@@ -49,9 +49,11 @@ can own `1002:13FE` on unit A and keep the firmware's display. If E05 fails, thi
 ## Open questions (to settle with measurements, not here)
 
 - How experiments in M4-M6 (GART, interrupt ring, first SDMA command) are driven from user mode while the
-  miniport owns the device. A display-only driver has no escape DDI. Candidates: a full-WDDM skeleton with
-  `DxgkDdiEscape` earlier than planned; a registry-driven self-test at start; a second, software-only control
-  driver like `bc250rd` that shares no state. Decide at the start of M4.
+  miniport owns the device. `KMDDOD_INITIALIZATION_DATA` has a `DxgkDdiEscape` slot (`dispmprt.h`, WDK
+  10.0.26100); whether `D3DKMTEscape` from an elevated tool actually reaches a display-only driver is to be
+  measured with the M3 driver itself (a version query, nothing more). If it does, escape is the control
+  channel. If not: a registry-driven self-test at start, or a second, software-only control driver like
+  `bc250rd` that shares no state. Decide at the start of M4.
 - Whether firmware (PSP-loaded microcode) survives a warm restart into Windows (wishlist L2). It decides
   whether M5 needs a PSP path first.
 - Whether the owner can connect the wired NIC, which would give us KDNET and make point 4 a convenience
