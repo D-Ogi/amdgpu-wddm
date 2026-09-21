@@ -1,0 +1,94 @@
+## compare.py irq gfx-run-first-175126.txt (stages 1 to 8 against amdgpu's trace)
+trace: 1 selection(s) without a write left out
+driver: 35 register writes   trace: 35 writes   TLB flush writes: 0, wrong value: 0
+equal 35, address registers with another value 0, other differences 0
+verdict: AS EXPECTED
+exit 0
+
+## compare.py rerun gfx-run-first-175126.txt gfx-run-second-175302.txt (the second bring-up, which now passes)
+first run: 390 writes and 69 TLB flush writes   second run: 389 and 69
+  only first  [ 201] 0x3B1C4 0000000F GC.RLC_SPM_MC_CNTL
+  only first  [ 207] 0x0C8B8 00005420 GC.CP_HQD_EOP_BASE_ADDR
+  only second [ 206] 0x0C8B8 000066A0 GC.CP_HQD_EOP_BASE_ADDR
+  only first  [ 213] 0x0C844 00004420 GC.CP_HQD_PQ_BASE
+  only second [ 212] 0x0C844 000056A0 GC.CP_HQD_PQ_BASE
+  only first  [ 216] 0x0C850 00441000 GC.CP_HQD_PQ_RPTR_REPORT_ADDR
+  only second [ 215] 0x0C850 00569000 GC.CP_HQD_PQ_RPTR_REPORT_ADDR
+  only first  [ 218] 0x0C858 00441008 GC.CP_HQD_PQ_WPTR_POLL_ADDR
+  only second [ 217] 0x0C858 00569008 GC.CP_HQD_PQ_WPTR_POLL_ADDR
+  only first  [ 226] 0x0C834 0BE05301 GC.CP_HQD_PERSISTENT_STATE
+  only second [ 225] 0x0C834 0BEC5301 GC.CP_HQD_PERSISTENT_STATE
+  only first  [ 298] 0x049F0 000400C2 GC.SDMA0_CNTL
+  only second [ 297] 0x049F0 000400E3 GC.SDMA0_CNTL
+  only first  [ 302] 0x061F0 000400C2 GC.SDMA1_CNTL
+  only second [ 301] 0x061F0 000400E3 GC.SDMA1_CNTL
+  only first  [ 304] 0x04B80 80840016 GC.SDMA0_GFX_RB_CNTL
+  only second [ 303] 0x04B80 80841016 GC.SDMA0_GFX_RB_CNTL
+  only first  [ 309] 0x04C4C 0055D008 GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO
+  only second [ 308] 0x04C4C 00685008 GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO
+  only first  [ 313] 0x04BA4 0055D000 GC.SDMA0_GFX_RB_RPTR_ADDR_LO
+  only first  [ 313] 0x04B84 000055E0 GC.SDMA0_GFX_RB_BASE
+  only second [ 312] 0x04BA4 00685000 GC.SDMA0_GFX_RB_RPTR_ADDR_LO
+  only second [ 312] 0x04B84 00006860 GC.SDMA0_GFX_RB_BASE
+  only first  [ 319] 0x04BC8 10000000 GC.SDMA0_GFX_DOORBELL
+  only second [ 318] 0x04BC8 50000000 GC.SDMA0_GFX_DOORBELL
+  only first  [ 323] 0x049F0 000400E2 GC.SDMA0_CNTL
+  only second [ 322] 0x049F0 000400E3 GC.SDMA0_CNTL
+  only first  [ 330] 0x06380 80840016 GC.SDMA1_GFX_RB_CNTL
+  only second [ 329] 0x06380 80841016 GC.SDMA1_GFX_RB_CNTL
+  only first  [ 335] 0x0644C 0055D018 GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO
+  only second [ 334] 0x0644C 00685018 GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO
+  only first  [ 339] 0x063A4 0055D010 GC.SDMA1_GFX_RB_RPTR_ADDR_LO
+  only first  [ 339] 0x06384 00005600 GC.SDMA1_GFX_RB_BASE
+  only second [ 338] 0x063A4 00685010 GC.SDMA1_GFX_RB_RPTR_ADDR_LO
+  only second [ 338] 0x06384 00006880 GC.SDMA1_GFX_RB_BASE
+  only first  [ 345] 0x063C8 10000000 GC.SDMA1_GFX_DOORBELL
+  only second [ 344] 0x063C8 50000000 GC.SDMA1_GFX_DOORBELL
+  only first  [ 349] 0x061F0 000400E2 GC.SDMA1_CNTL
+  only second [ 348] 0x061F0 000400E3 GC.SDMA1_CNTL
+only in the first run 20, only in the second run 19
+exit 0
+
+## compare.py rerun gfx-run-first-175126.txt gfx-run-third-180147.txt (the third)
+first run: 390 writes and 69 TLB flush writes   second run: 389 and 69
+  only first  [ 201] 0x3B1C4 0000000F GC.RLC_SPM_MC_CNTL
+  only first  [ 207] 0x0C8B8 00005420 GC.CP_HQD_EOP_BASE_ADDR
+  only second [ 206] 0x0C8B8 00007920 GC.CP_HQD_EOP_BASE_ADDR
+  only first  [ 213] 0x0C844 00004420 GC.CP_HQD_PQ_BASE
+  only second [ 212] 0x0C844 00006920 GC.CP_HQD_PQ_BASE
+  only first  [ 216] 0x0C850 00441000 GC.CP_HQD_PQ_RPTR_REPORT_ADDR
+  only second [ 215] 0x0C850 00691000 GC.CP_HQD_PQ_RPTR_REPORT_ADDR
+  only first  [ 218] 0x0C858 00441008 GC.CP_HQD_PQ_WPTR_POLL_ADDR
+  only second [ 217] 0x0C858 00691008 GC.CP_HQD_PQ_WPTR_POLL_ADDR
+  only first  [ 226] 0x0C834 0BE05301 GC.CP_HQD_PERSISTENT_STATE
+  only second [ 225] 0x0C834 0BEC5301 GC.CP_HQD_PERSISTENT_STATE
+  only first  [ 298] 0x049F0 000400C2 GC.SDMA0_CNTL
+  only second [ 297] 0x049F0 000400E3 GC.SDMA0_CNTL
+  only first  [ 302] 0x061F0 000400C2 GC.SDMA1_CNTL
+  only second [ 301] 0x061F0 000400E3 GC.SDMA1_CNTL
+  only first  [ 304] 0x04B80 80840016 GC.SDMA0_GFX_RB_CNTL
+  only second [ 303] 0x04B80 80841016 GC.SDMA0_GFX_RB_CNTL
+  only first  [ 309] 0x04C4C 0055D008 GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO
+  only second [ 308] 0x04C4C 007AD008 GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO
+  only first  [ 313] 0x04BA4 0055D000 GC.SDMA0_GFX_RB_RPTR_ADDR_LO
+  only first  [ 313] 0x04B84 000055E0 GC.SDMA0_GFX_RB_BASE
+  only second [ 312] 0x04BA4 007AD000 GC.SDMA0_GFX_RB_RPTR_ADDR_LO
+  only second [ 312] 0x04B84 00007AE0 GC.SDMA0_GFX_RB_BASE
+  only first  [ 319] 0x04BC8 10000000 GC.SDMA0_GFX_DOORBELL
+  only second [ 318] 0x04BC8 50000000 GC.SDMA0_GFX_DOORBELL
+  only first  [ 323] 0x049F0 000400E2 GC.SDMA0_CNTL
+  only second [ 322] 0x049F0 000400E3 GC.SDMA0_CNTL
+  only first  [ 330] 0x06380 80840016 GC.SDMA1_GFX_RB_CNTL
+  only second [ 329] 0x06380 80841016 GC.SDMA1_GFX_RB_CNTL
+  only first  [ 335] 0x0644C 0055D018 GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO
+  only second [ 334] 0x0644C 007AD018 GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO
+  only first  [ 339] 0x063A4 0055D010 GC.SDMA1_GFX_RB_RPTR_ADDR_LO
+  only first  [ 339] 0x06384 00005600 GC.SDMA1_GFX_RB_BASE
+  only second [ 338] 0x063A4 007AD010 GC.SDMA1_GFX_RB_RPTR_ADDR_LO
+  only second [ 338] 0x06384 00007B00 GC.SDMA1_GFX_RB_BASE
+  only first  [ 345] 0x063C8 10000000 GC.SDMA1_GFX_DOORBELL
+  only second [ 344] 0x063C8 50000000 GC.SDMA1_GFX_DOORBELL
+  only first  [ 349] 0x061F0 000400E2 GC.SDMA1_CNTL
+  only second [ 348] 0x061F0 000400E3 GC.SDMA1_CNTL
+only in the first run 20, only in the second run 19
+exit 0

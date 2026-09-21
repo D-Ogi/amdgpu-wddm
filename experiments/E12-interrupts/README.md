@@ -1,6 +1,6 @@
 # E12: interrupts under Windows: the IH ring, the first interrupt, fences (milestone M6)
 
-State: **part A run (2026-09-21, run 001): all four hold.** Parts B and C wait for the IH code in `driver/shim`.
+State: **part A run (2026-09-21, run 001): all four hold. Parts B and C run (run 002): the IH ring and fences work, a second bring-up failed (M44; fixed in E15).**
 
 ## Why
 
