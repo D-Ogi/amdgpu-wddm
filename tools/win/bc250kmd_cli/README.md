@@ -17,6 +17,7 @@ bc250kmd_cli vread <phys|bar0> <offset>          one 32-bit word of VRAM through
 bc250kmd_cli vwrite <phys|bar0> <offset> <v>     same, inside the driver's test page only
 bc250kmd_cli vcompare <offset> <count>           the same words through both paths, exit code 4 if they differ
 bc250kmd_cli gart plan|enable|restore            the M4 sequence: list what it would write, run it, give the firmware's state back (E09)
+bc250kmd_cli psp plan|load|unload                firmware through the PSP: list registers and commands, run them, DESTROY_TMR and ring stop (E10)
 ```
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage

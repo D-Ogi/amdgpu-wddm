@@ -33,6 +33,8 @@ TRACE = ROOT / "evidence/linux/2026-09-21-E03-init-trace/amdgpu-events.txt"
 SEQUENCES = [
     ("Gart", "E09", r"^(GC\.(GCVM|GCMC)|MMHUB\.(MMVM|MMMC))", 0.26,
      [("GC", "mmGCVM_INVALIDATE_ENG17_ACK"), ("MMHUB", "mmMMVM_INVALIDATE_ENG17_ACK")]),
+    # psp_v11_0_8 ring create and the eleven submissions are over at 0.309 s; the SMU mailbox follows.
+    ("Psp", "E10", r"^MP0\.MP0_SMN_C2PMSG_\d+$", 0.309, []),
 ]
 
 # (ip, register, experiment that put it here, why it is safe)

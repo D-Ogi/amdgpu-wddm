@@ -33,7 +33,10 @@ works over KDNET but its host-side server is disabled after it hung the developm
 M4 by experiments E07-E09: AMD's hub code, imported unmodified and run inside the miniport, programs GART and VM
 context 0 with the same register writes amdgpu made on this unit; acknowledged by the hardware, no fault bit,
 picture undisturbed, reversible. The driver does it on command behind gates; doing it at every start comes
-with M5, whose ring buffer is the first thing that needs a GART mapping. Next: M5.
+with M5, whose ring buffer is the first thing that needs a GART mapping. M5 is under way: its first part, the
+firmware through the PSP, works under Windows (E10, facts M34, M35: AMD's `psp_v11_0_8.c` imported unmodified,
+eleven commands accepted, same register traffic and timing as amdgpu on this unit; the PSP itself starts the RLC
+and releases SDMA). Next: M5's second part, RLC and CP bring-up, KIQ, the ring tests, SDMA.
 
 Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years. The project stays useful at every step because each milestone leaves verified, published knowledge.
 

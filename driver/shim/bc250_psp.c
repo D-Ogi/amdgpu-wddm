@@ -216,18 +216,23 @@ int psp_ring_cmd_submit(struct psp_context *psp,
 }
 
 /*
- * Follows psp_cmd_submit_buf(). Deviations: the fence is polled with a busy wait of 50 us instead
- * of usleep_range(10, 100), the same budget of psp_timeout polls (about one second; amdgpu's
- * eleven commands took between 0.1 and 6 ms each on unit A). A status other than zero is an error
+ * Follows psp_cmd_submit_buf(). Deviations: the fence is polled in two stages instead of
+ * psp_timeout polls of usleep_range(10, 100): 400 polls 50 us apart (20 ms; amdgpu's eleven
+ * commands took between 0.1 and 6 ms each on unit A), then 100 polls 10 ms apart, which a backend
+ * that can sleep turns into sleeping, so that a PSP that does not answer costs its caller about a
+ * second of waiting and not a second of spinning with a lock held. A status other than zero is an error
  * here: upstream only warns, because "some version of PSP FW doesn't write 0 to that field"; a
  * bring-up step wants to stop at the first command the PSP did not accept, and unit A's PSP does
  * write the field (the host test cannot show that, the hardware run does).
  */
+#define BC250_PSP_FAST_POLLS 400
+#define BC250_PSP_SLOW_POLLS 100
+
 static int bc250_psp_cmd_submit_buf(struct bc250_psp *ctx, struct psp_gfx_cmd_resp *cmd)
 {
 	struct psp_context *psp = &ctx->psp;
 	volatile uint32_t *fence = (volatile uint32_t *)psp->fence_buf;
-	int timeout = psp->psp_timeout;
+	int timeout = BC250_PSP_FAST_POLLS + BC250_PSP_SLOW_POLLS;
 	uint32_t index;
 	int ret;
 
@@ -244,14 +249,14 @@ static int bc250_psp_cmd_submit_buf(struct bc250_psp *ctx, struct psp_gfx_cmd_re
 	while (*fence != index) {
 		if (--timeout == 0)
 			break;
-		bc250_shim_udelay(50);
+		bc250_shim_udelay(timeout > BC250_PSP_SLOW_POLLS ? 50 : 10000);
 	}
 
 	memcpy(&cmd->resp, &psp->cmd_buf_mem->resp, sizeof(struct psp_gfx_resp));
 
 	if (timeout == 0) {
 		dev_err(psp->adev->dev, "psp gfx command 0x%X: no fence after %d polls\n",
-			cmd->cmd_id, psp->psp_timeout);
+			cmd->cmd_id, BC250_PSP_FAST_POLLS + BC250_PSP_SLOW_POLLS);
 		return -ETIME;
 	}
 	if (cmd->resp.status != 0) {

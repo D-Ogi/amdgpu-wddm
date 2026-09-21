@@ -1,0 +1,263 @@
+== H2: the plan (psp-plan-plan)
+driver: 4 register writes   trace: 15 in the step, 4 expected here
+register writes: MATCH
+  [ 1] SETUP_TMR   4194304 bytes       0 us  tmr 0x0  ok
+  [ 2] SDMA0         33536 bytes       0 us  tmr 0x0  ok
+  [ 3] SDMA1         33536 bytes       0 us  tmr 0x0  ok
+  [ 4] CP_CE        263040 bytes       0 us  tmr 0x0  ok
+  [ 5] CP_PFP       263168 bytes       0 us  tmr 0x0  ok
+  [ 6] CP_ME        263168 bytes       0 us  tmr 0x0  ok
+  [ 7] CP_MEC1      267440 bytes       0 us  tmr 0x0  ok
+  [ 8] CP_MEC1_JT      896 bytes       0 us  tmr 0x0  ok
+  [ 9] CP_MEC2      267440 bytes       0 us  tmr 0x0  ok
+  [10] CP_MEC2_JT      896 bytes       0 us  tmr 0x0  ok
+  [11] RLC_G         25088 bytes       0 us  tmr 0x0  ok
+verdict: AS EXPECTED (planned)
+
+== H2: state after the plan, control = before, before2, before3
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 8 registers; changed: 0 to Linux's value after init, 0 to something else
+
+== H4: the load (psp-load-load)
+driver: 15 register writes   trace: 15 in the step, 15 expected here
+register writes: MATCH
+  [ 1] SETUP_TMR   4194304 bytes     260 us  tmr 0x0  ok
+  [ 2] SDMA0         33536 bytes    1957 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [ 3] SDMA1         33536 bytes    1957 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [ 4] CP_CE        263040 bytes    5881 us  tmr 0xF5FF842000  ok
+  [ 5] CP_PFP       263168 bytes    5916 us  tmr 0xF5FF883000  ok
+  [ 6] CP_ME        263168 bytes    5907 us  tmr 0xF5FF8C4000  ok
+  [ 7] CP_MEC1      267440 bytes    5953 us  tmr 0xF5FF800000  ok
+  [ 8] CP_MEC1_JT      896 bytes     130 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [ 9] CP_MEC2      267440 bytes    5954 us  tmr 0xF5FF800000  ok
+  [10] CP_MEC2_JT      896 bytes     130 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [11] RLC_G         25088 bytes    1737 us  tmr 0x0  TMR address 0x0 outside the TMR
+  amdgpu's spacing between submissions on unit A, ms: 0.2 1.9 1.9 6.0 6.0 6.1 6.0 0.1 6.1 0.1  (the last one is not in the trace)
+verdict: NOT AS EXPECTED (loaded)
+
+== H6: the second load (psp-load-second)
+driver: 15 register writes   trace: 15 in the step, 15 expected here
+register writes: MATCH
+  [ 1] SETUP_TMR   4194304 bytes     276 us  tmr 0x0  ok
+  [ 2] SDMA0         33536 bytes    1911 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [ 3] SDMA1         33536 bytes    1912 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [ 4] CP_CE        263040 bytes    5919 us  tmr 0xF5FF842000  ok
+  [ 5] CP_PFP       263168 bytes    5926 us  tmr 0xF5FF883000  ok
+  [ 6] CP_ME        263168 bytes    5932 us  tmr 0xF5FF8C4000  ok
+  [ 7] CP_MEC1      267440 bytes    6013 us  tmr 0xF5FF800000  ok
+  [ 8] CP_MEC1_JT      896 bytes     130 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [ 9] CP_MEC2      267440 bytes    5964 us  tmr 0xF5FF800000  ok
+  [10] CP_MEC2_JT      896 bytes     130 us  tmr 0x0  TMR address 0x0 outside the TMR
+  [11] RLC_G         25088 bytes    1739 us  tmr 0x0  TMR address 0x0 outside the TMR
+  amdgpu's spacing between submissions on unit A, ms: 0.2 1.9 1.9 6.0 6.0 6.1 6.0 0.1 6.1 0.1  (the last one is not in the trace)
+verdict: NOT AS EXPECTED (loaded)
+
+== H5: state after the load, control = the sweep after gart enable
+  as Linux after init GC.SDMA0_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000000 -> 000007F8   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA1_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000001 -> 00000E65   (Linux after init: 00000419)
+  as Linux after init GC.CC_GC_SHADER_ARRAY_CONFIG_GEN0: 00000000 -> 00FC0001
+  clock/counter GC.SQ_TIME_HI: 000009ED -> 000009F9
+  clock/counter GC.SQ_TIME_LO: 0833A073 -> EE07A7A2
+  as Linux after init GC.SPI_PG_ENABLE_STATIC_WGP_MASK: 0000FFFF -> 00000007
+  clock/counter GC.CP_DMA_READ_TAGS: 10B48004 -> 11B48804
+  as Linux after init GC.RLC_CNTL: 00000000 -> 00000001
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: A637BD29 -> EDD6C979
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 000000FD -> 000000FE
+  as Linux after init GC.RLC_GPM_TIMER_INT_1: 00000063 -> 00006789
+  as Linux after init GC.RLC_GPM_TIMER_INT_2: 00000063 -> 000004F6
+  as Linux after init GC.RLC_GPM_DEBUG_INST_ADDR: 055000FD -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_A: 27F40001 -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_B: 33740000 -> 00000000
+  clock/counter GC.RLC_GPU_CLOCK_32: 8EEFB300 -> D68EBB1C
+  OTHER               GC.RLC_PG_CNTL: 00000000 -> 00000008   (Linux after init: 00000000)
+  as Linux after init GC.RLC_DYN_PG_STATUS: FFFFFFFF -> 0000001F
+  as Linux after init GC.RLC_MAX_PG_WGP: 0000000A -> 0000000C
+  as Linux after init GC.RLC_SERDES_MASK: 00030003 -> 00000000
+  as Linux after init GC.RLC_SERDES_CTRL: 0012FFFB -> 00096512
+  as Linux after init GC.RLC_STATIC_PG_STATUS: FFFFFFFF -> 0000FFE7
+  as Linux after init GC.RLC_GPM_INT_DISABLE_TH0: FFFFFFFF -> 00000000
+  as Linux after init GC.RLC_SMU_COMMAND: 00000000 -> 00000013
+  OTHER               GC.RLC_SMU_ARGUMENT_1: 00000000 -> 01D550C8   (Linux after init: 0207512C)
+  as Linux after init GC.RLC_GPM_INT_STAT_TH0: A0000000 -> 00000000
+  OTHER               GC.RLC_SMU_ARGUMENT_3: 00000000 -> 000001D5   (Linux after init: 00000207)
+  as Linux after init GC.RLC_GPM_STAT: 00F40016 -> 00B40016
+  as Linux after init GC.RLC_RLCS_GPM_STAT_2: 00000004 -> 00000000
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000083 -> 00000003   (Linux after init: 00000000)
+  as Linux after init GC.CGTS_SA0_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA0_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  OTHER               MP0.MP0_SMN_C2PMSG_60: CE00000B -> AD00000B   (Linux after init: E600000B)
+  as Linux after init MP0.MP0_SMN_C2PMSG_64: 80000000 -> 80020000
+  as Linux after init MP0.MP0_SMN_C2PMSG_67: 00000000 -> 000000B0
+  as Linux after init MP0.MP0_SMN_C2PMSG_68: 00000000 -> 000000B0
+  as Linux after init MP0.MP0_SMN_C2PMSG_69: 00000000 -> FFFE7000
+  as Linux after init MP0.MP0_SMN_C2PMSG_70: 00000000 -> 000000F5
+  as Linux after init MP0.MP0_SMN_C2PMSG_71: 00000000 -> 00001000
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 003CB175 -> 003D6021   (Linux after init: 00443F08)
+  as Linux after init MP0.MP1_SMN_C2PMSG_64: 00000000 -> 00000010
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 31 to Linux's value after init, 8 to something else
+
+== H6: state after the unload, control = the sweep after gart enable
+  as Linux after init GC.SDMA0_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000000 -> 00000E7C   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA1_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000001 -> 000005E1   (Linux after init: 00000419)
+  as Linux after init GC.CC_GC_SHADER_ARRAY_CONFIG_GEN0: 00000000 -> 00FC0001
+  clock/counter GC.SQ_TIME_HI: 000009ED -> 00000A05
+  clock/counter GC.SQ_TIME_LO: 0833A073 -> 312D0668
+  as Linux after init GC.SPI_PG_ENABLE_STATIC_WGP_MASK: 0000FFFF -> 00000007
+  clock/counter GC.CP_DMA_READ_TAGS: 10B48004 -> 12B49004
+  as Linux after init GC.RLC_CNTL: 00000000 -> 00000001
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: A637BD29 -> 07DB4055
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 000000FD -> 00000100
+  as Linux after init GC.RLC_GPM_TIMER_INT_1: 00000063 -> 00006789
+  as Linux after init GC.RLC_GPM_TIMER_INT_2: 00000063 -> 000004F6
+  as Linux after init GC.RLC_GPM_DEBUG_INST_ADDR: 055000FD -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_A: 27F40001 -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_B: 33740000 -> 00000000
+  clock/counter GC.RLC_GPU_CLOCK_32: 8EEFB300 -> F0934904
+  OTHER               GC.RLC_PG_CNTL: 00000000 -> 00000008   (Linux after init: 00000000)
+  as Linux after init GC.RLC_DYN_PG_STATUS: FFFFFFFF -> 0000001F
+  as Linux after init GC.RLC_MAX_PG_WGP: 0000000A -> 0000000C
+  as Linux after init GC.RLC_SERDES_MASK: 00030003 -> 00000000
+  as Linux after init GC.RLC_SERDES_CTRL: 0012FFFB -> 00096512
+  as Linux after init GC.RLC_STATIC_PG_STATUS: FFFFFFFF -> 0000FFE7
+  as Linux after init GC.RLC_GPM_INT_DISABLE_TH0: FFFFFFFF -> 00000000
+  as Linux after init GC.RLC_SMU_COMMAND: 00000000 -> 00000013
+  OTHER               GC.RLC_SMU_ARGUMENT_1: 00000000 -> 01D550C8   (Linux after init: 0207512C)
+  as Linux after init GC.RLC_GPM_INT_STAT_TH0: A0000000 -> 00000000
+  OTHER               GC.RLC_SMU_ARGUMENT_3: 00000000 -> 000001D5   (Linux after init: 00000207)
+  as Linux after init GC.RLC_GPM_STAT: 00F40016 -> 00B40016
+  as Linux after init GC.RLC_RLCS_GPM_STAT_2: 00000004 -> 00000000
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000083 -> 00000003   (Linux after init: 00000000)
+  as Linux after init GC.CGTS_SA0_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA0_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  OTHER               MP0.MP0_SMN_C2PMSG_60: CE00000B -> 8C00000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_64: 80000000 -> 80030000   (Linux after init: 80020000)
+  OTHER               MP0.MP0_SMN_C2PMSG_67: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  OTHER               MP0.MP0_SMN_C2PMSG_68: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  as Linux after init MP0.MP0_SMN_C2PMSG_69: 00000000 -> FFFE7000
+  as Linux after init MP0.MP0_SMN_C2PMSG_70: 00000000 -> 000000F5
+  as Linux after init MP0.MP0_SMN_C2PMSG_71: 00000000 -> 00001000
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 003CB175 -> 003D8885   (Linux after init: 00443F08)
+  as Linux after init MP0.MP1_SMN_C2PMSG_64: 00000000 -> 00000010
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 28 to Linux's value after init, 11 to something else
+
+== H6: state after the second load, control = the sweep after gart enable
+  as Linux after init GC.SDMA0_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000000 -> 00000F80   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA1_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000001 -> 00000E9D   (Linux after init: 00000419)
+  OTHER               GC.GRBM_STATUS2: 00000008 -> 01000008   (Linux after init: 00000008)
+  as Linux after init GC.CC_GC_SHADER_ARRAY_CONFIG_GEN0: 00000000 -> 00FC0001
+  clock/counter GC.SQ_TIME_HI: 000009ED -> 00000A13
+  clock/counter GC.SQ_TIME_LO: 0833A073 -> 216D10D9
+  as Linux after init GC.SPI_PG_ENABLE_STATIC_WGP_MASK: 0000FFFF -> 00000007
+  clock/counter GC.CP_DMA_READ_TAGS: 10B48004 -> 13B49804
+  OTHER               GC.RLC_STAT: 00000000 -> 00000005   (Linux after init: 00000000)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: A637BD29 -> 646E16F5
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 000000FD -> 00000101
+  as Linux after init GC.RLC_GPM_TIMER_INT_1: 00000063 -> 00006789
+  as Linux after init GC.RLC_GPM_TIMER_INT_2: 00000063 -> 000004F6
+  as Linux after init GC.RLC_GPM_DEBUG_INST_ADDR: 055000FD -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_A: 27F40001 -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_B: 33740000 -> 00000000
+  clock/counter GC.RLC_GPU_CLOCK_32: 8EEFB300 -> 4D26095C
+  OTHER               GC.RLC_PG_CNTL: 00000000 -> 00000008   (Linux after init: 00000000)
+  as Linux after init GC.RLC_DYN_PG_STATUS: FFFFFFFF -> 0000001F
+  as Linux after init GC.RLC_MAX_PG_WGP: 0000000A -> 0000000C
+  as Linux after init GC.RLC_SERDES_MASK: 00030003 -> 00000000
+  as Linux after init GC.RLC_SERDES_CTRL: 0012FFFB -> 00096512
+  as Linux after init GC.RLC_STATIC_PG_STATUS: FFFFFFFF -> 0000FFE7
+  as Linux after init GC.RLC_GPM_INT_DISABLE_TH0: FFFFFFFF -> 00000000
+  as Linux after init GC.RLC_SMU_COMMAND: 00000000 -> 00000013
+  OTHER               GC.RLC_SMU_ARGUMENT_1: 00000000 -> 01D550C8   (Linux after init: 0207512C)
+  OTHER               GC.RLC_GPM_INT_STAT_TH0: A0000000 -> 80000000   (Linux after init: 00000000)
+  OTHER               GC.RLC_SMU_ARGUMENT_3: 00000000 -> 000001D5   (Linux after init: 00000207)
+  OTHER               GC.RLC_GPM_STAT: 00F40016 -> 00F40017   (Linux after init: 00B40016)
+  as Linux after init GC.RLC_RLCS_GPM_STAT_2: 00000004 -> 00000000
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000083 -> 00000003   (Linux after init: 00000000)
+  as Linux after init GC.CGTS_SA0_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA0_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  OTHER               MP0.MP0_SMN_C2PMSG_60: CE00000B -> 6B00000B   (Linux after init: E600000B)
+  as Linux after init MP0.MP0_SMN_C2PMSG_64: 80000000 -> 80020000
+  as Linux after init MP0.MP0_SMN_C2PMSG_67: 00000000 -> 000000B0
+  as Linux after init MP0.MP0_SMN_C2PMSG_68: 00000000 -> 000000B0
+  as Linux after init MP0.MP0_SMN_C2PMSG_69: 00000000 -> FFFE7000
+  as Linux after init MP0.MP0_SMN_C2PMSG_70: 00000000 -> 000000F5
+  as Linux after init MP0.MP0_SMN_C2PMSG_71: 00000000 -> 00001000
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 003CB175 -> 003E3926   (Linux after init: 00443F08)
+  as Linux after init MP0.MP1_SMN_C2PMSG_64: 00000000 -> 00000010
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 28 to Linux's value after init, 12 to something else
+
+== H7: state after the device restart while loaded, control = before, before2, before3
+  as Linux after init GC.SDMA0_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000000 -> 0000071C   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA1_F32_CNTL: 00000001 -> 00000000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000001 -> 0000050D   (Linux after init: 00000419)
+  OTHER               GC.GRBM_STATUS2: 00000008 -> 01000008   (Linux after init: 00000008)
+  as Linux after init GC.CC_GC_SHADER_ARRAY_CONFIG_GEN0: 00000000 -> 00FC0001
+  as Linux after init GC.SPI_PG_ENABLE_STATIC_WGP_MASK: 0000FFFF -> 00000007
+  OTHER               GC.RLC_STAT: 00000000 -> 00000005   (Linux after init: 00000000)
+  as Linux after init GC.RLC_GPM_TIMER_INT_1: 00000063 -> 00006789
+  as Linux after init GC.RLC_GPM_TIMER_INT_2: 00000063 -> 000004F6
+  as Linux after init GC.RLC_GPM_DEBUG_INST_ADDR: 055000FD -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_A: 27F40001 -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_B: 33740000 -> 00000000
+  OTHER               GC.RLC_PG_CNTL: 00000000 -> 00000008   (Linux after init: 00000000)
+  as Linux after init GC.RLC_DYN_PG_STATUS: FFFFFFFF -> 0000001F
+  as Linux after init GC.RLC_MAX_PG_WGP: 0000000A -> 0000000C
+  as Linux after init GC.RLC_SERDES_MASK: 00030003 -> 00000000
+  as Linux after init GC.RLC_SERDES_CTRL: 0012FFFB -> 00096512
+  as Linux after init GC.RLC_STATIC_PG_STATUS: FFFFFFFF -> 0000FFE7
+  as Linux after init GC.RLC_GPM_INT_DISABLE_TH0: FFFFFFFF -> 00000000
+  as Linux after init GC.RLC_SMU_COMMAND: 00000000 -> 00000013
+  OTHER               GC.RLC_SMU_ARGUMENT_1: 00000000 -> 01D550C8   (Linux after init: 0207512C)
+  OTHER               GC.RLC_GPM_INT_STAT_TH0: A0000000 -> 80000000   (Linux after init: 00000000)
+  OTHER               GC.RLC_SMU_ARGUMENT_3: 00000000 -> 000001D5   (Linux after init: 00000207)
+  OTHER               GC.RLC_GPM_STAT: 00F40016 -> 00F40017   (Linux after init: 00B40016)
+  as Linux after init GC.RLC_RLCS_GPM_STAT_2: 00000004 -> 00000000
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000083 -> 00000003   (Linux after init: 00000000)
+  as Linux after init GC.CGTS_SA0_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA0_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  OTHER               MP0.MP0_SMN_C2PMSG_64: 80000000 -> 80030000   (Linux after init: 80020000)
+  OTHER               MP0.MP0_SMN_C2PMSG_67: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  OTHER               MP0.MP0_SMN_C2PMSG_68: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  as Linux after init MP0.MP0_SMN_C2PMSG_69: 00000000 -> FFFE7000
+  as Linux after init MP0.MP0_SMN_C2PMSG_70: 00000000 -> 000000F5
+  as Linux after init MP0.MP0_SMN_C2PMSG_71: 00000000 -> 00001000
+  as Linux after init MP0.MP1_SMN_C2PMSG_64: 00000000 -> 00000010
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 8 registers; changed: 25 to Linux's value after init, 13 to something else
+
+== after a warm reboot of the target, control = before, before2, before3
+  OTHER               GC.SDMA0_UTCL1_INV0: 01000800 -> 00000800   (Linux after init: 01000800)
+  OTHER               GC.SDMA1_UTCL1_INV0: 01000800 -> 00000800   (Linux after init: 01000800)
+  OTHER               GC.GRBM_READ_ERROR: 80008090 -> 00000000   (Linux after init: 80030800)
+  OTHER               GC.GRBM_READ_ERROR2: 00020000 -> 00000000   (Linux after init: 00020000)
+  as Linux after init GC.GDS_VM_PROTECTION_FAULT: 0000001B -> 00000000
+  OTHER               GC.GCVM_INVALIDATE_ENG17_REQ: 00F80001 -> 02F80000   (Linux after init: 00F80001)
+  OTHER               GC.GCVM_INVALIDATE_ENG17_ACK: 00000001 -> 00000000   (Linux after init: 00010001)
+  OTHER               MP0.MP1_SMN_C2PMSG_66: 00000038 -> 0000003B   (Linux after init: 00000006)
+  OTHER               MMHUB.MMVM_INVALIDATE_ENG17_REQ: 00F80001 -> 02F80000   (Linux after init: 00F80001)
+  OTHER               MMHUB.MMVM_INVALIDATE_ENG17_ACK: 00000001 -> 00000000   (Linux after init: 00010001)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 8 registers; changed: 1 to Linux's value after init, 9 to something else

@@ -852,4 +852,15 @@ static const unsigned long g_MmioGartAllow[BC250_MMIO_GART_ALLOW_COUNT] = {
     0x6A1CCul,   // MMHUB.MMMC_VM_MX_L1_TLB_CNTL
 };
 
+// E10: what amdgpu wrote on unit A in this step (E03 trace, first 0.309 s, names matching
+// ^MP0\.MP0_SMN_C2PMSG_\d+$), plus the registers it only polled. For the kernel command alone.
+#define BC250_MMIO_PSP_ALLOW_COUNT 5
+static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
+    0x58200ul,   // MP0.MP0_SMN_C2PMSG_64
+    0x5820Cul,   // MP0.MP0_SMN_C2PMSG_67
+    0x58214ul,   // MP0.MP0_SMN_C2PMSG_69
+    0x58218ul,   // MP0.MP0_SMN_C2PMSG_70
+    0x5821Cul,   // MP0.MP0_SMN_C2PMSG_71
+};
+
 #endif

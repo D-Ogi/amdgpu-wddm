@@ -4,7 +4,8 @@
 //
 // Layout: entry.c (DriverEntry, DDI table), pnp.c (device life cycle, children, power),
 // display.c (VidPN, present, pointer, system display), guard.c (boot-loop guard, breadcrumbs, log),
-// mmio.c (gated register access for the bring-up experiments).
+// mmio.c (gated register access for the bring-up experiments), vram.c (the VRAM carve-out),
+// sequence.c (kernel backend of driver/shim), gart.c (M4), psp.c (M5: firmware through the PSP).
 #pragma once
 
 #include <ntifs.h>        // superset of ntddk.h; the token checks of the escape need it
@@ -62,6 +63,7 @@ typedef struct _BC250_DEVICE {
     PHYSICAL_ADDRESS MmioPhysical;
     BOOLEAN MmioWriteEnabled;
     BOOLEAN MmioGartEnabled;
+    BOOLEAN MmioPspEnabled;
 
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
@@ -73,8 +75,31 @@ typedef struct _BC250_DEVICE {
     ULONGLONG Bar0Length;
 
     PVOID Gart;                         // gart.c, NULL unless the EnableGart gate was open at start
-    FAST_MUTEX GartLock;                // serializes the GART command and the stop; initialized in AddDevice
+    PVOID Psp;                          // psp.c, NULL unless the EnablePsp gate was open at start
+    FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c) and the stop;
+                                        // initialized in AddDevice
 } BC250_DEVICE;
+
+// One run of a bring-up sequence through the shim: what adev->backend points at (sequence.c).
+typedef struct _BC250_ESCAPE_WRITE BC250_SEQUENCE_WRITE;
+typedef struct _BC250_SEQUENCE {
+    const char* Name;                   // for the log
+    NTSTATUS (*Read)(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);     // the sequence's own table
+    NTSTATUS (*Write)(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+    // Optional. PLAN: answer a read instead of performing it (registers whose read has a side effect).
+    BOOLEAN (*PlanAnswers)(_In_ struct _BC250_SEQUENCE* Sequence, ULONG DwordIndex, _Out_ ULONG* Value);
+    // Optional. A write that must reach the hardware even after the sequence was stopped by a fault.
+    BOOLEAN (*PassesFault)(_In_ struct _BC250_SEQUENCE* Sequence, ULONG DwordIndex, ULONG Value);
+    PVOID Owner;
+
+    BC250_DEVICE* Device;               // set by SequenceBegin
+    BOOLEAN Plan;
+    NTSTATUS Fault;                     // first refused register access of the running sequence
+    ULONG FaultOffset;
+    ULONG WriteCount;
+    BC250_SEQUENCE_WRITE* Writes;       // where the writes are listed, may be NULL
+    ULONG MaxWrites;
+} BC250_SEQUENCE;
 
 // guard.c
 NTSTATUS GuardInit(_In_ PUNICODE_STRING RegistryPath);
@@ -93,6 +118,12 @@ NTSTATUS MmioWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 NTSTATUS MmioGartRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 NTSTATUS MmioGartWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 ULONG MmioGartTable(_Outptr_ const unsigned long** Table);
+NTSTATUS MmioPspRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
+NTSTATUS MmioPspWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+
+// sequence.c
+void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,
+                   _Out_writes_opt_(MaxWrites) BC250_SEQUENCE_WRITE* Writes, ULONG MaxWrites);
 
 // vram.c
 struct _BC250_ESCAPE_MEMORY;
@@ -105,6 +136,16 @@ struct _BC250_ESCAPE_GART;
 NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device);
 void GartStop(_Inout_ BC250_DEVICE* Device);
 void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GART* Data);
+struct amdgpu_device;
+// With GartLock held: the shim's device (register bases, VRAM window), set up if it was not yet, and whether the
+// GART sequence is enabled.
+NTSTATUS GartDevice(_In_ BC250_DEVICE* Device, _Outptr_ struct amdgpu_device** Adev, _Out_ BOOLEAN* Enabled);
+
+// psp.c
+struct _BC250_ESCAPE_PSP;
+NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
+void PspStop(_Inout_ BC250_DEVICE* Device);
+void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_PSP* Data);
 
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;

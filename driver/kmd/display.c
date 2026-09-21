@@ -113,6 +113,16 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (!CallerIsAdmin()) gart->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else GartEscape(device, gart);
         return STATUS_SUCCESS;
     }
+    if (data->Command == BC250_ESCAPE_RUN_PSP)
+    {
+        BC250_ESCAPE_PSP* psp = (BC250_ESCAPE_PSP*)Escape->pPrivateDriverData;
+
+        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_PSP)) return STATUS_INVALID_PARAMETER;
+        psp->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) |
+                     (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) | (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0);
+        if (!CallerIsAdmin()) psp->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else PspEscape(device, psp);
+        return STATUS_SUCCESS;
+    }
     data->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) |
                   (device->MmioWriteEnabled ? BC250_ESCAPE_FLAG_MMIO_WRITE : 0) |
                   (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) | (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0);

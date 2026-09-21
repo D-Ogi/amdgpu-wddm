@@ -457,6 +457,54 @@ static int Gart(const WCHAR *opText)
     return g.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
+// ---- psp: firmware through the PSP (experiment E10) ---------------------------------------------------------------
+//
+// plan executes no write and touches no VRAM: the driver reads the firmware files, lays the images out and runs
+// AMD's ring create against the real registers without writing. load does it (needs gart enable first); unload is
+// DESTROY_TMR plus ring stop. Output: "W <offset> <value>" per register write, "C ..." per PSP command.
+
+static int Psp(const WCHAR *opText)
+{
+    static BC250_ESCAPE_PSP p;
+    NTSTATUS status;
+
+    memset(&p, 0, sizeof(p));
+    p.Magic = BC250_ESCAPE_MAGIC;
+    p.Command = BC250_ESCAPE_RUN_PSP;
+    if (!_wcsicmp(opText, L"plan")) p.Op = BC250_PSP_OP_PLAN;
+    else if (!_wcsicmp(opText, L"load")) p.Op = BC250_PSP_OP_LOAD;
+    else if (!_wcsicmp(opText, L"unload")) p.Op = BC250_PSP_OP_UNLOAD;
+    else { fprintf(stderr, "psp plan | load | unload, not %ls\n", opText); return 2; }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &p, sizeof(p), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (p.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (p.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no PSP command\n"); return 3; }
+
+    printf("psp %ls: %s, NTSTATUS 0x%08lX %s, sequence result %ld, %lu register writes%s, %lu of %lu commands\n", opText,
+           p.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", p.NtStatus, StatusName((NTSTATUS)p.NtStatus), p.Result,
+           p.WriteCount, p.Op == BC250_PSP_OP_PLAN ? " planned, none executed" : " executed", p.CommandsDone, p.CommandCount);
+    printf("gates        mmio %s, vram %s, gart %s, psp %s\n", (p.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
+           (p.Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed", (p.Flags & BC250_ESCAPE_FLAG_GART) ? "open" : "closed",
+           (p.Flags & BC250_ESCAPE_FLAG_PSP) ? "open" : "closed");
+    if (p.FaultOffset) printf("fault        register 0x%05lX was refused by the driver's table; the sequence stopped there\n", p.FaultOffset);
+    printf("state        gart %s, psp ring %s, tmr %s\n", (p.State & BC250_PSP_STATE_GART) ? "enabled" : "not enabled",
+           (p.State & BC250_PSP_STATE_RING) ? "KNOWN TO THE PSP" : "none", (p.State & BC250_PSP_STATE_TMR) ? "KNOWN TO THE PSP" : "none");
+    printf("ring         MC 0x%llX, command buffer MC 0x%llX, fence MC 0x%llX\n", p.RingMc, p.CommandMc, p.FenceMc);
+    printf("tmr          MC 0x%llX, physical 0x%llX\n", p.TmrMc, p.TmrPhysical);
+    printf("staging      MC 0x%llX, 0x%lX bytes used\n", p.StagingMc, p.StagingUsed);
+    for (unsigned long i = 0; i < p.WriteCount && i < BC250_PSP_MAX_WRITES; i++)
+        printf("W 0x%05lX %08lX\n", p.Writes[i].Offset, p.Writes[i].Value);
+    for (unsigned long i = 0; i < p.CommandCount && i < BC250_PSP_MAX_COMMANDS; i++)
+    {
+        const BC250_ESCAPE_PSP_COMMAND *c = &p.Commands[i];
+        printf("C %2lu id %lu type %2lu size %7lu mc 0x%llX %s rc %ld status 0x%08lX us %lu tmr 0x%llX\n", i + 1, c->CommandId,
+               c->FirmwareType, c->Size, c->McAddress, i < p.CommandsDone ? "submitted" : "planned  ", c->Result, c->PspStatus,
+               c->Microseconds, c->TmrAddress);
+    }
+    return p.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -549,6 +597,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
                         "       bc250kmd_cli gart plan | enable | restore\n"
+                        "       bc250kmd_cli psp plan | load | unload\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -563,6 +612,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"vwrite") && argc == 5) return VramWord(1, argv[2], argv[3], argv[4]);
     if (!_wcsicmp(argv[1], L"vcompare") && argc == 4) return VramCompare(argv[2], argv[3]);
     if (!_wcsicmp(argv[1], L"gart") && argc == 3) return Gart(argv[2]);
+    if (!_wcsicmp(argv[1], L"psp") && argc == 3) return Psp(argv[2]);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }

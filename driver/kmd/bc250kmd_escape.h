@@ -12,7 +12,8 @@
 #define BC250_ESCAPE_VRAM_READ 5u           // BC250_ESCAPE_MEMORY in: Path, Offset; out: Value
 #define BC250_ESCAPE_VRAM_WRITE 6u          // BC250_ESCAPE_MEMORY in: Path, Offset, Value; out: Value read back
 #define BC250_ESCAPE_RUN_GART 7u            // BC250_ESCAPE_GART in: Op; out: what the sequence wrote (or would write)
-#define BC250_KMD_VERSION 0x00040003u       // milestone 4 work, revision 3
+#define BC250_ESCAPE_RUN_PSP 8u             // BC250_ESCAPE_PSP in: Op; out: register writes and PSP commands
+#define BC250_KMD_VERSION 0x00050002u       // milestone 5 work, revision 2
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -24,6 +25,7 @@
 #define BC250_ESCAPE_FLAG_VRAM 4u           // the EnableVram gate was open at start and the carve-out was identified
 #define BC250_ESCAPE_FLAG_VRAM_WRITE 8u
 #define BC250_ESCAPE_FLAG_GART 16u          // the EnableGart gate was open at start
+#define BC250_ESCAPE_FLAG_PSP 32u           // the EnablePsp gate was open at start
 
 // The two independent ways to the same VRAM byte (vram.c).
 #define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
@@ -63,6 +65,11 @@ typedef struct _BC250_ESCAPE_MEMORY {
     unsigned long long TestOffset, TestLength;      // out: the only window VRAM_WRITE accepts
 } BC250_ESCAPE_MEMORY;
 
+// One register write of a sequence, as issued or as planned.
+typedef struct _BC250_ESCAPE_WRITE {
+    unsigned long Offset, Value;
+} BC250_ESCAPE_WRITE;
+
 // The GART command (gart.c). PLAN executes no write; ENABLE and RESTORE do.
 #define BC250_GART_OP_PLAN 0u
 #define BC250_GART_OP_ENABLE 1u
@@ -85,5 +92,47 @@ typedef struct _BC250_ESCAPE_GART {
     unsigned long WriteCount;               // out: writes the sequence issued; the first BC250_GART_MAX_WRITES are listed
     unsigned long Reserved;
     unsigned long long TablePhysical, TableMc, ScratchMc, DummyPhysical;
-    struct { unsigned long Offset, Value; } Writes[BC250_GART_MAX_WRITES];
+    BC250_ESCAPE_WRITE Writes[BC250_GART_MAX_WRITES];
 } BC250_ESCAPE_GART;
+
+// The PSP command (psp.c). PLAN executes no write and touches no VRAM; LOAD and UNLOAD do.
+#define BC250_PSP_OP_PLAN 0u
+#define BC250_PSP_OP_LOAD 1u
+#define BC250_PSP_OP_UNLOAD 2u
+#define BC250_PSP_STATE_RING 1u             // the PSP has been told about our ring
+#define BC250_PSP_STATE_TMR 2u              // the PSP has been told about our TMR
+#define BC250_PSP_STATE_GART 4u             // the GART sequence is enabled (LOAD needs it)
+#define BC250_PSP_MAX_WRITES 32
+#define BC250_PSP_MAX_COMMANDS 16
+
+typedef struct _BC250_ESCAPE_PSP_COMMAND {
+    unsigned long CommandId;                // GFX_CMD_ID_*: 5 SETUP_TMR, 6 LOAD_IP_FW
+    unsigned long FirmwareType;             // GFX_FW_TYPE_*, 0 for SETUP_TMR
+    unsigned long Size;                     // bytes of the image, or of the TMR
+    long Result;                            // return code of the submission: 0, -62 no fence, -22 refused by the PSP
+    unsigned long PspStatus;                // resp.status as the PSP wrote it
+    unsigned long Microseconds;             // submission to fence
+    unsigned long long McAddress;           // where the image (or the TMR) is
+    unsigned long long TmrAddress;          // resp.fw_addr: where the PSP says it put the image
+} BC250_ESCAPE_PSP_COMMAND;
+
+typedef struct _BC250_ESCAPE_PSP {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_PSP
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Op;                       // in: BC250_PSP_OP_*
+    long Result;                            // out: first failing return code of the sequence, 0 if none; with a file
+                                            //      error (NtStatus), the index of the firmware file
+    unsigned long FaultOffset;              // out: the first register the driver's table refused, 0 if none
+    unsigned long State;                    // out: BC250_PSP_STATE_*
+    unsigned long WriteCount;               // out: register writes issued (or planned)
+    unsigned long CommandCount;             // out: commands of the sequence
+    unsigned long CommandsDone;             // out: commands submitted, the failing one included
+    unsigned long StagingUsed;              // out: bytes of the staging area in use
+    unsigned long long RingMc, CommandMc, FenceMc, TmrMc, TmrPhysical, StagingMc;
+    BC250_ESCAPE_WRITE Writes[BC250_PSP_MAX_WRITES];
+    BC250_ESCAPE_PSP_COMMAND Commands[BC250_PSP_MAX_COMMANDS];
+} BC250_ESCAPE_PSP;

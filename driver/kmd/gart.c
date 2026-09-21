@@ -17,8 +17,6 @@
 // own trace of this step. The first refused access stops all further writes of the sequence.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
-#include <ntstrsafe.h>
-#include <stdarg.h>
 #include "bc250_gmc.h"
 
 #define BC250_GART_TAG 'gC2B'
@@ -30,11 +28,8 @@
 
 typedef struct _BC250_GART {
     BC250_DEVICE* Device;
-    BOOLEAN Plan;
-    NTSTATUS Fault;                 // first refused register access of the running sequence
-    ULONG FaultOffset;
-    ULONG WriteCount;
-    BC250_ESCAPE_GART* Report;      // where the writes are listed, may be NULL
+    BC250_SEQUENCE Sequence;        // the shim's backend state for this command (sequence.c)
+    BOOLEAN SetUp;                  // Adev holds the register bases and the VRAM window
 
     // Kept from ENABLE until RESTORE.
     BOOLEAN Enabled;
@@ -47,7 +42,7 @@ typedef struct _BC250_GART {
     struct amdgpu_bo TableBo;
 } BC250_GART;
 
-// ---- the shim's backend (driver/shim/include/bc250_shim.h) ------------------------------------------------------
+// ---- what the shim's backend (sequence.c) needs to know about this sequence ---------------------------------------
 
 // The invalidation protocol registers: reading the semaphore acquires it (facts M25), writing the request
 // starts an invalidation. PLAN answers them instead of touching them, and the snapshot leaves them out. Their
@@ -82,70 +77,22 @@ static BOOLEAN IsSemaphoreRegister(_In_ const struct amdgpu_device* Adev, ULONG 
     return IsProtocolRegisterOfKind(Adev, DwordIndex, 0, 0);
 }
 
-static void RecordFault(_Inout_ BC250_GART* Gart, NTSTATUS Status, ULONG Offset)
+// PLAN answers the protocol registers instead of touching them: semaphore taken, every VMID acknowledged.
+static BOOLEAN GartPlanAnswers(_In_ BC250_SEQUENCE* Sequence, ULONG DwordIndex, _Out_ ULONG* Value)
 {
-    if (NT_SUCCESS(Gart->Fault))
-    {
-        Gart->Fault = Status;
-        Gart->FaultOffset = Offset;
-        GuardLog("gart: register 0x%05X refused (0x%08X), sequence stopped", Offset, Status);
-    }
+    const BC250_GART* gart = (const BC250_GART*)Sequence->Owner;
+
+    *Value = 0xFFFFFFFFu;
+    return IsProtocolRegister(&gart->Adev, DwordIndex);
 }
 
-unsigned int bc250_shim_rreg(struct amdgpu_device* adev, unsigned int dword_index)
+// The one write that must get through a stopped sequence: giving the invalidation semaphore back. A semaphore
+// left held would wedge every later invalidation, the next Linux boot's included (facts M25).
+static BOOLEAN GartPassesFault(_In_ BC250_SEQUENCE* Sequence, ULONG DwordIndex, ULONG Value)
 {
-    BC250_GART* gart = (BC250_GART*)adev->backend;
-    ULONG value = 0;
-    NTSTATUS status;
+    const BC250_GART* gart = (const BC250_GART*)Sequence->Owner;
 
-    // After a fault nothing is read any more, and all ones ends every bit poll of the sequence at once. No value
-    // read here can reach the hardware: writes are stopped as well.
-    if (!NT_SUCCESS(gart->Fault)) return 0xFFFFFFFFu;
-    if (gart->Plan && IsProtocolRegister(adev, dword_index)) return 0xFFFFFFFFu;    // semaphore taken, every VMID acknowledged
-    status = MmioGartRead(gart->Device, dword_index * 4, &value);
-    if (!NT_SUCCESS(status)) RecordFault(gart, status, dword_index * 4);
-    return value;
-}
-
-void bc250_shim_wreg(struct amdgpu_device* adev, unsigned int dword_index, unsigned int value)
-{
-    BC250_GART* gart = (BC250_GART*)adev->backend;
-    NTSTATUS status;
-
-    if (!NT_SUCCESS(gart->Fault))
-    {
-        // The one write that must get through a stopped sequence: giving the invalidation semaphore back. A
-        // semaphore left held would wedge every later invalidation, the next Linux boot's included (facts M25).
-        if (!gart->Plan && value == 0 && IsSemaphoreRegister(adev, dword_index)) MmioGartWrite(gart->Device, dword_index * 4, 0);
-        return;
-    }
-    if (!gart->Plan)
-    {
-        status = MmioGartWrite(gart->Device, dword_index * 4, value);
-        if (!NT_SUCCESS(status)) { RecordFault(gart, status, dword_index * 4); return; }
-    }
-    if (gart->Report != NULL && gart->WriteCount < BC250_GART_MAX_WRITES)
-    {
-        gart->Report->Writes[gart->WriteCount].Offset = dword_index * 4;
-        gart->Report->Writes[gart->WriteCount].Value = value;
-    }
-    gart->WriteCount++;
-}
-
-void bc250_shim_udelay(unsigned int usec)
-{
-    KeStallExecutionProcessor(usec);
-}
-
-void bc250_shim_log(int level, void* dev, const char* fmt, ...)
-{
-    va_list arguments;
-    char line[160];
-
-    UNREFERENCED_PARAMETER(dev);
-    va_start(arguments, fmt);
-    if (NT_SUCCESS(RtlStringCchVPrintfA(line, sizeof(line), fmt, arguments))) GuardLog("amdgpu[%d]: %s", level, line);
-    va_end(arguments);
+    return Value == 0 && IsSemaphoreRegister(&gart->Adev, DwordIndex);
 }
 
 // ---- memory ---------------------------------------------------------------------------------------------------------
@@ -192,12 +139,13 @@ static int RunSetup(_Inout_ BC250_GART* Gart)
     RtlZeroMemory(&Gart->Adev, sizeof(Gart->Adev));
     RtlZeroMemory(&Gart->TableBo, sizeof(Gart->TableBo));
     Gart->Adev.dev = (void*)device;
-    Gart->Adev.backend = Gart;
+    Gart->Adev.backend = &Gart->Sequence;
     inputs.gart_table_mc = device->VramMcBase + window;
     inputs.mem_scratch_mc = device->VramMcBase + window + BC250_GART_SCRATCH_OFFSET;
     inputs.dummy_page_dma = (u64)Gart->DummyPhysical.QuadPart;
     inputs.noretry = true;          // what amdgpu used on unit A: CONTEXTn_CNTL in the E03 trace, driver/shim/README.md
-    return bc250_gmc_setup(&Gart->Adev, &inputs, &Gart->TableBo);
+    Gart->SetUp = (bc250_gmc_setup(&Gart->Adev, &inputs, &Gart->TableBo) == 0);
+    return Gart->SetUp ? 0 : -1;
 }
 
 static NTSTATUS TakeSnapshot(_Inout_ BC250_GART* Gart)
@@ -241,7 +189,7 @@ static NTSTATUS WriteSnapshotBack(_Inout_ BC250_GART* Gart)
     ULONG count = MmioGartTable(&table), i, pass;
 
     if (!Gart->SnapshotValid || count > BC250_GART_MAX_WRITES) return STATUS_INVALID_DEVICE_STATE;
-    if (Gart->Adev.vmhub[AMDGPU_GFXHUB(0)].eng_distance == 0 || Gart->Adev.backend != Gart) return STATUS_INVALID_DEVICE_STATE;
+    if (Gart->Adev.vmhub[AMDGPU_GFXHUB(0)].eng_distance == 0 || Gart->Adev.backend != &Gart->Sequence) return STATUS_INVALID_DEVICE_STATE;
     for (pass = 0; pass < 2; pass++)
     {
         for (i = 0; i < count; i++)
@@ -251,7 +199,7 @@ static NTSTATUS WriteSnapshotBack(_Inout_ BC250_GART* Gart)
             bc250_shim_wreg(&Gart->Adev, table[i] / 4, Gart->Snapshot[i]);
         }
     }
-    return Gart->Fault;
+    return Gart->Sequence.Fault;
 }
 
 void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
@@ -278,14 +226,10 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
         return;
     }
     status = CheckWindow(Device);
-    gart->Plan = (Data->Op == BC250_GART_OP_PLAN);
-    gart->Fault = STATUS_SUCCESS;
-    gart->FaultOffset = 0;
-    gart->WriteCount = 0;
-    gart->Report = Data;
+    SequenceBegin(&gart->Sequence, Device, Data->Op == BC250_GART_OP_PLAN, Data->Writes, BC250_GART_MAX_WRITES);
 
     if (NT_SUCCESS(status) && RunSetup(gart) != 0) status = STATUS_DEVICE_DATA_ERROR;
-    if (NT_SUCCESS(status)) status = gart->Fault;
+    if (NT_SUCCESS(status)) status = gart->Sequence.Fault;
     if (NT_SUCCESS(status))
     {
         switch (Data->Op)
@@ -314,13 +258,15 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
             break;
         }
     }
-    if (NT_SUCCESS(status)) status = gart->Fault;
-    GuardLog("gart: op %u -> 0x%08X, result %d, %u writes, fault offset 0x%05X", Data->Op, status, result, gart->WriteCount, gart->FaultOffset);
+    if (NT_SUCCESS(status)) status = gart->Sequence.Fault;
+    GuardLog("gart: op %u -> 0x%08X, result %d, %u writes, fault offset 0x%05X", Data->Op, status, result,
+             gart->Sequence.WriteCount, gart->Sequence.FaultOffset);
 
-    gart->Report = NULL;
+    gart->Sequence.Writes = NULL;           // the caller's buffer goes away with this call
+    gart->Sequence.MaxWrites = 0;
     Data->Result = result;
-    Data->FaultOffset = gart->FaultOffset;
-    Data->WriteCount = gart->WriteCount;
+    Data->FaultOffset = gart->Sequence.FaultOffset;
+    Data->WriteCount = gart->Sequence.WriteCount;
     Data->State = (gart->Enabled ? BC250_GART_STATE_ENABLED : 0) | (gart->SnapshotValid ? BC250_GART_STATE_SNAPSHOT : 0);
     Data->TablePhysical = (unsigned long long)Device->VramPhysical.QuadPart + window;
     Data->TableMc = Device->VramMcBase + window;
@@ -329,6 +275,28 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
     ExReleaseFastMutex(&Device->GartLock);
+}
+
+// For the sequences that come after this one (psp.c): the shim's device. Caller holds GartLock. If no GART command
+// has run yet in this driver instance, the device is set up here, which only reads registers.
+NTSTATUS GartDevice(_In_ BC250_DEVICE* Device, _Outptr_ struct amdgpu_device** Adev, _Out_ BOOLEAN* Enabled)
+{
+    BC250_GART* gart = (BC250_GART*)Device->Gart;
+    NTSTATUS status;
+
+    *Adev = NULL;
+    *Enabled = FALSE;
+    if (gart == NULL || !Device->MmioGartEnabled) return STATUS_DEVICE_NOT_READY;
+    if (!gart->SetUp)
+    {
+        status = CheckWindow(Device);
+        if (!NT_SUCCESS(status)) return status;
+        SequenceBegin(&gart->Sequence, Device, TRUE, NULL, 0);
+        if (RunSetup(gart) != 0 || !NT_SUCCESS(gart->Sequence.Fault)) return STATUS_DEVICE_DATA_ERROR;
+    }
+    *Adev = &gart->Adev;
+    *Enabled = gart->Enabled;
+    return STATUS_SUCCESS;
 }
 
 // ---- start and stop ---------------------------------------------------------------------------------------------------
@@ -344,6 +312,12 @@ NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
     gart = (BC250_GART*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*gart), BC250_GART_TAG);
     if (gart == NULL) return STATUS_SUCCESS;        // never fails the start
     gart->Device = Device;
+    gart->Sequence.Name = "gart";
+    gart->Sequence.Read = MmioGartRead;
+    gart->Sequence.Write = MmioGartWrite;
+    gart->Sequence.PlanAnswers = GartPlanAnswers;
+    gart->Sequence.PassesFault = GartPassesFault;
+    gart->Sequence.Owner = gart;
     // The page faulting GPU accesses are redirected to. It stays allocated for as long as the GPU may know it.
     low.QuadPart = 0;
     high.QuadPart = 0xFFFFFFFFFFFll;                // 44 bits, amdgpu's DMA mask for this generation
@@ -374,16 +348,13 @@ void GartStop(_Inout_ BC250_DEVICE* Device)
     if (gart == NULL) return;
     if (gart->Enabled)
     {
-        gart->Plan = FALSE;
-        gart->Fault = STATUS_SUCCESS;
-        gart->WriteCount = 0;
-        gart->Report = NULL;
+        SequenceBegin(&gart->Sequence, Device, FALSE, NULL, 0);
         if (!NT_SUCCESS(WriteSnapshotBack(gart)))
         {
             GuardLog("gart: restore at stop failed, keeping the dummy page allocated");
             return;
         }
-        GuardLog("gart: firmware state restored at stop (%u writes)", gart->WriteCount);
+        GuardLog("gart: firmware state restored at stop (%u writes)", gart->Sequence.WriteCount);
     }
     MmFreeContiguousMemory(gart->DummyPage);
     ExFreePoolWithTag(gart, BC250_GART_TAG);

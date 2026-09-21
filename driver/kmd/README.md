@@ -1,7 +1,8 @@
 # driver/kmd: bc250kmd, the WDDM miniport
 
 State: **milestones M3 and M4 reached on unit A** (experiment E06, facts M28 and M29): the driver is installed on the
-lab machine and runs its display. The acceptance list below is met; escape reaches the driver.
+lab machine and runs its display. The acceptance list below is met; escape reaches the driver. M5's first part
+(0.5.2): the PSP takes the GPU firmware from this driver (experiment E10, facts M34 and M35).
 
 What it is (ADR 0006): a display-only miniport for `PCI\VEN_1002&DEV_13FE` that takes over the firmware's
 framebuffer through post-display ownership, offers exactly the mode the firmware left, and presents by CPU
@@ -16,7 +17,9 @@ the documented DDI; no code from Microsoft's MS-PL sample.
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
 | `guard.c` | boot-loop guard, stage breadcrumbs in the registry, log |
 | `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`; every access checked against tables generated through regcalc (E07) |
-| `gart.c` | M4: kernel backend of `driver/shim` and the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`; registers through a table generated from amdgpu's own trace of the step (E09) |
+| `sequence.c` | the kernel backend of `driver/shim`, shared by every bring-up sequence: registers only through the sequence's own generated table, first refused access stops all further writes, a plan executes no write and records what would be written |
+| `gart.c` | M4: the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`; registers through a table generated from amdgpu's own trace of the step (E09) |
+| `psp.c` | M5, first part: the PSP command (plan, load, unload) around AMD's imported `psp_v11_0_8.c` and `driver/shim/bc250_psp.c`, behind `EnablePsp`: PSP ring, trusted memory region and the ten firmware images, staged in the top of VRAM from files in `C:\BC250\firmware` (E10) |
 | `vram.c` | the VRAM carve-out by system physical address and through BAR0, behind `EnableVram` / `EnableVramWrite`; one page per access, writes only in a test page (E08) |
 | `bc250kmd_escape.h` | private escape data shared with lab tools |
 | `bc250kmd.inf`, `build.ps1` | package and build (direct `cl`/`link`, `/W4 /WX`, test-signed) |

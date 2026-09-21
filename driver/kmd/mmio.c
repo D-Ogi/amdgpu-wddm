@@ -7,6 +7,8 @@
 //     EnableMmioWrite  REG_DWORD  1 = also allow WRITE_REG escapes to g_MmioWriteAllow. Default 0.
 //     EnableGart       REG_DWORD  1 = also allow the GART command of gart.c its own table, g_MmioGartAllow,
 //                                 which no escape can reach register by register. Default 0.
+//     EnablePsp        REG_DWORD  1 = also allow the PSP command of psp.c its own table, g_MmioPspAllow. Needs
+//                                 EnableGart. Default 0.
 //
 // Both are read once per start. A read of a wrong BAR5 address can hang this SoC (facts M16) and some reads
 // change state (facts M25), hence a table for reads as well.
@@ -73,6 +75,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->Mmio = NULL;
     Device->MmioWriteEnabled = FALSE;
     Device->MmioGartEnabled = FALSE;
+    Device->MmioPspEnabled = FALSE;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);
@@ -90,6 +93,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioPhysical = start;
     Device->MmioWriteEnabled = (GuardReadSetting(L"EnableMmioWrite", 0) == 1);
     Device->MmioGartEnabled = (GuardReadSetting(L"EnableGart", 0) == 1);
+    Device->MmioPspEnabled = Device->MmioGartEnabled && (GuardReadSetting(L"EnablePsp", 0) == 1);
     GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
@@ -100,6 +104,7 @@ void MmioStop(_Inout_ BC250_DEVICE* Device)
     Device->Mmio = NULL;
     Device->MmioWriteEnabled = FALSE;
     Device->MmioGartEnabled = FALSE;
+    Device->MmioPspEnabled = FALSE;
 }
 
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
@@ -139,6 +144,27 @@ NTSTATUS MmioGartWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Valu
 {
     if (Device->Mmio == NULL || !Device->MmioGartEnabled) return STATUS_DEVICE_NOT_READY;
     if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioGartAllow, BC250_MMIO_GART_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
+    return STATUS_SUCCESS;
+}
+
+// The PSP command's registers (psp.c): the five mailbox registers amdgpu used for the ring. None has a read
+// side effect (they are on the general read list as well); writes: this table only.
+NTSTATUS MmioPspRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
+{
+    *Value = 0;
+    if (Device->Mmio == NULL || !Device->MmioPspEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioPspAllow, BC250_MMIO_PSP_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    *Value = READ_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4]);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS MmioPspWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    if (Device->Mmio == NULL || !Device->MmioPspEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioPspAllow, BC250_MMIO_PSP_ALLOW_COUNT, Offset))
         return STATUS_ACCESS_DENIED;
     WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
     return STATUS_SUCCESS;
