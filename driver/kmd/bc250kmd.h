@@ -175,6 +175,7 @@ ULONG GuardLogSequence(void);                                   // the sequence 
 void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
+void GuardLogKeep(void);                                        // the ring into a file under C:\BC250\kmdlog; PASSIVE_LEVEL
 
 // mmio.c
 NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device);

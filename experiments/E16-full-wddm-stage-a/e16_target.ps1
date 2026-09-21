@@ -45,6 +45,8 @@ function State {
     $umd = (Get-ItemProperty $class -Name UserModeDriverName -ErrorAction SilentlyContinue).UserModeDriverName
     Say ("umd      UserModeDriverName {0}" -f $(if ($umd) { $umd -join ' | ' } else { 'absent (plain package)' }))
     Say ("stages   last {0}   history {1}   unconfirmed {2}" -f $p.LastStage, $p.StageHistory, $p.UnconfirmedStarts)
+    Say ("keeplog  KeepLog {0}  KeepStatus {1}  files {2}" -f $p.KeepLog, $(if ($null -ne $p.KeepStatus) { '0x{0:X8}' -f $p.KeepStatus } else { 'never' }),
+        @(Get-ChildItem 'C:\BC250\kmdlog' -File -ErrorAction SilentlyContinue).Count)
     Say ("gates    EnableFullWddm {0}  EnableMmio {1}  EnableVram {2}  EnableGart {3}  EnablePsp {4}  EnableGfx {5}  EnableIh {6}" -f `
         $p.EnableFullWddm, $p.EnableMmio, $p.EnableVram, $p.EnableGart, $p.EnablePsp, $p.EnableGfx, $p.EnableIh)
     Get-CimInstance Win32_VideoController | ForEach-Object {
@@ -108,6 +110,9 @@ switch ($Phase) {
         Set-ItemProperty $params -Name EnableMmio -Value $Full -Type DWord
         Set-ItemProperty $params -Name EnableVram -Value $Full -Type DWord
         Set-ItemProperty $params -Name EnableFullWddm -Value $Full -Type DWord
+        # 0.7.3: the ring goes into C:\BC250\kmdlog at every stop while the gate is open, because dxgkrnl may end a
+        # full WDDM start by itself and unload the driver, ring and all (run 1 with 0.7.2 did exactly that).
+        Set-ItemProperty $params -Name KeepLog -Value $Full -Type DWord
         $gpu = Gpu
         Say ("disable: " + ((pnputil /disable-device "$($gpu.InstanceId)" 2>&1 | Out-String).Trim() -replace '\s+', ' '))
         Start-Sleep -Seconds 4

@@ -255,3 +255,118 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
     KeReleaseSpinLock(&g_LogLock, irql);
     return count;
 }
+
+// ---- the log, kept ---------------------------------------------------------------------------------------------
+//
+// E16 run 1 (0.7.2): with EnableFullWddm open, DxgkDdiStartDevice returned success, dxgkrnl called some DDIs,
+// did not like an answer, stopped the device and unloaded the driver - and the ring went with the image, so the
+// one run the ring was built for left nothing but "stage 39, 70, 79". Windows keeps no reason either
+// (CM_PROB_FAILED_POST_START, problem status 0). Kto nie ma w głowie, ten ma w nogach (what the head forgets,
+// the legs pay for): the ring can now be written out at the end of a stop.
+//
+// Behind its own gate, Parameters\KeepLog (REG_DWORD, 0 by default and after every install, read here at the
+// stop): a synchronous file write has no timeout, and a stop during a shutdown or over a wedged volume is no
+// place for one on a board without a BMC. An experiment that expects dxgkrnl to end the start opens it.
+//
+// A text file per stop under C:\BC250\kmdlog, named by UTC time to the millisecond, in the format bc250kmd_cli
+// log prints. The directory is created if it is missing. What became of the attempt is written to
+// Parameters\KeepStatus (the NTSTATUS of the create, or of the last write), because a line in the ring saying
+// that the ring was not kept would be read by nobody. PASSIVE_LEVEL only: DxgkDdiStopDevice is, and everything
+// here (Zw file and registry calls, paged pool) needs it.
+#define BC250_LOG_KEEP_LINE (BC250_LOG_TEXT + 32)   // "%6lu %6lu.%03lu " is 18 characters, CR LF, and room to spare
+
+static void KeepStatus(NTSTATUS Status)
+{
+    HANDLE key;
+
+    if (!NT_SUCCESS(OpenParameters(&key))) return;
+    WriteDword(key, L"KeepStatus", (ULONG)Status);
+    ZwFlushKey(key);
+    ZwClose(key);
+}
+
+void GuardLogKeep(void)
+{
+    WCHAR name[96];
+    UNICODE_STRING path;
+    OBJECT_ATTRIBUTES attributes;
+    IO_STATUS_BLOCK io;
+    HANDLE file = NULL;
+    LARGE_INTEGER now;
+    TIME_FIELDS t;
+    BC250_LOG_LINE* page = NULL;
+    char* text = NULL;
+    char* cursor;
+    size_t left;
+    ULONG from = 0, next = 0, returned, total, lost, above, i, rounds;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    if (GuardReadSetting(L"KeepLog", 0) == 0) return;
+
+    // The directory first; FILE_OPEN_IF makes this a no-op when it is there, and a failure shows in the create below.
+    RtlInitUnicodeString(&path, L"\\??\\C:\\BC250\\kmdlog");
+    InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
+    status = ZwCreateFile(&file, FILE_LIST_DIRECTORY | SYNCHRONIZE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL,
+                          FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN_IF,
+                          FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE, NULL, 0);
+    if (NT_SUCCESS(status)) ZwClose(file);
+    file = NULL;
+
+    KeQuerySystemTime(&now);
+    RtlTimeToTimeFields(&now, &t);
+    status = RtlStringCchPrintfW(name, RTL_NUMBER_OF(name),
+                                 L"\\??\\C:\\BC250\\kmdlog\\ring-%04d%02d%02d-%02d%02d%02d-%03d.log",
+                                 t.Year, t.Month, t.Day, t.Hour, t.Minute, t.Second, t.Milliseconds);
+    if (!NT_SUCCESS(status)) { KeepStatus(status); return; }
+    RtlInitUnicodeString(&path, name);
+    InitializeObjectAttributes(&attributes, &path, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
+    status = ZwCreateFile(&file, FILE_GENERIC_WRITE, &attributes, &io, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ,
+                          FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, NULL, 0);
+    if (!NT_SUCCESS(status)) { KeepStatus(status); return; }
+
+    page = (BC250_LOG_LINE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, BC250_LOG_MAX_LINES * sizeof(BC250_LOG_LINE), BC250_TAG);
+    text = (char*)ExAllocatePool2(POOL_FLAG_PAGED, BC250_LOG_MAX_LINES * BC250_LOG_KEEP_LINE, BC250_TAG);
+    if (page != NULL && text != NULL)
+    {
+        GuardLogStats(&total, &lost, &above);
+        cursor = text;
+        left = BC250_LOG_MAX_LINES * BC250_LOG_KEEP_LINE;
+        RtlStringCchPrintfExA(cursor, left, &cursor, &left, 0,
+                              "bc250kmd 0x%08X log kept at the stop: %lu lines, %lu lost to the wrap, %lu dropped above "
+                              "DISPATCH_LEVEL\r\n", BC250_KMD_VERSION, total, lost, above);
+        status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), NULL, NULL);
+
+        // A page of the ring at a time, the way the escape reads it. The round count is a bound, not a need: the
+        // ring holds RING_LINES and nothing logs during a stop, but a loop over a live structure gets a limit.
+        for (rounds = 0; NT_SUCCESS(status) && rounds < BC250_LOG_RING_LINES / BC250_LOG_MAX_LINES + 2; rounds++)
+        {
+            returned = GuardLogRead(from, page, BC250_LOG_MAX_LINES, &next);
+            if (returned == 0) break;
+            cursor = text;
+            left = BC250_LOG_MAX_LINES * BC250_LOG_KEEP_LINE;
+            for (i = 0; i < returned; i++)
+            {
+                page[i].Text[BC250_LOG_TEXT - 1] = 0;
+                RtlStringCchPrintfExA(cursor, left, &cursor, &left, 0, "%6lu %6lu.%03lu %s\r\n", page[i].Sequence,
+                                      page[i].Milliseconds / 1000, page[i].Milliseconds % 1000, page[i].Text);
+            }
+            // The one write whose failure matters: a full volume leaves a file that exists and is short, which
+            // is the most misleading thing this function could produce.
+            status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), NULL, NULL);
+            if (!NT_SUCCESS(status) || next <= from) break;
+            from = next;
+        }
+        // KeepStatus is the only voice this function has, so a file that is short or not on the disk must not
+        // be reported as kept.
+        if (NT_SUCCESS(status)) status = ZwFlushBuffersFile(file, &io);
+    }
+    else
+    {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+    }
+    if (text != NULL) ExFreePoolWithTag(text, BC250_TAG);
+    if (page != NULL) ExFreePoolWithTag(page, BC250_TAG);
+    ZwClose(file);
+    KeepStatus(status);
+}

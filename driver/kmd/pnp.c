@@ -114,6 +114,9 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     MmioStop(device);
     DisplayUnmapFramebuffer(device);
     GuardStage(StageStopDone);
+    // Last, so that the file holds the stop as well. Does nothing unless Parameters\KeepLog is set: dxgkrnl may
+    // end a full WDDM start by itself and unload the driver after, ring and all (E16 run 1).
+    GuardLogKeep();
     return STATUS_SUCCESS;
 }
 

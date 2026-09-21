@@ -238,6 +238,17 @@ static BOOLEAN WddmFirstCalls(_In_opt_ BC250_WDDM* Wddm, BC250_WDDM_DDI Ddi)
     return calls <= BC250_WDDM_LOG_CALLS;
 }
 
+// TRUE while QueryAdapterInfo is still in its first 64 calls, i.e. during adapter initialization. The lines that
+// log what a query was answered (not only that it was asked) are behind this, so that a dxgkrnl that asks for
+// the caps again at every power transition cannot push the start-up out of the ring's tail. It reads the
+// counter WddmFirstCalls keeps and does not count itself.
+static BOOLEAN WddmAnswersLogged(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+
+    return wddm != NULL && wddm->Calls[WddmDdiQueryAdapterInfo] < 64;
+}
+
 // Count one argument value in a kind table. Lock-free, because it is called from DDIs that may run at
 // DISPATCH_LEVEL and the summary that reads it never runs concurrently with a stop. A slot is claimed with one
 // compare-exchange and never released; a value that finds no free slot is counted in the overflow instead of
@@ -762,6 +773,7 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
     if (out->NbSegment == 0)
     {
         out->NbSegment = count;
+        if (WddmAnswersLogged(Device)) GuardLog("wddm: QUERYSEGMENT4 pass 1: %u segment(s)", count);
         return STATUS_SUCCESS;
     }
     if (out->NbSegment < count || out->pSegmentDescriptor == NULL) return STATUS_INVALID_PARAMETER;
@@ -785,6 +797,19 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
     out->PagingBufferSegmentId = count != 0 ? BC250_WDDM_SEGMENT_VRAM : 0;
     out->PagingBufferSize = BC250_WDDM_PAGING_BUFFER_BYTES;
     out->PagingBufferPrivateDataSize = 0;
+    // The segment table is the centre of two suspects of E16 run 1 and was invisible in the log.
+    if (!WddmAnswersLogged(Device)) return STATUS_SUCCESS;
+    GuardLog("wddm: QUERYSEGMENT4 pass 2: %u segment(s), stride %u, paging buffer segment %u, %u bytes",
+             count, (ULONG)out->SegmentDescriptorStride, out->PagingBufferSegmentId, out->PagingBufferSize);
+    if (count != 0)
+    {
+        // CpuTranslatedAddress shares a union with CpuHostAperture and is the valid arm only while
+        // Flags.SupportsCpuHostAperture is 0, which it is here.
+        descriptor = (DXGK_SEGMENTDESCRIPTOR4*)out->pSegmentDescriptor;
+        GuardLog("wddm: segment 1 flags 0x%08X gpu 0x%llX cpu 0x%llX size 0x%llX", descriptor->Flags.Value,
+                 (ULONGLONG)descriptor->BaseAddress.QuadPart, (ULONGLONG)descriptor->CpuTranslatedAddress.QuadPart,
+                 (ULONGLONG)descriptor->Size);
+    }
     return STATUS_SUCCESS;
 }
 
@@ -794,7 +819,6 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 {
     DXGK_DRIVERCAPS* caps = (DXGK_DRIVERCAPS*)Query->pOutputData;
 
-    UNREFERENCED_PARAMETER(Device);
     if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
     // The caller's buffer, not our sizeof: this driver is compiled at WDDM 2.0 and will run under a dxgkrnl that
     // knows a longer DXGK_DRIVERCAPS. Zeroing all of it means the members we have never heard of read as zero
@@ -856,6 +880,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 
     // No hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor into the image it presents,
     // exactly as in the display-only build.
+
+    // What was promised, and into how large a structure: the size says which DXGK_DRIVERCAPS this dxgkrnl thinks
+    // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 129 of
+    // the 160 bytes of a log line: count before adding a field.
+    if (WddmAnswersLogged(Device))
+        GuardLog("wddm: DRIVERCAPS %u of %u bytes: wddm %u sched 0x%X mm 0x%X paging node %u flip 0x%X slots %u",
+             (ULONG)sizeof(*caps), Query->OutputDataSize, (ULONG)caps->WDDMVersion, caps->SchedulingCaps.Value,
+             caps->MemoryManagementCaps.Value, caps->MemoryManagementCaps.PagingNode, caps->FlipCaps.Value,
+             caps->MaxAllocationListSlotId);
     return STATUS_SUCCESS;
 }
 
@@ -941,7 +974,10 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
     // Which types dxgkrnl asks a full miniport for, and how often, is half of what stage A is run for: the
     // counter table keeps all of them, the log below only the first few calls.
     if (wddm != NULL) WddmNoteKind(wddm->AdapterInfo, (ULONG)QueryAdapterInfo->Type, &wddm->AdapterInfoOverflow);
-    if (WddmFirstCalls(wddm, WddmDdiQueryAdapterInfo))
+    // The first few calls, and every refusal among the first 256: E16 run 1 ended with dxgkrnl stopping the
+    // adapter right after the start, and a question this function refused is the first suspect. PASSIVE_LEVEL DDI.
+    if (WddmFirstCalls(wddm, WddmDdiQueryAdapterInfo) ||
+        (!NT_SUCCESS(status) && wddm != NULL && wddm->Calls[WddmDdiQueryAdapterInfo] <= 256))
         GuardLog("wddm: QueryAdapterInfo type %u in %u out %u -> 0x%08X", (ULONG)QueryAdapterInfo->Type,
                  QueryAdapterInfo->InputDataSize, QueryAdapterInfo->OutputDataSize, status);
     return status;
@@ -1024,8 +1060,15 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     pCreateContext->ContextInfo.PagingCompanionNodeId = BC250_WDDM_NODE_3D;
 
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCreateContext))
+    {
         GuardLog("wddm: CreateContext node %u engine 0x%X flags 0x%08X private %u", pCreateContext->NodeOrdinal,
                  pCreateContext->EngineAffinity, pCreateContext->Flags.Value, pCreateContext->PrivateDriverDataSize);
+        // The answer as well as the question: a wrong answer that succeeds looks like a right one otherwise.
+        GuardLog("wddm: CreateContext answered dma %u bytes segment set 0x%X, lists %u/%u, caps 0x%08X",
+                 pCreateContext->ContextInfo.DmaBufferSize, pCreateContext->ContextInfo.DmaBufferSegmentSet,
+                 pCreateContext->ContextInfo.AllocationListSize, pCreateContext->ContextInfo.PatchLocationListSize,
+                 pCreateContext->ContextInfo.Caps.Value);
+    }
     return STATUS_SUCCESS;
 }
 
