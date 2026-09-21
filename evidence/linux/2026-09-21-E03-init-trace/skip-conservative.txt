@@ -1,0 +1,7 @@
+# Non-GC blocks: only register families that amdgpu itself uses are read.
+# Measured 2026-09-21: reading MMHUB.MMEA0_ADDRDEC0_BASE_ADDR_CS0 (0x68594) hangs the machine.
+^MMHUB\.(?!MMVM_|MMMC_VM_)
+^OSSSYS\.(?!IH_|INTERRUPT_CNTL)
+^NBIO\.(?!RCC_|BIF_)
+^MP[01]\.(?!.*C2PMSG)
+PERFCOUNTER|PERFMON
