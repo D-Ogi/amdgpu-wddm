@@ -83,6 +83,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
 
     GuardStage(StageStopEnter);
     device->Started = FALSE;
+    device->ModeActive = FALSE;
     DisplayUnmapFramebuffer(device);
     GuardStage(StageStopDone);
     return STATUS_SUCCESS;

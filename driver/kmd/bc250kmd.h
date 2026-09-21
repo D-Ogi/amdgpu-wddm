@@ -44,6 +44,7 @@ typedef struct _BC250_DEVICE {
 
     BOOLEAN Started;
     BOOLEAN SourceVisible;
+    BOOLEAN ModeActive;         // a commit has validated that the source surface is exactly the firmware's mode
     BOOLEAN PresentSeen;
     BOOLEAN CommitSeen;
 

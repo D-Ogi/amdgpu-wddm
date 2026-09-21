@@ -19,6 +19,11 @@ NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device)
     Device->FramebufferLength = (SIZE_T)Device->Post.Pitch * Device->Post.Height;
     Device->Framebuffer = MmMapIoSpaceEx(Device->Post.PhysicAddress, Device->FramebufferLength,
                                          PAGE_READWRITE | PAGE_WRITECOMBINE);
+    // Write-combining can be refused when the range already carries another cache attribute (a framebuffer
+    // carved out of system RAM, as on this APU, is a candidate). Slower but always mappable: uncached.
+    if (Device->Framebuffer == NULL)
+        Device->Framebuffer = MmMapIoSpaceEx(Device->Post.PhysicAddress, Device->FramebufferLength,
+                                             PAGE_READWRITE | PAGE_NOCACHE);
     if (Device->Framebuffer == NULL)
     {
         Device->FramebufferLength = 0;
@@ -339,17 +344,22 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
     if (!NT_SUCCESS(status)) return status;
     status = topology->pfnGetNumPaths(hTopology, &paths);
     if (!NT_SUCCESS(status)) return status;
+    // From here on the source counts as unusable until this commit has validated its mode: presents are
+    // dropped while ModeActive is clear, so a surface of another size can never be copied from.
+    device->ModeActive = FALSE;
     if (paths == 0) return STATUS_SUCCESS;                               // source detached: nothing to program
 
     status = SourceModeIsPinned(vidpn, Commit->hFunctionalVidPn, 0, &pinned, &mode);
     if (!NT_SUCCESS(status)) return status;
-    if (!pinned) return STATUS_GRAPHICS_MODE_NOT_PINNED;
+    if (!pinned) return STATUS_SUCCESS;     // a path without a pinned source mode: nothing to show, not an error
+                                            // (STATUS_GRAPHICS_MODE_NOT_PINNED has success severity anyway)
 
     // The only mode we can show is the one already on the wire. Accept exactly that.
     if (mode.Type != D3DKMDT_RMT_GRAPHICS ||
         mode.Format.Graphics.PrimSurfSize.cx != device->Post.Width ||
         mode.Format.Graphics.PrimSurfSize.cy != device->Post.Height)
         return STATUS_GRAPHICS_INVALID_VIDEO_PRESENT_SOURCE_MODE;
+    device->ModeActive = TRUE;
     return STATUS_SUCCESS;
 }
 
@@ -378,7 +388,7 @@ NTSTATUS Bc250RecommendMonitorModes(_In_ const HANDLE hAdapter, _In_ const DXGKA
     mode->ColorCoeffDynamicRanges.FirstChannel = 8;
     mode->ColorCoeffDynamicRanges.SecondChannel = 8;
     mode->ColorCoeffDynamicRanges.ThirdChannel = 8;
-    mode->ColorCoeffDynamicRanges.FourthChannel = 0;
+    mode->ColorCoeffDynamicRanges.FourthChannel = 8;
     mode->Origin = D3DKMDT_MCO_DRIVER;
     mode->Preference = D3DKMDT_MP_PREFERRED;
 
@@ -425,7 +435,8 @@ NTSTATUS Bc250PresentDisplayOnly(_In_ const HANDLE hAdapter, _In_ const DXGKARG_
 
     if (Present->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
     if (Present->BytesPerPixel != 4 || Present->Pitch <= 0) return STATUS_GRAPHICS_INVALID_PIXELFORMAT;
-    if (!device->Started || device->Framebuffer == NULL || !device->SourceVisible) return STATUS_SUCCESS;
+    if (!device->Started || device->Framebuffer == NULL || !device->SourceVisible || !device->ModeActive)
+        return STATUS_SUCCESS;
 
     if (!device->PresentSeen) GuardStage(StageFirstPresent);
 
