@@ -75,6 +75,7 @@ namespace Bc250Mon
             RegisterHotKey(Handle, HotControls, MOD_CONTROL | MOD_ALT, (int)Keys.B);
             RegisterHotKey(Handle, HotHide, MOD_CONTROL | MOD_ALT, (int)Keys.H);
             RegisterHotKey(Handle, HotStop, MOD_CONTROL | MOD_ALT, (int)Keys.S);
+            Screenshot.OverlayWindow = Handle;      // lets a capture with overlay=0 leave this window out
             Dock_();
         }
 
