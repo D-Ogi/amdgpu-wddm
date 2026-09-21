@@ -17,5 +17,6 @@ One directory per experiment, numbered in the order they were planned. The READM
 | E13 | second Linux reference session on unit A (wishlist L3, L4, L5, L7, L8, L9, L10, L11, L13, L15; L6 last) | run on 2026-09-21, three boots. H1 to H4 hold; one step hung the machine (facts M40, M41, M42). |
 | E14 | Vulkan compute reference (Linux/RADV today, Windows/M8 later) | run on 2026-09-21 on unit A under the Alpine diagnostic stick. H1 holds for all eight |
 | E15 | a compute dispatch under Windows, the SDMA ring test, a second bring-up (closes milestone M6) | runs 001 and 002 done (2026-09-21): the dispatch works, a second and a third bring-up work, and the SDMA |
+| E16 | a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008) | planned (2026-09-21). README written before the run. |
 
 The State column is each README's own `State:` line, shortened; the README is the authority.
