@@ -1,0 +1,82 @@
+{'ok': True}
+{'ok': True}
+driver   0.7.12.1   (oem28.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 0
+=== gate -Full 1 -GpuVa 1 -Engines 1
+gate     EnableGpuVa 1  EnableVramWrite 1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 1  EnablePsp 1  EnableGfx 1  EnableIh 1
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          227
+presents     0
+23:54:13 Tctl 72.6 C (raw 79BB0FEF)
+=== gart enable
+gart enable: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 285 writes executed
+exit code 0
+=== psp load
+C  5 id 6 type  2 size  263168 mc 0xF5FFC53000 submitted rc 0 status 0x00000000 us 5915 tmr 0xF5FF883000
+C  6 id 6 type  1 size  263168 mc 0xF5FFC94000 submitted rc 0 status 0x00000000 us 5903 tmr 0xF5FF8C4000
+C  7 id 6 type  4 size  267440 mc 0xF5FFCD5000 submitted rc 0 status 0x00000000 us 6002 tmr 0xF5FF800000
+C  8 id 6 type  5 size     896 mc 0xF5FFD17000 submitted rc 0 status 0x00000000 us 130 tmr 0x0
+C  9 id 6 type  4 size  267440 mc 0xF5FFD18000 submitted rc 0 status 0x00000000 us 5952 tmr 0xF5FF800000
+C 10 id 6 type  6 size     896 mc 0xF5FFD5A000 submitted rc 0 status 0x00000000 us 138 tmr 0x0
+C 11 id 6 type  8 size   25088 mc 0xF5FFD5B000 submitted rc 0 status 0x00000000 us 1736 tmr 0x0
+exit code 0
+=== ih init
+ih init: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 21 register writes executed
+ring         ENABLED, 0 interrupts taken as ours, 0 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+exit code 0
+=== gfx run 8
+gfx run to stage 8: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 462 register writes and 16 doorbells executed
+state        stages done on the hardware: 8 (interrupt sources)
+S 1 doorbell aperture  rc 0 first write 69 us 1
+S 2 golden registers   rc 0 first write 70 us 26
+S 3 GRBM CAM probe     rc 0 first write 104 us 2
+S 4 constants          rc 0 first write 107 us 66
+S 5 RLC                rc 0 first write 264 us 135
+S 6 CP                 rc 0 first write 272 us 353
+S 7 SDMA               rc 0 first write 334 us 95
+S 8 interrupt sources  rc 0 first write 427 us 23
+exit code 0
+23:54:51 Tctl 75.8 C (raw 7CDB0FEF)
+=== fence gfx x3
+time 2026-09-21T23:54:56  phase fence x
+fence gfx x3: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       3 of 3 values read back, 3 doorbells; last emitted 0x3, slot holds 0x3
+time         34 us in all, slowest single fence 12 us
+exit code 0
+=== fence c0 x16 dispatch
+time 2026-09-21T23:55:05  phase fence x
+fence c0 x16: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       1 of 16 values read back, 1 doorbells; last emitted 0x4, slot holds 0x4
+time         36 us in all, slowest single fence 0 us
+dispatch     16 workgroup(s) of 64 threads, fill 0x22222222: check 0 (every dword as asked), first wrong dword at byte 0x0
+exit code 0
+=== ih state
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+ring         ENABLED, 3 interrupts taken as ours, 286 DPCs, 4 vectors consumed, 0 overflows, rptr 0x80 wptr 0x80
+exit code 0
+log exit 0, 180 lines -> C:\BC250\e16\out\ring-c1-235522.log
+   207     95.294 wddm summary: objects created/destroyed: dev 3/0 ctx 2/0 proc 2/0 alloc 2/0, 9 alive
+   208     95.294 wddm summary: submissions 0 physical + 102 virtual, 0 preemptions, last completed fence 102
+   209     95.294 wddm summary: presents 102, flips 1 of 1 address calls (0 arrived above DISPATCH_LEVEL)
+   211     95.294 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   220     95.294 vidmm summary: 280643 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+=== undo
+=== gfx fini
+gfx fini to stage 0: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 147 register writes and 4 doorbells executed
+state        stages done on the hardware: 0 (none)
+exit code 0
+=== ih fini
+ih fini: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 9 register writes executed
+ring         off, 9 interrupts taken as ours, 512 DPCs, 12 vectors consumed, 0 overflows, rptr 0x180 wptr 0x0
+exit code 0
+23:55:47 Tctl 75.6 C (raw 7CBB0FEF)
+=== gate closed
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+presents     34
+UnconfirmedStarts = 0

@@ -1,6 +1,6 @@
 # E19: the full WDDM table, stage C - a real submission on the gfx ring
 
-Date: 2026-09-22. State: run 001 (M6's bring-up under the full table) prepared. ADR 0008 stage C; follows E18 (M73).
+Date: 2026-09-22. State: run 001 done (M75); the stage C driver build is next. ADR 0008 stage C; follows E18 (M73).
 
 ## Why
 
@@ -33,4 +33,7 @@ E15's pass-through phases (`gart`, `psp`, `ih`, `gfx`, `fence`).
 
 ## Result
 
-(after the runs)
+### Run 001 (2026-09-21, bc250kmd 0.7.12)
+
+H1 holds in every part (facts M75, `evidence/windows/2026-09-21-E19-run-001/`): the bring-up, three gfx fences, a 16-workgroup dispatch and the undo
+all ran under the full table, which did not notice. The ground under stage C is the one M6 built.
