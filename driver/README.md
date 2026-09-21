@@ -1,6 +1,6 @@
 # driver/
 
-M1 is closed. `kmd/` holds the M3 skeleton (builds, not yet loaded on hardware: see `kmd/README.md` and ADR 0006); the rest is still empty. Layout (ADR 0002):
+M1 is closed. `kmd/` holds the M3 skeleton (builds, not yet loaded on hardware: see `kmd/README.md` and ADR 0006). `shim/` and `amdgpu-import/` hold the first piece of M4: AMD's GFXHUB and MMHUB GART code, imported unmodified and replayed on the host against unit A's own amdgpu trace (`shim/README.md`). `umd/` is still empty. Layout (ADR 0002):
 
 | Directory | Contents |
 |---|---|

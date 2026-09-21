@@ -6,7 +6,8 @@ milestone is written from. Consecutive identical accesses are folded into one li
 
     python tools/trace/extract_phase.py <amdgpu-events.txt> --match 'GCVM|GCMC|MMVM|MMMC' [--reads] [--until 0.26]
 
-Times are seconds since the first register access. Output goes to stdout.
+Times are seconds since the first register access. Output goes to stdout. `accesses()` is the same thing for
+other scripts (driver/kmd/gen_regs.py builds the write table of a kernel command from it).
 """
 
 import argparse
@@ -19,6 +20,27 @@ sys.path.insert(0, str(HERE))
 from summarize_init import EVENT, register_names  # noqa: E402
 
 
+def accesses(events, match, reads=False, since=0.0, until=1e9, names=None):
+    """Yield (seconds, 'W'|'R', name, byte offset, value) for every access whose register name matches."""
+    names = names or register_names()
+    want = re.compile(match)
+    t0 = None
+    for line in Path(events).read_text(encoding="utf-8", errors="replace").splitlines():
+        m = EVENT.search(line)
+        if not m:
+            continue
+        t, kind, reg, val = float(m.group(1)), m.group(2), int(m.group(3), 16), int(m.group(4), 16)
+        if t0 is None:
+            t0 = t
+        t -= t0
+        if t < since or t > until or (kind == "rreg" and not reads):
+            continue
+        off = reg * 4
+        name = names.get(off, f"?0x{off:05x}")
+        if want.search(name):
+            yield t, "W" if kind == "wreg" else "R", name, off, val
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("events")
@@ -28,9 +50,6 @@ def main():
     ap.add_argument("--until", type=float, default=1e9)
     args = ap.parse_args()
 
-    names = register_names()
-    want = re.compile(args.match)
-    t0 = None
     last, count = None, 0
 
     def flush():
@@ -38,26 +57,12 @@ def main():
             t, kind, name, off, val = last
             print(f"{t:8.3f}  {kind}  {name:<44} 0x{off:05x}  {val:08X}" + (f"   x{count}" if count > 1 else ""))
 
-    for line in Path(args.events).read_text(encoding="utf-8", errors="replace").splitlines():
-        m = EVENT.search(line)
-        if not m:
-            continue
-        t, kind, reg, val = float(m.group(1)), m.group(2), int(m.group(3), 16), int(m.group(4), 16)
-        if t0 is None:
-            t0 = t
-        t -= t0
-        if t < args.since or t > args.until or (kind == "rreg" and not args.reads):
-            continue
-        off = reg * 4
-        name = names.get(off, f"?0x{off:05x}")
-        if not want.search(name):
-            continue
-        key = ("W" if kind == "wreg" else "R", name, off, val)
-        if last is not None and last[1:] == key:
+    for access in accesses(args.events, args.match, args.reads, args.since, args.until):
+        if last is not None and last[1:] == access[1:]:
             count += 1
             continue
         flush()
-        last, count = (t,) + key, 1
+        last, count = access, 1
     flush()
 
 

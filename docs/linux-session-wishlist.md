@@ -27,6 +27,7 @@ warm, what ran before), secrets and serials redacted before commit.
 | L12 | M.2 root port `00:15.0` over several **cold** starts: `LnkSta`, `LnkCtl2`, AER counters, with and without the SSD seen by the firmware | M21: the NVMe link is intermittent. A pattern (only cold, only first power-up) decides whether a firmware setting or another SSD is the answer | 2026-09-21 |
 | L13 | The PSP/CCP function `1022:143E`: `lspci -vv`, which Linux driver binds, its BARs | Under Windows it sits without a driver. Know what it is before deciding to ignore it | 2026-09-21 |
 | L14 | Rebuild the stick with the fixed SSH host key and with the trace + sweep instruments of E03 as first-class commands | Housekeeping: every Linux session so far started with a known-hosts dance and ad-hoc scripts | 2026-09-21 |
+| L15 | `grep . /sys/module/amdgpu/parameters/*` right after `modprobe amdgpu`, plus `uname -r` and `modinfo amdgpu` | Cheap confirmation of the module parameters the M4 replay had to take from source: `amdgpu_vm_size`, `vm_block_size`, `gart_size`, `agp` and `noretry`. The `noretry` question itself is already answered (6.18.52's `amdgpu_gmc_noretry_set()` tests `gc_ver >= IP_VERSION(10, 1, 0)` where mainline v6.18 tests `10, 3, 0`, so GC 10.1.3 gets `true` - which is what the trace shows), so this is a check, not an open question | 2026-09-21 |
 
 ## Done
 

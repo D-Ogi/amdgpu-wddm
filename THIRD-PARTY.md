@@ -6,7 +6,8 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 
 | Path | Origin | License | Notes |
 |---|---|---|---|
-| `third_party/linux-amdgpu/*.h` | Linux kernel, `drivers/gpu/drm/amd/include/` (see `PROVENANCE.md` there) | MIT (notice in each file), Copyright Advanced Micro Devices, Inc. | Unmodified register offset headers. Input of `tools/regcalc` |
+| `third_party/linux-amdgpu/*.h` | Linux kernel, `drivers/gpu/drm/amd/include/` (per-file commit in `PROVENANCE.md` there) | MIT (notice in each file), Copyright Advanced Micro Devices, Inc. | Unmodified register headers: offsets, field masks and shifts, reset defaults, the memory-type enum, hardware IP ids. Input of `tools/regcalc` and of the imports below |
+| `driver/amdgpu-import/*.c`, `*.h` | Linux kernel, `drivers/gpu/drm/amd/amdgpu/`, tag v6.18, commit `7d0a66e4bb90` (see `PROVENANCE.md` there) | MIT (notice checked in each file), Copyright Advanced Micro Devices, Inc. | Unmodified IP-block sources (ADR 0002): the GFXHUB and MMHUB GART setup, the Cyan Skillfish register base table, the SOC15 register macros. Compiled against `driver/shim`, never edited |
 
 ## Fetched at build time, not stored here
 
@@ -28,4 +29,4 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 |---|---|---|
 | `Keshas-dev/AMD-BC-250-Windows-Driver`: SMU mailbox, PSP GPCOM ring | Apache-2.0 | Attribute here, keep the notice, re-verify under `docs/01-evidence-rules.md` |
 | `Keshas-dev/AMD-BC-250-PSP-Driver`: BIOS/PSP directory parsing scripts | MIT | same |
-| Linux `amdgpu` IP-block sources for the shim-based import (ADR 0002) | MIT per file, check each | Record the kernel commit next to each file |
+| Further Linux `amdgpu` IP-block sources for the shim-based import, ADR 0002 (`gmc_v10_0.c`, `gfx_v10_0.c`, `psp_v11_0_8.c`, `smu_v11_0`, `navi10_ih.c`, `sdma_v5_0.c`, `nv.c`) | MIT per file, check each | Record the kernel commit next to each file, as `driver/amdgpu-import/PROVENANCE.md` does for the first batch |
