@@ -126,7 +126,13 @@ if (-not $PSCmdlet.ShouldProcess("disk $DiskNumber ($($disk.FriendlyName))", "ER
 Set-Disk -Number $DiskNumber -IsReadOnly $false
 Set-Disk -Number $DiskNumber -IsOffline $false
 Clear-Disk -Number $DiskNumber -RemoveData -RemoveOEM -Confirm:$false
-Initialize-Disk -Number $DiskNumber -PartitionStyle MBR -Confirm:$false
+# Removable media come out of Clear-Disk still initialized (MBR); only a RAW disk needs this.
+if ((Get-Disk -Number $DiskNumber).PartitionStyle -eq 'RAW') {
+    Initialize-Disk -Number $DiskNumber -PartitionStyle MBR -Confirm:$false
+}
+elseif ((Get-Disk -Number $DiskNumber).PartitionStyle -ne 'MBR') {
+    Fail "disk $DiskNumber is still $((Get-Disk -Number $DiskNumber).PartitionStyle) after Clear-Disk"
+}
 
 $partition = if ($disk.Size -le $MaxPartitionSize) {
     New-Partition -DiskNumber $DiskNumber -UseMaximumSize -IsActive -AssignDriveLetter
