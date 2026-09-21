@@ -1,0 +1,64 @@
+$ cat /proc/ioports
+0000-03af : PCI Bus 0000:00
+  0000-001f : dma1
+  0020-0021 : pic1
+  0040-0043 : timer0
+  0050-0053 : timer1
+  0060-0060 : keyboard
+  0061-0061 : PNP0800:00
+  0064-0064 : keyboard
+  0070-0071 : PNP0B00:00
+    0070-0071 : rtc0
+  0080-008f : dma page reg
+  00a0-00a1 : pic2
+  00c0-00df : dma2
+  00f0-00ff : fpu
+03b0-03df : PCI Bus 0000:00
+03e0-0cf7 : PCI Bus 0000:00
+  03f8-03ff : serial
+  0400-0403 : ACPI PM1a_EVT_BLK
+  0404-0405 : ACPI PM1a_CNT_BLK
+  040b-040b : pnp 00:03
+  0420-0427 : ACPI GPE0_BLK
+  04d0-04d1 : pnp 00:03
+  04d6-04d6 : pnp 00:03
+  0810-0815 : ACPI CPU throttle
+  0900-090f : pnp 00:03
+  0910-091f : pnp 00:03
+  0a00-0a0f : pnp 00:04
+  0a10-0a1f : pnp 00:04
+  0a20-0a2f : pnp 00:04
+    0a24-0a27 : nct6683
+      0a24-0a27 : nct6683
+  0b00-0b0f : pnp 00:03
+    0b00-0b08 : piix4_smbus
+  0b20-0b3f : pnp 00:03
+    0b20-0b28 : piix4_smbus
+  0c00-0c01 : pnp 00:03
+  0c14-0c14 : pnp 00:03
+  0c50-0c51 : pnp 00:03
+  0c52-0c52 : pnp 00:03
+  0c6c-0c6c : pnp 00:03
+  0c6f-0c6f : pnp 00:03
+  0cd0-0cd1 : pnp 00:03
+  0cd2-0cd3 : pnp 00:03
+  0cd4-0cd5 : pnp 00:03
+  0cd6-0cd7 : pnp 00:03
+  0cd8-0cdf : pnp 00:03
+0cf8-0cff : PCI conf1
+0d00-ffff : PCI Bus 0000:00
+  d000-dfff : PCI Bus 0000:04
+    d000-d0ff : 0000:04:00.0
+  e000-efff : PCI Bus 0000:01
+    e000-e0ff : 0000:01:00.0
+  f000-f00f : 0000:00:11.0
+    f000-f00f : ahci
+  f010-f013 : 0000:00:11.0
+    f010-f013 : ahci
+  f020-f027 : 0000:00:11.0
+    f020-f027 : ahci
+  f030-f033 : 0000:00:11.0
+    f030-f033 : ahci
+  f040-f047 : 0000:00:11.0
+    f040-f047 : ahci
+  fe00-fefe : pnp 00:03

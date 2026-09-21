@@ -1,0 +1,10 @@
+(1/8) Installing dmidecode (3.7-r0)
+(2/8) Installing python3-pycache-pyc0 (3.14.7-r1)
+(3/8) Installing pyc (3.14.7-r1)
+(4/8) Installing python3-pyc (3.14.7-r1)
+(5/8) Installing hwdata-usb (0.408-r0)
+(6/8) Installing eudev-libs (3.2.14-r6)
+(7/8) Installing libusb (1.0.30-r0)
+(8/8) Installing usbutils (019-r0)
+Executing busybox-1.37.0-r31.trigger
+OK: 60.2 MiB in 63 packages

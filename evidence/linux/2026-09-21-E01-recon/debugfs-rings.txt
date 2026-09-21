@@ -1,0 +1,23 @@
+$ sh -c ls /sys/kernel/debug/dri/0000:01:00.0 | grep -E "^amdgpu_ring_|^amdgpu_mqd_"
+amdgpu_mqd_comp_1.0.0
+amdgpu_mqd_comp_1.0.1
+amdgpu_mqd_comp_1.1.0
+amdgpu_mqd_comp_1.1.1
+amdgpu_mqd_comp_1.2.0
+amdgpu_mqd_comp_1.2.1
+amdgpu_mqd_comp_1.3.0
+amdgpu_mqd_comp_1.3.1
+amdgpu_mqd_gfx_0.0.0
+amdgpu_mqd_kiq_0.2.1.0
+amdgpu_ring_comp_1.0.0
+amdgpu_ring_comp_1.0.1
+amdgpu_ring_comp_1.1.0
+amdgpu_ring_comp_1.1.1
+amdgpu_ring_comp_1.2.0
+amdgpu_ring_comp_1.2.1
+amdgpu_ring_comp_1.3.0
+amdgpu_ring_comp_1.3.1
+amdgpu_ring_gfx_0.0.0
+amdgpu_ring_kiq_0.2.1.0
+amdgpu_ring_sdma0
+amdgpu_ring_sdma1

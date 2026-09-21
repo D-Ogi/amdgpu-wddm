@@ -1,0 +1,17 @@
+$ cat /sys/kernel/debug/dri/0000:01:00.0/framebuffer
+framebuffer[72]:
+	allocated by = [fbcon]
+	refcount=2
+	format=XR24 little-endian (0x34325258)
+	modifier=0x0
+	size=1920x1200
+	layers:
+		size[0]=1920x1200
+		pitch[0]=7680
+		offset[0]=0
+		obj[0]:
+			name=0
+			refcount=4
+			start=00100001
+			size=9216000
+			imported=no

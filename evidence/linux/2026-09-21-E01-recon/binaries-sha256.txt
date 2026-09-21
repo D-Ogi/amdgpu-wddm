@@ -1,0 +1,46 @@
+22fe99b207fc798f52d24aa82aa28bc5aec491a952a0eba50841d224f771a350  ./acpi/APIC.aml
+a660925076637ce9321812ea9df66c68c10d12d74fe6054b47dd5186dd8c1a6f  ./acpi/BGRT.aml
+079c41b4822297d2e643a93f1ae245b0078854241003469c861b3acdd204e30c  ./acpi/CDIT.aml
+c53515efc986a1f26fd5d77b07d14963e67e05fcf1542db06aee862cf94928a0  ./acpi/CRAT.aml
+ab88560016b5313425e9868f34a2b9b900bcf66d9d359de38d4e5fca789a22a6  ./acpi/DSDT.aml
+f835168bdef735868b194c54b4d4c7fab4a40244c20af4ff0a35e70c93be2955  ./acpi/FACP.aml
+684c8f1d7a77cf4dbdece6745b7de3bce386c0a8bb0b68365288d5f8f0f3cc2c  ./acpi/FACS.aml
+3b703c5eaa10f9e84ab388bcb0fc8bb49bb56901b0adcd5bae7647931850684e  ./acpi/FIDT.aml
+422b36af55ebd412212854c36dda6dd636b2be41925d3e70f9f497e73ad4c215  ./acpi/FPDT.aml
+e05aead47cfe74b395c44508aef50253e7e541ae08e8e803173b9750346ce090  ./acpi/HPET.aml
+8b78e1f2270e77c06f5421167e736c2f7fa1955a6e22c13c80ac1fe07ff817cb  ./acpi/MCFG.aml
+2f0c27555723a8ecda6a968059f66bdf082e63194d31898792ac71cb1f86a4d1  ./acpi/SSDT1.aml
+4a7e8f5a171767535c4627dfa1a98d286cbb233d180d8c9d4c41bbe5e52f7e5f  ./acpi/SSDT2.aml
+0f4bc1e545b1ff156258274a746f10293edc5d9079dfc10c7f482ef26801d19c  ./acpi/UEFI.aml
+722c901bc1508d18bddd7035168b21b5a1a87b5d589bcad1906dfcaa516eab72  ./acpi/VFCT.aml
+af47bf00f1a281ac1d1eb631c1fe008e5fb3a8ea280f9ff87902b581cb1d2c66  ./gca_config.bin
+3d5f69370523b1d84fbbe926ab72a5a287b9ff7ce74484c8a79677efc8677965  ./ip-discovery.bin
+bf4f1e3c77e27700b226265161cf7d0f92773dc2269c572aa47826c9f2830f22  ./vbios-debugfs.rom
+.:
+total 72
+drwxr-xr-x    3 root     root           120 Sep 21 01:54 .
+drwxrwxrwt    6 root     root           180 Sep 21 01:54 ..
+drwxr-xr-x    2 root     root           340 Sep 21 01:54 acpi
+-rw-r--r--    1 root     root           144 Sep 21 01:54 gca_config.bin
+-rw-r--r--    1 root     root         10240 Sep 21 01:54 ip-discovery.bin
+-rw-r--r--    1 root     root         55296 Sep 21 01:54 vbios-debugfs.rom
+
+acpi:
+total 136
+drwxr-xr-x    2 root     root           340 Sep 21 01:54 .
+drwxr-xr-x    3 root     root           120 Sep 21 01:54 ..
+-rw-r--r--    1 root     root           222 Sep 21 01:54 APIC.aml
+-rw-r--r--    1 root     root            56 Sep 21 01:54 BGRT.aml
+-rw-r--r--    1 root     root            41 Sep 21 01:54 CDIT.aml
+-rw-r--r--    1 root     root          3024 Sep 21 01:54 CRAT.aml
+-rw-r--r--    1 root     root         24208 Sep 21 01:54 DSDT.aml
+-rw-r--r--    1 root     root           276 Sep 21 01:54 FACP.aml
+-rw-r--r--    1 root     root            64 Sep 21 01:54 FACS.aml
+-rw-r--r--    1 root     root           156 Sep 21 01:54 FIDT.aml
+-rw-r--r--    1 root     root            68 Sep 21 01:54 FPDT.aml
+-rw-r--r--    1 root     root            56 Sep 21 01:54 HPET.aml
+-rw-r--r--    1 root     root            60 Sep 21 01:54 MCFG.aml
+-rw-r--r--    1 root     root          1560 Sep 21 01:54 SSDT1.aml
+-rw-r--r--    1 root     root          6466 Sep 21 01:54 SSDT2.aml
+-rw-r--r--    1 root     root            66 Sep 21 01:54 UEFI.aml
+-rw-r--r--    1 root     root         55428 Sep 21 01:54 VFCT.aml

@@ -1,0 +1,14 @@
+$ sh -c cd /sys/bus/pci/devices/0000:01:00.0/hwmon/hwmon1; for f in *; do [ -f $f ] && [ -r $f ] && echo "$f = $(cat $f 2>&1)"; done
+freq1_input = 1500000000
+freq1_label = sclk
+in0_input = 906
+in0_label = vddgfx
+in1_input = 1199
+in1_label = vddnb
+name = amdgpu
+power1_average = 67079000
+power1_input = 67039000
+power1_label = PPT
+temp1_input = 82000
+temp1_label = edge
+uevent = 

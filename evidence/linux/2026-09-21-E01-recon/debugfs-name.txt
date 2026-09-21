@@ -1,0 +1,2 @@
+$ cat /sys/kernel/debug/dri/0000:01:00.0/name
+amdgpu dev=0000:01:00.0 unique=0000:01:00.0

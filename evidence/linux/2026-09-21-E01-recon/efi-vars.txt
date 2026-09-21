@@ -1,0 +1,31 @@
+$ sh -c ls /sys/firmware/efi/efivars 2>/dev/null | sed -E "s/-[0-9a-f-]{36}$//" | sort | uniq -c | sort -rn | head -n 80; echo; od -An -tu1 /sys/firmware/efi/efivars/SecureBoot-* 2>/dev/null; od -An -tu1 /sys/firmware/efi/efivars/SetupMode-* 2>/dev/null
+      1 WriteOnceStatus
+      1 Timeout
+      1 SmbiosV3EntryPointTable
+      1 SmbiosScratchBuffer
+      1 SmbiosEntryPointTable
+      1 SetUpdateCountVar
+      1 PlatformLangCodes
+      1 PlatformLang
+      1 OsIndicationsSupported
+      1 OA3MSDMvariable
+      1 MonotonicCounter
+      1 MemoryOverwriteRequestControlLock
+      1 MemoryOverwriteRequestControl
+      1 MaximumTableSize
+      1 HideSetupOption
+      1 FPDT_Volatile
+      1 ErrOutDev
+      1 ErrOut
+      1 DefaultBootOrder
+      1 ConOutDev
+      1 ConOut
+      1 ConInDev
+      1 ConIn
+      1 BootOrder
+      1 BootOptionSupport
+      1 BootCurrent
+      1 Boot0001
+      1 AmdSetup
+      1 AmdAcpiVar
+

@@ -1,0 +1,2 @@
+$ cat /proc/cmdline
+BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=full

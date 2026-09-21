@@ -1,0 +1,23 @@
+$ sh -c command -v lsusb >/dev/null && { lsusb; lsusb -t; }
+unable to initialize usb specBus 001 Device 001: ID 1d6b:0002 Linux 6.18.52-0-lts ehci_hcd EHCI Host Controller
+Bus 001 Device 002: ID 090c:1000 Samsung Flash Drive FIT
+Bus 002 Device 001: ID 1d6b:0002 Linux 6.18.52-0-lts ehci_hcd EHCI Host Controller
+Bus 003 Device 001: ID 1d6b:0002 Linux 6.18.52-0-lts xhci-hcd xHCI Host Controller
+Bus 003 Device 002: ID 046d:c548 Logitech USB Receiver
+Bus 004 Device 001: ID 1d6b:0003 Linux 6.18.52-0-lts xhci-hcd xHCI Host Controller
+Bus 004 Device 002: ID 0b05:19aa Asus ASUS USB-AC58 USB Wireless adapter
+Bus 005 Device 001: ID 1d6b:0001 Linux 6.18.52-0-lts ohci_hcd OHCI PCI host controller
+Bus 006 Device 001: ID 1d6b:0001 Linux 6.18.52-0-lts ohci_hcd OHCI PCI host controller
+Bus 007 Device 001: ID 1d6b:0001 Linux 6.18.52-0-lts ohci_hcd OHCI PCI host controller
+unable to initialize usb spec/:  Bus 001.Port 001: Dev 001, Class=root_hub, Driver=ehci-pci/5p, 480M
+    |__ Port 005: Dev 002, If 0, Class=[unknown], Driver=usb-storage, 480M
+/:  Bus 002.Port 001: Dev 001, Class=root_hub, Driver=ehci-pci/5p, 480M
+/:  Bus 003.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/2p, 480M
+    |__ Port 001: Dev 002, If 0, Class=[unknown], Driver=usbhid, 12M
+    |__ Port 001: Dev 002, If 1, Class=[unknown], Driver=usbhid, 12M
+    |__ Port 001: Dev 002, If 2, Class=[unknown], Driver=usbhid, 12M
+/:  Bus 004.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/2p, 5000M
+    |__ Port 002: Dev 002, If 0, Class=[unknown], Driver=rtw88_8822bu, 5000M
+/:  Bus 005.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/5p, 12M
+/:  Bus 006.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/5p, 12M
+/:  Bus 007.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/2p, 12M

@@ -1,0 +1,4 @@
+$ sh -c dmesg | grep -i -E "iommu|AMD-Vi|ivrs"; echo "groups: $(ls /sys/kernel/iommu_groups 2>/dev/null | wc -l)"
+[    0.259482] iommu: Default domain type: Translated
+[    0.259488] iommu: DMA domain TLB invalidation policy: lazy mode
+groups: 0

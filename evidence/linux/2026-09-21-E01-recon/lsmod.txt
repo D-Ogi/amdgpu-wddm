@@ -1,0 +1,88 @@
+$ lsmod
+Module                  Size  Used by    Tainted: G  
+nct6775_core           81920  0 
+hwmon_vid              12288  0 
+nct6683                28672  0 
+ctr                    12288  2 
+ccm                    20480  6 
+amdgpu              14934016  0 
+drm_buddy              12288  1 amdgpu
+amdxcp                 12288  1 amdgpu
+drm_panel_backlight_quirks    12288  1 amdgpu
+gpu_sched              69632  1 amdgpu
+drm_ttm_helper         16384  2 amdgpu
+ttm                   126976  2 amdgpu,drm_ttm_helper
+drm_exec               12288  1 amdgpu
+i2c_algo_bit           16384  1 amdgpu
+drm_suballoc_helper    16384  1 amdgpu
+drm_display_helper    274432  1 amdgpu
+cec                    69632  2 amdgpu,drm_display_helper
+crc16                  12288  1 amdgpu
+af_packet              69632  6 
+rtw88_8822bu           12288  0 
+rtw88_usb              32768  1 rtw88_8822bu
+rtw88_8822b           229376  1 rtw88_8822bu
+rtw88_core            245760  2 rtw88_usb,rtw88_8822b
+mac80211             1441792  2 rtw88_usb,rtw88_core
+cfg80211             1474560  2 rtw88_core,mac80211
+rfkill                 32768  2 cfg80211
+libarc4                12288  1 mac80211
+serio_raw              16384  0 
+pcspkr                 12288  0 
+efi_pstore             12288  0 
+realtek                53248  1 
+r8169                 143360  0 
+mdio_devres            12288  1 r8169
+libphy                184320  3 realtek,r8169,mdio_devres
+snd_hda_codec_atihdmi    16384  1 
+mdio_bus               65536  3 realtek,r8169,libphy
+snd_hda_codec_hdmi     61440  1 snd_hda_codec_atihdmi
+i2c_piix4              32768  0 
+i2c_smbus              20480  1 i2c_piix4
+sp5100_tco             20480  0 
+k10temp                12288  0 
+hwmon                  45056  4 nct6775_core,nct6683,amdgpu,k10temp
+snd_hda_intel          61440  0 
+snd_hda_codec         212992  3 snd_hda_codec_atihdmi,snd_hda_codec_hdmi,snd_hda_intel
+snd_hda_core          147456  4 snd_hda_codec_atihdmi,snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec
+snd_intel_dspcfg       49152  1 snd_hda_intel
+snd_intel_sdw_acpi     16384  1 snd_intel_dspcfg
+snd_hwdep              24576  1 snd_hda_codec
+snd_pcm               192512  4 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec,snd_hda_core
+snd_timer              57344  1 snd_pcm
+snd                   155648  6 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec,snd_hwdep,snd_pcm,snd_timer
+soundcore              16384  1 snd
+input_leds             12288  0 
+mousedev               28672  0 
+intel_rapl_msr         20480  0 
+intel_rapl_common      53248  1 intel_rapl_msr
+evdev                  32768  0 
+button                 28672  0 
+efivarfs               28672  1 
+nls_utf8               12288  1 
+nls_cp437              16384  1 
+vfat                   24576  1 
+fat                   110592  1 vfat
+uas                    32768  0 
+hid_generic            12288  0 
+usbhid                 53248  0 
+hid                   262144  2 hid_generic,usbhid
+video                  81920  1 amdgpu
+wmi                    28672  1 video
+ahci                   53248  0 
+libahci                61440  1 ahci
+libata                466944  2 ahci,libahci
+ohci_pci               20480  0 
+ohci_hcd               65536  1 ohci_pci
+xhci_pci               24576  0 
+xhci_hcd              393216  1 xhci_pci
+ehci_pci               16384  0 
+ehci_hcd              110592  1 ehci_pci
+usb_storage            94208  2 uas
+usbcore               421888 11 rtw88_8822bu,rtw88_usb,uas,usbhid,ohci_pci,ohci_hcd,xhci_pci,xhci_hcd,ehci_pci,ehci_hcd,usb_storage
+usb_common             20480  4 ohci_hcd,xhci_hcd,ehci_hcd,usbcore
+sd_mod                 65536  1 
+scsi_mod              278528  4 uas,libata,usb_storage,sd_mod
+scsi_common            16384  5 uas,libata,usb_storage,sd_mod,scsi_mod
+squashfs               86016  1 
+loop                   45056  2 

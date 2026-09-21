@@ -1,0 +1,24 @@
+$ sh -c for f in /sys/class/dmi/id/*; do [ -f $f ] && [ -r $f ] && echo "$(basename $f) = $(cat $f 2>/dev/null)"; done
+bios_date = 12/09/2021
+bios_release = 5.13
+bios_vendor = American Megatrends Inc.
+bios_version = P3.00
+board_asset_tag = REDACTED
+board_name = AMD BC-250
+board_serial = REDACTED
+board_vendor = ASRock
+board_version = 
+chassis_asset_tag = REDACTED
+chassis_serial = REDACTED
+chassis_type = 3
+chassis_vendor = Default string
+chassis_version = Default string
+modalias = dmi:bvnAmericanMegatrendsInc.:bvrP3.00:bd12/09/2021:br5.13:svnDefaultstring:pnAMDBC-250:pvrDefaultstring:rvnASRock:rnAMDBC-250:rvr:cvnDefaultstring:ct3:cvrDefaultstring:skuDefaultstring:
+product_family = Default string
+product_name = AMD BC-250
+product_serial = REDACTED
+product_sku = Default string
+product_uuid = REDACTED
+product_version = Default string
+sys_vendor = Default string
+uevent = MODALIAS=dmi:bvnAmericanMegatrendsInc.:bvrP3.00:bd12/09/2021:br5.13:svnDefaultstring:pnAMDBC-250:pvrDefaultstring:rvnASRock:rnAMDBC-250:rvr:cvnDefaultstring:ct3:cvrDefaultstring:skuDefaultstring:

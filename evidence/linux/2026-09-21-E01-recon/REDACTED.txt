@@ -1,0 +1,12 @@
+Redacted before the first commit (docs/01-evidence-rules.md):
+
+- dmesg-full.txt: every MAC address (on-board NIC, Wi-Fi dongle, access point) -> xx:xx:xx:xx:xx:xx; serial number of the USB boot stick
+- dmi.txt: product_serial, product_uuid, board_serial, chassis_serial, asset tags
+- dmidecode.txt: Serial Number, UUID, Asset Tag, Part Number fields
+
+Collected over SSH with P:\BC-250\scratch\recon.sh (read-only; copy kept next to this file as recon.sh).
+Binary captures of the same session are NOT in the repository (AMD VBIOS is not ours to publish):
+P:\BC-250\firmware\unit-A-2026-09-21\ holds vbios-debugfs.rom, ip-discovery.bin, gca_config.bin and the ACPI tables
+(DSDT, SSDT1, SSDT2, VFCT, CRAT, ...). Their SHA-256 sums are in binaries-sha256.txt.
+mqd/: MQDs of the GFX, KIQ and compute queues as hex words (od -t x4) and rptr/wptr/driver wptr of every ring.
+The clock of the unit was set from the dev PC right before this capture; run-001 predates that.

@@ -1,0 +1,2 @@
+$ sh -c for b in /sys/block/*; do n=$(basename $b); case $n in loop*|ram*) continue;; esac; echo "$n size_512=$(cat $b/size) rotational=$(cat $b/queue/rotational) removable=$(cat $b/removable) model=$(cat $b/device/model 2>/dev/null) transport=$(readlink -f $b/device | grep -o -E "usb|nvme|ata" | head -n1)"; done; ls /sys/class/nvme 2>/dev/null
+sda size_512=125313283 rotational=1 removable=1 model=Flash Drive FIT  transport=usb

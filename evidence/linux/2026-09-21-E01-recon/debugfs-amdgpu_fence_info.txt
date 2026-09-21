@@ -1,0 +1,46 @@
+$ cat /sys/kernel/debug/dri/0000:01:00.0/amdgpu_fence_info
+--- ring 0 (gfx_0.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+Last preempted               0x00000000
+Last reset                   0x00000000
+Last both                    0x00000000
+--- ring 1 (comp_1.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 3 (comp_1.2.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 4 (comp_1.3.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 5 (comp_1.0.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 6 (comp_1.1.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 7 (comp_1.2.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 8 (comp_1.3.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 9 (kiq_0.2.1.0) ---
+Last signaled fence          0x00000009
+Last emitted                 0x00000009
+--- ring 10 (sdma0) ---
+Last signaled fence          0x00000012
+Last emitted                 0x00000012
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+--- ring 11 (sdma1) ---
+Last signaled fence          0x00000006
+Last emitted                 0x00000006
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000

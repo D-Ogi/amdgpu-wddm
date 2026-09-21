@@ -1,0 +1,29 @@
+$ sh -c for h in /sys/class/hwmon/hwmon*; do echo "== $(cat $h/name)"; for f in $h/*_input $h/pwm[0-9] $h/pwm[0-9]_enable $h/pwm[0-9]_mode; do [ -r $f ] && echo "$(basename $f) $(cat ${f%_input}_label 2>/dev/null) = $(cat $f 2>&1)"; done; done
+== k10temp
+temp1_input Tctl = 83500
+== amdgpu
+freq1_input sclk = 1500000000
+in0_input vddgfx = 906
+in1_input vddnb = 1199
+power1_input PPT = 69223000
+temp1_input edge = 82000
+== nct6686
+fan1_input  = 0
+fan2_input  = 1589
+fan3_input  = 0
+fan4_input  = 0
+fan5_input  = 0
+in0_input VIN0 = 816
+in1_input VIN1 = 1008
+in2_input VIN2 = 1008
+in3_input VIN6 = 1392
+in4_input VIN7 = 928
+in5_input VIN16 = 880
+temp1_input AMD TSI Addr 98h = 83000
+temp2_input Thermistor 14 = 59500
+temp3_input Thermistor 15 = 59500
+pwm1  = 245
+pwm2  = 245
+pwm3  = 245
+pwm4  = 245
+pwm5  = 245

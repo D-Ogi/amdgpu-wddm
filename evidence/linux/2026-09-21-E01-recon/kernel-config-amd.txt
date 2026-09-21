@@ -1,0 +1,1 @@
+$ sh -c zcat /proc/config.gz 2>/dev/null | grep -E "AMDGPU|DRM_AMD|HSA_AMD|IOMMU|CONFIG_PCI_MSI|STRICT_DEVMEM|IO_STRICT|LOCK_DOWN" 

@@ -1,0 +1,2 @@
+$ cat /sys/kernel/debug/dri/0000:01:00.0/clients
+             command  tgid dev master a   uid      magic                                                             name                   id

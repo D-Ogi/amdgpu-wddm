@@ -10,3 +10,5 @@
 *.ps1  text eol=crlf
 # Shell scripts without an extension that run on the diagnostic USB
 tools/diagusb/overlay/** text eol=lf
+# Evidence is stored byte for byte, never normalized
+evidence/** -text

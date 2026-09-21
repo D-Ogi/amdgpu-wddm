@@ -1,0 +1,19 @@
+$ cat /sys/kernel/debug/dri/0000:01:00.0/amdgpu_sa_info
+--------------------- DELAYED ---------------------
+ [0x0000900000 0x0000900400] size     1024 protected by 0x0000000000000001 on context 309
+ [0x0000900400 0x0000900800] size     1024 protected by 0x0000000000000004 on context 309
+ [0x0000900800 0x0000900c00] size     1024 protected by 0x0000000000000002 on context 309
+ [0x0000900c00 0x0000901000] size     1024 protected by 0x0000000000000003 on context 309
+ [0x0000901000 0x0000901400] size     1024 protected by 0x0000000000000001 on context 315
+ [0x0000901400 0x0000901800] size     1024 protected by 0x0000000000000004 on context 315
+ [0x0000901800 0x0000901c00] size     1024 protected by 0x0000000000000002 on context 315
+ [0x0000901c00 0x0000902000] size     1024 protected by 0x0000000000000003 on context 315
+ [0x0000902000 0x0000902040] size       64 protected by 0x0000000000000001 on context 305
+ [0x0000902100 0x0000902120] size       32 protected by 0x0000000000000002 on context 305
+ [0x0000902200 0x0000902220] size       32 protected by 0x0000000000000003 on context 305
+ [0x0000902300 0x0000902320] size       32 protected by 0x0000000000000004 on context 305
+>[0x0000902400 0x0000902420] size       32 protected by 0x0000000000000005 on context 305
+-------------------- IMMEDIATE --------------------
+ [0x0000a00000 0x0000a00040] size       64 protected by 0x0000000000000001 on context 303
+>[0x0000a00100 0x0000a00140] size       64 protected by 0x0000000000000002 on context 303
+--------------------- DIRECT ----------------------

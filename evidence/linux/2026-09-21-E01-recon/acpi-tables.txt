@@ -1,0 +1,27 @@
+$ sh -c ls -la /sys/firmware/acpi/tables /sys/firmware/acpi/tables/dynamic 2>/dev/null
+/sys/firmware/acpi/tables:
+total 0
+drwxr-xr-x    4 root     root             0 Sep 21 01:54 .
+drwxr-xr-x    6 root     root             0 Sep 21 01:54 ..
+-r--------    1 root     root           222 Sep 21 01:54 APIC
+-r--------    1 root     root            56 Sep 21 01:54 BGRT
+-r--------    1 root     root            41 Sep 21 01:54 CDIT
+-r--------    1 root     root          3024 Sep 21 01:54 CRAT
+-r--------    1 root     root         24208 Sep 21 01:54 DSDT
+-r--------    1 root     root           276 Sep 21 01:54 FACP
+-r--------    1 root     root            64 Sep 21 01:54 FACS
+-r--------    1 root     root           156 Sep 21 01:54 FIDT
+-r--------    1 root     root            68 Sep 21 01:54 FPDT
+-r--------    1 root     root            56 Sep 21 01:54 HPET
+-r--------    1 root     root            60 Sep 21 01:54 MCFG
+-r--------    1 root     root          1560 Sep 21 01:54 SSDT1
+-r--------    1 root     root          6466 Sep 21 01:54 SSDT2
+-r--------    1 root     root            66 Sep 21 01:54 UEFI
+-r--------    1 root     root         55428 Sep 21 01:54 VFCT
+drwxr-xr-x    2 root     root             0 Sep 21 01:54 data
+drwxr-xr-x    2 root     root             0 Sep 21 01:54 dynamic
+
+/sys/firmware/acpi/tables/dynamic:
+total 0
+drwxr-xr-x    2 root     root             0 Sep 21 01:54 .
+drwxr-xr-x    4 root     root             0 Sep 21 01:54 ..
