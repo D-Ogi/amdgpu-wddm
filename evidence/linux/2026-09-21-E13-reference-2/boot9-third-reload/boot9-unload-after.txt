@@ -1,0 +1,26 @@
+ 17:43:10 up 1 min,  0 users,  load average: 0.22, 0.10, 0.03
+[   84.855625] amdgpu: Virtual CRAT table created for GPU
+[   84.856065] amdgpu: Topology: Add dGPU node [0x13fe:0x1002]
+[   84.856072] kfd kfd: amdgpu: added device 1002:13fe
+[   84.856103] amdgpu 0000:01:00.0: amdgpu: SE 2, SH per SE 2, CU per SH 10, active_cu_number 24
+[   84.856117] amdgpu 0000:01:00.0: amdgpu: ring gfx_0.0.0 uses VM inv eng 0 on hub 0
+[   84.856124] amdgpu 0000:01:00.0: amdgpu: ring comp_1.0.0 uses VM inv eng 1 on hub 0
+[   84.856130] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.0 uses VM inv eng 4 on hub 0
+[   84.856136] amdgpu 0000:01:00.0: amdgpu: ring comp_1.2.0 uses VM inv eng 5 on hub 0
+[   84.856142] amdgpu 0000:01:00.0: amdgpu: ring comp_1.3.0 uses VM inv eng 6 on hub 0
+[   84.856148] amdgpu 0000:01:00.0: amdgpu: ring comp_1.0.1 uses VM inv eng 7 on hub 0
+[   84.856153] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.1 uses VM inv eng 8 on hub 0
+[   84.856159] amdgpu 0000:01:00.0: amdgpu: ring comp_1.2.1 uses VM inv eng 9 on hub 0
+[   84.856165] amdgpu 0000:01:00.0: amdgpu: ring comp_1.3.1 uses VM inv eng 10 on hub 0
+[   84.856171] amdgpu 0000:01:00.0: amdgpu: ring kiq_0.2.1.0 uses VM inv eng 11 on hub 0
+[   84.856177] amdgpu 0000:01:00.0: amdgpu: ring sdma0 uses VM inv eng 12 on hub 0
+[   84.856183] amdgpu 0000:01:00.0: amdgpu: ring sdma1 uses VM inv eng 13 on hub 0
+[   84.856735] amdgpu 0000:01:00.0: amdgpu: Runtime PM not available
+[   84.857485] [drm] Initialized amdgpu 3.64.0 for 0000:01:00.0 on minor 1
+[   84.865792] fbcon: amdgpudrmfb (fb0) is primary device
+[   85.028481] [drm] Failed to add display topology, DTM TA is not initialized.
+[   85.030757] Console: switching to colour frame buffer device 240x75
+[   85.049923] amdgpu 0000:01:00.0: [drm] fb0: amdgpudrmfb frame buffer device
+[   90.888263] Console: switching to colour dummy device 80x25
+[   91.003506] amdgpu 0000:01:00.0: amdgpu: amdgpu: finishing device.
+[   91.033480] amdgpu 0000:01:00.0: amdgpu: amdgpu: ttm finalized
