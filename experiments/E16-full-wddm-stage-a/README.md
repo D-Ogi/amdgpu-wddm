@@ -1,6 +1,6 @@
 # E16: a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008)
 
-State: **planned (2026-09-21). README written before the run.**
+State: **run 001 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62); why is not known yet. The README above "Result" was written before the run.**
 
 ## Why
 
@@ -69,4 +69,24 @@ gate is closed again, because the ring lives in the driver image and a driver un
 
 ## Result
 
-(after the run)
+### Run 001 (2026-09-21, bc250kmd 0.7.1 then 0.7.2, plain package)
+
+Evidence: `evidence/windows/2026-09-21-E16-run-001/` (README.txt has the timeline). Facts M61, M62.
+
+- H1 holds: gate closed, 0.7.1 and 0.7.2 are the display-only driver they were (stage 61, presents counting).
+- The log ring paid for itself on its first read, before the gate was opened: the POST display's `TargetId` is
+  `0xFFFFFFFF` on this machine (M61), and stage A of 0.7.1 would have reported every VSync against it. 0.7.2
+  reports against the child's UID. Had the gate been opened with 0.7.1, this run would have measured our own bug.
+- **H2 is refuted as written.** Gate open: `DxgkDdiStartDevice` succeeds, dxgkrnl never commits a VidPN, stops the
+  device and unloads the driver: `CM_PROB_FAILED_POST_START`, problem status 0 (M62). Windows records no reason.
+- H3 and H5 were not reached. H4 is true and worthless: no TDR and no bugcheck, from a driver that never ran.
+- H6 holds for a failed start: Basic Display takes the desktop, SSH and the overlay keep working, and gate closed
+  plus disable/enable brings the display-only driver back. The failed start is counted by the start budget
+  (2 of 2 after it, because the install before it had not been confirmed yet); it was cleared through the registry.
+  Lesson for the procedure: confirm the display-only start before opening the gate.
+- The instrument failed where it mattered: the ring lives in the driver image, dxgkrnl unloaded the image, and
+  the one run the ring was built for left three breadcrumbs. Mądry Polak po szkodzie (a Pole is wise after the
+  damage): 0.7.3 writes the ring to a file at the stop, behind its own gate, and logs what it answered, not only
+  what it was asked.
+
+Run 2 (the UMD stub) waits until a plain full-table start survives.
