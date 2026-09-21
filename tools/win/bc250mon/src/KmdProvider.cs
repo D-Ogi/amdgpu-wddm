@@ -227,6 +227,13 @@ namespace Bc250Mon
             try { File.WriteAllText(_markerFile, id); } catch { }
         }
 
+        // The overlay is 460 px wide and the service path wraps over three lines there, so it is only worth a
+        // row when it is not the usual one, i.e. when the debug switch points this provider somewhere else.
+        void AddKeyRow(Panel p)
+        {
+            if (_kmd.Path != KmdRegistry.DefaultPath) p.Rows.Add(new Row("Key", _kmd.Path, Level.Warn));
+        }
+
         public void Poll(State state)
         {
             var p = new Panel { Name = Name, Title = "bc250kmd", Order = 30 };
@@ -236,7 +243,7 @@ namespace Bc250Mon
             {
                 // The normal state of the lab today. Say it once in the log, then stay quiet.
                 p.Rows.Add(new Row("Driver", "not installed"));
-                p.Rows.Add(new Row("Key", _kmd.Path));
+                AddKeyRow(p);
                 if (_wasInstalled == true) state.Log(Name, Level.Info, "the bc250kmd service key is gone");
                 _wasInstalled = false;
                 _lastError = null;
@@ -247,6 +254,7 @@ namespace Bc250Mon
             _wasInstalled = true;
 
             p.Rows.Add(new Row("Driver", "installed", Level.Good));
+            AddKeyRow(p);
             if (s.Error != null)
             {
                 p.Rows.Add(new Row("Key", s.Error, Level.Error));

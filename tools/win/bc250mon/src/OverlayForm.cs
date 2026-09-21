@@ -1,6 +1,9 @@
 // The window on the BC-250's own screen. Passive mode: always on top, translucent, click-through, never takes
-// focus. Interactive mode (Ctrl+Alt+B): the same window accepts the mouse and shows one button per action.
-// Global hotkeys work in both modes and while hidden:  Ctrl+Alt+B controls, Ctrl+Alt+H hide/show, Ctrl+Alt+S STOP.
+// focus. Interactive mode (Ctrl+Alt+F9): the same window accepts the mouse and shows one button per action.
+// Global hotkeys work in both modes and while hidden:
+//   Ctrl+Alt+F9 controls, Ctrl+Alt+F10 hide/show, Ctrl+Alt+F12 STOP.
+// Function keys, not letters: on the Polish layout (and every other AltGr layout) AltGr is Ctrl+Alt, so a
+// global Ctrl+Alt+<letter> swallows the letter the owner is trying to type - Ctrl+Alt+S ate "s with acute".
 using System;
 using System.Drawing;
 using System.Linq;
@@ -72,11 +75,19 @@ namespace Bc250Mon
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            RegisterHotKey(Handle, HotControls, MOD_CONTROL | MOD_ALT, (int)Keys.B);
-            RegisterHotKey(Handle, HotHide, MOD_CONTROL | MOD_ALT, (int)Keys.H);
-            RegisterHotKey(Handle, HotStop, MOD_CONTROL | MOD_ALT, (int)Keys.S);
+            Hotkey(HotControls, Keys.F9, "controls");
+            Hotkey(HotHide, Keys.F10, "hide/show");
+            Hotkey(HotStop, Keys.F12, "STOP");
             Screenshot.OverlayWindow = Handle;      // lets a capture with overlay=0 leave this window out
             Dock_();
+        }
+
+        // A hotkey another process already owns is refused silently by Windows, and the owner would then press
+        // it and see nothing happen. Say so in the log instead.
+        void Hotkey(int id, Keys key, string what)
+        {
+            if (!RegisterHotKey(Handle, id, MOD_CONTROL | MOD_ALT, (int)key))
+                _state.Log("ui", Level.Warn, "hotkey Ctrl+Alt+" + key + " (" + what + ") is taken, use the buttons or the API");
         }
 
         void Dock_()
@@ -185,7 +196,7 @@ namespace Bc250Mon
             }
             y += 6;
             using (var b = new SolidBrush(Color.FromArgb(110, 118, 130)))
-                g.DrawString("Ctrl+Alt+B controls   Ctrl+Alt+H hide   Ctrl+Alt+S STOP", _small, b, x, y);
+                g.DrawString("Ctrl+Alt+F9 controls   Ctrl+Alt+F10 hide   Ctrl+Alt+F12 STOP", _small, b, x, y);
             y += 22;
 
             int wanted = y + (_buttons.Visible ? _buttons.Height : 0);

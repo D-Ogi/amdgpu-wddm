@@ -44,6 +44,7 @@ before it stopped talking (ADR 0006 points 3 and 4, `driver/kmd/README.md`):
 | Row | From |
 |---|---|
 | `Driver` | does `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd` exist |
+| `Key` | only when `--kmd-key` points somewhere else, so the overlay cannot lie about what it is watching |
 | `Stage` | `Parameters\LastStage`, number plus name |
 | `History` | the tail of `Parameters\StageHistory` |
 | `Unconfirmed` | `Parameters\UnconfirmedStarts`, green at 0, amber at 1, red at 2 (the guard then refuses to start) |
@@ -74,7 +75,7 @@ such service exists, without administrator rights.
 
 ## The brake
 
-`Ctrl+Alt+S` or the red button sets the STOP flag: a banner on the overlay, `GET /flags` returns
+`Ctrl+Alt+F12` or the red button sets the STOP flag: a banner on the overlay, `GET /flags` returns
 `{"stop": true}` and the file `C:\BC250\mon\STOP` exists. Every test script that can run for more than a
 few seconds has to poll one of the two and end. `mon.py stop?` does it from the PC (exit code 1).
 
@@ -109,9 +110,14 @@ their screen was taken. That is the deal, not a debug aid.
 
 | Hotkey | Effect |
 |---|---|
-| `Ctrl+Alt+B` | Toggle interactive mode: the window accepts the mouse and shows the action buttons. Otherwise it is click-through and never takes focus |
-| `Ctrl+Alt+H` | Hide / show |
-| `Ctrl+Alt+S` | STOP |
+| `Ctrl+Alt+F9` | Toggle interactive mode: the window accepts the mouse and shows the action buttons. Otherwise it is click-through and never takes focus |
+| `Ctrl+Alt+F10` | Hide / show |
+| `Ctrl+Alt+F12` | STOP |
+
+Function keys, not letters. `AltGr` is `Ctrl+Alt` on the Polish layout and on every other layout that has
+one, so a global `Ctrl+Alt+<letter>` eats the character the owner is typing: `Ctrl+Alt+S` swallowed `s` with
+an acute accent. A hotkey another process already holds is refused silently by Windows, so the monitor logs a
+warning when a registration fails rather than leaving a dead key.
 
 Buttons today: STOP, clear stop, 1000 MHz / 820 mV, stock 1500 MHz, hide, back to click-through.
 Temperature colours: green below 85 C, amber from 85 C, red from 92 C (Tctl).
