@@ -61,7 +61,11 @@ gate is closed again, because the ring lives in the driver image and a driver un
 3. Gate closed, device disable/enable. State.
 4. Run 2: the INF's `UserModeDriverName` block enabled and `bc250umd.dll` installed (a second package, same binary),
    then as step 2, plus a Direct3D 11 device creation attempt from the SSH session (its HRESULT is the datum).
-5. Gate closed, the plain package installed again. State, witness sweeps `after`.
+5. Gate closed, the plain package back (`-Phase unumd`: the run 2 package carries build number `.1` so that its
+   install is not a tie Windows resolves in favour of what is already there, and for the same reason the plain
+   package cannot be installed over it; removing the run 2 package from the store returns the plain one). `state`
+   prints `UserModeDriverName` from the device's class key in every phase, so which run a line belongs to is
+   read, not remembered. State, witness sweeps `after`.
 
 ## Result
 

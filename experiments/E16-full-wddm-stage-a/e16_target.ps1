@@ -3,7 +3,8 @@
 # except `sweep`, which is the read-only witness.
 #
 #   -Phase install                     pnputil the package in -Package (every install closes every gate)
-#   -Phase gate -Full 0|1              EnableMmio, EnableVram and EnableFullWddm = Full, every engine gate 0, then a
+#   -Phase unumd                       after run 2: remove its package from the store, which returns the plain one
+#   -Phase gate -Full 0|1            EnableMmio, EnableVram and EnableFullWddm = Full, every engine gate 0, then a
 #                                      device disable/enable so that DriverEntry reads the gate again
 #   -Phase state -Tag <t>              device, driver, breadcrumbs, gates, video controller, event and report COUNTS
 #   -Phase log -Tag <t>                the driver's log ring (read it BEFORE the gate is closed: an unload takes it along)
@@ -11,7 +12,7 @@
 #   -Phase d3d -Tag <t>                D3D11CreateDevice on the hardware adapter and on WARP; the HRESULTs are the data
 #   -Phase sweep -Tag <t>              witness sweeps
 param(
-    [Parameter(Mandatory)][ValidateSet('install', 'gate', 'state', 'log', 'confirm', 'd3d', 'sweep')][string]$Phase,
+    [Parameter(Mandatory)][ValidateSet('install', 'unumd', 'gate', 'state', 'log', 'confirm', 'd3d', 'sweep')][string]$Phase,
     [string]$Tag = 'x',
     [int]$Full = 0,
     [string]$Package = 'C:\BC250\e16'
@@ -36,7 +37,13 @@ function State {
     $os = Get-CimInstance Win32_OperatingSystem
     Say ("boot     {0}" -f $os.LastBootUpTime.ToString('s'))
     Say ("device   {0}   status {1}   problem {2}" -f $gpu.FriendlyName, $gpu.Status, $gpu.Problem)
-    Say ("driver   {0}" -f (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data)
+    Say ("driver   {0}   ({1})" -f (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data,
+        (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverInfPath).Data)
+    # Which run this is, read from where dxgkrnl reads it: the run 2 package registers a user-mode driver, the plain
+    # one does not. A run 2 without this value is run 1 under another name.
+    $class = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\' + (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
+    $umd = (Get-ItemProperty $class -Name UserModeDriverName -ErrorAction SilentlyContinue).UserModeDriverName
+    Say ("umd      UserModeDriverName {0}" -f $(if ($umd) { $umd -join ' | ' } else { 'absent (plain package)' }))
     Say ("stages   last {0}   history {1}   unconfirmed {2}" -f $p.LastStage, $p.StageHistory, $p.UnconfirmedStarts)
     Say ("gates    EnableFullWddm {0}  EnableMmio {1}  EnableVram {2}  EnableGart {3}  EnablePsp {4}  EnableGfx {5}  EnableIh {6}" -f `
         $p.EnableFullWddm, $p.EnableMmio, $p.EnableVram, $p.EnableGart, $p.EnablePsp, $p.EnableGfx, $p.EnableIh)
@@ -63,6 +70,36 @@ switch ($Phase) {
     'install' {
         pnputil /add-driver (Join-Path $Package 'bc250kmd.inf') /install 2>&1 | ForEach-Object { Say "$_" }
         Start-Sleep -Seconds 8
+        State
+        & $cli info 2>&1 | ForEach-Object { Say "$_" }
+    }
+    'unumd' {
+        # The way back from run 2. Its package is one build number above the plain one (so that it wins the install
+        # instead of tying with it), which also means the plain package cannot be installed over it. Removing the
+        # run 2 package from the store hands the device to the best package left, the plain 0.7.x of run 1.
+        $gpu = Gpu
+        $inf = (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverInfPath).Data
+        $class = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\' + (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
+        if (-not (Get-ItemProperty $class -Name UserModeDriverName -ErrorAction SilentlyContinue)) {
+            Say "unumd: the installed package ($inf) registers no user-mode driver; nothing removed"
+        } elseif ($inf -notmatch '^oem\d+\.inf$') {
+            Say "unumd: unexpected INF name '$inf'; nothing removed"
+        } else {
+            # Without a plain package left in the store the device would fall to Basic Display and take the escape,
+            # the ring and this tool's counterpart with it: that would read as a failed experiment, not as a missing
+            # package. Get-WindowsDriver rather than pnputil's text, which is localized.
+            $others = @(Get-WindowsDriver -Online | Where-Object { $_.OriginalFileName -like '*\bc250kmd.inf' -and $_.Driver -ne $inf })
+            Say ("unumd: other bc250kmd packages in the store: " + (($others | ForEach-Object { "$($_.Driver) $($_.Version)" }) -join ', '))
+            if ($others.Count -eq 0) {
+                Say "unumd: no plain package in the store; nothing removed (install the plain package first)"
+            } else {
+                pnputil /delete-driver $inf /uninstall 2>&1 | ForEach-Object { Say "$_" }
+                Start-Sleep -Seconds 10
+                Say ("unumd: bc250umd.dll in System32 after the uninstall: " + (Test-Path 'C:\Windows\System32\bc250umd.dll'))
+                # The restart this caused counts against the start budget like any other.
+                Say "unumd: read 'unconfirmed' below; run -Phase confirm if it is not 0 and the state is healthy"
+            }
+        }
         State
         & $cli info 2>&1 | ForEach-Object { Say "$_" }
     }
