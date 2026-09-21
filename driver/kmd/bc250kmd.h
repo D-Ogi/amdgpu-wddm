@@ -1,11 +1,13 @@
 // bc250kmd: WDDM miniport for the ASRock BC-250 (AMD Cyan Skillfish, PCI 1002:13FE).
-// Milestone M3 (ADR 0006): display-only, no MMIO, keeps the firmware's framebuffer.
+// Milestone M3 (ADR 0006): display-only, keeps the firmware's framebuffer. MMIO is a separate, gated part
+// (ADR 0007, mmio.c) that the display path never uses.
 //
 // Layout: entry.c (DriverEntry, DDI table), pnp.c (device life cycle, children, power),
-// display.c (VidPN, present, pointer, system display), guard.c (boot-loop guard, breadcrumbs, log).
+// display.c (VidPN, present, pointer, system display), guard.c (boot-loop guard, breadcrumbs, log),
+// mmio.c (gated register access for the bring-up experiments).
 #pragma once
 
-#include <ntddk.h>
+#include <ntifs.h>        // superset of ntddk.h; the token checks of the escape need it
 #include <windef.h>
 #include <dispmprt.h>
 
@@ -26,6 +28,7 @@ typedef enum _BC250_STAGE {
     StageStartDeviceInfo = 32,
     StageStartPostDisplayAcquired = 33,
     StageStartFramebufferMapped = 34,
+    StageStartMmioDone = 35,
     StageStartDone = 39,
     StageFirstCommitVidPn = 50,
     StageFirstPresent = 60,
@@ -53,6 +56,11 @@ typedef struct _BC250_DEVICE {
     PVOID Framebuffer;                  // mapping of Post.PhysicAddress
     SIZE_T FramebufferLength;
     D3DKMDT_VIDPN_PRESENT_PATH_ROTATION Rotation;
+
+    // BAR5, NULL unless the EnableMmio gate was open at start (mmio.c).
+    volatile ULONG* Mmio;
+    PHYSICAL_ADDRESS MmioPhysical;
+    BOOLEAN MmioWriteEnabled;
 } BC250_DEVICE;
 
 // guard.c
@@ -62,6 +70,13 @@ void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);
 NTSTATUS GuardCheckAndCountStart(void);         // STATUS_SUCCESS, or a failure when the start budget is used up
 void GuardLog(_In_z_ const char* Format, ...);
+ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
+
+// mmio.c
+NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device);
+void MmioStop(_Inout_ BC250_DEVICE* Device);
+NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
+NTSTATUS MmioWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;

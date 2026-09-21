@@ -68,6 +68,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartFramebufferMapped);
 
+    MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
+    GuardStage(StageStartMmioDone);
+
     device->Started = TRUE;
     *NumberOfVideoPresentSources = 1;
     *NumberOfChildren = 1;
@@ -87,6 +90,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     GuardStage(StageStopEnter);
     device->Started = FALSE;
     device->ModeActive = FALSE;
+    MmioStop(device);
     DisplayUnmapFramebuffer(device);
     GuardStage(StageStopDone);
     return STATUS_SUCCESS;

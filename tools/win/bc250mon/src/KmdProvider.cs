@@ -37,6 +37,7 @@ namespace Bc250Mon
             new KmdStage(32, "StageStartDeviceInfo", "start: device info"),
             new KmdStage(33, "StageStartPostDisplayAcquired", "start: post display acquired"),
             new KmdStage(34, "StageStartFramebufferMapped", "start: framebuffer mapped"),
+            new KmdStage(35, "StageStartMmioDone", "start: register gate handled"),
             new KmdStage(39, "StageStartDone", "start: done"),
             new KmdStage(50, "StageFirstCommitVidPn", "first CommitVidPn"),
             new KmdStage(60, "StageFirstPresent", "first present"),

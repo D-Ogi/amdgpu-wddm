@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/21/2026,0.3.1.0
+DriverVer   = 09/21/2026,0.4.1.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -47,6 +47,9 @@ AddReg        = Bc250_Parameters
 [Bc250_Parameters]
 ; Boot-loop guard (guard.c). Installing the package grants a fresh start budget.
 HKR, Parameters, UnconfirmedStarts, 0x00010001, 0
+; Register access gates (mmio.c, ADR 0007). Every install closes them; an experiment opens them on purpose.
+HKR, Parameters, EnableMmio,        0x00010001, 0
+HKR, Parameters, EnableMmioWrite,   0x00010001, 0
 
 [Strings]
 Provider   = "BC-250 lab (D-Ogi)"

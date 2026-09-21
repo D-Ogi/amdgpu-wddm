@@ -100,6 +100,18 @@ BC250_STAGE GuardLastStage(void)
     return g_LastStage;
 }
 
+ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
+{
+    HANDLE key;
+    ULONG value;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !NT_SUCCESS(OpenParameters(&key))) return Default;
+    status = ReadDword(key, Name, &value);
+    ZwClose(key);
+    return NT_SUCCESS(status) ? value : Default;
+}
+
 NTSTATUS GuardCheckAndCountStart(void)
 {
     HANDLE key;

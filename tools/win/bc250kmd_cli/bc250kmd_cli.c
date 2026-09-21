@@ -54,6 +54,7 @@ static const struct { unsigned long Number; const char *Symbol, *Text; } g_Stage
     { 32, "StageStartDeviceInfo",           "start: device info" },
     { 33, "StageStartPostDisplayAcquired",  "start: post display acquired" },
     { 34, "StageStartFramebufferMapped",    "start: framebuffer mapped" },
+    { 35, "StageStartMmioDone",             "start: register gate handled" },
     { 39, "StageStartDone",                 "start: done" },
     { 50, "StageFirstCommitVidPn",          "first CommitVidPn" },
     { 60, "StageFirstPresent",              "first present" },
@@ -82,6 +83,7 @@ static const char *StatusName(NTSTATUS s)
     case 0xC0000002ul: return "STATUS_NOT_IMPLEMENTED";
     case 0xC00000BBul: return "STATUS_NOT_SUPPORTED";
     case 0xC0000022ul: return "STATUS_ACCESS_DENIED";
+    case 0xC00000A3ul: return "STATUS_DEVICE_NOT_READY";
     case 0xC0000008ul: return "STATUS_INVALID_HANDLE";
     case 0xC000000Ful: return "STATUS_NO_SUCH_FILE";
     case 0xC0000023ul: return "STATUS_BUFFER_TOO_SMALL";
@@ -253,6 +255,71 @@ static int Info(const WCHAR *wantedId)
     return 0;
 }
 
+// ---- read / write: registers through the escape (ADR 0007) ----------------------------------------------------
+//
+// Offsets are BAR5 byte offsets and come from tools/regcalc (on the target: bc250rd's reglist.txt), never from
+// memory. The driver checks them against its own generated tables, so a wrong one is refused, not executed.
+
+static int SendEscape(const WCHAR *wantedId, BC250_ESCAPE *data, NTSTATUS *result)
+{
+    BC250_ADAPTER adapters[16];
+    int count = FindAdapters(adapters, 16);
+    int chosen = -1;
+    D3DKMT_OPENADAPTERFROMDEVICENAME open = { 0 };
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_ESCAPE escape = { 0 };
+
+    for (int i = 0; i < count && chosen < 0; i++)
+        if (MatchesHardwareId(adapters[i].HardwareId, wantedId)) chosen = i;
+    if (chosen < 0) { fprintf(stderr, "no display adapter with hardware id %ls\n", wantedId); return 1; }
+
+    open.pDeviceName = adapters[chosen].InterfacePath;
+    *result = D3DKMTOpenAdapterFromDeviceName(&open);
+    if (!NT_SUCCESS(*result)) { PrintStatus("D3DKMTOpenAdapterFromDeviceName", *result); return 1; }
+
+    escape.hAdapter = open.hAdapter;
+    escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
+    escape.Flags.HardwareAccess = 1;        // dxgkrnl then serializes the call with the rest of the adapter's work
+    escape.pPrivateDriverData = data;
+    escape.PrivateDriverDataSize = sizeof(*data);
+    *result = D3DKMTEscape(&escape);
+
+    close.hAdapter = open.hAdapter;
+    D3DKMTCloseAdapter(&close);
+    return 0;
+}
+
+static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
+{
+    BC250_ESCAPE data;
+    NTSTATUS status;
+    WCHAR *end;
+
+    memset(&data, 0, sizeof(data));
+    data.Magic = BC250_ESCAPE_MAGIC;
+    data.Command = write ? BC250_ESCAPE_WRITE_REG : BC250_ESCAPE_READ_REG;
+    data.RegOffset = wcstoul(offsetText, &end, 16);
+    if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    if (write) {
+        data.RegValue = wcstoul(valueText, &end, 16);
+        if (*end) { fprintf(stderr, "value %ls is not a hex number\n", valueText); return 2; }
+    }
+    if (SendEscape(BC250_DEFAULT_HWID, &data, &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+
+    if (data.Status == BC250_ESCAPE_STATUS_DONE) {
+        printf("%s 0x%05lx %08lX\n", write ? "wrote" : "read", data.RegOffset, data.RegValue);
+        return 0;
+    }
+    printf("refused 0x%05lx: %s (driver status %lu, NTSTATUS 0x%08lX %s; mmio %s, writes %s)\n", data.RegOffset,
+           data.Status == BC250_ESCAPE_STATUS_NOT_ADMIN ? "caller is not an administrator" :
+           data.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND ? "this driver build has no register commands" : "see NTSTATUS",
+           data.Status, data.NtStatus, StatusName((NTSTATUS)data.NtStatus),
+           (data.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "not mapped (gate closed)",
+           (data.Flags & BC250_ESCAPE_FLAG_MMIO_WRITE) ? "on" : "off");
+    return 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -341,6 +408,7 @@ int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
+                        "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -348,6 +416,8 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
     if (!_wcsicmp(argv[1], L"stages")) return Stages();
     if (!_wcsicmp(argv[1], L"confirm")) return Confirm();
+    if (!_wcsicmp(argv[1], L"read") && argc == 3) return Register(0, argv[2], NULL);
+    if (!_wcsicmp(argv[1], L"write") && argc == 4) return Register(1, argv[2], argv[3]);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }
