@@ -1136,6 +1136,143 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 #define UNITA_STALE_KIQ_RPTR 0x737u
 
 /*
+ * A compute queue that does not answer the unmap.
+ *
+ * bc250_gfx_unmap_queues() failing is not fatal to the teardown - it is logged and the undo carries
+ * on, because a half-undone GPU is worse than a fully undone one. That leaves
+ * bc250_kcq_clear_pointers() in front of a queue the CP may still be fetching from, and zeroing the
+ * read pointer of a running queue is the one thing worse than leaving a stale one: it tells the CP
+ * that the whole ring is pending. So the clear reads CP_HQD_ACTIVE first and skips a queue that
+ * still says 1 (bc250_gfx.c:2117-2123).
+ *
+ * The arm reproduces it with backend_hqd_pin(): one queue keeps its active bit through the
+ * UNMAP_QUEUES that names it, everything else runs exactly as it did in the re-run above. What has
+ * to happen is a per-queue statement, which is why the backend keeps CP_HQD_PQ_RPTR per queue: the
+ * pinned queue's read pointer must still be what the CP left there, and the other seven must be 0.
+ *
+ * Both halves matter. A teardown that skipped every queue would pass a test that only looked at the
+ * pinned one, and a teardown that zeroed every queue would pass a test that only looked at the
+ * other seven.
+ */
+static unsigned int check_stuck_queue(struct amdgpu_device *adev, int verbose)
+{
+	struct bc250_gfx_inputs fin;
+	struct amdgpu_ring *stuck;
+	unsigned int i, bad = 0, writes_rptr = 0, writes_wptr = 0;
+	u32 before = 0, after = 0;
+	int r;
+
+	printf("\n== a compute queue that does not answer the unmap ==\n");
+
+	/* A fresh bring-up, so that every queue has run its ring test and has a read pointer worth
+	 * clearing. The re-run arm left the device up; take it down the same way the miniport does
+	 * and start again. */
+	(void)bc250_gfx_hw_fini(adev);
+	bc250_sdma_teardown(adev);
+	bc250_gfx_teardown(adev);
+	memset(&fin, 0, sizeof(fin));
+	fin.max_shader_engines = UNITA_MAX_SHADER_ENGINES;
+	fin.max_sh_per_se = UNITA_MAX_SH_PER_SE;
+	fin.max_cu_per_sh = UNITA_MAX_CU_PER_SH;
+	fin.max_backends_per_se = UNITA_MAX_BACKENDS_PER_SE;
+	fin.async_gfx_ring = true;
+	fin.pp_gfxoff = true;
+	if (bc250_gfx_setup(adev, &fin) != 0 || bc250_sdma_setup(adev) != 0) {
+		printf("  the setup failed; nothing to take down\n");
+		return bad + 1;
+	}
+	register_rings(adev);
+	r = bc250_gfx_hw_init(adev);
+	if (r != 0) {
+		printf("  the bring-up returned %d; this arm needs a running device\n", r);
+		return bad + 1;
+	}
+
+	stuck = &adev->gfx.compute_ring[5];             /* me 1, pipe 1, queue 1 */
+	nv_grbm_select(adev, stuck->me, stuck->pipe, stuck->queue, 0);
+	before = bc250_shim_rreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR));
+	nv_grbm_select(adev, 0, 0, 0, 0);
+	if (before == 0) {
+		printf("  compute ring 5's read pointer is already 0; the bring-up did not run its"
+		       " ring test   <-- wrong\n");
+		bad++;
+	}
+
+	backend_hqd_pin(stuck, 1);
+	printf("  compute ring 5 (%u.%u.%u) will keep CP_HQD_ACTIVE = 1 through the unmap, read"
+	       " pointer %u\n", stuck->me, stuck->pipe, stuck->queue, before);
+
+	backend_reset_writes();
+	(void)bc250_gfx_hw_fini(adev);
+	backend_hqd_pin(stuck, 0);
+
+	/* What the teardown wrote. The KIQ's own dequeue zeroes the same three registers for its own
+	 * queue, so the expected count is seven compute queues plus the KIQ. */
+	{
+		const struct bc250_reg_write *w = backend_writes();
+		unsigned int n = backend_write_count();
+		u32 off_rptr = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR) * 4u;
+		u32 off_wptr = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_WPTR_LO) * 4u;
+
+		for (i = 0; i < n; i++) {
+			if (w[i].byte_offset == off_rptr && w[i].value == 0)
+				writes_rptr++;
+			if (w[i].byte_offset == off_wptr && w[i].value == 0)
+				writes_wptr++;
+		}
+		if (writes_rptr != 8u || writes_wptr != 8u) {
+			printf("  the teardown zeroed %u read pointers and %u write pointers, not the"
+			       " seven queues plus the KIQ   <-- wrong\n", writes_rptr, writes_wptr);
+			bad++;
+		} else if (verbose) {
+			printf("    eight of each, which is seven compute queues and the KIQ\n");
+		}
+	}
+
+	/* And the per-queue statement the write count cannot make: this queue's own read pointer. */
+	nv_grbm_select(adev, stuck->me, stuck->pipe, stuck->queue, 0);
+	after = bc250_shim_rreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR));
+	nv_grbm_select(adev, 0, 0, 0, 0);
+	if (after != before) {
+		printf("  the stuck queue's read pointer went from %u to %u   <-- wrong: the CP may"
+		       " still be fetching from it\n", before, after);
+		bad++;
+	} else {
+		printf("  the queue that did not answer kept its read pointer  : yes\n");
+	}
+
+	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+		struct amdgpu_ring *ring = &adev->gfx.compute_ring[i];
+		u32 v;
+
+		if (ring == stuck)
+			continue;
+		nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+		v = bc250_shim_rreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR));
+		nv_grbm_select(adev, 0, 0, 0, 0);
+		if (v == 0)
+			continue;
+		printf("    compute ring %u kept read pointer %u\n", i, v);
+		bad++;
+	}
+	if (bad == 0)
+		printf("  the other seven were put back to 0                   : yes\n");
+
+	/* Leave the device as this arm found it: running, with the KIQ active. The arm that follows
+	 * starts from exactly that state, and this one's teardown dequeued the KIQ. */
+	r = bc250_gfx_hw_init(adev);
+	if (r == 0)
+		r = bc250_sdma_hw_init(adev);
+	if (r != 0) {
+		printf("  bringing the device back up for the next arm returned %d   <-- wrong\n", r);
+		bad++;
+	}
+
+	printf("  %u wrong\n", bad);
+	return bad;
+}
+
+/*
  * The one case the teardown fix does not cover: an instance that stopped without taking the KIQ
  * down. It is not hypothetical - that is exactly what 0.6.1 does, so the first 0.6.2 start on the
  * lab machine goes through here - and it is what the recovery branch at the top of
@@ -2037,6 +2174,7 @@ int main(int argc, char **argv)
 	struct result derived, ctl_async, ctl_gfxoff, ctl_nostub, ctl_perring;
 	struct run_opts opt;
 	unsigned int i, stray = 0, gart_bad = 0, mqd_bad = 0, rerun_bad = 0, unclean_bad = 0;
+	unsigned int stuck_bad = 0;
 	int verbose = 0, exact, controls_fail;
 	const char *sweep1, *sweep2, *trace, *trace_irq, *dumpdir = NULL, *ringsdir = NULL;
 	const char *winsweep = NULL;
@@ -2124,6 +2262,9 @@ int main(int argc, char **argv)
 
 	/* And after that, because it starts from the device the re-run left running. */
 	if (derived.irq_rc == 0 && rerun_bad == 0)
+		stuck_bad = check_stuck_queue(&adev, verbose);
+
+	if (derived.irq_rc == 0 && rerun_bad == 0 && stuck_bad == 0)
 		unclean_bad = check_unclean_start(&adev, verbose);
 
 	/* Four controls, one per claim that is not forced by the register sequence itself.
@@ -2191,6 +2332,7 @@ int main(int argc, char **argv)
 	if (ringsdir != NULL)
 		printf("  MQD fields differing from unit A    : %u\n", mqd_bad);
 	printf("  teardown-and-rerun checks wrong     : %u\n", rerun_bad);
+	printf("  stuck-queue checks wrong            : %u\n", stuck_bad);
 	printf("  unclean-start recovery wrong        : %u\n", unclean_bad);
 	printf("  mismatches, control async_gfx_ring  : %u\n", ctl_async.bringup.mismatches);
 	printf("  mismatches, control pp_gfxoff       : %u\n", ctl_gfxoff.bringup.mismatches);
@@ -2233,6 +2375,10 @@ int main(int argc, char **argv)
 		printf("NO MATCH - %u GART page table checks failed\n", gart_bad);
 	else if (mqd_bad != 0)
 		printf("NO MATCH - %u compute MQD fields differ from unit A's own MQDs\n", mqd_bad);
+	else if (stuck_bad != 0)
+		printf("BRING-UP EXACT over %u + %u writes, BUT the teardown mishandles a compute queue\n"
+		       "           that does not answer its unmap (%u failing check above)\n",
+		       derived.bringup.compared, derived.irq.compared, stuck_bad);
 	else if (unclean_bad != 0)
 		printf("BRING-UP EXACT over %u + %u writes, BUT it does not recover from a start where\n"
 		       "           the last instance left the KIQ up (%u failing check above)\n",
@@ -2254,5 +2400,5 @@ int main(int argc, char **argv)
 		derived.address_failures == 0 && derived.stub_hits == 11 &&
 		derived.stub_rejects == 0 && stray == 0 &&
 		derived.stage0_bad == 0 && gart_bad == 0 && mqd_bad == 0 && rerun_bad == 0 &&
-		unclean_bad == 0 && controls_fail) ? 0 : 1;
+		stuck_bad == 0 && unclean_bad == 0 && controls_fail) ? 0 : 1;
 }

@@ -132,6 +132,7 @@ struct ring_slot {
 	 * Compute queues only - the KIQ's is programmed through the register and stays in the file. */
 	int hqd_mapped;
 	int hqd_mapped_known;
+	int hqd_pinned;                 /* a test asked this queue not to answer an unmap */
 };
 
 static struct ring_slot g_ring[MAX_RINGS];
@@ -832,7 +833,8 @@ static int stub_dispatch_direct(const struct backend_packet *p, const struct amd
 }
 
 /* MAP_QUEUES and UNMAP_QUEUES name their queue by its doorbell (bc250_gfx.c:1265 and :1290, the
- * second body dword, shifted by two in both packets). */
+ * second body dword, shifted by two in both packets: PACKET3_MAP_QUEUES_DOORBELL_OFFSET(x) and
+ * PACKET3_UNMAP_QUEUES_DOORBELL_OFFSET0(x) are both `(x) << 2`, nvd.h:616 and :638). */
 static int stub_map_unmap(const struct backend_packet *p, int mapped)
 {
 	unsigned int i, index;
@@ -844,10 +846,22 @@ static int stub_map_unmap(const struct backend_packet *p, int mapped)
 		if (g_ring[i].ring->doorbell_index != index ||
 		    g_ring[i].ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE)
 			continue;
+		/* The queue the test has pinned does not let go. See backend_hqd_pin(). */
+		if (!mapped && g_ring[i].hqd_pinned)
+			continue;
 		g_ring[i].hqd_mapped = mapped;
 		g_ring[i].hqd_mapped_known = 1;
 	}
 	return 0;                       /* recorded, not counted as a stub hit: the counts are compared */
+}
+
+void backend_hqd_pin(const struct amdgpu_ring *ring, int pinned)
+{
+	unsigned int i;
+
+	for (i = 0; i < g_ring_count; i++)
+		if (g_ring[i].ring == ring)
+			g_ring[i].hqd_pinned = pinned;
 }
 
 static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring *ring)
@@ -1054,9 +1068,17 @@ static struct ring_slot *ring_selected(void)
 {
 	unsigned int i;
 
-	for (i = 0; i < g_ring_count; i++)
+	for (i = 0; i < g_ring_count; i++) {
+		/* Compute queues and the KIQ only. The HQD registers belong to them, and without
+		 * this the gfx ring - me 0, pipe 0, queue 0 - would answer for GRBM_GFX_CNTL = 0,
+		 * which is not a selection at all but the value nv_grbm_select() writes to give the
+		 * selection back. */
+		if (g_ring[i].ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE &&
+		    g_ring[i].ring->funcs->type != AMDGPU_RING_TYPE_KIQ)
+			continue;
 		if (selection_names(g_mec_selection, g_ring[i].ring))
 			return &g_ring[i];
+	}
 	return NULL;
 }
 
@@ -1253,11 +1275,21 @@ void backend_mec_observe(u32 byte_offset, u32 value)
 	}
 
 	if (byte_offset == g_mec.hqd_dequeue_request) {
+		struct ring_slot *slot;
+
 		if (value == 0 || g_mec_halted)
 			return;                 /* a halted engine services nothing */
 		s = hqd_current();
 		s->engine_live = 0;             /* the engine lets the queue go */
 		backend_poke(g_mec.hqd_active, 0);
+
+		/* And in the per-queue copy, for a queue that has one. Only the KIQ is dequeued this
+		 * way today, and the KIQ's active bit lives in the register file the poke above
+		 * reaches - but a compute queue dequeued by hand would otherwise go on reading
+		 * active, because the read hook prefers the per-queue value. */
+		slot = ring_selected();
+		if (slot != NULL && slot->hqd_mapped_known)
+			slot->hqd_mapped = 0;
 		return;
 	}
 
@@ -1361,8 +1393,14 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 		count = CP_PACKET_GET_COUNT(header);
 		body = count + 1u;      /* a PACKET3 is one header plus count + 1 body dwords */
 
-		if (g_packet_count < MAX_PACKETS) {
-			p = &g_packet[g_packet_count++];
+		/* Decoded into a local and then logged, rather than decoded into the log. The log is
+		 * bounded and the CP is not: a run with more packets than MAX_PACKETS would otherwise
+		 * stop EXECUTING them too, and a ring test that is never answered looks exactly like
+		 * a ring test the driver built wrongly. */
+		{
+			struct backend_packet decoded;
+
+			p = &decoded;
 			memset(p, 0, sizeof(*p));
 			p->doorbell_index = index;
 			p->opcode = CP_PACKET3_GET_OPCODE(header);
@@ -1371,6 +1409,9 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 			p->body_dwords = body < 8u ? body : 8u;
 			for (k = 0; k < p->body_dwords; k++)
 				p->body[k] = ring->ring[(size_t)((at + 1u + k) & ring->buf_mask)];
+
+			if (g_packet_count < MAX_PACKETS)
+				g_packet[g_packet_count++] = *p;
 
 			if (g_stub_on)
 				g_stub_hits += (unsigned int)stub_execute(p, ring);

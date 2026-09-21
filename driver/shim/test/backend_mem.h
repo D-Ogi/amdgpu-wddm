@@ -80,6 +80,18 @@ struct backend_packet {
 
 const struct backend_packet *backend_packets(void);
 
+/*
+ * Make one compute queue refuse to answer an UNMAP_QUEUES: its CP_HQD_ACTIVE goes on reading 1
+ * although the packet named it. The test speaking for hardware, like backend_poke(), and the only
+ * way to reach the arm of bc250_kcq_clear_pointers() that leaves a still-active queue alone - a
+ * failed unmap is logged and survived by the teardown, so the queue it failed on is exactly the one
+ * whose read pointer must not be zeroed underneath a CP that is still fetching from it.
+ *
+ * Nothing in driver/shim can reach this. Call with 0 to let go again; backend_mem_reset() drops it
+ * with the rest of the ring table.
+ */
+void backend_hqd_pin(const struct amdgpu_ring *ring, int pinned);
+
 /* How many DISPATCH_DIRECT packets the stub has accepted and carried out. A dispatch that fails any
  * of the stub's checks is a rejection (backend_cp_stub_rejects()) and is not counted here, so a test
  * asserts both: the count it expects, and no rejections. */

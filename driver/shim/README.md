@@ -26,6 +26,8 @@ bc250_gfx.c             golden registers, constants, RLC, MQDs, KIQ, the compute
 bc250_sdma.c            golden registers, unhalt, context switch, the two SDMA GFX rings
 bc250_irq.c             the CP and SDMA interrupt-enable callbacks and the two orders they run in
 bc250_nbio.c            SDMA doorbell range and the doorbell self-ring aperture
+include/bc250_pte.h     DXGK_PTE -> AMD page table entry: the entry points (milestone M7 Stage B)
+bc250_pte.c             the translation, the inverse and the one-line description of an entry
 generated/*.inc         golden register tables cut out of the reference imports, see below
 test/                   the host replay tests, see below
 ```
@@ -464,6 +466,14 @@ Four more things it checks, none of which the two windows can reach:
   second of those can fail on its own - with `bc250_kcq_clear_pointers()` taken out of the teardown,
   all eight compute MQDs come back with 256, the position the CP stub leaves a queue's read pointer
   at after a ring test.
+- **A compute queue that does not answer its unmap.** `bc250_gfx_unmap_queues()` failing is logged
+  and survived, which leaves `bc250_kcq_clear_pointers()` in front of a queue the CP may still be
+  fetching from - and zeroing a running queue's read pointer is worse than leaving a stale one. The
+  arm pins one queue's `CP_HQD_ACTIVE` through the `UNMAP_QUEUES` that names it
+  (`backend_hqd_pin()`), then asserts both halves: that queue keeps its read pointer, the other
+  seven are back to 0, and the teardown wrote eight of each pointer register rather than nine. With
+  the active check taken out of the shim it fails on both counts, which is what says it is testing
+  the check and not the weather.
 - **A start where the last instance left the KIQ up.** What 0.6.1's teardown leaves behind, which
   makes it the state the first 0.6.2 start finds on the lab machine. The bring-up has to notice,
   recover and come back, taking exactly one stale fetch - inside the ring the previous instance
@@ -673,6 +683,54 @@ test's own code, and the "dispatch" is a `for` loop writing what the shader woul
 established is that the encode and the decode agree, that the packet the shim emits is the packet
 upstream's emitter builds, and that the dispatch the shim emits is libdrm's dispatch dword for
 dword. The rest is the first hardware run's job, and it is what the fence exists for.
+
+## The host test: DXGK_PTE to an AMD page table entry (M7 Stage B)
+
+```
+pwsh driver\shim\test\run_pte.ps1
+```
+
+`bc250_pte.c` is the translation the full miniport needs and nothing else: under WDDM's GpuMmu
+model VidMm owns the page tables and hands the driver one abstract entry at a time through
+`DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE`, and each has to become the 64-bit word the hardware
+walks. It reads and writes no register, allocates nothing and is safe at any IRQL, so there is no
+trace to replay and no sweep to load; the whole input space is its arguments.
+
+What takes the place of a replay is the two things it is not free to invent.
+
+**Microsoft's half.** `replay_pte.c` includes the real `<d3dkmthk.h>`, builds a real `DXGK_PTE`,
+sets one field at a time and asserts that each of the eleven lands exactly where the
+`BC250_DXGK_PTE_*` macro says, that they tile all 64 bits of `Flags`, that the struct is 16 bytes
+and that `PageAddress` and `PageTableAddress` are the same storage. Every translation case then
+goes through a real `DXGK_PTE` rather than a hand-assembled flags word. No bit position in
+`bc250_pte.h` rests on memory, and if Microsoft moves one the suite fails instead of the driver
+mapping the wrong page.
+
+**Our half.** `bc250_pte_gart_flags()` must equal `bc250_gart_pte_flags()` from `bc250_gart.c`, the
+path that put `0x0003000000000077` in unit A's table and that the CP then fetched rings and MQDs
+through (facts M33 and M37), and both must equal that number. `bc250_gart.c` is linked into the
+test for exactly that comparison, so the two cannot drift.
+
+The header states plainly which half of this is measured and which is transcription. The VMID 0
+GART entry is measured. The multi-level tables for VMIDs 1..15 - four levels, block size 9, the PDE
+carrying `VALID | SYSTEM | SNOOPED` and no permissions, `MTYPE_NC` instead of the GART's `MTYPE_UC`
+- are transcribed from `gmc_v10_0.c`, `gfxhub_v2_0.c` and `amdgpu_vm*.c` at tag v6.18, with the
+experiment that would settle each named next to it. It also records the three questions the DDI
+does not answer: whether `PageAddress` is a byte address or a frame number, which segment id means
+system memory, and which page table level is the leaf. All three are context parameters rather than
+constants, and a wrong choice is a refused translation instead of a wrong page.
+
+Eleven translations are asserted with the expected entry written out in full, twenty malformed
+inputs are refused with nothing written, and every successful entry survives the round trip through
+`bc250_pte_decode()`. Four controls, each a wrong implementation the rest of the suite would still
+pass: the two readings of `PageAddress` must produce entries that differ by exactly the shift; the
+two apertures must differ in exactly bits 50:48; `LargePage` must become `AMDGPU_PTE_FRAG(4)` and
+not be dropped, which would otherwise give a valid 4 KB entry at the head of a 64 KB mapping; and a
+directory entry must carry no permissions and no memory type.
+
+What this test cannot say is that the walker accepts any of it. Nothing here has run on the ASIC:
+the GART half is the same code that has, and the VM half is a careful transcription waiting for a
+VMID 1 context to be brought up against it.
 
 ## What the miniport calls, in order (M5 part B)
 

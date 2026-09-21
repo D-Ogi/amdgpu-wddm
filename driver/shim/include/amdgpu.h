@@ -210,16 +210,28 @@ enum amd_hw_ip_block_type {
 #define AMDGPU_GMC_HOLE_START	0x0000800000000000ULL
 #define AMDGPU_GMC_HOLE_END	0xffff800000000000ULL
 
-/* [amdgpu] amdgpu_vm.h:57-118, the page-table entry flags the GART uses. Only the bits that can
- * appear in a GART PTE on this part are taken over; the fragment, PRT, TMZ and GFX12 bits cannot,
- * because nothing here builds a VM page table. See driver/shim/bc250_gart.c for which of these end
- * up in a PTE and why. */
+/* [amdgpu] amdgpu_vm.h:57-118, the page-table entry flags. The first six are what a GART PTE can
+ * carry and are what driver/shim/bc250_gart.c uses; the rest belong to a multi-level VM page table
+ * and are used only by driver/shim/bc250_pte.c, which builds entries for VMIDs 1..15. The GFX9 and
+ * GFX12 variants are not taken over: neither applies to GC 10.1.3. */
 #define AMDGPU_PTE_VALID	(1ULL << 0)
 #define AMDGPU_PTE_SYSTEM	(1ULL << 1)
 #define AMDGPU_PTE_SNOOPED	(1ULL << 2)
+#define AMDGPU_PTE_TMZ		(1ULL << 3)
 #define AMDGPU_PTE_EXECUTABLE	(1ULL << 4)
 #define AMDGPU_PTE_READABLE	(1ULL << 5)
 #define AMDGPU_PTE_WRITEABLE	(1ULL << 6)
+
+/* amdgpu_vm.h:70. Five bits: the page covered by the entry is 1 << (12 + frag) bytes, and every
+ * entry inside that range must carry the same flags and be physically contiguous
+ * (amdgpu_vm_pt.c:738-743). */
+#define AMDGPU_PTE_FRAG(x)	(((u64)(x) & 0x1fULL) << 7)
+
+#define AMDGPU_PTE_PRT		(1ULL << 51)    /* amdgpu_vm.h:73, "T" in the NAVI10 format */
+#define AMDGPU_PDE_PTE		(1ULL << 54)    /* amdgpu_vm.h:76, "P": this directory entry is a page */
+#define AMDGPU_PTE_LOG		(1ULL << 55)    /* amdgpu_vm.h:78 */
+#define AMDGPU_PTE_TF		(1ULL << 56)    /* amdgpu_vm.h:81, translate further */
+#define AMDGPU_PTE_NOALLOC	(1ULL << 58)    /* amdgpu_vm.h:84 */
 
 /* The memory type lives in bits 48..50 on GFX10. The enumerators themselves (MTYPE_UC and the rest)
  * are AMD's, in third_party/linux-amdgpu/navi10_enum.h, and are not repeated here. */
@@ -232,6 +244,12 @@ enum amd_hw_ip_block_type {
 /* [amdgpu] amdgpu_gmc.c:169 amdgpu_gmc_set_pte_pde(): the address bits a PTE carries. Bits below 12
  * are the flags above; bits 48 and up are the memory type and the reserved fields. */
 #define AMDGPU_PTE_ADDR_MASK	0x0000FFFFFFFFF000ULL
+
+/* The same for a page DIRECTORY entry, whose address field reaches six bits lower (bits 47:6 in the
+ * NAVI10 PDE format, gmc_v10_0.c:462). Upstream states it as an assertion rather than a mask -
+ * BUG_ON(*addr & 0xFFFF00000000003FULL) at gmc_v10_0.c:474 - and this is that condition written the
+ * other way round. */
+#define AMDGPU_PDE_ADDR_MASK	0x0000FFFFFFFFFFC0ULL
 
 /* [amdgpu] amd_shared.h - the two clock-gating flags and the state enum mmhub_v2_0.c uses.
  * amd_shared.h itself pulls in DRM headers, so only these three definitions are taken over. */
