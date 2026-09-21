@@ -1,6 +1,6 @@
 # E05: a display-only WDDM driver owns the GPU and keeps the firmware's display
 
-State: prepared, not run.
+State: prepared, not run. Blocked on the recovery path: its first proof failed (see Recovery, point 2).
 
 ## Why
 
@@ -30,6 +30,8 @@ documented DDI, with this experiment's observations as its acceptance test).
    drivers are not loaded in safe mode, `sshd` is allowed there (`SafeBoot\Network\sshd`), Wi-Fi service is
    on the safe-mode list. **This path has to be proven once (one-time boot into the entry) before the
    install.** It needs a keyboard on the BC-250 to pick the entry if it is ever needed for real.
+   First proof, 2026-09-21: the entry boots, but safe mode shows no network adapters (the vendor driver of
+   the USB Wi-Fi dongle is not on the safe-mode list), so no SSH. Not proven until that is fixed and re-run.
 3. Last resort: NVMe into the USB enclosure, delete the driver from the offline image.
 
 ## Procedure
