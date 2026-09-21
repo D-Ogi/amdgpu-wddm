@@ -247,3 +247,18 @@ one-shot gate did what it was made for: one bugcheck, one restart, picture back 
   the primary surface (`GetStandardAllocationDriverData`, `CreateAllocation`) and `CommitVidPn` (stage 50); new in the
   log: `BuildPagingBuffer` operations other than 11 (MapApertureSegment). What follows is recorded, not predicted.
   The answers are compared with the two Microsoft samples beforehand (`scratch\tmp\sample_diff.md`).
+
+### Run 009 (2026-09-21, bc250kmd 0.7.9: aperture segment) - stage A runs
+
+Evidence: `evidence/windows/2026-09-21-E16-run-009/`. Facts M71.
+
+- **H13 holds.** The CDD context is created, the primary and the shadow surface are allocated, `CommitVidPn` succeeds
+  (stage 50), and then the part that was recorded rather than predicted: `Present` and `SubmitCommandVirtual` arrive in
+  pairs and every fence retires (160 of 160). Not as predicted: no `MapApertureSegment`; the new operations are 12 and 9.
+- **H2 holds** in full. **H4 holds**: no TDR, no bugcheck, no live report, same boot. **H5**: hardware D3D11 device
+  creation fails with 0x887A0004 against the stub UMD, WARP works. **H6 holds**: gate closed, stage 61, picture back.
+- **H3 holds for the kernel side and fails for the eye**: presents arrive, VSync is reported, the one flip retires - and
+  the screen is black, because stage A's `Present` builds nothing and nobody programs the scanout. Dwminit events pile
+  up meanwhile. A picture under the full table is stage B/C work (real page tables, a real blit), not a stage A defect.
+- Stage A of ADR 0008 is reached: dxgkrnl, VidMm and VidSch accept the table and run it without harm. Do trzech razy
+  sztuka (third time lucky) would have been nice; it took nine.
