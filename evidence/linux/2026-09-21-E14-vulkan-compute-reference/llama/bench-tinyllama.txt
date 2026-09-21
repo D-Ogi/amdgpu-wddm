@@ -1,0 +1,14 @@
+load_backend: loaded BLAS backend from /usr/lib/llama.cpp/libggml-blas.so
+load_backend: loaded RPC backend from /usr/lib/llama.cpp/libggml-rpc.so
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = AMD BC-250 (RADV GFX1013) (radv) | uma: 1 | fp16: 1 | bf16: 0 | warp size: 32 | shared memory: 65536 | int dot: 0 | matrix cores: none
+load_backend: loaded Vulkan backend from /usr/lib/llama.cpp/libggml-vulkan.so
+load_backend: loaded CPU backend from /usr/lib/llama.cpp/libggml-cpu-haswell.so
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           pp512 |       1656.62 ± 0.20 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           tg128 |        220.10 ± 2.06 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           pp512 |        111.49 ± 1.94 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           tg128 |         56.79 ± 0.05 |
+
+build: 3b3da01dc21dc68e958efb898ab739c65ed08ca2 (9564)

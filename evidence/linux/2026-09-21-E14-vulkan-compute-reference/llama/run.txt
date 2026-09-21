@@ -1,0 +1,74 @@
+Available devices:
+  BLAS: OpenBLAS (0 MiB, 0 MiB free)
+  Vulkan0: AMD BC-250 (RADV GFX1013) (12026 MiB, 11999 MiB free)
+stories260K ngl=99 exit=0 bytes=256 sha256=404328f9fe8ec445
+prompt eval time =       2.29 ms /     5 tokens (    0.46 ms per token,  2179.60 tokens per second)
+eval time =      62.49 ms /    95 runs   (    0.66 ms per token,  1520.29 tokens per second)
+stories15M ngl=99 exit=0 bytes=377 sha256=9a75289c5ee188d7
+prompt eval time =       2.97 ms /     5 tokens (    0.59 ms per token,  1684.07 tokens per second)
+eval time =      76.43 ms /    95 runs   (    0.80 ms per token,  1242.95 tokens per second)
+tinyllama ngl=99 exit=0 bytes=234 sha256=8a5491652c871b51
+prompt eval time =      12.67 ms /     6 tokens (    2.11 ms per token,   473.67 tokens per second)
+eval time =     283.41 ms /    63 runs   (    4.50 ms per token,   222.29 tokens per second)
+stories260K ngl=0 exit=0 bytes=256 sha256=404328f9fe8ec445
+prompt eval time =      16.43 ms /     5 tokens (    3.29 ms per token,   304.25 tokens per second)
+eval time =      16.31 ms /    95 runs   (    0.17 ms per token,  5825.72 tokens per second)
+stories15M ngl=0 exit=0 bytes=377 sha256=9a75289c5ee188d7
+prompt eval time =       1.10 ms /     5 tokens (    0.22 ms per token,  4562.04 tokens per second)
+eval time =      63.56 ms /    95 runs   (    0.67 ms per token,  1494.72 tokens per second)
+tinyllama ngl=0 exit=0 bytes=237 sha256=11a2b2f60a0d2370
+prompt eval time =      59.96 ms /     6 tokens (    9.99 ms per token,   100.07 tokens per second)
+eval time =    1099.07 ms /    63 runs   (   17.45 ms per token,    57.32 tokens per second)
+stories15M repeat:       3 9a75289c5ee188d7
+tinyllama repeat:       3 8a5491652c871b51
+== llama-bench
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| llama ?B Q4_0                  |  17.50 MiB |    24.41 M | BLAS,Vulkan |       6 |           pp512 |    76102.49 ± 505.43 |
+| llama ?B Q4_0                  |  17.50 MiB |    24.41 M | BLAS,Vulkan |       6 |           tg128 |       1291.65 ± 3.17 |
+| llama ?B Q4_0                  |  17.50 MiB |    24.41 M | BLAS,Vulkan |       6 |           pp512 |     5339.12 ± 111.86 |
+| llama ?B Q4_0                  |  17.50 MiB |    24.41 M | BLAS,Vulkan |       6 |           tg128 |     1439.43 ± 152.20 |
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           pp512 |       1656.62 ± 0.20 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           tg128 |        220.10 ± 2.06 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           pp512 |        111.49 ± 1.94 |
+| llama 1B Q4_0                  | 606.53 MiB |     1.10 B | BLAS,Vulkan |       6 |           tg128 |         56.79 ± 0.05 |
+== amdgpu events around one short GPU run (stories260K, 16 tokens)
+lines 12928 overruns 0
+4214 amdgpu_vm_bo_cs:
+2022 amdgpu_vm_bo_mapping:
+1966 amdgpu_bo_list_set:
+566 amdgpu_cs:
+459 amdgpu_iv:
+433 amdgpu_sched_run_job:
+427 amdgpu_vm_set_ptes:
+406 amdgpu_vm_update_ptes:
+283 amdgpu_vm_grab_id:
+283 amdgpu_cs_ioctl:
+283 amdgpu_cs_bo_status:
+238 amdgpu_device_wreg:
+238 amdgpu_dc_wreg:
+134 amdgpu_device_rreg:
+134 amdgpu_dc_rreg:
+132 amdgpu_bo_move:
+66 amdgpu_bo_create:
+56 amdgpu_vm_bo_update:
+56 amdgpu_vm_bo_unmap:
+56 amdgpu_vm_bo_map:
+25 amdgpu_vm_flush:
+5 amdgpu_dm_plane_atomic_check:
+2 amdgpu_dm_crtc_atomic_check:
+1 amdgpu_refresh_rate_track:
+1 amdgpu_pasid_freed:
+1 amdgpu_pasid_allocated:
+1 amdgpu_dm_connector_atomic_check:
+1 amdgpu_dm_atomic_commit_tail_finish:
+1 amdgpu_dm_atomic_commit_tail_begin:
+1 amdgpu_dm_atomic_check_finish:
+1 amdgpu_dm_atomic_check_begin:
+    285 client_id:20 src_id:181 ring:0
+    127 client_id:9 src_id:224 ring:0
+     46 client_id:8 src_id:224 ring:0
+      1 client_id:4 src_id:87 ring:0
+after: power_uW 62107000 temp_mC 71000 sclk_Hz 1500000000

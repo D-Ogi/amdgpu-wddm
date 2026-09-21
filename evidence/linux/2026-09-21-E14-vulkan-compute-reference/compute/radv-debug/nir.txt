@@ -1,0 +1,59 @@
+shader: MESA_SHADER_COMPUTE
+source_blake3: {0x93e7367f, 0xf7e5ab15, 0x3674f148, 0x78b06bd4, 0x319ee547, 0x4396f1eb, 0xd1d5ffd5, 0x129b315e}
+workgroup_size: 64, 1, 1
+num_ssbos: 1
+system_values_read: 0x00000000'00000000'00012100'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x21
+separate_shader: true
+flrp_lowered: true
+writes_memory: true
+uniforms: 8
+decl_var push_const INTERP_MODE_NONE none Push p
+decl_var ssbo INTERP_MODE_NONE restrict writeonly Out o (~0, 0, 0)
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:   // preds:
+    32x2   %0 = @load_scalar_arg_amd (base=4, arg_upper_bound_u32_amd=0)
+    32     %1 = load_const (0x00000000)
+    64     %2 = pack_64_2x32_split %0.x, %0.y
+    32     %3 = @load_global_amd (%2, %1 (0x0)) (base=0, access=readonly|reorderable|speculatable|smem-amd, align_mul=4, align_offset=0)
+    32     %4 = @load_scalar_arg_amd (base=5, arg_upper_bound_u32_amd=0)
+    32     %5 = @load_vector_arg_amd (base=7, arg_upper_bound_u32_amd=63)
+    32     %6 = load_const (0x00000006)
+    32     %7 = ishl %4, %6 (0x6)
+    32     %8 = iadd %7, %5
+    32     %9 = @load_scalar_arg_amd (base=2, arg_upper_bound_u32_amd=0)
+    32    %10 = @load_scalar_arg_amd (base=3, arg_upper_bound_u32_amd=0)
+    32    %11 = ishl %3, %6 (0x6)
+                // succs: b1
+    loop {
+        block b1:   // preds: b0 b4
+        32    %12 = phi b0: %8, b4: %20
+        1     %13 = uge %12, %9
+                    // succs: b2 b3
+        if %13 {
+            block b2:// preds: b1
+            break
+            // succs: b5
+        } else {
+            block b3:  // preds: b1, succs: b4
+        }
+        block b4:   // preds: b3
+        32    %14 = @load_scalar_arg_amd (base=1, arg_upper_bound_u32_amd=0)
+        32    %15 = load_const (0xffff8000 = -32768 = 4294934528)
+        64    %16 = pack_64_2x32_split %14, %15 (0xffff8000)
+        32x4  %17 = @load_global_amd (%16, %1 (0x0)) (base=0, access=readonly|reorderable|speculatable|smem-amd, align_mul=4, align_offset=0)
+        32    %18 = load_const (0x00000002)
+        32    %19 = ishl %12, %18 (0x2)
+                    @store_ssbo (%10, %17, %19) (wrmask=x, access=writeonly, align_mul=4, align_offset=0, offset_shift=0)
+        32    %20 = iadd %12, %11
+                    // succs: b1
+    }
+    block b5:  // preds: b2, succs: b6
+    block b6:
+}
+

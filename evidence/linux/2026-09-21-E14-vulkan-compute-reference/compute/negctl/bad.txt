@@ -1,0 +1,30 @@
+physical devices 1, using index 0
+device        AMD BC-250 (RADV GFX1013)
+ids           vendor=0x1002 device=0x13fe type=1
+driverVersion 0x06801006 (26.1.6)
+apiVersion    0x00404162 (1.4.354)
+queue family  0
+subgroup      size=64 supportedStages=0x3f3f supportedOps=0x6ff
+limits        wgInvocations=1024 wgSize=1024x1024x1024 sharedMem=65536 pushConst=256 storageBuffersPerStage=8388606
+memory types  11 heaps 2
+  type  0 heap 1 flags 0x001
+  type  1 heap 1 flags 0x001
+  type  2 heap 0 flags 0x006
+  type  3 heap 1 flags 0x007
+  type  4 heap 1 flags 0x007
+  type  5 heap 0 flags 0x00e
+  type  6 heap 0 flags 0x00e
+  type  7 heap 1 flags 0x0c1
+  type  8 heap 0 flags 0x0c6
+  type  9 heap 1 flags 0x0c7
+  type 10 heap 0 flags 0x0ce
+  heap  0 size 4008 MiB flags 0x0
+  heap  1 size 8017 MiB flags 0x1
+shaders       /tmp/e14/negctl/shaders
+runs          1 (the reported time is the median)
+lcg           state = 1664525 * state + 1013904223, values taken from the high bits
+hash          FNV-1a 64 over the raw output bytes
+
+fill_g1      n=16384     hash=0x881b077929212325 cpu_hash=0x7018cdd513a22325 match=NO  t_submit_to_idle_us=    223.9 first_words=22222223 22222223 22222223 22222223 22222223 22222223 22222223 22222223
+
+1 test(s) run, 1 mismatch(es)

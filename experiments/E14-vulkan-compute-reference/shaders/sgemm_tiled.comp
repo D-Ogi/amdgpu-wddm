@@ -1,0 +1,49 @@
+#version 450
+/* The same product as sgemm.comp, but staged through workgroup memory in 8x8 tiles, which
+ * exercises shared memory and barrier() and accumulates in a different order. Because every
+ * partial sum is exactly representable in float32, the different order must still give bit
+ * identical output - if it does not, the difference is not rounding.
+ *
+ * p.n must be a multiple of T and the dispatch must cover it exactly, which the host guarantees
+ * (256 = 32 groups of 8), so there is no bounds check in the tile loads. */
+#define T 8
+
+layout(local_size_x = T, local_size_y = T) in;
+
+layout(std430, binding = 0) readonly buffer A {
+	float v[];
+} a;
+
+layout(std430, binding = 1) readonly buffer B {
+	float v[];
+} b;
+
+layout(std430, binding = 2) writeonly buffer C {
+	float v[];
+} c;
+
+layout(push_constant) uniform Push {
+	uint n;
+} p;
+
+shared float as_[T][T];
+shared float bs_[T][T];
+
+void main()
+{
+	uint lx = gl_LocalInvocationID.x;
+	uint ly = gl_LocalInvocationID.y;
+	uint row = gl_GlobalInvocationID.y;
+	uint col = gl_GlobalInvocationID.x;
+
+	float sum = 0.0;
+	for (uint t = 0; t < p.n; t += uint(T)) {
+		as_[ly][lx] = a.v[row * p.n + t + lx];
+		bs_[ly][lx] = b.v[(t + ly) * p.n + col];
+		barrier();
+		for (uint k = 0; k < uint(T); ++k)
+			sum += as_[ly][k] * bs_[k][lx];
+		barrier();
+	}
+	c.v[row * p.n + col] = sum;
+}

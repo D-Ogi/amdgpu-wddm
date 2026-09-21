@@ -1,0 +1,1366 @@
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 1280/1280   #P:12
+#
+#                                _-----=> irqs-off/BH-disabled
+#                               / _----=> need-resched
+#                              | / _---=> hardirq/softirq
+#                              || / _--=> preempt-depth
+#                              ||| / _-=> migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+              sh-13731   [000] ...1.  1316.723932: tracing_mark_write: bc250 begin fill
+       vkcompute-13734   [010] .....  1316.744225: amdgpu_pasid_allocated: pasid=64
+       vkcompute-13734   [010] .....  1316.744247: amdgpu_bo_move: bo=000000001a8c9435, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.744249: amdgpu_bo_create: bo=000000001a8c9435, pages=1, type=2, preferred=4, allowed=4, visible=36
+       vkcompute-13734   [010] .....  1316.744257: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+       vkcompute-13734   [010] .....  1316.744271: amdgpu_vm_bo_map: bo=00000000b97d8569, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+       vkcompute-13734   [010] .....  1316.744273: amdgpu_vm_bo_update: soffs=0ffffffc00, eoffs=0ffffffe00, flags=82
+   kworker/u48:3-3184    [002] .....  1316.744282: amdgpu_sched_run_job: timeline=sdma1, fence=751:1, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.744283: amdgpu_bo_move: bo=00000000ba8a68ac, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.744284: amdgpu_bo_create: bo=00000000ba8a68ac, pages=1, type=2, preferred=4, allowed=4, visible=36
+       vkcompute-13734   [010] .....  1316.744285: amdgpu_vm_set_ptes: pe=f5fffdf000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+       vkcompute-13734   [010] .....  1316.744292: amdgpu_bo_move: bo=00000000666c6c42, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.744292: amdgpu_bo_create: bo=00000000666c6c42, pages=1, type=2, preferred=4, allowed=4, visible=36
+       vkcompute-13734   [010] .....  1316.744294: amdgpu_vm_set_ptes: pe=f5fffde000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+       vkcompute-13734   [010] .....  1316.744295: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0ffffffc00 end:0x0ffffffe00, flags:0x30000000004a7, incr:2097152, dst:
+{0x156600000}
+       vkcompute-13734   [010] .....  1316.744296: amdgpu_vm_set_ptes: pe=f5fffdeff0, addr=0156600000, incr=2097152, flags=430000000004a7, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.744297: amdgpu_vm_bo_mapping: soffs=0ffffffc00, eoffs=0ffffffe00, flags=82
+   kworker/u48:3-3184    [002] .....  1316.744300: amdgpu_sched_run_job: timeline=sdma1, fence=751:2, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] d.h..  1316.744307: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469747945 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] d.h..  1316.744325: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469750117 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] .....  1316.744330: amdgpu_sched_run_job: timeline=sdma1, fence=751:3, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] d.h2.  1316.744340: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469751605 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] .....  1316.744343: amdgpu_sched_run_job: timeline=sdma1, fence=751:4, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.744356: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469752941 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.745912: amdgpu_bo_move: bo=0000000058618479, from=-1, to=1, size=4096
+       vkcompute-13734   [010] .....  1316.745913: amdgpu_bo_create: bo=0000000058618479, pages=1, type=1, preferred=2, allowed=2, visible=649
+       vkcompute-13734   [010] .....  1316.745921: amdgpu_vm_bo_map: bo=0000000058618479, start=800100000, last=800100000, offset=0000000000, flags=e
+       vkcompute-13734   [010] .....  1316.745923: amdgpu_vm_bo_update: soffs=0800100000, eoffs=0800100001, flags=e
+       vkcompute-13734   [010] .....  1316.745933: amdgpu_bo_move: bo=0000000006acdc9e, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.745933: amdgpu_bo_create: bo=0000000006acdc9e, pages=1, type=2, preferred=4, allowed=4, visible=36
+       vkcompute-13734   [010] .....  1316.745935: amdgpu_vm_set_ptes: pe=f5fffdd000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+       vkcompute-13734   [010] .....  1316.745944: amdgpu_bo_move: bo=000000000cad813c, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.745945: amdgpu_bo_create: bo=000000000cad813c, pages=1, type=2, preferred=4, allowed=4, visible=36
+   kworker/u48:3-3184    [002] .....  1316.745945: amdgpu_sched_run_job: timeline=sdma1, fence=751:5, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.745946: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+   kworker/u48:3-3184    [002] .....  1316.745949: amdgpu_sched_run_job: timeline=sdma1, fence=751:6, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.745950: amdgpu_bo_move: bo=00000000538ae5c1, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.745950: amdgpu_bo_create: bo=00000000538ae5c1, pages=1, type=2, preferred=4, allowed=4, visible=36
+       vkcompute-13734   [010] .....  1316.745952: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0000000000, incr=0, flags=10, count=512, immediate=0
+          <idle>-0       [002] d.h1.  1316.745955: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469912757 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.745955: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100000 end:0x0800100001, flags:0x77, incr:4096, dst:
+{0x1010eb000}
+       vkcompute-13734   [010] .....  1316.745955: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=01010eb000, incr=4096, flags=77, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.745957: amdgpu_vm_bo_mapping: soffs=0800100000, eoffs=0800100001, flags=e
+       vkcompute-13734   [010] .....  1316.745959: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=046ffdb000, incr=0, flags=1, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.745959: amdgpu_vm_set_ptes: pe=f5fffdd020, addr=046ffdc000, incr=0, flags=1, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.745959: amdgpu_vm_set_ptes: pe=f5fffe0800, addr=046ffdd000, incr=0, flags=1, count=1, immediate=0
+          <idle>-0       [002] dNh1.  1316.745960: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469913317 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.745960: amdgpu_vm_set_ptes: pe=f5fffdfff8, addr=046ffde000, incr=0, flags=1, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.745961: amdgpu_vm_set_ptes: pe=f5fffe0ff8, addr=046ffdf000, incr=0, flags=1, count=1, immediate=0
+   kworker/u48:3-3184    [002] .....  1316.745964: amdgpu_sched_run_job: timeline=sdma1, fence=751:7, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] .....  1316.745968: amdgpu_sched_run_job: timeline=sdma1, fence=751:8, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] d.h1.  1316.745973: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469914617 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] .....  1316.745975: amdgpu_sched_run_job: timeline=sdma1, fence=751:9, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] d.h..  1316.745979: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469915253 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.745986: amdgpu_bo_move: bo=00000000b0ff6ce5, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.745987: amdgpu_bo_create: bo=00000000b0ff6ce5, pages=1, type=2, preferred=6, allowed=6, visible=650
+          <idle>-0       [002] d.h1.  1316.745989: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469916229 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.745990: amdgpu_vm_bo_map: bo=00000000b0ff6ce5, start=800000000, last=800000000, offset=0000000000, flags=a
+       vkcompute-13734   [010] .....  1316.745992: amdgpu_vm_bo_update: soffs=0800000000, eoffs=0800000001, flags=a
+       vkcompute-13734   [010] .....  1316.745999: amdgpu_bo_move: bo=0000000036fd16b8, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.745999: amdgpu_bo_create: bo=0000000036fd16b8, pages=1, type=2, preferred=4, allowed=4, visible=36
+       vkcompute-13734   [010] .....  1316.746001: amdgpu_vm_set_ptes: pe=f5fffda000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+       vkcompute-13734   [010] .....  1316.746005: amdgpu_bo_move: bo=00000000b170a5d7, from=-1, to=2, size=4096
+       vkcompute-13734   [010] .....  1316.746005: amdgpu_bo_create: bo=00000000b170a5d7, pages=1, type=2, preferred=4, allowed=4, visible=36
+   kworker/u48:3-3184    [002] .....  1316.746007: amdgpu_sched_run_job: timeline=sdma1, fence=751:10, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.746007: amdgpu_vm_set_ptes: pe=f5fffd9000, addr=0000000000, incr=0, flags=10, count=512, immediate=0
+       vkcompute-13734   [010] .....  1316.746009: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000000 end:0x0800000001, flags:0x31, incr:4096, dst:
+{0x46ffd3000}
+       vkcompute-13734   [010] .....  1316.746009: amdgpu_vm_set_ptes: pe=f5fffd9000, addr=046ffd3000, incr=4096, flags=31, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746011: amdgpu_vm_bo_mapping: soffs=0800000000, eoffs=0800000001, flags=a
+   kworker/u48:3-3184    [002] .....  1316.746011: amdgpu_sched_run_job: timeline=sdma1, fence=751:11, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.746012: amdgpu_vm_set_ptes: pe=f5fffda000, addr=046ffd9000, incr=0, flags=1, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746012: amdgpu_vm_set_ptes: pe=f5fffdd000, addr=046ffda000, incr=0, flags=1, count=1, immediate=0
+          <idle>-0       [002] d.h1.  1316.746016: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469918861 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] d.h1.  1316.746020: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469919429 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] .....  1316.746025: amdgpu_sched_run_job: timeline=sdma1, fence=751:12, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.746026: amdgpu_bo_move: bo=0000000025d496fb, from=-1, to=1, size=81920
+       vkcompute-13734   [010] .....  1316.746026: amdgpu_bo_create: bo=0000000025d496fb, pages=20, type=1, preferred=2, allowed=2, visible=653
+   kworker/u48:3-3184    [002] .....  1316.746028: amdgpu_sched_run_job: timeline=sdma1, fence=751:13, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.746030: amdgpu_vm_bo_map: bo=0000000025d496fb, start=800100001, last=800100014, offset=0000000000, flags=8a
+       vkcompute-13734   [010] .....  1316.746031: amdgpu_vm_bo_update: soffs=0800100001, eoffs=0800100015, flags=8a
+          <idle>-0       [002] d.h1.  1316.746033: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469920653 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746033: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100001 end:0x0800100002, flags:0x3000000000033, incr:4096, dst:
+{0x1095a0000}
+       vkcompute-13734   [010] .....  1316.746033: amdgpu_vm_set_ptes: pe=f5fffdb008, addr=01095a0000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746034: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100002 end:0x0800100004, flags:0x30000000000b3, incr:4096, dst:
+{0x1095a1000,0x1095a2000}
+       vkcompute-13734   [010] .....  1316.746034: amdgpu_vm_set_ptes: pe=f5fffdb010, addr=01095a1000, incr=4096, flags=30000000000b3, count=2, immediate=0
+       vkcompute-13734   [010] .....  1316.746034: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100004 end:0x0800100008, flags:0x3000000000133, incr:4096, dst:
+{0x1095a3000,0x1095a4000,0x1095a5000,0x1095a6000}
+       vkcompute-13734   [010] .....  1316.746035: amdgpu_vm_set_ptes: pe=f5fffdb020, addr=01095a3000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [010] .....  1316.746035: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100008 end:0x0800100010, flags:0x30000000001b3, incr:4096, dst:
+{0x1095a7000,0x1095a8000,0x1095a9000,0x1095aa000,0x1095ab000,0x1095ac000,0x1095ad000,0x1095ae000}
+       vkcompute-13734   [010] .....  1316.746035: amdgpu_vm_set_ptes: pe=f5fffdb040, addr=01095a7000, incr=4096, flags=30000000001b3, count=8, immediate=0
+       vkcompute-13734   [010] .....  1316.746035: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100010 end:0x0800100011, flags:0x3000000000033, incr:4096, dst:
+{0x1095af000}
+       vkcompute-13734   [010] .....  1316.746036: amdgpu_vm_set_ptes: pe=f5fffdb080, addr=01095af000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746036: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100011 end:0x0800100012, flags:0x3000000000033, incr:4096, dst:
+{0x157e54000}
+       vkcompute-13734   [010] .....  1316.746037: amdgpu_vm_set_ptes: pe=f5fffdb088, addr=0157e54000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746037: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100012 end:0x0800100014, flags:0x30000000000b3, incr:4096, dst:
+{0x157e55000,0x157e56000}
+       vkcompute-13734   [010] .....  1316.746037: amdgpu_vm_set_ptes: pe=f5fffdb090, addr=0157e55000, incr=4096, flags=30000000000b3, count=2, immediate=0
+       vkcompute-13734   [010] .....  1316.746038: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100014 end:0x0800100015, flags:0x3000000000033, incr:4096, dst:
+{0x157e57000}
+       vkcompute-13734   [010] .....  1316.746038: amdgpu_vm_set_ptes: pe=f5fffdb0a0, addr=0157e57000, incr=4096, flags=3000000000033, count=1, immediate=0
+          <idle>-0       [002] d.h1.  1316.746040: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469921329 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746041: amdgpu_vm_bo_mapping: soffs=0800100001, eoffs=0800100015, flags=8a
+   kworker/u48:3-3184    [002] .....  1316.746046: amdgpu_sched_run_job: timeline=sdma1, fence=751:14, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746060: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469923365 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746067: amdgpu_bo_move: bo=00000000d4c13897, from=-1, to=1, size=4096
+       vkcompute-13734   [010] .....  1316.746067: amdgpu_bo_create: bo=00000000d4c13897, pages=1, type=1, preferred=2, allowed=2, visible=653
+       vkcompute-13734   [010] .....  1316.746070: amdgpu_vm_bo_map: bo=00000000d4c13897, start=800100015, last=800100015, offset=0000000000, flags=a
+       vkcompute-13734   [010] .....  1316.746071: amdgpu_vm_bo_update: soffs=0800100015, eoffs=0800100016, flags=a
+       vkcompute-13734   [010] .....  1316.746072: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100015 end:0x0800100016, flags:0x33, incr:4096, dst:
+{0x158108000}
+       vkcompute-13734   [010] .....  1316.746073: amdgpu_vm_set_ptes: pe=f5fffdb0a8, addr=0158108000, incr=4096, flags=33, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746076: amdgpu_vm_bo_mapping: soffs=0800100015, eoffs=0800100016, flags=a
+   kworker/u48:3-3184    [002] .....  1316.746079: amdgpu_sched_run_job: timeline=sdma1, fence=751:15, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746087: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469926065 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746113: amdgpu_vm_bo_unmap: bo=0000000025d496fb, start=800100001, last=800100014, offset=0000000000, flags=8a
+       vkcompute-13734   [010] .....  1316.746115: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100001 end:0x0800100002, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [010] .....  1316.746116: amdgpu_vm_set_ptes: pe=f5fffdb008, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746116: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100002 end:0x0800100004, flags:0x80, incr:4096, dst:
+{0x1000,0x2000}
+       vkcompute-13734   [010] .....  1316.746116: amdgpu_vm_set_ptes: pe=f5fffdb010, addr=0000001000, incr=4096, flags=90, count=2, immediate=0
+       vkcompute-13734   [010] .....  1316.746117: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100004 end:0x0800100008, flags:0x100, incr:4096, dst:
+{0x3000,0x4000,0x5000,0x6000}
+       vkcompute-13734   [010] .....  1316.746117: amdgpu_vm_set_ptes: pe=f5fffdb020, addr=0000003000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [010] .....  1316.746117: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100008 end:0x0800100010, flags:0x180, incr:4096, dst:
+{0x7000,0x8000,0x9000,0xa000,0xb000,0xc000,0xd000,0xe000}
+       vkcompute-13734   [010] .....  1316.746118: amdgpu_vm_set_ptes: pe=f5fffdb040, addr=0000007000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [010] .....  1316.746118: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100010 end:0x0800100014, flags:0x100, incr:4096, dst:
+{0xf000,0x10000,0x11000,0x12000}
+       vkcompute-13734   [010] .....  1316.746118: amdgpu_vm_set_ptes: pe=f5fffdb080, addr=000000f000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [010] .....  1316.746118: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100014 end:0x0800100015, flags:0x0, incr:4096, dst:
+{0x13000}
+       vkcompute-13734   [010] .....  1316.746119: amdgpu_vm_set_ptes: pe=f5fffdb0a0, addr=0000013000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:3-3184    [002] .....  1316.746125: amdgpu_sched_run_job: timeline=sdma1, fence=751:16, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.746127: amdgpu_bo_move: bo=0000000025d496fb, from=1, to=-1, size=81920
+          <idle>-0       [002] d.h1.  1316.746137: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469931025 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746294: amdgpu_bo_move: bo=0000000025d496fb, from=-1, to=1, size=81920
+       vkcompute-13734   [010] .....  1316.746295: amdgpu_bo_create: bo=0000000025d496fb, pages=20, type=1, preferred=2, allowed=2, visible=653
+       vkcompute-13734   [010] .....  1316.746299: amdgpu_vm_bo_map: bo=0000000025d496fb, start=800100001, last=800100014, offset=0000000000, flags=8a
+       vkcompute-13734   [010] .....  1316.746300: amdgpu_vm_bo_update: soffs=0800100001, eoffs=0800100015, flags=8a
+       vkcompute-13734   [010] .....  1316.746301: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100001 end:0x0800100002, flags:0x3000000000033, incr:4096, dst:
+{0x1095a0000}
+       vkcompute-13734   [010] .....  1316.746302: amdgpu_vm_set_ptes: pe=f5fffdb008, addr=01095a0000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746302: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100002 end:0x0800100004, flags:0x30000000000b3, incr:4096, dst:
+{0x1095a1000,0x1095a2000}
+       vkcompute-13734   [010] .....  1316.746302: amdgpu_vm_set_ptes: pe=f5fffdb010, addr=01095a1000, incr=4096, flags=30000000000b3, count=2, immediate=0
+       vkcompute-13734   [010] .....  1316.746302: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100004 end:0x0800100008, flags:0x3000000000133, incr:4096, dst:
+{0x1095a3000,0x1095a4000,0x1095a5000,0x1095a6000}
+       vkcompute-13734   [010] .....  1316.746303: amdgpu_vm_set_ptes: pe=f5fffdb020, addr=01095a3000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [010] .....  1316.746303: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100008 end:0x0800100010, flags:0x30000000001b3, incr:4096, dst:
+{0x1095a7000,0x1095a8000,0x1095a9000,0x1095aa000,0x1095ab000,0x1095ac000,0x1095ad000,0x1095ae000}
+       vkcompute-13734   [010] .....  1316.746303: amdgpu_vm_set_ptes: pe=f5fffdb040, addr=01095a7000, incr=4096, flags=30000000001b3, count=8, immediate=0
+       vkcompute-13734   [010] .....  1316.746304: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100010 end:0x0800100011, flags:0x3000000000033, incr:4096, dst:
+{0x1095af000}
+       vkcompute-13734   [010] .....  1316.746304: amdgpu_vm_set_ptes: pe=f5fffdb080, addr=01095af000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746304: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100011 end:0x0800100012, flags:0x3000000000033, incr:4096, dst:
+{0x157e54000}
+       vkcompute-13734   [010] .....  1316.746305: amdgpu_vm_set_ptes: pe=f5fffdb088, addr=0157e54000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746305: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100012 end:0x0800100014, flags:0x30000000000b3, incr:4096, dst:
+{0x157e55000,0x157e56000}
+       vkcompute-13734   [010] .....  1316.746305: amdgpu_vm_set_ptes: pe=f5fffdb090, addr=0157e55000, incr=4096, flags=30000000000b3, count=2, immediate=0
+       vkcompute-13734   [010] .....  1316.746305: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100014 end:0x0800100015, flags:0x3000000000033, incr:4096, dst:
+{0x157e57000}
+       vkcompute-13734   [010] .....  1316.746306: amdgpu_vm_set_ptes: pe=f5fffdb0a0, addr=0157e57000, incr=4096, flags=3000000000033, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746309: amdgpu_vm_bo_mapping: soffs=0800100001, eoffs=0800100015, flags=8a
+   kworker/u48:3-3184    [002] .....  1316.746312: amdgpu_sched_run_job: timeline=sdma1, fence=751:17, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [010] .....  1316.746326: amdgpu_bo_move: bo=000000008d8f3ae5, from=-1, to=2, size=65536
+       vkcompute-13734   [010] .....  1316.746326: amdgpu_bo_create: bo=000000008d8f3ae5, pages=16, type=2, preferred=6, allowed=6, visible=713
+          <idle>-0       [002] d.h1.  1316.746327: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469949953 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746331: amdgpu_vm_bo_map: bo=000000008d8f3ae5, start=800100020, last=80010002f, offset=0000000000, flags=e
+       vkcompute-13734   [010] .....  1316.746332: amdgpu_vm_bo_update: soffs=0800100020, eoffs=0800100030, flags=e
+       vkcompute-13734   [010] .....  1316.746334: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100020 end:0x0800100030, flags:0x271, incr:4096, dst:
+{0x46e9e0000,0x46e9e1000,0x46e9e2000,0x46e9e3000,0x46e9e4000,0x46e9e5000,0x46e9e6000,0x46e9e7000,0x46e9e8000,0x46e9e9000,0x46e9ea000,0x46e9eb000,0x46e9ec000,0x46e9ed000,0x46e9ee000,0x46e9ef000}
+       vkcompute-13734   [010] .....  1316.746334: amdgpu_vm_set_ptes: pe=f5fffdb100, addr=046e9e0000, incr=4096, flags=271, count=16, immediate=0
+       vkcompute-13734   [010] .....  1316.746337: amdgpu_vm_bo_mapping: soffs=0800100020, eoffs=0800100030, flags=e
+   kworker/u48:3-3184    [002] .....  1316.746340: amdgpu_sched_run_job: timeline=sdma1, fence=751:18, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746349: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469952149 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [010] .....  1316.746511: amdgpu_bo_move: bo=00000000ddb9f21f, from=-1, to=2, size=262144
+       vkcompute-13734   [010] .....  1316.746511: amdgpu_bo_create: bo=00000000ddb9f21f, pages=64, type=2, preferred=6, allowed=6, visible=648
+       vkcompute-13734   [010] .....  1316.746515: amdgpu_vm_bo_map: bo=00000000ddb9f21f, start=800000001, last=800000040, offset=0000000000, flags=a
+       vkcompute-13734   [010] .....  1316.746516: amdgpu_vm_bo_update: soffs=0800000001, eoffs=0800000041, flags=a
+       vkcompute-13734   [010] .....  1316.746518: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000001 end:0x0800000002, flags:0x31, incr:4096, dst:
+{0x46ff80000}
+       vkcompute-13734   [010] .....  1316.746518: amdgpu_vm_set_ptes: pe=f5fffd9008, addr=046ff80000, incr=4096, flags=31, count=1, immediate=0
+       vkcompute-13734   [010] .....  1316.746519: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000002 end:0x0800000004, flags:0xb1, incr:4096, dst:
+{0x46ff81000,0x46ff82000}
+       vkcompute-13734   [010] .....  1316.746519: amdgpu_vm_set_ptes: pe=f5fffd9010, addr=046ff81000, incr=4096, flags=b1, count=2, immediate=0
+       vkcompute-13734   [010] .....  1316.746519: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000004 end:0x0800000008, flags:0x131, incr:4096, dst:
+{0x46ff83000,0x46ff84000,0x46ff85000,0x46ff86000}
+       vkcompute-13734   [010] .....  1316.746519: amdgpu_vm_set_ptes: pe=f5fffd9020, addr=046ff83000, incr=4096, flags=131, count=4, immediate=0
+       vkcompute-13734   [010] .....  1316.746520: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000008 end:0x0800000010, flags:0x1b1, incr:4096, dst:
+{0x46ff87000,0x46ff88000,0x46ff89000,0x46ff8a000,0x46ff8b000,0x46ff8c000,0x46ff8d000,0x46ff8e000}
+       vkcompute-13734   [010] .....  1316.746520: amdgpu_vm_set_ptes: pe=f5fffd9040, addr=046ff87000, incr=4096, flags=1b1, count=8, immediate=0
+       vkcompute-13734   [010] .....  1316.746520: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000010 end:0x0800000020, flags:0x231, incr:4096, dst:
+{0x46ff8f000,0x46ff90000,0x46ff91000,0x46ff92000,0x46ff93000,0x46ff94000,0x46ff95000,0x46ff96000,0x46ff97000,0x46ff98000,0x46ff99000,0x46ff9a000,0x46ff9b000,0x46ff9c000,0x46ff9d000,0x46ff9e000}
+       vkcompute-13734   [010] .....  1316.746521: amdgpu_vm_set_ptes: pe=f5fffd9080, addr=046ff8f000, incr=4096, flags=231, count=16, immediate=0
+       vkcompute-13734   [010] .....  1316.746521: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000020 end:0x0800000040, flags:0x2b1, incr:4096, dst:
+{0x46ff9f000,0x46ffa0000,0x46ffa1000,0x46ffa2000,0x46ffa3000,0x46ffa4000,0x46ffa5000,0x46ffa6000,0x46ffa7000,0x46ffa8000,0x46ffa9000,0x46ffaa000,0x46ffab000,0x46ffac000,0x46ffad000,0x46ffae000,0x46ffaf000,0x46ffb0000,0x46ffb1000,0x46ffb2000,0x46ffb3000,0x46ffb4000,0x46ffb5000,0x46ffb6000,0x46ffb7000,0x46ffb8000,0x46ffb9000,0x46ffba000,0x46ffbb000,0x46ffbc000,0x46ffbd000,0x46ffbe000}
+       vkcompute-13734   [010] .N...  1316.746528: amdgpu_vm_set_ptes: pe=f5fffd9100, addr=046ff9f000, incr=4096, flags=2b1, count=32, immediate=0
+       vkcompute-13734   [010] .N...  1316.746528: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000040 end:0x0800000041, flags:0x31, incr:4096, dst:
+{0x46ffbf000}
+       vkcompute-13734   [010] .N...  1316.746529: amdgpu_vm_set_ptes: pe=f5fffd9200, addr=046ffbf000, incr=4096, flags=31, count=1, immediate=0
+       vkcompute-13734   [010] .N...  1316.746532: amdgpu_vm_bo_mapping: soffs=0800000001, eoffs=0800000041, flags=a
+   kworker/u48:3-3184    [002] .....  1316.746535: amdgpu_sched_run_job: timeline=sdma1, fence=751:19, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746548: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469972065 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [011] .....  1316.746578: amdgpu_bo_move: bo=00000000fd96d8b2, from=-1, to=2, size=4096
+       vkcompute-13734   [011] .....  1316.746579: amdgpu_bo_create: bo=00000000fd96d8b2, pages=1, type=2, preferred=6, allowed=6, visible=648
+       vkcompute-13734   [011] .....  1316.746584: amdgpu_vm_bo_map: bo=00000000fd96d8b2, start=800000041, last=800000041, offset=0000000000, flags=a
+       vkcompute-13734   [011] .....  1316.746585: amdgpu_vm_bo_update: soffs=0800000041, eoffs=0800000042, flags=a
+       vkcompute-13734   [011] .....  1316.746588: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000041 end:0x0800000042, flags:0x31, incr:4096, dst:
+{0x46ffd2000}
+       vkcompute-13734   [011] .....  1316.746588: amdgpu_vm_set_ptes: pe=f5fffd9208, addr=046ffd2000, incr=4096, flags=31, count=1, immediate=0
+       vkcompute-13734   [011] .....  1316.746592: amdgpu_vm_bo_mapping: soffs=0800000041, eoffs=0800000042, flags=a
+   kworker/u48:3-3184    [002] .....  1316.746595: amdgpu_sched_run_job: timeline=sdma1, fence=751:20, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746604: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469977649 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [011] .....  1316.746615: amdgpu_bo_move: bo=000000002fbe30ae, from=-1, to=1, size=16384
+       vkcompute-13734   [011] .....  1316.746615: amdgpu_bo_create: bo=000000002fbe30ae, pages=4, type=1, preferred=2, allowed=2, visible=653
+       vkcompute-13734   [011] .....  1316.746618: amdgpu_vm_bo_map: bo=000000002fbe30ae, start=800000042, last=800000045, offset=0000000000, flags=e
+       vkcompute-13734   [011] .....  1316.746619: amdgpu_vm_bo_update: soffs=0800000042, eoffs=0800000046, flags=e
+       vkcompute-13734   [011] .....  1316.746620: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000042 end:0x0800000044, flags:0xf3, incr:4096, dst:
+{0x102d14000,0x102d15000}
+       vkcompute-13734   [011] .....  1316.746621: amdgpu_vm_set_ptes: pe=f5fffd9210, addr=0102d14000, incr=4096, flags=f3, count=2, immediate=0
+       vkcompute-13734   [011] .....  1316.746621: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800000044 end:0x0800000046, flags:0xf3, incr:4096, dst:
+{0x102d16000,0x102d17000}
+       vkcompute-13734   [011] .....  1316.746622: amdgpu_vm_set_ptes: pe=f5fffd9220, addr=0102d16000, incr=4096, flags=f3, count=2, immediate=0
+       vkcompute-13734   [011] .....  1316.746624: amdgpu_vm_bo_mapping: soffs=0800000042, eoffs=0800000046, flags=e
+   kworker/u48:3-3184    [002] .....  1316.746628: amdgpu_sched_run_job: timeline=sdma1, fence=751:21, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746637: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469980933 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [011] .....  1316.746683: amdgpu_bo_move: bo=00000000445cb55f, from=-1, to=1, size=81920
+       vkcompute-13734   [011] .....  1316.746684: amdgpu_bo_create: bo=00000000445cb55f, pages=20, type=1, preferred=2, allowed=2, visible=653
+       vkcompute-13734   [011] .....  1316.746687: amdgpu_vm_bo_map: bo=00000000445cb55f, start=800100030, last=800100043, offset=0000000000, flags=8a
+       vkcompute-13734   [011] .....  1316.746688: amdgpu_vm_bo_update: soffs=0800100030, eoffs=0800100044, flags=8a
+       vkcompute-13734   [011] .....  1316.746689: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100030 end:0x0800100040, flags:0x3000000000233, incr:4096, dst:
+{0x15a390000,0x15a391000,0x15a392000,0x15a393000,0x15a394000,0x15a395000,0x15a396000,0x15a397000,0x15a398000,0x15a399000,0x15a39a000,0x15a39b000,0x15a39c000,0x15a39d000,0x15a39e000,0x15a39f000}
+       vkcompute-13734   [011] .....  1316.746690: amdgpu_vm_set_ptes: pe=f5fffdb180, addr=015a390000, incr=4096, flags=3000000000233, count=16, immediate=0
+       vkcompute-13734   [011] .....  1316.746690: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100040 end:0x0800100044, flags:0x3000000000133, incr:4096, dst:
+{0x15839c000,0x15839d000,0x15839e000,0x15839f000}
+       vkcompute-13734   [011] .....  1316.746691: amdgpu_vm_set_ptes: pe=f5fffdb200, addr=015839c000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [011] .....  1316.746693: amdgpu_vm_bo_mapping: soffs=0800100030, eoffs=0800100044, flags=8a
+   kworker/u48:3-3184    [002] .....  1316.746697: amdgpu_sched_run_job: timeline=sdma1, fence=751:22, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746705: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469987761 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [011] .....  1316.746727: amdgpu_bo_move: bo=00000000fc92045d, from=-1, to=1, size=81920
+       vkcompute-13734   [011] .....  1316.746728: amdgpu_bo_create: bo=00000000fc92045d, pages=20, type=1, preferred=2, allowed=2, visible=653
+       vkcompute-13734   [011] .....  1316.746731: amdgpu_vm_bo_map: bo=00000000fc92045d, start=800100044, last=800100057, offset=0000000000, flags=8a
+       vkcompute-13734   [011] .....  1316.746732: amdgpu_vm_bo_update: soffs=0800100044, eoffs=0800100058, flags=8a
+       vkcompute-13734   [011] .....  1316.746733: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100044 end:0x0800100048, flags:0x3000000000133, incr:4096, dst:
+{0x109210000,0x109211000,0x109212000,0x109213000}
+       vkcompute-13734   [011] .....  1316.746734: amdgpu_vm_set_ptes: pe=f5fffdb220, addr=0109210000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [011] .....  1316.746734: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100048 end:0x0800100050, flags:0x30000000001b3, incr:4096, dst:
+{0x109214000,0x109215000,0x109216000,0x109217000,0x109218000,0x109219000,0x10921a000,0x10921b000}
+       vkcompute-13734   [011] .....  1316.746734: amdgpu_vm_set_ptes: pe=f5fffdb240, addr=0109214000, incr=4096, flags=30000000001b3, count=8, immediate=0
+       vkcompute-13734   [011] .....  1316.746735: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100050 end:0x0800100054, flags:0x3000000000133, incr:4096, dst:
+{0x10921c000,0x10921d000,0x10921e000,0x10921f000}
+       vkcompute-13734   [011] .....  1316.746735: amdgpu_vm_set_ptes: pe=f5fffdb280, addr=010921c000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [011] .....  1316.746735: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100054 end:0x0800100058, flags:0x3000000000133, incr:4096, dst:
+{0x157ec8000,0x157ec9000,0x157eca000,0x157ecb000}
+       vkcompute-13734   [011] .....  1316.746736: amdgpu_vm_set_ptes: pe=f5fffdb2a0, addr=0157ec8000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [011] .....  1316.746738: amdgpu_vm_bo_mapping: soffs=0800100044, eoffs=0800100058, flags=8a
+   kworker/u48:3-3184    [002] .....  1316.746742: amdgpu_sched_run_job: timeline=sdma1, fence=751:23, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746751: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469992317 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [011] .....  1316.746760: amdgpu_bo_move: bo=000000004ca5ed54, from=-1, to=1, size=81920
+       vkcompute-13734   [011] .....  1316.746760: amdgpu_bo_create: bo=000000004ca5ed54, pages=20, type=1, preferred=2, allowed=2, visible=653
+       vkcompute-13734   [011] .....  1316.746763: amdgpu_vm_bo_map: bo=000000004ca5ed54, start=800100058, last=80010006b, offset=0000000000, flags=8a
+       vkcompute-13734   [011] .....  1316.746764: amdgpu_vm_bo_update: soffs=0800100058, eoffs=080010006c, flags=8a
+       vkcompute-13734   [011] .....  1316.746765: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100058 end:0x0800100060, flags:0x30000000001b3, incr:4096, dst:
+{0x15b4c0000,0x15b4c1000,0x15b4c2000,0x15b4c3000,0x15b4c4000,0x15b4c5000,0x15b4c6000,0x15b4c7000}
+       vkcompute-13734   [011] .....  1316.746766: amdgpu_vm_set_ptes: pe=f5fffdb2c0, addr=015b4c0000, incr=4096, flags=30000000001b3, count=8, immediate=0
+       vkcompute-13734   [011] .....  1316.746766: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100060 end:0x0800100068, flags:0x30000000001b3, incr:4096, dst:
+{0x15b4c8000,0x15b4c9000,0x15b4ca000,0x15b4cb000,0x15b4cc000,0x15b4cd000,0x15b4ce000,0x15b4cf000}
+       vkcompute-13734   [011] .....  1316.746767: amdgpu_vm_set_ptes: pe=f5fffdb300, addr=015b4c8000, incr=4096, flags=30000000001b3, count=8, immediate=0
+       vkcompute-13734   [011] .....  1316.746767: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x2ec start:0x0800100068 end:0x080010006c, flags:0x3000000000133, incr:4096, dst:
+{0x15820c000,0x15820d000,0x15820e000,0x15820f000}
+       vkcompute-13734   [011] .....  1316.746767: amdgpu_vm_set_ptes: pe=f5fffdb340, addr=015820c000, incr=4096, flags=3000000000133, count=4, immediate=0
+       vkcompute-13734   [011] .....  1316.746770: amdgpu_vm_bo_mapping: soffs=0800100058, eoffs=080010006c, flags=8a
+   kworker/u48:3-3184    [002] .....  1316.746773: amdgpu_sched_run_job: timeline=sdma1, fence=751:24, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.746783: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413469995497 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [011] .....  1316.746793: amdgpu_bo_list_set: list=00000000e2168d71, bo=00000000b0ff6ce5, bo_size=4096
+       vkcompute-13734   [011] .....  1316.746793: amdgpu_bo_list_set: list=00000000e2168d71, bo=0000000025d496fb, bo_size=81920
+       vkcompute-13734   [011] .....  1316.746794: amdgpu_bo_list_set: list=00000000e2168d71, bo=000000002fbe30ae, bo_size=16384
+       vkcompute-13734   [011] .....  1316.746794: amdgpu_bo_list_set: list=00000000e2168d71, bo=00000000ddb9f21f, bo_size=262144
+       vkcompute-13734   [011] .....  1316.746794: amdgpu_bo_list_set: list=00000000e2168d71, bo=00000000fd96d8b2, bo_size=4096
+       vkcompute-13734   [011] .....  1316.746795: amdgpu_bo_list_set: list=00000000e2168d71, bo=00000000fc92045d, bo_size=81920
+       vkcompute-13734   [011] .....  1316.746795: amdgpu_bo_list_set: list=00000000e2168d71, bo=00000000d4c13897, bo_size=4096
+       vkcompute-13734   [011] .....  1316.746795: amdgpu_bo_list_set: list=00000000e2168d71, bo=000000004ca5ed54, bo_size=81920
+       vkcompute-13734   [011] .....  1316.746797: amdgpu_cs_bo_status: total_bo_size=8, total_bo_count=536576
+   kworker/u48:3-3184    [002] .....  1316.746813: amdgpu_sched_run_job: timeline=sdma0, fence=303:67, ring_name=sdma0, num_ibs=1
+   kworker/u48:3-3184    [002] .....  1316.746814: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+          <idle>-0       [002] d.h1.  1316.746826: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413469999825 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.746830: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413470000201 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.746849: amdgpu_vm_bo_mapping: soffs=0800000000, eoffs=0800000001, flags=a
+       vkcompute-13734   [006] .....  1316.746851: amdgpu_vm_bo_mapping: soffs=0800000041, eoffs=0800000042, flags=a
+       vkcompute-13734   [006] .....  1316.746851: amdgpu_vm_bo_mapping: soffs=0800000042, eoffs=0800000046, flags=e
+       vkcompute-13734   [006] .....  1316.746852: amdgpu_vm_bo_mapping: soffs=0800000001, eoffs=0800000041, flags=a
+       vkcompute-13734   [006] .....  1316.746853: amdgpu_vm_bo_mapping: soffs=0800100001, eoffs=0800100015, flags=8a
+       vkcompute-13734   [006] .....  1316.746853: amdgpu_vm_bo_mapping: soffs=0800100058, eoffs=080010006c, flags=8a
+       vkcompute-13734   [006] .....  1316.746854: amdgpu_vm_bo_mapping: soffs=0800100044, eoffs=0800100058, flags=8a
+       vkcompute-13734   [006] .....  1316.746855: amdgpu_vm_bo_mapping: soffs=0800100015, eoffs=0800100016, flags=a
+       vkcompute-13734   [006] .....  1316.746857: amdgpu_cs: bo_list=00000000e2168d71, ring=0, dw=24, fences=0
+       vkcompute-13734   [006] .....  1316.746857: amdgpu_cs: bo_list=00000000e2168d71, ring=0, dw=64, fences=0
+       vkcompute-13734   [006] .....  1316.746860: amdgpu_vm_bo_cs: soffs=0800000000, eoffs=0800000001, flags=a
+       vkcompute-13734   [006] .....  1316.746860: amdgpu_vm_bo_cs: soffs=0800000001, eoffs=0800000041, flags=a
+       vkcompute-13734   [006] .....  1316.746861: amdgpu_vm_bo_cs: soffs=0800000041, eoffs=0800000042, flags=a
+       vkcompute-13734   [006] .....  1316.746861: amdgpu_vm_bo_cs: soffs=0800000042, eoffs=0800000046, flags=e
+       vkcompute-13734   [006] .....  1316.746861: amdgpu_vm_bo_cs: soffs=0800100000, eoffs=0800100001, flags=e
+       vkcompute-13734   [006] .....  1316.746861: amdgpu_vm_bo_cs: soffs=0800100001, eoffs=0800100015, flags=8a
+       vkcompute-13734   [006] .....  1316.746862: amdgpu_vm_bo_cs: soffs=0800100015, eoffs=0800100016, flags=a
+       vkcompute-13734   [006] .....  1316.746862: amdgpu_vm_bo_cs: soffs=0800100020, eoffs=0800100030, flags=e
+       vkcompute-13734   [006] .....  1316.746862: amdgpu_vm_bo_cs: soffs=0800100044, eoffs=0800100058, flags=8a
+       vkcompute-13734   [006] .....  1316.746862: amdgpu_vm_bo_cs: soffs=0800100058, eoffs=080010006c, flags=8a
+       vkcompute-13734   [006] .....  1316.746863: amdgpu_cs_ioctl: timeline=gfx_0.0.0, fence=755:1, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:3-3184    [002] .....  1316.746873: amdgpu_vm_grab_id: pasid=64, ring=gfx_0.0.0, id=5, hub=0, pd_addr=046ffe0001 needs_flush=1
+   kworker/u48:3-3184    [002] .....  1316.746874: amdgpu_sched_run_job: timeline=gfx_0.0.0, fence=755:1, ring_name=gfx_0.0.0, num_ibs=2
+   kworker/u48:3-3184    [002] .....  1316.746878: amdgpu_vm_flush: ring=gfx_0.0.0, id=5, hub=0, pd_addr=046ffe0001
+          <idle>-0       [002] d.h1.  1316.746889: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:0 vmid:0 timestamp: 413470006061 pasid:0 src_data: 80000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.746917: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:0 vmid:0 timestamp: 413470008897 pasid:0 src_data: 80000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766731: amdgpu_vm_bo_unmap: bo=00000000fd96d8b2, start=800000041, last=800000041, offset=0000000000, flags=a
+       vkcompute-13734   [006] .....  1316.766734: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000041 end:0x0800000042, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [006] .....  1316.766734: amdgpu_vm_set_ptes: pe=f5fffd9208, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:3-3184    [002] .....  1316.766746: amdgpu_sched_run_job: timeline=sdma1, fence=751:25, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] .....  1316.766754: amdgpu_sched_run_job: timeline=sdma0, fence=305:925, ring_name=sdma0, num_ibs=1
+   kworker/u48:3-3184    [002] d.h2.  1316.766757: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413471989145 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766760: amdgpu_vm_bo_unmap: bo=00000000ddb9f21f, start=800000001, last=800000040, offset=0000000000, flags=a
+       vkcompute-13734   [006] .....  1316.766763: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000001 end:0x0800000002, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [006] .....  1316.766763: amdgpu_vm_set_ptes: pe=f5fffd9008, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:3-3184    [002] .....  1316.766764: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+       vkcompute-13734   [006] .....  1316.766764: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000002 end:0x0800000004, flags:0x80, incr:4096, dst:
+{0x1000,0x2000}
+       vkcompute-13734   [006] .....  1316.766764: amdgpu_vm_set_ptes: pe=f5fffd9010, addr=0000001000, incr=4096, flags=90, count=2, immediate=0
+       vkcompute-13734   [006] .....  1316.766765: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000004 end:0x0800000008, flags:0x100, incr:4096, dst:
+{0x3000,0x4000,0x5000,0x6000}
+       vkcompute-13734   [006] .....  1316.766765: amdgpu_vm_set_ptes: pe=f5fffd9020, addr=0000003000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [006] .....  1316.766765: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000008 end:0x0800000010, flags:0x180, incr:4096, dst:
+{0x7000,0x8000,0x9000,0xa000,0xb000,0xc000,0xd000,0xe000}
+       vkcompute-13734   [006] .....  1316.766766: amdgpu_vm_set_ptes: pe=f5fffd9040, addr=0000007000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [006] .....  1316.766766: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000010 end:0x0800000020, flags:0x200, incr:4096, dst:
+{0xf000,0x10000,0x11000,0x12000,0x13000,0x14000,0x15000,0x16000,0x17000,0x18000,0x19000,0x1a000,0x1b000,0x1c000,0x1d000,0x1e000}
+       vkcompute-13734   [006] .....  1316.766766: amdgpu_vm_set_ptes: pe=f5fffd9080, addr=000000f000, incr=4096, flags=210, count=16, immediate=0
+       vkcompute-13734   [006] .....  1316.766767: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000020 end:0x0800000040, flags:0x280, incr:4096, dst:
+{0x1f000,0x20000,0x21000,0x22000,0x23000,0x24000,0x25000,0x26000,0x27000,0x28000,0x29000,0x2a000,0x2b000,0x2c000,0x2d000,0x2e000,0x2f000,0x30000,0x31000,0x32000,0x33000,0x34000,0x35000,0x36000,0x37000,0x38000,0x39000,0x3a000,0x3b000,0x3c000,0x3d000,0x3e000}
+       vkcompute-13734   [006] .....  1316.766767: amdgpu_vm_set_ptes: pe=f5fffd9100, addr=000001f000, incr=4096, flags=290, count=32, immediate=0
+       vkcompute-13734   [006] .....  1316.766767: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000040 end:0x0800000041, flags:0x0, incr:4096, dst:
+{0x3f000}
+       vkcompute-13734   [006] .....  1316.766768: amdgpu_vm_set_ptes: pe=f5fffd9200, addr=000003f000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:3-3184    [002] d.h2.  1316.766778: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413471991193 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:3-3184    [002] .....  1316.766778: amdgpu_sched_run_job: timeline=sdma1, fence=751:26, ring_name=sdma1, num_ibs=1
+   kworker/u48:3-3184    [002] d.h..  1316.766783: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413471991709 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1316.766784: amdgpu_sched_run_job: timeline=sdma0, fence=305:926, ring_name=sdma0, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1316.766787: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+   kworker/u53:1-13630   [011] .....  1316.766793: amdgpu_bo_move: bo=00000000fd96d8b2, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.766797: amdgpu_vm_bo_unmap: bo=000000008d8f3ae5, start=800100020, last=80010002f, offset=0000000000, flags=e
+       vkcompute-13734   [006] .....  1316.766800: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100020 end:0x0800100030, flags:0x200, incr:4096, dst:
+{0x0,0x1000,0x2000,0x3000,0x4000,0x5000,0x6000,0x7000,0x8000,0x9000,0xa000,0xb000,0xc000,0xd000,0xe000,0xf000}
+       vkcompute-13734   [006] .....  1316.766800: amdgpu_vm_set_ptes: pe=f5fffdb100, addr=0000000000, incr=4096, flags=210, count=16, immediate=0
+          <idle>-0       [002] d.h1.  1316.766801: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413471993517 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.766805: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413471993841 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1316.766807: amdgpu_sched_run_job: timeline=sdma1, fence=751:27, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.766810: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413471994473 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.766815: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413471995085 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u53:5-13634   [010] .....  1316.766818: amdgpu_bo_move: bo=00000000ddb9f21f, from=2, to=-1, size=262144
+   kworker/u48:4-3588    [007] .....  1316.766822: amdgpu_sched_run_job: timeline=sdma0, fence=305:927, ring_name=sdma0, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1316.766822: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+          <idle>-0       [002] d.h1.  1316.766835: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413471996797 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.766838: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413471997357 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766839: amdgpu_vm_bo_unmap: bo=000000002fbe30ae, start=800000042, last=800000045, offset=0000000000, flags=e
+       vkcompute-13734   [006] .....  1316.766840: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000042 end:0x0800000044, flags:0x80, incr:4096, dst:
+{0x0,0x1000}
+       vkcompute-13734   [006] .....  1316.766841: amdgpu_vm_set_ptes: pe=f5fffd9210, addr=0000000000, incr=4096, flags=90, count=2, immediate=0
+       vkcompute-13734   [006] .....  1316.766841: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000044 end:0x0800000046, flags:0x80, incr:4096, dst:
+{0x2000,0x3000}
+       vkcompute-13734   [006] .....  1316.766841: amdgpu_vm_set_ptes: pe=f5fffd9220, addr=0000002000, incr=4096, flags=90, count=2, immediate=0
+   kworker/u53:1-13630   [011] .....  1316.766845: amdgpu_bo_move: bo=000000008d8f3ae5, from=2, to=-1, size=65536
+       vkcompute-13734   [006] .....  1316.766848: amdgpu_bo_move: bo=000000002fbe30ae, from=1, to=-1, size=16384
+   kworker/u48:3-3184    [002] .....  1316.766855: amdgpu_sched_run_job: timeline=sdma1, fence=751:28, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [006] .....  1316.766860: amdgpu_vm_bo_unmap: bo=0000000025d496fb, start=800100001, last=800100014, offset=0000000000, flags=8a
+       vkcompute-13734   [006] .....  1316.766862: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100001 end:0x0800100002, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [006] .....  1316.766863: amdgpu_vm_set_ptes: pe=f5fffdb008, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+       vkcompute-13734   [006] .....  1316.766863: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100002 end:0x0800100004, flags:0x80, incr:4096, dst:
+{0x1000,0x2000}
+       vkcompute-13734   [006] .....  1316.766863: amdgpu_vm_set_ptes: pe=f5fffdb010, addr=0000001000, incr=4096, flags=90, count=2, immediate=0
+       vkcompute-13734   [006] .....  1316.766864: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100004 end:0x0800100008, flags:0x100, incr:4096, dst:
+{0x3000,0x4000,0x5000,0x6000}
+       vkcompute-13734   [006] .....  1316.766864: amdgpu_vm_set_ptes: pe=f5fffdb020, addr=0000003000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [006] .....  1316.766864: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100008 end:0x0800100010, flags:0x180, incr:4096, dst:
+{0x7000,0x8000,0x9000,0xa000,0xb000,0xc000,0xd000,0xe000}
+       vkcompute-13734   [006] .....  1316.766864: amdgpu_vm_set_ptes: pe=f5fffdb040, addr=0000007000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [006] .....  1316.766865: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100010 end:0x0800100014, flags:0x100, incr:4096, dst:
+{0xf000,0x10000,0x11000,0x12000}
+       vkcompute-13734   [006] .....  1316.766865: amdgpu_vm_set_ptes: pe=f5fffdb080, addr=000000f000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [006] .....  1316.766865: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100014 end:0x0800100015, flags:0x0, incr:4096, dst:
+{0x13000}
+       vkcompute-13734   [006] .....  1316.766866: amdgpu_vm_set_ptes: pe=f5fffdb0a0, addr=0000013000, incr=4096, flags=10, count=1, immediate=0
+          <idle>-0       [002] d.h1.  1316.766868: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472000113 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766874: amdgpu_bo_move: bo=0000000025d496fb, from=1, to=-1, size=81920
+   kworker/u48:3-3184    [002] .....  1316.766879: amdgpu_sched_run_job: timeline=sdma1, fence=751:29, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.766893: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472002633 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766894: amdgpu_vm_bo_unmap: bo=00000000b0ff6ce5, start=800000000, last=800000000, offset=0000000000, flags=a
+       vkcompute-13734   [006] .....  1316.766896: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800000000 end:0x0800000001, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [006] .....  1316.766896: amdgpu_vm_set_ptes: pe=f5fffd9000, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:3-3184    [002] .....  1316.766905: amdgpu_sched_run_job: timeline=sdma1, fence=751:30, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [006] .....  1316.766909: amdgpu_vm_bo_unmap: bo=00000000d4c13897, start=800100015, last=800100015, offset=0000000000, flags=a
+   kworker/u48:4-3588    [007] .....  1316.766909: amdgpu_sched_run_job: timeline=sdma0, fence=305:928, ring_name=sdma0, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1316.766910: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+       vkcompute-13734   [006] .....  1316.766911: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100015 end:0x0800100016, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [006] .....  1316.766912: amdgpu_vm_set_ptes: pe=f5fffdb0a8, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+          <idle>-0       [002] dnh1.  1316.766916: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472004925 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1316.766918: amdgpu_sched_run_job: timeline=sdma1, fence=751:31, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [006] .....  1316.766920: amdgpu_bo_move: bo=00000000d4c13897, from=1, to=-1, size=4096
+          <idle>-0       [002] dnh1.  1316.766920: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413472005569 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] dnh1.  1316.766926: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413472006009 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766931: amdgpu_vm_bo_unmap: bo=00000000445cb55f, start=800100030, last=800100043, offset=0000000000, flags=8a
+          <idle>-0       [002] dnh1.  1316.766932: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472006149 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766932: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100030 end:0x0800100040, flags:0x200, incr:4096, dst:
+{0x0,0x1000,0x2000,0x3000,0x4000,0x5000,0x6000,0x7000,0x8000,0x9000,0xa000,0xb000,0xc000,0xd000,0xe000,0xf000}
+   kworker/u53:1-13630   [011] .....  1316.766933: amdgpu_bo_move: bo=00000000b0ff6ce5, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.766933: amdgpu_vm_set_ptes: pe=f5fffdb180, addr=0000000000, incr=4096, flags=210, count=16, immediate=0
+       vkcompute-13734   [006] .....  1316.766934: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100040 end:0x0800100044, flags:0x100, incr:4096, dst:
+{0x10000,0x11000,0x12000,0x13000}
+       vkcompute-13734   [006] .....  1316.766934: amdgpu_vm_set_ptes: pe=f5fffdb200, addr=0000010000, incr=4096, flags=110, count=4, immediate=0
+   kworker/u48:4-3588    [007] .....  1316.766939: amdgpu_sched_run_job: timeline=sdma1, fence=751:32, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [006] .....  1316.766941: amdgpu_bo_move: bo=00000000445cb55f, from=1, to=-1, size=81920
+          <idle>-0       [002] d.h1.  1316.766949: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472008225 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766957: amdgpu_vm_bo_unmap: bo=00000000fc92045d, start=800100044, last=800100057, offset=0000000000, flags=8a
+       vkcompute-13734   [006] .....  1316.766959: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100044 end:0x0800100048, flags:0x100, incr:4096, dst:
+{0x0,0x1000,0x2000,0x3000}
+       vkcompute-13734   [006] .....  1316.766959: amdgpu_vm_set_ptes: pe=f5fffdb220, addr=0000000000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [006] .....  1316.766960: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100048 end:0x0800100050, flags:0x180, incr:4096, dst:
+{0x4000,0x5000,0x6000,0x7000,0x8000,0x9000,0xa000,0xb000}
+       vkcompute-13734   [006] .....  1316.766960: amdgpu_vm_set_ptes: pe=f5fffdb240, addr=0000004000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [006] .....  1316.766960: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100050 end:0x0800100058, flags:0x180, incr:4096, dst:
+{0xc000,0xd000,0xe000,0xf000,0x10000,0x11000,0x12000,0x13000}
+       vkcompute-13734   [006] .....  1316.766960: amdgpu_vm_set_ptes: pe=f5fffdb280, addr=000000c000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [006] .....  1316.766967: amdgpu_bo_move: bo=00000000fc92045d, from=1, to=-1, size=81920
+   kworker/u48:3-3184    [002] .....  1316.766970: amdgpu_sched_run_job: timeline=sdma1, fence=751:33, ring_name=sdma1, num_ibs=1
+       vkcompute-13734   [006] .....  1316.766982: amdgpu_vm_bo_unmap: bo=000000004ca5ed54, start=800100058, last=80010006b, offset=0000000000, flags=8a
+          <idle>-0       [002] d.h1.  1316.766982: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472011553 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.766984: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100058 end:0x0800100060, flags:0x180, incr:4096, dst:
+{0x0,0x1000,0x2000,0x3000,0x4000,0x5000,0x6000,0x7000}
+       vkcompute-13734   [006] .....  1316.766984: amdgpu_vm_set_ptes: pe=f5fffdb2c0, addr=0000000000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [006] .....  1316.766985: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100060 end:0x0800100068, flags:0x180, incr:4096, dst:
+{0x8000,0x9000,0xa000,0xb000,0xc000,0xd000,0xe000,0xf000}
+       vkcompute-13734   [006] .....  1316.766985: amdgpu_vm_set_ptes: pe=f5fffdb300, addr=0000008000, incr=4096, flags=190, count=8, immediate=0
+       vkcompute-13734   [006] .....  1316.766985: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100068 end:0x080010006c, flags:0x100, incr:4096, dst:
+{0x10000,0x11000,0x12000,0x13000}
+       vkcompute-13734   [006] .....  1316.766986: amdgpu_vm_set_ptes: pe=f5fffdb340, addr=0000010000, incr=4096, flags=110, count=4, immediate=0
+       vkcompute-13734   [006] .....  1316.766991: amdgpu_bo_move: bo=000000004ca5ed54, from=1, to=-1, size=81920
+   kworker/u48:3-3184    [002] .....  1316.766995: amdgpu_sched_run_job: timeline=sdma1, fence=751:34, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1316.767007: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472013957 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.767020: amdgpu_vm_bo_unmap: bo=0000000058618479, start=800100000, last=800100000, offset=0000000000, flags=e
+       vkcompute-13734   [006] .....  1316.767022: amdgpu_vm_update_ptes: pid:13734 vm_ctx:0x2ec start:0x0800100000 end:0x0800100001, flags:0x0, incr:4096, dst:
+{0x0}
+       vkcompute-13734   [006] .....  1316.767023: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+       vkcompute-13734   [006] .....  1316.767029: amdgpu_bo_move: bo=0000000058618479, from=1, to=-1, size=4096
+   kworker/u48:3-3184    [002] .....  1316.767032: amdgpu_sched_run_job: timeline=sdma1, fence=751:35, ring_name=sdma1, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1316.767037: amdgpu_sched_run_job: timeline=sdma0, fence=303:68, ring_name=sdma0, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1316.767038: amdgpu_vm_flush: ring=sdma0, id=0, hub=0, pd_addr=046fe00001
+          <idle>-0       [002] d.h1.  1316.767043: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 413472017593 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.767050: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413472018353 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.767053: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 413472018805 pasid:0 src_data: 00000000 00000000 00000000 00000000
+       vkcompute-13734   [006] .....  1316.767255: amdgpu_vm_bo_unmap: bo=00000000b97d8569, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+       vkcompute-13734   [006] .....  1316.767269: amdgpu_bo_move: bo=00000000b170a5d7, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767288: amdgpu_bo_move: bo=0000000036fd16b8, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767291: amdgpu_bo_move: bo=00000000538ae5c1, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767310: amdgpu_bo_move: bo=000000000cad813c, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767329: amdgpu_bo_move: bo=0000000006acdc9e, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767373: amdgpu_bo_move: bo=00000000666c6c42, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767375: amdgpu_bo_move: bo=00000000ba8a68ac, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767380: amdgpu_pasid_freed: pasid=64
+       vkcompute-13734   [006] .....  1316.767381: amdgpu_bo_move: bo=000000001a8c9435, from=2, to=-1, size=4096
+       vkcompute-13734   [006] .....  1316.767401: amdgpu_dm_atomic_check_begin: state=0000000055b41928 allow_modeset=1 legacy_cursor_update=0 async_update=0 duplicated=0 num_connector=2 num_private_objs=0
+       vkcompute-13734   [006] .....  1316.767404: amdgpu_dm_connector_atomic_check: conn_id=64 conn_state=00000000aecf75ff state=0000000055b41928 commit=0000000000000000 crtc_id=58 best_encoder_id=63 link_status=0 self_refresh_aware=0 picture_aspect_ratio=0 content_type=0 hdcp_content_type=0 content_protection=0 scaling_mode=0 colorspace=0 max_requested_bpc=16 max_bpc=8
+       vkcompute-13734   [006] .....  1316.767518: amdgpu_dm_plane_atomic_check: plane_id=41 plane_type=1 plane_state=0000000024a7fc07 state=0000000055b41928 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=1 normalized_zpos=1 color_encoding=0 color_range=0 visible=0
+       vkcompute-13734   [006] .....  1316.767519: amdgpu_dm_plane_atomic_check: plane_id=45 plane_type=1 plane_state=00000000fb58d893 state=0000000055b41928 crtc_id=58 fb(id=72 fmt=XR24 planes=1 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=1920 crtc_h=1200 src_x=0 src_y=0 src_w=1920 src_h=1200 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=1 normalized_zpos=0 color_encoding=0 color_range=0 visible=1
+       vkcompute-13734   [006] .....  1316.767519: amdgpu_dm_plane_atomic_check: plane_id=49 plane_type=0 plane_state=00000000575aa425 state=0000000055b41928 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=4 normalized_zpos=4 color_encoding=0 color_range=0 visible=0
+       vkcompute-13734   [006] .....  1316.767520: amdgpu_dm_plane_atomic_check: plane_id=55 plane_type=2 plane_state=000000000f3f70ff state=0000000055b41928 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=255 normalized_zpos=255 color_encoding=0 color_range=0 visible=0
+       vkcompute-13734   [006] .....  1316.767520: amdgpu_dm_plane_atomic_check: plane_id=59 plane_type=2 plane_state=000000006eff96e8 state=0000000055b41928 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=255 normalized_zpos=255 color_encoding=0 color_range=0 visible=0
+       vkcompute-13734   [006] .....  1316.767521: amdgpu_dm_crtc_atomic_check: crtc_id=58 crtc_state=00000000db0ad0b3 state=0000000055b41928 commit=0000000000000000 changed(planes=1 mode=0 active=0 conn=0 zpos=0 color_mgmt=0) state(enable=1 active=1 async_flip=0 vrr_enabled=0 self_refresh_active=0 no_vblank=0) mask(plane=2 conn=1 enc=1)
+       vkcompute-13734   [006] .....  1316.767532: amdgpu_dm_crtc_atomic_check: crtc_id=62 crtc_state=00000000194717d7 state=0000000055b41928 commit=0000000000000000 changed(planes=0 mode=0 active=0 conn=0 zpos=0 color_mgmt=0) state(enable=0 active=0 async_flip=0 vrr_enabled=0 self_refresh_active=0 no_vblank=0) mask(plane=0 conn=0 enc=0)
+       vkcompute-13734   [006] b..1.  1316.767537: dcn_fpu: begin: recursion_depth: 1: dcn20_validate_bandwidth()+2137:
+       vkcompute-13734   [006] b..2.  1316.767540: dcn_fpu: begin: recursion_depth: 2: dcn20_fast_validate_bw()+2023:
+       vkcompute-13734   [006] b..3.  1316.767542: dcn_fpu: begin: recursion_depth: 3: dcn201_populate_dml_writeback_from_context()+1043:
+       vkcompute-13734   [006] b..3.  1316.767542: dcn_fpu: end: recursion_depth: 2: dcn201_populate_dml_writeback_from_context()+1045:
+       vkcompute-13734   [006] b..2.  1316.767542: dcn_fpu: end: recursion_depth: 1: dcn20_fast_validate_bw()+2025:
+       vkcompute-13734   [006] ...1.  1316.767563: dcn_fpu: end: recursion_depth: 0: dcn20_validate_bandwidth()+2139:
+       vkcompute-13734   [006] .....  1316.767564: amdgpu_dm_atomic_check_finish: state=0000000055b41928 res=0 async_update=0 allow_modeset=1
+       vkcompute-13734   [006] .....  1316.767573: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] .....  1316.767575: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] .....  1316.767576: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0482010f
+       vkcompute-13734   [006] .....  1316.767576: amdgpu_dc_rreg: reg=0x0000500a, value=0x0482010f
+       vkcompute-13734   [006] .....  1316.767577: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000010f
+       vkcompute-13734   [006] .....  1316.767577: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000010f
+       vkcompute-13734   [006] .....  1316.767580: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] .....  1316.767580: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] .....  1316.767581: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x07c6010f
+       vkcompute-13734   [006] .....  1316.767581: amdgpu_dc_rreg: reg=0x0000500a, value=0x07c6010f
+       vkcompute-13734   [006] .....  1316.767583: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000110
+       vkcompute-13734   [006] .....  1316.767583: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000110
+       vkcompute-13734   [006] .....  1316.767585: amdgpu_dm_atomic_commit_tail_begin: state=0000000055b41928 allow_modeset=1 legacy_cursor_update=0 async_update=0 duplicated=0 num_connector=2 num_private_objs=1
+       vkcompute-13734   [006] .....  1316.767592: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012188
+       vkcompute-13734   [006] .....  1316.767592: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012188
+       vkcompute-13734   [006] .....  1316.767593: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] .....  1316.767593: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] .....  1316.767594: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x07720110
+       vkcompute-13734   [006] .....  1316.767594: amdgpu_dc_rreg: reg=0x0000500a, value=0x07720110
+       vkcompute-13734   [006] .....  1316.767595: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000110
+       vkcompute-13734   [006] .....  1316.767596: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000110
+       vkcompute-13734   [006] .....  1316.767597: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012188
+       vkcompute-13734   [006] .....  1316.767597: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012188
+       vkcompute-13734   [006] .....  1316.767598: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] .....  1316.767598: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] .....  1316.767599: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x02160111
+       vkcompute-13734   [006] .....  1316.767599: amdgpu_dc_rreg: reg=0x0000500a, value=0x02160111
+       vkcompute-13734   [006] .....  1316.767600: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000111
+       vkcompute-13734   [006] .....  1316.767600: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000111
+       vkcompute-13734   [006] d..4.  1316.767604: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00104104
+       vkcompute-13734   [006] d..4.  1316.767604: amdgpu_dc_rreg: reg=0x0000504a, value=0x00104104
+       vkcompute-13734   [006] d..4.  1316.767605: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00114104
+       vkcompute-13734   [006] d..4.  1316.767605: amdgpu_dc_wreg: reg=0x0000504a, value=0x00114104
+       vkcompute-13734   [006] d..4.  1316.767606: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00100104
+       vkcompute-13734   [006] d..4.  1316.767606: amdgpu_dc_rreg: reg=0x0000504a, value=0x00100104
+       vkcompute-13734   [006] d..4.  1316.767607: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00101104
+       vkcompute-13734   [006] d..4.  1316.767607: amdgpu_dc_wreg: reg=0x0000504a, value=0x00101104
+       vkcompute-13734   [006] d..3.  1316.767610: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012188
+       vkcompute-13734   [006] d..3.  1316.767611: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012188
+       vkcompute-13734   [006] d..3.  1316.767612: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] d..3.  1316.767612: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] d..3.  1316.767613: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x02600112
+       vkcompute-13734   [006] d..3.  1316.767613: amdgpu_dc_rreg: reg=0x0000500a, value=0x02600112
+       vkcompute-13734   [006] d..3.  1316.767614: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000112
+       vkcompute-13734   [006] d..3.  1316.767614: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000112
+       vkcompute-13734   [006] d..3.  1316.767615: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012188
+       vkcompute-13734   [006] d..3.  1316.767616: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012188
+       vkcompute-13734   [006] d..3.  1316.767617: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] d..3.  1316.767617: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] d..3.  1316.767618: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x05670112
+       vkcompute-13734   [006] d..3.  1316.767618: amdgpu_dc_rreg: reg=0x0000500a, value=0x05670112
+       vkcompute-13734   [006] d..3.  1316.767619: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000112
+       vkcompute-13734   [006] d..3.  1316.767619: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000112
+       vkcompute-13734   [006] d..3.  1316.767620: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012188
+       vkcompute-13734   [006] d..3.  1316.767620: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012188
+       vkcompute-13734   [006] d..3.  1316.767621: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+       vkcompute-13734   [006] d..3.  1316.767622: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+       vkcompute-13734   [006] d..3.  1316.767623: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x00130113
+       vkcompute-13734   [006] d..3.  1316.767623: amdgpu_dc_rreg: reg=0x0000500a, value=0x00130113
+       vkcompute-13734   [006] d..3.  1316.767624: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000113
+       vkcompute-13734   [006] d..3.  1316.767624: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000113
+       vkcompute-13734   [006] d..3.  1316.767625: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012188
+       vkcompute-13734   [006] d..3.  1316.767625: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012188
+       vkcompute-13734   [006] b..1.  1316.767729: dcn_fpu: begin: recursion_depth: 1: dcn20_validate_bandwidth()+2137:
+       vkcompute-13734   [006] b..2.  1316.767731: dcn_fpu: begin: recursion_depth: 2: dcn20_fast_validate_bw()+2023:
+       vkcompute-13734   [006] b..3.  1316.767731: dcn_fpu: begin: recursion_depth: 3: dcn201_populate_dml_writeback_from_context()+1043:
+       vkcompute-13734   [006] b..3.  1316.767731: dcn_fpu: end: recursion_depth: 2: dcn201_populate_dml_writeback_from_context()+1045:
+       vkcompute-13734   [006] b..2.  1316.767732: dcn_fpu: end: recursion_depth: 1: dcn20_fast_validate_bw()+2025:
+       vkcompute-13734   [006] b..2.  1316.767746: dcn_fpu: begin: recursion_depth: 2: dcn201_populate_dml_writeback_from_context()+1043:
+       vkcompute-13734   [006] b..2.  1316.767746: dcn_fpu: end: recursion_depth: 1: dcn201_populate_dml_writeback_from_context()+1045:
+       vkcompute-13734   [006] ...1.  1316.767849: dcn_fpu: end: recursion_depth: 0: dcn20_validate_bandwidth()+2139:
+       vkcompute-13734   [006] .....  1316.767875: amdgpu_device_wreg: 0x13fe, 0x000039c6, 0x00000bb8
+       vkcompute-13734   [006] .....  1316.767875: amdgpu_dc_wreg: reg=0x000039c6, value=0x00000bb8
+       vkcompute-13734   [006] .....  1316.767876: amdgpu_device_rreg: 0x13fe, 0x000039c5, 0x00440100
+       vkcompute-13734   [006] .....  1316.767876: amdgpu_dc_rreg: reg=0x000039c5, value=0x00440100
+       vkcompute-13734   [006] .....  1316.767877: amdgpu_device_wreg: 0x13fe, 0x000039c5, 0x00440100
+       vkcompute-13734   [006] .....  1316.767877: amdgpu_dc_wreg: reg=0x000039c5, value=0x00440100
+       vkcompute-13734   [006] .....  1316.767878: amdgpu_device_rreg: 0x13fe, 0x000039c8, 0x00000000
+       vkcompute-13734   [006] .....  1316.767878: amdgpu_dc_rreg: reg=0x000039c8, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767879: amdgpu_device_wreg: 0x13fe, 0x000039c8, 0x00000000
+       vkcompute-13734   [006] .....  1316.767879: amdgpu_dc_wreg: reg=0x000039c8, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767882: amdgpu_device_rreg: 0x13fe, 0x00004d14, 0x00000000
+       vkcompute-13734   [006] .....  1316.767882: amdgpu_dc_rreg: reg=0x00004d14, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767883: amdgpu_device_rreg: 0x13fe, 0x00004d1b, 0x00000000
+       vkcompute-13734   [006] .....  1316.767883: amdgpu_dc_rreg: reg=0x00004d1b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767884: amdgpu_device_rreg: 0x13fe, 0x00004d14, 0x00000000
+       vkcompute-13734   [006] .....  1316.767884: amdgpu_dc_rreg: reg=0x00004d14, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767885: amdgpu_device_rreg: 0x13fe, 0x00004d1b, 0x00000000
+       vkcompute-13734   [006] .....  1316.767885: amdgpu_dc_rreg: reg=0x00004d1b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767887: amdgpu_device_rreg: 0x13fe, 0x00005001, 0x80011311
+       vkcompute-13734   [006] .....  1316.767887: amdgpu_dc_rreg: reg=0x00005001, value=0x80011311
+       vkcompute-13734   [006] .....  1316.767888: amdgpu_device_wreg: 0x13fe, 0x00005050, 0x00000000
+       vkcompute-13734   [006] .....  1316.767888: amdgpu_dc_wreg: reg=0x00005050, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767889: amdgpu_device_wreg: 0x13fe, 0x0000504b, 0x00000001
+       vkcompute-13734   [006] .....  1316.767889: amdgpu_dc_wreg: reg=0x0000504b, value=0x00000001
+       vkcompute-13734   [006] .....  1316.767890: amdgpu_device_rreg: 0x13fe, 0x0000504b, 0x00000101
+       vkcompute-13734   [006] .....  1316.767890: amdgpu_dc_rreg: reg=0x0000504b, value=0x00000101
+       vkcompute-13734   [006] .....  1316.767891: dcn_optc_lock_unlock_state: Lock: optc1_lock()+684: optc_instance=0 opp_count=0 max_h_total=32768 max_v_total=32768 min_h_blank=32 min_h_sync_width=8 min_v_sync_width=1 min_v_blank=3 min_v_blank_interlace=5 vstartup_start=23 vupdate_offset=520 vupdate_width=303 vready_offset=520
+       vkcompute-13734   [006] .....  1316.767893: amdgpu_device_rreg: 0x13fe, 0x00003adc, 0x00000040
+       vkcompute-13734   [006] .....  1316.767893: amdgpu_dc_rreg: reg=0x00003adc, value=0x00000040
+       vkcompute-13734   [006] .....  1316.767894: amdgpu_device_rreg: 0x13fe, 0x00003d70, 0x00000040
+       vkcompute-13734   [006] .....  1316.767895: amdgpu_dc_rreg: reg=0x00003d70, value=0x00000040
+       vkcompute-13734   [006] .....  1316.767896: amdgpu_device_rreg: 0x13fe, 0x00003adc, 0x00000040
+       vkcompute-13734   [006] .....  1316.767896: amdgpu_dc_rreg: reg=0x00003adc, value=0x00000040
+       vkcompute-13734   [006] .....  1316.767897: amdgpu_device_rreg: 0x13fe, 0x00003d70, 0x00000040
+       vkcompute-13734   [006] .....  1316.767898: amdgpu_dc_rreg: reg=0x00003d70, value=0x00000040
+       vkcompute-13734   [006] .....  1316.767901: amdgpu_device_wreg: 0x13fe, 0x00005047, 0x00000017
+       vkcompute-13734   [006] .....  1316.767901: amdgpu_dc_wreg: reg=0x00005047, value=0x00000017
+       vkcompute-13734   [006] .....  1316.767902: amdgpu_device_wreg: 0x13fe, 0x00005048, 0x012f0208
+       vkcompute-13734   [006] .....  1316.767902: amdgpu_dc_wreg: reg=0x00005048, value=0x012f0208
+       vkcompute-13734   [006] .....  1316.767902: amdgpu_device_wreg: 0x13fe, 0x00005049, 0x0000018b
+       vkcompute-13734   [006] .....  1316.767903: amdgpu_dc_wreg: reg=0x00005049, value=0x0000018b
+       vkcompute-13734   [006] .....  1316.767904: amdgpu_device_rreg: 0x13fe, 0x000039e8, 0x84d00000
+       vkcompute-13734   [006] .....  1316.767904: amdgpu_dc_rreg: reg=0x000039e8, value=0x84d00000
+       vkcompute-13734   [006] .....  1316.767904: amdgpu_device_wreg: 0x13fe, 0x000039e8, 0x84d00000
+       vkcompute-13734   [006] .....  1316.767905: amdgpu_dc_wreg: reg=0x000039e8, value=0x84d00000
+       vkcompute-13734   [006] .....  1316.767905: amdgpu_device_wreg: 0x13fe, 0x00005026, 0x0000000a
+       vkcompute-13734   [006] .....  1316.767906: amdgpu_dc_wreg: reg=0x00005026, value=0x0000000a
+       vkcompute-13734   [006] .....  1316.767907: amdgpu_device_wreg: 0x13fe, 0x00004d16, 0x078004b0
+       vkcompute-13734   [006] .....  1316.767907: amdgpu_dc_wreg: reg=0x00004d16, value=0x078004b0
+       vkcompute-13734   [006] .....  1316.767908: amdgpu_device_wreg: 0x13fe, 0x00004d1a, 0x00000000
+       vkcompute-13734   [006] .....  1316.767908: amdgpu_dc_wreg: reg=0x00004d1a, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767908: amdgpu_device_wreg: 0x13fe, 0x00004d14, 0x00000000
+       vkcompute-13734   [006] .....  1316.767909: amdgpu_dc_wreg: reg=0x00004d14, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767909: amdgpu_device_wreg: 0x13fe, 0x00004d17, 0x00000000
+       vkcompute-13734   [006] .....  1316.767909: amdgpu_dc_wreg: reg=0x00004d17, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767910: amdgpu_device_wreg: 0x13fe, 0x00004d18, 0x00000000
+       vkcompute-13734   [006] .....  1316.767910: amdgpu_dc_wreg: reg=0x00004d18, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767910: amdgpu_device_wreg: 0x13fe, 0x00004d19, 0x00000000
+       vkcompute-13734   [006] .....  1316.767911: amdgpu_dc_wreg: reg=0x00004d19, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767911: amdgpu_device_wreg: 0x13fe, 0x00004d15, 0x00000000
+       vkcompute-13734   [006] .....  1316.767911: amdgpu_dc_wreg: reg=0x00004d15, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767913: amdgpu_device_rreg: 0x13fe, 0x00003ab4, 0x00f11111
+       vkcompute-13734   [006] .....  1316.767913: amdgpu_dc_rreg: reg=0x00003ab4, value=0x00f11111
+       vkcompute-13734   [006] .....  1316.767913: amdgpu_device_wreg: 0x13fe, 0x00003ab4, 0x00f11111
+       vkcompute-13734   [006] .....  1316.767914: amdgpu_dc_wreg: reg=0x00003ab4, value=0x00f11111
+       vkcompute-13734   [006] .....  1316.767915: amdgpu_device_rreg: 0x13fe, 0x00004d4c, 0x00000003
+       vkcompute-13734   [006] .....  1316.767915: amdgpu_dc_rreg: reg=0x00004d4c, value=0x00000003
+       vkcompute-13734   [006] .....  1316.767915: amdgpu_device_wreg: 0x13fe, 0x00004d4c, 0x00000003
+       vkcompute-13734   [006] .....  1316.767916: amdgpu_dc_wreg: reg=0x00004d4c, value=0x00000003
+       vkcompute-13734   [006] .....  1316.767917: amdgpu_device_rreg: 0x13fe, 0x00004185, 0xf0000010
+       vkcompute-13734   [006] .....  1316.767917: amdgpu_dc_rreg: reg=0x00004185, value=0xf0000010
+       vkcompute-13734   [006] .....  1316.767918: amdgpu_device_wreg: 0x13fe, 0x00004185, 0xf0000010
+       vkcompute-13734   [006] .....  1316.767918: amdgpu_dc_wreg: reg=0x00004185, value=0xf0000010
+       vkcompute-13734   [006] .....  1316.767919: amdgpu_device_rreg: 0x13fe, 0x00003ab3, 0x000f0102
+       vkcompute-13734   [006] .....  1316.767919: amdgpu_dc_rreg: reg=0x00003ab3, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.767920: amdgpu_device_wreg: 0x13fe, 0x00003ab3, 0x000f0102
+       vkcompute-13734   [006] .....  1316.767920: amdgpu_dc_wreg: reg=0x00003ab3, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.767921: amdgpu_device_wreg: 0x13fe, 0x00003ab6, 0x00000100
+       vkcompute-13734   [006] .....  1316.767921: amdgpu_dc_wreg: reg=0x00003ab6, value=0x00000100
+       vkcompute-13734   [006] .....  1316.767922: amdgpu_device_rreg: 0x13fe, 0x00003ab3, 0x000f0102
+       vkcompute-13734   [006] .....  1316.767922: amdgpu_dc_rreg: reg=0x00003ab3, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.767923: amdgpu_device_wreg: 0x13fe, 0x00003ab3, 0x000f0102
+       vkcompute-13734   [006] .....  1316.767923: amdgpu_dc_wreg: reg=0x00003ab3, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.767924: amdgpu_device_rreg: 0x13fe, 0x00003b2a, 0x00e40000
+       vkcompute-13734   [006] .....  1316.767924: amdgpu_dc_rreg: reg=0x00003b2a, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.767925: amdgpu_device_wreg: 0x13fe, 0x00003b2a, 0x00e40000
+       vkcompute-13734   [006] .....  1316.767925: amdgpu_dc_wreg: reg=0x00003b2a, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.767925: amdgpu_device_wreg: 0x13fe, 0x00003aec, 0x00000056
+       vkcompute-13734   [006] .....  1316.767926: amdgpu_dc_wreg: reg=0x00003aec, value=0x00000056
+       vkcompute-13734   [006] .....  1316.767926: amdgpu_device_wreg: 0x13fe, 0x00003ab1, 0x000d1b00
+       vkcompute-13734   [006] .....  1316.767926: amdgpu_dc_wreg: reg=0x00003ab1, value=0x000d1b00
+       vkcompute-13734   [006] .....  1316.767927: amdgpu_device_wreg: 0x13fe, 0x00003ab2, 0x00000000
+       vkcompute-13734   [006] .....  1316.767927: amdgpu_dc_wreg: reg=0x00003ab2, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767928: amdgpu_device_wreg: 0x13fe, 0x00003b06, 0x00200024
+       vkcompute-13734   [006] .....  1316.767928: amdgpu_dc_wreg: reg=0x00003b06, value=0x00200024
+       vkcompute-13734   [006] .....  1316.767929: amdgpu_device_wreg: 0x13fe, 0x00003b07, 0x00001340
+       vkcompute-13734   [006] .....  1316.767929: amdgpu_dc_wreg: reg=0x00003b07, value=0x00001340
+       vkcompute-13734   [006] .....  1316.767929: amdgpu_device_wreg: 0x13fe, 0x00003b08, 0x0002a353
+       vkcompute-13734   [006] .....  1316.767929: amdgpu_dc_wreg: reg=0x00003b08, value=0x0002a353
+       vkcompute-13734   [006] .....  1316.767930: amdgpu_device_wreg: 0x13fe, 0x00003b09, 0x00000198
+       vkcompute-13734   [006] .....  1316.767930: amdgpu_dc_wreg: reg=0x00003b09, value=0x00000198
+       vkcompute-13734   [006] .....  1316.767931: amdgpu_device_wreg: 0x13fe, 0x00003b1f, 0x000298ef
+       vkcompute-13734   [006] .....  1316.767931: amdgpu_dc_wreg: reg=0x00003b1f, value=0x000298ef
+       vkcompute-13734   [006] .....  1316.767931: amdgpu_device_wreg: 0x13fe, 0x00003b0d, 0x000001fa
+       vkcompute-13734   [006] .....  1316.767931: amdgpu_dc_wreg: reg=0x00003b0d, value=0x000001fa
+       vkcompute-13734   [006] .....  1316.767932: amdgpu_device_wreg: 0x13fe, 0x00003b18, 0x00000020
+       vkcompute-13734   [006] .....  1316.767932: amdgpu_dc_wreg: reg=0x00003b18, value=0x00000020
+       vkcompute-13734   [006] .....  1316.767933: amdgpu_device_wreg: 0x13fe, 0x00003b19, 0x0000151a
+       vkcompute-13734   [006] .....  1316.767933: amdgpu_dc_wreg: reg=0x00003b19, value=0x0000151a
+       vkcompute-13734   [006] .....  1316.767934: amdgpu_device_wreg: 0x13fe, 0x00003b1d, 0x0000026f
+       vkcompute-13734   [006] .....  1316.767934: amdgpu_dc_wreg: reg=0x00003b1d, value=0x0000026f
+       vkcompute-13734   [006] .....  1316.767934: amdgpu_device_wreg: 0x13fe, 0x00003b0e, 0x00000000
+       vkcompute-13734   [006] .....  1316.767934: amdgpu_dc_wreg: reg=0x00003b0e, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767935: amdgpu_device_wreg: 0x13fe, 0x00003b1a, 0x00000020
+       vkcompute-13734   [006] .....  1316.767935: amdgpu_dc_wreg: reg=0x00003b1a, value=0x00000020
+       vkcompute-13734   [006] .....  1316.767936: amdgpu_device_wreg: 0x13fe, 0x00003b1b, 0x00000000
+       vkcompute-13734   [006] .....  1316.767936: amdgpu_dc_wreg: reg=0x00003b1b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767936: amdgpu_device_wreg: 0x13fe, 0x00003aed, 0x0a8d0000
+       vkcompute-13734   [006] .....  1316.767937: amdgpu_dc_wreg: reg=0x00003aed, value=0x0a8d0000
+       vkcompute-13734   [006] .....  1316.767937: amdgpu_device_wreg: 0x13fe, 0x00003aef, 0x08009bd8
+       vkcompute-13734   [006] .....  1316.767937: amdgpu_dc_wreg: reg=0x00003aef, value=0x08009bd8
+       vkcompute-13734   [006] .....  1316.767938: amdgpu_device_wreg: 0x13fe, 0x00003af1, 0x08000000
+       vkcompute-13734   [006] .....  1316.767938: amdgpu_dc_wreg: reg=0x00003af1, value=0x08000000
+       vkcompute-13734   [006] .....  1316.767938: amdgpu_device_wreg: 0x13fe, 0x00003af3, 0x0800531d
+       vkcompute-13734   [006] .....  1316.767939: amdgpu_dc_wreg: reg=0x00003af3, value=0x0800531d
+       vkcompute-13734   [006] .....  1316.767939: amdgpu_device_wreg: 0x13fe, 0x00003b0a, 0x0b092492
+       vkcompute-13734   [006] .....  1316.767940: amdgpu_dc_wreg: reg=0x00003b0a, value=0x0b092492
+       vkcompute-13734   [006] .....  1316.767940: amdgpu_device_wreg: 0x13fe, 0x00003b0b, 0x00080000
+       vkcompute-13734   [006] .....  1316.767940: amdgpu_dc_wreg: reg=0x00003b0b, value=0x00080000
+       vkcompute-13734   [006] .....  1316.767941: amdgpu_device_wreg: 0x13fe, 0x00003b0c, 0x00000301
+       vkcompute-13734   [006] .....  1316.767941: amdgpu_dc_wreg: reg=0x00003b0c, value=0x00000301
+       vkcompute-13734   [006] .....  1316.767941: amdgpu_device_wreg: 0x13fe, 0x00003b11, 0x00000000
+       vkcompute-13734   [006] .....  1316.767942: amdgpu_dc_wreg: reg=0x00003b11, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767942: amdgpu_device_wreg: 0x13fe, 0x00003b0f, 0x000001fa
+       vkcompute-13734   [006] .....  1316.767942: amdgpu_dc_wreg: reg=0x00003b0f, value=0x000001fa
+       vkcompute-13734   [006] .....  1316.767943: amdgpu_device_wreg: 0x13fe, 0x00003b10, 0x000001fa
+       vkcompute-13734   [006] .....  1316.767943: amdgpu_dc_wreg: reg=0x00003b10, value=0x000001fa
+       vkcompute-13734   [006] .....  1316.767943: amdgpu_device_wreg: 0x13fe, 0x00003b13, 0x00000000
+       vkcompute-13734   [006] .....  1316.767944: amdgpu_dc_wreg: reg=0x00003b13, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767944: amdgpu_device_wreg: 0x13fe, 0x00003b1c, 0x0000014b
+       vkcompute-13734   [006] .....  1316.767944: amdgpu_dc_wreg: reg=0x00003b1c, value=0x0000014b
+       vkcompute-13734   [006] .....  1316.767945: amdgpu_device_wreg: 0x13fe, 0x00003af0, 0x00004db0
+       vkcompute-13734   [006] .....  1316.767945: amdgpu_dc_wreg: reg=0x00003af0, value=0x00004db0
+       vkcompute-13734   [006] .....  1316.767945: amdgpu_device_wreg: 0x13fe, 0x00003af2, 0x00000000
+       vkcompute-13734   [006] .....  1316.767946: amdgpu_dc_wreg: reg=0x00003af2, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767946: amdgpu_device_wreg: 0x13fe, 0x00003af4, 0x000052de
+       vkcompute-13734   [006] .....  1316.767946: amdgpu_dc_wreg: reg=0x00003af4, value=0x000052de
+       vkcompute-13734   [006] .....  1316.767947: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000000
+       vkcompute-13734   [006] .....  1316.767947: amdgpu_dc_wreg: reg=0x00000000, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767948: amdgpu_device_wreg: 0x13fe, 0x00003aee, 0xe0003284
+       vkcompute-13734   [006] .....  1316.767948: amdgpu_dc_wreg: reg=0x00003aee, value=0xe0003284
+       vkcompute-13734   [006] .....  1316.767949: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x00000001
+       vkcompute-13734   [006] .....  1316.767949: amdgpu_dc_wreg: reg=0x00004190, value=0x00000001
+       vkcompute-13734   [006] .....  1316.767950: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767950: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767951: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767951: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767952: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767952: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767953: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767953: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767954: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767954: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767954: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767955: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767956: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767956: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767956: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767957: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767957: amdgpu_device_wreg: 0x13fe, 0x0000418f, 0x00000008
+       vkcompute-13734   [006] .....  1316.767957: amdgpu_dc_wreg: reg=0x0000418f, value=0x00000008
+       vkcompute-13734   [006] .....  1316.767958: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+       vkcompute-13734   [006] .....  1316.767959: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+       vkcompute-13734   [006] .....  1316.767959: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100101
+       vkcompute-13734   [006] .....  1316.767959: amdgpu_dc_wreg: reg=0x00004190, value=0x03100101
+       vkcompute-13734   [006] .....  1316.767960: amdgpu_device_wreg: 0x13fe, 0x000041db, 0x00000000
+       vkcompute-13734   [006] .....  1316.767960: amdgpu_dc_wreg: reg=0x000041db, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767962: amdgpu_device_rreg: 0x13fe, 0x00004262, 0x00000004
+       vkcompute-13734   [006] .....  1316.767962: amdgpu_dc_rreg: reg=0x00004262, value=0x00000004
+       vkcompute-13734   [006] .....  1316.767962: amdgpu_device_wreg: 0x13fe, 0x00004262, 0x00000004
+       vkcompute-13734   [006] .....  1316.767962: amdgpu_dc_wreg: reg=0x00004262, value=0x00000004
+       vkcompute-13734   [006] .....  1316.767964: amdgpu_device_rreg: 0x13fe, 0x000041cb, 0x00000000
+       vkcompute-13734   [006] .....  1316.767964: amdgpu_dc_rreg: reg=0x000041cb, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767964: amdgpu_device_wreg: 0x13fe, 0x000041cb, 0x00000000
+       vkcompute-13734   [006] .....  1316.767964: amdgpu_dc_wreg: reg=0x000041cb, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767966: amdgpu_device_rreg: 0x13fe, 0x000041c8, 0x00000000
+       vkcompute-13734   [006] .....  1316.767966: amdgpu_dc_rreg: reg=0x000041c8, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767966: amdgpu_device_wreg: 0x13fe, 0x000041c8, 0x00000000
+       vkcompute-13734   [006] .....  1316.767966: amdgpu_dc_wreg: reg=0x000041c8, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767969: amdgpu_device_rreg: 0x13fe, 0x00004845, 0x0a040000
+       vkcompute-13734   [006] .....  1316.767969: amdgpu_dc_rreg: reg=0x00004845, value=0x0a040000
+       vkcompute-13734   [006] .....  1316.767969: amdgpu_device_wreg: 0x13fe, 0x00004845, 0x0a040003
+       vkcompute-13734   [006] .....  1316.767970: amdgpu_dc_wreg: reg=0x00004845, value=0x0a040003
+       vkcompute-13734   [006] .....  1316.767970: amdgpu_device_wreg: 0x13fe, 0x00004731, 0x0000000f
+       vkcompute-13734   [006] .....  1316.767970: amdgpu_dc_wreg: reg=0x00004731, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.767971: amdgpu_device_wreg: 0x13fe, 0x00004732, 0x0000000f
+       vkcompute-13734   [006] .....  1316.767971: amdgpu_dc_wreg: reg=0x00004732, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.767971: amdgpu_device_wreg: 0x13fe, 0x00004733, 0x0000000f
+       vkcompute-13734   [006] .....  1316.767972: amdgpu_dc_wreg: reg=0x00004733, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.767972: amdgpu_device_wreg: 0x13fe, 0x00004736, 0x0000000f
+       vkcompute-13734   [006] .....  1316.767972: amdgpu_dc_wreg: reg=0x00004736, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.767973: amdgpu_device_wreg: 0x13fe, 0x0000473a, 0x00000000
+       vkcompute-13734   [006] .....  1316.767973: amdgpu_dc_wreg: reg=0x0000473a, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767974: amdgpu_device_wreg: 0x13fe, 0x0000473b, 0x00000000
+       vkcompute-13734   [006] .....  1316.767974: amdgpu_dc_wreg: reg=0x0000473b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767974: amdgpu_device_wreg: 0x13fe, 0x0000473c, 0x00000000
+       vkcompute-13734   [006] .....  1316.767975: amdgpu_dc_wreg: reg=0x0000473c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767975: amdgpu_device_wreg: 0x13fe, 0x00004732, 0x0000000f
+       vkcompute-13734   [006] .....  1316.767976: amdgpu_dc_wreg: reg=0x00004732, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.767977: amdgpu_device_rreg: 0x13fe, 0x00004734, 0xffff0423
+       vkcompute-13734   [006] .....  1316.767977: amdgpu_dc_rreg: reg=0x00004734, value=0xffff0423
+       vkcompute-13734   [006] .....  1316.767977: amdgpu_device_wreg: 0x13fe, 0x00004734, 0xffff0422
+       vkcompute-13734   [006] .....  1316.767977: amdgpu_dc_wreg: reg=0x00004734, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.767978: amdgpu_device_wreg: 0x13fe, 0x00004731, 0x00000000
+       vkcompute-13734   [006] .....  1316.767978: amdgpu_dc_wreg: reg=0x00004731, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767979: amdgpu_device_wreg: 0x13fe, 0x00004733, 0x00000000
+       vkcompute-13734   [006] .....  1316.767979: amdgpu_dc_wreg: reg=0x00004733, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767979: amdgpu_device_wreg: 0x13fe, 0x00004736, 0x00000000
+       vkcompute-13734   [006] .....  1316.767979: amdgpu_dc_wreg: reg=0x00004736, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767980: amdgpu_device_wreg: 0x13fe, 0x00004783, 0x00000000
+       vkcompute-13734   [006] .....  1316.767980: amdgpu_dc_wreg: reg=0x00004783, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767981: amdgpu_device_rreg: 0x13fe, 0x00004785, 0xffff0422
+       vkcompute-13734   [006] .....  1316.767981: amdgpu_dc_rreg: reg=0x00004785, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.767982: amdgpu_device_wreg: 0x13fe, 0x00004785, 0xffff0423
+       vkcompute-13734   [006] .....  1316.767982: amdgpu_dc_wreg: reg=0x00004785, value=0xffff0423
+       vkcompute-13734   [006] .....  1316.767983: amdgpu_device_rreg: 0x13fe, 0x00004734, 0xffff0422
+       vkcompute-13734   [006] .....  1316.767983: amdgpu_dc_rreg: reg=0x00004734, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.767984: amdgpu_device_wreg: 0x13fe, 0x00004734, 0xffff0422
+       vkcompute-13734   [006] .....  1316.767984: amdgpu_dc_wreg: reg=0x00004734, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.767984: amdgpu_device_wreg: 0x13fe, 0x00004737, 0x0001f000
+       vkcompute-13734   [006] .....  1316.767985: amdgpu_dc_wreg: reg=0x00004737, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.767985: amdgpu_device_wreg: 0x13fe, 0x00004738, 0x0001f000
+       vkcompute-13734   [006] .....  1316.767985: amdgpu_dc_wreg: reg=0x00004738, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.767986: amdgpu_device_wreg: 0x13fe, 0x00004739, 0x0001f000
+       vkcompute-13734   [006] .....  1316.767986: amdgpu_dc_wreg: reg=0x00004739, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.767988: amdgpu_device_wreg: 0x13fe, 0x00003aaa, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.767988: amdgpu_dc_wreg: reg=0x00003aaa, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.767989: amdgpu_device_wreg: 0x13fe, 0x00003aa9, 0x00000000
+       vkcompute-13734   [006] .....  1316.767989: amdgpu_dc_wreg: reg=0x00003aa9, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767989: amdgpu_device_wreg: 0x13fe, 0x00003aae, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.767989: amdgpu_dc_wreg: reg=0x00003aae, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.767990: amdgpu_device_wreg: 0x13fe, 0x00003aad, 0x00000000
+       vkcompute-13734   [006] .....  1316.767990: amdgpu_dc_wreg: reg=0x00003aad, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767991: amdgpu_device_wreg: 0x13fe, 0x00003aac, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.767991: amdgpu_dc_wreg: reg=0x00003aac, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.767991: amdgpu_device_wreg: 0x13fe, 0x00003aab, 0x00000000
+       vkcompute-13734   [006] .....  1316.767992: amdgpu_dc_wreg: reg=0x00003aab, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767992: amdgpu_device_wreg: 0x13fe, 0x00003ab0, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.767992: amdgpu_dc_wreg: reg=0x00003ab0, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.767993: amdgpu_device_wreg: 0x13fe, 0x00003aaf, 0x00000000
+       vkcompute-13734   [006] .....  1316.767993: amdgpu_dc_wreg: reg=0x00003aaf, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767994: amdgpu_device_wreg: 0x13fe, 0x000041e8, 0x00000000
+       vkcompute-13734   [006] .....  1316.767994: amdgpu_dc_wreg: reg=0x000041e8, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767995: amdgpu_device_wreg: 0x13fe, 0x0000473d, 0x00000004
+       vkcompute-13734   [006] .....  1316.767995: amdgpu_dc_wreg: reg=0x0000473d, value=0x00000004
+       vkcompute-13734   [006] .....  1316.767996: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000001
+       vkcompute-13734   [006] .....  1316.767996: amdgpu_dc_wreg: reg=0x00000000, value=0x00000001
+       vkcompute-13734   [006] .....  1316.767997: amdgpu_device_rreg: 0x13fe, 0x00000000, 0x00000000
+       vkcompute-13734   [006] .....  1316.767997: amdgpu_dc_rreg: reg=0x00000000, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767997: amdgpu_device_wreg: 0x13fe, 0x00004a78, 0x00002000
+       vkcompute-13734   [006] .....  1316.767998: amdgpu_dc_wreg: reg=0x00004a78, value=0x00002000
+       vkcompute-13734   [006] .....  1316.767998: amdgpu_device_wreg: 0x13fe, 0x00004a79, 0x00000000
+       vkcompute-13734   [006] .....  1316.767998: amdgpu_dc_wreg: reg=0x00004a79, value=0x00000000
+       vkcompute-13734   [006] .....  1316.767999: amdgpu_device_wreg: 0x13fe, 0x00004a7a, 0x20000000
+       vkcompute-13734   [006] .....  1316.767999: amdgpu_dc_wreg: reg=0x00004a7a, value=0x20000000
+       vkcompute-13734   [006] .....  1316.767999: amdgpu_device_wreg: 0x13fe, 0x00004a7b, 0x00000000
+       vkcompute-13734   [006] .....  1316.768000: amdgpu_dc_wreg: reg=0x00004a7b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768000: amdgpu_device_wreg: 0x13fe, 0x00004a7c, 0x00000000
+       vkcompute-13734   [006] .....  1316.768000: amdgpu_dc_wreg: reg=0x00004a7c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768001: amdgpu_device_wreg: 0x13fe, 0x00004a7d, 0x00002000
+       vkcompute-13734   [006] .....  1316.768001: amdgpu_dc_wreg: reg=0x00004a7d, value=0x00002000
+       vkcompute-13734   [006] .....  1316.768001: amdgpu_device_wreg: 0x13fe, 0x00004a77, 0x00000001
+       vkcompute-13734   [006] .....  1316.768002: amdgpu_dc_wreg: reg=0x00004a77, value=0x00000001
+       vkcompute-13734   [006] .....  1316.768003: amdgpu_device_rreg: 0x13fe, 0x00003ada, 0x00000000
+       vkcompute-13734   [006] .....  1316.768003: amdgpu_dc_rreg: reg=0x00003ada, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768004: amdgpu_device_wreg: 0x13fe, 0x00003ada, 0x00000000
+       vkcompute-13734   [006] .....  1316.768004: amdgpu_dc_wreg: reg=0x00003ada, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768005: amdgpu_device_rreg: 0x13fe, 0x00003aa6, 0x0000123c
+       vkcompute-13734   [006] .....  1316.768005: amdgpu_dc_rreg: reg=0x00003aa6, value=0x0000123c
+       vkcompute-13734   [006] .....  1316.768006: amdgpu_device_wreg: 0x13fe, 0x00003aa6, 0x0000123c
+       vkcompute-13734   [006] .....  1316.768006: amdgpu_dc_wreg: reg=0x00003aa6, value=0x0000123c
+       vkcompute-13734   [006] .....  1316.768007: amdgpu_device_rreg: 0x13fe, 0x00003aa7, 0x00000080
+       vkcompute-13734   [006] .....  1316.768007: amdgpu_dc_rreg: reg=0x00003aa7, value=0x00000080
+       vkcompute-13734   [006] .....  1316.768008: amdgpu_device_wreg: 0x13fe, 0x00003aa7, 0x00000080
+       vkcompute-13734   [006] .....  1316.768008: amdgpu_dc_wreg: reg=0x00003aa7, value=0x00000080
+       vkcompute-13734   [006] .....  1316.768009: amdgpu_device_rreg: 0x13fe, 0x00003ac7, 0x0000077f
+       vkcompute-13734   [006] .....  1316.768009: amdgpu_dc_rreg: reg=0x00003ac7, value=0x0000077f
+       vkcompute-13734   [006] .....  1316.768009: amdgpu_device_wreg: 0x13fe, 0x00003ac7, 0x0000077f
+       vkcompute-13734   [006] .....  1316.768010: amdgpu_dc_wreg: reg=0x00003ac7, value=0x0000077f
+       vkcompute-13734   [006] .....  1316.768011: amdgpu_device_rreg: 0x13fe, 0x00003b2a, 0x00e40000
+       vkcompute-13734   [006] .....  1316.768011: amdgpu_dc_rreg: reg=0x00003b2a, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.768011: amdgpu_device_wreg: 0x13fe, 0x00003b2a, 0x00e40000
+       vkcompute-13734   [006] .....  1316.768012: amdgpu_dc_wreg: reg=0x00003b2a, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.768013: amdgpu_device_rreg: 0x13fe, 0x00003aa5, 0x00000008
+       vkcompute-13734   [006] .....  1316.768013: amdgpu_dc_rreg: reg=0x00003aa5, value=0x00000008
+       vkcompute-13734   [006] .....  1316.768013: amdgpu_device_wreg: 0x13fe, 0x00003aa5, 0x00000008
+       vkcompute-13734   [006] .....  1316.768014: amdgpu_dc_wreg: reg=0x00003aa5, value=0x00000008
+       vkcompute-13734   [006] .....  1316.768015: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000200
+       vkcompute-13734   [006] .....  1316.768015: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768016: amdgpu_device_wreg: 0x13fe, 0x00003adb, 0x00000200
+       vkcompute-13734   [006] .....  1316.768016: amdgpu_dc_wreg: reg=0x00003adb, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768017: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000200
+       vkcompute-13734   [006] .....  1316.768017: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768017: amdgpu_device_wreg: 0x13fe, 0x00003adb, 0x00000200
+       vkcompute-13734   [006] .....  1316.768018: amdgpu_dc_wreg: reg=0x00003adb, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768019: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000200
+       vkcompute-13734   [006] .....  1316.768019: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768019: amdgpu_device_wreg: 0x13fe, 0x00003adb, 0x00000200
+       vkcompute-13734   [006] .....  1316.768019: amdgpu_dc_wreg: reg=0x00003adb, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768021: amdgpu_device_rreg: 0x13fe, 0x00003ada, 0x00000000
+       vkcompute-13734   [006] .....  1316.768021: amdgpu_dc_rreg: reg=0x00003ada, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768021: amdgpu_device_wreg: 0x13fe, 0x00003ada, 0x00000000
+       vkcompute-13734   [006] .....  1316.768021: amdgpu_dc_wreg: reg=0x00003ada, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768022: amdgpu_device_wreg: 0x13fe, 0x00003acb, 0x00000004
+       vkcompute-13734   [006] .....  1316.768022: amdgpu_dc_wreg: reg=0x00003acb, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768023: amdgpu_device_wreg: 0x13fe, 0x00003aca, 0x6e000000
+       vkcompute-13734   [006] .....  1316.768023: amdgpu_dc_wreg: reg=0x00003aca, value=0x6e000000
+       vkcompute-13734   [006] .....  1316.768024: amdgpu_device_rreg: 0x13fe, 0x00003ab3, 0x000e0100
+       vkcompute-13734   [006] .....  1316.768024: amdgpu_dc_rreg: reg=0x00003ab3, value=0x000e0100
+       vkcompute-13734   [006] .....  1316.768025: amdgpu_device_wreg: 0x13fe, 0x00003ab3, 0x000e0100
+       vkcompute-13734   [006] .....  1316.768025: amdgpu_dc_wreg: reg=0x00003ab3, value=0x000e0100
+       vkcompute-13734   [006] .....  1316.768026: amdgpu_device_rreg: 0x13fe, 0x00004261, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768027: amdgpu_dc_rreg: reg=0x00004261, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768027: amdgpu_device_wreg: 0x13fe, 0x00004261, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768027: amdgpu_dc_wreg: reg=0x00004261, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768028: amdgpu_device_wreg: 0x13fe, 0x00004267, 0x00000000
+       vkcompute-13734   [006] .....  1316.768028: amdgpu_dc_wreg: reg=0x00004267, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768030: amdgpu_device_rreg: 0x13fe, 0x000042a0, 0x00000010
+       vkcompute-13734   [006] .....  1316.768030: amdgpu_dc_rreg: reg=0x000042a0, value=0x00000010
+       vkcompute-13734   [006] .....  1316.768031: amdgpu_device_wreg: 0x13fe, 0x000042a0, 0x00000010
+       vkcompute-13734   [006] .....  1316.768031: amdgpu_dc_wreg: reg=0x000042a0, value=0x00000010
+       vkcompute-13734   [006] .....  1316.768032: amdgpu_device_wreg: 0x13fe, 0x00004223, 0x00000000
+       vkcompute-13734   [006] .....  1316.768032: amdgpu_dc_wreg: reg=0x00004223, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768033: amdgpu_device_rreg: 0x13fe, 0x000041da, 0x00003100
+       vkcompute-13734   [006] .....  1316.768034: amdgpu_dc_rreg: reg=0x000041da, value=0x00003100
+       vkcompute-13734   [006] .....  1316.768034: amdgpu_device_wreg: 0x13fe, 0x000041da, 0x00003100
+       vkcompute-13734   [006] .....  1316.768034: amdgpu_dc_wreg: reg=0x000041da, value=0x00003100
+       vkcompute-13734   [006] .....  1316.768035: amdgpu_device_rreg: 0x13fe, 0x000041f7, 0x00000000
+       vkcompute-13734   [006] .....  1316.768036: amdgpu_dc_rreg: reg=0x000041f7, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768036: amdgpu_device_wreg: 0x13fe, 0x000041f7, 0x00000000
+       vkcompute-13734   [006] .....  1316.768036: amdgpu_dc_wreg: reg=0x000041f7, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768037: amdgpu_device_wreg: 0x13fe, 0x0000473d, 0x00000004
+       vkcompute-13734   [006] .....  1316.768037: amdgpu_dc_wreg: reg=0x0000473d, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768038: amdgpu_device_wreg: 0x13fe, 0x0000486e, 0x00000000
+       vkcompute-13734   [006] .....  1316.768038: amdgpu_dc_wreg: reg=0x0000486e, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768039: amdgpu_device_rreg: 0x13fe, 0x00003d48, 0x00f11111
+       vkcompute-13734   [006] .....  1316.768039: amdgpu_dc_rreg: reg=0x00003d48, value=0x00f11111
+       vkcompute-13734   [006] .....  1316.768040: amdgpu_device_wreg: 0x13fe, 0x00003d48, 0x00f11111
+       vkcompute-13734   [006] .....  1316.768040: amdgpu_dc_wreg: reg=0x00003d48, value=0x00f11111
+       vkcompute-13734   [006] .....  1316.768041: amdgpu_device_rreg: 0x13fe, 0x00004d4c, 0x00000003
+       vkcompute-13734   [006] .....  1316.768041: amdgpu_dc_rreg: reg=0x00004d4c, value=0x00000003
+       vkcompute-13734   [006] .....  1316.768042: amdgpu_device_wreg: 0x13fe, 0x00004d4c, 0x00000003
+       vkcompute-13734   [006] .....  1316.768042: amdgpu_dc_wreg: reg=0x00004d4c, value=0x00000003
+       vkcompute-13734   [006] .....  1316.768043: amdgpu_device_rreg: 0x13fe, 0x000045c6, 0xf0000010
+       vkcompute-13734   [006] .....  1316.768043: amdgpu_dc_rreg: reg=0x000045c6, value=0xf0000010
+       vkcompute-13734   [006] .....  1316.768044: amdgpu_device_wreg: 0x13fe, 0x000045c6, 0xf0000010
+       vkcompute-13734   [006] .....  1316.768044: amdgpu_dc_wreg: reg=0x000045c6, value=0xf0000010
+       vkcompute-13734   [006] .....  1316.768045: amdgpu_device_rreg: 0x13fe, 0x00003d47, 0x000f0102
+       vkcompute-13734   [006] .....  1316.768045: amdgpu_dc_rreg: reg=0x00003d47, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.768046: amdgpu_device_wreg: 0x13fe, 0x00003d47, 0x000f0102
+       vkcompute-13734   [006] .....  1316.768046: amdgpu_dc_wreg: reg=0x00003d47, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.768046: amdgpu_device_wreg: 0x13fe, 0x00003d4a, 0x00000100
+       vkcompute-13734   [006] .....  1316.768047: amdgpu_dc_wreg: reg=0x00003d4a, value=0x00000100
+       vkcompute-13734   [006] .....  1316.768047: amdgpu_device_rreg: 0x13fe, 0x00003d47, 0x000f0102
+       vkcompute-13734   [006] .....  1316.768048: amdgpu_dc_rreg: reg=0x00003d47, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.768048: amdgpu_device_wreg: 0x13fe, 0x00003d47, 0x000f0102
+       vkcompute-13734   [006] .....  1316.768048: amdgpu_dc_wreg: reg=0x00003d47, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.768049: amdgpu_device_rreg: 0x13fe, 0x00003dbe, 0x00e40000
+       vkcompute-13734   [006] .....  1316.768049: amdgpu_dc_rreg: reg=0x00003dbe, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.768050: amdgpu_device_wreg: 0x13fe, 0x00003dbe, 0x00e40000
+       vkcompute-13734   [006] .....  1316.768050: amdgpu_dc_wreg: reg=0x00003dbe, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.768051: amdgpu_device_wreg: 0x13fe, 0x00003d80, 0x00000056
+       vkcompute-13734   [006] .....  1316.768051: amdgpu_dc_wreg: reg=0x00003d80, value=0x00000056
+       vkcompute-13734   [006] .....  1316.768051: amdgpu_device_wreg: 0x13fe, 0x00003d45, 0x000d1b00
+       vkcompute-13734   [006] .....  1316.768052: amdgpu_dc_wreg: reg=0x00003d45, value=0x000d1b00
+       vkcompute-13734   [006] .....  1316.768052: amdgpu_device_wreg: 0x13fe, 0x00003d46, 0x00000000
+       vkcompute-13734   [006] .....  1316.768052: amdgpu_dc_wreg: reg=0x00003d46, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768053: amdgpu_device_wreg: 0x13fe, 0x00003d9a, 0x00200024
+       vkcompute-13734   [006] .....  1316.768053: amdgpu_dc_wreg: reg=0x00003d9a, value=0x00200024
+       vkcompute-13734   [006] .....  1316.768053: amdgpu_device_wreg: 0x13fe, 0x00003d9b, 0x00001340
+       vkcompute-13734   [006] .....  1316.768054: amdgpu_dc_wreg: reg=0x00003d9b, value=0x00001340
+       vkcompute-13734   [006] .....  1316.768054: amdgpu_device_wreg: 0x13fe, 0x00003d9c, 0x0002a353
+       vkcompute-13734   [006] .....  1316.768054: amdgpu_dc_wreg: reg=0x00003d9c, value=0x0002a353
+       vkcompute-13734   [006] .....  1316.768055: amdgpu_device_wreg: 0x13fe, 0x00003d9d, 0x00000198
+       vkcompute-13734   [006] .....  1316.768055: amdgpu_dc_wreg: reg=0x00003d9d, value=0x00000198
+       vkcompute-13734   [006] .....  1316.768055: amdgpu_device_wreg: 0x13fe, 0x00003db3, 0x000298ef
+       vkcompute-13734   [006] .....  1316.768056: amdgpu_dc_wreg: reg=0x00003db3, value=0x000298ef
+       vkcompute-13734   [006] .....  1316.768056: amdgpu_device_wreg: 0x13fe, 0x00003da1, 0x000001fa
+       vkcompute-13734   [006] .....  1316.768056: amdgpu_dc_wreg: reg=0x00003da1, value=0x000001fa
+       vkcompute-13734   [006] .....  1316.768057: amdgpu_device_wreg: 0x13fe, 0x00003dac, 0x00000020
+       vkcompute-13734   [006] .....  1316.768057: amdgpu_dc_wreg: reg=0x00003dac, value=0x00000020
+       vkcompute-13734   [006] .....  1316.768058: amdgpu_device_wreg: 0x13fe, 0x00003dad, 0x0000151a
+       vkcompute-13734   [006] .....  1316.768058: amdgpu_dc_wreg: reg=0x00003dad, value=0x0000151a
+       vkcompute-13734   [006] .....  1316.768058: amdgpu_device_wreg: 0x13fe, 0x00003db1, 0x0000026f
+       vkcompute-13734   [006] .....  1316.768058: amdgpu_dc_wreg: reg=0x00003db1, value=0x0000026f
+       vkcompute-13734   [006] .....  1316.768059: amdgpu_device_wreg: 0x13fe, 0x00003da2, 0x00000000
+       vkcompute-13734   [006] .....  1316.768059: amdgpu_dc_wreg: reg=0x00003da2, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768060: amdgpu_device_wreg: 0x13fe, 0x00003dae, 0x00000020
+       vkcompute-13734   [006] .....  1316.768060: amdgpu_dc_wreg: reg=0x00003dae, value=0x00000020
+       vkcompute-13734   [006] .....  1316.768060: amdgpu_device_wreg: 0x13fe, 0x00003daf, 0x00000000
+       vkcompute-13734   [006] .....  1316.768060: amdgpu_dc_wreg: reg=0x00003daf, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768061: amdgpu_device_wreg: 0x13fe, 0x00003d81, 0x0a8d0000
+       vkcompute-13734   [006] .....  1316.768061: amdgpu_dc_wreg: reg=0x00003d81, value=0x0a8d0000
+       vkcompute-13734   [006] .....  1316.768062: amdgpu_device_wreg: 0x13fe, 0x00003d83, 0x08009bd8
+       vkcompute-13734   [006] .....  1316.768062: amdgpu_dc_wreg: reg=0x00003d83, value=0x08009bd8
+       vkcompute-13734   [006] .....  1316.768062: amdgpu_device_wreg: 0x13fe, 0x00003d85, 0x08000000
+       vkcompute-13734   [006] .....  1316.768063: amdgpu_dc_wreg: reg=0x00003d85, value=0x08000000
+       vkcompute-13734   [006] .....  1316.768063: amdgpu_device_wreg: 0x13fe, 0x00003d87, 0x0800531d
+       vkcompute-13734   [006] .....  1316.768063: amdgpu_dc_wreg: reg=0x00003d87, value=0x0800531d
+       vkcompute-13734   [006] .....  1316.768064: amdgpu_device_wreg: 0x13fe, 0x00003d9e, 0x0b092492
+       vkcompute-13734   [006] .....  1316.768064: amdgpu_dc_wreg: reg=0x00003d9e, value=0x0b092492
+       vkcompute-13734   [006] .....  1316.768064: amdgpu_device_wreg: 0x13fe, 0x00003d9f, 0x00080000
+       vkcompute-13734   [006] .....  1316.768065: amdgpu_dc_wreg: reg=0x00003d9f, value=0x00080000
+       vkcompute-13734   [006] .....  1316.768065: amdgpu_device_wreg: 0x13fe, 0x00003da0, 0x00000301
+       vkcompute-13734   [006] .....  1316.768065: amdgpu_dc_wreg: reg=0x00003da0, value=0x00000301
+       vkcompute-13734   [006] .....  1316.768066: amdgpu_device_wreg: 0x13fe, 0x00003da5, 0x00000000
+       vkcompute-13734   [006] .....  1316.768066: amdgpu_dc_wreg: reg=0x00003da5, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768066: amdgpu_device_wreg: 0x13fe, 0x00003da3, 0x000001fa
+       vkcompute-13734   [006] .....  1316.768067: amdgpu_dc_wreg: reg=0x00003da3, value=0x000001fa
+       vkcompute-13734   [006] .....  1316.768067: amdgpu_device_wreg: 0x13fe, 0x00003da4, 0x000001fa
+       vkcompute-13734   [006] .....  1316.768067: amdgpu_dc_wreg: reg=0x00003da4, value=0x000001fa
+       vkcompute-13734   [006] .....  1316.768068: amdgpu_device_wreg: 0x13fe, 0x00003da7, 0x00000000
+       vkcompute-13734   [006] .....  1316.768068: amdgpu_dc_wreg: reg=0x00003da7, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768069: amdgpu_device_wreg: 0x13fe, 0x00003db0, 0x0000014b
+       vkcompute-13734   [006] .....  1316.768069: amdgpu_dc_wreg: reg=0x00003db0, value=0x0000014b
+       vkcompute-13734   [006] .....  1316.768069: amdgpu_device_wreg: 0x13fe, 0x00003d84, 0x00004db0
+       vkcompute-13734   [006] .....  1316.768069: amdgpu_dc_wreg: reg=0x00003d84, value=0x00004db0
+       vkcompute-13734   [006] .....  1316.768070: amdgpu_device_wreg: 0x13fe, 0x00003d86, 0x00000000
+       vkcompute-13734   [006] .....  1316.768070: amdgpu_dc_wreg: reg=0x00003d86, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768071: amdgpu_device_wreg: 0x13fe, 0x00003d88, 0x000052de
+       vkcompute-13734   [006] .....  1316.768071: amdgpu_dc_wreg: reg=0x00003d88, value=0x000052de
+       vkcompute-13734   [006] .....  1316.768071: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000000
+       vkcompute-13734   [006] .....  1316.768071: amdgpu_dc_wreg: reg=0x00000000, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768072: amdgpu_device_wreg: 0x13fe, 0x00003d82, 0xe0003284
+       vkcompute-13734   [006] .....  1316.768072: amdgpu_dc_wreg: reg=0x00003d82, value=0xe0003284
+       vkcompute-13734   [006] .....  1316.768073: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x00000001
+       vkcompute-13734   [006] .....  1316.768073: amdgpu_dc_wreg: reg=0x000045d1, value=0x00000001
+       vkcompute-13734   [006] .....  1316.768074: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768074: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768075: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768075: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768076: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768076: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768077: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768077: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768078: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768078: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768078: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768079: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768080: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768080: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768080: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768081: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768081: amdgpu_device_wreg: 0x13fe, 0x000045d0, 0x00000008
+       vkcompute-13734   [006] .....  1316.768081: amdgpu_dc_wreg: reg=0x000045d0, value=0x00000008
+       vkcompute-13734   [006] .....  1316.768082: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+       vkcompute-13734   [006] .....  1316.768083: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+       vkcompute-13734   [006] .....  1316.768083: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100101
+       vkcompute-13734   [006] .....  1316.768083: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100101
+       vkcompute-13734   [006] .....  1316.768084: amdgpu_device_wreg: 0x13fe, 0x0000461c, 0x00000000
+       vkcompute-13734   [006] .....  1316.768084: amdgpu_dc_wreg: reg=0x0000461c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768085: amdgpu_device_rreg: 0x13fe, 0x000046a3, 0x00000004
+       vkcompute-13734   [006] .....  1316.768085: amdgpu_dc_rreg: reg=0x000046a3, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768086: amdgpu_device_wreg: 0x13fe, 0x000046a3, 0x00000004
+       vkcompute-13734   [006] .....  1316.768086: amdgpu_dc_wreg: reg=0x000046a3, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768087: amdgpu_device_rreg: 0x13fe, 0x0000460c, 0x00000000
+       vkcompute-13734   [006] .....  1316.768087: amdgpu_dc_rreg: reg=0x0000460c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768088: amdgpu_device_wreg: 0x13fe, 0x0000460c, 0x00000000
+       vkcompute-13734   [006] .....  1316.768088: amdgpu_dc_wreg: reg=0x0000460c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768089: amdgpu_device_rreg: 0x13fe, 0x00004609, 0x00000000
+       vkcompute-13734   [006] .....  1316.768089: amdgpu_dc_rreg: reg=0x00004609, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768090: amdgpu_device_wreg: 0x13fe, 0x00004609, 0x00000000
+       vkcompute-13734   [006] .....  1316.768090: amdgpu_dc_wreg: reg=0x00004609, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768091: amdgpu_device_rreg: 0x13fe, 0x00004845, 0x0a040003
+       vkcompute-13734   [006] .....  1316.768091: amdgpu_dc_rreg: reg=0x00004845, value=0x0a040003
+       vkcompute-13734   [006] .....  1316.768092: amdgpu_device_wreg: 0x13fe, 0x00004845, 0x0a040000
+       vkcompute-13734   [006] .....  1316.768092: amdgpu_dc_wreg: reg=0x00004845, value=0x0a040000
+       vkcompute-13734   [006] .....  1316.768092: amdgpu_device_wreg: 0x13fe, 0x00004782, 0x0000000f
+       vkcompute-13734   [006] .....  1316.768093: amdgpu_dc_wreg: reg=0x00004782, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.768093: amdgpu_device_wreg: 0x13fe, 0x00004783, 0x0000000f
+       vkcompute-13734   [006] .....  1316.768093: amdgpu_dc_wreg: reg=0x00004783, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.768094: amdgpu_device_wreg: 0x13fe, 0x00004784, 0x0000000f
+       vkcompute-13734   [006] .....  1316.768094: amdgpu_dc_wreg: reg=0x00004784, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.768095: amdgpu_device_wreg: 0x13fe, 0x00004787, 0x0000000f
+       vkcompute-13734   [006] .....  1316.768095: amdgpu_dc_wreg: reg=0x00004787, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.768095: amdgpu_device_wreg: 0x13fe, 0x0000478b, 0x00000000
+       vkcompute-13734   [006] .....  1316.768095: amdgpu_dc_wreg: reg=0x0000478b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768096: amdgpu_device_wreg: 0x13fe, 0x0000478c, 0x00000000
+       vkcompute-13734   [006] .....  1316.768096: amdgpu_dc_wreg: reg=0x0000478c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768097: amdgpu_device_wreg: 0x13fe, 0x0000478d, 0x00000000
+       vkcompute-13734   [006] .....  1316.768097: amdgpu_dc_wreg: reg=0x0000478d, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768097: amdgpu_device_wreg: 0x13fe, 0x00004783, 0x0000000f
+       vkcompute-13734   [006] .....  1316.768098: amdgpu_dc_wreg: reg=0x00004783, value=0x0000000f
+       vkcompute-13734   [006] .....  1316.768098: amdgpu_device_rreg: 0x13fe, 0x00004785, 0xffff0423
+       vkcompute-13734   [006] .....  1316.768099: amdgpu_dc_rreg: reg=0x00004785, value=0xffff0423
+       vkcompute-13734   [006] .....  1316.768099: amdgpu_device_wreg: 0x13fe, 0x00004785, 0xffff0422
+       vkcompute-13734   [006] .....  1316.768099: amdgpu_dc_wreg: reg=0x00004785, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.768100: amdgpu_device_wreg: 0x13fe, 0x00004782, 0x00000003
+       vkcompute-13734   [006] .....  1316.768100: amdgpu_dc_wreg: reg=0x00004782, value=0x00000003
+       vkcompute-13734   [006] .....  1316.768100: amdgpu_device_wreg: 0x13fe, 0x00004784, 0x00000000
+       vkcompute-13734   [006] .....  1316.768101: amdgpu_dc_wreg: reg=0x00004784, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768101: amdgpu_device_wreg: 0x13fe, 0x00004787, 0x00000000
+       vkcompute-13734   [006] .....  1316.768101: amdgpu_dc_wreg: reg=0x00004787, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768102: amdgpu_device_wreg: 0x13fe, 0x00004732, 0x00000003
+       vkcompute-13734   [006] .....  1316.768102: amdgpu_dc_wreg: reg=0x00004732, value=0x00000003
+       vkcompute-13734   [006] .....  1316.768103: amdgpu_device_rreg: 0x13fe, 0x00004734, 0xffff0422
+       vkcompute-13734   [006] .....  1316.768103: amdgpu_dc_rreg: reg=0x00004734, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.768104: amdgpu_device_wreg: 0x13fe, 0x00004734, 0xffff0423
+       vkcompute-13734   [006] .....  1316.768104: amdgpu_dc_wreg: reg=0x00004734, value=0xffff0423
+       vkcompute-13734   [006] .....  1316.768105: amdgpu_device_rreg: 0x13fe, 0x00004785, 0xffff0422
+       vkcompute-13734   [006] .....  1316.768105: amdgpu_dc_rreg: reg=0x00004785, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.768105: amdgpu_device_wreg: 0x13fe, 0x00004785, 0xffff0422
+       vkcompute-13734   [006] .....  1316.768106: amdgpu_dc_wreg: reg=0x00004785, value=0xffff0422
+       vkcompute-13734   [006] .....  1316.768106: amdgpu_device_wreg: 0x13fe, 0x00004788, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768106: amdgpu_dc_wreg: reg=0x00004788, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768107: amdgpu_device_wreg: 0x13fe, 0x00004789, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768107: amdgpu_dc_wreg: reg=0x00004789, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768107: amdgpu_device_wreg: 0x13fe, 0x0000478a, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768108: amdgpu_dc_wreg: reg=0x0000478a, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768108: amdgpu_device_wreg: 0x13fe, 0x00003d3e, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.768109: amdgpu_dc_wreg: reg=0x00003d3e, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.768109: amdgpu_device_wreg: 0x13fe, 0x00003d3d, 0x000003c0
+       vkcompute-13734   [006] .....  1316.768109: amdgpu_dc_wreg: reg=0x00003d3d, value=0x000003c0
+       vkcompute-13734   [006] .....  1316.768110: amdgpu_device_wreg: 0x13fe, 0x00003d42, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.768110: amdgpu_dc_wreg: reg=0x00003d42, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.768110: amdgpu_device_wreg: 0x13fe, 0x00003d41, 0x000003c0
+       vkcompute-13734   [006] .....  1316.768111: amdgpu_dc_wreg: reg=0x00003d41, value=0x000003c0
+       vkcompute-13734   [006] .....  1316.768111: amdgpu_device_wreg: 0x13fe, 0x00003d40, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.768111: amdgpu_dc_wreg: reg=0x00003d40, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.768112: amdgpu_device_wreg: 0x13fe, 0x00003d3f, 0x000003c0
+       vkcompute-13734   [006] .....  1316.768112: amdgpu_dc_wreg: reg=0x00003d3f, value=0x000003c0
+       vkcompute-13734   [006] .....  1316.768113: amdgpu_device_wreg: 0x13fe, 0x00003d44, 0x04b003c0
+       vkcompute-13734   [006] .....  1316.768113: amdgpu_dc_wreg: reg=0x00003d44, value=0x04b003c0
+       vkcompute-13734   [006] .....  1316.768113: amdgpu_device_wreg: 0x13fe, 0x00003d43, 0x000003c0
+       vkcompute-13734   [006] .....  1316.768113: amdgpu_dc_wreg: reg=0x00003d43, value=0x000003c0
+       vkcompute-13734   [006] .....  1316.768114: amdgpu_device_wreg: 0x13fe, 0x00004629, 0x00000000
+       vkcompute-13734   [006] .....  1316.768114: amdgpu_dc_wreg: reg=0x00004629, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768115: amdgpu_device_wreg: 0x13fe, 0x0000478e, 0x00000004
+       vkcompute-13734   [006] .....  1316.768115: amdgpu_dc_wreg: reg=0x0000478e, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768115: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000001
+       vkcompute-13734   [006] .....  1316.768116: amdgpu_dc_wreg: reg=0x00000000, value=0x00000001
+       vkcompute-13734   [006] .....  1316.768116: amdgpu_device_rreg: 0x13fe, 0x00000000, 0x00000000
+       vkcompute-13734   [006] .....  1316.768116: amdgpu_dc_rreg: reg=0x00000000, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768117: amdgpu_device_wreg: 0x13fe, 0x00004a78, 0x00002000
+       vkcompute-13734   [006] .....  1316.768117: amdgpu_dc_wreg: reg=0x00004a78, value=0x00002000
+       vkcompute-13734   [006] .....  1316.768118: amdgpu_device_wreg: 0x13fe, 0x00004a79, 0x00000000
+       vkcompute-13734   [006] .....  1316.768118: amdgpu_dc_wreg: reg=0x00004a79, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768118: amdgpu_device_wreg: 0x13fe, 0x00004a7a, 0x20000000
+       vkcompute-13734   [006] .....  1316.768118: amdgpu_dc_wreg: reg=0x00004a7a, value=0x20000000
+       vkcompute-13734   [006] .....  1316.768119: amdgpu_device_wreg: 0x13fe, 0x00004a7b, 0x00000000
+       vkcompute-13734   [006] .....  1316.768119: amdgpu_dc_wreg: reg=0x00004a7b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768120: amdgpu_device_wreg: 0x13fe, 0x00004a7c, 0x00000000
+       vkcompute-13734   [006] .....  1316.768120: amdgpu_dc_wreg: reg=0x00004a7c, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768120: amdgpu_device_wreg: 0x13fe, 0x00004a7d, 0x00002000
+       vkcompute-13734   [006] .....  1316.768120: amdgpu_dc_wreg: reg=0x00004a7d, value=0x00002000
+       vkcompute-13734   [006] .....  1316.768121: amdgpu_device_wreg: 0x13fe, 0x00004a77, 0x00000001
+       vkcompute-13734   [006] .....  1316.768121: amdgpu_dc_wreg: reg=0x00004a77, value=0x00000001
+       vkcompute-13734   [006] .....  1316.768122: amdgpu_device_rreg: 0x13fe, 0x00003d6e, 0x00000000
+       vkcompute-13734   [006] .....  1316.768122: amdgpu_dc_rreg: reg=0x00003d6e, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768123: amdgpu_device_wreg: 0x13fe, 0x00003d6e, 0x00000000
+       vkcompute-13734   [006] .....  1316.768123: amdgpu_dc_wreg: reg=0x00003d6e, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768124: amdgpu_device_rreg: 0x13fe, 0x00003d3a, 0x0000123c
+       vkcompute-13734   [006] .....  1316.768124: amdgpu_dc_rreg: reg=0x00003d3a, value=0x0000123c
+       vkcompute-13734   [006] .....  1316.768125: amdgpu_device_wreg: 0x13fe, 0x00003d3a, 0x0000123c
+       vkcompute-13734   [006] .....  1316.768125: amdgpu_dc_wreg: reg=0x00003d3a, value=0x0000123c
+       vkcompute-13734   [006] .....  1316.768126: amdgpu_device_rreg: 0x13fe, 0x00003d3b, 0x00000080
+       vkcompute-13734   [006] .....  1316.768126: amdgpu_dc_rreg: reg=0x00003d3b, value=0x00000080
+       vkcompute-13734   [006] .....  1316.768126: amdgpu_device_wreg: 0x13fe, 0x00003d3b, 0x00000080
+       vkcompute-13734   [006] .....  1316.768127: amdgpu_dc_wreg: reg=0x00003d3b, value=0x00000080
+       vkcompute-13734   [006] .....  1316.768131: amdgpu_device_rreg: 0x13fe, 0x00003d5b, 0x0000077f
+       vkcompute-13734   [006] .....  1316.768131: amdgpu_dc_rreg: reg=0x00003d5b, value=0x0000077f
+       vkcompute-13734   [006] .....  1316.768131: amdgpu_device_wreg: 0x13fe, 0x00003d5b, 0x0000077f
+       vkcompute-13734   [006] .....  1316.768132: amdgpu_dc_wreg: reg=0x00003d5b, value=0x0000077f
+       vkcompute-13734   [006] .....  1316.768135: amdgpu_device_rreg: 0x13fe, 0x00003dbe, 0x00e40000
+       vkcompute-13734   [006] .....  1316.768136: amdgpu_dc_rreg: reg=0x00003dbe, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.768136: amdgpu_device_wreg: 0x13fe, 0x00003dbe, 0x00e40000
+       vkcompute-13734   [006] .....  1316.768136: amdgpu_dc_wreg: reg=0x00003dbe, value=0x00e40000
+       vkcompute-13734   [006] .....  1316.768137: amdgpu_device_rreg: 0x13fe, 0x00003d39, 0x00000008
+       vkcompute-13734   [006] .....  1316.768137: amdgpu_dc_rreg: reg=0x00003d39, value=0x00000008
+       vkcompute-13734   [006] .....  1316.768138: amdgpu_device_wreg: 0x13fe, 0x00003d39, 0x00000008
+       vkcompute-13734   [006] .....  1316.768138: amdgpu_dc_wreg: reg=0x00003d39, value=0x00000008
+       vkcompute-13734   [006] .....  1316.768141: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000200
+       vkcompute-13734   [006] .....  1316.768142: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768142: amdgpu_device_wreg: 0x13fe, 0x00003d6f, 0x00000200
+       vkcompute-13734   [006] .....  1316.768142: amdgpu_dc_wreg: reg=0x00003d6f, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768146: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000200
+       vkcompute-13734   [006] .....  1316.768146: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768146: amdgpu_device_wreg: 0x13fe, 0x00003d6f, 0x00000200
+       vkcompute-13734   [006] .....  1316.768147: amdgpu_dc_wreg: reg=0x00003d6f, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768147: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000200
+       vkcompute-13734   [006] .....  1316.768148: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768148: amdgpu_device_wreg: 0x13fe, 0x00003d6f, 0x00000200
+       vkcompute-13734   [006] .....  1316.768148: amdgpu_dc_wreg: reg=0x00003d6f, value=0x00000200
+       vkcompute-13734   [006] .....  1316.768149: amdgpu_device_rreg: 0x13fe, 0x00003d6e, 0x00000000
+       vkcompute-13734   [006] .....  1316.768149: amdgpu_dc_rreg: reg=0x00003d6e, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768150: amdgpu_device_wreg: 0x13fe, 0x00003d6e, 0x00000000
+       vkcompute-13734   [006] .....  1316.768150: amdgpu_dc_wreg: reg=0x00003d6e, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768151: amdgpu_device_wreg: 0x13fe, 0x00003d5f, 0x00000004
+       vkcompute-13734   [006] .....  1316.768151: amdgpu_dc_wreg: reg=0x00003d5f, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768151: amdgpu_device_wreg: 0x13fe, 0x00003d5e, 0x6e000000
+       vkcompute-13734   [006] .....  1316.768152: amdgpu_dc_wreg: reg=0x00003d5e, value=0x6e000000
+       vkcompute-13734   [006] .....  1316.768153: amdgpu_device_rreg: 0x13fe, 0x00003d47, 0x000f0102
+       vkcompute-13734   [006] .....  1316.768153: amdgpu_dc_rreg: reg=0x00003d47, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.768153: amdgpu_device_wreg: 0x13fe, 0x00003d47, 0x000f0102
+       vkcompute-13734   [006] .....  1316.768153: amdgpu_dc_wreg: reg=0x00003d47, value=0x000f0102
+       vkcompute-13734   [006] .....  1316.768155: amdgpu_device_rreg: 0x13fe, 0x000046a2, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768155: amdgpu_dc_rreg: reg=0x000046a2, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768155: amdgpu_device_wreg: 0x13fe, 0x000046a2, 0x0001f000
+       vkcompute-13734   [006] .....  1316.768155: amdgpu_dc_wreg: reg=0x000046a2, value=0x0001f000
+       vkcompute-13734   [006] .....  1316.768156: amdgpu_device_wreg: 0x13fe, 0x000046a8, 0x00000000
+       vkcompute-13734   [006] .....  1316.768156: amdgpu_dc_wreg: reg=0x000046a8, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768157: amdgpu_device_rreg: 0x13fe, 0x000046e1, 0x00000010
+       vkcompute-13734   [006] .....  1316.768158: amdgpu_dc_rreg: reg=0x000046e1, value=0x00000010
+       vkcompute-13734   [006] .....  1316.768158: amdgpu_device_wreg: 0x13fe, 0x000046e1, 0x00000010
+       vkcompute-13734   [006] .....  1316.768158: amdgpu_dc_wreg: reg=0x000046e1, value=0x00000010
+       vkcompute-13734   [006] .....  1316.768159: amdgpu_device_wreg: 0x13fe, 0x00004664, 0x00000000
+       vkcompute-13734   [006] .....  1316.768159: amdgpu_dc_wreg: reg=0x00004664, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768160: amdgpu_device_rreg: 0x13fe, 0x0000461b, 0x00003100
+       vkcompute-13734   [006] .....  1316.768160: amdgpu_dc_rreg: reg=0x0000461b, value=0x00003100
+       vkcompute-13734   [006] .....  1316.768161: amdgpu_device_wreg: 0x13fe, 0x0000461b, 0x00003100
+       vkcompute-13734   [006] .....  1316.768161: amdgpu_dc_wreg: reg=0x0000461b, value=0x00003100
+       vkcompute-13734   [006] .....  1316.768162: amdgpu_device_rreg: 0x13fe, 0x00004638, 0x00000000
+       vkcompute-13734   [006] .....  1316.768162: amdgpu_dc_rreg: reg=0x00004638, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768163: amdgpu_device_wreg: 0x13fe, 0x00004638, 0x00000000
+       vkcompute-13734   [006] .....  1316.768163: amdgpu_dc_wreg: reg=0x00004638, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768163: amdgpu_device_wreg: 0x13fe, 0x0000478e, 0x00000004
+       vkcompute-13734   [006] .....  1316.768163: amdgpu_dc_wreg: reg=0x0000478e, value=0x00000004
+       vkcompute-13734   [006] .....  1316.768164: amdgpu_device_wreg: 0x13fe, 0x00004931, 0x00000000
+       vkcompute-13734   [006] .....  1316.768164: amdgpu_dc_wreg: reg=0x00004931, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768165: amdgpu_device_rreg: 0x13fe, 0x00005001, 0x80011311
+       vkcompute-13734   [006] .....  1316.768165: amdgpu_dc_rreg: reg=0x00005001, value=0x80011311
+       vkcompute-13734   [006] .....  1316.768166: amdgpu_device_wreg: 0x13fe, 0x0000504b, 0x00000000
+       vkcompute-13734   [006] .....  1316.768166: amdgpu_dc_wreg: reg=0x0000504b, value=0x00000000
+       vkcompute-13734   [006] .....  1316.768166: dcn_optc_lock_unlock_state: Unlock: optc1_unlock()+694: optc_instance=0 opp_count=0 max_h_total=32768 max_v_total=32768 min_h_blank=32 min_h_sync_width=8 min_v_sync_width=1 min_v_blank=3 min_v_blank_interlace=5 vstartup_start=23 vupdate_offset=520 vupdate_width=303 vready_offset=520
+       vkcompute-13734   [006] .....  1316.768168: amdgpu_device_wreg: 0x13fe, 0x00004ffa, 0x00000001
+       vkcompute-13734   [006] .....  1316.768168: amdgpu_dc_wreg: reg=0x00004ffa, value=0x00000001
+       vkcompute-13734   [006] d..1.  1316.768177: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000100
+       vkcompute-13734   [006] d..1.  1316.768177: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000100
+       vkcompute-13734   [006] d..1.  1316.768178: amdgpu_device_rreg: 0x13fe, 0x00003ae5, 0x6e000000
+       vkcompute-13734   [006] d..1.  1316.768178: amdgpu_dc_rreg: reg=0x00003ae5, value=0x6e000000
+       vkcompute-13734   [006] d..1.  1316.768179: amdgpu_device_rreg: 0x13fe, 0x00003ae6, 0x00000004
+       vkcompute-13734   [006] d..1.  1316.768179: amdgpu_dc_rreg: reg=0x00003ae6, value=0x00000004
+          <idle>-0       [002] d.h1.  1316.780719: amdgpu_iv: ih:0 client_id:4 src_id:87 ring:0 vmid:0 timestamp: 413473382629 pasid:0 src_data: 086bf533 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.780722: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x0010d104
+          <idle>-0       [002] d.h1.  1316.780723: amdgpu_dc_rreg: reg=0x0000504a, value=0x0010d104
+          <idle>-0       [002] d.h1.  1316.780723: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x0011d104
+          <idle>-0       [002] d.h1.  1316.780724: amdgpu_dc_wreg: reg=0x0000504a, value=0x0011d104
+          <idle>-0       [002] d.h2.  1316.780726: amdgpu_refresh_rate_track: crtc_index=0 refresh_rate=0Hz (13527918574)
+          <idle>-0       [002] d.h4.  1316.780730: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012189
+          <idle>-0       [002] d.h4.  1316.780731: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012189
+          <idle>-0       [002] d.h4.  1316.780732: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.780733: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.780734: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x05e7000a
+          <idle>-0       [002] d.h4.  1316.780734: amdgpu_dc_rreg: reg=0x0000500a, value=0x05e7000a
+          <idle>-0       [002] d.h4.  1316.780735: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000a
+          <idle>-0       [002] d.h4.  1316.780735: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000a
+          <idle>-0       [002] d.h4.  1316.780736: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012189
+          <idle>-0       [002] d.h4.  1316.780736: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012189
+          <idle>-0       [002] d.h4.  1316.780738: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.780738: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.780739: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0129000b
+          <idle>-0       [002] d.h4.  1316.780739: amdgpu_dc_rreg: reg=0x0000500a, value=0x0129000b
+          <idle>-0       [002] d.h4.  1316.780740: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1316.780741: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1316.780742: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012189
+          <idle>-0       [002] d.h4.  1316.780742: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012189
+          <idle>-0       [002] d.h4.  1316.780743: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.780743: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.780744: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x042b000b
+          <idle>-0       [002] d.h4.  1316.780744: amdgpu_dc_rreg: reg=0x0000500a, value=0x042b000b
+          <idle>-0       [002] d.h4.  1316.780745: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1316.780746: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1316.780747: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00012189
+          <idle>-0       [002] d.h4.  1316.780747: amdgpu_dc_rreg: reg=0x0000500c, value=0x00012189
+          <idle>-0       [002] d.h3.  1316.780750: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000000
+          <idle>-0       [002] d.h3.  1316.780750: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000000
+          <idle>-0       [002] d.h3.  1316.780751: amdgpu_device_rreg: 0x13fe, 0x00003ae5, 0x6e000000
+          <idle>-0       [002] d.h3.  1316.780751: amdgpu_dc_rreg: reg=0x00003ae5, value=0x6e000000
+          <idle>-0       [002] d.h3.  1316.780752: amdgpu_device_rreg: 0x13fe, 0x00003ae6, 0x00000004
+          <idle>-0       [002] d.h3.  1316.780752: amdgpu_dc_rreg: reg=0x00003ae6, value=0x00000004
+          <idle>-0       [002] d.h3.  1316.780754: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000000
+          <idle>-0       [002] d.h3.  1316.780754: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000000
+          <idle>-0       [002] d.h3.  1316.780755: amdgpu_device_rreg: 0x13fe, 0x00003d79, 0x6e000000
+          <idle>-0       [002] d.h3.  1316.780755: amdgpu_dc_rreg: reg=0x00003d79, value=0x6e000000
+          <idle>-0       [002] d.h3.  1316.780756: amdgpu_device_rreg: 0x13fe, 0x00003d7a, 0x00000004
+          <idle>-0       [002] d.h3.  1316.780757: amdgpu_dc_rreg: reg=0x00003d7a, value=0x00000004
+       vkcompute-13734   [006] .....  1316.780764: amdgpu_dm_atomic_commit_tail_finish: state=0000000055b41928 allow_modeset=1 legacy_cursor_update=0 async_update=0 duplicated=0 num_connector=2 num_private_objs=1
+          <idle>-0       [002] d.h1.  1316.797400: amdgpu_iv: ih:0 client_id:4 src_id:87 ring:0 vmid:0 timestamp: 413475047573 pasid:0 src_data: 08725227 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.797402: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x0010d104
+          <idle>-0       [002] d.h1.  1316.797402: amdgpu_dc_rreg: reg=0x0000504a, value=0x0010d104
+          <idle>-0       [002] d.h1.  1316.797403: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x0011d104
+          <idle>-0       [002] d.h1.  1316.797403: amdgpu_dc_wreg: reg=0x0000504a, value=0x0011d104
+          <idle>-0       [002] d.h2.  1316.797405: amdgpu_refresh_rate_track: crtc_index=0 refresh_rate=59Hz (16680634)
+          <idle>-0       [002] d.h4.  1316.797406: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218a
+          <idle>-0       [002] d.h4.  1316.797407: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218a
+          <idle>-0       [002] d.h4.  1316.797408: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.797409: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.797410: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0362000a
+          <idle>-0       [002] d.h4.  1316.797410: amdgpu_dc_rreg: reg=0x0000500a, value=0x0362000a
+          <idle>-0       [002] d.h4.  1316.797412: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000a
+          <idle>-0       [002] d.h4.  1316.797412: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000a
+          <idle>-0       [002] d.h4.  1316.797414: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218a
+          <idle>-0       [002] d.h4.  1316.797414: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218a
+          <idle>-0       [002] d.h4.  1316.797416: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.797416: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.797418: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x07fe000a
+          <idle>-0       [002] d.h4.  1316.797418: amdgpu_dc_rreg: reg=0x0000500a, value=0x07fe000a
+          <idle>-0       [002] d.h4.  1316.797419: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1316.797420: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1316.797422: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218a
+          <idle>-0       [002] d.h4.  1316.797422: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218a
+          <idle>-0       [002] d.h4.  1316.797423: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.797424: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.797425: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0472000b
+          <idle>-0       [002] d.h4.  1316.797426: amdgpu_dc_rreg: reg=0x0000500a, value=0x0472000b
+          <idle>-0       [002] d.h4.  1316.797427: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1316.797427: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1316.797429: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218a
+          <idle>-0       [002] d.h4.  1316.797429: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218a
+          <idle>-0       [002] d.h1.  1316.814081: amdgpu_iv: ih:0 client_id:4 src_id:87 ring:0 vmid:0 timestamp: 413476712513 pasid:0 src_data: 0878af1f 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1316.814083: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x0010d104
+          <idle>-0       [002] d.h1.  1316.814083: amdgpu_dc_rreg: reg=0x0000504a, value=0x0010d104
+          <idle>-0       [002] d.h1.  1316.814084: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x0011d104
+          <idle>-0       [002] d.h1.  1316.814085: amdgpu_dc_wreg: reg=0x0000504a, value=0x0011d104
+          <idle>-0       [002] d.h2.  1316.814085: amdgpu_refresh_rate_track: crtc_index=0 refresh_rate=59Hz (16681797)
+          <idle>-0       [002] d.h4.  1316.814087: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [002] d.h4.  1316.814088: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [002] d.h4.  1316.814089: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.814089: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.814091: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x037d000a
+          <idle>-0       [002] d.h4.  1316.814091: amdgpu_dc_rreg: reg=0x0000500a, value=0x037d000a
+          <idle>-0       [002] d.h4.  1316.814092: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000a
+          <idle>-0       [002] d.h4.  1316.814093: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000a
+          <idle>-0       [002] d.h4.  1316.814094: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [002] d.h4.  1316.814095: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [002] d.h4.  1316.814097: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.814097: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.814098: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0819000a
+          <idle>-0       [002] d.h4.  1316.814099: amdgpu_dc_rreg: reg=0x0000500a, value=0x0819000a
+          <idle>-0       [002] d.h4.  1316.814100: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1316.814101: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1316.814102: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [002] d.h4.  1316.814103: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [002] d.h4.  1316.814104: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1316.814105: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1316.814106: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x048f000b
+          <idle>-0       [002] d.h4.  1316.814106: amdgpu_dc_rreg: reg=0x0000500a, value=0x048f000b
+          <idle>-0       [002] d.h4.  1316.814108: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1316.814108: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1316.814110: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [002] d.h4.  1316.814110: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [000] d.s3.  1316.815543: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [000] d.s3.  1316.815545: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [000] d.s3.  1316.815546: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [000] d.s3.  1316.815547: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [000] d.s3.  1316.815548: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x02ce0076
+          <idle>-0       [000] d.s3.  1316.815549: amdgpu_dc_rreg: reg=0x0000500a, value=0x02ce0076
+          <idle>-0       [000] d.s3.  1316.815550: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000076
+          <idle>-0       [000] d.s3.  1316.815550: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000076
+          <idle>-0       [000] d.s3.  1316.815552: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [000] d.s3.  1316.815553: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [000] d.s3.  1316.815554: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [000] d.s3.  1316.815555: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [000] d.s3.  1316.815556: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x07be0076
+          <idle>-0       [000] d.s3.  1316.815557: amdgpu_dc_rreg: reg=0x0000500a, value=0x07be0076
+          <idle>-0       [000] d.s3.  1316.815558: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000077
+          <idle>-0       [000] d.s3.  1316.815559: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000077
+          <idle>-0       [000] d.s3.  1316.815561: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [000] d.s3.  1316.815561: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [000] d.s3.  1316.815562: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [000] d.s3.  1316.815563: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [000] d.s3.  1316.815564: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x04410077
+          <idle>-0       [000] d.s3.  1316.815565: amdgpu_dc_rreg: reg=0x0000500a, value=0x04410077
+          <idle>-0       [000] d.s3.  1316.815566: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x00000077
+          <idle>-0       [000] d.s3.  1316.815566: amdgpu_dc_rreg: reg=0x0000500b, value=0x00000077
+          <idle>-0       [000] d.s3.  1316.815568: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x0001218b
+          <idle>-0       [000] d.s3.  1316.815568: amdgpu_dc_rreg: reg=0x0000500c, value=0x0001218b
+          <idle>-0       [000] d.s4.  1316.815572: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00101104
+          <idle>-0       [000] d.s4.  1316.815572: amdgpu_dc_rreg: reg=0x0000504a, value=0x00101104
+          <idle>-0       [000] d.s4.  1316.815573: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00111104
+          <idle>-0       [000] d.s4.  1316.815574: amdgpu_dc_wreg: reg=0x0000504a, value=0x00111104
+          <idle>-0       [000] d.s4.  1316.815575: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00101104
+          <idle>-0       [000] d.s4.  1316.815576: amdgpu_dc_rreg: reg=0x0000504a, value=0x00101104
+          <idle>-0       [000] d.s4.  1316.815576: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00100104
+          <idle>-0       [000] d.s4.  1316.815577: amdgpu_dc_wreg: reg=0x0000504a, value=0x00100104
+              sh-13731   [000] ...1.  1317.787869: tracing_mark_write: bc250 end fill

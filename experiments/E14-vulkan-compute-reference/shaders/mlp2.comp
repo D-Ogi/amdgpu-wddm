@@ -1,0 +1,49 @@
+#version 450
+/* Perceptron layer 2 plus argmax: one invocation per sample computes all nout logits and the
+ * index of the largest. The comparison is strictly greater, so ties go to the lowest class
+ * index; the C reference does the same. Layout of the weight buffer as in mlp1.comp: W2 row
+ * major (nh x nout) followed by the nout biases. */
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer H {
+	float v[];
+} h;
+
+layout(std430, binding = 1) readonly buffer W {
+	float v[];
+} w;
+
+layout(std430, binding = 2) writeonly buffer L {
+	float v[];
+} l;
+
+layout(std430, binding = 3) writeonly buffer A {
+	uint v[];
+} am;
+
+layout(push_constant) uniform Push {
+	uint batch;
+	uint nh;
+	uint nout;
+} p;
+
+void main()
+{
+	uint b = gl_GlobalInvocationID.x;
+	if (b >= p.batch)
+		return;
+
+	uint best = 0u;
+	float bestv = 0.0;
+	for (uint k = 0; k < p.nout; ++k) {
+		float sum = w.v[p.nh * p.nout + k];
+		for (uint j = 0; j < p.nh; ++j)
+			sum += h.v[b * p.nh + j] * w.v[j * p.nout + k];
+		l.v[b * p.nout + k] = sum;
+		if (k == 0u || sum > bestv) {
+			bestv = sum;
+			best = k;
+		}
+	}
+	am.v[b] = best;
+}

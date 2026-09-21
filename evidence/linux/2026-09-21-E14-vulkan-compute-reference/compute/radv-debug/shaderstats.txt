@@ -1,0 +1,32 @@
+
+Compute Shader:
+*** SHADER STATS ***
+Driver pipeline hash: 4144957494754456997
+SGPRs: 108
+VGPRs: 4
+Spilled SGPRs: 0
+Spilled VGPRs: 0
+Code size: 100
+LDS size: 0
+Scratch size: 0
+Subgroups per SIMD: 40
+Combined inputs: 0
+Combined outputs: 0
+Hash: 4060199943
+Instructions: 20
+Copies: 8
+Branches: 2
+Latency: 396
+Inverse Throughput: 66
+VMEM Clause: 1
+SMEM Clause: 2
+Pre-Sched SGPRs: 10
+Pre-Sched VGPRs: 3
+VALU: 5
+SALU: 7
+VMEM: 1
+SMEM: 2
+VOPD: 0
+********************
+
+

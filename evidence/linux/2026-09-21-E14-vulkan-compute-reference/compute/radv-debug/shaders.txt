@@ -1,0 +1,142 @@
+shader: MESA_SHADER_COMPUTE
+source_blake3: {0x93e7367f, 0xf7e5ab15, 0x3674f148, 0x78b06bd4, 0x319ee547, 0x4396f1eb, 0xd1d5ffd5, 0x129b315e}
+workgroup_size: 64, 1, 1
+num_ssbos: 1
+system_values_read: 0x00000000'00000000'00012100'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x21
+separate_shader: true
+flrp_lowered: true
+writes_memory: true
+uniforms: 8
+decl_var push_const INTERP_MODE_NONE none Push p
+decl_var ssbo INTERP_MODE_NONE restrict writeonly Out o (~0, 0, 0)
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:   // preds:
+    32x2   %0 = @load_scalar_arg_amd (base=4, arg_upper_bound_u32_amd=0)
+    32     %1 = load_const (0x00000000)
+    64     %2 = pack_64_2x32_split %0.x, %0.y
+    32     %3 = @load_global_amd (%2, %1 (0x0)) (base=0, access=readonly|reorderable|speculatable|smem-amd, align_mul=4, align_offset=0)
+    32     %4 = @load_scalar_arg_amd (base=5, arg_upper_bound_u32_amd=0)
+    32     %5 = @load_vector_arg_amd (base=7, arg_upper_bound_u32_amd=63)
+    32     %6 = load_const (0x00000006)
+    32     %7 = ishl %4, %6 (0x6)
+    32     %8 = iadd %7, %5
+    32     %9 = @load_scalar_arg_amd (base=2, arg_upper_bound_u32_amd=0)
+    32    %10 = @load_scalar_arg_amd (base=3, arg_upper_bound_u32_amd=0)
+    32    %11 = ishl %3, %6 (0x6)
+                // succs: b1
+    loop {
+        block b1:   // preds: b0 b4
+        32    %12 = phi b0: %8, b4: %20
+        1     %13 = uge %12, %9
+                    // succs: b2 b3
+        if %13 {
+            block b2:// preds: b1
+            break
+            // succs: b5
+        } else {
+            block b3:  // preds: b1, succs: b4
+        }
+        block b4:   // preds: b3
+        32    %14 = @load_scalar_arg_amd (base=1, arg_upper_bound_u32_amd=0)
+        32    %15 = load_const (0xffff8000 = -32768 = 4294934528)
+        64    %16 = pack_64_2x32_split %14, %15 (0xffff8000)
+        32x4  %17 = @load_global_amd (%16, %1 (0x0)) (base=0, access=readonly|reorderable|speculatable|smem-amd, align_mul=4, align_offset=0)
+        32    %18 = load_const (0x00000002)
+        32    %19 = ishl %12, %18 (0x2)
+                    @store_ssbo (%10, %17, %19) (wrmask=x, access=writeonly, align_mul=4, align_offset=0, offset_shift=0)
+        32    %20 = iadd %12, %11
+                    // succs: b1
+    }
+    block b5:  // preds: b2, succs: b6
+    block b6:
+}
+
+After RA:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, loop-preheader, */
+	 s2: %22:s[0-1],  s1: %23:s[2],  s1: %24:s[3],  s1: %25:s[4],  s1: %26:s[5],  s1: %27:s[6],  s1: %29:s[7],  s1: %30:s[8],  v1: %31:v[0],  v1: %32:v[1],  v1: %33:v[2] = p_startpgm
+	 s2: %35:s[0-1],  s1: %34:scc = p_init_scratch %22:s[0-1], %30:s[8]
+	p_logical_start
+	 s2: %3:s[0-1] = p_create_vector %26:s[5], %27:s[6]
+	 s1: %4:s[0] = s_load_dword %3:s[0-1], 0 storage:buffer semantics:private,reorder
+	 v1: %9:v[0] = v_lshl_add_u32 %29:s[7], 6, %31:v[0]
+	p_logical_end
+	p_branch BB1
+BB1
+/* logical preds: BB0, BB6, / linear preds: BB0, BB6, / kind: loop-header, branch, */
+	 v1: %13:v[0] = p_phi %9:v[0], %21:v[0]
+	p_logical_start
+	 s2: %14:vcc = v_cmp_le_u32 %24:s[3], %13:v[0]
+	p_logical_end
+	 s2: %46:s[6-7],  s1: %45:scc,  s2: %0:exec = s_and_saveexec_b64 %14:vcc, %0:exec
+	p_cbranch_z %0:exec BB5, BB2
+BB2
+/* logical preds: BB1, / linear preds: BB1, / kind: break, */
+	p_logical_start
+	p_logical_end
+	 s2: %48:s[6-7],  s1: %47:scc = s_andn2_b64 %46:s[6-7], %0:exec
+	p_cbranch_nz %47:scc BB4, BB3
+BB3
+/* logical preds: / linear preds: BB2, / kind: uniform, */
+	p_branch BB7
+BB4
+/* logical preds: / linear preds: BB2, / kind: uniform, */
+	p_branch BB6
+BB5
+/* logical preds: / linear preds: BB1, / kind: uniform, */
+	p_branch BB6
+BB6
+/* logical preds: BB1, / linear preds: BB4, BB5, / kind: uniform, merge, */
+	 s2: %49:s[6-7] = p_linear_phi %48:s[6-7], %46:s[6-7]
+	 s2: %0:exec = p_parallelcopy %49:s[6-7]
+	p_logical_start
+	 s2: %17:s[6-7] = p_create_vector %23:s[2], 0xffff8000
+	 s4: %18:s[8-11] = s_load_dwordx4 %17:s[6-7], 0 storage:buffer semantics:private,reorder
+	 v1: %20:v[1] = v_lshlrev_b32 2, %13:v[0]
+	 v1: %44:v[2] = p_parallelcopy %25:s[4]
+	buffer_store_dword %18:s[8-11], %20:v[1], 0, %44:v[2] offen storage:buffer
+	 v1: %21:v[0] = v_lshl_add_u32 %4:s[0], 6, %13:v[0]
+	p_logical_end
+	p_branch BB1
+BB7
+/* logical preds: BB2, / linear preds: BB3, / kind: uniform, top-level, loop-exit, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	p_logical_end
+	s_endpgm
+
+Compute Shader
+disasm:
+BB0:
+	s_mov_b32 s0, s5                                            ; be800305
+	s_mov_b32 s1, s6                                            ; be810306
+	s_load_dword s0, s[0:1], null                               ; f4000000 fa000000
+	v_lshl_add_u32 v0, s7, 6, v0                                ; d7460000 04010c07
+	s_branch BB1                                                ; bf82000c
+BB6:
+	s_mov_b64 exec, s[6:7]                                      ; befe0406
+	s_mov_b32 s6, s2                                            ; be860302
+	s_movk_i32 s7, 0x8000                                       ; b0078000
+	s_load_dwordx4 s[8:11], s[6:7], null                        ; f4080203 fa000000
+	v_lshlrev_b32_e32 v1, 2, v0                                 ; 34020082
+	v_mov_b32_e32 v2, s4                                        ; 7e040204
+	s_waitcnt lgkmcnt(0)                                        ; bf8cc07f
+	buffer_store_dword v2, v1, s[8:11], 0 offen                 ; e0701000 80020201
+	v_lshl_add_u32 v0, s0, 6, v0                                ; d7460000 04010c00
+BB1:
+	s_mov_b64 s[6:7], exec                                      ; be86047e
+	s_waitcnt_depctr 0xfffe                                     ; bfa3fffe
+	v_cmpx_le_u32_e32 s3, v0                                    ; 7da60003
+BB2:
+	s_andn2_b64 s[6:7], s[6:7], exec                            ; 8a867e06
+	s_cbranch_scc1 BB6                                          ; bf85ffef
+BB7:
+	s_endpgm                                                    ; bf810000
+

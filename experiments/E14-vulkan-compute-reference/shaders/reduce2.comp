@@ -1,0 +1,36 @@
+#version 450
+/* Reduction pass 2: a single workgroup folds the p.ngroups partial sums that pass 1 left in the
+ * same buffer and appends the total at index p.ngroups. Reading what the previous dispatch wrote
+ * is what the host's compute-to-compute pipeline barrier is for; the buffer is neither readonly
+ * nor writeonly here because this pass does both. */
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer Out {
+	uint v[];
+} o;
+
+layout(push_constant) uniform Push {
+	uint ngroups;
+} p;
+
+shared uint s[64];
+
+void main()
+{
+	uint t = gl_LocalInvocationID.x;
+
+	uint acc = 0u;
+	for (uint i = t; i < p.ngroups; i += gl_WorkGroupSize.x)
+		acc += o.v[i];
+	s[t] = acc;
+	barrier();
+
+	for (uint stride = gl_WorkGroupSize.x / 2u; stride > 0u; stride >>= 1u) {
+		if (t < stride)
+			s[t] += s[t + stride];
+		barrier();
+	}
+
+	if (t == 0u)
+		o.v[p.ngroups] = s[0];
+}

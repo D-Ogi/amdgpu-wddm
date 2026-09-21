@@ -1,0 +1,22 @@
+OK: 676.1 MiB in 103 packages
+gcc: The GNU Compiler Collection
+gcc: https://gcc.gnu.org
+gcc: 159 MiB
+glslang: Khronos reference front-end for GLSL, ESSL, and sample SPIR-V generator
+glslang: https://github.com/KhronosGroup/glslang
+glslang: 85 KiB
+llama.cpp: LLM inference in C/C++ (with Vulkan GPU acceleration)
+llama.cpp: https://github.com/ggml-org/llama.cpp
+llama.cpp: 14 MiB
+mesa-vulkan-ati: Mesa Vulkan API driver for ati
+mesa-vulkan-ati: https://www.mesa3d.org
+mesa-vulkan-ati: 17 MiB
+vulkan-loader: Vulkan Installable Client Driver (ICD) Loader
+vulkan-loader: https://www.khronos.org/vulkan
+vulkan-loader: 585 KiB
+	apiVersion         = 1.4.354
+	deviceName         = AMD BC-250 (RADV GFX1013)
+	driverInfo         = Mesa 26.1.6
+270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d  stories260K.gguf
+66967fbece6dbe97886593fdbb73589584927e29119ec31f08090732d1861739  stories15M-q4_0.gguf
+da3087fb14aede55fde6eb81a0e55e886810e43509ec82ecdc7aa5d62a03b556  tinyllama-1.1b-chat-v1.0.Q4_0.gguf

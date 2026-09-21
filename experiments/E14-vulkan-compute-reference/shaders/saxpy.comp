@@ -1,0 +1,30 @@
+#version 450
+/* z = a*x + y in float32. The host chooses a, x and y so that every product and every sum is a
+ * small integer, exactly representable; the compiler is therefore free to emit v_fma_f32 or a
+ * separate multiply and add without changing a single bit of the result. Out of place, because
+ * the timing loop re-submits the same command buffer and the test must stay idempotent. */
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer X {
+	float v[];
+} x;
+
+layout(std430, binding = 1) readonly buffer Y {
+	float v[];
+} y;
+
+layout(std430, binding = 2) writeonly buffer Z {
+	float v[];
+} z;
+
+layout(push_constant) uniform Push {
+	uint n;
+	float a;
+} p;
+
+void main()
+{
+	uint i = gl_GlobalInvocationID.x;
+	if (i < p.n)
+		z.v[i] = p.a * x.v[i] + y.v[i];
+}

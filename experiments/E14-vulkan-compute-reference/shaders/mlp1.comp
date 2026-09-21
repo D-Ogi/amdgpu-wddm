@@ -1,0 +1,42 @@
+#version 450
+/* Perceptron layer 1: h[b][j] = relu(bias[j] + sum_i x[b][i] * W1[i][j]), one invocation per
+ * output element (batch * nh of them). The weight buffer holds W1 row major (nin x nh) followed
+ * by the nh biases, so that no pipeline here needs more than four storage buffers.
+ *
+ * The bias is added before the dot product, exactly as in the C reference. With the scaling the
+ * host uses every value is an exact multiple of 2^-5 below 2^24, so the order does not actually
+ * matter - keeping it identical only removes it as a suspect later. */
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer X {
+	float v[];
+} x;
+
+layout(std430, binding = 1) readonly buffer W {
+	float v[];
+} w;
+
+layout(std430, binding = 2) writeonly buffer H {
+	float v[];
+} h;
+
+layout(push_constant) uniform Push {
+	uint batch;
+	uint nin;
+	uint nh;
+} p;
+
+void main()
+{
+	uint id = gl_GlobalInvocationID.x;
+	if (id >= p.batch * p.nh)
+		return;
+
+	uint b = id / p.nh;
+	uint j = id % p.nh;
+
+	float sum = w.v[p.nin * p.nh + j];
+	for (uint i = 0; i < p.nin; ++i)
+		sum += x.v[b * p.nin + i] * w.v[i * p.nh + j];
+	h.v[id] = max(sum, 0.0);
+}
