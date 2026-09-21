@@ -60,9 +60,22 @@ ADDRESS = {"OSSSYS.IH_RB_BASE", "OSSSYS.IH_RB_BASE_HI", "OSSSYS.IH_RB_WPTR_ADDR_
            "NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH"}
 
 
-def against_trace(ours, flushes, step, window, names):
+def against_trace(ours, flushes, step, window, names, drop_empty_selections=False):
     trace = [(off, val, name) for _, _, name, off, val in
              _e11.accesses(_e11.E03 / "amdgpu-events.txt", step, since=window[0], until=window[1], names=names)]
+    if drop_empty_selections:
+        # amdgpu selects a pipe and lets go of it again with no write in between (it only read there): nothing for a
+        # write sequence to reproduce. Taken out of the trace side and counted.
+        kept, i = [], 0
+        while i < len(trace):
+            if (i + 1 < len(trace) and trace[i][2] == "GC.GRBM_GFX_CNTL" and trace[i][1] != 0
+                    and trace[i + 1][2] == "GC.GRBM_GFX_CNTL" and trace[i + 1][1] == 0):
+                i += 2
+                continue
+            kept.append(trace[i])
+            i += 1
+        print(f"trace: {(len(trace) - len(kept)) // 2} selection(s) without a write left out")
+        trace = kept
     wrong = [(o, v) for o, v in flushes if _e11.FLUSH[names[o]] != v]
     print(f"driver: {len(ours)} register writes   trace: {len(trace)} writes   TLB flush writes: {len(flushes)}, wrong value: {len(wrong)}")
     same = address = 0
@@ -99,7 +112,7 @@ def cmd_irq(args):
         sys.exit("no stage 8 in this log")
     every = [(int(m.group(1), 16), int(m.group(2), 16)) for m in map(_e11.WRITE.match, lines) if m]
     ours = [w for w in every[first[0]:] if names.get(w[0]) not in _e11.FLUSH]
-    return against_trace(ours, [], _e11.STEP, (1.560, 1.562), names)
+    return against_trace(ours, [], _e11.STEP, (1.560, 1.562), names, drop_empty_selections=True)
 
 
 def main():

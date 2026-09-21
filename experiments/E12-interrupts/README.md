@@ -110,3 +110,34 @@ the value, no vector) -> `fence -Op gfx` -> `ih state` -> `fence -Op c0`, `c5`, 
 
 Not answered by part A: whether `DxgkCbQueueDpc` works for a display-only miniport (no interrupt arrived, so none
 was queued). Part C answers it.
+
+### Parts B and C, run 002 (2026-09-21, bc250kmd 0.6.1.0 = commit 3c1373d, `evidence/windows/2026-09-21-E12-run-002/`)
+
+Reviewed a third time before the install (no blocker; the DPC drain at stop, a single-consumer gate in the DPC and a
+total time budget for the fence escape went in on the reviewer's advice). Linux reference taken the same day: E13.
+
+- **B1, B2, B3 held.** `ih plan` and `ih init`: 15 writes, 12 equal to amdgpu's, three address registers with our
+  addresses, nothing else; `IH_RB_CNTL` bit 31 reads back cleared as modelled. Ring enabled, 0 interrupts over a sweep
+  of five IP blocks and a minute; `ih fini` returns the memory; a second init and fini in the same device start work
+  (its first write is a read-modify-write over our own earlier value, the one expected difference).
+- **C1 held.** Stage 8: 35 writes, equal to amdgpu's 35 in offset, order and value (`compare.py irq`, which now leaves
+  out of the trace side one pipe selection that amdgpu makes without writing anything).
+- **C2 held: the first interrupt** (facts M43). Control without the interrupt bit: value, no interrupt. With it: one
+  routine call, one DPC, one vector, `client 20 source 181 ring 0`, `src_data[0] = 0x80000000`, as under Linux.
+  `DxgkCbQueueDpc` works for a display-only miniport (part A's open question). Compute pipe 0 queue 0 -> ring id 4,
+  pipe 1 queue 1 -> 21, pipe 3 queue 0 -> 7; KIQ -> `source 178`, ring id 9. All as E13 measured under Linux.
+- **C3 held.** 100 fences: 100 values, 100 vectors, 1082 us, none lost, no overflow.
+- **C4 held.** Device restart with ring, sources and engines running: no bugcheck, silence afterwards. Two notes: the
+  driver refuses a bring-up after a device restart (it does not take the earlier start's PSP load as its own), and the
+  first `ih init` after such a stop was followed, once, by a message without a vector.
+- **Not held: a second bring-up in the same device start** (facts M44). Stage 6 times out at the KIQ ring test and the
+  GPU page-faults at the first run's KIQ ring: the MEC resumes the old queue from state that the `CP_HQD_*` registers
+  do not reset. M39's success was an accident of equal addresses. The fault itself came in through our IH ring as a
+  UTCL2 vector and the witness confirmed it, and the undo after it worked. The prediction attached to the
+  `cp_hqd_pq_rptr = 0` deviation was not reached; the deviation is under review together with the teardown.
+- Seen on the way (facts M45): the KIQ's unmaps during the undo raise `source 181` vectors with `src_data[0] = 1` and
+  ring ids that are not the unmapped queues' own.
+
+Next: a teardown that dequeues the KIQ's HQD while the MEC runs (shim), then the second bring-up again with the IH
+ring holding its pages, then the SDMA ring test and fence (the shim's emitter exists as a patch), then a compute
+dispatch.
