@@ -24,7 +24,11 @@ Each milestone has an exit criterion that is a measurement. A milestone is close
 | M5 | **First command execution** | Firmware loaded the way Linux does for this ASIC, RLC and CP running, the `gfx_v10_0_ring_test_ring` equivalent passes: a PM4 packet written by the CPU changes `SCRATCH_REG0`. Then the SDMA ring test |
 | M6 | **Interrupts, fences, compute queue** | IH ring delivers EOP interrupts; a compute queue mapped through MQD/HQD runs a dispatch that writes a known pattern to memory |
 | M7 | **WDDM scheduling and memory management** | VidMm/VidSch contracts implemented for real: GPU VA, paging through SDMA, TDR recovery |
-| M8 | **User mode** | Direction: Vulkan first (RADV with a WDDM winsys), Direct3D by translation (ADR 0005). Exit criterion set at M8 |
+| M8 | **User mode: a Vulkan device** | RADV with a WDDM winsys (ADR 0005) against `driver/contract/`, loaded as an ICD on unit A under Windows: `vulkaninfo` lists the part from our ICD, and the eight compute tests of E14, run from the same SPIR-V, give hashes equal to the CPU's and to the Linux run's (facts M50); the deliberately wrong shader is caught. Submissions go through dxgkrnl and M7's scheduler, not through an escape |
+| M9 | **Compute that somebody would use** | llama.cpp on its Vulkan backend under Windows: greedy text from stories15M Q4_0 and TinyLlama 1.1B Q4_0 hashes equal to the GPU hashes measured under Linux (facts M51), identical across at least four runs each. Throughput (pp512, tg128) measured at a stated shader clock and set against M51/M52; a gap is explained in `facts.md` before the milestone closes, not after. This is the first milestone that needs memory beyond a few buffers: allocation, eviction and paging under a working set of about 1 GB |
+| M10 | **A picture from Vulkan** | Win32 WSI: `vkcube` (or an equal test with a defined image) shows on unit A's screen, witnessed by `bc250mon` screenshots, frame rate measured. A present path that copies through the CPU is acceptable and is named as such. Whether the software VSync of M7 stage A gives way to the display engine's interrupt is decided by an ADR inside this milestone (ADR 0005 point 4 leaves the display core open) |
+| M11 | **Robustness** | 24 hours of mixed load on unit A (M8's compute tests, M9's inference, M10's presentation in rotation) with no TDR, no bugcheck, no live kernel report, no leak in our pool tags and hashes equal at the end. A deliberately stuck queue is run once and what happens is recorded: this part has no working reset under Linux either (facts M53), so the criterion is a known, documented outcome, not a recovery that may not exist. Temperature inside `docs/hardware.md` throughout |
+| M12 | **Direct3D by translation** | A Direct3D 11 application with DXVK's DLLs next to it and a Direct3D 12 sample with vkd3d-proton's render on unit A through our Vulkan driver, witnessed by screenshots against a reference image from another machine. No native D3D user-mode driver (ADR 0005 point 2); the desktop itself still composes on WARP, and the README says so |
 | O1 | Optional: 40 CU | Only after M5. Mirrors `bc250-40cu-unlock`: two per-bank register writes during gfx init |
 
 Status 2026-09-21: M0-M5 closed on unit A (facts M1-M33; M3 by experiment E06: our display-only miniport runs the
@@ -41,7 +45,13 @@ against AMD's unmodified tables and run in stages inside the miniport, makes the
 made (14 of them carrying our addresses), and all eleven ring tests pass with the rings in system memory behind
 our GART. M6 in progress: Windows assigns the miniport a message interrupt and it is silent with no source enabled (E12 part A, facts M38); a second bring-up in the same boot works (M39). The IH ring runs and the GPU interrupts the CPU: fences on the gfx ring, the compute queues and the KIQ each give one vector, the same as under Linux on this machine (E12 run 002, E13, facts M40, M43). M6 is reached (E15, facts M57, M58): a compute dispatch on a kernel-owned MEC queue writes its pattern under Windows, the SDMA ring tests and fences work, and a second bring-up in one device start no longer meets a live KIQ fetcher. One defect found on the way: the SDMA engines keep their ring pointers across a halt, so a re-init has to adopt them (M59); 0.7.0 does, and three bring-ups in one device start now work end to end (E15 run 002, M60). M7 starts from ADR 0008.
 
-Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years. The project stays useful at every step because each milestone leaves verified, published knowledge.
+M8's criterion was set and M9-M12 were written out on 2026-09-21, at the owner's request, before any of them was
+started. The order is the order of dependence: M9 needs M8's device, M12 needs M10's swapchain, M11 needs something
+worth soaking. A criterion may be sharpened by an ADR when the milestone before it closes; it is never loosened after
+a run.
+
+Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years, M9-M12 each smaller than M8
+if M7 and M8 were done properly and a second M7 if they were not. The project stays useful at every step because each milestone leaves verified, published knowledge.
 
 ## Architecture direction (detail in ADRs)
 

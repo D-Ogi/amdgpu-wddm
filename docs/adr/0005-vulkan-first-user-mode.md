@@ -1,6 +1,7 @@
 # ADR 0005: Vulkan first in user mode, Direct3D by translation
 
-Date: 2026-09-21. Status: accepted (direction only; the exit criterion for M8 is still set at M8).
+Date: 2026-09-21. Status: accepted (direction only; the exit criteria that follow from it are M8, M10 and M12 in
+`docs/00-goal-and-roadmap.md`, set the same day).
 
 ## Context
 
