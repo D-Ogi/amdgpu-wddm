@@ -278,10 +278,34 @@ Measured on unit A (llama.cpp build 9564, Mesa 26.1.6, kernel 6.18.52-0-lts, 150
   GFX1013 as "known to have broken compute queue"; `radv-info.txt` shows the device as RADV sees it), so for M8 the gfx
   ring is the one that matters, while the raw-ioctl memset of E13 (facts M49) shows that the compute rings do work.
 
+## The clock half (`dpm_sweep.sh`): times that can be compared with Windows
+
+Windows keeps unit A at 1000 MHz (the startup task), Linux runs it at 1500 MHz by default, so no time in this file could be
+held against a Windows time. `dpm_sweep.sh` repeats the work at 1000 MHz. amdgpu refuses
+`power_dpm_force_performance_level low|high` on this part; the one interface is `pp_od_clk_voltage`, which always names
+a voltage with the clock (`cyan_skillfish_ppt.c:438-533`: `RequestGfxclk` and `ForceGfxVid`). The script sets 1000 MHz
+at the voltage the part uses for 1500 MHz by itself and nothing else: no higher clock, no higher voltage. 2000 MHz was
+left alone on purpose: it needs a forced voltage above the default and we have no measured curve for this unit.
+
+| | 1000 MHz (899 mV) | 1500 MHz (default, 906 mV) | ratio |
+|---|---|---|---|
+| `sgemm` (naive) | 562 us | 392 us | 1.43 |
+| `sgemm_tiled` | 113 us | 87 us | 1.31 |
+| `mlp` | 819 us | 566 us | 1.45 |
+| `inthash`, `saxpy` (1M elements) | 70, 74 us | 70, 79 us | 1.0 (submission latency, not GPU time) |
+| TinyLlama 1.1B Q4_0 pp512 | 1120 t/s | 1657 t/s | 1.48 |
+| TinyLlama 1.1B Q4_0 tg128 | 155 t/s | 219 t/s | 1.42 |
+| PPT idle / peak under load | 49 W / 78 W | 58 W / 95 W | |
+| edge temperature peak | 76 C | 79 to 80 C | |
+
+Hashes are identical at both clocks. Throughput follows the GPU clock almost linearly, token generation included, so on
+this part generation is bound by the shader clock and not by memory. **The 1000 MHz column is the one to hold Windows
+against.**
+
 ## Evidence
 
 `evidence/linux/2026-09-21-E14-vulkan-compute-reference/`: `compute/` (results, timings, the negative control, RADV's
 shader dumps with the GFX10 machine code, the trace around one fill, `spv/` with the nine SPIR-V binaries H2 has to be
-run with), `llama/` (texts, logs, benchmarks, the trace), `vulkaninfo.txt`, `radv-info.txt` (`RADV_DEBUG=info`: the
+run with), `llama/` (texts, logs, benchmarks, the trace), `dpm/` (the clock half), `vulkaninfo.txt`, `radv-info.txt` (`RADV_DEBUG=info`: the
 whole `radeon_info` as Mesa derived it on this unit, the reference for `driver/contract/`), `llama-install.txt`.
 `redact.py` replaced the UUID-like values of `vulkaninfo` as well; nothing else was touched.

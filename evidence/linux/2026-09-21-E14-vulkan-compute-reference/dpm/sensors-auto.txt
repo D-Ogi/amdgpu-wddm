@@ -1,0 +1,10 @@
+16:32:53 power_uW 59112000 temp_mC 70000 sclk_Hz 1500000000 vddgfx_mV 906
+16:32:54 power_uW 62056000 temp_mC 70000 sclk_Hz 1500000000 vddgfx_mV 906
+16:32:55 power_uW 61214000 temp_mC 70000 sclk_Hz 1500000000 vddgfx_mV 906
+16:32:56 power_uW 61164000 temp_mC 69000 sclk_Hz 1500000000 vddgfx_mV 906
+16:32:57 power_uW 63088000 temp_mC 70000 sclk_Hz 1500000000 vddgfx_mV 906
+16:32:58 power_uW 62016000 temp_mC 70000 sclk_Hz 1500000000 vddgfx_mV 906
+16:32:59 power_uW 62000000 temp_mC 70000 sclk_Hz 1500000000 vddgfx_mV 906
+16:33:00 power_uW 95045000 temp_mC 80000 sclk_Hz 1500000000 vddgfx_mV 893
+16:33:01 power_uW 68009000 temp_mC 77000 sclk_Hz 1500000000 vddgfx_mV 899
+16:33:02 power_uW 87154000 temp_mC 77000 sclk_Hz 1500000000 vddgfx_mV 893
