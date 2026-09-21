@@ -1,6 +1,6 @@
 # E18: the full WDDM table, stage B - VidMm's page tables in the hardware's format
 
-Date: 2026-09-21. State: run 001 (plan) prepared. ADR 0008 stage B; follows E16 (stage A, facts M71).
+Date: 2026-09-21. State: run 001 done (M72); run 002 (writes) next. ADR 0008 stage B; follows E16 (stage A, facts M71).
 
 ## Why
 
@@ -41,4 +41,13 @@ and `EnableVramWrite` together. Install with every gate closed, check stage 61, 
 
 ## Result
 
-(after the runs)
+### Run 001 (2026-09-21, bc250kmd 0.7.10, plan)
+
+Evidence: `evidence/windows/2026-09-21-E18-run-001/`. Facts M72.
+
+- H1 is half right and the wrong half is the useful one. Level 0 is the leaf, level 3 the root, host memory is
+  segment 0 - as predicted. `PageAddress` is NOT a byte offset: it is a page frame number. The translator refused all
+  9011 valid entries (rc -22) instead of mis-mapping them, which is what the units parameter was built for.
+- Not predicted at all: the 1028 page table updates at adapter start come in `CPU_VIRTUAL` mode, with a pointer, for
+  the system paging process - although the driver declares `GPU_PHYSICAL`. 0.7.10 refused them as calls.
+- bc250kmd 0.7.11: units = page frames, CPU_VIRTUAL calls written through VidMm's pointer. Run 002 opens `EnableGpuVa`.
