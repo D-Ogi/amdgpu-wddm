@@ -1,0 +1,54 @@
+; bc250kmd: WDDM display-only miniport for the ASRock BC-250 GPU (milestone M3, ADR 0006).
+; Test-signed lab driver. Matches exactly one device; everything else keeps its own driver.
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = Display
+ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
+Provider    = %Provider%
+CatalogFile = bc250kmd.cat
+DriverVer   = 09/21/2026,0.3.1.0
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%
+
+[SourceDisksFiles]
+bc250kmd.sys = 1
+
+[Manufacturer]
+%Provider% = Models,NTamd64
+
+[Models.NTamd64]
+%DeviceName% = Bc250_Install, PCI\VEN_1002&DEV_13FE
+
+[Bc250_Install]
+FeatureScore = F8
+CopyFiles    = Bc250_Files
+
+[Bc250_Files]
+bc250kmd.sys
+
+[Bc250_Install.Services]
+AddService = bc250kmd, 0x00000002, Bc250_Service
+
+[Bc250_Service]
+DisplayName   = %DeviceName%
+ServiceType   = 1                   ; SERVICE_KERNEL_DRIVER
+StartType     = 3                   ; SERVICE_DEMAND_START
+ErrorControl  = 0                   ; SERVICE_ERROR_IGNORE: a failed start must never stop the boot
+LoadOrderGroup = Video
+ServiceBinary = %13%\bc250kmd.sys
+AddReg        = Bc250_Parameters
+
+[Bc250_Parameters]
+; Boot-loop guard (guard.c). Installing the package grants a fresh start budget.
+HKR, Parameters, UnconfirmedStarts, 0x00010001, 0
+
+[Strings]
+Provider   = "BC-250 lab (D-Ogi)"
+DiskName   = "bc250kmd installation media"
+DeviceName = "BC-250 GPU (bc250kmd, display-only, lab build)"

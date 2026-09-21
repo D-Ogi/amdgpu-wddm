@@ -1,6 +1,6 @@
 # driver/
 
-Empty on purpose until M1 is closed. Planned layout (ADR 0002):
+M1 is closed. `kmd/` holds the M3 skeleton (builds, not yet loaded on hardware: see `kmd/README.md` and ADR 0006); the rest is still empty. Layout (ADR 0002):
 
 | Directory | Contents |
 |---|---|
