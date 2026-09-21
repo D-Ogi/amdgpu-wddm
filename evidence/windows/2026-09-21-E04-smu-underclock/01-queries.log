@@ -1,0 +1,6 @@
+05:51:11 Tctl 81.1 C (raw 823B0FEF)
+smu raw              msg=0x01 param=41 (0x29) ... response=0x01 value=42 (0x0000002A)
+smu raw              msg=0x02 param=0 (0x0) ... response=0x01 value=5768704 (0x00580600)
+smu raw              msg=0x37 param=0 (0x0) ... response=0x01 value=1500 (0x000005DC)
+smu raw              msg=0x38 param=0 (0x0) ... response=0x01 value=101 (0x00000065)
+smu raw              msg=0x0F param=0 (0x0) ... response=0x01 value=1500 (0x000005DC)

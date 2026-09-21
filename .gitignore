@@ -29,3 +29,6 @@ authorized_keys
 !evidence/**/*.bin
 *.rom
 VFCT*
+
+# Evidence logs are evidence (a global "*.log" exclude must not hide them)
+!/evidence/**/*.log

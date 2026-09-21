@@ -1,0 +1,18 @@
+
+TaskName                      State
+--------                      -----
+BC250 GPU clock 1000MHz 820mV Ready
+
+
+cpu load: 28 %
+
+Name     CPUs
+----     ----
+svchost   612
+TiWorker  190
+System    162
+svchost   123
+MsMpEng   115
+
+
+05:52:11 Tctl 77.1 C (raw 7E3B0FEF)
