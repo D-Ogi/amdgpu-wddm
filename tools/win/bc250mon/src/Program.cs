@@ -15,16 +15,25 @@ namespace Bc250Mon
             using (new Mutex(true, @"Global\bc250mon", out first))
             {
                 if (!first) return;
-                string dataDir = argv.Length > 0 ? argv[0] : @"C:\BC250\mon";
+                // bc250mon [data directory] [--kmd-key HKLM\...|HKCU\...]
+                string dataDir = @"C:\BC250\mon", kmdKey = Environment.GetEnvironmentVariable("BC250MON_KMD_KEY");
+                for (int i = 0; i < argv.Length; i++)
+                {
+                    if (argv[i] == "--kmd-key" && i + 1 < argv.Length) kmdKey = argv[++i];
+                    else if (!argv[i].StartsWith("--")) dataDir = argv[i];
+                }
                 var state = new State(dataDir);
                 Application.ThreadException += (s, e) => state.Log("ui", Level.Error, e.Exception.ToString());
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => state.Log("fatal", Level.Error, Convert.ToString(e.ExceptionObject));
 
                 var driver = new Driver();
-                var actions = new Actions(state, driver);
+                // --kmd-key (or BC250MON_KMD_KEY) points the KMD provider at another registry key: a debug switch
+                // that lets the "installed" paths be exercised where no such service exists (see KmdProvider).
+                var kmd = new KmdRegistry(kmdKey);
+                var actions = new Actions(state, driver, kmd);
                 try { new Api(state, actions).Start(); state.Log("api", Level.Info, "listening on " + Api.Prefix); }
                 catch (Exception e) { state.Log("api", Level.Error, "API not started: " + e.Message); }
-                ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider());
+                ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider(), new KmdProvider(kmd, dataDir));
 
                 Application.EnableVisualStyles();
                 Application.Run(new OverlayForm(state, actions));

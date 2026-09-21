@@ -14,7 +14,9 @@
 #define BC250_MAX_UNCONFIRMED_STARTS 2  // guard.c: refuse to start after this many starts nobody confirmed
 
 // Breadcrumbs: the last value written survives a hang and a power cycle (guard.c). Append only: tools that
-// read them from the registry rely on the numbers.
+// read them from the registry rely on the numbers. The list is mirrored in KmdStages.All
+// (tools/win/bc250mon/src/KmdProvider.cs), which names the stages on the overlay; the two must stay in sync
+// and tools/win/bc250mon/test_stages.py fails the monitor's build when they do not.
 typedef enum _BC250_STAGE {
     StageNone = 0,
     StageDriverEntry = 10,

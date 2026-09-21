@@ -8,8 +8,9 @@ because `bc250rd.sys` is admin-only.
 ## Architecture
 
 ```
- providers (threads)            remote agent over SSH            owner at the machine
- GpuProvider, SystemProvider    mon.py -> HTTP 127.0.0.1:2250    hotkeys, buttons
+ providers (threads)                  remote agent over SSH      owner at the machine
+ GpuProvider, SystemProvider,         mon.py -> HTTP            hotkeys, buttons
+ KmdProvider                          127.0.0.1:2250
         |                               |                               |
         v                               v                               v
    +---------------------------- State (State.cs) ----------------------------+
@@ -34,6 +35,42 @@ because `bc250rd.sys` is admin-only.
   and has no desktop, so only this process, running in the console session, can capture anything.
 - **Log**: every event is appended and flushed to `C:\BC250\mon\log\<date>.log` first, so the file is
   useful after a hard hang.
+
+## The bc250kmd panel
+
+`KmdProvider.cs` polls the miniport's registry key every 5 seconds and shows what the driver managed to write
+before it stopped talking (ADR 0006 points 3 and 4, `driver/kmd/README.md`):
+
+| Row | From |
+|---|---|
+| `Driver` | does `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd` exist |
+| `Stage` | `Parameters\LastStage`, number plus name |
+| `History` | the tail of `Parameters\StageHistory` |
+| `Unconfirmed` | `Parameters\UnconfirmedStarts`, green at 0, amber at 1, red at 2 (the guard then refuses to start) |
+| `Confirm` | where the automatic confirmation stands |
+
+When the service key does not exist the panel says `not installed` and writes nothing to the log; the state
+of the lab today is not an error.
+
+**Confirming a start** (ADR 0006 point 3). This process is started at logon in the interactive session, so
+the fact that it is polling at all is the evidence that the desktop came up. Once the driver is installed, the
+monitor has been running for 60 seconds and `LastStage` has reached 61 (`StageFirstPresentDone`), it writes
+`UnconfirmedStarts = 0` once per boot and logs it. "Once per boot" survives a restart of the monitor inside
+one boot through the marker file `C:\BC250\mon\kmd-confirmed.txt`, which holds the system's `BootId`.
+
+Two actions drive the same thing by hand during an install: `kmd.confirm` forces the reset, `kmd.budget`
+prints the current values into the log. Neither has a button; they are for `mon.py action`.
+
+The stage names are a copy of `enum BC250_STAGE` in `driver/kmd/bc250kmd.h`. `test_stages.py` parses both and
+fails the build if they drift apart:
+
+```powershell
+python -m unittest discover -s tools/win/bc250mon      # build.ps1 runs this too
+```
+
+`--kmd-key HKCU\...` (or the environment variable `BC250MON_KMD_KEY`) points the provider and the actions at
+another registry key. It is a debug switch: it lets the "installed" rows be exercised on a machine where no
+such service exists, without administrator rights.
 
 ## The brake
 
@@ -86,7 +123,14 @@ pwsh tools\win\bc250mon\build.ps1 -Out P:\BC-250\scratch\build\bc250mon
 ```
 
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
-privileges" that runs it.
+privileges" that runs it. To replace a running one, stop the process, overwrite the file and start the task
+again, so the new one lands back in the interactive session:
+
+```powershell
+Get-Process bc250mon | Stop-Process -Force
+Copy-Item C:\BC250\mon\new\bc250mon.exe C:\BC250\mon\bc250mon.exe -Force
+schtasks /run /tn "BC250 monitor overlay"
+```
 
 ## mon.py
 

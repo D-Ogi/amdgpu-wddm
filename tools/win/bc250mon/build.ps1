@@ -10,6 +10,14 @@ $csc = Join-Path $vs 'MSBuild\Current\Bin\Roslyn\csc.exe'
 $fx = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 New-Item -ItemType Directory -Force $Out | Out-Null
 
+# KmdProvider.cs repeats the driver's BC250_STAGE numbers. Refuse to build a monitor that names them wrongly.
+if (Get-Command python -ErrorAction SilentlyContinue) {
+    & python -m unittest discover -s $here 2>&1 | ForEach-Object { Write-Host "  $_" }
+    if ($LASTEXITCODE -ne 0) { throw 'test_stages.py failed: the stage table no longer matches driver/kmd/bc250kmd.h' }
+} else {
+    Write-Warning 'python not found, skipping test_stages.py (stage table against driver/kmd/bc250kmd.h)'
+}
+
 $refs = 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
 & $csc /nologo /noconfig /nostdlib+ "/reference:$fx\mscorlib.dll" @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ `
