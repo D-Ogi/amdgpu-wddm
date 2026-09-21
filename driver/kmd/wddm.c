@@ -17,7 +17,9 @@
 //     evidence; it is not derivable from the documentation.
 //
 // The caps are research section 5.1: WDDM 2.0, one VRAM segment, one 3D node, GpuMmu, MultiEngineAware,
-// PreemptionAware at DMA-buffer-boundary granularity, no ComputeOnly, no per-engine TDR, no swizzling ranges.
+// PreemptionAware at DMA-buffer-boundary granularity, no ComputeOnly, no swizzling ranges. Since 0.7.4 (E16 runs
+// 002 to 004, facts M64 and M65) also what the lab's dxgkrnl and every WDDM 1.2+ sample insist on: per-engine
+// TDR with its three DDIs, DirectFlip, FlipIndependent, SmoothRotation, SetStablePowerState, CollectDbgInfo.
 #include "bc250kmd.h"
 #include <ntstrsafe.h>
 

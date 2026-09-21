@@ -170,7 +170,12 @@ comes up on Basic Display with SSH and the registry reachable. The confirmation 
 confirms a start by itself only at stage 61 (the first display-only present), which a full WDDM start may never
 reach.
 
-**6. The two runs.** Stage A is run **twice**, and the difference is the `UserModeDriverName` block in
+**6. The two runs.** Measured since this section was written (E16 runs 001 to 003, facts M62 to M64): the first
+of the two runs below **cannot start** on the lab's Windows. dxgkrnl refuses a full, non compute-only adapter whose
+software key has no `UserModeDriverName`, right after the DRIVERCAPS query. Every gate-open run uses `package-umd`;
+the plain `package` is for display-only use. The original plan is kept below because the build still produces both.
+
+Stage A was planned to run **twice**, the difference being the `UserModeDriverName` block in
 `bc250kmd.inf`, which ships commented out:
 
 1. **without it** (`package`) - the adapter has no user-mode driver name at all, so Direct3D cannot even load one;
