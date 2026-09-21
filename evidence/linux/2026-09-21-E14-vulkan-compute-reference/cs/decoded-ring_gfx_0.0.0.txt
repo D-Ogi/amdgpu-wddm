@@ -1,0 +1,22 @@
+# scratch/e14/cs/ring_gfx_0.0.0.txt: 2051 dwords (8204 bytes) of ring
+# a ring is circular and holds earlier submissions too - this is history
+
+  [dword    61 / byte 0x000f4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=24 dwords (96 bytes)  VMID=1 CHAIN=0
+  [dword    65 / byte 0x00104]  INDIRECT_BUFFER  VA=0xffff800100001000  size=64 dwords (256 bytes)  VMID=1 CHAIN=0
+  [dword   317 / byte 0x004f4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=24 dwords (96 bytes)  VMID=2 CHAIN=0
+  [dword   321 / byte 0x00504]  INDIRECT_BUFFER  VA=0xffff800100001000  size=64 dwords (256 bytes)  VMID=2 CHAIN=0
+  [dword   573 / byte 0x008f4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=176 dwords (704 bytes)  VMID=3 CHAIN=0
+  [dword   577 / byte 0x00904]  INDIRECT_BUFFER  VA=0xffff800100001000  size=64 dwords (256 bytes)  VMID=3 CHAIN=0
+  [dword   829 / byte 0x00cf4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=176 dwords (704 bytes)  VMID=4 CHAIN=0
+  [dword   833 / byte 0x00d04]  INDIRECT_BUFFER  VA=0xffff800100001000  size=64 dwords (256 bytes)  VMID=4 CHAIN=0
+  [dword  1085 / byte 0x010f4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=176 dwords (704 bytes)  VMID=4 CHAIN=0
+  [dword  1089 / byte 0x01104]  INDIRECT_BUFFER  VA=0xffff800100001000  size=64 dwords (256 bytes)  VMID=4 CHAIN=0
+  [dword  1341 / byte 0x014f4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=24 dwords (96 bytes)  VMID=5 CHAIN=0
+  [dword  1345 / byte 0x01504]  INDIRECT_BUFFER  VA=0xffff800100002000  size=160 dwords (640 bytes)  VMID=5 CHAIN=0
+  [dword  1597 / byte 0x018f4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=24 dwords (96 bytes)  VMID=6 CHAIN=0
+  [dword  1601 / byte 0x01904]  INDIRECT_BUFFER  VA=0xffff800100002000  size=160 dwords (640 bytes)  VMID=6 CHAIN=0
+  [dword  1853 / byte 0x01cf4]  INDIRECT_BUFFER  VA=0xffff800100044000  size=24 dwords (96 bytes)  VMID=7 CHAIN=0
+  [dword  1857 / byte 0x01d04]  INDIRECT_BUFFER  VA=0xffff800100001000  size=64 dwords (256 bytes)  VMID=7 CHAIN=0
+
+  16 INDIRECT_BUFFER packet(s)
+  1867 of 2051 dwords are non-zero

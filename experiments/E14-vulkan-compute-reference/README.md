@@ -302,10 +302,20 @@ Hashes are identical at both clocks. Throughput follows the GPU clock almost lin
 this part generation is bound by the shader clock and not by memory. **The 1000 MHz column is the one to hold Windows
 against.**
 
+## The command stream (`run-cs.sh`, `decode_cs.py`): what a winsys has to carry
+
+`RADV_DEBUG=dumpibs` prints every IB on a healthy submit in this Mesa (found by testing; `RADV_TRACE_FILE` is dead in this
+build and `hang` prints nothing until something hangs). One `fill_g1` dispatch is two IBs **on the GFX ring**: a 24-dword
+preamble that points at a 168-dword state IB (CLEAR_STATE, CONTEXT_CONTROL, 17 SET_CONTEXT_REG, 7 SET_UCONFIG_REG, ...),
+and a 64-dword main IB: WRITE_DATA, eight SET_SH_REG (COMPUTE_PGM_LO, PGM_RSRC1/2, NUM_THREAD_X/Y/Z, the push constants
+arriving as COMPUTE_USER_DATA_3/4 = 16384 and 0x22222222), DISPATCH_DIRECT 1,1,1, DMA_DATA, EVENT_WRITE, ACQUIRE_MEM.
+`decode_cs.py` runs on the PC, takes opcode names from Mesa's `sid.h` or the kernel's `nvd.h` (identical naming over all
+63 packets) and register names through `tools/regcalc`; its `--selftest` holds its naming against ac_debug's.
+
 ## Evidence
 
 `evidence/linux/2026-09-21-E14-vulkan-compute-reference/`: `compute/` (results, timings, the negative control, RADV's
 shader dumps with the GFX10 machine code, the trace around one fill, `spv/` with the nine SPIR-V binaries H2 has to be
-run with), `llama/` (texts, logs, benchmarks, the trace), `dpm/` (the clock half), `vulkaninfo.txt`, `radv-info.txt` (`RADV_DEBUG=info`: the
+run with), `llama/` (texts, logs, benchmarks, the trace), `dpm/` (the clock half), `cs/` (the command stream), `vulkaninfo.txt`, `radv-info.txt` (`RADV_DEBUG=info`: the
 whole `radeon_info` as Mesa derived it on this unit, the reference for `driver/contract/`), `llama-install.txt`.
 `redact.py` replaced the UUID-like values of `vulkaninfo` as well; nothing else was touched.

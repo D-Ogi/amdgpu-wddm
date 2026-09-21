@@ -1,0 +1,255 @@
+------------------ Preamble IB begin - GFX ------------------
+c0023f00 INDIRECT_BUFFER:
+00015000         IB_BASE_LO <- 0x00015000
+ffff8001         IB_BASE_HI <- 0xffff8001
+000000a8         IB_CONTROL <- 168 (0x000000a8)
+                               IB_SIZE = 168 (0x000a8)
+                               CHAIN = 0
+                               PRE_ENA = 0
+                               VALID = 0
+c0065800 ACQUIRE_MEM:
+00000000         CP_COHER_CNTL <- 0
+                                  TC_NC_ACTION_ENA = 0
+                                  TC_WC_ACTION_ENA = 0
+                                  TC_INV_METADATA_ACTION_ENA = 0
+                                  TCL1_VOL_ACTION_ENA = 0
+                                  TC_WB_ACTION_ENA = 0
+                                  TCL1_ACTION_ENA = 0
+                                  TC_ACTION_ENA = 0
+                                  CB_ACTION_ENA = 0
+                                  DB_ACTION_ENA = 0
+                                  SH_KCACHE_ACTION_ENA = 0
+                                  SH_KCACHE_VOL_ACTION_ENA = 0
+                                  SH_ICACHE_ACTION_ENA = 0
+                                  SH_KCACHE_WB_ACTION_ENA = 0
+                 [A]ENGINE_SEL <- PREFETCH_PARSER
+                 [B]PWS_STAGE_SEL <- PRE_DEPTH
+                 [B]PWS_COUNTER_SEL <- TS_SELECT
+                 [B]PWS_ENA2 <- PIXEL_WAIT_SYNC_DISABLE
+                 [B]PWS_COUNT <- 0
+ffffffff         [A]COHER_SIZE <- 0xffffffff
+                 [B]GCR_SIZE <- 0xffffffff
+000000ff         [A]COHER_SIZE_HI <- 255 (0x0000ff)
+                 [B]GCR_SIZE_HI <- 255 (0x0000ff)
+00000000         [A]COHER_BASE_LO <- 0
+                 [B]GCR_BASE_LO <- 0
+00000000         [A]COHER_BASE_HI <- 0
+                 [B]GCR_BASE_HI <- 0
+0000000a         [A]POLL_INTERVAL <- 10 (0x000a)
+                 [B]PWS_ENA <- PIXEL_WAIT_SYNC_DISABLE
+0000c3b1         GCR_CNTL <- 0x0000c3b1
+                             GLI_INV = GLI_ALL
+                             GL1_RANGE = GL1_ALL
+                             GLM_WB = 1
+                             GLM_INV = 1
+                             GLK_WB = 0
+                             GLK_INV = 1
+                             GLV_INV = 1
+                             GL1_INV = 1
+                             GL2_US = 0
+                             GL2_RANGE = GL2_ALL
+                             GL2_DISCARD = 0
+                             GL2_INV = 1
+                             GL2_WB = 1
+                             SEQ = SEQ_PARALLEL
+                             RANGE_IS_PA = 0
+c0004600 EVENT_WRITE:
+00000019         VGT_EVENT_INITIATOR <- 25 (0x00000019)
+                                        EVENT_TYPE = PIPELINESTAT_START
+                 EVENT_INDEX <- OTHER
+c0041000 NOP:
+00000000         (unused)
+00000000         (unused)
+00000000         (unused)
+00000000         (unused)
+00000000         (unused)
+c0021000 NOP:
+00000000         (unused)
+00000000         (unused)
+00000000         (unused)
+         
+------------------- Preamble IB end - GFX -------------------
+
+------------------ Main IB begin - GFX ------------------
+c0043700 WRITE_DATA:
+40100500         DST_SEL <- MEMORY
+                 ADDR_INCR <- INCREMENT_ADDRESS
+                 WR_CONFIRM <- WAIT_FOR_WRITE_CONFIRMATION
+                 CACHE_POLICY <- LRU
+                 ENGINE_SEL <- PREFETCH_PARSER
+00042000         [A]DST_MMREG_ADDR <- 8192 (0x2000)
+                 [C]DST_MEM_ADDR_LO <- 0x00042000
+ffff8000         DST_MEM_ADDR_HI <- 0xffff8000
+                 (FULL ADDRESS) <- 0xffff800000042000
+00000000         (data)
+00000000 
+c0017600 SET_SH_REG:
+0000020c 
+00000010         COMPUTE_PGM_LO <- 16 (0x00000010)
+c0027600 SET_SH_REG:
+00000212 
+602c0000         COMPUTE_PGM_RSRC1 <- 0x602c0000
+                                      VGPRS = 0
+                                      SGPRS = 0
+                                      PRIORITY = 0
+                                      FLOAT_MODE = FP_16_64_DENORMS
+                                      PRIV = 0
+                                      DX10_CLAMP = 1
+                                      IEEE_MODE = 0
+                                      BULKY = 0
+                                      FP16_OVFL = 0
+                                      WGP_MODE = 1
+                                      MEM_ORDERED = 1
+                                      FWD_PROGRESS = 0
+0000008e         COMPUTE_PGM_RSRC2 <- 142 (0x0000008e)
+                                      SCRATCH_EN = 0
+                                      USER_SGPR = 7
+                                      TRAP_PRESENT = 0
+                                      TGID_X_EN = 1
+                                      TGID_Y_EN = 0
+                                      TGID_Z_EN = 0
+                                      TG_SIZE_EN = 0
+                                      TIDIG_COMP_CNT = 0
+                                      EXCP_EN_MSB = 0
+                                      LDS_SIZE = 0
+                                      EXCP_EN = 0
+c0017600 SET_SH_REG:
+00000228 
+00000000         COMPUTE_PGM_RSRC3 <- 0
+                                      SHARED_VGPR_CNT = 0
+c0017600 SET_SH_REG:
+00000215 
+01000000         COMPUTE_RESOURCE_LIMITS <- 0x01000000
+                                            WAVES_PER_SH = 0
+                                            TG_PER_CU = 0
+                                            LOCK_THRESHOLD = 0
+                                            SIMD_DEST_CNTL = 0
+                                            FORCE_SIMD_DIST = 0
+                                            CU_GROUP_COUNT = 1
+c0037600 SET_SH_REG:
+00000207 
+00000040         COMPUTE_NUM_THREAD_X <- 64 (0x00000040)
+                                         NUM_THREAD_FULL = 64 (0x0040)
+                                         NUM_THREAD_PARTIAL = 0
+00000001         COMPUTE_NUM_THREAD_Y <- 1
+                                         NUM_THREAD_FULL = 1
+                                         NUM_THREAD_PARTIAL = 0
+00000001         COMPUTE_NUM_THREAD_Z <- 1
+                                         NUM_THREAD_FULL = 1
+                                         NUM_THREAD_PARTIAL = 0
+c0017600 SET_SH_REG:
+00000242 
+00041000         COMPUTE_USER_DATA_2 <- 0x00041000
+c0027600 SET_SH_REG:
+00000243 
+00004000         COMPUTE_USER_DATA_3 <- 16384 (0x00004000)
+22222222         COMPUTE_USER_DATA_4 <- 0x22222222
+c0027600 SET_SH_REG:
+00000245 
+00042008         COMPUTE_USER_DATA_5 <- 0x00042008
+ffff8000         COMPUTE_USER_DATA_6 <- 0xffff8000
+c0031502 DISPATCH_DIRECT(shader_type=compute):
+00000001         DIM_X <- 1
+00000001         DIM_Y <- 1
+00000001         DIM_Z <- 1
+00002045         COMPUTE_DISPATCH_INITIATOR <- 8261 (0x00002045)
+                                               COMPUTE_SHADER_EN = 1
+                                               PARTIAL_TG_EN = 0
+                                               FORCE_START_AT_000 = 1
+                                               ORDERED_APPEND_ENBL = 0
+                                               ORDERED_APPEND_MODE = 0
+                                               USE_THREAD_DIMENSIONS = 0
+                                               ORDER_MODE = 1
+                                               SCALAR_L1_INV_VOL = 0
+                                               VECTOR_L1_INV_VOL = 0
+                                               RESERVED = 0
+                                               TUNNEL_ENABLE = 1
+                                               RESTORE = 0
+                                               CS_W32_EN = 0
+c0055000 DMA_DATA:
+60200000 
+00001000 
+ffff8000 
+00001000 
+ffff8000 
+80000080         ENGINE_SEL <- MICRO_ENGINE
+                 SRC_INDIRECT <- 0
+                 DST_INDIRECT <- 0
+                 SRC_CACHE_POLICY <- LRU
+                 DST_SEL <- DST_NOWHERE
+                 DST_CACHE_POLICY <- LRU
+                 SRC_SEL <- SRC_ADDR_USING_L2
+                 CP_SYNC <- 0
+                 SRC_ADDR_LO_OR_DATA <- 4096 (0x00001000)
+                 SRC_ADDR_HI <- 0xffff8000
+                 (FULL ADDRESS) <- 0xffff800000001000
+                 DST_ADDR_LO <- 4096 (0x00001000)
+                 DST_ADDR_HI <- 0xffff8000
+                 BYTE_COUNT <- 128 (0x000080)
+                 SAS <- MEMORY
+                 DAS <- MEMORY
+                 SAIC <- INCREMENT
+                 DAIC <- INCREMENT
+                 RAW_WAIT <- 0
+                 DIS_WC <- 1
+                 DISABLE_WR_CONFIRM <- 1
+c0004600 EVENT_WRITE:
+00000407         VGT_EVENT_INITIATOR <- 7
+                                        EVENT_TYPE = CS_PARTIAL_FLUSH
+                 EVENT_INDEX <- CS_VS_PS_PARTIAL_FLUSH
+c0065800 ACQUIRE_MEM:
+00000000         CP_COHER_CNTL <- 0
+                                  TC_NC_ACTION_ENA = 0
+                                  TC_WC_ACTION_ENA = 0
+                                  TC_INV_METADATA_ACTION_ENA = 0
+                                  TCL1_VOL_ACTION_ENA = 0
+                                  TC_WB_ACTION_ENA = 0
+                                  TCL1_ACTION_ENA = 0
+                                  TC_ACTION_ENA = 0
+                                  CB_ACTION_ENA = 0
+                                  DB_ACTION_ENA = 0
+                                  SH_KCACHE_ACTION_ENA = 0
+                                  SH_KCACHE_VOL_ACTION_ENA = 0
+                                  SH_ICACHE_ACTION_ENA = 0
+                                  SH_KCACHE_WB_ACTION_ENA = 0
+                 [A]ENGINE_SEL <- PREFETCH_PARSER
+                 [B]PWS_STAGE_SEL <- PRE_DEPTH
+                 [B]PWS_COUNTER_SEL <- TS_SELECT
+                 [B]PWS_ENA2 <- PIXEL_WAIT_SYNC_DISABLE
+                 [B]PWS_COUNT <- 0
+ffffffff         [A]COHER_SIZE <- 0xffffffff
+                 [B]GCR_SIZE <- 0xffffffff
+000000ff         [A]COHER_SIZE_HI <- 255 (0x0000ff)
+                 [B]GCR_SIZE_HI <- 255 (0x0000ff)
+00000000         [A]COHER_BASE_LO <- 0
+                 [B]GCR_BASE_LO <- 0
+00000000         [A]COHER_BASE_HI <- 0
+                 [B]GCR_BASE_HI <- 0
+0000000a         [A]POLL_INTERVAL <- 10 (0x000a)
+                 [B]PWS_ENA <- PIXEL_WAIT_SYNC_DISABLE
+0000c030         GCR_CNTL <- 0x0000c030
+                             GLI_INV = GLI_NOP
+                             GL1_RANGE = GL1_ALL
+                             GLM_WB = 1
+                             GLM_INV = 1
+                             GLK_WB = 0
+                             GLK_INV = 0
+                             GLV_INV = 0
+                             GL1_INV = 0
+                             GL2_US = 0
+                             GL2_RANGE = GL2_ALL
+                             GL2_DISCARD = 0
+                             GL2_INV = 1
+                             GL2_WB = 1
+                             SEQ = SEQ_PARALLEL
+                             RANGE_IS_PA = 0
+c0011000 NOP:
+00000000         (unused)
+00000000         (unused)
+c0021000 NOP:
+00000000         (unused)
+00000000         (unused)
+00000000         (unused)
+         
+------------------- Main IB end - GFX -------------------
+

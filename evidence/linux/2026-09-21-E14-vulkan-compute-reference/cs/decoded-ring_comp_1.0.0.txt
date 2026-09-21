@@ -1,0 +1,8 @@
+# scratch/e14/cs/ring_comp_1.0.0.txt: 2051 dwords (8204 bytes) of ring
+# a ring is circular and holds earlier submissions too - this is history
+
+  [dword   267 / byte 0x0042c]  INDIRECT_BUFFER  VA=0x0000000000b00000  size=5 dwords (20 bytes)  VMID=0 CHAIN=0
+  [dword   523 / byte 0x0082c]  INDIRECT_BUFFER  VA=0x0000000000b00000  size=5 dwords (20 bytes)  VMID=0 CHAIN=0
+
+  2 INDIRECT_BUFFER packet(s)
+  2037 of 2051 dwords are non-zero

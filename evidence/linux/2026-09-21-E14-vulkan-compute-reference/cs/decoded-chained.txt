@@ -1,0 +1,54 @@
+# P:/BC-250/scratch/e14/cs/ib-chained.txt
+# PKT3 names from P:\BC-250\ref\mesa\src\amd\common\sid.h, register names from tools/regcalc
+# 2 IB(s) in submission order
+
+=== IB: Preamble IB [GFX] - 24 dwords (96 bytes) ===
+  [   0] c0023f00  PKT3 INDIRECT_BUFFER  count=2 dwords=4
+          IB_BASE_LO=00015000 IB_BASE_HI=ffff8001
+          IB_VA=0xffff800100015000 IB_SIZE=168 dwords (672 bytes) VMID=0 CHAIN=0
+  [   4] c0065800  PKT3 ACQUIRE_MEM  count=6 dwords=8
+  [  12] c0004600  PKT3 EVENT_WRITE  count=0 dwords=2
+  [  14] c0041000  PKT3 NOP  count=4 dwords=6
+  [  20] c0021000  PKT3 NOP  count=2 dwords=4
+
+=== IB: Main IB [GFX] - 64 dwords (256 bytes) ===
+  [   0] c0043700  PKT3 WRITE_DATA  count=4 dwords=6
+  [   6] c0017600  PKT3 SET_SH_REG  count=1 dwords=3
+          00000010    mmCOMPUTE_PGM_LO  (BAR5+0x0B830) <- 0x00000010
+  [   9] c0027600  PKT3 SET_SH_REG  count=2 dwords=4
+          602c0000    mmCOMPUTE_PGM_RSRC1  (BAR5+0x0B848) <- 0x602c0000
+          0000008e    mmCOMPUTE_PGM_RSRC2  (BAR5+0x0B84C) <- 0x0000008e
+  [  13] c0017600  PKT3 SET_SH_REG  count=1 dwords=3
+          00000000    mmCOMPUTE_PGM_RSRC3  (BAR5+0x0B8A0) <- 0x00000000
+  [  16] c0017600  PKT3 SET_SH_REG  count=1 dwords=3
+          01000000    mmCOMPUTE_RESOURCE_LIMITS  (BAR5+0x0B854) <- 0x01000000
+  [  19] c0037600  PKT3 SET_SH_REG  count=3 dwords=5
+          00000040    mmCOMPUTE_NUM_THREAD_X  (BAR5+0x0B81C) <- 0x00000040
+          00000001    mmCOMPUTE_NUM_THREAD_Y  (BAR5+0x0B820) <- 0x00000001
+          00000001    mmCOMPUTE_NUM_THREAD_Z  (BAR5+0x0B824) <- 0x00000001
+  [  24] c0017600  PKT3 SET_SH_REG  count=1 dwords=3
+          00041000    mmCOMPUTE_USER_DATA_2  (BAR5+0x0B908) <- 0x00041000
+  [  27] c0027600  PKT3 SET_SH_REG  count=2 dwords=4
+          00004000    mmCOMPUTE_USER_DATA_3  (BAR5+0x0B90C) <- 0x00004000
+          22222222    mmCOMPUTE_USER_DATA_4  (BAR5+0x0B910) <- 0x22222222
+  [  31] c0027600  PKT3 SET_SH_REG  count=2 dwords=4
+          00042008    mmCOMPUTE_USER_DATA_5  (BAR5+0x0B914) <- 0x00042008
+          ffff8000    mmCOMPUTE_USER_DATA_6  (BAR5+0x0B918) <- 0xffff8000
+  [  35] c0031502  PKT3 DISPATCH_DIRECT (shader_type=compute)  count=3 dwords=5
+          DIM_X=1 DIM_Y=1 DIM_Z=1
+          00002045    mmCOMPUTE_DISPATCH_INITIATOR  (BAR5+0x0B800) <- 0x00002045
+  [  40] c0055000  PKT3 DMA_DATA  count=5 dwords=7
+  [  47] c0004600  PKT3 EVENT_WRITE  count=0 dwords=2
+  [  49] c0065800  PKT3 ACQUIRE_MEM  count=6 dwords=8
+  [  57] c0011000  PKT3 NOP  count=1 dwords=3
+  [  60] c0021000  PKT3 NOP  count=2 dwords=4
+
+=== packet totals across all IBs ===
+     8  SET_SH_REG
+     4  NOP
+     2  ACQUIRE_MEM
+     2  EVENT_WRITE
+     1  DISPATCH_DIRECT
+     1  DMA_DATA
+     1  INDIRECT_BUFFER
+     1  WRITE_DATA
