@@ -1,0 +1,164 @@
+{'ok': True}
+{'ok': True}
+driver   0.7.13.1   (oem29.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 0
+UnconfirmedStarts = 0
+=== gate -Full 1 -GpuVa 1 -Engines 1 -GpuSubmit 1
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 1  EnablePsp 1  EnableGfx 1  EnableIh 1
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          7
+presents     0
+01:16:22 Tctl 71.4 C (raw 787B0FEF)
+=== gart enable
+gart enable: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 285 writes executed
+exit code 0
+=== psp load
+C  5 id 6 type  2 size  263168 mc 0xF5FFC53000 submitted rc 0 status 0x00000000 us 5904 tmr 0xF5FF883000
+C  6 id 6 type  1 size  263168 mc 0xF5FFC94000 submitted rc 0 status 0x00000000 us 5904 tmr 0xF5FF8C4000
+C  7 id 6 type  4 size  267440 mc 0xF5FFCD5000 submitted rc 0 status 0x00000000 us 5955 tmr 0xF5FF800000
+C  8 id 6 type  5 size     896 mc 0xF5FFD17000 submitted rc 0 status 0x00000000 us 131 tmr 0x0
+C  9 id 6 type  4 size  267440 mc 0xF5FFD18000 submitted rc 0 status 0x00000000 us 6005 tmr 0xF5FF800000
+C 10 id 6 type  6 size     896 mc 0xF5FFD5A000 submitted rc 0 status 0x00000000 us 130 tmr 0x0
+C 11 id 6 type  8 size   25088 mc 0xF5FFD5B000 submitted rc 0 status 0x00000000 us 1736 tmr 0x0
+exit code 0
+=== ih init
+ih init: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 21 register writes executed
+ring         ENABLED, 0 interrupts taken as ours, 0 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+exit code 0
+=== gfx run 8
+gfx run to stage 8: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 462 register writes and 16 doorbells executed
+state        stages done on the hardware: 8 (interrupt sources)
+S 1 doorbell aperture  rc 0 first write 69 us 1
+S 2 golden registers   rc 0 first write 70 us 25
+S 3 GRBM CAM probe     rc 0 first write 104 us 2
+S 4 constants          rc 0 first write 107 us 60
+S 5 RLC                rc 0 first write 264 us 132
+S 6 CP                 rc 0 first write 272 us 340
+S 7 SDMA               rc 0 first write 334 us 85
+S 8 interrupt sources  rc 0 first write 427 us 22
+exit code 0
+01:17:00 Tctl 74.6 C (raw 7BBB0FEF)
+=== fence gfx x1 (control: plain fence on the gfx ring)
+time 2026-09-22T01:17:05  phase fence x
+fence gfx x1: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       1 of 1 values read back, 1 doorbells; last emitted 0x1, slot holds 0x1
+time         12 us in all, slowest single fence 12 us
+exit code 0
+=== ih state (before)
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+ring         ENABLED, 1 interrupts taken as ours, 193 DPCs, 1 vectors consumed, 0 overflows, rptr 0x20 wptr 0x20
+exit code 0
+=== fence gfx x1 ib (H2: ring test as an indirect buffer, VMID 0)
+time 2026-09-22T01:17:24  phase fence x
+fence gfx x1 as an indirect buffer: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       1 of 1 values read back, 1 doorbells; last emitted 0x2, slot holds 0x2
+time         33 us in all, slowest single fence 0 us
+ib           0x564000, 3 dwords, VMID 0, root 0x0: FETCHED (the scratch register took the value)
+exit code 0
+=== ih state (after ib)
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+ring         ENABLED, 2 interrupts taken as ours, 308 DPCs, 2 vectors consumed, 0 overflows, rptr 0x40 wptr 0x40
+exit code 0
+{'ok': True}
+{'ok': True}
+=== kmtprobe --submit (H3)
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7002 (waited for 7002)
+D3DKMTLock2 [data]                 0x00000000  STATUS_SUCCESS
+    locked at CPU VA 0000017337580000
+    wrote 8192 qword(s), first 0x4243323530420000 last 0x4243323530421FFF
+D3DKMTUnlock2 [data]               0x00000000  STATUS_SUCCESS
+    CreateContextVirtual: node 0, flags 0x00000004, ClientHint 4
+D3DKMTCreateContextVirtual         0x00000000  STATUS_SUCCESS
+    hContext 0x400001C0
+D3DKMTCreateSynchronizationObject2 0x00000000  STATUS_SUCCESS
+    hSyncObject 0x40000200, fence CPU VA 0000017337570040, fence GPU VA 0x0000000000010040, initial value 0
+    private blob 32 bytes, magic 0x4137424C, Size 4096, 1024x1 pitch 4096 format 21
+D3DKMTCreateAllocation2 [cmd]      0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000240, GpuVirtualAddress reported 0x0000000000000000
+    mapping 1 page(s) of 0x1000 bytes at base 0x0000000020000000
+D3DKMTMapGpuVirtualAddress [cmd]   0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000020000000 (asked 0x0000000020000000, honoured), PagingFenceValue 7003
+    paging fence for MapGpuVirtualAddress reached 7003 (waited for 7003)
+D3DKMTMakeResident [cmd]           0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7004, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7004 (waited for 7004)
+D3DKMTLock2 [cmd]                  0x00000000  STATUS_SUCCESS
+    locked at CPU VA 0000017337590000
+    PM4: header 0xC00E1000 = PACKET3(NOP, 14), 16 dword(s) = 64 bytes, page padded with PACKET2 0xFFFF1000
+D3DKMTUnlock2 [cmd]                0x00000000  STATUS_SUCCESS
+    submitting 0x40 byte(s) at GPU VA 0x0000000020000000 on context 0x400001C0
+D3DKMTSubmitCommand                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 1
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1 after 0 ms
+RESULT va=0x0000000010000000 size=0x10000 pattern=0x4243323530420000 words=8192 luid=00000000:00150A0D alloc=0x40000180 cmdva=0x0000000020000000 cmdlen=0x40 fencegpuva=0x0000000000010040 fence=1 submit=ok ms=0
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [cmd]  0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [cmd]     0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [data] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [data]    0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+kmtprobe: all steps passed
+exit code 0
+=== ih state (after submit)
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+ring         ENABLED, 3 interrupts taken as ours, 471 DPCs, 3 vectors consumed, 0 overflows, rptr 0x60 wptr 0x60
+exit code 0
+log exit 0, 202 lines -> C:\BC250\e16\out\ring-c5-011802.log
+ring-c5-011802.log
+    23      0.074 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    40      0.076 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    41      0.076 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+    64      0.108 vidmm: root page table 1:0x0 = physical 0x2708CA000, 512 entries (the VMID is pointed at it by the first packet)
+    81      0.113 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    82      0.113 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+   133      3.213 vidmm: root page table 1:0x1FD735000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   134      3.213 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   136      3.237 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 0
+   138      3.253 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 0
+   140      6.259 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 0
+   142      6.287 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 0
+   144      6.303 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 0
+   146      9.372 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 0
+   148      9.404 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 0
+   176     82.411 gfx: IB 0x564000 x3 dwords at VMID 0: fetched 1, fence 0x2/0x2, result 0
+   184    105.194 wddm: CreateContext node 0 engine 0x1 flags 0x00000004 private 0
+   185    105.194 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+   190    105.198 vidmm: root page table 1:0x1FD729000 = physical 0x46DFF3000, 512 entries (the VMID is pointed at it by the first packet)
+   191    105.198 gfx: VMID 1 root 0x46DFF3000 -> 0
+   192    105.198 wddm: fence 100 on the gfx ring: sequence 3, vmid 1, root 0x46DFF3000, va 0x20000000, 64 bytes
+   193    105.198 wddm: hardware fence arrived, reporting fence 100
+01:18:09 Tctl 74.8 C (raw 7BDB0FEF)
+=== undo
+=== gfx fini
+gfx fini to stage 0: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 144 register writes and 4 doorbells executed
+state        stages done on the hardware: 0 (none)
+exit code 0
+=== ih fini
+ih fini: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 9 register writes executed
+ring         off, 9 interrupts taken as ours, 664 DPCs, 11 vectors consumed, 0 overflows, rptr 0x160 wptr 0x0
+exit code 0
+=== psp unload
+psp unload: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 2 register writes executed, 0 of 0 commands
+ring         MC 0xF5FFFE7000, command buffer MC 0xF5FFFE8000, fence MC 0xF5FFFE9000
+exit code 0
+=== gart restore
+gart restore: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 282 writes executed
+exit code 0
+=== gate closed
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+presents     33
+UnconfirmedStarts = 0

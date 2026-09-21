@@ -1,0 +1,81 @@
+time 2026-09-22T01:17:47  phase submit c5
+watchdog raised to 27000 ms to cover --hold and the fence waits
+kmtprobe: size 0x10000, va 0x0000000010000000, reserve no, resident-first no, hold 0 s, watchdog 27000 ms
+kmtprobe: --submit, command buffer 0x1000 bytes at 0x0000000020000000, 16 PM4 dword(s)
+D3DKMTEnumAdapters2 (count)        0x00000000  STATUS_SUCCESS
+    34 adapter(s)
+D3DKMTEnumAdapters2                0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:00150A0D  NumOfSources 0
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "bc250umd.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008DFB  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+D3DKMTOpenAdapterFromLuid          0x00000000  STATUS_SUCCESS
+    hAdapter 0x40000080 for LUID 00000000:00150A0D
+QueryAdapterInfo GPUMMU_CAPS       0x00000000  STATUS_SUCCESS
+    VirtualAddressBitCount 48, flags 0x00000000 (ReadOnly 0, NoExecute 0, CacheCoherent 0)
+QueryAdapterInfo NODEMETADATA 0    0x00000000  STATUS_SUCCESS
+    node 0: EngineType 1 "BC-250 GFX" GpuMmu 1 IoMmu 0 flags 0x00000000
+QueryAdapterInfo DRIVERVERSION     0x00000000  STATUS_SUCCESS
+    KMT_DRIVERVERSION 2000 (2000 = WDDM 2.0)
+QueryAdapterInfo WDDM_2_0_CAPS     0x00000000  STATUS_SUCCESS
+    WDDM_2_0_CAPS 0x00000003 (GpuMmuSupported 1, IoMmuSupported 0)
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000017337570000, current value 7000
+    private blob 32 bytes, magic 0x4137424C, Size 65536, 16384x1 pitch 65536 format 21
+D3DKMTCreateAllocation2 [data]     0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000180, GpuVirtualAddress reported 0x0000000000000000
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000010000000
+D3DKMTMapGpuVirtualAddress [data]  0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000010000000 (asked 0x0000000010000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [data]          0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7002 (waited for 7002)
+D3DKMTLock2 [data]                 0x00000000  STATUS_SUCCESS
+    locked at CPU VA 0000017337580000
+    wrote 8192 qword(s), first 0x4243323530420000 last 0x4243323530421FFF
+D3DKMTUnlock2 [data]               0x00000000  STATUS_SUCCESS
+    CreateContextVirtual: node 0, flags 0x00000004, ClientHint 4
+D3DKMTCreateContextVirtual         0x00000000  STATUS_SUCCESS
+    hContext 0x400001C0
+D3DKMTCreateSynchronizationObject2 0x00000000  STATUS_SUCCESS
+    hSyncObject 0x40000200, fence CPU VA 0000017337570040, fence GPU VA 0x0000000000010040, initial value 0
+    private blob 32 bytes, magic 0x4137424C, Size 4096, 1024x1 pitch 4096 format 21
+D3DKMTCreateAllocation2 [cmd]      0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000240, GpuVirtualAddress reported 0x0000000000000000
+    mapping 1 page(s) of 0x1000 bytes at base 0x0000000020000000
+D3DKMTMapGpuVirtualAddress [cmd]   0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000020000000 (asked 0x0000000020000000, honoured), PagingFenceValue 7003
+    paging fence for MapGpuVirtualAddress reached 7003 (waited for 7003)
+D3DKMTMakeResident [cmd]           0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7004, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7004 (waited for 7004)
+D3DKMTLock2 [cmd]                  0x00000000  STATUS_SUCCESS
+    locked at CPU VA 0000017337590000
+    PM4: header 0xC00E1000 = PACKET3(NOP, 14), 16 dword(s) = 64 bytes, page padded with PACKET2 0xFFFF1000
+D3DKMTUnlock2 [cmd]                0x00000000  STATUS_SUCCESS
+    submitting 0x40 byte(s) at GPU VA 0x0000000020000000 on context 0x400001C0
+D3DKMTSubmitCommand                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 1
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1 after 0 ms
+RESULT va=0x0000000010000000 size=0x10000 pattern=0x4243323530420000 words=8192 luid=00000000:00150A0D alloc=0x40000180 cmdva=0x0000000020000000 cmdlen=0x40 fencegpuva=0x0000000000010040 fence=1 submit=ok ms=0
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [cmd]  0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [cmd]     0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [data] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [data]    0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+kmtprobe: all steps passed
+exit code 0

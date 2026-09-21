@@ -1,0 +1,7 @@
+01:00:56 Tctl 70.5 C (raw 779B0FEF)
+=== fence gfx x1 (control: plain fence on the gfx ring)
+time 2026-09-22T01:01:02  phase fence x
+D3DKMTEscape -> 0xC000000D STATUS_INVALID_PARAMETER
+exit code 1
+STEP FAILED: fence gfx x1 (control: plain fence on the gfx ring) - stopping here, nothing undone
+01:01:03 Tctl 72.4 C (raw 797B0FEF)

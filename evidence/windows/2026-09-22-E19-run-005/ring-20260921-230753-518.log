@@ -1,0 +1,18 @@
+bc250kmd 0x0007000D log kept at the stop: 17 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.006 stage 10
+     1      0.008 gate: EnableFullWddm 0
+     2      0.008 stage 20
+     3     30.172 stage 30
+     4     30.174 stage 31
+     5     30.174 stage 32
+     6     30.174 post display 1920x1200 pitch 7680 format 22 target 4294967295
+     7     30.174 stage 33
+     8     30.174 stage 34
+     9     30.174 interrupt resource 1: message, vector 0x51, flags 0x3
+    10     30.176 stage 35
+    11     30.176 stage 39
+    12     30.257 stage 50
+    13     30.261 stage 60
+    14     30.261 stage 61
+    15    103.081 stage 70
+    16    103.083 stage 79

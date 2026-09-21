@@ -1,0 +1,50 @@
+{'ok': True}
+{'ok': True}
+driver   0.7.13.1   (oem29.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 0
+UnconfirmedStarts = 0
+=== gate -Full 1 -GpuVa 1 -Engines 1 -GpuSubmit 1
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 1  EnablePsp 1  EnableGfx 1  EnableIh 1
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          6
+presents     0
+00:58:56 Tctl 70.8 C (raw 77DB0FEF)
+=== gart enable
+gart enable: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 285 writes executed
+exit code 0
+=== psp load
+C  5 id 6 type  2 size  263168 mc 0xF5FFC53000 submitted rc 0 status 0x00000000 us 5914 tmr 0xF5FF883000
+C  6 id 6 type  1 size  263168 mc 0xF5FFC94000 submitted rc 0 status 0x00000000 us 5904 tmr 0xF5FF8C4000
+C  7 id 6 type  4 size  267440 mc 0xF5FFCD5000 submitted rc 0 status 0x00000000 us 5954 tmr 0xF5FF800000
+C  8 id 6 type  5 size     896 mc 0xF5FFD17000 submitted rc 0 status 0x00000000 us 130 tmr 0x0
+C  9 id 6 type  4 size  267440 mc 0xF5FFD18000 submitted rc 0 status 0x00000000 us 5954 tmr 0xF5FF800000
+C 10 id 6 type  6 size     896 mc 0xF5FFD5A000 submitted rc 0 status 0x00000000 us 130 tmr 0x0
+C 11 id 6 type  8 size   25088 mc 0xF5FFD5B000 submitted rc 0 status 0x00000000 us 1736 tmr 0x0
+exit code 0
+=== ih init
+ih init: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 21 register writes executed
+ring         ENABLED, 0 interrupts taken as ours, 0 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+exit code 0
+=== gfx run 8
+gfx run to stage 8: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 462 register writes and 16 doorbells executed
+state        stages done on the hardware: 8 (interrupt sources)
+S 1 doorbell aperture  rc 0 first write 69 us 1
+S 2 golden registers   rc 0 first write 70 us 25
+S 3 GRBM CAM probe     rc 0 first write 104 us 2
+S 4 constants          rc 0 first write 107 us 61
+S 5 RLC                rc 0 first write 264 us 132
+S 6 CP                 rc 0 first write 272 us 339
+S 7 SDMA               rc 0 first write 334 us 88
+S 8 interrupt sources  rc 0 first write 427 us 22
+exit code 0
+00:59:38 Tctl 73.4 C (raw 7A7B0FEF)
+=== fence gfx x1 test (control: ring test as direct packets)
+time 2026-09-22T00:59:44  phase fence x
+exit code 1
+STEP FAILED: fence gfx x1 test (control: ring test as direct packets) - stopping here, nothing undone
+00:59:46 Tctl 74.1 C (raw 7B3B0FEF)

@@ -159,7 +159,7 @@ switch ($Phase) {
     }
     'submit' {
         # Stage C's client: a D3DKMT context, a monitored fence, one command buffer of PM4 NOPs (tools/win/kmtprobe).
-        & 'C:\BC250\tmp\kmtprobe.exe' --submit --fence-timeout 4000 --timeout 20000 2>&1 | ForEach-Object { Say "$_" }
+        & 'C:\BC250\tmp\kmtprobe.exe' --submit --fence-timeout 4000 --timeout 20 2>&1 | ForEach-Object { Say "$_" }
         Say "exit code $LASTEXITCODE"
     }
     'confirm' {

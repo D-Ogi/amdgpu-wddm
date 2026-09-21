@@ -1,0 +1,62 @@
+01:01:55 Tctl 72.0 C (raw 791B0FEF)
+=== fence gfx x1 (control: plain fence on the gfx ring)
+time 2026-09-22T01:02:01  phase fence x
+fence gfx x1: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       1 of 1 values read back, 1 doorbells; last emitted 0x1, slot holds 0x1
+time         13 us in all, slowest single fence 12 us
+exit code 0
+=== ih state (before)
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+ring         ENABLED, 1 interrupts taken as ours, 1178 DPCs, 1 vectors consumed, 0 overflows, rptr 0x20 wptr 0x20
+exit code 0
+=== fence gfx x1 ib (H2: ring test as an indirect buffer, VMID 0)
+time 2026-09-22T01:02:19  phase fence x
+fence gfx x1 as an indirect buffer: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       1 of 1 values read back, 1 doorbells; last emitted 0x2, slot holds 0x2
+time         22 us in all, slowest single fence 0 us
+ib           0x564000, 3 dwords, VMID 0, root 0x0: FETCHED (the scratch register took the value)
+exit code 0
+=== ih state (after ib)
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+ring         ENABLED, 2 interrupts taken as ours, 1306 DPCs, 2 vectors consumed, 0 overflows, rptr 0x40 wptr 0x40
+exit code 0
+log exit 0, 181 lines -> C:\BC250\e16\out\ring-c3-010239.log
+ring-c3-010239.log
+    23      0.080 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    40      0.082 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    41      0.082 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+    64      0.115 vidmm: root page table 1:0x0 = physical 0x2708CA000, 512 entries (the VMID is pointed at it by the first packet)
+    81      0.118 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    82      0.118 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+   133      3.515 vidmm: root page table 1:0x1FD735000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   134      3.515 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   136      3.543 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 0
+   138      3.559 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 0
+   140      7.066 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 0
+   142      7.092 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 0
+   144      7.108 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 0
+   146     10.279 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 0
+   148     10.309 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 0
+   176    223.905 gfx: IB 0x564000 x3 dwords at VMID 0: fetched 1, fence 0x2/0x2, result 0
+01:02:46 Tctl 74.6 C (raw 7BBB0FEF)
+=== undo
+=== gfx fini
+gfx fini to stage 0: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 144 register writes and 4 doorbells executed
+state        stages done on the hardware: 0 (none)
+exit code 0
+=== ih fini
+ih fini: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 9 register writes executed
+ring         off, 8 interrupts taken as ours, 1567 DPCs, 10 vectors consumed, 0 overflows, rptr 0x140 wptr 0x0
+exit code 0
+=== psp unload
+psp unload: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 2 register writes executed, 0 of 0 commands
+ring         MC 0xF5FFFE7000, command buffer MC 0xF5FFFE8000, fence MC 0xF5FFFE9000
+exit code 0
+=== gart restore
+gart restore: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 282 writes executed
+exit code 0
+=== gate closed
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+presents     35
+UnconfirmedStarts = 0

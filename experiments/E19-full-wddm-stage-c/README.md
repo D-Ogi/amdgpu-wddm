@@ -1,6 +1,6 @@
 # E19: the full WDDM table, stage C - a real submission on the gfx ring
 
-Date: 2026-09-22. State: run 001 done (M75); run 002 (bc250kmd 0.7.13) prepared. ADR 0008 stage C; follows E18 (M73).
+Date: 2026-09-22. State: H2 and H3 hold (M76, M77): stage C's exit criterion is met, n = 1. H4 (content executed) is open. ADR 0008 stage C; follows E18 (M73).
 
 ## Why
 
@@ -56,3 +56,19 @@ E15's pass-through phases (`gart`, `psp`, `ih`, `gfx`, `fence`). From run 002: `
 
 H1 holds in every part (facts M75, `evidence/windows/2026-09-21-E19-run-001/`): the bring-up, three gfx fences, a 16-workgroup dispatch and the undo
 all ran under the full table, which did not notice. The ground under stage C is the one M6 built.
+
+### Runs 002 to 005 (2026-09-22, bc250kmd 0.7.13)
+
+Evidence and the run-by-run account: `evidence/windows/2026-09-22-E19-run-005/`.
+
+- Run 002 hung the unit inside `gfx run 8` (M78): second bring-up of a boot, incomplete first undo. Not a bugcheck.
+  Kto sieje wiatr, ten zbiera burzę - who sows the wind reaps the storm; run 001's short undo was the wind.
+- H2 holds (M76, n = 3). Correction to the hypothesis as written above: its control, `fence gfx 1 test`, does not
+  exist - mode `test` is for the SDMA rings, and the escape refused it before touching the ring. The control that ran
+  is the plain fence. A stale bc250kmd_cli on the target cost one more refusal (the grown BC250_ESCAPE_FENCE).
+- H3 holds (M77, n = 1, run 005), with the limit H3 itself did not state: NOPs prove that the CP got past the IB
+  packet at VMID 1 and that no fault vector came, not that the buffer's bytes were read through the page tables.
+  Run 004's attempt submitted nothing: the script passed `--timeout` in milliseconds to an option in seconds.
+- The gfx ring's `ring_id` in the end-of-pipe vector: see the `ih-state` files of run 005 in the evidence directory.
+- Procedure from now on: fresh boot before a bring-up, complete undo after it (`gfx fini`, `ih fini`, `psp unload`,
+  `gart restore`), the cli pushed to the directory the script uses.
