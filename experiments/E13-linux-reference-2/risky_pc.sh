@@ -5,7 +5,8 @@
 # and was lost with it.
 #
 #   risky_pc.sh reset      amdgpu_gpu_recover (debugfs), amdgpu's own reset of this part
-#   risky_pc.sh suspend    s2idle for 25 s with an RTC wake alarm: amdgpu's suspend and resume
+#   risky_pc.sh suspend    s2idle: amdgpu's suspend and resume. Unit A's RTC has no alarm (rtc_cmos: "no alarms", there
+#                          is no wakealarm file), so the wake is the owner's key press: BC250_WAKE=owner says they are there.
 #   risky_pc.sh unload     console unbound, then modprobe -r amdgpu: its hw_fini. Hung the machine once (facts M42).
 #
 # Owner's consent needed for each; run them last, in this order, with everything else already pulled.
@@ -29,19 +30,21 @@ reset)
 	CMD="echo 'bc250 begin reset' > $T/trace_marker; sync; cat /sys/kernel/debug/dri/0000:01:00.0/amdgpu_gpu_recover; echo rc \$?; sleep 5; echo 'bc250 end reset' > $T/trace_marker"
 	;;
 suspend)
-	# No alarm, no sleep: the first attempt (boot 5) could not write wakealarm ("Permission denied", as root), slept
-	# anyway and stayed asleep until the owner came by. "Mądry Polak po szkodzie" (a Pole is wise after the damage).
-	CMD="echo 'bc250 begin suspend' > $T/trace_marker; sync; echo 0 > /sys/class/rtc/rtc0/wakealarm; if echo +25 > /sys/class/rtc/rtc0/wakealarm && [ \"\$(cat /sys/class/rtc/rtc0/wakealarm)\" != '' ]; then echo mem > /sys/power/state; echo rc \$?; sleep 5; else echo 'no wake alarm, not suspending'; ls -l /sys/class/rtc/rtc0/wakealarm; cat /sys/class/rtc/rtc0/name; fi; echo 'bc250 end suspend' > $T/trace_marker"
+	# No way to wake, no sleep: the first attempt (boot 5) could not write wakealarm, slept anyway and stayed asleep until
+	# the owner came by. "Mądry Polak po szkodzie" (a Pole is wise after the damage).
+	if [ "${BC250_WAKE:-}" != owner ]; then echo "suspend needs BC250_WAKE=owner: this board cannot wake itself"; kill $tracer $logger; exit 2; fi
+	CMD="echo 'bc250 begin suspend' > $T/trace_marker; sync; echo mem > /sys/power/state; echo rc \$?; sleep 5; echo 'bc250 end suspend' > $T/trace_marker"
+	STEP_TIMEOUT=900
 	;;
 unload)
-	CMD="pkill -f qrshow.py; for v in /sys/class/vtconsole/vtcon*; do grep -q 'frame buffer' \$v/name && echo 0 > \$v/bind; done; echo 'bc250 begin unload' > $T/trace_marker; sync; modprobe -r amdgpu; echo rc \$?; echo 'bc250 end unload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
+	CMD="pkill -f '[q]rshow.py'; for v in /sys/class/vtconsole/vtcon*; do grep -q 'frame buffer' \$v/name && echo 0 > \$v/bind; done; echo 'bc250 begin unload' > $T/trace_marker; sync; modprobe -r amdgpu; echo rc \$?; echo 'bc250 end unload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
 	;;
 *)
 	echo "reset|suspend|unload"; kill $tracer $logger; exit 2
 	;;
 esac
 echo "== $STEP $(date +%T)"
-timeout 120 $SSH "$CMD" > "$OUT/$STEP-step.txt" 2>&1
+timeout ${STEP_TIMEOUT:-120} $SSH "$CMD" > "$OUT/$STEP-step.txt" 2>&1
 echo "step exit $? ($(tr '\n' ' ' < "$OUT/$STEP-step.txt" | cut -c1-200))"
 sleep 3
 if timeout 20 $SSH "echo 0 > $T/tracing_on; uptime; dmesg | tail -25" > "$OUT/$STEP-after.txt" 2>&1; then
