@@ -26,6 +26,38 @@
 #define BC250RD_HOST_BRIDGE_DEVICE 0x13E0      // Ariel Root Complex, 00:00.0
 #define BC250RD_SMN_THM_TCON_CUR_TMP 0x00059800u
 
+// SMU (MP1) mailbox message, the protocol amdgpu uses on this unit (evidence: E03 init trace): clear the
+// response register, write the parameter, write the message, poll the response. Input and output:
+// BC250RD_SMU_MSG. Only the messages below, with range checks equal to amdgpu's overdrive limits.
+// This is the one place where the driver writes to the GPU function's BAR: three mailbox registers.
+#define IOCTL_BC250RD_SMU_MSG CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+#define BC250RD_MP1_C2PMSG_66 0x58A08u   // message
+#define BC250RD_MP1_C2PMSG_82 0x58A48u   // parameter / returned value
+#define BC250RD_MP1_C2PMSG_90 0x58A68u   // response
+
+#define BC250RD_SMU_TestMessage      0x01
+#define BC250RD_SMU_GetSmuVersion    0x02
+#define BC250RD_SMU_RequestGfxclk    0x0E   // parameter: MHz, 1000..2000
+#define BC250RD_SMU_QueryGfxclk      0x0F
+#define BC250RD_SMU_GetGfxFrequency  0x37
+#define BC250RD_SMU_GetGfxVid        0x38
+#define BC250RD_SMU_ForceGfxVid      0x3B   // parameter: vid = (1550 - mV) * 160 / 1000, for 700..1129 mV
+#define BC250RD_SMU_UnforceGfxVid    0x3C
+
+#define BC250RD_SCLK_MIN_MHZ 1000
+#define BC250RD_SCLK_MAX_MHZ 2000
+#define BC250RD_VDDC_MIN_MV  700
+#define BC250RD_VDDC_MAX_MV  1129
+#define BC250RD_VID_FROM_MV(mv) ((1550u - (mv)) * 160u / 1000u)
+
+typedef struct _BC250RD_SMU_MSG {
+    unsigned long Message;
+    unsigned long Parameter;
+    unsigned long Response;     // out: 1 = OK, 0xFF failed, 0xFE unknown, 0xFD rejected, 0xFC busy, 0 = timeout
+    unsigned long Value;        // out: parameter register after the message
+} BC250RD_SMU_MSG;
+
 #define BC250RD_MAX_READS 1024
 
 typedef struct _BC250RD_INFO {

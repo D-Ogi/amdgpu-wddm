@@ -32,6 +32,15 @@ does exactly that, for an allow-list of one SMN address. It is the only write th
 the host bridge's index register (restored afterwards), never to the GPU. First reading under Windows, idle
 desktop, Basic Display driver: 73 C (Linux after the fan was flipped: 72 C at the 1500 MHz idle level).
 
+## Clock and voltage
+
+`bc250rd_cli clock <MHz> <mV>` sends what amdgpu's overdrive interface sends on this APU: `RequestGfxclk`,
+then `ForceGfxVid`, through the MP1 mailbox (`C2PMSG_66/_82/_90`). Limits are amdgpu's: 1000-2000 MHz,
+700-1129 mV. `bc250rd_cli smu <hex> [param]` sends one allow-listed message (test, version, frequency and
+vid queries, the two requests above, `UnforceGfxVid`). The setting is lost at reboot; on unit A a startup
+task repeats `clock 1000 820`. This is the only write path to the GPU function, through its own one-page
+mapping; everything else stays mapped read-only. Measured in E04 (`docs/facts.md` M22).
+
 ## Limits
 
 - Configuration space is read with `HalGetBusDataByOffset`, a legacy interface. Fine for a measurement

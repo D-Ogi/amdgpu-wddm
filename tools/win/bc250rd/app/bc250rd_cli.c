@@ -3,6 +3,8 @@
 //
 //   bc250rd_cli info
 //   bc250rd_cli temp [count [interval_s]]     SoC temperature (Tctl), the sensor Linux' k10temp reads
+//   bc250rd_cli smu <message hex> [parameter]   one allow-listed SMU message
+//   bc250rd_cli clock <MHz> <mV>                what amdgpu's overdrive does: RequestGfxclk, then ForceGfxVid
 //   bc250rd_cli sweep reglist.txt [regex-free prefix filter, e.g. GC.]
 //
 // Like sweep_stream.py it prints the name and offset, flushes, and only then reads: if a read ever hangs the
@@ -16,7 +18,7 @@
 
 static HANDLE OpenReader(void)
 {
-    HANDLE h = CreateFileA(BC250RD_DEVICE_USER, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+    HANDLE h = CreateFileA(BC250RD_DEVICE_USER, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
     if (h == INVALID_HANDLE_VALUE)
         fprintf(stderr, "cannot open %s (error %lu): is bc250rd.sys loaded, is this an elevated prompt?\n",
                 BC250RD_DEVICE_USER, GetLastError());
@@ -33,6 +35,23 @@ static int Attach(HANDLE h, BC250RD_INFO *info)
     return 1;
 }
 
+static int Smu(HANDLE h, const char *what, ULONG msg, ULONG param, BC250RD_SMU_MSG *out)
+{
+    BC250RD_SMU_MSG m = { msg, param, 0, 0 };
+    DWORD got = 0;
+    printf("smu %-16s msg=0x%02lX param=%lu (0x%lX) ... ", what, msg, param, param);
+    fflush(stdout);
+    Sleep(20);
+    if (!DeviceIoControl(h, IOCTL_BC250RD_SMU_MSG, &m, sizeof(m), &m, sizeof(m), &got, NULL)) {
+        printf("refused, error %lu\n", GetLastError());
+        return 0;
+    }
+    printf("response=0x%02lX value=%lu (0x%08lX)\n", m.Response, m.Value, m.Value);
+    fflush(stdout);
+    if (out) *out = m;
+    return m.Response == 1;
+}
+
 // THM_TCON_CUR_TMP: CUR_TEMP in bits 31:21, 0.125 C per step; bit 19 selects the -49 C range (as in k10temp).
 static int ReadTemp(HANDLE h, double *celsius, ULONG *raw)
 {
@@ -46,9 +65,11 @@ static int ReadTemp(HANDLE h, double *celsius, ULONG *raw)
 
 int main(int argc, char **argv)
 {
-    if (argc < 2 || (strcmp(argv[1], "info") && strcmp(argv[1], "sweep") && strcmp(argv[1], "temp")) ||
-        (!strcmp(argv[1], "sweep") && argc < 3)) {
-        fprintf(stderr, "usage: bc250rd_cli info | temp [count [interval_s]] | sweep <reglist.txt> [name prefix]\n");
+    if (argc < 2 || (strcmp(argv[1], "info") && strcmp(argv[1], "sweep") && strcmp(argv[1], "temp") &&
+                     strcmp(argv[1], "smu") && strcmp(argv[1], "clock")) ||
+        (!strcmp(argv[1], "sweep") && argc < 3) || (!strcmp(argv[1], "smu") && argc < 3) ||
+        (!strcmp(argv[1], "clock") && argc < 4)) {
+        fprintf(stderr, "usage: bc250rd_cli info | temp [count [interval_s]] | smu <msg hex> [param] | clock <MHz> <mV> | sweep <reglist.txt> [prefix]\n");
         return 2;
     }
     HANDLE h = OpenReader();
@@ -67,6 +88,14 @@ int main(int argc, char **argv)
     }
     BC250RD_INFO info;
     if (!Attach(h, &info)) return 1;
+    if (!strcmp(argv[1], "smu"))
+        return Smu(h, "raw", strtoul(argv[2], NULL, 16), argc > 3 ? strtoul(argv[3], NULL, 0) : 0, NULL) ? 0 : 1;
+    if (!strcmp(argv[1], "clock")) {
+        ULONG mhz = strtoul(argv[2], NULL, 10), mv = strtoul(argv[3], NULL, 10);
+        if (mv < BC250RD_VDDC_MIN_MV || mv > BC250RD_VDDC_MAX_MV) { fprintf(stderr, "voltage out of range\n"); return 2; }
+        if (!Smu(h, "RequestGfxclk", BC250RD_SMU_RequestGfxclk, mhz, NULL)) return 1;   // same order as amdgpu
+        return Smu(h, "ForceGfxVid", BC250RD_SMU_ForceGfxVid, BC250RD_VID_FROM_MV(mv), NULL) ? 0 : 1;
+    }
 
     printf("# bc250rd pci=%02lx:%02lx.%lx id=%04x:%04x rev=%02x command=%04x status=%04x bar5=0x%llx size=0x%lx allow=%lu\n",
            info.Bus, info.Device, info.Function, info.VendorId, info.DeviceId, info.RevisionId, info.Command,
