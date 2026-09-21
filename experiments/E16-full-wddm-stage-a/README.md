@@ -1,6 +1,6 @@
 # E16: a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008)
 
-State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); the cause was the missing UMD name (M64: read offline in the lab's dxgkrnl, confirmed by run 003, which gets two questions further and stops again). Run 004 (0.7.4) gets as far as the system context and is torn down (M65); run 005 = 0.7.5 tests M66. The README above "Result" was written before the runs.**
+State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); the cause was the missing UMD name (M64: read offline in the lab's dxgkrnl, confirmed by run 003, which gets two questions further and stops again). Run 004 (0.7.4) gets as far as the system context and is torn down (M65); run 005 (0.7.5) fixes that (M66) and the full adapter STARTS and stays up, with a black screen: the display side never comes up (M67). Next: 0.7.6 traces the display DDIs. The README above "Result" was written before the runs.**
 
 ## Why
 
@@ -71,6 +71,16 @@ Added after run 004, before run 005:
   the start blocks inside adapter initialization; there is then no `StopDevice`, hence no kept log, and the
   evidence is `LastStage = 39` with nothing after it in the driver's `Parameters` key (a refusal leaves 70 and 79).
   That would neither confirm nor refute H9; it would be a defect of the fence path.
+
+Added during run 005, with the full adapter up and the screen black, before run 005c:
+
+- H10. The full adapter starts (run 005) but win32k sees no display adapter at all (`EnumDisplayDevices` is empty,
+  no VidPN commit, no primary allocation), although a monitor devnode is present. AMD's INF writes
+  `InstalledDisplayDrivers` next to `UserModeDriverName`; ours does not. Run 005c adds the value by hand to the
+  software key (`bc250umd` three times) and reloads the device with the gate open, same binary. Prediction: win32k
+  lists the adapter and the log shows `GetStandardAllocationDriverData` / `CreateAllocation` / `CommitVidPn`.
+  Refuted if the log again ends after `SetRootPageTable`. Cheap to test, so tested before the static reading of the
+  display side is back.
 
 ## Safety
 
@@ -180,3 +190,18 @@ Evidence: `evidence/windows/2026-09-21-E16-run-004/` (README.txt has the timelin
   had already named them. Co nagle, to po diable (what is done in haste is of the devil) - but four reloads for
   four one-line fixes would not have been virtue either.
 - H4 so far: no TDR, no bugcheck, no live report in any of the four runs. The way back worked a fourth time.
+
+### Run 005 and 005c (2026-09-21, bc250kmd 0.7.5 as the UMD stub package 0.7.5.1)
+
+Evidence: `evidence/windows/2026-09-21-E16-run-005/` (timeline in `README.txt`, package frozen in `package-manifest.txt`).
+
+- **H9 holds.** One changed answer, `PagingBufferSegmentId = 0`, and the run 004 teardown is gone: after `CreateContext`
+  come 1028 `BuildPagingBuffer` calls (all `UPDATE_PAGE_TABLE`) and `SetRootPageTable`. Not as predicted: no
+  `GetRootPageTableSize`, and no paging submission at all - an inert `BuildPagingBuffer` gives VidMm nothing to submit,
+  so the fence path H9's third outcome worried about was not exercised. No hang.
+- **H2 holds for the render side and fails for the display side.** The device starts without a problem code and stays
+  up (first time for the full table). But H3 is refuted: the screen goes black and stays black, `CommitVidPn` is never
+  reached, win32k lists no display adapter. H4 holds: no TDR, no bugcheck, no live kernel report. H5 not reached.
+- **H10 is refuted**: `InstalledDisplayDrivers` in the software key changes nothing (run 005c, same log tail).
+- The machine stayed reachable over SSH throughout and the owner asked to go forward rather than back, so the adapter
+  was left in the full table while 0.7.6 (tracing wrappers on the child and VidPN DDIs) was prepared.

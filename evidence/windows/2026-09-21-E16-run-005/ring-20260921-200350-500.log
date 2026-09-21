@@ -1,0 +1,377 @@
+bc250kmd 0x00070005 log kept at the stop: 376 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.003 stage 10
+     1      0.003 gate: EnableFullWddm 1
+     2      0.003 stage 20
+     3      0.138 stage 30
+     4      0.140 stage 31
+     5      0.140 stage 32
+     6      0.140 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.142 stage 33
+     8      0.142 stage 34
+     9      0.142 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.142 mmio: BAR5 at 0xFE800000 mapped, writes off
+    11      0.142 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes off
+    12      0.142 wddm: full table started, VRAM identified
+    13      0.142 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+    14      0.144 stage 35
+    15      0.144 stage 39
+    16      0.144 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    17      0.144 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+    18      0.144 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+    19      0.144 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+    20      0.144 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+    21      0.144 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    22      0.144 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    23      0.144 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    24      0.144 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    25      0.144 wddm: GetNodeMetadata node 0 adapter 0
+    26      0.146 wddm: QUERYSEGMENT4 pass 1: 1 segment(s)
+    27      0.146 wddm: QUERYSEGMENT4 pass 2: 1 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+    28      0.146 wddm: segment 1 flags 0x00080404 gpu 0xF4008CA000 cpu 0x2708CA000 size 0x1FD736000
+    29      0.146 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+    30      0.146 wddm: CreateProcess flags 0x00000001 pasids 1
+    31      0.146 wddm: CreateDevice flags 0x00000001 pasid 0
+    32      0.146 wddm: CreateDevice flags 0x00000001 pasid 0
+    33      0.146 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    34      0.146 wddm: CreateContext answered dma 4096 bytes segment set 0x0, lists 0/0, caps 0x00000001
+    35      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    36      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    37      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    38      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    39      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    40      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    41      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    42      0.148 wddm: BuildPagingBuffer operation 11, 65536 bytes free, pass offset 0
+    43      0.164 wddm: SetRootPageTable segment 1 offset 0x0, 512 entries
+    44      0.828 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    45      1.801 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    46      2.802 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    47      3.809 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    48      4.804 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    49      5.807 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    50      6.804 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    51      7.809 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    52      8.808 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    53      9.813 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    54     10.810 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    55     11.809 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    56     12.798 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    57     13.805 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    58     14.795 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    59     15.806 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    60     16.809 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    61     17.806 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    62     18.807 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    63     19.800 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    64     20.805 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    65     21.800 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    66     22.806 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    67     23.797 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    68     24.796 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    69     25.801 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    70     26.798 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    71     27.805 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    72     28.804 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    73     29.804 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    74     30.799 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    75     31.810 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    76     32.815 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    77     33.802 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    78     34.803 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    79     35.808 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    80     36.799 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    81     37.808 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    82     38.795 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    83     39.804 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    84     40.797 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    85     41.796 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    86     42.801 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    87     43.797 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    88     44.810 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    89     45.817 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    90     46.816 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    91     47.815 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    92     48.816 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    93     49.817 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    94     50.816 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    95     51.818 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    96     52.825 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    97     53.824 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    98     54.818 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+    99     55.823 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   100     56.823 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   101     57.828 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   102     58.831 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   103     59.814 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   104     60.819 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   105     61.819 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   106     62.822 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   107     63.824 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   108     64.819 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   109     65.823 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   110     66.826 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   111     67.829 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   112     68.831 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   113     69.821 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   114     70.824 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   115     71.819 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   116     72.822 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   117     73.819 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   118     74.820 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   119     75.823 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   120     76.818 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   121     77.821 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   122     78.818 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   123     79.821 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   124     80.826 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   125     81.829 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   126     82.832 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   127     83.828 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   128     84.847 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   129     85.828 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   130     86.833 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   131     87.838 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   132     88.845 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   133     89.848 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   134     90.853 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   135     91.856 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   136     92.850 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   137     93.855 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   138     94.850 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   139     95.853 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   140     96.850 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   141     97.849 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   142     98.847 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   143     99.848 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   144    100.845 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   145    101.848 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   146    102.851 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   147    103.848 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   148    104.851 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   149    105.852 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   150    106.859 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   151    107.847 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   152    108.846 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   153    109.857 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   154    110.858 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   155    111.869 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   156    112.862 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   157    113.869 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   158    114.859 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   159    115.872 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   160    116.873 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   161    117.884 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   162    118.883 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   163    119.876 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   164    120.875 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   165    121.874 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   166    122.883 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   167    123.881 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   168    124.882 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   169    125.879 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   170    126.880 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   171    127.881 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   172    128.882 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   173    129.875 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   174    130.873 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   175    131.880 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   176    132.887 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   177    133.886 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   178    134.879 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   179    135.878 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   180    136.877 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   181    137.877 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   182    138.886 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   183    139.877 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   184    140.888 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   185    141.879 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   186    142.880 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   187    143.879 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   188    144.893 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   189    145.886 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   190    146.881 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   191    147.880 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   192    148.889 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   193    149.878 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   194    150.889 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   195    151.896 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   196    152.896 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   197    153.893 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   198    154.892 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   199    155.379 wddm summary: ---- DDI calls: name, count, first log line ----
+   200    155.379 wddm summary: QueryAdapterInfo                  167  first at 17
+   201    155.379 wddm summary: GetNodeMetadata                     1  first at 25
+   202    155.379 wddm summary: CreateDevice                        2  first at 31
+   203    155.379 wddm summary: CreateContext                       1  first at 33
+   204    155.379 wddm summary: CreateProcess                       1  first at 30
+   205    155.379 wddm summary: SetRootPageTable                    1  first at 43
+   206    155.379 wddm summary: BuildPagingBuffer                1028  first at 35
+   207    155.379 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   208    155.379 wddm summary: adapter info type   1       1  first at 17
+   209    155.379 wddm summary: adapter info type  15       1  first at 18
+   210    155.379 wddm summary: adapter info type  47       1  first at 19
+   211    155.379 wddm summary: adapter info type  13       1  first at 20
+   212    155.379 wddm summary: adapter info type  14       4  first at 21
+   213    155.379 wddm summary: adapter info type  11       2  first at 27
+   214    155.379 wddm summary: adapter info type  10       1  first at 29
+   215    155.379 wddm summary: adapter info type  16       1  first at 29
+   216    155.379 wddm summary: adapter info type  25     155  first at 44
+   217    155.379 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   218    155.379 wddm summary: paging operation  11    1028  first at 35
+   219    155.379 wddm summary: objects created/destroyed: dev 2/0 ctx 1/0 proc 1/0 alloc 0/0, 4 alive
+   220    155.379 wddm summary: submissions 0 physical + 0 virtual, 0 preemptions, last completed fence 0
+   221    155.379 wddm summary: presents 0, flips 0 of 0 address calls (0 arrived above DISPATCH_LEVEL)
+   222    155.379 wddm summary: vsync not enabled by ControlInterrupt, 0 ticks, 0 reported to dxgkrnl
+   223    155.379 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   224    155.379 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   225    155.891 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   226    156.888 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   227    157.903 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   228    158.898 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   229    159.900 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   230    160.897 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   231    161.896 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   232    162.899 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   233    163.898 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   234    164.902 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   235    165.900 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   236    166.906 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   237    167.907 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   238    168.910 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   239    169.911 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   240    170.910 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   241    171.913 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   242    172.918 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   243    173.915 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   244    174.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   245    175.915 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   246    176.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   247    177.915 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   248    178.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   249    179.913 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   250    180.916 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   251    181.920 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   252    182.922 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   253    183.925 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   254    184.906 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   255    185.911 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   256    186.914 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   257    187.911 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   258    188.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   259    189.917 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   260    190.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   261    191.917 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   262    192.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   263    193.915 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   264    194.912 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   265    195.910 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   266    196.907 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   267    197.910 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   268    198.919 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   269    199.924 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   270    200.921 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   271    201.916 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   272    202.907 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   273    203.905 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   274    204.906 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   275    205.915 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   276    206.638 wddm summary: ---- DDI calls: name, count, first log line ----
+   277    206.638 wddm summary: QueryAdapterInfo                  218  first at 17
+   278    206.638 wddm summary: GetNodeMetadata                     1  first at 25
+   279    206.638 wddm summary: CreateDevice                        2  first at 31
+   280    206.638 wddm summary: CreateContext                       1  first at 33
+   281    206.638 wddm summary: CreateProcess                       1  first at 30
+   282    206.638 wddm summary: SetRootPageTable                    1  first at 43
+   283    206.638 wddm summary: BuildPagingBuffer                1028  first at 35
+   284    206.638 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   285    206.638 wddm summary: adapter info type   1       1  first at 17
+   286    206.638 wddm summary: adapter info type  15       1  first at 18
+   287    206.638 wddm summary: adapter info type  47       1  first at 19
+   288    206.638 wddm summary: adapter info type  13       1  first at 20
+   289    206.638 wddm summary: adapter info type  14       4  first at 21
+   290    206.638 wddm summary: adapter info type  11       2  first at 27
+   291    206.638 wddm summary: adapter info type  10       1  first at 29
+   292    206.638 wddm summary: adapter info type  16       1  first at 29
+   293    206.638 wddm summary: adapter info type  25     206  first at 44
+   294    206.638 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   295    206.638 wddm summary: paging operation  11    1028  first at 35
+   296    206.638 wddm summary: objects created/destroyed: dev 2/0 ctx 1/0 proc 1/0 alloc 0/0, 4 alive
+   297    206.638 wddm summary: submissions 0 physical + 0 virtual, 0 preemptions, last completed fence 0
+   298    206.638 wddm summary: presents 0, flips 0 of 0 address calls (0 arrived above DISPATCH_LEVEL)
+   299    206.638 wddm summary: vsync not enabled by ControlInterrupt, 0 ticks, 0 reported to dxgkrnl
+   300    206.638 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   301    206.638 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   302    206.906 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   303    207.913 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   304    208.916 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   305    209.913 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   306    210.911 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   307    211.906 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   308    212.921 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   309    213.928 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   310    214.932 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   311    215.929 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   312    216.929 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   313    217.932 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   314    218.927 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   315    219.924 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   316    220.931 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   317    221.934 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   318    222.929 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   319    223.932 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   320    224.937 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   321    225.937 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   322    226.940 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   323    227.925 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   324    228.921 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   325    229.929 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   326    230.926 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   327    231.927 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   328    232.932 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   329    233.933 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   330    234.924 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   331    235.935 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   332    236.924 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   333    237.920 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   334    238.919 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   335    239.930 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   336    240.929 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   337    241.930 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   338    242.929 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   339    243.934 wddm: QueryAdapterInfo type 25 in 4 out 53 -> 0xC00000BB
+   340    438.466 wddm: DestroyContext
+   341    438.466 wddm: DestroyDevice
+   342    438.466 wddm: DestroyDevice
+   343    438.466 wddm: DestroyProcess
+   344    438.470 stage 70
+   345    438.470 wddm summary: ---- DDI calls: name, count, first log line ----
+   346    438.470 wddm summary: QueryAdapterInfo                  450  first at 17
+   347    438.470 wddm summary: GetNodeMetadata                     1  first at 25
+   348    438.470 wddm summary: CreateDevice                        2  first at 31
+   349    438.470 wddm summary: DestroyDevice                       2  first at 341
+   350    438.470 wddm summary: CreateContext                       1  first at 33
+   351    438.470 wddm summary: DestroyContext                      1  first at 340
+   352    438.470 wddm summary: CreateProcess                       1  first at 30
+   353    438.470 wddm summary: DestroyProcess                      1  first at 343
+   354    438.470 wddm summary: SetRootPageTable                    1  first at 43
+   355    438.470 wddm summary: BuildPagingBuffer                1028  first at 35
+   356    438.470 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   357    438.470 wddm summary: adapter info type   1       1  first at 17
+   358    438.470 wddm summary: adapter info type  15       1  first at 18
+   359    438.470 wddm summary: adapter info type  47       1  first at 19
+   360    438.470 wddm summary: adapter info type  13       1  first at 20
+   361    438.470 wddm summary: adapter info type  14       4  first at 21
+   362    438.470 wddm summary: adapter info type  11       2  first at 27
+   363    438.470 wddm summary: adapter info type  10       1  first at 29
+   364    438.470 wddm summary: adapter info type  16       1  first at 29
+   365    438.470 wddm summary: adapter info type  25     438  first at 44
+   366    438.470 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   367    438.470 wddm summary: paging operation  11    1028  first at 35
+   368    438.470 wddm summary: objects created/destroyed: dev 2/2 ctx 1/1 proc 1/1 alloc 0/0, 0 alive
+   369    438.470 wddm summary: submissions 0 physical + 0 virtual, 0 preemptions, last completed fence 0
+   370    438.470 wddm summary: presents 0, flips 0 of 0 address calls (0 arrived above DISPATCH_LEVEL)
+   371    438.470 wddm summary: vsync not enabled by ControlInterrupt, 0 ticks, 0 reported to dxgkrnl
+   372    438.470 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   373    438.470 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   374    438.470 wddm: stop, last completed fence 0, 0 vsync ticks, 0 objects freed at the stop
+   375    438.472 stage 79
