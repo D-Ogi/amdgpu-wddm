@@ -1,0 +1,7 @@
+; The three entry points the Direct3D runtimes look up by name. Undecorated on x64 anyway, but named here so that
+; a rename in the source is a link error instead of a runtime "entry point not found" in the lab.
+LIBRARY BC250UMD
+EXPORTS
+    OpenAdapter
+    OpenAdapter10
+    OpenAdapter10_2

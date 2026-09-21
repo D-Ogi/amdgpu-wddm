@@ -19,7 +19,7 @@
 #define BC250_VRAM_TEST_LENGTH 0x1000ull
 // Reads are accepted where BAR0 can confirm them, and in the top 2 MB where amdgpu keeps its GART table on
 // this unit (E03) and where M4 will put ours. The rest stays untouched until somebody needs it.
-#define BC250_VRAM_TOP_WINDOW 0x200000ull
+#define BC250_VRAM_TOP_WINDOW BC250_VRAM_GART_BELOW     // the number itself is in the reservation table, bc250kmd.h
 
 static BOOLEAN Overlaps(ULONGLONG StartA, ULONGLONG LengthA, ULONGLONG StartB, ULONGLONG LengthB)
 {
@@ -135,8 +135,9 @@ void VramStop(_Inout_ BC250_DEVICE* Device)
     Device->VramWriteEnabled = FALSE;
 }
 
-// Where in VRAM the firmware's framebuffer is, if its address is inside one of the two views we know.
-static BOOLEAN FramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset)
+// Where in VRAM the firmware's framebuffer is, if its address is inside one of the two views we know. Not static:
+// wddm.c carves M7's memory segment clear of it, and that has to be the same answer as this file's.
+BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset)
 {
     ULONGLONG fb = (ULONGLONG)Device->Post.PhysicAddress.QuadPart;
     ULONGLONG vram = (ULONGLONG)Device->VramPhysical.QuadPart, bar = (ULONGLONG)Device->Bar0Physical.QuadPart;
@@ -170,7 +171,7 @@ static NTSTATUS Access(_In_ const BC250_DEVICE* Device, ULONG Path, ULONGLONG Of
     if (Write)
     {
         if (Offset < BC250_VRAM_TEST_OFFSET || Offset >= BC250_VRAM_TEST_OFFSET + BC250_VRAM_TEST_LENGTH) return STATUS_ACCESS_DENIED;
-        if (!FramebufferOffset(Device, &fbOffset) ||
+        if (!VramFramebufferOffset(Device, &fbOffset) ||
             Overlaps(fbOffset, Device->FramebufferLength, BC250_VRAM_TEST_OFFSET, BC250_VRAM_TEST_LENGTH)) return STATUS_ACCESS_DENIED;
     }
     else if (Offset >= Device->Bar0Length && Offset < Device->VramLength - BC250_VRAM_TOP_WINDOW)

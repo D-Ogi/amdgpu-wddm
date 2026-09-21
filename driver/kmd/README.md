@@ -14,7 +14,8 @@ the documented DDI; no code from Microsoft's MS-PL sample.
 
 | File | Contents |
 |---|---|
-| `entry.c` | `DriverEntry`, the display-only DDI table |
+| `entry.c` | `DriverEntry` and the `EnableFullWddm` gate: the display-only DDI table, or M7's full one |
+| `wddm.c` | M7 stage A: the full WDDM DDI table behind that gate, inert (see below) |
 | `pnp.c` | add/start/stop/remove, the single child (always-connected video output, no EDID), power |
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
 | `guard.c` | boot-loop guard, stage breadcrumbs in the registry, log |
@@ -42,10 +43,69 @@ the documented DDI; no code from Microsoft's MS-PL sample.
   name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
 - The service is `ErrorControl = 0`: a failed start never stops the boot.
 
+## The DDI table gate (M7 stage A, ADR 0008)
+
+`Services\bc250kmd\Parameters\EnableFullWddm`, a `REG_DWORD` that every install sets back to 0, like every other
+gate in this driver:
+
+| Value | `DriverEntry` calls | Table |
+|---|---|---|
+| 0 (default) | `DxgkInitializeDisplayOnlyDriver` | the display-only table of M3, unchanged, byte for byte the driver that runs the owner's display today |
+| 1 | `DxgkInitialize` | `wddm.c`: the same 28 pointers plus what a full graphics miniport may not leave out |
+
+The gate is read once, in `DriverEntry`, before the driver object is touched, so at 0 not a line of `wddm.c` runs.
+Both paths are counted by the same start budget, because both can cost a boot.
+
+**One binary, one interface version.** The whole driver is compiled at `DXGKDDI_INTERFACE_VERSION_WDDM2_0`
+(`bc250kmd.h` says why, with the measurement behind it): the WDK headers change the *shape* of `DXGKRNL_INTERFACE`
+and of most `DXGKARG_*` structures with that macro, and `BC250_DEVICE` embeds a `DXGKRNL_INTERFACE`, so two
+translation units at two versions would disagree about the layout of this driver's own device structure. The
+display-only table is unaffected: `KMDDOD_INITIALIZATION_DATA` and all 30 of its members are identical at both
+versions, and so are every member of `DXGK_DRIVERCAPS`, `DXGKARG_QUERYADAPTERINFO` and `DXGKARG_ESCAPE` that
+`display.c` reads or writes. `Version` inside each table is a run-time value and is unchanged in either path.
+
+### What stage A is, and is not
+
+Stage A is the smallest driver dxgkrnl will accept as a full graphics miniport. It exists to answer one question
+that no public source answers: does the adapter start, and does the desktop survive, when a started full WDDM
+adapter is the only one in the machine and nothing can render on it. So it is built to be inert:
+
+- no register, no BAR mapping, no doorbell in any of the new DDIs - the memory segment's geometry comes from what
+  `vram.c` already identified behind `EnableVram`, and the display DDIs leave the firmware's framebuffer, which
+  `display.c` owns, exactly where it is;
+- no submission: a packet is recorded when dxgkrnl hands it over and reported finished from a DPC of our own,
+  after the submit DDI has returned;
+- a **software VSync**: the driver claims `FlipOnVSyncMmIo`, and dxgkrnl retires a queued flip only when the
+  driver reports `DXGK_INTERRUPT_CRTC_VSYNC`. Stage A may not read the display core, so a periodic timer at
+  60 Hz stands in for the real one, running only while a source is visible and only reporting while
+  `DxgkDdiControlInterrupt` has the VSync switched on. `DxgkDdiGetScanLine` answers from that timer's phase.
+  Without this the second flip never leaves the queue and DWM stops - it is the difference between stage A
+  meeting its exit criterion and not;
+- no failure return from the DDIs whose failure is a bugcheck;
+- every new DDI logs its first calls, because *which* DDIs dxgkrnl calls on an adapter nobody can render on, and
+  in which order, is the evidence stage A is run for.
+
+### Running stage A
+
+Open `EnableMmio`, `EnableVram` and `EnableFullWddm`, so that the memory segment reported to VidMm is the real
+carve-out and not an empty list. With `EnableVram` closed the driver declares zero segments and says so in the
+log; that is a second data point, not the main one.
+
+Stage A is run **twice**, and the difference is the `UserModeDriverName` block in `bc250kmd.inf`, which ships
+commented out:
+
+1. **without it** - the adapter has no user-mode driver name at all, so Direct3D cannot even load one;
+2. **with it**, and `bc250umd.dll` from `driver/umd-stub` installed - the DLL loads and every `OpenAdapter` entry
+   point returns `E_NOTIMPL`. Each one writes a line through `OutputDebugString` first, so which entry point the
+   runtime asks for, and in which order, is visible to any debug-output viewer without the DLL keeping state.
+
+Those are two different failures and the runtime may not treat them alike.
+
 ## Build
 
 ```powershell
 pwsh driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd
+pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
 ```
 
 ## What M3 has to show on hardware (acceptance, mirrors E05)

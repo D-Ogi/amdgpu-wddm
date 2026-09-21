@@ -32,8 +32,8 @@
 #include "bc250_psp.h"
 
 #define BC250_PSP_TAG 'pS2B'
-#define BC250_PSP_TOP_WINDOW     0x800000ull
-#define BC250_PSP_TMR_BELOW      0x800000ull
+#define BC250_PSP_TOP_WINDOW     BC250_VRAM_PSP_BELOW       // the numbers themselves are in the reservation
+#define BC250_PSP_TMR_BELOW      BC250_VRAM_PSP_BELOW       // table, bc250kmd.h
 #define BC250_PSP_STAGING_BELOW  0x400000ull
 #define BC250_PSP_STAGING_LENGTH 0x200000ul
 #define BC250_PSP_PAGES_BELOW    0x19000ull         // ring, command buffer, fence: three pages

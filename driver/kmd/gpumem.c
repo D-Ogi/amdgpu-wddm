@@ -24,9 +24,9 @@
 #include "bc250_shim.h"
 
 #define BC250_GPUMEM_TAG 'mG2B'
-#define BC250_GPUMEM_POOL_BELOW     0x2000000ull        // the VRAM pool starts 32 MB below the end of VRAM
+#define BC250_GPUMEM_POOL_BELOW     BC250_VRAM_POOL_BELOW   // the VRAM pool starts 32 MB below the end of VRAM
 #define BC250_GPUMEM_POOL_LENGTH    0x1800000ul         // and is 24 MB long
-#define BC250_GPUMEM_TABLE_BELOW    0x200000ull         // gart.c: the GART table, 1 MB
+#define BC250_GPUMEM_TABLE_BELOW    BC250_VRAM_GART_BELOW   // gart.c: the GART table, 1 MB
 #define BC250_GPUMEM_TABLE_LENGTH   0x100000ul
 #define BC250_GPUMEM_GTT_FIRST      0x400000ull         // first GART offset handed out: offset 0 stays unmapped
 #define BC250_GPUMEM_GTT_LIMIT      0x4000000ull        // 64 MB of GART address space and of system memory

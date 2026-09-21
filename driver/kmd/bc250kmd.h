@@ -2,19 +2,64 @@
 // Milestone M3 (ADR 0006): display-only, keeps the firmware's framebuffer. MMIO is a separate, gated part
 // (ADR 0007, mmio.c) that the display path never uses.
 //
-// Layout: entry.c (DriverEntry, DDI table), pnp.c (device life cycle, children, power),
+// Layout: entry.c (DriverEntry, the gate and the two DDI tables), pnp.c (device life cycle, children, power),
 // display.c (VidPN, present, pointer, system display), guard.c (boot-loop guard, breadcrumbs, log),
 // mmio.c (gated register access for the bring-up experiments), vram.c (the VRAM carve-out),
-// sequence.c (kernel backend of driver/shim), gart.c (M4), psp.c (M5: firmware through the PSP).
+// sequence.c (kernel backend of driver/shim), gart.c (M4), psp.c (M5: firmware through the PSP),
+// wddm.c (M7 stage A: the full WDDM table behind the EnableFullWddm gate, ADR 0008).
 #pragma once
+
+// M7, ADR 0008 point 2: the whole binary is compiled at the WDDM 2.0 DDI interface version, which is the version
+// the full table is declared with. The display-only table keeps telling dxgkrnl DXGKDDI_INTERFACE_VERSION_WIN8,
+// exactly as it does today; that value is a run-time field, not this macro.
+//
+// One version for one binary, not one per translation unit: this macro changes the shape of DXGKRNL_INTERFACE and
+// of most DXGKARG_* structures, and BC250_DEVICE carries a DXGKRNL_INTERFACE, so two translation units compiled at
+// two versions would disagree about the layout of our own device structure.
+//
+// That this costs the display-only path nothing was measured, not assumed (P:\BC-250\scratch\m7-stagea\probe.c,
+// which emits every size and member offset the display path touches and compares the compilations): of 99 values,
+// 94 are identical between the header's default (WDDM 3.2) and 2.0. The five that differ are the total sizes of
+// DXGKRNL_INTERFACE, DXGK_DRIVERCAPS, DXGKARG_QUERYADAPTERINFO, DXGKARG_ESCAPE and D3DKMDT_VIDPN_TARGET_MODE; in
+// each of them every member this driver reads or writes keeps its offset, and every member that disappears was
+// added at WDDM 2.2 or later, which dxgkrnl never hands to a driver declaring WIN8.
+//
+// KMDDOD_INITIALIZATION_DATA is **not** version-independent, and it matters that the reason it is safe is written
+// down rather than the size being quoted. Its one guard is at >= WDDM2_0 (dispmprt.h:3118-3120, which appends
+// DxgkDdiPowerRuntimeSetDeviceHandle: measured 0x148 bytes below that version and 0x150 at it and above), so the
+// move from 3.2 to 2.0 happens to leave it alone - both sides are >= 2.0. The argument that survives the next
+// version bump is a different one: the member is **appended**, the buffer is ours and zeroed before use, and
+// dxgkrnl dispatches on the run-time data.Version field, which this driver still sets to WIN8; it therefore reads
+// only the prefix that WIN8 defines and never the tail. A member inserted in the middle would break that, which
+// is why probe.ps1 now reports this structure's size at three versions and not only at two.
+//
+// The same probe names the other six that move with the version, and each has its own argument. Two are buffers
+// **dxgkrnl** owns and sizes for the version the driver declared, so the rule there is the opposite one - write
+// only inside the WIN8 prefix and never assign the whole structure: DXGK_CHILD_STATUS (0x0C at WIN8, 0x10 from
+// WDDM 1.3 on; see pnp.c's Bc250QueryChildStatus) and DXGKRNL_INTERFACE (0x100 at WIN8, 0x138 at 2.0), which
+// pnp.c already copies with min(DxgkInterface->Size, sizeof(device->Dxgk)) for exactly this reason.
+// The literal is what the preprocessor needs here; the assert below binds it to the header's own constant.
+#define DXGKDDI_INTERFACE_VERSION 0x5023
 
 #include <ntifs.h>        // superset of ntddk.h; the token checks of the escape need it
 #include <windef.h>
 #include <dispmprt.h>
 
+C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
+
 #define BC250_TAG 'dK52'
 #define BC250_CHILD_UID 0x250001        // the one DisplayPort output, as far as this driver is concerned
 #define BC250_MAX_UNCONFIRMED_STARTS 2  // guard.c: refuse to start after this many starts nobody confirmed
+
+// ---- VRAM reservations ---------------------------------------------------------------------------------------
+// The one table of what the top of the VRAM carve-out (facts M31) is already used for. Every bring-up file places
+// its buffers this far below the end of VRAM and takes the distance from here, so that the numbers exist once:
+// M7's memory segment (wddm.c) is the part of VRAM that is left over, between the firmware's framebuffer at the
+// bottom and BC250_VRAM_TOP_RESERVED at the top.
+#define BC250_VRAM_GART_BELOW   0x200000ull     // gart.c: page table (1 MB) and scratch page, MC 0xF5FFE00000 (M33)
+#define BC250_VRAM_PSP_BELOW    0x800000ull     // psp.c: TMR (4 MB, MC 0xF5FF800000, M34), staging, the ring pages
+#define BC250_VRAM_POOL_BELOW  0x2000000ull     // gpumem.c: the 24 MB pool for rings, MQDs and write-back slots
+#define BC250_VRAM_TOP_RESERVED BC250_VRAM_POOL_BELOW       // the whole reserved tail: the largest of the three
 
 // Breadcrumbs: the last value written survives a hang and a power cycle (guard.c). Append only: tools that
 // read them from the registry rely on the numbers. The list is mirrored in KmdStages.All
@@ -80,6 +125,8 @@ typedef struct _BC250_DEVICE {
     PVOID GpuMem;                       // gpumem.c, NULL unless the EnableGfx gate was open at start
     PVOID Gfx;                          // gfx.c, the same
     PVOID Ih;                           // ih.c, NULL unless the EnableIh gate was open at start
+    BOOLEAN FullWddm;                   // DriverEntry found EnableFullWddm open and gave dxgkrnl the full table
+    PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN IhQuiet;                    // ih.c's stop: the IH ring reads disabled (or never was enabled); for gpumem.c's stop
     volatile LONG InterruptCount;       // every call of the interrupt routine since start, ours or not
@@ -155,6 +202,9 @@ struct _BC250_ESCAPE_MEMORY;
 NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device);
 void VramStop(_Inout_ BC250_DEVICE* Device);
 void VramEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_MEMORY* Data);
+// Where in VRAM the firmware's framebuffer is, if its address is inside one of the two views we know. Needs the
+// VRAM carve-out to have been identified (EnableVram); wddm.c carves its segment clear of the answer.
+BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset);
 
 // gart.c
 struct _BC250_ESCAPE_GART;
@@ -227,3 +277,11 @@ DXGKDDI_SYSTEM_DISPLAY_WRITE Bc250SystemDisplayWrite;
 
 NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);
+
+// wddm.c (M7 stage A, ADR 0008). Everything here is inert while the EnableFullWddm gate is closed.
+BOOLEAN WddmGateOpen(void);                     // EnableFullWddm, read once in DriverEntry
+void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
+void WddmStart(_Inout_ BC250_DEVICE* Device);       // never fails the start, like every other bring-up file
+void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
+void WddmStop(_Inout_ BC250_DEVICE* Device);
+void WddmDpc(_Inout_ BC250_DEVICE* Device);

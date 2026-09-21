@@ -426,6 +426,9 @@ NTSTATUS Bc250SetVidPnSourceVisibility(_In_ const HANDLE hAdapter, _In_ const DX
     if (!Visibility->Visible && device->SourceVisible && device->Framebuffer != NULL)
         RtlZeroMemory(device->Framebuffer, device->FramebufferLength);      // blank: there is no plane to disable in M3
     device->SourceVisible = Visibility->Visible;
+    // M7 stage A: a visible source is the earliest point at which dxgkrnl can queue a flip, and a flip is only
+    // retired by a VSync report. Does nothing at all while the EnableFullWddm gate is closed.
+    WddmSourceVisibility(device, Visibility->Visible);
     return STATUS_SUCCESS;
 }
 

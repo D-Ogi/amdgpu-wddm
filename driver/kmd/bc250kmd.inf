@@ -28,9 +28,45 @@ bc250kmd.sys = 1
 [Bc250_Install]
 FeatureScore = F8
 CopyFiles    = Bc250_Files
+;CopyFiles   = Bc250_Files, Bc250_UmdFiles      ; M7 stage A second run, see below
+;AddReg      = Bc250_UserModeDriver             ; M7 stage A second run, see below
 
 [Bc250_Files]
 bc250kmd.sys
+
+; ---------------------------------------------------------------------------------------------------------------
+; M7 stage A, second run only. Commented out on purpose.
+;
+; Stage A is run twice, and the difference between the two runs is exactly this block (driver\kmd\README.md):
+;
+;   first run   these lines commented out. The adapter has no UserModeDriverName at all, so Direct3D cannot even
+;               load a user-mode driver for it. This is the cheaper failure and is measured first.
+;   second run  these lines uncommented and bc250umd.dll (driver\umd-stub) in the package. The DLL loads and
+;               every OpenAdapter entry point returns E_NOTIMPL. A runtime that gets that far has done more work
+;               than one that found no driver name, and DWM may well treat the two differently.
+;
+; The three entries of the REG_MULTI_SZ are D3D9, D3D10 and D3D11 in that order; the same stub answers all three.
+; 0x00010000 is REG_MULTI_SZ. Research section 2.1 quotes a Learn page that calls this value a REG_SZ; that page
+; is the OpenGL ICD one and predates WDDM. Every shipping WDDM display INF writes a REG_MULTI_SZ here, so that is
+; what is prepared - but if the second run shows the DLL is never loaded, a single REG_SZ (0x00000000) naming the
+; same file is the first thing to try before concluding anything about the runtime.
+; UserModeDriverNameWow is the 32-bit list and is needed as soon as anything 32-bit renders, DWM included on some
+; builds, so it is prepared here too. Note that these go to dirid 11 (System32) and 10 (SysWOW64) and not to the
+; driver store: the runtime loads them by bare name.
+;
+;[SourceDisksFiles]
+;bc250umd.dll = 1
+;
+;[DestinationDirs]
+;Bc250_UmdFiles = 11
+;
+;[Bc250_UmdFiles]
+;bc250umd.dll
+;
+;[Bc250_UserModeDriver]
+;HKR,, UserModeDriverName,    0x00010000, bc250umd.dll, bc250umd.dll, bc250umd.dll
+;HKR,, UserModeDriverNameWow, 0x00010000, bc250umd.dll, bc250umd.dll, bc250umd.dll
+; ---------------------------------------------------------------------------------------------------------------
 
 ; Message-signalled interrupts (milestone M6). The function has MSI (1 of 4 messages) and MSI-X (3) capabilities
 ; (evidence/linux/2026-09-21-E01-recon/lspci-gpu-vvv.txt); amdgpu used them on this unit. Without this section
@@ -68,6 +104,9 @@ HKR, Parameters, EnableGart,        0x00010001, 0
 HKR, Parameters, EnablePsp,         0x00010001, 0
 HKR, Parameters, EnableGfx,         0x00010001, 0
 HKR, Parameters, EnableIh,          0x00010001, 0
+; The DDI table gate (entry.c, ADR 0008). 0 = DxgkInitializeDisplayOnlyDriver, the driver that runs the display
+; today. 1 = DxgkInitialize with the full WDDM table of wddm.c. Closed by every install, like every gate above.
+HKR, Parameters, EnableFullWddm,    0x00010001, 0
 
 [Strings]
 Provider   = "BC-250 lab (D-Ogi)"

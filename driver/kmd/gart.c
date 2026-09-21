@@ -22,7 +22,7 @@
 #define BC250_GART_TAG 'gC2B'
 // Where amdgpu put its GART table on this unit (E03: MC 0xF5FFE00000, the top 2 MB of VRAM), and E08 read it.
 // First MB: the table (512 MB of GART, 8 bytes per 4 KB page). Second MB, first page: the scratch page.
-#define BC250_GART_WINDOW 0x200000ull
+#define BC250_GART_WINDOW BC250_VRAM_GART_BELOW     // the number itself is in the reservation table, bc250kmd.h
 #define BC250_GART_SCRATCH_OFFSET 0x100000ull
 #define BC250_GART_INVALIDATE_ENGINES 18
 

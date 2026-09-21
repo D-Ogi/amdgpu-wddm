@@ -80,6 +80,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
     IhStart(device);        // same rule
+    WddmStart(device);      // same rule: does nothing at all unless EnableFullWddm opened the gate in DriverEntry
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
@@ -104,6 +105,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
     device->CommitSeen = FALSE;
     device->PresentSeen = FALSE;
+    WddmStop(device);       // first: it logs what dxgkrnl called, and nothing below it is allowed to have run
     IhStop(device);         // no interrupt of ours from here on
     GfxStop(device);        // then, in amdgpu's order: engines halted, then their memory (gpumem.c) given back or kept
     PspStop(device);        // then, in amdgpu's order: the PSP forgets our ring and TMR while the GART state still stands
@@ -181,6 +183,7 @@ BOOLEAN Bc250InterruptRoutine(_In_ const PVOID MiniportDeviceContext, _In_ ULONG
 void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
 {
     IhDpc((BC250_DEVICE*)MiniportDeviceContext);
+    WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
 }
 
 NTSTATUS Bc250QueryChildRelations(_In_ const PVOID MiniportDeviceContext,
@@ -207,6 +210,11 @@ NTSTATUS Bc250QueryChildStatus(_In_ const PVOID MiniportDeviceContext, _Inout_ P
     UNREFERENCED_PARAMETER(MiniportDeviceContext);
     UNREFERENCED_PARAMETER(NonDestructiveOnly);
 
+    // This buffer belongs to dxgkrnl and is sized for the version this driver declares, WIN8. DXGK_CHILD_STATUS
+    // grows from 12 to 16 bytes at WDDM 1.3 and later, where the union gains its Miracast arm
+    // (dispmprt.h:338-343), and this driver's compiled view of the structure is the larger one. So: write only
+    // inside the first 12 bytes, which is what the two arms below do, and never zero, copy or assign the whole
+    // structure - that would write past the end of what dxgkrnl allocated.
     if (ChildStatus->ChildUid != BC250_CHILD_UID) return STATUS_INVALID_PARAMETER;
     switch (ChildStatus->Type)
     {
