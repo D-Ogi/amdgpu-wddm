@@ -12,6 +12,7 @@ The previous driver attempt did not fail because of the hardware. It failed beca
 6. **`evidence/` is immutable.** Dumps are never edited. A new measurement is a new file.
 7. **Import AMD code, do not retype it.** Init sequences come from `amdgpu` (MIT) through `driver/shim`. Every deviation from Linux gets a comment stating the reason.
 8. **`P:\BC-250\ref\keshas-driver\AGENTS.md` and its `docs/` are not sources of facts.** Take experiment ideas and verified code (SMU mailbox, PSP ring) from there, never addresses or conclusions.
+9. **Missed Linux measurements go to `docs/linux-session-wishlist.md` at once.** Unit A runs Windows now; every boot of the diagnostic stick costs the owner a trip to the machine. Whenever you notice something that would have been easy to capture under Linux, add a row (what, why, date) instead of keeping it in your head or in the journal. Before any Linux session, plan it from that file; after it, move the finished rows to "Done" with their evidence directory.
 
 ## Hardware safety
 
