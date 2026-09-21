@@ -39,8 +39,8 @@ LIVE_MODE_WARNING = """refusing to start a live KDNET server.
 
 On 2026-09-21 this exact launch (kd -server npipe -k net, hidden console, stdin from NUL) made the development
 PC lose about 0.87 GB of nonpaged kernel memory per second from the first second, before the target had even
-connected: the PC hung after ~110 s the first time, and a supervised repeat leaked 57 GB in 70 s that only a
-reboot gives back (journal 2026-09-21). Which of the launch details triggers it is not known. A plain
+connected: the PC hung after ~110 s the first time, and a supervised repeat took 57 GB in 70 s, which came
+back only about 70 s after the killed process had finally gone (journal 2026-09-21). Which of the launch details triggers it is not known. A plain
 `kd -k net:...` with a console and a live stdin had run for 35 minutes before without a leak.
 
 Dump files (`start --dump FILE`) are not affected. To work on the cause, watch the host's nonpaged pool every
