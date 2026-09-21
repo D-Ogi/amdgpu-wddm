@@ -107,8 +107,12 @@ void backend_clear_aliases(void);
  *
  * For a model that cannot be expressed as a register changing, which is what the MEC's own fetch
  * state is: an engine remembering a queue's base and read pointer across a halt. backend_mem.c
- * installs the hook from backend_add_mec_fetch_state() and takes it off again on reset, so this file
- * neither knows nor needs that file - replay.c links it without backend_mem.c at all.
+ * installs the hook and takes it off again on reset, so this file neither knows nor needs that file
+ * - replay.c links it without backend_mem.c at all.
+ *
+ * One slot, not a list, and there is more than one such model now. Both live in backend_mem.c and
+ * that file chains them behind a single hook of its own, so the order in which they are asked is
+ * decided in one place by the code that knows what each of them claims.
  *
  * NULL is the default and means nobody is listening.
  */
@@ -119,12 +123,14 @@ void backend_set_write_hook(backend_write_hook hook);
  * The same, for reads. The hook is asked before the register file and answers by returning 1 and
  * filling in *value; returning 0 leaves the read exactly as it would have been.
  *
- * It exists for one thing this file structurally cannot hold: a register whose value depends on
- * which queue GRBM_GFX_CNTL has selected. There is one value per offset here, so the eight compute
+ * It exists for things this file structurally cannot hold. One is a register whose value depends on
+ * which queue GRBM_GFX_CNTL has selected: there is one value per offset here, so the eight compute
  * queues' CP_HQD_PQ_RPTR would be one register, and a test could not tell "the teardown zeroed all
  * of them" from "the teardown zeroed one of them". backend_mem.c's MEC model already follows the
- * selection, so it answers instead - and only for the queues it has actually seen a ring test run
- * on, so a cold boot reads the seeded sweep value exactly as before.
+ * selection, so it answers instead. The other is a register the hardware does not let the driver
+ * write: an SDMA engine's own write pointer, which goes on reading what the engine holds however
+ * often the bring-up writes 0 into it. Both answer only once the engine in question has actually
+ * run, so a cold boot reads the seeded sweep value exactly as before.
  */
 typedef int (*backend_read_hook)(u32 byte_offset, u32 *value);
 void backend_set_read_hook(backend_read_hook hook);

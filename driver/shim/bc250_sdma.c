@@ -237,11 +237,68 @@ static void bc250_sdma_ctx_switch_enable(struct amdgpu_device *adev, bool enable
 }
 
 /* ---------------------------------------------------------------------------------------------
- * sdma_v5_0.c:688 sdma_v5_0_gfx_resume_instance(), restore = false
+ * sdma_v5_0.c:688 sdma_v5_0_gfx_resume_instance()
  *
- * The restore arm reprograms the pointers from a saved wptr after an engine reset; bring-up is the
- * fresh case, so the branch is not carried. The SR-IOV guards are all on the bare-metal side, which
- * is this one (amdgpu_sriov_vf() is false on this device, see amdgpu.h).
+ * Upstream carries a `restore` flag. The fresh case writes 0 into both pointers
+ * (sdma_v5_0.c:722-725) and leaves ring->wptr at 0 (:754-755); the restart case, which exists for
+ * engine reset, programs RPTR and WPTR from the ring's saved write pointer instead (:717-720) and
+ * keeps ring->wptr. A bring-up is the fresh case, so only that arm used to be carried here.
+ *
+ * Experiment E15 on unit A (2026-09-21, bc250kmd 0.6.2.0) says that is not enough on this part. A
+ * second GFX bring-up inside one device start - bring-up, `gfx fini` undo, bring-up again, no GPU
+ * reset in between and no PSP firmware reload - leaves both SDMA engines executing nothing, and the
+ * register sweeps taken through the read-only witness driver say why:
+ *
+ *   - the first bring-up ran four submissions on SDMA0 and three on SDMA1, and left
+ *     SDMA0_GFX_RB_RPTR, SDMA0_GFX_RB_WPTR and SDMA0_RB_RPTR_FETCH all reading 0x100 bytes, and
+ *     SDMA1's three 0xC0;
+ *   - the undo does not move them. It writes SDMAx_CNTL (context switching off), RB_CNTL with
+ *     RB_ENABLE clear, IB_CNTL with IB_ENABLE clear and F32_CNTL with HALT set, which is amdgpu's
+ *     own unload (fact M54), and afterwards the pointer registers still read 0x100 and 0xC0;
+ *   - the writes of 0 below, and the later write of 0 under MINOR_PTR_UPDATE = 1, do not take. A
+ *     sweep taken right after the second bring-up and before any submission reads 0x100 and 0xC0
+ *     again, on both engines, over two bring-ups. SDMA0_GFX_RB_BASE, written in the same sequence,
+ *     does take the new ring address.
+ *
+ * The engine's 64-bit write pointer is monotonic: a doorbell carrying a value at or below the
+ * pointer the engine holds says nothing new and is ignored. That is what upstream's own comment
+ * "before programing wptr to a less value, need set minor_ptr_update first" is about, and here even
+ * that path did not lower it. So the ring test's doorbell of 0x40 - sixteen dwords - was ignored,
+ * nothing executed, and the scratch slot kept 0xCAFEDEAD until the poll ran out.
+ *
+ * Two things make this the engine's own state and not a register that failed to write:
+ * bc250_sdma_enable(adev, true) un-halts the engines before the ring is programmed, which is
+ * upstream's order, and the SDMA firmware is not reloaded, so each engine resumes holding what it
+ * had. Which is also the way out: an engine that remembers its write pointer is an engine we can
+ * ask where it stands.
+ *
+ * The deviation, and it is the only one. The fresh-case writes of 0 stay exactly as they are,
+ * because the first bring-up's write sequence is what the host replay compares with the Linux
+ * trace. After them the write pointer is read back, and if it is non-zero the engine kept its
+ * pointers: this then takes upstream's `restore` arm with the hardware's own value standing in for
+ * the saved ring->wptr, because this driver frees its ring state together with the ring buffer and
+ * has no saved write pointer to restore from. The engine is the only thing that still knows.
+ *
+ * The write pointer and not the read pointer. They are equal in everything E15 measured, but if the
+ * two ever differ the engine walks the ring from its read pointer up to its write pointer, and
+ * those dwords are NOPs: bc250_sdma_setup() runs amdgpu_ring_clear_ring() over every freshly
+ * allocated ring buffer and BC250_SDMA_NOP is what it fills with. Adopting the read pointer instead
+ * would leave the engine's own write pointer above ours and the next doorbell would be ignored
+ * exactly as it is now.
+ *
+ * One loose end, named here because it is a gap in the evidence and not in the code. The undo
+ * leaves SDMAx_GFX_RB_WPTR_POLL_CNTL and the two WPTR_POLL_ADDR halves exactly as the bring-up set
+ * them, which is what upstream's hw_fini does too - it touches CNTL, RB_CNTL, IB_CNTL and F32_CNTL
+ * and nothing else. So between bc250_sdma_enable(adev, true) and the rewrite of POLL_ADDR a few
+ * writes below, F32_POLL_ENABLE is still set and the poll address still names the PREVIOUS
+ * instance's write-back page, which the miniport has by then given back. Whether an engine with
+ * RB_ENABLE clear reads that address at all is not known; E15 saw no fault vector across three
+ * bring-ups, which is evidence of absence only as far as three bring-ups go. Closing the window
+ * would mean writing POLL_ADDR before the un-halt, which is a second deviation from upstream's
+ * order and has nothing measured behind it, so it is written down rather than done.
+ *
+ * The SR-IOV guards are all on the bare-metal side, which is this one (amdgpu_sriov_vf() is false on
+ * this device, see amdgpu.h).
  *
  * The write pointer of an SDMA ring counts bytes, not dwords, which is where the `<< 2` comes from;
  * bc250_ring.c keeps the dword convention of the CP rings and says so.
@@ -256,6 +313,8 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i)
 	u32 temp;
 	u32 wptr_poll_cntl;
 	u64 wptr_gpu_addr;
+	u64 hw_wptr;
+	u64 adopted = 0;                        /* the engine's own write pointer, in bytes, or 0 */
 
 	ring = &adev->sdma.instance[i].ring;
 
@@ -272,6 +331,66 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i)
 	WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR_HI), 0);
 	WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR), 0);
 	WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR_HI), 0);
+
+	/* [shim] Did they take? On a second bring-up in one device start they do not, and the engine
+	 * goes on holding the write pointer it reached; see the block comment for what E15 measured.
+	 * Two reads here, and the read pointer only in the branch that reports it, so a bring-up that
+	 * adopts nothing gains two reads and not a single write.
+	 *
+	 * These two reads must stay BELOW the writes of 0, and that is load-bearing rather than
+	 * tidy. The miniport can run this sequence as a PLAN, which executes no write and answers a
+	 * read from its own recorded write list (driver/kmd/gfx.c GfxPlanAnswers, :504-518). Here
+	 * that list already holds the 0 this function just planned, so a PLAN reads 0, takes the
+	 * fresh arm, and its write list comes out exactly as it did before this change. Moved above
+	 * the writes, the same read would fall through to real hardware and a PLAN would start
+	 * predicting an adoption it cannot carry out. The corollary is that a PLAN can never exercise
+	 * the adoption arm at all - the only thing that does is the host replay's
+	 * check_sdma_pointers() (driver/shim/test/replay_gfx.c). */
+	hw_wptr = (u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR)) |
+		  ((u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+								 mmSDMA0_GFX_RB_WPTR_HI)) << 32);
+	if (hw_wptr != 0) {
+		u64 hw_rptr;
+
+		/* All-ones in either half is not a pointer: it is what a faulted register sequence
+		 * or a bus with nothing on the other end answers. Tested outright rather than left
+		 * to the alignment test below, which would reject it only because 0xFFFFFFFF happens
+		 * to be odd - the right answer for a reason that says nothing, and one that would
+		 * stop holding if either the value or the alignment rule moved. There is no upper
+		 * bound worth testing next to it: the pointer is 64-bit and monotonic, it does not
+		 * have to fit the ring (buf_mask is what wraps it into the buffer), and ring->wptr
+		 * counts in the same 64 bits. */
+		if (lower_32_bits(hw_wptr) == 0xffffffffu || upper_32_bits(hw_wptr) == 0xffffffffu) {
+			dev_err(adev->dev,
+				"sdma%d read back write pointer 0x%llX; all-ones in either half is a"
+				" dead read, not a pointer\n", i, hw_wptr);
+			return BC250_EINVAL;
+		}
+
+		/* The invariant is not four bytes but sixteen dwords. amdgpu_ring_commit() pads every
+		 * submission to ring->funcs->align_mask + 1 (sdma_v5_0.c:1941-1944 sets the mask to
+		 * 0xf), so a pointer this engine reached can only be a multiple of that. Anything
+		 * else is a pointer we do not understand, and one we do not understand is not one to
+		 * build on: refuse, do not round. The dword test is separate and first because
+		 * `hw_wptr >> 2` throws away the two bits it would catch. */
+		if ((hw_wptr & 0x3u) != 0 ||
+		    ((hw_wptr >> 2) & (u64)ring->funcs->align_mask) != 0) {
+			dev_err(adev->dev,
+				"sdma%d kept write pointer 0x%llX, which is not a whole %u-dword"
+				" submission; refusing to adopt it\n",
+				i, hw_wptr, (unsigned int)ring->funcs->align_mask + 1u);
+			return BC250_EINVAL;
+		}
+
+		hw_rptr = (u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+									 mmSDMA0_GFX_RB_RPTR)) |
+			  ((u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+									 mmSDMA0_GFX_RB_RPTR_HI)) << 32);
+		adopted = hw_wptr;
+		dev_info(adev->dev,
+			 "sdma%d kept its pointers across the undo (rptr 0x%llX, wptr 0x%llX);"
+			 " adopting the write pointer\n", i, hw_rptr, hw_wptr);
+	}
 
 	/* setup the wptr shadow polling */
 	wptr_gpu_addr = ring->wptr_gpu_addr;
@@ -300,7 +419,13 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i)
 	WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_BASE_HI),
 			(u32)(ring->gpu_addr >> 40));
 
-	ring->wptr = 0;
+	/* sdma_v5_0.c:754-755 `if (!restore) ring->wptr = 0;`, with the engine's own value where
+	 * upstream has the caller's saved one. Everything downstream counts on from here: the WPTR
+	 * write below, the write-back slot, and every doorbell amdgpu_ring_commit() will ring. */
+	if (adopted != 0)
+		ring->wptr = adopted >> 2;
+	else
+		ring->wptr = 0;
 
 	/* before programing wptr to a less value, need set minor_ptr_update first */
 	WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_MINOR_PTR_UPDATE), 1);
@@ -310,6 +435,14 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i)
 	       lower_32_bits(ring->wptr << 2));
 	WREG32(bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR_HI),
 	       upper_32_bits(ring->wptr << 2));
+
+	/* [shim] And into the write-back slot the engine polls, which is where amdgpu_ring_commit()
+	 * puts it and which nothing has written yet: F32_POLL_ENABLE went on a few writes above, the
+	 * page bc250_sdma_setup() cut this slot out of is freshly allocated and reads 0, and the first
+	 * commit after this bring-up would be the first to fill it. Before RB_ENABLE, so the engine
+	 * never sees the ring enabled with a shadow that contradicts where it stands. */
+	if (adopted != 0 && ring->wptr_cpu_addr != NULL)
+		*(volatile u64 *)ring->wptr_cpu_addr = ring->wptr << 2;
 
 	doorbell = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_DOORBELL));
 	doorbell_offset = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
@@ -414,14 +547,27 @@ int bc250_sdma_hw_init(struct amdgpu_device *adev)
 }
 
 /* sdma_v5_0.c:1480 sdma_v5_0_hw_fini(), with sdma_v5_0_gfx_stop() (sdma_v5_0.c:563) written out
- * where sdma_v5_0_enable(adev, false) would call it. sdma_v5_0_rlc_stop() is an upstream stub. */
-void bc250_sdma_hw_fini(struct amdgpu_device *adev)
+ * where sdma_v5_0_enable(adev, false) would call it. sdma_v5_0_rlc_stop() is an upstream stub.
+ *
+ * [shim] and a verdict, which upstream has no use for and this driver does. The halt sequence is
+ * unchanged and still runs to the end whatever it finds; what is added is four reads per engine
+ * AFTER it. Setting F32_CNTL.HALT proves the engine stopped, not that it finished: an engine whose
+ * read pointer is still behind its write pointer stopped holding packets it had not executed, and
+ * those packets name addresses - a ring, a fence slot, a WRITE_LINEAR destination - that the caller
+ * is about to give back to the page allocator. So an engine that halts with rptr != wptr is
+ * reported as BC250_EBUSY, and driver/kmd/gfx.c's Fini() turns that into pages that stay.
+ *
+ * Both engines are always read, so the log names both rather than the first; the return is the
+ * first failure. Nothing here frees memory, and the return value says nothing about whether the
+ * halt itself was written - that is what the caller's own read of F32_CNTL is for. */
+int bc250_sdma_hw_fini(struct amdgpu_device *adev)
 {
 	u32 rb_cntl, ib_cntl;
-	int i;
+	u64 rptr, wptr;
+	int i, r = 0;
 
 	if (adev == NULL)
-		return;
+		return BC250_EINVAL;
 
 	bc250_sdma_ctx_switch_enable(adev, false);
 
@@ -435,6 +581,27 @@ void bc250_sdma_hw_fini(struct amdgpu_device *adev)
 	}
 
 	bc250_sdma_enable(adev, false);
+
+	for (i = 0; i < adev->sdma.num_instances; i++) {
+		rptr = (u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+								      mmSDMA0_GFX_RB_RPTR)) |
+		       ((u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+								      mmSDMA0_GFX_RB_RPTR_HI)) << 32);
+		wptr = (u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+								      mmSDMA0_GFX_RB_WPTR)) |
+		       ((u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
+								      mmSDMA0_GFX_RB_WPTR_HI)) << 32);
+		if (rptr == wptr)
+			continue;
+
+		dev_err(adev->dev,
+			"sdma%d halted with rptr 0x%llX behind wptr 0x%llX: it stopped owing work,"
+			" and the packets it has not read name addresses of ours\n", i, rptr, wptr);
+		if (r == 0)
+			r = BC250_EBUSY;
+	}
+
+	return r;
 }
 
 /* ---------------------------------------------------------------------------------------------

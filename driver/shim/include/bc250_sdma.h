@@ -49,9 +49,17 @@ int bc250_sdma_hw_init(struct amdgpu_device *adev);
 int bc250_sdma_init_golden_registers(struct amdgpu_device *adev);
 int bc250_sdma_start(struct amdgpu_device *adev);
 
-/* sdma_v5_0.c:1480 sdma_v5_0_hw_fini(): stop context switching, then halt the engines. Does not
- * free memory. */
-void bc250_sdma_hw_fini(struct amdgpu_device *adev);
+/*
+ * sdma_v5_0.c:1480 sdma_v5_0_hw_fini(): stop context switching, then halt the engines. Does not
+ * free memory, and always runs the whole halt sequence whatever it finds.
+ *
+ * [shim] Returns 0, or BC250_EBUSY if an engine halted with its read pointer still behind its write
+ * pointer. HALT says the engine stopped, not that it drained, and an engine that stopped mid-queue
+ * is still holding packets that name a ring, a fence slot or a copy destination the caller is about
+ * to hand back. The caller decides what to do with that; driver/kmd/gfx.c's Fini() keeps the pages.
+ * Both engines are read and both are logged; the return is the first failure.
+ */
+int bc250_sdma_hw_fini(struct amdgpu_device *adev);
 
 /* [amdgpu] sdma_v5_0.c:218 sdma_v5_0_get_reg_offset(): the register window of one SDMA instance.
  * Exposed because bc250_irq.c needs it for SDMA0_CNTL, and two copies of an address calculation is

@@ -76,7 +76,8 @@ static struct reg_selfclear g_selfclear[MAX_SELFCLEAR];
 static unsigned int g_selfclear_count;
 
 /* Told about every register write, for a model that needs more than this file's own three can
- * express. backend_mem.c's MEC fetch state is the only user; see backend_set_write_hook(). */
+ * express. backend_mem.c is the only user, and chains its own models behind it; see
+ * backend_set_write_hook(). */
 static backend_write_hook g_write_hook;
 
 void backend_set_write_hook(backend_write_hook hook)
@@ -84,7 +85,8 @@ void backend_set_write_hook(backend_write_hook hook)
 	g_write_hook = hook;
 }
 
-/* Asked before the register file on every read; see bc250_shim_rreg(). Same one user. */
+/* Asked before the register file on every read; see bc250_shim_rreg(). Same one user, same
+ * chaining. */
 static backend_read_hook g_read_hook;
 
 void backend_set_read_hook(backend_read_hook hook)
@@ -427,10 +429,10 @@ unsigned int bc250_shim_rreg(struct amdgpu_device *adev, unsigned int dword_inde
 	}
 	touch(dword_index * 4u, 0);
 
-	/* A model that answers for hardware this file cannot represent: a register whose value
-	 * depends on which queue is selected, and there is one value per offset here. The hook is
-	 * asked first and declines for everything it has nothing to say about, so a run without one -
-	 * and every offset outside it - reads exactly what it read before. See
+	/* The models that answer for hardware this file cannot represent: a register whose value
+	 * depends on which queue is selected, and one whose value the driver's writes do not reach.
+	 * The hook is asked first and declines for everything it has nothing to say about, so a run
+	 * without one - and every offset outside them - reads exactly what it read before. See
 	 * backend_set_read_hook(). */
 	if (g_read_hook != NULL) {
 		u32 answer = 0;
@@ -493,12 +495,12 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int dword_index, unsig
 		g_known[g_reaction[i].target / 4u] = 1;
 	}
 
-	/* The fourth declared model, and the only one that is not about a register: the MEC's own
-	 * copy of a queue's base and read pointer, which survives a halt. It observes rather than
-	 * reacts, and it lives in backend_mem.c, because a stale fetch ends in a ring that executes
-	 * nothing and an interrupt vector - both of which are that file's. See backend_mem.h for what
-	 * was measured. It is reached through a hook rather than by name so that this file stays
-	 * linkable on its own: replay.c uses it without backend_mem.c at all. */
+	/* The models that are not about a register at all: the MEC's own copy of a queue's base and
+	 * read pointer, and the SDMA engines' own write pointer, both of which survive a halt. They
+	 * observe rather than react, and they live in backend_mem.c, because a stale fetch ends in a
+	 * ring that executes nothing and an interrupt vector - both of which are that file's. See
+	 * backend_mem.h for what was measured. They are reached through a hook rather than by name so
+	 * that this file stays linkable on its own: replay.c uses it without backend_mem.c at all. */
 	if (g_write_hook != NULL)
 		g_write_hook(dword_index * 4u, value);
 

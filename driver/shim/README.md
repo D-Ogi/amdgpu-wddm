@@ -137,7 +137,7 @@ int  bc250_nbio_enable_doorbell_selfring_aperture(struct amdgpu_device *adev, bo
 int  bc250_irq_late_init(struct amdgpu_device *adev);
 
 int  bc250_gfx_hw_fini(struct amdgpu_device *adev);      /* the first failure, or 0; see Undo */
-void bc250_sdma_hw_fini(struct amdgpu_device *adev);
+int  bc250_sdma_hw_fini(struct amdgpu_device *adev);     /* BC250_EBUSY if an engine did not drain */
 void bc250_gfx_teardown(struct amdgpu_device *adev);
 void bc250_sdma_teardown(struct amdgpu_device *adev);
 ```
@@ -781,7 +781,11 @@ separately so a staged hardware run can stop after any of them and read the regi
 
 ### Undo
 
-`bc250_sdma_hw_fini(adev)` then `bc250_gfx_hw_fini(adev)`. Frees nothing. It follows
+`bc250_sdma_hw_fini(adev)` then `bc250_gfx_hw_fini(adev)`. Frees nothing. The SDMA half also reports:
+after the halt it reads both engines' read and write pointers and returns `BC250_EBUSY` if either
+engine stopped with work still queued, because `F32_CNTL.HALT` says the engine stopped, not that it
+finished, and a half-executed queue still names pages the caller is about to hand back. The GFX half
+follows
 `gfx_v10_0_hw_fini()` in its order: the three fault interrupt sources off, `UNMAP_QUEUES` through the
 KIQ for the gfx ring and the eight compute rings with the ring test upstream does after it, **the
 eight compute queues' pointer registers put back**, **the KIQ's own HQD dequeued while the MEC still

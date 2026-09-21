@@ -55,6 +55,8 @@ static int StageInterrupts(struct amdgpu_device* adev)
     return result;
 }
 
+static int StageSdma(struct amdgpu_device* adev);       // below: it needs BC250_GFX
+
 // Stage numbers are part of the escape's interface (bc250kmd_cli prints the names).
 static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages[] = {
     { NULL, NULL },
@@ -64,7 +66,7 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
     { "constants", bc250_gfx_constants_init },                  // 4  gfx_v10_0_constants_init
     { "RLC", bc250_gfx_rlc_resume },                            // 5  gfx_v10_0_rlc_resume
     { "CP", bc250_gfx_cp_resume },                              // 6  gfx_v10_0_cp_resume: KIQ, MEC, queues, ring tests
-    { "SDMA", bc250_sdma_hw_init },                             // 7  sdma_v5_0_hw_init
+    { "SDMA", StageSdma },                                      // 7  sdma_v5_0_hw_init, with the ring tests upstream ends it with
     { "interrupt sources", StageInterrupts },                   // 8  amdgpu_fence_driver_hw_init, gfx_v10_0_late_init, amdkfd
 };
 #define BC250_GFX_STAGE_COUNT (RTL_NUMBER_OF(g_Stages) - 1)
@@ -89,6 +91,24 @@ typedef struct _BC250_GFX {
     ULONG RingOwesSlot[BC250_FENCE_RING_SDMA0 + 2];
     ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
 } BC250_GFX;
+
+// sdma_v5_0_gfx_resume_instance() ends with amdgpu_ring_test_helper(ring); the shim leaves that to the miniport, because an
+// SDMA ring test touches no register (bc250_sdma.h). Without it stage 7 proves that registers can be written and nothing
+// more: in E15 run 001 both engines were dead after a re-init behind an rc 0 in 56 us (facts M59). Not in a plan, where
+// nothing executes and the slot would never change.
+static int StageSdma(struct amdgpu_device* adev)
+{
+    BC250_GFX* gfx = CONTAINING_RECORD(adev->backend, BC250_GFX, Sequence);
+    int result = bc250_sdma_hw_init(adev), i;
+
+    // A faulted sequence executes nothing any more: two ring tests could only time out, with the GART lock held.
+    if (result != 0 || gfx->Sequence.Plan || !NT_SUCCESS(gfx->Sequence.Fault)) return result;
+    result = bc250_sdma_fence_page_alloc(adev);
+    if (result != 0) return result;
+    gfx->SdmaFencePage = TRUE;
+    for (i = 0; i < adev->sdma.num_instances && result == 0; i++) result = bc250_sdma_ring_test(&adev->sdma.instance[i].ring);
+    return result;
+}
 
 static ULONG Microseconds(LARGE_INTEGER From, LARGE_INTEGER Frequency)
 {
@@ -163,19 +183,23 @@ static void GrbmSelectDefault(_In_ const BC250_DEVICE* Device)
 }
 
 // hw_fini in amdgpu's order (SDMA before GFX), then the memory. Returns whether the engines read halted; Undo gets what
-// the shim's undo returned (BC250_ETIME: the MEC did not let go of the KIQ's queue, facts M44).
+// the shim's undo returned (BC250_ETIME: the MEC did not let go of the KIQ's queue, facts M44; BC250_EBUSY: an SDMA
+// engine halted with its read pointer still behind its write pointer, so it stopped holding packets that name pages of
+// ours). GFX first if both failed, because the KIQ is the one whose recovery the next bring-up has a branch for.
 static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev, _Out_ long* Undo)
 {
     BOOLEAN quiet;
+    long sdma = 0;
 
     *Undo = 0;
 
     if (Gfx->StagesDone >= BC250_GFX_STAGE_CP)
     {
-        bc250_sdma_hw_fini(Adev);
+        sdma = bc250_sdma_hw_fini(Adev);
         // Disables the three fault sources of late_init. The end-of-pipe enables of stage 8 stay set: harmless with the
         // queues unmapped and both CPs halted, but a second run to stage 8 meets them enabled.
         *Undo = bc250_gfx_hw_fini(Adev);
+        if (*Undo == 0) *Undo = sdma;
         // nv_common_hw_fini(): the self-ring aperture goes last.
         if (Gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS) (void)bc250_nbio_enable_doorbell_selfring_aperture(Adev, false);
         // The undo selects queues as well (the KIQ's dequeue), and a sequence that faults in between writes nothing any more.

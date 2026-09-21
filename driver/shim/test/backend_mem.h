@@ -178,4 +178,109 @@ u64 backend_mec_fault_address(void);
  * nothing unless backend_add_mec_fetch_state() has been called. */
 void backend_mec_observe(u32 byte_offset, u32 value);
 
+/* ---------------------------------------------------------------------------------------------
+ * The SDMA engines' own write pointer: the fifth declared model
+ *
+ * The same kind of thing as the MEC's fetch state above, for the other pair of engines and for the
+ * other half of the question that model left UNTESTED: "whether ME or an SDMA engine nevertheless
+ * caches a base across a halt is UNTESTED ... the measurement that settles it is the same run
+ * repeated with the KIQ fixed". That run is experiment E15, and it settles it for SDMA.
+ *
+ * What was measured, on unit A, 2026-09-21, E15 (bc250kmd 0.6.2.0, one device start, bring-up,
+ * `gfx fini` undo, bring-up again, no GPU reset and no PSP firmware reload):
+ *
+ *  1. Each SDMA engine keeps its own 64-bit write pointer, in bytes. After the first bring-up's
+ *     four submissions on SDMA0 and three on SDMA1, SDMA0_GFX_RB_RPTR = RB_WPTR = 0x100 and SDMA1's
+ *     read 0xC0 - four and three sixteen-dword submissions.
+ *  2. The undo does not move it. SDMAx_CNTL, RB_CNTL with RB_ENABLE clear, IB_CNTL with IB_ENABLE
+ *     clear, F32_CNTL with HALT set - amdgpu's own unload, fact M54 - and the pointer registers
+ *     still read 0x100 and 0xC0 afterwards.
+ *  3. Writes to the pointer registers do not reach it. The second bring-up writes RB_RPTR,
+ *     RPTR_HI, RB_WPTR and WPTR_HI with 0, and RB_WPTR with 0 again under MINOR_PTR_UPDATE = 1; a
+ *     sweep taken after that bring-up and before any submission reads 0x100 and 0xC0 again, on both
+ *     engines, over two bring-ups. RB_BASE, written in the same sequence, does take the new ring
+ *     address.
+ *  4. INFERRED, not measured. The pointer is monotonic: a doorbell carrying a value at or below it
+ *     executes nothing. What was observed is one failure and its shape - the second bring-up's
+ *     SDMA ring test rang 0x40, the engine stood at 0x100, and the scratch slot kept 0xCAFEDEAD
+ *     until the poll ran out - plus upstream's own comment at sdma_v5_0.c:757, "before programing
+ *     wptr to a less value, need set minor_ptr_update first", which says the hardware treats a
+ *     lower write pointer as a thing needing special handling. Monotonicity is the simplest rule
+ *     that produces that failure; "ignores a doorbell while RB_ENABLE was clear when it was rung"
+ *     and several others produce it too. What would settle it is a bring-up that rings a doorbell
+ *     ABOVE the kept pointer without adopting it and sees whether the engine executes the gap.
+ *
+ * So the model: one pointer per engine, in bytes, which survives backend_ring_register() for the
+ * same ring object and survives the teardown, because the engine does. A doorbell at or below the
+ * pointer executes nothing; above it, the stub executes from the pointer to the new value, and the
+ * pointer follows. The old assumption this replaces was that a re-initialised SDMA ring restarts at
+ * 0, which is what the CP rings do and what the hardware refutes for these two.
+ *
+ * The scope of the survival is UNTESTED at both ends, and the model is the optimistic reading of
+ * it. Only backend_mem_reset() clears the pointer, which asserts that nothing short of a new boot
+ * does - but E15 was one device start, three bring-ups, one PSP load. Whether the pointer survives
+ * a Windows device restart (PnP stop and start, no power change), and whether it survives a PSP
+ * firmware reload without a reboot, were not measured; either could reset the engine and make the
+ * adoption arm dead code in exactly the case it was written for. A driver that adopts a pointer the
+ * engine no longer holds would read 0 and take the fresh arm, so the failure mode of being wrong
+ * here is benign, which is why the model states the stronger claim rather than the safer one.
+ *
+ * It is on for every SDMA ring, without being asked: it is what the hardware does, and a test that
+ * had to opt in would be a test that could forget to. The register offsets below are the one part
+ * that has to be declared, because answering a read needs to know which offset is which, and this
+ * file types no register address.
+ *
+ * Every offset is passed in by the test, resolved through AMD's headers.
+ * ------------------------------------------------------------------------------------------- */
+
+struct backend_sdma_regs {
+	u32 rb_rptr, rb_rptr_hi;        /* SDMAx_GFX_RB_RPTR, _HI */
+	u32 rb_wptr, rb_wptr_hi;        /* SDMAx_GFX_RB_WPTR, _HI */
+	/* SDMAx_RB_RPTR_FETCH, _HI - note the name has no GFX in it. Nothing in driver/shim reads
+	 * them today; they are here because the sweeps that measured this read them, and a model that
+	 * answers two of the three pointer registers and not the third would be a trap for the next
+	 * person. 0 leaves them out. */
+	u32 rb_rptr_fetch, rb_rptr_fetch_hi;
+};
+
+/*
+ * Let the model answer reads of one engine's pointer registers. `ring` is that engine's GFX ring,
+ * and the offsets are that instance's. Idempotent by ring, because a teardown and a fresh setup
+ * hand back the same ring object. Returns 0, or -1 if the table is full.
+ *
+ * Without this call the pointer still survives and still decides what a doorbell executes; only the
+ * reads fall back to the register file, which is what every run that programs no SDMA ring wants.
+ */
+int backend_add_sdma_pointer_state(struct amdgpu_ring *ring, const struct backend_sdma_regs *regs);
+
+/* Where this engine's pointer stands, in bytes, and whether it has executed anything at all. For a
+ * test to compare what a second bring-up adopted with what the first run left behind. */
+u64 backend_sdma_engine_wptr(const struct amdgpu_ring *ring);
+int backend_sdma_engine_ran(const struct amdgpu_ring *ring);
+
+/*
+ * Make one engine answer with its read pointer `bytes` behind its write pointer: an engine that was
+ * halted part-way through what it had been given. The test speaking for hardware, like
+ * backend_hqd_pin(), and the only way to reach the arm of bc250_sdma_hw_fini() that reports
+ * BC250_EBUSY - the stub executes a submission whole, so nothing in driver/shim can produce it.
+ *
+ * RB_RPTR and RB_RPTR_FETCH move back, RB_WPTR does not, which is what "stopped owing work" reads
+ * like. 0 lets go again; backend_mem_reset() drops it with the rest of the ring table.
+ */
+void backend_sdma_hold_back(const struct amdgpu_ring *ring, u64 bytes);
+
+/*
+ * Put one engine's pointer at `bytes`, whatever the stub has executed. The same thing again: the
+ * test speaking for hardware, for the states a working engine never reaches - a pointer that is not
+ * a whole submission, and the all-ones a faulted register sequence or a dead bus answers with. Both
+ * are refusals in bc250_sdma_gfx_resume_instance(), and without this nothing would ever take them.
+ *
+ * Marks the engine as having run, because a pointer is only answered for once it has.
+ */
+void backend_sdma_force_engine_wptr(const struct amdgpu_ring *ring, u64 bytes);
+
+/* Doorbells this engine ignored because they were at or below its pointer. The count a test asserts
+ * is 0 once the driver adopts the pointer, and non-zero when it does not. */
+unsigned int backend_sdma_ignored_doorbells(void);
+
 #endif /* BC250_BACKEND_MEM_H */

@@ -133,6 +133,14 @@ struct ring_slot {
 	int hqd_mapped;
 	int hqd_mapped_known;
 	int hqd_pinned;                 /* a test asked this queue not to answer an unmap */
+
+	/* An SDMA engine's own write pointer, in BYTES, and whether it has executed anything. The
+	 * fifth declared model; backend_mem.h says what E15 measured. Hardware state, not ring
+	 * state: it outlives the ring buffer it counted into and the halt that stopped it, so
+	 * backend_ring_register() must not clear it either. */
+	u64 sdma_engine_ptr;
+	int sdma_ran;
+	u64 sdma_held_back;             /* a test asked this engine to answer rptr this far behind */
 };
 
 static struct ring_slot g_ring[MAX_RINGS];
@@ -167,6 +175,8 @@ void backend_mem_set_bases(u64 vram_base, u64 gtt_base)
 }
 
 static void mec_model_off(void);        /* the MEC model, further down; reset turns it off */
+static void sdma_model_off(void);       /* the SDMA pointer model, likewise */
+static void hooks_refresh(void);        /* the two chained hooks, on while any model is */
 static void cs_state_clear(void);       /* the compute dispatch stub's state, likewise */
 
 void backend_mem_reset(void)
@@ -174,6 +184,7 @@ void backend_mem_reset(void)
 	unsigned int i;
 
 	mec_model_off();
+	sdma_model_off();
 	for (i = 0; i < g_alloc_count; i++)
 		free(g_alloc[i].cpu);
 	g_alloc_count = 0;
@@ -199,7 +210,11 @@ void backend_ring_register(struct amdgpu_ring *ring)
 
 	/* Idempotent by ring, because a teardown and a fresh setup hand back the same ring objects
 	 * with new buffers behind them: a second entry would leave the stub reading the first one's
-	 * decoded_to and looking at a ring that no longer exists. */
+	 * decoded_to and looking at a ring that no longer exists.
+	 *
+	 * What is NOT cleared here is the hardware state the models keep - this queue's read pointer,
+	 * this engine's write pointer - because a new ring buffer is not a new engine. That is the
+	 * whole point of both models; see the two blocks in backend_mem.h. */
 	for (i = 0; i < g_ring_count; i++) {
 		if (g_ring[i].ring == ring) {
 			g_ring[i].decoded_to = 0;
@@ -1119,8 +1134,7 @@ int backend_add_mec_fetch_state(const struct backend_mec_regs *regs)
 		return -1;
 	g_mec = *regs;
 	g_mec_on = 1;
-	backend_set_write_hook(backend_mec_observe);
-	backend_set_read_hook(backend_mec_answer);
+	hooks_refresh();
 	g_mec_selection = 0;
 	g_mec_halted = 1;
 	g_hqd_count = 0;
@@ -1135,9 +1149,8 @@ u64 backend_mec_fault_address(void)     { return g_mec_fault_address; }
 
 static void mec_model_off(void)
 {
-	backend_set_write_hook(NULL);
-	backend_set_read_hook(NULL);
 	g_mec_on = 0;
+	hooks_refresh();
 	g_mec_selection = 0;
 	g_mec_halted = 1;
 	g_hqd_count = 0;
@@ -1307,6 +1320,187 @@ void backend_mec_observe(u32 byte_offset, u32 value)
 	}
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * The SDMA engines' own write pointer. What this models and what was measured is in backend_mem.h.
+ * ------------------------------------------------------------------------------------------- */
+
+#define MAX_SDMA_REG_SETS 2u
+
+struct sdma_reg_set {
+	const struct amdgpu_ring *ring;
+	struct backend_sdma_regs regs;
+};
+
+static struct sdma_reg_set g_sdma_regs[MAX_SDMA_REG_SETS];
+static unsigned int g_sdma_reg_count;
+static unsigned int g_sdma_ignored;
+
+static struct ring_slot *ring_slot_of(const struct amdgpu_ring *ring)
+{
+	unsigned int i;
+
+	for (i = 0; i < g_ring_count; i++)
+		if (g_ring[i].ring == ring)
+			return &g_ring[i];
+	return NULL;
+}
+
+int backend_add_sdma_pointer_state(struct amdgpu_ring *ring, const struct backend_sdma_regs *regs)
+{
+	unsigned int i;
+
+	if (ring == NULL || regs == NULL)
+		return -1;
+
+	/* Idempotent by ring, for the same reason backend_ring_register() is: the teardown and the
+	 * next setup hand back the same ring object, and the offsets are the same offsets. */
+	for (i = 0; i < g_sdma_reg_count; i++) {
+		if (g_sdma_regs[i].ring == ring) {
+			g_sdma_regs[i].regs = *regs;
+			hooks_refresh();
+			return 0;
+		}
+	}
+	if (g_sdma_reg_count >= MAX_SDMA_REG_SETS)
+		return -1;
+	g_sdma_regs[g_sdma_reg_count].ring = ring;
+	g_sdma_regs[g_sdma_reg_count].regs = *regs;
+	g_sdma_reg_count++;
+	hooks_refresh();
+	return 0;
+}
+
+u64 backend_sdma_engine_wptr(const struct amdgpu_ring *ring)
+{
+	const struct ring_slot *slot = ring_slot_of(ring);
+
+	return slot != NULL ? slot->sdma_engine_ptr : 0;
+}
+
+int backend_sdma_engine_ran(const struct amdgpu_ring *ring)
+{
+	const struct ring_slot *slot = ring_slot_of(ring);
+
+	return slot != NULL ? slot->sdma_ran : 0;
+}
+
+void backend_sdma_hold_back(const struct amdgpu_ring *ring, u64 bytes)
+{
+	struct ring_slot *slot = ring_slot_of(ring);
+
+	if (slot != NULL)
+		slot->sdma_held_back = bytes;
+}
+
+void backend_sdma_force_engine_wptr(const struct amdgpu_ring *ring, u64 bytes)
+{
+	struct ring_slot *slot = ring_slot_of(ring);
+
+	if (slot == NULL)
+		return;
+	slot->sdma_engine_ptr = bytes;
+	slot->sdma_ran = 1;
+	slot->decoded_to = bytes >> 2;
+}
+
+unsigned int backend_sdma_ignored_doorbells(void) { return g_sdma_ignored; }
+
+/* A new boot. The engines lose their pointers here and nowhere else - not at a teardown, not at a
+ * ring registration, which is the whole of point 2 in the header. */
+static void sdma_model_off(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < MAX_RINGS; i++) {
+		g_ring[i].sdma_engine_ptr = 0;
+		g_ring[i].sdma_ran = 0;
+		g_ring[i].sdma_held_back = 0;
+	}
+	g_sdma_reg_count = 0;
+	g_sdma_ignored = 0;
+	hooks_refresh();
+}
+
+/*
+ * Answer a read of an engine's pointer registers with the pointer the engine holds, once it has run.
+ *
+ * Before it has run the register file answers, so a cold boot reads unit A's own swept value and
+ * the first bring-up is exactly what it was. Writes are not handled at all, and that is the model:
+ * point 3 says they do not reach the engine, so the write lands in the register file where nobody
+ * asks for it again.
+ */
+static int sdma_answer(u32 byte_offset, u32 *value)
+{
+	unsigned int i;
+
+	/* An offset a caller left out of the table reads 0, and no SDMA register is at BAR5+0. */
+	if (byte_offset == 0)
+		return 0;
+
+	for (i = 0; i < g_sdma_reg_count; i++) {
+		const struct backend_sdma_regs *r = &g_sdma_regs[i].regs;
+		const struct ring_slot *slot = ring_slot_of(g_sdma_regs[i].ring);
+		u64 read_ptr;
+
+		if (slot == NULL || !slot->sdma_ran)
+			continue;
+
+		/* How far the engine has got, which is the write pointer unless a test has asked for
+		 * an engine that stopped part-way (backend_sdma_hold_back()). */
+		read_ptr = slot->sdma_held_back <= slot->sdma_engine_ptr
+			   ? slot->sdma_engine_ptr - slot->sdma_held_back : 0;
+
+		if (byte_offset == r->rb_wptr) {
+			*value = lower_32_bits(slot->sdma_engine_ptr);
+			return 1;
+		}
+		if (byte_offset == r->rb_wptr_hi) {
+			*value = upper_32_bits(slot->sdma_engine_ptr);
+			return 1;
+		}
+		if (byte_offset == r->rb_rptr || byte_offset == r->rb_rptr_fetch) {
+			*value = lower_32_bits(read_ptr);
+			return 1;
+		}
+		if (byte_offset == r->rb_rptr_hi || byte_offset == r->rb_rptr_fetch_hi) {
+			*value = upper_32_bits(read_ptr);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The two hooks backend_trace.c keeps, and the two models that want them
+ *
+ * That file has one read slot and one write slot, and both models live here. Rather than turning
+ * its single slot into a list - which would let something outside this file install a second model
+ * whose order against ours nobody has decided - the chaining is done here, one function per
+ * direction, asking each model in turn. The order matters only where two models claim the same
+ * offset, and they do not: the MEC model answers CP_HQD_*, the SDMA one answers SDMAx_GFX_RB_*.
+ * ------------------------------------------------------------------------------------------- */
+static int backend_read_dispatch(u32 byte_offset, u32 *value)
+{
+	if (backend_mec_answer(byte_offset, value))
+		return 1;
+	return sdma_answer(byte_offset, value);
+}
+
+static void backend_write_dispatch(u32 byte_offset, u32 value)
+{
+	backend_mec_observe(byte_offset, value);
+	/* The SDMA model has nothing to observe: point 3 of its header is that a write to a pointer
+	 * register does not reach the engine, and the doorbell is where it does follow along. */
+}
+
+static void hooks_refresh(void)
+{
+	int on = g_mec_on || g_sdma_reg_count != 0;
+
+	backend_set_read_hook(on ? backend_read_dispatch : NULL);
+	backend_set_write_hook(on ? backend_write_dispatch : NULL);
+}
+
 void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsigned long long value)
 {
 	unsigned int i;
@@ -1337,14 +1531,23 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 
 	/* An SDMA doorbell carries the write pointer in BYTES - sdma_v5_0_ring_set_wptr() rings it
 	 * with ring->wptr << 2 - so it is brought back to dwords before anything below counts with
-	 * it, and the packets are decoded by the other stub. */
+	 * it, and the packets are decoded by the other stub.
+	 *
+	 * Where the engine starts from is the fifth declared model, not the ring: the pointer it
+	 * holds survives the teardown and the next bring-up's writes of 0, and it is monotonic, so a
+	 * doorbell at or below it says nothing new and executes nothing. backend_mem.h has what E15
+	 * measured. What this replaced was the CP rings' rule - a doorbell that does not advance means
+	 * the ring was re-initialised, start again at 0 - which unit A refutes for these two engines
+	 * and which is why the second bring-up's ring test used to pass here and time out there. */
 	if (ring->funcs->type == AMDGPU_RING_TYPE_SDMA) {
 		u64 to = value >> 2;
 
-		if (to <= slot->decoded_to)
-			slot->decoded_to = 0;
+		if (value <= slot->sdma_engine_ptr) {
+			g_sdma_ignored++;
+			return;
+		}
 
-		for (at = slot->decoded_to; at < to; ) {
+		for (at = slot->sdma_engine_ptr >> 2; at < to; ) {
 			unsigned int size = 0;
 
 			if (!g_stub_on)
@@ -1354,6 +1557,8 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 			g_stub_hits++;
 			at += size;
 		}
+		slot->sdma_engine_ptr = value;
+		slot->sdma_ran = 1;
 		slot->decoded_to = to;
 		return;
 	}

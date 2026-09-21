@@ -80,6 +80,12 @@
  *    aliasing (see bc250_irq.h for why the trace cannot settle whether it exists). Those reads are
  *    answered from the trace's own read record, like every other first read in a window.
  *
+ * 6. The SDMA engines. Since experiment E15 the backend keeps, per SDMA engine, the write pointer
+ *    the engine holds: it survives the undo and the next bring-up's writes of 0, and a doorbell at
+ *    or below it executes nothing. That is the fifth declared model, it is measured hardware
+ *    behaviour rather than a convenience, and backend_mem.h sets out the four things the sweeps
+ *    showed. The arm that exercises it is check_sdma_pointers().
+ *
  * Nothing in this file decides what the hardware is told; that is bc250_gfx.c's, bc250_sdma.c's and
  * bc250_irq.c's job. What is here is the inputs of that one amdgpu run, the comparison, and the
  * dumps.
@@ -750,19 +756,33 @@ static unsigned int survey_fini_registers(const char *what, struct amdgpu_device
 	NAME_GC(GRBM_GFX_CNTL);
 #undef NAME_GC
 
-	for (i = 0; i < (unsigned int)adev->sdma.num_instances && nknown + 4 <= ARRAY_SIZE(known); i++) {
-		static const char *nm[2][4] = {
+	/* Four the halt sequence writes, and the four pointer registers the fini reads afterwards to
+	 * decide whether the engine drained (bc250_sdma_hw_fini()). The reads are the same offsets the
+	 * bring-up writes, so a trace window already names them; they are listed anyway, because this
+	 * table is what the fini path is supposed to be able to account for. */
+	for (i = 0; i < (unsigned int)adev->sdma.num_instances && nknown + 8 <= ARRAY_SIZE(known); i++) {
+		static const char *nm[2][8] = {
 			{ "GC.SDMA0_CNTL", "GC.SDMA0_GFX_RB_CNTL", "GC.SDMA0_GFX_IB_CNTL",
-			  "GC.SDMA0_F32_CNTL" },
+			  "GC.SDMA0_F32_CNTL", "GC.SDMA0_GFX_RB_RPTR", "GC.SDMA0_GFX_RB_RPTR_HI",
+			  "GC.SDMA0_GFX_RB_WPTR", "GC.SDMA0_GFX_RB_WPTR_HI" },
 			{ "GC.SDMA1_CNTL", "GC.SDMA1_GFX_RB_CNTL", "GC.SDMA1_GFX_IB_CNTL",
-			  "GC.SDMA1_F32_CNTL" }
+			  "GC.SDMA1_F32_CNTL", "GC.SDMA1_GFX_RB_RPTR", "GC.SDMA1_GFX_RB_RPTR_HI",
+			  "GC.SDMA1_GFX_RB_WPTR", "GC.SDMA1_GFX_RB_WPTR_HI" }
 		};
-		const u32 internal[4] = { mmSDMA0_CNTL, mmSDMA0_GFX_RB_CNTL, mmSDMA0_GFX_IB_CNTL,
-					  mmSDMA0_F32_CNTL };
+		u32 internal[8];
+
+		internal[0] = mmSDMA0_CNTL;
+		internal[1] = mmSDMA0_GFX_RB_CNTL;
+		internal[2] = mmSDMA0_GFX_IB_CNTL;
+		internal[3] = mmSDMA0_F32_CNTL;
+		internal[4] = mmSDMA0_GFX_RB_RPTR;
+		internal[5] = mmSDMA0_GFX_RB_RPTR_HI;
+		internal[6] = mmSDMA0_GFX_RB_WPTR;
+		internal[7] = mmSDMA0_GFX_RB_WPTR_HI;
 
 		if (i > 1)
 			break;
-		for (k = 0; k < 4; k++) {
+		for (k = 0; k < 8; k++) {
 			known[nknown].name = nm[i][k];
 			known[nknown].byte_offset =
 				bc250_sdma_reg_offset(adev, i, internal[k]) * 4u;
@@ -868,7 +888,7 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 {
 	unsigned int hits_before, writes, bad = 0;
 	u64 kiq_before;
-	int r;
+	int r, r_sdma;
 
 	printf("\n== teardown, then the whole bring-up again ==\n");
 
@@ -879,9 +899,18 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 	       (unsigned long long)adev->gfx.kiq[0].ring.wptr);
 
 	backend_touched_start();
-	bc250_sdma_hw_fini(adev);
+	r_sdma = bc250_sdma_hw_fini(adev);
 	r = bc250_gfx_hw_fini(adev);
 	backend_touched_stop();
+
+	/* Nothing has submitted on the SDMA rings in this arm, so both engines are where the bring-up
+	 * left them and the drain check has nothing to complain about. A failure here would mean the
+	 * fini's own reads are not answering. */
+	if (r_sdma != 0) {
+		printf("  bc250_sdma_hw_fini returned %d with no SDMA submission in this arm   <--"
+		       " wrong\n", r_sdma);
+		bad++;
+	}
 	printf("  after the undo: %u doorbells, %u packets, KIQ wptr %llu\n",
 	       backend_doorbell_count(), backend_packet_count(),
 	       (unsigned long long)adev->gfx.kiq[0].ring.wptr);
@@ -1395,6 +1424,383 @@ static unsigned int check_unclean_start(struct amdgpu_device *adev, int verbose)
 }
 
 /* ---------------------------------------------------------------------------------------------
+ * The SDMA engines across a second bring-up (experiment E15)
+ *
+ * The arm above settles the KIQ. This one settles the question backend_mem.h's MEC block left
+ * open - "whether ME or an SDMA engine nevertheless caches a base across a halt is UNTESTED" - for
+ * the two SDMA engines, and the answer measured on unit A is that they do, in the form of a write
+ * pointer that survives the undo and that no register write of the next bring-up can move.
+ *
+ * What happens here: a bring-up, unit A's own submissions on both engines, the undo, rings freed
+ * and allocated again at fresh addresses, a second bring-up, and then a ring test on each engine.
+ * What has to hold:
+ *
+ *   - the first bring-up writes 0 into all four pointer registers and 0 again into RB_WPTR under
+ *     MINOR_PTR_UPDATE, which is upstream's fresh arm untouched;
+ *   - after its submissions the engines stand where unit A's did, 0x100 and 0xC0 bytes;
+ *   - the second bring-up still writes 0 into all four of them - the sequence the host replay
+ *     compares with the Linux trace does not move - and then writes the pointer it adopted;
+ *   - what it adopted is what the first run left, to the byte;
+ *   - both ring tests pass, and no doorbell was ignored for being at or below the engine.
+ *
+ * Without the adoption in bc250_sdma_gfx_resume_instance() the last two fail exactly as unit A
+ * failed: the ring test rings 0x40 against an engine standing at 0x100, the doorbell is ignored,
+ * nothing executes and the scratch slot keeps 0xCAFEDEAD until the poll runs out.
+ * ------------------------------------------------------------------------------------------- */
+
+/* Unit A, E15: the first bring-up ran a ring test and three fences on SDMA0, a ring test and two on
+ * SDMA1. Every submission is padded to the sixteen-dword fetch size the ring's align_mask sets, so
+ * the engines finished at 4 * 16 * 4 and 3 * 16 * 4 bytes - and that is what the sweeps read back.
+ * The counts are here so this arm walks unit A's own numbers rather than some convenient ones. */
+static const unsigned int g_sdma_arm_fences[2] = { 3u, 2u };
+static const u64 g_sdma_arm_final[2] = { 0x100u, 0x0C0u };
+#define SDMA_ARM_SEQ_BASE   0x00000000C0FFEE10ULL
+
+/* Slots 0 and 1 belong to the two engines' ring tests (bc250_sdma_ring_test() takes them by
+ * ring->me), so the fences start at 2. Four apiece is more than either engine uses. */
+#define SDMA_ARM_FENCE_SLOT(inst, k)  (2u + (unsigned int)(inst) * 4u + (unsigned int)(k))
+
+/* Every value the run wrote to one byte offset, oldest first; the return is how many there were,
+ * which can exceed `max`. */
+static unsigned int writes_to(u32 byte_offset, u32 *out, unsigned int max)
+{
+	const struct bc250_reg_write *w = backend_writes();
+	unsigned int n = backend_write_count(), i, k = 0;
+
+	for (i = 0; i < n; i++) {
+		if (w[i].byte_offset != byte_offset)
+			continue;
+		if (k < max)
+			out[k] = w[i].value;
+		k++;
+	}
+	return k;
+}
+
+/*
+ * What one bring-up wrote into an engine's four pointer registers.
+ *
+ * The read pointer is written once and is always 0; the write pointer is written twice, 0 first -
+ * upstream's fresh arm, which must not move, because the first bring-up's write sequence is what
+ * the 354-write comparison at the top of this file is made of - and then whatever the driver
+ * decided under MINOR_PTR_UPDATE. `expect` is that second value per engine, in bytes: 0 on a cold
+ * bring-up, the adopted pointer on a second one.
+ */
+static unsigned int check_sdma_pointer_writes(const char *label, struct amdgpu_device *adev,
+					      const u64 *expect, int verbose)
+{
+	unsigned int bad = 0;
+	int i;
+
+	for (i = 0; i < adev->sdma.num_instances; i++) {
+		static const char *const once_name[2] = { "RB_RPTR", "RB_RPTR_HI" };
+		u32 off_once[2], off_twice[2], want_second[2];
+		u32 v[4];
+		unsigned int k, n;
+
+		off_once[0] = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR) * 4u;
+		off_once[1] = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR_HI) * 4u;
+		off_twice[0] = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR) * 4u;
+		off_twice[1] = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR_HI) * 4u;
+		want_second[0] = (u32)(expect[i] & 0xffffffffu);
+		want_second[1] = (u32)(expect[i] >> 32);
+
+		for (k = 0; k < 2; k++) {
+			n = writes_to(off_once[k], v, (unsigned int)ARRAY_SIZE(v));
+			if (n != 1u || v[0] != 0) {
+				printf("    %s: SDMA%d_GFX_%s written %u times%s   <-- wrong:"
+				       " upstream writes it once, with 0\n", label, i,
+				       once_name[k], n, n ? "" : " (not at all)");
+				bad++;
+			}
+		}
+
+		for (k = 0; k < 2; k++) {
+			n = writes_to(off_twice[k], v, (unsigned int)ARRAY_SIZE(v));
+			if (n != 2u) {
+				printf("    %s: SDMA%d_GFX_RB_WPTR%s written %u times   <--"
+				       " wrong: the fresh 0 and the value under MINOR_PTR_UPDATE\n",
+				       label, i, k ? "_HI" : "", n);
+				bad++;
+				continue;
+			}
+			if (v[0] != 0) {
+				printf("    %s: SDMA%d_GFX_RB_WPTR%s initialised with %08X, not"
+				       " 0   <-- wrong: upstream's fresh arm must not move\n",
+				       label, i, k ? "_HI" : "", v[0]);
+				bad++;
+			}
+			if (v[1] != want_second[k]) {
+				printf("    %s: SDMA%d_GFX_RB_WPTR%s programmed %08X, expected"
+				       " %08X   <-- wrong\n", label, i, k ? "_HI" : "", v[1],
+				       want_second[k]);
+				bad++;
+			}
+		}
+
+		if (verbose && bad == 0)
+			printf("    %s: SDMA%d pointer registers 0, 0, 0/%08X, 0/%08X\n", label, i,
+			       want_second[0], want_second[1]);
+	}
+	return bad;
+}
+
+/* Unit A's own traffic on one engine: a ring test, then its fences. Each of them is a doorbell, and
+ * each doorbell is what moves the engine. */
+static unsigned int sdma_arm_submit(struct amdgpu_device *adev, int inst, int verbose)
+{
+	struct amdgpu_ring *ring = &adev->sdma.instance[inst].ring;
+	unsigned int k, bad = 0;
+	int r;
+
+	r = bc250_sdma_ring_test(ring);
+	if (r != 0) {
+		printf("    sdma%d: the ring test returned %d   <-- wrong\n", inst, r);
+		return 1;
+	}
+
+	for (k = 0; k < g_sdma_arm_fences[inst]; k++) {
+		unsigned int slot = SDMA_ARM_FENCE_SLOT(inst, k);
+		u64 seq = SDMA_ARM_SEQ_BASE + slot;
+
+		r = bc250_sdma_signal_fence(ring, bc250_sdma_fence_addr(adev, slot), seq, 0);
+		if (r != 0) {
+			printf("    sdma%d: fence %u returned %d   <-- wrong\n", inst, k, r);
+			bad++;
+			continue;
+		}
+		if ((u32)bc250_sdma_fence_read(adev, slot) != (u32)seq) {
+			printf("    sdma%d: fence %u did not land in its slot   <-- wrong\n",
+			       inst, k);
+			bad++;
+		}
+	}
+	if (verbose && bad == 0)
+		printf("    sdma%d: a ring test and %u fences, all executed\n", inst,
+		       g_sdma_arm_fences[inst]);
+	return bad;
+}
+
+static unsigned int check_sdma_pointers(struct amdgpu_device *adev, int verbose)
+{
+	struct bc250_gfx_inputs fin;
+	u64 final_ptr[AMDGPU_MAX_SDMA_INSTANCES];
+	u64 base_before[AMDGPU_MAX_SDMA_INSTANCES];
+	u64 fresh[AMDGPU_MAX_SDMA_INSTANCES];
+	u64 one_submission;
+	unsigned int bad = 0, ignored_before;
+	int i, r;
+
+	printf("\n== the SDMA engines across a second bring-up (experiment E15) ==\n");
+
+	memset(final_ptr, 0, sizeof(final_ptr));
+	memset(fresh, 0, sizeof(fresh));
+
+	/* A device of this arm's own. The arms above leave one running, and what is measured here is
+	 * what TWO bring-ups in one device start do to the engines. */
+	(void)bc250_gfx_hw_fini(adev);
+	bc250_sdma_teardown(adev);
+	bc250_gfx_teardown(adev);
+	memset(&fin, 0, sizeof(fin));
+	fin.max_shader_engines = UNITA_MAX_SHADER_ENGINES;
+	fin.max_sh_per_se = UNITA_MAX_SH_PER_SE;
+	fin.max_cu_per_sh = UNITA_MAX_CU_PER_SH;
+	fin.max_backends_per_se = UNITA_MAX_BACKENDS_PER_SE;
+	fin.async_gfx_ring = true;
+	fin.pp_gfxoff = true;
+	if (bc250_gfx_setup(adev, &fin) != 0 || bc250_sdma_setup(adev) != 0) {
+		printf("  the setup failed; nothing to bring up\n");
+		return 1;
+	}
+	register_rings(adev);
+	if (bc250_sdma_fence_page_alloc(adev) != 0) {
+		printf("  bc250_sdma_fence_page_alloc failed; the ring test has no scratch slot\n");
+		return 1;
+	}
+
+	backend_reset_writes();
+	r = bc250_gfx_hw_init(adev);
+	if (r == 0)
+		r = bc250_sdma_hw_init(adev);
+	if (r != 0) {
+		printf("  the first bring-up returned %d   <-- wrong\n", r);
+		return bad + 1;
+	}
+	bad += check_sdma_pointer_writes("first bring-up", adev, fresh, verbose);
+
+	ignored_before = backend_sdma_ignored_doorbells();
+	for (i = 0; i < adev->sdma.num_instances; i++)
+		bad += sdma_arm_submit(adev, i, verbose);
+
+	for (i = 0; i < adev->sdma.num_instances; i++) {
+		struct amdgpu_ring *ring = &adev->sdma.instance[i].ring;
+
+		final_ptr[i] = backend_sdma_engine_wptr(ring);
+		base_before[i] = ring->gpu_addr;
+		printf("  sdma%d: %u submissions leave the engine at 0x%llX bytes\n", i,
+		       1u + g_sdma_arm_fences[i], (unsigned long long)final_ptr[i]);
+		if (final_ptr[i] != (ring->wptr << 2)) {
+			printf("    the driver thinks it is at 0x%llX   <-- wrong\n",
+			       (unsigned long long)(ring->wptr << 2));
+			bad++;
+		}
+		if (i < (int)ARRAY_SIZE(g_sdma_arm_final) && final_ptr[i] != g_sdma_arm_final[i]) {
+			printf("    unit A's engine finished at 0x%llX   <-- wrong: this arm is not"
+			       " walking the same submissions\n",
+			       (unsigned long long)g_sdma_arm_final[i]);
+			bad++;
+		}
+	}
+
+	/*
+	 * The undo says whether the engines drained, not only whether they halted, and that is a
+	 * separate statement from everything above: HALT stops an engine wherever it stands, and one
+	 * stopped with its read pointer behind its write pointer is still holding packets that name
+	 * this instance's ring, fence slots and copy destinations - which the miniport is about to
+	 * give back to the page allocator.
+	 *
+	 * Nothing in driver/shim can produce that state, because the stub executes a submission
+	 * whole. backend_sdma_hold_back() is the test speaking for hardware, as backend_hqd_pin() is
+	 * for a queue that will not answer an unmap: sdma0 answers with its read pointer one
+	 * submission behind, and the fini has to notice.
+	 */
+	one_submission = ((u64)adev->sdma.instance[0].ring.funcs->align_mask + 1u) * 4u;
+	backend_sdma_hold_back(&adev->sdma.instance[0].ring, one_submission);
+	r = bc250_sdma_hw_fini(adev);
+	if (r == 0) {
+		printf("  the undo passed an engine that halted one submission short of its write"
+		       " pointer   <-- wrong\n");
+		bad++;
+	} else {
+		printf("  an engine halted mid-queue makes the undo return %d        : yes\n", r);
+	}
+	backend_sdma_hold_back(&adev->sdma.instance[0].ring, 0);
+
+	/* And with both engines drained it has to pass, or the check above would be worthless. The
+	 * halt sequence is register writes and is safe to run twice; the engines are already down. */
+	r = bc250_sdma_hw_fini(adev);
+	if (r != 0) {
+		printf("  the undo returned %d with both engines drained   <-- wrong\n", r);
+		bad++;
+	}
+
+	/* Then the rings freed and allocated again, exactly as the miniport does it. */
+	(void)bc250_gfx_hw_fini(adev);
+	bc250_sdma_teardown(adev);
+	bc250_gfx_teardown(adev);
+	if (bc250_gfx_setup(adev, &fin) != 0 || bc250_sdma_setup(adev) != 0) {
+		printf("  the second setup failed; nothing to re-run\n");
+		return bad + 1;
+	}
+	register_rings(adev);
+
+	printf("\n  == the second bring-up, rings at fresh addresses ==\n");
+	backend_reset_writes();
+	backend_touched_start();
+	r = bc250_gfx_hw_init(adev);
+	if (r == 0)
+		r = bc250_sdma_hw_init(adev);
+	backend_touched_stop();
+	if (r != 0) {
+		printf("  the second bring-up returned %d   <-- wrong\n", r);
+		return bad + 1;
+	}
+
+	bad += check_sdma_pointer_writes("second bring-up", adev, final_ptr, verbose);
+
+	for (i = 0; i < adev->sdma.num_instances; i++) {
+		struct amdgpu_ring *ring = &adev->sdma.instance[i].ring;
+
+		if (ring->gpu_addr == base_before[i]) {
+			printf("  sdma%d's ring did not move; a stale pointer would find valid memory"
+			       " and show nothing   <-- wrong\n", i);
+			bad++;
+		}
+		if ((ring->wptr << 2) != final_ptr[i]) {
+			printf("  sdma%d adopted 0x%llX, the first run left 0x%llX   <-- wrong\n", i,
+			       (unsigned long long)(ring->wptr << 2),
+			       (unsigned long long)final_ptr[i]);
+			bad++;
+		} else {
+			printf("  sdma%d: ring 0x%llX -> 0x%llX, write pointer adopted at 0x%llX\n",
+			       i, (unsigned long long)base_before[i],
+			       (unsigned long long)ring->gpu_addr,
+			       (unsigned long long)final_ptr[i]);
+		}
+		/* And into the slot the engine polls, which F32_POLL_ENABLE has just turned on over a
+		 * page that was allocated a moment ago and reads 0. */
+		if (ring->wptr_cpu_addr != NULL &&
+		    *(volatile u64 *)ring->wptr_cpu_addr != final_ptr[i]) {
+			printf("  sdma%d's write-back slot holds 0x%llX, not the adopted 0x%llX"
+			       "   <-- wrong\n", i,
+			       (unsigned long long)*(volatile u64 *)ring->wptr_cpu_addr,
+			       (unsigned long long)final_ptr[i]);
+			bad++;
+		}
+	}
+
+	/* And the thing all of it is for. */
+	for (i = 0; i < adev->sdma.num_instances; i++) {
+		r = bc250_sdma_ring_test(&adev->sdma.instance[i].ring);
+		if (r != 0) {
+			printf("  sdma%d: the ring test after the second bring-up returned %d"
+			       "   <-- wrong: the engine executed nothing\n", i, r);
+			bad++;
+		}
+	}
+	if (backend_sdma_ignored_doorbells() != ignored_before) {
+		printf("  %u doorbells were at or below the engine's pointer and executed nothing"
+		       "   <-- wrong\n", backend_sdma_ignored_doorbells() - ignored_before);
+		bad++;
+	} else if (bad == 0) {
+		printf("  both engines ran again, and no doorbell was ignored  : yes\n");
+	}
+
+	/*
+	 * The two refusals. A kept pointer that is not a whole submission, and the all-ones a faulted
+	 * register sequence or a dead bus answers with, both have to stop the bring-up rather than be
+	 * rounded into something plausible - a pointer we do not understand is not one to build on.
+	 * A working engine never reaches either state, so the backend says them for the hardware.
+	 *
+	 * Last in this arm, because a refused bring-up leaves the engine half programmed. The control
+	 * runs that follow start from backend_mem_reset() and a fresh adev, so nothing inherits it.
+	 */
+	{
+		static const struct { const char *what; u64 wptr; } refuse[] = {
+			{ "half a submission",        0x120u },
+			{ "one dword past a whole one", 0x104u },
+			{ "an odd byte",              0x101u },
+			{ "all-ones, which is a dead read", 0xffffffffu }
+		};
+		struct amdgpu_ring *ring = &adev->sdma.instance[0].ring;
+		unsigned int k;
+
+		for (k = 0; k < ARRAY_SIZE(refuse); k++) {
+			backend_sdma_force_engine_wptr(ring, refuse[k].wptr);
+			r = bc250_sdma_hw_init(adev);
+			if (r != BC250_EINVAL) {
+				printf("    sdma0 kept 0x%llX (%s) and the bring-up returned %d, not"
+				       " BC250_EINVAL   <-- wrong\n",
+				       (unsigned long long)refuse[k].wptr, refuse[k].what, r);
+				bad++;
+			} else if (verbose) {
+				printf("    sdma0 kept 0x%llX (%s): refused\n",
+				       (unsigned long long)refuse[k].wptr, refuse[k].what);
+			}
+		}
+		backend_sdma_force_engine_wptr(ring, final_ptr[0]);
+		printf("  four write pointers no engine should ever hold, all refused  : %s\n",
+		       bad == 0 ? "yes" : "no");
+	}
+
+	bad += survey_fini_registers("the SDMA second bring-up", adev, verbose);
+
+	bc250_sdma_fence_page_free(adev);
+	printf("  %u wrong\n", bad);
+	return bad;
+}
+
+/* ---------------------------------------------------------------------------------------------
  * Stage 0: nv_common_hw_init's NBIO writes
  *
  * Half a second before the GFX window, at t = 0.0383, and compared against its own three traced
@@ -1620,15 +2026,46 @@ static unsigned int check_gart(struct amdgpu_device *adev, int verbose)
 	return bad;
 }
 
+/* The fifth declared model: the SDMA engines' own write pointer, measured in E15. backend_mem.h
+ * sets out the four things the sweeps showed. The pointer survives without being declared - it is
+ * what the hardware does, so the backend does it for every SDMA ring - and what this call adds is
+ * the ability to ANSWER a read of the pointer registers with it, which needs to know which offset
+ * is which. Every offset comes from AMD's headers through bc250_sdma_reg_offset(). */
+static void declare_sdma_pointer_state(struct amdgpu_device *adev, int i)
+{
+	struct backend_sdma_regs r;
+
+	memset(&r, 0, sizeof(r));
+	r.rb_rptr           = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR) * 4u;
+	r.rb_rptr_hi        = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR_HI) * 4u;
+	r.rb_wptr           = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR) * 4u;
+	r.rb_wptr_hi        = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR_HI) * 4u;
+	/* The fetch pointer has no GFX in its name; regcalc says mmSDMA0_GFX_RB_RPTR_FETCH does not
+	 * exist, and this one does. Nothing in driver/shim reads it, and the model answers it anyway
+	 * so that the three pointer registers agree with each other. */
+	r.rb_rptr_fetch     = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_RB_RPTR_FETCH) * 4u;
+	r.rb_rptr_fetch_hi  = bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_RB_RPTR_FETCH_HI) * 4u;
+	backend_add_sdma_pointer_state(&adev->sdma.instance[i].ring, &r);
+}
+
 static void register_rings(struct amdgpu_device *adev)
 {
 	u32 i;
+	int k;
 
 	backend_ring_register(&adev->gfx.kiq[0].ring);
 	for (i = 0; i < adev->gfx.num_compute_rings; i++)
 		backend_ring_register(&adev->gfx.compute_ring[i]);
 	for (i = 0; i < adev->gfx.num_gfx_rings; i++)
 		backend_ring_register(&adev->gfx.gfx_ring[i]);
+
+	/* The SDMA rings too, since E15. Nothing submits on them in most of this file, so before
+	 * that arm they were left out and their doorbells resolved to no ring at all; a model of what
+	 * the engines remember cannot be checked against a ring the backend has never heard of. */
+	for (k = 0; k < adev->sdma.num_instances; k++) {
+		backend_ring_register(&adev->sdma.instance[k].ring);
+		declare_sdma_pointer_state(adev, k);
+	}
 }
 
 static void run_one(const char *title, const struct run_opts *opt, struct amdgpu_device *adev,
@@ -2174,7 +2611,7 @@ int main(int argc, char **argv)
 	struct result derived, ctl_async, ctl_gfxoff, ctl_nostub, ctl_perring;
 	struct run_opts opt;
 	unsigned int i, stray = 0, gart_bad = 0, mqd_bad = 0, rerun_bad = 0, unclean_bad = 0;
-	unsigned int stuck_bad = 0;
+	unsigned int stuck_bad = 0, sdma_ptr_bad = 0;
 	int verbose = 0, exact, controls_fail;
 	const char *sweep1, *sweep2, *trace, *trace_irq, *dumpdir = NULL, *ringsdir = NULL;
 	const char *winsweep = NULL;
@@ -2267,6 +2704,10 @@ int main(int argc, char **argv)
 	if (derived.irq_rc == 0 && rerun_bad == 0 && stuck_bad == 0)
 		unclean_bad = check_unclean_start(&adev, verbose);
 
+	/* And after that, because it takes the device down and builds two bring-ups of its own. */
+	if (derived.irq_rc == 0 && rerun_bad == 0 && stuck_bad == 0 && unclean_bad == 0)
+		sdma_ptr_bad = check_sdma_pointers(&adev, verbose);
+
 	/* Four controls, one per claim that is not forced by the register sequence itself.
 	 *
 	 * The first two are the two module parameters struct bc250_gfx_inputs carries: its comment
@@ -2334,6 +2775,7 @@ int main(int argc, char **argv)
 	printf("  teardown-and-rerun checks wrong     : %u\n", rerun_bad);
 	printf("  stuck-queue checks wrong            : %u\n", stuck_bad);
 	printf("  unclean-start recovery wrong        : %u\n", unclean_bad);
+	printf("  SDMA pointer-adoption checks wrong  : %u\n", sdma_ptr_bad);
 	printf("  mismatches, control async_gfx_ring  : %u\n", ctl_async.bringup.mismatches);
 	printf("  mismatches, control pp_gfxoff       : %u\n", ctl_gfxoff.bringup.mismatches);
 	printf("  control with the CP stub off        : gfx_hw_init returned %d\n", ctl_nostub.gfx_rc);
@@ -2383,6 +2825,11 @@ int main(int argc, char **argv)
 		printf("BRING-UP EXACT over %u + %u writes, BUT it does not recover from a start where\n"
 		       "           the last instance left the KIQ up (%u failing check above)\n",
 		       derived.bringup.compared, derived.irq.compared, unclean_bad);
+	else if (sdma_ptr_bad != 0)
+		printf("BRING-UP EXACT over %u + %u writes, BUT the SDMA engines do not run again after\n"
+		       "           a second bring-up: they keep the write pointer the first run left and\n"
+		       "           the driver does not adopt it (%u failing check above)\n",
+		       derived.bringup.compared, derived.irq.compared, sdma_ptr_bad);
 	else if (rerun_bad != 0)
 		printf("BRING-UP EXACT over %u + %u writes, BUT it does not survive its own teardown\n"
 		       "           (%u failing check above. The first bring-up, which is what experiment\n"
@@ -2400,5 +2847,5 @@ int main(int argc, char **argv)
 		derived.address_failures == 0 && derived.stub_hits == 11 &&
 		derived.stub_rejects == 0 && stray == 0 &&
 		derived.stage0_bad == 0 && gart_bad == 0 && mqd_bad == 0 && rerun_bad == 0 &&
-		stuck_bad == 0 && unclean_bad == 0 && controls_fail) ? 0 : 1;
+		stuck_bad == 0 && unclean_bad == 0 && sdma_ptr_bad == 0 && controls_fail) ? 0 : 1;
 }

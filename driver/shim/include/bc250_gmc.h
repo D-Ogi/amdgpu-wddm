@@ -20,6 +20,7 @@
 /* Return codes, negative like the kernel's, with Linux's numeric values so that a code seen in a
  * log means the same thing on both sides. */
 #define BC250_EINVAL	(-22)
+#define BC250_EBUSY	(-16)
 #define BC250_ETIME	(-62)
 
 /*
