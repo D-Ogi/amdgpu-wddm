@@ -7,7 +7,7 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 | Path | Origin | License | Notes |
 |---|---|---|---|
 | `third_party/linux-amdgpu/*.h` | Linux kernel, `drivers/gpu/drm/amd/include/` (per-file commit in `PROVENANCE.md` there) | MIT (notice in each file), Copyright Advanced Micro Devices, Inc. | Unmodified register headers: offsets, field masks and shifts, reset defaults, the memory-type enum, hardware IP ids. Input of `tools/regcalc` and of the imports below |
-| `driver/amdgpu-import/*.c`, `*.h` | Linux kernel, `drivers/gpu/drm/amd/amdgpu/`, tag v6.18, commit `7d0a66e4bb90` (see `PROVENANCE.md` there) | MIT (notice checked in each file), Copyright Advanced Micro Devices, Inc. | Unmodified IP-block sources (ADR 0002): the GFXHUB and MMHUB GART setup, the Cyan Skillfish register base table, the SOC15 register macros. Compiled against `driver/shim`, never edited |
+| `driver/amdgpu-import/*.c`, `*.h` | Linux kernel, `drivers/gpu/drm/amd/amdgpu/`, tag v6.18, commit `7d0a66e4bb90` (see `PROVENANCE.md` there) | MIT (notice checked in each file), Copyright Advanced Micro Devices, Inc. | Unmodified IP-block sources (ADR 0002): the GFXHUB and MMHUB GART setup, the Cyan Skillfish register base table, the SOC15 register macros, the PSP 11.0.8 ring code and the PSP interface header. Compiled against `driver/shim`, never edited |
 
 ## Fetched at build time, not stored here
 

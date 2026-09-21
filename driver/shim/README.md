@@ -12,6 +12,11 @@ include/nv.h            stand-in for amdgpu's nv.h (one prototype)
 include/gc/, mmhub/     forwarding headers, so "gc/gc_10_1_0_offset.h" finds third_party/linux-amdgpu/
 shim.c                  the few entry points that cannot be macros
 bc250_gmc.c             setup, gart_enable, gart_disable, flush_gpu_tlb - the code under test
+include/amdgpu_psp.h    the slice of amdgpu_psp.h the imported psp_v11_0_8.c compiles against
+include/amdgpu_ucode.h  the firmware file headers (common, gfx v1.0, rlc v2.0, sdma v1.0)
+include/bc250_psp.h     firmware loading through the PSP: the entry points (milestone M5)
+include/mp/             forwarding header for "mp/mp_11_0_8_offset.h"
+bc250_psp.c             ring create/stop, SETUP_TMR, LOAD_IP_FW, firmware file parsing
 test/                   the host replay test, see below
 ```
 
@@ -177,3 +182,30 @@ the kernel that ran rather than from the tag the imports come from.
 The test runs both values and prints both. With `true` the 285 writes are identical to the trace;
 with `false` exactly 30 writes differ, all of them `GCVM/MMVM_CONTEXT1..15_CNTL` and all of them in
 that one bit.
+
+## Firmware through the PSP (M5)
+
+On 1002:13FE amdgpu loads all GPU firmware through the PSP (`AMDGPU_FW_LOAD_PSP`, `psp_v11_0_8`,
+no autoload, no boot-time TMR): it creates the kernel-mode ring of the PSP's trusted OS, sends
+`GFX_CMD_ID_SETUP_TMR`, then ten `GFX_CMD_ID_LOAD_IP_FW` (SDMA0, SDMA1, CE, PFP, ME, MEC1, MEC1 jump
+table, MEC2, MEC2 jump table, RLC). Eleven submissions, which is the count on `MP0_SMN_C2PMSG_67` in
+the E03 trace, and their spacing there (0.1 ms for the jump tables, 2 ms for SDMA, 6 ms for the
+260 KB images) fits the image sizes.
+
+`bc250_psp.c` is the hardware-independent part, compiled into the host test and into the miniport
+alike. The register traffic is AMD's `psp_v11_0_8.c`, unmodified. The command path follows
+`amdgpu_psp.c` function by function (each one names its upstream counterpart); two deliberate
+deviations: a PSP status other than 0 is an error (upstream only warns), and the fence is polled
+with a 50 us busy wait. The owner supplies the memory: ring, command buffer and fence page with CPU
+pointer and MC address, the TMR's MC address, and wherever it staged the images.
+
+`test/replay_psp.c` (`pwsh driver\shim\test\run_psp.ps1`) runs it against a model of the PSP. The
+model answers the ring create as unit A's PSP answered amdgpu, parses every ring frame and command
+buffer by `psp_gfx_if.h`, and writes the fence. Result: all 28 mailbox accesses of amdgpu's PSP
+phase, reads included, reproduced in order and value, with no exception list (the ring sits at the
+MC address amdgpu used); eleven well-formed commands with amdgpu's firmware types and the sizes the
+file headers give; two control runs (a PSP that stays silent, a PSP that refuses a command) stop
+the sequence where they should. What the model cannot show is what the real PSP accepts; that is
+the hardware experiment's job. The firmware files are linux-firmware's
+`amdgpu/cyan_skillfish2_*.bin`, kept outside this repository; their versions equal what amdgpu
+reported on unit A (E01).

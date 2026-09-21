@@ -1,18 +1,19 @@
-# Builds and runs the M4 shim replay test, and compile-checks the same shim with the WDK kernel
-# flags the miniport uses. Host-side only: nothing here touches the lab machine.
+# Builds and runs the host test of the PSP path (replay_psp.c), and compile-checks the same sources
+# with the WDK kernel flags the miniport uses. Host-side only: nothing here touches the lab machine.
 #
-#   pwsh driver\shim\test\run.ps1
-#   pwsh driver\shim\test\run.ps1 -Out P:\BC-250\scratch\m4shim -Verbose250
+#   pwsh driver\shim\test\run_psp.ps1
+#   pwsh driver\shim\test\run_psp.ps1 -Firmware P:\BC-250\ref\linux-firmware\amdgpu -Verbose250
 #
-# Everything is written under -Out (default P:\BC-250\scratch\m4shim), never into the repository
-# and never onto drive C:.
+# Everything is written under -Out (default P:\BC-250\scratch\m5psp), never into the repository and
+# never onto drive C:. The firmware files are linux-firmware's amdgpu/cyan_skillfish2_*.bin; they
+# are not part of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\m4shim',
+    [string]$Out = 'P:\BC-250\scratch\m5psp',
+    [string]$Firmware = 'P:\BC-250\ref\linux-firmware\amdgpu',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
-    [switch]$Verbose250,
-    [switch]$SkipTrace
+    [switch]$Verbose250
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,8 +29,7 @@ $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object N
 $bin = Join-Path $msvc.FullName 'bin\Hostx64\x64'
 $wdk = Join-Path $Kits 'microsoft.windows.wdk.x64\c'
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
-$sdklib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'    # the headers and the import libraries
-                                                               # come from two different packages
+$sdklib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
 
 $objUser = Join-Path $Out 'obj-user'
 $objKern = Join-Path $Out 'obj-kernel'
@@ -44,39 +44,34 @@ function Invoke-Tool([string]$exe, [string[]]$argv) {
 $env:INCLUDE = ''
 $env:LIB = ''
 
-# /W4 /WX for our own code. The imported AMD files are compiled unmodified, so the two warnings
-# they raise are turned off from here and nowhere else:
-#   C4244  u64 -> u32 in the SR-IOV arm of soc15_common.h's register macros (AGP_BOT/TOP and the
-#          system aperture are programmed from 64-bit MC addresses; the arm is never taken).
-#   C4701  mmhub_v2_0_update_medium_grain_clock_gating() reads `def`/`data` on the 2.1.x branch
-#          where it never assigned them. Upstream defect, unreachable on GC 10.1.3, not our call.
-$importWarn = @('/wd4244', '/wd4701')
+# AMD's interface header psp_gfx_if.h uses a nameless union and bit fields of type uint32_t. Both are
+# accepted by every compiler this code meets; MSVC reports them at /W4 (C4201, C4214). Turned off from
+# the build line, for the files that include the header, and nowhere else. C4244 and C4701 are the
+# ones run.ps1 explains; C4100: psp_v11_0_8_ring_stop() does not use its ring_type argument (there
+# is one ring). Imports only.
+$pspWarn = @('/wd4201', '/wd4214')
+$importWarn = @('/wd4244', '/wd4701', '/wd4100')
 
-$shimSources = @((Join-Path $shim 'shim.c'), (Join-Path $shim 'bc250_gmc.c'))
-# Named, not globbed: drivermdgpu-import also holds imports of later milestones, which have their
-# own tests (run_psp.ps1) and their own warning lists.
-$importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c') | ForEach-Object { Join-Path $imports $_ }
-$testSources = @((Join-Path $shim 'test\backend_trace.c'), (Join-Path $shim 'test\replay.c'))
+$shimSources = @((Join-Path $shim 'shim.c'), (Join-Path $shim 'bc250_gmc.c'), (Join-Path $shim 'bc250_psp.c'))
+$importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { Join-Path $imports $_ }
+$testSources = @((Join-Path $shim 'test\replay_psp.c'))
 
 $incUser = @("/I$shim\include", "/I$imports", "/I$amdhdr",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 
-Write-Host 'compile (user mode, host replay test)'
-Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS') +
+Write-Host 'compile (user mode, host test)'
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi', '/D_CRT_SECURE_NO_WARNINGS') + $pspWarn +
     $incUser + @("/Fo$objUser\", "/Fd$objUser\cl.pdb") + $shimSources + $testSources)
-Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi') + $importWarn +
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/TC', '/W4', '/WX', '/Od', '/Zi') + $pspWarn + $importWarn +
     $incUser + @("/Fo$objUser\", "/Fd$objUser\cl.pdb") + $importSources)
 
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DEBUG', '/MACHINE:X64', '/SUBSYSTEM:CONSOLE',
         "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64",
         "/LIBPATH:$($msvc.FullName)\lib\x64",
-        "/OUT:$Out\replay.exe", "/PDB:$Out\replay.pdb") + (Get-ChildItem "$objUser\*.obj").FullName)
+        "/OUT:$Out\replay_psp.exe", "/PDB:$Out\replay_psp.pdb") + (Get-ChildItem "$objUser\*.obj").FullName)
 
-# The same sources with the flags of driver\kmd\build.ps1. Compile only: there is no kernel backend
-# for bc250_shim_rreg/wreg yet, so nothing to link. BC250_SHIM_KERNEL picks the kernel variant of
-# the fixed-width types (the WDK's km CRT has no <stdint.h>).
 Write-Host 'compile (kernel flags, same sources, no link)'
 $incKern = @("/I$shim\include", "/I$imports", "/I$amdhdr",
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
@@ -87,22 +82,19 @@ $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '
 Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + $incKern + @("/Fo$objKern\", "/Fd$objKern\cl.pdb") + $shimSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + $importWarn + $incKern + @("/Fo$objKern\", "/Fd$objKern\cl.pdb") + $importSources)
 
-# The reference trace, made with the recipe in the test's header comment.
-$traceFile = Join-Path $Out 'trace-gart.txt'
-if (-not $SkipTrace -or -not (Test-Path $traceFile)) {
-    Write-Host 'extract the reference trace'
-    & python (Join-Path $repo 'tools\trace\extract_phase.py') (Join-Path $evid 'amdgpu-events.txt') `
-        --match 'GCVM|GCMC|MMVM|MMMC' --until 0.26 | Set-Content -Encoding ascii $traceFile
-    if ($LASTEXITCODE -ne 0) { throw 'extract_phase.py failed' }
-}
+Write-Host 'extract the reference trace'
+$traceFile = Join-Path $Out 'trace-psp.txt'
+& python (Join-Path $repo 'tools\trace\extract_phase.py') (Join-Path $evid 'amdgpu-events.txt') `
+    --match 'MP0\.MP0_SMN_C2PMSG_(6|7)' --reads --until 0.309 | Set-Content -Encoding ascii $traceFile
+if ($LASTEXITCODE -ne 0) { throw 'extract_phase.py failed' }
 
 Write-Host 'run'
 $argv = @((Join-Path $evid 'sweep-before-run1-GC-complete-then-hang.log'),
           (Join-Path $evid 'sweep-before-run2-nonGC.log'),
-          $traceFile)
+          $traceFile, $Firmware)
 if ($Verbose250) { $argv += '-v' }
-& "$Out\replay.exe" @argv
+& "$Out\replay_psp.exe" @argv
 $code = $LASTEXITCODE
 Write-Host ''
-Write-Host "replay.exe exit code $code"
+Write-Host "replay_psp.exe exit code $code"
 exit $code

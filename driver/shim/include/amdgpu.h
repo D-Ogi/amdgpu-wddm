@@ -328,6 +328,12 @@ struct amdgpu_mem_scratch {
 	u64 gpu_addr;
 };
 
+/* [shim] adev->firmware, cut down to the one member psp_v11_0_8_ring_destroy() names: the buffer
+ * object of the PSP ring. The ring's memory belongs to whoever set the PSP context up. */
+struct amdgpu_firmware {
+	struct amdgpu_bo *rbuf;
+};
+
 struct amdgpu_device {
 	void			*dev;           /* opaque owner handle, only passed to the log macros */
 
@@ -342,6 +348,7 @@ struct amdgpu_device {
 	struct amdgpu_vmhub	vmhub[AMDGPU_MAX_VMHUBS];
 	struct amdgpu_vm_manager vm_manager;
 	struct amdgpu_mem_scratch mem_scratch;
+	struct amdgpu_firmware	firmware;
 
 	u64			dummy_page_addr;   /* DMA address of the dummy page (dma_addr_t upstream) */
 	u64			cg_flags;
@@ -379,6 +386,11 @@ static __inline uint32_t amdgpu_ip_version(const struct amdgpu_device *adev,
 	 */
 	return adev->ip_versions[ip][inst] & ~0xFFU;
 }
+
+/* [shim] amdgpu_object.c upstream: unpin, unmap and free a kernel buffer object. The shim owns no
+ * memory (see struct amdgpu_bo), so this only clears the three references, which is the part of the
+ * upstream contract a caller can observe. Implemented in driver/shim/bc250_psp.c. */
+void amdgpu_bo_free_kernel(struct amdgpu_bo **bo, u64 *gpu_addr, void **cpu_addr);
 
 /* [amdgpu] amdgpu_gmc.c: MC address of a VRAM buffer -> physical address. */
 u64 amdgpu_gmc_vram_mc2pa(struct amdgpu_device *adev, u64 mc_addr);
