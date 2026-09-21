@@ -26,6 +26,10 @@ The previous driver attempt did not fail because of the hardware. It failed beca
 
 - Everything in the repo is in English: docs, code, identifiers, commit messages.
 - Plain hyphens `-` in prose, no em dashes.
+- One exception to the English rule, by the owner's wish: a Polish saying or proverb that fits the situation
+  is welcome now and then in journals, READMEs and comments, in Polish with its diacritics, followed by a
+  short English gloss. Dry, slightly dark humour likewise. Let future readers pick up some Polish culture
+  along the way. Never in `docs/facts.md` rows, evidence files or safety rules, where precision comes first.
 - Small single-topic commits. An experiment result is committed together with its evidence and the `docs/facts.md` update.
 
 ## Commands

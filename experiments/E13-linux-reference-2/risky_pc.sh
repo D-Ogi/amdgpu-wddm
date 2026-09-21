@@ -29,7 +29,9 @@ reset)
 	CMD="echo 'bc250 begin reset' > $T/trace_marker; sync; cat /sys/kernel/debug/dri/0000:01:00.0/amdgpu_gpu_recover; echo rc \$?; sleep 5; echo 'bc250 end reset' > $T/trace_marker"
 	;;
 suspend)
-	CMD="echo 'bc250 begin suspend' > $T/trace_marker; sync; echo 0 > /sys/class/rtc/rtc0/wakealarm; echo +25 > /sys/class/rtc/rtc0/wakealarm; echo mem > /sys/power/state; echo rc \$?; sleep 5; echo 'bc250 end suspend' > $T/trace_marker"
+	# No alarm, no sleep: the first attempt (boot 5) could not write wakealarm ("Permission denied", as root), slept
+	# anyway and stayed asleep until the owner came by. "Mądry Polak po szkodzie" (a Pole is wise after the damage).
+	CMD="echo 'bc250 begin suspend' > $T/trace_marker; sync; echo 0 > /sys/class/rtc/rtc0/wakealarm; if echo +25 > /sys/class/rtc/rtc0/wakealarm && [ \"\$(cat /sys/class/rtc/rtc0/wakealarm)\" != '' ]; then echo mem > /sys/power/state; echo rc \$?; sleep 5; else echo 'no wake alarm, not suspending'; ls -l /sys/class/rtc/rtc0/wakealarm; cat /sys/class/rtc/rtc0/name; fi; echo 'bc250 end suspend' > $T/trace_marker"
 	;;
 unload)
 	CMD="pkill -f qrshow.py; for v in /sys/class/vtconsole/vtcon*; do grep -q 'frame buffer' \$v/name && echo 0 > \$v/bind; done; echo 'bc250 begin unload' > $T/trace_marker; sync; modprobe -r amdgpu; echo rc \$?; echo 'bc250 end unload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
