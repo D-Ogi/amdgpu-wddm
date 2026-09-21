@@ -1,7 +1,7 @@
 # ADR 0006: M3 is a display-only miniport of our own, built for a lab without a kernel debugger
 
-Date: 2026-09-21. Status: proposed; becomes accepted when experiment E05 has shown that a display-only driver
-can own `1002:13FE` on unit A and keep the firmware's display. If E05 fails, this ADR is rewritten, not amended.
+Date: 2026-09-21. Status: **accepted** the same day. The condition was that experiment E05 shows that a
+display-only driver can own `1002:13FE` on unit A and keep the firmware's display; run 001 showed it (facts M26).
 
 ## Context
 
@@ -58,6 +58,17 @@ can own `1002:13FE` on unit A and keep the firmware's display. If E05 fails, thi
   whether M5 needs a PSP path first.
 - Whether the owner can connect the wired NIC, which would give us KDNET and make point 4 a convenience
   instead of the only source of truth.
+
+## Update, 2026-09-21 (after acceptance; the text above is left as decided)
+
+- The owner connected the wired NIC. KDNET works over the on-board RTL8168 and the recovery boot entry has
+  network and SSH over that path (facts M27). The context line "the lab has no kernel debugger" is no longer
+  true. Points 3 and 4 stay: the guard protects against boot loops with or without a debugger, and the
+  breadcrumbs are what the owner sees on the overlay and what survives when no debugger is attached.
+- Baseline for the escape question, measured before our driver exists: `D3DKMTEscape` with a driver-private
+  request returns `STATUS_INVALID_PARAMETER` from Basic Display and `STATUS_NOT_SUPPORTED` from the KMDOD
+  sample on the same device (`evidence/windows/2026-09-21-escape-probe/`). Neither implements an escape of
+  ours, so this does not answer the question; the M3 driver does.
 
 ## Consequences
 

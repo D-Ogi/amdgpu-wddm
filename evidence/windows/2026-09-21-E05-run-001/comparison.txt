@@ -1,0 +1,40 @@
+registers per sweep: [4537, 4537, 4537]
+noise floor (sweep-GC-before-070904.log vs sweep-GC-before2-070944.log): 36 registers differ with nothing changed
+  ~ GC.CP_CE_HEADER_DUMP                         0x08690  DEF0DEF0 -> DEF1DEF1
+  ~ GC.CP_CPF_STATUS                             0x0821c  00000000 -> 10000000
+  ~ GC.CP_DMA_READ_TAGS                          0x3022c  00B40004 -> 01B40804
+  ~ GC.CP_MEC_ME1_HEADER_DUMP                    0x08238  DEF0DEF0 -> DEF1DEF1
+  ~ GC.CP_MEC_ME2_HEADER_DUMP                    0x0823c  DEF0DEF0 -> DEF1DEF1
+  ~ GC.CP_ME_HEADER_DUMP                         0x08684  DEF0DEF0 -> DEF1DEF1
+  ~ GC.CP_PFP_HEADER_DUMP                        0x08688  DEF0DEF0 -> DEF1DEF1
+  ~ GC.GCVM_INVALIDATE_ENG0_SEM                  0x0a244  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG10_SEM                 0x0a26c  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG11_SEM                 0x0a270  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG12_SEM                 0x0a274  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG13_SEM                 0x0a278  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG14_SEM                 0x0a27c  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG15_SEM                 0x0a280  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG16_SEM                 0x0a284  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG17_SEM                 0x0a288  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG1_SEM                  0x0a248  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG2_SEM                  0x0a24c  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG3_SEM                  0x0a250  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG4_SEM                  0x0a254  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG5_SEM                  0x0a258  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG6_SEM                  0x0a25c  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG7_SEM                  0x0a260  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG8_SEM                  0x0a264  00000001 -> 00000000
+  ~ GC.GCVM_INVALIDATE_ENG9_SEM                  0x0a268  00000001 -> 00000000
+  ~ GC.GCVM_L2_STATUS                            0x0a10c  00000000 -> 00000001
+  ~ GC.GDS_VM_PROTECTION_FAULT                   0x09710  00000000 -> 0000001B
+  ~ GC.GRBM_READ_ERROR                           0x08058  00000000 -> 80008088
+  ~ GC.GRBM_READ_ERROR2                          0x0805c  00000000 -> 00020000
+  ~ GC.GRBM_STATUS                               0x08010  00003028 -> 80003028
+  ~ GC.GRBM_STATUS2                              0x08008  00000008 -> 00008008
+  ~ GC.RLC_GPU_CLOCK_32                          0x3b108  AD50E475 -> 972C9631
+  ~ GC.RLC_REFCLOCK_TIMESTAMP_LSB                0x3b030  29E33042 -> 13BEE194
+  ~ GC.RLC_REFCLOCK_TIMESTAMP_MSB                0x3b034  00000003 -> 00000004
+  ~ GC.SQ_TIME_HI                                0x08df0  00000024 -> 0000002D
+  ~ GC.SQ_TIME_LO                                0x08df4  81A2C2B0 -> A27D60E5
+
+sweep-GC-after-071043.log: 11 differ from the control sweep, 0 of them outside the noise set

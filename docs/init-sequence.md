@@ -18,7 +18,7 @@ microcode do in response, nor register writes that travel inside command packets
 | 0.000 | `MM_INDEX` / `MM_DATA` walk, `0xFFFF0000` upward, 2560 reads | 2560 | reads 10 KiB from the top of VRAM through the index/data pair: the IP discovery table |
 | 0.038 | `REMAP_HDP_*_FLUSH_CNTL`, doorbell aperture enable | 3 | NBIO setup |
 | 0.039 | `GCVM_*` / `GCMC_*` and the same for `MMVM_*` / `MMMC_*` | 280 | GART: page table base registers (`LO32 = 0x6FE00001`, `HI32 = 0x4`), VM context 0 range, system aperture, fault handling, L2 control. **Both hubs (GC and MMHUB) get the same values** |
-| 0.039 - 0.251 | 99 844 reads of `MMVM_INVALIDATE_ENG17_SEM`, every one returns 0 | 0 | the first MMHUB TLB flush tries to take the invalidation semaphore (`gmc_v10_0_flush_gpu_tlb`, `usec_timeout` = 100000 polls), **never gets it**, gives up after 0.21 s and flushes anyway. All 20 later flushes get it at the first read (value 1) and release it with a write of 0. `dmesg.txt` line 817 carries the matching "Timeout waiting for sem acquire in VM flush" |
+| 0.039 - 0.251 | 99 844 reads of `MMVM_INVALIDATE_ENG17_SEM`, every one returns 0 | 0 | **artifact of our instrument, not of amdgpu**: the first MMHUB TLB flush tries to take the invalidation semaphore (`gmc_v10_0_flush_gpu_tlb`, `usec_timeout` = 100000 polls) and never gets it, because our pre-driver sweep had read that register and a read acquires the semaphore (facts M25). amdgpu gives up after 0.21 s, flushes anyway and writes 0, which releases it: all 20 later flushes get it at the first read. `dmesg.txt` line 817 carries the matching timeout; the E01 session, which did no full sweep before the driver, has none |
 | 0.25 | `*_INVALIDATE_ENG17_REQ` / `_SEM` rounds | ~70 | TLB flushes while GART tables are filled |
 | 0.253 | `IH_RB_*`, `INTERRUPT_CNTL*`, `BIF_IH_DOORBELL_RANGE` | 15 | interrupt handler ring |
 | 0.253 | `MP0_SMN_C2PMSG_69/70/71`, then `_64 = 0x20000` | 4 | PSP: ring address low/high, size `0x1000`, "create ring" |
@@ -55,6 +55,10 @@ microcode do in response, nor register writes that travel inside command packets
    executed under Windows" than the gfx ring, provided its firmware is alive (see 1).
 5. `SCRATCH_REG0` is amdgpu's own ring-test target. It is the natural first *write* under Windows as well
    (roadmap: control write), since a working driver writes it eleven times in a row with no side effect.
-6. The first MMHUB TLB flush costs amdgpu 0.21 s of polling a semaphore that is never granted. Our driver
-   must not copy that wait blindly: bound it, and find out (M4) whether the semaphore is needed at all before
-   MMHUB has been touched.
+6. The 0.21 s of semaphore polling at the first MMHUB TLB flush is **not** part of amdgpu's normal init here.
+   It is damage done by our own instrument: the pre-driver sweep of this very session had read
+   `MMVM_INVALIDATE_ENG17_SEM`, and a read acquires that semaphore (facts M25, measured later under Windows;
+   the E01 session, without a full sweep before the driver, shows no timeout). Lessons for the driver: take
+   the semaphore the way amdgpu does, with a bounded wait, and release it; lesson for the method: a register
+   read can change state, so sweeps need an allow-list that knows about side effects, and a trace taken after
+   a sweep describes a machine the sweep has already touched.
