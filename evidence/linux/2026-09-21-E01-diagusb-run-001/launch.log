@@ -1,0 +1,42 @@
+=== launch 2026-09-09T00:08:11Z kernel 6.18.52-0-lts mode=full
+( 1/17) Installing gdbm (1.26-r0)
+( 2/17) Installing hwdata-pci (0.408-r0)
+( 3/17) Installing libbz2 (1.0.8-r6)
+( 4/17) Installing libexpat (2.8.4-r0)
+( 5/17) Installing libffi (3.5.2-r1)
+( 6/17) Installing libgcc (15.2.0-r5)
+( 7/17) Installing ncurses-terminfo-base (6.6_p20260516-r0)
+( 8/17) Installing libncursesw (6.6_p20260516-r0)
+( 9/17) Installing libpanelw (6.6_p20260516-r0)
+(10/17) Installing libstdc++ (15.2.0-r5)
+(11/17) Installing mpdecimal (4.0.1-r0)
+(12/17) Installing pciutils-libs (3.15.0-r0)
+(13/17) Installing pciutils (3.15.0-r0)
+(14/17) Installing xz-libs (5.8.4-r0)
+(15/17) Installing readline (8.3.3-r1)
+(16/17) Installing sqlite-libs (3.53.4-r0)
+(17/17) Installing python3 (3.14.7-r1)
+Executing busybox-1.37.0-r31.trigger
+OK: 40.6 MiB in 45 packages
+BC-250 diag: mode=full probes=79152824 results=/media/usb/bc250/results/run-001
+  device 1002:13FE at 0000:01:00.0, bound driver: ''
+  phase A: raw BAR5 probe (524288 bytes, no GPU driver loaded)
+  phase B: loading amdgpu (can take a minute)
+  done: 3 QR code(s), results in /media/usb/bc250/results/run-001
+( 1/10) Installing openssh-keygen (10.3_p1-r1)
+( 2/10) Installing openssh-server-common (10.3_p1-r1)
+( 3/10) Installing openssh-server-common-openrc (10.3_p1-r1)
+( 4/10) Installing openssh-server (10.3_p1-r1)
+( 5/10) Installing dbus-libs (1.16.2-r2)
+( 6/10) Installing libnl3 (3.11.0-r0)
+( 7/10) Installing pcsc-lite-libs (2.4.0-r4)
+( 8/10) Installing wpa_supplicant (2.11-r4)
+( 9/10) Installing wpa_supplicant-openrc (2.11-r4)
+(10/10) Installing ifupdown-ng-wifi (0.13.0-r0)
+Executing busybox-1.37.0-r31.trigger
+OK: 47.9 MiB in 55 packages
+ssh-keygen: generating new host keys: RSA ECDSA 
+udhcpc: started, v1.37.0
+udhcpc: broadcasting discover
+udhcpc: broadcasting discover
+udhcpc: broadcasting discover
