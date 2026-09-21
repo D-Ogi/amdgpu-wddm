@@ -1,0 +1,36 @@
+bc250kmd 0x00070003 log kept at the stop: 35 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.003 stage 10
+     1      0.003 gate: EnableFullWddm 1
+     2      0.003 stage 20
+     3      0.118 stage 30
+     4      0.120 stage 31
+     5      0.120 stage 32
+     6      0.120 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.122 stage 33
+     8      0.122 stage 34
+     9      0.122 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.122 mmio: BAR5 at 0xFE800000 mapped, writes off
+    11      0.122 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes off
+    12      0.122 wddm: full table started, VRAM identified
+    13      0.122 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+    14      0.124 stage 35
+    15      0.124 stage 39
+    16      0.124 wddm: DRIVERCAPS 576 of 576 bytes: wddm 8192 sched 0x45 mm 0x60 paging node 0 flip 0x2 slots 0
+    17      0.124 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+    18      0.124 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+    19      0.124 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+    20      0.126 stage 70
+    21      0.126 wddm summary: ---- DDI calls: name, count, first log line ----
+    22      0.126 wddm summary: QueryAdapterInfo                    3  first at 17
+    23      0.126 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+    24      0.126 wddm summary: adapter info type   1       1  first at 17
+    25      0.126 wddm summary: adapter info type  15       1  first at 18
+    26      0.126 wddm summary: adapter info type  47       1  first at 19
+    27      0.126 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+    28      0.126 wddm summary: objects created/destroyed: dev 0/0 ctx 0/0 proc 0/0 alloc 0/0, 0 alive
+    29      0.126 wddm summary: submissions 0 physical + 0 virtual, 0 preemptions, last completed fence 0
+    30      0.126 wddm summary: presents 0, flips 0 of 0 address calls (0 arrived above DISPATCH_LEVEL)
+    31      0.126 wddm summary: vsync not enabled by ControlInterrupt, 0 ticks, 0 reported to dxgkrnl
+    32      0.126 wddm summary: no TDR (ResetFromTimeout and RestartFromTimeout were never called)
+    33      0.126 wddm: stop, last completed fence 0, 0 vsync ticks, 0 objects freed at the stop
+    34      0.128 stage 79

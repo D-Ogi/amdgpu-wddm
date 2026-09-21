@@ -1,6 +1,6 @@
 # E16: a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008)
 
-State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); an offline reading of the lab's dxgkrnl blames the missing UMD name (M64, to be tested by run 003). The README above "Result" was written before the runs.**
+State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); the cause was the missing UMD name (M64: read offline in the lab's dxgkrnl, confirmed by run 003, which gets two questions further and stops again). Run 004 = 0.7.4. The README above "Result" was written before the runs.**
 
 ## Why
 
@@ -130,4 +130,18 @@ Evidence: `evidence/windows/2026-09-21-E16-run-002/` (README.txt has the timelin
   to load") never had a chance to be observed. Nie szukaj dziury w całym (do not look for a hole in the whole):
   the part I suspected was fine.
 
-Run 2 (the UMD stub) waits until a plain full-table start survives.
+### Run 003 (2026-09-21, the 0.7.3 binary as the UMD stub package 0.7.3.1)
+
+Evidence: `evidence/windows/2026-09-21-E16-run-003/` (README.txt has the timeline). Fact M64.
+
+- **H7 holds.** One difference from run 002, the package, and dxgkrnl asks on: DRIVERCAPS, then type 15
+  (`PHYSICALADAPTERCAPS`) exactly as its code said it would, then type 47 (`64BITONLYCAPS`), both refused by the
+  driver, then the stop. The missing `UserModeDriverName` was the wall runs 001 and 002 hit. The original split of
+  this experiment into "run 1 without a UMD, run 2 with one" is void on this Windows: a full adapter without a UMD
+  name does not start, so every gate-open run from here on uses the UMD stub package.
+- H8 is compatible with the record and not proven by it: the start still fails (`CM_PROB_FAILED_POST_START`), and
+  the log cannot say which check refused it, only that no DDI beyond `QueryAdapterInfo` was entered.
+- H1 extended: the display-only table starts normally (stage 61) with a `UserModeDriverName` in the key.
+- The way back worked a third time. 67.8 C before and after.
+
+Run 004 is 0.7.4 (see "Added after run 002" above) on the UMD stub package.
