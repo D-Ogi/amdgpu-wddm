@@ -25,6 +25,7 @@ Linux (`amdgpu` + Mesa RADV) fully drives this hardware. The existing Windows dr
 | `tools/regcalc/` | Register address calculator driven by kernel headers, with tests |
 | `tools/diagusb/` | Bootable diagnostic USB: probes the board under Linux, shows results as QR codes |
 | `tools/win/` | Measurement tools for Windows |
+| `SECURITY.md`, `NOTICE`, `CONTRIBUTING.md` | How to tell genuine releases from fakes; required attribution; inbound license for contributions |
 | `driver/` | The driver: `kmd` (WDDM miniport), `shim` (Linux compatibility layer), `amdgpu-import` (AMD code), `umd` |
 | `third_party/` | Foreign code kept in the repo, with provenance and license |
 
@@ -38,4 +39,8 @@ python -m unittest discover -s tools/regcalc
 
 ## License
 
-Our code: MIT (matching the `amdgpu` code we import). Foreign code: see `THIRD-PARTY.md`. AMD firmware blobs are not part of this repo.
+Copyright (c) 2026 D-Ogi. Source-available under the **PolyForm Noncommercial License 1.0.0** (`LICENSE.md`): free for noncommercial use, modification and sharing, provided the `Required Notice` lines in `NOTICE` stay attached. No commercial use, including bundling with hardware or OS images for sale. Reasons: `docs/adr/0004-polyform-noncommercial.md`.
+
+Third-party code keeps its own license (`THIRD-PARTY.md`). AMD firmware blobs are not part of this repo.
+
+**Beware of fakes.** This project publishes source and signed checksums only, never Windows images, installers from file hosts or BIOS files. See `SECURITY.md`.

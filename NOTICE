@@ -1,0 +1,8 @@
+bc250-win - Windows GPU support for the ASRock BC-250
+
+Required Notice: Copyright (c) 2026 D-Ogi. Licensed under the PolyForm Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0).
+Required Notice: Unofficial community project, not affiliated with or endorsed by AMD, ASRock or Microsoft. Genuine releases are published only by D-Ogi, as source code with signed checksums (see SECURITY.md). A binary obtained anywhere else does not come from this project.
+
+Under the license these two lines must travel with every copy of any part of this software, modified or not.
+
+Files under third_party/ are not covered by the license above. They keep their own licenses and copyright notices (see THIRD-PARTY.md).

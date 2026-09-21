@@ -1,5 +1,7 @@
 # Third-party material
 
+Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`LICENSE.md`, `NOTICE`). Everything listed below is NOT ours and keeps its own license.
+
 ## In this repository
 
 | Path | Origin | License | Notes |
