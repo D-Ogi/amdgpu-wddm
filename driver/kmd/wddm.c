@@ -1315,7 +1315,8 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     pDescribeAllocation->MultisampleMethod.NumSamples = 0;
     pDescribeAllocation->MultisampleMethod.NumQualityLevels = 0;
     // The firmware set the mode and its timing cannot be read without display-core MMIO, so the refresh rate is
-    // reported as not specified, exactly as display.c reports it in the VidPN.
+    // reported as not specified. (The VidPN modes no longer say that for the full table: dxgkrnl refused them, E16
+    // run 006, and display.c gives them a nominal 60 Hz. This field is informational and stays as it was.)
     pDescribeAllocation->RefreshRate.Numerator = D3DKMDT_FREQUENCY_NOTSPECIFIED;
     pDescribeAllocation->RefreshRate.Denominator = D3DKMDT_FREQUENCY_NOTSPECIFIED;
     pDescribeAllocation->PrivateDriverFormatAttribute = 0;

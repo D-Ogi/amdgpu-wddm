@@ -294,6 +294,17 @@ static void FillSignalInfo(_In_ const BC250_DEVICE* Device, _Out_ D3DKMDT_VIDEO_
     Signal->HSyncFreq.Denominator = D3DKMDT_FREQUENCY_NOTSPECIFIED;
     Signal->PixelRate = D3DKMDT_FREQUENCY_NOTSPECIFIED;
     Signal->ScanLineOrdering = D3DDDI_VSSLO_PROGRESSIVE;
+    if (Device->FullWddm)
+    {
+        // "Not specified" is a display-only driver's privilege: with the full table dxgkrnl refuses the mode with
+        // STATUS_GRAPHICS_INVALID_FREQUENCY and the display side never comes up (E16 run 006). The real timing is
+        // still unknown, so this is the nominal rate the software VSync runs at, with the blanking taken as zero.
+        Signal->VSyncFreq.Numerator = 60000;
+        Signal->VSyncFreq.Denominator = 1000;
+        Signal->HSyncFreq.Numerator = 60 * Device->Post.Height;
+        Signal->HSyncFreq.Denominator = 1;
+        Signal->PixelRate = (SIZE_T)60 * Device->Post.Width * Device->Post.Height;
+    }
 }
 
 static NTSTATUS OfferSourceMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKMDT_HVIDPN hVidPn,

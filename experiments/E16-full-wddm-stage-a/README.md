@@ -205,3 +205,16 @@ Evidence: `evidence/windows/2026-09-21-E16-run-005/` (timeline in `README.txt`, 
 - **H10 is refuted**: `InstalledDisplayDrivers` in the software key changes nothing (run 005c, same log tail).
 - The machine stayed reachable over SSH throughout and the owner asked to go forward rather than back, so the adapter
   was left in the full table while 0.7.6 (tracing wrappers on the child and VidPN DDIs) was prepared.
+
+### Run 006 (2026-09-21, bc250kmd 0.7.6 = 0.7.5 plus tracing wrappers on the child and VidPN DDIs)
+
+The display side is not skipped, it is refused: `QueryChildRelations`, `QueryDeviceDescriptor` (no EDID, as ever),
+`RecommendMonitorModes` and `IsSupportedVidPn` succeed, and every `EnumVidPnCofuncModality` fails with `0xC01E030A`,
+`STATUS_GRAPHICS_INVALID_FREQUENCY`. The display-only table's modes carry `D3DKMDT_FREQUENCY_NOTSPECIFIED`, which
+dxgkrnl takes from a display-only driver and, by this run, not from a full one.
+
+- H11 (before run 007). bc250kmd 0.7.7 gives the full table's modes a nominal 60 Hz timing (the software VSync's rate,
+  blanking taken as zero). Prediction: `EnumVidPnCofuncModality` succeeds, `CommitVidPn` is reached (stage 50) and the
+  allocation DDIs appear (`GetStandardAllocationDriverData`, `CreateAllocation`). Whether a picture follows is recorded,
+  not predicted: stage A presents nothing to the hardware itself, so a committed VidPN over an inert `Present` may
+  well stay black. Refuted if `EnumVidPnCofuncModality` still fails.
