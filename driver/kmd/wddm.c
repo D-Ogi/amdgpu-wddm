@@ -1741,12 +1741,74 @@ static void WddmCheckReserved(_In_ const DRIVER_INITIALIZATION_DATA* Data)
             GuardLog("wddm: table member %s must be zero and is not", reserved[i].Name);
 }
 
+// ---- the display side, traced -----------------------------------------------------------------------------------
+
+// E16 run 005: the full adapter starts and then nothing on the display side happens, and the display DDIs this
+// table shares with the display-only one were silent. These wrappers change no answer; they count each call and
+// log the first few with the status, so that the next kept log says how far dxgkrnl's display core got. The
+// counters are file-scope because the child DDIs may run before BC250_WDDM exists. All of these DDIs are
+// PASSIVE_LEVEL ones; the IRQL test only guards the log's spin lock against an annotation being wrong.
+typedef enum _BC250_WDDM_TRACED {
+    TracedQueryChildRelations = 0, TracedQueryChildStatus, TracedQueryDeviceDescriptor, TracedIsSupportedVidPn,
+    TracedRecommendFunctionalVidPn, TracedEnumVidPnCofuncModality, TracedSetVidPnSourceVisibility, TracedCommitVidPn,
+    TracedUpdateActiveVidPnPresentPath, TracedRecommendMonitorModes, TracedQueryVidPnHWCapability, TracedCount
+} BC250_WDDM_TRACED;
+
+static volatile LONG g_TracedCalls[TracedCount];
+
+static NTSTATUS WddmTraced(BC250_WDDM_TRACED Slot, _In_z_ const char* Name, NTSTATUS Status, ULONG Detail)
+{
+    LONG calls = InterlockedIncrement(&g_TracedCalls[Slot]);
+
+    if (KeGetCurrentIrql() <= DISPATCH_LEVEL && (calls <= 6 || (!NT_SUCCESS(Status) && calls <= 64)))
+        GuardLog("wddm: display %s call %ld detail 0x%X -> 0x%08X", Name, calls, Detail, Status);
+    return Status;
+}
+
+static DXGKDDI_QUERY_CHILD_RELATIONS Bc250WddmQueryChildRelations;
+static NTSTATUS Bc250WddmQueryChildRelations(_In_ const PVOID Context, _Inout_updates_bytes_(Size) PDXGK_CHILD_DESCRIPTOR Relations,
+                                             _In_ ULONG Size)
+{
+    return WddmTraced(TracedQueryChildRelations, "QueryChildRelations", Bc250QueryChildRelations(Context, Relations, Size), Size);
+}
+
+static DXGKDDI_QUERY_CHILD_STATUS Bc250WddmQueryChildStatus;
+static NTSTATUS Bc250WddmQueryChildStatus(_In_ const PVOID Context, _Inout_ PDXGK_CHILD_STATUS ChildStatus, _In_ BOOLEAN NonDestructiveOnly)
+{
+    ULONG type = (ULONG)ChildStatus->Type;
+
+    return WddmTraced(TracedQueryChildStatus, "QueryChildStatus", Bc250QueryChildStatus(Context, ChildStatus, NonDestructiveOnly), type);
+}
+
+static DXGKDDI_QUERY_DEVICE_DESCRIPTOR Bc250WddmQueryDeviceDescriptor;
+static NTSTATUS Bc250WddmQueryDeviceDescriptor(_In_ const PVOID Context, _In_ ULONG ChildUid, _Inout_ PDXGK_DEVICE_DESCRIPTOR Descriptor)
+{
+    return WddmTraced(TracedQueryDeviceDescriptor, "QueryDeviceDescriptor", Bc250QueryDeviceDescriptor(Context, ChildUid, Descriptor), ChildUid);
+}
+
+#define BC250_WDDM_TRACED_DDI(DdiType, Name, ArgType)                                                          \
+    static DdiType Bc250WddmTraced##Name;                                                                      \
+    static NTSTATUS Bc250WddmTraced##Name(_In_ const HANDLE hAdapter, ArgType pArgs)                           \
+    {                                                                                                          \
+        return WddmTraced(Traced##Name, #Name, Bc250##Name(hAdapter, pArgs), 0);                               \
+    }
+
+BC250_WDDM_TRACED_DDI(DXGKDDI_ISSUPPORTEDVIDPN, IsSupportedVidPn, DXGKARG_ISSUPPORTEDVIDPN*)
+BC250_WDDM_TRACED_DDI(DXGKDDI_RECOMMENDFUNCTIONALVIDPN, RecommendFunctionalVidPn, const DXGKARG_RECOMMENDFUNCTIONALVIDPN* const)
+BC250_WDDM_TRACED_DDI(DXGKDDI_ENUMVIDPNCOFUNCMODALITY, EnumVidPnCofuncModality, const DXGKARG_ENUMVIDPNCOFUNCMODALITY* const)
+BC250_WDDM_TRACED_DDI(DXGKDDI_SETVIDPNSOURCEVISIBILITY, SetVidPnSourceVisibility, const DXGKARG_SETVIDPNSOURCEVISIBILITY*)
+BC250_WDDM_TRACED_DDI(DXGKDDI_COMMITVIDPN, CommitVidPn, const DXGKARG_COMMITVIDPN* const)
+BC250_WDDM_TRACED_DDI(DXGKDDI_UPDATEACTIVEVIDPNPRESENTPATH, UpdateActiveVidPnPresentPath, const DXGKARG_UPDATEACTIVEVIDPNPRESENTPATH* const)
+BC250_WDDM_TRACED_DDI(DXGKDDI_RECOMMENDMONITORMODES, RecommendMonitorModes, const DXGKARG_RECOMMENDMONITORMODES* const)
+BC250_WDDM_TRACED_DDI(DXGKDDI_QUERYVIDPNHWCAPABILITY, QueryVidPnHWCapability, DXGKARG_QUERYVIDPNHWCAPABILITY*)
+
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 {
     RtlZeroMemory(Data, sizeof(*Data));
     Data->Version = DXGKDDI_INTERFACE_VERSION_WDDM2_0;
 
-    // The 28 pointers the display-only table already has, unchanged. PresentDisplayOnly is the one member with no
+    // The 28 pointers the display-only table already has; since 0.7.6 the child and VidPN ones go through the
+    // tracing wrappers above, which change no answer. PresentDisplayOnly is the one member with no
     // home in this structure; Present plus SetVidPnSourceAddress take its place.
     Data->DxgkDdiAddDevice = Bc250AddDevice;
     Data->DxgkDdiStartDevice = Bc250StartDevice;
@@ -1756,23 +1818,23 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiDispatchIoRequest = Bc250DispatchIoRequest;
     Data->DxgkDdiInterruptRoutine = Bc250InterruptRoutine;
     Data->DxgkDdiDpcRoutine = Bc250DpcRoutine;
-    Data->DxgkDdiQueryChildRelations = Bc250QueryChildRelations;
-    Data->DxgkDdiQueryChildStatus = Bc250QueryChildStatus;
-    Data->DxgkDdiQueryDeviceDescriptor = Bc250QueryDeviceDescriptor;
+    Data->DxgkDdiQueryChildRelations = Bc250WddmQueryChildRelations;
+    Data->DxgkDdiQueryChildStatus = Bc250WddmQueryChildStatus;
+    Data->DxgkDdiQueryDeviceDescriptor = Bc250WddmQueryDeviceDescriptor;
     Data->DxgkDdiSetPowerState = Bc250SetPowerState;
     Data->DxgkDdiUnload = Bc250Unload;
     Data->DxgkDdiStopDeviceAndReleasePostDisplayOwnership = Bc250StopDeviceAndReleasePostDisplayOwnership;
     Data->DxgkDdiSetPointerPosition = Bc250SetPointerPosition;
     Data->DxgkDdiSetPointerShape = Bc250SetPointerShape;
     Data->DxgkDdiEscape = Bc250Escape;
-    Data->DxgkDdiIsSupportedVidPn = Bc250IsSupportedVidPn;
-    Data->DxgkDdiRecommendFunctionalVidPn = Bc250RecommendFunctionalVidPn;
-    Data->DxgkDdiEnumVidPnCofuncModality = Bc250EnumVidPnCofuncModality;
-    Data->DxgkDdiSetVidPnSourceVisibility = Bc250SetVidPnSourceVisibility;
-    Data->DxgkDdiCommitVidPn = Bc250CommitVidPn;
-    Data->DxgkDdiUpdateActiveVidPnPresentPath = Bc250UpdateActiveVidPnPresentPath;
-    Data->DxgkDdiRecommendMonitorModes = Bc250RecommendMonitorModes;
-    Data->DxgkDdiQueryVidPnHWCapability = Bc250QueryVidPnHWCapability;
+    Data->DxgkDdiIsSupportedVidPn = Bc250WddmTracedIsSupportedVidPn;
+    Data->DxgkDdiRecommendFunctionalVidPn = Bc250WddmTracedRecommendFunctionalVidPn;
+    Data->DxgkDdiEnumVidPnCofuncModality = Bc250WddmTracedEnumVidPnCofuncModality;
+    Data->DxgkDdiSetVidPnSourceVisibility = Bc250WddmTracedSetVidPnSourceVisibility;
+    Data->DxgkDdiCommitVidPn = Bc250WddmTracedCommitVidPn;
+    Data->DxgkDdiUpdateActiveVidPnPresentPath = Bc250WddmTracedUpdateActiveVidPnPresentPath;
+    Data->DxgkDdiRecommendMonitorModes = Bc250WddmTracedRecommendMonitorModes;
+    Data->DxgkDdiQueryVidPnHWCapability = Bc250WddmTracedQueryVidPnHWCapability;
     Data->DxgkDdiSystemDisplayEnable = Bc250SystemDisplayEnable;
     Data->DxgkDdiSystemDisplayWrite = Bc250SystemDisplayWrite;
 
