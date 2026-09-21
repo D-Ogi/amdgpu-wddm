@@ -1,0 +1,1017 @@
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 998/998   #P:12
+#
+#                                _-----=> irqs-off/BH-disabled
+#                               / _----=> need-resched
+#                              | / _---=> hardirq/softirq
+#                              || / _--=> preempt-depth
+#                              ||| / _-=> migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+              sh-13942   [002] ...1.  1642.093260: tracing_mark_write: bc250 begin dispatch g1
+          <idle>-0       [002] d.h1.  1642.101300: amdgpu_iv: ih:0 client_id:4 src_id:87 ring:0 vmid:0 timestamp: 445944727381 pasid:0 src_data: 0d2fc133 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1642.101306: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x0010d104
+          <idle>-0       [002] d.h1.  1642.101307: amdgpu_dc_rreg: reg=0x0000504a, value=0x0010d104
+          <idle>-0       [002] d.h1.  1642.101308: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x0011d104
+          <idle>-0       [002] d.h1.  1642.101309: amdgpu_dc_wreg: reg=0x0000504a, value=0x0011d104
+          <idle>-0       [002] d.h2.  1642.101311: amdgpu_refresh_rate_track: crtc_index=0 refresh_rate=59Hz (16680534)
+          <idle>-0       [002] d.h4.  1642.101316: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db8
+          <idle>-0       [002] d.h4.  1642.101317: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db8
+          <idle>-0       [002] d.h4.  1642.101319: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.101320: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.101321: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0412000b
+          <idle>-0       [002] d.h4.  1642.101322: amdgpu_dc_rreg: reg=0x0000500a, value=0x0412000b
+          <idle>-0       [002] d.h4.  1642.101323: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1642.101323: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1642.101325: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db8
+          <idle>-0       [002] d.h4.  1642.101326: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db8
+          <idle>-0       [002] d.h4.  1642.101328: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.101329: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.101330: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0132000c
+          <idle>-0       [002] d.h4.  1642.101330: amdgpu_dc_rreg: reg=0x0000500a, value=0x0132000c
+          <idle>-0       [002] d.h4.  1642.101332: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000c
+          <idle>-0       [002] d.h4.  1642.101332: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000c
+          <idle>-0       [002] d.h4.  1642.101334: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db8
+          <idle>-0       [002] d.h4.  1642.101335: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db8
+          <idle>-0       [002] d.h4.  1642.101336: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.101337: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.101338: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0613000c
+          <idle>-0       [002] d.h4.  1642.101339: amdgpu_dc_rreg: reg=0x0000500a, value=0x0613000c
+          <idle>-0       [002] d.h4.  1642.101340: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000c
+          <idle>-0       [002] d.h4.  1642.101340: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000c
+          <idle>-0       [002] d.h4.  1642.101342: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db8
+          <idle>-0       [002] d.h4.  1642.101342: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db8
+          <idle>-0       [002] d.h1.  1642.117978: amdgpu_iv: ih:0 client_id:4 src_id:87 ring:0 vmid:0 timestamp: 445946392325 pasid:0 src_data: 0d361e27 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1642.117980: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x0010d104
+          <idle>-0       [002] d.h1.  1642.117981: amdgpu_dc_rreg: reg=0x0000504a, value=0x0010d104
+          <idle>-0       [002] d.h1.  1642.117982: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x0011d104
+          <idle>-0       [002] d.h1.  1642.117982: amdgpu_dc_wreg: reg=0x0000504a, value=0x0011d104
+          <idle>-0       [002] d.h2.  1642.117983: amdgpu_refresh_rate_track: crtc_index=0 refresh_rate=59Hz (16682677)
+          <idle>-0       [002] d.h4.  1642.117985: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+          <idle>-0       [002] d.h4.  1642.117986: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+          <idle>-0       [002] d.h4.  1642.117987: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.117987: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.117989: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0467000a
+          <idle>-0       [002] d.h4.  1642.117989: amdgpu_dc_rreg: reg=0x0000500a, value=0x0467000a
+          <idle>-0       [002] d.h4.  1642.117990: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000a
+          <idle>-0       [002] d.h4.  1642.117991: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000a
+          <idle>-0       [002] d.h4.  1642.117992: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+          <idle>-0       [002] d.h4.  1642.117993: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+          <idle>-0       [002] d.h4.  1642.117995: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.117995: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.117996: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x00dd000b
+          <idle>-0       [002] d.h4.  1642.117997: amdgpu_dc_rreg: reg=0x0000500a, value=0x00dd000b
+          <idle>-0       [002] d.h4.  1642.117998: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1642.117999: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1642.118000: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+          <idle>-0       [002] d.h4.  1642.118001: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+          <idle>-0       [002] d.h4.  1642.118002: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.118003: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.118004: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x056b000b
+          <idle>-0       [002] d.h4.  1642.118004: amdgpu_dc_rreg: reg=0x0000500a, value=0x056b000b
+          <idle>-0       [002] d.h4.  1642.118006: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1642.118006: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1642.118008: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+          <idle>-0       [002] d.h4.  1642.118008: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+         python3-13954   [008] d.s2.  1642.120525: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+         python3-13954   [008] d.s2.  1642.120528: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+         python3-13954   [008] d.s2.  1642.120530: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] d.s2.  1642.120530: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] d.s2.  1642.120531: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x061800c6
+         python3-13954   [008] d.s2.  1642.120531: amdgpu_dc_rreg: reg=0x0000500a, value=0x061800c6
+         python3-13954   [008] d.s2.  1642.120532: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000c6
+         python3-13954   [008] d.s2.  1642.120532: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000c6
+         python3-13954   [008] d.s2.  1642.120533: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+         python3-13954   [008] d.s2.  1642.120533: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+         python3-13954   [008] d.s2.  1642.120535: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] d.s2.  1642.120535: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] d.s2.  1642.120536: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x013c00c7
+         python3-13954   [008] d.s2.  1642.120536: amdgpu_dc_rreg: reg=0x0000500a, value=0x013c00c7
+         python3-13954   [008] d.s2.  1642.120537: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000c7
+         python3-13954   [008] d.s2.  1642.120537: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000c7
+         python3-13954   [008] d.s2.  1642.120539: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+         python3-13954   [008] d.s2.  1642.120539: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+         python3-13954   [008] d.s2.  1642.120540: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] d.s2.  1642.120540: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] d.s2.  1642.120541: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x041a00c7
+         python3-13954   [008] d.s2.  1642.120541: amdgpu_dc_rreg: reg=0x0000500a, value=0x041a00c7
+         python3-13954   [008] d.s2.  1642.120542: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000c7
+         python3-13954   [008] d.s2.  1642.120542: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000c7
+         python3-13954   [008] d.s2.  1642.120543: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016db9
+         python3-13954   [008] d.s2.  1642.120543: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016db9
+         python3-13954   [008] d.s3.  1642.120550: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00101104
+         python3-13954   [008] d.s3.  1642.120550: amdgpu_dc_rreg: reg=0x0000504a, value=0x00101104
+         python3-13954   [008] d.s3.  1642.120551: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00111104
+         python3-13954   [008] d.s3.  1642.120552: amdgpu_dc_wreg: reg=0x0000504a, value=0x00111104
+         python3-13954   [008] d.s3.  1642.120555: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00101104
+         python3-13954   [008] d.s3.  1642.120555: amdgpu_dc_rreg: reg=0x0000504a, value=0x00101104
+         python3-13954   [008] d.s3.  1642.120555: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00100104
+         python3-13954   [008] d.s3.  1642.120556: amdgpu_dc_wreg: reg=0x0000504a, value=0x00100104
+         python3-13954   [008] .....  1642.152859: amdgpu_pasid_allocated: pasid=74
+         python3-13954   [008] .....  1642.152881: amdgpu_bo_move: bo=000000007485482a, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.152883: amdgpu_bo_create: bo=000000007485482a, pages=1, type=2, preferred=4, allowed=4, visible=36
+         python3-13954   [008] .....  1642.152891: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-13954   [008] .....  1642.152904: amdgpu_vm_bo_map: bo=00000000b97d8569, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+         python3-13954   [008] .....  1642.152906: amdgpu_vm_bo_update: soffs=0ffffffc00, eoffs=0ffffffe00, flags=82
+   kworker/u48:4-3588    [007] .....  1642.152910: amdgpu_sched_run_job: timeline=sdma1, fence=829:1, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.152916: amdgpu_bo_move: bo=00000000ba8a68ac, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.152916: amdgpu_bo_create: bo=00000000ba8a68ac, pages=1, type=2, preferred=4, allowed=4, visible=36
+         python3-13954   [008] .....  1642.152919: amdgpu_vm_set_ptes: pe=f5fffdf000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+   kworker/u48:4-3588    [007] .....  1642.152924: amdgpu_sched_run_job: timeline=sdma1, fence=829:2, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.152924: amdgpu_bo_move: bo=00000000dc400067, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.152925: amdgpu_bo_create: bo=00000000dc400067, pages=1, type=2, preferred=4, allowed=4, visible=36
+         python3-13954   [008] .....  1642.152926: amdgpu_vm_set_ptes: pe=f5fffde000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-13954   [008] .....  1642.152928: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x33a start:0x0ffffffc00 end:0x0ffffffe00, flags:0x30000000004a7, incr:2097152, dst:
+{0x156600000}
+         python3-13954   [008] .....  1642.152928: amdgpu_vm_set_ptes: pe=f5fffdeff0, addr=0156600000, incr=2097152, flags=430000000004a7, count=1, immediate=0
+          <idle>-0       [002] d.h1.  1642.152929: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949881033 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.152930: amdgpu_vm_bo_mapping: soffs=0ffffffc00, eoffs=0ffffffe00, flags=82
+          <idle>-0       [002] d.h1.  1642.152943: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949881589 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1642.152951: amdgpu_sched_run_job: timeline=sdma1, fence=829:3, ring_name=sdma1, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1642.152957: amdgpu_sched_run_job: timeline=sdma1, fence=829:4, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1642.152962: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949884333 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1642.152968: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949884957 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153109: amdgpu_bo_move: bo=00000000e603155a, from=-1, to=1, size=4096
+         python3-13954   [008] .....  1642.153110: amdgpu_bo_create: bo=00000000e603155a, pages=1, type=1, preferred=2, allowed=2, visible=520
+         python3-13954   [008] .....  1642.153142: amdgpu_vm_bo_map: bo=00000000e603155a, start=100000, last=100000, offset=0000000000, flags=e
+         python3-13954   [008] .....  1642.153143: amdgpu_vm_bo_update: soffs=0000100000, eoffs=0000100001, flags=e
+         python3-13954   [008] .....  1642.153151: amdgpu_bo_move: bo=00000000ec19cdda, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.153151: amdgpu_bo_create: bo=00000000ec19cdda, pages=1, type=2, preferred=4, allowed=4, visible=36
+         python3-13954   [008] .....  1642.153153: amdgpu_vm_set_ptes: pe=f5fffdd000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-13954   [008] .....  1642.153160: amdgpu_bo_move: bo=000000000272a7c1, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.153160: amdgpu_bo_create: bo=000000000272a7c1, pages=1, type=2, preferred=4, allowed=4, visible=36
+   kworker/u48:4-3588    [007] .....  1642.153160: amdgpu_sched_run_job: timeline=sdma1, fence=829:5, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.153162: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=0000000000, incr=0, flags=40000000000000, count=512, immediate=0
+         python3-13954   [008] .....  1642.153165: amdgpu_bo_move: bo=00000000f8e14378, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.153165: amdgpu_bo_create: bo=00000000f8e14378, pages=1, type=2, preferred=4, allowed=4, visible=36
+   kworker/u48:4-3588    [007] .....  1642.153166: amdgpu_sched_run_job: timeline=sdma1, fence=829:6, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.153167: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0000000000, incr=0, flags=10, count=512, immediate=0
+         python3-13954   [008] .....  1642.153168: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x33a start:0x0000100000 end:0x0000100001, flags:0x77, incr:4096, dst:
+{0x1032e5000}
+         python3-13954   [008] .....  1642.153169: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=01032e5000, incr=4096, flags=77, count=1, immediate=0
+         python3-13954   [008] .....  1642.153170: amdgpu_vm_bo_mapping: soffs=0000100000, eoffs=0000100001, flags=e
+          <idle>-0       [002] d.h1.  1642.153171: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949905201 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153172: amdgpu_vm_set_ptes: pe=f5fffdc000, addr=046ffdb000, incr=0, flags=1, count=1, immediate=0
+         python3-13954   [008] .....  1642.153172: amdgpu_vm_set_ptes: pe=f5fffdd020, addr=046ffdc000, incr=0, flags=1, count=1, immediate=0
+         python3-13954   [008] .....  1642.153172: amdgpu_vm_set_ptes: pe=f5fffe0000, addr=046ffdd000, incr=0, flags=1, count=1, immediate=0
+         python3-13954   [008] .....  1642.153173: amdgpu_vm_set_ptes: pe=f5fffdfff8, addr=046ffde000, incr=0, flags=1, count=1, immediate=0
+         python3-13954   [008] .....  1642.153173: amdgpu_vm_set_ptes: pe=f5fffe0ff8, addr=046ffdf000, incr=0, flags=1, count=1, immediate=0
+          <idle>-0       [002] d.h1.  1642.153177: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949905805 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1642.153186: amdgpu_sched_run_job: timeline=sdma1, fence=829:7, ring_name=sdma1, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1642.153192: amdgpu_sched_run_job: timeline=sdma1, fence=829:8, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1642.153196: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949907737 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153201: amdgpu_bo_move: bo=00000000374b96be, from=-1, to=1, size=4096
+         python3-13954   [008] .....  1642.153202: amdgpu_bo_create: bo=00000000374b96be, pages=1, type=1, preferred=2, allowed=2, visible=520
+          <idle>-0       [002] d.h1.  1642.153202: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949908337 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1642.153210: amdgpu_sched_run_job: timeline=sdma1, fence=829:9, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.153224: amdgpu_vm_bo_map: bo=00000000374b96be, start=100100, last=100100, offset=0000000000, flags=e
+          <idle>-0       [002] d.h1.  1642.153225: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949910601 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153225: amdgpu_vm_bo_update: soffs=0000100100, eoffs=0000100101, flags=e
+         python3-13954   [008] .....  1642.153227: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x33a start:0x0000100100 end:0x0000100101, flags:0x77, incr:4096, dst:
+{0x10306a000}
+         python3-13954   [008] .....  1642.153227: amdgpu_vm_set_ptes: pe=f5fffdb800, addr=010306a000, incr=4096, flags=77, count=1, immediate=0
+         python3-13954   [008] .....  1642.153230: amdgpu_vm_bo_mapping: soffs=0000100100, eoffs=0000100101, flags=e
+   kworker/u48:4-3588    [007] .....  1642.153236: amdgpu_sched_run_job: timeline=sdma1, fence=829:10, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.153246: amdgpu_bo_move: bo=00000000f308d730, from=-1, to=1, size=4096
+          <idle>-0       [002] d.h1.  1642.153247: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949912769 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153247: amdgpu_bo_create: bo=00000000f308d730, pages=1, type=1, preferred=2, allowed=2, visible=520
+         python3-13954   [008] .....  1642.153267: amdgpu_vm_bo_map: bo=00000000f308d730, start=100200, last=100200, offset=0000000000, flags=6
+         python3-13954   [008] .....  1642.153268: amdgpu_vm_bo_update: soffs=0000100200, eoffs=0000100201, flags=6
+         python3-13954   [008] .....  1642.153272: amdgpu_bo_move: bo=00000000f5d21681, from=-1, to=2, size=4096
+         python3-13954   [008] .....  1642.153273: amdgpu_bo_create: bo=00000000f5d21681, pages=1, type=2, preferred=4, allowed=4, visible=36
+         python3-13954   [008] .....  1642.153275: amdgpu_vm_set_ptes: pe=f5fffda000, addr=0000000000, incr=0, flags=10, count=512, immediate=0
+         python3-13954   [008] .....  1642.153277: amdgpu_vm_update_ptes: pid:0 vm_ctx:0x33a start:0x0000100200 end:0x0000100201, flags:0x67, incr:4096, dst:
+{0x10a501000}
+         python3-13954   [008] .....  1642.153277: amdgpu_vm_set_ptes: pe=f5fffda000, addr=010a501000, incr=4096, flags=67, count=1, immediate=0
+         python3-13954   [008] .....  1642.153278: amdgpu_vm_bo_mapping: soffs=0000100200, eoffs=0000100201, flags=6
+         python3-13954   [008] .....  1642.153279: amdgpu_vm_set_ptes: pe=f5fffdc008, addr=046ffda000, incr=0, flags=1, count=1, immediate=0
+   kworker/u48:4-3588    [007] .....  1642.153281: amdgpu_sched_run_job: timeline=sdma1, fence=829:11, ring_name=sdma1, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1642.153288: amdgpu_sched_run_job: timeline=sdma1, fence=829:12, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1642.153292: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949917305 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1642.153298: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949917897 pasid:0 src_data: 00000000 00000000 00000000 00000000
+   kworker/u48:4-3588    [007] .....  1642.153307: amdgpu_sched_run_job: timeline=sdma1, fence=829:13, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1642.153317: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949919829 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153471: amdgpu_bo_list_set: list=00000000ad519a1c, bo=00000000e603155a, bo_size=4096
+         python3-13954   [008] .....  1642.153472: amdgpu_bo_list_set: list=00000000ad519a1c, bo=00000000374b96be, bo_size=4096
+         python3-13954   [008] .....  1642.153472: amdgpu_bo_list_set: list=00000000ad519a1c, bo=00000000f308d730, bo_size=4096
+         python3-13954   [008] .....  1642.153473: amdgpu_cs_bo_status: total_bo_size=3, total_bo_count=12288
+         python3-13954   [008] .....  1642.153479: amdgpu_vm_bo_mapping: soffs=0000100200, eoffs=0000100201, flags=6
+         python3-13954   [008] .....  1642.153479: amdgpu_vm_bo_mapping: soffs=0000100100, eoffs=0000100101, flags=e
+         python3-13954   [008] .....  1642.153480: amdgpu_vm_bo_mapping: soffs=0000100000, eoffs=0000100001, flags=e
+         python3-13954   [008] .....  1642.153481: amdgpu_cs: bo_list=00000000ad519a1c, ring=2, dw=72, fences=0
+         python3-13954   [008] .....  1642.153483: amdgpu_vm_bo_cs: soffs=0000100000, eoffs=0000100001, flags=e
+         python3-13954   [008] .....  1642.153483: amdgpu_vm_bo_cs: soffs=0000100100, eoffs=0000100101, flags=e
+         python3-13954   [008] .....  1642.153483: amdgpu_vm_bo_cs: soffs=0000100200, eoffs=0000100201, flags=6
+         python3-13954   [008] .....  1642.153484: amdgpu_cs_ioctl: timeline=comp_1.1.0, fence=833:1, ring_name=comp_1.1.0, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1642.153497: amdgpu_vm_grab_id: pasid=74, ring=comp_1.1.0, id=7, hub=0, pd_addr=046ffe0001 needs_flush=1
+   kworker/u48:4-3588    [007] .....  1642.153499: amdgpu_sched_run_job: timeline=comp_1.1.0, fence=833:1, ring_name=comp_1.1.0, num_ibs=1
+   kworker/u48:4-3588    [007] .....  1642.153504: amdgpu_vm_flush: ring=comp_1.1.0, id=7, hub=0, pd_addr=046ffe0001
+          <idle>-0       [002] d.h1.  1642.153519: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:5 vmid:0 timestamp: 445949939857 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1642.153530: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:5 vmid:0 timestamp: 445949940333 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153599: amdgpu_vm_bo_unmap: bo=00000000f308d730, start=100200, last=100200, offset=0000000000, flags=6
+         python3-13954   [008] .....  1642.153602: amdgpu_vm_update_ptes: pid:13954 vm_ctx:0x33a start:0x0000100200 end:0x0000100201, flags:0x0, incr:4096, dst:
+{0x0}
+         python3-13954   [008] .....  1642.153603: amdgpu_vm_set_ptes: pe=f5fffda000, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:4-3588    [007] .....  1642.153610: amdgpu_sched_run_job: timeline=sdma1, fence=829:14, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.153614: amdgpu_bo_move: bo=00000000f308d730, from=1, to=-1, size=4096
+          <idle>-0       [002] d.h1.  1642.153621: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949950113 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153632: amdgpu_vm_bo_unmap: bo=00000000374b96be, start=100100, last=100100, offset=0000000000, flags=e
+         python3-13954   [008] .....  1642.153634: amdgpu_vm_update_ptes: pid:13954 vm_ctx:0x33a start:0x0000100100 end:0x0000100101, flags:0x0, incr:4096, dst:
+{0x0}
+         python3-13954   [008] .....  1642.153634: amdgpu_vm_set_ptes: pe=f5fffdb800, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+   kworker/u48:4-3588    [007] .....  1642.153641: amdgpu_sched_run_job: timeline=sdma1, fence=829:15, ring_name=sdma1, num_ibs=1
+         python3-13954   [008] .....  1642.153642: amdgpu_bo_move: bo=00000000374b96be, from=1, to=-1, size=4096
+          <idle>-0       [002] d.h1.  1642.153652: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949953201 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153653: amdgpu_vm_bo_unmap: bo=00000000e603155a, start=100000, last=100000, offset=0000000000, flags=e
+         python3-13954   [008] .....  1642.153654: amdgpu_vm_update_ptes: pid:13954 vm_ctx:0x33a start:0x0000100000 end:0x0000100001, flags:0x0, incr:4096, dst:
+{0x0}
+         python3-13954   [008] .....  1642.153655: amdgpu_vm_set_ptes: pe=f5fffdb000, addr=0000000000, incr=4096, flags=10, count=1, immediate=0
+         python3-13954   [008] .....  1642.153662: amdgpu_bo_move: bo=00000000e603155a, from=1, to=-1, size=4096
+   kworker/u48:4-3588    [007] .....  1642.153663: amdgpu_sched_run_job: timeline=sdma1, fence=829:16, ring_name=sdma1, num_ibs=1
+          <idle>-0       [002] d.h1.  1642.153674: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 445949955409 pasid:0 src_data: 00000000 00000000 00000000 00000000
+         python3-13954   [008] .....  1642.153693: amdgpu_vm_bo_unmap: bo=00000000b97d8569, start=ffffffc00, last=ffffffdff, offset=0000000000, flags=82
+         python3-13954   [008] .....  1642.153697: amdgpu_bo_move: bo=00000000f8e14378, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153699: amdgpu_bo_move: bo=00000000f5d21681, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153717: amdgpu_bo_move: bo=000000000272a7c1, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153736: amdgpu_bo_move: bo=00000000ec19cdda, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153791: amdgpu_bo_move: bo=00000000dc400067, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153793: amdgpu_bo_move: bo=00000000ba8a68ac, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153798: amdgpu_pasid_freed: pasid=74
+         python3-13954   [008] .....  1642.153799: amdgpu_bo_move: bo=000000007485482a, from=2, to=-1, size=4096
+         python3-13954   [008] .....  1642.153818: amdgpu_dm_atomic_check_begin: state=000000009de6bad5 allow_modeset=1 legacy_cursor_update=0 async_update=0 duplicated=0 num_connector=2 num_private_objs=0
+         python3-13954   [008] .....  1642.153822: amdgpu_dm_connector_atomic_check: conn_id=64 conn_state=00000000ee3076f8 state=000000009de6bad5 commit=0000000000000000 crtc_id=58 best_encoder_id=63 link_status=0 self_refresh_aware=0 picture_aspect_ratio=0 content_type=0 hdcp_content_type=0 content_protection=0 scaling_mode=0 colorspace=0 max_requested_bpc=16 max_bpc=8
+         python3-13954   [008] .....  1642.153920: amdgpu_dm_plane_atomic_check: plane_id=41 plane_type=1 plane_state=000000000a3d1c08 state=000000009de6bad5 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=1 normalized_zpos=1 color_encoding=0 color_range=0 visible=0
+         python3-13954   [008] .....  1642.153920: amdgpu_dm_plane_atomic_check: plane_id=45 plane_type=1 plane_state=00000000b76f0250 state=000000009de6bad5 crtc_id=58 fb(id=72 fmt=XR24 planes=1 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=1920 crtc_h=1200 src_x=0 src_y=0 src_w=1920 src_h=1200 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=1 normalized_zpos=0 color_encoding=0 color_range=0 visible=1
+         python3-13954   [008] .....  1642.153921: amdgpu_dm_plane_atomic_check: plane_id=49 plane_type=0 plane_state=00000000d3f2075f state=000000009de6bad5 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=4 normalized_zpos=4 color_encoding=0 color_range=0 visible=0
+         python3-13954   [008] .....  1642.153922: amdgpu_dm_plane_atomic_check: plane_id=55 plane_type=2 plane_state=00000000b1670029 state=000000009de6bad5 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=255 normalized_zpos=255 color_encoding=0 color_range=0 visible=0
+         python3-13954   [008] .....  1642.153922: amdgpu_dm_plane_atomic_check: plane_id=59 plane_type=2 plane_state=0000000041cecbc6 state=000000009de6bad5 crtc_id=0 fb(id=0 fmt=NONE planes=0 mod=0) fence=0000000000000000 crtc_x=0 crtc_y=0 crtc_w=0 crtc_h=0 src_x=0 src_y=0 src_w=0 src_h=0 alpha=65535 pixel_blend_mode=0 rotation=1 zpos=255 normalized_zpos=255 color_encoding=0 color_range=0 visible=0
+         python3-13954   [008] .....  1642.153923: amdgpu_dm_crtc_atomic_check: crtc_id=58 crtc_state=00000000e179c9ba state=000000009de6bad5 commit=0000000000000000 changed(planes=1 mode=0 active=0 conn=0 zpos=0 color_mgmt=0) state(enable=1 active=1 async_flip=0 vrr_enabled=0 self_refresh_active=0 no_vblank=0) mask(plane=2 conn=1 enc=1)
+         python3-13954   [008] .....  1642.153926: amdgpu_dm_crtc_atomic_check: crtc_id=62 crtc_state=000000005555632e state=000000009de6bad5 commit=0000000000000000 changed(planes=0 mode=0 active=0 conn=0 zpos=0 color_mgmt=0) state(enable=0 active=0 async_flip=0 vrr_enabled=0 self_refresh_active=0 no_vblank=0) mask(plane=0 conn=0 enc=0)
+         python3-13954   [008] b..1.  1642.153932: dcn_fpu: begin: recursion_depth: 1: dcn20_validate_bandwidth()+2137:
+         python3-13954   [008] b..2.  1642.153935: dcn_fpu: begin: recursion_depth: 2: dcn20_fast_validate_bw()+2023:
+         python3-13954   [008] b..3.  1642.153937: dcn_fpu: begin: recursion_depth: 3: dcn201_populate_dml_writeback_from_context()+1043:
+         python3-13954   [008] b..3.  1642.153937: dcn_fpu: end: recursion_depth: 2: dcn201_populate_dml_writeback_from_context()+1045:
+         python3-13954   [008] b..2.  1642.153938: dcn_fpu: end: recursion_depth: 1: dcn20_fast_validate_bw()+2025:
+         python3-13954   [008] ...1.  1642.153959: dcn_fpu: end: recursion_depth: 0: dcn20_validate_bandwidth()+2139:
+         python3-13954   [008] .....  1642.153960: amdgpu_dm_atomic_check_finish: state=000000009de6bad5 res=0 async_update=0 allow_modeset=1
+         python3-13954   [008] .....  1642.153968: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] .....  1642.153968: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] .....  1642.153970: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x044300cc
+         python3-13954   [008] .....  1642.153970: amdgpu_dc_rreg: reg=0x0000500a, value=0x044300cc
+         python3-13954   [008] .....  1642.153971: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000cc
+         python3-13954   [008] .....  1642.153971: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000cc
+         python3-13954   [008] .....  1642.153974: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] .....  1642.153975: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] .....  1642.153976: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x07ba00cc
+         python3-13954   [008] .....  1642.153976: amdgpu_dc_rreg: reg=0x0000500a, value=0x07ba00cc
+         python3-13954   [008] .....  1642.153977: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000cd
+         python3-13954   [008] .....  1642.153977: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000cd
+         python3-13954   [008] .....  1642.153979: amdgpu_dm_atomic_commit_tail_begin: state=000000009de6bad5 allow_modeset=1 legacy_cursor_update=0 async_update=0 duplicated=0 num_connector=2 num_private_objs=1
+         python3-13954   [008] .....  1642.153986: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbb
+         python3-13954   [008] .....  1642.153986: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbb
+         python3-13954   [008] .....  1642.153987: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] .....  1642.153988: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] .....  1642.153988: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x075b00cd
+         python3-13954   [008] .....  1642.153989: amdgpu_dc_rreg: reg=0x0000500a, value=0x075b00cd
+         python3-13954   [008] .....  1642.153990: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000cd
+         python3-13954   [008] .....  1642.153990: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000cd
+         python3-13954   [008] .....  1642.153991: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbb
+         python3-13954   [008] .....  1642.153991: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbb
+         python3-13954   [008] .....  1642.153992: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] .....  1642.153992: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] .....  1642.153993: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x01fd00ce
+         python3-13954   [008] .....  1642.153993: amdgpu_dc_rreg: reg=0x0000500a, value=0x01fd00ce
+         python3-13954   [008] .....  1642.153994: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000ce
+         python3-13954   [008] .....  1642.153994: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000ce
+         python3-13954   [008] d..4.  1642.153998: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00104104
+         python3-13954   [008] d..4.  1642.153999: amdgpu_dc_rreg: reg=0x0000504a, value=0x00104104
+         python3-13954   [008] d..4.  1642.153999: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00114104
+         python3-13954   [008] d..4.  1642.154000: amdgpu_dc_wreg: reg=0x0000504a, value=0x00114104
+         python3-13954   [008] d..4.  1642.154001: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x00100104
+         python3-13954   [008] d..4.  1642.154001: amdgpu_dc_rreg: reg=0x0000504a, value=0x00100104
+         python3-13954   [008] d..4.  1642.154002: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x00101104
+         python3-13954   [008] d..4.  1642.154002: amdgpu_dc_wreg: reg=0x0000504a, value=0x00101104
+         python3-13954   [008] d..3.  1642.154004: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbb
+         python3-13954   [008] d..3.  1642.154004: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbb
+         python3-13954   [008] d..3.  1642.154005: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] d..3.  1642.154006: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] d..3.  1642.154006: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x01f500cf
+         python3-13954   [008] d..3.  1642.154007: amdgpu_dc_rreg: reg=0x0000500a, value=0x01f500cf
+         python3-13954   [008] d..3.  1642.154008: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000cf
+         python3-13954   [008] d..3.  1642.154008: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000cf
+         python3-13954   [008] d..3.  1642.154009: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbb
+         python3-13954   [008] d..3.  1642.154009: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbb
+         python3-13954   [008] d..3.  1642.154010: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] d..3.  1642.154010: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] d..3.  1642.154011: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x04d700cf
+         python3-13954   [008] d..3.  1642.154011: amdgpu_dc_rreg: reg=0x0000500a, value=0x04d700cf
+         python3-13954   [008] d..3.  1642.154012: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000cf
+         python3-13954   [008] d..3.  1642.154013: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000cf
+         python3-13954   [008] d..3.  1642.154014: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbb
+         python3-13954   [008] d..3.  1642.154014: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbb
+         python3-13954   [008] d..3.  1642.154015: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+         python3-13954   [008] d..3.  1642.154015: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+         python3-13954   [008] d..3.  1642.154016: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x07ab00cf
+         python3-13954   [008] d..3.  1642.154016: amdgpu_dc_rreg: reg=0x0000500a, value=0x07ab00cf
+         python3-13954   [008] d..3.  1642.154017: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x000000d0
+         python3-13954   [008] d..3.  1642.154017: amdgpu_dc_rreg: reg=0x0000500b, value=0x000000d0
+         python3-13954   [008] d..3.  1642.154018: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbb
+         python3-13954   [008] d..3.  1642.154018: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbb
+         python3-13954   [008] b..1.  1642.154114: dcn_fpu: begin: recursion_depth: 1: dcn20_validate_bandwidth()+2137:
+         python3-13954   [008] b..2.  1642.154116: dcn_fpu: begin: recursion_depth: 2: dcn20_fast_validate_bw()+2023:
+         python3-13954   [008] b..3.  1642.154116: dcn_fpu: begin: recursion_depth: 3: dcn201_populate_dml_writeback_from_context()+1043:
+         python3-13954   [008] b..3.  1642.154117: dcn_fpu: end: recursion_depth: 2: dcn201_populate_dml_writeback_from_context()+1045:
+         python3-13954   [008] b..2.  1642.154117: dcn_fpu: end: recursion_depth: 1: dcn20_fast_validate_bw()+2025:
+         python3-13954   [008] b..2.  1642.154132: dcn_fpu: begin: recursion_depth: 2: dcn201_populate_dml_writeback_from_context()+1043:
+         python3-13954   [008] b..2.  1642.154132: dcn_fpu: end: recursion_depth: 1: dcn201_populate_dml_writeback_from_context()+1045:
+         python3-13954   [008] ...1.  1642.154236: dcn_fpu: end: recursion_depth: 0: dcn20_validate_bandwidth()+2139:
+         python3-13954   [008] .....  1642.154262: amdgpu_device_wreg: 0x13fe, 0x000039c6, 0x00000bb8
+         python3-13954   [008] .....  1642.154262: amdgpu_dc_wreg: reg=0x000039c6, value=0x00000bb8
+         python3-13954   [008] .....  1642.154263: amdgpu_device_rreg: 0x13fe, 0x000039c5, 0x00440100
+         python3-13954   [008] .....  1642.154263: amdgpu_dc_rreg: reg=0x000039c5, value=0x00440100
+         python3-13954   [008] .....  1642.154264: amdgpu_device_wreg: 0x13fe, 0x000039c5, 0x00440100
+         python3-13954   [008] .....  1642.154264: amdgpu_dc_wreg: reg=0x000039c5, value=0x00440100
+         python3-13954   [008] .....  1642.154265: amdgpu_device_rreg: 0x13fe, 0x000039c8, 0x00000000
+         python3-13954   [008] .....  1642.154265: amdgpu_dc_rreg: reg=0x000039c8, value=0x00000000
+         python3-13954   [008] .....  1642.154266: amdgpu_device_wreg: 0x13fe, 0x000039c8, 0x00000000
+         python3-13954   [008] .....  1642.154266: amdgpu_dc_wreg: reg=0x000039c8, value=0x00000000
+         python3-13954   [008] .....  1642.154269: amdgpu_device_rreg: 0x13fe, 0x00004d14, 0x00000000
+         python3-13954   [008] .....  1642.154269: amdgpu_dc_rreg: reg=0x00004d14, value=0x00000000
+         python3-13954   [008] .....  1642.154270: amdgpu_device_rreg: 0x13fe, 0x00004d1b, 0x00000000
+         python3-13954   [008] .....  1642.154270: amdgpu_dc_rreg: reg=0x00004d1b, value=0x00000000
+         python3-13954   [008] .....  1642.154271: amdgpu_device_rreg: 0x13fe, 0x00004d14, 0x00000000
+         python3-13954   [008] .....  1642.154271: amdgpu_dc_rreg: reg=0x00004d14, value=0x00000000
+         python3-13954   [008] .....  1642.154272: amdgpu_device_rreg: 0x13fe, 0x00004d1b, 0x00000000
+         python3-13954   [008] .....  1642.154272: amdgpu_dc_rreg: reg=0x00004d1b, value=0x00000000
+         python3-13954   [008] .....  1642.154274: amdgpu_device_rreg: 0x13fe, 0x00005001, 0x80011311
+         python3-13954   [008] .....  1642.154274: amdgpu_dc_rreg: reg=0x00005001, value=0x80011311
+         python3-13954   [008] .....  1642.154275: amdgpu_device_wreg: 0x13fe, 0x00005050, 0x00000000
+         python3-13954   [008] .....  1642.154275: amdgpu_dc_wreg: reg=0x00005050, value=0x00000000
+         python3-13954   [008] .....  1642.154276: amdgpu_device_wreg: 0x13fe, 0x0000504b, 0x00000001
+         python3-13954   [008] .....  1642.154276: amdgpu_dc_wreg: reg=0x0000504b, value=0x00000001
+         python3-13954   [008] .....  1642.154277: amdgpu_device_rreg: 0x13fe, 0x0000504b, 0x00000101
+         python3-13954   [008] .....  1642.154278: amdgpu_dc_rreg: reg=0x0000504b, value=0x00000101
+         python3-13954   [008] .....  1642.154278: dcn_optc_lock_unlock_state: Lock: optc1_lock()+684: optc_instance=0 opp_count=0 max_h_total=32768 max_v_total=32768 min_h_blank=32 min_h_sync_width=8 min_v_sync_width=1 min_v_blank=3 min_v_blank_interlace=5 vstartup_start=23 vupdate_offset=520 vupdate_width=303 vready_offset=520
+         python3-13954   [008] .....  1642.154280: amdgpu_device_rreg: 0x13fe, 0x00003adc, 0x00000040
+         python3-13954   [008] .....  1642.154281: amdgpu_dc_rreg: reg=0x00003adc, value=0x00000040
+         python3-13954   [008] .....  1642.154282: amdgpu_device_rreg: 0x13fe, 0x00003d70, 0x00000040
+         python3-13954   [008] .....  1642.154282: amdgpu_dc_rreg: reg=0x00003d70, value=0x00000040
+         python3-13954   [008] .....  1642.154284: amdgpu_device_rreg: 0x13fe, 0x00003adc, 0x00000040
+         python3-13954   [008] .....  1642.154284: amdgpu_dc_rreg: reg=0x00003adc, value=0x00000040
+         python3-13954   [008] .....  1642.154285: amdgpu_device_rreg: 0x13fe, 0x00003d70, 0x00000040
+         python3-13954   [008] .....  1642.154285: amdgpu_dc_rreg: reg=0x00003d70, value=0x00000040
+         python3-13954   [008] .....  1642.154288: amdgpu_device_wreg: 0x13fe, 0x00005047, 0x00000017
+         python3-13954   [008] .....  1642.154288: amdgpu_dc_wreg: reg=0x00005047, value=0x00000017
+         python3-13954   [008] .....  1642.154289: amdgpu_device_wreg: 0x13fe, 0x00005048, 0x012f0208
+         python3-13954   [008] .....  1642.154289: amdgpu_dc_wreg: reg=0x00005048, value=0x012f0208
+         python3-13954   [008] .....  1642.154289: amdgpu_device_wreg: 0x13fe, 0x00005049, 0x0000018b
+         python3-13954   [008] .....  1642.154290: amdgpu_dc_wreg: reg=0x00005049, value=0x0000018b
+         python3-13954   [008] .....  1642.154291: amdgpu_device_rreg: 0x13fe, 0x000039e8, 0x84d00000
+         python3-13954   [008] .....  1642.154291: amdgpu_dc_rreg: reg=0x000039e8, value=0x84d00000
+         python3-13954   [008] .....  1642.154291: amdgpu_device_wreg: 0x13fe, 0x000039e8, 0x84d00000
+         python3-13954   [008] .....  1642.154291: amdgpu_dc_wreg: reg=0x000039e8, value=0x84d00000
+         python3-13954   [008] .....  1642.154292: amdgpu_device_wreg: 0x13fe, 0x00005026, 0x0000000a
+         python3-13954   [008] .....  1642.154293: amdgpu_dc_wreg: reg=0x00005026, value=0x0000000a
+         python3-13954   [008] .....  1642.154294: amdgpu_device_wreg: 0x13fe, 0x00004d16, 0x078004b0
+         python3-13954   [008] .....  1642.154294: amdgpu_dc_wreg: reg=0x00004d16, value=0x078004b0
+         python3-13954   [008] .....  1642.154294: amdgpu_device_wreg: 0x13fe, 0x00004d1a, 0x00000000
+         python3-13954   [008] .....  1642.154295: amdgpu_dc_wreg: reg=0x00004d1a, value=0x00000000
+         python3-13954   [008] .....  1642.154295: amdgpu_device_wreg: 0x13fe, 0x00004d14, 0x00000000
+         python3-13954   [008] .....  1642.154295: amdgpu_dc_wreg: reg=0x00004d14, value=0x00000000
+         python3-13954   [008] .....  1642.154296: amdgpu_device_wreg: 0x13fe, 0x00004d17, 0x00000000
+         python3-13954   [008] .....  1642.154296: amdgpu_dc_wreg: reg=0x00004d17, value=0x00000000
+         python3-13954   [008] .....  1642.154297: amdgpu_device_wreg: 0x13fe, 0x00004d18, 0x00000000
+         python3-13954   [008] .....  1642.154297: amdgpu_dc_wreg: reg=0x00004d18, value=0x00000000
+         python3-13954   [008] .....  1642.154297: amdgpu_device_wreg: 0x13fe, 0x00004d19, 0x00000000
+         python3-13954   [008] .....  1642.154298: amdgpu_dc_wreg: reg=0x00004d19, value=0x00000000
+         python3-13954   [008] .....  1642.154298: amdgpu_device_wreg: 0x13fe, 0x00004d15, 0x00000000
+         python3-13954   [008] .....  1642.154298: amdgpu_dc_wreg: reg=0x00004d15, value=0x00000000
+         python3-13954   [008] .....  1642.154300: amdgpu_device_rreg: 0x13fe, 0x00003ab4, 0x00f11111
+         python3-13954   [008] .....  1642.154300: amdgpu_dc_rreg: reg=0x00003ab4, value=0x00f11111
+         python3-13954   [008] .....  1642.154300: amdgpu_device_wreg: 0x13fe, 0x00003ab4, 0x00f11111
+         python3-13954   [008] .....  1642.154300: amdgpu_dc_wreg: reg=0x00003ab4, value=0x00f11111
+         python3-13954   [008] .....  1642.154301: amdgpu_device_rreg: 0x13fe, 0x00004d4c, 0x00000003
+         python3-13954   [008] .....  1642.154302: amdgpu_dc_rreg: reg=0x00004d4c, value=0x00000003
+         python3-13954   [008] .....  1642.154302: amdgpu_device_wreg: 0x13fe, 0x00004d4c, 0x00000003
+         python3-13954   [008] .....  1642.154302: amdgpu_dc_wreg: reg=0x00004d4c, value=0x00000003
+         python3-13954   [008] .....  1642.154304: amdgpu_device_rreg: 0x13fe, 0x00004185, 0xf0000010
+         python3-13954   [008] .....  1642.154304: amdgpu_dc_rreg: reg=0x00004185, value=0xf0000010
+         python3-13954   [008] .....  1642.154304: amdgpu_device_wreg: 0x13fe, 0x00004185, 0xf0000010
+         python3-13954   [008] .....  1642.154305: amdgpu_dc_wreg: reg=0x00004185, value=0xf0000010
+         python3-13954   [008] .....  1642.154306: amdgpu_device_rreg: 0x13fe, 0x00003ab3, 0x000f0102
+         python3-13954   [008] .....  1642.154306: amdgpu_dc_rreg: reg=0x00003ab3, value=0x000f0102
+         python3-13954   [008] .....  1642.154306: amdgpu_device_wreg: 0x13fe, 0x00003ab3, 0x000f0102
+         python3-13954   [008] .....  1642.154306: amdgpu_dc_wreg: reg=0x00003ab3, value=0x000f0102
+         python3-13954   [008] .....  1642.154307: amdgpu_device_wreg: 0x13fe, 0x00003ab6, 0x00000100
+         python3-13954   [008] .....  1642.154308: amdgpu_dc_wreg: reg=0x00003ab6, value=0x00000100
+         python3-13954   [008] .....  1642.154309: amdgpu_device_rreg: 0x13fe, 0x00003ab3, 0x000f0102
+         python3-13954   [008] .....  1642.154309: amdgpu_dc_rreg: reg=0x00003ab3, value=0x000f0102
+         python3-13954   [008] .....  1642.154309: amdgpu_device_wreg: 0x13fe, 0x00003ab3, 0x000f0102
+         python3-13954   [008] .....  1642.154309: amdgpu_dc_wreg: reg=0x00003ab3, value=0x000f0102
+         python3-13954   [008] .....  1642.154310: amdgpu_device_rreg: 0x13fe, 0x00003b2a, 0x00e40000
+         python3-13954   [008] .....  1642.154311: amdgpu_dc_rreg: reg=0x00003b2a, value=0x00e40000
+         python3-13954   [008] .....  1642.154311: amdgpu_device_wreg: 0x13fe, 0x00003b2a, 0x00e40000
+         python3-13954   [008] .....  1642.154311: amdgpu_dc_wreg: reg=0x00003b2a, value=0x00e40000
+         python3-13954   [008] .....  1642.154312: amdgpu_device_wreg: 0x13fe, 0x00003aec, 0x00000056
+         python3-13954   [008] .....  1642.154312: amdgpu_dc_wreg: reg=0x00003aec, value=0x00000056
+         python3-13954   [008] .....  1642.154313: amdgpu_device_wreg: 0x13fe, 0x00003ab1, 0x000d1b00
+         python3-13954   [008] .....  1642.154313: amdgpu_dc_wreg: reg=0x00003ab1, value=0x000d1b00
+         python3-13954   [008] .....  1642.154313: amdgpu_device_wreg: 0x13fe, 0x00003ab2, 0x00000000
+         python3-13954   [008] .....  1642.154313: amdgpu_dc_wreg: reg=0x00003ab2, value=0x00000000
+         python3-13954   [008] .....  1642.154314: amdgpu_device_wreg: 0x13fe, 0x00003b06, 0x00200024
+         python3-13954   [008] .....  1642.154314: amdgpu_dc_wreg: reg=0x00003b06, value=0x00200024
+         python3-13954   [008] .....  1642.154315: amdgpu_device_wreg: 0x13fe, 0x00003b07, 0x00001340
+         python3-13954   [008] .....  1642.154315: amdgpu_dc_wreg: reg=0x00003b07, value=0x00001340
+         python3-13954   [008] .....  1642.154316: amdgpu_device_wreg: 0x13fe, 0x00003b08, 0x0002a353
+         python3-13954   [008] .....  1642.154316: amdgpu_dc_wreg: reg=0x00003b08, value=0x0002a353
+         python3-13954   [008] .....  1642.154316: amdgpu_device_wreg: 0x13fe, 0x00003b09, 0x00000198
+         python3-13954   [008] .....  1642.154316: amdgpu_dc_wreg: reg=0x00003b09, value=0x00000198
+         python3-13954   [008] .....  1642.154317: amdgpu_device_wreg: 0x13fe, 0x00003b1f, 0x000298ef
+         python3-13954   [008] .....  1642.154317: amdgpu_dc_wreg: reg=0x00003b1f, value=0x000298ef
+         python3-13954   [008] .....  1642.154318: amdgpu_device_wreg: 0x13fe, 0x00003b0d, 0x000001fa
+         python3-13954   [008] .....  1642.154318: amdgpu_dc_wreg: reg=0x00003b0d, value=0x000001fa
+         python3-13954   [008] .....  1642.154318: amdgpu_device_wreg: 0x13fe, 0x00003b18, 0x00000020
+         python3-13954   [008] .....  1642.154319: amdgpu_dc_wreg: reg=0x00003b18, value=0x00000020
+         python3-13954   [008] .....  1642.154319: amdgpu_device_wreg: 0x13fe, 0x00003b19, 0x0000151a
+         python3-13954   [008] .....  1642.154319: amdgpu_dc_wreg: reg=0x00003b19, value=0x0000151a
+         python3-13954   [008] .....  1642.154320: amdgpu_device_wreg: 0x13fe, 0x00003b1d, 0x0000026f
+         python3-13954   [008] .....  1642.154320: amdgpu_dc_wreg: reg=0x00003b1d, value=0x0000026f
+         python3-13954   [008] .....  1642.154320: amdgpu_device_wreg: 0x13fe, 0x00003b0e, 0x00000000
+         python3-13954   [008] .....  1642.154321: amdgpu_dc_wreg: reg=0x00003b0e, value=0x00000000
+         python3-13954   [008] .....  1642.154321: amdgpu_device_wreg: 0x13fe, 0x00003b1a, 0x00000020
+         python3-13954   [008] .....  1642.154321: amdgpu_dc_wreg: reg=0x00003b1a, value=0x00000020
+         python3-13954   [008] .....  1642.154322: amdgpu_device_wreg: 0x13fe, 0x00003b1b, 0x00000000
+         python3-13954   [008] .....  1642.154322: amdgpu_dc_wreg: reg=0x00003b1b, value=0x00000000
+         python3-13954   [008] .....  1642.154322: amdgpu_device_wreg: 0x13fe, 0x00003aed, 0x0a8d0000
+         python3-13954   [008] .....  1642.154323: amdgpu_dc_wreg: reg=0x00003aed, value=0x0a8d0000
+         python3-13954   [008] .....  1642.154323: amdgpu_device_wreg: 0x13fe, 0x00003aef, 0x08009bd8
+         python3-13954   [008] .....  1642.154323: amdgpu_dc_wreg: reg=0x00003aef, value=0x08009bd8
+         python3-13954   [008] .....  1642.154324: amdgpu_device_wreg: 0x13fe, 0x00003af1, 0x08000000
+         python3-13954   [008] .....  1642.154324: amdgpu_dc_wreg: reg=0x00003af1, value=0x08000000
+         python3-13954   [008] .....  1642.154325: amdgpu_device_wreg: 0x13fe, 0x00003af3, 0x0800531d
+         python3-13954   [008] .....  1642.154325: amdgpu_dc_wreg: reg=0x00003af3, value=0x0800531d
+         python3-13954   [008] .....  1642.154325: amdgpu_device_wreg: 0x13fe, 0x00003b0a, 0x0b092492
+         python3-13954   [008] .....  1642.154326: amdgpu_dc_wreg: reg=0x00003b0a, value=0x0b092492
+         python3-13954   [008] .....  1642.154326: amdgpu_device_wreg: 0x13fe, 0x00003b0b, 0x00080000
+         python3-13954   [008] .....  1642.154326: amdgpu_dc_wreg: reg=0x00003b0b, value=0x00080000
+         python3-13954   [008] .....  1642.154327: amdgpu_device_wreg: 0x13fe, 0x00003b0c, 0x00000301
+         python3-13954   [008] .....  1642.154327: amdgpu_dc_wreg: reg=0x00003b0c, value=0x00000301
+         python3-13954   [008] .....  1642.154327: amdgpu_device_wreg: 0x13fe, 0x00003b11, 0x00000000
+         python3-13954   [008] .....  1642.154328: amdgpu_dc_wreg: reg=0x00003b11, value=0x00000000
+         python3-13954   [008] .....  1642.154328: amdgpu_device_wreg: 0x13fe, 0x00003b0f, 0x000001fa
+         python3-13954   [008] .....  1642.154328: amdgpu_dc_wreg: reg=0x00003b0f, value=0x000001fa
+         python3-13954   [008] .....  1642.154329: amdgpu_device_wreg: 0x13fe, 0x00003b10, 0x000001fa
+         python3-13954   [008] .....  1642.154329: amdgpu_dc_wreg: reg=0x00003b10, value=0x000001fa
+         python3-13954   [008] .....  1642.154330: amdgpu_device_wreg: 0x13fe, 0x00003b13, 0x00000000
+         python3-13954   [008] .....  1642.154330: amdgpu_dc_wreg: reg=0x00003b13, value=0x00000000
+         python3-13954   [008] .....  1642.154330: amdgpu_device_wreg: 0x13fe, 0x00003b1c, 0x0000014b
+         python3-13954   [008] .....  1642.154330: amdgpu_dc_wreg: reg=0x00003b1c, value=0x0000014b
+         python3-13954   [008] .....  1642.154331: amdgpu_device_wreg: 0x13fe, 0x00003af0, 0x00004db0
+         python3-13954   [008] .....  1642.154331: amdgpu_dc_wreg: reg=0x00003af0, value=0x00004db0
+         python3-13954   [008] .....  1642.154332: amdgpu_device_wreg: 0x13fe, 0x00003af2, 0x00000000
+         python3-13954   [008] .....  1642.154332: amdgpu_dc_wreg: reg=0x00003af2, value=0x00000000
+         python3-13954   [008] .....  1642.154332: amdgpu_device_wreg: 0x13fe, 0x00003af4, 0x000052de
+         python3-13954   [008] .....  1642.154332: amdgpu_dc_wreg: reg=0x00003af4, value=0x000052de
+         python3-13954   [008] .....  1642.154333: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000000
+         python3-13954   [008] .....  1642.154333: amdgpu_dc_wreg: reg=0x00000000, value=0x00000000
+         python3-13954   [008] .....  1642.154334: amdgpu_device_wreg: 0x13fe, 0x00003aee, 0xe0003284
+         python3-13954   [008] .....  1642.154334: amdgpu_dc_wreg: reg=0x00003aee, value=0xe0003284
+         python3-13954   [008] .....  1642.154335: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x00000001
+         python3-13954   [008] .....  1642.154335: amdgpu_dc_wreg: reg=0x00004190, value=0x00000001
+         python3-13954   [008] .....  1642.154336: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154336: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154337: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154337: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154338: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154338: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154339: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154339: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154340: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154340: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154340: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154341: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154342: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154342: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154342: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154343: amdgpu_dc_wreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154343: amdgpu_device_wreg: 0x13fe, 0x0000418f, 0x00000008
+         python3-13954   [008] .....  1642.154343: amdgpu_dc_wreg: reg=0x0000418f, value=0x00000008
+         python3-13954   [008] .....  1642.154344: amdgpu_device_rreg: 0x13fe, 0x00004190, 0x03100001
+         python3-13954   [008] .....  1642.154345: amdgpu_dc_rreg: reg=0x00004190, value=0x03100001
+         python3-13954   [008] .....  1642.154345: amdgpu_device_wreg: 0x13fe, 0x00004190, 0x03100101
+         python3-13954   [008] .....  1642.154345: amdgpu_dc_wreg: reg=0x00004190, value=0x03100101
+         python3-13954   [008] .....  1642.154346: amdgpu_device_wreg: 0x13fe, 0x000041db, 0x00000000
+         python3-13954   [008] .....  1642.154346: amdgpu_dc_wreg: reg=0x000041db, value=0x00000000
+         python3-13954   [008] .....  1642.154348: amdgpu_device_rreg: 0x13fe, 0x00004262, 0x00000004
+         python3-13954   [008] .....  1642.154348: amdgpu_dc_rreg: reg=0x00004262, value=0x00000004
+         python3-13954   [008] .....  1642.154348: amdgpu_device_wreg: 0x13fe, 0x00004262, 0x00000004
+         python3-13954   [008] .....  1642.154349: amdgpu_dc_wreg: reg=0x00004262, value=0x00000004
+         python3-13954   [008] .....  1642.154350: amdgpu_device_rreg: 0x13fe, 0x000041cb, 0x00000000
+         python3-13954   [008] .....  1642.154350: amdgpu_dc_rreg: reg=0x000041cb, value=0x00000000
+         python3-13954   [008] .....  1642.154350: amdgpu_device_wreg: 0x13fe, 0x000041cb, 0x00000000
+         python3-13954   [008] .....  1642.154351: amdgpu_dc_wreg: reg=0x000041cb, value=0x00000000
+         python3-13954   [008] .....  1642.154352: amdgpu_device_rreg: 0x13fe, 0x000041c8, 0x00000000
+         python3-13954   [008] .....  1642.154352: amdgpu_dc_rreg: reg=0x000041c8, value=0x00000000
+         python3-13954   [008] .....  1642.154352: amdgpu_device_wreg: 0x13fe, 0x000041c8, 0x00000000
+         python3-13954   [008] .....  1642.154352: amdgpu_dc_wreg: reg=0x000041c8, value=0x00000000
+         python3-13954   [008] .....  1642.154355: amdgpu_device_rreg: 0x13fe, 0x00004845, 0x0a040000
+         python3-13954   [008] .....  1642.154355: amdgpu_dc_rreg: reg=0x00004845, value=0x0a040000
+         python3-13954   [008] .....  1642.154355: amdgpu_device_wreg: 0x13fe, 0x00004845, 0x0a040003
+         python3-13954   [008] .....  1642.154356: amdgpu_dc_wreg: reg=0x00004845, value=0x0a040003
+         python3-13954   [008] .....  1642.154356: amdgpu_device_wreg: 0x13fe, 0x00004731, 0x0000000f
+         python3-13954   [008] .....  1642.154356: amdgpu_dc_wreg: reg=0x00004731, value=0x0000000f
+         python3-13954   [008] .....  1642.154357: amdgpu_device_wreg: 0x13fe, 0x00004732, 0x0000000f
+         python3-13954   [008] .....  1642.154357: amdgpu_dc_wreg: reg=0x00004732, value=0x0000000f
+         python3-13954   [008] .....  1642.154357: amdgpu_device_wreg: 0x13fe, 0x00004733, 0x0000000f
+         python3-13954   [008] .....  1642.154358: amdgpu_dc_wreg: reg=0x00004733, value=0x0000000f
+         python3-13954   [008] .....  1642.154358: amdgpu_device_wreg: 0x13fe, 0x00004736, 0x0000000f
+         python3-13954   [008] .....  1642.154358: amdgpu_dc_wreg: reg=0x00004736, value=0x0000000f
+         python3-13954   [008] .....  1642.154359: amdgpu_device_wreg: 0x13fe, 0x0000473a, 0x00000000
+         python3-13954   [008] .....  1642.154359: amdgpu_dc_wreg: reg=0x0000473a, value=0x00000000
+         python3-13954   [008] .....  1642.154360: amdgpu_device_wreg: 0x13fe, 0x0000473b, 0x00000000
+         python3-13954   [008] .....  1642.154360: amdgpu_dc_wreg: reg=0x0000473b, value=0x00000000
+         python3-13954   [008] .....  1642.154361: amdgpu_device_wreg: 0x13fe, 0x0000473c, 0x00000000
+         python3-13954   [008] .....  1642.154361: amdgpu_dc_wreg: reg=0x0000473c, value=0x00000000
+         python3-13954   [008] .....  1642.154361: amdgpu_device_wreg: 0x13fe, 0x00004732, 0x0000000f
+         python3-13954   [008] .....  1642.154362: amdgpu_dc_wreg: reg=0x00004732, value=0x0000000f
+         python3-13954   [008] .....  1642.154363: amdgpu_device_rreg: 0x13fe, 0x00004734, 0xffff0423
+         python3-13954   [008] .....  1642.154363: amdgpu_dc_rreg: reg=0x00004734, value=0xffff0423
+         python3-13954   [008] .....  1642.154363: amdgpu_device_wreg: 0x13fe, 0x00004734, 0xffff0422
+         python3-13954   [008] .....  1642.154363: amdgpu_dc_wreg: reg=0x00004734, value=0xffff0422
+         python3-13954   [008] .....  1642.154364: amdgpu_device_wreg: 0x13fe, 0x00004731, 0x00000000
+         python3-13954   [008] .....  1642.154364: amdgpu_dc_wreg: reg=0x00004731, value=0x00000000
+         python3-13954   [008] .....  1642.154365: amdgpu_device_wreg: 0x13fe, 0x00004733, 0x00000000
+         python3-13954   [008] .....  1642.154365: amdgpu_dc_wreg: reg=0x00004733, value=0x00000000
+         python3-13954   [008] .....  1642.154365: amdgpu_device_wreg: 0x13fe, 0x00004736, 0x00000000
+         python3-13954   [008] .....  1642.154366: amdgpu_dc_wreg: reg=0x00004736, value=0x00000000
+         python3-13954   [008] .....  1642.154366: amdgpu_device_wreg: 0x13fe, 0x00004783, 0x00000000
+         python3-13954   [008] .....  1642.154366: amdgpu_dc_wreg: reg=0x00004783, value=0x00000000
+         python3-13954   [008] .....  1642.154367: amdgpu_device_rreg: 0x13fe, 0x00004785, 0xffff0422
+         python3-13954   [008] .....  1642.154367: amdgpu_dc_rreg: reg=0x00004785, value=0xffff0422
+         python3-13954   [008] .....  1642.154368: amdgpu_device_wreg: 0x13fe, 0x00004785, 0xffff0423
+         python3-13954   [008] .....  1642.154368: amdgpu_dc_wreg: reg=0x00004785, value=0xffff0423
+         python3-13954   [008] .....  1642.154369: amdgpu_device_rreg: 0x13fe, 0x00004734, 0xffff0422
+         python3-13954   [008] .....  1642.154369: amdgpu_dc_rreg: reg=0x00004734, value=0xffff0422
+         python3-13954   [008] .....  1642.154370: amdgpu_device_wreg: 0x13fe, 0x00004734, 0xffff0422
+         python3-13954   [008] .....  1642.154370: amdgpu_dc_wreg: reg=0x00004734, value=0xffff0422
+         python3-13954   [008] .....  1642.154370: amdgpu_device_wreg: 0x13fe, 0x00004737, 0x0001f000
+         python3-13954   [008] .....  1642.154371: amdgpu_dc_wreg: reg=0x00004737, value=0x0001f000
+         python3-13954   [008] .....  1642.154371: amdgpu_device_wreg: 0x13fe, 0x00004738, 0x0001f000
+         python3-13954   [008] .....  1642.154371: amdgpu_dc_wreg: reg=0x00004738, value=0x0001f000
+         python3-13954   [008] .....  1642.154372: amdgpu_device_wreg: 0x13fe, 0x00004739, 0x0001f000
+         python3-13954   [008] .....  1642.154372: amdgpu_dc_wreg: reg=0x00004739, value=0x0001f000
+         python3-13954   [008] .....  1642.154373: amdgpu_device_wreg: 0x13fe, 0x00003aaa, 0x04b003c0
+         python3-13954   [008] .....  1642.154374: amdgpu_dc_wreg: reg=0x00003aaa, value=0x04b003c0
+         python3-13954   [008] .....  1642.154374: amdgpu_device_wreg: 0x13fe, 0x00003aa9, 0x00000000
+         python3-13954   [008] .....  1642.154374: amdgpu_dc_wreg: reg=0x00003aa9, value=0x00000000
+         python3-13954   [008] .....  1642.154375: amdgpu_device_wreg: 0x13fe, 0x00003aae, 0x04b003c0
+         python3-13954   [008] .....  1642.154375: amdgpu_dc_wreg: reg=0x00003aae, value=0x04b003c0
+         python3-13954   [008] .....  1642.154376: amdgpu_device_wreg: 0x13fe, 0x00003aad, 0x00000000
+         python3-13954   [008] .....  1642.154376: amdgpu_dc_wreg: reg=0x00003aad, value=0x00000000
+         python3-13954   [008] .....  1642.154376: amdgpu_device_wreg: 0x13fe, 0x00003aac, 0x04b003c0
+         python3-13954   [008] .....  1642.154377: amdgpu_dc_wreg: reg=0x00003aac, value=0x04b003c0
+         python3-13954   [008] .....  1642.154377: amdgpu_device_wreg: 0x13fe, 0x00003aab, 0x00000000
+         python3-13954   [008] .....  1642.154377: amdgpu_dc_wreg: reg=0x00003aab, value=0x00000000
+         python3-13954   [008] .....  1642.154378: amdgpu_device_wreg: 0x13fe, 0x00003ab0, 0x04b003c0
+         python3-13954   [008] .....  1642.154378: amdgpu_dc_wreg: reg=0x00003ab0, value=0x04b003c0
+         python3-13954   [008] .....  1642.154378: amdgpu_device_wreg: 0x13fe, 0x00003aaf, 0x00000000
+         python3-13954   [008] .....  1642.154379: amdgpu_dc_wreg: reg=0x00003aaf, value=0x00000000
+         python3-13954   [008] .....  1642.154379: amdgpu_device_wreg: 0x13fe, 0x000041e8, 0x00000000
+         python3-13954   [008] .....  1642.154380: amdgpu_dc_wreg: reg=0x000041e8, value=0x00000000
+         python3-13954   [008] .....  1642.154380: amdgpu_device_wreg: 0x13fe, 0x0000473d, 0x00000004
+         python3-13954   [008] .....  1642.154381: amdgpu_dc_wreg: reg=0x0000473d, value=0x00000004
+         python3-13954   [008] .....  1642.154381: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000001
+         python3-13954   [008] .....  1642.154381: amdgpu_dc_wreg: reg=0x00000000, value=0x00000001
+         python3-13954   [008] .....  1642.154382: amdgpu_device_rreg: 0x13fe, 0x00000000, 0x00000000
+         python3-13954   [008] .....  1642.154382: amdgpu_dc_rreg: reg=0x00000000, value=0x00000000
+         python3-13954   [008] .....  1642.154383: amdgpu_device_wreg: 0x13fe, 0x00004a78, 0x00002000
+         python3-13954   [008] .....  1642.154383: amdgpu_dc_wreg: reg=0x00004a78, value=0x00002000
+         python3-13954   [008] .....  1642.154383: amdgpu_device_wreg: 0x13fe, 0x00004a79, 0x00000000
+         python3-13954   [008] .....  1642.154384: amdgpu_dc_wreg: reg=0x00004a79, value=0x00000000
+         python3-13954   [008] .....  1642.154384: amdgpu_device_wreg: 0x13fe, 0x00004a7a, 0x20000000
+         python3-13954   [008] .....  1642.154384: amdgpu_dc_wreg: reg=0x00004a7a, value=0x20000000
+         python3-13954   [008] .....  1642.154385: amdgpu_device_wreg: 0x13fe, 0x00004a7b, 0x00000000
+         python3-13954   [008] .....  1642.154385: amdgpu_dc_wreg: reg=0x00004a7b, value=0x00000000
+         python3-13954   [008] .....  1642.154385: amdgpu_device_wreg: 0x13fe, 0x00004a7c, 0x00000000
+         python3-13954   [008] .....  1642.154386: amdgpu_dc_wreg: reg=0x00004a7c, value=0x00000000
+         python3-13954   [008] .....  1642.154386: amdgpu_device_wreg: 0x13fe, 0x00004a7d, 0x00002000
+         python3-13954   [008] .....  1642.154386: amdgpu_dc_wreg: reg=0x00004a7d, value=0x00002000
+         python3-13954   [008] .....  1642.154387: amdgpu_device_wreg: 0x13fe, 0x00004a77, 0x00000001
+         python3-13954   [008] .....  1642.154387: amdgpu_dc_wreg: reg=0x00004a77, value=0x00000001
+         python3-13954   [008] .....  1642.154388: amdgpu_device_rreg: 0x13fe, 0x00003ada, 0x00000000
+         python3-13954   [008] .....  1642.154388: amdgpu_dc_rreg: reg=0x00003ada, value=0x00000000
+         python3-13954   [008] .....  1642.154389: amdgpu_device_wreg: 0x13fe, 0x00003ada, 0x00000000
+         python3-13954   [008] .....  1642.154389: amdgpu_dc_wreg: reg=0x00003ada, value=0x00000000
+         python3-13954   [008] .....  1642.154390: amdgpu_device_rreg: 0x13fe, 0x00003aa6, 0x0000123c
+         python3-13954   [008] .....  1642.154390: amdgpu_dc_rreg: reg=0x00003aa6, value=0x0000123c
+         python3-13954   [008] .....  1642.154391: amdgpu_device_wreg: 0x13fe, 0x00003aa6, 0x0000123c
+         python3-13954   [008] .....  1642.154391: amdgpu_dc_wreg: reg=0x00003aa6, value=0x0000123c
+         python3-13954   [008] .....  1642.154392: amdgpu_device_rreg: 0x13fe, 0x00003aa7, 0x00000080
+         python3-13954   [008] .....  1642.154392: amdgpu_dc_rreg: reg=0x00003aa7, value=0x00000080
+         python3-13954   [008] .....  1642.154393: amdgpu_device_wreg: 0x13fe, 0x00003aa7, 0x00000080
+         python3-13954   [008] .....  1642.154393: amdgpu_dc_wreg: reg=0x00003aa7, value=0x00000080
+         python3-13954   [008] .....  1642.154394: amdgpu_device_rreg: 0x13fe, 0x00003ac7, 0x0000077f
+         python3-13954   [008] .....  1642.154394: amdgpu_dc_rreg: reg=0x00003ac7, value=0x0000077f
+         python3-13954   [008] .....  1642.154394: amdgpu_device_wreg: 0x13fe, 0x00003ac7, 0x0000077f
+         python3-13954   [008] .....  1642.154395: amdgpu_dc_wreg: reg=0x00003ac7, value=0x0000077f
+         python3-13954   [008] .....  1642.154396: amdgpu_device_rreg: 0x13fe, 0x00003b2a, 0x00e40000
+         python3-13954   [008] .....  1642.154396: amdgpu_dc_rreg: reg=0x00003b2a, value=0x00e40000
+         python3-13954   [008] .....  1642.154396: amdgpu_device_wreg: 0x13fe, 0x00003b2a, 0x00e40000
+         python3-13954   [008] .....  1642.154397: amdgpu_dc_wreg: reg=0x00003b2a, value=0x00e40000
+         python3-13954   [008] .....  1642.154398: amdgpu_device_rreg: 0x13fe, 0x00003aa5, 0x00000008
+         python3-13954   [008] .....  1642.154398: amdgpu_dc_rreg: reg=0x00003aa5, value=0x00000008
+         python3-13954   [008] .....  1642.154398: amdgpu_device_wreg: 0x13fe, 0x00003aa5, 0x00000008
+         python3-13954   [008] .....  1642.154398: amdgpu_dc_wreg: reg=0x00003aa5, value=0x00000008
+         python3-13954   [008] .....  1642.154400: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000200
+         python3-13954   [008] .....  1642.154400: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000200
+         python3-13954   [008] .....  1642.154401: amdgpu_device_wreg: 0x13fe, 0x00003adb, 0x00000200
+         python3-13954   [008] .....  1642.154401: amdgpu_dc_wreg: reg=0x00003adb, value=0x00000200
+         python3-13954   [008] .....  1642.154402: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000200
+         python3-13954   [008] .....  1642.154402: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000200
+         python3-13954   [008] .....  1642.154402: amdgpu_device_wreg: 0x13fe, 0x00003adb, 0x00000200
+         python3-13954   [008] .....  1642.154403: amdgpu_dc_wreg: reg=0x00003adb, value=0x00000200
+         python3-13954   [008] .....  1642.154403: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000200
+         python3-13954   [008] .....  1642.154404: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000200
+         python3-13954   [008] .....  1642.154404: amdgpu_device_wreg: 0x13fe, 0x00003adb, 0x00000200
+         python3-13954   [008] .....  1642.154404: amdgpu_dc_wreg: reg=0x00003adb, value=0x00000200
+         python3-13954   [008] .....  1642.154405: amdgpu_device_rreg: 0x13fe, 0x00003ada, 0x00000000
+         python3-13954   [008] .....  1642.154406: amdgpu_dc_rreg: reg=0x00003ada, value=0x00000000
+         python3-13954   [008] .....  1642.154406: amdgpu_device_wreg: 0x13fe, 0x00003ada, 0x00000000
+         python3-13954   [008] .....  1642.154406: amdgpu_dc_wreg: reg=0x00003ada, value=0x00000000
+         python3-13954   [008] .....  1642.154407: amdgpu_device_wreg: 0x13fe, 0x00003acb, 0x00000004
+         python3-13954   [008] .....  1642.154407: amdgpu_dc_wreg: reg=0x00003acb, value=0x00000004
+         python3-13954   [008] .....  1642.154407: amdgpu_device_wreg: 0x13fe, 0x00003aca, 0x6e000000
+         python3-13954   [008] .....  1642.154408: amdgpu_dc_wreg: reg=0x00003aca, value=0x6e000000
+         python3-13954   [008] .....  1642.154409: amdgpu_device_rreg: 0x13fe, 0x00003ab3, 0x000f0102
+         python3-13954   [008] .....  1642.154409: amdgpu_dc_rreg: reg=0x00003ab3, value=0x000f0102
+         python3-13954   [008] .....  1642.154409: amdgpu_device_wreg: 0x13fe, 0x00003ab3, 0x000f0102
+         python3-13954   [008] .....  1642.154410: amdgpu_dc_wreg: reg=0x00003ab3, value=0x000f0102
+         python3-13954   [008] .....  1642.154411: amdgpu_device_rreg: 0x13fe, 0x00004261, 0x0001f000
+         python3-13954   [008] .....  1642.154412: amdgpu_dc_rreg: reg=0x00004261, value=0x0001f000
+         python3-13954   [008] .....  1642.154412: amdgpu_device_wreg: 0x13fe, 0x00004261, 0x0001f000
+         python3-13954   [008] .....  1642.154412: amdgpu_dc_wreg: reg=0x00004261, value=0x0001f000
+         python3-13954   [008] .....  1642.154413: amdgpu_device_wreg: 0x13fe, 0x00004267, 0x00000000
+         python3-13954   [008] .....  1642.154413: amdgpu_dc_wreg: reg=0x00004267, value=0x00000000
+         python3-13954   [008] .....  1642.154415: amdgpu_device_rreg: 0x13fe, 0x000042a0, 0x00000010
+         python3-13954   [008] .....  1642.154415: amdgpu_dc_rreg: reg=0x000042a0, value=0x00000010
+         python3-13954   [008] .....  1642.154415: amdgpu_device_wreg: 0x13fe, 0x000042a0, 0x00000010
+         python3-13954   [008] .....  1642.154416: amdgpu_dc_wreg: reg=0x000042a0, value=0x00000010
+         python3-13954   [008] .....  1642.154416: amdgpu_device_wreg: 0x13fe, 0x00004223, 0x00000000
+         python3-13954   [008] .....  1642.154417: amdgpu_dc_wreg: reg=0x00004223, value=0x00000000
+         python3-13954   [008] .....  1642.154418: amdgpu_device_rreg: 0x13fe, 0x000041da, 0x00003100
+         python3-13954   [008] .....  1642.154418: amdgpu_dc_rreg: reg=0x000041da, value=0x00003100
+         python3-13954   [008] .....  1642.154419: amdgpu_device_wreg: 0x13fe, 0x000041da, 0x00003100
+         python3-13954   [008] .....  1642.154419: amdgpu_dc_wreg: reg=0x000041da, value=0x00003100
+         python3-13954   [008] .....  1642.154420: amdgpu_device_rreg: 0x13fe, 0x000041f7, 0x00000000
+         python3-13954   [008] .....  1642.154420: amdgpu_dc_rreg: reg=0x000041f7, value=0x00000000
+         python3-13954   [008] .....  1642.154421: amdgpu_device_wreg: 0x13fe, 0x000041f7, 0x00000000
+         python3-13954   [008] .....  1642.154421: amdgpu_dc_wreg: reg=0x000041f7, value=0x00000000
+         python3-13954   [008] .....  1642.154421: amdgpu_device_wreg: 0x13fe, 0x0000473d, 0x00000004
+         python3-13954   [008] .....  1642.154422: amdgpu_dc_wreg: reg=0x0000473d, value=0x00000004
+         python3-13954   [008] .....  1642.154422: amdgpu_device_wreg: 0x13fe, 0x0000486e, 0x00000000
+         python3-13954   [008] .....  1642.154423: amdgpu_dc_wreg: reg=0x0000486e, value=0x00000000
+         python3-13954   [008] .....  1642.154424: amdgpu_device_rreg: 0x13fe, 0x00003d48, 0x00f11111
+         python3-13954   [008] .....  1642.154424: amdgpu_dc_rreg: reg=0x00003d48, value=0x00f11111
+         python3-13954   [008] .....  1642.154424: amdgpu_device_wreg: 0x13fe, 0x00003d48, 0x00f11111
+         python3-13954   [008] .....  1642.154424: amdgpu_dc_wreg: reg=0x00003d48, value=0x00f11111
+         python3-13954   [008] .....  1642.154425: amdgpu_device_rreg: 0x13fe, 0x00004d4c, 0x00000003
+         python3-13954   [008] .....  1642.154426: amdgpu_dc_rreg: reg=0x00004d4c, value=0x00000003
+         python3-13954   [008] .....  1642.154426: amdgpu_device_wreg: 0x13fe, 0x00004d4c, 0x00000003
+         python3-13954   [008] .....  1642.154426: amdgpu_dc_wreg: reg=0x00004d4c, value=0x00000003
+         python3-13954   [008] .....  1642.154427: amdgpu_device_rreg: 0x13fe, 0x000045c6, 0xf0000010
+         python3-13954   [008] .....  1642.154428: amdgpu_dc_rreg: reg=0x000045c6, value=0xf0000010
+         python3-13954   [008] .....  1642.154428: amdgpu_device_wreg: 0x13fe, 0x000045c6, 0xf0000010
+         python3-13954   [008] .....  1642.154428: amdgpu_dc_wreg: reg=0x000045c6, value=0xf0000010
+         python3-13954   [008] .....  1642.154429: amdgpu_device_rreg: 0x13fe, 0x00003d47, 0x000f0102
+         python3-13954   [008] .....  1642.154430: amdgpu_dc_rreg: reg=0x00003d47, value=0x000f0102
+         python3-13954   [008] .....  1642.154430: amdgpu_device_wreg: 0x13fe, 0x00003d47, 0x000f0102
+         python3-13954   [008] .....  1642.154430: amdgpu_dc_wreg: reg=0x00003d47, value=0x000f0102
+         python3-13954   [008] .....  1642.154431: amdgpu_device_wreg: 0x13fe, 0x00003d4a, 0x00000100
+         python3-13954   [008] .....  1642.154431: amdgpu_dc_wreg: reg=0x00003d4a, value=0x00000100
+         python3-13954   [008] .....  1642.154432: amdgpu_device_rreg: 0x13fe, 0x00003d47, 0x000f0102
+         python3-13954   [008] .....  1642.154432: amdgpu_dc_rreg: reg=0x00003d47, value=0x000f0102
+         python3-13954   [008] .....  1642.154432: amdgpu_device_wreg: 0x13fe, 0x00003d47, 0x000f0102
+         python3-13954   [008] .....  1642.154433: amdgpu_dc_wreg: reg=0x00003d47, value=0x000f0102
+         python3-13954   [008] .....  1642.154434: amdgpu_device_rreg: 0x13fe, 0x00003dbe, 0x00e40000
+         python3-13954   [008] .....  1642.154434: amdgpu_dc_rreg: reg=0x00003dbe, value=0x00e40000
+         python3-13954   [008] .....  1642.154434: amdgpu_device_wreg: 0x13fe, 0x00003dbe, 0x00e40000
+         python3-13954   [008] .....  1642.154434: amdgpu_dc_wreg: reg=0x00003dbe, value=0x00e40000
+         python3-13954   [008] .....  1642.154435: amdgpu_device_wreg: 0x13fe, 0x00003d80, 0x00000056
+         python3-13954   [008] .....  1642.154435: amdgpu_dc_wreg: reg=0x00003d80, value=0x00000056
+         python3-13954   [008] .....  1642.154436: amdgpu_device_wreg: 0x13fe, 0x00003d45, 0x000d1b00
+         python3-13954   [008] .....  1642.154436: amdgpu_dc_wreg: reg=0x00003d45, value=0x000d1b00
+         python3-13954   [008] .....  1642.154436: amdgpu_device_wreg: 0x13fe, 0x00003d46, 0x00000000
+         python3-13954   [008] .....  1642.154437: amdgpu_dc_wreg: reg=0x00003d46, value=0x00000000
+         python3-13954   [008] .....  1642.154437: amdgpu_device_wreg: 0x13fe, 0x00003d9a, 0x00200024
+         python3-13954   [008] .....  1642.154437: amdgpu_dc_wreg: reg=0x00003d9a, value=0x00200024
+         python3-13954   [008] .....  1642.154438: amdgpu_device_wreg: 0x13fe, 0x00003d9b, 0x00001340
+         python3-13954   [008] .....  1642.154438: amdgpu_dc_wreg: reg=0x00003d9b, value=0x00001340
+         python3-13954   [008] .....  1642.154438: amdgpu_device_wreg: 0x13fe, 0x00003d9c, 0x0002a353
+         python3-13954   [008] .....  1642.154439: amdgpu_dc_wreg: reg=0x00003d9c, value=0x0002a353
+         python3-13954   [008] .....  1642.154439: amdgpu_device_wreg: 0x13fe, 0x00003d9d, 0x00000198
+         python3-13954   [008] .....  1642.154439: amdgpu_dc_wreg: reg=0x00003d9d, value=0x00000198
+         python3-13954   [008] .....  1642.154440: amdgpu_device_wreg: 0x13fe, 0x00003db3, 0x000298ef
+         python3-13954   [008] .....  1642.154440: amdgpu_dc_wreg: reg=0x00003db3, value=0x000298ef
+         python3-13954   [008] .....  1642.154440: amdgpu_device_wreg: 0x13fe, 0x00003da1, 0x000001fa
+         python3-13954   [008] .....  1642.154441: amdgpu_dc_wreg: reg=0x00003da1, value=0x000001fa
+         python3-13954   [008] .....  1642.154441: amdgpu_device_wreg: 0x13fe, 0x00003dac, 0x00000020
+         python3-13954   [008] .....  1642.154442: amdgpu_dc_wreg: reg=0x00003dac, value=0x00000020
+         python3-13954   [008] .....  1642.154442: amdgpu_device_wreg: 0x13fe, 0x00003dad, 0x0000151a
+         python3-13954   [008] .....  1642.154442: amdgpu_dc_wreg: reg=0x00003dad, value=0x0000151a
+         python3-13954   [008] .....  1642.154443: amdgpu_device_wreg: 0x13fe, 0x00003db1, 0x0000026f
+         python3-13954   [008] .....  1642.154443: amdgpu_dc_wreg: reg=0x00003db1, value=0x0000026f
+         python3-13954   [008] .....  1642.154444: amdgpu_device_wreg: 0x13fe, 0x00003da2, 0x00000000
+         python3-13954   [008] .....  1642.154444: amdgpu_dc_wreg: reg=0x00003da2, value=0x00000000
+         python3-13954   [008] .....  1642.154444: amdgpu_device_wreg: 0x13fe, 0x00003dae, 0x00000020
+         python3-13954   [008] .....  1642.154444: amdgpu_dc_wreg: reg=0x00003dae, value=0x00000020
+         python3-13954   [008] .....  1642.154445: amdgpu_device_wreg: 0x13fe, 0x00003daf, 0x00000000
+         python3-13954   [008] .....  1642.154445: amdgpu_dc_wreg: reg=0x00003daf, value=0x00000000
+         python3-13954   [008] .....  1642.154446: amdgpu_device_wreg: 0x13fe, 0x00003d81, 0x0a8d0000
+         python3-13954   [008] .....  1642.154446: amdgpu_dc_wreg: reg=0x00003d81, value=0x0a8d0000
+         python3-13954   [008] .....  1642.154446: amdgpu_device_wreg: 0x13fe, 0x00003d83, 0x08009bd8
+         python3-13954   [008] .....  1642.154446: amdgpu_dc_wreg: reg=0x00003d83, value=0x08009bd8
+         python3-13954   [008] .....  1642.154447: amdgpu_device_wreg: 0x13fe, 0x00003d85, 0x08000000
+         python3-13954   [008] .....  1642.154447: amdgpu_dc_wreg: reg=0x00003d85, value=0x08000000
+         python3-13954   [008] .....  1642.154448: amdgpu_device_wreg: 0x13fe, 0x00003d87, 0x0800531d
+         python3-13954   [008] .....  1642.154448: amdgpu_dc_wreg: reg=0x00003d87, value=0x0800531d
+         python3-13954   [008] .....  1642.154448: amdgpu_device_wreg: 0x13fe, 0x00003d9e, 0x0b092492
+         python3-13954   [008] .....  1642.154449: amdgpu_dc_wreg: reg=0x00003d9e, value=0x0b092492
+         python3-13954   [008] .....  1642.154449: amdgpu_device_wreg: 0x13fe, 0x00003d9f, 0x00080000
+         python3-13954   [008] .....  1642.154449: amdgpu_dc_wreg: reg=0x00003d9f, value=0x00080000
+         python3-13954   [008] .....  1642.154450: amdgpu_device_wreg: 0x13fe, 0x00003da0, 0x00000301
+         python3-13954   [008] .....  1642.154450: amdgpu_dc_wreg: reg=0x00003da0, value=0x00000301
+         python3-13954   [008] .....  1642.154450: amdgpu_device_wreg: 0x13fe, 0x00003da5, 0x00000000
+         python3-13954   [008] .....  1642.154451: amdgpu_dc_wreg: reg=0x00003da5, value=0x00000000
+         python3-13954   [008] .....  1642.154451: amdgpu_device_wreg: 0x13fe, 0x00003da3, 0x000001fa
+         python3-13954   [008] .....  1642.154451: amdgpu_dc_wreg: reg=0x00003da3, value=0x000001fa
+         python3-13954   [008] .....  1642.154452: amdgpu_device_wreg: 0x13fe, 0x00003da4, 0x000001fa
+         python3-13954   [008] .....  1642.154452: amdgpu_dc_wreg: reg=0x00003da4, value=0x000001fa
+         python3-13954   [008] .....  1642.154452: amdgpu_device_wreg: 0x13fe, 0x00003da7, 0x00000000
+         python3-13954   [008] .....  1642.154453: amdgpu_dc_wreg: reg=0x00003da7, value=0x00000000
+         python3-13954   [008] .....  1642.154453: amdgpu_device_wreg: 0x13fe, 0x00003db0, 0x0000014b
+         python3-13954   [008] .....  1642.154453: amdgpu_dc_wreg: reg=0x00003db0, value=0x0000014b
+         python3-13954   [008] .....  1642.154454: amdgpu_device_wreg: 0x13fe, 0x00003d84, 0x00004db0
+         python3-13954   [008] .....  1642.154454: amdgpu_dc_wreg: reg=0x00003d84, value=0x00004db0
+         python3-13954   [008] .....  1642.154454: amdgpu_device_wreg: 0x13fe, 0x00003d86, 0x00000000
+         python3-13954   [008] .....  1642.154455: amdgpu_dc_wreg: reg=0x00003d86, value=0x00000000
+         python3-13954   [008] .....  1642.154455: amdgpu_device_wreg: 0x13fe, 0x00003d88, 0x000052de
+         python3-13954   [008] .....  1642.154455: amdgpu_dc_wreg: reg=0x00003d88, value=0x000052de
+         python3-13954   [008] .....  1642.154456: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000000
+         python3-13954   [008] .....  1642.154456: amdgpu_dc_wreg: reg=0x00000000, value=0x00000000
+         python3-13954   [008] .....  1642.154456: amdgpu_device_wreg: 0x13fe, 0x00003d82, 0xe0003284
+         python3-13954   [008] .....  1642.154457: amdgpu_dc_wreg: reg=0x00003d82, value=0xe0003284
+         python3-13954   [008] .....  1642.154457: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x00000001
+         python3-13954   [008] .....  1642.154458: amdgpu_dc_wreg: reg=0x000045d1, value=0x00000001
+         python3-13954   [008] .....  1642.154459: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154459: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154459: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154459: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154460: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154461: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154461: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154461: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154462: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154463: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154463: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154463: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154464: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154464: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154465: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154465: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154466: amdgpu_device_wreg: 0x13fe, 0x000045d0, 0x00000008
+         python3-13954   [008] .....  1642.154466: amdgpu_dc_wreg: reg=0x000045d0, value=0x00000008
+         python3-13954   [008] .....  1642.154467: amdgpu_device_rreg: 0x13fe, 0x000045d1, 0x03100001
+         python3-13954   [008] .....  1642.154467: amdgpu_dc_rreg: reg=0x000045d1, value=0x03100001
+         python3-13954   [008] .....  1642.154468: amdgpu_device_wreg: 0x13fe, 0x000045d1, 0x03100101
+         python3-13954   [008] .....  1642.154468: amdgpu_dc_wreg: reg=0x000045d1, value=0x03100101
+         python3-13954   [008] .....  1642.154468: amdgpu_device_wreg: 0x13fe, 0x0000461c, 0x00000000
+         python3-13954   [008] .....  1642.154468: amdgpu_dc_wreg: reg=0x0000461c, value=0x00000000
+         python3-13954   [008] .....  1642.154470: amdgpu_device_rreg: 0x13fe, 0x000046a3, 0x00000004
+         python3-13954   [008] .....  1642.154470: amdgpu_dc_rreg: reg=0x000046a3, value=0x00000004
+         python3-13954   [008] .....  1642.154470: amdgpu_device_wreg: 0x13fe, 0x000046a3, 0x00000004
+         python3-13954   [008] .....  1642.154470: amdgpu_dc_wreg: reg=0x000046a3, value=0x00000004
+         python3-13954   [008] .....  1642.154471: amdgpu_device_rreg: 0x13fe, 0x0000460c, 0x00000000
+         python3-13954   [008] .....  1642.154472: amdgpu_dc_rreg: reg=0x0000460c, value=0x00000000
+         python3-13954   [008] .....  1642.154472: amdgpu_device_wreg: 0x13fe, 0x0000460c, 0x00000000
+         python3-13954   [008] .....  1642.154472: amdgpu_dc_wreg: reg=0x0000460c, value=0x00000000
+         python3-13954   [008] .....  1642.154474: amdgpu_device_rreg: 0x13fe, 0x00004609, 0x00000000
+         python3-13954   [008] .....  1642.154474: amdgpu_dc_rreg: reg=0x00004609, value=0x00000000
+         python3-13954   [008] .....  1642.154474: amdgpu_device_wreg: 0x13fe, 0x00004609, 0x00000000
+         python3-13954   [008] .....  1642.154474: amdgpu_dc_wreg: reg=0x00004609, value=0x00000000
+         python3-13954   [008] .....  1642.154475: amdgpu_device_rreg: 0x13fe, 0x00004845, 0x0a040003
+         python3-13954   [008] .....  1642.154476: amdgpu_dc_rreg: reg=0x00004845, value=0x0a040003
+         python3-13954   [008] .....  1642.154476: amdgpu_device_wreg: 0x13fe, 0x00004845, 0x0a040000
+         python3-13954   [008] .....  1642.154476: amdgpu_dc_wreg: reg=0x00004845, value=0x0a040000
+         python3-13954   [008] .....  1642.154477: amdgpu_device_wreg: 0x13fe, 0x00004782, 0x0000000f
+         python3-13954   [008] .....  1642.154477: amdgpu_dc_wreg: reg=0x00004782, value=0x0000000f
+         python3-13954   [008] .....  1642.154477: amdgpu_device_wreg: 0x13fe, 0x00004783, 0x0000000f
+         python3-13954   [008] .....  1642.154478: amdgpu_dc_wreg: reg=0x00004783, value=0x0000000f
+         python3-13954   [008] .....  1642.154478: amdgpu_device_wreg: 0x13fe, 0x00004784, 0x0000000f
+         python3-13954   [008] .....  1642.154478: amdgpu_dc_wreg: reg=0x00004784, value=0x0000000f
+         python3-13954   [008] .....  1642.154479: amdgpu_device_wreg: 0x13fe, 0x00004787, 0x0000000f
+         python3-13954   [008] .....  1642.154479: amdgpu_dc_wreg: reg=0x00004787, value=0x0000000f
+         python3-13954   [008] .....  1642.154479: amdgpu_device_wreg: 0x13fe, 0x0000478b, 0x00000000
+         python3-13954   [008] .....  1642.154480: amdgpu_dc_wreg: reg=0x0000478b, value=0x00000000
+         python3-13954   [008] .....  1642.154480: amdgpu_device_wreg: 0x13fe, 0x0000478c, 0x00000000
+         python3-13954   [008] .....  1642.154480: amdgpu_dc_wreg: reg=0x0000478c, value=0x00000000
+         python3-13954   [008] .....  1642.154481: amdgpu_device_wreg: 0x13fe, 0x0000478d, 0x00000000
+         python3-13954   [008] .....  1642.154481: amdgpu_dc_wreg: reg=0x0000478d, value=0x00000000
+         python3-13954   [008] .....  1642.154481: amdgpu_device_wreg: 0x13fe, 0x00004783, 0x0000000f
+         python3-13954   [008] .....  1642.154482: amdgpu_dc_wreg: reg=0x00004783, value=0x0000000f
+         python3-13954   [008] .....  1642.154483: amdgpu_device_rreg: 0x13fe, 0x00004785, 0xffff0423
+         python3-13954   [008] .....  1642.154483: amdgpu_dc_rreg: reg=0x00004785, value=0xffff0423
+         python3-13954   [008] .....  1642.154483: amdgpu_device_wreg: 0x13fe, 0x00004785, 0xffff0422
+         python3-13954   [008] .....  1642.154483: amdgpu_dc_wreg: reg=0x00004785, value=0xffff0422
+         python3-13954   [008] .....  1642.154484: amdgpu_device_wreg: 0x13fe, 0x00004782, 0x00000003
+         python3-13954   [008] .....  1642.154484: amdgpu_dc_wreg: reg=0x00004782, value=0x00000003
+         python3-13954   [008] .....  1642.154485: amdgpu_device_wreg: 0x13fe, 0x00004784, 0x00000000
+         python3-13954   [008] .....  1642.154485: amdgpu_dc_wreg: reg=0x00004784, value=0x00000000
+         python3-13954   [008] .....  1642.154485: amdgpu_device_wreg: 0x13fe, 0x00004787, 0x00000000
+         python3-13954   [008] .....  1642.154486: amdgpu_dc_wreg: reg=0x00004787, value=0x00000000
+         python3-13954   [008] .....  1642.154486: amdgpu_device_wreg: 0x13fe, 0x00004732, 0x00000003
+         python3-13954   [008] .....  1642.154486: amdgpu_dc_wreg: reg=0x00004732, value=0x00000003
+         python3-13954   [008] .....  1642.154487: amdgpu_device_rreg: 0x13fe, 0x00004734, 0xffff0422
+         python3-13954   [008] .....  1642.154487: amdgpu_dc_rreg: reg=0x00004734, value=0xffff0422
+         python3-13954   [008] .....  1642.154488: amdgpu_device_wreg: 0x13fe, 0x00004734, 0xffff0423
+         python3-13954   [008] .....  1642.154488: amdgpu_dc_wreg: reg=0x00004734, value=0xffff0423
+         python3-13954   [008] .....  1642.154489: amdgpu_device_rreg: 0x13fe, 0x00004785, 0xffff0422
+         python3-13954   [008] .....  1642.154489: amdgpu_dc_rreg: reg=0x00004785, value=0xffff0422
+         python3-13954   [008] .....  1642.154490: amdgpu_device_wreg: 0x13fe, 0x00004785, 0xffff0422
+         python3-13954   [008] .....  1642.154490: amdgpu_dc_wreg: reg=0x00004785, value=0xffff0422
+         python3-13954   [008] .....  1642.154490: amdgpu_device_wreg: 0x13fe, 0x00004788, 0x0001f000
+         python3-13954   [008] .....  1642.154490: amdgpu_dc_wreg: reg=0x00004788, value=0x0001f000
+         python3-13954   [008] .....  1642.154491: amdgpu_device_wreg: 0x13fe, 0x00004789, 0x0001f000
+         python3-13954   [008] .....  1642.154491: amdgpu_dc_wreg: reg=0x00004789, value=0x0001f000
+         python3-13954   [008] .....  1642.154492: amdgpu_device_wreg: 0x13fe, 0x0000478a, 0x0001f000
+         python3-13954   [008] .....  1642.154492: amdgpu_dc_wreg: reg=0x0000478a, value=0x0001f000
+         python3-13954   [008] .....  1642.154493: amdgpu_device_wreg: 0x13fe, 0x00003d3e, 0x04b003c0
+         python3-13954   [008] .....  1642.154493: amdgpu_dc_wreg: reg=0x00003d3e, value=0x04b003c0
+         python3-13954   [008] .....  1642.154493: amdgpu_device_wreg: 0x13fe, 0x00003d3d, 0x000003c0
+         python3-13954   [008] .....  1642.154494: amdgpu_dc_wreg: reg=0x00003d3d, value=0x000003c0
+         python3-13954   [008] .....  1642.154494: amdgpu_device_wreg: 0x13fe, 0x00003d42, 0x04b003c0
+         python3-13954   [008] .....  1642.154494: amdgpu_dc_wreg: reg=0x00003d42, value=0x04b003c0
+         python3-13954   [008] .....  1642.154495: amdgpu_device_wreg: 0x13fe, 0x00003d41, 0x000003c0
+         python3-13954   [008] .....  1642.154495: amdgpu_dc_wreg: reg=0x00003d41, value=0x000003c0
+         python3-13954   [008] .....  1642.154495: amdgpu_device_wreg: 0x13fe, 0x00003d40, 0x04b003c0
+         python3-13954   [008] .....  1642.154496: amdgpu_dc_wreg: reg=0x00003d40, value=0x04b003c0
+         python3-13954   [008] .....  1642.154496: amdgpu_device_wreg: 0x13fe, 0x00003d3f, 0x000003c0
+         python3-13954   [008] .....  1642.154496: amdgpu_dc_wreg: reg=0x00003d3f, value=0x000003c0
+         python3-13954   [008] .....  1642.154497: amdgpu_device_wreg: 0x13fe, 0x00003d44, 0x04b003c0
+         python3-13954   [008] .....  1642.154497: amdgpu_dc_wreg: reg=0x00003d44, value=0x04b003c0
+         python3-13954   [008] .....  1642.154497: amdgpu_device_wreg: 0x13fe, 0x00003d43, 0x000003c0
+         python3-13954   [008] .....  1642.154498: amdgpu_dc_wreg: reg=0x00003d43, value=0x000003c0
+         python3-13954   [008] .....  1642.154498: amdgpu_device_wreg: 0x13fe, 0x00004629, 0x00000000
+         python3-13954   [008] .....  1642.154498: amdgpu_dc_wreg: reg=0x00004629, value=0x00000000
+         python3-13954   [008] .....  1642.154499: amdgpu_device_wreg: 0x13fe, 0x0000478e, 0x00000004
+         python3-13954   [008] .....  1642.154499: amdgpu_dc_wreg: reg=0x0000478e, value=0x00000004
+         python3-13954   [008] .....  1642.154500: amdgpu_device_wreg: 0x13fe, 0x00000000, 0x00000001
+         python3-13954   [008] .....  1642.154500: amdgpu_dc_wreg: reg=0x00000000, value=0x00000001
+         python3-13954   [008] .....  1642.154500: amdgpu_device_rreg: 0x13fe, 0x00000000, 0x00000000
+         python3-13954   [008] .....  1642.154501: amdgpu_dc_rreg: reg=0x00000000, value=0x00000000
+         python3-13954   [008] .....  1642.154501: amdgpu_device_wreg: 0x13fe, 0x00004a78, 0x00002000
+         python3-13954   [008] .....  1642.154501: amdgpu_dc_wreg: reg=0x00004a78, value=0x00002000
+         python3-13954   [008] .....  1642.154502: amdgpu_device_wreg: 0x13fe, 0x00004a79, 0x00000000
+         python3-13954   [008] .....  1642.154502: amdgpu_dc_wreg: reg=0x00004a79, value=0x00000000
+         python3-13954   [008] .....  1642.154502: amdgpu_device_wreg: 0x13fe, 0x00004a7a, 0x20000000
+         python3-13954   [008] .....  1642.154503: amdgpu_dc_wreg: reg=0x00004a7a, value=0x20000000
+         python3-13954   [008] .....  1642.154503: amdgpu_device_wreg: 0x13fe, 0x00004a7b, 0x00000000
+         python3-13954   [008] .....  1642.154503: amdgpu_dc_wreg: reg=0x00004a7b, value=0x00000000
+         python3-13954   [008] .....  1642.154504: amdgpu_device_wreg: 0x13fe, 0x00004a7c, 0x00000000
+         python3-13954   [008] .....  1642.154504: amdgpu_dc_wreg: reg=0x00004a7c, value=0x00000000
+         python3-13954   [008] .....  1642.154504: amdgpu_device_wreg: 0x13fe, 0x00004a7d, 0x00002000
+         python3-13954   [008] .....  1642.154505: amdgpu_dc_wreg: reg=0x00004a7d, value=0x00002000
+         python3-13954   [008] .....  1642.154505: amdgpu_device_wreg: 0x13fe, 0x00004a77, 0x00000001
+         python3-13954   [008] .....  1642.154505: amdgpu_dc_wreg: reg=0x00004a77, value=0x00000001
+         python3-13954   [008] .....  1642.154506: amdgpu_device_rreg: 0x13fe, 0x00003d6e, 0x00000000
+         python3-13954   [008] .....  1642.154507: amdgpu_dc_rreg: reg=0x00003d6e, value=0x00000000
+         python3-13954   [008] .....  1642.154507: amdgpu_device_wreg: 0x13fe, 0x00003d6e, 0x00000000
+         python3-13954   [008] .....  1642.154507: amdgpu_dc_wreg: reg=0x00003d6e, value=0x00000000
+         python3-13954   [008] .....  1642.154508: amdgpu_device_rreg: 0x13fe, 0x00003d3a, 0x0000123c
+         python3-13954   [008] .....  1642.154508: amdgpu_dc_rreg: reg=0x00003d3a, value=0x0000123c
+         python3-13954   [008] .....  1642.154509: amdgpu_device_wreg: 0x13fe, 0x00003d3a, 0x0000123c
+         python3-13954   [008] .....  1642.154509: amdgpu_dc_wreg: reg=0x00003d3a, value=0x0000123c
+         python3-13954   [008] .....  1642.154510: amdgpu_device_rreg: 0x13fe, 0x00003d3b, 0x00000080
+         python3-13954   [008] .....  1642.154510: amdgpu_dc_rreg: reg=0x00003d3b, value=0x00000080
+         python3-13954   [008] .....  1642.154511: amdgpu_device_wreg: 0x13fe, 0x00003d3b, 0x00000080
+         python3-13954   [008] .....  1642.154519: amdgpu_dc_wreg: reg=0x00003d3b, value=0x00000080
+         python3-13954   [008] .....  1642.154520: amdgpu_device_rreg: 0x13fe, 0x00003d5b, 0x0000077f
+         python3-13954   [008] .....  1642.154520: amdgpu_dc_rreg: reg=0x00003d5b, value=0x0000077f
+         python3-13954   [008] .....  1642.154520: amdgpu_device_wreg: 0x13fe, 0x00003d5b, 0x0000077f
+         python3-13954   [008] .....  1642.154521: amdgpu_dc_wreg: reg=0x00003d5b, value=0x0000077f
+         python3-13954   [008] .....  1642.154522: amdgpu_device_rreg: 0x13fe, 0x00003dbe, 0x00e40000
+         python3-13954   [008] .....  1642.154522: amdgpu_dc_rreg: reg=0x00003dbe, value=0x00e40000
+         python3-13954   [008] .....  1642.154522: amdgpu_device_wreg: 0x13fe, 0x00003dbe, 0x00e40000
+         python3-13954   [008] .....  1642.154523: amdgpu_dc_wreg: reg=0x00003dbe, value=0x00e40000
+         python3-13954   [008] .....  1642.154524: amdgpu_device_rreg: 0x13fe, 0x00003d39, 0x00000008
+         python3-13954   [008] .....  1642.154524: amdgpu_dc_rreg: reg=0x00003d39, value=0x00000008
+         python3-13954   [008] .....  1642.154524: amdgpu_device_wreg: 0x13fe, 0x00003d39, 0x00000008
+         python3-13954   [008] .....  1642.154524: amdgpu_dc_wreg: reg=0x00003d39, value=0x00000008
+         python3-13954   [008] .....  1642.154526: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000200
+         python3-13954   [008] .....  1642.154526: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000200
+         python3-13954   [008] .....  1642.154526: amdgpu_device_wreg: 0x13fe, 0x00003d6f, 0x00000200
+         python3-13954   [008] .....  1642.154526: amdgpu_dc_wreg: reg=0x00003d6f, value=0x00000200
+         python3-13954   [008] .....  1642.154527: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000200
+         python3-13954   [008] .....  1642.154528: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000200
+         python3-13954   [008] .....  1642.154528: amdgpu_device_wreg: 0x13fe, 0x00003d6f, 0x00000200
+         python3-13954   [008] .....  1642.154528: amdgpu_dc_wreg: reg=0x00003d6f, value=0x00000200
+         python3-13954   [008] .....  1642.154529: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000200
+         python3-13954   [008] .....  1642.154529: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000200
+         python3-13954   [008] .....  1642.154530: amdgpu_device_wreg: 0x13fe, 0x00003d6f, 0x00000200
+         python3-13954   [008] .....  1642.154530: amdgpu_dc_wreg: reg=0x00003d6f, value=0x00000200
+         python3-13954   [008] .....  1642.154531: amdgpu_device_rreg: 0x13fe, 0x00003d6e, 0x00000000
+         python3-13954   [008] .....  1642.154531: amdgpu_dc_rreg: reg=0x00003d6e, value=0x00000000
+         python3-13954   [008] .....  1642.154532: amdgpu_device_wreg: 0x13fe, 0x00003d6e, 0x00000000
+         python3-13954   [008] .....  1642.154532: amdgpu_dc_wreg: reg=0x00003d6e, value=0x00000000
+         python3-13954   [008] .....  1642.154532: amdgpu_device_wreg: 0x13fe, 0x00003d5f, 0x00000004
+         python3-13954   [008] .....  1642.154532: amdgpu_dc_wreg: reg=0x00003d5f, value=0x00000004
+         python3-13954   [008] .....  1642.154533: amdgpu_device_wreg: 0x13fe, 0x00003d5e, 0x6e000000
+         python3-13954   [008] .....  1642.154533: amdgpu_dc_wreg: reg=0x00003d5e, value=0x6e000000
+         python3-13954   [008] .....  1642.154534: amdgpu_device_rreg: 0x13fe, 0x00003d47, 0x000f0102
+         python3-13954   [008] .....  1642.154534: amdgpu_dc_rreg: reg=0x00003d47, value=0x000f0102
+         python3-13954   [008] .....  1642.154535: amdgpu_device_wreg: 0x13fe, 0x00003d47, 0x000f0102
+         python3-13954   [008] .....  1642.154535: amdgpu_dc_wreg: reg=0x00003d47, value=0x000f0102
+         python3-13954   [008] .....  1642.154536: amdgpu_device_rreg: 0x13fe, 0x000046a2, 0x0001f000
+         python3-13954   [008] .....  1642.154537: amdgpu_dc_rreg: reg=0x000046a2, value=0x0001f000
+         python3-13954   [008] .....  1642.154537: amdgpu_device_wreg: 0x13fe, 0x000046a2, 0x0001f000
+         python3-13954   [008] .....  1642.154537: amdgpu_dc_wreg: reg=0x000046a2, value=0x0001f000
+         python3-13954   [008] .....  1642.154538: amdgpu_device_wreg: 0x13fe, 0x000046a8, 0x00000000
+         python3-13954   [008] .....  1642.154538: amdgpu_dc_wreg: reg=0x000046a8, value=0x00000000
+         python3-13954   [008] .....  1642.154539: amdgpu_device_rreg: 0x13fe, 0x000046e1, 0x00000010
+         python3-13954   [008] .....  1642.154539: amdgpu_dc_rreg: reg=0x000046e1, value=0x00000010
+         python3-13954   [008] .....  1642.154540: amdgpu_device_wreg: 0x13fe, 0x000046e1, 0x00000010
+         python3-13954   [008] .....  1642.154540: amdgpu_dc_wreg: reg=0x000046e1, value=0x00000010
+         python3-13954   [008] .....  1642.154540: amdgpu_device_wreg: 0x13fe, 0x00004664, 0x00000000
+         python3-13954   [008] .....  1642.154541: amdgpu_dc_wreg: reg=0x00004664, value=0x00000000
+         python3-13954   [008] .....  1642.154542: amdgpu_device_rreg: 0x13fe, 0x0000461b, 0x00003100
+         python3-13954   [008] .....  1642.154542: amdgpu_dc_rreg: reg=0x0000461b, value=0x00003100
+         python3-13954   [008] .....  1642.154542: amdgpu_device_wreg: 0x13fe, 0x0000461b, 0x00003100
+         python3-13954   [008] .....  1642.154543: amdgpu_dc_wreg: reg=0x0000461b, value=0x00003100
+         python3-13954   [008] .....  1642.154544: amdgpu_device_rreg: 0x13fe, 0x00004638, 0x00000000
+         python3-13954   [008] .....  1642.154544: amdgpu_dc_rreg: reg=0x00004638, value=0x00000000
+         python3-13954   [008] .....  1642.154544: amdgpu_device_wreg: 0x13fe, 0x00004638, 0x00000000
+         python3-13954   [008] .....  1642.154545: amdgpu_dc_wreg: reg=0x00004638, value=0x00000000
+         python3-13954   [008] .....  1642.154545: amdgpu_device_wreg: 0x13fe, 0x0000478e, 0x00000004
+         python3-13954   [008] .....  1642.154545: amdgpu_dc_wreg: reg=0x0000478e, value=0x00000004
+         python3-13954   [008] .....  1642.154546: amdgpu_device_wreg: 0x13fe, 0x00004931, 0x00000000
+         python3-13954   [008] .....  1642.154546: amdgpu_dc_wreg: reg=0x00004931, value=0x00000000
+         python3-13954   [008] .....  1642.154547: amdgpu_device_rreg: 0x13fe, 0x00005001, 0x80011311
+         python3-13954   [008] .....  1642.154547: amdgpu_dc_rreg: reg=0x00005001, value=0x80011311
+         python3-13954   [008] .....  1642.154548: amdgpu_device_wreg: 0x13fe, 0x0000504b, 0x00000000
+         python3-13954   [008] .....  1642.154548: amdgpu_dc_wreg: reg=0x0000504b, value=0x00000000
+         python3-13954   [008] .....  1642.154548: dcn_optc_lock_unlock_state: Unlock: optc1_unlock()+694: optc_instance=0 opp_count=0 max_h_total=32768 max_v_total=32768 min_h_blank=32 min_h_sync_width=8 min_v_sync_width=1 min_v_blank=3 min_v_blank_interlace=5 vstartup_start=23 vupdate_offset=520 vupdate_width=303 vready_offset=520
+         python3-13954   [008] .....  1642.154549: amdgpu_device_wreg: 0x13fe, 0x00004ffa, 0x00000001
+         python3-13954   [008] .....  1642.154550: amdgpu_dc_wreg: reg=0x00004ffa, value=0x00000001
+         python3-13954   [008] d..1.  1642.154562: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000100
+         python3-13954   [008] d..1.  1642.154562: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000100
+         python3-13954   [008] d..1.  1642.154566: amdgpu_device_rreg: 0x13fe, 0x00003ae5, 0x6e000000
+         python3-13954   [008] d..1.  1642.154566: amdgpu_dc_rreg: reg=0x00003ae5, value=0x6e000000
+         python3-13954   [008] d..1.  1642.154567: amdgpu_device_rreg: 0x13fe, 0x00003ae6, 0x00000004
+         python3-13954   [008] d..1.  1642.154567: amdgpu_dc_rreg: reg=0x00003ae6, value=0x00000004
+          <idle>-0       [002] d.h1.  1642.168020: amdgpu_iv: ih:0 client_id:4 src_id:87 ring:0 vmid:0 timestamp: 445951387145 pasid:0 src_data: 0d493507 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.  1642.168022: amdgpu_device_rreg: 0x13fe, 0x0000504a, 0x0010d104
+          <idle>-0       [002] d.h1.  1642.168023: amdgpu_dc_rreg: reg=0x0000504a, value=0x0010d104
+          <idle>-0       [002] d.h1.  1642.168024: amdgpu_device_wreg: 0x13fe, 0x0000504a, 0x0011d104
+          <idle>-0       [002] d.h1.  1642.168024: amdgpu_dc_wreg: reg=0x0000504a, value=0x0011d104
+          <idle>-0       [002] d.h2.  1642.168025: amdgpu_refresh_rate_track: crtc_index=0 refresh_rate=19Hz (50040291)
+          <idle>-0       [002] d.h4.  1642.168027: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168028: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168029: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.168030: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.168031: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x04c5000a
+          <idle>-0       [002] d.h4.  1642.168031: amdgpu_dc_rreg: reg=0x0000500a, value=0x04c5000a
+          <idle>-0       [002] d.h4.  1642.168033: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000a
+          <idle>-0       [002] d.h4.  1642.168033: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000a
+          <idle>-0       [002] d.h4.  1642.168035: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168035: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168037: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.168037: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.168039: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x0142000b
+          <idle>-0       [002] d.h4.  1642.168039: amdgpu_dc_rreg: reg=0x0000500a, value=0x0142000b
+          <idle>-0       [002] d.h4.  1642.168040: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1642.168041: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1642.168043: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168043: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168044: amdgpu_device_rreg: 0x13fe, 0x00004ff6, 0x002004d0
+          <idle>-0       [002] d.h4.  1642.168045: amdgpu_dc_rreg: reg=0x00004ff6, value=0x002004d0
+          <idle>-0       [002] d.h4.  1642.168046: amdgpu_device_rreg: 0x13fe, 0x0000500a, 0x05d7000b
+          <idle>-0       [002] d.h4.  1642.168047: amdgpu_dc_rreg: reg=0x0000500a, value=0x05d7000b
+          <idle>-0       [002] d.h4.  1642.168048: amdgpu_device_rreg: 0x13fe, 0x0000500b, 0x0000000b
+          <idle>-0       [002] d.h4.  1642.168049: amdgpu_dc_rreg: reg=0x0000500b, value=0x0000000b
+          <idle>-0       [002] d.h4.  1642.168050: amdgpu_device_rreg: 0x13fe, 0x0000500c, 0x00016dbc
+          <idle>-0       [002] d.h4.  1642.168051: amdgpu_dc_rreg: reg=0x0000500c, value=0x00016dbc
+          <idle>-0       [002] d.h3.  1642.168054: amdgpu_device_rreg: 0x13fe, 0x00003adb, 0x00000000
+          <idle>-0       [002] d.h3.  1642.168054: amdgpu_dc_rreg: reg=0x00003adb, value=0x00000000
+          <idle>-0       [002] d.h3.  1642.168056: amdgpu_device_rreg: 0x13fe, 0x00003ae5, 0x6e000000
+          <idle>-0       [002] d.h3.  1642.168056: amdgpu_dc_rreg: reg=0x00003ae5, value=0x6e000000
+          <idle>-0       [002] d.h3.  1642.168057: amdgpu_device_rreg: 0x13fe, 0x00003ae6, 0x00000004
+          <idle>-0       [002] d.h3.  1642.168058: amdgpu_dc_rreg: reg=0x00003ae6, value=0x00000004
+          <idle>-0       [002] d.h3.  1642.168060: amdgpu_device_rreg: 0x13fe, 0x00003d6f, 0x00000000
+          <idle>-0       [002] d.h3.  1642.168061: amdgpu_dc_rreg: reg=0x00003d6f, value=0x00000000
+          <idle>-0       [002] d.h3.  1642.168062: amdgpu_device_rreg: 0x13fe, 0x00003d79, 0x6e000000
+          <idle>-0       [002] d.h3.  1642.168062: amdgpu_dc_rreg: reg=0x00003d79, value=0x6e000000
+          <idle>-0       [002] d.h3.  1642.168064: amdgpu_device_rreg: 0x13fe, 0x00003d7a, 0x00000004
+          <idle>-0       [002] d.h3.  1642.168064: amdgpu_dc_rreg: reg=0x00003d7a, value=0x00000004
+         python3-13954   [008] .....  1642.168082: amdgpu_dm_atomic_commit_tail_finish: state=000000009de6bad5 allow_modeset=1 legacy_cursor_update=0 async_update=0 duplicated=0 num_connector=2 num_private_objs=1
+              sh-13942   [002] ...1.  1642.180865: tracing_mark_write: bc250 end dispatch g1

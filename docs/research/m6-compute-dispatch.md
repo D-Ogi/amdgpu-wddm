@@ -474,13 +474,23 @@ For our shader this is fine, because `COMPUTE_PGM_RSRC2.SCRATCH_EN = 0` and
 
 libdrm relies on the kernel to wrap the IB. Doing this ourselves, two pieces matter:
 
-- **Before the dispatch**: the kernel emits `gfx_v10_0_emit_mem_sync()`
-  (`gfx_v10_0.c:9473-9494`) automatically for every IB, because `amdgpu_ib_get()` sets
-  `AMDGPU_IB_FLAG_EMIT_MEM_SYNC` (`amdgpu_ib.c:80`) and `amdgpu_ib.c:211-212` acts on it. It is
+- **Before the dispatch**: `gfx_v10_0_emit_mem_sync()` (`gfx_v10_0.c:9473-9494`), which is
   `PACKET3(PACKET3_ACQUIRE_MEM, 6)` with `COHER_SIZE = 0xffffffff`, `COHER_SIZE_HI = 0xffffff`,
   `POLL_INTERVAL = 0xA` and a `GCR_CNTL` of
   `GL2_INV | GL2_WB | GLM_INV | GLM_WB | GL1_INV | GLV_INV | GLK_INV | GLI_INV`. **We need this,
   8 dwords**, otherwise the shader may fetch stale instruction bytes through GL1/GL2.
+
+  Correction, measured while writing `experiments/E13-linux-reference-2/dispatch.py`: the kernel
+  does **not** emit it for every IB. `amdgpu_ib.c:211-212` acts on `AMDGPU_IB_FLAG_EMIT_MEM_SYNC`,
+  and `amdgpu_ib_get()` sets that flag only inside `if (size)` (`amdgpu_ib.c:70-84`). For a **user
+  CS** on a compute ring, `amdgpu_cs_p2_ib()` calls `amdgpu_ib_get()` with size 0, because compute
+  ring funcs have no `.parse_cs` (`amdgpu_cs.c:389-391`), and then assigns
+  `ib->flags = chunk_ib->flags` (`amdgpu_cs.c:399`) over whatever was there. So on a user
+  submission the flag comes only from the submitter, and libdrm's memset test passes flags 0, i.e.
+  **libdrm's known-good run has no `ACQUIRE_MEM` at all**. The flag does take effect for
+  kernel-internal IBs such as `gfx_v10_0_ring_test_ib()`, where `amdgpu_ib_get()` is called with a
+  real size. Conclusion for us is unchanged (emit it on a raw ring), but "the reference does it
+  too" was not a correct reason.
 - **After the dispatch**: the memset test relies on the CS fence. On a raw ring we need either
   `gfx_v10_0_ring_emit_fence()` (`gfx_v10_0.c:8712-8743`, a `RELEASE_MEM`, 8 dwords) or, at
   minimum, a `PACKET3_EVENT_WRITE` CS partial flush (`nvd.h:326`) followed by a

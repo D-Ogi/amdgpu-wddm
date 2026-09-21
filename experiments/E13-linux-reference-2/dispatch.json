@@ -1,0 +1,2018 @@
+{
+ "generated_by": "experiments/E13-linux-reference-2/gen_dispatch.py",
+ "sources": {
+  "uapi": "P:/BC-250/ref/mesa/include/drm-uapi",
+  "libdrm": "P:/BC-250/ref/libdrm/tests/amdgpu",
+  "libdrm_tag": "libdrm-2.4.114",
+  "libdrm_commit": "b9ca37b3134861048986b75896c0915cbf2e97f9",
+  "nvd_h": "P:/BC-250/ref/linux-src/drivers/gpu/drm/amd/amdgpu/nvd.h",
+  "regcalc_headers": "P:/BC-250/bc250-win/third_party/linux-amdgpu"
+ },
+ "ioctl": {
+  "GEM_CREATE": 3223348288,
+  "GEM_MMAP": 3221775425,
+  "CTX": 3222299714,
+  "CS": 3222824004,
+  "INFO": 1075864645,
+  "GEM_VA": 1077961800,
+  "WAIT_CS": 3223348297,
+  "GEM_CLOSE": 1074291721
+ },
+ "types": {
+  "drm_amdgpu_gem_create": {
+   "kind": "union",
+   "name": "drm_amdgpu_gem_create",
+   "size": 32,
+   "align": 8,
+   "fields": {
+    "in.bo_size": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "in.alignment": {
+     "offset": 8,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "in.domains": {
+     "offset": 16,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "in.domain_flags": {
+     "offset": 24,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "out.handle": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out._pad": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_amdgpu_gem_mmap": {
+   "kind": "union",
+   "name": "drm_amdgpu_gem_mmap",
+   "size": 8,
+   "align": 8,
+   "fields": {
+    "in.handle": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in._pad": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.addr_ptr": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    }
+   }
+  },
+  "drm_amdgpu_gem_va": {
+   "kind": "struct",
+   "name": "drm_amdgpu_gem_va",
+   "size": 64,
+   "align": 8,
+   "fields": {
+    "handle": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "_pad": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "operation": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "flags": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "va_address": {
+     "offset": 16,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "offset_in_bo": {
+     "offset": 24,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "map_size": {
+     "offset": 32,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "vm_timeline_point": {
+     "offset": 40,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "vm_timeline_syncobj_out": {
+     "offset": 48,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_syncobj_handles": {
+     "offset": 52,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "input_fence_syncobj_handles": {
+     "offset": 56,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    }
+   }
+  },
+  "drm_amdgpu_ctx": {
+   "kind": "union",
+   "name": "drm_amdgpu_ctx",
+   "size": 16,
+   "align": 8,
+   "fields": {
+    "in.op": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.flags": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.ctx_id": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.priority": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "i"
+    },
+    "out.alloc.ctx_id": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.alloc._pad": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.state.flags": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "out.state.hangs": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.state.reset_status": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.pstate.flags": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.pstate._pad": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_amdgpu_cs": {
+   "kind": "union",
+   "name": "drm_amdgpu_cs",
+   "size": 24,
+   "align": 8,
+   "fields": {
+    "in.ctx_id": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.bo_list_handle": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.num_chunks": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.flags": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.chunks": {
+     "offset": 16,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "out.handle": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    }
+   }
+  },
+  "drm_amdgpu_cs_chunk": {
+   "kind": "struct",
+   "name": "drm_amdgpu_cs_chunk",
+   "size": 16,
+   "align": 8,
+   "fields": {
+    "chunk_id": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "length_dw": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "chunk_data": {
+     "offset": 8,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    }
+   }
+  },
+  "drm_amdgpu_cs_chunk_ib": {
+   "kind": "struct",
+   "name": "drm_amdgpu_cs_chunk_ib",
+   "size": 32,
+   "align": 8,
+   "fields": {
+    "_pad": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "flags": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "va_start": {
+     "offset": 8,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "ib_bytes": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ip_type": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ip_instance": {
+     "offset": 24,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ring": {
+     "offset": 28,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_amdgpu_bo_list_in": {
+   "kind": "struct",
+   "name": "drm_amdgpu_bo_list_in",
+   "size": 24,
+   "align": 8,
+   "fields": {
+    "operation": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "list_handle": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "bo_number": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "bo_info_size": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "bo_info_ptr": {
+     "offset": 16,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    }
+   }
+  },
+  "drm_amdgpu_bo_list_entry": {
+   "kind": "struct",
+   "name": "drm_amdgpu_bo_list_entry",
+   "size": 8,
+   "align": 4,
+   "fields": {
+    "bo_handle": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "bo_priority": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_amdgpu_wait_cs": {
+   "kind": "union",
+   "name": "drm_amdgpu_wait_cs",
+   "size": 32,
+   "align": 8,
+   "fields": {
+    "in.handle": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "in.timeout": {
+     "offset": 8,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "in.ip_type": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.ip_instance": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.ring": {
+     "offset": 24,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "in.ctx_id": {
+     "offset": 28,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "out.status": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    }
+   }
+  },
+  "drm_amdgpu_info": {
+   "kind": "struct",
+   "name": "drm_amdgpu_info",
+   "size": 32,
+   "align": 8,
+   "fields": {
+    "return_pointer": {
+     "offset": 0,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "return_size": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "mode_crtc.id": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "mode_crtc._pad": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query_hw_ip.type": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query_hw_ip.ip_instance": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "read_mmr_reg.dword_offset": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "read_mmr_reg.count": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "read_mmr_reg.instance": {
+     "offset": 24,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "read_mmr_reg.flags": {
+     "offset": 28,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query_fw.fw_type": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query_fw.ip_instance": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query_fw.index": {
+     "offset": 24,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "query_fw._pad": {
+     "offset": 28,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "vbios_info.type": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "vbios_info.offset": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "sensor_info.type": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "video_cap.type": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_amdgpu_info_device": {
+   "kind": "struct",
+   "name": "drm_amdgpu_info_device",
+   "size": 448,
+   "align": 8,
+   "fields": {
+    "device_id": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "chip_rev": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "external_rev": {
+     "offset": 8,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pci_rev": {
+     "offset": 12,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "family": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_shader_engines": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_shader_arrays_per_engine": {
+     "offset": 24,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gpu_counter_freq": {
+     "offset": 28,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "max_engine_clock": {
+     "offset": 32,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "max_memory_clock": {
+     "offset": 40,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "cu_active_number": {
+     "offset": 48,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "cu_ao_mask": {
+     "offset": 52,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "cu_bitmap": {
+     "offset": 56,
+     "size": 64,
+     "count": 16,
+     "fmt": "I"
+    },
+    "enabled_rb_pipes_mask": {
+     "offset": 120,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_rb_pipes": {
+     "offset": 124,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_hw_gfx_contexts": {
+     "offset": 128,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pcie_gen": {
+     "offset": 132,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ids_flags": {
+     "offset": 136,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "virtual_address_offset": {
+     "offset": 144,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "virtual_address_max": {
+     "offset": 152,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "virtual_address_alignment": {
+     "offset": 160,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pte_fragment_size": {
+     "offset": 164,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gart_page_size": {
+     "offset": 168,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ce_ram_size": {
+     "offset": 172,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "vram_type": {
+     "offset": 176,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "vram_bit_width": {
+     "offset": 180,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "vce_harvest_config": {
+     "offset": 184,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gc_double_offchip_lds_buf": {
+     "offset": 188,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "prim_buf_gpu_addr": {
+     "offset": 192,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "pos_buf_gpu_addr": {
+     "offset": 200,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "cntl_sb_buf_gpu_addr": {
+     "offset": 208,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "param_buf_gpu_addr": {
+     "offset": 216,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "prim_buf_size": {
+     "offset": 224,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pos_buf_size": {
+     "offset": 228,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "cntl_sb_buf_size": {
+     "offset": 232,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "param_buf_size": {
+     "offset": 236,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "wave_front_size": {
+     "offset": 240,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_shader_visible_vgprs": {
+     "offset": 244,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_cu_per_sh": {
+     "offset": 248,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_tcc_blocks": {
+     "offset": 252,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gs_vgt_table_depth": {
+     "offset": 256,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gs_prim_buffer_depth": {
+     "offset": 260,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "max_gs_waves_per_vgt": {
+     "offset": 264,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pcie_num_lanes": {
+     "offset": 268,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "cu_ao_bitmap": {
+     "offset": 272,
+     "size": 64,
+     "count": 16,
+     "fmt": "I"
+    },
+    "high_va_offset": {
+     "offset": 336,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "high_va_max": {
+     "offset": 344,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "pa_sc_tile_steering_override": {
+     "offset": 352,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "tcc_disabled_mask": {
+     "offset": 360,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "min_engine_clock": {
+     "offset": 368,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "min_memory_clock": {
+     "offset": 376,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "tcp_cache_size": {
+     "offset": 384,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "num_sqc_per_wgp": {
+     "offset": 388,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "sqc_data_cache_size": {
+     "offset": 392,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "sqc_inst_cache_size": {
+     "offset": 396,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gl1c_cache_size": {
+     "offset": 400,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "gl2c_cache_size": {
+     "offset": 404,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "mall_size": {
+     "offset": 408,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "enabled_rb_pipes_mask_hi": {
+     "offset": 416,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "shadow_size": {
+     "offset": 420,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "shadow_alignment": {
+     "offset": 424,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "csa_size": {
+     "offset": 428,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "csa_alignment": {
+     "offset": 432,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "userq_ip_mask": {
+     "offset": 436,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pad": {
+     "offset": 440,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_amdgpu_info_hw_ip": {
+   "kind": "struct",
+   "name": "drm_amdgpu_info_hw_ip",
+   "size": 32,
+   "align": 8,
+   "fields": {
+    "hw_ip_version_major": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "hw_ip_version_minor": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "capabilities_flags": {
+     "offset": 8,
+     "size": 8,
+     "count": 1,
+     "fmt": "Q"
+    },
+    "ib_start_alignment": {
+     "offset": 16,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ib_size_alignment": {
+     "offset": 20,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "available_rings": {
+     "offset": 24,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "ip_discovery_version": {
+     "offset": 28,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  },
+  "drm_gem_close": {
+   "kind": "struct",
+   "name": "drm_gem_close",
+   "size": 8,
+   "align": 4,
+   "fields": {
+    "handle": {
+     "offset": 0,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    },
+    "pad": {
+     "offset": 4,
+     "size": 4,
+     "count": 1,
+     "fmt": "I"
+    }
+   }
+  }
+ },
+ "const": {
+  "AMDGPU_GEM_DOMAIN_CPU": 1,
+  "AMDGPU_GEM_DOMAIN_GTT": 2,
+  "AMDGPU_GEM_DOMAIN_VRAM": 4,
+  "AMDGPU_GEM_DOMAIN_GDS": 8,
+  "AMDGPU_GEM_DOMAIN_GWS": 16,
+  "AMDGPU_GEM_DOMAIN_OA": 32,
+  "AMDGPU_GEM_DOMAIN_DOORBELL": 64,
+  "AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED": 1,
+  "AMDGPU_GEM_CREATE_NO_CPU_ACCESS": 2,
+  "AMDGPU_GEM_CREATE_CPU_GTT_USWC": 4,
+  "AMDGPU_GEM_CREATE_VRAM_CLEARED": 8,
+  "AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS": 32,
+  "AMDGPU_GEM_CREATE_VM_ALWAYS_VALID": 64,
+  "AMDGPU_GEM_CREATE_EXPLICIT_SYNC": 128,
+  "AMDGPU_GEM_CREATE_CP_MQD_GFX9": 256,
+  "AMDGPU_GEM_CREATE_VRAM_WIPE_ON_RELEASE": 512,
+  "AMDGPU_GEM_CREATE_ENCRYPTED": 1024,
+  "AMDGPU_GEM_CREATE_PREEMPTIBLE": 2048,
+  "AMDGPU_GEM_CREATE_DISCARDABLE": 4096,
+  "AMDGPU_GEM_CREATE_COHERENT": 8192,
+  "AMDGPU_GEM_CREATE_UNCACHED": 16384,
+  "AMDGPU_GEM_CREATE_EXT_COHERENT": 32768,
+  "AMDGPU_GEM_CREATE_GFX12_DCC": 65536,
+  "AMDGPU_CTX_OP_ALLOC_CTX": 1,
+  "AMDGPU_CTX_OP_FREE_CTX": 2,
+  "AMDGPU_CTX_OP_QUERY_STATE": 3,
+  "AMDGPU_CTX_OP_QUERY_STATE2": 4,
+  "AMDGPU_CTX_OP_GET_STABLE_PSTATE": 5,
+  "AMDGPU_CTX_OP_SET_STABLE_PSTATE": 6,
+  "AMDGPU_VA_OP_MAP": 1,
+  "AMDGPU_VA_OP_UNMAP": 2,
+  "AMDGPU_VA_OP_CLEAR": 3,
+  "AMDGPU_VA_OP_REPLACE": 4,
+  "AMDGPU_VM_DELAY_UPDATE": 1,
+  "AMDGPU_VM_PAGE_READABLE": 2,
+  "AMDGPU_VM_PAGE_WRITEABLE": 4,
+  "AMDGPU_VM_PAGE_EXECUTABLE": 8,
+  "AMDGPU_VM_PAGE_PRT": 16,
+  "AMDGPU_VM_PAGE_NOALLOC": 512,
+  "AMDGPU_HW_IP_GFX": 0,
+  "AMDGPU_HW_IP_COMPUTE": 1,
+  "AMDGPU_HW_IP_DMA": 2,
+  "AMDGPU_HW_IP_UVD": 3,
+  "AMDGPU_HW_IP_VCE": 4,
+  "AMDGPU_HW_IP_UVD_ENC": 5,
+  "AMDGPU_HW_IP_VCN_DEC": 6,
+  "AMDGPU_HW_IP_VCN_ENC": 7,
+  "AMDGPU_HW_IP_VCN_JPEG": 8,
+  "AMDGPU_HW_IP_VPE": 9,
+  "AMDGPU_HW_IP_NUM": 10,
+  "AMDGPU_HW_IP_INSTANCE_MAX_COUNT": 1,
+  "AMDGPU_CHUNK_ID_IB": 1,
+  "AMDGPU_CHUNK_ID_FENCE": 2,
+  "AMDGPU_CHUNK_ID_DEPENDENCIES": 3,
+  "AMDGPU_CHUNK_ID_SYNCOBJ_IN": 4,
+  "AMDGPU_CHUNK_ID_SYNCOBJ_OUT": 5,
+  "AMDGPU_CHUNK_ID_BO_HANDLES": 6,
+  "AMDGPU_CHUNK_ID_SCHEDULED_DEPENDENCIES": 7,
+  "AMDGPU_CHUNK_ID_SYNCOBJ_TIMELINE_WAIT": 8,
+  "AMDGPU_CHUNK_ID_SYNCOBJ_TIMELINE_SIGNAL": 9,
+  "AMDGPU_CHUNK_ID_CP_GFX_SHADOW": 10,
+  "AMDGPU_IB_FLAG_CE": 1,
+  "AMDGPU_IB_FLAG_PREAMBLE": 2,
+  "AMDGPU_IB_FLAG_PREEMPT": 4,
+  "AMDGPU_IB_FLAG_TC_WB_NOT_INVALIDATE": 8,
+  "AMDGPU_IB_FLAG_RESET_GDS_MAX_WAVE_ID": 16,
+  "AMDGPU_IB_FLAGS_SECURE": 32,
+  "AMDGPU_IB_FLAG_EMIT_MEM_SYNC": 64,
+  "AMDGPU_INFO_ACCEL_WORKING": 0,
+  "AMDGPU_INFO_CRTC_FROM_ID": 1,
+  "AMDGPU_INFO_HW_IP_INFO": 2,
+  "AMDGPU_INFO_HW_IP_COUNT": 3,
+  "AMDGPU_INFO_TIMESTAMP": 5,
+  "AMDGPU_INFO_FW_VERSION": 14,
+  "AMDGPU_INFO_FW_VCE": 1,
+  "AMDGPU_INFO_FW_UVD": 2,
+  "AMDGPU_INFO_FW_GMC": 3,
+  "AMDGPU_INFO_FW_GFX_ME": 4,
+  "AMDGPU_INFO_FW_GFX_PFP": 5,
+  "AMDGPU_INFO_FW_GFX_CE": 6,
+  "AMDGPU_INFO_FW_GFX_RLC": 7,
+  "AMDGPU_INFO_FW_GFX_MEC": 8,
+  "AMDGPU_INFO_FW_SMC": 10,
+  "AMDGPU_INFO_FW_SDMA": 11,
+  "AMDGPU_INFO_FW_SOS": 12,
+  "AMDGPU_INFO_FW_ASD": 13,
+  "AMDGPU_INFO_FW_VCN": 14,
+  "AMDGPU_INFO_FW_GFX_RLC_RESTORE_LIST_CNTL": 15,
+  "AMDGPU_INFO_FW_GFX_RLC_RESTORE_LIST_GPM_MEM": 16,
+  "AMDGPU_INFO_FW_GFX_RLC_RESTORE_LIST_SRM_MEM": 17,
+  "AMDGPU_INFO_FW_DMCU": 18,
+  "AMDGPU_INFO_FW_TA": 19,
+  "AMDGPU_INFO_FW_DMCUB": 20,
+  "AMDGPU_INFO_FW_TOC": 21,
+  "AMDGPU_INFO_FW_CAP": 22,
+  "AMDGPU_INFO_FW_GFX_RLCP": 23,
+  "AMDGPU_INFO_FW_GFX_RLCV": 24,
+  "AMDGPU_INFO_FW_MES_KIQ": 25,
+  "AMDGPU_INFO_FW_MES": 26,
+  "AMDGPU_INFO_FW_IMU": 27,
+  "AMDGPU_INFO_FW_VPE": 28,
+  "AMDGPU_INFO_NUM_BYTES_MOVED": 15,
+  "AMDGPU_INFO_VRAM_USAGE": 16,
+  "AMDGPU_INFO_GTT_USAGE": 17,
+  "AMDGPU_INFO_GDS_CONFIG": 19,
+  "AMDGPU_INFO_VRAM_GTT": 20,
+  "AMDGPU_INFO_READ_MMR_REG": 21,
+  "AMDGPU_INFO_DEV_INFO": 22,
+  "AMDGPU_INFO_VIS_VRAM_USAGE": 23,
+  "AMDGPU_INFO_NUM_EVICTIONS": 24,
+  "AMDGPU_INFO_MEMORY": 25,
+  "AMDGPU_INFO_VCE_CLOCK_TABLE": 26,
+  "AMDGPU_INFO_VBIOS": 27,
+  "AMDGPU_INFO_VBIOS_SIZE": 1,
+  "AMDGPU_INFO_VBIOS_IMAGE": 2,
+  "AMDGPU_INFO_VBIOS_INFO": 3,
+  "AMDGPU_INFO_NUM_HANDLES": 28,
+  "AMDGPU_INFO_SENSOR": 29,
+  "AMDGPU_INFO_SENSOR_GFX_SCLK": 1,
+  "AMDGPU_INFO_SENSOR_GFX_MCLK": 2,
+  "AMDGPU_INFO_SENSOR_GPU_TEMP": 3,
+  "AMDGPU_INFO_SENSOR_GPU_LOAD": 4,
+  "AMDGPU_INFO_SENSOR_GPU_AVG_POWER": 5,
+  "AMDGPU_INFO_SENSOR_VDDNB": 6,
+  "AMDGPU_INFO_SENSOR_VDDGFX": 7,
+  "AMDGPU_INFO_SENSOR_STABLE_PSTATE_GFX_SCLK": 8,
+  "AMDGPU_INFO_SENSOR_STABLE_PSTATE_GFX_MCLK": 9,
+  "AMDGPU_INFO_SENSOR_PEAK_PSTATE_GFX_SCLK": 10,
+  "AMDGPU_INFO_SENSOR_PEAK_PSTATE_GFX_MCLK": 11,
+  "AMDGPU_INFO_SENSOR_GPU_INPUT_POWER": 12,
+  "AMDGPU_INFO_NUM_VRAM_CPU_PAGE_FAULTS": 30,
+  "AMDGPU_INFO_VRAM_LOST_COUNTER": 31,
+  "AMDGPU_INFO_RAS_ENABLED_FEATURES": 32,
+  "AMDGPU_INFO_RAS_ENABLED_UMC": 1,
+  "AMDGPU_INFO_RAS_ENABLED_SDMA": 2,
+  "AMDGPU_INFO_RAS_ENABLED_GFX": 4,
+  "AMDGPU_INFO_RAS_ENABLED_MMHUB": 8,
+  "AMDGPU_INFO_RAS_ENABLED_ATHUB": 16,
+  "AMDGPU_INFO_RAS_ENABLED_PCIE": 32,
+  "AMDGPU_INFO_RAS_ENABLED_HDP": 64,
+  "AMDGPU_INFO_RAS_ENABLED_XGMI": 128,
+  "AMDGPU_INFO_RAS_ENABLED_DF": 256,
+  "AMDGPU_INFO_RAS_ENABLED_SMN": 512,
+  "AMDGPU_INFO_RAS_ENABLED_SEM": 1024,
+  "AMDGPU_INFO_RAS_ENABLED_MP0": 2048,
+  "AMDGPU_INFO_RAS_ENABLED_MP1": 4096,
+  "AMDGPU_INFO_RAS_ENABLED_FUSE": 8192,
+  "AMDGPU_INFO_VIDEO_CAPS": 33,
+  "AMDGPU_INFO_VIDEO_CAPS_DECODE": 0,
+  "AMDGPU_INFO_VIDEO_CAPS_ENCODE": 1,
+  "AMDGPU_INFO_MAX_IBS": 34,
+  "AMDGPU_INFO_GPUVM_FAULT": 35,
+  "AMDGPU_INFO_UQ_FW_AREAS": 36,
+  "AMDGPU_INFO_MMR_SE_INDEX_SHIFT": 0,
+  "AMDGPU_INFO_MMR_SE_INDEX_MASK": 255,
+  "AMDGPU_INFO_MMR_SH_INDEX_SHIFT": 8,
+  "AMDGPU_INFO_MMR_SH_INDEX_MASK": 255,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_MPEG2": 0,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_MPEG4": 1,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_VC1": 2,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_MPEG4_AVC": 3,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_HEVC": 4,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_JPEG": 5,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_VP9": 6,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_AV1": 7,
+  "AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_COUNT": 8
+ },
+ "shader": {
+  "words": [
+   3611688964,
+   67177480,
+   2113929732,
+   2114060805,
+   2114191878,
+   2114322951,
+   3759939584,
+   2147483652,
+   3212902400
+  ],
+  "cite": "shader_code_gfx10.h:27-32",
+  "symbol": "bufferclear_cs_shader_gfx10",
+  "dwords": 9
+ },
+ "reg_table": {
+  "pairs": [
+   [
+    11794,
+    786497
+   ],
+   [
+    11795,
+    144
+   ],
+   [
+    11783,
+    64
+   ],
+   [
+    11784,
+    1
+   ],
+   [
+    11785,
+    1
+   ]
+  ],
+  "cite": "shader_code_gfx9.h:34-41",
+  "symbol": "bufferclear_cs_shader_registers_gfx9"
+ },
+ "pm4": {
+  "sh_reg_base": 11264,
+  "uconfig_reg_base": 49152,
+  "opcodes": {
+   "PACKET3_DISPATCH_DIRECT": 21,
+   "PACKET3_CONTEXT_CONTROL": 40,
+   "PACKET3_DRAW_INDEX_AUTO": 45,
+   "PACKET3_SET_CONTEXT_REG": 105,
+   "PACKET3_SET_SH_REG": 118,
+   "PACKET3_SET_SH_REG_OFFSET": 119,
+   "PACKET3_SET_UCONFIG_REG": 121,
+   "PACKET3_SET_SH_REG_INDEX": 155
+  },
+  "pad_align_dw": 8,
+  "pad_word": 4294905856,
+  "pad_cite": "shader_test_util.c:620-621"
+ },
+ "registers": {
+  "mmCOMPUTE_START_X": {
+   "dword": 11780,
+   "packet_offset": 516,
+   "reg_base": 11264,
+   "mm": 7076,
+   "aliases": []
+  },
+  "mmCOMPUTE_START_Y": {
+   "dword": 11781,
+   "packet_offset": 517,
+   "reg_base": 11264,
+   "mm": 7077,
+   "aliases": []
+  },
+  "mmCOMPUTE_START_Z": {
+   "dword": 11782,
+   "packet_offset": 518,
+   "reg_base": 11264,
+   "mm": 7078,
+   "aliases": []
+  },
+  "mmCOMPUTE_TMPRING_SIZE": {
+   "dword": 11800,
+   "packet_offset": 536,
+   "reg_base": 11264,
+   "mm": 7096,
+   "aliases": []
+  },
+  "mmCOMPUTE_SHADER_CHKSUM": {
+   "dword": 11818,
+   "packet_offset": 554,
+   "reg_base": 11264,
+   "mm": 7114,
+   "aliases": []
+  },
+  "mmCOMPUTE_REQ_CTRL": {
+   "dword": 11810,
+   "packet_offset": 546,
+   "reg_base": 11264,
+   "mm": 7106,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_ACCUM_0": {
+   "dword": 11812,
+   "packet_offset": 548,
+   "reg_base": 11264,
+   "mm": 7108,
+   "aliases": [
+    "mmCOMPUTE_PREF_PRI_ACCUM_0"
+   ]
+  },
+  "mmCOMPUTE_PREF_PRI_ACCUM_1": {
+   "dword": 11813,
+   "packet_offset": 549,
+   "reg_base": 11264,
+   "mm": 7109,
+   "aliases": [
+    "mmCOMPUTE_USER_ACCUM_1"
+   ]
+  },
+  "mmCOMPUTE_PREF_PRI_ACCUM_2": {
+   "dword": 11814,
+   "packet_offset": 550,
+   "reg_base": 11264,
+   "mm": 7110,
+   "aliases": [
+    "mmCOMPUTE_USER_ACCUM_2"
+   ]
+  },
+  "mmCOMPUTE_PREF_PRI_ACCUM_3": {
+   "dword": 11815,
+   "packet_offset": 551,
+   "reg_base": 11264,
+   "mm": 7111,
+   "aliases": [
+    "mmCOMPUTE_USER_ACCUM_3"
+   ]
+  },
+  "mmCP_COHER_START_DELAY": {
+   "dword": 49275,
+   "packet_offset": 123,
+   "reg_base": 49152,
+   "mm": 8315,
+   "aliases": []
+  },
+  "mmCOMPUTE_STATIC_THREAD_MGMT_SE0": {
+   "dword": 11798,
+   "packet_offset": 534,
+   "reg_base": 11264,
+   "mm": 7094,
+   "aliases": [
+    "mmCOMPUTE_DESTINATION_EN_SE0"
+   ]
+  },
+  "mmCOMPUTE_STATIC_THREAD_MGMT_SE1": {
+   "dword": 11799,
+   "packet_offset": 535,
+   "reg_base": 11264,
+   "mm": 7095,
+   "aliases": [
+    "mmCOMPUTE_DESTINATION_EN_SE1"
+   ]
+  },
+  "mmCOMPUTE_STATIC_THREAD_MGMT_SE2": {
+   "dword": 11801,
+   "packet_offset": 537,
+   "reg_base": 11264,
+   "mm": 7097,
+   "aliases": [
+    "mmCOMPUTE_DESTINATION_EN_SE2"
+   ]
+  },
+  "mmCOMPUTE_STATIC_THREAD_MGMT_SE3": {
+   "dword": 11802,
+   "packet_offset": 538,
+   "reg_base": 11264,
+   "mm": 7098,
+   "aliases": [
+    "mmCOMPUTE_DESTINATION_EN_SE3"
+   ]
+  },
+  "mmCOMPUTE_PGM_LO": {
+   "dword": 11788,
+   "packet_offset": 524,
+   "reg_base": 11264,
+   "mm": 7084,
+   "aliases": []
+  },
+  "mmCOMPUTE_PGM_HI": {
+   "dword": 11789,
+   "packet_offset": 525,
+   "reg_base": 11264,
+   "mm": 7085,
+   "aliases": []
+  },
+  "mmCOMPUTE_PGM_RSRC1": {
+   "dword": 11794,
+   "packet_offset": 530,
+   "reg_base": 11264,
+   "mm": 7090,
+   "aliases": []
+  },
+  "mmCOMPUTE_PGM_RSRC2": {
+   "dword": 11795,
+   "packet_offset": 531,
+   "reg_base": 11264,
+   "mm": 7091,
+   "aliases": []
+  },
+  "mmCOMPUTE_NUM_THREAD_X": {
+   "dword": 11783,
+   "packet_offset": 519,
+   "reg_base": 11264,
+   "mm": 7079,
+   "aliases": []
+  },
+  "mmCOMPUTE_NUM_THREAD_Y": {
+   "dword": 11784,
+   "packet_offset": 520,
+   "reg_base": 11264,
+   "mm": 7080,
+   "aliases": []
+  },
+  "mmCOMPUTE_NUM_THREAD_Z": {
+   "dword": 11785,
+   "packet_offset": 521,
+   "reg_base": 11264,
+   "mm": 7081,
+   "aliases": []
+  },
+  "mmCOMPUTE_PGM_RSRC3": {
+   "dword": 11816,
+   "packet_offset": 552,
+   "reg_base": 11264,
+   "mm": 7112,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_0": {
+   "dword": 11840,
+   "packet_offset": 576,
+   "reg_base": 11264,
+   "mm": 7136,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_1": {
+   "dword": 11841,
+   "packet_offset": 577,
+   "reg_base": 11264,
+   "mm": 7137,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_2": {
+   "dword": 11842,
+   "packet_offset": 578,
+   "reg_base": 11264,
+   "mm": 7138,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_3": {
+   "dword": 11843,
+   "packet_offset": 579,
+   "reg_base": 11264,
+   "mm": 7139,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_4": {
+   "dword": 11844,
+   "packet_offset": 580,
+   "reg_base": 11264,
+   "mm": 7140,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_5": {
+   "dword": 11845,
+   "packet_offset": 581,
+   "reg_base": 11264,
+   "mm": 7141,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_6": {
+   "dword": 11846,
+   "packet_offset": 582,
+   "reg_base": 11264,
+   "mm": 7142,
+   "aliases": []
+  },
+  "mmCOMPUTE_USER_DATA_7": {
+   "dword": 11847,
+   "packet_offset": 583,
+   "reg_base": 11264,
+   "mm": 7143,
+   "aliases": []
+  },
+  "mmCOMPUTE_RESOURCE_LIMITS": {
+   "dword": 11797,
+   "packet_offset": 533,
+   "reg_base": 11264,
+   "mm": 7093,
+   "aliases": []
+  }
+ },
+ "packets": [
+  {
+   "header": 3221452290,
+   "op": 118,
+   "count": 3,
+   "shader_type": 1,
+   "lines": [
+    218,
+    219,
+    220,
+    220,
+    220
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:218-220",
+   "index": 0,
+   "offset": 516,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_START_X",
+    "mmCOMPUTE_START_Y",
+    "mmCOMPUTE_START_Z"
+   ],
+   "values": [
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    223,
+    224,
+    225
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:223-225",
+   "index": 0,
+   "offset": 536,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_TMPRING_SIZE"
+   ],
+   "values": [
+    0
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    240,
+    241,
+    242
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:240-242",
+   "index": 0,
+   "offset": 554,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_SHADER_CHKSUM"
+   ],
+   "values": [
+    0
+   ]
+  },
+  {
+   "header": 3221648898,
+   "op": 118,
+   "count": 6,
+   "shader_type": 1,
+   "lines": [
+    244,
+    245,
+    246,
+    246,
+    246,
+    246,
+    246,
+    246
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:244-246",
+   "index": 0,
+   "offset": 546,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_REQ_CTRL",
+    null,
+    "mmCOMPUTE_USER_ACCUM_0",
+    "mmCOMPUTE_PREF_PRI_ACCUM_1",
+    "mmCOMPUTE_PREF_PRI_ACCUM_2",
+    "mmCOMPUTE_PREF_PRI_ACCUM_3"
+   ],
+   "values": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "header": 3221321984,
+   "op": 121,
+   "count": 1,
+   "shader_type": 0,
+   "lines": [
+    248,
+    249,
+    250
+   ],
+   "op_name": "PACKET3_SET_UCONFIG_REG",
+   "cite": "shader_test_util.c:248-250",
+   "index": 0,
+   "offset": 123,
+   "reg_base": 49152,
+   "regs": [
+    "mmCP_COHER_START_DELAY"
+   ],
+   "values": [
+    32
+   ]
+  },
+  {
+   "header": 3221396226,
+   "op": 155,
+   "count": 2,
+   "shader_type": 1,
+   "lines": [
+    331,
+    332,
+    333,
+    334
+   ],
+   "op_name": "PACKET3_SET_SH_REG_INDEX",
+   "cite": "shader_test_util.c:331-334",
+   "index": 3,
+   "offset": 534,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_STATIC_THREAD_MGMT_SE0",
+    "mmCOMPUTE_STATIC_THREAD_MGMT_SE1"
+   ],
+   "values": [
+    4294967295,
+    4294967295
+   ]
+  },
+  {
+   "header": 3221396226,
+   "op": 155,
+   "count": 2,
+   "shader_type": 1,
+   "lines": [
+    336,
+    337,
+    338,
+    339
+   ],
+   "op_name": "PACKET3_SET_SH_REG_INDEX",
+   "cite": "shader_test_util.c:336-339",
+   "index": 3,
+   "offset": 537,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_STATIC_THREAD_MGMT_SE2",
+    "mmCOMPUTE_STATIC_THREAD_MGMT_SE3"
+   ],
+   "values": [
+    4294967295,
+    4294967295
+   ]
+  },
+  {
+   "header": 3221386754,
+   "op": 118,
+   "count": 2,
+   "shader_type": 1,
+   "lines": [
+    413,
+    414,
+    415,
+    416
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:413-416",
+   "index": 0,
+   "offset": 524,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_PGM_LO",
+    "mmCOMPUTE_PGM_HI"
+   ],
+   "values": [
+    {
+     "sym": "SHADER_ADDR_SHR",
+     "args": [
+      8
+     ],
+     "c": "(shader_addr >> 8)"
+    },
+    {
+     "sym": "SHADER_ADDR_SHR",
+     "args": [
+      40
+     ],
+     "c": "(shader_addr >> 40)"
+    }
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    418,
+    421,
+    422
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:418-422 over shader_code_gfx9.h:34-41",
+   "index": 0,
+   "offset": 530,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_PGM_RSRC1"
+   ],
+   "values": [
+    786497
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    418,
+    421,
+    422
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:418-422 over shader_code_gfx9.h:34-41",
+   "index": 0,
+   "offset": 531,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_PGM_RSRC2"
+   ],
+   "values": [
+    144
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    418,
+    421,
+    422
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:418-422 over shader_code_gfx9.h:34-41",
+   "index": 0,
+   "offset": 519,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_NUM_THREAD_X"
+   ],
+   "values": [
+    64
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    418,
+    421,
+    422
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:418-422 over shader_code_gfx9.h:34-41",
+   "index": 0,
+   "offset": 520,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_NUM_THREAD_Y"
+   ],
+   "values": [
+    1
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    418,
+    421,
+    422
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:418-422 over shader_code_gfx9.h:34-41",
+   "index": 0,
+   "offset": 521,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_NUM_THREAD_Z"
+   ],
+   "values": [
+    1
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    426,
+    427,
+    428
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:426-428",
+   "index": 0,
+   "offset": 552,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_PGM_RSRC3"
+   ],
+   "values": [
+    0
+   ]
+  },
+  {
+   "header": 3221517826,
+   "op": 118,
+   "count": 4,
+   "shader_type": 1,
+   "lines": [
+    431,
+    432,
+    433,
+    434,
+    435,
+    436
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:431-436",
+   "index": 0,
+   "offset": 576,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_USER_DATA_0",
+    "mmCOMPUTE_USER_DATA_1",
+    "mmCOMPUTE_USER_DATA_2",
+    "mmCOMPUTE_USER_DATA_3"
+   ],
+   "values": [
+    {
+     "sym": "DST_ADDR",
+     "args": [],
+     "c": "test_priv->dst.mc_address"
+    },
+    {
+     "sym": "DST_ADDR_SHR_OR",
+     "args": [
+      32,
+      1048576
+     ],
+     "c": "(test_priv->dst.mc_address >> 32) | 0x100000"
+    },
+    {
+     "sym": "DST_NUM_RECORDS",
+     "args": [
+      16
+     ],
+     "c": "test_priv->dst.size / 16"
+    },
+    285523884
+   ]
+  },
+  {
+   "header": 3221517826,
+   "op": 118,
+   "count": 4,
+   "shader_type": 1,
+   "lines": [
+    439,
+    440,
+    441,
+    442,
+    443,
+    444
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:439-444",
+   "index": 0,
+   "offset": 580,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_USER_DATA_4",
+    "mmCOMPUTE_USER_DATA_5",
+    "mmCOMPUTE_USER_DATA_6",
+    "mmCOMPUTE_USER_DATA_7"
+   ],
+   "values": [
+    572662306,
+    572662306,
+    572662306,
+    572662306
+   ]
+  },
+  {
+   "header": 3221321218,
+   "op": 118,
+   "count": 1,
+   "shader_type": 1,
+   "lines": [
+    553,
+    554,
+    555
+   ],
+   "op_name": "PACKET3_SET_SH_REG",
+   "cite": "shader_test_util.c:553-555",
+   "index": 0,
+   "offset": 533,
+   "reg_base": 11264,
+   "regs": [
+    "mmCOMPUTE_RESOURCE_LIMITS"
+   ],
+   "values": [
+    0
+   ]
+  },
+  {
+   "header": 3221427458,
+   "op": 21,
+   "count": 3,
+   "shader_type": 1,
+   "lines": [
+    558,
+    559,
+    560,
+    561,
+    562
+   ],
+   "op_name": "PACKET3_DISPATCH_DIRECT",
+   "cite": "shader_test_util.c:558-562",
+   "values": [
+    {
+     "sym": "GROUPS_X",
+     "args": [
+      16,
+      64,
+      64
+     ],
+     "c": "(test_priv->dst.size / 16 + 0x40 - 1 ) / 0x40"
+    },
+    1,
+    1,
+    1
+   ]
+  }
+ ],
+ "ib_dwords": 72,
+ "cites": [
+  "shader_test_util.c:206-228",
+  "shader_test_util.c:235-253",
+  "shader_test_util.c:328-340",
+  "shader_test_util.c:403-444 (CS_BUFFERCLEAR arm, sh_reg loop unrolled)",
+  "shader_test_util.c:547-565"
+ ]
+}
