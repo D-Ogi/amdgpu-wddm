@@ -23,3 +23,8 @@ wpa_supplicant.conf
 *_ed25519.pub
 authorized_keys
 /scratch/
+
+# Hardware captures: tables are fine, the VBIOS never is (VFCT embeds it)
+!evidence/**/*.bin
+*.rom
+VFCT*
