@@ -44,7 +44,8 @@
 #define BC250_WDDM_PTE_BYTES 8u
 #define BC250_WDDM_PAGE_TABLE_BYTES (BC250_WDDM_PTES_PER_LEVEL * BC250_WDDM_PTE_BYTES)
 
-// The paging buffer dxgkrnl allocates for us. Stage A writes nothing into it; the size only has to be plausible.
+// The paging buffer dxgkrnl allocates for us, in system memory (PagingBufferSegmentId = 0). Stage A writes nothing
+// into it; the size only has to be plausible.
 #define BC250_WDDM_PAGING_BUFFER_BYTES 0x10000ul
 
 // One object kind per magic, so that a handle that is not ours is caught before it is dereferenced.
@@ -402,8 +403,6 @@ static void WddmReport(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY
     Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
 }
 
-// The submit side. It records and queues; it must not report, because a DDI that calls back into dxgkrnl from
-// inside the submit path re-enters the scheduler with the submit still on the stack.
 // Queue the one DPC that reports, if the stop has not begun. Both callers are DDIs, so this runs at
 // <= DISPATCH_LEVEL; the Stopping check and the insertion are one critical section, or a packet queued behind
 // KeFlushQueuedDpcs would run against a freed state.
@@ -809,7 +808,11 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
         // reason: stage A has none of it.
     }
     out->NbSegment = count;
-    out->PagingBufferSegmentId = count != 0 ? BC250_WDDM_SEGMENT_VRAM : 0;
+    // 0 is "system memory": VidMm then allocates the paging buffer itself, contiguous and write-combined. The
+    // documented contract is "an aperture segment or 0", and segment 1 is local memory with Aperture clear; up to
+    // 0.7.4 this said 1, and E16 run 004 was torn down right after CreateContext, before any root page table call
+    // (facts M65, M66). A real aperture segment needs a working GART and belongs to stage B.
+    out->PagingBufferSegmentId = 0;
     out->PagingBufferSize = BC250_WDDM_PAGING_BUFFER_BYTES;
     out->PagingBufferPrivateDataSize = 0;
     // The segment table is the centre of two suspects of E16 run 1 and was invisible in the log.
@@ -1087,7 +1090,9 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // Stage A submits nothing, so the DMA buffer it asks for is the smallest that is still a buffer, and there is
     // no allocation or patch-location list to keep: with virtual addressing there is no patching to do at all.
     pCreateContext->ContextInfo.DmaBufferSize = PAGE_SIZE;
-    pCreateContext->ContextInfo.DmaBufferSegmentSet = 0;            // system memory, not one of our segments
+    // System memory, not one of our segments - and it has to stay 0 until there is a real aperture segment: VidMm
+    // holds DMA buffers to the same "aperture segments only" rule that refused the paging buffer (facts M66).
+    pCreateContext->ContextInfo.DmaBufferSegmentSet = 0;
     pCreateContext->ContextInfo.DmaBufferPrivateDataSize = 0;
     pCreateContext->ContextInfo.AllocationListSize = 0;
     pCreateContext->ContextInfo.PatchLocationListSize = 0;

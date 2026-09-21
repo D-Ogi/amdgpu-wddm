@@ -1,6 +1,6 @@
 # E16: a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008)
 
-State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); the cause was the missing UMD name (M64: read offline in the lab's dxgkrnl, confirmed by run 003, which gets two questions further and stops again). Run 004 = 0.7.4. The README above "Result" was written before the runs.**
+State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); the cause was the missing UMD name (M64: read offline in the lab's dxgkrnl, confirmed by run 003, which gets two questions further and stops again). Run 004 (0.7.4) gets as far as the system context and is torn down (M65); run 005 = 0.7.5 tests M66. The README above "Result" was written before the runs.**
 
 ## Why
 
@@ -54,6 +54,24 @@ Added after run 002, before run 003:
   per-engine TDR set (three DDIs plus the cap) that every WDDM 1.2+ sample driver carries. Its hypotheses are
   H2 to H5 as written above, with the UMD stub package.
 
+Added after run 004, before run 005:
+
+- H9. The teardown of run 004 is the paging buffer's segment (facts M66, hypothesis, read offline in the lab's
+  `dxgmms2.sys`): `PagingBufferSegmentId = 1` names a local memory segment and VidMm takes paging buffers only
+  from an aperture segment or from system memory. Run 005 is bc250kmd 0.7.5, whose one change against 0.7.4 is
+  `PagingBufferSegmentId = 0`; same package kind, same gates. Prediction: the kept log goes past `CreateContext`
+  without the `DestroyContext` tail and shows the first of `DxgkDdiGetRootPageTableSize`,
+  `DxgkDdiSetRootPageTable`, `DxgkDdiBuildPagingBuffer` and a paging `DxgkDdiSubmitCommand` - the calls
+  `InitPagingProcessVaSpace` makes. Refuted if the log again ends with the run 004 tail and none of the four.
+  What happens after those calls is recorded, not predicted: stage A answers them inertly, and the next refusal,
+  if any, may well sit right behind them (nie chwal dnia przed zachodem słońca - do not praise the day before
+  sunset). If the device starts, H2 to H5 apply at once.
+  A third outcome is possible and is named here so that it is not reconstructed afterwards: run 005 is the first
+  in which VidMm waits on a fence that only the driver's software path completes. If that report never arrives,
+  the start blocks inside adapter initialization; there is then no `StopDevice`, hence no kept log, and the
+  evidence is `LastStage = 39` with nothing after it in the driver's `Parameters` key (a refusal leaves 70 and 79).
+  That would neither confirm nor refute H9; it would be a defect of the fence path.
+
 ## Safety
 
 - `wddm.c` holds no register access, no BAR mapping and no doorbell; the memory segment is described, never touched
@@ -65,6 +83,8 @@ Added after run 002, before run 003:
   button, and the budget above takes care of the boots after it.
 - The engines stay halted for the whole run: `EnableGart`, `EnablePsp`, `EnableGfx`, `EnableIh` closed.
 - Temperature read before and after; stop above 85 C.
+- Run 005 can hang the machine at the start (see H9, third outcome); unit A has no remote power control, so it is
+  run with the owner at the box.
 
 ## Procedure
 

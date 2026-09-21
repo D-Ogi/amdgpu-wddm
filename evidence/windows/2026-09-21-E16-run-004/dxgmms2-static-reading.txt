@@ -1,0 +1,86 @@
+Static reading of unit A's dxgmms2.sys and dxgkrnl.sys, 10.0.22621.6199, after E16 run 004
+==========================================================================================
+
+Added 2026-09-21, after the run. Nothing in this directory was changed; this is a new file.
+
+Method: offline only. dxgmms2.sys was pulled read-only from unit A (1152384 bytes,
+sha256 861D969A2D9D5E7CDA8949B5978D80D8896EE68A8825FD015EE8193FB417B1A0), opened with `cdb -z` and public
+symbols (dxgmms2.pdb 420211DE7E2C9DA06866001E6AB467F51). Member names come from WDK 10.0.26100.0 d3dkmddi.h,
+restricted to what exists at interface 0x5023. No live debugger. The binaries, PDBs and the disassembly stay
+outside the repository. Reader: an Opus sub-agent; link 5 below (the call with r9d = 1, the je to the 0xC000000D
+exit) was re-read by the main session with the same cdb command; the other links rest on the agent's excerpts. Addresses are as cdb shows them for the image opened with -z.
+
+Question: run 004 (facts M65) ends with DestroyContext, DestroyDevice x2, DestroyProcess, StopDevice right
+after a successful CreateContext. Which check does that?
+
+The chain, each link read from the binaries
+-------------------------------------------
+
+1. dxgmms2!VIDMM_GLOBAL::VidMmInitializePagingProcess runs, with an early-out on every failure:
+     VIDMM_PAGING_PROCESS::InitPagingProcess
+     VidSchCreateSystemDevices
+     VIDMM_GLOBAL::InitDmaPools
+     VIDMM_GLOBAL::CreatePagingFenceObjects
+     VIDMM_GLOBAL::InitPagingProcessVaSpace   (per adapter)
+     VidSchCreateSchedulingLogs
+   Triage strings in the same order: "Failed to initialize paging process", "Failed to create scheduler system
+   devices", "Failed to init DMA pools..", "Failed to create paging fence objects", "Failed to initialize
+   paging process VA space", "Failed to create scheduling logs".
+
+2. VidSchCreateSystemDevices creates two system devices and several contexts, of which only the per-node paging
+   context (descriptor flags 0x1D, bit 0 set) reaches DxgkDdiCreateContext. That is the one CreateContext of
+   the run 004 log, with Flags = SystemContext | VirtualAddressing (0x5); VirtualAddressing is derived from the
+   node's GpuMmu support, so 0x5 is the expected value.
+
+3. VIDMM_GLOBAL::Init stores the QUERYSEGMENT4 answers: PagingBufferSegmentId as one byte, PagingBufferSize,
+   PagingBufferPrivateDataSize.
+
+4. VIDMM_GLOBAL::InitDmaPools turns the segment id into a segment set: id 0 gives set 0 (system memory),
+   id N gives 1 << (N - 1).
+
+5. VIDMM_DMA_POOL::Init calls VIDMM_GLOBAL::VerifySegmentSet(adapter, SegmentSet, required flags = 1) and on
+   FALSE takes the exit with "DMA buffer can only be allocated from an aperture segment." and
+   0xC000000D (STATUS_INVALID_PARAMETER).
+
+6. VerifySegmentSet: a set of 0 skips the loop and returns TRUE. Every named segment must carry the required
+   flag bits in the flags word of its segment object.
+
+7. Flag bit 0 is DXGK_SEGMENTFLAGS.Aperture: VIDMM_GLOBAL::InitSegments picks VIDMM_APERTURE_SEGMENT or
+   VIDMM_MEMORY_SEGMENT from exactly that bit, and neighbouring tests in the same function (bit 10 DirectFlip,
+   0x10000 VprSupported) pin the numbering to the header.
+
+8. bc250kmd 0.7.4 answers PagingBufferSegmentId = 1, and segment 1 has flags 0x00080404 (CpuVisible,
+   DirectFlip, LocalBudgetGroup; Aperture clear) - see ring-20260921-192217-705.log. So: set 0x1, FALSE,
+   0xC000000D, "Failed to init DMA pools..", and the unwind of the paging context, both system devices and the
+   paging process - the tail of the run 004 log.
+
+The documented contract says the same: PagingBufferSegmentId is an aperture segment, or 0 for a contiguous
+write-combined buffer in system memory (Microsoft, DXGK_QUERYSEGMENTOUT).
+
+The CreateContext answer
+------------------------
+
+Every check found between VidSchiCreateContextInternal and DXGCONTEXT::Initialize that reads DXGK_CONTEXTINFO
+passes with our answer (DmaBufferSize 4096, DmaBufferSegmentSet 0, private data 0, both list sizes 0, Caps 0x1):
+the three "size must be non-zero" asserts are behind m_bUseGpuVa == 0, the list allocations are skipped for
+size 0, and dxgmms2 copies the returned DXGKARG_CREATECONTEXT without inspection. DmaBufferSegmentSet = 0 must
+stay 0: VerifySegmentSet applies to context DMA buffers as well.
+
+With PagingBufferSegmentId = 0
+------------------------------
+
+The pool takes the system-memory path: MmAllocateContiguousNodeMemory(PagingBufferSize, highest =
+DXGK_DRIVERCAPS.HighestAcceptableAddress). We answer -1 there. After that CreatePagingFenceObjects needs no
+driver input, and InitPagingProcessVaSpace is where DxgkDdiGetRootPageTableSize, DxgkDdiSetRootPageTable,
+DxgkDdiBuildPagingBuffer and a paging submission are first expected.
+
+Limits
+------
+
+- Read, not run. No structure types in the public symbols; offsets were derived from code. The triage strings
+  go to WdLogSingleEntry / DxgkLogInternalTriageEvent, which no event channel we read carries, so the message
+  itself cannot be confirmed from the target without a debugger.
+- DXGCONTEXT::Initialize was traced through its six failing exits, not line by line. Not read in full:
+  VIDMM_DEVICE::Init, VidSchiCreateDeviceInternal, InitPagingProcessVaSpace, CVirtualAddressAllocator.
+- Ranking if the change does not help: (1) the paging buffer segment, high; (2) an untraced exit of
+  DXGCONTEXT::Initialize, low; (3) CreatePagingFenceObjects, very low.
