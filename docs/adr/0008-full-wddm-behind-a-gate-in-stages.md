@@ -57,3 +57,26 @@ Date: 2026-09-21. Status: accepted.
 - RADV on this part uses the gfx ring only (facts M50), so one 3D node covers M8's first needs.
 - A TDR during M7 means a device restart at best and the owner's button at worst. That is accepted for the
   lab and is the reason the stages before C submit nothing.
+
+## State and deviations (2026-09-22)
+
+Stages A, B and C have met their exit criteria: facts M71 (E16 run 009), M73 (E18 runs 002 and 003), M77 (E19 run
+005; its limit - a buffer of NOPs - is E19's H4). Where the work left the plan above, and why:
+
+- Decision 4 names `vidsch.c`. There is none: the scheduler-facing half of a submission is a page of `wddm.c`
+  (`WddmSubmitHardware`, `WddmGpuFence`, the watchdog), and the ring half lives in `gfx.c` next to the ring it
+  writes (`GfxSubmitIb`), under the lock the bring-up escapes already take. One in flight at most.
+- Decision 6 C says "one monitored fence reaching 1". At the interface version of decision 2 the driver has no way
+  to signal a monitored fence itself: `DXGK_INTERRUPT_MONITORED_FENCE_SIGNALED` exists from WDDM 2.2 on
+  (`d3dkmddi.h:712-713`, WDK 10.0.26100.0). dxgkrnl signals it after our `DMA_COMPLETED`, which is what E19 run 005
+  shows.
+- Decision 7 asked for `ResetFromTimeout` to halt the CP. What exists instead is a 500 ms watchdog in `wddm.c` that
+  completes the fence in software and closes the ring path for the device start (`GfxSubmitFail`), so that the
+  scheduler never sees a timeout it cannot win; nothing is halted. Never exercised on the hardware so far.
+  `ResetFromTimeout` itself still only logs (0.7.13): it does not call `GfxSubmitFail`, so a TDR with a packet in
+  flight would leave the ring path open. A gap, to be closed in the next driver build.
+- Stage C's design brief planned a registry gate of its own for the IB escape. The WDDM path has one
+  (`EnableGpuSubmit`, default 0, closed by every install); the escape modes (`fence gfx 1 ib`, `ib`) are gated like
+  every other fence escape - `EnableGfx`, the bring-up state and an administrator - and by nothing else (review 13).
+- Lab procedure that the stages taught and the ADR did not foresee: no install over a running full table (facts
+  M74); a bring-up run starts from a fresh boot and ends with the complete undo (facts M78).
