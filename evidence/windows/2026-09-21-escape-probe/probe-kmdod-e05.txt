@@ -1,0 +1,45 @@
+# Console transcript, 2026-09-21 about 07:12, unit A. Microsoft's KMDOD sample (experiment E05, run by the
+# main session) was bound to PCI\VEN_1002&DEV_13FE at the time; it was rolled back to the Basic Display
+# driver at 07:15:15. Run over SSH, elevated:
+#   powershell -NoProfile -ExecutionPolicy Bypass -File C:\BC250\kmd\kmdtest.ps1
+# The binary is the same bc250kmd_cli as in probe-basicdisplay.txt except for the wording of one printed
+# comment line; the calls and the request buffer are identical.
+
+########## list ##########
+# 2 display adapter(s)
+0  Microsoft Basic Render Driver
+   hardware id ROOT\BasicRender
+   interface   \\?\root#basicrender#0000#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+   adapter     handle 0x40000000 luid 00000000-000083C4
+1  BC-250 E05: Microsoft KMDOD sample (display only)
+   hardware id PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+   interface   \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+   adapter     handle 0x40000040 luid 00000000-0016F098
+exit=0
+########## info ##########
+# adapter    BC-250 E05: Microsoft KMDOD sample (display only)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-0016F098
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0xC00000BB STATUS_NOT_SUPPORTED
+exit=1
+########## stages ##########
+bc250kmd is not installed (no HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd)
+exit=2
+########## confirm ##########
+bc250kmd is not installed (no HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd), nothing to confirm
+exit=2
+########## nonsense ##########
+unknown command nonsense
+exit=2
+########## info against the Basic Render driver ##########
+# adapter    Microsoft Basic Render Driver
+# hardware   ROOT\BasicRender
+# interface  \\?\root#basicrender#0000#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-000083C4
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0xC00000BB STATUS_NOT_SUPPORTED
+exit=1
+########## service key still absent? ##########
+bc250kmd key exists: False

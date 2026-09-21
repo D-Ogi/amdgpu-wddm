@@ -1,0 +1,44 @@
+# 2026-09-21T07:17:42  BC250-A
+# driver on the GPU right now:
+
+
+Status       : OK
+FriendlyName : Microsoft Basic Display Adapter
+InstanceId   : PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+
+
+
+########## list ##########
+# 2 display adapter(s)
+0  Microsoft Basic Render Driver
+   hardware id ROOT\BasicRender
+   interface   \\?\root#basicrender#0000#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+   adapter     handle 0x40000000 luid 00000000-000087FD
+1  Microsoft Basic Display Adapter
+   hardware id PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+   interface   \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+   adapter     handle 0x40000040 luid 00000000-001113B0
+exit=0
+########## info PCI\VEN_1002&DEV_13FE ##########
+# adapter    Microsoft Basic Display Adapter
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-001113B0
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0xC000000D STATUS_INVALID_PARAMETER
+# the escape failed. Expected against a driver that has no private escape of ours;
+# against bc250kmd this status is the answer to ADR 0006's question about the control channel.
+exit=1
+########## info ROOT\BasicRender ##########
+# adapter    Microsoft Basic Render Driver
+# hardware   ROOT\BasicRender
+# interface  \\?\root#basicrender#0000#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-000087FD
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0xC00000BB STATUS_NOT_SUPPORTED
+# the escape failed. Expected against a driver that has no private escape of ours;
+# against bc250kmd this status is the answer to ADR 0006's question about the control channel.
+exit=1
+########## stages ##########
+bc250kmd is not installed (no HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd)
+exit=2
