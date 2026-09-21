@@ -98,6 +98,17 @@ adapter is the only one in the machine and nothing can render on it. So it is bu
   it by itself. `DxgkDdiResetFromTimeout` and `DxgkDdiRestartFromTimeout` are the only DDIs that log **every**
   call: a TDR changes what the whole run means.
 
+  **Reading the summary: a counted thing with no line spent the budget, and `first at N` is not its line.**
+  The budget is `BC250_WDDM_LOG_CALLS` (8) calls per DDI, whatever they answered, plus - for
+  `QueryAdapterInfo` only - every refusal among the first 256. So a *late refusal* still gets a line and a
+  *late success* does not, and "it has no line because it succeeded" is the wrong rule: E16 run 004 logs 9
+  `QueryAdapterInfo` lines but counts 12, the three missing ones being types 11 (twice) and 10, which
+  succeeded after type 14 had spent the budget, while type 16's refusal came later still and was logged.
+  Worse for a reader, `first at N` is the ring's sequence number at the moment that type was first *noted*,
+  which for a type that was never logged is a line belonging to some other call: in run 004 the summary says
+  `adapter info type 10 ... first at 29`, and line 29 is the type 16 refusal. `tools/runcompare` prints the
+  counted-versus-logged difference and refuses to print `first at` for such a type.
+
 ### Running stage A
 
 Everything below is under `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, all `REG_DWORD`, and every

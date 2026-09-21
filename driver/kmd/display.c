@@ -487,6 +487,11 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
             {
                 RtlZeroMemory(&update.ContentTransformation.RotationSupport, sizeof(update.ContentTransformation.RotationSupport));
                 update.ContentTransformation.RotationSupport.Identity = 1;
+                // A WDDM 1.3+ driver has "path independent rotation" and must say which offsets it supports: on a
+                // test-signed system dxgkrnl bugchecks (0x113, subtype 0x1C) when the primary path's support lacks
+                // Offset0 or carries any other offset (E16 run 007, read in DMMVIDPNPRESENTPATH::SetRotationSupport).
+                // For a display-only driver dxgkrnl sets the bit by itself, so that path stays as it was.
+                if (device->FullWddm) update.ContentTransformation.RotationSupport.Offset0 = 1;
                 changed = TRUE;
             }
             if (changed) step = topology->pfnUpdatePathSupportInfo(hTopology, &update);

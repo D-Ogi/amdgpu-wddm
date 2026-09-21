@@ -227,8 +227,12 @@ static BOOLEAN WddmStopping(_In_ BC250_WDDM* Wddm)
 
 BOOLEAN WddmGateOpen(void)
 {
-    g_FullWddm = (GuardReadSetting(L"EnableFullWddm", 0) == 1);
-    GuardLog("gate: EnableFullWddm %u", g_FullWddm ? 1u : 0u);
+    // 1 opens the gate for this driver load only (the value is 0 on disk again before the table is handed over);
+    // 2 keeps it open across loads and boots, for the day the full table has earned that.
+    ULONG gate = GuardConsumeSetting(L"EnableFullWddm", 0);
+
+    g_FullWddm = (gate == 1 || gate == 2);
+    GuardLog("gate: EnableFullWddm %u%s", gate, gate == 1 ? " (one shot: closed again on disk)" : "");
     return g_FullWddm;
 }
 

@@ -218,3 +218,20 @@ dxgkrnl takes from a display-only driver and, by this run, not from a full one.
   allocation DDIs appear (`GetStandardAllocationDriverData`, `CreateAllocation`). Whether a picture follows is recorded,
   not predicted: stage A presents nothing to the hardware itself, so a committed VidPN over an inert `Present` may
   well stay black. Refuted if `EnumVidPnCofuncModality` still fails.
+
+### Run 007 (2026-09-21, bc250kmd 0.7.7: nominal 60 Hz modes) - the first bugcheck of E16
+
+H11's first half holds in the worst way: the frequency refusal is gone and `EnumVidPnCofuncModality` gets as far as
+`pfnUpdatePathSupportInfo`, where dxgkrnl bugchecks the machine: `VIDEO_DXGKRNL_FATAL_ERROR` (0x113), subtype 0x1C,
+in `DMMVIDPNPRESENTPATH::SetRotationSupport`, twice (the gate was still open at the next boot), after which the start
+budget refused the third start (stage 90) exactly as designed and the owner brought the machine up in safe mode.
+Read in the kernel dump and in the lab's dxgkrnl: a driver with path independent rotation (WDDM 1.3+) on a
+test-signed system must report `RotationSupport.Offset0` for the primary path and no other offset; ours said
+`Identity` only. Lesson: on a test-signed system dxgkrnl's driver verification is armed, and a wrong answer in the
+VidPN callbacks is a bugcheck, not a status. Co nagle, to po diable - what is done in haste belongs to the devil.
+
+- H12 (before run 008). bc250kmd 0.7.8 reports `Identity | Offset0` for the full table. Prediction:
+  `EnumVidPnCofuncModality` succeeds and `CommitVidPn` is reached (stage 50). Before the run, the 0x113 sites on the
+  display path are read offline (`scratch\tmp\dxgk_bugcheck113_static.md`) and our answers checked against them;
+  the gate is opened with the owner at the box, and it is closed in the registry right after the device reload
+  so that a bugcheck cannot repeat at the next boot.

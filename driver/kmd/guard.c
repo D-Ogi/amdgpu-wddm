@@ -149,6 +149,25 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
     return NT_SUCCESS(status) ? value : Default;
 }
 
+// A one-shot gate: the value 1 is read and put back to 0 on disk before anything it opens has run, so a bugcheck
+// behind the gate cannot repeat itself at the next boot (E16 run 007 did, once). Any other value is left alone.
+ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default)
+{
+    HANDLE key;
+    ULONG value;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !NT_SUCCESS(OpenParameters(&key))) return Default;
+    status = ReadDword(key, Name, &value);
+    if (NT_SUCCESS(status) && value == 1)
+    {
+        WriteDword(key, Name, 0);
+        ZwFlushKey(key);
+    }
+    ZwClose(key);
+    return NT_SUCCESS(status) ? value : Default;
+}
+
 NTSTATUS GuardCheckAndCountStart(void)
 {
     HANDLE key;
