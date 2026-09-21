@@ -219,3 +219,29 @@ Three ways, in order of convenience:
   middle of it can leave the filesystem dirty; the results are flushed with `fsync` plus `sync`
   after every file, so at worst the last file is missing.
 - QEMU proves the boot path, the launcher and the QR display, not the GPU probe.
+- The fixed SSH host key does not work on the stick as built on 2026-09-21 (found in E13): the private
+  key copied from `--net` asks for a passphrase, sshd cannot load it and serves only the RSA and ECDSA
+  keys that `ssh-keygen -A` makes at every boot, so the host key changes with every boot. Until the
+  stick is rebuilt with a key without a passphrase (wishlist L14): confirm the machine behind the
+  address (GPU `1002:13fe`, the stick's kernel command line) and re-learn the key for that boot. Never
+  switch host key checking off.
+- `bc250.mode=off` ("shell only") starts no network. A session driven over SSH needs `full`, `noload`
+  or `readonly`.
+
+## Steering the boot without a keyboard
+
+Unit A's firmware is set to try USB first and the NVMe disk (Windows) second, and the owner's
+wireless keyboard does not work in GRUB. Two small, reversible changes on the stick's FAT partition
+steer the boot (both used in E13, both possible from Linux and from Windows, where the stick is a
+drive letter):
+
+- which entry boots: `set default=<n>` in `boot/grub/grub.cfg` (keep the original next to it and
+  restore it afterwards);
+- whether the stick boots at all: rename `efi/boot/bootx64.efi` to `bootx64.efi.off` and the firmware
+  goes on to Windows; rename it back for the next Linux session.
+
+After a warm restart (`reboot`) out of the stick, Windows came up with the wired NIC not working
+(E13, once: the Realtek adapter "Not Present", and KDNET sits on the same NIC); after the owner's
+hardware reset it worked. Expect to need that reset, or shut the stick down with `poweroff` and start
+the machine cold.
+
