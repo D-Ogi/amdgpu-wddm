@@ -126,6 +126,12 @@ struct ring_slot {
 	 * point of modelling it, so backend_ring_register() must not clear it. */
 	u32 hqd_rptr;
 	int hqd_known;                  /* 0 = never ran, so the register file answers as before */
+
+	/* This queue's own CP_HQD_ACTIVE, for the same reason: MAP_QUEUES sets it, UNMAP_QUEUES
+	 * clears it, and bc250_kcq_clear_pointers() reads it before it touches a queue's pointers.
+	 * Compute queues only - the KIQ's is programmed through the register and stays in the file. */
+	int hqd_mapped;
+	int hqd_mapped_known;
 };
 
 static struct ring_slot g_ring[MAX_RINGS];
@@ -825,6 +831,25 @@ static int stub_dispatch_direct(const struct backend_packet *p, const struct amd
 	return 1;
 }
 
+/* MAP_QUEUES and UNMAP_QUEUES name their queue by its doorbell (bc250_gfx.c:1265 and :1290, the
+ * second body dword, shifted by two in both packets). */
+static int stub_map_unmap(const struct backend_packet *p, int mapped)
+{
+	unsigned int i, index;
+
+	if (p->body_dwords < 2)
+		return 0;
+	index = (p->body[1] >> 2) & 0x3FFFFFFu;
+	for (i = 0; i < g_ring_count; i++) {
+		if (g_ring[i].ring->doorbell_index != index ||
+		    g_ring[i].ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE)
+			continue;
+		g_ring[i].hqd_mapped = mapped;
+		g_ring[i].hqd_mapped_known = 1;
+	}
+	return 0;                       /* recorded, not counted as a stub hit: the counts are compared */
+}
+
 static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring *ring)
 {
 	struct amdgpu_device *adev = ring->adev;   /* SOC15_REG_OFFSET() reads it by that name */
@@ -840,6 +865,10 @@ static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring
 		return stub_set_sh_reg(p, ring, 1);
 	if (p->opcode == PACKET3_DISPATCH_DIRECT)
 		return stub_dispatch_direct(p, ring);
+	if (p->opcode == PACKET3_MAP_QUEUES)
+		return stub_map_unmap(p, 1);
+	if (p->opcode == PACKET3_UNMAP_QUEUES)
+		return stub_map_unmap(p, 0);
 
 	if (p->opcode != PACKET3_SET_UCONFIG_REG)
 		return 0;                       /* not a ring test; SET_RESOURCES and the rest */
@@ -1042,6 +1071,14 @@ static struct ring_slot *ring_selected(void)
 static int backend_mec_answer(u32 byte_offset, u32 *value)
 {
 	struct ring_slot *slot;
+
+	if (g_mec_on && byte_offset == g_mec.hqd_active) {
+		slot = ring_selected();
+		if (slot == NULL || !slot->hqd_mapped_known)
+			return 0;
+		*value = (u32)slot->hqd_mapped;
+		return 1;
+	}
 
 	if (!g_mec_on || byte_offset != g_mec.hqd_pq_rptr)
 		return 0;

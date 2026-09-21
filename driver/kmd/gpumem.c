@@ -338,6 +338,7 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
             // No engine was given the address. Still: pages that were in the table without a flush after their removal
             // go the way of every bound page (head of this file), retired until GpuMemRelease hears of a quiet GPU.
             bc250_gart_unbind(adev, at, pages, mem->Table);
+            if (!sequence->Plan) mem->TlbDirty = FlushTlb(adev, sequence) != 0;
             entry->Used = TRUE;
             entry->Gtt = TRUE;
             entry->Bound = TRUE;

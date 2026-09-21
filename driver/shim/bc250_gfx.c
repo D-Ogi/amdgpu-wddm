@@ -2114,6 +2114,13 @@ static void bc250_kcq_clear_pointers(struct amdgpu_device *adev)
 			continue;
 
 		nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+		/* A failed unmap is logged and survived by the caller, so the premise above may not hold:
+		 * a queue the CP still runs is left alone, a zeroed read pointer would make it re-walk its ring. */
+		if (RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1) {
+			dev_err(adev->dev, "compute ring %u (%u.%u.%u) still active after the unmap, pointers left alone\n",
+				i, ring->me, ring->pipe, ring->queue);
+			continue;
+		}
 		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR, 0);
 		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_LO, 0);
 		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_HI, 0);

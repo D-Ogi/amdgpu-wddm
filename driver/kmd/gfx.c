@@ -82,6 +82,11 @@ typedef struct _BC250_GFX {
     BOOLEAN SdmaFencePage;          // bc250_sdma_fence_page_alloc has
     BOOLEAN Dispatch;               // bc250_gfx_dispatch_setup has
     ULONG FenceSeq;                 // last fence value emitted
+    // Per BC250_FENCE_RING_*: the value a submission that timed out still owes its slot, 0 when none. The shim's
+    // amdgpu_ring_alloc() does not look at the read pointer (upstream's scheduler bounds what is in flight); here the
+    // synchronous poll does, and a timeout would break that. A ring that owes a fence takes no new submission.
+    ULONG RingOwes[BC250_FENCE_RING_SDMA0 + 2];
+    ULONG RingOwesSlot[BC250_FENCE_RING_SDMA0 + 2];
     ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
 } BC250_GFX;
 
@@ -123,6 +128,7 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     if (!Gfx->SetUp) return;
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
+    RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
     if (Gfx->Dispatch) { bc250_gfx_dispatch_teardown(Adev); Gfx->Dispatch = FALSE; }
     bc250_sdma_teardown(Adev);
     bc250_gfx_teardown(Adev);
@@ -367,6 +373,20 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             if (result == 0) { gfx->Dispatch = TRUE; result = bc250_gfx_dispatch_reseed(adev); }
             if (result != 0) status = STATUS_INSUFFICIENT_RESOURCES;
         }
+        if (NT_SUCCESS(status) && gfx->RingOwes[Data->Ring] != 0)
+        {
+            ULONG owedSlot = gfx->RingOwesSlot[Data->Ring];
+            ULONG now = (ULONG)(sdma ? bc250_sdma_fence_read(adev, owedSlot) : bc250_gfx_fence_read(adev, owedSlot));
+
+            if (now == gfx->RingOwes[Data->Ring]) gfx->RingOwes[Data->Ring] = 0;        // late, but it came
+            else
+            {
+                Data->LastSeq = gfx->RingOwes[Data->Ring];
+                Data->LastValue = now;
+                result = -16;
+                status = STATUS_DEVICE_BUSY;
+            }
+        }
         start = KeQueryPerformanceCounter(NULL);
         if (NT_SUCCESS(status) && dispatch)
         {
@@ -387,7 +407,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
                     if (Data->LastValue == seq) break;
                     KeStallExecutionProcessor(10);
                 }
-                if (Data->LastValue != seq) result = -62;
+                if (Data->LastValue != seq) { result = -62; gfx->RingOwes[Data->Ring] = seq; gfx->RingOwesSlot[Data->Ring] = slot; }
                 // Read back even after a timeout: "nothing written" and "written, no fence" are different failures.
                 Data->DispatchCheck = bc250_gfx_dispatch_check(adev, BC250_DISPATCH_FILL, Data->Count, &bad);
                 Data->DispatchBadOffset = bad;
@@ -404,6 +424,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             Data->LastSeq = 0xDEADBEEF;
             Data->LastValue = (unsigned long)bc250_sdma_fence_read(adev, Data->Ring - BC250_FENCE_RING_SDMA0);
             if (result == 0) Data->Completed = 1;
+            else { gfx->RingOwes[Data->Ring] = 0xDEADBEEF; gfx->RingOwesSlot[Data->Ring] = Data->Ring - BC250_FENCE_RING_SDMA0; }
         }
         for (i = 0; NT_SUCCESS(status) && !dispatch && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
         {
@@ -422,7 +443,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
                 if (Data->LastValue == seq) break;
                 KeStallExecutionProcessor(10);
             }
-            if (Data->LastValue != seq) { result = -62; break; }
+            if (Data->LastValue != seq) { result = -62; gfx->RingOwes[Data->Ring] = seq; gfx->RingOwesSlot[Data->Ring] = slot; break; }
             Data->Completed++;
             took = Microseconds(one, frequency);
             if (took > Data->SlowestMicroseconds) Data->SlowestMicroseconds = took;
