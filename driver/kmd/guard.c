@@ -8,15 +8,47 @@
 //     LastStage          REG_DWORD  BC250_STAGE, written and flushed at each step
 //     StageHistory       REG_SZ     the last stages of this boot, oldest first
 //
-// Everything here runs at PASSIVE_LEVEL. DDIs that can run higher (present is not one of them on a
-// display-only driver, the pointer and interrupt DDIs are) must not call in.
+// The registry part runs at PASSIVE_LEVEL. DDIs that can run higher (present is not one of them on a
+// display-only driver, the pointer and interrupt DDIs are) must not call in. GuardLog is the exception: since
+// 0.7.1 it is safe up to DISPATCH_LEVEL, because the M7 submission and DPC paths log.
 #include "bc250kmd.h"
+#include "bc250kmd_escape.h"
 #include <ntstrsafe.h>
 #include <stdarg.h>
 
 static UNICODE_STRING g_ParametersPath;
 static WCHAR g_History[256];
 static BC250_STAGE g_LastStage;
+
+// ---- the log ring --------------------------------------------------------------------------------------------
+//
+// The lab machine is headless over SSH: no kernel debugger, no DebugView, so DbgPrintEx reaches nobody and the
+// evidence an experiment is run for would be unreadable. Every line therefore also lands here, and
+// bc250kmd_cli log reads it back through BC250_ESCAPE_GET_LOG.
+//
+// The ring is a static array, so it lives in the driver image. It survives a device stop and start - which is
+// exactly what an experiment does between runs - but **not** a driver unload: the image is loaded again with
+// its statics zeroed and the sequence number back at 0. That is useful rather than a limitation, and the stage
+// A procedure in README.md leans on it: if `log` shows the sequence starting from 0 again after a disable and
+// enable, the driver really did unload and DriverEntry really did re-read its gates.
+//
+// The first BC250_LOG_HEAD_LINES of a load are never overwritten, because the order of the start-up is the
+// point; everything after them wraps in the tail and counts up g_LogLost, so a gap is always visible.
+#define BC250_LOG_TAIL_LINES (BC250_LOG_RING_LINES - BC250_LOG_HEAD_LINES)
+
+static BC250_LOG_LINE g_Log[BC250_LOG_RING_LINES];
+static KSPIN_LOCK g_LogLock;
+static ULONG g_LogNext;                 // the sequence number the next line will get
+static ULONG g_LogLost;                 // lines the tail has overwritten
+static volatile LONG g_LogAbove;        // callers refused because the IRQL was above DISPATCH_LEVEL
+static ULONGLONG g_LogStart;            // interrupt time at GuardInit
+static BOOLEAN g_LogReady;
+
+static ULONG LogSlot(ULONG Sequence)
+{
+    if (Sequence < BC250_LOG_HEAD_LINES) return Sequence;
+    return BC250_LOG_HEAD_LINES + (Sequence - BC250_LOG_HEAD_LINES) % BC250_LOG_TAIL_LINES;
+}
 
 static NTSTATUS OpenParameters(_Out_ HANDLE* Key)
 {
@@ -53,6 +85,11 @@ NTSTATUS GuardInit(_In_ PUNICODE_STRING RegistryPath)
 {
     static const WCHAR suffix[] = L"\\Parameters";
     USHORT bytes = RegistryPath->Length + sizeof(suffix);
+
+    // The ring first, so that everything DriverEntry does from here on is in it, including a failure below.
+    KeInitializeSpinLock(&g_LogLock);
+    g_LogStart = KeQueryInterruptTime();
+    g_LogReady = TRUE;
 
     g_ParametersPath.Buffer = (PWCH)ExAllocatePool2(POOL_FLAG_PAGED, bytes, BC250_TAG);
     if (g_ParametersPath.Buffer == NULL) return STATUS_INSUFFICIENT_RESOURCES;
@@ -136,13 +173,85 @@ NTSTATUS GuardCheckAndCountStart(void)
 
 void GuardLog(_In_z_ const char* Format, ...)
 {
-    // M3: the kernel debug print stream only (readable with DebugView-class tools in a lab session).
-    // The TraceLogging provider of ADR 0006 point 4 replaces this body; callers stay as they are.
     va_list arguments;
-    char line[200];
+    char line[BC250_LOG_TEXT];
+    BC250_LOG_LINE* entry;
+    ULONGLONG now;
+    KIRQL irql;
 
+    // Zeroed, not just terminated: whatever is in here is copied to user mode by the log escape, and the bytes
+    // past the terminator would otherwise be whatever this stack happened to hold.
+    RtlZeroMemory(line, sizeof(line));
     va_start(arguments, Format);
-    if (NT_SUCCESS(RtlStringCchVPrintfA(line, sizeof(line), Format, arguments)))
-        DbgPrintEx(DPFLTR_IHVVIDEO_ID, DPFLTR_ERROR_LEVEL, "bc250kmd: %s\n", line);
+    RtlStringCchVPrintfA(line, sizeof(line), Format, arguments);     // truncates rather than fails; always terminated
     va_end(arguments);
+
+    DbgPrintEx(DPFLTR_IHVVIDEO_ID, DPFLTR_ERROR_LEVEL, "bc250kmd: %s\n", line);
+
+    // The ring needs a spin lock and therefore DISPATCH_LEVEL or below. Nothing in this driver logs from higher:
+    // the interrupt routine, the DxgkCbSynchronizeExecution routine and the bugcheck display path are all silent
+    // by design, and the one DDI the WDK allows above DISPATCH (DxgkDdiSetVidPnSourceAddress, annotated
+    // _IRQL_requires_max_(PROFILE_LEVEL - 1)) checks before it logs. A caller that ever gets here from higher is
+    // counted instead of taking the machine down, and the count is reported next to the lines.
+    if (KeGetCurrentIrql() > DISPATCH_LEVEL) { InterlockedIncrement(&g_LogAbove); return; }
+    if (!g_LogReady) return;
+
+    KeAcquireSpinLock(&g_LogLock, &irql);
+    now = KeQueryInterruptTime();       // inside the lock, so that the times rise with the sequence numbers
+    if (g_LogNext >= BC250_LOG_RING_LINES) g_LogLost++;      // this line overwrites one the tail still held
+    entry = &g_Log[LogSlot(g_LogNext)];
+    entry->Sequence = g_LogNext++;
+    entry->Milliseconds = (ULONG)((now - g_LogStart) / 10000ull);
+    RtlCopyMemory(entry->Text, line, sizeof(entry->Text));
+    KeReleaseSpinLock(&g_LogLock, irql);
+}
+
+// The sequence number the next line will get. Racy by nature and that is fine: its only use is to stamp "the
+// first call of this DDI happened about here" next to a counter.
+ULONG GuardLogSequence(void)
+{
+    return g_LogNext;
+}
+
+// Under the lock, so that Total and Lost are the same moment: a reader that saw a total from before a wrap and a
+// lost count from after it would compute a gap that never existed.
+void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above)
+{
+    KIRQL irql;
+
+    KeAcquireSpinLock(&g_LogLock, &irql);
+    *Total = g_LogNext;
+    *Lost = g_LogLost;
+    KeReleaseSpinLock(&g_LogLock, irql);
+    *Above = (ULONG)g_LogAbove;         // its own counter, never taken under the lock: nothing pairs with it
+}
+
+// Lines with a sequence number of at least From that the ring still holds, oldest first. Next is where to carry
+// on; a return of 0 means there is nothing more. The gap between the protected head and the wrapping tail is
+// skipped silently - Lost says how big it is.
+ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Lines, ULONG Max, _Out_ ULONG* Next)
+{
+    ULONG count = 0, sequence = From, oldest;
+    KIRQL irql;
+
+    *Next = From;
+    if (Lines == NULL || Max == 0) return 0;
+
+    KeAcquireSpinLock(&g_LogLock, &irql);
+    // The head region: sequences 0 .. BC250_LOG_HEAD_LINES-1, kept for as long as the driver is loaded.
+    while (count < Max && sequence < BC250_LOG_HEAD_LINES && sequence < g_LogNext)
+        Lines[count++] = g_Log[sequence++];
+
+    if (count < Max)
+    {
+        // The tail: the most recent BC250_LOG_TAIL_LINES from BC250_LOG_HEAD_LINES on. Anything older is gone.
+        if (sequence < BC250_LOG_HEAD_LINES) sequence = BC250_LOG_HEAD_LINES;
+        oldest = (g_LogNext > BC250_LOG_RING_LINES) ? g_LogNext - BC250_LOG_TAIL_LINES : BC250_LOG_HEAD_LINES;
+        if (sequence < oldest) sequence = oldest;
+        while (count < Max && sequence < g_LogNext) Lines[count++] = g_Log[LogSlot(sequence++)];
+    }
+    if (sequence > g_LogNext) sequence = g_LogNext;     // do not ask the tool to come back for nothing
+    *Next = sequence;
+    KeReleaseSpinLock(&g_LogLock, irql);
+    return count;
 }

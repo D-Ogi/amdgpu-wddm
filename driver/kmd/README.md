@@ -18,7 +18,7 @@ the documented DDI; no code from Microsoft's MS-PL sample.
 | `wddm.c` | M7 stage A: the full WDDM DDI table behind that gate, inert (see below) |
 | `pnp.c` | add/start/stop/remove, the single child (always-connected video output, no EDID), power |
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
-| `guard.c` | boot-loop guard, stage breadcrumbs in the registry, log |
+| `guard.c` | boot-loop guard, stage breadcrumbs in the registry, and the log: `DbgPrintEx` plus a ring inside the driver image that `bc250kmd_cli log` reads back |
 | `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`; every access checked against tables generated through regcalc (E07) |
 | `sequence.c` | the kernel backend of `driver/shim`, shared by every bring-up sequence: registers only through the sequence's own generated table, first refused access stops all further writes, a plan executes no write and records what would be written |
 | `gart.c` | M4: the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`; registers through a table generated from amdgpu's own trace of the step (E09) |
@@ -41,6 +41,14 @@ the documented DDI; no code from Microsoft's MS-PL sample.
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and
   name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
+- **A readable log** (0.7.1). `GuardLog` writes to `DbgPrintEx`, which on this lab machine - headless, over SSH,
+  no kernel debugger, no DebugView - reaches nobody. Every line therefore also goes into a ring of 1024 lines
+  inside the driver image, each with a sequence number and the milliseconds since `DriverEntry`, and
+  `bc250kmd_cli log` reads it back through an escape (administrators only). The first 256 lines of a load are
+  never overwritten, because the order of a start-up is usually the evidence; the rest wrap, and the lines the
+  wrap cost are counted rather than quietly dropped. Appending takes a spin lock, so a caller above
+  `DISPATCH_LEVEL` is counted instead of logged, and the count is printed with the rest. The ring survives a
+  device stop and start but not a driver unload, which makes it a reload detector as well: see "Running stage A".
 - The service is `ErrorControl = 0`: a failed start never stops the boot.
 
 ## The DDI table gate (M7 stage A, ADR 0008)
@@ -83,23 +91,106 @@ adapter is the only one in the machine and nothing can render on it. So it is bu
   meeting its exit criterion and not;
 - no failure return from the DDIs whose failure is a bugcheck;
 - every new DDI logs its first calls, because *which* DDIs dxgkrnl calls on an adapter nobody can render on, and
-  in which order, is the evidence stage A is run for.
+  in which order, is the evidence stage A is run for. Counting goes on after the logging stops: each DDI keeps a
+  call count and the log line its first call landed on, `QueryAdapterInfo` keeps every information type it was
+  asked for and `BuildPagingBuffer` every operation, and presents, flips, VSync ticks and VSync reports are
+  counted separately. `bc250kmd_cli log summary` writes all of it into the log ring on demand, and the stop does
+  it by itself. `DxgkDdiResetFromTimeout` and `DxgkDdiRestartFromTimeout` are the only DDIs that log **every**
+  call: a TDR changes what the whole run means.
 
 ### Running stage A
 
-Open `EnableMmio`, `EnableVram` and `EnableFullWddm`, so that the memory segment reported to VidMm is the real
-carve-out and not an empty list. With `EnableVram` closed the driver declares zero segments and says so in the
-log; that is a second data point, not the main one.
+Everything below is under `HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`, all `REG_DWORD`, and every
+install writes every gate back to 0.
 
-Stage A is run **twice**, and the difference is the `UserModeDriverName` block in `bc250kmd.inf`, which ships
-commented out:
+**1. The gates.** Open `EnableMmio`, `EnableVram` and `EnableFullWddm`, so that the memory segment reported to
+VidMm is the real carve-out and not an empty list. With `EnableVram` closed the driver declares zero segments and
+says so in the log; that is a second data point, not the main one. `EnableGart`, `EnablePsp`, `EnableGfx` and
+`EnableIh` stay closed: stage A submits nothing and starts no engine.
 
-1. **without it** - the adapter has no user-mode driver name at all, so Direct3D cannot even load one;
-2. **with it**, and `bc250umd.dll` from `driver/umd-stub` installed - the DLL loads and every `OpenAdapter` entry
-   point returns `E_NOTIMPL`. Each one writes a line through `OutputDebugString` first, so which entry point the
-   runtime asks for, and in which order, is visible to any debug-output viewer without the DLL keeping state.
+```powershell
+$p = 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
+Set-ItemProperty $p EnableMmio 1; Set-ItemProperty $p EnableVram 1; Set-ItemProperty $p EnableFullWddm 1
+```
 
-Those are two different failures and the runtime may not treat them alike.
+**2. The reload, and why it is not optional.** `EnableFullWddm` is read in `DriverEntry` (`entry.c:80`), not at
+device start, so changing it does nothing until `DriverEntry` runs again. A device disable and enable in Device
+Manager (`pnpdevprop`/`pnputil`, or `Disable-PnpDevice`/`Enable-PnpDevice` over SSH) tears the device down through
+`DxgkDdiRemoveDevice` and, when it was the last device the driver object had, Windows unloads the image and calls
+`DxgkDdiUnload` (`Bc250Unload`, `pnp.c:254`). Whether that really happens on this machine is **not** something the
+code can promise - it is the PnP manager's decision, and a driver whose image stays referenced is enabled again
+without a new `DriverEntry`.
+
+So do not assume it: the log ring answers it by itself. The ring is a static array in the driver image, so an
+unload wipes it and the sequence number starts at 0 again.
+
+```powershell
+bc250kmd_cli log 0 | Select-Object -First 3      # note the highest sequence number and the gate line
+Disable-PnpDevice -InstanceId <id> -Confirm:$false; Enable-PnpDevice -InstanceId <id> -Confirm:$false
+bc250kmd_cli log 0 | Select-Object -First 3
+```
+
+If the second `log` starts at sequence 0 with a fresh `gate: EnableFullWddm 1` line, the driver unloaded and
+re-read the gate: the full table is live. If the sequence carries on counting from where it was, the image never
+went away, the gate was never re-read, and the only way in is a **reboot** (`shutdown /r /t 0`).
+
+**3. Reading the log.** Read it **before** closing the gate again, for the same reason: closing the gate needs
+another reload, and the reload takes the ring with it.
+
+```powershell
+bc250kmd_cli log summary > stage-a.txt      # counters into the ring first, then the whole ring
+```
+
+The output is `sequence seconds.milliseconds text`. The header line says how many lines exist, how many the
+wrapping tail overwrote and how many were dropped because a caller was above `DISPATCH_LEVEL`, and whether the
+full table is live at all (`table FULL WDDM`). The first 256 lines of a load are never overwritten, so the
+start-up order survives however long the run was; a gap between sequence 255 and the next line is the wrap, and
+`lost` counts it. Ask for `log summary` **once, at the end**: each call appends a block of about 40 lines, and
+in a run long enough to wrap, every such block evicts as many lines of the run's middle from the tail. Plain
+`bc250kmd_cli log` reads without writing and can be run as often as wanted.
+
+**4. If the desktop freezes but SSH still works.** Close the gate and reload:
+
+```powershell
+Set-ItemProperty $p EnableFullWddm 0
+bc250kmd_cli log summary > stage-a-frozen.txt        # the evidence, before the reload destroys it
+Disable-PnpDevice -InstanceId <id> -Confirm:$false; Enable-PnpDevice -InstanceId <id> -Confirm:$false
+```
+
+If SSH does not answer either, the way back is the power button, and the start budget below takes over.
+
+**5. What the start budget does in full WDDM mode.** `GuardCheckAndCountStart()` is called from
+`Bc250StartDevice` (`pnp.c:41`), and `WddmBuildTable`, which `DriverEntry` calls when the gate is open, puts
+that same function into the full table (`Data->DxgkDdiStartDevice = Bc250StartDevice`), so the budget covers
+both tables with one counter. Every start increments
+`UnconfirmedStarts`; `bc250kmd_cli confirm` clears it once the desktop is up. At
+`BC250_MAX_UNCONFIRMED_STARTS` (2, `bc250kmd.h:52`) the driver refuses to start and Windows falls back to Basic
+Display - so a full WDDM table that kills the desktop costs two boots, not an endless loop, and the third boot
+comes up on Basic Display with SSH and the registry reachable. The confirmation is manual here: `bc250mon`
+confirms a start by itself only at stage 61 (the first display-only present), which a full WDDM start may never
+reach.
+
+**6. The two runs.** Stage A is run **twice**, and the difference is the `UserModeDriverName` block in
+`bc250kmd.inf`, which ships commented out:
+
+1. **without it** (`package`) - the adapter has no user-mode driver name at all, so Direct3D cannot even load one;
+2. **with it** (`package-umd`), and `bc250umd.dll` from `driver/umd-stub` installed - the DLL loads and every
+   `OpenAdapter` entry point returns `E_NOTIMPL`. Each one writes a line through `OutputDebugString` first, so
+   which entry point the runtime asks for, and in which order, is visible to any debug-output viewer without the
+   DLL keeping state.
+
+Those are two different failures and the runtime may not treat them alike. Both packages come out of one
+`build.ps1 -UmdStub` run (below) carrying the **same** `bc250kmd.sys`, which the build proves by printing both
+copies' SHA256: the second run must differ from the first in the INF and the DLL only, or it measures two things
+at once. The run 2 INF is generated from the repository's by the markers documented inside `bc250kmd.inf`
+(`;@UMD` enables a line, `;@PLAIN-ONLY` disables one) and the build throws if they are missing, because a run 2
+package quietly missing that block is byte for byte the run 1 experiment wearing the wrong name.
+
+`UserModeDriverNameWow` is deliberately **not** written. Only a 64-bit stub is built, so a Wow value naming
+`bc250umd.dll` would point 32-bit processes at a file that is not in SysWOW64, and "the runtime never asked for a
+32-bit driver" and "it asked and the load failed" would look identical - which is the one distinction run 2
+exists to make. Everything that renders in run 2 (DWM on this x64 build, and the Direct3D 11 attempt from the SSH
+session) is 64-bit. The INF says what it would take to add it.
 
 ## Build
 
@@ -107,6 +198,17 @@ Those are two different failures and the runtime may not treat them alike.
 pwsh driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd
 pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
 ```
+
+For stage A's second run, build the stub first and hand it to the driver build, which then writes both packages:
+
+```powershell
+pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
+pwsh driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd `
+                          -UmdStub P:\BC-250\scratch\build\bc250umd
+```
+
+`<Out>\package` is run 1 and `<Out>\package-umd` is run 2; both are catalogued and test-signed, and the run 2
+catalog covers `bc250umd.dll` as well. Without `-UmdStub` nothing about the plain package changes.
 
 ## What M3 has to show on hardware (acceptance, mirrors E05)
 

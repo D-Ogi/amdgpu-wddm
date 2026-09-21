@@ -4,8 +4,9 @@
 #
 #   pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
 #
-# The DLL is not signed and not packaged: it is copied next to the driver by hand for the second stage A run, and
-# the INF's UserModeDriverName lines that name it are commented out until then (driver\kmd\README.md).
+# The DLL is not signed here and not packaged here. It is packaged by the driver build, which takes this -Out as
+# its -UmdStub and writes a second package with the INF's UserModeDriverName block live and this DLL in the
+# catalog; without that switch the block stays commented out (driver\kmd\README.md, "The two runs").
 
 param(
     [Parameter(Mandatory)][string]$Kits,

@@ -94,6 +94,18 @@ static const char* const g_DdiNames[] = {
 };
 C_ASSERT(RTL_NUMBER_OF(g_DdiNames) == WddmDdiCount);
 
+// A counter is only half the evidence: "QueryAdapterInfo was called 31 times" does not say which 31 things
+// dxgkrnl wanted. These tables hold the distinct argument values a DDI was called with - QueryAdapterInfo's
+// information type, BuildPagingBuffer's operation - with the count and the log sequence number of the first
+// call for each. 24 slots is more than either enum has values that stage A can meet.
+#define BC250_WDDM_KINDS 24
+
+typedef struct _BC250_WDDM_KIND {
+    volatile LONG Value;                // the argument plus one, so that 0 means "this slot is free"
+    volatile LONG Count;
+    volatile LONG FirstSequence;
+} BC250_WDDM_KIND;
+
 // What stage A knows about an allocation. This is our own private data, not the user-mode contract of ADR 0008
 // point 8 (driver/contract/): stage A has no user-mode driver to agree with, and the blob dies with this stage.
 #define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
@@ -128,6 +140,15 @@ typedef struct _BC250_WDDM_OBJECT {
 typedef struct _BC250_WDDM {
     BC250_DEVICE* Device;
     volatile LONG Calls[WddmDdiCount];
+    volatile LONG FirstSequence[WddmDdiCount];      // the log sequence number of each DDI's first call
+
+    // What dxgkrnl asked for, not only how often. Both are written lock-free from paths that may run at
+    // DISPATCH_LEVEL; WddmSummary prints them at the stop or on demand.
+    BC250_WDDM_KIND AdapterInfo[BC250_WDDM_KINDS];  // DXGKARG_QUERYADAPTERINFO.Type
+    BC250_WDDM_KIND PagingOps[BC250_WDDM_KINDS];    // DXGK_BUILDPAGINGBUFFER_OPERATION
+    volatile LONG AdapterInfoOverflow;              // distinct values that found no free slot
+    volatile LONG PagingOpsOverflow;
+    volatile LONG ReportFailures;                   // DxgkCbSynchronizeExecution refusals in WddmReport
 
     // Everything that can add work - an object, a timer, a DPC - is decided and done inside this lock, and
     // Stopping is what makes the stop final: it is set first, under the lock, so that a timer or a DPC cannot
@@ -161,12 +182,15 @@ typedef struct _BC250_WDDM {
     BOOLEAN VSyncArmed;                 // the timer is running (a source is visible)
     BOOLEAN VSyncEnabled;               // ControlInterrupt turned CRTC_VSYNC on
     D3DDDI_VIDEO_PRESENT_TARGET_ID VSyncTargetId;
-    volatile LONG VSyncTicks;
+    volatile LONG VSyncTicks;           // timer ticks, whether or not anybody was listening
+    volatile LONG VSyncReports;         // of those, the ones reported to dxgkrnl as DXGK_INTERRUPT_CRTC_VSYNC
     LARGE_INTEGER VSyncLast;            // the performance counter at the last tick, for GetScanLine's phase
     LARGE_INTEGER VSyncFrequency;
 
     PHYSICAL_ADDRESS PrimaryAddress;    // what SetVidPnSourceAddress was last asked to scan out
     UINT PrimarySegment;
+    volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
+    volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
 } BC250_WDDM;
 
 // One shared fence pair is only correct while there is one node. GpuEngineTopology below reports this same
@@ -199,12 +223,44 @@ BOOLEAN WddmGateOpen(void)
 
 // ---- the log ---------------------------------------------------------------------------------------------------
 
-// TRUE for the first BC250_WDDM_LOG_CALLS calls of this DDI, so that the caller may log. Safe at any IRQL up to
-// the one the DDI runs at; the counter keeps rising after that, and the stop log reports the totals.
+// TRUE for the first BC250_WDDM_LOG_CALLS calls of this DDI, so that the caller may log. The count itself is
+// interlocked and is taken at any IRQL; only the permission to log is withheld above DISPATCH_LEVEL, because the
+// ring behind GuardLog needs a spin lock. One DDI in this table is annotated for that height
+// (DxgkDdiSetVidPnSourceAddress, _IRQL_requires_max_(PROFILE_LEVEL - 1)), and it is counted there like any other.
 static BOOLEAN WddmFirstCalls(_In_opt_ BC250_WDDM* Wddm, BC250_WDDM_DDI Ddi)
 {
+    LONG calls;
+
     if (Wddm == NULL) return FALSE;
-    return InterlockedIncrement(&Wddm->Calls[Ddi]) <= BC250_WDDM_LOG_CALLS;
+    calls = InterlockedIncrement(&Wddm->Calls[Ddi]);
+    if (calls == 1) InterlockedExchange(&Wddm->FirstSequence[Ddi], (LONG)GuardLogSequence());
+    if (KeGetCurrentIrql() > DISPATCH_LEVEL) return FALSE;
+    return calls <= BC250_WDDM_LOG_CALLS;
+}
+
+// Count one argument value in a kind table. Lock-free, because it is called from DDIs that may run at
+// DISPATCH_LEVEL and the summary that reads it never runs concurrently with a stop. A slot is claimed with one
+// compare-exchange and never released; a value that finds no free slot is counted in the overflow instead of
+// being dropped silently. Both callers pass a small enum, so the plus-one that marks a slot as taken cannot wrap.
+static void WddmNoteKind(_Inout_updates_(BC250_WDDM_KINDS) BC250_WDDM_KIND* Table, ULONG Value,
+                         _Inout_ volatile LONG* Overflow)
+{
+    const LONG stored = (LONG)(Value + 1);
+    ULONG i;
+
+    for (i = 0; i < BC250_WDDM_KINDS; i++)
+    {
+        LONG seen = Table[i].Value;
+        if (seen == 0) seen = InterlockedCompareExchange(&Table[i].Value, stored, 0);
+        if (seen == 0)
+        {
+            InterlockedExchange(&Table[i].FirstSequence, (LONG)GuardLogSequence());
+            InterlockedIncrement(&Table[i].Count);
+            return;
+        }
+        if (seen == stored) { InterlockedIncrement(&Table[i].Count); return; }
+    }
+    InterlockedIncrement(Overflow);
 }
 
 static BC250_WDDM* WddmOf(_In_ const HANDLE hAdapter)
@@ -311,8 +367,15 @@ static void WddmReport(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARGCB_NOTIFY
     if (!NT_SUCCESS(status))
     {
         // Nothing can be done from here: the DDIs this is called from must not fail. It is logged so that a
-        // scheduler timeout in stage A has an explanation in the trail.
-        GuardLog("wddm: synchronize for interrupt type %u failed 0x%08X", (ULONG)Data->InterruptType, status);
+        // scheduler timeout in stage A has an explanation in the trail - the first few times and then every
+        // 1024th, because the VSync DPC gets here 62 times a second and a failure that persists would push the
+        // middle of the run out of the ring within seconds. The summary carries the full count.
+        BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+        LONG failures = (wddm != NULL) ? InterlockedIncrement(&wddm->ReportFailures) : 1;
+
+        if (failures <= 8 || (failures & 0x3FF) == 0)
+            GuardLog("wddm: synchronize for interrupt type %u failed 0x%08X (failure %ld)",
+                     (ULONG)Data->InterruptType, status, failures);
         return;
     }
     Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
@@ -424,6 +487,7 @@ static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_
     data.CrtcVsync.VidPnTargetId = wddm->VSyncTargetId;
     data.CrtcVsync.PhysicalAddress = wddm->PrimaryAddress;      // the address SetVidPnSourceAddress last asked for
     data.CrtcVsync.PhysicalAdapterMask = 0;     // not in a link, so Flags.ValidPhysicalAdapterMask stays 0 too
+    InterlockedIncrement(&wddm->VSyncReports);
     WddmReport(device, &data);
 }
 
@@ -473,6 +537,89 @@ void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
     WddmVSyncArm(Device, Visible);
 }
 
+// ---- the summary -------------------------------------------------------------------------------------------------
+
+// Everything stage A counted, written into the log ring as ordinary lines so that bc250kmd_cli log carries it off
+// the headless machine in one go. Called at the stop, and on demand through BC250_ESCAPE_LOG_SUMMARY - a run that
+// ends in a frozen desktop never reaches a stop, and the counters are exactly what the experiment is run for.
+//
+// Read without the lock: every counter here is interlocked or write-once, the numbers are evidence rather than
+// control flow, and a summary that took the lock could not be asked for from a DPC-level path later.
+static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
+{
+    ULONG i;
+
+    GuardLog("wddm summary: ---- DDI calls: name, count, first log line ----");
+    for (i = 0; i < WddmDdiCount; i++)
+        if (Wddm->Calls[i] != 0)
+            GuardLog("wddm summary: %-30s %6ld  first at %ld", g_DdiNames[i], Wddm->Calls[i],
+                     Wddm->FirstSequence[i]);
+
+    GuardLog("wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----");
+    for (i = 0; i < BC250_WDDM_KINDS; i++)
+        if (Wddm->AdapterInfo[i].Value != 0)
+            GuardLog("wddm summary: adapter info type %3ld  %6ld  first at %ld", Wddm->AdapterInfo[i].Value - 1,
+                     Wddm->AdapterInfo[i].Count, Wddm->AdapterInfo[i].FirstSequence);
+    if (Wddm->AdapterInfoOverflow != 0)
+        GuardLog("wddm summary: %ld adapter info calls with types past the %u slots", Wddm->AdapterInfoOverflow,
+                 (ULONG)BC250_WDDM_KINDS);
+
+    GuardLog("wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----");
+    for (i = 0; i < BC250_WDDM_KINDS; i++)
+        if (Wddm->PagingOps[i].Value != 0)
+            GuardLog("wddm summary: paging operation %3ld  %6ld  first at %ld", Wddm->PagingOps[i].Value - 1,
+                     Wddm->PagingOps[i].Count, Wddm->PagingOps[i].FirstSequence);
+    if (Wddm->PagingOpsOverflow != 0)
+        GuardLog("wddm summary: %ld paging buffer calls with operations past the %u slots", Wddm->PagingOpsOverflow,
+                 (ULONG)BC250_WDDM_KINDS);
+
+    // Short on purpose: nine numbers have to fit into BC250_LOG_TEXT with room to grow.
+    GuardLog("wddm summary: objects created/destroyed: dev %ld/%ld ctx %ld/%ld proc %ld/%ld alloc %ld/%ld, %ld alive",
+             Wddm->Calls[WddmDdiCreateDevice], Wddm->Calls[WddmDdiDestroyDevice],
+             Wddm->Calls[WddmDdiCreateContext], Wddm->Calls[WddmDdiDestroyContext],
+             Wddm->Calls[WddmDdiCreateProcess], Wddm->Calls[WddmDdiDestroyProcess],
+             Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation], Wddm->ObjectCount);
+    GuardLog("wddm summary: submissions %ld physical + %ld virtual, %ld preemptions, last completed fence %ld",
+             Wddm->Calls[WddmDdiSubmitCommand], Wddm->Calls[WddmDdiSubmitCommandVirtual],
+             Wddm->Calls[WddmDdiPreemptCommand], Wddm->LastCompletedFence);
+    GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
+             Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
+             Wddm->FlipsAboveDispatch);
+    GuardLog("wddm summary: vsync %s, %ld ticks, %ld reported to dxgkrnl",
+             Wddm->VSyncEnabled ? "enabled" : "not enabled by ControlInterrupt", Wddm->VSyncTicks,
+             Wddm->VSyncReports);
+    if (Wddm->ReportFailures != 0)
+        GuardLog("wddm summary: *** %ld reports refused by DxgkCbSynchronizeExecution ***", Wddm->ReportFailures);
+
+    // The one result that changes what stage A means: the scheduler declaring this adapter hung. Loud, and
+    // repeated here even though every call was logged where it happened, because the summary may be all anybody
+    // reads.
+    if (Wddm->Calls[WddmDdiResetFromTimeout] != 0 || Wddm->Calls[WddmDdiRestartFromTimeout] != 0)
+        GuardLog("wddm summary: *** TDR: ResetFromTimeout %ld, RestartFromTimeout %ld - the scheduler timed this "
+                 "adapter out ***", Wddm->Calls[WddmDdiResetFromTimeout], Wddm->Calls[WddmDdiRestartFromTimeout]);
+    else
+        GuardLog("wddm summary: no TDR (ResetFromTimeout and RestartFromTimeout were never called)");
+}
+
+// Reached from DxgkDdiEscape, and holds the pointer across some 40 GuardLog calls while WddmStop frees the block.
+// No lock covers that, and none inside the block could (it would be freed with it). What covers it is dxgkrnl:
+// DxgkDdiStopDevice is a Level Three call - "only a single thread (the calling thread) is within the kernel-mode
+// driver", the one documented exception being QueryAdapterInfo against SetPowerState and QueryChildRelations - so
+// no escape runs while WddmStop does (LEARN display/threading-and-synchronization-third-level). The escape's own
+// side of it is enforced, not assumed: display.c refuses BC250_ESCAPE_LOG_SUMMARY unless the caller asked for
+// HardwareAccess without NoAdapterSynchronization, which makes this a Level Two call (-second-level).
+void WddmSummary(_In_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+
+    if (wddm == NULL)
+    {
+        GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
+        return;
+    }
+    WddmSummaryOf(wddm);
+}
+
 // ---- start, stop, DPC ------------------------------------------------------------------------------------------
 
 void WddmStart(_Inout_ BC250_DEVICE* Device)
@@ -508,7 +655,7 @@ void WddmStart(_Inout_ BC250_DEVICE* Device)
 void WddmStop(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
-    ULONG i, freed = 0;
+    ULONG freed = 0;
     LIST_ENTRY* entry;
     KIRQL irql;
 
@@ -523,7 +670,8 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     //  3. Only then drop Device->Wddm and read or free anything.
     //
     // What this does not cover, and cannot: a DDI that read Device->Wddm before step 3 and then touches the
-    // state after it is freed. That one rests on dxgkrnl's own guarantee that no DDI arrives during StopDevice.
+    // state after it is freed. That one rests on dxgkrnl's own guarantee that no DDI arrives during StopDevice
+    // (Level Three, see WddmSummary).
     KeAcquireSpinLock(&wddm->Lock, &irql);
     wddm->Stopping = TRUE;
     if (wddm->VSyncArmed) { wddm->VSyncArmed = FALSE; KeCancelTimer(&wddm->VSyncTimer); }
@@ -535,9 +683,9 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     KeFlushQueuedDpcs();
     Device->Wddm = NULL;                // from here no DDI and no DPC of ours can find the state
 
-    // The call counts are the point of stage A: log them all, once, at the stop.
-    for (i = 0; i < WddmDdiCount; i++)
-        if (wddm->Calls[i] != 0) GuardLog("wddm: %s called %ld times", g_DdiNames[i], wddm->Calls[i]);
+    // The counters are the point of stage A: all of them, once, at the stop. The state is ours alone now, so the
+    // summary cannot race anything.
+    WddmSummaryOf(wddm);
 
     // Whatever dxgkrnl did not destroy is ours to free: a process or a device left behind would otherwise live
     // until the next boot. No lock is needed now, nothing else can reach the list.
@@ -782,6 +930,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         status = STATUS_NOT_SUPPORTED;
         break;
     }
+    // Which types dxgkrnl asks a full miniport for, and how often, is half of what stage A is run for: the
+    // counter table keeps all of them, the log below only the first few calls.
+    if (wddm != NULL) WddmNoteKind(wddm->AdapterInfo, (ULONG)QueryAdapterInfo->Type, &wddm->AdapterInfoOverflow);
     if (WddmFirstCalls(wddm, WddmDdiQueryAdapterInfo))
         GuardLog("wddm: QueryAdapterInfo type %u in %u out %u -> 0x%08X", (ULONG)QueryAdapterInfo->Type,
                  QueryAdapterInfo->InputDataSize, QueryAdapterInfo->OutputDataSize, status);
@@ -1121,7 +1272,12 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGK
     // Only three return values are legal here; anything else, STATUS_NOT_IMPLEMENTED included, is bugcheck 0x119
     // with parameter 1 = 0x5. Stage A builds no paging buffer for any operation, known or not: leaving pDmaBuffer
     // where it was is how "no byte was written" is expressed, and that is a legal answer to every operation.
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiBuildPagingBuffer))
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+
+    // Which operations VidMm asks for is the other half of stage A's evidence, and it decides what stage B has to
+    // build first. All of them are counted; only the first few are logged.
+    if (wddm != NULL) WddmNoteKind(wddm->PagingOps, (ULONG)pBuildPagingBuffer->Operation, &wddm->PagingOpsOverflow);
+    if (WddmFirstCalls(wddm, WddmDdiBuildPagingBuffer))
         GuardLog("wddm: BuildPagingBuffer operation %u, %u bytes free, pass offset %u",
                  (ULONG)pBuildPagingBuffer->Operation, pBuildPagingBuffer->DmaSize, pBuildPagingBuffer->MultipassOffset);
     return STATUS_SUCCESS;
@@ -1182,14 +1338,20 @@ static NTSTATUS Bc250WddmResetFromTimeout(_In_ const HANDLE hAdapter)
     // A failure return bugchecks. Stage A has nothing to reset: it never started an engine, and its hard rule is
     // that no DDI of this file touches a register. Halting the CP the way the undo path does (ADR 0008 point 7,
     // facts M44) belongs to the stage that first submits something.
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetFromTimeout)) GuardLog("wddm: ResetFromTimeout (nothing was running)");
+    //
+    // These two are the only DDIs in the file that log on every call rather than the first few: a TDR means the
+    // scheduler has decided this adapter is hung, which changes what the whole run means, and a run where it
+    // happens a hundred times is a different result from one where it happens once.
+    (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetFromTimeout);
+    GuardLog("wddm: *** ResetFromTimeout: the scheduler timed this adapter out (nothing was running) ***");
     return STATUS_SUCCESS;
 }
 
 static DXGKDDI_RESTARTFROMTIMEOUT Bc250WddmRestartFromTimeout;
 static NTSTATUS Bc250WddmRestartFromTimeout(_In_ const HANDLE hAdapter)
 {
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiRestartFromTimeout)) GuardLog("wddm: RestartFromTimeout");
+    (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiRestartFromTimeout);
+    GuardLog("wddm: *** RestartFromTimeout: the adapter is being restarted after a timeout ***");
     return STATUS_SUCCESS;       // "can simply return STATUS_SUCCESS immediately"
 }
 
@@ -1253,6 +1415,15 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm = WddmOf(hAdapter);
 
+    // This is the one DDI in the table whose ceiling is above DISPATCH_LEVEL: d3dkmddi.h annotates it
+    // _IRQL_requires_min_(PASSIVE_LEVEL) / _IRQL_requires_max_(PROFILE_LEVEL - 1), because a flip may be programmed
+    // from the VSync interrupt itself. Everything below is therefore either interlocked or refused up there:
+    // GuardLog takes a spin lock for its ring, and WddmVSyncArm takes ours and calls KeSetTimerEx, and neither is
+    // legal at DIRQL. The arm being skipped costs nothing in practice - SetVidPnSourceVisibility runs at
+    // PASSIVE_LEVEL and has armed the timer long before any flip arrives - and the count below says how often it
+    // happened, so the assumption is measured rather than hoped for.
+    const BOOLEAN high = (KeGetCurrentIrql() > DISPATCH_LEVEL);
+
     if (pSetVidPnSourceAddress->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
     // There is exactly one scan-out address on this adapter and the firmware programmed it; changing it needs the
     // display core, which this driver does not touch (ADR 0006 point 2). The request is recorded, the firmware's
@@ -1260,14 +1431,25 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
     // next CRTC_VSYNC report carries, which is how dxgkrnl learns that this flip has retired.
     if (wddm != NULL)
     {
-        wddm->PrimaryAddress = pSetVidPnSourceAddress->PrimaryAddress;
+        // A call that names the address that is already being scanned out is not a flip; DWM redrawing into one
+        // buffer looks exactly like that. Counting only the changes is what says whether anything is double
+        // buffered on an adapter with no user-mode driver.
+        //
+        // No lock, and none can be taken here (this DDI may run above DISPATCH_LEVEL): the hand-off to the VSync
+        // report is one interlocked exchange, so the reader sees the old address or the new one and never half
+        // of each, and the value it replaced says whether this was a flip. The segment stored next to it is read
+        // by nothing but a debugger.
+        if (InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, pSetVidPnSourceAddress->PrimaryAddress.QuadPart) !=
+            pSetVidPnSourceAddress->PrimaryAddress.QuadPart)
+            InterlockedIncrement(&wddm->Flips);
         wddm->PrimarySegment = pSetVidPnSourceAddress->PrimarySegment;
+        if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
     }
-    if (WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress))
+    if (WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress))     // FALSE above DISPATCH_LEVEL, count taken all the same
         GuardLog("wddm: SetVidPnSourceAddress segment %u address 0x%llX flags 0x%08X (firmware framebuffer 0x%llX)",
                  pSetVidPnSourceAddress->PrimarySegment, (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,
                  pSetVidPnSourceAddress->Flags.Value, (ULONGLONG)device->Post.PhysicAddress.QuadPart);
-    WddmVSyncArm(device, TRUE);         // a flip has been queued: something must retire it
+    if (!high) WddmVSyncArm(device, TRUE);      // a flip has been queued: something must retire it
     return STATUS_SUCCESS;
 }
 

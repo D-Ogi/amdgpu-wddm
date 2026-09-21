@@ -739,6 +739,75 @@ static int Confirm(void)
     return 0;
 }
 
+// ---- log: the driver's own log ring (BC250_ESCAPE_GET_LOG) -------------------------------------------------------
+//
+// The lab machine is headless over SSH: no kernel debugger, no DebugView, so the debug print stream GuardLog
+// writes to reaches nobody. Since 0.7.1 every line also goes into a ring inside the driver image, and this pages
+// through it, 64 lines per escape, printing "sequence seconds.milliseconds text".
+//
+// Two things to know when reading it. The ring lives in the driver image, so it starts empty at every driver load
+// and dies with one: read it BEFORE closing a gate that needs a reload. And a sequence number that starts at 0
+// again is itself the proof that the driver really unloaded.
+//
+// "log summary" asks the WDDM table to write its call counters into the ring first, which is what stage A is run
+// for; with the gate closed that is one line saying the table is not running.
+
+static int Log(const WCHAR *fromText, int summary)
+{
+    static BC250_ESCAPE_LOG log;        // 10 KB: a static, not a frame this tool has no reason to grow
+    unsigned long from = 0, printed = 0;
+    int first = 1;
+    NTSTATUS status;
+    WCHAR *end;
+
+    if (fromText != NULL) {
+        from = wcstoul(fromText, &end, 10);
+        // wcstoul takes "-1" and returns 0xFFFFFFFF, which is BC250_LOG_FROM_SUMMARY: a sentinel is not a number to type.
+        if (*end || fromText[0] == L'-' || from == BC250_LOG_FROM_SUMMARY) {
+            fprintf(stderr, "log [from], where from is a decimal sequence number, not %ls\n", fromText);
+            return 2;
+        }
+    }
+    for (;;) {
+        memset(&log, 0, sizeof(log));
+        log.Magic = BC250_ESCAPE_MAGIC;
+        log.Command = (summary && first) ? BC250_ESCAPE_LOG_SUMMARY : BC250_ESCAPE_GET_LOG;
+        log.From = from;
+        if (SendEscape(BC250_DEFAULT_HWID, &log, sizeof(log), &status)) return 1;
+        if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+        if (log.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+        if (log.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
+            printf("refused: this driver build has no log command (0.7.0 or older)\n");
+            return 3;
+        }
+        if (log.Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("refused: driver status %lu, NTSTATUS 0x%08lX %s\n", log.Status, log.NtStatus,
+                   StatusName((NTSTATUS)log.NtStatus));
+            return 3;
+        }
+        if (first)
+            printf("log          %lu lines since this driver load, %lu lost to the wrap, %lu dropped above "
+                   "DISPATCH_LEVEL; ring %lu lines of which the first %lu are kept; table %s\n",
+                   log.Total, log.Lost, log.Above, log.RingLines, log.HeadLines,
+                   (log.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM (the gate was open at DriverEntry)" :
+                                                               "display-only");
+        first = 0;
+        for (unsigned long i = 0; i < log.Returned && i < BC250_LOG_MAX_LINES; i++) {
+            log.Lines[i].Text[BC250_LOG_TEXT - 1] = 0;      // the driver terminates it; printing does not rely on that
+            printf("%6lu %6lu.%03lu %s\n", log.Lines[i].Sequence, log.Lines[i].Milliseconds / 1000,
+                   log.Lines[i].Milliseconds % 1000, log.Lines[i].Text);
+            printed++;
+        }
+        if (log.Returned == 0 || log.Next <= from) break;   // the end, or a driver that is not moving on
+        from = log.Next;
+        // A driver that keeps logging while we read would keep us here: the ring is 1024 lines, so anything past
+        // a few times that is a live stream rather than a trail, and whoever wants more can ask again.
+        if (printed > 4 * log.RingLines) { printf("             stopped at %lu lines; ask again from %lu\n", printed, from); break; }
+    }
+    printf("             %lu lines printed\n", printed);
+    return 0;
+}
+
 // ---- ---------------------------------------------------------------------------------------------------------
 
 int wmain(int argc, wchar_t **argv)
@@ -751,6 +820,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli gart plan | enable | restore\n"
                         "       bc250kmd_cli psp plan | load | unload\n"
                         "       bc250kmd_cli gfx plan <stage> | run <stage> | fini | state\n"
+                        "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -769,6 +839,10 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
+    if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
+        if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
+        if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);
+    }
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }

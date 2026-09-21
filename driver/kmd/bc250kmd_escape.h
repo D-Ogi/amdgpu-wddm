@@ -16,7 +16,9 @@
 #define BC250_ESCAPE_RUN_GFX 9u             // BC250_ESCAPE_GFX in: Op, LastStage; out: stages, register and doorbell writes
 #define BC250_ESCAPE_RUN_IH 10u             // BC250_ESCAPE_IH in: Op; out: interrupt counts, vectors seen, register writes
 #define BC250_ESCAPE_RUN_FENCE 11u          // BC250_ESCAPE_FENCE in: Ring, Count, Interrupt; out: fences completed, timing
-#define BC250_KMD_VERSION 0x00070000u       // milestone 7 work, revision 0
+#define BC250_ESCAPE_GET_LOG 12u            // BC250_ESCAPE_LOG in: From; out: the driver's log ring from that sequence on
+#define BC250_ESCAPE_LOG_SUMMARY 13u        // BC250_ESCAPE_LOG: wddm.c writes its counter tables into the ring, then as GET_LOG
+#define BC250_KMD_VERSION 0x00070001u       // milestone 7 work, revision 1
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -31,6 +33,7 @@
 #define BC250_ESCAPE_FLAG_PSP 32u           // the EnablePsp gate was open at start
 #define BC250_ESCAPE_FLAG_GFX 64u           // the EnableGfx gate was open at start
 #define BC250_ESCAPE_FLAG_IH 128u           // the EnableIh gate was open at start
+#define BC250_ESCAPE_FLAG_FULL_WDDM 256u    // the EnableFullWddm gate was open in DriverEntry: the full table is live
 
 // The two independent ways to the same VRAM byte (vram.c).
 #define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
@@ -269,7 +272,57 @@ typedef struct _BC250_ESCAPE_FENCE {
     unsigned long DispatchBadOffset;        // out, DISPATCH: byte offset of the first wrong dword of the destination
 } BC250_ESCAPE_FENCE;
 
+// ---- BC250_ESCAPE_GET_LOG (guard.c): the driver's own log ring -------------------------------------------------------------
+//
+// The lab machine is headless over SSH: it has no kernel debugger and no DebugView, so the debug print stream
+// GuardLog writes to reaches nobody. Since 0.7.1 every line also goes into a ring inside the driver image, and
+// this escape reads it back by sequence number. `bc250kmd_cli log` pages through it.
+//
+// The ring keeps the first BC250_LOG_HEAD lines of a driver load for as long as the driver stays loaded - the
+// order of the start-up is the evidence an experiment is run for - and wraps everything after them. Lines lost
+// that way are counted, so a gap is always visible rather than silent.
+#define BC250_LOG_TEXT 160                  // bytes of text per line, the terminator included
+#define BC250_LOG_HEAD_LINES 256            // never overwritten while the driver stays loaded
+#define BC250_LOG_RING_LINES 1024           // the whole ring: the head above plus a wrapping tail
+#define BC250_LOG_MAX_LINES 64              // lines one escape returns
+
+// As `From` with BC250_ESCAPE_LOG_SUMMARY: start at the first line this summary itself wrote, so that asking for
+// a summary does not reprint the whole run. The driver answers the real number in SummaryFrom either way.
+// bc250kmd_cli does not send it (its `log summary` prints the whole ring, which is what an evidence file wants);
+// it is here for a caller that polls.
+//
+// BC250_ESCAPE_LOG_SUMMARY is refused (REFUSED, STATUS_INVALID_DEVICE_REQUEST) unless D3DKMT_ESCAPE.Flags has
+// HardwareAccess set and NoAdapterSynchronization clear: the summary reads state that a device stop frees, and
+// that flag is what makes dxgkrnl serialize the two.
+#define BC250_LOG_FROM_SUMMARY 0xFFFFFFFFu
+
+typedef struct _BC250_LOG_LINE {
+    unsigned long Sequence;                 // 0 for the first line of this driver load
+    unsigned long Milliseconds;             // since GuardInit, i.e. since DriverEntry
+    char Text[BC250_LOG_TEXT];
+} BC250_LOG_LINE;
+
+typedef struct _BC250_ESCAPE_LOG {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_GET_LOG or BC250_ESCAPE_LOG_SUMMARY
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long From;                     // in: the first sequence number wanted
+    unsigned long Total;                    // out: lines logged since this driver load; sequence numbers run 0..Total-1
+    unsigned long Lost;                     // out: lines the wrapping tail has overwritten
+    unsigned long Above;                    // out: lines dropped because the caller was above DISPATCH_LEVEL
+    unsigned long Returned;                 // out: lines in Lines[]
+    unsigned long Next;                     // out: the sequence to ask for next; Returned 0 means the end
+    unsigned long HeadLines, RingLines;     // out: the shape of the ring, so the tool need not assume it
+    unsigned long SummaryFrom;              // out, LOG_SUMMARY only: the sequence its first line was given
+    BC250_LOG_LINE Lines[BC250_LOG_MAX_LINES];
+} BC250_ESCAPE_LOG;
+
 // The first escape struct with mixed 4 and 8 byte alignment (four bytes of padding before Last[]). The driver and the
 // CLI must agree on it; a packing option on either side makes this a build failure instead of garbage vectors.
 typedef char BC250_ESCAPE_IV_SIZE_CHECK[(sizeof(BC250_ESCAPE_IV) == 48) ? 1 : -1];
 typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2336) ? 1 : -1];
+typedef char BC250_LOG_LINE_SIZE_CHECK[(sizeof(BC250_LOG_LINE) == 168) ? 1 : -1];
+typedef char BC250_ESCAPE_LOG_SIZE_CHECK[(sizeof(BC250_ESCAPE_LOG) == 10812) ? 1 : -1];

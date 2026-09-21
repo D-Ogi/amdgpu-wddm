@@ -165,8 +165,16 @@ void GuardCleanup(void);
 void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);
 NTSTATUS GuardCheckAndCountStart(void);         // STATUS_SUCCESS, or a failure when the start budget is used up
-void GuardLog(_In_z_ const char* Format, ...);
+void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
+
+// The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only
+// the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.
+struct _BC250_LOG_LINE;
+ULONG GuardLogSequence(void);                                   // the sequence number the next line will get
+void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
+ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
+                   _Out_ ULONG* Next);
 
 // mmio.c
 NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device);
@@ -285,3 +293,5 @@ void WddmStart(_Inout_ BC250_DEVICE* Device);       // never fails the start, li
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
+void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
+                                                    // when the gate is closed, so the escape can call it either way
