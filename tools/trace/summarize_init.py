@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Turn the amdgpu register trace of experiment E03 into a readable, ordered init sequence.
+
+    python tools/trace/summarize_init.py [evidence dir] > docs/init-sequence-unitA.md
+
+Input: amdgpu-events.txt (trace events amdgpu_device_wreg / amdgpu_device_rreg) from
+evidence/linux/2026-09-21-E03-init-trace; names come from the vendored kernel headers through regcalc, this
+time including the index/data ports the sweep had to leave out (a trace may name them, a sweep must not read
+them). Output: phases of consecutive writes that go to
+the same register family, with time, count, and the first writes of each phase spelled out. Reads are only
+counted: what a driver has to *do* is in the writes; polling loops show up as read bursts.
+"""
+
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "regcalc"))
+sys.path.insert(0, str(ROOT / "tools" / "diagusb"))
+from regcalc import HDR_DIR, RegMap  # noqa: E402
+from gen_probes import SPEC  # noqa: E402  (ip, header, ...): which header describes which IP block
+DEFAULT = ROOT / "evidence" / "linux" / "2026-09-21-E03-init-trace"
+EVENT = re.compile(r"\s(\d+\.\d+): amdgpu_device_(wreg|rreg): 0x[0-9a-f]+, 0x([0-9a-f]+), 0x([0-9a-f]+)")
+SHOW = 6            # writes spelled out per phase
+MERGE_GAP = 3       # a phase survives this many foreign writes in a row
+CYCLE = 6           # longest repeating cycle of phases that is folded into one row
+
+
+def family(name):
+    """GC.CP_RB0_BASE -> GC.CP ; MMHUB.MMVM_CONTEXT0_CNTL -> MMHUB.MMVM ; unnamed -> block of 0x1000 bytes."""
+    ip, _, reg = name.partition(".")
+    token = re.sub(r"\d+$", "", reg.split("_")[0]) or reg.split("_")[0]     # DP_AUX0 / HUBP3: one family per kind
+    if ip == "DMU":
+        return "DMU (display core)"         # one chapter; its sub-blocks are counted in a table of their own
+    return token if ip.startswith("MP") else f"{ip}.{token}"     # MP0 and MP1 share one header
+
+
+# Display core: named here, never swept (tools/diagusb/gen_sweep.py does not know these headers).
+DISPLAY = [("DMU", "dcn_2_0_1_offset.h"), ("DMU", "dpcs_2_0_3_offset.h")]
+
+
+def register_names():
+    names = {}
+    for ip, header in [(ip, header) for ip, header, _ in SPEC] + DISPLAY:
+        rm = RegMap(ip=ip, reg_header=HDR_DIR / header)
+        for name, (mm, idx) in sorted(rm.regs.items()):
+            if idx in rm.segs:
+                names.setdefault((rm.segs[idx] + mm) * 4, f"{ip}.{name[2:] if name.startswith('mm') else name}")
+    return names
+
+
+def collapse(phases):
+    """AUX transactions, VM invalidations and per-queue loops repeat the same few families hundreds of times:
+    fold N repetitions of a cycle of up to CYCLE phases into one row."""
+    out, i = [], 0
+    while i < len(phases):
+        best = (1, 1)
+        for k in range(1, CYCLE + 1):
+            fams = [p[0] for p in phases[i:i + k]]
+            n = 1
+            while [p[0] for p in phases[i + n * k:i + (n + 1) * k]] == fams and len(fams) == k:
+                n += 1
+            if n >= 3 and n * k > best[0] * best[1]:
+                best = (k, n)
+        k, n = best
+        if n == 1:
+            out.append(phases[i])
+            i += 1
+            continue
+        group = phases[i:i + k * n]
+        label = f"{n} x ({' + '.join(p[0] for p in group[:k])})"
+        out.append([label, group[0][1], group[-1][2], [w for p in group for w in p[3]], sum(p[4] for p in group)])
+        i += k * n
+    return out
+
+
+def main():
+    evid = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT
+    names = register_names()
+
+    events = []
+    for line in (evid / "amdgpu-events.txt").read_text(encoding="utf-8", errors="replace").splitlines():
+        m = EVENT.search(line)
+        if m:
+            off = int(m.group(3), 16) * 4
+            events.append((float(m.group(1)), m.group(2) == "wreg", off, int(m.group(4), 16)))
+    t0 = events[0][0]
+
+    phases = []         # [family, t_start, t_end, writes[(name, off, value)], reads]
+    reads_pending = 0
+    for t, is_write, off, value in events:
+        name = names.get(off, f"?.UNNAMED_{off & ~0xFFF:#07x}")
+        if not is_write:
+            reads_pending += 1
+            continue
+        fam = family(name)
+        target = None
+        for p in reversed(phases[-MERGE_GAP:]):
+            if p[0] == fam:
+                target = p
+                break
+        if target is None or target is not phases[-1] and sum(len(q[3]) for q in phases[phases.index(target) + 1:]) > MERGE_GAP:
+            target = [fam, t, t, [], 0]
+            phases.append(target)
+        target[2] = t
+        target[3].append((name, off, value))
+        target[4] += reads_pending
+        reads_pending = 0
+
+    phases = collapse(collapse(phases))
+    writes = sum(len(p[3]) for p in phases)
+    print("# amdgpu init on unit A as a sequence of register writes")
+    print()
+    print("Generated by `tools/trace/summarize_init.py` from `evidence/linux/2026-09-21-E03-init-trace/`.")
+    print("Do not edit by hand. Times are seconds since the first traced access; offsets are BAR5 byte offsets.")
+    print(f"{writes} writes and {len(events) - writes} reads in {len(phases)} phases.")
+    print("Only host MMIO accesses are visible here: what the firmware engines (PSP, SMU, RLC, CP microcode) do")
+    print("in response is not, and neither are command-stream writes submitted through rings.")
+    print()
+    print("| # | t [s] | family | writes | reads before/within | first writes |")
+    print("|---|---|---|---|---|---|")
+    for i, (fam, ts, te, ws, reads) in enumerate(phases, 1):
+        first = "; ".join(f"`{n.split('.', 1)[1]}`=`{v:08X}`" for n, _, v in ws[:SHOW])
+        more = f" ... (+{len(ws) - SHOW})" if len(ws) > SHOW else ""
+        print(f"| {i} | {ts - t0:.3f} | {fam} | {len(ws)} | {reads} | {first}{more} |")
+    print()
+    print("## Display core (DMU) writes by sub-block")
+    print()
+    print("| sub-block | writes |")
+    print("|---|---|")
+    sub = Counter(re.sub(r"\d+$", "", n.split(".", 1)[1].split("_")[0]) for p in phases for n, _, _ in p[3] if n.startswith("DMU."))
+    for block, c in sub.most_common():
+        print(f"| `{block}` | {c} |")
+    print()
+    print("## Most written registers")
+    print()
+    print("| register | offset | writes |")
+    print("|---|---|---|")
+    counts = Counter((n, o) for p in phases for n, o, _ in p[3])
+    for (n, o), c in counts.most_common(25):
+        print(f"| `{n}` | `{o:#07x}` | {c} |")
+
+
+if __name__ == "__main__":
+    main()
