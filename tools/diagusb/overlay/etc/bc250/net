@@ -1,0 +1,36 @@
+#!/bin/sh
+# Optional remote access: Wi-Fi (or wired) DHCP + sshd, so the probe can be driven from the dev PC.
+# Enabled only if the USB stick carries bc250/net/ (built from a secrets directory that is NOT in git).
+# Usage: net <media-mountpoint>. Runs in the background; diagnostics never wait for it.
+
+C="$1/bc250/net"
+[ -f "$C/authorized_keys" ] || exit 0
+
+apk add --no-network --no-progress wpa_supplicant openssh-server || exit 1
+
+mkdir -p /root/.ssh /etc/ssh
+cp "$C/authorized_keys" /root/.ssh/authorized_keys
+chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
+if [ -f "$C/ssh_host_ed25519_key" ]; then
+	cp "$C/ssh_host_ed25519_key" "$C/ssh_host_ed25519_key.pub" /etc/ssh/
+	chmod 600 /etc/ssh/ssh_host_ed25519_key
+fi
+ssh-keygen -A
+/usr/sbin/sshd
+
+for eth in $(ls /sys/class/net | grep '^eth'); do
+	ip link set "$eth" up
+	udhcpc -i "$eth" -x hostname:bc250diag -b -t 8 -S
+done
+
+[ -f "$C/wpa_supplicant.conf" ] || exit 0
+WL=""
+for _ in $(seq 1 40); do
+	WL=$(ls /sys/class/net | grep -m1 '^wl')
+	[ -n "$WL" ] && break
+	sleep 1
+done
+[ -n "$WL" ] || { echo "no wireless interface appeared"; exit 1; }
+ip link set "$WL" up
+wpa_supplicant -B -i "$WL" -c "$C/wpa_supplicant.conf"
+udhcpc -i "$WL" -x hostname:bc250diag -b -t 30 -S

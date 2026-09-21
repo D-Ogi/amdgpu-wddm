@@ -1,0 +1,64 @@
+#!/bin/sh
+# Started by init on tty1 instead of a login prompt (see ../inittab).
+# First start after boot: run the diagnostics and show the QR codes. Afterwards: a root shell.
+
+if [ -e /run/bc250.done ]; then
+	exec /bin/sh -l
+fi
+touch /run/bc250.done
+
+mode=$(sed -n 's/.*bc250\.mode=\([a-z]*\).*/\1/p' /proc/cmdline)
+if [ "$mode" = "off" ]; then
+	echo "bc250.mode=off: diagnostics skipped."
+	exec /bin/sh -l
+fi
+
+echo "BC-250 diagnostic USB: looking for the payload..."
+M=""
+for _ in $(seq 1 30); do
+	for d in /media/*; do
+		if [ -f "$d/bc250/diag.py" ]; then M="$d"; break; fi
+	done
+	[ -n "$M" ] && break
+	sleep 1
+done
+if [ -z "$M" ]; then
+	echo "ERROR: bc250/diag.py not found on any mounted media. Dropping to a shell."
+	exec /bin/sh -l
+fi
+
+LOG=/tmp/bc250-launch.log
+if mount -o remount,rw "$M" 2>/dev/null && mkdir -p "$M/bc250/results" 2>/dev/null; then
+	LOG="$M/bc250/results/launch.log"
+else
+	echo "NOTE: $M is not writable, results stay in RAM (/tmp). The QR codes still work."
+fi
+
+{
+	echo "=== launch $(date -u +%Y-%m-%dT%H:%M:%SZ) kernel $(uname -r) mode=${mode:-full}"
+	# Diskless system in RAM: "lost on next reboot" is exactly what we want.
+	apk add --no-network --no-progress --force-non-repository "$M"/bc250/apks/*.apk
+} >>"$LOG" 2>&1
+if ! command -v python3 >/dev/null; then
+	echo "ERROR: python3 could not be installed from $M/bc250/apks (see $LOG). Dropping to a shell."
+	exec /bin/sh -l
+fi
+
+# Network first and in the background: if loading amdgpu later kills the display, SSH may still work.
+NETLOG=/tmp/bc250-net.log
+/etc/bc250/net "$M" >"$NETLOG" 2>&1 &
+
+# A kernel that hangs on modprobe cannot be helped from here, but nothing in user space should be
+# allowed to cost us the QR codes: diag.py writes them once after phase A already.
+TMO=""
+if command -v timeout >/dev/null && timeout 5 true 2>/dev/null; then TMO="timeout 900"; fi
+$TMO python3 "$M/bc250/diag.py" "$M/bc250/results" 2>&1 | tee -a "$LOG"
+cat "$NETLOG" >>"$LOG" 2>/dev/null
+sync
+mount -o remount,ro "$M" 2>/dev/null
+
+dmesg -n 1   # keep kernel messages off the screen while the QR codes are up
+python3 "$M/bc250/qrshow.py"
+dmesg -n 4
+echo "Results: $M/bc250/results  |  rerun: python3 $M/bc250/diag.py && python3 $M/bc250/qrshow.py  |  poweroff"
+exec /bin/sh -l

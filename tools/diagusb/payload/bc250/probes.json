@@ -1,0 +1,400 @@
+{
+ "id": "79152824",
+ "kernel_ref": "torvalds/linux master 93f51579e7df (fetched 2026-09-21)",
+ "regs": [
+  {
+   "n": "GRBM_STATUS",
+   "ip": "GC",
+   "off": 32784,
+   "banked": false
+  },
+  {
+   "n": "GRBM_STATUS2",
+   "ip": "GC",
+   "off": 32776,
+   "banked": false
+  },
+  {
+   "n": "GRBM_STATUS_SE0",
+   "ip": "GC",
+   "off": 32788,
+   "banked": false
+  },
+  {
+   "n": "GRBM_GFX_INDEX",
+   "ip": "GC",
+   "off": 198656,
+   "banked": false
+  },
+  {
+   "n": "CC_GC_SHADER_ARRAY_CONFIG",
+   "ip": "GC",
+   "off": 35260,
+   "banked": true
+  },
+  {
+   "n": "GC_USER_SHADER_ARRAY_CONFIG",
+   "ip": "GC",
+   "off": 35264,
+   "banked": true
+  },
+  {
+   "n": "SPI_PG_ENABLE_STATIC_WGP_MASK",
+   "ip": "GC",
+   "off": 37724,
+   "banked": true
+  },
+  {
+   "n": "RLC_PG_ALWAYS_ON_WGP_MASK",
+   "ip": "GC",
+   "off": 241996,
+   "banked": true
+  },
+  {
+   "n": "CC_RB_BACKEND_DISABLE",
+   "ip": "GC",
+   "off": 39156,
+   "banked": true
+  },
+  {
+   "n": "GB_ADDR_CONFIG",
+   "ip": "GC",
+   "off": 39160,
+   "banked": false
+  },
+  {
+   "n": "SCRATCH_REG0",
+   "ip": "GC",
+   "off": 196864,
+   "banked": false
+  },
+  {
+   "n": "SCRATCH_REG1",
+   "ip": "GC",
+   "off": 196868,
+   "banked": false
+  },
+  {
+   "n": "CP_STAT",
+   "ip": "GC",
+   "off": 34432,
+   "banked": false
+  },
+  {
+   "n": "CP_CPC_STATUS",
+   "ip": "GC",
+   "off": 33296,
+   "banked": false
+  },
+  {
+   "n": "CP_CPF_STATUS",
+   "ip": "GC",
+   "off": 33308,
+   "banked": false
+  },
+  {
+   "n": "CP_ME_CNTL",
+   "ip": "GC",
+   "off": 34520,
+   "banked": false
+  },
+  {
+   "n": "CP_MEC_CNTL",
+   "ip": "GC",
+   "off": 33332,
+   "banked": false
+  },
+  {
+   "n": "CP_RB0_BASE",
+   "ip": "GC",
+   "off": 49408,
+   "banked": false
+  },
+  {
+   "n": "CP_RB0_BASE_HI",
+   "ip": "GC",
+   "off": 49860,
+   "banked": false
+  },
+  {
+   "n": "CP_RB0_CNTL",
+   "ip": "GC",
+   "off": 49412,
+   "banked": false
+  },
+  {
+   "n": "CP_RB0_RPTR",
+   "ip": "GC",
+   "off": 34560,
+   "banked": false
+  },
+  {
+   "n": "CP_RB0_WPTR",
+   "ip": "GC",
+   "off": 49488,
+   "banked": false
+  },
+  {
+   "n": "CP_HQD_ACTIVE",
+   "ip": "GC",
+   "off": 51244,
+   "banked": false
+  },
+  {
+   "n": "CP_HQD_PQ_BASE",
+   "ip": "GC",
+   "off": 51268,
+   "banked": false
+  },
+  {
+   "n": "CP_HQD_PQ_BASE_HI",
+   "ip": "GC",
+   "off": 51272,
+   "banked": false
+  },
+  {
+   "n": "CP_HQD_PQ_CONTROL",
+   "ip": "GC",
+   "off": 51304,
+   "banked": false
+  },
+  {
+   "n": "RLC_CNTL",
+   "ip": "GC",
+   "off": 241664,
+   "banked": false
+  },
+  {
+   "n": "RLC_STAT",
+   "ip": "GC",
+   "off": 241680,
+   "banked": false
+  },
+  {
+   "n": "RLC_GPM_STAT",
+   "ip": "GC",
+   "off": 244152,
+   "banked": false
+  },
+  {
+   "n": "RLC_PG_CNTL",
+   "ip": "GC",
+   "off": 241932,
+   "banked": false
+  },
+  {
+   "n": "RLC_CP_SCHEDULERS",
+   "ip": "GC",
+   "off": 242344,
+   "banked": false
+  },
+  {
+   "n": "RLC_RLCS_BOOTLOAD_STATUS",
+   "ip": "GC",
+   "off": 244276,
+   "banked": false
+  },
+  {
+   "n": "MMVM_CONTEXT0_CNTL",
+   "ip": "MMHUB",
+   "off": 432896,
+   "banked": false
+  },
+  {
+   "n": "MMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32",
+   "ip": "MMHUB",
+   "off": 433324,
+   "banked": false
+  },
+  {
+   "n": "MMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32",
+   "ip": "MMHUB",
+   "off": 433328,
+   "banked": false
+  },
+  {
+   "n": "MMVM_L2_PROTECTION_FAULT_STATUS",
+   "ip": "MMHUB",
+   "off": 432688,
+   "banked": false
+  },
+  {
+   "n": "MMMC_VM_FB_LOCATION_BASE",
+   "ip": "MMHUB",
+   "off": 434608,
+   "banked": false
+  },
+  {
+   "n": "MMMC_VM_FB_LOCATION_TOP",
+   "ip": "MMHUB",
+   "off": 434612,
+   "banked": false
+  },
+  {
+   "n": "MMMC_VM_FB_OFFSET",
+   "ip": "MMHUB",
+   "off": 434524,
+   "banked": false
+  },
+  {
+   "n": "MMMC_VM_SYSTEM_APERTURE_LOW_ADDR",
+   "ip": "MMHUB",
+   "off": 434628,
+   "banked": false
+  },
+  {
+   "n": "MMMC_VM_SYSTEM_APERTURE_HIGH_ADDR",
+   "ip": "MMHUB",
+   "off": 434632,
+   "banked": false
+  },
+  {
+   "n": "IH_RB_CNTL",
+   "ip": "OSSSYS",
+   "off": 17536,
+   "banked": false
+  },
+  {
+   "n": "IH_RB_BASE",
+   "ip": "OSSSYS",
+   "off": 17540,
+   "banked": false
+  },
+  {
+   "n": "IH_RB_BASE_HI",
+   "ip": "OSSSYS",
+   "off": 17544,
+   "banked": false
+  },
+  {
+   "n": "IH_RB_RPTR",
+   "ip": "OSSSYS",
+   "off": 17548,
+   "banked": false
+  },
+  {
+   "n": "IH_RB_WPTR",
+   "ip": "OSSSYS",
+   "off": 17552,
+   "banked": false
+  },
+  {
+   "n": "IH_CNTL",
+   "ip": "OSSSYS",
+   "off": 17792,
+   "banked": false
+  },
+  {
+   "n": "HDP_NONSURFACE_BASE",
+   "ip": "HDP",
+   "off": 15744,
+   "banked": false
+  },
+  {
+   "n": "HDP_NONSURFACE_INFO",
+   "ip": "HDP",
+   "off": 15748,
+   "banked": false
+  },
+  {
+   "n": "HDP_HOST_PATH_CNTL",
+   "ip": "HDP",
+   "off": 16304,
+   "banked": false
+  },
+  {
+   "n": "HDP_MISC_CNTL",
+   "ip": "HDP",
+   "off": 16332,
+   "banked": false
+  },
+  {
+   "n": "MP0_SMN_C2PMSG_35",
+   "ip": "MP0",
+   "off": 360844,
+   "banked": false
+  },
+  {
+   "n": "MP0_SMN_C2PMSG_64",
+   "ip": "MP0",
+   "off": 360960,
+   "banked": false
+  },
+  {
+   "n": "MP0_SMN_C2PMSG_81",
+   "ip": "MP0",
+   "off": 361028,
+   "banked": false
+  },
+  {
+   "n": "MP1_SMN_C2PMSG_66",
+   "ip": "MP1",
+   "off": 363016,
+   "banked": false
+  },
+  {
+   "n": "MP1_SMN_C2PMSG_82",
+   "ip": "MP1",
+   "off": 363080,
+   "banked": false
+  },
+  {
+   "n": "MP1_SMN_C2PMSG_90",
+   "ip": "MP1",
+   "off": 363112,
+   "banked": false
+  },
+  {
+   "n": "RCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE",
+   "ip": "NBIO",
+   "off": 14220,
+   "banked": false
+  }
+ ],
+ "claims": [
+  {
+   "off": 12896,
+   "as": "GRBM_STATUS"
+  },
+  {
+   "off": 12900,
+   "as": "CC_GC_SHADER_ARRAY_CONFIG (early)"
+  },
+  {
+   "off": 39964,
+   "as": "CC_GC_SHADER_ARRAY_CONFIG (late)"
+  },
+  {
+   "off": 13564,
+   "as": "SPI_PG_ENABLE_STATIC_WGP_MASK (early)"
+  },
+  {
+   "off": 23612,
+   "as": "SPI_PG_ENABLE_STATIC_WGP_MASK (late)"
+  },
+  {
+   "off": 15716,
+   "as": "RLC_PG_ALWAYS_ON_WGP_MASK"
+  },
+  {
+   "off": 13520,
+   "as": "GRBM_GFX_INDEX"
+  },
+  {
+   "off": 13012,
+   "as": "CP_SCRATCH_REG0"
+  },
+  {
+   "off": 19060,
+   "as": "CP_ME_CNTL"
+  },
+  {
+   "off": 55904,
+   "as": "CP_RING0_BASE_LO"
+  },
+  {
+   "off": 57440,
+   "as": "KIQ_BASE_LO"
+  }
+ ]
+}

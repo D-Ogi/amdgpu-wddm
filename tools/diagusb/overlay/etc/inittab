@@ -1,0 +1,12 @@
+# /etc/inittab - Alpine default with tty1 handed to the BC-250 diagnostics launcher
+
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+
+tty1::respawn:/etc/bc250/launch
+tty2::respawn:/sbin/getty 38400 tty2
+tty3::respawn:/sbin/getty 38400 tty3
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown
