@@ -4,7 +4,7 @@
 
 A Windows driver that makes the BC-250's GPU do real work: first provably execute commands, then compute, then 3D. "Works" always means demonstrated on hardware with evidence in `evidence/`, never "the code path exists".
 
-Non-goals: modifying AMD firmware, flashing BIOS as a requirement, shipping binaries of unknown origin, supporting hardware other than PCI `1002:13FE` until it works there.
+Non-goals: modifying AMD firmware, flashing BIOS as a requirement, shipping binaries of unknown origin, supporting hardware other than PCI `1002:13FE` until it works there, production driver signing (the driver is test-signed and the machine runs with test signing on; Microsoft's attestation signing needs an EV certificate and a partner account, which is an organisational matter and stays outside the project by the owner's decision of 2026-09-21).
 
 ## Why this is believed possible
 
