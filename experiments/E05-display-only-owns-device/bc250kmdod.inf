@@ -1,0 +1,48 @@
+; Experiment E05: Microsoft's KMDOD sample driver, unmodified, bound to the BC-250's GPU only.
+; The sample's own INF matches every display adapter (PCI\CC_0300); this one matches one device ID.
+
+[Version]
+Signature="$Windows NT$"
+Class=Display
+ClassGUID={4d36e968-e325-11ce-bfc1-08002be10318}
+Provider=%ProviderString%
+DriverVer=09/21/2026,0.5.0.1
+CatalogFile=bc250kmdod.cat
+PnpLockdown=1
+
+[DestinationDirs]
+Bc250Kmdod.Files = 12
+
+[SourceDisksNames]
+0=%DiskName%
+
+[SourceDisksFiles]
+bc250kmdod.sys=0
+
+[Manufacturer]
+%ManufacturerName%=Standard,NTamd64
+
+[Standard.NTamd64]
+%DeviceName% = Bc250Kmdod_Inst, PCI\VEN_1002&DEV_13FE
+
+[Bc250Kmdod_Inst]
+FeatureScore=F9
+CopyFiles = Bc250Kmdod.Files
+
+[Bc250Kmdod_Inst.Services]
+AddService = bc250kmdod,0x00000002,Bc250Kmdod_Service_Inst
+
+[Bc250Kmdod_Service_Inst]
+ServiceType = 1      ; SERVICE_KERNEL_DRIVER
+StartType = 3        ; SERVICE_DEMAND_START
+ErrorControl = 0     ; SERVICE_ERROR_IGNORE
+ServiceBinary = %12%\bc250kmdod.sys
+
+[Bc250Kmdod.Files]
+bc250kmdod.sys
+
+[Strings]
+ProviderString="BC-250 lab (experiment E05)"
+ManufacturerName="BC-250 lab"
+DiskName="BC-250 lab experiment E05"
+DeviceName="BC-250 E05: Microsoft KMDOD sample (display only)"
