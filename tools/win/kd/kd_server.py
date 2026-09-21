@@ -35,7 +35,21 @@ def transport(dump):
     return ["-k", f"net:port={kdenv.PORT},key={secret}"], secret
 
 
+LIVE_MODE_WARNING = """refusing to start a live KDNET server.
+
+On 2026-09-21 this exact launch (kd -server npipe -k net, hidden console, stdin from NUL) made the development
+PC lose about 0.87 GB of nonpaged kernel memory per second from the first second, before the target had even
+connected: the PC hung after ~110 s the first time, and a supervised repeat leaked 57 GB in 70 s that only a
+reboot gives back (journal 2026-09-21). Which of the launch details triggers it is not known. A plain
+`kd -k net:...` with a console and a live stdin had run for 35 minutes before without a leak.
+
+Dump files (`start --dump FILE`) are not affected. To work on the cause, watch the host's nonpaged pool every
+second with a kill switch ready, and set BC250_KD_LIVE_AT_MY_OWN_RISK=1."""
+
+
 def start(dump=None):
+    if not dump and os.environ.get("BC250_KD_LIVE_AT_MY_OWN_RISK") != "1":
+        sys.exit(LIVE_MODE_WARNING)
     state = kdenv.read_state()
     if state and kdenv.alive(state["pid"]):
         sys.exit(f"a server is already running as pid {state['pid']} ({state['mode']}); stop it first")

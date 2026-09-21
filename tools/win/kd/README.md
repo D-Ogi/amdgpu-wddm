@@ -33,6 +33,11 @@ python tools/win/kd/kd_server.py stop
 
 ## A live target over KDNET
 
+> **Disabled since 2026-09-21.** Starting the live server made the development PC leak nonpaged kernel memory
+> at about 0.87 GB/s (hang after ~110 s; reproduced once under supervision, 57 GB lost until reboot). The cause
+> inside the launch is not known yet; `kd_server.py start` refuses live mode unless
+> `BC250_KD_LIVE_AT_MY_OWN_RISK=1`. Dump files are not affected. The text below describes the intended use.
+
 The target must have been set up for network debugging and rebooted, and the key it was given must be in
 `P:\BC-250\secrets\kd\key.txt`, one line, four dot-separated groups as `kdnet.exe` prints them.
 
