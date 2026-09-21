@@ -260,7 +260,7 @@ static int Info(const WCHAR *wantedId)
 // Offsets are BAR5 byte offsets and come from tools/regcalc (on the target: bc250rd's reglist.txt), never from
 // memory. The driver checks them against its own generated tables, so a wrong one is refused, not executed.
 
-static int SendEscape(const WCHAR *wantedId, BC250_ESCAPE *data, NTSTATUS *result)
+static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
 {
     BC250_ADAPTER adapters[16];
     int count = FindAdapters(adapters, 16);
@@ -281,7 +281,7 @@ static int SendEscape(const WCHAR *wantedId, BC250_ESCAPE *data, NTSTATUS *resul
     escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
     escape.Flags.HardwareAccess = 1;        // dxgkrnl then serializes the call with the rest of the adapter's work
     escape.pPrivateDriverData = data;
-    escape.PrivateDriverDataSize = sizeof(*data);
+    escape.PrivateDriverDataSize = size;
     *result = D3DKMTEscape(&escape);
 
     close.hAdapter = open.hAdapter;
@@ -304,7 +304,7 @@ static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
         data.RegValue = wcstoul(valueText, &end, 16);
         if (*end) { fprintf(stderr, "value %ls is not a hex number\n", valueText); return 2; }
     }
-    if (SendEscape(BC250_DEFAULT_HWID, &data, &status)) return 1;
+    if (SendEscape(BC250_DEFAULT_HWID, &data, sizeof(data), &status)) return 1;
     if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
 
     if (data.Status == BC250_ESCAPE_STATUS_DONE) {
@@ -318,6 +318,103 @@ static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
            (data.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "not mapped (gate closed)",
            (data.Flags & BC250_ESCAPE_FLAG_MMIO_WRITE) ? "on" : "off");
     return 3;
+}
+
+// ---- memory / vread / vwrite / vcompare: the VRAM carve-out through the escape (experiment E08) ---------------
+//
+// Two independent ways to the same byte: "phys" is the carve-out's system physical address, "bar0" the PCI
+// aperture. The driver accepts writes in its one-page test window only.
+
+static int MemoryEscape(BC250_ESCAPE_MEMORY *data, unsigned long command, unsigned long path, unsigned long long offset,
+                        unsigned long value)
+{
+    NTSTATUS status;
+
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = command;
+    data->Path = path;
+    data->Offset = offset;
+    data->Value = value;
+    if (SendEscape(BC250_DEFAULT_HWID, data, sizeof(*data), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (data->Status == BC250_ESCAPE_STATUS_DONE) return 0;
+    printf("refused: %s (driver status %lu, NTSTATUS 0x%08lX %s; vram %s, writes %s)\n",
+           data->Status == BC250_ESCAPE_STATUS_NOT_ADMIN ? "caller is not an administrator" :
+           data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND ? "this driver build has no memory commands" : "see NTSTATUS",
+           data->Status, data->NtStatus, StatusName((NTSTATUS)data->NtStatus),
+           (data->Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "not identified (gate closed)",
+           (data->Flags & BC250_ESCAPE_FLAG_VRAM_WRITE) ? "on" : "off");
+    return 3;
+}
+
+static int Memory(void)
+{
+    BC250_ESCAPE_MEMORY m;
+    int r = MemoryEscape(&m, BC250_ESCAPE_GET_MEMORY, 0, 0, 0);
+
+    if (r) return r;
+    printf("framebuffer  0x%llX + 0x%llX\n", m.FramebufferPhysical, m.FramebufferLength);
+    printf("bar0         0x%llX + 0x%llX\n", m.Bar0Physical, m.Bar0Length);
+    printf("vram         0x%llX + 0x%llX, MC base 0x%llX\n", m.VramPhysical, m.VramLength, m.VramMcBase);
+    printf("test window  0x%llX + 0x%llX\n", m.TestOffset, m.TestLength);
+    printf("gates        vram %s, vram writes %s\n", (m.Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed",
+           (m.Flags & BC250_ESCAPE_FLAG_VRAM_WRITE) ? "on" : "off");
+    return 0;
+}
+
+static int ParsePath(const WCHAR *text, unsigned long *path)
+{
+    if (!_wcsicmp(text, L"phys")) { *path = BC250_VRAM_PATH_PHYSICAL; return 1; }
+    if (!_wcsicmp(text, L"bar0")) { *path = BC250_VRAM_PATH_BAR0; return 1; }
+    fprintf(stderr, "path is phys or bar0, not %ls\n", text);
+    return 0;
+}
+
+static int VramWord(int write, const WCHAR *pathText, const WCHAR *offsetText, const WCHAR *valueText)
+{
+    BC250_ESCAPE_MEMORY m;
+    unsigned long path, value = 0;
+    unsigned long long offset;
+    WCHAR *end;
+    int r;
+
+    if (!ParsePath(pathText, &path)) return 2;
+    offset = _wcstoui64(offsetText, &end, 16);
+    if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    if (write) {
+        value = wcstoul(valueText, &end, 16);
+        if (*end) { fprintf(stderr, "value %ls is not a hex number\n", valueText); return 2; }
+    }
+    r = MemoryEscape(&m, write ? BC250_ESCAPE_VRAM_WRITE : BC250_ESCAPE_VRAM_READ, path, offset, value);
+    if (r) return r;
+    printf("%s %ls 0x%llX %08lX\n", write ? "wrote" : "read", pathText, offset, m.Value);
+    return 0;
+}
+
+// Read <count> words at <offset> through both paths and say whether they are the same memory.
+static int VramCompare(const WCHAR *offsetText, const WCHAR *countText)
+{
+    BC250_ESCAPE_MEMORY a, b;
+    unsigned long long offset;
+    unsigned long count, same = 0, nonzero = 0;
+    WCHAR *end;
+    int r;
+
+    offset = _wcstoui64(offsetText, &end, 16);
+    if (*end) { fprintf(stderr, "offset %ls is not a hex number\n", offsetText); return 2; }
+    count = wcstoul(countText, &end, 10);
+    if (*end || count == 0 || count > 1024) { fprintf(stderr, "count is 1..1024\n"); return 2; }
+    for (unsigned long i = 0; i < count; i++) {
+        if ((r = MemoryEscape(&a, BC250_ESCAPE_VRAM_READ, BC250_VRAM_PATH_PHYSICAL, offset + 4ull * i, 0)) != 0) return r;
+        if ((r = MemoryEscape(&b, BC250_ESCAPE_VRAM_READ, BC250_VRAM_PATH_BAR0, offset + 4ull * i, 0)) != 0) return r;
+        same += a.Value == b.Value;
+        nonzero += a.Value != 0;
+        if (i < 8 || a.Value != b.Value) printf("0x%llX  phys %08lX  bar0 %08lX%s\n", offset + 4ull * i, a.Value, b.Value,
+                                                 a.Value == b.Value ? "" : "   DIFFERENT");
+    }
+    printf("compared %lu words at 0x%llX: %lu same, %lu different, %lu nonzero\n", count, offset, same, count - same, nonzero);
+    return same == count ? 0 : 4;
 }
 
 // ---- stages: the registry ------------------------------------------------------------------------------------
@@ -409,6 +506,8 @@ int wmain(int argc, wchar_t **argv)
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
                         "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
+                        "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
+                        "       bc250kmd_cli vcompare <hex offset> <count>\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -418,6 +517,10 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"confirm")) return Confirm();
     if (!_wcsicmp(argv[1], L"read") && argc == 3) return Register(0, argv[2], NULL);
     if (!_wcsicmp(argv[1], L"write") && argc == 4) return Register(1, argv[2], argv[3]);
+    if (!_wcsicmp(argv[1], L"memory")) return Memory();
+    if (!_wcsicmp(argv[1], L"vread") && argc == 4) return VramWord(0, argv[2], argv[3], NULL);
+    if (!_wcsicmp(argv[1], L"vwrite") && argc == 5) return VramWord(1, argv[2], argv[3], argv[4]);
+    if (!_wcsicmp(argv[1], L"vcompare") && argc == 4) return VramCompare(argv[2], argv[3]);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }

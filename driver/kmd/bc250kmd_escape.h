@@ -8,7 +8,10 @@
 #define BC250_ESCAPE_GET_INFO 1u
 #define BC250_ESCAPE_READ_REG 2u            // in: RegOffset (BAR5 byte offset); out: RegValue
 #define BC250_ESCAPE_WRITE_REG 3u           // in: RegOffset, RegValue; out: RegValue read back after the write
-#define BC250_KMD_VERSION 0x00040001u       // milestone 4 work, revision 1
+#define BC250_ESCAPE_GET_MEMORY 4u          // BC250_ESCAPE_MEMORY out: where the framebuffer, BAR0 and the VRAM carve-out are
+#define BC250_ESCAPE_VRAM_READ 5u           // BC250_ESCAPE_MEMORY in: Path, Offset; out: Value
+#define BC250_ESCAPE_VRAM_WRITE 6u          // BC250_ESCAPE_MEMORY in: Path, Offset, Value; out: Value read back
+#define BC250_KMD_VERSION 0x00040002u       // milestone 4 work, revision 2
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -17,6 +20,12 @@
 
 #define BC250_ESCAPE_FLAG_MMIO_MAPPED 1u
 #define BC250_ESCAPE_FLAG_MMIO_WRITE 2u
+#define BC250_ESCAPE_FLAG_VRAM 4u           // the EnableVram gate was open at start and the carve-out was identified
+#define BC250_ESCAPE_FLAG_VRAM_WRITE 8u
+
+// The two independent ways to the same VRAM byte (vram.c).
+#define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
+#define BC250_VRAM_PATH_BAR0 1u             // the PCI aperture, which shows the first BAR0-length bytes of VRAM
 
 typedef struct _BC250_ESCAPE {
     unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
@@ -31,3 +40,23 @@ typedef struct _BC250_ESCAPE {
     unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
     unsigned long Reserved[2];
 } BC250_ESCAPE;
+
+// Memory commands. The first four fields are those of BC250_ESCAPE, so the driver can tell the two apart by
+// Command after checking Magic.
+typedef struct _BC250_ESCAPE_MEMORY {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Path;                     // in: BC250_VRAM_PATH_*
+    unsigned long Value;                    // in/out: one 32-bit word of VRAM
+    unsigned long long Offset;              // in: byte offset into VRAM, multiple of 4
+    unsigned long long FramebufferPhysical; // out: where the firmware says its framebuffer is
+    unsigned long long FramebufferLength;
+    unsigned long long Bar0Physical, Bar0Length;
+    unsigned long long VramPhysical, VramLength;    // out: from GCMC_VM_FB_OFFSET and FB_LOCATION_BASE/TOP
+    unsigned long long VramMcBase;          // out: GPU physical (MC) address of VRAM byte 0
+    unsigned long long TestOffset, TestLength;      // out: the only window VRAM_WRITE accepts
+} BC250_ESCAPE_MEMORY;

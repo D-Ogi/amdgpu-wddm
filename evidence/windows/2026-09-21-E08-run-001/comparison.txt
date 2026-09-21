@@ -1,0 +1,10 @@
+registers per sweep: [4512, 4512, 4512]
+noise floor (evidence/windows/2026-09-21-E08-run-001/sweep-GC-before-090937.log vs evidence/windows/2026-09-21-E08-run-001/sweep-GC-before2-091010.log): 6 registers differ with nothing changed
+  ~ GC.CP_DMA_READ_TAGS                          0x3022c  03B41804 -> 04B42004
+  ~ GC.RLC_GPU_CLOCK_32                          0x3b108  C0A28CD4 -> 7A5E4DF8
+  ~ GC.RLC_REFCLOCK_TIMESTAMP_LSB                0x3b030  D7EA98B3 -> 91A65B47
+  ~ GC.RLC_REFCLOCK_TIMESTAMP_MSB                0x3b034  00000056 -> 00000057
+  ~ GC.SQ_TIME_HI                                0x08df0  0000036A -> 00000371
+  ~ GC.SQ_TIME_LO                                0x08df4  08EAF007 -> 9038EC3E
+
+evidence/windows/2026-09-21-E08-run-001/sweep-GC-after-091046.log: 6 differ from the control sweep, 0 of them outside the noise set

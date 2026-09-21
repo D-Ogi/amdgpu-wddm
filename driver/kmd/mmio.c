@@ -9,6 +9,7 @@
 // Both are read once per start. A read of a wrong BAR5 address can hang this SoC (facts M16) and some reads
 // change state (facts M25), hence a table for reads as well.
 #include "bc250kmd.h"
+#define BC250_REGS_WITH_TABLES
 #include "regs.generated.h"
 
 #define BC250_BAR5_INDEX 5
@@ -100,7 +101,8 @@ NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Va
 {
     *Value = 0;
     if (Device->Mmio == NULL) return STATUS_DEVICE_NOT_READY;
-    if ((Offset & 3) != 0 || !InTable(g_MmioReadAllow, BC250_MMIO_READ_ALLOW_COUNT, Offset)) return STATUS_ACCESS_DENIED;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioReadAllow, BC250_MMIO_READ_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;        // the length check does not rely on what the generator put into the table
     *Value = READ_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4]);
     return STATUS_SUCCESS;
 }
@@ -108,7 +110,8 @@ NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Va
 NTSTATUS MmioWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
 {
     if (Device->Mmio == NULL || !Device->MmioWriteEnabled) return STATUS_DEVICE_NOT_READY;
-    if ((Offset & 3) != 0 || !InTable(g_MmioWriteAllow, BC250_MMIO_WRITE_ALLOW_COUNT, Offset)) return STATUS_ACCESS_DENIED;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioWriteAllow, BC250_MMIO_WRITE_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
     WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
     return STATUS_SUCCESS;
 }

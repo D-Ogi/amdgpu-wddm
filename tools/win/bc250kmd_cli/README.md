@@ -10,10 +10,17 @@ bc250kmd_cli info [hardware-id]   the escape, to the adapter with that PnP hardw
 bc250kmd_cli list                 every graphics adapter, with hardware id, interface path, handle and LUID
 bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts, with names
 bc250kmd_cli confirm              UnconfirmedStarts = 0 (elevated)
+bc250kmd_cli read <offset>        one register through the driver (hex BAR5 byte offset from regcalc; ADR 0007)
+bc250kmd_cli write <offset> <v>   one register on the driver's write table, read back
+bc250kmd_cli memory               where the framebuffer, BAR0 and the VRAM carve-out are (E08)
+bc250kmd_cli vread <phys|bar0> <offset>          one 32-bit word of VRAM through either path
+bc250kmd_cli vwrite <phys|bar0> <offset> <v>     same, inside the driver's test page only
+bc250kmd_cli vcompare <offset> <count>           the same words through both paths, exit code 4 if they differ
 ```
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage
-or the driver is not installed, `3` (`stages` only) the start budget is used up.
+or the driver is not installed, `3` the start budget is used up (`stages`) or the driver refused the command
+(gate closed, offset outside its tables or windows, caller not an administrator), `4` (`vcompare`) the paths differ.
 
 ## How the adapter is found
 

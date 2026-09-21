@@ -34,9 +34,13 @@ NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device)
 
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device)
 {
-    if (Device->Framebuffer != NULL) MmUnmapIoSpace(Device->Framebuffer, Device->FramebufferLength);
+    // The bugcheck display writes through this pointer: take it away before the mapping goes.
+    PVOID mapping = Device->Framebuffer;
+    SIZE_T length = Device->FramebufferLength;
+
     Device->Framebuffer = NULL;
     Device->FramebufferLength = 0;
+    if (mapping != NULL) MmUnmapIoSpace(mapping, length);
 }
 
 // ---- adapter ----------------------------------------------------------------------------------------------
@@ -74,6 +78,16 @@ NTSTATUS Bc250SetPointerShape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SET
     return STATUS_NOT_SUPPORTED;
 }
 
+// The escape runs in the caller's context. Registers and memory are for administrators.
+static BOOLEAN CallerIsAdmin(void)
+{
+    PACCESS_TOKEN token = PsReferencePrimaryToken(PsGetCurrentProcess());
+    BOOLEAN admin = SeTokenIsAdmin(token);
+
+    PsDereferencePrimaryToken(token);
+    return admin;
+}
+
 NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Escape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
@@ -81,20 +95,25 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 
     if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE) || data == NULL || data->Magic != BC250_ESCAPE_MAGIC)
         return STATUS_INVALID_PARAMETER;
+    if (data->Command >= BC250_ESCAPE_GET_MEMORY && data->Command <= BC250_ESCAPE_VRAM_WRITE)
+    {
+        BC250_ESCAPE_MEMORY* memory = (BC250_ESCAPE_MEMORY*)Escape->pPrivateDriverData;
+
+        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_MEMORY)) return STATUS_INVALID_PARAMETER;
+        if (!CallerIsAdmin()) memory->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else VramEscape(device, memory);
+        return STATUS_SUCCESS;
+    }
     data->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) |
-                  (device->MmioWriteEnabled ? BC250_ESCAPE_FLAG_MMIO_WRITE : 0);
+                  (device->MmioWriteEnabled ? BC250_ESCAPE_FLAG_MMIO_WRITE : 0) |
+                  (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) | (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0);
     data->NtStatus = 0;
 
     if (data->Command == BC250_ESCAPE_READ_REG || data->Command == BC250_ESCAPE_WRITE_REG)
     {
-        // The escape runs in the caller's context. Registers are for administrators.
-        PACCESS_TOKEN token = PsReferencePrimaryToken(PsGetCurrentProcess());
-        BOOLEAN admin = SeTokenIsAdmin(token);
         ULONG value = 0;
         NTSTATUS status;
 
-        PsDereferencePrimaryToken(token);
-        if (!admin)
+        if (!CallerIsAdmin())
         {
             data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
             return STATUS_SUCCESS;

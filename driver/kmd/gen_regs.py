@@ -29,7 +29,10 @@ WRITABLE = [
 ]
 
 # Named offsets the driver's own code uses (beyond the tables).
-NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STATUS")]
+NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STATUS"),
+         ("GC", "mmGCMC_VM_FB_OFFSET"), ("GC", "mmGCMC_VM_FB_LOCATION_BASE"), ("GC", "mmGCMC_VM_FB_LOCATION_TOP")]
+
+BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
 
@@ -45,6 +48,8 @@ def main():
     maps = {}
     reads = sorted({int(m.group(3), 16) for m in map(LINE.match, (ROOT / "tools/win/bc250rd/reglist.txt")
                                                      .read_text(encoding="utf-8").splitlines()) if m})
+    if reads and reads[-1] >= BAR5_LENGTH:
+        sys.exit(f"read list reaches 0x{reads[-1]:X}, beyond the 0x{BAR5_LENGTH:X} bytes of BAR5 that mmio.c maps")
     writes = [(offset(maps, ip, name), ip, name, exp, why) for ip, name, exp, why in WRITABLE]
     for off, ip, name, _, _ in writes:
         if off not in reads:
@@ -54,7 +59,11 @@ def main():
            "#pragma once", ""]
     for ip, name in NAMED:
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
-    out += ["", "// Offsets that may be written through the escape, with the experiment that allowed each."]
+    for ip, name in NAMED:
+        if offset(maps, ip, name) not in reads:
+            sys.exit(f"{ip}.{name} is used by the driver but not on the read list")
+    out += ["", "// The tables are for mmio.c alone; everybody else gets the names.", "#ifdef BC250_REGS_WITH_TABLES",
+            "", "// Offsets that may be written through the escape, with the experiment that allowed each."]
     out.append(f"#define BC250_MMIO_WRITE_ALLOW_COUNT {len(writes)}")
     out.append("static const unsigned long g_MmioWriteAllow[BC250_MMIO_WRITE_ALLOW_COUNT] = {")
     for off, ip, name, exp, why in sorted(writes):
@@ -63,7 +72,7 @@ def main():
             f"#define BC250_MMIO_READ_ALLOW_COUNT {len(reads)}",
             "static const unsigned long g_MmioReadAllow[BC250_MMIO_READ_ALLOW_COUNT] = {"]
     out += ["    " + ", ".join(f"0x{o:05X}" for o in reads[i:i + 10]) + "," for i in range(0, len(reads), 10)]
-    out += ["};", ""]
+    out += ["};", "", "#endif", ""]
     (HERE / "regs.generated.h").write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes))
 

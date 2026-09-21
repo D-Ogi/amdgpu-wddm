@@ -5,8 +5,9 @@ lab machine and runs its display. The acceptance list below is met; escape reach
 
 What it is (ADR 0006): a display-only miniport for `PCI\VEN_1002&DEV_13FE` that takes over the firmware's
 framebuffer through post-display ownership, offers exactly the mode the firmware left, and presents by CPU
-copy. It performs **no MMIO** and enables no interrupt. Written from the documented DDI; no code from
-Microsoft's MS-PL sample.
+copy. The display path performs **no MMIO** and enables no interrupt; the bring-up code next to it (ADR 0007)
+touches hardware only behind registry gates that default to 0 and that every install closes. Written from
+the documented DDI; no code from Microsoft's MS-PL sample.
 
 | File | Contents |
 |---|---|
@@ -14,6 +15,8 @@ Microsoft's MS-PL sample.
 | `pnp.c` | add/start/stop/remove, the single child (always-connected video output, no EDID), power |
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
 | `guard.c` | boot-loop guard, stage breadcrumbs in the registry, log |
+| `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`; every access checked against tables generated through regcalc (E07) |
+| `vram.c` | the VRAM carve-out by system physical address and through BAR0, behind `EnableVram` / `EnableVramWrite`; one page per access, writes only in a test page (E08) |
 | `bc250kmd_escape.h` | private escape data shared with lab tools |
 | `bc250kmd.inf`, `build.ps1` | package and build (direct `cl`/`link`, `/W4 /WX`, test-signed) |
 

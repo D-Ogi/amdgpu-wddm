@@ -4,6 +4,12 @@
 #define BC250_REG_GC_SCRATCH_REG0 0x30100ul
 #define BC250_REG_GC_SCRATCH_REG1 0x30104ul
 #define BC250_REG_GC_GRBM_STATUS 0x08010ul
+#define BC250_REG_GC_GCMC_VM_FB_OFFSET 0x0A5ACul
+#define BC250_REG_GC_GCMC_VM_FB_LOCATION_BASE 0x0A600ul
+#define BC250_REG_GC_GCMC_VM_FB_LOCATION_TOP 0x0A604ul
+
+// The tables are for mmio.c alone; everybody else gets the names.
+#ifdef BC250_REGS_WITH_TABLES
 
 // Offsets that may be written through the escape, with the experiment that allowed each.
 #define BC250_MMIO_WRITE_ALLOW_COUNT 2
@@ -552,3 +558,5 @@ static const unsigned long g_MmioReadAllow[BC250_MMIO_READ_ALLOW_COUNT] = {
     0x6A160, 0x6A164, 0x6A168, 0x6A17C, 0x6A180, 0x6A184, 0x6A188, 0x6A1B0, 0x6A1B4, 0x6A1B8,
     0x6A1BC, 0x6A1C0, 0x6A1C4, 0x6A1C8, 0x6A1CC,
 };
+
+#endif

@@ -69,6 +69,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GuardStage(StageStartFramebufferMapped);
 
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
+    VramStart(device);      // same rule
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
@@ -90,6 +91,10 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     GuardStage(StageStopEnter);
     device->Started = FALSE;
     device->ModeActive = FALSE;
+    device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
+    device->CommitSeen = FALSE;
+    device->PresentSeen = FALSE;
+    VramStop(device);
     MmioStop(device);
     DisplayUnmapFramebuffer(device);
     GuardStage(StageStopDone);
