@@ -27,6 +27,11 @@ Each milestone has an exit criterion that is a measurement. A milestone is close
 | M8 | **User mode** | Direction: Vulkan first (RADV with a WDDM winsys), Direct3D by translation (ADR 0005). Exit criterion set at M8 |
 | O1 | Optional: 40 CU | Only after M5. Mirrors `bc250-40cu-unlock`: two per-bank register writes during gfx init |
 
+Status 2026-09-21: M0-M3 closed on unit A (facts M1-M29; M3 by experiment E06: our display-only miniport runs the
+lab machine's display, and `D3DKMTEscape` reaches it, which gives M4-M6 their control channel). M2's debugger
+works over KDNET but its host-side server is disabled after it hung the development PC (journal 2026-09-21).
+Next: M4.
+
 Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years. The project stays useful at every step because each milestone leaves verified, published knowledge.
 
 ## Architecture direction (detail in ADRs)
