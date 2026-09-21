@@ -1,7 +1,7 @@
 # E15: a compute dispatch under Windows, the SDMA ring test, a second bring-up (closes milestone M6)
 
-State: **run 001 done (2026-09-21): the dispatch works, the second bring-up works, one new defect (SDMA after a
-re-init, fact M59).**
+State: **runs 001 and 002 done (2026-09-21): the dispatch works, a second and a third bring-up work, and the SDMA
+defect run 001 found (M59) is fixed in 0.7.0 (M60). Open: two stray SDMA0 vectors per re-init.**
 
 ## Why
 
@@ -49,7 +49,21 @@ interrupts and 35 vectors in the session, 0 overflows, 67 to 71 C.
 `evidence/windows/2026-09-21-E15-run-001/` (README.txt there lists every file). Facts M57 (dispatch), M58 (second
 bring-up), M59 (SDMA pointers).
 
-## Follow-up
+## Result (run 002, bc250kmd 0.7.0)
+
+H5 holds in full. Three bring-ups in one device start; in each, stage 7's own ring tests, two more ring tests, five SDMA
+fences, three gfx fences and a 16-workgroup dispatch, all as asked. The witness sweeps show what the fix does: the
+engines' pointers count on across the undo and across three different ring bases (table in the evidence README), and
+each bring-up's first doorbell lands above them. Every undo returned 0, which since 0.7.0 also means that both engines
+halted with nothing left to fetch.
+
+One thing nobody ordered: a single extra vector from SDMA0 per re-init, source 244 (`SDMA_DOORBELL_INVALID`) with data
+`0x280` the first time and source 0 with data `0x500` the second, never from SDMA1 and never in a first bring-up.
+Nothing failed after them. Which step raises them is not separated by this run (fact M60, open).
+
+Evidence: `evidence/windows/2026-09-21-E15-run-002/`.
+
+## Follow-up (written after run 001; done in 0.7.0)
 
 The shim adopts the engine's write pointer on a re-init (upstream's `restore` arm with the hardware's own value), the
 host model learns that SDMA pointers survive a halt, and the miniport runs the SDMA ring test as part of stage 7's
