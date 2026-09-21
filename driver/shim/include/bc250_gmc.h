@@ -66,4 +66,18 @@ void bc250_gmc_gart_disable(struct amdgpu_device *adev);
  * MMHUB semaphore is released on every path that took it, timeout included. */
 int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32 flush_type);
 
+/*
+ * Point one VMID's page directory at pd_phys and invalidate that VMID (ADR 0008 stage C).
+ *
+ * pd_phys is a physical address with no flags in it; the valid bit is added here, which on this
+ * part is the whole of what amdgpu_gmc_pd_addr() adds (see shim.c for why). It must be 4 KB
+ * aligned. vmid is 1..15: VMID 0 is the GART aperture the driver's own rings, MQDs and fence pages
+ * live in, bc250_gmc_gart_enable() programmed its root, and re-pointing it would take that memory
+ * out from under the CP, so it is refused.
+ *
+ * Returns 0, BC250_EINVAL on a bad argument with nothing written, or BC250_ETIME from the
+ * invalidation. The caller serializes: this writes registers and polls, and nothing here locks.
+ */
+int bc250_gmc_set_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 pd_phys, u32 flush_type);
+
 #endif /* BC250_GMC_H */

@@ -86,6 +86,11 @@
  *    behaviour rather than a convenience, and backend_mem.h sets out the four things the sweeps
  *    showed. The arm that exercises it is check_sdma_pointers().
  *
+ * 7. Stage C. The last arm of this file is not a replay at all and says so in its own banner: ADR
+ *    0008's indirect buffer and per-VMID page directory are things amdgpu does per job, so no
+ *    bring-up window contains them. They are checked against AMD's packet and register names, and
+ *    one submission is run end to end through the CP stub, which follows an IB at VMID 0.
+ *
  * Nothing in this file decides what the hardware is told; that is bc250_gfx.c's, bc250_sdma.c's and
  * bc250_irq.c's job. What is here is the inputs of that one amdgpu run, the comparison, and the
  * dumps.
@@ -2026,6 +2031,374 @@ static unsigned int check_gart(struct amdgpu_device *adev, int verbose)
 	return bad;
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * Stage C: the indirect buffer, and one VMID's page directory (ADR 0008)
+ *
+ * Neither is in any trace and neither can be. amdgpu programs a VMID's page directory root per job,
+ * from amdgpu_vm_flush(), and every window recorded on unit A is a bring-up; it submits no indirect
+ * buffer in them either. So this checks the three things that would otherwise be checked by eye:
+ *
+ *   - the dwords bc250_gfx_emit_ib() writes, against the packet AMD's own macros build. Four of
+ *     them, and each is a separate way of being wrong: a different header would be a different
+ *     packet, a swapped address pair would fetch from nowhere, a length in the VMID field would be
+ *     a huge IB at VMID 0, and a VMID in the length field a three-dword IB at VMID 0;
+ *   - that every refusal leaves the ring exactly as it was, which is what makes a refusal safe to
+ *     ignore in the miniport (gfx.c returns a status and writes nothing);
+ *   - the registers bc250_gmc_set_vmid_pd() names, by their CONTEXTn names rather than by the
+ *     ctx_addr_distance arithmetic the code uses, so the two have to agree.
+ *
+ * And one end-to-end run: the ring test built as an indirect buffer, submitted, fetched by the CP
+ * stub and applied. The stub follows an IB at VMID 0 only - see backend_mem.h - so the same
+ * submission at VMID 1 is the control, and it has to come back with the register untouched.
+ * ------------------------------------------------------------------------------------------- */
+
+/* The slot the miniport gives the submission path (BC250_SUBMIT_FENCE_SLOT in driver/kmd/gfx.c);
+ * the number matters here only in that it must not be one of the ring-indexed ones. */
+#define STAGE_C_FENCE_SLOT	10u
+#define STAGE_C_SEQ_BASE	0x00000000C0FFEE20ULL
+
+/* Emit one IB into a ring and compare the four dwords with the packet, then put the ring back. */
+static unsigned int check_ib_dwords(const char *label, struct amdgpu_ring *ring, u64 addr,
+				    u32 length_dw, u32 vmid, int verbose)
+{
+	u32 want[4];
+	u64 at;
+	unsigned int bad = 0, k;
+	int r;
+
+	want[0] = (u32)PACKET3(PACKET3_INDIRECT_BUFFER, 2);
+	want[1] = lower_32_bits(addr);
+	want[2] = upper_32_bits(addr);
+	want[3] = PACKET3_INDIRECT_BUFFER__IB_SIZE(length_dw) | PACKET3_INDIRECT_BUFFER__VMID(vmid);
+
+	r = amdgpu_ring_alloc(ring, bc250_gfx_ib_size(ring));
+	if (r != 0) {
+		printf("    %s: amdgpu_ring_alloc returned %d   <-- wrong\n", label, r);
+		return 1;
+	}
+
+	at = ring->wptr;
+	r = bc250_gfx_emit_ib(ring, addr, length_dw, vmid);
+	if (r != 0) {
+		printf("    %s: bc250_gfx_emit_ib returned %d   <-- wrong\n", label, r);
+		amdgpu_ring_undo(ring);
+		return 1;
+	}
+	if (ring->wptr - at != 4u) {
+		printf("    %s: wrote %llu dwords, not the 4 bc250_gfx_ib_size() promises   <-- wrong\n",
+		       label, (unsigned long long)(ring->wptr - at));
+		bad++;
+	}
+	for (k = 0; k < ARRAY_SIZE(want); k++) {
+		u32 got = ring->ring[(size_t)((at + k) & ring->buf_mask)];
+
+		if (got != want[k]) {
+			printf("    %s: dword %u is %08X, the packet says %08X   <-- wrong\n",
+			       label, k, got, want[k]);
+			bad++;
+		}
+	}
+	if (verbose && bad == 0)
+		printf("    %s: %08X %08X %08X %08X\n", label, want[0], want[1], want[2], want[3]);
+
+	amdgpu_ring_undo(ring);
+	return bad;
+}
+
+/* Every way of asking for an IB that cannot be encoded. Each must return a code and leave the write
+ * pointer where it was: the miniport turns a refusal into a status and carries on, which is only
+ * sound if the ring really is untouched. */
+static unsigned int check_ib_refusals(struct amdgpu_device *adev, u64 addr, int verbose)
+{
+	struct amdgpu_ring *gfx = &adev->gfx.gfx_ring[0];
+	static const struct {
+		const char *what;
+		u64 addr_or;
+		u32 length_dw;
+		u32 vmid;
+		int compute;
+	} bad_input[] = {
+		{ "an address with bit 0 set",       1u,  3u,        0u,  0 },
+		{ "an address with bit 1 set",       2u,  3u,        0u,  0 },
+		{ "a length of 0",                   0u,  0u,        0u,  0 },
+		{ "a length past the 20-bit field",  0u,  0x100000u, 0u,  0 },
+		{ "vmid 16",                         0u,  3u,        16u, 0 },
+		{ "a compute ring",                  0u,  3u,        0u,  1 },
+	};
+	unsigned int bad = 0, k;
+
+	for (k = 0; k < ARRAY_SIZE(bad_input); k++) {
+		struct amdgpu_ring *ring = bad_input[k].compute ? &adev->gfx.compute_ring[0] : gfx;
+		u64 before = ring->wptr;
+		int r;
+
+		/* The allocation is the gfx ring's either way: a compute ring has no IB size here, so
+		 * asking bc250_gfx_ib_size() for one would give 0 and there would be nothing to undo. */
+		if (amdgpu_ring_alloc(gfx, bc250_gfx_ib_size(gfx)) != 0) {
+			printf("    %-34s could not reserve ring space   <-- wrong\n",
+			       bad_input[k].what);
+			bad++;
+			continue;
+		}
+		r = bc250_gfx_emit_ib(ring, addr | bad_input[k].addr_or, bad_input[k].length_dw,
+				      bad_input[k].vmid);
+		if (r == 0) {
+			printf("    %-34s accepted   <-- wrong\n", bad_input[k].what);
+			bad++;
+		} else if (ring->wptr != before) {
+			printf("    %-34s refused but moved the write pointer   <-- wrong\n",
+			       bad_input[k].what);
+			bad++;
+		} else if (verbose) {
+			printf("    %-34s refused (%d), ring untouched\n", bad_input[k].what, r);
+		}
+		amdgpu_ring_undo(gfx);
+	}
+	return bad;
+}
+
+/* One submission: the IB packet, the fence behind it, the doorbell, and what the CP stub made of
+ * them. `vmid` 0 is the run that has to work; 1 is the control the stub cannot follow. */
+static unsigned int check_ib_submit(struct amdgpu_device *adev, u32 vmid, int verbose)
+{
+	struct amdgpu_ring *ring = &adev->gfx.gfx_ring[0];
+	const u32 scratch = SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG0);
+	unsigned int followed, skipped, hits, bad = 0, k;
+	u64 seq = STAGE_C_SEQ_BASE + vmid;
+	u64 at, ib_addr, fence_addr;
+	u32 length_dw = 0;
+	int r;
+
+	r = bc250_gfx_ib_ring_test_build(adev, &length_dw);
+	if (r != 0 || length_dw != 3u) {
+		printf("    vmid %u: bc250_gfx_ib_ring_test_build returned %d, %u dwords   <-- wrong\n",
+		       vmid, r, length_dw);
+		return 1;
+	}
+	ib_addr = bc250_gfx_ib_addr(adev);
+	fence_addr = bc250_gfx_fence_addr(adev, STAGE_C_FENCE_SLOT);
+	if (ib_addr == 0 || fence_addr == 0) {
+		printf("    vmid %u: no IB page (0x%llX) or no fence slot (0x%llX)   <-- wrong\n",
+		       vmid, (unsigned long long)ib_addr, (unsigned long long)fence_addr);
+		return 1;
+	}
+
+	/* The IB half is asserted dword by dword in check_ib_dwords(); the fence half has its own
+	 * checks in the stub, against the three dwords unit A's own driver emits. What is asserted
+	 * here is the thing only the pair can be wrong about: that they are adjacent and in that
+	 * order, which is the whole of what "submit" adds to "emit". */
+	followed = backend_ib_followed();
+	skipped = backend_ib_skipped();
+	hits = backend_cp_stub_count();
+	at = ring->wptr;
+
+	r = bc250_gfx_submit_ib(ring, ib_addr, length_dw, vmid, fence_addr, seq,
+				AMDGPU_FENCE_FLAG_INT);
+	if (r != 0) {
+		printf("    vmid %u: bc250_gfx_submit_ib returned %d   <-- wrong\n", vmid, r);
+		return 1;
+	}
+
+	if (ring->ring[(size_t)(at & ring->buf_mask)] != (u32)PACKET3(PACKET3_INDIRECT_BUFFER, 2) ||
+	    ring->ring[(size_t)((at + 4u) & ring->buf_mask)] != (u32)PACKET3(PACKET3_RELEASE_MEM, 6)) {
+		printf("    vmid %u: the submission is not an INDIRECT_BUFFER followed by a"
+		       " RELEASE_MEM (%08X, %08X)   <-- wrong\n", vmid,
+		       ring->ring[(size_t)(at & ring->buf_mask)],
+		       ring->ring[(size_t)((at + 4u) & ring->buf_mask)]);
+		bad++;
+	}
+
+	if (vmid == 0) {
+		if (backend_ib_followed() != followed + 1u || backend_ib_skipped() != skipped) {
+			printf("    vmid 0: the stub followed %u IBs and skipped %u   <-- wrong:"
+			       " expected one followed, none skipped\n",
+			       backend_ib_followed() - followed, backend_ib_skipped() - skipped);
+			bad++;
+		}
+		/* Three hits: the SET_UCONFIG_REG inside the buffer, the fetch that reached it, and
+		 * the RELEASE_MEM behind the IB in the ring. Counting them is what separates "the
+		 * scratch register happens to hold 0xDEADBEEF" from "this submission put it there". */
+		if (backend_cp_stub_count() != hits + 3u) {
+			printf("    vmid 0: the stub satisfied %u packets, expected 3   <-- wrong\n",
+			       backend_cp_stub_count() - hits);
+			bad++;
+		}
+		if (bc250_gfx_ib_ring_test_result(adev) != 0) {
+			printf("    vmid 0: SCRATCH_REG0 reads %08X, so the IB was not fetched"
+			       "   <-- wrong\n", bc250_shim_rreg(adev, scratch));
+			bad++;
+		}
+	} else {
+		if (backend_ib_skipped() != skipped + 1u || backend_ib_followed() != followed) {
+			printf("    vmid %u: the stub followed the buffer   <-- wrong: it has no"
+			       " address space for a non-zero VMID\n", vmid);
+			bad++;
+		}
+		if (bc250_gfx_ib_ring_test_result(adev) == 0) {
+			printf("    vmid %u: SCRATCH_REG0 took the IB's value although the buffer was"
+			       " never fetched   <-- wrong\n", vmid);
+			bad++;
+		}
+	}
+
+	/* The fence is in the ring either way, so it lands either way: the IB is what the VMID
+	 * decides, not the packet behind it. */
+	if ((u32)bc250_gfx_fence_read(adev, STAGE_C_FENCE_SLOT) != (u32)seq) {
+		printf("    vmid %u: the fence slot holds %08X, not %08X   <-- wrong\n", vmid,
+		       (u32)bc250_gfx_fence_read(adev, STAGE_C_FENCE_SLOT), (u32)seq);
+		bad++;
+	}
+
+	if (verbose && bad == 0) {
+		printf("    vmid %u: IB 0x%llX x%u dwords, fence 0x%llX = %08X;", vmid,
+		       (unsigned long long)ib_addr, length_dw, (unsigned long long)fence_addr,
+		       (u32)seq);
+		for (k = 0; k < 12u; k++)
+			printf(" %08X", ring->ring[(size_t)((at + k) & ring->buf_mask)]);
+		printf("\n");
+	}
+	return bad;
+}
+
+/* bc250_gmc_set_vmid_pd(): the two halves of the root, then the invalidation. */
+static unsigned int check_vmid_pd(struct amdgpu_device *adev, u32 vmid, u32 lo_offset,
+				  u32 hi_offset, u64 pd_phys, int verbose)
+{
+	const u32 req_offset = SOC15_REG_OFFSET(GC, 0, mmGCVM_INVALIDATE_ENG17_REQ) * 4u;
+	const u32 ack_offset = SOC15_REG_OFFSET(GC, 0, mmGCVM_INVALIDATE_ENG17_ACK) * 4u;
+	u32 v[4], req, per_vmid;
+	unsigned int bad = 0, n;
+	int r;
+
+	/* The acknowledge register is the hardware answering, and a replayed register file never
+	 * does: without this the poll would run out its 100 000 iterations and return BC250_ETIME.
+	 * All ones rather than the one bit, so that a call which invalidated the wrong VMID would
+	 * still be caught by the REQ check below and not by the poll. */
+	backend_poke(ack_offset, 0xFFFFFFFFu);
+
+	r = bc250_gmc_set_vmid_pd(adev, vmid, pd_phys, 0);
+	if (r != 0) {
+		printf("    vmid %u: bc250_gmc_set_vmid_pd returned %d   <-- wrong\n", vmid, r);
+		return 1;
+	}
+
+	n = writes_to(lo_offset, v, (unsigned int)ARRAY_SIZE(v));
+	if (n == 0 || v[n - 1u] != lower_32_bits(pd_phys | AMDGPU_PTE_VALID)) {
+		printf("    vmid %u: PAGE_TABLE_BASE_ADDR_LO32 (0x%05X) last written %08X, expected"
+		       " %08X   <-- wrong\n", vmid, lo_offset, n ? v[n - 1u] : 0,
+		       lower_32_bits(pd_phys | AMDGPU_PTE_VALID));
+		bad++;
+	}
+	n = writes_to(hi_offset, v, (unsigned int)ARRAY_SIZE(v));
+	if (n == 0 || v[n - 1u] != upper_32_bits(pd_phys | AMDGPU_PTE_VALID)) {
+		printf("    vmid %u: PAGE_TABLE_BASE_ADDR_HI32 (0x%05X) last written %08X, expected"
+		       " %08X   <-- wrong\n", vmid, hi_offset, n ? v[n - 1u] : 0,
+		       upper_32_bits(pd_phys | AMDGPU_PTE_VALID));
+		bad++;
+	}
+
+	n = writes_to(req_offset, v, (unsigned int)ARRAY_SIZE(v));
+	req = n ? v[n - 1u] : 0;
+	per_vmid = (req & GCVM_INVALIDATE_ENG0_REQ__PER_VMID_INVALIDATE_REQ_MASK) >>
+		   GCVM_INVALIDATE_ENG0_REQ__PER_VMID_INVALIDATE_REQ__SHIFT;
+	if (n == 0 || per_vmid != (1u << vmid)) {
+		printf("    vmid %u: INVALIDATE_ENG17_REQ last written %08X, PER_VMID %04X, expected"
+		       " %04X   <-- wrong\n", vmid, req, per_vmid, 1u << vmid);
+		bad++;
+	}
+	if (verbose && bad == 0)
+		printf("    vmid %2u: 0x%05X = %08X, 0x%05X = %08X, ENG17_REQ = %08X\n", vmid,
+		       lo_offset, lower_32_bits(pd_phys | AMDGPU_PTE_VALID), hi_offset,
+		       upper_32_bits(pd_phys | AMDGPU_PTE_VALID), req);
+	return bad;
+}
+
+static unsigned int check_stage_c(struct amdgpu_device *adev, int verbose)
+{
+	static const struct { const char *what; u32 vmid; u64 pd; } refuse[] = {
+		{ "vmid 0, the GART's own",         0u,  0x0000000012345000ULL },
+		{ "vmid 16, past the hub",          16u, 0x0000000012345000ULL },
+		{ "a root that is not page aligned", 1u, 0x0000000012345800ULL },
+	};
+	struct amdgpu_ring *gfx = &adev->gfx.gfx_ring[0];
+	unsigned int bad = 0, k, before;
+	u64 ib_addr;
+	int r;
+
+	printf("\n== stage C: the indirect buffer and a VMID's page directory ==\n");
+	printf("  no trace holds either of these, so they are checked against AMD's own packet and\n"
+	       "  register names; the end-to-end run goes through the CP stub's IB support\n");
+
+	/* The sizes, which are also how a caller asks whether a ring takes an IB at all. */
+	if (bc250_gfx_ib_size(gfx) != 4u) {
+		printf("    bc250_gfx_ib_size(gfx) is %u, not 4   <-- wrong\n",
+		       bc250_gfx_ib_size(gfx));
+		bad++;
+	}
+	if (bc250_gfx_ib_size(&adev->gfx.compute_ring[0]) != 0u ||
+	    bc250_gfx_ib_size(&adev->gfx.kiq[0].ring) != 0u || bc250_gfx_ib_size(NULL) != 0u) {
+		printf("    bc250_gfx_ib_size() answers for a ring this file has no IB emitter for"
+		       "   <-- wrong\n");
+		bad++;
+	}
+
+	r = bc250_gfx_ib_page_alloc(adev);
+	if (r != 0) {
+		printf("    bc250_gfx_ib_page_alloc returned %d   <-- wrong\n", r);
+		return bad + 1u;
+	}
+	if (bc250_gfx_fence_page_alloc(adev) != 0) {
+		printf("    bc250_gfx_fence_page_alloc failed   <-- wrong\n");
+		return bad + 1u;
+	}
+	ib_addr = bc250_gfx_ib_addr(adev);
+
+	/* Four dwords, at three VMIDs and two addresses, so that neither field can be reading the
+	 * other's value by accident. */
+	bad += check_ib_dwords("vmid 0, the IB page", gfx, ib_addr, 3u, 0u, verbose);
+	bad += check_ib_dwords("vmid 1, the IB page", gfx, ib_addr, 3u, 1u, verbose);
+	bad += check_ib_dwords("vmid 15, a 40-bit address", gfx, 0x000000AB12345678ULL & ~3ULL,
+			       0xFFFFFu, 15u, verbose);
+	bad += check_ib_refusals(adev, ib_addr, verbose);
+
+	/* End to end, then the control at a VMID the stub has no address space for. */
+	bad += check_ib_submit(adev, 0u, verbose);
+	bad += check_ib_submit(adev, 1u, verbose);
+
+	/* The page directory. The offsets are the CONTEXTn names; the code reaches the same
+	 * registers as CONTEXT0 plus hub->ctx_addr_distance * vmid, so a mistake in either the
+	 * distance or the names shows up here. */
+	bad += check_vmid_pd(adev, 1u, SOC15_REG_OFFSET(GC, 0, mmGCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32) * 4u,
+			     SOC15_REG_OFFSET(GC, 0, mmGCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_HI32) * 4u,
+			     0x000000F5FF123000ULL, verbose);
+	bad += check_vmid_pd(adev, 15u, SOC15_REG_OFFSET(GC, 0, mmGCVM_CONTEXT15_PAGE_TABLE_BASE_ADDR_LO32) * 4u,
+			     SOC15_REG_OFFSET(GC, 0, mmGCVM_CONTEXT15_PAGE_TABLE_BASE_ADDR_HI32) * 4u,
+			     0x000000F5FF456000ULL, verbose);
+
+	for (k = 0; k < ARRAY_SIZE(refuse); k++) {
+		before = backend_write_count();
+
+		r = bc250_gmc_set_vmid_pd(adev, refuse[k].vmid, refuse[k].pd, 0);
+		if (r == 0) {
+			printf("    %-34s accepted   <-- wrong\n", refuse[k].what);
+			bad++;
+		} else if (backend_write_count() != before) {
+			printf("    %-34s refused but wrote %u registers   <-- wrong\n",
+			       refuse[k].what, backend_write_count() - before);
+			bad++;
+		} else if (verbose) {
+			printf("    %-34s refused (%d), nothing written\n", refuse[k].what, r);
+		}
+	}
+
+	/* Both pages go back, so that what runs after this sees the device it would have seen: the
+	 * teardown-and-rerun arm below is about the addresses a second bring-up gets. */
+	bc250_gfx_ib_page_free(adev);
+	bc250_gfx_fence_page_free(adev);
+	printf("  %u wrong\n", bad);
+	return bad;
+}
+
 /* The fifth declared model: the SDMA engines' own write pointer, measured in E15. backend_mem.h
  * sets out the four things the sweeps showed. The pointer survives without being declared - it is
  * what the hardware does, so the backend does it for every SDMA ring - and what this call adds is
@@ -2611,7 +2984,7 @@ int main(int argc, char **argv)
 	struct result derived, ctl_async, ctl_gfxoff, ctl_nostub, ctl_perring;
 	struct run_opts opt;
 	unsigned int i, stray = 0, gart_bad = 0, mqd_bad = 0, rerun_bad = 0, unclean_bad = 0;
-	unsigned int stuck_bad = 0, sdma_ptr_bad = 0;
+	unsigned int stuck_bad = 0, sdma_ptr_bad = 0, stagec_bad = 0;
 	int verbose = 0, exact, controls_fail;
 	const char *sweep1, *sweep2, *trace, *trace_irq, *dumpdir = NULL, *ringsdir = NULL;
 	const char *winsweep = NULL;
@@ -2689,6 +3062,11 @@ int main(int argc, char **argv)
 
 	if (derived.irq_rc == 0)
 		gart_bad = check_gart(&adev, verbose);
+
+	/* Before the teardown arms, because it wants the device the bring-up left and gives back the
+	 * two pages it borrows so that those arms see the same one. */
+	if (derived.irq_rc == 0)
+		stagec_bad = check_stage_c(&adev, verbose);
 
 	if (ringsdir != NULL && derived.irq_rc == 0)
 		mqd_bad = compare_mqds_with_unit_a(ringsdir, &adev, verbose);
@@ -2770,6 +3148,7 @@ int main(int argc, char **argv)
 		printf("  unexpected non-zero MQD dwords      : %u\n", stray);
 	printf("  stage 0 writes wrong                : %u\n", derived.stage0_bad);
 	printf("  GART page table checks wrong        : %u\n", gart_bad);
+	printf("  stage C (IB and VMID root) wrong    : %u\n", stagec_bad);
 	if (ringsdir != NULL)
 		printf("  MQD fields differing from unit A    : %u\n", mqd_bad);
 	printf("  teardown-and-rerun checks wrong     : %u\n", rerun_bad);
@@ -2815,6 +3194,9 @@ int main(int argc, char **argv)
 		printf("NO MATCH - %u of stage 0's three NBIO writes differ\n", derived.stage0_bad);
 	else if (gart_bad != 0)
 		printf("NO MATCH - %u GART page table checks failed\n", gart_bad);
+	else if (stagec_bad != 0)
+		printf("NO MATCH - %u stage C checks failed (the IB emitters or the VMID page"
+		       " directory)\n", stagec_bad);
 	else if (mqd_bad != 0)
 		printf("NO MATCH - %u compute MQD fields differ from unit A's own MQDs\n", mqd_bad);
 	else if (stuck_bad != 0)
@@ -2847,5 +3229,6 @@ int main(int argc, char **argv)
 		derived.address_failures == 0 && derived.stub_hits == 11 &&
 		derived.stub_rejects == 0 && stray == 0 &&
 		derived.stage0_bad == 0 && gart_bad == 0 && mqd_bad == 0 && rerun_bad == 0 &&
-		stuck_bad == 0 && unclean_bad == 0 && sdma_ptr_bad == 0 && controls_fail) ? 0 : 1;
+		stuck_bad == 0 && unclean_bad == 0 && sdma_ptr_bad == 0 && stagec_bad == 0 &&
+		controls_fail) ? 0 : 1;
 }

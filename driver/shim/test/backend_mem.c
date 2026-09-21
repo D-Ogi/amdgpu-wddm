@@ -151,6 +151,9 @@ static unsigned int g_stub_hits;
 static unsigned int g_stub_rejects;
 static u32 g_scratch_reg0_dword;        /* set by backend_cp_stub_expect(), 0 = not told yet */
 static int g_stub_on = 1;
+static unsigned int g_ib_followed;      /* indirect buffers the stub fetched and ran, and those it */
+static unsigned int g_ib_skipped;       /* saw at a VMID it has no address space for */
+static int g_ib_depth;                  /* 1 while the packets of an IB are being executed */
 
 static struct backend_packet g_packet[MAX_PACKETS];
 static unsigned int g_packet_count;
@@ -196,6 +199,9 @@ void backend_mem_reset(void)
 	g_stub_hits = 0;
 	g_stub_rejects = 0;
 	g_packet_count = 0;
+	g_ib_followed = 0;
+	g_ib_skipped = 0;
+	g_ib_depth = 0;
 	cs_state_clear();
 
 	g_ih_adev = NULL;
@@ -879,6 +885,119 @@ void backend_hqd_pin(const struct amdgpu_ring *ring, int pinned)
 			g_ring[i].hqd_pinned = pinned;
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * The fourth stub: an indirect buffer
+ *
+ * PACKET3_INDIRECT_BUFFER points the CP at dwords somewhere else and it executes them as if they
+ * had been in the ring. The stub does the same, for the one address space it can: VMID 0, the flat
+ * GART aperture, where an MC address is an allocation this file handed out. Anything else is
+ * counted as skipped and left alone - see backend_mem.h for why that is not the same as ignoring it.
+ *
+ * Same discipline as everywhere above. The packet's own count has to be right, the length has to
+ * fit inside the buffer the address resolves to, the packets inside go through stub_execute() like
+ * any others, and an IB that names another IB is a rejection: the CP does allow chaining, nothing
+ * in this driver emits it, and a stub that followed one would be modelling something no test has
+ * ever looked at.
+ * ------------------------------------------------------------------------------------------- */
+
+unsigned int backend_ib_followed(void) { return g_ib_followed; }
+unsigned int backend_ib_skipped(void)  { return g_ib_skipped; }
+
+static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring *ring);
+
+static int stub_indirect_buffer(const struct backend_packet *p, const struct amdgpu_ring *ring)
+{
+	const u32 *ib;
+	u64 addr;
+	u32 length_dw, vmid, at;
+	unsigned int ran = 0;
+
+	/* PACKET3(PACKET3_INDIRECT_BUFFER, 2): the header plus three body dwords. */
+	if (p->count != 2 || p->body_dwords < 3) {
+		fprintf(stderr, "backend_mem: INDIRECT_BUFFER count %u, body %u; expected 2 and 3\n",
+			p->count, p->body_dwords);
+		g_stub_rejects++;
+		return 0;
+	}
+	if (g_ib_depth != 0) {
+		fprintf(stderr, "backend_mem: an INDIRECT_BUFFER inside an indirect buffer; nothing in"
+				" this driver chains them\n");
+		g_stub_rejects++;
+		return 0;
+	}
+
+	addr = (u64)p->body[0] | ((u64)p->body[1] << 32);
+	/* nvd.h gives setters and no getters, so each field is taken apart with its own macro where
+	 * that works and with the macro's shift restated where it does not, exactly as the
+	 * RELEASE_MEM decode above does. IB_SIZE shifts by nothing, so the macro of all-ones is its
+	 * mask; VMID's shift is the 24 in PACKET3_INDIRECT_BUFFER__VMID(x) (nvd.h:239). */
+	length_dw = p->body[2] & PACKET3_INDIRECT_BUFFER__IB_SIZE(~0u);
+	vmid = (p->body[2] & PACKET3_INDIRECT_BUFFER__VMID(~0u)) >> 24;
+
+	if (vmid != 0) {
+		g_ib_skipped++;
+		return 0;
+	}
+	if (length_dw == 0) {
+		fprintf(stderr, "backend_mem: INDIRECT_BUFFER of 0 dwords\n");
+		g_stub_rejects++;
+		return 0;
+	}
+
+	ib = (const u32 *)mc_to_cpu(addr, length_dw * 4u);
+	if (ib == NULL) {
+		fprintf(stderr, "backend_mem: INDIRECT_BUFFER at 0x%llX covering %u dwords is in no"
+				" allocation\n", (unsigned long long)addr, length_dw);
+		g_stub_rejects++;
+		return 0;
+	}
+
+	g_ib_depth = 1;
+	for (at = 0; at < length_dw; ) {
+		u32 header = ib[at];
+		struct backend_packet decoded;
+		unsigned int count, body, k;
+
+		if (header == ring->funcs->nop) {       /* the same one-dword filler the ring decode knows */
+			at++;
+			continue;
+		}
+		if (CP_PACKET_GET_TYPE(header) != PACKET_TYPE3) {
+			at++;
+			continue;
+		}
+
+		count = CP_PACKET_GET_COUNT(header);
+		body = count + 1u;
+		if (at + 1u + body > length_dw) {
+			fprintf(stderr, "backend_mem: a packet at dword %u of the indirect buffer runs"
+					" past its %u dwords\n", at, length_dw);
+			g_stub_rejects++;
+			break;
+		}
+
+		memset(&decoded, 0, sizeof(decoded));
+		decoded.doorbell_index = p->doorbell_index;
+		decoded.opcode = CP_PACKET3_GET_OPCODE(header);
+		decoded.count = count;
+		decoded.first_dword = at;
+		decoded.body_dwords = body < 8u ? body : 8u;
+		for (k = 0; k < decoded.body_dwords; k++)
+			decoded.body[k] = ib[at + 1u + k];
+
+		if (g_packet_count < MAX_PACKETS)
+			g_packet[g_packet_count++] = decoded;
+
+		ran += (unsigned int)stub_execute(&decoded, ring);
+		at += 1u + body;
+	}
+	g_ib_depth = 0;
+
+	g_ib_followed++;
+	g_stub_hits += ran;             /* what the packets inside did; the fetch itself is the 1 below */
+	return 1;
+}
+
 static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring *ring)
 {
 	struct amdgpu_device *adev = ring->adev;   /* SOC15_REG_OFFSET() reads it by that name */
@@ -898,6 +1017,8 @@ static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring
 		return stub_map_unmap(p, 1);
 	if (p->opcode == PACKET3_UNMAP_QUEUES)
 		return stub_map_unmap(p, 0);
+	if (p->opcode == PACKET3_INDIRECT_BUFFER)
+		return stub_indirect_buffer(p, ring);
 
 	if (p->opcode != PACKET3_SET_UCONFIG_REG)
 		return 0;                       /* not a ring test; SET_RESOURCES and the rest */

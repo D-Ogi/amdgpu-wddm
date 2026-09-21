@@ -251,6 +251,25 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GFX* D
 BOOLEAN GfxIsActive(_In_ const BC250_DEVICE* Device);
 struct _BC250_ESCAPE_FENCE;
 void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_FENCE* Data);
+// ADR 0008 stage C: one indirect buffer on the gfx ring. The ring side of a submission lives here so that wddm.c
+// stays free of shim types, exactly as it is today.
+//   GfxSubmitIb      PASSIVE_LEVEL only; takes Device->GartLock. Programs VMID Vmid's page directory root if
+//                    RootPhysical differs from what that VMID was last given in this device start (Vmid 0 has no root
+//                    of its own and never programs one), then submits the IB with an interrupting fence and rings the
+//                    doorbell. It does NOT wait. One submission is in flight at a time: while the previous sequence
+//                    number has not arrived it answers STATUS_DEVICE_BUSY and writes nothing.
+//   GfxFenceArrived  DISPATCH_LEVEL: one read of the fence slot in GTT memory, no lock, no register. It also clears
+//                    the in-flight mark, so it is what lets the next submission through.
+//   GfxSubmitReady   whether a submission would be taken: stage 8 done, nothing failed, nothing in flight and the
+//                    EnableGpuSubmit gate open. Advisory - GfxSubmitIb checks the same things under the lock.
+//   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
+//                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
+//                    only safe answer to a submission that never completed.
+NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
+                     ULONG SizeBytes, _Out_ ULONG* Seq);
+BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
+BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
+void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;
@@ -295,11 +314,13 @@ void WddmStart(_Inout_ BC250_DEVICE* Device);       // never fails the start, li
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
+void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet in flight finished? <= DISPATCH_LEVEL
 // vidmm.c: VidMm's page tables (ADR 0008 stage B). EnableGpuVa 0 = plan and log, 1 = write the entries.
 void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
 void VidMmStop(void);
 void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
 void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root);
+BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULONGLONG* Physical);
 void VidMmSummary(void);
 void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
                                                     // when the gate is closed, so the escape can call it either way

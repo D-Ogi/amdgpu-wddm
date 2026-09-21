@@ -2,9 +2,9 @@
 //
 // It creates one allocation on our full WDDM miniport, gives it a GPU virtual address we choose, makes it
 // resident, locks it and writes a pattern a witness (bc250rd, walking the page tables) can find again in
-// physical memory. Nothing here is a context and nothing is submitted: that is stage C (research document
-// section 5.3), and the steps below are one function each so that a later --submit can be bolted on without
-// rewriting the ones before it.
+// physical memory. With --submit it continues into stage C (research document section 5.3): a virtual-
+// addressing context, a monitored fence, a second allocation holding PM4 NOPs, one SubmitCommand and a
+// bounded wait for the fence to reach 1. Every step is one function, and stage B is untouched by stage C.
 //
 // It runs ON THE TARGET, elevated, in session 0. On the development PC it only answers --help.
 //
@@ -56,6 +56,20 @@ C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE) == 32);
 // The witness looks for this in memory. High six bytes "BC250B", low two bytes the word index.
 #define PATTERN_TAG 0x4243323530420000ull
 
+// ---- PM4, as the shim already writes it ---------------------------------------------------------------
+//
+// Verbatim from driver/amdgpu-import/nvd.h:33 (PACKET_TYPE3), :48 (PACKET3) and :55 (PACKET3_NOP). The dword
+// count is the one gfx_v10_0.c:9505 uses - amdgpu_ring_write(ring, PACKET3(PACKET3_NOP, num_nop - 2)) - so a
+// NOP that occupies `total` dwords carries n = total - 2: one header plus n + 1 body dwords, and the CP
+// ignores the body. The single-dword pad is the PACKET2 NOP of driver/shim/bc250_gfx.c:68 (BC250_CP_NOP),
+// what all three GFX10 ring types pad with.
+#define PACKET_TYPE3 3u
+#define PACKET3(op, n)  (((PACKET_TYPE3) << 30) | (((op) & 0xFFu) << 8) | ((((UINT32)(n)) & 0x3FFFu) << 16))
+#define PACKET3_NOP 0x10u
+#define BC250_CP_NOP 0xFFFF1000u
+// bc250_gfx.c:66: "All three CP ring types pad to 8 dwords". The command stream is rounded to that.
+#define PM4_DWORD_ALIGN 8u
+
 // ---- options ------------------------------------------------------------------------------------------
 
 typedef struct _OPTIONS {
@@ -69,12 +83,35 @@ typedef struct _OPTIONS {
     BOOL Reserve;                       // D3DKMTReserveGpuVirtualAddress before the map
     BOOL ResidentFirst;                 // MakeResident before MapGpuVirtualAddress
     BOOL NoWrite;                       // lock, but leave the contents alone
+    BOOL Submit;                        // stage C: context, monitored fence, one submission of NOPs
+    UINT64 CommandVa;                   // where the command buffer is mapped
+    UINT32 Nops;                        // dwords of PM4 in the command buffer
     DWORD HoldSeconds;
     DWORD FenceTimeoutMs;
     DWORD WatchdogMs;
 } OPTIONS;
 
 // ---- probe state --------------------------------------------------------------------------------------
+
+// One allocation with its GPU VA. The data buffer and the command buffer differ only in what goes into them,
+// so every memory step below takes one of these and the transcript says which.
+typedef struct _BUFFER {
+    const char* Name;                   // "data" or "cmd", printed next to every call
+    UINT64 Size;                        // page-rounded
+    UINT64 RequestedVa;                 // what we ask for, 0 = let VidMm choose
+    D3DKMT_HANDLE hAllocation;
+    UINT64 ReservedBase;                // 0 when nothing was reserved
+    UINT64 ReservedSize;
+    UINT64 MappedVa;                    // 0 when nothing is mapped
+    void* Locked;                       // NULL when not locked
+} BUFFER;
+
+typedef enum _SUBMIT_RESULT {
+    SubmitNotAttempted = 0,
+    SubmitFenceReached,                 // the monitored fence reached the value we asked for
+    SubmitFenceTimeout,                 // every call succeeded, the fence did not move in time
+    SubmitFailed                        // a call failed
+} SUBMIT_RESULT;
 
 typedef struct _PROBE {
     OPTIONS Opt;
@@ -84,12 +121,18 @@ typedef struct _PROBE {
     D3DKMT_HANDLE hPagingQueue;
     D3DKMT_HANDLE hPagingFenceObject;
     volatile UINT64* PagingFence;       // CPU-readable value of the paging queue's monitored fence
-    D3DKMT_HANDLE hAllocation;
-    UINT64 Size;                        // page-rounded
-    UINT64 ReservedBase;                // 0 when nothing was reserved
-    UINT64 ReservedSize;
-    UINT64 MappedVa;                    // 0 when nothing is mapped
-    void* Locked;                       // NULL when not locked
+    BUFFER Data;
+    BUFFER Command;
+
+    // stage C
+    D3DKMT_HANDLE hContext;
+    D3DKMT_HANDLE hFence;
+    volatile UINT64* FenceCpuVa;        // read-only mapping of the monitored fence
+    UINT64 FenceGpuVa;                  // where the GPU would write it
+    HANDLE WaitEvent;                   // handed to WaitForSynchronizationObjectFromCpu, never NULL
+    UINT32 CommandLength;               // bytes of PM4 actually submitted
+    SUBMIT_RESULT Submit;
+    DWORD SubmitElapsedMs;
 } PROBE;
 
 // ---- NTSTATUS names -----------------------------------------------------------------------------------
@@ -134,6 +177,15 @@ static NTSTATUS Report(const char* Call, NTSTATUS Status)
     printf("%-34s 0x%08lX%s%s\n", Call, (unsigned long)Status, name[0] ? "  " : "", name);
     fflush(stdout);
     return Status;
+}
+
+// The same, for a call that acts on one buffer: "D3DKMTLock2 [cmd]".
+static NTSTATUS ReportOn(const char* Call, const BUFFER* Buffer, NTSTATUS Status)
+{
+    char label[64];
+
+    sprintf_s(label, sizeof(label), "%s [%s]", Call, Buffer->Name);
+    return Report(label, Status);
 }
 
 static void Note(const char* Format, ...)
@@ -430,7 +482,7 @@ static BOOL StepCreatePagingQueue(PROBE* Probe)
 
 // ---- step 4: the allocation ------------------------------------------------------------------------------
 
-static BOOL StepCreateAllocation(PROBE* Probe)
+static BOOL StepCreateAllocation(PROBE* Probe, BUFFER* Buffer)
 {
     BC250_WDDM_ALLOCATION_PRIVATE private;
     D3DDDI_ALLOCATIONINFO2 info;
@@ -441,11 +493,11 @@ static BOOL StepCreateAllocation(PROBE* Probe)
     ZeroMemory(&private, sizeof(private));
     private.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
     private.Version = BC250_ALLOCATION_PRIVATE_VERSION;
-    private.Width = (ULONG)(Probe->Size / 4);
+    private.Width = (ULONG)(Buffer->Size / 4);
     private.Height = 1;
-    private.Pitch = (ULONG)Probe->Size;
+    private.Pitch = (ULONG)Buffer->Size;
     private.Format = (ULONG)D3DDDIFMT_A8R8G8B8;
-    private.Size = Probe->Size;
+    private.Size = Buffer->Size;
 
     ZeroMemory(&info, sizeof(info));
     info.pPrivateDriverData = &private;
@@ -462,49 +514,49 @@ static BOOL StepCreateAllocation(PROBE* Probe)
          (unsigned)sizeof(private), (unsigned long)private.Magic, private.Size,
          (unsigned long)private.Width, (unsigned long)private.Height, (unsigned long)private.Pitch,
          (unsigned long)private.Format);
-    if (!NT_SUCCESS(Report("D3DKMTCreateAllocation2", D3DKMTCreateAllocation2(&create)))) return FALSE;
-    Probe->hAllocation = info.hAllocation;
+    if (!NT_SUCCESS(ReportOn("D3DKMTCreateAllocation2", Buffer, D3DKMTCreateAllocation2(&create)))) return FALSE;
+    Buffer->hAllocation = info.hAllocation;
     Note("hAllocation 0x%08lX, GpuVirtualAddress reported 0x%016llX",
-         (unsigned long)Probe->hAllocation, info.GpuVirtualAddress);
+         (unsigned long)Buffer->hAllocation, info.GpuVirtualAddress);
     return TRUE;
 }
 
 // ---- step 5: GPU virtual address -------------------------------------------------------------------------
 
-static BOOL StepReserveVa(PROBE* Probe)
+static BOOL StepReserveVa(PROBE* Probe, BUFFER* Buffer)
 {
     D3DDDI_RESERVEGPUVIRTUALADDRESS reserve;
-    UINT64 size = (Probe->Size + GPU_RESERVE_ALIGN - 1) & ~(GPU_RESERVE_ALIGN - 1);
+    UINT64 size = (Buffer->Size + GPU_RESERVE_ALIGN - 1) & ~(GPU_RESERVE_ALIGN - 1);
 
     // The struct changed meaning between revisions (research section 3.2): zero it, set only hAdapter,
     // BaseAddress, Minimum, Maximum and Size, and never wait on the fence slot of this call.
     ZeroMemory(&reserve, sizeof(reserve));
     reserve.hAdapter = Probe->hAdapter;
-    reserve.BaseAddress = Probe->Opt.Va;
-    if (Probe->Opt.Va == 0)
+    reserve.BaseAddress = Buffer->RequestedVa;
+    if (Buffer->RequestedVa == 0)
     {
         reserve.MinimumAddress = Probe->Opt.VaMin;
         reserve.MaximumAddress = Probe->Opt.VaMax;
     }
     reserve.Size = size;
     reserve.ReservationType = D3DDDIGPUVIRTUALADDRESS_RESERVE_NO_ACCESS;
-    Note("reserving 0x%llX bytes at 0x%016llX", size, Probe->Opt.Va);
-    if (!NT_SUCCESS(Report("D3DKMTReserveGpuVirtualAddress", D3DKMTReserveGpuVirtualAddress(&reserve))))
+    Note("reserving 0x%llX bytes at 0x%016llX", size, Buffer->RequestedVa);
+    if (!NT_SUCCESS(ReportOn("D3DKMTReserveGpuVirtualAddress", Buffer, D3DKMTReserveGpuVirtualAddress(&reserve))))
         return FALSE;
-    Probe->ReservedBase = reserve.VirtualAddress;
-    Probe->ReservedSize = size;
-    Note("reserved at 0x%016llX (asked 0x%016llX)", Probe->ReservedBase, Probe->Opt.Va);
+    Buffer->ReservedBase = reserve.VirtualAddress;
+    Buffer->ReservedSize = size;
+    Note("reserved at 0x%016llX (asked 0x%016llX)", Buffer->ReservedBase, Buffer->RequestedVa);
     return TRUE;
 }
 
-static BOOL StepMapVa(PROBE* Probe)
+static BOOL StepMapVa(PROBE* Probe, BUFFER* Buffer)
 {
     D3DDDI_MAPGPUVIRTUALADDRESS map;
-    UINT64 base = Probe->ReservedBase != 0 ? Probe->ReservedBase : Probe->Opt.Va;
+    UINT64 base = Buffer->ReservedBase != 0 ? Buffer->ReservedBase : Buffer->RequestedVa;
 
     ZeroMemory(&map, sizeof(map));
     map.hPagingQueue = Probe->hPagingQueue;
-    map.hAllocation = Probe->hAllocation;
+    map.hAllocation = Buffer->hAllocation;
     map.BaseAddress = base;
     if (base == 0)
     {
@@ -513,15 +565,15 @@ static BOOL StepMapVa(PROBE* Probe)
         map.MaximumAddress = Probe->Opt.VaMax;
     }
     map.OffsetInPages = 0;
-    map.SizeInPages = Probe->Size / GPU_PAGE_SIZE;
+    map.SizeInPages = Buffer->Size / GPU_PAGE_SIZE;
     // Read plus write: read is the absence of NoAccess, there is no separate Read bit.
     map.Protection.Value = 0;
     map.Protection.Write = 1;
-    map.DriverProtection = 0;           // stage C sends our PTE bits here; stage B has no page-table code yet
+    map.DriverProtection = 0;           // the per-PTE hook, once BuildPagingBuffer translates DXGK_PTE
 
-    Note("mapping %llu page(s) of 0x%llX bytes at base 0x%016llX", map.SizeInPages, Probe->Size, base);
-    if (!NT_SUCCESS(Report("D3DKMTMapGpuVirtualAddress", D3DKMTMapGpuVirtualAddress(&map)))) return FALSE;
-    Probe->MappedVa = map.VirtualAddress;
+    Note("mapping %llu page(s) of 0x%llX bytes at base 0x%016llX", map.SizeInPages, Buffer->Size, base);
+    if (!NT_SUCCESS(ReportOn("D3DKMTMapGpuVirtualAddress", Buffer, D3DKMTMapGpuVirtualAddress(&map)))) return FALSE;
+    Buffer->MappedVa = map.VirtualAddress;
     Note("VirtualAddress 0x%016llX (asked 0x%016llX, %s), PagingFenceValue %llu", map.VirtualAddress, base,
          (base == 0 || map.VirtualAddress == base) ? "honoured" : "DIFFERENT", map.PagingFenceValue);
     return WaitPagingFence(Probe, map.PagingFenceValue, "MapGpuVirtualAddress");
@@ -529,14 +581,14 @@ static BOOL StepMapVa(PROBE* Probe)
 
 // ---- step 6: residency -----------------------------------------------------------------------------------
 
-static BOOL StepMakeResident(PROBE* Probe)
+static BOOL StepMakeResident(PROBE* Probe, BUFFER* Buffer)
 {
     D3DDDI_MAKERESIDENT resident;
     D3DKMT_HANDLE list[1];
     UINT priorities[1];
     NTSTATUS status;
 
-    list[0] = Probe->hAllocation;
+    list[0] = Buffer->hAllocation;
     priorities[0] = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
 
     ZeroMemory(&resident, sizeof(resident));
@@ -544,7 +596,7 @@ static BOOL StepMakeResident(PROBE* Probe)
     resident.NumAllocations = 1;
     resident.AllocationList = list;
     resident.PriorityList = priorities;
-    status = Report("D3DKMTMakeResident", D3DKMTMakeResident(&resident));
+    status = ReportOn("D3DKMTMakeResident", Buffer, D3DKMTMakeResident(&resident));
     // NumAllocations is in and out: partial success is legal and is not an error by itself.
     Note("NumAllocations back %u, PagingFenceValue %llu, NumBytesToTrim %llu", resident.NumAllocations,
          resident.PagingFenceValue, resident.NumBytesToTrim);
@@ -560,50 +612,247 @@ static BOOL StepMakeResident(PROBE* Probe)
 
 // ---- step 7: lock, write the pattern, unlock ---------------------------------------------------------------
 
-static BOOL StepLockAndWrite(PROBE* Probe)
+static BOOL LockBuffer(PROBE* Probe, BUFFER* Buffer)
 {
     D3DKMT_LOCK2 lock;
-    D3DKMT_UNLOCK2 unlock;
-    UINT64 words = Probe->Size / sizeof(UINT64);
-    UINT64 i;
-    volatile UINT64* data;
 
     ZeroMemory(&lock, sizeof(lock));
     lock.hDevice = Probe->hDevice;
-    lock.hAllocation = Probe->hAllocation;
-    lock.Flags.Value = 0;
-    if (!NT_SUCCESS(Report("D3DKMTLock2", D3DKMTLock2(&lock)))) return FALSE;
-    Probe->Locked = lock.pData;
+    lock.hAllocation = Buffer->hAllocation;
+    lock.Flags.Value = 0;               // WDDM 2.0's Lock2 flags are entirely reserved; there is nothing to say
+    if (!NT_SUCCESS(ReportOn("D3DKMTLock2", Buffer, D3DKMTLock2(&lock)))) return FALSE;
+    Buffer->Locked = lock.pData;
     Note("locked at CPU VA %p", lock.pData);
-    if (lock.pData == NULL) return FALSE;
+    return lock.pData != NULL;
+}
 
+static BOOL UnlockBuffer(PROBE* Probe, BUFFER* Buffer)
+{
+    D3DKMT_UNLOCK2 unlock;
+
+    ZeroMemory(&unlock, sizeof(unlock));
+    unlock.hDevice = Probe->hDevice;
+    unlock.hAllocation = Buffer->hAllocation;
+    if (!NT_SUCCESS(ReportOn("D3DKMTUnlock2", Buffer, D3DKMTUnlock2(&unlock)))) return FALSE;
+    Buffer->Locked = NULL;
+    return TRUE;
+}
+
+static BOOL StepLockAndWrite(PROBE* Probe, BUFFER* Buffer)
+{
+    UINT64 words = Buffer->Size / sizeof(UINT64);
+    UINT64 i;
+    volatile UINT64* data;
+
+    if (!LockBuffer(Probe, Buffer)) return FALSE;
     if (Probe->Opt.NoWrite)
     {
         Note("--no-write: contents left alone");
     }
     else
     {
-        data = (volatile UINT64*)lock.pData;
+        data = (volatile UINT64*)Buffer->Locked;
         for (i = 0; i < words; i++) data[i] = PATTERN_TAG | (i & 0xFFFFull);
         Note("wrote %llu qword(s), first 0x%016llX last 0x%016llX", words, data[0], data[words - 1]);
     }
+    return UnlockBuffer(Probe, Buffer);
+}
 
-    ZeroMemory(&unlock, sizeof(unlock));
-    unlock.hDevice = Probe->hDevice;
-    unlock.hAllocation = Probe->hAllocation;
-    if (!NT_SUCCESS(Report("D3DKMTUnlock2", D3DKMTUnlock2(&unlock)))) return FALSE;
-    Probe->Locked = NULL;
+// ---- stage C: a context, a monitored fence, one submission of NOPs -------------------------------------------
+//
+// Research section 5.3, steps 6 to 15, minus the RELEASE_MEM: this first version puts nothing but NOPs in the
+// command buffer, so the only thing that can move the monitored fence is dxgkrnl's own signal path through the
+// miniport. That is the measurement - whether a submission on a GpuMmu context reaches the fence at all.
+
+static BOOL StepCreateContext(PROBE* Probe)
+{
+    D3DKMT_CREATECONTEXTVIRTUAL create;
+
+    ZeroMemory(&create, sizeof(create));
+    create.hDevice = Probe->hDevice;
+    create.NodeOrdinal = 0;             // our only node, DXGK_ENGINE_TYPE_3D
+    create.EngineAffinity = 0;
+    // DisableGpuTimeout suppresses TDR on this context. ADR 0008 point 7: until a reset exists, timeouts are
+    // avoided rather than recovered, and a TDR here costs the owner a trip to the machine.
+    create.Flags.DisableGpuTimeout = 1;
+    create.ClientHint = D3DKMT_CLIENTHINT_VULKAN;
+    create.pPrivateDriverData = NULL;
+    create.PrivateDriverDataSize = 0;
+    Note("CreateContextVirtual: node 0, flags 0x%08X, ClientHint %u", create.Flags.Value,
+         (unsigned)create.ClientHint);
+    if (!NT_SUCCESS(Report("D3DKMTCreateContextVirtual", D3DKMTCreateContextVirtual(&create)))) return FALSE;
+    Probe->hContext = create.hContext;
+    Note("hContext 0x%08lX", (unsigned long)Probe->hContext);
     return TRUE;
+}
+
+static BOOL StepCreateFence(PROBE* Probe)
+{
+    D3DKMT_CREATESYNCHRONIZATIONOBJECT2 create;
+
+    ZeroMemory(&create, sizeof(create));
+    create.hDevice = Probe->hDevice;
+    create.Info.Type = D3DDDI_MONITORED_FENCE;
+    create.Info.Flags.Value = 0;
+    create.Info.MonitoredFence.InitialFenceValue = 0;
+    create.Info.MonitoredFence.EngineAffinity = 0;
+    if (!NT_SUCCESS(Report("D3DKMTCreateSynchronizationObject2", D3DKMTCreateSynchronizationObject2(&create))))
+        return FALSE;
+    Probe->hFence = create.hSyncObject;
+    Probe->FenceCpuVa = (volatile UINT64*)create.Info.MonitoredFence.FenceValueCPUVirtualAddress;
+    Probe->FenceGpuVa = create.Info.MonitoredFence.FenceValueGPUVirtualAddress;
+    Note("hSyncObject 0x%08lX, fence CPU VA %p, fence GPU VA 0x%016llX, initial value %llu",
+         (unsigned long)Probe->hFence, (void*)Probe->FenceCpuVa, Probe->FenceGpuVa,
+         Probe->FenceCpuVa != NULL ? *Probe->FenceCpuVa : 0ull);
+    if (Probe->FenceCpuVa == NULL)
+    {
+        Note("no CPU mapping of the fence: nothing could read whether it moved");
+        return FALSE;
+    }
+    return TRUE;
+}
+
+// One type-3 NOP covering the whole stream, the way gfx_v10_0_ring_insert_nop writes one, then PACKET2 pad to
+// the end of the page so that a CP which ever ran past CommandLength would still find no-ops rather than a
+// type-0 register write to register 0.
+static BOOL StepFillCommandBuffer(PROBE* Probe, BUFFER* Buffer)
+{
+    UINT32* dwords;
+    UINT32 total = Probe->Opt.Nops;
+    UINT32 page = (UINT32)(Buffer->Size / sizeof(UINT32));
+    UINT32 i;
+
+    if (!LockBuffer(Probe, Buffer)) return FALSE;
+    dwords = (UINT32*)Buffer->Locked;
+    dwords[0] = PACKET3(PACKET3_NOP, total - 2u);
+    for (i = 1; i < total; i++) dwords[i] = 0;                  // the NOP body, ignored by the CP
+    for (i = total; i < page; i++) dwords[i] = BC250_CP_NOP;    // PACKET2 pad over the rest of the page
+    Probe->CommandLength = total * (UINT32)sizeof(UINT32);
+    Note("PM4: header 0x%08lX = PACKET3(NOP, %lu), %lu dword(s) = %lu bytes, page padded with PACKET2 0x%08lX",
+         (unsigned long)dwords[0], (unsigned long)(total - 2u), (unsigned long)total,
+         (unsigned long)Probe->CommandLength, (unsigned long)BC250_CP_NOP);
+    return UnlockBuffer(Probe, Buffer);
+}
+
+static BOOL StepSubmit(PROBE* Probe)
+{
+    D3DKMT_SUBMITCOMMAND submit;
+
+    ZeroMemory(&submit, sizeof(submit));
+    submit.Commands = Probe->Command.MappedVa;      // a GPU virtual address, not a pointer
+    submit.CommandLength = Probe->CommandLength;    // bytes
+    submit.BroadcastContextCount = 1;               // there is no hContext member; this array is the target
+    submit.BroadcastContext[0] = Probe->hContext;
+    submit.NumPrimaries = 0;                        // offscreen work, nothing is being scanned out
+    submit.NumHistoryBuffers = 0;
+    submit.HistoryBufferArray = NULL;
+    submit.pPrivateDriverData = NULL;
+    submit.PrivateDriverDataSize = 0;
+    Note("submitting 0x%lX byte(s) at GPU VA 0x%016llX on context 0x%08lX",
+         (unsigned long)submit.CommandLength, submit.Commands, (unsigned long)Probe->hContext);
+    return NT_SUCCESS(Report("D3DKMTSubmitCommand", D3DKMTSubmitCommand(&submit)));
+}
+
+static BOOL StepSignalFence(PROBE* Probe, UINT64 Value)
+{
+    D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU signal;
+    D3DKMT_HANDLE objects[1];
+    UINT64 values[1];
+
+    objects[0] = Probe->hFence;
+    values[0] = Value;
+    ZeroMemory(&signal, sizeof(signal));
+    signal.hContext = Probe->hContext;
+    signal.ObjectCount = 1;
+    signal.ObjectHandleArray = objects;
+    signal.MonitoredFenceValueArray = values;
+    Note("asking the context to signal the monitored fence to %llu", Value);
+    return NT_SUCCESS(Report("D3DKMTSignalSynchronizationObjectFromGpu",
+                             D3DKMTSignalSynchronizationObjectFromGpu(&signal)));
+}
+
+// The wait is given an event, never NULL: with NULL the call does not return until the condition is met, and
+// this tool may not contain a wait that can outlive the run. The event wait carries the timeout; the fence's
+// CPU mapping is read afterwards as the independent answer to "did it actually move".
+static BOOL StepWaitFence(PROBE* Probe, UINT64 Value)
+{
+    D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait;
+    D3DKMT_HANDLE objects[1];
+    UINT64 values[1];
+    ULONGLONG started = GetTickCount64();
+    DWORD waited;
+    UINT64 seen;
+
+    objects[0] = Probe->hFence;
+    values[0] = Value;
+    ZeroMemory(&wait, sizeof(wait));
+    wait.hDevice = Probe->hDevice;
+    wait.ObjectCount = 1;
+    wait.ObjectHandleArray = objects;
+    wait.FenceValueArray = values;
+    wait.hAsyncEvent = Probe->WaitEvent;
+    wait.Flags.Value = 0;
+    if (!NT_SUCCESS(Report("D3DKMTWaitForSynchronizationObjectFromCpu",
+                           D3DKMTWaitForSynchronizationObjectFromCpu(&wait))))
+        return FALSE;
+
+    waited = WaitForSingleObject(Probe->WaitEvent, Probe->Opt.FenceTimeoutMs);
+    Probe->SubmitElapsedMs = (DWORD)(GetTickCount64() - started);
+    seen = *Probe->FenceCpuVa;
+    if (waited == WAIT_OBJECT_0 && seen >= Value)
+    {
+        Note("the monitored fence reached %llu after %lu ms", seen, Probe->SubmitElapsedMs);
+        return TRUE;
+    }
+    Note("the monitored fence is %llu, wanted %llu, after %lu ms (%s)", seen, Value,
+         Probe->SubmitElapsedMs, waited == WAIT_TIMEOUT ? "event timed out" :
+         waited == WAIT_OBJECT_0 ? "event signalled but the value did not move" : "wait failed");
+    return FALSE;
+}
+
+static void StepStageC(PROBE* Probe)
+{
+    Probe->Submit = SubmitFailed;       // anything that returns early below has failed
+    if (!StepCreateContext(Probe)) return;
+    if (!StepCreateFence(Probe)) return;
+    if (!StepCreateAllocation(Probe, &Probe->Command)) return;
+    if (Probe->Opt.Reserve && !StepReserveVa(Probe, &Probe->Command)) return;
+    if (!StepMapVa(Probe, &Probe->Command)) return;
+    if (!StepMakeResident(Probe, &Probe->Command)) return;
+    if (!StepFillCommandBuffer(Probe, &Probe->Command)) return;
+    if (!StepSubmit(Probe)) return;
+    if (!StepSignalFence(Probe, 1)) return;
+    // From here the calls have all succeeded: a fence that does not move is a timeout, not a failure, and it
+    // is the interesting outcome rather than an error in the tool.
+    Probe->Submit = StepWaitFence(Probe, 1) ? SubmitFenceReached : SubmitFenceTimeout;
+}
+
+static const char* SubmitWord(SUBMIT_RESULT Result)
+{
+    switch (Result)
+    {
+    case SubmitFenceReached: return "ok";
+    case SubmitFenceTimeout: return "timeout";
+    case SubmitFailed:       return "failed";
+    default:                 return "skipped";
+    }
 }
 
 // ---- step 8: the machine-readable line ---------------------------------------------------------------------
 
 static void PrintResult(const PROBE* Probe)
 {
-    printf("RESULT va=0x%016llX size=0x%llX pattern=0x%016llX words=%llu luid=%08lX:%08lX alloc=0x%08lX\n",
-           Probe->MappedVa, Probe->Size, (UINT64)PATTERN_TAG, Probe->Size / sizeof(UINT64),
+    printf("RESULT va=0x%016llX size=0x%llX pattern=0x%016llX words=%llu luid=%08lX:%08lX alloc=0x%08lX",
+           Probe->Data.MappedVa, Probe->Data.Size, (UINT64)PATTERN_TAG, Probe->Data.Size / sizeof(UINT64),
            (unsigned long)Probe->Luid.HighPart, (unsigned long)Probe->Luid.LowPart,
-           (unsigned long)Probe->hAllocation);
+           (unsigned long)Probe->Data.hAllocation);
+    // The stage B fields above keep their shape and order; stage C only appends.
+    if (Probe->Opt.Submit)
+        printf(" cmdva=0x%016llX cmdlen=0x%lX fencegpuva=0x%016llX fence=%llu submit=%s ms=%lu",
+               Probe->Command.MappedVa, (unsigned long)Probe->CommandLength, Probe->FenceGpuVa,
+               Probe->FenceCpuVa != NULL ? *Probe->FenceCpuVa : 0ull, SubmitWord(Probe->Submit),
+               Probe->SubmitElapsedMs);
+    printf("\n");
     fflush(stdout);
 }
 
@@ -612,48 +861,75 @@ static void PrintResult(const PROBE* Probe)
 // Called on every path, including the failing ones, and it must survive a half-built probe: every handle is
 // checked before it is used, and no failure here stops the next step from being tried.
 
-static void Teardown(PROBE* Probe)
+static void TeardownBuffer(PROBE* Probe, BUFFER* Buffer)
 {
-    printf("-- teardown\n");
-    fflush(stdout);
-
-    if (Probe->Locked != NULL && Probe->hAllocation != 0)
+    if (Buffer->Locked != NULL && Buffer->hAllocation != 0)
     {
         D3DKMT_UNLOCK2 unlock;
 
         ZeroMemory(&unlock, sizeof(unlock));
         unlock.hDevice = Probe->hDevice;
-        unlock.hAllocation = Probe->hAllocation;
-        (void)Report("D3DKMTUnlock2 (teardown)", D3DKMTUnlock2(&unlock));
-        Probe->Locked = NULL;
+        unlock.hAllocation = Buffer->hAllocation;
+        (void)ReportOn("D3DKMTUnlock2 (teardown)", Buffer, D3DKMTUnlock2(&unlock));
+        Buffer->Locked = NULL;
     }
     // A reservation covers the range the map went into, so one free is enough and freeing the mapped range
     // separately would be freeing a part of it twice.
-    if (Probe->ReservedBase != 0 || Probe->MappedVa != 0)
+    if (Buffer->ReservedBase != 0 || Buffer->MappedVa != 0)
     {
         D3DKMT_FREEGPUVIRTUALADDRESS free_va;
 
         ZeroMemory(&free_va, sizeof(free_va));
         free_va.hAdapter = Probe->hAdapter;
-        free_va.BaseAddress = Probe->ReservedBase != 0 ? Probe->ReservedBase : Probe->MappedVa;
-        free_va.Size = Probe->ReservedBase != 0 ? Probe->ReservedSize : Probe->Size;
-        (void)Report("D3DKMTFreeGpuVirtualAddress", D3DKMTFreeGpuVirtualAddress(&free_va));
-        Probe->ReservedBase = 0;
-        Probe->MappedVa = 0;
+        free_va.BaseAddress = Buffer->ReservedBase != 0 ? Buffer->ReservedBase : Buffer->MappedVa;
+        free_va.Size = Buffer->ReservedBase != 0 ? Buffer->ReservedSize : Buffer->Size;
+        (void)ReportOn("D3DKMTFreeGpuVirtualAddress", Buffer, D3DKMTFreeGpuVirtualAddress(&free_va));
+        Buffer->ReservedBase = 0;
+        Buffer->MappedVa = 0;
     }
-    if (Probe->hAllocation != 0)
+    if (Buffer->hAllocation != 0)
     {
         D3DKMT_DESTROYALLOCATION2 destroy;
         D3DKMT_HANDLE list[1];
 
-        list[0] = Probe->hAllocation;
+        list[0] = Buffer->hAllocation;
         ZeroMemory(&destroy, sizeof(destroy));
         destroy.hDevice = Probe->hDevice;
         destroy.phAllocationList = list;
         destroy.AllocationCount = 1;
-        (void)Report("D3DKMTDestroyAllocation2", D3DKMTDestroyAllocation2(&destroy));
-        Probe->hAllocation = 0;
+        (void)ReportOn("D3DKMTDestroyAllocation2", Buffer, D3DKMTDestroyAllocation2(&destroy));
+        Buffer->hAllocation = 0;
     }
+}
+
+static void Teardown(PROBE* Probe)
+{
+    printf("-- teardown\n");
+    fflush(stdout);
+
+    // The fence first: it is what a still-outstanding WaitForSynchronizationObjectFromCpu is waiting on, and
+    // the context next, because it is the thing that was asked to signal it.
+    if (Probe->hFence != 0)
+    {
+        D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy;
+
+        ZeroMemory(&destroy, sizeof(destroy));
+        destroy.hSyncObject = Probe->hFence;
+        (void)Report("D3DKMTDestroySynchronizationObject", D3DKMTDestroySynchronizationObject(&destroy));
+        Probe->hFence = 0;
+        Probe->FenceCpuVa = NULL;
+    }
+    if (Probe->hContext != 0)
+    {
+        D3DKMT_DESTROYCONTEXT destroy;
+
+        ZeroMemory(&destroy, sizeof(destroy));
+        destroy.hContext = Probe->hContext;
+        (void)Report("D3DKMTDestroyContext", D3DKMTDestroyContext(&destroy));
+        Probe->hContext = 0;
+    }
+    TeardownBuffer(Probe, &Probe->Command);
+    TeardownBuffer(Probe, &Probe->Data);
     if (Probe->hPagingQueue != 0)
     {
         D3DDDI_DESTROYPAGINGQUEUE destroy;
@@ -682,12 +958,18 @@ static void Teardown(PROBE* Probe)
         (void)Report("D3DKMTCloseAdapter", D3DKMTCloseAdapter(&close));
         Probe->hAdapter = 0;
     }
+    // Last, and only now: an unsatisfied wait held a reference to this event until the objects above went away.
+    if (Probe->WaitEvent != NULL)
+    {
+        CloseHandle(Probe->WaitEvent);
+        Probe->WaitEvent = NULL;
+    }
 }
 
 // ---- the sequence --------------------------------------------------------------------------------------------
 //
-// One place that names the steps in order. Stage C adds CreateContextVirtual, CreateSynchronizationObject2 and
-// SubmitCommand between the lock and the hold, behind a --submit flag; nothing above has to change for that.
+// One place that names the steps in order. Stage C (--submit) hangs off the end of stage B and reuses every
+// memory step for its command buffer; nothing in stage B changes when it is off.
 
 static BOOL RunProbe(PROBE* Probe)
 {
@@ -696,19 +978,20 @@ static BOOL RunProbe(PROBE* Probe)
     if (!StepQueryCaps(Probe)) return FALSE;
     if (!StepCreateDevice(Probe)) return FALSE;
     if (!StepCreatePagingQueue(Probe)) return FALSE;
-    if (!StepCreateAllocation(Probe)) return FALSE;
-    if (Probe->Opt.Reserve && !StepReserveVa(Probe)) return FALSE;
+    if (!StepCreateAllocation(Probe, &Probe->Data)) return FALSE;
+    if (Probe->Opt.Reserve && !StepReserveVa(Probe, &Probe->Data)) return FALSE;
     if (Probe->Opt.ResidentFirst)
     {
-        if (!StepMakeResident(Probe)) return FALSE;
-        if (!StepMapVa(Probe)) return FALSE;
+        if (!StepMakeResident(Probe, &Probe->Data)) return FALSE;
+        if (!StepMapVa(Probe, &Probe->Data)) return FALSE;
     }
     else
     {
-        if (!StepMapVa(Probe)) return FALSE;
-        if (!StepMakeResident(Probe)) return FALSE;
+        if (!StepMapVa(Probe, &Probe->Data)) return FALSE;
+        if (!StepMakeResident(Probe, &Probe->Data)) return FALSE;
     }
-    if (!StepLockAndWrite(Probe)) return FALSE;
+    if (!StepLockAndWrite(Probe, &Probe->Data)) return FALSE;
+    if (Probe->Opt.Submit) StepStageC(Probe);
     PrintResult(Probe);
 
     if (Probe->Opt.HoldSeconds > 0)
@@ -723,7 +1006,10 @@ static BOOL RunProbe(PROBE* Probe)
             left--;
         }
     }
-    return TRUE;
+    // A fence that never moved is the finding, not a broken tool: the run still passes and the RESULT line
+    // carries submit=timeout. Only a stage C call that failed outright makes the exit code non-zero, and the
+    // hold above happens either way, because the data buffer is worth witnessing in both cases.
+    return Probe->Submit != SubmitFailed;
 }
 
 // ---- command line ------------------------------------------------------------------------------------------
@@ -732,7 +1018,8 @@ static void Usage(void)
 {
     printf(
         "kmtprobe - ADR 0008 stage B: one allocation, one GPU VA, one pattern, through raw D3DKMT.\n"
-        "Runs on the target against the bc250kmd full WDDM miniport. Nothing is submitted.\n"
+        "With --submit, stage C as well: a context, a monitored fence and one command buffer of PM4 NOPs.\n"
+        "Runs on the target against the bc250kmd full WDDM miniport.\n"
         "\n"
         "  --match <text>    substring of the adapter string / chip type / UMD name (default \"bc250\")\n"
         "  --luid H:L        pick the adapter by LUID in hex instead, HighPart:LowPart\n"
@@ -743,8 +1030,11 @@ static void Usage(void)
         "  --reserve         D3DKMTReserveGpuVirtualAddress the range first (64 KB-aligned base)\n"
         "  --resident-first  D3DKMTMakeResident before the map instead of after it\n"
         "  --no-write        lock, but do not write the pattern\n"
+        "  --submit          stage C: context, monitored fence, one command buffer of PM4 NOPs, submit it\n"
+        "  --cmdva <address> where the command buffer is mapped (default 0x20000000)\n"
+        "  --nops <dwords>   PM4 dwords in that command buffer (default 16, at least 2, rounded up to 8)\n"
         "  --hold <s>        keep everything alive for s seconds after the write (default 0)\n"
-        "  --fence-timeout <ms>  per-wait paging fence deadline (default 5000)\n"
+        "  --fence-timeout <ms>  paging fence and monitored fence deadline (default 5000)\n"
         "  --timeout <s>     watchdog on the whole process (default 30, raised to cover --hold)\n"
         "  --help\n"
         "\n"
@@ -812,8 +1102,12 @@ int main(int argc, char** argv)
     probe.Opt.Match = "bc250";
     probe.Opt.Size = 0x10000;
     probe.Opt.Va = 0x10000000;
+    probe.Opt.CommandVa = 0x20000000;
+    probe.Opt.Nops = 16;
     probe.Opt.FenceTimeoutMs = 5000;
     probe.Opt.WatchdogMs = 30000;
+    probe.Data.Name = "data";
+    probe.Command.Name = "cmd";
 
     for (i = 1; i < argc; i++)
     {
@@ -869,6 +1163,25 @@ int main(int argc, char** argv)
             if (!ParseU64(argv[++i], &seconds) || seconds == 0 || seconds > 3600) { printf("bad --timeout\n"); return 2; }
             probe.Opt.WatchdogMs = (DWORD)(seconds * 1000);
         }
+        else if (strcmp(argv[i], "--cmdva") == 0)
+        {
+            NEED_VALUE(i, argc);
+            if (!ParseU64(argv[++i], &probe.Opt.CommandVa)) { printf("bad --cmdva\n"); return 2; }
+        }
+        else if (strcmp(argv[i], "--nops") == 0)
+        {
+            UINT64 dwords;
+
+            NEED_VALUE(i, argc);
+            // A type-3 NOP is a header plus at least one body dword, and the command buffer is one page.
+            if (!ParseU64(argv[++i], &dwords) || dwords < 2 || dwords > GPU_PAGE_SIZE / 4)
+            {
+                printf("bad --nops, want 2 to %llu dwords\n", GPU_PAGE_SIZE / 4);
+                return 2;
+            }
+            probe.Opt.Nops = (UINT32)dwords;
+        }
+        else if (strcmp(argv[i], "--submit") == 0) probe.Opt.Submit = TRUE;
         else if (strcmp(argv[i], "--reserve") == 0) probe.Opt.Reserve = TRUE;
         else if (strcmp(argv[i], "--resident-first") == 0) probe.Opt.ResidentFirst = TRUE;
         else if (strcmp(argv[i], "--no-write") == 0) probe.Opt.NoWrite = TRUE;
@@ -876,29 +1189,66 @@ int main(int argc, char** argv)
     }
 
     if (probe.Opt.Size == 0) { printf("--size 0 makes no allocation\n"); return 2; }
-    probe.Size = (probe.Opt.Size + GPU_PAGE_SIZE - 1) & ~(GPU_PAGE_SIZE - 1);
-    if (probe.Size != probe.Opt.Size) printf("size 0x%llX rounded up to 0x%llX\n", probe.Opt.Size, probe.Size);
-    if (probe.Size > 0x40000000ull) { printf("--size above 1 GB refused for a probe\n"); return 2; }
-    if (probe.Opt.Va != 0)
+    probe.Data.Size = (probe.Opt.Size + GPU_PAGE_SIZE - 1) & ~(GPU_PAGE_SIZE - 1);
+    probe.Data.RequestedVa = probe.Opt.Va;
+    if (probe.Data.Size != probe.Opt.Size)
+        printf("size 0x%llX rounded up to 0x%llX\n", probe.Opt.Size, probe.Data.Size);
+    if (probe.Data.Size > 0x40000000ull) { printf("--size above 1 GB refused for a probe\n"); return 2; }
+    // The command buffer is one page, whatever --nops says; only the submitted length changes.
+    probe.Command.Size = GPU_PAGE_SIZE;
+    probe.Command.RequestedVa = probe.Opt.CommandVa;
+    probe.Opt.Nops = (probe.Opt.Nops + PM4_DWORD_ALIGN - 1u) & ~(PM4_DWORD_ALIGN - 1u);
+    if (probe.Opt.Nops > GPU_PAGE_SIZE / 4) probe.Opt.Nops = (UINT32)(GPU_PAGE_SIZE / 4);
     {
         UINT64 alignment = probe.Opt.Reserve ? GPU_RESERVE_ALIGN : GPU_PAGE_SIZE;
 
-        if ((probe.Opt.Va & (alignment - 1)) != 0)
+        if (probe.Opt.Va != 0 && (probe.Opt.Va & (alignment - 1)) != 0)
         {
             printf("--va 0x%llX is not aligned to 0x%llX\n", probe.Opt.Va, alignment);
             return 2;
         }
+        if (probe.Opt.Submit && probe.Opt.CommandVa != 0 && (probe.Opt.CommandVa & (alignment - 1)) != 0)
+        {
+            printf("--cmdva 0x%llX is not aligned to 0x%llX\n", probe.Opt.CommandVa, alignment);
+            return 2;
+        }
+        // Two ranges in one per-process VA space: they may not overlap, and with --reserve each is rounded up
+        // to 64 KB before it is reserved.
+        if (probe.Opt.Submit && probe.Opt.Va != 0 && probe.Opt.CommandVa != 0)
+        {
+            UINT64 data_span = (probe.Data.Size + alignment - 1) & ~(alignment - 1);
+            UINT64 cmd_span = (probe.Command.Size + alignment - 1) & ~(alignment - 1);
+
+            if (probe.Opt.Va < probe.Opt.CommandVa + cmd_span && probe.Opt.CommandVa < probe.Opt.Va + data_span)
+            {
+                printf("--va 0x%llX and --cmdva 0x%llX overlap\n", probe.Opt.Va, probe.Opt.CommandVa);
+                return 2;
+            }
+        }
     }
-    // The watchdog has to outlive the hold, or a --hold longer than the timeout would always be killed.
-    if (probe.Opt.WatchdogMs < probe.Opt.HoldSeconds * 1000 + 15000)
+    if (probe.Opt.Submit)
     {
-        probe.Opt.WatchdogMs = probe.Opt.HoldSeconds * 1000 + 15000;
-        printf("watchdog raised to %lu ms to cover --hold\n", probe.Opt.WatchdogMs);
+        // Auto-reset, unsignalled: the wait below is the only thing that ever sets it.
+        probe.WaitEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+        if (probe.WaitEvent == NULL) { printf("could not create the wait event\n"); return 2; }
+    }
+    // The watchdog has to outlive the hold and the fence waits, or a long --hold would always be killed.
+    {
+        DWORD needed = probe.Opt.HoldSeconds * 1000 + probe.Opt.FenceTimeoutMs * 3 + 15000;
+
+        if (probe.Opt.WatchdogMs < needed)
+        {
+            probe.Opt.WatchdogMs = needed;
+            printf("watchdog raised to %lu ms to cover --hold and the fence waits\n", probe.Opt.WatchdogMs);
+        }
     }
     if (!StartWatchdog(probe.Opt.WatchdogMs)) { printf("could not start the watchdog\n"); return 2; }
     printf("kmtprobe: size 0x%llX, va 0x%016llX, reserve %s, resident-first %s, hold %lu s, watchdog %lu ms\n",
-           probe.Size, probe.Opt.Va, probe.Opt.Reserve ? "yes" : "no",
+           probe.Data.Size, probe.Opt.Va, probe.Opt.Reserve ? "yes" : "no",
            probe.Opt.ResidentFirst ? "yes" : "no", probe.Opt.HoldSeconds, probe.Opt.WatchdogMs);
+    if (probe.Opt.Submit)
+        printf("kmtprobe: --submit, command buffer 0x%llX bytes at 0x%016llX, %lu PM4 dword(s)\n",
+               probe.Command.Size, probe.Opt.CommandVa, (unsigned long)probe.Opt.Nops);
     fflush(stdout);
 
     ok = RunProbe(&probe);

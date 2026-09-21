@@ -217,6 +217,54 @@ int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32
 }
 
 /*
+ * amdgpu_vm_flush() (amdgpu_vm.c), reduced to the two steps that touch this hardware when a VMID
+ * has to be pointed at a different page directory: the hub's setup_vm_pt_regs, which is
+ * gfxhub_v2_0_setup_vm_pt_regs() (gfxhub_v2_0.c:120-132), and the invalidation of that VMID.
+ *
+ * Deviation from Linux (ADR 0008 stage C): upstream does the second step on the ring, through
+ * gmc_v10_0_emit_flush_gpu_tlb() and gfx_v10_0_ring_emit_vm_flush()
+ * (driver/amdgpu-import/reference/gfx_v10_0.c:8767), and the first one through the same packets.
+ * Here both are MMIO, ahead of the ring write: the miniport serializes every submission under one
+ * lock at PASSIVE_LEVEL, so nothing of ours can be executing while these registers move, and two
+ * register writes plus one poll are a great deal less to be wrong about than a packet sequence
+ * nothing has replayed. If an on-ring flush is ever added, PACKET3_PFP_SYNC_ME (nvd.h:322) belongs
+ * with it on a gfx-type ring - upstream emits it there and only there.
+ *
+ * The value: amdgpu_gmc_pd_addr() is the page directory's physical address with AMDGPU_PTE_VALID
+ * and nothing else on this part (shim.c:57-80), so the caller passes the address and this adds the
+ * bit. Everything else about the context - depth, block size, the address range, the fault
+ * defaults - gfxhub_v2_0_setup_vmid_config() already wrote for VMIDs 1..15 inside
+ * bc250_gmc_gart_enable() (gfxhub_v2_0.c:283-330), and none of it changes per submission.
+ */
+int bc250_gmc_set_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 pd_phys, u32 flush_type)
+{
+	if (adev == NULL || adev->gfxhub.funcs == NULL ||
+	    adev->gfxhub.funcs->setup_vm_pt_regs == NULL)
+		return BC250_EINVAL;
+	if (adev->vmhub[AMDGPU_GFXHUB(0)].vmhub_funcs == NULL)
+		return BC250_EINVAL;    /* the hub's init() has not run, so its offsets are 0 */
+
+	/* VMID 0 is the system domain (gfxhub_v2_0_enable_system_domain(), gfxhub_v2_0.c:254): page
+	 * table depth 0, i.e. the flat GART aperture that every buffer this driver owns is addressed
+	 * through. Its root is not ours to move. */
+	if (vmid == 0 || vmid >= AMDGPU_NUM_VMID)
+		return BC250_EINVAL;
+
+	/* A page directory is a page. Upstream never checks this because the address comes out of a
+	 * buffer object; here it comes from VidMm through an escape or a DDI, and the low bits of the
+	 * register are not address bits. */
+	if ((pd_phys & (AMDGPU_GPU_PAGE_SIZE - 1)) != 0)
+		return BC250_EINVAL;
+
+	adev->gfxhub.funcs->setup_vm_pt_regs(adev, vmid, pd_phys | AMDGPU_PTE_VALID);
+
+	/* GFXHUB only: this driver's submissions are CP work, and the MMHUB copy of the context would
+	 * only matter to an engine behind it. That also keeps the M25 semaphore hazard out of the
+	 * path - bc250_gmc_flush_gpu_tlb() takes the semaphore for MMHUB0 and for nothing else. */
+	return bc250_gmc_flush_gpu_tlb(adev, vmid, AMDGPU_GFXHUB(0), flush_type);
+}
+
+/*
  * gmc_v10_0_gart_enable(). adev->in_s0ix is false: this is a cold start, not a resume.
  * amdgpu_gtt_mgr_recover() and the DRM_INFO at the end touch no register.
  */

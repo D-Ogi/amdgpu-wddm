@@ -711,6 +711,12 @@ struct amdgpu_gfx {
 	struct bc250_mem	dispatch_shader;
 	struct bc250_mem	dispatch_dst;
 
+	/* [shim] one GTT page the driver builds an indirect buffer in, for the submission that proves
+	 * PACKET3_INDIRECT_BUFFER before any page table of a process is involved (ADR 0008 stage C).
+	 * Allocated by bc250_gfx_ib_page_alloc() alone, for the third time for the same reason: an
+	 * allocation the traced bring-up does not make cannot move an address it programs. */
+	struct bc250_mem	ib_mem;
+
 	/* upstream adev->gfx.mec_bitmap[0].queue_bitmap, which is a bitmap over
 	 * AMDGPU_MAX_COMPUTE_QUEUES; eight queues fit in a u64 and gfx10_kiq_set_resources()
 	 * already folds it into a 64-bit queue_mask. */

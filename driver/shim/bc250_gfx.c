@@ -1511,6 +1511,213 @@ u64 bc250_gfx_fence_read(struct amdgpu_device *adev, unsigned int slot)
 	return p[slot];
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * The indirect buffer: the first submission whose packets are not in the ring (ADR 0008 stage C)
+ *
+ * gfx_v10_0.c:8640 gfx_v10_0_ring_emit_ib_gfx(), the gfx variant, used by the gfx ring funcs
+ * (:9862). What upstream's function does that is left out, one line each for why:
+ *
+ *   AMDGPU_IB_FLAG_CE        picks PACKET3_INDIRECT_BUFFER_CNST instead of our header. Only a
+ *                            user-mode driver's constant-engine stream sets it; nothing here has a
+ *                            CE stream.
+ *   mcbp / IB_FLAG_PREEMPT   INDIRECT_BUFFER_PRE_ENB, INDIRECT_BUFFER_PRE_RESUME and
+ *                            gfx_v10_0_ring_emit_de_meta(). The whole branch is guarded by
+ *                            ring->adev->gfx.mcbp, mid-command-buffer preemption, which this
+ *                            driver neither sets nor has a field for.
+ *   INDIRECT_BUFFER_VALID    gfx_v10_0_ring_emit_ib_compute() (:8677) sets it and the gfx emitter
+ *                            does not; it is a CE/DE flag, not a "this buffer is good" bit. The
+ *                            compute variant is not transcribed at all, because nothing in this
+ *                            driver submits an IB on a compute ring - the M6 dispatch writes its
+ *                            packets straight into the ring (bc250_dispatch.h, point 1).
+ *   __BIG_ENDIAN             the two swap bits in the low half of the address dword.
+ *
+ * Deviations of the usual kind: upstream BUG_ON()s a misaligned address, and a BUG() in a Windows
+ * miniport is a bugcheck on a caller's mistake, so this refuses with nothing written. Two bounds
+ * upstream does not check at all are checked here, because the length and the VMID reach this from
+ * user mode through an escape and the fields they go into are narrow - IB_SIZE is 20 bits and VMID
+ * 4 (nvd.h:235, :239), so a larger value would quietly become a different packet.
+ *
+ * What upstream emits AROUND an IB, and why none of it is here. amdgpu_ib_schedule()
+ * (amdgpu_ib.c:124-326) is the complete list, and every part of it that a gfx ring has is guarded
+ * by `job &&`: CONTEXT_CONTROL (:244, gfx_v10_0_ring_emit_cntxcntl() at :8813), the TMZ frame
+ * control (:253 and :273), the VM flush (:222 amdgpu_vm_flush) and the trailing SWITCH_BUFFER
+ * (:307). A ring test passes job = NULL (gfx_v10_0_ring_test_ib(), :4104) and therefore gets one IB
+ * packet and one fence - exactly what bc250_gfx_submit_ib() below builds. Stage C has no context to
+ * switch away from and does its VM flush by MMIO before the ring write
+ * (bc250_gmc_set_vmid_pd()), so the ring-test shape is the right one and not merely the small one.
+ *
+ * The one thing amdgpu_ib_schedule() emits without a job is init_cond_exec (:235, the gfx ring's
+ * gfx_v10_0_ring_emit_init_cond_exec() at :8847), a PACKET3_COND_EXEC over ring->cond_exe_gpu_addr.
+ * It is deliberately not emitted: that packet discards the dwords behind it unless the dword at
+ * that address is non-zero, upstream allocates the slot and seeds it in amdgpu_ring_init(), and
+ * this driver has no such allocation. A COND_EXEC over an address we do not own would be a way of
+ * throwing the submission away for reasons nobody could see. It costs nothing to leave out while
+ * there is neither preemption nor a conditional-execution patch site.
+ * ------------------------------------------------------------------------------------------- */
+
+/* Upstream writes neither bound down, because upstream BUG_ON()s neither. Rather than typing
+ * 0xFFFFF next to a macro that already says it, the length is asked whether it survives its own
+ * encoding: PACKET3_INDIRECT_BUFFER__IB_SIZE() masks to the field and shifts by nothing
+ * (nvd.h:235), so a value that comes back unchanged is a value the packet can carry. The VMID's
+ * bound is AMDGPU_NUM_VMID, which is the number of contexts the hub has. */
+static int bc250_ib_length_fits(u32 length_dw)
+{
+	return PACKET3_INDIRECT_BUFFER__IB_SIZE(length_dw) == length_dw;
+}
+
+unsigned int bc250_gfx_ib_size(const struct amdgpu_ring *ring)
+{
+	if (ring == NULL || ring->funcs == NULL)
+		return 0;
+
+	/* gfx_v10_0.c:9861 emit_ib_size = 4 for the gfx ring funcs: the header, the two address
+	 * halves and the control dword. Compute and the KIQ answer 0 rather than 4, because this file
+	 * has no emitter for them - see the block above. */
+	if (ring->funcs->type != AMDGPU_RING_TYPE_GFX)
+		return 0;
+	return 4u;
+}
+
+int bc250_gfx_emit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid)
+{
+	u32 control;
+
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_GFX)
+		return BC250_EINVAL;
+
+	/* All three checked before a single dword is written, so that a refusal leaves the ring
+	 * exactly as it was, as bc250_gfx_emit_fence() does. */
+	if ((gpu_addr & 0x3u) != 0)             /* upstream: BUG_ON(ib->gpu_addr & 0x3) */
+		return BC250_EINVAL;
+	if (length_dw == 0 || !bc250_ib_length_fits(length_dw))
+		return BC250_EINVAL;
+	if (vmid >= AMDGPU_NUM_VMID)
+		return BC250_EINVAL;
+
+	/* Upstream writes `control |= ib->length_dw | (vmid << 24)` (:8653). The same value, through
+	 * AMD's own field macros, so that the two widths refused above are the widths the packet has
+	 * and not a pair of numbers this file believes in. */
+	control = PACKET3_INDIRECT_BUFFER__IB_SIZE(length_dw) | PACKET3_INDIRECT_BUFFER__VMID(vmid);
+
+	amdgpu_ring_write(ring, PACKET3(PACKET3_INDIRECT_BUFFER, 2));
+	amdgpu_ring_write(ring, lower_32_bits(gpu_addr));
+	amdgpu_ring_write(ring, upper_32_bits(gpu_addr));
+	amdgpu_ring_write(ring, control);
+
+	return 0;
+}
+
+int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			u64 fence_addr, u64 seq, unsigned int flags)
+{
+	unsigned int ndw = bc250_gfx_ib_size(ring);
+	int r;
+
+	if (ndw == 0)
+		return BC250_EINVAL;
+	ndw += bc250_gfx_fence_size(ring, flags);
+
+	r = amdgpu_ring_alloc(ring, ndw);
+	if (r)
+		return r;
+
+	/* Both emitters refuse before writing anything, so an undo here really does put the ring
+	 * back: the write pointer returns to where it was and whatever dwords were written sit above
+	 * it, where the CP never looks. */
+	r = bc250_gfx_emit_ib(ring, gpu_addr, length_dw, vmid);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+	r = bc250_gfx_emit_fence(ring, fence_addr, seq, flags);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+
+	amdgpu_ring_commit(ring);
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * One indirect buffer to submit: the ring test, moved out of the ring
+ *
+ * The first IB has to be something whose result is already known from the same hardware by another
+ * route, or a failure says nothing about the IB. bc250_gfx_ring_test() is that route: the same
+ * PACKET3_SET_UCONFIG_REG writing 0xDEADBEEF into SCRATCH_REG0, and it has passed eleven times per
+ * bring-up since M5. Putting those three dwords in a GTT page and reaching them through
+ * PACKET3_INDIRECT_BUFFER changes exactly one thing - where the CP fetched them from - so a run
+ * that leaves 0xCAFEDEAD in the register says the fetch failed and nothing else.
+ *
+ * Upstream's own first IB is gfx_v10_0_ring_test_ib() (gfx_v10_0.c:4071), which writes to memory
+ * with a WRITE_DATA instead. A register is used here on purpose: the readback then does not depend
+ * on the GTT mapping being right as well, which is the other half of what stage C is testing.
+ * ------------------------------------------------------------------------------------------- */
+
+int bc250_gfx_ib_page_alloc(struct amdgpu_device *adev)
+{
+	int r;
+
+	if (adev == NULL)
+		return BC250_EINVAL;
+	if (adev->gfx.ib_mem.cpu != NULL)
+		return 0;                               /* already there; idempotent */
+
+	r = bc250_shim_mem_alloc(adev, BC250_MEM_GTT, AMDGPU_GPU_PAGE_SIZE, AMDGPU_GPU_PAGE_SIZE,
+				 &adev->gfx.ib_mem);
+	if (r)
+		return r;
+	if (adev->gfx.ib_mem.cpu == NULL)
+		return BC250_EINVAL;
+	return 0;
+}
+
+void bc250_gfx_ib_page_free(struct amdgpu_device *adev)
+{
+	if (adev == NULL)
+		return;
+	bc250_shim_mem_free(adev, &adev->gfx.ib_mem);
+}
+
+u64 bc250_gfx_ib_addr(const struct amdgpu_device *adev)
+{
+	return (adev == NULL) ? 0 : adev->gfx.ib_mem.mc;
+}
+
+int bc250_gfx_ib_ring_test_build(struct amdgpu_device *adev, u32 *length_dw)
+{
+	volatile u32 *ib;
+	u32 scratch;
+
+	if (adev == NULL || length_dw == NULL)
+		return BC250_EINVAL;
+	*length_dw = 0;
+	if (adev->gfx.ib_mem.cpu == NULL)
+		return BC250_EINVAL;
+
+	/* The same register bc250_gfx_ring_test() uses, named the same way, and seeded with the same
+	 * value it seeds, so that a stale 0xDEADBEEF from an earlier ring test cannot be read as this
+	 * submission's result. */
+	scratch = SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG0);
+	WREG32(scratch, 0xCAFEDEAD);
+
+	ib = (volatile u32 *)adev->gfx.ib_mem.cpu;
+	ib[0] = PACKET3(PACKET3_SET_UCONFIG_REG, 1);
+	ib[1] = scratch - PACKET3_SET_UCONFIG_REG_START;
+	ib[2] = 0xDEADBEEF;
+	*length_dw = 3u;
+	return 0;
+}
+
+int bc250_gfx_ib_ring_test_result(struct amdgpu_device *adev)
+{
+	if (adev == NULL)
+		return BC250_EINVAL;
+	return RREG32(SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG0)) == 0xDEADBEEF ? 0 : BC250_ETIME;
+}
+
 /* amdgpu_gfx.c:656 amdgpu_gfx_enable_kcq(), without MES, without the HDP flush (which returns
  * early for an APU: amdgpu_device_flush_hdp() does nothing when adev->flags & AMD_IS_APU) and
  * without the spinlock. */

@@ -876,7 +876,7 @@ static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
 
 // E11: what amdgpu wrote on unit A in this step (E03 trace, 0.0375 to 0.0385 s, 0.2495 to 0.2528 s, 0.5496 to 0.551 s, 1.56 to 1.562 s, names matching
 // ^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_GFX_ALLOW_COUNT 251
+#define BC250_MMIO_GFX_ALLOW_COUNT 281
 static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x03780ul,   // NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
     0x0384Cul,   // NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH
@@ -986,6 +986,36 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x09FA0ul,   // GC.UTCL1_CTRL
     0x0A2D0ul,   // GC.GCVM_INVALIDATE_ENG17_REQ
     0x0A318ul,   // GC.GCVM_INVALIDATE_ENG17_ACK
+    0x0A3B4ul,   // GC.GCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 1, ADR 0008 stage C)
+    0x0A3B8ul,   // GC.GCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 1, ADR 0008 stage C)
+    0x0A3BCul,   // GC.GCVM_CONTEXT2_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 2, ADR 0008 stage C)
+    0x0A3C0ul,   // GC.GCVM_CONTEXT2_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 2, ADR 0008 stage C)
+    0x0A3C4ul,   // GC.GCVM_CONTEXT3_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 3, ADR 0008 stage C)
+    0x0A3C8ul,   // GC.GCVM_CONTEXT3_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 3, ADR 0008 stage C)
+    0x0A3CCul,   // GC.GCVM_CONTEXT4_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 4, ADR 0008 stage C)
+    0x0A3D0ul,   // GC.GCVM_CONTEXT4_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 4, ADR 0008 stage C)
+    0x0A3D4ul,   // GC.GCVM_CONTEXT5_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 5, ADR 0008 stage C)
+    0x0A3D8ul,   // GC.GCVM_CONTEXT5_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 5, ADR 0008 stage C)
+    0x0A3DCul,   // GC.GCVM_CONTEXT6_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 6, ADR 0008 stage C)
+    0x0A3E0ul,   // GC.GCVM_CONTEXT6_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 6, ADR 0008 stage C)
+    0x0A3E4ul,   // GC.GCVM_CONTEXT7_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 7, ADR 0008 stage C)
+    0x0A3E8ul,   // GC.GCVM_CONTEXT7_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 7, ADR 0008 stage C)
+    0x0A3ECul,   // GC.GCVM_CONTEXT8_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 8, ADR 0008 stage C)
+    0x0A3F0ul,   // GC.GCVM_CONTEXT8_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 8, ADR 0008 stage C)
+    0x0A3F4ul,   // GC.GCVM_CONTEXT9_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 9, ADR 0008 stage C)
+    0x0A3F8ul,   // GC.GCVM_CONTEXT9_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 9, ADR 0008 stage C)
+    0x0A3FCul,   // GC.GCVM_CONTEXT10_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 10, ADR 0008 stage C)
+    0x0A400ul,   // GC.GCVM_CONTEXT10_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 10, ADR 0008 stage C)
+    0x0A404ul,   // GC.GCVM_CONTEXT11_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 11, ADR 0008 stage C)
+    0x0A408ul,   // GC.GCVM_CONTEXT11_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 11, ADR 0008 stage C)
+    0x0A40Cul,   // GC.GCVM_CONTEXT12_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 12, ADR 0008 stage C)
+    0x0A410ul,   // GC.GCVM_CONTEXT12_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 12, ADR 0008 stage C)
+    0x0A414ul,   // GC.GCVM_CONTEXT13_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 13, ADR 0008 stage C)
+    0x0A418ul,   // GC.GCVM_CONTEXT13_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 13, ADR 0008 stage C)
+    0x0A41Cul,   // GC.GCVM_CONTEXT14_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 14, ADR 0008 stage C)
+    0x0A420ul,   // GC.GCVM_CONTEXT14_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 14, ADR 0008 stage C)
+    0x0A424ul,   // GC.GCVM_CONTEXT15_PAGE_TABLE_BASE_ADDR_LO32 (not traced: the page directory root of VMID 15, ADR 0008 stage C)
+    0x0A428ul,   // GC.GCVM_CONTEXT15_PAGE_TABLE_BASE_ADDR_HI32 (not traced: the page directory root of VMID 15, ADR 0008 stage C)
     0x0A5C8ul,   // GC.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END
     0x0C12Cul,   // GC.CP_DEVICE_ID
     0x0C168ul,   // GC.CP_RB_DOORBELL_RANGE_LOWER

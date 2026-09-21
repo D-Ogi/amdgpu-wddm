@@ -177,4 +177,45 @@ u64  bc250_gfx_fence_read(struct amdgpu_device *adev, unsigned int slot);
  * to account for it explicitly rather than quietly. */
 int bc250_gfx_ring_test(struct amdgpu_ring *ring);
 
+/* ---------------------------------------------------------------------------------------------
+ * The indirect buffer (ADR 0008 stage C)
+ *
+ * Everything the driver has submitted so far was written into the ring itself. An IB is a pointer
+ * to packets somewhere else, fetched by the CP through a VMID - which is what makes it the one
+ * packet that can reach a process's own address space, and the reason it comes before anything
+ * that involves a page table of VidMm's. The long form of what is emitted and what upstream emits
+ * around it is at the head of the implementation in bc250_gfx.c.
+ *
+ * The gfx ring only. gfx_v10_0_ring_emit_ib_compute() is a different packet (it sets
+ * INDIRECT_BUFFER_VALID) and nothing here submits an IB on a compute ring, so it is not
+ * transcribed and the functions below refuse any other ring type.
+ * ------------------------------------------------------------------------------------------- */
+
+/* How many dwords bc250_gfx_emit_ib() writes: 4 on a gfx ring, 0 on anything else, which is also
+ * how a caller asks whether this ring takes an IB at all. */
+unsigned int bc250_gfx_ib_size(const struct amdgpu_ring *ring);
+
+/* Emit into a ring amdgpu_ring_alloc() has already reserved space in. Returns 0, or BC250_EINVAL
+ * with nothing written: a gpu_addr that is not dword aligned (which upstream BUG_ON()s), a
+ * length_dw of 0 or beyond the packet's 20-bit field, a vmid of 16 or more, or a ring that is not
+ * a gfx ring. */
+int bc250_gfx_emit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid);
+
+/* alloc + emit_ib + emit_fence + commit: the one call the miniport makes for a submission, the
+ * shape of bc250_gfx_signal_fence(). The doorbell is rung on return and nothing is waited for.
+ * `flags` is the fence's: AMDGPU_FENCE_FLAG_INT for an end-of-pipe interrupt behind the IB. */
+int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			u64 fence_addr, u64 seq, unsigned int flags);
+
+/* One GTT page to build an indirect buffer in, and the ring test as an indirect buffer: the first
+ * submission of stage C, whose result is already known from the same hardware by another route.
+ * bc250_gfx_ib_ring_test_build() seeds SCRATCH_REG0 with 0xCAFEDEAD and writes the three dwords;
+ * bc250_gfx_ib_ring_test_result() returns 0 once the register holds 0xDEADBEEF, BC250_ETIME while
+ * it does not. Both read or write one register, so both belong to the caller's sequence. */
+int  bc250_gfx_ib_page_alloc(struct amdgpu_device *adev);
+void bc250_gfx_ib_page_free(struct amdgpu_device *adev);
+u64  bc250_gfx_ib_addr(const struct amdgpu_device *adev);
+int  bc250_gfx_ib_ring_test_build(struct amdgpu_device *adev, u32 *length_dw);
+int  bc250_gfx_ib_ring_test_result(struct amdgpu_device *adev);
+
 #endif /* BC250_GFX_H */

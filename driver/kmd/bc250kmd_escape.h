@@ -18,7 +18,7 @@
 #define BC250_ESCAPE_RUN_FENCE 11u          // BC250_ESCAPE_FENCE in: Ring, Count, Interrupt; out: fences completed, timing
 #define BC250_ESCAPE_GET_LOG 12u            // BC250_ESCAPE_LOG in: From; out: the driver's log ring from that sequence on
 #define BC250_ESCAPE_LOG_SUMMARY 13u        // BC250_ESCAPE_LOG: wddm.c writes its counter tables into the ring, then as GET_LOG
-#define BC250_KMD_VERSION 0x0007000Cu       // milestone 7 work, revision 12
+#define BC250_KMD_VERSION 0x0007000Du       // milestone 7 work, revision 13
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -248,7 +248,17 @@ typedef struct _BC250_ESCAPE_IH {
 #define BC250_FENCE_MODE_RING_TEST 2u       // SDMA rings only: sdma_v5_0_ring_test_ring(), Count is ignored
 #define BC250_FENCE_MODE_DISPATCH 3u        // compute rings only: libdrm's gfx10 memset dispatch (bc250_dispatch.h), Count is the
                                             // number of 64-thread workgroups, 1..16; one fence with the interrupt bit behind it
+// The two indirect-buffer modes (ADR 0008 stage C). Gfx ring only, Count 1.
+#define BC250_FENCE_MODE_IB 4u              // the driver builds the ring test as an IB in a GTT page of its own and submits it
+                                            // through bc250_gfx_submit_ib() at VMID 0, then polls the fence as the modes above
+                                            // do. Out: IbAddress, Dwords, IbFetched. Needs no gate beyond EnableGfx.
+#define BC250_FENCE_MODE_IB_AT 5u           // the caller's IB: Vmid, RootPhysical, IbAddress, Dwords. Goes through GfxSubmitIb(),
+                                            // i.e. the path wddm.c uses, so it needs EnableGpuSubmit and stage 8, takes the one
+                                            // submission slot, and is polled with GfxFenceArrived() for BC250_SUBMIT_POLL_US.
 #define BC250_FENCE_MAX_COUNT 1000u
+#define BC250_FENCE_IB_MAX_DWORDS 0xFFFFFu  // the width of PACKET3_INDIRECT_BUFFER's IB_SIZE field (nvd.h); the driver
+                                            // refuses the same bound through AMD's own macro, this one is so that a
+                                            // tool need not send a request that cannot be encoded
 #define BC250_DISPATCH_FILL 0x22222222u     // what the shader stores: libdrm's own value (shader_test_util.c:441-444)
 
 typedef struct _BC250_ESCAPE_FENCE {
@@ -270,6 +280,15 @@ typedef struct _BC250_ESCAPE_FENCE {
     unsigned long SlowestMicroseconds;      // out: the slowest single emit-to-value
     long DispatchCheck;                     // out, DISPATCH: bc250_gfx_dispatch_check(), 0 when every dword is as asked
     unsigned long DispatchBadOffset;        // out, DISPATCH: byte offset of the first wrong dword of the destination
+    // The two IB modes. Appended, so every field above keeps the offset it had; the driver refuses a buffer shorter
+    // than this structure, which is how an older tool is turned away rather than read past its end.
+    unsigned long Vmid;                     // in, IB_AT: the VMID the CP fetches the IB through, 0..15 (0 = the GART aperture)
+    unsigned long Dwords;                   // in, IB_AT: dwords of the IB, 1..0xFFFFF; out, IB: what the driver built
+    unsigned long IbFetched;                // out, IB: 1 when the scratch register took the value the IB writes
+    unsigned long Seq;                      // out: the fence sequence number the submission was given
+    unsigned long Padding;                  // explicit, so the two 64-bit fields below start where they read
+    unsigned long long RootPhysical;        // in, IB_AT: page directory root of that VMID; 0 = leave the VMID's root alone
+    unsigned long long IbAddress;           // in, IB_AT: GPU address of the IB; out, IB: where the driver built it
 } BC250_ESCAPE_FENCE;
 
 // ---- BC250_ESCAPE_GET_LOG (guard.c): the driver's own log ring -------------------------------------------------------------
@@ -322,6 +341,7 @@ typedef struct _BC250_ESCAPE_LOG {
 
 // The first escape struct with mixed 4 and 8 byte alignment (four bytes of padding before Last[]). The driver and the
 // CLI must agree on it; a packing option on either side makes this a build failure instead of garbage vectors.
+typedef char BC250_ESCAPE_FENCE_SIZE_CHECK[(sizeof(BC250_ESCAPE_FENCE) == 112) ? 1 : -1];
 typedef char BC250_ESCAPE_IV_SIZE_CHECK[(sizeof(BC250_ESCAPE_IV) == 48) ? 1 : -1];
 typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2336) ? 1 : -1];
 typedef char BC250_LOG_LINE_SIZE_CHECK[(sizeof(BC250_LOG_LINE) == 168) ? 1 : -1];

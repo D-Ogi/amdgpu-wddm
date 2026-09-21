@@ -6,8 +6,9 @@ create one allocation, give it **the GPU virtual address we asked for**, make it
 pattern, unlock, print a machine-readable line, and tear everything down in reverse.
 
 It is the "small host-side tool calling D3DKMT directly" of `docs/research/m7-full-wddm-miniport.md`
-section 5.2. Nothing is submitted and no context is created: that is stage C (section 5.3). The steps are
-one function each so a later `--submit` can be added between the lock and the hold without touching them.
+section 5.2. With `--submit` it goes on into stage C (section 5.3): a virtual-addressing context, a monitored
+fence, a second allocation holding PM4 NOPs, one `SubmitCommand` and a bounded wait for the fence. Stage B
+behaves exactly as before when `--submit` is off.
 
 The witness stays independent (ADR 0007 point 5): `bc250rd` walks the GPU page tables and reads the
 physical pages, and the `RESULT` line is what tells it where to look.
@@ -26,7 +27,32 @@ physical pages, and the `RESULT` line is what tells it where to look.
 | 9 | `FreeGpuVirtualAddress`, `DestroyAllocation2`, `DestroyPagingQueue`, `DestroyDevice`, `CloseAdapter` | the matching Destroy DDIs |
 
 Exit criterion of stage B: the VA we asked for is the VA we got, and the pattern shows up at the physical
-address the page tables point at.
+address the page tables point at. Met in E18 runs 002 and 003 (facts M73, M74).
+
+### With `--submit`, after step 7
+
+| # | D3DKMT call | KMD DDI |
+|---|---|---|
+| C1 | `CreateContextVirtual`, node 0, `ClientHint = VULKAN`, `Flags.DisableGpuTimeout = 1` | `DxgkDdiCreateContext` with `Flags.VirtualAddressing`; drags in `CreateProcess`, `GetRootPageTableSize`, `SetRootPageTable` |
+| C2 | `CreateSynchronizationObject2(D3DDDI_MONITORED_FENCE)`, initial value 0 | none; hands back the fence's CPU VA and GPU VA |
+| C3 | a second allocation, one page, mapped at `--cmdva`, made resident | `DxgkDdiCreateAllocation`, `BuildPagingBuffer` |
+| C4 | `Lock2`, write `--nops` dwords of PM4, `Unlock2` | none |
+| C5 | `SubmitCommand`, `BroadcastContextCount = 1`, `NumPrimaries = 0` | **`DxgkDdiSubmitCommandVirtual`** |
+| C6 | `SignalSynchronizationObjectFromGpu(fence, 1)` | `DxgkDdiSignalMonitoredFence`, which the driver does not implement yet |
+| C7 | `WaitForSynchronizationObjectFromCpu` with an event, then a bounded `WaitForSingleObject` | none |
+
+Exit criterion of stage C: `*(UINT64*)FenceValueCPUVirtualAddress == 1`. A fence that does not move inside
+`--fence-timeout` is reported as `submit=timeout` and is a finding, not a tool failure - the exit code stays
+0. Only a call that fails outright makes it non-zero.
+
+The command stream is NOPs and nothing else in this version: no `RELEASE_MEM` writing the fence from the
+command buffer (research section 5.3 step 9). That is deliberate, so that the run answers one question -
+whether dxgkrnl's own signal path reaches the fence through our miniport - without the answer being muddled
+by a fence write we performed ourselves.
+
+The NOP encoding is `PACKET3(PACKET3_NOP, total - 2)` from `driver/amdgpu-import/nvd.h:48,55`, with the dword
+count as `gfx_v10_0.c:9505` computes it; the rest of the page is padded with the PACKET2 NOP `0xFFFF1000` of
+`driver/shim/bc250_gfx.c:68`.
 
 ## The private driver data
 
@@ -72,8 +98,11 @@ display-only adapter that has no paging queue to give.
 | `--reserve` | reserve the range first (64 KB-aligned base) and map inside it |
 | `--resident-first` | `MakeResident` before the map instead of after it |
 | `--no-write` | lock but leave the contents alone |
+| `--submit` | stage C: context, monitored fence, a page of PM4 NOPs, `SubmitCommand`, bounded fence wait |
+| `--cmdva <address>` | where the command buffer is mapped, default `0x20000000`; may not overlap `--va` |
+| `--nops <dwords>` | PM4 dwords in the command buffer, default 16, at least 2, rounded up to 8 |
 | `--hold <s>` | keep everything alive so the witness can read |
-| `--fence-timeout <ms>` | per-wait paging fence deadline, default 5000 |
+| `--fence-timeout <ms>` | paging fence and monitored fence deadline, default 5000 |
 | `--timeout <s>` | watchdog on the whole process, default 30, raised to cover `--hold` |
 
 No wait is unbounded: every paging fence poll has a deadline, and a watchdog thread terminates the process
@@ -89,11 +118,25 @@ RESULT va=0x0000000010000000 size=0x10000 pattern=0x4243323530420000 words=8192 
 The pattern is `"BC250B"` in the high six bytes of every 64-bit word, the word index in the low two. A page
 of it is unmistakable in a physical-memory dump and says which word of the allocation a given byte is.
 
+With `--submit` the same line gains, appended after the fields above so anything parsing stage B keeps
+working:
+
+```
+ cmdva=0x0000000020000000 cmdlen=0x40 fencegpuva=0x... fence=1 submit=ok ms=3
+```
+
+`submit` is `ok` (the fence reached 1), `timeout` (every call succeeded, the fence did not move) or `failed`
+(a call failed); `ms` is how long the wait took.
+
 ## Hazards
 
 - The first `MapGpuVirtualAddress` is the first time VidMm asks our `BuildPagingBuffer` for real work. Stage A
   answers every operation inertly, so a map can "succeed" with no PTE behind it; the witness, not the
   `NTSTATUS`, is what settles that. See `scratch/tmp/kmtprobe_kmd_patch.md` for the gap list.
-- A GPU VA with no page table behind it is a fault waiting for stage C, not for this tool: nothing here lets
-  the GPU touch the range.
 - `--hold` keeps an allocation resident in the VRAM carve-out. Harmless at 64 KB, worth a thought at 1 GB.
+- `--submit` is the first thing in this project that asks the scheduler to run a command buffer. The context
+  carries `DisableGpuTimeout`, so a stream the CP does not like hangs the node instead of raising a TDR, and
+  there is no GPU reset on this part (facts M53). Run it on the lab, with the overlay told first, never here.
+- `DxgkDdiSignalMonitoredFence` is absent from the miniport's table today, so `submit=timeout` is the
+  expected first result rather than a surprise. What the guard log shows `SubmitCommandVirtual` receiving is
+  the evidence worth keeping from that run.

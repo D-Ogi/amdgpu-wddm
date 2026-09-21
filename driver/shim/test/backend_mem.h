@@ -97,6 +97,24 @@ void backend_hqd_pin(const struct amdgpu_ring *ring, int pinned);
  * asserts both: the count it expects, and no rejections. */
 unsigned int backend_dispatch_count(void);
 
+/*
+ * PACKET3_INDIRECT_BUFFER (ADR 0008 stage C): how many the stub followed, and how many it saw and
+ * did not follow.
+ *
+ * Following one means reading the dwords at the address the packet names and executing them as if
+ * they had been in the ring, which is what the CP does. That is only modelled for VMID 0: every
+ * address this file hands out is an MC address of the flat GART aperture, and a buffer named
+ * through any other VMID would be reached through a page table walk that nothing here has. So an
+ * IB at a non-zero VMID is COUNTED and not executed, rather than quietly ignored - a test that
+ * submits one asserts the skip, and a test that expects its packets to run would otherwise see a
+ * silent nothing and call it a pass.
+ *
+ * A malformed IB - the wrong count, a length that runs off the end of the buffer, an address in no
+ * allocation, or an IB inside an IB - is a rejection like any other (backend_cp_stub_rejects()).
+ */
+unsigned int backend_ib_followed(void);
+unsigned int backend_ib_skipped(void);
+
 /* ---------------------------------------------------------------------------------------------
  * The MEC's own fetch state: a declared model of measured hardware
  *

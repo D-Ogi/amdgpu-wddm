@@ -189,6 +189,7 @@ BOOLEAN Bc250InterruptRoutine(_In_ const PVOID MiniportDeviceContext, _In_ ULONG
 void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
 {
     IhDpc((BC250_DEVICE*)MiniportDeviceContext);
+    WddmGpuFence((BC250_DEVICE*)MiniportDeviceContext); // stage C: the vectors are consumed, the fence memory says whose they were
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
 }
 

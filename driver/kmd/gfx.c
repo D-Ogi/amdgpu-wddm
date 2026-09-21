@@ -4,7 +4,9 @@
 // register traffic of unit A. This file is the command around it; the memory is gpumem.c.
 //
 //   <service key>\Parameters
-//     EnableGfx   REG_DWORD  1 = allow the GFX command. Needs EnableMmio, EnableVram, EnableGart, EnablePsp. Default 0.
+//     EnableGfx        REG_DWORD  1 = allow the GFX command. Needs EnableMmio, EnableVram, EnableGart, EnablePsp. Default 0.
+//     EnableGpuSubmit  REG_DWORD  1 = GfxSubmitIb() may write the gfx ring (ADR 0008 stage C). Needs EnableGfx and a
+//                                 bring-up that reached stage 8, i.e. EnableIh as well. Default 0.
 //
 // One escape (BC250_ESCAPE_RUN_GFX), four operations:
 //   PLAN    set up (allocates memory and zeroes it, the GART table untouched; reads registers), run stages 1..LastStage against the real registers
@@ -17,7 +19,9 @@
 //   STATE   the out fields only.
 // Stage 8 (M6) enables the interrupt sources as amdgpu does at 1.56 s of its init; it needs ih.c's ring enabled first,
 // which is amdgpu's order. A second escape (BC250_ESCAPE_RUN_FENCE) emits fences on one ring: the smallest submission
-// that writes a value we can read and raises an end-of-pipe interrupt (experiment E12 part C).
+// that writes a value we can read and raises an end-of-pipe interrupt (experiment E12 part C). Its two newest modes are
+// ADR 0008 stage C: BC250_FENCE_MODE_IB submits the ring test as an indirect buffer the driver builds itself, and
+// BC250_FENCE_MODE_IB_AT submits the caller's, through the same GfxSubmitIb() that wddm.c uses.
 // The driver does FINI by itself when the device stops, before the PSP unload and the GART restore.
 //
 // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
@@ -75,6 +79,11 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 #define BC250_GFX_STAGE_INTERRUPTS 8
 #define BC250_FENCE_BUDGET_US 1000000     // all fences of one call
 #define BC250_FENCE_TIMEOUT_US 100000ul
+// ADR 0008 stage C. FenceRing() gives the fence escape slots 0..9, one per CP ring, so the submission path takes one
+// of the six the page has left (BC250_GFX_FENCE_SLOTS is 16). The poll budget is the `ib` escape verb's alone:
+// GfxSubmitIb() never waits, and wddm.c will hear about the fence from the interrupt.
+#define BC250_SUBMIT_FENCE_SLOT 10u
+#define BC250_SUBMIT_POLL_US 500000ul
 
 typedef struct _BC250_GFX {
     BC250_SEQUENCE Sequence;
@@ -90,6 +99,21 @@ typedef struct _BC250_GFX {
     ULONG RingOwes[BC250_FENCE_RING_SDMA0 + 2];
     ULONG RingOwesSlot[BC250_FENCE_RING_SDMA0 + 2];
     ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
+    // ---- stage C: one indirect buffer at a time on the gfx ring (ADR 0008) ----
+    BOOLEAN SubmitGate;             // EnableGpuSubmit, read once at GfxStart
+    BOOLEAN IbPage;                 // bc250_gfx_ib_page_alloc has allocated
+    volatile LONG SubmitFailed;     // sticky: nothing goes to the ring through GfxSubmitIb again this device start
+    volatile LONG SubmitInFlight;   // a submission whose fence has not been seen; the one-in-flight rule below
+    ULONG SubmitSeq;                // its sequence number, 0 when none was ever emitted
+    // The DPC reads the fence slot without the lock, so it needs a device pointer it can use there. It is this
+    // sequence's own adev, set under GartLock at the submission and never freed before GfxStop: pnp.c stops ih.c
+    // first, and IhStop() clears Active and drains the DPCs, so by the time TearDown() releases the fence page no
+    // consumer of this field can still be running.
+    struct amdgpu_device* SubmitAdev;
+    // The page directory root each VMID was last given, so that a submission whose context has not moved does not pay
+    // for an invalidation (bc250_gmc_flush_gpu_tlb polls for up to adev->usec_timeout). Index 0 is unused: VMID 0 is
+    // the GART aperture and has no root of ours.
+    ULONGLONG VmidRoot[16];
 } BC250_GFX;
 
 // sdma_v5_0_gfx_resume_instance() ends with amdgpu_ring_test_helper(ring); the shim leaves that to the miniport, because an
@@ -146,10 +170,18 @@ static int SetUp(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 {
     if (!Gfx->SetUp) return;
+    Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
+    if (Gfx->IbPage) { bc250_gfx_ib_page_free(Adev); Gfx->IbPage = FALSE; }
     RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
     RtlZeroMemory(Gfx->RingOwesSlot, sizeof(Gfx->RingOwesSlot));
+    // The fence page is gone, so nothing may read a slot in it any more, and the rings are gone, so no VMID root this
+    // instance programmed describes anything the next one will submit. SubmitFailed is NOT cleared: it is sticky for
+    // the whole device start by design, and a teardown is not a reason to trust the path again.
+    Gfx->SubmitSeq = 0;
+    InterlockedExchange(&Gfx->SubmitInFlight, 0);
+    RtlZeroMemory(Gfx->VmidRoot, sizeof(Gfx->VmidRoot));
     if (Gfx->Dispatch) { bc250_gfx_dispatch_teardown(Adev); Gfx->Dispatch = FALSE; }
     bc250_sdma_teardown(Adev);
     bc250_gfx_teardown(Adev);
@@ -302,6 +334,15 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
 
         case BC250_GFX_OP_FINI:
             if (gfx->StagesDone == 0 && !gfx->SetUp) { status = STATUS_INVALID_DEVICE_STATE; break; }
+            // Review 13: this teardown, unlike GfxStop's, runs with the IH DPC alive, and wddm.c's fence check reads
+            // the page it frees. Not while a submission is on the ring; after a watchdog failure nobody looks any more.
+            WddmGpuFence(Device);           // a fence that has arrived is reported as one, not by the watchdog later
+            if (gfx->SubmitInFlight != 0 && gfx->SubmitFailed == 0 && !GfxFenceArrived(Device, gfx->SubmitSeq))
+            {
+                GuardLog("gfx: fini refused, submission %lu is still on the ring", gfx->SubmitSeq);
+                status = STATUS_DEVICE_BUSY;
+                break;
+            }
             if (!Fini(Device, gfx, adev, &result)) status = STATUS_IO_DEVICE_ERROR;
             break;
         }
@@ -321,6 +362,156 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
     Data->Result = result;
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+// ---- stage C: one indirect buffer on the gfx ring (ADR 0008) --------------------------------------------------------------
+//
+// The ring side of a submission, so that wddm.c keeps its distance from the shim's types. Everything it does is in
+// driver/shim: bc250_gmc_set_vmid_pd() points a VMID's page directory at the submitting process's root and invalidates
+// it by MMIO, bc250_gfx_submit_ib() writes PACKET3_INDIRECT_BUFFER and an interrupting RELEASE_MEM into the gfx ring
+// and rings the doorbell. What is here is the policy around them.
+//
+// One submission in flight, and it is a correctness requirement rather than a simplification. The shim's
+// amdgpu_ring_alloc() does not look at the read pointer (bc250_ring.c:26, the deviation is stated at the RingOwes
+// comment above), the gfx ring's align_mask rounds every allocation up to 256 dwords, and the ring holds 2048: eight
+// unanswered submissions would wrap it onto packets the CP has not read yet. So a submission is taken only when the
+// previous sequence number has arrived, and the fence slot in GTT memory is the whole of how that is decided - the
+// same rule the fence escape's owed slots follow, on one slot instead of ten.
+//
+// Nothing here waits for the GPU. GfxSubmitIb() returns as soon as the doorbell is rung; the completion is the
+// end-of-pipe interrupt, which ih.c's DPC turns into a GfxFenceArrived() call.
+
+BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+
+    // Stage 8 and not 6: the fence carries AMDGPU_FENCE_FLAG_INT, and without the interrupt sources of stage 8 the
+    // completion would never be reported, only polled. Without the IH ring stage 8 cannot have run at all (GfxEscape).
+    return gfx != NULL && gfx->SubmitGate && gfx->SetUp && !gfx->Failed && gfx->SubmitFailed == 0 &&
+           gfx->SubmitInFlight == 0 && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS;
+}
+
+void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+
+    if (gfx == NULL) return;
+    // Once, however often the caller says it: a watchdog that fires twice should not fill the log ring. The write
+    // pointer is left where it stands, because facts M59/M60 say a hardware pointer only counts up and a re-init has
+    // to adopt it, so abandoning the ring is the safe act and rewinding it is not.
+    if (InterlockedExchange(&gfx->SubmitFailed, 1) == 0)
+        GuardLog("gfx: submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
+                 gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
+}
+
+BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+
+    // One read of a GTT page the CP writes. No register, no lock, no allocation: everything a DISPATCH_LEVEL caller
+    // may not do is somewhere else. SubmitAdev is only ever non-NULL between a submission and the teardown that frees
+    // the page, and pnp.c drains ih.c's DPCs before that teardown runs (see the field's comment).
+    if (gfx == NULL || gfx->SubmitAdev == NULL || Seq == 0) return FALSE;
+    if ((ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) != Seq) return FALSE;
+    // The sequence numbers only count up, so a slot holding Seq means that submission and every earlier one is done.
+    if (gfx->SubmitSeq == Seq) InterlockedExchange(&gfx->SubmitInFlight, 0);
+    return TRUE;
+}
+
+// With GartLock held, the gfx sequence installed as adev->backend and a GpuMem sequence open. GfxSubmitIb is this plus
+// all three; GfxFenceEscape's IB_AT mode calls it directly, because it already holds them.
+static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev,
+                               ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes, _Out_ ULONG* Seq)
+{
+    struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
+    ULONG seq;
+    u64 address;
+    long result;
+
+    *Seq = 0;
+    if (Gfx->SubmitFailed) return STATUS_DEVICE_HARDWARE_ERROR;
+    if (!Gfx->SubmitGate) return STATUS_ACCESS_DENIED;
+    if (Gfx->Failed || !Gfx->SetUp || Gfx->StagesDone < BC250_GFX_STAGE_INTERRUPTS) return STATUS_INVALID_DEVICE_STATE;
+    // The shim refuses the same three things, but a size in bytes is this file's unit, so the division is checked here:
+    // an odd length would otherwise become a shorter IB rather than an error.
+    if (SizeBytes == 0 || (SizeBytes & 3) != 0 || Vmid >= RTL_NUMBER_OF(Gfx->VmidRoot)) return STATUS_INVALID_PARAMETER;
+
+    // One in flight. A late fence is taken here rather than held against the caller: GfxFenceArrived also clears the
+    // mark, so a submission whose interrupt was missed still unblocks the next one as soon as its value lands.
+    if (Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq)) return STATUS_DEVICE_BUSY;
+
+    if (!Gfx->FencePage)
+    {
+        result = bc250_gfx_fence_page_alloc(Adev);
+        if (result != 0) return STATUS_INSUFFICIENT_RESOURCES;
+        Gfx->FencePage = TRUE;
+    }
+    address = bc250_gfx_fence_addr(Adev, BC250_SUBMIT_FENCE_SLOT);
+    if (address == 0) return STATUS_INSUFFICIENT_RESOURCES;
+
+    // VMID 0 is the GART aperture, whose root bc250_gmc_gart_enable() programmed and which bc250_gmc_set_vmid_pd()
+    // refuses to touch; a caller submitting at VMID 0 is submitting out of the driver's own GTT pages. For 1..15 the
+    // root is programmed only when it moved, because the invalidation behind it polls for up to 100 ms.
+    if (Vmid != 0 && RootPhysical != Gfx->VmidRoot[Vmid])
+    {
+        result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
+        GuardLog("gfx: VMID %lu root 0x%llX -> %d", Vmid, RootPhysical, result);
+        if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
+            return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
+        Gfx->VmidRoot[Vmid] = RootPhysical;
+    }
+
+    seq = ++Gfx->FenceSeq;
+    if (seq == 0) seq = ++Gfx->FenceSeq;        // 0 means "nothing in flight" to GfxFenceArrived
+    // Both set before the doorbell: the end-of-pipe interrupt can arrive inside bc250_gfx_submit_ib().
+    Gfx->SubmitSeq = seq;
+    Gfx->SubmitAdev = Adev;
+    InterlockedExchange(&Gfx->SubmitInFlight, 1);
+
+    result = bc250_gfx_submit_ib(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
+    if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
+    {
+        // Nothing was committed: both emitters refuse before writing and bc250_gfx_submit_ib undoes the allocation.
+        InterlockedExchange(&Gfx->SubmitInFlight, 0);
+        Gfx->SubmitSeq = 0;
+        GuardLog("gfx: IB 0x%llX x%lu dwords at VMID %lu refused, result %d", GpuAddress, SizeBytes / 4, Vmid, result);
+        return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_INVALID_PARAMETER : Gfx->Sequence.Fault;
+    }
+
+    *Seq = seq;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
+                     ULONG SizeBytes, _Out_ ULONG* Seq)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    void* previousBackend = NULL;
+    BOOLEAN gartEnabled = FALSE;
+    NTSTATUS status;
+    ULONG vram, gtt;
+
+    *Seq = 0;
+    // PASSIVE_LEVEL only, because of this: DxgkDdiSubmitCommandVirtual is annotated PASSIVE_LEVEL
+    // (d3dkmddi.h) and DxgkDdiSubmitCommand is not, which is exactly why the paging path may not come here.
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else status = GartDevice(Device, &adev, &gartEnabled);
+    if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status))
+    {
+        previousBackend = adev->backend;
+        adev->backend = &gfx->Sequence;
+        SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+        GpuMemBeginSequence(Device, NULL, 0);
+        status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Seq);
+        (void)GpuMemEndSequence(Device, &vram, &gtt);
+        adev->backend = previousBackend;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    return status;
 }
 
 // ---- fences (E12 part C) ------------------------------------------------------------------------------------------------
@@ -349,6 +540,8 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     BOOLEAN sdma = Data->Ring >= BC250_FENCE_RING_SDMA0;
     BOOLEAN dispatch = Data->Interrupt == BC250_FENCE_MODE_DISPATCH;
     BOOLEAN compute = Data->Ring >= BC250_FENCE_RING_COMPUTE0 && Data->Ring < BC250_FENCE_RING_COMPUTE0 + 8;
+    BOOLEAN ib = Data->Interrupt == BC250_FENCE_MODE_IB;            // the driver's own ring-test IB, VMID 0
+    BOOLEAN ibAt = Data->Interrupt == BC250_FENCE_MODE_IB_AT;       // the caller's IB, through GfxSubmitIb
     ULONG slot = sdma ? 2 + (Data->Ring - BC250_FENCE_RING_SDMA0) : Data->Ring;     // SDMA slots 0 and 1 are the ring tests'
     long result = 0;
 
@@ -363,14 +556,22 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     Data->SlowestMicroseconds = 0;
     Data->DispatchCheck = 0;
     Data->DispatchBadOffset = 0;
+    Data->IbFetched = 0;
+    Data->Seq = 0;
+    Data->Padding = 0;
     KeQueryPerformanceCounter(&frequency);
 
     ExAcquireFastMutex(&Device->GartLock);
     gfx = (BC250_GFX*)Device->Gfx;
     if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
     else if (Data->Count == 0 || Data->Count > BC250_FENCE_MAX_COUNT) status = STATUS_INVALID_PARAMETER;
-    else if (Data->Interrupt > BC250_FENCE_MODE_DISPATCH || (Data->Interrupt == BC250_FENCE_MODE_RING_TEST && !sdma)) status = STATUS_INVALID_PARAMETER;
+    else if (Data->Interrupt > BC250_FENCE_MODE_IB_AT || (Data->Interrupt == BC250_FENCE_MODE_RING_TEST && !sdma)) status = STATUS_INVALID_PARAMETER;
     else if (dispatch && (!compute || Data->Count > BC250_DISPATCH_MAX_GROUPS)) status = STATUS_INVALID_PARAMETER;
+    // Both IB modes are one submission on the gfx ring: the ring because that is the only one bc250_gfx_emit_ib()
+    // emits for, one because the ring holds eight unanswered submissions and nothing here reads the read pointer.
+    else if ((ib || ibAt) && (Data->Ring != BC250_FENCE_RING_GFX || Data->Count != 1)) status = STATUS_INVALID_PARAMETER;
+    else if (ibAt && (Data->Dwords == 0 || Data->Dwords > BC250_FENCE_IB_MAX_DWORDS || (Data->IbAddress & 3) != 0 ||
+                      (Data->RootPhysical & (AMDGPU_GPU_PAGE_SIZE - 1)) != 0)) status = STATUS_INVALID_PARAMETER;
     else if (gfx->Failed || !gfx->SetUp || gfx->StagesDone < (ULONG)(sdma ? BC250_GFX_STAGE_SDMA : BC250_GFX_STAGE_CP)) status = STATUS_INVALID_DEVICE_STATE;
     if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
     if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
@@ -390,6 +591,13 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
         {
             result = bc250_gfx_fence_page_alloc(adev);
             if (result == 0) gfx->FencePage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+        // The page the driver builds its own IB in. Like the fence page it belongs to this sequence, so gpumem.c gives
+        // it back with everything else at the FINI; unlike it, nothing but this mode ever asks for it.
+        if (NT_SUCCESS(status) && ib && !gfx->IbPage)
+        {
+            result = bc250_gfx_ib_page_alloc(adev);
+            if (result == 0) gfx->IbPage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
         }
         // Before the dispatch's reseed: a refused call must leave the destination as the pending dispatch may still fill it.
         if (NT_SUCCESS(status) && gfx->RingOwes[Data->Ring] != 0)
@@ -443,6 +651,73 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             GuardLog("gfx: dispatch %u groups, shader 0x%llX, destination 0x%llX, check %d at 0x%X", Data->Count,
                      bc250_gfx_dispatch_shader_addr(adev), bc250_gfx_dispatch_dst_addr(adev), Data->DispatchCheck, Data->DispatchBadOffset);
         }
+        if (NT_SUCCESS(status) && ib)
+        {
+            // Stage C step C3: the ring test as an indirect buffer, at VMID 0, straight through the shim - the same
+            // alloc, emit, commit and poll the modes above use, with one PACKET3_INDIRECT_BUFFER in front of the
+            // fence. None of GfxSubmitIb's policy is involved, so this runs before EnableGpuSubmit is ever opened and
+            // before stage 8: what it asks is only whether the CP fetches a buffer it was pointed at.
+            ULONG seq = ++gfx->FenceSeq;
+            u64 address = bc250_gfx_fence_addr(adev, slot);
+            u32 dwords = 0;
+
+            result = bc250_gfx_ib_ring_test_build(adev, &dwords);
+            // Every one of these is the driver's, not the caller's, so they are reported as the driver set them and
+            // not as they arrived: this mode takes no input at all.
+            Data->IbAddress = bc250_gfx_ib_addr(adev);
+            Data->Dwords = dwords;
+            Data->Vmid = 0;
+            Data->RootPhysical = 0;
+            if (result == 0 && (address == 0 || Data->IbAddress == 0)) result = -62;
+            if (result == 0)
+                result = bc250_gfx_submit_ib(&adev->gfx.gfx_ring[0], Data->IbAddress, dwords, 0, address, seq,
+                                             AMDGPU_FENCE_FLAG_INT);
+            if (result == 0 && NT_SUCCESS(gfx->Sequence.Fault))
+            {
+                Data->LastSeq = seq;
+                Data->Seq = seq;
+                for (waited = 0; waited < BC250_FENCE_TIMEOUT_US; waited += 10)
+                {
+                    Data->LastValue = (unsigned long)bc250_gfx_fence_read(adev, slot);
+                    if (Data->LastValue == seq) break;
+                    KeStallExecutionProcessor(10);
+                }
+                if (Data->LastValue != seq) { result = -62; gfx->RingOwes[Data->Ring] = seq; gfx->RingOwesSlot[Data->Ring] = slot; }
+                // Read back after a timeout as well: "the fence never came" and "the fence came but the CP never read
+                // the buffer" are different failures and want different next steps.
+                Data->IbFetched = (bc250_gfx_ib_ring_test_result(adev) == 0) ? 1 : 0;
+                if (result == 0 && Data->IbFetched) Data->Completed = 1;
+                else if (result == 0) result = -5;      // the fence arrived, the scratch register did not take the IB
+            }
+            GuardLog("gfx: IB 0x%llX x%lu dwords at VMID 0: fetched %lu, fence 0x%lX/0x%lX, result %d", Data->IbAddress,
+                     Data->Dwords, Data->IbFetched, Data->LastValue, Data->LastSeq, result);
+        }
+        if (NT_SUCCESS(status) && ibAt)
+        {
+            // Steps C4 and C6: the caller's buffer through the path wddm.c will use, with GfxSubmitIb's policy in
+            // full - the gate, stage 8, the VMID root and the one-in-flight rule - and then a bounded wait, which is
+            // the one thing a DDI must not do. The lock and the sequence are already ours, so the inner call is the
+            // one that runs; GfxSubmitIb itself would deadlock on GartLock here.
+            ULONG seq = 0;
+
+            status = SubmitIbLocked(Device, gfx, adev, Data->Vmid, Data->RootPhysical, Data->IbAddress,
+                                    Data->Dwords * 4u, &seq);
+            if (NT_SUCCESS(status))
+            {
+                Data->LastSeq = seq;
+                Data->Seq = seq;
+                for (waited = 0; waited < BC250_SUBMIT_POLL_US; waited += 10)
+                {
+                    if (GfxFenceArrived(Device, seq)) break;
+                    KeStallExecutionProcessor(10);
+                }
+                Data->LastValue = (unsigned long)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT);
+                if (Data->LastValue == seq) Data->Completed = 1;
+                else result = -62;      // the submission stands; the next one is refused until its value arrives
+            }
+            GuardLog("gfx: IB 0x%llX x%lu dwords at VMID %lu, root 0x%llX -> 0x%08X, fence 0x%lX/0x%lX", Data->IbAddress,
+                     Data->Dwords, Data->Vmid, Data->RootPhysical, status, Data->LastValue, Data->LastSeq);
+        }
         if (NT_SUCCESS(status) && Data->Interrupt == BC250_FENCE_MODE_RING_TEST)
         {
             // sdma_v5_0_ring_test_ring(): one WRITE_LINEAR of 0xDEADBEEF into the engine's scratch slot, polled by the shim.
@@ -452,7 +727,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             if (result == 0) Data->Completed = 1;
             else { gfx->RingOwes[Data->Ring] = 0xDEADBEEF; gfx->RingOwesSlot[Data->Ring] = Data->Ring - BC250_FENCE_RING_SDMA0; }
         }
-        for (i = 0; NT_SUCCESS(status) && !dispatch && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
+        for (i = 0; NT_SUCCESS(status) && !dispatch && !ib && !ibAt && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
         {
             LARGE_INTEGER one = KeQueryPerformanceCounter(NULL);
             ULONG seq = ++gfx->FenceSeq, took;
@@ -545,8 +820,12 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     gfx->Sequence.Write = MmioGfxWrite;
     gfx->Sequence.PlanAnswers = GfxPlanAnswers;
     gfx->Sequence.PassesFault = GfxPassesFault;
+    // ADR 0008 stage C. Read once here and never again, like every other gate: a submission path that could be opened
+    // while the device runs would be a path nobody had decided to open.
+    //   EnableGpuSubmit  REG_DWORD  1 = GfxSubmitIb may write the gfx ring. Needs EnableGfx and EnableIh (stage 8).
+    gfx->SubmitGate = (GuardReadSetting(L"EnableGpuSubmit", 0) == 1);
     Device->Gfx = gfx;
-    GuardLog("gfx: ready");
+    GuardLog("gfx: ready, GPU submission %s", gfx->SubmitGate ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
 

@@ -632,10 +632,33 @@ static int Ih(const WCHAR *opText)
 // ---- fence: fences on one ring (BC250_ESCAPE_RUN_FENCE) ----------------------------------------------------------------
 //
 // fence c0..c7 <groups> dispatch: libdrm's gfx10 memset shader on that compute ring (the M6 exit criterion), 1..16 workgroups.
+// fence gfx 1 ib: the driver builds the ring test as an indirect buffer in a GTT page of its own and submits it at VMID 0
+// (ADR 0008 step C3). It reports whether the scratch register took the value, which is what says the CP fetched the buffer.
 // fence gfx|c0..c7|kiq|s0|s1 [count] [noint|test]: emit <count> fences one after the other and poll each value in memory
 // (test, SDMA only: the ring test, one WRITE_LINEAR of 0xDEADBEEF, instead). With the
 // IH ring up and stage 8 done each one also raises an end-of-pipe interrupt (`ih state` counts them); noint is the
 // control: the same packet without the interrupt bit.
+
+static void FencePrint(const BC250_ESCAPE_FENCE *f, const WCHAR *what)
+{
+    printf("fence %ls x%lu%s: %s, NTSTATUS 0x%08lX %s, result %ld\n", what, f->Count,
+           f->Interrupt == BC250_FENCE_MODE_RING_TEST ? " as a ring test" :
+           f->Interrupt == BC250_FENCE_MODE_IB || f->Interrupt == BC250_FENCE_MODE_IB_AT ? " as an indirect buffer" :
+           f->Interrupt ? "" : " without the interrupt bit",
+           f->Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", f->NtStatus, StatusName((NTSTATUS)f->NtStatus), f->Result);
+    if (f->FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", f->FaultOffset);
+    printf("fences       %lu of %lu values read back, %lu doorbells; last emitted 0x%lX, slot holds 0x%lX\n", f->Completed, f->Count,
+           f->DoorbellCount, f->LastSeq, f->LastValue);
+    printf("time         %lu us in all, slowest single fence %lu us\n", f->Microseconds, f->SlowestMicroseconds);
+    if (f->Interrupt == BC250_FENCE_MODE_DISPATCH)
+        printf("dispatch     %lu workgroup(s) of 64 threads, fill 0x%08X: check %ld%s, first wrong dword at byte 0x%lX\n", f->Count,
+               BC250_DISPATCH_FILL, f->DispatchCheck, f->DispatchCheck == 0 && f->Completed ? " (every dword as asked)" : "", f->DispatchBadOffset);
+    if (f->Interrupt == BC250_FENCE_MODE_IB || f->Interrupt == BC250_FENCE_MODE_IB_AT)
+        printf("ib           0x%llX, %lu dwords, VMID %lu, root 0x%llX: %s\n", f->IbAddress, f->Dwords, f->Vmid, f->RootPhysical,
+               f->Interrupt == BC250_FENCE_MODE_IB ? (f->IbFetched ? "FETCHED (the scratch register took the value)"
+                                                                   : "not fetched (the register still holds the seed)")
+                                                   : (f->Completed ? "the fence arrived" : "no fence"));
+}
 
 static int Fence(int argc, WCHAR **argv)
 {
@@ -654,12 +677,13 @@ static int Fence(int argc, WCHAR **argv)
         f.Ring = BC250_FENCE_RING_COMPUTE0 + (unsigned long)(argv[2][1] - L'0');
     else if ((argv[2][0] == L's' || argv[2][0] == L'S') && (argv[2][1] == L'0' || argv[2][1] == L'1') && argv[2][2] == 0)
         f.Ring = BC250_FENCE_RING_SDMA0 + (unsigned long)(argv[2][1] - L'0');
-    else { fprintf(stderr, "fence gfx|c0..c7|kiq|s0|s1 [count] [noint|test], not %ls\n", argv[2]); return 2; }
+    else { fprintf(stderr, "fence gfx|c0..c7|kiq|s0|s1 [count] [noint|test|dispatch|ib], not %ls\n", argv[2]); return 2; }
     for (i = 3; i < argc; i++)
     {
         if (!_wcsicmp(argv[i], L"noint")) f.Interrupt = BC250_FENCE_MODE_VALUE;
         else if (!_wcsicmp(argv[i], L"test")) f.Interrupt = BC250_FENCE_MODE_RING_TEST;
         else if (!_wcsicmp(argv[i], L"dispatch")) f.Interrupt = BC250_FENCE_MODE_DISPATCH;
+        else if (!_wcsicmp(argv[i], L"ib")) f.Interrupt = BC250_FENCE_MODE_IB;
         else f.Count = wcstoul(argv[i], NULL, 0);
     }
 
@@ -668,16 +692,45 @@ static int Fence(int argc, WCHAR **argv)
     if (f.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
     if (f.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no fence command\n"); return 3; }
 
-    printf("fence %ls x%lu%s: %s, NTSTATUS 0x%08lX %s, result %ld\n", argv[2], f.Count,
-           f.Interrupt == BC250_FENCE_MODE_RING_TEST ? " as a ring test" : f.Interrupt ? "" : " without the interrupt bit",
-           f.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", f.NtStatus, StatusName((NTSTATUS)f.NtStatus), f.Result);
-    if (f.FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", f.FaultOffset);
-    printf("fences       %lu of %lu values read back, %lu doorbells; last emitted 0x%lX, slot holds 0x%lX\n", f.Completed, f.Count,
-           f.DoorbellCount, f.LastSeq, f.LastValue);
-    printf("time         %lu us in all, slowest single fence %lu us\n", f.Microseconds, f.SlowestMicroseconds);
-    if (f.Interrupt == BC250_FENCE_MODE_DISPATCH)
-        printf("dispatch     %lu workgroup(s) of 64 threads, fill 0x%08X: check %ld%s, first wrong dword at byte 0x%lX\n", f.Count,
-               BC250_DISPATCH_FILL, f.DispatchCheck, f.DispatchCheck == 0 && f.Completed ? " (every dword as asked)" : "", f.DispatchBadOffset);
+    FencePrint(&f, argv[2]);
+    return f.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
+// ---- ib: one indirect buffer through the miniport's own submission path (ADR 0008 stage C) ------------------------------
+//
+// ib <vmid> <root phys hex> <gpu va hex> <dwords>: GfxSubmitIb() with those arguments, then GfxFenceArrived() polled in
+// the driver for up to half a second. The VMID's page directory root is programmed first if it differs from the one that
+// VMID was last given; a root of 0 leaves it alone, which is what VMID 0 (the GART aperture) always does. Unlike
+// `fence gfx 1 ib` this goes through the gate wddm.c will go through, so it needs EnableGpuSubmit and a bring-up that
+// reached stage 8, and it takes the one submission slot: a second call is refused until the first fence arrives.
+
+static int Ib(WCHAR **argv)
+{
+    BC250_ESCAPE_FENCE f;
+    NTSTATUS status;
+
+    memset(&f, 0, sizeof(f));
+    f.Magic = BC250_ESCAPE_MAGIC;
+    f.Command = BC250_ESCAPE_RUN_FENCE;
+    f.Ring = BC250_FENCE_RING_GFX;
+    f.Count = 1;
+    f.Interrupt = BC250_FENCE_MODE_IB_AT;
+    f.Vmid = wcstoul(argv[2], NULL, 0);
+    f.RootPhysical = _wcstoui64(argv[3], NULL, 16);
+    f.IbAddress = _wcstoui64(argv[4], NULL, 16);
+    f.Dwords = wcstoul(argv[5], NULL, 0);
+    if (f.Vmid > 15 || f.Dwords == 0 || f.Dwords > BC250_FENCE_IB_MAX_DWORDS)
+    {
+        fprintf(stderr, "ib <vmid 0..15> <root phys hex> <gpu va hex> <dwords 1..%u>\n", BC250_FENCE_IB_MAX_DWORDS);
+        return 2;
+    }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &f, sizeof(f), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (f.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (f.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no fence command\n"); return 3; }
+
+    FencePrint(&f, L"gfx");
     return f.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
@@ -845,6 +898,8 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli gart plan | enable | restore\n"
                         "       bc250kmd_cli psp plan | load | unload\n"
                         "       bc250kmd_cli gfx plan <stage> | run <stage> | fini | state\n"
+                        "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
+                        "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
@@ -865,6 +920,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
+    if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
         if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);

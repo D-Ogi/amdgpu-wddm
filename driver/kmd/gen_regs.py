@@ -28,6 +28,22 @@ from gen_probes import SPEC  # noqa: E402  (ip -> header)
 from extract_phase import accesses  # noqa: E402
 
 TRACE = ROOT / "evidence/linux/2026-09-21-E03-init-trace/amdgpu-events.txt"
+
+# gfx.c's stage C submission (ADR 0008) programs one VMID's page directory root through
+# gfxhub_v2_0_setup_vm_pt_regs(), and no trace of ours holds those registers: amdgpu writes them per
+# job from amdgpu_vm_flush(), while every window we recorded is a bring-up. VMIDs 1..15, both halves
+# each, by name - upstream reaches them as mmGCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32 plus
+# hub->ctx_addr_distance * vmid, and that distance is defined as the CONTEXT1 offset minus the
+# CONTEXT0 one (gfxhub_v2_0.c:459-460), so naming the contexts is the same addresses by the other
+# road. VMID 0 is the GART's own and bc250_gmc_set_vmid_pd() refuses it, so it is not here. The
+# invalidation that goes with a root change is GC.GCVM_INVALIDATE_ENG17_REQ/ACK, which the Gfx table
+# already holds: gpumem.c flushes the TLB after every bind.
+VMID_PAGE_TABLE_BASE = [
+    ("GC", f"mmGCVM_CONTEXT{vmid}_PAGE_TABLE_BASE_ADDR_{half}",
+     f"not traced: the page directory root of VMID {vmid}, ADR 0008 stage C")
+    for vmid in range(1, 16) for half in ("LO32", "HI32")
+]
+
 # (table, experiment, regex on traced register names, the step's time in seconds since the first access: its end,
 #  or a list of (since, until) windows in which case the registers amdgpu only read there count as well,
 #  registers the step only reads). gmc_v10_0_gart_enable() is over at 0.26 s (docs/init-sequence.md).
@@ -52,7 +68,8 @@ SEQUENCES = [
      # before it halts the engine (bc250_kiq_dequeue(), upstream's handshake of kgd_hqd_destroy(),
      # amdgpu_amdkfd_gfx_v10.c:606-619). Without it the MEC keeps the queue's fetch state across the halt and the next
      # bring-up faults at the old ring's address (facts M44, E12 run 002).
-     [("GC", "mmCP_HQD_DEQUEUE_REQUEST", "not traced: the undo's dequeue handshake, facts M44")]),
+     [("GC", "mmCP_HQD_DEQUEUE_REQUEST", "not traced: the undo's dequeue handshake, facts M44")]
+     + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
     # The ring is GTT memory: gpumem.c flushes the TLB after the bind as amdgpu did (its binds of 0.2495 to 0.2528 s,

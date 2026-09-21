@@ -142,6 +142,7 @@ typedef struct _BC250_WDDM_OBJECT {
     ULONG Magic;
     BC250_DEVICE* Device;
     UINT NodeOrdinal;                   // contexts
+    ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
 } BC250_WDDM_OBJECT;
 
@@ -194,6 +195,24 @@ typedef struct _BC250_WDDM {
     volatile LONG PreemptionNode;
     volatile LONG PreemptionPending;
     KDPC ReportDpc;
+
+    // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, one in flight at most) and its fence is
+    // reported when the hardware's arrives - from the IH DPC, from the submit itself if the interrupt won the race,
+    // or from the watchdog. Software completions that come while one is in flight are held back and published
+    // with it: a completion of fence N retires every fence up to N, so N + 1 must not be reported first.
+    // All of it under Lock.
+    BOOLEAN HwPending;
+    ULONG HwSeq;                        // gfx.c's sequence number of the submission in flight
+    UINT HwFence;
+    UINT HwNode;
+    BOOLEAN DeferredValid;
+    UINT DeferredFence;
+    KTIMER SubmitTimer;                 // there is no GPU reset on this part (facts M53): a fence that does not
+    KDPC SubmitDpc;                     // arrive is completed in software and the ring is left alone from then on
+    volatile LONG HwSubmitted;
+    volatile LONG HwCompleted;
+    volatile LONG HwTimeouts;
+    volatile LONG HwRefused;
 
     KTIMER VSyncTimer;
     KDPC VSyncDpc;
@@ -453,6 +472,122 @@ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT No
     WddmQueueReport(wddm);
 }
 
+// ---- stage C: the hardware path --------------------------------------------------------------------------------
+
+#define BC250_WDDM_VMID 1u                  // the one hardware VMID, re-pointed at the submitter's root by gfx.c
+#define BC250_WDDM_SUBMIT_TIMEOUT_MS 500    // an M6 dispatch takes 28 us (facts M57); the TDR default is 2 s
+
+// A completion that did not come from the hardware. While a hardware submission is in flight it waits for it.
+static void WddmCompleteSoftware(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT NodeOrdinal)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    BOOLEAN deferred;
+    KIRQL irql;
+
+    if (wddm == NULL) return;
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    deferred = wddm->HwPending;
+    if (deferred) { wddm->DeferredValid = TRUE; wddm->DeferredFence = FenceId; }
+    KeReleaseSpinLock(&wddm->Lock, irql);
+    if (!deferred) WddmCompleteFence(Device, FenceId, NodeOrdinal);
+}
+
+// Has the fence of the submission in flight arrived? Called from the IH DPC (pnp.c), from the submit and from the
+// watchdog, at <= DISPATCH_LEVEL. GfxFenceArrived is a memory read.
+void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    BOOLEAN done = FALSE;
+    UINT fence = 0, node = 0;
+    KIRQL irql;
+
+    if (wddm == NULL) return;
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    if (wddm->HwPending && GfxFenceArrived(Device, wddm->HwSeq))
+    {
+        done = TRUE;
+        fence = wddm->DeferredValid ? wddm->DeferredFence : wddm->HwFence;
+        node = wddm->HwNode;
+        wddm->HwPending = FALSE;
+        wddm->DeferredValid = FALSE;
+        KeCancelTimer(&wddm->SubmitTimer);
+    }
+    KeReleaseSpinLock(&wddm->Lock, irql);
+    if (!done) return;
+    if (InterlockedIncrement(&wddm->HwCompleted) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: hardware fence arrived, reporting fence %u", fence);
+    WddmCompleteFence(Device, fence, node);
+}
+
+static KDEFERRED_ROUTINE WddmSubmitDpcRoutine;
+static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+    BC250_WDDM* wddm;
+    BOOLEAN timedOut = FALSE;
+    UINT fence = 0, node = 0;
+    ULONG seq = 0;
+    KIRQL irql;
+
+    UNREFERENCED_PARAMETER(Dpc);
+    UNREFERENCED_PARAMETER(Arg1);
+    UNREFERENCED_PARAMETER(Arg2);
+    if (device == NULL || (wddm = (BC250_WDDM*)device->Wddm) == NULL) return;
+    WddmGpuFence(device);               // late is still arrived
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    if (wddm->HwPending)
+    {
+        timedOut = TRUE;
+        fence = wddm->DeferredValid ? wddm->DeferredFence : wddm->HwFence;
+        node = wddm->HwNode;
+        seq = wddm->HwSeq;
+        wddm->HwPending = FALSE;
+        wddm->DeferredValid = FALSE;
+    }
+    KeReleaseSpinLock(&wddm->Lock, irql);
+    if (!timedOut) return;
+    // Nobody can reset this GPU. The packet is declared finished so that the scheduler never starts a TDR it
+    // cannot win, and the ring is not written again in this device start.
+    InterlockedIncrement(&wddm->HwTimeouts);
+    GfxSubmitFail(device);
+    GuardLog("wddm: HARDWARE FENCE TIMEOUT after %u ms (sequence %u): fence %u completed in software, ring path closed",
+             (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
+    WddmCompleteFence(device, fence, node);
+}
+
+// PASSIVE_LEVEL (SubmitCommandVirtual). TRUE = the packet is on the ring and its completion will come by itself.
+static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
+                                  _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* Submit, UINT Node)
+{
+    LARGE_INTEGER due;
+    ULONG seq = 0;
+    NTSTATUS status;
+    KIRQL irql;
+
+    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, (ULONGLONG)Submit->DmaBufferVirtualAddress,
+                         Submit->DmaBufferSize, &seq);
+    if (!NT_SUCCESS(status))
+    {
+        if (InterlockedIncrement(&Wddm->HwRefused) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: ring refused 0x%08X (fence %u, va 0x%llX, %u bytes): completed in software", status,
+                     Submit->SubmissionFenceId, (ULONGLONG)Submit->DmaBufferVirtualAddress, Submit->DmaBufferSize);
+        return FALSE;
+    }
+    due.QuadPart = -10000ll * BC250_WDDM_SUBMIT_TIMEOUT_MS;
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    Wddm->HwPending = TRUE;
+    Wddm->HwSeq = seq;
+    Wddm->HwFence = Submit->SubmissionFenceId;
+    Wddm->HwNode = Node;
+    if (!Wddm->Stopping) KeSetTimer(&Wddm->SubmitTimer, due, &Wddm->SubmitDpc);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    if (InterlockedIncrement(&Wddm->HwSubmitted) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: fence %u on the gfx ring: sequence %u, vmid %u, root 0x%llX, va 0x%llX, %u bytes", Submit->SubmissionFenceId,
+                 seq, (ULONG)BC250_WDDM_VMID, Context->RootPhysical, (ULONGLONG)Submit->DmaBufferVirtualAddress, Submit->DmaBufferSize);
+    WddmGpuFence(Device);               // the interrupt may have come and gone before HwPending was set
+    return TRUE;
+}
+
 // The report side, at DISPATCH_LEVEL, with the DDI long returned. Completion first, then preemption: that order
 // is what makes DmaPreempted.LastCompletedFenceId the fence dxgkrnl has just been told about, and it means a
 // packet is never reported as completed after it has been declared preempted.
@@ -678,6 +813,8 @@ void WddmStart(_Inout_ BC250_DEVICE* Device)
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
+    KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
+    KeInitializeTimer(&wddm->SubmitTimer);
     KeInitializeTimerEx(&wddm->VSyncTimer, SynchronizationTimer);
     // The one target this driver has. Every VidPN target is a child's UID and Bc250QueryChildRelations reports
     // exactly one child, so this is the only id a CRTC_VSYNC report or a GetScanLine question can carry. 0.7.1
@@ -712,6 +849,21 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
 
     if (wddm == NULL) return;
 
+    // Stage C: GfxStop comes after this function (pnp.c) and the state below is about to be freed, so a packet
+    // still on the ring gets a bounded moment to finish. PASSIVE_LEVEL. The watchdog ends the wait at the latest.
+    {
+        LARGE_INTEGER tick;
+        ULONG waited;
+
+        tick.QuadPart = -10000ll * 10;
+        for (waited = 0; waited < BC250_WDDM_SUBMIT_TIMEOUT_MS + 100 && wddm->HwPending; waited += 10)
+        {
+            WddmGpuFence(Device);
+            if (wddm->HwPending) KeDelayExecutionThread(KernelMode, FALSE, &tick);
+        }
+        if (waited != 0) GuardLog("wddm: stop waited %u ms for the packet in flight (%s)", waited, wddm->HwPending ? "STILL PENDING" : "done");
+    }
+
     // Order matters, and this is the order:
     //
     //  1. Stopping under the lock. From here nothing of ours arms a timer, queues a DPC or joins the object
@@ -729,6 +881,8 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     KeReleaseSpinLock(&wddm->Lock, irql);
 
     KeCancelTimer(&wddm->VSyncTimer);   // again, unconditionally: cheap, and it cannot be armed any more
+    KeCancelTimer(&wddm->SubmitTimer);
+    KeRemoveQueueDpc(&wddm->SubmitDpc);
     KeRemoveQueueDpc(&wddm->VSyncDpc);
     KeRemoveQueueDpc(&wddm->ReportDpc);
     KeFlushQueuedDpcs();
@@ -1213,6 +1367,13 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
         GuardLog("wddm: SetRootPageTable segment %u offset 0x%llX, %u entries", pSetPageTable->Address.SegmentId,
                  pSetPageTable->Address.SegmentOffset, pSetPageTable->NumEntries);
     VidMmSetRootPageTable(pSetPageTable);
+    // Stage C: the context remembers where its page tables start; gfx.c points the VMID there before its packet.
+    {
+        BC250_WDDM_OBJECT* context = WddmObject(pSetPageTable->hContext, BC250_WDDM_MAGIC_CONTEXT);
+        ULONGLONG physical = 0;
+
+        if (context != NULL) context->RootPhysical = VidMmRootPhysical(&pSetPageTable->Address, &physical) ? physical : 0;
+    }
 }
 
 // ---- allocations ------------------------------------------------------------------------------------------------
@@ -1450,7 +1611,7 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSubmitCommand))
         GuardLog("wddm: SubmitCommand fence %u node %u flags 0x%08X segment %u size %u", pSubmitCommand->SubmissionFenceId,
                  node, pSubmitCommand->Flags.Value, pSubmitCommand->DmaBufferSegmentId, pSubmitCommand->DmaBufferSize);
-    WddmCompleteFence(device, pSubmitCommand->SubmissionFenceId, node);
+    WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
     return STATUS_SUCCESS;
 }
 
@@ -1466,7 +1627,14 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
         GuardLog("wddm: SubmitCommandVirtual fence %u node %u flags 0x%08X va 0x%llX size %u",
                  pSubmitCommand->SubmissionFenceId, node, pSubmitCommand->Flags.Value,
                  (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize);
-    WddmCompleteFence(device, pSubmitCommand->SubmissionFenceId, node);
+    // Stage C. An empty DMA buffer (every Present of stage A's inert DDI) has nothing to run; one with bytes in it
+    // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root. Everything else
+    // is completed in software as before. The header says PASSIVE_LEVEL, and gfx.c's lock needs <= APC_LEVEL.
+    if (pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 && device->Wddm != NULL &&
+        KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
+        WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, pSubmitCommand, node))
+        return STATUS_SUCCESS;
+    WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
     return STATUS_SUCCESS;
 }
 

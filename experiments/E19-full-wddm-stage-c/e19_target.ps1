@@ -12,15 +12,16 @@
 #   -Phase d3d -Tag <t>                D3D11CreateDevice on the hardware adapter and on WARP; the HRESULTs are the data
 #   -Phase sweep -Tag <t>              witness sweeps
 param(
-    [Parameter(Mandatory)][ValidateSet('install', 'unumd', 'gate', 'state', 'log', 'confirm', 'd3d', 'sweep', 'gart', 'psp', 'ih', 'gfx', 'fence')][string]$Phase,
+    [Parameter(Mandatory)][ValidateSet('install', 'unumd', 'gate', 'state', 'log', 'confirm', 'd3d', 'sweep', 'gart', 'psp', 'ih', 'gfx', 'fence', 'submit')][string]$Phase,
     [string]$Tag = 'x',
     [int]$Full = 0,
     [int]$Engines = 0,                  # with -Phase gate: EnableGart, EnablePsp, EnableGfx, EnableIh
     [string]$Op = 'plan',
     [int]$Stage = 0,
     [int]$Count = 1,
-    [ValidateSet('', 'noint', 'test', 'dispatch')][string]$Mode = '',
+    [ValidateSet('', 'noint', 'test', 'dispatch', 'ib')][string]$Mode = '',
     [int]$GpuVa = 0,                    # with -Phase gate: EnableGpuVa and EnableVramWrite (stage B writes)
+    [int]$GpuSubmit = 0,                # with -Phase gate: EnableGpuSubmit (stage C: DMA buffers go down the gfx ring)
     [string]$Package = 'C:\BC250\e16'
 )
 
@@ -120,7 +121,9 @@ switch ($Phase) {
         $va = if ($Full -eq 1) { $GpuVa } else { 0 }
         Set-ItemProperty $params -Name EnableVramWrite -Value $va -Type DWord
         Set-ItemProperty $params -Name EnableGpuVa -Value $va -Type DWord
-        Say "gate     EnableGpuVa $va  EnableVramWrite $va"
+        $submit = if ($Full -eq 1 -and $va -eq 1) { $GpuSubmit } else { 0 }
+        Set-ItemProperty $params -Name EnableGpuSubmit -Value $submit -Type DWord
+        Say "gate     EnableGpuVa $va  EnableVramWrite $va  EnableGpuSubmit $submit"
         Set-ItemProperty $params -Name EnableFullWddm -Value $Full -Type DWord
         # 0.7.3: the ring goes into C:\BC250\kmdlog at every stop while the gate is open, because dxgkrnl may end a
         # full WDDM start by itself and unload the driver, ring and all (run 1 with 0.7.2 did exactly that).
@@ -152,6 +155,11 @@ switch ($Phase) {
     }
     { $_ -in 'gart', 'psp', 'ih' } {
         & $cli $Phase $Op 2>&1 | ForEach-Object { Say "$_" }
+        Say "exit code $LASTEXITCODE"
+    }
+    'submit' {
+        # Stage C's client: a D3DKMT context, a monitored fence, one command buffer of PM4 NOPs (tools/win/kmtprobe).
+        & 'C:\BC250\tmp\kmtprobe.exe' --submit --fence-timeout 4000 --timeout 20000 2>&1 | ForEach-Object { Say "$_" }
         Say "exit code $LASTEXITCODE"
     }
     'confirm' {

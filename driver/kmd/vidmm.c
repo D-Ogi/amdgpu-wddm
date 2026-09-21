@@ -199,9 +199,24 @@ void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root)
     if (!vm->Ready) return;
     // Stage B programs no VM context: the root is where the witness starts its walk, and stage C's first job.
     if (InterlockedIncrement(&vm->Roots) <= BC250_VIDMM_LOG_CALLS)
-        GuardLog("vidmm: root page table %u:0x%llX = physical 0x%llX, %u entries (no VMID programmed in stage B)",
+        GuardLog("vidmm: root page table %u:0x%llX = physical 0x%llX, %u entries (the VMID is pointed at it by the first packet)",
                  Root->Address.SegmentId, Root->Address.SegmentOffset, vm->SegmentPhysical + Root->Address.SegmentOffset,
                  Root->NumEntries);
+}
+
+// A root page table address as VidMm gives it, as the physical address the VMID's base register wants (without
+// amdgpu's VALID bit: gfx.c's shim call adds it). FALSE for anything that is not a page inside the segment.
+BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULONGLONG* Physical)
+{
+    const BC250_VIDMM* vm = &g_VidMm;
+
+    *Physical = 0;
+    // Plan-only mode (EnableGpuVa closed) has no root: tables nobody wrote are not tables to point a GPU at.
+    if (!vm->Ready || !vm->Write || vm->SegmentLength < PAGE_SIZE || Address->SegmentId != vm->Pte.vram_segment ||
+        (Address->SegmentOffset & (PAGE_SIZE - 1)) != 0 || Address->SegmentOffset > vm->SegmentLength - PAGE_SIZE)
+        return FALSE;
+    *Physical = vm->SegmentPhysical + Address->SegmentOffset;
+    return TRUE;
 }
 
 void VidMmSummary(void)
