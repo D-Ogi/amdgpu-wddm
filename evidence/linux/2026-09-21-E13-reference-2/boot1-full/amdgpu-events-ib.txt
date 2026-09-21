@@ -1,0 +1,26 @@
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 14/14   #P:12
+#
+#                                _-----=> irqs-off/BH-disabled
+#                               / _----=> need-resched
+#                              | / _---=> hardirq/softirq
+#                              || / _--=> preempt-depth
+#                              ||| / _-=> migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+              sh-3815    [010] ...1.   179.758015: tracing_mark_write: bc250 begin ib
+          <idle>-0       [002] d.h1.   179.759205: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:0 vmid:0 timestamp: 21100127122 pasid:0 src_data: 80000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759223: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:4 vmid:0 timestamp: 21100129402 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759235: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:5 vmid:0 timestamp: 21100130662 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759248: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:6 vmid:0 timestamp: 21100131962 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759261: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:7 vmid:0 timestamp: 21100133242 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759274: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:20 vmid:0 timestamp: 21100134550 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759287: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:21 vmid:0 timestamp: 21100135810 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759300: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:22 vmid:0 timestamp: 21100137090 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759312: amdgpu_iv: ih:0 client_id:20 src_id:181 ring:23 vmid:0 timestamp: 21100138350 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759323: amdgpu_iv: ih:0 client_id:20 src_id:178 ring:9 vmid:0 timestamp: 21100139438 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759339: amdgpu_iv: ih:0 client_id:8 src_id:224 ring:0 vmid:0 timestamp: 21100141006 pasid:0 src_data: 00000000 00000000 00000000 00000000
+          <idle>-0       [002] d.h1.   179.759353: amdgpu_iv: ih:0 client_id:9 src_id:224 ring:0 vmid:0 timestamp: 21100142398 pasid:0 src_data: 00000000 00000000 00000000 00000000
+              sh-3815    [000] ...1.   180.760215: tracing_mark_write: bc250 end ib

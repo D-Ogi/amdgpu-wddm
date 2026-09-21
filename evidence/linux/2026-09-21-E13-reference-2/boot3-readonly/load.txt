@@ -1,0 +1,7 @@
+== modprobe amdgpu 14:50:59
+== trace amdgpu-events-load.txt: 87792 lines; overruns: 0
+[   54.279201] amdgpu 0000:01:00.0: amdgpu: ring sdma1 uses VM inv eng 13 on hub 0
+[   54.279773] amdgpu 0000:01:00.0: amdgpu: Runtime PM not available
+[   54.280535] [drm] Initialized amdgpu 3.64.0 for 0000:01:00.0 on minor 1
+[   54.291973] fbcon: amdgpudrmfb (fb0) is primary device
+[   54.478291] amdgpu 0000:01:00.0: [drm] fb0: amdgpudrmfb frame buffer device

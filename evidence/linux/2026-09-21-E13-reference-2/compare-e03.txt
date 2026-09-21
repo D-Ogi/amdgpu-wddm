@@ -1,0 +1,51 @@
+first: 146135 accesses, 10018 writes, 136117 reads, 1.785 s from the first to the last
+second: 48357 accesses, 10496 writes, 37861 reads, 3.890 s from the first to the last
+writes aligned by offset: 10018; of those with a different value: 7
+writes only in the first: 0; only in the second: 478
+-- value differs at (4 offsets), most frequent first
+   0x05df5 x4
+   0x0284f x1
+   0x1a68f x1
+   0x00e12 x1
+-- only in the first (0 offsets), most frequent first
+-- only in the second (185 offsets), most frequent first
+   0x04190 x12
+   0x045d1 x12
+   0x0504a x8
+   0x00000 x8
+   0x03ab3 x6
+   0x04732 x6
+   0x04734 x6
+   0x04783 x6
+   0x04785 x6
+   0x03adb x6
+   0x03d47 x6
+   0x03d6f x6
+   0x0504b x4
+   0x04d4c x4
+   0x03b2a x4
+   0x04845 x4
+   0x04731 x4
+   0x04733 x4
+   0x04736 x4
+   0x0473d x4
+   0x04a78 x4
+   0x04a79 x4
+   0x04a7a x4
+   0x04a7b x4
+   0x04a7c x4
+   0x04a7d x4
+   0x04a77 x4
+   0x03ada x4
+   0x03dbe x4
+   0x04782 x4
+   0x04784 x4
+   0x04787 x4
+   0x0478e x4
+   0x03d6e x4
+   0x039c6 x2
+   0x039c5 x2
+   0x039c8 x2
+   0x05050 x2
+   0x05047 x2
+   0x05048 x2

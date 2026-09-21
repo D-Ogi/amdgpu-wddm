@@ -1,0 +1,28 @@
+== before
+  54:          0          0        149          0          0          0          0          0          0          0          0          0 PCI-MSIX-0000:01:00.0    0-edge      amdgpu
+GC.SDMA0_GFX_RB_CNTL 0x04b80 80841017
+GC.SDMA0_GFX_RB_RPTR 0x04b8c 000009c0
+GC.SDMA0_GFX_RB_WPTR 0x04b94 000009c0
+GC.CP_RB0_RPTR 0x08700 00000600
+GC.CP_RB0_WPTR 0x0c150 00000600
+OSSSYS.IH_RB_RPTR 0x0448c 000012c0
+OSSSYS.IH_RB_WPTR 0x04490 000012c0
+OSSSYS.IH_RB_WPTR_ADDR_LO 0x04498 00401000
+OSSSYS.IH_RB_WPTR_ADDR_HI 0x04494 00000000
+== amdgpu_test_ib 14:48:54
+run ib test:
+ib ring tests passed.
+== trace amdgpu-events-ib.txt: 26 lines; overruns: 0
+== after
+  54:          0          0        161          0          0          0          0          0          0          0          0          0 PCI-MSIX-0000:01:00.0    0-edge      amdgpu
+GC.SDMA0_GFX_RB_CNTL 0x04b80 80841017
+GC.SDMA0_GFX_RB_RPTR 0x04b8c 00000a40
+GC.SDMA0_GFX_RB_WPTR 0x04b94 00000a40
+GC.CP_RB0_RPTR 0x08700 00000700
+GC.CP_RB0_WPTR 0x0c150 00000700
+OSSSYS.IH_RB_RPTR 0x0448c 00001440
+OSSSYS.IH_RB_WPTR 0x04490 00001440
+OSSSYS.IH_RB_WPTR_ADDR_LO 0x04498 00401000
+OSSSYS.IH_RB_WPTR_ADDR_HI 0x04494 00000000
+== event kinds in the trace
+12 amdgpu_iv:
