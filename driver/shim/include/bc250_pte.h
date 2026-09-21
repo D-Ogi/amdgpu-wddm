@@ -69,7 +69,10 @@
  *     other on this exact point, so it is a parameter and the wrong choice is refused rather than
  *     silently mis-mapped: under BC250_PTE_ADDR_BYTES an address with any of the low 12 bits set
  *     is an error.
- *     Settled by: logging one PageAddress for a system-memory allocation in Stage B and comparing
+ *     SETTLED (facts M72, E18 run 001): it is a page frame number. driver/kmd/vidmm.c passes
+ *     BC250_PTE_ADDR_PAGES; the default below stays BYTES so that a caller has to say so.
+ *     Questions 2 and 3 were settled by the same run the way the text below expects.
+ *     Was to be settled by: logging one PageAddress for a system-memory allocation in Stage B and comparing
  *     its magnitude with installed RAM. 0x1_2345_6000 is a byte address; 0x12_3456 is a frame
  *     number.
  *  2. Which segment id means system memory. The WDK is explicit and is what this driver goes by:

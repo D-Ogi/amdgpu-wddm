@@ -11,7 +11,7 @@
 //                                 but the witness (bc250rd reading VRAM), so a wrong entry costs a wrong reading.
 //
 // The three questions bc250_pte.h leaves open (units of PageAddress, the id of system memory, which level is the
-// leaf) are answered by PLAN's log before the first write: raw Flags and PageAddress of the first calls of every
+// leaf) were answered by PLAN's log before the first write (E18 run 001, see VidMmStart): raw Flags and PageAddress of the first calls of every
 // level, and the first entry of every segment id that shows up. Co nagle, to po diable (haste is the devil's work).
 #include "bc250kmd.h"
 #include "bc250_pte.h"
@@ -29,6 +29,7 @@ typedef struct _BC250_VIDMM {
     ULONGLONG SegmentLength;
     struct bc250_pte_context Pte;
     volatile LONG Calls[BC250_VIDMM_LEVELS];
+    volatile LONG CpuCalls, GpuCalls;       // by update mode: CPU_VIRTUAL (the paging process) and GPU_PHYSICAL
     volatile LONG64 Entries[BC250_VIDMM_LEVELS];
     volatile LONG64 Valid[BC250_VIDMM_LEVELS];
     volatile LONG64 Written;
@@ -51,7 +52,9 @@ void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGL
 
     g_VidMm.SegmentPhysical = (ULONGLONG)Device->VramPhysical.QuadPart + SegmentOffset;
     g_VidMm.SegmentLength = SegmentLength;
-    g_VidMm.Pte.units = BC250_PTE_ADDR_BYTES;
+    // Settled by E18 run 001: PageAddress is a page frame number (a level 1 entry 0x1FD732 names the level 0 table at
+    // segment offset 0x1FD732000), host memory is segment 0, level 0 is the leaf and level 3 the root.
+    g_VidMm.Pte.units = BC250_PTE_ADDR_PAGES;
     g_VidMm.Pte.aperture = BC250_PTE_VM;
     g_VidMm.Pte.system_segment = 0;
     g_VidMm.Pte.vram_segment = VramSegmentId;
@@ -74,37 +77,55 @@ void VidMmStop(void)
 }
 
 // PASSIVE_LEVEL (BuildPagingBuffer). Never fails: what goes wrong is counted and logged (ADR 0008 point 5).
+//
+// Two kinds of call arrive, whatever GPUMMUCAPS says (E18 run 001): the page tables of the system paging process are
+// updated in DXGK_PAGETABLEUPDATE_CPU_VIRTUAL mode - VidMm has the table page mapped and hands over the pointer, 1028
+// calls at the start - and everything after that comes in the declared GPU_PHYSICAL mode, segment and offset.
 void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update)
 {
     BC250_VIDMM* vm = &g_VidMm;
     UINT level = Update->PageTableLevel;
     const DXGK_PTE* source = Update->pPageTableEntries;
-    ULONGLONG tableOffset = Update->PageTableAddress.GpuPhysical.SegmentOffset;
-    ULONG tableSegment = Update->PageTableAddress.GpuPhysical.SegmentId;
+    BOOLEAN cpu = (Update->UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL);
+    ULONGLONG tableOffset = cpu ? 0 : Update->PageTableAddress.GpuPhysical.SegmentOffset;
+    ULONG tableSegment = cpu ? 0 : Update->PageTableAddress.GpuPhysical.SegmentId;
     volatile ULONGLONG* table = NULL;
-    BOOLEAN logCall;
+    BOOLEAN logCall, bad;
+    u64 firstEntry = 0;
     UINT i;
 
     C_ASSERT(sizeof(Update->Flags) == sizeof(UINT));    // the raw word below is read through a cast
     if (!vm->Ready || vm->SegmentLength < PAGE_SIZE) return;
-    if (level >= BC250_VIDMM_LEVELS || source == NULL || Update->NumPageTableEntries == 0 ||
-        Update->StartIndex >= BC250_VIDMM_PTES || Update->NumPageTableEntries > BC250_VIDMM_PTES - Update->StartIndex ||
-        tableSegment != vm->Pte.vram_segment || (tableOffset & (PAGE_SIZE - 1)) != 0 ||
-        tableOffset > vm->SegmentLength - PAGE_SIZE || Update->UpdateMode != DXGK_PAGETABLEUPDATE_GPU_PHYSICAL)
+    bad = level >= BC250_VIDMM_LEVELS || source == NULL || Update->NumPageTableEntries == 0 ||
+          Update->StartIndex >= BC250_VIDMM_PTES || Update->NumPageTableEntries > BC250_VIDMM_PTES - Update->StartIndex;
+    if (!bad && cpu)
+        bad = Update->PageTableAddress.CpuVirtual == NULL || ((ULONG_PTR)Update->PageTableAddress.CpuVirtual & (PAGE_SIZE - 1)) != 0;
+    else if (!bad)
+        bad = Update->UpdateMode != DXGK_PAGETABLEUPDATE_GPU_PHYSICAL || tableSegment != vm->Pte.vram_segment ||
+              (tableOffset & (PAGE_SIZE - 1)) != 0 || tableOffset > vm->SegmentLength - PAGE_SIZE;
+    if (bad)
     {
         if (InterlockedIncrement(&vm->BadCalls) <= BC250_VIDMM_LOG_REFUSALS)
-            GuardLog("vidmm: UpdatePageTable REFUSED as a call: level %u table %u:0x%llX start %u count %u mode %u", level,
-                     tableSegment, tableOffset, Update->StartIndex, Update->NumPageTableEntries, (ULONG)Update->UpdateMode);
+            GuardLog("vidmm: UpdatePageTable REFUSED as a call: level %u mode %u table 0x%llX / 0x%llX start %u count %u", level,
+                     (ULONG)Update->UpdateMode, (ULONGLONG)(ULONG_PTR)Update->PageTableAddress.CpuVirtual,
+                     Update->PageTableAddress.GpuPhysical.SegmentOffset, Update->StartIndex, Update->NumPageTableEntries);
         return;
     }
 
-    logCall = InterlockedIncrement(&vm->Calls[level]) <= BC250_VIDMM_LOG_CALLS;
+    InterlockedIncrement(&vm->Calls[level]);
+    logCall = InterlockedIncrement(cpu ? &vm->CpuCalls : &vm->GpuCalls) <= BC250_VIDMM_LOG_CALLS * 2;
     if (logCall)
-        GuardLog("vidmm: level %u table %u:0x%llX start %u count %u flags 0x%X first raw 0x%llX / 0x%llX", level,
-                 tableSegment, tableOffset, Update->StartIndex, Update->NumPageTableEntries, *(const UINT*)&Update->Flags,
-                 source[0].Flags, source[0].PageAddress);
+        GuardLog("vidmm: level %u %s 0x%llX start %u count %u flags 0x%X first raw 0x%llX / 0x%llX", level,
+                 cpu ? "cpu table" : "table 1:", cpu ? (ULONGLONG)(ULONG_PTR)Update->PageTableAddress.CpuVirtual : tableOffset,
+                 Update->StartIndex, Update->NumPageTableEntries, *(const UINT*)&Update->Flags, source[0].Flags,
+                 source[0].PageAddress);
 
-    if (vm->Write)
+    if (vm->Write && cpu)
+    {
+        // VidMm's own mapping of the table page, valid for this call by its contract (CosKmd writes through it too).
+        table = (volatile ULONGLONG*)Update->PageTableAddress.CpuVirtual;
+    }
+    else if (vm->Write)
     {
         PHYSICAL_ADDRESS physical;
 
@@ -114,38 +135,43 @@ void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
             GuardLog("vidmm: no mapping for the table page at 0x%llX, update dropped", physical.QuadPart);
     }
 
-    for (i = 0; i < Update->NumPageTableEntries; i++)
+    __try
     {
-        const DXGK_PTE* pte = Update->Flags.Repeat ? source : source + i;
-        ULONG segment = (ULONG)pte->Segment;
-        u64 entry = 0;
-        int rc = bc250_pte_from_dxgk(&vm->Pte, VidMmKind(level), pte->Flags, pte->PageAddress, &entry);
+        for (i = 0; i < Update->NumPageTableEntries; i++)
+        {
+            const DXGK_PTE* pte = Update->Flags.Repeat ? source : source + i;
+            ULONG segment = (ULONG)pte->Segment;
+            u64 entry = 0;
+            int rc = bc250_pte_from_dxgk(&vm->Pte, VidMmKind(level), pte->Flags, pte->PageAddress, &entry);
 
-        InterlockedIncrement64(&vm->Entries[level]);
-        if (pte->Valid)
-        {
-            InterlockedIncrement64(&vm->Valid[level]);
-            if (InterlockedIncrement(&vm->SegmentSeen[segment]) == 1)
-                GuardLog("vidmm: first valid entry of segment %u: level %u raw 0x%llX / 0x%llX -> 0x%llX rc %d", segment,
-                         level, pte->Flags, pte->PageAddress, entry, rc);
-        }
-        if (rc != 0 && InterlockedIncrement(&vm->Refused) <= BC250_VIDMM_LOG_REFUSALS)
-            GuardLog("vidmm: entry REFUSED (rc %d): level %u index %u raw 0x%llX / 0x%llX", rc, level,
-                     Update->StartIndex + i, pte->Flags, pte->PageAddress);
-        // A refused entry is written as 0: absent, which is how this hardware spells invalid (bc250_pte.c).
-        if (table != NULL)
-        {
-            table[Update->StartIndex + i] = entry;
-            InterlockedIncrement64(&vm->Written);
+            if (i == 0) firstEntry = entry;
+            InterlockedIncrement64(&vm->Entries[level]);
+            if (pte->Valid)
+            {
+                InterlockedIncrement64(&vm->Valid[level]);
+                if (InterlockedIncrement(&vm->SegmentSeen[segment]) == 1)
+                    GuardLog("vidmm: first valid entry of segment %u: level %u raw 0x%llX / 0x%llX -> 0x%llX rc %d", segment,
+                             level, pte->Flags, pte->PageAddress, entry, rc);
+            }
+            if (rc != 0 && InterlockedIncrement(&vm->Refused) <= BC250_VIDMM_LOG_REFUSALS)
+                GuardLog("vidmm: entry REFUSED (rc %d): level %u index %u raw 0x%llX / 0x%llX", rc, level,
+                         Update->StartIndex + i, pte->Flags, pte->PageAddress);
+            // A refused entry is written as 0: absent, which is how this hardware spells invalid (bc250_pte.c).
+            if (table != NULL)
+            {
+                table[Update->StartIndex + i] = entry;
+                InterlockedIncrement64(&vm->Written);
+            }
         }
     }
-    if (logCall && Update->NumPageTableEntries != 0)
+    __except (EXCEPTION_EXECUTE_HANDLER)
     {
-        u64 first = 0;
-        (void)bc250_pte_from_dxgk(&vm->Pte, VidMmKind(level), source[0].Flags, source[0].PageAddress, &first);
-        GuardLog("vidmm:   -> first entry 0x%llX%s", first, table != NULL ? " (written)" : "");
+        // Only a user-range pointer can end up here; a bad kernel address is not catchable and is VidMm's to keep valid.
+        if (InterlockedIncrement(&vm->BadCalls) <= BC250_VIDMM_LOG_REFUSALS)
+            GuardLog("vidmm: exception 0x%08X writing a %s table, level %u", (ULONG)GetExceptionCode(), cpu ? "cpu" : "segment", level);
     }
-    if (table != NULL) MmUnmapIoSpace((PVOID)table, PAGE_SIZE);
+    if (logCall) GuardLog("vidmm:   -> first entry 0x%llX%s", firstEntry, table != NULL ? " (written)" : "");
+    if (table != NULL && !cpu) MmUnmapIoSpace((PVOID)table, PAGE_SIZE);
 }
 
 void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root)
@@ -172,6 +198,7 @@ void VidMmSummary(void)
     for (segment = 0; segment < BC250_VIDMM_SEGMENT_IDS; segment++)
         if (vm->SegmentSeen[segment] != 0)
             GuardLog("vidmm summary: segment %u named by %ld valid entries", segment, vm->SegmentSeen[segment]);
+    GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls", vm->CpuCalls, vm->GpuCalls);
     GuardLog("vidmm summary: %lld entries written (%s), %ld refused, %ld bad calls, %ld roots", vm->Written,
              vm->Write ? "EnableGpuVa open" : "plan only", vm->Refused, vm->BadCalls, vm->Roots);
 }
