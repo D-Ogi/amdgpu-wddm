@@ -1,0 +1,48 @@
+Kernel dump of the second bugcheck of E16 run 007 (C:\Windows\MEMORY.DMP, 813316000 bytes, written 22:22:26),
+opened offline with cdb -z and public symbols plus the 0.7.7 PDB. The dump stays outside the repository.
+Excerpt of `!analyze -v`: bugcheck arguments and the stack (frame addresses and raw arguments removed).
+
+VIDEO_DXGKRNL_FATAL_ERROR (113)
+Arg1: 000000000000001c, The subtype of the BugCheck:
+Arg2: 0000000000000001
+Arg3: 0000000000000001
+Arg4: 0000000000000000
+BUGCHECK_CODE:  113
+BUGCHECK_P1: 1c
+BUGCHECK_P2: 1
+BUGCHECK_P3: 1
+BUGCHECK_P4: 0
+PROCESS_NAME:  csrss.exe
+
+STACK_TEXT:  
+    nt!KeBugCheckEx
+    watchdog!WdLogSingleEntry5+0x3c05
+    dxgkrnl!DMMVIDPNPRESENTPATH::SetRotationSupport+0x26b9b
+    dxgkrnl!DXGK_VIDPNTOPOLOGY_INTERFACE_V1_IMPL::UpdatePathSupportInfo+0x299
+    bc250kmd!Bc250EnumVidPnCofuncModality+0x5b3
+    bc250kmd!Bc250WddmTracedEnumVidPnCofuncModality+0xf
+    dxgkrnl!ADAPTER_DISPLAY::DdiEnumVidPnCofuncModality+0x15c
+    dxgkrnl!VIDPN_MGR::FormalizeVidPnChange+0x278
+    dxgkrnl!VIDPN_MGR::_AddPathToVidPnTopology+0x101
+    dxgkrnl!VIDPN_MGR::AddPathToVidPnTopology+0x14d
+    dxgkrnl!BmlPreparePathOrderAndVidPn+0x407
+    dxgkrnl!_BmlGetPathModalityForAdapter+0xaa
+    dxgkrnl!BmlGetPathModalityForAdapterWithCoreAccessHeld+0x74
+    dxgkrnl!BmlGetPathModalityForAdapter+0x114
+    dxgkrnl!CCD_TOPOLOGY::FunctionalizeWorker+0x1bd
+    dxgkrnl!CCD_TOPOLOGY::Functionalize+0x76
+    dxgkrnl!DxgkFunctionalizePathsModality+0xc8
+    win32kbase!DrvSetDisplayConfig+0xbf5
+    win32kbase!xxxUserSetDisplayConfig+0x268
+    win32kbase!Win32kPnpNotify+0x2e5
+    win32kbase!VideoPortCalloutThread+0x5ebf3
+    win32kbase!xxxCreateSystemThreads+0xa4
+    win32kbase!NtUserCreateSystemThreads+0x7a
+    win32k!NtUserCreateSystemThreads+0x15
+    nt!KiSystemServiceCopyEnd+0x28
+    0x00007ffe`5d0f8e84
+
+SYMBOL_NAME:  dxgkrnl!DMMVIDPNPRESENTPATH::SetRotationSupport+26b9b
+IMAGE_NAME:  dxgkrnl.sys
+IMAGE_VERSION:  10.0.22621.6199
+FAILURE_BUCKET_ID:  0x113_1C_dxgkrnl!DMMVIDPNPRESENTPATH::SetRotationSupport
