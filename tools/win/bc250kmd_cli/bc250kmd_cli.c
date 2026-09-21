@@ -1,0 +1,353 @@
+// bc250kmd_cli - the lab's user-mode end of the M3 miniport (ADR 0006). It answers one open question of that
+// ADR ("does dxgkrnl route D3DKMTEscape to a display-only driver?") and reads the driver's breadcrumbs when
+// there is no kernel debugger to ask.
+//
+//   bc250kmd_cli info [hardware-id]   D3DKMTEscape(BC250_ESCAPE_GET_INFO) to the adapter with that PnP
+//                                     hardware id (default PCI\VEN_1002&DEV_13FE, matched case-insensitively
+//                                     as a prefix); prints the reply, or exactly which call failed and its NTSTATUS
+//   bc250kmd_cli list                 every display adapter dxgkrnl knows, with its hardware id and LUID
+//   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
+//   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
+//
+// The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
+// private escape. That failure is a measurement too, so every step prints its own NTSTATUS instead of one
+// summary "it did not work".
+//
+// Choosing the adapter. D3DKMTOpenAdapterFromGdiDisplayName ("\\.\DISPLAY1") only reaches an adapter that owns
+// a GDI display, and it names a display, not a device: with two adapters, or while ours is installed but not
+// driving the screen, it can silently open the wrong one. D3DKMTEnumAdapters2 gives handles but no way back to
+// the PnP device. So we go the other way round: SetupAPI enumerates device interfaces, we pick the device whose
+// SPDRP_HARDWAREID matches, and hand its interface path to D3DKMTOpenAdapterFromDeviceName. That is a direct
+// PnP-id-to-adapter mapping and does not care whether the adapter is driving a screen.
+//
+// The interface class has to be GUID_DISPLAY_DEVICE_ARRIVAL, the one dxgkrnl registers for every graphics
+// device including display-only ones (ntddvdeo.h). Measured on the development PC, 2026-09-21: the paths of
+// GUID_DEVINTERFACE_DISPLAY_ADAPTER, which is the obvious-looking name, are refused by
+// D3DKMTOpenAdapterFromDeviceName with STATUS_INVALID_PARAMETER (0xC000000D) for every adapter, while the
+// GUID_DISPLAY_DEVICE_ARRIVAL path of the same device opens.
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <winternl.h>       // NTSTATUS and NT_SUCCESS, which windows.h alone does not give a user-mode program
+#include <setupapi.h>
+#include <initguid.h>       // makes the DEFINE_GUID below emit the GUID itself, not just a declaration
+#include <ntddvdeo.h>       // GUID_DISPLAY_DEVICE_ARRIVAL
+#include <d3dkmthk.h>
+#include <stdio.h>
+#include <string.h>
+#include <wchar.h>
+
+#include "../../../driver/kmd/bc250kmd_escape.h"     // shared with the driver, never copied
+
+#define BC250_DEFAULT_HWID L"PCI\\VEN_1002&DEV_13FE"
+#define BC250_SERVICE_KEY  L"SYSTEM\\CurrentControlSet\\Services\\bc250kmd"
+#define BC250_PARAMETERS   BC250_SERVICE_KEY L"\\Parameters"
+
+// Mirrors enum BC250_STAGE in driver/kmd/bc250kmd.h; tools/win/bc250mon/test_stages.py watches that copy of
+// the same table, and this one is checked against it by tools/win/bc250kmd_cli/test_stages.py.
+static const struct { unsigned long Number; const char *Symbol, *Text; } g_Stages[] = {
+    {  0, "StageNone",                      "nothing written yet" },
+    { 10, "StageDriverEntry",               "DriverEntry" },
+    { 20, "StageAddDevice",                 "add device" },
+    { 30, "StageStartEnter",                "start: entered" },
+    { 31, "StageStartGuardPassed",          "start: guard passed" },
+    { 32, "StageStartDeviceInfo",           "start: device info" },
+    { 33, "StageStartPostDisplayAcquired",  "start: post display acquired" },
+    { 34, "StageStartFramebufferMapped",    "start: framebuffer mapped" },
+    { 39, "StageStartDone",                 "start: done" },
+    { 50, "StageFirstCommitVidPn",          "first CommitVidPn" },
+    { 60, "StageFirstPresent",              "first present" },
+    { 61, "StageFirstPresentDone",          "first present done" },
+    { 70, "StageStopEnter",                 "stop: entered" },
+    { 79, "StageStopDone",                  "stop: done" },
+    { 90, "StageRefusedByGuard",            "refused by the guard" },
+    { 91, "StageStartFailed",               "start failed" },
+};
+
+static const char *StageName(unsigned long stage)
+{
+    for (size_t i = 0; i < sizeof(g_Stages) / sizeof(g_Stages[0]); i++)
+        if (g_Stages[i].Number == stage) return g_Stages[i].Text;
+    return "unknown stage";
+}
+
+// The few NTSTATUS values this tool is likely to meet. Anything else is printed as a bare number, which is
+// what matters: a hex status can be looked up, a guessed name cannot.
+static const char *StatusName(NTSTATUS s)
+{
+    switch ((unsigned long)s) {
+    case 0x00000000ul: return "STATUS_SUCCESS";
+    case 0xC0000001ul: return "STATUS_UNSUCCESSFUL";
+    case 0xC000000Dul: return "STATUS_INVALID_PARAMETER";
+    case 0xC0000002ul: return "STATUS_NOT_IMPLEMENTED";
+    case 0xC00000BBul: return "STATUS_NOT_SUPPORTED";
+    case 0xC0000022ul: return "STATUS_ACCESS_DENIED";
+    case 0xC0000008ul: return "STATUS_INVALID_HANDLE";
+    case 0xC000000Ful: return "STATUS_NO_SUCH_FILE";
+    case 0xC0000023ul: return "STATUS_BUFFER_TOO_SMALL";
+    case 0xC00000E5ul: return "STATUS_INTERNAL_ERROR";
+    case 0xC01E0102ul: return "STATUS_GRAPHICS_DRIVER_MISMATCH";
+    case 0xC01E0200ul: return "STATUS_GRAPHICS_ADAPTER_WAS_RESET";
+    default:           return "";
+    }
+}
+
+static void PrintStatus(const char *call, NTSTATUS status)
+{
+    const char *name = StatusName(status);
+    printf("%s -> 0x%08lX%s%s\n", call, (unsigned long)status, name[0] ? " " : "", name);
+}
+
+// ---- display adapters --------------------------------------------------------------------------------------
+
+typedef struct {
+    WCHAR InterfacePath[512];
+    WCHAR HardwareId[512];      // the first line of the REG_MULTI_SZ, which is the most specific one
+    WCHAR Description[256];
+} BC250_ADAPTER;
+
+// Fills up to Max adapters, returns how many were found, or -1 with a message on a SetupAPI failure.
+static int FindAdapters(BC250_ADAPTER *out, int max)
+{
+    HDEVINFO set = SetupDiGetClassDevsW(&GUID_DISPLAY_DEVICE_ARRIVAL, NULL, NULL,
+                                        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    SP_DEVICE_INTERFACE_DATA iface = { sizeof(iface) };
+    union {
+        SP_DEVICE_INTERFACE_DETAIL_DATA_W detail;
+        UCHAR space[sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W) + 512 * sizeof(WCHAR)];
+    } buffer;
+    DWORD index = 0;
+    int found = 0;
+
+    if (set == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "SetupDiGetClassDevs(GUID_DISPLAY_DEVICE_ARRIVAL) failed, error %lu\n", GetLastError());
+        return -1;
+    }
+    while (found < max && SetupDiEnumDeviceInterfaces(set, NULL, &GUID_DISPLAY_DEVICE_ARRIVAL, index++, &iface)) {
+        SP_DEVINFO_DATA info = { sizeof(info) };
+        DWORD needed = 0;
+
+        buffer.detail.cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+        if (!SetupDiGetDeviceInterfaceDetailW(set, &iface, &buffer.detail, sizeof(buffer), &needed, &info)) {
+            fprintf(stderr, "# SetupDiGetDeviceInterfaceDetail failed for interface %lu, error %lu\n", index - 1, GetLastError());
+            continue;
+        }
+        memset(&out[found], 0, sizeof(out[found]));
+        wcsncpy_s(out[found].InterfacePath, 512, buffer.detail.DevicePath, _TRUNCATE);
+        // SPDRP_HARDWAREID is REG_MULTI_SZ, most specific id first: PCI\VEN_1002&DEV_13FE&SUBSYS_...&REV_..
+        if (!SetupDiGetDeviceRegistryPropertyW(set, &info, SPDRP_HARDWAREID, NULL,
+                                               (PBYTE)out[found].HardwareId, sizeof(out[found].HardwareId), NULL))
+            wcscpy_s(out[found].HardwareId, 512, L"(no hardware id)");
+        if (!SetupDiGetDeviceRegistryPropertyW(set, &info, SPDRP_DEVICEDESC, NULL,
+                                               (PBYTE)out[found].Description, sizeof(out[found].Description), NULL))
+            wcscpy_s(out[found].Description, 256, L"(no description)");
+        found++;
+    }
+    SetupDiDestroyDeviceInfoList(set);
+    return found;
+}
+
+static int MatchesHardwareId(const WCHAR *hardwareId, const WCHAR *wanted)
+{
+    return _wcsnicmp(hardwareId, wanted, wcslen(wanted)) == 0;
+}
+
+static int ListAdapters(void)
+{
+    BC250_ADAPTER adapters[16];
+    int count = FindAdapters(adapters, 16);
+
+    if (count < 0) return 1;
+    printf("# %d display adapter(s)\n", count);
+    for (int i = 0; i < count; i++) {
+        D3DKMT_OPENADAPTERFROMDEVICENAME open = { 0 };
+        NTSTATUS status;
+
+        printf("%d  %ls\n", i, adapters[i].Description);
+        printf("   hardware id %ls\n", adapters[i].HardwareId);
+        printf("   interface   %ls\n", adapters[i].InterfacePath);
+        open.pDeviceName = adapters[i].InterfacePath;
+        status = D3DKMTOpenAdapterFromDeviceName(&open);
+        if (NT_SUCCESS(status)) {
+            D3DKMT_CLOSEADAPTER close = { open.hAdapter };
+            printf("   adapter     handle 0x%08lX luid %08lX-%08lX\n", (unsigned long)open.hAdapter,
+                   (unsigned long)open.AdapterLuid.HighPart, open.AdapterLuid.LowPart);
+            D3DKMTCloseAdapter(&close);
+        } else {
+            printf("   adapter     ");
+            PrintStatus("D3DKMTOpenAdapterFromDeviceName", status);
+        }
+    }
+    return count > 0 ? 0 : 1;
+}
+
+// ---- info: the escape --------------------------------------------------------------------------------------
+
+static int Info(const WCHAR *wantedId)
+{
+    BC250_ADAPTER adapters[16];
+    int count = FindAdapters(adapters, 16);
+    int chosen = -1;
+    D3DKMT_OPENADAPTERFROMDEVICENAME open = { 0 };
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_ESCAPE escape = { 0 };
+    BC250_ESCAPE data;
+    NTSTATUS status;
+
+    if (count < 0) return 1;
+    for (int i = 0; i < count && chosen < 0; i++)
+        if (MatchesHardwareId(adapters[i].HardwareId, wantedId)) chosen = i;
+
+    if (chosen < 0) {
+        fprintf(stderr, "no display adapter with hardware id %ls among the %d present:\n", wantedId, count);
+        for (int i = 0; i < count; i++) fprintf(stderr, "  %ls  (%ls)\n", adapters[i].HardwareId, adapters[i].Description);
+        return 1;
+    }
+    printf("# adapter    %ls\n", adapters[chosen].Description);
+    printf("# hardware   %ls\n", adapters[chosen].HardwareId);
+    printf("# interface  %ls\n", adapters[chosen].InterfacePath);
+
+    open.pDeviceName = adapters[chosen].InterfacePath;
+    status = D3DKMTOpenAdapterFromDeviceName(&open);
+    PrintStatus("D3DKMTOpenAdapterFromDeviceName", status);
+    if (!NT_SUCCESS(status)) return 1;
+    printf("# adapter    handle 0x%08lX luid %08lX-%08lX\n", (unsigned long)open.hAdapter,
+           (unsigned long)open.AdapterLuid.HighPart, open.AdapterLuid.LowPart);
+
+    memset(&data, 0, sizeof(data));
+    data.Magic = BC250_ESCAPE_MAGIC;
+    data.Command = BC250_ESCAPE_GET_INFO;
+
+    escape.hAdapter = open.hAdapter;
+    escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;      // the only type a miniport's DxgkDdiEscape sees unchanged
+    escape.Flags.Value = 0;                         // no HardwareAccess: M3 touches no register
+    escape.pPrivateDriverData = &data;
+    escape.PrivateDriverDataSize = sizeof(data);
+
+    status = D3DKMTEscape(&escape);
+    PrintStatus("D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO)", status);
+
+    close.hAdapter = open.hAdapter;
+    D3DKMTCloseAdapter(&close);
+
+    if (!NT_SUCCESS(status)) {
+        // Say what was seen, not what it means. Against a driver with no private escape the call is expected
+        // to fail; against bc250kmd, which does fill DxgkDdiEscape, the status decides ADR 0006's open
+        // question about the control channel for M4. Measured statuses are collected in docs/facts.md.
+        printf("# the escape failed. Expected against a driver that has no private escape of ours;\n"
+               "# against bc250kmd this status is the answer to ADR 0006's question about the control channel.\n");
+        return 1;
+    }
+    if (data.Magic != BC250_ESCAPE_MAGIC) {
+        printf("# the escape returned success but the buffer came back changed (magic 0x%08lX): not our driver\n", data.Magic);
+        return 1;
+    }
+    if (data.Status != 0) {
+        printf("# the driver refused the command (Status %lu)\n", data.Status);
+        return 1;
+    }
+    printf("version      0x%08lX (milestone %lu revision %lu)\n", data.Version, data.Version >> 16, data.Version & 0xFFFFu);
+    printf("last stage   %lu %s\n", data.LastStage, StageName(data.LastStage));
+    printf("mode         %lux%lu pitch %lu format %lu\n", data.Width, data.Height, data.Pitch, data.ColorFormat);
+    printf("presents     %lu\n", data.Presents);
+    return 0;
+}
+
+// ---- stages: the registry ------------------------------------------------------------------------------------
+
+static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
+{
+    DWORD size = sizeof(*value), type = 0;
+    return RegGetValueW(HKEY_LOCAL_MACHINE, key, name, RRF_RT_REG_DWORD, &type, value, &size) == ERROR_SUCCESS;
+}
+
+static int Stages(void)
+{
+    HKEY key;
+    DWORD stage = 0, starts = 0;
+    WCHAR history[1024];
+    DWORD size = sizeof(history), type = 0;
+    LSTATUS s = RegOpenKeyExW(HKEY_LOCAL_MACHINE, BC250_SERVICE_KEY, 0, KEY_READ, &key);
+
+    if (s == ERROR_FILE_NOT_FOUND) {
+        printf("bc250kmd is not installed (no HKLM\\%ls)\n", BC250_SERVICE_KEY);
+        return 2;
+    }
+    if (s != ERROR_SUCCESS) {
+        fprintf(stderr, "cannot open HKLM\\%ls, error %lu\n", BC250_SERVICE_KEY, (unsigned long)s);
+        return 1;
+    }
+    RegCloseKey(key);
+
+    printf("service      installed (HKLM\\%ls)\n", BC250_SERVICE_KEY);
+    if (ReadDword(BC250_PARAMETERS, L"LastStage", &stage))
+        printf("LastStage    %lu %s\n", stage, StageName(stage));
+    else
+        printf("LastStage    -  (the driver has not written one yet)\n");
+
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS, L"StageHistory", RRF_RT_REG_SZ, &type, history, &size) == ERROR_SUCCESS)
+        printf("StageHistory %ls\n", history);
+    else
+        printf("StageHistory -\n");
+
+    if (ReadDword(BC250_PARAMETERS, L"UnconfirmedStarts", &starts)) {
+        printf("starts       %lu unconfirmed%s\n", starts,
+               starts >= 2 ? "  (the guard refuses to start: run 'bc250kmd_cli confirm')" : "");
+        return starts >= 2 ? 3 : 0;
+    }
+    printf("starts       -\n");
+    return 0;
+}
+
+static int Confirm(void)
+{
+    HKEY key;
+    DWORD zero = 0, disposition = 0;
+    LSTATUS s = RegOpenKeyExW(HKEY_LOCAL_MACHINE, BC250_SERVICE_KEY, 0, KEY_READ, &key);
+
+    // Never bring the service key into being: an empty Services\bc250kmd would be a puzzle for whoever looks
+    // at the machine next, and this tool is run on machines where the driver is deliberately not installed.
+    if (s == ERROR_FILE_NOT_FOUND) {
+        fprintf(stderr, "bc250kmd is not installed (no HKLM\\%ls), nothing to confirm\n", BC250_SERVICE_KEY);
+        return 2;
+    }
+    if (s != ERROR_SUCCESS) {
+        fprintf(stderr, "cannot open HKLM\\%ls, error %lu%s\n", BC250_SERVICE_KEY, (unsigned long)s,
+                s == ERROR_ACCESS_DENIED ? " (is this an elevated prompt?)" : "");
+        return 1;
+    }
+    RegCloseKey(key);
+
+    s = RegCreateKeyExW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS, 0, NULL, REG_OPTION_NON_VOLATILE,
+                        KEY_SET_VALUE, NULL, &key, &disposition);
+    if (s != ERROR_SUCCESS) {
+        fprintf(stderr, "cannot open HKLM\\%ls, error %lu%s\n", BC250_PARAMETERS, (unsigned long)s,
+                s == ERROR_ACCESS_DENIED ? " (is this an elevated prompt?)" : "");
+        return 1;
+    }
+    s = RegSetValueExW(key, L"UnconfirmedStarts", 0, REG_DWORD, (const BYTE *)&zero, sizeof(zero));
+    RegCloseKey(key);
+    if (s != ERROR_SUCCESS) {
+        fprintf(stderr, "cannot write UnconfirmedStarts, error %lu\n", (unsigned long)s);
+        return 1;
+    }
+    printf("UnconfirmedStarts = 0\n");
+    return 0;
+}
+
+// ---- ---------------------------------------------------------------------------------------------------------
+
+int wmain(int argc, wchar_t **argv)
+{
+    if (argc < 2) {
+        fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
+                        "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
+        return 2;
+    }
+    if (!_wcsicmp(argv[1], L"info")) return Info(argc > 2 ? argv[2] : BC250_DEFAULT_HWID);
+    if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
+    if (!_wcsicmp(argv[1], L"stages")) return Stages();
+    if (!_wcsicmp(argv[1], L"confirm")) return Confirm();
+    fprintf(stderr, "unknown command %ls\n", argv[1]);
+    return 2;
+}

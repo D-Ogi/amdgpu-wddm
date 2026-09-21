@@ -21,12 +21,13 @@ Microsoft's MS-PL sample.
 
 - **Start budget.** `Services\bc250kmd\Parameters\UnconfirmedStarts` is incremented at every
   `DxgkDdiStartDevice`. At 2 the driver refuses to start and Windows falls back to the Basic Display driver.
-  User mode confirms a good start by writing 0 (to become a `bc250mon` provider; by hand:
-  `reg add HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters /v UnconfirmedStarts /t REG_DWORD /d 0 /f`).
-  Installing the package resets it.
+  User mode confirms a good start by writing 0: `bc250mon`'s `KmdProvider` does it by itself once the desktop
+  has been up for 60 s and `LastStage` has reached 61, and by hand it is `bc250kmd_cli confirm`
+  (`tools/win/bc250kmd_cli`) or `mon.py action kmd.confirm`. Installing the package resets it.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
-  cycle they say how far the driver got.
+  cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and
+  name them; both keep a copy of the `BC250_STAGE` table that a test checks against this driver's header.
 - The service is `ErrorControl = 0`: a failed start never stops the boot.
 
 ## Build
