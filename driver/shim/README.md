@@ -134,7 +134,7 @@ int  bc250_irq_hw_init(struct amdgpu_device *adev);
 int  bc250_nbio_enable_doorbell_selfring_aperture(struct amdgpu_device *adev, bool enable);
 int  bc250_irq_late_init(struct amdgpu_device *adev);
 
-void bc250_gfx_hw_fini(struct amdgpu_device *adev);
+int  bc250_gfx_hw_fini(struct amdgpu_device *adev);      /* the first failure, or 0; see Undo */
 void bc250_sdma_hw_fini(struct amdgpu_device *adev);
 void bc250_gfx_teardown(struct amdgpu_device *adev);
 void bc250_sdma_teardown(struct amdgpu_device *adev);
@@ -459,7 +459,11 @@ Four more things it checks, none of which the two windows can reach:
   no window of its own, so what it touches can only be found by running it. The free and re-allocate
   is not decoration: gpumem does not hand a freed GART range back, so the second run's rings land
   where the first run's never were, and that is what turns a stale engine fetch into a page fault
-  instead of a quiet walk through someone else's memory.
+  instead of a quiet walk through someone else's memory. Two things are asserted after the second
+  bring-up: no stale fetch happened, and all nine queues' MQDs sampled a read pointer of 0. The
+  second of those can fail on its own - with `bc250_kcq_clear_pointers()` taken out of the teardown,
+  all eight compute MQDs come back with 256, the position the CP stub leaves a queue's read pointer
+  at after a ring test.
 - **A start where the last instance left the KIQ up.** What 0.6.1's teardown leaves behind, which
   makes it the state the first 0.6.2 start finds on the lab machine. The bring-up has to notice,
   recover and come back, taking exactly one stale fetch - inside the ring the previous instance
@@ -603,7 +607,53 @@ Then, on the ring that bring-up produced:
 - the trio run again through a second `struct amdgpu_device` that is zeroed except for `irq.ih`
   copied by value, which is what the miniport's DPC gets, with the same results;
 - a fence emitted on the gfx ring, on compute ring 3 and on the KIQ: each lands its value in a GTT
-  slot and produces exactly one vector, which decodes back to that ring.
+  slot and produces exactly one vector, which decodes back to that ring;
+- a compute dispatch on compute ring 0, which is the whole of the M6 shader test (below).
+
+### The compute dispatch arm
+
+`bc250_gfx_dispatch_memset()` writes 82 dwords into the ring - an `ACQUIRE_MEM`, libdrm's 18-packet
+dispatch, a `CS_PARTIAL_FLUSH` - and a fence behind them. The test asserts all 82 **against a table
+of libdrm's own numbers**, taken from the packet-by-packet reading in
+`P:\BC-250\scratch\m6\DISPATCH-NOTES.md` section 3.3 with a `shader_test_util.c` line for each row.
+That comparison is the point of the arm: the shim resolves every offset through
+`gc_10_1_0_offset.h`, libdrm writes the resolved numbers out by hand, and a wrong offset would still
+be a well-formed packet that the stub would still execute. Nine of the 82 dwords are addresses or
+caller arguments and are checked against what the test allocated and asked for instead.
+
+Every constant in the table is also a measurement. The same 72 dwords were submitted to unit A under
+Linux through raw ioctls and filled their buffer (fact M49); the dump of what was submitted is
+`evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/dispatch/g1.txt:14-85`, and
+our submission differs from it only in the two addresses, the fill value, and `NUM_RECORDS` and
+`DIM_X` with them. `NUM_RECORDS` follows the workgroup count, as libdrm derives both from the same
+`dst.size`: for one workgroup the descriptor says 0x40 records, for sixteen 0x400, so the hardware
+bounds the stores to the range the dispatch is meant to cover.
+
+One of the constants is confirmed a second time inside our own tree: packet 5 is
+`0xc0017900, 0x7b, 0x20`, and those three dwords appear verbatim in `preamblecache_gfx10[]` in
+`third_party/libdrm/shader_code_gfx10.h`, a different file reaching the same header encoding and the
+same offset arithmetic.
+
+The CP stub in `backend_mem.c` then executes the packets: it keeps the compute state the
+`SET_SH_REG`s build, and on `DISPATCH_DIRECT` it checks the dispatch shape, `COMPUTE_SHADER_EN`,
+that `COMPUTE_TMPRING_SIZE` is 0 (nothing programs a scratch base), that the two CU-mask packets and
+the one uconfig packet came first, that the address in `COMPUTE_PGM_LO/HI` resolves to an allocation
+whose words `memcmp` equal `bufferclear_cs_shader_gfx10`, and that the descriptor's stride is 16.
+Only then does it write the records, clamped to `NUM_RECORDS` the way `OOB_SELECT` clamps them
+rather than wrapping. So "the shader was copied correctly, to a 256-aligned address, and the address
+was shifted the right way" is a tested statement and not an assumption.
+
+What the arm asserts, beyond the 82 dwords: one workgroup writes its 1024 bytes and **nothing past
+them** (`bc250_gfx_dispatch_check()` insists the tail is still `0xCAFEDEAD`, so a dispatch that
+overran is as loud as one that did nothing), 16 workgroups fill the whole 0x4000 bytes, exactly one
+dispatch was carried out, the fence behind it landed and raised exactly one vector, the padding
+`amdgpu_ring_commit()` adds is all NOPs, and the whole submission produces **zero register writes**.
+
+Five controls, each of which must fail: a dispatch of 0 workgroups, one of 17, and one on the gfx
+ring are all refused with the ring untouched; with the CP stub turned off the destination keeps its
+seed and `check()` fails at offset 0, which is what says the bytes came from the dispatch and not
+from the setup; one corrupted dword is found at its own offset; and a shader with one word changed
+is refused by the stub instead of being dispatched.
 
 One model is declared and one is inherited. The declared one is `IH_RB_CNTL` bit 31,
 `WPTR_OVERFLOW_CLEAR`, which the hardware retires as the write lands: the trace puts `C03101A0` in
@@ -617,10 +667,12 @@ differ; with the self-clearing bit not modelled the final `IH_RB_CNTL` comes out
 of `403301A1`. A fence without `AMDGPU_FENCE_FLAG_INT` writes its value and delivers nothing, and a
 misaligned 64-bit fence and a 64-bit KIQ fence are both refused with nothing written to the ring.
 
-What this test cannot say is that the ASIC raises the interrupt. No hardware raises one anywhere in
-it, and the stub's encoder is the test's own code; what is established is that the encode and the
-decode agree and that the packet the shim emits is the packet upstream's emitter builds. The rest is
-the first hardware run's job, and it is what the fence exists for.
+What this test cannot say is that the ASIC raises the interrupt, or that it runs the shader. No
+hardware raises an interrupt or executes an instruction anywhere in it: the stub's encoder is the
+test's own code, and the "dispatch" is a `for` loop writing what the shader would write. What is
+established is that the encode and the decode agree, that the packet the shim emits is the packet
+upstream's emitter builds, and that the dispatch the shim emits is libdrm's dispatch dword for
+dword. The rest is the first hardware run's job, and it is what the fence exists for.
 
 ## What the miniport calls, in order (M5 part B)
 
@@ -674,9 +726,15 @@ separately so a staged hardware run can stop after any of them and read the regi
 `bc250_sdma_hw_fini(adev)` then `bc250_gfx_hw_fini(adev)`. Frees nothing. It follows
 `gfx_v10_0_hw_fini()` in its order: the three fault interrupt sources off, `UNMAP_QUEUES` through the
 KIQ for the gfx ring and the eight compute rings with the ring test upstream does after it, **the
-KIQ's own HQD dequeued while the MEC still runs**, then the CP and the MEC halted. The RLC stop at
-the end is not upstream's and is there for the miniport, which needs a way to stop the RLC before
-asking the PSP to load firmware again; `bc250_gfx_rlc_stop(adev)` exposes that step on its own.
+eight compute queues' pointer registers put back**, **the KIQ's own HQD dequeued while the MEC still
+runs**, then the CP and the MEC halted. The RLC stop at the end is not upstream's and is there for
+the miniport, which needs a way to stop the RLC before asking the PSP to load firmware again;
+`bc250_gfx_rlc_stop(adev)` exposes that step on its own.
+
+It returns the first failure it saw, or 0. Every step runs whatever the earlier ones did, so the
+value is for the caller to report rather than to act on - there is nothing left to try. The one that
+carries information is `BC250_ETIME` from the KIQ dequeue: the MEC did not answer the handshake, so
+the next bring-up will have to go through the recovery branch instead.
 
 What it leaves behind, measured by the host test rather than asserted: `CP_ME_CNTL = 0x15000000`,
 `CP_MEC_CNTL = 0x50000000`, `RLC_CNTL = 0`, both `SDMAn_F32_CNTL` with `HALT` set. It touches 25
@@ -706,6 +764,24 @@ poll `CP_HQD_ACTIVE` to 0, then the pointer registers zeroed. The handshake is u
 There is no documented MEC reset to use instead - `kgd_gfx_v10_hqd_reset()` returns 0 without
 touching anything, and `SOFT_RESET_CPC` exists only from gfx11 on.
 
+#### And why the other eight queues get their pointers cleared
+
+A second, quieter half of the same problem, and it is about a register rather than an engine.
+`bc250_compute_mqd_init()` samples `CP_HQD_PQ_RPTR` under each queue's own selection, as upstream
+does, so each of the eight compute MQDs is built from whatever that queue's register holds. After a
+bring-up that ran the ring tests the queues idle at `rptr == wptr != 0` (fact M40), `UNMAP_QUEUES`
+is not known to clear them, and nothing else in the undo did - so the second bring-up would hand
+each queue an MQD saying most of the ring is pending, which is the 5222 us walk of E12 run 001, nine
+times over. `bc250_kcq_clear_pointers()` zeroes `CP_HQD_PQ_RPTR`, `CP_HQD_PQ_WPTR_LO` and
+`CP_HQD_PQ_WPTR_HI` for all eight after the unmap, so the sentence "the value it samples is put
+there here" holds for all nine queues. All three registers are already inside a trace window, so
+this adds nothing to the miniport's allow-list.
+
+No handshake is needed for these, and none would be possible: unlike the KIQ's own HQD, these queues
+have already been taken off their pipes by a running CP, and `bc250_gfx_unmap_queues()` ends in a
+KIQ ring test, so the `UNMAP_QUEUES` packets are known to have completed before the registers are
+written.
+
 One deviation from upstream's behaviour is left, and it is the fallback for a KIQ found active with
 the MEC already halted - what 0.6.1's teardown leaves behind, so the first 0.6.2 start on a machine
 that ran 0.6.1 goes through it. There `bc250_kiq_init_register()` un-halts the MEC for the length of
@@ -725,6 +801,12 @@ The host test carries both arms (`check_rerun()` and `check_unclean_start()` in
 moment a register is overwritten. `test/backend_mem.h` states what was measured for it and the one
 point that was not: that a dequeue serviced by a running MEC clears the copy. That is what both the
 teardown and the fallback assume, and the next hardware run is what tests it.
+
+The same model answers reads of `CP_HQD_PQ_RPTR` from the queue `GRBM_GFX_CNTL` has selected, which
+the register file cannot do - it holds one value per offset, so the nine queues would share a read
+pointer and the arm above could not tell "the teardown put all nine back" from "the teardown put one
+back". It answers only for queues a ring test has actually run on, so a cold boot still reads unit
+A's own seeded value and the 354-write comparison is untouched.
 
 ### Interrupts (M6)
 

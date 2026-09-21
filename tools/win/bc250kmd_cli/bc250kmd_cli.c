@@ -607,6 +607,7 @@ static int Ih(const WCHAR *opText)
 
 // ---- fence: fences on one ring (BC250_ESCAPE_RUN_FENCE) ----------------------------------------------------------------
 //
+// fence c0..c7 <groups> dispatch: libdrm's gfx10 memset shader on that compute ring (the M6 exit criterion), 1..16 workgroups.
 // fence gfx|c0..c7|kiq|s0|s1 [count] [noint|test]: emit <count> fences one after the other and poll each value in memory
 // (test, SDMA only: the ring test, one WRITE_LINEAR of 0xDEADBEEF, instead). With the
 // IH ring up and stage 8 done each one also raises an end-of-pipe interrupt (`ih state` counts them); noint is the
@@ -634,6 +635,7 @@ static int Fence(int argc, WCHAR **argv)
     {
         if (!_wcsicmp(argv[i], L"noint")) f.Interrupt = BC250_FENCE_MODE_VALUE;
         else if (!_wcsicmp(argv[i], L"test")) f.Interrupt = BC250_FENCE_MODE_RING_TEST;
+        else if (!_wcsicmp(argv[i], L"dispatch")) f.Interrupt = BC250_FENCE_MODE_DISPATCH;
         else f.Count = wcstoul(argv[i], NULL, 0);
     }
 
@@ -649,6 +651,9 @@ static int Fence(int argc, WCHAR **argv)
     printf("fences       %lu of %lu values read back, %lu doorbells; last emitted 0x%lX, slot holds 0x%lX\n", f.Completed, f.Count,
            f.DoorbellCount, f.LastSeq, f.LastValue);
     printf("time         %lu us in all, slowest single fence %lu us\n", f.Microseconds, f.SlowestMicroseconds);
+    if (f.Interrupt == BC250_FENCE_MODE_DISPATCH)
+        printf("dispatch     %lu workgroup(s) of 64 threads, fill 0x%08X: check %ld%s, first wrong dword at byte 0x%lX\n", f.Count,
+               BC250_DISPATCH_FILL, f.DispatchCheck, f.DispatchCheck == 0 && f.Completed ? " (every dword as asked)" : "", f.DispatchBadOffset);
     return f.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 

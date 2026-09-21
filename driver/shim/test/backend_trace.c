@@ -84,6 +84,14 @@ void backend_set_write_hook(backend_write_hook hook)
 	g_write_hook = hook;
 }
 
+/* Asked before the register file on every read; see bc250_shim_rreg(). Same one user. */
+static backend_read_hook g_read_hook;
+
+void backend_set_read_hook(backend_read_hook hook)
+{
+	g_read_hook = hook;
+}
+
 int backend_add_alias(u32 alias_offset, u32 target_offset)
 {
 	if (g_alias_count >= MAX_ALIASES)
@@ -418,6 +426,19 @@ unsigned int bc250_shim_rreg(struct amdgpu_device *adev, unsigned int dword_inde
 		exit(2);
 	}
 	touch(dword_index * 4u, 0);
+
+	/* A model that answers for hardware this file cannot represent: a register whose value
+	 * depends on which queue is selected, and there is one value per offset here. The hook is
+	 * asked first and declines for everything it has nothing to say about, so a run without one -
+	 * and every offset outside it - reads exactly what it read before. See
+	 * backend_set_read_hook(). */
+	if (g_read_hook != NULL) {
+		u32 answer = 0;
+
+		if (g_read_hook(dword_index * 4u, &answer))
+			return answer;
+	}
+
 	if (!g_known[dword_index]) {
 		if (g_unknown_reads == 0)
 			g_first_unknown_read = dword_index * 4u;

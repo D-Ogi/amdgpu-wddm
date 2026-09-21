@@ -80,6 +80,11 @@ struct backend_packet {
 
 const struct backend_packet *backend_packets(void);
 
+/* How many DISPATCH_DIRECT packets the stub has accepted and carried out. A dispatch that fails any
+ * of the stub's checks is a rejection (backend_cp_stub_rejects()) and is not counted here, so a test
+ * asserts both: the count it expects, and no rejections. */
+unsigned int backend_dispatch_count(void);
+
 /* ---------------------------------------------------------------------------------------------
  * The MEC's own fetch state: a declared model of measured hardware
  *
@@ -122,6 +127,15 @@ const struct backend_packet *backend_packets(void);
  * with the KIQ fixed: the second bring-up then reaches the gfx ring test and the SDMA ring test
  * with rings at addresses the first run never used, so a cached base shows up as a fault at an old
  * address or as a ring test that times out.
+ *
+ * One thing the model does beyond the fetch state, because it is the same selection bookkeeping: it
+ * answers reads of CP_HQD_PQ_RPTR from the queue GRBM_GFX_CNTL names, through
+ * backend_set_read_hook(). The replayed register file holds one value per offset, so without this
+ * the nine queues share a read pointer, and a test cannot tell a teardown that put all nine back
+ * from one that put a single queue back. The value it answers with is where the CP stub left that
+ * queue - at its write pointer, which is where unit A's queues idle after the ring tests (fact M40)
+ * - and only for queues a ring test has actually run on, so a cold boot reads the seeded sweep value
+ * exactly as it did before.
  *
  * Every offset is passed in by the test, resolved through AMD's headers, so this file still types
  * no register address.

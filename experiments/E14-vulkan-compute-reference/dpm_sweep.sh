@@ -8,7 +8,7 @@
 # 1000 MHz at the voltage the part runs its 1500 MHz at by itself (read from hwmon first, 906 mV on unit A): a lower
 # clock at an unchanged voltage, inside the driver's own range (1000 to 2000 MHz, 700 to 1129 mV). No higher clock and no
 # higher voltage is tried. "r" and "c" afterwards give clock and voltage back to the firmware (UnforceGfxVid).
-# A sensor line per second goes to sensors-<point>.txt while the work runs; above 90 C everything goes back to default.
+# A sensor line per second goes to sensors-<point>.txt while the work runs; above 85 C everything goes back to default.
 set -u
 O=/tmp/e14/dpm
 M=/tmp/e14/models
@@ -29,7 +29,7 @@ for point in 1000 default; do
 	echo "idle: $(sense)"
 	( while :; do
 		sense
-		[ "$(cat $H/temp1_input)" -gt 90000 ] && { echo "TOO HOT, back to default"; back; }
+		[ "$(cat $H/temp1_input)" -gt 85000 ] && { echo "TOO HOT, back to default"; back; }     # the workspace's limit
 		sleep 1
 	done ) > $O/sensors-$point.txt 2>&1 &
 	watcher=$!

@@ -50,8 +50,20 @@
 #include "irqsrcs_sdma1_5_0.h"
 #include "navi10_sdma_pkt_open.h"       /* the SDMA opcodes the second stub below decodes */
 #include <navi10_enum.h>                /* CACHE_FLUSH_AND_INV_TS_EVENT */
-#include "gc/gc_10_1_0_offset.h"        /* mmCPC_INT_STATUS */
+#include "gc/gc_10_1_0_offset.h"        /* mmCPC_INT_STATUS, and the COMPUTE_* the dispatch sets */
+#include "gc/gc_10_1_0_sh_mask.h"       /* GRBM_GFX_CNTL's fields, to read a selection back */
 #include "soc15_common.h"               /* SOC15_REG_OFFSET() */
+
+/* libdrm's gfx10 shader binaries, imported unmodified (third_party/libdrm/PROVENANCE.md). The stub
+ * refuses to run a dispatch whose program address does not point at these exact words, which is how
+ * a host run checks that the driver copied the shader and shifted its address correctly. The
+ * `struct reg_info` the file's other tables need is libdrm's, from tests/amdgpu/shader_code.h:56-59;
+ * see the same note in driver/shim/bc250_dispatch.c. */
+struct reg_info {
+	uint32_t reg_offset;
+	uint32_t reg_value;
+};
+#include "shader_code_gfx10.h"
 
 /* ---------------------------------------------------------------------------------------------
  * The three dwords of a fence that unit A's own Linux driver pins
@@ -108,6 +120,12 @@ struct ring_slot {
 	struct amdgpu_ring *ring;
 	u64 decoded_to;                 /* how far into the ring the stub has looked, in dwords */
 	int dead;                       /* the MEC model faulted on this ring: it executes nothing */
+
+	/* This queue's own CP_HQD_PQ_RPTR, for the MEC model to answer reads with. It is hardware
+	 * state, not ring state: it outlives the ring buffer it counted into, which is the whole
+	 * point of modelling it, so backend_ring_register() must not clear it. */
+	u32 hqd_rptr;
+	int hqd_known;                  /* 0 = never ran, so the register file answers as before */
 };
 
 static struct ring_slot g_ring[MAX_RINGS];
@@ -142,6 +160,7 @@ void backend_mem_set_bases(u64 vram_base, u64 gtt_base)
 }
 
 static void mec_model_off(void);        /* the MEC model, further down; reset turns it off */
+static void cs_state_clear(void);       /* the compute dispatch stub's state, likewise */
 
 void backend_mem_reset(void)
 {
@@ -159,6 +178,7 @@ void backend_mem_reset(void)
 	g_stub_hits = 0;
 	g_stub_rejects = 0;
 	g_packet_count = 0;
+	cs_state_clear();
 
 	g_ih_adev = NULL;
 	g_ih_wptr = 0;
@@ -313,7 +333,8 @@ unsigned int backend_cp_stub_rejects(void) { return g_stub_rejects; }
  *
  *   - the opcode is PACKET3_SET_UCONFIG_REG and the count says exactly one register;
  *   - the register it names, after adding PACKET3_SET_UCONFIG_REG_START, is SCRATCH_REG0, which the
- *     test resolves through AMD's headers and hands to backend_cp_stub_expect();
+ *     test resolves through AMD's headers and hands to backend_cp_stub_expect(), or
+ *     CP_COHER_START_DELAY, which belongs to the dispatch sequence and is taken there instead;
  *   - the value is 0xDEADBEEF;
  *   - the packet was found inside the dwords the doorbell announced, which is what the decode loop
  *     in bc250_shim_wdoorbell64() guarantees by never looking past the write pointer.
@@ -554,14 +575,271 @@ static int stub_write_data(const struct backend_packet *p, const struct amdgpu_r
 	return 0;
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * The third stub: a compute dispatch
+ *
+ * bc250_gfx_dispatch_memset() sets up the COMPUTE_* state with SET_SH_REG packets and then launches
+ * it with DISPATCH_DIRECT. There is no shader core here, so what this does is keep the state the
+ * packets set, refuse anything it cannot account for, and on the launch perform the store the
+ * shader would have performed - one 16-byte record per thread, out of the buffer descriptor in
+ * COMPUTE_USER_DATA_0..3 and the pattern in COMPUTE_USER_DATA_4..7.
+ *
+ * It is not a simulator and is not meant to be. What it can say is: the packets name the registers
+ * the reference names, the program address points at the shader the driver copied in, the
+ * descriptor is a 16-byte-stride buffer inside an allocation this file handed out, and the number of
+ * records the dispatch covers is what the workgroup count says. That is the whole of what a host run
+ * can check about a dispatch, and all of it would otherwise be checked by eye.
+ *
+ * The out-of-bounds rule is modelled because it is a real difference: the descriptor's OOB_SELECT
+ * bounds stores against NUM_RECORDS, so a dispatch that covers more records than the buffer holds
+ * drops the excess rather than writing past it.
+ * ------------------------------------------------------------------------------------------- */
+
+struct cs_state {
+	u32 pgm_lo, pgm_hi;
+	u32 rsrc1, rsrc2, rsrc3;
+	u32 thread_x, thread_y, thread_z;
+	u32 user_data[8];
+	u32 resource_limits;
+	u32 tmpring_size;
+	unsigned int cu_mask_packets;   /* the two SET_SH_REG_INDEX packets, if the caller emits them */
+	unsigned int sh_writes;         /* how many registers have been set since the last dispatch */
+	unsigned int coher_packets;     /* the one SET_UCONFIG_REG of the sequence */
+	u32 coher_start_delay;
+};
+
+static struct cs_state g_cs;
+static unsigned int g_dispatches;
+
+unsigned int backend_dispatch_count(void) { return g_dispatches; }
+
+static void cs_state_clear(void)
+{
+	memset(&g_cs, 0, sizeof(g_cs));
+	g_dispatches = 0;
+}
+
+/* One register of the compute state. Returns 1 if the stub knows the register, 0 if it does not -
+ * and not knowing it is a rejection, because a dispatch built out of registers this file cannot name
+ * is a dispatch nobody has checked. */
+static int cs_store(struct amdgpu_device *adev, u32 reg, u32 v)
+{
+	u32 base;
+
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_PGM_LO))          { g_cs.pgm_lo = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_PGM_HI))          { g_cs.pgm_hi = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_PGM_RSRC1))       { g_cs.rsrc1 = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_PGM_RSRC2))       { g_cs.rsrc2 = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_PGM_RSRC3))       { g_cs.rsrc3 = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_NUM_THREAD_X))    { g_cs.thread_x = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_NUM_THREAD_Y))    { g_cs.thread_y = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_NUM_THREAD_Z))    { g_cs.thread_z = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_RESOURCE_LIMITS)) { g_cs.resource_limits = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_TMPRING_SIZE))    { g_cs.tmpring_size = v; return 1; }
+	if (reg == SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_SHADER_CHKSUM))   { return 1; }
+
+	base = SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_USER_DATA_0);
+	if (reg >= base && reg < base + ARRAY_SIZE(g_cs.user_data)) {
+		g_cs.user_data[reg - base] = v;
+		return 1;
+	}
+
+	/* COMPUTE_START_X/Y/Z, three registers the reference clears (shader_test_util.c:218-220). */
+	base = SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_START_X);
+	if (reg >= base && reg < base + 3u)
+		return v == 0;
+
+	/* The four CU masks, which the MQD has already set to the same value. */
+	base = SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_STATIC_THREAD_MGMT_SE0);
+	if (reg == base || reg == base + 1u)
+		return 1;
+	base = SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_STATIC_THREAD_MGMT_SE2);
+	if (reg == base || reg == base + 1u)
+		return 1;
+
+	/* The six dwords from COMPUTE_REQ_CTRL (shader_test_util.c:244-246). One of them, mm 0x1bc3,
+	 * has no name in gc_10_1_0_offset.h at all; the reference writes zero to it on every gfx10
+	 * part, so zero is accepted here and anything else is not. */
+	base = SOC15_REG_OFFSET(GC, 0, mmCOMPUTE_REQ_CTRL);
+	if (reg >= base && reg < base + 6u)
+		return v == 0;
+
+	return 0;
+}
+
+/* SET_SH_REG and SET_SH_REG_INDEX. `indexed` also carries an index in the top four bits of the
+ * offset dword, which must be 3, the CU-mask path libdrm uses. */
+static int stub_set_sh_reg(const struct backend_packet *p, const struct amdgpu_ring *ring,
+			   int indexed)
+{
+	struct amdgpu_device *adev = ring->adev;
+	u32 first, index, k;
+
+	if (p->body_dwords < 2u || p->count + 1u != p->body_dwords) {
+		fprintf(stderr, "backend_mem: SET_SH_REG count %u with %u body dwords\n",
+			p->count, p->body_dwords);
+		g_stub_rejects++;
+		return 0;
+	}
+
+	index = p->body[0] >> 28;
+	first = (p->body[0] & 0xffffu) + PACKET3_SET_SH_REG_START;
+
+	if (indexed) {
+		if (index != 3u) {
+			fprintf(stderr, "backend_mem: SET_SH_REG_INDEX index %u; the reference uses 3\n",
+				index);
+			g_stub_rejects++;
+			return 0;
+		}
+		g_cs.cu_mask_packets++;
+	} else if (index != 0u) {
+		fprintf(stderr, "backend_mem: SET_SH_REG with index %u set\n", index);
+		g_stub_rejects++;
+		return 0;
+	}
+
+	for (k = 1u; k < p->body_dwords; k++) {
+		if (!cs_store(adev, first + k - 1u, p->body[k])) {
+			fprintf(stderr, "backend_mem: SET_SH_REG names register dword 0x%X = %08X,"
+					" which is not part of the dispatch this stub knows\n",
+				first + k - 1u, p->body[k]);
+			g_stub_rejects++;
+			return 0;
+		}
+		g_cs.sh_writes++;
+	}
+	return 1;
+}
+
+/* DISPATCH_DIRECT: check the state the packets built, then do what the shader would do. */
+static int stub_dispatch_direct(const struct backend_packet *p, const struct amdgpu_ring *ring)
+{
+	u64 pgm, dst;
+	u32 dim_x, dim_y, dim_z, initiator, stride, num_records, records, i;
+	const u32 *shader;
+	void *dst_cpu;
+
+	(void)ring;     /* the state came from the SET_SH_REG packets, not from the ring */
+
+	if (p->body_dwords < 4u || p->count != 3u) {
+		g_stub_rejects++;
+		return 0;
+	}
+	dim_x = p->body[0];
+	dim_y = p->body[1];
+	dim_z = p->body[2];
+	initiator = p->body[3];
+
+	if (dim_y != 1u || dim_z != 1u || g_cs.thread_y != 1u || g_cs.thread_z != 1u) {
+		fprintf(stderr, "backend_mem: dispatch is %ux%ux%u of %ux%ux%u; this stub knows the"
+				" one-dimensional memset only\n", dim_x, dim_y, dim_z,
+			g_cs.thread_x, g_cs.thread_y, g_cs.thread_z);
+		g_stub_rejects++;
+		return 0;
+	}
+	if ((initiator & 1u) == 0u) {            /* COMPUTE_DISPATCH_INITIATOR.COMPUTE_SHADER_EN */
+		fprintf(stderr, "backend_mem: DISPATCH_DIRECT with COMPUTE_SHADER_EN clear (%08X)\n",
+			initiator);
+		g_stub_rejects++;
+		return 0;
+	}
+	/* The rest of the sequence has to have been emitted in front of this packet. Neither register
+	 * is read back by anything here, so without this the stub would execute a dispatch that had
+	 * skipped them - and on hardware the CU masks left by the MQD and a stale CP_COHER_START_DELAY
+	 * are exactly the kind of difference that shows up as a hang rather than as wrong data. */
+	if (g_cs.cu_mask_packets != 2u || g_cs.coher_packets != 1u) {
+		fprintf(stderr, "backend_mem: the dispatch was preceded by %u CU-mask packets and %u"
+				" uconfig packets, not 2 and 1\n",
+			g_cs.cu_mask_packets, g_cs.coher_packets);
+		g_stub_rejects++;
+		return 0;
+	}
+	if (g_cs.tmpring_size != 0u) {
+		fprintf(stderr, "backend_mem: COMPUTE_TMPRING_SIZE is %08X; a scratch ring needs"
+				" COMPUTE_DISPATCH_SCRATCH_BASE, which nothing here programs\n",
+			g_cs.tmpring_size);
+		g_stub_rejects++;
+		return 0;
+	}
+
+	/* The program address, and the shader that has to be at it. This is what says the driver
+	 * copied the right words to the right place and shifted the address the right way. */
+	pgm = ((u64)g_cs.pgm_lo << 8) | ((u64)g_cs.pgm_hi << 40);
+	shader = (const u32 *)mc_to_cpu(pgm, (u32)sizeof(bufferclear_cs_shader_gfx10));
+	if (shader == NULL) {
+		fprintf(stderr, "backend_mem: COMPUTE_PGM points at 0x%llX, which is in no allocation\n",
+			(unsigned long long)pgm);
+		g_stub_rejects++;
+		return 0;
+	}
+	if (memcmp(shader, bufferclear_cs_shader_gfx10,
+		   sizeof(bufferclear_cs_shader_gfx10)) != 0) {
+		fprintf(stderr, "backend_mem: the words at 0x%llX are not bufferclear_cs_shader_gfx10\n",
+			(unsigned long long)pgm);
+		g_stub_rejects++;
+		return 0;
+	}
+
+	/* The buffer resource in USER_DATA_0..3. Word 1 carries the top 16 bits of the address in its
+	 * low half and the stride above it; word 2 is NUM_RECORDS. */
+	dst = (u64)g_cs.user_data[0] | ((u64)(g_cs.user_data[1] & 0xffffu) << 32);
+	stride = (g_cs.user_data[1] >> 16) & 0x3fffu;
+	num_records = g_cs.user_data[2];
+
+	if (stride != 16u) {
+		fprintf(stderr, "backend_mem: buffer stride is %u bytes; the shader stores 16\n", stride);
+		g_stub_rejects++;
+		return 0;
+	}
+	if (num_records == 0u) {
+		g_stub_rejects++;
+		return 0;
+	}
+
+	records = dim_x * g_cs.thread_x;
+	if (records > num_records)
+		records = num_records;          /* OOB_SELECT bounds the stores, it does not wrap */
+
+	dst_cpu = mc_to_cpu(dst, records * 16u);
+	if (dst_cpu == NULL) {
+		fprintf(stderr, "backend_mem: the dispatch writes %u records at 0x%llX, which is not"
+				" inside one allocation\n", records, (unsigned long long)dst);
+		g_stub_rejects++;
+		return 0;
+	}
+
+	for (i = 0; i < records; i++) {
+		volatile u32 *rec = (volatile u32 *)dst_cpu + i * 4u;
+
+		rec[0] = g_cs.user_data[4];
+		rec[1] = g_cs.user_data[5];
+		rec[2] = g_cs.user_data[6];
+		rec[3] = g_cs.user_data[7];
+	}
+
+	g_dispatches++;
+	g_cs.sh_writes = 0;
+	g_cs.cu_mask_packets = 0;
+	g_cs.coher_packets = 0;
+	return 1;
+}
+
 static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring *ring)
 {
+	struct amdgpu_device *adev = ring->adev;   /* SOC15_REG_OFFSET() reads it by that name */
 	u32 reg_dword, value;
 
 	if (p->opcode == PACKET3_RELEASE_MEM)
 		return stub_release_mem(p, ring);
 	if (p->opcode == PACKET3_WRITE_DATA)
 		return stub_write_data(p, ring);
+	if (p->opcode == PACKET3_SET_SH_REG)
+		return stub_set_sh_reg(p, ring, 0);
+	if (p->opcode == PACKET3_SET_SH_REG_INDEX)
+		return stub_set_sh_reg(p, ring, 1);
+	if (p->opcode == PACKET3_DISPATCH_DIRECT)
+		return stub_dispatch_direct(p, ring);
 
 	if (p->opcode != PACKET3_SET_UCONFIG_REG)
 		return 0;                       /* not a ring test; SET_RESOURCES and the rest */
@@ -573,6 +851,18 @@ static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring
 
 	reg_dword = p->body[0] + PACKET3_SET_UCONFIG_REG_START;
 	value = p->body[1];
+
+	/* The one uconfig register of the dispatch sequence (shader_test_util.c:248-250). It is in
+	 * the same packet space as SCRATCH_REG0 and would otherwise be read as a malformed ring
+	 * test, so it is recognised here first, resolved through AMD's headers like every other
+	 * register this file names. Recorded rather than poked into the register file: nothing reads
+	 * it back, and a poke would seed the sweep layer with a GC register the traced bring-up
+	 * never writes. */
+	if (reg_dword == SOC15_REG_OFFSET(GC, 0, mmCP_COHER_START_DELAY)) {
+		g_cs.coher_start_delay = value;
+		g_cs.coher_packets++;
+		return 1;
+	}
 
 	if (g_scratch_reg0_dword != 0 && reg_dword != g_scratch_reg0_dword) {
 		fprintf(stderr, "backend_mem: SET_UCONFIG_REG names dword 0x%X, not SCRATCH_REG0 0x%X\n",
@@ -721,6 +1011,49 @@ static unsigned int g_hqd_count;
 static unsigned int g_mec_fault_count;
 static u64 g_mec_fault_address;
 
+/* Does GRBM_GFX_CNTL's current value name this ring's queue? The three fields are decoded through
+ * AMD's own masks; nothing here encodes a selection, so this cannot agree with nv_grbm_select() by
+ * repeating its arithmetic. */
+static int selection_names(u32 selection, const struct amdgpu_ring *ring)
+{
+	return ((selection & GRBM_GFX_CNTL__MEID_MASK) >> GRBM_GFX_CNTL__MEID__SHIFT) == ring->me &&
+	       ((selection & GRBM_GFX_CNTL__PIPEID_MASK) >> GRBM_GFX_CNTL__PIPEID__SHIFT) == ring->pipe &&
+	       ((selection & GRBM_GFX_CNTL__QUEUEID_MASK) >> GRBM_GFX_CNTL__QUEUEID__SHIFT) == ring->queue;
+}
+
+static struct ring_slot *ring_selected(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < g_ring_count; i++)
+		if (selection_names(g_mec_selection, g_ring[i].ring))
+			return &g_ring[i];
+	return NULL;
+}
+
+/*
+ * CP_HQD_PQ_RPTR is one register per queue, and the replayed register file has one value per
+ * offset. Without this, the eight compute queues and the KIQ would share a read pointer, the KIQ
+ * dequeue's zeroing at the end of the teardown would appear to have zeroed all nine, and the arm
+ * that checks the other eight could not fail. So the model answers from the queue the selection
+ * names - and only once a ring test has actually run on it, so that a cold boot still reads unit
+ * A's own seeded value and the 354-write comparison is untouched.
+ */
+static int backend_mec_answer(u32 byte_offset, u32 *value)
+{
+	struct ring_slot *slot;
+
+	if (!g_mec_on || byte_offset != g_mec.hqd_pq_rptr)
+		return 0;
+
+	slot = ring_selected();
+	if (slot == NULL || !slot->hqd_known)
+		return 0;
+
+	*value = slot->hqd_rptr;
+	return 1;
+}
+
 int backend_add_mec_fetch_state(const struct backend_mec_regs *regs)
 {
 	if (g_mec_on || regs == NULL)
@@ -728,6 +1061,7 @@ int backend_add_mec_fetch_state(const struct backend_mec_regs *regs)
 	g_mec = *regs;
 	g_mec_on = 1;
 	backend_set_write_hook(backend_mec_observe);
+	backend_set_read_hook(backend_mec_answer);
 	g_mec_selection = 0;
 	g_mec_halted = 1;
 	g_hqd_count = 0;
@@ -743,6 +1077,7 @@ u64 backend_mec_fault_address(void)     { return g_mec_fault_address; }
 static void mec_model_off(void)
 {
 	backend_set_write_hook(NULL);
+	backend_set_read_hook(NULL);
 	g_mec_on = 0;
 	g_mec_selection = 0;
 	g_mec_halted = 1;
@@ -868,7 +1203,15 @@ void backend_mec_observe(u32 byte_offset, u32 value)
 		return;
 	}
 	if (byte_offset == g_mec.hqd_pq_rptr) {
+		struct ring_slot *slot = ring_selected();
+
 		hqd_current()->reg_rptr = value;
+		/* The per-queue value the read above answers with. A driver that puts the register
+		 * back is exactly what this is here to notice. */
+		if (slot != NULL) {
+			slot->hqd_rptr = value;
+			slot->hqd_known = 1;
+		}
 		return;
 	}
 
@@ -1000,4 +1343,15 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 	}
 	slot->decoded_to = value;
 	mec_note_consumed(ring, value);
+
+	/* Where the CP leaves this queue's read pointer: at the write pointer, because it has just
+	 * consumed everything. That is what unit A's queues idle at after the ring tests (fact M40,
+	 * rptr == wptr != 0), and it is the value the next bring-up's MQD would sample if nothing put
+	 * it back. Only the queues with an HQD: the graphics ring's pointer is CP_RB0_RPTR, a
+	 * different register with no selection behind it. */
+	if (ring->funcs->type == AMDGPU_RING_TYPE_COMPUTE ||
+	    ring->funcs->type == AMDGPU_RING_TYPE_KIQ) {
+		slot->hqd_rptr = (u32)(value & ring->buf_mask);
+		slot->hqd_known = 1;
+	}
 }

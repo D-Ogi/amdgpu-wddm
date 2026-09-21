@@ -545,6 +545,16 @@ void bc250_sdma_teardown(struct amdgpu_device *adev)
  * chip asks for AMDGPU_FENCE_FLAG_64BIT; the 64-bit arm below is transcribed anyway, because
  * leaving out an arm of an upstream function is how a driver grows a hole.
  *
+ * One difference against that dump, in the padding and nowhere else. Upstream's pad at dw 0x0005 is
+ * a single NOP packet declaring ten dwords of payload (`000a0000` is SDMA_OP_NOP with COUNT 10,
+ * then ten zeros), because sdma_v5_0_ring_insert_nop() writes a burst NOP when the slack is more
+ * than one dword. Ours is eleven separate one-dword NOPs: the shim uses the generic
+ * amdgpu_ring_insert_nop() for every ring, and upstream's SDMA version of it is reached through a
+ * `.insert_nop` callback, which ADR 0002 does not import - the shim's amdgpu_ring_funcs carries no
+ * callbacks at all. Same length, same effect, different bytes, and the packets that matter are byte
+ * for byte upstream's; recorded here so that the next person to diff a ring dump does not read it
+ * as a defect.
+ *
  * Deviations, both of the same kind as bc250_gfx_emit_fence()'s:
  *   - upstream BUG_ON()s a misaligned address, and it does so after the header dword is already in
  *     the ring. A BUG() in a Windows miniport is a bugcheck on a caller's mistake, and a partly

@@ -880,11 +880,21 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 
 	backend_touched_start();
 	bc250_sdma_hw_fini(adev);
-	bc250_gfx_hw_fini(adev);
+	r = bc250_gfx_hw_fini(adev);
 	backend_touched_stop();
 	printf("  after the undo: %u doorbells, %u packets, KIQ wptr %llu\n",
 	       backend_doorbell_count(), backend_packet_count(),
 	       (unsigned long long)adev->gfx.kiq[0].ring.wptr);
+
+	/* The undo reports its first failure now. On a replay every step of it should succeed, and
+	 * the one that can fail quietly on hardware is the KIQ dequeue: BC250_ETIME here would say
+	 * the MEC did not answer the handshake, which is precisely what the arm below then measures
+	 * the consequences of. */
+	if (r != 0) {
+		printf("  bc250_gfx_hw_fini returned %d   <-- wrong: every step of the undo should"
+		       " succeed here\n", r);
+		bad++;
+	}
 	bad += check_halted(adev);
 	bad += survey_fini_registers("the teardown", adev, verbose);
 
@@ -997,6 +1007,41 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 		bad++;
 	} else {
 		printf("  no stale KIQ fetch survived the teardown            : yes\n");
+	}
+
+	/*
+	 * And the other nine tenths of the same question: what read pointer did the second bring-up's
+	 * MQDs sample?
+	 *
+	 * bc250_compute_mqd_init() takes CP_HQD_PQ_RPTR as upstream does, under each queue's own
+	 * selection, so each of the eight compute MQDs is built from whatever that queue's register
+	 * holds. After a bring-up that ran the ring tests the queues idle at rptr == wptr != 0 (fact
+	 * M40), which the CP stub now reproduces per queue, and UNMAP_QUEUES is not known to clear
+	 * them. A non-zero sample here would tell a queue whose write pointer restarts at 0 that most
+	 * of the ring is pending - the 5222 us walk of E12 run 001, nine times over. The fix is
+	 * bc250_kcq_clear_pointers() in the teardown; this is what notices if it is not there.
+	 */
+	{
+		unsigned int i, stale = 0;
+
+		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+			const struct v10_compute_mqd *mqd =
+				(const struct v10_compute_mqd *)adev->gfx.compute_ring[i].mqd_ptr;
+
+			if (mqd == NULL || mqd->cp_hqd_pq_rptr == 0)
+				continue;
+			printf("    compute ring %u (me %u pipe %u queue %u) sampled rptr %u\n", i,
+			       adev->gfx.compute_ring[i].me, adev->gfx.compute_ring[i].pipe,
+			       adev->gfx.compute_ring[i].queue, mqd->cp_hqd_pq_rptr);
+			stale++;
+		}
+		if (stale != 0) {
+			printf("  %u of the eight compute MQDs sampled a read pointer the first run"
+			       " left behind   <-- the teardown did not put them back\n", stale);
+			bad++;
+		} else {
+			printf("  all nine queues sampled a read pointer of 0        : yes\n");
+		}
 	}
 
 	/* The teardown's own ring test plus eleven more from the second bring-up. If the CP had not
@@ -1186,16 +1231,25 @@ static unsigned int check_unclean_start(struct amdgpu_device *adev, int verbose)
 		       " back: yes\n", (unsigned long long)backend_mec_fault_address());
 	}
 
+	/* What the recovery had to achieve: the MQD it built holds 0 rather than the 0x737 the last
+	 * instance left, and the register no longer holds it either.
+	 *
+	 * The register is not required to read 0 here, and this is not a weaker test than it looks.
+	 * Between the recovery and this line the queue ran eleven ring tests, and the CP stub now
+	 * models what the CP does to a queue's read pointer - it leaves it at the write pointer - per
+	 * queue rather than in one shared register. So 0 would mean the queue had consumed nothing.
+	 * The stale value is what must be gone. */
 	nv_grbm_select(adev, kiq->me, kiq->pipe, kiq->queue, 0);
 	rptr = bc250_shim_rreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR));
 	nv_grbm_select(adev, 0, 0, 0, 0);
-	if (rptr != 0 || ((struct v10_compute_mqd *)kiq->mqd_ptr)->cp_hqd_pq_rptr != 0) {
+	if (rptr == UNITA_STALE_KIQ_RPTR ||
+	    ((struct v10_compute_mqd *)kiq->mqd_ptr)->cp_hqd_pq_rptr != 0) {
 		printf("  the read pointer survived: register 0x%X, MQD 0x%X   <-- wrong\n", rptr,
 		       ((struct v10_compute_mqd *)kiq->mqd_ptr)->cp_hqd_pq_rptr);
 		bad++;
 	} else {
-		printf("  the stale read pointer was corrected to 0 in both the register and the"
-		       " MQD: yes\n");
+		printf("  the stale read pointer is gone: MQD 0, register 0x%X (what the queue has"
+		       " consumed since): yes\n", rptr);
 	}
 
 	bad += survey_fini_registers("the recovering bring-up", adev, verbose);

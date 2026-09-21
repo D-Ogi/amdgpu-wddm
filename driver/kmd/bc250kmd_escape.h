@@ -243,7 +243,10 @@ typedef struct _BC250_ESCAPE_IH {
 #define BC250_FENCE_MODE_VALUE 0u           // Interrupt: the control, the value and no interrupt
 #define BC250_FENCE_MODE_INTERRUPT 1u
 #define BC250_FENCE_MODE_RING_TEST 2u       // SDMA rings only: sdma_v5_0_ring_test_ring(), Count is ignored
+#define BC250_FENCE_MODE_DISPATCH 3u        // compute rings only: libdrm's gfx10 memset dispatch (bc250_dispatch.h), Count is the
+                                            // number of 64-thread workgroups, 1..16; one fence with the interrupt bit behind it
 #define BC250_FENCE_MAX_COUNT 1000u
+#define BC250_DISPATCH_FILL 0x22222222u     // what the shader stores: libdrm's own value (shader_test_util.c:441-444)
 
 typedef struct _BC250_ESCAPE_FENCE {
     unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
@@ -262,6 +265,8 @@ typedef struct _BC250_ESCAPE_FENCE {
     unsigned long LastSeq, LastValue;       // out: the last value emitted and what the slot held last
     unsigned long Microseconds;             // out: all of them
     unsigned long SlowestMicroseconds;      // out: the slowest single emit-to-value
+    long DispatchCheck;                     // out, DISPATCH: bc250_gfx_dispatch_check(), 0 when every dword is as asked
+    unsigned long DispatchBadOffset;        // out, DISPATCH: byte offset of the first wrong dword of the destination
 } BC250_ESCAPE_FENCE;
 
 // The first escape struct with mixed 4 and 8 byte alignment (four bytes of padding before Last[]). The driver and the

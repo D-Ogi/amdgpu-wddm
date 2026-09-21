@@ -27,6 +27,7 @@
 #include "bc250_gmc.h"
 #include "bc250_gfx.h"
 #include "bc250_sdma.h"
+#include "bc250_dispatch.h"
 #include "bc250_nbio.h"
 #include "bc250_irq.h"
 
@@ -79,6 +80,7 @@ typedef struct _BC250_GFX {
     BOOLEAN Failed;                 // a stage failed on the hardware: only FINI from here
     BOOLEAN FencePage;              // bc250_gfx_fence_page_alloc has allocated
     BOOLEAN SdmaFencePage;          // bc250_sdma_fence_page_alloc has
+    BOOLEAN Dispatch;               // bc250_gfx_dispatch_setup has
     ULONG FenceSeq;                 // last fence value emitted
     ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
 } BC250_GFX;
@@ -121,6 +123,7 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     if (!Gfx->SetUp) return;
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
+    if (Gfx->Dispatch) { bc250_gfx_dispatch_teardown(Adev); Gfx->Dispatch = FALSE; }
     bc250_sdma_teardown(Adev);
     bc250_gfx_teardown(Adev);
     Gfx->SetUp = FALSE;
@@ -152,25 +155,33 @@ static void GrbmSelectDefault(_In_ const BC250_DEVICE* Device)
     GuardLog("gfx: GRBM_GFX_CNTL was left at 0x%08X, back to 0: 0x%08X", select, MmioGfxWrite(Device, BC250_REG_GC_GRBM_GFX_CNTL, 0));
 }
 
-// hw_fini in amdgpu's order (SDMA before GFX), then the memory. Returns whether the engines read halted.
-static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
+// hw_fini in amdgpu's order (SDMA before GFX), then the memory. Returns whether the engines read halted; Undo gets what
+// the shim's undo returned (BC250_ETIME: the MEC did not let go of the KIQ's queue, facts M44).
+static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev, _Out_ long* Undo)
 {
     BOOLEAN quiet;
+
+    *Undo = 0;
 
     if (Gfx->StagesDone >= BC250_GFX_STAGE_CP)
     {
         bc250_sdma_hw_fini(Adev);
         // Disables the three fault sources of late_init. The end-of-pipe enables of stage 8 stay set: harmless with the
         // queues unmapped and both CPs halted, but a second run to stage 8 meets them enabled.
-        bc250_gfx_hw_fini(Adev);
+        *Undo = bc250_gfx_hw_fini(Adev);
         // nv_common_hw_fini(): the self-ring aperture goes last.
         if (Gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS) (void)bc250_nbio_enable_doorbell_selfring_aperture(Adev, false);
+        // The undo selects queues as well (the KIQ's dequeue), and a sequence that faults in between writes nothing any more.
+        GrbmSelectDefault(Device);
     }
     // Before the CP stage no engine was released by us and no queue was mapped: nothing of ours is in use. (The PSP
     // releases SDMA by itself, facts M35, but an SDMA engine without a ring has no address of ours.)
     quiet = (Gfx->StagesDone < BC250_GFX_STAGE_CP) || EnginesHalted(Device);
     TearDown(Gfx, Adev);
-    GpuMemRelease(Device, &Gfx->Sequence, quiet);
+    // An undo that failed leaves an engine that may still hold an address of ours: its pages stay (they go back with a
+    // later undo that succeeds, or never), but the state is reset all the same, because the way out of this is the next
+    // bring-up's recovery branch (bc250_kiq_init_register), not a second undo on a halted MEC.
+    GpuMemRelease(Device, &Gfx->Sequence, quiet && *Undo == 0);
     if (quiet) { Gfx->StagesDone = 0; Gfx->Failed = FALSE; }
     return quiet;
 }
@@ -260,7 +271,7 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
 
         case BC250_GFX_OP_FINI:
             if (gfx->StagesDone == 0 && !gfx->SetUp) { status = STATUS_INVALID_DEVICE_STATE; break; }
-            if (!Fini(Device, gfx, adev)) status = STATUS_IO_DEVICE_ERROR;
+            if (!Fini(Device, gfx, adev, &result)) status = STATUS_IO_DEVICE_ERROR;
             break;
         }
         if (NT_SUCCESS(status)) status = gfx->Sequence.Fault;
@@ -305,6 +316,8 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     LARGE_INTEGER frequency, start;
     ULONG i, waited, vram, gtt, flags = Data->Interrupt == BC250_FENCE_MODE_INTERRUPT ? AMDGPU_FENCE_FLAG_INT : 0;
     BOOLEAN sdma = Data->Ring >= BC250_FENCE_RING_SDMA0;
+    BOOLEAN dispatch = Data->Interrupt == BC250_FENCE_MODE_DISPATCH;
+    BOOLEAN compute = Data->Ring >= BC250_FENCE_RING_COMPUTE0 && Data->Ring < BC250_FENCE_RING_COMPUTE0 + 8;
     ULONG slot = sdma ? 2 + (Data->Ring - BC250_FENCE_RING_SDMA0) : Data->Ring;     // SDMA slots 0 and 1 are the ring tests'
     long result = 0;
 
@@ -317,13 +330,16 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     Data->LastValue = 0;
     Data->Microseconds = 0;
     Data->SlowestMicroseconds = 0;
+    Data->DispatchCheck = 0;
+    Data->DispatchBadOffset = 0;
     KeQueryPerformanceCounter(&frequency);
 
     ExAcquireFastMutex(&Device->GartLock);
     gfx = (BC250_GFX*)Device->Gfx;
     if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
     else if (Data->Count == 0 || Data->Count > BC250_FENCE_MAX_COUNT) status = STATUS_INVALID_PARAMETER;
-    else if (Data->Interrupt > BC250_FENCE_MODE_RING_TEST || (Data->Interrupt == BC250_FENCE_MODE_RING_TEST && !sdma)) status = STATUS_INVALID_PARAMETER;
+    else if (Data->Interrupt > BC250_FENCE_MODE_DISPATCH || (Data->Interrupt == BC250_FENCE_MODE_RING_TEST && !sdma)) status = STATUS_INVALID_PARAMETER;
+    else if (dispatch && (!compute || Data->Count > BC250_DISPATCH_MAX_GROUPS)) status = STATUS_INVALID_PARAMETER;
     else if (gfx->Failed || !gfx->SetUp || gfx->StagesDone < (ULONG)(sdma ? BC250_GFX_STAGE_SDMA : BC250_GFX_STAGE_CP)) status = STATUS_INVALID_DEVICE_STATE;
     if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
     if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
@@ -344,7 +360,43 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             result = bc250_gfx_fence_page_alloc(adev);
             if (result == 0) gfx->FencePage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
         }
+        if (NT_SUCCESS(status) && dispatch)
+        {
+            // Its own two allocations (the shader, 256-byte aligned, and the destination), seeded again before every run.
+            result = bc250_gfx_dispatch_setup(adev);
+            if (result == 0) { gfx->Dispatch = TRUE; result = bc250_gfx_dispatch_reseed(adev); }
+            if (result != 0) status = STATUS_INSUFFICIENT_RESOURCES;
+        }
         start = KeQueryPerformanceCounter(NULL);
+        if (NT_SUCCESS(status) && dispatch)
+        {
+            // The M6 exit criterion: ACQUIRE_MEM, libdrm's 18 packets, a partial flush and a fence, straight into the
+            // compute ring; then the destination is read back, the part behind the last workgroup included.
+            ULONG seq = ++gfx->FenceSeq;
+            u64 address = bc250_gfx_fence_addr(adev, slot);
+            u32 bad = 0;
+
+            if (address == 0) result = -62;
+            else result = bc250_gfx_dispatch_memset(ring, BC250_DISPATCH_FILL, Data->Count, address, seq, AMDGPU_FENCE_FLAG_INT);
+            if (result == 0 && NT_SUCCESS(gfx->Sequence.Fault))
+            {
+                Data->LastSeq = seq;
+                for (waited = 0; waited < BC250_FENCE_TIMEOUT_US; waited += 10)
+                {
+                    Data->LastValue = (unsigned long)bc250_gfx_fence_read(adev, slot);
+                    if (Data->LastValue == seq) break;
+                    KeStallExecutionProcessor(10);
+                }
+                if (Data->LastValue != seq) result = -62;
+                // Read back even after a timeout: "nothing written" and "written, no fence" are different failures.
+                Data->DispatchCheck = bc250_gfx_dispatch_check(adev, BC250_DISPATCH_FILL, Data->Count, &bad);
+                Data->DispatchBadOffset = bad;
+                if (result == 0 && Data->DispatchCheck == 0) Data->Completed = 1;
+                else if (result == 0) result = Data->DispatchCheck;
+            }
+            GuardLog("gfx: dispatch %u groups, shader 0x%llX, destination 0x%llX, check %d at 0x%X", Data->Count,
+                     bc250_gfx_dispatch_shader_addr(adev), bc250_gfx_dispatch_dst_addr(adev), Data->DispatchCheck, Data->DispatchBadOffset);
+        }
         if (NT_SUCCESS(status) && Data->Interrupt == BC250_FENCE_MODE_RING_TEST)
         {
             // sdma_v5_0_ring_test_ring(): one WRITE_LINEAR of 0xDEADBEEF into the engine's scratch slot, polled by the shim.
@@ -353,7 +405,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             Data->LastValue = (unsigned long)bc250_sdma_fence_read(adev, Data->Ring - BC250_FENCE_RING_SDMA0);
             if (result == 0) Data->Completed = 1;
         }
-        for (i = 0; NT_SUCCESS(status) && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
+        for (i = 0; NT_SUCCESS(status) && !dispatch && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
         {
             LARGE_INTEGER one = KeQueryPerformanceCounter(NULL);
             ULONG seq = ++gfx->FenceSeq, took;
@@ -458,6 +510,7 @@ void GfxStop(_Inout_ BC250_DEVICE* Device)
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
     BOOLEAN gartEnabled, quiet = TRUE;
+    long undo = 0;
 
     ExAcquireFastMutex(&Device->GartLock);
     gfx = (BC250_GFX*)Device->Gfx;
@@ -472,7 +525,7 @@ void GfxStop(_Inout_ BC250_DEVICE* Device)
             adev->backend = &gfx->Sequence;
             SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
             GpuMemBeginSequence(Device, NULL, 0);
-            quiet = Fini(Device, gfx, adev);
+            quiet = Fini(Device, gfx, adev, &undo) && undo == 0;
             adev->backend = previousBackend;
         }
     }

@@ -22,6 +22,7 @@ $repo = Resolve-Path (Join-Path $here '..\..\..')
 $shim = Join-Path $repo 'driver\shim'
 $imports = Join-Path $repo 'driver\amdgpu-import'
 $amdhdr = Join-Path $repo 'third_party\linux-amdgpu'
+$libdrm = Join-Path $repo 'third_party\libdrm'      # the gfx10 dispatch shader the CP stub checks
 $evid = Join-Path $repo 'evidence\linux\2026-09-21-E03-init-trace'
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
@@ -84,7 +85,7 @@ $testSources = @('test\backend_trace.c', 'test\backend_mem.c', 'test\replay_gfx.
 # driver\shim\README.md.
 $importWarn = @('/wd4244', '/wd4701')
 
-$incUser = @("/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
+$incUser = @("/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr", "/I$libdrm",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 
@@ -105,7 +106,7 @@ Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DEBUG', '/MACHINE:X64', 
 
 # The same sources with the flags of driver\kmd\build.ps1. Compile only.
 Write-Host 'compile (kernel flags, same shim sources, no link)'
-$incKern = @("/I$shim\include", "/I$imports", "/I$amdhdr",
+$incKern = @("/I$shim\include", "/I$imports", "/I$amdhdr", "/I$libdrm",
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\um")
 $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',

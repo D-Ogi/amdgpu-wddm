@@ -31,6 +31,16 @@
  *     directly means emitting both: this file does, so the shader cannot fetch stale instruction
  *     bytes and the CPU cannot read a result still sitting in GL2.
  *
+ * The same 72 dwords and the same nine-dword shader were run on unit A under Linux before any of
+ * this was written, through raw ioctls on AMDGPU_HW_IP_COMPUTE: one workgroup filled 256 of 256
+ * dwords, sixteen filled 4096 of 4096, with and without a kernel-prepended ACQUIRE_MEM (fact M49,
+ * evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/dispatch/). So the shader
+ * is good for gfx1013, the program is good for gfx1013, and both shapes of cache handling work.
+ * What that run does NOT say anything about is the two departures it could not exercise: it went
+ * through an INDIRECT_BUFFER with VMID 2 and a user page table, not straight into a kernel ring at
+ * VMID 0 with a GART address. Those two are still ours to be right about, and they are why the
+ * paragraph below spells out why VMID 0 is fetchable.
+ *
  * VMID 0 throughout, which is what a KIQ-mapped kernel compute queue already is - gfx10_kiq_map_queues()
  * hardcodes VMID(0) (gfx_v10_0.c:3751), the MQD forces it (:6961-6963, :7001) - and VMID 0 is the
  * flat GART aperture, page table depth 0 (gfxhub_v2_0.c:254-264). Instruction fetch goes through the
@@ -88,7 +98,9 @@ unsigned int bc250_gfx_dispatch_size(const struct amdgpu_ring *ring, unsigned in
  * `value` is the dword the shader stores, repeated four times per record - libdrm uses 0x22222222
  * (shader_test_util.c:441-444). `groups` is the number of 64-thread workgroups, 1 to
  * BC250_DISPATCH_MAX_GROUPS; 1 writes the first kilobyte and is the right first attempt on
- * hardware, 16 writes the whole buffer and is libdrm's own dispatch.
+ * hardware, 16 writes the whole buffer and is libdrm's own dispatch. It also sets the buffer
+ * descriptor's NUM_RECORDS, as libdrm does, so the hardware itself bounds the stores to the range
+ * the workgroups are meant to cover and a wrong DIM_X cannot reach past it.
  *
  * Returns 0, or BC250_EINVAL with nothing written (no setup, wrong ring type, groups out of range,
  * a fence address the fence emitter refuses), or what amdgpu_ring_alloc() returned.

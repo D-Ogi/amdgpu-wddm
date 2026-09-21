@@ -934,6 +934,12 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 	 *    on this part and measured to be: run 002 took it, the machine stayed up, the interrupt
 	 *    arrived on our own IH ring, and the teardown afterwards freed everything.
 	 *
+	 *    Expect a burst rather than a single vector. The engine is live for the whole poll below,
+	 *    so it retries the fetch for as long as the dequeue takes, and each retry is another
+	 *    UTCL2 vector; run 002 saw one because the MEC was un-halted by kcq_resume and nothing
+	 *    then asked it to stop. A drained interrupt ring and a log line per vector are what tell
+	 *    the two apart; the count is not a failure by itself.
+	 *
 	 *    Not taken instead: GRBM_SOFT_RESET.SOFT_RESET_CP with the engines halted, AMD's own
 	 *    sequence from gfx_v10_0_soft_reset() (gfx_v10_0.c:7660-7685). It would also discard the
 	 *    engine's state, and it is the only other mechanism that can - kgd_gfx_v10_hqd_reset()
@@ -958,16 +964,40 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 	 *    with the register so the two agree.
 	 */
 	if (RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1) {
+		/* Either engine halted counts as halted, and the restore below halts both. That is
+		 * asymmetric only in appearance: bc250_cp_compute_enable() is upstream's own
+		 * function and it writes both bits together, so the two states it can leave behind
+		 * are "both running" and "both halted". Anything that had set exactly one of them
+		 * did not come from this driver. */
 		bool mec_halted = (RREG32_SOC15(GC, 0, mmCP_MEC_CNTL) &
 				   (CP_MEC_CNTL__MEC_ME1_HALT_MASK |
 				    CP_MEC_CNTL__MEC_ME2_HALT_MASK)) != 0;
 		bool timed_out;
 
 		if (mec_halted) {
+			u32 cntl;
+
 			dev_err(adev->dev,
 				"KIQ still active and the MEC halted: the last instance did not take"
 				" this queue down. Un-halting to dequeue it; a stale fetch may fault\n");
 			bc250_cp_compute_enable(adev, true);
+
+			/* Read it back. CP_MEC_CNTL is written here with this queue's selection in
+			 * force - me 2, pipe 1, queue 0 - which upstream never does: its own un-halt
+			 * is in kcq_resume, outside any selection. One register carries both MEs'
+			 * halt bits, so it should not be per-instance and the write should land as
+			 * written; but CPC_INT_CNTL was measured to alias under a selection on this
+			 * part (fact M40), and a silently ignored un-halt here would show up only as
+			 * the full timeout below. Cheaper to ask. */
+			cntl = RREG32_SOC15(GC, 0, mmCP_MEC_CNTL);
+			if (cntl & (CP_MEC_CNTL__MEC_ME1_HALT_MASK |
+				    CP_MEC_CNTL__MEC_ME2_HALT_MASK)) {
+				dev_err(adev->dev,
+					"CP_MEC_CNTL reads %08X after the un-halt: the MEC is still"
+					" halted and cannot answer a dequeue\n", cntl);
+				bc250_cp_compute_enable(adev, false);
+				return BC250_EIO;
+			}
 		}
 
 		WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, 1);
@@ -2020,13 +2050,22 @@ static int bc250_kiq_dequeue(struct amdgpu_device *adev)
 
 	if (RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1) {
 		WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, 1);
-		for (j = 0; j < adev->usec_timeout; j++) {
+
+		/* Tested before the delay rather than after it, so that the register is read at
+		 * least once whatever the budget is. The two other polls in this file
+		 * (bc250_gfx_cp_resume(), bc250_gfx_setup()) refuse adev->usec_timeout == 0 at the
+		 * entry point instead; the teardown cannot, because it has to run whatever state
+		 * the caller is in, and a budget of 0 must not be reported as a dequeue the engine
+		 * refused. */
+		for (j = 0; ; j++) {
 			if (!(RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1))
 				break;
+			if (j >= adev->usec_timeout) {
+				r = BC250_ETIME;
+				break;
+			}
 			bc250_shim_udelay(1);
 		}
-		if (j >= adev->usec_timeout)
-			r = BC250_ETIME;
 		/* Put the request back the way the MQD's own field has it, which is what upstream's
 		 * restore writes (gfx_v10_0.c:7043): a left-over request is a request the next
 		 * activation would find pending. */
@@ -2043,6 +2082,47 @@ static int bc250_kiq_dequeue(struct amdgpu_device *adev)
 }
 
 /*
+ * DECLARED ADDITION (driver/amdgpu-import/PROVENANCE.md): zero the eight compute queues' pointer
+ * registers, each under its own selection, once they are unmapped.
+ *
+ * Same argument as the two lines in bc250_kiq_dequeue() above, for the other nine tenths of the
+ * problem. bc250_compute_mqd_init() samples CP_HQD_PQ_RPTR (:765) and bc250_kcq_init_queue()
+ * selects each ring's own slot (:1089) before calling it, so each of the eight MQDs is built from
+ * whatever that slot's read pointer happens to hold. After a bring-up that ran the ring tests the
+ * queues idle at rptr == wptr != 0 (fact M40), and nothing in the undo puts them back: UNMAP_QUEUES
+ * takes the queue off the pipe, and whether the CP clears the slot's pointer registers as it does
+ * so is not something we have measured or found stated. Upstream never has to care - it has no
+ * second bring-up without a power cycle or a reset in between - so this is not a deviation from its
+ * behaviour but a step it has no need for.
+ *
+ * With this here, the sentence in bc250_compute_mqd_init()'s comment ("the value it samples is put
+ * there here") is true for all nine queues rather than for the KIQ alone.
+ *
+ * Call it after the queues are unmapped, which bc250_gfx_unmap_queues() guarantees by ending in a
+ * KIQ ring test: the CP has consumed and completed the UNMAP_QUEUES packets before it returns, so
+ * nothing is going to write these registers behind us. No handshake is needed and none is possible
+ * - unlike the KIQ's own HQD, these queues have already been dequeued by a running CP.
+ */
+static void bc250_kcq_clear_pointers(struct amdgpu_device *adev)
+{
+	u32 i;
+
+	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+		struct amdgpu_ring *ring = &adev->gfx.compute_ring[i];
+
+		if (ring->ring == NULL)
+			continue;
+
+		nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
+		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR, 0);
+		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_LO, 0);
+		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_HI, 0);
+	}
+
+	nv_grbm_select(adev, 0, 0, 0, 0);
+}
+
+/*
  * gfx_v10_0.c:7529 gfx_v10_0_hw_fini(), in its order.
  *
  * This exists to make the bring-up re-runnable without reloading firmware, which matters on Windows
@@ -2056,7 +2136,9 @@ static int bc250_kiq_dequeue(struct amdgpu_device *adev)
  *   2. UNMAP_QUEUES for the gfx ring, if the async gfx ring path mapped one, then for the eight
  *      compute rings. The CP keeps per-queue state that MAP_QUEUES sets up, and mapping a queue
  *      twice without unmapping it is not something the trace shows anyone doing;
- *   2a. the KIQ's own HQD dequeued while the MEC still runs, which is not upstream's and is the one
+ *   2a. the eight compute queues' pointer registers zeroed, so that the next bring-up's MQDs sample
+ *      a read pointer this code put there. See bc250_kcq_clear_pointers() above;
+ *   2b. the KIQ's own HQD dequeued while the MEC still runs, which is not upstream's and is the one
  *      step without which a second bring-up meets a live fetcher. See bc250_kiq_dequeue() above;
  *   3. the CP and the MEC halted;
  *   4. the RLC stopped. This is NOT in upstream's hw_fini, and it is here deliberately: upstream
@@ -2066,14 +2148,18 @@ static int bc250_kiq_dequeue(struct amdgpu_device *adev)
  *      nothing else would stop it. bc250_gfx_rlc_stop() is exposed for exactly that.
  *
  * Errors are reported but do not stop the teardown: a half-undone GPU is worse than a fully
- * undone one, and every step after a failure is still worth attempting.
+ * undone one, and every step after a failure is still worth attempting. The return value is the
+ * first failure seen, for a caller that has somewhere to put it - the miniport's Fini keeps the
+ * pages and surfaces it - and 0 when the whole undo ran. It is deliberately not a reason for the
+ * caller to do anything differently: there is nothing left to try.
  */
-void bc250_gfx_hw_fini(struct amdgpu_device *adev)
+int bc250_gfx_hw_fini(struct amdgpu_device *adev)
 {
+	int first = 0;
 	int r;
 
 	if (adev == NULL)
-		return;
+		return BC250_EINVAL;
 
 	(void)bc250_irq_set_priv_reg_fault(adev, BC250_IRQ_STATE_DISABLE);
 	(void)bc250_irq_set_priv_inst_fault(adev, BC250_IRQ_STATE_DISABLE);
@@ -2081,23 +2167,35 @@ void bc250_gfx_hw_fini(struct amdgpu_device *adev)
 
 	if (adev->gfx.async_gfx_ring) {
 		r = bc250_gfx_unmap_queues(adev, adev->gfx.gfx_ring, adev->gfx.num_gfx_rings);
-		if (r)
+		if (r) {
 			dev_err(adev->dev, "KGQ disable failed (%d)\n", r);
+			if (!first)
+				first = r;
+		}
 	}
 
 	r = bc250_gfx_unmap_queues(adev, adev->gfx.compute_ring, adev->gfx.num_compute_rings);
-	if (r)
+	if (r) {
 		dev_err(adev->dev, "KCQ disable failed (%d)\n", r);
+		if (!first)
+			first = r;
+	}
+
+	bc250_kcq_clear_pointers(adev);
 
 	/* Step 3 below halts the MEC, so this is the last moment a running engine can answer. */
 	r = bc250_kiq_dequeue(adev);
-	if (r)
+	if (r) {
 		dev_err(adev->dev, "KIQ dequeue failed (%d)\n", r);
+		if (!first)
+			first = r;
+	}
 
 	bc250_cp_compute_enable(adev, false);
 	(void)bc250_cp_gfx_enable(adev, false);
 
 	bc250_rlc_stop(adev);
+	return first;
 }
 
 /* The RLC stop on its own, for the one caller that needs it without the rest: the kmd, before

@@ -96,14 +96,21 @@ int bc250_gfx_cp_resume(struct amdgpu_device *adev);
 
 /*
  * The undo, in gfx_v10_0_hw_fini()'s order: the three fault interrupts off, UNMAP_QUEUES through
- * the KIQ for the gfx and compute rings, the CP and MEC halted, then the RLC stopped.
+ * the KIQ for the gfx and compute rings, the nine queues' pointer registers put back, the KIQ's own
+ * HQD dequeued while the MEC still runs, the CP and MEC halted, then the RLC stopped.
  *
  * Frees nothing. After it, bc250_gfx_hw_init() can run again on the same adev with no PSP reload,
  * which is the point: a second PSP load in one boot leaves the RLC disabled and busy (facts M35).
  *
- * The RLC stop is ours, not upstream's - see the comment on the function for why it is here.
+ * Returns the first failure, or 0 if the whole undo ran. Every step is attempted whatever the
+ * earlier ones did, so the value is for the caller to report and not to act on: there is nothing
+ * left to try. The one that matters is BC250_ETIME from the KIQ dequeue, which says the MEC did not
+ * answer the handshake and the next bring-up will have to recover instead (bc250_kiq_dequeue()).
+ *
+ * The RLC stop and the two queue steps are ours, not upstream's - see the comments on the functions
+ * for why they are here.
  */
-void bc250_gfx_hw_fini(struct amdgpu_device *adev);
+int bc250_gfx_hw_fini(struct amdgpu_device *adev);
 
 /* Stop the RLC and nothing else. For the kmd, before a second PSP firmware load in one boot. */
 void bc250_gfx_rlc_stop(struct amdgpu_device *adev);

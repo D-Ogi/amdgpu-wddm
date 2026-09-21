@@ -61,6 +61,8 @@ typedef struct _BC250_GPUMEM {
     ULONG DoorbellCount;            // doorbell writes of the running sequence
     BC250_ESCAPE_DOORBELL* Doorbells;
     ULONG MaxDoorbells;
+    BOOLEAN TlbDirty;               // a table change whose TLB flush failed: a translation of a page that left the table
+                                    // may still be live. The next flush that succeeds clears it (it flushes everything)
 } BC250_GPUMEM;
 
 // ---- the doorbell BAR: identified the way mmio.c identifies the register BAR ----------------------------------------------
@@ -167,9 +169,12 @@ void GpuMemRelease(_Inout_ BC250_DEVICE* Device, _In_ const VOID* Owner, BOOLEAN
     {
         BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
         if (!entry->Used || !entry->Gtt || !entry->Retired || entry->Owner != Owner) continue;
-        if (GpuQuiet || !entry->Bound) ReleaseEntry(mem, entry); else leaked += entry->Size;
+        // Halted engines are not enough with a stale translation about: gfx.c's next bring-up may un-halt the MEC to
+        // dequeue what the last instance left (bc250_kiq_init_register), and that engine fetches through the TLB.
+        if ((GpuQuiet && !mem->TlbDirty) || !entry->Bound) ReleaseEntry(mem, entry); else leaked += entry->Size;
     }
-    if (leaked != 0) GuardLog("gpumem: GPU not known to be quiet, %u bytes of GTT memory stay allocated", leaked);
+    if (leaked != 0) GuardLog("gpumem: GPU not known to be quiet%s, %u bytes of GTT memory stay allocated",
+                              mem->TlbDirty ? " (a TLB flush failed)" : "", leaked);
 }
 
 // Device stop. Live allocations at this point belong to a sequence that was never torn down.
@@ -185,7 +190,7 @@ void GpuMemStop(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet)
         BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
         if (!entry->Used) continue;
         // On purpose, see the head of this file: a bound page goes back only unbound and with the GPU quiet.
-        if (entry->Gtt && entry->Bound && (!GpuQuiet || !entry->Retired)) { leaked += entry->Size; continue; }
+        if (entry->Gtt && entry->Bound && (!GpuQuiet || mem->TlbDirty || !entry->Retired)) { leaked += entry->Size; continue; }
         ReleaseEntry(mem, entry);
     }
     if (leaked != 0) GuardLog("gpumem: stop with the GPU not known to be quiet: %u bytes of GTT memory leaked on purpose", leaked);
@@ -323,7 +328,11 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
                 break;
             }
         }
-        if (failed == 0 && !sequence->Plan) failed = FlushTlb(adev, sequence) != 0 ? -62 : 0;
+        if (failed == 0 && !sequence->Plan)
+        {
+            failed = FlushTlb(adev, sequence) != 0 ? -62 : 0;
+            mem->TlbDirty = failed != 0 ? mem->TlbDirty : FALSE;
+        }
         if (failed != 0)
         {
             // No engine was given the address. Still: pages that were in the table without a flush after their removal
@@ -376,7 +385,8 @@ void bc250_shim_mem_free(struct amdgpu_device* adev, struct bc250_mem* m)
             if (entry->Bound)
             {
                 bc250_gart_unbind(adev, entry->GartOffset, entry->Size / PAGE_SIZE, mem->Table);
-                (void)FlushTlb(adev, sequence);         // failed: logged; the page waits for a quiet GPU either way
+                // Failed: logged, and the page then waits for more than a quiet GPU (TlbDirty, GpuMemRelease).
+                mem->TlbDirty = FlushTlb(adev, sequence) != 0;
             }
             entry->Retired = TRUE;
         }

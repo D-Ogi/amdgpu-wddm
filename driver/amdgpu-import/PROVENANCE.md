@@ -144,6 +144,18 @@ Upstream's teardown is not known-good on this part, which is worth stating next 
 departs from it: Linux itself hung this machine at `modprobe -r amdgpu` on 2026-09-21 (facts M42).
 Following it exactly was never the safe option here.
 
+#### The eight compute queues' pointer registers
+
+| Where | What upstream does | Why it cannot work here | What we do instead |
+| --- | --- | --- | --- |
+| `gfx_v10_0_hw_fini()` again, against `gfx_v10_0_compute_mqd_init()`'s `mqd->cp_hqd_pq_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR)` (`gfx_v10_0.c:6998`), transcribed at `driver/shim/bc250_gfx.c:765` | Samples each queue's read pointer under that queue's own selection when building its MQD, and leaves the registers alone in the teardown | The sample is only right where the teardown left a 0 there. Here it does not: after a bring-up that ran the ring tests the queues idle at `rptr == wptr != 0` (fact M40), `UNMAP_QUEUES` is not documented or measured to clear the slot's pointer registers, and there is no power cycle in between. The next bring-up would hand each of the eight queues an MQD saying most of its ring is pending - the 5222 us walk of E12 run 001, eight times over | `bc250_kcq_clear_pointers()`, called after the KCQ unmap: for each of the eight compute rings, select its slot and zero `CP_HQD_PQ_RPTR`, `CP_HQD_PQ_WPTR_LO` and `CP_HQD_PQ_WPTR_HI`. No handshake, and none is possible or needed - these queues have already been dequeued by a running CP, and `bc250_gfx_unmap_queues()` ends in a KIQ ring test, so the packets have completed before the registers are written. All three registers are inside a trace window already, so the miniport's allow-list is unchanged |
+
+Together with the row above, this makes one sentence true for all nine queues: the read pointer an
+MQD samples is a value this driver put there. The host test fails without it - with the call taken
+out, all eight compute MQDs of the second bring-up come back holding 256 - which took a fifth
+declared behaviour in the backend: `CP_HQD_PQ_RPTR` answered per selected queue rather than as one
+shared register, and left where the CP stub left it. See `driver/shim/test/backend_mem.h`.
+
 #### A KIQ found active with the MEC halted
 
 | Where | What upstream does | Why it cannot work here | What we do instead |
@@ -289,6 +301,48 @@ One thing deliberately left as it is: `bc250_sdma_ring_test()` fills its slack w
 `SDMA_OP_NOP` dwords rather than the count-carrying burst NOP the engine also accepts. Upstream's
 ring test does the same, the packets are identical on the wire, and there is nothing to gain from
 differing.
+
+## The compute dispatch (milestone M6)
+
+Nothing from the kernel is imported for it. The kernel has no "run this shader" path that a driver
+can call: `amdgpu` dispatches only what user space hands it through a command stream, and the one
+shader the kernel owns is in `amdgpu_ucode.c` as firmware. The dispatch therefore comes from
+**libdrm's own amdgpu tests**, which do exactly this and nothing else, and which run on gfx10 parts.
+
+Source: `P:\BC-250\ref\libdrm`, tag `libdrm-2.4.114`, commit `b9ca37b31348`.
+
+- The shader binary is imported byte for byte with its MIT notice, never retyped:
+  `third_party/libdrm/shader_code_gfx10.h`, hash-verified in both directions
+  (`third_party/libdrm/PROVENANCE.md`).
+- The PM4 sequence is transcribed into `driver/shim/bc250_dispatch.c` from
+  `tests/amdgpu/shader_test_util.c`, with a `file:line` citation at every packet:
+  `amdgpu_test_dispatch_memset()` at `:566` and the four functions it calls, `:206-253`,
+  `:309-344`, `:403-463`, `:547-565`. Eighteen packets, 72 dwords. What was taken is which registers
+  to write, in which order, with which values; every register offset is resolved through
+  `gc_10_1_0_offset.h` by `SOC15_REG_OFFSET()`, so no address is typed here, and the host test then
+  asserts those resolved offsets against libdrm's literal numbers dword for dword.
+- The two magic dwords that cannot be derived from a header are marked as such in the source:
+  `COMPUTE_USER_DATA_3 = 0x1104BFAC` (the buffer resource's word 3, `shader_test_util.c:435`) and
+  `0x100000` OR-ed into the descriptor's high dword (`STRIDE = 16`, `:433`).
+
+The whole program is measured on this silicon before we emit it: fact M49 ran these 72 dwords and
+this shader on unit A under Linux, one workgroup and sixteen, with and without a kernel-prepended
+`ACQUIRE_MEM`, and all three filled their buffer
+(`evidence/linux/2026-09-21-E13-reference-2/boot4-readonly-after-windows/dispatch/`). That run went
+through an `INDIRECT_BUFFER` with VMID 2 and a user page table, so what remains untested by it, and
+ours to be right about, is the two things it could not exercise: submission straight into a
+kernel-owned compute ring, and VMID 0 with a GART address.
+
+Three deliberate departures from libdrm, each argued in the header comment of
+`driver/shim/include/bc250_dispatch.h`: the packets go straight into the compute ring rather than
+into an indirect buffer, both buffers are in GART rather than VRAM, and the cache handling that
+`amdgpu_ib_schedule()` would have supplied around an IB is emitted explicitly - an `ACQUIRE_MEM`
+copied from `gfx_v10_0_emit_mem_sync()` (`gfx_v10_0.c:9473-9494`) in front, and a
+`CS_PARTIAL_FLUSH` before the fence behind.
+
+No register the miniport writes is added by any of this: a dispatch is memory and one doorbell. The
+host test asserts that outright - `backend_write_count()` must be 0 across the whole submission - so
+`driver/kmd`'s allow-list needs no new entry for M6's dispatch.
 
 ### What the M6 host test can and cannot say
 

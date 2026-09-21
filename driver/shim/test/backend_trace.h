@@ -115,6 +115,20 @@ void backend_clear_aliases(void);
 typedef void (*backend_write_hook)(u32 byte_offset, u32 value);
 void backend_set_write_hook(backend_write_hook hook);
 
+/*
+ * The same, for reads. The hook is asked before the register file and answers by returning 1 and
+ * filling in *value; returning 0 leaves the read exactly as it would have been.
+ *
+ * It exists for one thing this file structurally cannot hold: a register whose value depends on
+ * which queue GRBM_GFX_CNTL has selected. There is one value per offset here, so the eight compute
+ * queues' CP_HQD_PQ_RPTR would be one register, and a test could not tell "the teardown zeroed all
+ * of them" from "the teardown zeroed one of them". backend_mem.c's MEC model already follows the
+ * selection, so it answers instead - and only for the queues it has actually seen a ring test run
+ * on, so a cold boot reads the seeded sweep value exactly as before.
+ */
+typedef int (*backend_read_hook)(u32 byte_offset, u32 *value);
+void backend_set_read_hook(backend_read_hook hook);
+
 /* Load the read values of a trace extract taken with `--reads`, so that the first read of a register
  * in the replayed window returns what unit A's hardware returned at that moment rather than what the
  * pre-driver sweep saw. Later reads come from the run's own writes, as they do on hardware.
