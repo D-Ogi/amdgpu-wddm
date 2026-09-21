@@ -1,6 +1,6 @@
 # E16: a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008)
 
-State: **run 001 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62); why is not known yet. The README above "Result" was written before the run.**
+State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), and it does so on the DRIVERCAPS answer, the only question it asks (M63). The README above "Result" was written before the runs.**
 
 ## Why
 
@@ -88,5 +88,27 @@ Evidence: `evidence/windows/2026-09-21-E16-run-001/` (README.txt has the timelin
   the one run the ring was built for left three breadcrumbs. Mądry Polak po szkodzie (a Pole is wise after the
   damage): 0.7.3 writes the ring to a file at the stop, behind its own gate, and logs what it answered, not only
   what it was asked.
+
+### Run 002 (2026-09-21, bc250kmd 0.7.3, plain package, same table and answers as 0.7.2)
+
+Evidence: `evidence/windows/2026-09-21-E16-run-002/` (README.txt has the timeline). Facts M61 (corrected), M63.
+
+- The procedure's lesson was applied: install, stage 61, confirm, and only then the gate. The failed start cost one
+  unit of the budget, not all of it.
+- The kept log works: two files, `KeepStatus` 0, one from the display-only instance stopped by the disable and one
+  from the full-table instance dxgkrnl refused.
+- **The refusal is an answer to DRIVERCAPS** (M63). After `DxgkDdiStartDevice` dxgkrnl asks one question,
+  `QueryAdapterInfo` type 1 into a 576-byte buffer, gets success, and stops the device 2 ms later. Nothing else of
+  the full table is ever entered. Four of the reviewer's seven suspects (a refused type, the segment table,
+  CreateContext, the root page table) are out: dxgkrnl never got that far.
+- Windows still gives no reason: both DxgKrnl event channels are enabled and empty.
+- M61 needed a correction: the POST display's `TargetId` is ours (`0x250001`) when the previous owner was a build
+  that fills it at release (0.7.2 and later), and `0xFFFFFFFF` otherwise. The rule for the driver is unchanged.
+- What is left is the content of the answer. Microsoft's WDDM 1.2 enforcement text says a full graphics driver that
+  claims WDDM 1.2 or later without every mandatory feature "will fail to create an adapter, and the system will
+  fall back to the Microsoft Basic Display Driver", which is this symptom to the letter; of the mandatory caps,
+  ours says no to per-engine TDR, DirectFlip and smooth rotation. A documented rule is not a measurement of what
+  this dxgkrnl checks: the next build changes the caps, and the kept log says whether dxgkrnl then asks a second
+  question.
 
 Run 2 (the UMD stub) waits until a plain full-table start survives.
