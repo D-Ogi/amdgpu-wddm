@@ -38,4 +38,5 @@ desktop, Basic Display driver: 73 C (Linux after the fan was flipped: 72 C at th
   tool that must stay out of the device stack, not for a product driver.
 - Banked registers are read in whatever bank `GRBM_GFX_INDEX` currently selects; selecting a bank is a
   write and this tool does not write.
-- Not yet run on hardware. Built and signed only.
+- Run on unit A: E02 run 001 (`evidence/windows/2026-09-21-E02-run-001/`). The temperature path was checked
+  for plausibility against the Linux readings only, not against an independent sensor at the same moment.
