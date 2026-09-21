@@ -69,6 +69,8 @@ display-only driver can own `1002:13FE` on unit A and keep the firmware's displa
   request returns `STATUS_INVALID_PARAMETER` from Basic Display and `STATUS_NOT_SUPPORTED` from the KMDOD
   sample on the same device (`evidence/windows/2026-09-21-escape-probe/`). Neither implements an escape of
   ours, so this does not answer the question; the M3 driver does.
+- It did (E06, facts M29): `D3DKMTEscape` reaches `DxgkDdiEscape` of our display-only driver. Escape is the
+  control channel for M4; no second control driver is needed.
 
 ## Consequences
 

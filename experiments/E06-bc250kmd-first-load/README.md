@@ -1,6 +1,6 @@
 # E06: first load of our own miniport (bc250kmd, milestone M3)
 
-State: **prepared, not run.**
+State: **run 001 done, H1-H4 hold, H5 answered: yes** (2026-09-21). Evidence: `evidence/windows/2026-09-21-E06-run-001/`.
 
 ## Why
 
@@ -53,6 +53,32 @@ e05_target.ps1 -Package C:\BC250\e06 -InfName bc250kmd.inf -Phase state|sweep|in
 6. Rollback unless everything holds; if everything holds the driver stays installed for M4 work and the
    rollback is proven once and the package installed again.
 
-## Result
+## Result (run 001)
 
-Not run yet.
+Before the load a second reader went through `driver/kmd` and found five things; four were fixed first
+(no uncached fallback when the write-combined mapping of the framebuffer is refused; `CommitVidPn` returned
+the success-severity `STATUS_GRAPHICS_MODE_NOT_PINNED` as if it were an error; presents were not tied to a
+validated commit, so a source surface of another size could have been read out of bounds; one field of the
+recommended monitor mode differed from the proven value). The fifth, that only user mode resets the start
+budget, is the design (ADR 0006 point 3) and stays; see the last row.
+
+No kernel debugger was attached (the debugger server had hung the development PC earlier that day, journal).
+
+| | Outcome |
+|---|---|
+| H1 install, no problem code, mode kept | **holds**: `pnputil /add-driver /install`, no reboot, `CM_PROB_NONE`, 1920x1200; the owner confirms the picture fills the panel |
+| H2 stages | **holds**: `LastStage` 61, history `10 20 30 31 32 33 34 39 50 60 61` after every start |
+| H3 no register change | **holds**: noise floor 9 registers (it was 36 before the side-effect registers left the allow-list), 0 outside it after the install |
+| H4 disable/enable, restart, budget, rollback | **holds**: both come back at stage 61; the restart ran at the edge of the budget (1 -> 2) and `bc250mon` confirmed it to 0 about a minute after the desktop; rollback returned Basic Display; the package was installed again and stays |
+| H5 escape | **yes**: `D3DKMTEscape` reaches `DxgkDdiEscape` of a display-only driver, `STATUS_SUCCESS`, data correct (facts M29). Escape is the control channel for M4 |
+
+Found on the way:
+
+- `bc250mon` confirms a start once per boot. A second start within the same boot (disable/enable, re-install)
+  stays unconfirmed until the next boot, so two device cycles in one boot would run into the guard. To change:
+  confirm again whenever stage 61 has been stable for 60 s.
+- The monitor process keeps the DPI it started with. After the driver switch Windows went from 200 % back to
+  100 % and captures came out as a quarter of a 3840x2400 canvas until the monitor was restarted.
+- `GRBM_READ_ERROR` still latches during a sweep (now with the address of `0x8090`, the register after the
+  excluded `GRBM_GFX_CNTL`), and it read 0 again at the start of the next sweep although nothing of ours
+  clears it. Which reads fault, and what clears the latch, is open.

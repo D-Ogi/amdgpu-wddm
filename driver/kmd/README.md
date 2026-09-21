@@ -1,7 +1,7 @@
 # driver/kmd: bc250kmd, the WDDM miniport
 
-State: **milestone M3 skeleton, builds, never loaded.** It is not installed on any machine until experiment
-E05 (Microsoft's known-good display-only sample on the same device) has run and ADR 0006 is accepted.
+State: **milestone M3 reached on unit A** (experiment E06, facts M28 and M29): the driver is installed on the
+lab machine and runs its display. The acceptance list below is met; escape reaches the driver.
 
 What it is (ADR 0006): a display-only miniport for `PCI\VEN_1002&DEV_13FE` that takes over the firmware's
 framebuffer through post-display ownership, offers exactly the mode the firmware left, and presents by CPU
