@@ -170,12 +170,17 @@ static NTSTATUS Access(_In_ const BC250_DEVICE* Device, ULONG Path, ULONGLONG Of
 
     if (Write)
     {
+        // Under the full table the test window belongs to VidMm's segment like everything else between the
+        // framebuffer and the reserved tail: a test write there would land in somebody's allocation.
+        if (Device->FullWddm) return STATUS_ACCESS_DENIED;
         if (Offset < BC250_VRAM_TEST_OFFSET || Offset >= BC250_VRAM_TEST_OFFSET + BC250_VRAM_TEST_LENGTH) return STATUS_ACCESS_DENIED;
         if (!VramFramebufferOffset(Device, &fbOffset) ||
             Overlaps(fbOffset, Device->FramebufferLength, BC250_VRAM_TEST_OFFSET, BC250_VRAM_TEST_LENGTH)) return STATUS_ACCESS_DENIED;
     }
-    else if (Offset >= Device->Bar0Length && Offset < Device->VramLength - BC250_VRAM_TOP_WINDOW)
+    else if (!Device->FullWddm && Offset >= Device->Bar0Length && Offset < Device->VramLength - BC250_VRAM_TOP_WINDOW)
     {
+        // "Until somebody needs it" has come for the full table: VidMm puts process page tables at the top of its
+        // segment, 8 GB above BAR0's reach, and E18's witness reads them by physical address. Reads only.
         return STATUS_ACCESS_DENIED;
     }
 

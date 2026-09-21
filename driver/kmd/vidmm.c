@@ -45,6 +45,24 @@ static BC250_VIDMM g_VidMm;
 // (bc250_pte.h question 3; the GPU virtual address page of the WDK documentation).
 static enum bc250_pte_kind VidMmKind(UINT Level) { return Level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY; }
 
+// One past the highest byte of RAM the OS owns: a host page named above that is refused, not translated. 0 (do not
+// check) if the OS will not say. PASSIVE_LEVEL.
+static ULONGLONG VidMmSystemLimit(void)
+{
+    PPHYSICAL_MEMORY_RANGE ranges = MmGetPhysicalMemoryRanges();
+    ULONGLONG limit = 0;
+    ULONG i;
+
+    if (ranges == NULL) return 0;
+    for (i = 0; ranges[i].BaseAddress.QuadPart != 0 || ranges[i].NumberOfBytes.QuadPart != 0; i++)
+    {
+        ULONGLONG end = (ULONGLONG)ranges[i].BaseAddress.QuadPart + (ULONGLONG)ranges[i].NumberOfBytes.QuadPart;
+        if (end > limit) limit = end;
+    }
+    ExFreePool(ranges);
+    return limit;
+}
+
 void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId)
 {
     RtlZeroMemory(&g_VidMm, sizeof(g_VidMm));
@@ -63,11 +81,11 @@ void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGL
     // vram_base_offset is the FB offset register, which is what vram.c keeps as VramPhysical.
     g_VidMm.Pte.vram_base = g_VidMm.SegmentPhysical;
     g_VidMm.Pte.vram_size = SegmentLength;
-    g_VidMm.Pte.system_limit = 0;
+    g_VidMm.Pte.system_limit = VidMmSystemLimit();
     g_VidMm.Ready = TRUE;
     g_VidMm.Write = (GuardReadSetting(L"EnableGpuVa", 0) == 1) && Device->VramWriteEnabled;
-    GuardLog("vidmm: segment %u at physical 0x%llX + 0x%llX, page table updates are %s", VramSegmentId,
-             g_VidMm.SegmentPhysical, SegmentLength, g_VidMm.Write ? "WRITTEN" : "planned only (EnableGpuVa closed)");
+    GuardLog("vidmm: segment %u at physical 0x%llX + 0x%llX, host memory below 0x%llX, updates are %s", VramSegmentId,
+             g_VidMm.SegmentPhysical, SegmentLength, g_VidMm.Pte.system_limit, g_VidMm.Write ? "WRITTEN" : "planned only (EnableGpuVa closed)");
 }
 
 void VidMmStop(void)
