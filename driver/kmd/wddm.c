@@ -639,7 +639,15 @@ void WddmStart(_Inout_ BC250_DEVICE* Device)
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
     KeInitializeTimerEx(&wddm->VSyncTimer, SynchronizationTimer);
-    wddm->VSyncTargetId = Device->Post.TargetId;    // the target dxgkrnl named when it handed us the POST display
+    // The one target this driver has. Every VidPN target is a child's UID and Bc250QueryChildRelations reports
+    // exactly one child, so this is the only id a CRTC_VSYNC report or a GetScanLine question can carry. 0.7.1
+    // took Post.TargetId here, which is whatever the previous owner of the display called its target, and
+    // D3DDDI_ID_UNINITIALIZED after a driver reload (E16 step 1: "target 4294967295"): every VSync report would
+    // have named a target that does not exist, no flip would have retired, and the run would have measured that.
+    wddm->VSyncTargetId = BC250_CHILD_UID;
+    if (Device->Post.TargetId != BC250_CHILD_UID)
+        GuardLog("wddm: POST display target %u is not ours, vsync reports name child 0x%X",
+                 (ULONG)Device->Post.TargetId, (ULONG)BC250_CHILD_UID);
     wddm->VSyncLast = KeQueryPerformanceCounter(&wddm->VSyncFrequency);
     Device->Wddm = wddm;
     GuardLog("wddm: full table started, VRAM %s", Device->VramEnabled ? "identified" : "unknown (EnableVram closed)");

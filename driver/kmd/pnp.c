@@ -125,8 +125,11 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
-    UNREFERENCED_PARAMETER(TargetId);
+    // The mode is the one we were given; the target is the one dxgkrnl is releasing now. Post.TargetId is the
+    // previous owner's name for it, or D3DDDI_ID_UNINITIALIZED after a reload (E16 step 1), and means nothing to
+    // the next owner.
     *DisplayInfo = device->Post;
+    DisplayInfo->TargetId = TargetId;
     return Bc250StopDevice(MiniportDeviceContext);
 }
 
