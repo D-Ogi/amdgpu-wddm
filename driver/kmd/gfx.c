@@ -129,6 +129,7 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
     RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
+    RtlZeroMemory(Gfx->RingOwesSlot, sizeof(Gfx->RingOwesSlot));
     if (Gfx->Dispatch) { bc250_gfx_dispatch_teardown(Adev); Gfx->Dispatch = FALSE; }
     bc250_sdma_teardown(Adev);
     bc250_gfx_teardown(Adev);
@@ -366,13 +367,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             result = bc250_gfx_fence_page_alloc(adev);
             if (result == 0) gfx->FencePage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
         }
-        if (NT_SUCCESS(status) && dispatch)
-        {
-            // Its own two allocations (the shader, 256-byte aligned, and the destination), seeded again before every run.
-            result = bc250_gfx_dispatch_setup(adev);
-            if (result == 0) { gfx->Dispatch = TRUE; result = bc250_gfx_dispatch_reseed(adev); }
-            if (result != 0) status = STATUS_INSUFFICIENT_RESOURCES;
-        }
+        // Before the dispatch's reseed: a refused call must leave the destination as the pending dispatch may still fill it.
         if (NT_SUCCESS(status) && gfx->RingOwes[Data->Ring] != 0)
         {
             ULONG owedSlot = gfx->RingOwesSlot[Data->Ring];
@@ -386,6 +381,13 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
                 result = -16;
                 status = STATUS_DEVICE_BUSY;
             }
+        }
+        if (NT_SUCCESS(status) && dispatch)
+        {
+            // Its own two allocations (the shader, 256-byte aligned, and the destination), seeded again before every run.
+            result = bc250_gfx_dispatch_setup(adev);
+            if (result == 0) { gfx->Dispatch = TRUE; result = bc250_gfx_dispatch_reseed(adev); }
+            if (result != 0) status = STATUS_INSUFFICIENT_RESOURCES;
         }
         start = KeQueryPerformanceCounter(NULL);
         if (NT_SUCCESS(status) && dispatch)
