@@ -85,7 +85,13 @@ Evidence: `evidence/linux/2026-09-21-E13-reference-2/` (redacted with `redact.py
   compute queue 0 has pipe priority 2 and queue priority 15, the others 0 and 0. Not expected: a thirteenth active HQD
   (me 2 pipe 0 queue 0), which is amdkfd's HIQ (dmesg: "kfd kfd: amdgpu: added device 1002:13fe").
 - **H4 holds for the interrupt half** (facts M40): 12 fences, 12 interrupts, 12 vectors, the same client, source and
-  ring ids in all three boots. This is what E12 part C compares against. The packet half (the fence packets in the
-  ring dumps against `bc250_gfx_emit_fence()`) is not evaluated yet; the dumps are in `boot*/rings-after-ib/`.
+  ring ids in all three boots. This is what E12 part C compares against. **The packet half holds too** (checked by
+  the shim's author against `boot3-readonly/rings-after-ib/`): on the gfx ring and all eight compute rings amdgpu's
+  fence is the 8-dword `RELEASE_MEM` `c0064900 06603514 22000000 <addr> 0 <seq> 0 0`, on the KIQ the 5-dword
+  `WRITE_DATA` `c0033700 00100500 <addr> 0 <seq>`, followed for an interrupt by `c0033700 00100000 000030b5 0
+  20000000` (a write to `CPC_INT_STATUS`), word for word what `bc250_gfx_emit_fence()` builds; the ring ids decode
+  with `gfx_v10_0_eop_irq`'s fields to exactly the eight compute queues, and 9 to the KIQ's me 2 pipe 1 queue 0.
+  Found on the way: the shim has no SDMA fence yet (reference: `00030005 <addr lo> <addr hi> <seq>`, then the trap
+  `00000006 00000000`), and the host test's CP stub did not check the literal control words (being tightened).
 - amdgpu uses MSI-X here (3 entries, one used); Windows gives our miniport MSI with one message (M38).
 - **`modprobe -r amdgpu` hung the machine** (facts M42, n = 1): no reference for the teardown; wishlist L17.
