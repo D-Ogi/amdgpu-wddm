@@ -61,6 +61,7 @@ typedef struct _BC250_DEVICE {
     volatile ULONG* Mmio;
     PHYSICAL_ADDRESS MmioPhysical;
     BOOLEAN MmioWriteEnabled;
+    BOOLEAN MmioGartEnabled;
 
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
@@ -70,6 +71,9 @@ typedef struct _BC250_DEVICE {
     ULONGLONG VramMcBase;               // GPU physical (MC) address of VRAM byte 0
     PHYSICAL_ADDRESS Bar0Physical;
     ULONGLONG Bar0Length;
+
+    PVOID Gart;                         // gart.c, NULL unless the EnableGart gate was open at start
+    FAST_MUTEX GartLock;                // serializes the GART command and the stop; initialized in AddDevice
 } BC250_DEVICE;
 
 // guard.c
@@ -86,12 +90,21 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device);
 void MmioStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 NTSTATUS MmioWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+NTSTATUS MmioGartRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
+NTSTATUS MmioGartWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+ULONG MmioGartTable(_Outptr_ const unsigned long** Table);
 
 // vram.c
 struct _BC250_ESCAPE_MEMORY;
 NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device);
 void VramStop(_Inout_ BC250_DEVICE* Device);
 void VramEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_MEMORY* Data);
+
+// gart.c
+struct _BC250_ESCAPE_GART;
+NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device);
+void GartStop(_Inout_ BC250_DEVICE* Device);
+void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GART* Data);
 
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;

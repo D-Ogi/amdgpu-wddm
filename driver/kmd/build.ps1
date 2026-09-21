@@ -30,13 +30,21 @@ function Invoke-Tool([string]$exe, [string[]]$argv) {
 
 $env:INCLUDE = ''; $env:LIB = ''
 $sources = (Get-ChildItem (Join-Path $here '*.c')).FullName
+# M4: AMD's imported hub code and the shim it compiles against (ADR 0002). Same flags; the imports get the two
+# warning disables documented in driver\shim\README.md, from the build line, never by editing them.
+$repo = Split-Path (Split-Path $here)
+$shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", '/DBC250_SHIM_KERNEL')
+$shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c")
+$importSources = (Get-ChildItem "$repo\driver\amdgpu-import\*.c").FullName
 Write-Host 'compile'
-Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
+$clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\um",
-    "/Fo$obj\", "/Fd$obj\cl.pdb") + $sources)
+    "/Fo$obj\", "/Fd$obj\cl.pdb")
+Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
+Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244', '/wd4701') + $importSources)
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",

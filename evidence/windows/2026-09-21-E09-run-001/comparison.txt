@@ -1,0 +1,71 @@
+== plan vs amdgpu trace (exit 0)
+driver: 285 writes   trace: 351 writes in the step
+  [11] GC.GCMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB: 0046FF00 instead of amdgpu's 002708C9: our own page, as computed
+  [13] GC.GCVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32: 0026FFFA instead of amdgpu's 0007E3C1: our own page, as computed
+  [151] MMHUB.MMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB: 0046FF00 instead of amdgpu's 002708C9: our own page, as computed
+  [153] MMHUB.MMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32: 0026FFFA instead of amdgpu's 0007E3C1: our own page, as computed
+trace writes after the compared prefix: 66, of which not invalidation protocol: 0
+verdict: MATCH (0 unexplained, 4 own-address values)
+
+== executed writes vs amdgpu trace (exit 0)
+driver: 285 writes   trace: 351 writes in the step
+  [11] GC.GCMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB: 0046FF00 instead of amdgpu's 002708C9: our own page, as computed
+  [13] GC.GCVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32: 0026FFFA instead of amdgpu's 0007E3C1: our own page, as computed
+  [151] MMHUB.MMMC_VM_SYSTEM_APERTURE_DEFAULT_ADDR_LSB: 0046FF00 instead of amdgpu's 002708C9: our own page, as computed
+  [153] MMHUB.MMVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32: 0026FFFA instead of amdgpu's 0007E3C1: our own page, as computed
+trace writes after the compared prefix: 66, of which not invalidation protocol: 0
+verdict: MATCH (0 unexplained, 4 own-address values)
+
+== after the plan: nothing changed (exit 0)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000009C -> 0000009D
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+step registers: 282  as firmware: 282
+noise set: 5 registers; changed outside the step and outside noise: 0
+verdict: AS EXPECTED (expect firmware)
+
+== enabled (exit 0)
+  note GC.GCVM_L2_CNTL2: wrote 00000003, reads 00000000, and so it does under Linux after init
+  note MMHUB.MMVM_L2_CNTL2: wrote 00000003, reads 00000000, and so it does under Linux after init
+  hardware response GC.SDMA0_UTCL1_INV0: 00000800 -> 01000800, the value Linux shows after init
+  hardware response GC.SDMA1_UTCL1_INV0: 00000800 -> 01000800, the value Linux shows after init
+  invalidation protocol GC.GCVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001 (Linux after init: 00F80001)
+  invalidation protocol GC.GCVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001 (Linux after init: 00010001)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000009C -> 0000009F
+  invalidation protocol MMHUB.MMVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001 (Linux after init: 00F80001)
+  invalidation protocol MMHUB.MMVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001 (Linux after init: 00010001)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+step registers: 282  as written: 272  as Linux after init: 2  own address: 8
+noise set: 5 registers; changed outside the step and outside noise: 0
+verdict: AS EXPECTED (expect written)
+
+== after restore (exit 0)
+  hardware response GC.SDMA0_UTCL1_INV0: 00000800 -> 01000800, the value Linux shows after init
+  hardware response GC.SDMA1_UTCL1_INV0: 00000800 -> 01000800, the value Linux shows after init
+  invalidation protocol GC.GCVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001 (Linux after init: 00F80001)
+  invalidation protocol GC.GCVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001 (Linux after init: 00010001)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000009C -> 000000A1
+  invalidation protocol MMHUB.MMVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001 (Linux after init: 00F80001)
+  invalidation protocol MMHUB.MMVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001 (Linux after init: 00010001)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+step registers: 282  as firmware: 282
+noise set: 5 registers; changed outside the step and outside noise: 0
+residue: 6 registers keep the record that an invalidation ran (last request, acknowledge, SDMA's invalidation status); they cannot be written back; the lines above show them next to the values Linux has after init
+verdict: AS EXPECTED (expect firmware)
+
+== after a device stop with GART enabled (exit 0)
+  hardware response GC.SDMA0_UTCL1_INV0: 00000800 -> 01000800, the value Linux shows after init
+  hardware response GC.SDMA1_UTCL1_INV0: 00000800 -> 01000800, the value Linux shows after init
+  invalidation protocol GC.GCVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001 (Linux after init: 00F80001)
+  invalidation protocol GC.GCVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001 (Linux after init: 00010001)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000009C -> 000000A2
+  invalidation protocol MMHUB.MMVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001 (Linux after init: 00F80001)
+  invalidation protocol MMHUB.MMVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001 (Linux after init: 00010001)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+step registers: 282  as firmware: 282
+noise set: 5 registers; changed outside the step and outside noise: 0
+residue: 6 registers keep the record that an invalidation ran (last request, acknowledge, SDMA's invalidation status); they cannot be written back; the lines above show them next to the values Linux has after init
+verdict: AS EXPECTED (expect firmware)

@@ -5,6 +5,8 @@
 //   <service key>\Parameters
 //     EnableMmio       REG_DWORD  1 = map BAR5 at start and allow READ_REG escapes. Default 0.
 //     EnableMmioWrite  REG_DWORD  1 = also allow WRITE_REG escapes to g_MmioWriteAllow. Default 0.
+//     EnableGart       REG_DWORD  1 = also allow the GART command of gart.c its own table, g_MmioGartAllow,
+//                                 which no escape can reach register by register. Default 0.
 //
 // Both are read once per start. A read of a wrong BAR5 address can hang this SoC (facts M16) and some reads
 // change state (facts M25), hence a table for reads as well.
@@ -70,6 +72,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
 
     Device->Mmio = NULL;
     Device->MmioWriteEnabled = FALSE;
+    Device->MmioGartEnabled = FALSE;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);
@@ -86,6 +89,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     }
     Device->MmioPhysical = start;
     Device->MmioWriteEnabled = (GuardReadSetting(L"EnableMmioWrite", 0) == 1);
+    Device->MmioGartEnabled = (GuardReadSetting(L"EnableGart", 0) == 1);
     GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
@@ -95,6 +99,7 @@ void MmioStop(_Inout_ BC250_DEVICE* Device)
     if (Device->Mmio != NULL) MmUnmapIoSpace((PVOID)Device->Mmio, BC250_BAR5_LENGTH);
     Device->Mmio = NULL;
     Device->MmioWriteEnabled = FALSE;
+    Device->MmioGartEnabled = FALSE;
 }
 
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
@@ -114,4 +119,34 @@ NTSTATUS MmioWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
         return STATUS_ACCESS_DENIED;
     WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
     return STATUS_SUCCESS;
+}
+
+// The GART command's registers (gart.c). Reads: its own table, which holds two registers that are on no other
+// list because reading them is part of a protocol (the MMHUB invalidation semaphore, facts M25), or the general
+// read table. Writes: its own table only.
+NTSTATUS MmioGartRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
+{
+    *Value = 0;
+    if (Device->Mmio == NULL || !Device->MmioGartEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH ||
+        (!InTable(g_MmioGartAllow, BC250_MMIO_GART_ALLOW_COUNT, Offset) && !InTable(g_MmioReadAllow, BC250_MMIO_READ_ALLOW_COUNT, Offset)))
+        return STATUS_ACCESS_DENIED;
+    *Value = READ_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4]);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS MmioGartWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    if (Device->Mmio == NULL || !Device->MmioGartEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioGartAllow, BC250_MMIO_GART_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
+    return STATUS_SUCCESS;
+}
+
+// For gart.c's snapshot: the table itself.
+ULONG MmioGartTable(_Outptr_ const unsigned long** Table)
+{
+    *Table = g_MmioGartAllow;
+    return BC250_MMIO_GART_ALLOW_COUNT;
 }

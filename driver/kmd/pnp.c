@@ -10,6 +10,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     if (device == NULL) return STATUS_INSUFFICIENT_RESOURCES;
     device->PhysicalDeviceObject = PhysicalDeviceObject;
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
+    ExInitializeFastMutex(&device->GartLock);
     *MiniportDeviceContext = device;
     return STATUS_SUCCESS;
 }
@@ -70,6 +71,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
     VramStart(device);      // same rule
+    GartStart(device);      // same rule
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
@@ -94,6 +96,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
     device->CommitSeen = FALSE;
     device->PresentSeen = FALSE;
+    GartStop(device);       // while the registers are still mapped: it may have a state to give back
     VramStop(device);
     MmioStop(device);
     DisplayUnmapFramebuffer(device);

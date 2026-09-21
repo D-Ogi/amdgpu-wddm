@@ -11,7 +11,8 @@
 #define BC250_ESCAPE_GET_MEMORY 4u          // BC250_ESCAPE_MEMORY out: where the framebuffer, BAR0 and the VRAM carve-out are
 #define BC250_ESCAPE_VRAM_READ 5u           // BC250_ESCAPE_MEMORY in: Path, Offset; out: Value
 #define BC250_ESCAPE_VRAM_WRITE 6u          // BC250_ESCAPE_MEMORY in: Path, Offset, Value; out: Value read back
-#define BC250_KMD_VERSION 0x00040002u       // milestone 4 work, revision 2
+#define BC250_ESCAPE_RUN_GART 7u            // BC250_ESCAPE_GART in: Op; out: what the sequence wrote (or would write)
+#define BC250_KMD_VERSION 0x00040003u       // milestone 4 work, revision 3
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -22,6 +23,7 @@
 #define BC250_ESCAPE_FLAG_MMIO_WRITE 2u
 #define BC250_ESCAPE_FLAG_VRAM 4u           // the EnableVram gate was open at start and the carve-out was identified
 #define BC250_ESCAPE_FLAG_VRAM_WRITE 8u
+#define BC250_ESCAPE_FLAG_GART 16u          // the EnableGart gate was open at start
 
 // The two independent ways to the same VRAM byte (vram.c).
 #define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
@@ -60,3 +62,28 @@ typedef struct _BC250_ESCAPE_MEMORY {
     unsigned long long VramMcBase;          // out: GPU physical (MC) address of VRAM byte 0
     unsigned long long TestOffset, TestLength;      // out: the only window VRAM_WRITE accepts
 } BC250_ESCAPE_MEMORY;
+
+// The GART command (gart.c). PLAN executes no write; ENABLE and RESTORE do.
+#define BC250_GART_OP_PLAN 0u
+#define BC250_GART_OP_ENABLE 1u
+#define BC250_GART_OP_RESTORE 2u
+#define BC250_GART_STATE_ENABLED 1u         // the sequence has been run and not restored
+#define BC250_GART_STATE_SNAPSHOT 2u        // the firmware's register state is held for RESTORE
+#define BC250_GART_MAX_WRITES 512
+
+typedef struct _BC250_ESCAPE_GART {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_GART
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Op;                       // in: BC250_GART_OP_*
+    long Result;                            // out: return code of the imported sequence (0, or -62 for a poll timeout)
+    unsigned long FaultOffset;              // out: the first register the driver's table refused, 0 if none
+    unsigned long State;                    // out: BC250_GART_STATE_*
+    unsigned long WriteCount;               // out: writes the sequence issued; the first BC250_GART_MAX_WRITES are listed
+    unsigned long Reserved;
+    unsigned long long TablePhysical, TableMc, ScratchMc, DummyPhysical;
+    struct { unsigned long Offset, Value; } Writes[BC250_GART_MAX_WRITES];
+} BC250_ESCAPE_GART;

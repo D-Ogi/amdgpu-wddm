@@ -417,6 +417,46 @@ static int VramCompare(const WCHAR *offsetText, const WCHAR *countText)
     return same == count ? 0 : 4;
 }
 
+// ---- gart: the M4 sequence (experiment E09) ---------------------------------------------------------------------
+//
+// plan executes no write: the driver runs AMD's imported sequence against the real registers and returns what
+// it would write. enable runs it; restore writes the firmware's state back. Output: one "W <offset> <value>"
+// line per write, which experiments/E09-*/compare_plan.py compares with amdgpu's trace.
+
+static int Gart(const WCHAR *opText)
+{
+    static BC250_ESCAPE_GART g;
+    NTSTATUS status;
+
+    memset(&g, 0, sizeof(g));
+    g.Magic = BC250_ESCAPE_MAGIC;
+    g.Command = BC250_ESCAPE_RUN_GART;
+    if (!_wcsicmp(opText, L"plan")) g.Op = BC250_GART_OP_PLAN;
+    else if (!_wcsicmp(opText, L"enable")) g.Op = BC250_GART_OP_ENABLE;
+    else if (!_wcsicmp(opText, L"restore")) g.Op = BC250_GART_OP_RESTORE;
+    else { fprintf(stderr, "gart plan | enable | restore, not %ls\n", opText); return 2; }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &g, sizeof(g), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (g.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (g.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no GART command\n"); return 3; }
+
+    printf("gart %ls: %s, NTSTATUS 0x%08lX %s, sequence result %ld, %lu writes%s\n", opText,
+           g.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", g.NtStatus, StatusName((NTSTATUS)g.NtStatus), g.Result,
+           g.WriteCount, g.Op == BC250_GART_OP_PLAN ? " planned, none executed" : " executed");
+    printf("gates        mmio %s, vram %s, gart %s\n", (g.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
+           (g.Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed", (g.Flags & BC250_ESCAPE_FLAG_GART) ? "open" : "closed");
+    if (g.FaultOffset) printf("fault        register 0x%05lX was refused by the driver's table; the sequence stopped there\n", g.FaultOffset);
+    printf("state        %s, snapshot %s\n", (g.State & BC250_GART_STATE_ENABLED) ? "ENABLED" : "not enabled",
+           (g.State & BC250_GART_STATE_SNAPSHOT) ? "held" : "none");
+    printf("table        physical 0x%llX, MC 0x%llX\n", g.TablePhysical, g.TableMc);
+    printf("scratch      MC 0x%llX\n", g.ScratchMc);
+    printf("dummy page   physical 0x%llX\n", g.DummyPhysical);
+    for (unsigned long i = 0; i < g.WriteCount && i < BC250_GART_MAX_WRITES; i++)
+        printf("W 0x%05lX %08lX\n", g.Writes[i].Offset, g.Writes[i].Value);
+    return g.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -508,6 +548,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
+                        "       bc250kmd_cli gart plan | enable | restore\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -521,6 +562,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"vread") && argc == 4) return VramWord(0, argv[2], argv[3], NULL);
     if (!_wcsicmp(argv[1], L"vwrite") && argc == 5) return VramWord(1, argv[2], argv[3], argv[4]);
     if (!_wcsicmp(argv[1], L"vcompare") && argc == 4) return VramCompare(argv[2], argv[3]);
+    if (!_wcsicmp(argv[1], L"gart") && argc == 3) return Gart(argv[2]);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }

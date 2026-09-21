@@ -1,6 +1,6 @@
 # driver/kmd: bc250kmd, the WDDM miniport
 
-State: **milestone M3 reached on unit A** (experiment E06, facts M28 and M29): the driver is installed on the
+State: **milestones M3 and M4 reached on unit A** (experiment E06, facts M28 and M29): the driver is installed on the
 lab machine and runs its display. The acceptance list below is met; escape reaches the driver.
 
 What it is (ADR 0006): a display-only miniport for `PCI\VEN_1002&DEV_13FE` that takes over the firmware's
@@ -16,6 +16,7 @@ the documented DDI; no code from Microsoft's MS-PL sample.
 | `display.c` | VidPN (one source, one target, one mode, identity only), `PresentDisplayOnly`, bugcheck display, the escape query |
 | `guard.c` | boot-loop guard, stage breadcrumbs in the registry, log |
 | `mmio.c`, `gen_regs.py`, `regs.generated.h` | BAR5 behind `EnableMmio` / `EnableMmioWrite`; every access checked against tables generated through regcalc (E07) |
+| `gart.c` | M4: kernel backend of `driver/shim` and the GART command (plan, enable, restore) around AMD's imported hub code, behind `EnableGart`; registers through a table generated from amdgpu's own trace of the step (E09) |
 | `vram.c` | the VRAM carve-out by system physical address and through BAR0, behind `EnableVram` / `EnableVramWrite`; one page per access, writes only in a test page (E08) |
 | `bc250kmd_escape.h` | private escape data shared with lab tools |
 | `bc250kmd.inf`, `build.ps1` | package and build (direct `cl`/`link`, `/W4 /WX`, test-signed) |

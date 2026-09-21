@@ -7,6 +7,9 @@ Nobody types an offset (docs/02-register-addressing.md). Two tables come out of 
                     registers that were read on unit A without harm and without side effects (facts M16, M25)
   g_MmioWriteAllow  the offsets the escape WRITE_REG may write. A register gets onto WRITABLE below by an
                     experiment that says why, never by convenience.
+  g_MmioGartAllow   the offsets the kernel's GART command (gart.c) may touch, and nobody else: exactly the
+                    registers amdgpu itself wrote on unit A during that step of its init, taken from the
+                    recorded trace (E03), plus the two acknowledge registers it polled. Not chosen by us.
 
 Run:  python driver/kmd/gen_regs.py
 """
@@ -19,8 +22,18 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "regcalc"))
 sys.path.insert(0, str(ROOT / "tools" / "diagusb"))
+sys.path.insert(0, str(ROOT / "tools" / "trace"))
 from regcalc import HDR_DIR, RegMap  # noqa: E402
 from gen_probes import SPEC  # noqa: E402  (ip -> header)
+from extract_phase import accesses  # noqa: E402
+
+TRACE = ROOT / "evidence/linux/2026-09-21-E03-init-trace/amdgpu-events.txt"
+# (table, experiment, regex on traced register names, end of the step in seconds since the first access,
+#  registers the step only reads). gmc_v10_0_gart_enable() is over at 0.26 s (docs/init-sequence.md).
+SEQUENCES = [
+    ("Gart", "E09", r"^(GC\.(GCVM|GCMC)|MMHUB\.(MMVM|MMMC))", 0.26,
+     [("GC", "mmGCVM_INVALIDATE_ENG17_ACK"), ("MMHUB", "mmMMVM_INVALIDATE_ENG17_ACK")]),
+]
 
 # (ip, register, experiment that put it here, why it is safe)
 WRITABLE = [
@@ -72,9 +85,30 @@ def main():
             f"#define BC250_MMIO_READ_ALLOW_COUNT {len(reads)}",
             "static const unsigned long g_MmioReadAllow[BC250_MMIO_READ_ALLOW_COUNT] = {"]
     out += ["    " + ", ".join(f"0x{o:05X}" for o in reads[i:i + 10]) + "," for i in range(0, len(reads), 10)]
-    out += ["};", "", "#endif", ""]
+    out += ["};", ""]
+    summary = []
+    for table, exp, match, until, read_only in SEQUENCES:
+        entries = {}
+        for _, kind, name, off, _ in accesses(TRACE, match, until=until):
+            ip, reg = name.split(".", 1)
+            if offset(maps, ip, "mm" + reg) != off:
+                sys.exit(f"{name}: the trace has 0x{off:05X}, regcalc says 0x{offset(maps, ip, 'mm' + reg):05X}")
+            entries[off] = name
+        for ip, reg in read_only:
+            entries[offset(maps, ip, reg)] = f"{ip}.{reg[2:]} (read only)"
+        if max(entries) >= BAR5_LENGTH:
+            sys.exit(f"{table}: 0x{max(entries):X} is beyond BAR5")
+        out += [f"// {exp}: what amdgpu wrote on unit A in this step (E03 trace, first {until} s, names matching",
+                f"// {match}), plus the registers it only polled. For the kernel command alone.",
+                f"#define BC250_MMIO_{table.upper()}_ALLOW_COUNT {len(entries)}",
+                f"static const unsigned long g_Mmio{table}Allow[BC250_MMIO_{table.upper()}_ALLOW_COUNT] = {{"]
+        out += [f"    0x{off:05X}ul,   // {entries[off]}" for off in sorted(entries)]
+        out += ["};", ""]
+        summary.append(f"{len(entries)} in the {table} sequence")
+    out += ["#endif", ""]
     (HERE / "regs.generated.h").write_text("\n".join(out), encoding="utf-8", newline="\n")
-    print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes))
+    print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes)
+          + "; " + ", ".join(summary))
 
 
 if __name__ == "__main__":
