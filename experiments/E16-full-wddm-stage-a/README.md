@@ -144,4 +144,19 @@ Evidence: `evidence/windows/2026-09-21-E16-run-003/` (README.txt has the timelin
 - H1 extended: the display-only table starts normally (stage 61) with a `UserModeDriverName` in the key.
 - The way back worked a third time. 67.8 C before and after.
 
-Run 004 is 0.7.4 (see "Added after run 002" above) on the UMD stub package.
+### Run 004 (2026-09-21, bc250kmd 0.7.4 as the UMD stub package 0.7.4.1)
+
+Evidence: `evidence/windows/2026-09-21-E16-run-004/` (README.txt has the timeline). Fact M65.
+
+- H8's cure worked as far as it goes: dxgkrnl no longer stops after the adapter queries. It accepts DRIVERCAPS,
+  the GPU MMU caps, four page table levels, the node, the segment over the real carve-out, and begins to build:
+  system process, two system devices, the system context. **H2's first half is now observed** (the
+  `QueryAdapterInfo` sequence and `CreateDevice`/`CreateContext` for the system's own contexts).
+- Then it takes all of it down again, in order, and stops the device: `CM_PROB_FAILED_POST_START` a fourth time,
+  6 ms after the start. No root page table was ever asked for, no allocation created, no VidPN call made. The log
+  cannot say which check ended it; the next reading of dxgkrnl/dxgmms2 starts at the return of `CreateContext`.
+- Several changes went into 0.7.4 at once, so the run supports M64's predictions without isolating any of them.
+  Deliberate: each refusal costs a driver reload on a machine whose M.2 link is moody, and the offline reading
+  had already named them. Co nagle, to po diable (what is done in haste is of the devil) - but four reloads for
+  four one-line fixes would not have been virtue either.
+- H4 so far: no TDR, no bugcheck, no live report in any of the four runs. The way back worked a fourth time.
