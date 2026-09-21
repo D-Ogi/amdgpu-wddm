@@ -1,0 +1,84 @@
+{
+ "generated_by": "experiments/E17-linux-reference-3/gen_pte_bits.py",
+ "sources": {
+  "vm_h": "ref\\linux-src\\drivers\\gpu\\drm\\amd\\amdgpu\\amdgpu_vm.h",
+  "gmc_c": "ref\\linux-src\\drivers\\gpu\\drm\\amd\\amdgpu\\gmc_v10_0.c",
+  "enum_h": "bc250-win\\third_party\\linux-amdgpu\\navi10_enum.h"
+ },
+ "bits": {
+  "AMDGPU_PTE_VALID": 0,
+  "AMDGPU_PTE_SYSTEM": 1,
+  "AMDGPU_PTE_SNOOPED": 2,
+  "AMDGPU_PTE_TMZ": 3,
+  "AMDGPU_PTE_EXECUTABLE": 4,
+  "AMDGPU_PTE_READABLE": 5,
+  "AMDGPU_PTE_WRITEABLE": 6,
+  "AMDGPU_PTE_PRT": 51,
+  "AMDGPU_PDE_PTE": 54,
+  "AMDGPU_PTE_LOG": 55,
+  "AMDGPU_PTE_TF": 56,
+  "AMDGPU_PTE_NOALLOC": 58
+ },
+ "bit_cites": {
+  "AMDGPU_PTE_VALID": "amdgpu_vm.h:57",
+  "AMDGPU_PTE_SYSTEM": "amdgpu_vm.h:58",
+  "AMDGPU_PTE_SNOOPED": "amdgpu_vm.h:59",
+  "AMDGPU_PTE_TMZ": "amdgpu_vm.h:62",
+  "AMDGPU_PTE_EXECUTABLE": "amdgpu_vm.h:65",
+  "AMDGPU_PTE_READABLE": "amdgpu_vm.h:67",
+  "AMDGPU_PTE_WRITEABLE": "amdgpu_vm.h:68",
+  "AMDGPU_PTE_PRT": "amdgpu_vm.h:73",
+  "AMDGPU_PDE_PTE": "amdgpu_vm.h:76",
+  "AMDGPU_PTE_LOG": "amdgpu_vm.h:78",
+  "AMDGPU_PTE_TF": "amdgpu_vm.h:81",
+  "AMDGPU_PTE_NOALLOC": "amdgpu_vm.h:84"
+ },
+ "order": [
+  "AMDGPU_PTE_VALID",
+  "AMDGPU_PTE_SYSTEM",
+  "AMDGPU_PTE_SNOOPED",
+  "AMDGPU_PTE_TMZ",
+  "AMDGPU_PTE_EXECUTABLE",
+  "AMDGPU_PTE_READABLE",
+  "AMDGPU_PTE_WRITEABLE",
+  "AMDGPU_PTE_PRT",
+  "AMDGPU_PDE_PTE",
+  "AMDGPU_PTE_LOG",
+  "AMDGPU_PTE_TF",
+  "AMDGPU_PTE_NOALLOC"
+ ],
+ "frag": {
+  "shift": 7,
+  "mask": 31,
+  "cite": "amdgpu_vm.h:70"
+ },
+ "mtype": {
+  "shift": 48,
+  "mask": 7,
+  "names": {
+   "0": "MTYPE_NC",
+   "1": "MTYPE_WC",
+   "2": "MTYPE_CC",
+   "3": "MTYPE_UC"
+  },
+  "cite": "amdgpu_vm.h:114 amdgpu_vm.h:115"
+ },
+ "bfs": {
+  "shift": 59,
+  "cite": "amdgpu_vm.h:87"
+ },
+ "addr": {
+  "pde_mask": 281474976710592,
+  "pte_mask": 281474976706560,
+  "page_shift": 12,
+  "cite": "gmc_v10_0.c:474 BUG_ON(*addr & 0xFFFF00000000003FULL); amdgpu_gart.h:37"
+ },
+ "levels": [
+  "AMDGPU_VM_PDB2",
+  "AMDGPU_VM_PDB1",
+  "AMDGPU_VM_PDB0",
+  "AMDGPU_VM_PTB"
+ ],
+ "pdb0_index": 2,
+ "ptb_index": 3
+}
