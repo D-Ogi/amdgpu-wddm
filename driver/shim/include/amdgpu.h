@@ -22,6 +22,7 @@
 #define BC250_SHIM_AMDGPU_H
 
 #include <stddef.h>         /* NULL, size_t - present in both the SDK and the WDK km CRT */
+#include <string.h>         /* memcpy, memset - the km CRT has both */
 #include "bc250_shim.h"
 
 /* ---------------------------------------------------------------------------------------------
@@ -56,6 +57,9 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
+/* [shim] Linux's type for a bus resource address. Only amdgpu_doorbell.h names it. */
+typedef uint64_t resource_size_t;
+
 /* [shim] GCC attribute used by cyan_skillfish_ip_offset.h on its IP_BASE structs. */
 #ifndef __maybe_unused
 #define __maybe_unused
@@ -78,6 +82,42 @@ typedef uint64_t u64;
 #endif
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
+/* [shim] log2.h's order_base_2(n) = ceil(log2(n)), with order_base_2(0) == 0 and
+ * order_base_2(1) == 0. The GFX10 MQD builders call it on queue and buffer sizes, which are powers
+ * of two, but the general definition is kept so that a non-power-of-two never rounds the wrong way.
+ * Written from the documented behaviour, not copied: log2.h is GPL-2.0. */
+static __inline u32 bc250_order_base_2(u64 n)
+{
+	u32 order = 0;
+
+	if (n < 2)
+		return 0;
+	n--;
+	while (n) {
+		n >>= 1;
+		order++;
+	}
+	return order;
+}
+#ifndef order_base_2
+#define order_base_2(n) bc250_order_base_2((u64)(n))
+#endif
+
+/* [shim] bitops.h's hweight32: how many bits are set. Same reason as order_base_2. */
+static __inline u32 bc250_hweight32(u32 v)
+{
+	u32 n = 0;
+
+	while (v) {
+		v &= v - 1u;
+		n++;
+	}
+	return n;
+}
+#ifndef hweight32
+#define hweight32(v) bc250_hweight32((u32)(v))
 #endif
 
 /* [shim] Logging. The imports call dev_err/dev_info/dev_warn with adev->dev first; the shim does
@@ -170,8 +210,28 @@ enum amd_hw_ip_block_type {
 #define AMDGPU_GMC_HOLE_START	0x0000800000000000ULL
 #define AMDGPU_GMC_HOLE_END	0xffff800000000000ULL
 
-/* [amdgpu] amdgpu_vm.h */
+/* [amdgpu] amdgpu_vm.h:57-118, the page-table entry flags the GART uses. Only the bits that can
+ * appear in a GART PTE on this part are taken over; the fragment, PRT, TMZ and GFX12 bits cannot,
+ * because nothing here builds a VM page table. See driver/shim/bc250_gart.c for which of these end
+ * up in a PTE and why. */
 #define AMDGPU_PTE_VALID	(1ULL << 0)
+#define AMDGPU_PTE_SYSTEM	(1ULL << 1)
+#define AMDGPU_PTE_SNOOPED	(1ULL << 2)
+#define AMDGPU_PTE_EXECUTABLE	(1ULL << 4)
+#define AMDGPU_PTE_READABLE	(1ULL << 5)
+#define AMDGPU_PTE_WRITEABLE	(1ULL << 6)
+
+/* The memory type lives in bits 48..50 on GFX10. The enumerators themselves (MTYPE_UC and the rest)
+ * are AMD's, in third_party/linux-amdgpu/navi10_enum.h, and are not repeated here. */
+#define AMDGPU_PTE_MTYPE_NV10_SHIFT(mtype)	((u64)(mtype) << 48)
+#define AMDGPU_PTE_MTYPE_NV10_MASK		AMDGPU_PTE_MTYPE_NV10_SHIFT(7ULL)
+#define AMDGPU_PTE_MTYPE_NV10(flags, mtype)			\
+	(((u64)(flags) & (~AMDGPU_PTE_MTYPE_NV10_MASK)) |	\
+	  AMDGPU_PTE_MTYPE_NV10_SHIFT(mtype))
+
+/* [amdgpu] amdgpu_gmc.c:169 amdgpu_gmc_set_pte_pde(): the address bits a PTE carries. Bits below 12
+ * are the flags above; bits 48 and up are the memory type and the reserved fields. */
+#define AMDGPU_PTE_ADDR_MASK	0x0000FFFFFFFFF000ULL
 
 /* [amdgpu] amd_shared.h - the two clock-gating flags and the state enum mmhub_v2_0.c uses.
  * amd_shared.h itself pulls in DRM headers, so only these three definitions are taken over. */
@@ -189,6 +249,7 @@ enum amd_clockgating_state {
  * register-distance fields stay exactly those of the imported code.
  * ------------------------------------------------------------------------------------------- */
 struct amdgpu_device;
+struct cs_section_def;          /* driver/amdgpu-import/clearstate_defs.h */
 
 struct amdgpu_vmhub_funcs {
 	void (*print_l2_protection_fault_status)(struct amdgpu_device *adev,
@@ -280,6 +341,173 @@ struct amdgpu_bo {
 	u64 gpu_addr;                 /* MC address of the buffer, i.e. amdgpu_bo_gpu_offset() */
 };
 
+/* [amdgpu] drivers/gpu/drm/amd/amdgpu/amdgpu_doorbell.h, imported unmodified: `struct
+ * amdgpu_doorbell_index` and the AMDGPU_NAVI10_DOORBELL_* assignment this chip uses. It is the only
+ * import this header includes, and it is included here rather than in the .c files because
+ * struct amdgpu_device carries a doorbell_index by value, exactly as upstream does.
+ *
+ * The header has a nameless union (MSVC C4201). It is switched off around this include only, not
+ * from the build line, so that /W4 stays strict for every other line in the translation unit. The
+ * import itself is untouched, which is the rule that matters. */
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4201)
+#endif
+#include "amdgpu_doorbell.h"
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
+/* [amdgpu] amdgpu.h:997 and amdgpu_device.h struct amdgpu_mmio_remap: where in BAR5 the HDP flush
+ * registers are aliased, so that a flush is one store to a page that can be handed to user space.
+ * amdgpu programs this in nv_common_hw_init() long before the GFX block comes up, and
+ * amdgpu_device_flush_hdp() writes through it; see driver/shim/bc250_nbio.c. */
+struct amdgpu_mmio_remap {
+	u32 reg_offset;         /* byte offset inside BAR5 */
+	u64 bus_addr;           /* its physical address, for user-space mapping */
+};
+
+/* [uapi] include/uapi/linux/kfd_ioctl.h:738-739, enum kfd_mmio_remap. Two offsets inside the
+ * remapped page; the names are KFD's because KFD is what the page is exposed for. */
+#define KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL	0
+#define KFD_MMIO_REMAP_HDP_REG_FLUSH_CNTL	4
+
+/* [amdgpu] amdgpu.h */
+#define AMDGPU_GPU_PAGE_SIZE	4096
+
+/* [amdgpu] amdgpu.h: (PAGE_SIZE / AMDGPU_GPU_PAGE_SIZE), how many GPU pages one CPU page covers.
+ * Upstream this can exceed 1 on architectures with large pages; on x86-64, and on every Windows
+ * target this driver has, the CPU page is also 4 KB, so it is 1. The loops in bc250_gart.c keep the
+ * upstream shape anyway, because that is what makes them comparable with amdgpu_gart_map(). */
+#define AMDGPU_GPU_PAGES_IN_CPU_PAGE	1
+
+/* [amdgpu] amdgpu_ring.h:49 enum amdgpu_ring_priority_level. Unlike the ring types below, these
+ * values DO reach the hardware: they land in the MQD's cp_hqd_pipe_priority, which unit A's own
+ * MQD dump shows as 2 for the one high-priority compute queue. */
+enum amdgpu_ring_priority_level {
+	AMDGPU_RING_PRIO_0,
+	AMDGPU_RING_PRIO_1,
+	AMDGPU_RING_PRIO_DEFAULT = 1,
+	AMDGPU_RING_PRIO_2,
+	AMDGPU_RING_PRIO_MAX
+};
+
+/* [amdgpu] amdgpu_gfx.h:52-58. Note that a queue which is not high priority does NOT get
+ * AMDGPU_GFX_PIPE_PRIO_NORMAL: amdgpu_ring_to_mqd_prop() memsets the whole prop to zero and only
+ * the high-priority branch assigns, so an ordinary queue keeps 0. Unit A's MQDs show 0, not 1. */
+enum amdgpu_gfx_pipe_priority {
+	AMDGPU_GFX_PIPE_PRIO_NORMAL = AMDGPU_RING_PRIO_1,
+	AMDGPU_GFX_PIPE_PRIO_HIGH = AMDGPU_RING_PRIO_2
+};
+
+#define AMDGPU_GFX_QUEUE_PRIORITY_MAXIMUM	15
+
+/* [amdgpu] amdgpu_gfx.h:121 enum amdgpu_unmap_queues_action. Only the one the teardown uses is
+ * named: the other three belong to the scheduler's preempt paths, which do not exist here. The
+ * value agrees with the comment in the imported nvd.h at PACKET3_UNMAP_QUEUES_ACTION, "1 -
+ * RESET_QUEUES". */
+#define BC250_RESET_QUEUES	1
+
+/* [amdgpu] amdgpu_ring.h: the ring types the shim uses. The numeric values do not reach the
+ * hardware; gfx10_kiq_map_queues() switches on them to pick eng_sel. */
+enum amdgpu_ring_type {
+	AMDGPU_RING_TYPE_GFX,
+	AMDGPU_RING_TYPE_COMPUTE,
+	AMDGPU_RING_TYPE_SDMA,
+	AMDGPU_RING_TYPE_KIQ
+};
+
+/* [amdgpu] amdgpu_ring.h, cut down. Upstream carries scheduler, fence and IB callbacks; the shim
+ * submits nothing but bring-up packets, so only the three members the write path reads are here. */
+struct amdgpu_ring_funcs {
+	enum amdgpu_ring_type	type;
+	u32			align_mask;
+	u32			nop;
+};
+
+/* [amdgpu] amdgpu_ring.h, cut down to the fields amdgpu_ring_alloc/write/write_multiple/commit and
+ * the GFX10 MQD builders actually read, plus the allocations the shim owns on the ring's behalf.
+ *
+ * Deviation from Linux (ADR 0002): there is no scheduler, no fence context, no IB pool and no BO.
+ * `ring_mem`, `mqd_mem` and `eop_mem` hold what bc250_shim_mem_alloc() handed out, so that
+ * bc250_gfx_hw_fini() can give it all back without a separate bookkeeping structure. */
+struct amdgpu_ring {
+	struct amdgpu_device		*adev;
+	const struct amdgpu_ring_funcs	*funcs;
+
+	u32		*ring;          /* CPU mapping of the ring buffer */
+	u64		gpu_addr;       /* MC address of the ring buffer */
+	u32		ring_size;      /* bytes */
+	u64		wptr;           /* in dwords for CP rings, see bc250_ring.c */
+	u64		wptr_old;
+	u32		max_dw;
+	int		count_dw;
+	u32		buf_mask;       /* ring_size / 4 - 1 */
+	u64		ptr_mask;
+
+	bool		use_doorbell;
+	u32		doorbell_index;
+
+	u64		rptr_gpu_addr;  /* writeback slot the CP reports the read pointer in */
+	u64		wptr_gpu_addr;  /* writeback slot the CP polls for the write pointer */
+	void		*wptr_cpu_addr;
+
+	u64		eop_gpu_addr;
+	u64		mqd_gpu_addr;
+	void		*mqd_ptr;
+
+	u32		me;
+	u32		pipe;
+	u32		queue;
+
+	struct bc250_mem ring_mem;
+	struct bc250_mem mqd_mem;
+	struct bc250_mem eop_mem;
+};
+
+/* [amdgpu] amdgpu_gfx.h */
+struct amdgpu_kiq {
+	struct amdgpu_ring ring;
+};
+
+/* [amdgpu] amdgpu.h: the input to the MQD builders. Taken over in full so that
+ * gfx_v10_0_compute_mqd_init() and gfx_v10_0_gfx_mqd_init() can be transcribed field for field. */
+struct amdgpu_mqd_prop {
+	uint64_t mqd_gpu_addr;
+	uint64_t hqd_base_gpu_addr;
+	uint64_t rptr_gpu_addr;
+	uint64_t wptr_gpu_addr;
+	uint32_t queue_size;
+	bool use_doorbell;
+	uint32_t doorbell_index;
+	uint64_t eop_gpu_addr;
+	uint32_t hqd_pipe_priority;
+	uint32_t hqd_queue_priority;
+	bool allow_tunneling;
+	bool hqd_active;
+	uint64_t shadow_addr;
+	uint64_t gds_bkup_addr;
+	uint64_t csa_addr;
+	uint64_t fence_address;
+	bool tmz_queue;
+	bool kernel_queue;
+};
+
+/* [amdgpu] amdgpu_gfx.h, the fields of struct amdgpu_gfx_config this bring-up reads or writes. */
+struct amdgpu_gfx_config {
+	unsigned max_shader_engines;
+	unsigned max_sh_per_se;
+	unsigned max_backends_per_se;
+	unsigned max_hw_contexts;
+	unsigned backend_enable_mask;
+	unsigned gb_addr_config;
+	unsigned num_rbs;
+	uint32_t num_sc_per_sh;
+	uint32_t num_packer_per_sc;
+	uint32_t pa_sc_tile_steering_override;
+	uint64_t tcc_disabled_mask;
+};
+
 struct amdgpu_gart {
 	struct amdgpu_bo *bo;
 	u64 table_size;
@@ -301,6 +529,19 @@ struct amdgpu_gmc {
 	u64 mc_mask;
 	bool translate_further;
 	bool noretry;
+
+	/* [amdgpu] gmc_v10_0_sw_init(): the LDS and scratch apertures the SH_MEM_BASES writes of
+	 * gfx_v10_0_constants_init() are built from. */
+	u64 shared_aperture_start;
+	u64 shared_aperture_end;
+	u64 private_aperture_start;
+	u64 private_aperture_end;
+};
+
+/* [amdgpu] amdgpu_ids.h: how many VMIDs a hub hands out. gfx_v10_0_constants_init() walks
+ * adev->vm_manager.id_mgr[AMDGPU_GFXHUB(0)].num_ids. */
+struct amdgpu_vmid_mgr {
+	unsigned int num_ids;
 };
 
 struct amdgpu_vm_manager {
@@ -309,17 +550,98 @@ struct amdgpu_vm_manager {
 	uint32_t num_level;
 	uint32_t block_size;
 	uint32_t fragment_size;
+
+	unsigned int first_kfd_vmid;
+	struct amdgpu_vmid_mgr id_mgr[AMDGPU_MAX_VMHUBS];
 };
 
-/* [shim] only the two fields soc15_common.h's RLC macros test. */
+/* [shim] the two fields soc15_common.h's RLC macros test, plus the clear-state buffer that
+ * gfx_v10_0_init_csb() points the RLC at. `cs_data` is the imported gfx10_cs_data table. */
 struct amdgpu_rlc {
 	const void *funcs;
 	bool rlcg_reg_access_supported;
+
+	const struct cs_section_def *cs_data;
+	u32 *cs_ptr;                    /* CPU mapping of the clear-state buffer */
+	u64 clear_state_gpu_addr;
+	u32 clear_state_size;           /* in dwords, what RLC_CSIB_LENGTH gets */
+	struct bc250_mem clear_state_mem;
+};
+
+/* [amdgpu] amdgpu_gfx.h: struct amdgpu_me and struct amdgpu_mec, cut down to the four counts this
+ * sequence reads. Upstream carries the firmware objects, the ring arrays and the queue bitmaps on
+ * them as well. The names are upstream's, so that `adev->gfx.me.num_pipe_per_me` in a transcribed
+ * function is spelled the way it is in gfx_v10_0.c.
+ *
+ * What unit A's values are, and how the trace says so:
+ *   me.num_me = 1, me.num_pipe_per_me = 1     gfx_v10_0_set_priv_inst_fault_state() walks both and
+ *                                             writes only CP_INT_CNTL_RING0; pipe 1 would be
+ *                                             CP_INT_CNTL_RING1, which the trace never touches.
+ *   mec.num_mec = 1, mec.num_pipe_per_mec = 4 the same loop in set_priv_reg_fault_state() writes
+ *                                             CP_ME1_PIPE0..3_INT_CNTL and nothing on ME2. */
+struct amdgpu_me {
+	u32 num_me;
+	u32 num_pipe_per_me;
+};
+
+struct amdgpu_mec {
+	u32 num_mec;
+	u32 num_pipe_per_mec;
 };
 
 struct amdgpu_gfx {
 	uint32_t xcc_mask;
 	struct amdgpu_rlc rlc;
+	struct amdgpu_me  me;
+	struct amdgpu_mec mec;
+
+	struct amdgpu_gfx_config config;
+
+	/* [shim] Upstream has adev->gfx.kiq[AMDGPU_MAX_XCC] and heap-allocated ring arrays. This part
+	 * has one XCC, one gfx ring and eight compute queues (me 1, pipes 0-3, queues 0-1, which is
+	 * what the E03 trace shows), so they are plain members and the upstream spelling
+	 * adev->gfx.kiq[0].ring still works. */
+	struct amdgpu_kiq	kiq[1];
+	struct amdgpu_ring	gfx_ring[1];
+	struct amdgpu_ring	compute_ring[8];
+	u32			num_gfx_rings;
+	u32			num_compute_rings;
+
+	/* [shim] two Linux module parameters the sequence branches on, carried on adev so that the
+	 * stage functions keep upstream's signatures. Set by bc250_gfx_setup() from
+	 * struct bc250_gfx_inputs; see that struct for what the trace says about each. */
+	bool			async_gfx_ring;
+	bool			pp_gfxoff;
+
+	/* [shim] the writeback page the rings' read- and write-pointer slots are cut from. */
+	struct bc250_mem	wb_mem;
+
+	/* upstream adev->gfx.mec_bitmap[0].queue_bitmap, which is a bitmap over
+	 * AMDGPU_MAX_COMPUTE_QUEUES; eight queues fit in a u64 and gfx10_kiq_set_resources()
+	 * already folds it into a 64-bit queue_mask. */
+	u64			mec_queue_bitmap;
+};
+
+/* [amdgpu] amdgpu_sdma.h: struct amdgpu_sdma_instance and struct amdgpu_sdma, cut down to the ring
+ * and the instance count. Upstream also carries the firmware image, its header, the fence and the
+ * IP-dump buffer per instance; the firmware is the PSP's business on this part and the rest has no
+ * counterpart here.
+ *
+ * Two instances: the E03 trace programs SDMA0 and SDMA1 and nothing beyond (the register block
+ * repeats at +0x600 dwords, and SDMA2 would be another +0x600, never written). */
+#define AMDGPU_MAX_SDMA_INSTANCES	2
+
+struct amdgpu_sdma_instance {
+	struct amdgpu_ring ring;
+};
+
+struct amdgpu_sdma {
+	struct amdgpu_sdma_instance instance[AMDGPU_MAX_SDMA_INSTANCES];
+	int num_instances;
+
+	/* [shim] the writeback page the two rings' read- and write-pointer slots are cut from, the
+	 * same arrangement as adev->gfx.wb_mem. */
+	struct bc250_mem wb_mem;
 };
 
 /* [amdgpu] amdgpu.h: struct amdgpu_mem_scratch, the scratch page whose MC address becomes
@@ -341,6 +663,7 @@ struct amdgpu_device {
 	uint32_t		ip_versions[MAX_HWIP][HWIP_MAX_INSTANCE];
 
 	struct amdgpu_gfx	gfx;
+	struct amdgpu_sdma	sdma;
 	struct amdgpu_gmc	gmc;
 	struct amdgpu_gart	gart;
 	struct amdgpu_gfxhub	gfxhub;
@@ -349,6 +672,18 @@ struct amdgpu_device {
 	struct amdgpu_vm_manager vm_manager;
 	struct amdgpu_mem_scratch mem_scratch;
 	struct amdgpu_firmware	firmware;
+
+	/* [amdgpu] amdgpu_doorbell.h, both imported unmodified. `doorbell.base` is the physical
+	 * address of the doorbell BAR, which only the miniport can know; the self-ring aperture in
+	 * bc250_nbio.c is the one thing here that reads it. */
+	/* [amdgpu] amdgpu.h: the physical address of BAR5. The shim never dereferences it - register
+	 * access goes through bc250_shim_rreg/wreg - and it is here only so that
+	 * bc250_nbio_set_reg_remap() can form rmmio_remap.bus_addr, the address of the page the HDP
+	 * flush registers are aliased into. The miniport fills it from its translated resources. */
+	u64			     rmmio_base;
+	struct amdgpu_mmio_remap     rmmio_remap;
+	struct amdgpu_doorbell	     doorbell;
+	struct amdgpu_doorbell_index doorbell_index;
 
 	u64			dummy_page_addr;   /* DMA address of the dummy page (dma_addr_t upstream) */
 	u64			cg_flags;
@@ -398,5 +733,50 @@ u64 amdgpu_gmc_vram_mc2pa(struct amdgpu_device *adev, u64 mc_addr);
 /* [amdgpu] amdgpu_gmc.c: MC address of the page directory root, with its flags.
  * The shim implements the GMC v10 variant of it, see driver/shim/shim.c. */
 u64 amdgpu_gmc_pd_addr(struct amdgpu_bo *bo);
+
+/* ---------------------------------------------------------------------------------------------
+ * [amdgpu] amdgpu_ring.h / amdgpu_ring.c - the ring write path.
+ *
+ * amdgpu_ring_write() and amdgpu_ring_write_multiple() are static inlines upstream and are
+ * transcribed here so that the packet emitters read exactly as they do in gfx_v10_0.c. The rest is
+ * in driver/shim/bc250_ring.c. Deviation from Linux (ADR 0002): upstream amdgpu_ring_alloc() takes
+ * ring->funcs->begin_use and amdgpu_ring_commit() takes end_use; the shim has neither power
+ * management nor a scheduler, so those hooks do not exist.
+ * ------------------------------------------------------------------------------------------- */
+int  amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw);
+void amdgpu_ring_commit(struct amdgpu_ring *ring);
+void amdgpu_ring_undo(struct amdgpu_ring *ring);
+void amdgpu_ring_insert_nop(struct amdgpu_ring *ring, uint32_t count);
+void amdgpu_ring_clear_ring(struct amdgpu_ring *ring);
+
+/* [amdgpu] amdgpu_ring.h:487 amdgpu_ring_write() */
+static __inline void amdgpu_ring_write(struct amdgpu_ring *ring, uint32_t v)
+{
+	ring->ring[ring->wptr++ & ring->buf_mask] = v;
+	ring->wptr &= ring->ptr_mask;
+	ring->count_dw--;
+}
+
+/* [amdgpu] amdgpu_ring.h:494 amdgpu_ring_write_multiple() */
+static __inline void amdgpu_ring_write_multiple(struct amdgpu_ring *ring,
+						const u32 *src, int count_dw)
+{
+	unsigned int occupied, chunk1, chunk2;
+
+	occupied = (unsigned int)(ring->wptr & ring->buf_mask);
+	chunk1 = ring->buf_mask + 1u - occupied;
+	chunk1 = (chunk1 >= (unsigned int)count_dw) ? (unsigned int)count_dw : chunk1;
+	chunk2 = (unsigned int)count_dw - chunk1;
+
+	if (chunk1)
+		memcpy(&ring->ring[occupied], src, (size_t)chunk1 * 4u);
+
+	if (chunk2)
+		memcpy(ring->ring, src + chunk1, (size_t)chunk2 * 4u);
+
+	ring->wptr += (u64)count_dw;
+	ring->wptr &= ring->ptr_mask;
+	ring->count_dw -= count_dw;
+}
 
 #endif /* BC250_SHIM_AMDGPU_H */

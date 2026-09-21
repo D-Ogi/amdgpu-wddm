@@ -73,6 +73,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     VramStart(device);      // same rule
     GartStart(device);      // same rule
     PspStart(device);       // same rule
+    GpuMemStart(device);    // same rule
+    GfxStart(device);       // same rule
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
@@ -97,7 +99,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
     device->CommitSeen = FALSE;
     device->PresentSeen = FALSE;
-    PspStop(device);        // first, in amdgpu's order: the PSP forgets our ring and TMR while the GART state still stands
+    GfxStop(device);        // first, in amdgpu's order: engines halted, then their memory (gpumem.c) given back or kept
+    PspStop(device);        // then, in amdgpu's order: the PSP forgets our ring and TMR while the GART state still stands
     GartStop(device);       // while the registers are still mapped: it may have a state to give back
     VramStop(device);
     MmioStop(device);

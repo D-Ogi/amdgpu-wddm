@@ -48,6 +48,13 @@ def main():
     ap.add_argument("--reads", action="store_true", help="include reads")
     ap.add_argument("--since", type=float, default=0.0)
     ap.add_argument("--until", type=float, default=1e9)
+    ap.add_argument("--no-fold", action="store_true",
+                    help="one line per access, no xN runs. The folding is a reading aid; a consumer "
+                         "that replays the accesses in order (driver/shim/test) wants them all, and "
+                         "expanding xN back out is guesswork once reads and writes are interleaved.")
+    ap.add_argument("--precision", type=int, default=3,
+                    help="decimals on the timestamp (default 3; 6 separates accesses within a "
+                         "microsecond, which matters when a window is a fraction of a millisecond)")
     args = ap.parse_args()
 
     last, count = None, 0
@@ -55,10 +62,11 @@ def main():
     def flush():
         if last is not None:
             t, kind, name, off, val = last
-            print(f"{t:8.3f}  {kind}  {name:<44} 0x{off:05x}  {val:08X}" + (f"   x{count}" if count > 1 else ""))
+            print(f"{t:{args.precision + 5}.{args.precision}f}  {kind}  {name:<44} 0x{off:05x}  {val:08X}"
+                  + (f"   x{count}" if count > 1 else ""))
 
     for access in accesses(args.events, args.match, args.reads, args.since, args.until):
-        if last is not None and last[1:] == access[1:]:
+        if not args.no_fold and last is not None and last[1:] == access[1:]:
             count += 1
             continue
         flush()

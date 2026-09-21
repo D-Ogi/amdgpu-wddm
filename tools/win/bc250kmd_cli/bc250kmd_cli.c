@@ -505,6 +505,63 @@ static int Psp(const WCHAR *opText)
     return p.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
+// ---- gfx: RLC, CP, KIQ, queues, ring tests, SDMA (experiment E11) ------------------------------------------------------
+//
+// plan <stage> runs stages 1..stage against the real registers without executing a register or doorbell write;
+// run <stage> executes the stages not yet done, up to <stage>; fini halts the engines and gives the memory back.
+// Output: "S ..." per stage, "W <offset> <value>" per register write, "D <index> <value> after <n>" per doorbell.
+
+static const char *GfxStageName(unsigned long stage)
+{
+    static const char *names[] = { "?", "doorbell aperture", "golden registers", "GRBM CAM probe", "constants", "RLC", "CP", "SDMA" };
+
+    return stage < sizeof(names) / sizeof(names[0]) ? names[stage] : "?";
+}
+
+static int Gfx(const WCHAR *opText, const WCHAR *stageText)
+{
+    static BC250_ESCAPE_GFX g;
+    NTSTATUS status;
+
+    memset(&g, 0, sizeof(g));
+    g.Magic = BC250_ESCAPE_MAGIC;
+    g.Command = BC250_ESCAPE_RUN_GFX;
+    if (!_wcsicmp(opText, L"plan")) g.Op = BC250_GFX_OP_PLAN;
+    else if (!_wcsicmp(opText, L"run")) g.Op = BC250_GFX_OP_RUN;
+    else if (!_wcsicmp(opText, L"fini")) g.Op = BC250_GFX_OP_FINI;
+    else if (!_wcsicmp(opText, L"state")) g.Op = BC250_GFX_OP_STATE;
+    else { fprintf(stderr, "gfx plan <stage> | run <stage> | fini | state, not %ls\n", opText); return 2; }
+    if (g.Op <= BC250_GFX_OP_RUN)
+    {
+        if (stageText == NULL) { fprintf(stderr, "gfx %ls needs the last stage to run (1..7)\n", opText); return 2; }
+        g.LastStage = wcstoul(stageText, NULL, 0);
+    }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &g, sizeof(g), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (g.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (g.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no GFX command\n"); return 3; }
+
+    printf("gfx %ls to stage %lu: %s, NTSTATUS 0x%08lX %s, result %ld%s, %lu register writes and %lu doorbells%s\n", opText, g.LastStage,
+           g.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", g.NtStatus, StatusName((NTSTATUS)g.NtStatus), g.Result,
+           g.FailedStage ? " (a stage failed)" : "", g.WriteCount, g.DoorbellCount,
+           g.Op == BC250_GFX_OP_PLAN ? " planned, none executed" : " executed");
+    printf("gates        mmio %s, vram %s, gart %s, psp %s, gfx %s\n", (g.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
+           (g.Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed", (g.Flags & BC250_ESCAPE_FLAG_GART) ? "open" : "closed",
+           (g.Flags & BC250_ESCAPE_FLAG_PSP) ? "open" : "closed", (g.Flags & BC250_ESCAPE_FLAG_GFX) ? "open" : "closed");
+    if (g.FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", g.FaultOffset);
+    printf("state        stages done on the hardware: %lu (%s)\n", g.StagesDone, g.StagesDone ? GfxStageName(g.StagesDone) : "none");
+    printf("memory       VRAM 0x%lX bytes, GTT 0x%lX bytes held\n", g.VramBytes, g.GttBytes);
+    for (unsigned long i = 0; i < g.StageCount && i < BC250_GFX_MAX_STAGES; i++)
+        printf("S %lu %-18s rc %ld first write %lu us %lu%s\n", g.Stages[i].Stage, GfxStageName(g.Stages[i].Stage), g.Stages[i].Result,
+               g.Stages[i].FirstWrite, g.Stages[i].Microseconds, g.Stages[i].Stage == g.FailedStage ? "  FAILED" : "");
+    for (unsigned long i = 0; i < g.WriteCount && i < BC250_GFX_MAX_WRITES; i++)
+        printf("W 0x%05lX %08lX\n", g.Writes[i].Offset, g.Writes[i].Value);
+    for (unsigned long i = 0; i < g.DoorbellCount && i < BC250_GFX_MAX_DOORBELLS; i++)
+        printf("D 0x%03lX %016llX after %lu\n", g.Doorbells[i].Index, g.Doorbells[i].Value, g.Doorbells[i].AfterWrite);
+    return g.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -598,6 +655,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
                         "       bc250kmd_cli gart plan | enable | restore\n"
                         "       bc250kmd_cli psp plan | load | unload\n"
+                        "       bc250kmd_cli gfx plan <stage> | run <stage> | fini | state\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -613,6 +671,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"vcompare") && argc == 4) return VramCompare(argv[2], argv[3]);
     if (!_wcsicmp(argv[1], L"gart") && argc == 3) return Gart(argv[2]);
     if (!_wcsicmp(argv[1], L"psp") && argc == 3) return Psp(argv[2]);
+    if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }

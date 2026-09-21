@@ -36,6 +36,7 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/<path> | sha256sum
 | `mmhub_2_0_0_default.h` | `drivers/gpu/drm/amd/include/asic_reg/mmhub/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `navi10_enum.h` | `drivers/gpu/drm/amd/include/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `soc15_hw_ip.h` | `drivers/gpu/drm/amd/include/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `nbio_2_3_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/nbio/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 
 License: MIT, with the full permission notice at the top of every file, Copyright Advanced Micro
 Devices, Inc. Checked file by file on 2026-09-21.
@@ -50,8 +51,10 @@ Who uses what:
 
 - `*_offset.h`, `cyan_skillfish_ip_offset.h` - `tools/regcalc` (and through it `tools/diagusb`,
   `tools/trace`, `driver/kmd/gen_regs.py`), and the imported AMD sources through the shim.
-- `gc_10_1_0_sh_mask.h`, `mmhub_2_0_0_sh_mask.h` - field masks and shifts for `REG_SET_FIELD` in
-  `driver/amdgpu-import/`.
+- `gc_10_1_0_sh_mask.h`, `mmhub_2_0_0_sh_mask.h`, `nbio_2_3_sh_mask.h` - field masks and shifts for
+  `REG_SET_FIELD` in `driver/amdgpu-import/` and in the shim's own transcriptions. The NBIO one was
+  added for M5 part B: `driver/shim/bc250_nbio.c` needs the `BIF_SDMA*_DOORBELL_RANGE` and
+  `BIF_BX_PF_DOORBELL_SELFRING_GPA_APER_CNTL` field definitions.
 - `gc_10_1_0_default.h`, `mmhub_2_0_0_default.h` - the `*_DEFAULT` reset values the hub code starts
   some registers from (`GCVM_L2_CNTL3/4/5` and the MMHUB equivalents).
 - `navi10_enum.h` - the memory-type enum (`MTYPE_UC`) the TLB setup uses.

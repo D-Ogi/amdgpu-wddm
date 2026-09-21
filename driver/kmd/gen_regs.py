@@ -28,13 +28,26 @@ from gen_probes import SPEC  # noqa: E402  (ip -> header)
 from extract_phase import accesses  # noqa: E402
 
 TRACE = ROOT / "evidence/linux/2026-09-21-E03-init-trace/amdgpu-events.txt"
-# (table, experiment, regex on traced register names, end of the step in seconds since the first access,
+# (table, experiment, regex on traced register names, the step's time in seconds since the first access: its end,
+#  or a list of (since, until) windows in which case the registers amdgpu only read there count as well,
 #  registers the step only reads). gmc_v10_0_gart_enable() is over at 0.26 s (docs/init-sequence.md).
 SEQUENCES = [
     ("Gart", "E09", r"^(GC\.(GCVM|GCMC)|MMHUB\.(MMVM|MMMC))", 0.26,
      [("GC", "mmGCVM_INVALIDATE_ENG17_ACK"), ("MMHUB", "mmMMVM_INVALIDATE_ENG17_ACK")]),
     # psp_v11_0_8 ring create and the eleven submissions are over at 0.309 s; the SMU mailbox follows.
     ("Psp", "E10", r"^MP0\.MP0_SMN_C2PMSG_\d+$", 0.309, []),
+    # M5 second part. 0.038 s: nv_common_hw_init() opens the doorbell aperture (closed under Windows, E02).
+    # 0.5496 to 0.551 s: gfx_v10_0_hw_init() and sdma_v5_0_hw_init() (golden registers, constants, RLC, KIQ, MEC,
+    # the queues, the ring tests, both SDMA rings). 1.560 to 1.562 s: interrupt state (amdgpu_fence_driver_hw_init,
+    # gfx_v10_0_late_init, amdkfd's pipe interrupts) and the doorbell self-ring aperture.
+    # GCMC_VM_CACHEABLE_DRAM_ADDRESS_END: one of AMD's golden settings for this part (driver/shim/generated/
+    # gfx10_golden_cyan_skillfish.inc), the only GCVM/GCMC write of the step (0.550 s, 0x000FFFFF).
+    # 0.2495 to 0.2528 s: nothing but the TLB flush of both hubs after each bind of a ring into the GART
+    # (amdgpu_gart_invalidate_tlb), which gpumem.c does after its own binds.
+    ("Gfx", "E11", r"^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|"
+                   r"NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|"
+                   r"BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)",
+     [(0.0375, 0.0385), (0.2495, 0.2528), (0.5496, 0.551), (1.560, 1.562)], []),
 ]
 
 # (ip, register, experiment that put it here, why it is safe)
@@ -45,7 +58,15 @@ WRITABLE = [
 
 # Named offsets the driver's own code uses (beyond the tables).
 NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STATUS"),
-         ("GC", "mmGCMC_VM_FB_OFFSET"), ("GC", "mmGCMC_VM_FB_LOCATION_BASE"), ("GC", "mmGCMC_VM_FB_LOCATION_TOP")]
+         ("GC", "mmGCMC_VM_FB_OFFSET"), ("GC", "mmGCMC_VM_FB_LOCATION_BASE"), ("GC", "mmGCMC_VM_FB_LOCATION_TOP"),
+         # gfx.c: are the engines halted?
+         ("GC", "mmCP_ME_CNTL"), ("GC", "mmCP_MEC_CNTL"), ("GC", "mmSDMA0_F32_CNTL"), ("GC", "mmSDMA1_F32_CNTL"),
+         # gfx.c: a stage that stopped half way must not leave a me/pipe/queue selected
+         ("GC", "mmGRBM_GFX_CNTL"),
+         # gfx.c: the one write that passes a stopped sequence (gpumem.c flushes the TLB after its binds)
+         ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
+         # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
+         ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD")]
 
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 
@@ -74,9 +95,6 @@ def main():
            "#pragma once", ""]
     for ip, name in NAMED:
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
-    for ip, name in NAMED:
-        if offset(maps, ip, name) not in reads:
-            sys.exit(f"{ip}.{name} is used by the driver but not on the read list")
     out += ["", "// The tables are for mmio.c alone; everybody else gets the names.", "#ifdef BC250_REGS_WITH_TABLES",
             "", "// Offsets that may be written through the escape, with the experiment that allowed each."]
     out.append(f"#define BC250_MMIO_WRITE_ALLOW_COUNT {len(writes)}")
@@ -89,9 +107,12 @@ def main():
     out += ["    " + ", ".join(f"0x{o:05X}" for o in reads[i:i + 10]) + "," for i in range(0, len(reads), 10)]
     out += ["};", ""]
     summary = []
+    sequenced = set()
     for table, exp, match, until, read_only in SEQUENCES:
         entries = {}
-        for _, kind, name, off, _ in accesses(TRACE, match, until=until):
+        windows = until if isinstance(until, list) else [(0.0, until)]
+        traced = [a for since, to in windows for a in accesses(TRACE, match, reads=isinstance(until, list), since=since, until=to)]
+        for _, kind, name, off, _ in traced:
             ip, reg = name.split(".", 1)
             if offset(maps, ip, "mm" + reg) != off:
                 sys.exit(f"{name}: the trace has 0x{off:05X}, regcalc says 0x{offset(maps, ip, 'mm' + reg):05X}")
@@ -100,13 +121,18 @@ def main():
             entries[offset(maps, ip, reg)] = f"{ip}.{reg[2:]} (read only)"
         if max(entries) >= BAR5_LENGTH:
             sys.exit(f"{table}: 0x{max(entries):X} is beyond BAR5")
-        out += [f"// {exp}: what amdgpu wrote on unit A in this step (E03 trace, first {until} s, names matching",
+        when = ", ".join(f"{a} to {b} s" for a, b in until) if isinstance(until, list) else f"first {until} s"
+        out += [f"// {exp}: what amdgpu wrote on unit A in this step (E03 trace, {when}, names matching",
                 f"// {match}), plus the registers it only polled. For the kernel command alone.",
                 f"#define BC250_MMIO_{table.upper()}_ALLOW_COUNT {len(entries)}",
                 f"static const unsigned long g_Mmio{table}Allow[BC250_MMIO_{table.upper()}_ALLOW_COUNT] = {{"]
         out += [f"    0x{off:05X}ul,   // {entries[off]}" for off in sorted(entries)]
         out += ["};", ""]
+        sequenced |= set(entries)
         summary.append(f"{len(entries)} in the {table} sequence")
+    for ip, name in NAMED:
+        if offset(maps, ip, name) not in reads and offset(maps, ip, name) not in sequenced:
+            sys.exit(f"{ip}.{name} is used by the driver but neither on the read list nor in a sequence's table")
     out += ["#endif", ""]
     (HERE / "regs.generated.h").write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes)

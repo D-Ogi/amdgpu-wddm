@@ -1,0 +1,2788 @@
+== attempt on 0.5.4: the plan that showed the register missing from the driver table (GCMC_VM_CACHEABLE_DRAM_ADDRESS_END)
+   (compared here with the corrected trace filter: the plan itself was right, the table and the first filter were not)
+  [ 199] address driver 0x3B288 FE00A000 GC.RLC_CSIB_ADDR_LO   trace GC.RLC_CSIB_ADDR_LO 0x3B288 008CE000
+equal 201, address registers with another value 2, other differences 0
+verdict: AS EXPECTED
+
+== H3: the plan of stages 1 to 5
+driver: 203 register writes in 5 stages   trace: 355 writes in the step
+TLB flush writes after binds: 0, with a value other than amdgpu's: 0
+  stage 1: rc 0, writes from [0]
+  stage 2: rc 0, writes from [1]
+  stage 3: rc 0, writes from [35]
+  stage 4: rc 0, writes from [38]
+  stage 5: rc 0, writes from [195]
+  [ 198] address driver 0x3B28C 000000F5 GC.RLC_CSIB_ADDR_HI   trace GC.RLC_CSIB_ADDR_HI 0x3B28C 000000F4
+  [ 199] address driver 0x3B288 FE00A000 GC.RLC_CSIB_ADDR_LO   trace GC.RLC_CSIB_ADDR_LO 0x3B288 008CE000
+equal 201, address registers with another value 2, other differences 0
+verdict: AS EXPECTED
+
+== H3: state after the plan, control = the sweep after the PSP load
+  OTHER               GC.SDMA0_STATUS2_REG: 00000704 -> 00000604   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000E91 -> 00000E85   (Linux after init: 00000419)
+  clock/counter GC.SQ_TIME_HI: 00000042 -> 0000004C
+  clock/counter GC.SQ_TIME_LO: 160836BC -> 191D2ABD
+  clock/counter GC.CP_DMA_READ_TAGS: 02B41004 -> 03B41804
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 03DDFE33 -> FEA22C21
+  clock/counter GC.RLC_GPU_CLOCK_32: 0F215577 -> 09E5951F
+  OTHER               MP0.MP0_SMN_C2PMSG_60: 9C00000B -> 7B00000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002C2BA8 -> 002C4AFF   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 0 to Linux's value after init, 4 to something else
+
+== H4 to H8: the executed writes of the seven calls (gfx-run-s1 .. s7), the whole step against the trace
+driver: 355 register writes in 7 stages   trace: 355 writes in the step
+TLB flush writes after binds: 69, with a value other than amdgpu's: 0
+  stage 1: rc 0, writes from [69]
+  stage 2: rc 0, writes from [0]
+  stage 3: rc 0, writes from [0]
+  stage 4: rc 0, writes from [0]
+  stage 5: rc 0, writes from [0]
+  stage 6: rc 0, writes from [0]
+  stage 7: rc 0, writes from [0]
+  [ 198] address driver 0x3B28C 000000F5 GC.RLC_CSIB_ADDR_HI   trace GC.RLC_CSIB_ADDR_HI 0x3B28C 000000F4
+  [ 199] address driver 0x3B288 FE00A000 GC.RLC_CSIB_ADDR_LO   trace GC.RLC_CSIB_ADDR_LO 0x3B288 008CE000
+  [ 207] address driver 0x0C8B8 00005010 GC.CP_HQD_EOP_BASE_ADDR   trace GC.CP_HQD_EOP_BASE_ADDR 0x0C8B8 000065F0
+  [ 210] address driver 0x0C824 FE000000 GC.CP_MQD_BASE_ADDR   trace GC.CP_MQD_BASE_ADDR 0x0C824 008CD000
+  [ 211] address driver 0x0C828 000000F5 GC.CP_MQD_BASE_ADDR_HI   trace GC.CP_MQD_BASE_ADDR_HI 0x0C828 000000F4
+  [ 213] address driver 0x0C844 00004010 GC.CP_HQD_PQ_BASE   trace GC.CP_HQD_PQ_BASE 0x0C844 00008000
+  [ 216] address driver 0x0C850 00400000 GC.CP_HQD_PQ_RPTR_REPORT_ADDR   trace GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0C850 004015E0
+  [ 218] address driver 0x0C858 00400008 GC.CP_HQD_PQ_WPTR_POLL_ADDR   trace GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0C858 00401600
+  [ 309] address driver 0x04C4C 0051C008 GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO   trace GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO 0x04C4C 004016A0
+  [ 313] address driver 0x04BA4 0051C000 GC.SDMA0_GFX_RB_RPTR_ADDR_LO   trace GC.SDMA0_GFX_RB_RPTR_ADDR_LO 0x04BA4 00401680
+  [ 314] address driver 0x04B84 000051D0 GC.SDMA0_GFX_RB_BASE   trace GC.SDMA0_GFX_RB_BASE 0x04B84 00006600
+  [ 335] address driver 0x0644C 0051C018 GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO   trace GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO 0x0644C 00401740
+  [ 339] address driver 0x063A4 0051C010 GC.SDMA1_GFX_RB_RPTR_ADDR_LO   trace GC.SDMA1_GFX_RB_RPTR_ADDR_LO 0x063A4 00401720
+  [ 340] address driver 0x06384 000051F0 GC.SDMA1_GFX_RB_BASE   trace GC.SDMA1_GFX_RB_BASE 0x06384 00006620
+equal 341, address registers with another value 14, other differences 0
+verdict: AS EXPECTED
+
+== stage 1: state, control = the sweep before it (loaded)
+  as Linux after init NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN: 00000000 -> 00000001
+  OTHER               GC.SDMA0_STATUS2_REG: 00000704 -> 000005E4   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000E91 -> 00000E65   (Linux after init: 00000419)
+  clock/counter GC.SQ_TIME_HI: 00000042 -> 00000059
+  clock/counter GC.SQ_TIME_LO: 160836BC -> 81EC5DA4
+  clock/counter GC.CP_DMA_READ_TAGS: 02B41004 -> 04B42004
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 03DDFE33 -> 4E80442B
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 00000006 -> 00000008
+  clock/counter GC.RLC_GPU_CLOCK_32: 0F215577 -> 59C3AA5B
+  OTHER               MP0.MP0_SMN_C2PMSG_60: 9C00000B -> 5A00000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002C2BA8 -> 002C7008   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 1 to Linux's value after init, 4 to something else
+
+== stage 2: state, control = the sweep before it (s1)
+  OTHER               GC.SDMA0_STATUS2_REG: 000005E4 -> 00000818   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000E65 -> 00000E95   (Linux after init: 00000419)
+  as Linux after init GC.GE_FAST_CLKS: 00000000 -> 0000493E
+  as Linux after init GC.PA_SC_ENHANCE: 08000001 -> 08000009
+  as Linux after init GC.SQ_ARB_CONFIG: 00000030 -> 00000130
+  clock/counter GC.SQ_TIME_HI: 00000059 -> 00000063
+  clock/counter GC.SQ_TIME_LO: 81EC5DA4 -> 77CA729E
+  as Linux after init GC.TA_CNTL_AUX: 01030008 -> 01030000
+  as Linux after init GC.DB_DEBUG: 00000000 -> 20000000
+  as Linux after init GC.DB_DEBUG3: 00000000 -> 00000200
+  as Linux after init GC.DB_DEBUG4: 04000000 -> 04800000
+  as Linux after init GC.DB_LAST_OF_BURST_CONFIG: 02060410 -> 03860210
+  as Linux after init GC.CB_HW_CONTROL_4: 003C0014 -> 003C8014
+  as Linux after init GC.CB_HW_CONTROL_3: 20000000 -> A0000000
+  as Linux after init GC.RMI_SPARE: FFFF3108 -> FFFF3100
+  as Linux after init GC.GCR_GENERAL_CNTL: 00F00400 -> 00F08500
+  as Linux after init GC.UTCL1_CTRL: 00000000 -> 00800000
+  as Linux after init GC.CP_SD_CNTL: 0000045F -> 000005FF
+  OTHER               GC.GC_CAC_AGGR_LOWER: 00000000 -> 026FFDB8   (Linux after init: 03A3C930)
+  clock/counter GC.CP_DMA_READ_TAGS: 04B42004 -> 05B42804
+  as Linux after init GC.GL1_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_VC5_ENABLE: 00000000 -> 00000003
+  as Linux after init GC.GL2C_CTRL2: 1402002F -> 9402002F
+  as Linux after init GC.GL2C_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2C_CTRL3: 00002188 -> 00000188
+  as Linux after init GC.GL2A_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2_PIPE_STEER_0: 32103210 -> 21302130
+  as Linux after init GC.GL2_PIPE_STEER_1: 32103210 -> 21302130
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 4E80442B -> 480454DB
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 00000008 -> 00000009
+  clock/counter GC.RLC_GPU_CLOCK_32: 59C3AA5B -> 5347BC4B
+  as Linux after init GC.CGTT_SPI_CLK_CTRL: 00000100 -> 3C000100
+  as Linux after init GC.SQ_LDS_CLK_CTRL: 00000000 -> FFFFFFFF
+  as Linux after init GC.GL2C_CGTT_SCLK_CTRL: 00000100 -> 10000100
+  as Linux after init GC.CGTT_CPF_CLK_CTRL: 00000100 -> F8000100
+  OTHER               MP0.MP0_SMN_C2PMSG_60: 5A00000B -> 3900000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002C7008 -> 002C8F54   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 27 to Linux's value after init, 5 to something else
+
+== stage 3: state, control = the sweep before it (s2)
+  OTHER               GC.SDMA0_STATUS2_REG: 00000818 -> 0000071C   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000E95 -> 00000711   (Linux after init: 00000419)
+  clock/counter GC.SQ_TIME_HI: 00000063 -> 0000006D
+  clock/counter GC.SQ_TIME_LO: 77CA729E -> 688590C8
+  OTHER               GC.GC_CAC_AGGR_LOWER: 026FFDB8 -> 027016E0   (Linux after init: 03A3C930)
+  clock/counter GC.CP_DMA_READ_TAGS: 05B42804 -> 06B43004
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 480454DB -> 410858EB
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 00000009 -> 0000000A
+  clock/counter GC.RLC_GPU_CLOCK_32: 5347BC4B -> 4C4BC11B
+  OTHER               MP0.MP0_SMN_C2PMSG_60: 3900000B -> 1800000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002C8F54 -> 002CAE8D   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 0 to Linux's value after init, 5 to something else
+
+== stage 4: state, control = the sweep before it (s3)
+  OTHER               GC.SDMA0_STATUS2_REG: 0000071C -> 00000F5C   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000711 -> 00000535   (Linux after init: 00000419)
+  as Linux after init GC.GRBM_CNTL: 00000018 -> 000000FF
+  as Linux after init GC.SH_MEM_CONFIG: 00000000 -> 0000C00C
+  clock/counter GC.SQ_TIME_HI: 0000006D -> 00000077
+  clock/counter GC.SQ_TIME_LO: 688590C8 -> 66196694
+  as Linux after init GC.SPI_GDBG_TRAP_CONFIG: 00000000 -> FF008000
+  OTHER               GC.GC_CAC_AGGR_LOWER: 027016E0 -> 026EC448   (Linux after init: 03A3C930)
+  as Linux after init GC.GDS_VMID1_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID2_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID3_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID4_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID5_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID6_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID7_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID8_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID9_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID10_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID11_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID12_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID13_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID14_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID15_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID1: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID2: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID3: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID4: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID5: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID6: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID7: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID8: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID9: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID10: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID11: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID12: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID13: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID14: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID15: 00400000 -> 00000000
+  clock/counter GC.CP_DMA_READ_TAGS: 06B43004 -> 07B43804
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 410858EB -> 3B4356A5
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000000A -> 0000000B
+  clock/counter GC.RLC_GPU_CLOCK_32: 4C4BC11B -> 4686BDE3
+  OTHER               MP0.MP0_SMN_C2PMSG_60: 1800000B -> F700000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002CAE8D -> 002CCDF5   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 33 to Linux's value after init, 5 to something else
+
+== stage 5: state, control = the sweep before it (s4)
+  OTHER               GC.SDMA0_STATUS2_REG: 00000F5C -> 0000070C   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000535 -> 00000E6D   (Linux after init: 00000419)
+  clock/counter GC.SQ_TIME_HI: 00000077 -> 00000083
+  clock/counter GC.SQ_TIME_LO: 66196694 -> 79F3A04C
+  OTHER               GC.GC_CAC_AGGR_LOWER: 026EC448 -> 026FD400   (Linux after init: 03A3C930)
+  clock/counter GC.CP_DMA_READ_TAGS: 07B43804 -> 08B44004
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 3B4356A5 -> 69CD5FBB
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000000B -> 0000000C
+  clock/counter GC.RLC_GPU_CLOCK_32: 4686BDE3 -> 7510C6B7
+  as Linux after init GC.RLC_PG_CNTL: 00000008 -> 00000000
+  as Linux after init GC.RLC_CGCG_CGLS_CTRL: 0001003C -> 00000000
+  as Linux after init GC.RLC_SPM_MC_CNTL: 00000000 -> 0000000F
+  OTHER               GC.RLC_CSIB_ADDR_LO: 00000000 -> FE00A000   (Linux after init: 008CE000)
+  OTHER               GC.RLC_CSIB_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.RLC_CSIB_LENGTH: 00000000 -> 000003B5
+  OTHER               MP0.MP0_SMN_C2PMSG_60: F700000B -> D600000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002CCDF5 -> 002CF0B1   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 4 to Linux's value after init, 7 to something else
+
+== stage 6: state, control = the sweep before it (s5)
+  OTHER               GC.SDMA0_STATUS2_REG: 0000070C -> 00000604   (Linux after init: 00000DAC)
+  OTHER               GC.SDMA1_STATUS2_REG: 00000E6D -> 00000605   (Linux after init: 00000419)
+  as Linux after init GC.CP_MEC_CNTL: 50000000 -> 00000000
+  as Linux after init GC.CP_STALLED_STAT1: 00000000 -> 00000C00
+  as Linux after init GC.CP_PFP_INSTR_PNTR: 00000000 -> 0000172E
+  as Linux after init GC.CP_ME_INSTR_PNTR: 00000000 -> 00000E19
+  as Linux after init GC.CP_CE_INSTR_PNTR: 00000000 -> 000005CF
+  OTHER               GC.CP_MEC1_INSTR_PNTR: 00000000 -> 00000491   (Linux after init: 00000447)
+  OTHER               GC.CP_MEC2_INSTR_PNTR: 00000000 -> 00000447   (Linux after init: 00000491)
+  as Linux after init GC.CP_ME_CNTL: 15000000 -> 00000000
+  OTHER               GC.CP_CNTX_STAT: 00000000 -> 10000000   (Linux after init: 20000000)
+  OTHER               GC.CP_RB0_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_MEQ_STAT: 00000000 -> 01C301C3   (Linux after init: 01E901E9)
+  OTHER               GC.VGT_LAST_COPY_STATE: 00000000 -> 00010000   (Linux after init: 00020001)
+  clock/counter GC.SQ_TIME_HI: 00000083 -> 00000091
+  clock/counter GC.SQ_TIME_LO: 79F3A04C -> D916342A
+  OTHER               GC.CP_RB0_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  as Linux after init GC.CP_RB0_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_RB0_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  as Linux after init GC.CP_RB0_BUFSZ_MASK: 00000000 -> 000007FF
+  as Linux after init GC.CP_DEVICE_ID: 00000000 -> 00000001
+  OTHER               GC.CP_RB0_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_LOWER: 00000000 -> 00000458
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_UPPER: 00000108 -> 0FFFFFFC
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_LOWER: 00000110 -> 00000000
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_UPPER: 0FFFFFFC -> 00000450
+  as Linux after init GC.CP_PQ_STATUS: 00000000 -> 00000002
+  as Linux after init GC.CP_CE_CS_PARTITION_INDEX: 00000000 -> 00008000
+  as Linux after init GC.CP_SUSPEND_CNTL: 00000002 -> 00000000
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR: 00000000 -> FE009000   (Linux after init: 008CC000)
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.CP_GFX_HQD_ACTIVE: 00000000 -> 00000001
+  OTHER               GC.CP_GFX_HQD_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_RB_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  as Linux after init GC.CP_RB_DOORBELL_CONTROL: 00000000 -> C0000458
+  OTHER               GC.CP_GFX_HQD_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_BASE: CDCDCDCD -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_CE_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  OTHER               GC.CP_GFX_HQD_CE_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CE_CNTL: 08A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CE_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_CE_DOORBELL_CONTROL: 00000000 -> C0000458
+  as Linux after init GC.CP_PFP_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_CE_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_MEC_JT_STAT: 00000000 -> 000000FF
+  as Linux after init GC.CP_RB0_ACTIVE: 00000000 -> 00000001
+  OTHER               GC.GC_CAC_AGGR_LOWER: 026FD400 -> 026E80F0   (Linux after init: 03A3C930)
+  as Linux after init GC.DB_RENDER_CONTROL: 00000DFD -> 00000000
+  as Linux after init GC.DB_DEPTH_VIEW: 43F56F6C -> 00000000
+  as Linux after init GC.DB_RENDER_OVERRIDE: F81F7DFE -> 00000000
+  as Linux after init GC.DB_RENDER_OVERRIDE2: 021DA560 -> 00000000
+  as Linux after init GC.DB_DEPTH_SIZE_XY: 3C543CE8 -> 00000000
+  as Linux after init GC.DB_DEPTH_BOUNDS_MIN: 2F75FF7D -> 00000000
+  as Linux after init GC.DB_DEPTH_BOUNDS_MAX: B82F7FB5 -> 00000000
+  as Linux after init GC.DB_STENCIL_CLEAR: 00000099 -> 00000000
+  as Linux after init GC.DB_DEPTH_CLEAR: DC65FFCC -> 00000000
+  as Linux after init GC.PA_SC_SCREEN_SCISSOR_TL: 3F827C12 -> 00000000
+  as Linux after init GC.PA_SC_SCREEN_SCISSOR_BR: CD4F6FAF -> 40004000
+  as Linux after init GC.DB_DFSM_CONTROL: 0000000F -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_2: E01FF0BD -> 00000000
+  as Linux after init GC.DB_Z_INFO: B8025E0C -> 00000000
+  as Linux after init GC.DB_STENCIL_INFO: 2810DA00 -> 00000000
+  as Linux after init GC.DB_Z_READ_BASE: 8FF782DE -> 00000000
+  as Linux after init GC.DB_STENCIL_READ_BASE: 9FABF5BE -> 00000000
+  as Linux after init GC.DB_Z_WRITE_BASE: F8FA6C6C -> 00000000
+  as Linux after init GC.DB_STENCIL_WRITE_BASE: F774359A -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_1: 000AE8D9 -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_3: 003DEBDA -> 00000000
+  as Linux after init GC.DB_Z_READ_BASE_HI: 00000099 -> 00000000
+  as Linux after init GC.DB_STENCIL_READ_BASE_HI: 000000DC -> 00000000
+  as Linux after init GC.DB_Z_WRITE_BASE_HI: 00000027 -> 00000000
+  as Linux after init GC.DB_STENCIL_WRITE_BASE_HI: 000000FE -> 00000000
+  as Linux after init GC.DB_RMI_L2_CACHE_CONTROL: 033700AF -> 00150055
+  as Linux after init GC.TA_BC_BASE_ADDR: 77DB7FDC -> 00000000
+  as Linux after init GC.TA_BC_BASE_ADDR_HI: 000000D7 -> 00000000
+  as Linux after init GC.PA_SC_WINDOW_OFFSET: D5B4F8FD -> 00000000
+  as Linux after init GC.PA_SC_WINDOW_SCISSOR_TL: 6CFD347F -> 80000000
+  as Linux after init GC.PA_SC_WINDOW_SCISSOR_BR: 35627D9B -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_RULE: 0000CCC7 -> 0000FFFF
+  as Linux after init GC.PA_SC_CLIPRECT_0_TL: 2DCF6ADE -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_0_BR: 3D047D5B -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_1_TL: 7BF13907 -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_1_BR: 00D25FAD -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_2_TL: 1A5E2E7F -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_2_BR: 5BB759B9 -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_3_TL: 653C1359 -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_3_BR: 5EB6401A -> 40004000
+  as Linux after init GC.PA_SC_EDGERULE: B2FC9E16 -> AA99AAAA
+  as Linux after init GC.PA_SU_HARDWARE_SCREEN_OFFSET: 00EC001B -> 00000000
+  as Linux after init GC.CB_TARGET_MASK: F588FBDE -> FFFFFFFF
+  as Linux after init GC.CB_SHADER_MASK: FEAC0E7E -> FFFFFFFF
+  as Linux after init GC.PA_SC_GENERIC_SCISSOR_TL: 45DF516F -> 80000000
+  as Linux after init GC.PA_SC_GENERIC_SCISSOR_BR: 75597D0B -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_TL: 58F43658 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_BR: 55EF0DFB -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_TL: C1405DC3 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_BR: 488C0310 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_TL: BA805F7B -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_BR: 18270CFA -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_TL: F8010105 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_BR: 20850892 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_TL: D6F07155 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_BR: 239F6EA3 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_TL: D4C20A49 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_BR: 08010F02 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_TL: EA81546E -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_BR: 7B6D12CF -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_TL: E240706A -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_BR: 040706C6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_TL: 7D7A7E71 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_BR: 50721C67 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_TL: 340868C9 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_BR: 50640002 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_TL: 6AC67FB1 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_BR: 798F227D -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_TL: 30056260 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_BR: 6000324A -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_TL: 7E792C3F -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_BR: 254432ED -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_TL: 8C600634 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_BR: 400C462F -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_TL: AB3E6F36 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_BR: 59F77DEC -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_TL: 41400901 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_BR: 08C15DA6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_0: AED9CEF6 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_0: 52EA1CED -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_1: 10101810 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_1: 82820815 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_2: C87C4C5E -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_2: 76FFB2FF -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_3: 426028A4 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_3: 10FD0052 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_4: DB1EE1E3 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_4: F35E2E8F -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_5: 4000A69B -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_5: AEB1249A -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_6: 3BFB5DF1 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_6: FF1E9970 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_7: F20C2234 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_7: A81F03A4 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_8: F3F2B496 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_8: 18BEBA3D -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_9: 2049A801 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_9: DEAA8013 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_10: ABA14BFF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_10: F62FB8E9 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_11: C06DC646 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_11: 0C020234 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_12: E61CB2FF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_12: F7D6EED7 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_13: 070D8851 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_13: 88428000 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_14: A88265AC -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_14: 1FD3BF34 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_15: 05126840 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_15: 44286210 -> 3F800000
+  as Linux after init GC.PA_SC_RASTER_CONFIG: 2A00126A -> 00000000
+  as Linux after init GC.PA_SC_RASTER_CONFIG_1: 00000036 -> 00000000
+  OTHER               GC.PA_SC_TILE_STEERING_OVERRIDE: 00123126 -> 00002000   (Linux after init: 00122000)
+  as Linux after init GC.PA_SC_RIGHT_VERT_GRID: D832EF82 -> 00000000
+  as Linux after init GC.PA_SC_LEFT_VERT_GRID: F36CC81A -> 00000000
+  as Linux after init GC.PA_SC_HORIZ_GRID: FF82968F -> 00000000
+  as Linux after init GC.CB_RMI_GL2_CACHE_CONTROL: C05500D0 -> 00550055
+  as Linux after init GC.CB_BLEND_RED: 204EBED5 -> 00000000
+  as Linux after init GC.CB_BLEND_GREEN: 114067FC -> 00000000
+  as Linux after init GC.CB_BLEND_BLUE: F9B7FDC2 -> 00000000
+  as Linux after init GC.CB_BLEND_ALPHA: 8686F7C0 -> 00000000
+  as Linux after init GC.CB_DCC_CONTROL: 00004779 -> 00000000
+  as Linux after init GC.CB_COVERAGE_OUT_CONTROL: 00000B25 -> 00000000
+  as Linux after init GC.DB_STENCIL_CONTROL: 00D0FD3D -> 00000000
+  as Linux after init GC.DB_STENCILREFMASK: 72EF6BFF -> 01000000
+  as Linux after init GC.DB_STENCILREFMASK_BF: 74C5EB67 -> 01000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE: 26B3BB8C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET: 197D6C7B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE: A76CEF38 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET: 2BA7B35F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE: B4EC1FFB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET: D77BCE77 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_1: 80100014 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_1: 58840492 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_1: 01005404 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_1: 4A910402 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_1: 6400058B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_1: C6428260 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_2: 24B8CF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_2: 7B375CDF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_2: FEDFD8DE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_2: 02746BDB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_2: F75F6FAF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_2: 37A7CE76 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_3: 20ECC18D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_3: D1610001 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_3: E8121280 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_3: 24A14001 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_3: 20281C04 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_3: F989084A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_4: 59FFF7F9 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_4: EB2B2FF3 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_4: BF83CABD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_4: AEDADA78 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_4: 8F2F5A5B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_4: 4DB9ADEB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_5: 984034DD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_5: A1024408 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_5: 4233A381 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_5: 54532864 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_5: 51060124 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_5: B06200A0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_6: FFB7FDEF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_6: BFFFFF6F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_6: DFABEF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_6: AE66E83A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_6: B6B6337E -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_6: 5DF7FF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_7: 054B80E4 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_7: 0729040E -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_7: 2B421876 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_7: 188C620C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_7: 8C9500A6 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_7: D60DE819 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_8: F9FC3A6F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_8: 7F3249FC -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_8: BB7FE73D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_8: 7DFEDB2B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_8: EE6EFEF6 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_8: BFDE9BFE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_9: C1E0710C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_9: 51001D03 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_9: 8F450004 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_9: C8A0890A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_9: 30280217 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_9: 0AC20084 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_10: 579F3EF7 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_10: DEE362B2 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_10: D56DE1F5 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_10: 9F77E9F9 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_10: BB3DFF1A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_10: 775EFBFD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_11: F88D4144 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_11: 32000221 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_11: 41B30022 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_11: C25E11B0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_11: 488E3182 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_11: 22040146 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_12: 3B7AEFFE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_12: 8DBF6BCF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_12: E31EFE75 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_12: 224FC9BB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_12: AEBDBF1D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_12: CA3F6F73 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_13: 224A6240 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_13: A0C60C24 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_13: 2D210805 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_13: 00500094 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_13: 050111A1 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_13: 22766860 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_14: 4ADAFEFF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_14: FFCEDEDD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_14: E1EBC9F0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_14: 56BE76FB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_14: E7D4E8BD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_14: FEFEE5CF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_15: 8B004801 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_15: 84021572 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_15: 002A834D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_15: 8E809682 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_15: 2813481A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_15: 50C4A002 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_X: BFF3E676 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_Y: F4CFDDD8 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_Z: EEFEFE5F -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_W: B3DF8EBA -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_X: 5BEF8BFE -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_Y: 7DF6FEFD -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_Z: 5568BFB8 -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_W: 5FFEBAB5 -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_X: 2EFAB73E -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_Y: F4FE9FAE -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_Z: F3AF0DFF -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_W: 3ECD77FE -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_X: 56F1E5EC -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_Y: 2FE3DAAD -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_Z: 653F732E -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_W: CEEDD57E -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_X: 1F994FED -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_Y: 7BF758B3 -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_Z: 5D5DB192 -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_W: BBE9AEBF -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_X: BFDEC36E -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_Y: 55BED873 -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_Z: B9D74527 -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_W: ADEDBAEF -> 00000000
+  as Linux after init GC.PA_CL_PROG_NEAR_CLIP_Z: 6F393CA1 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_0: 0162E732 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_1: 03FD4503 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_2: 023F822F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_3: 0085630D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_4: 01E7E43D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_5: 01450706 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_6: 0271C73B -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_7: 01B7A23A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_8: 02FDE73E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_9: 0388E117 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_10: 02F7813A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_11: 03C4661F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_12: 03AD8519 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_13: 01B5272E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_14: 00EA8108 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_15: 038FC13B -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_16: 03CD2210 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_17: 031BC32D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_18: 02D2C22E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_19: 01FFE230 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_20: 022C050F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_21: 035C0433 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_22: 03380212 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_23: 0358013D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_24: 02700706 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_25: 0170032A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_26: 0178051F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_27: 0258061C -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_28: 02680535 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_29: 02540320 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_30: 031C0207 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_31: 021C073A -> 00000000
+  as Linux after init GC.SPI_VS_OUT_CONFIG: 00000066 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_ENA: 0000E0E8 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_ADDR: 0000DACE -> 00000000
+  as Linux after init GC.SPI_INTERP_CONTROL_0: 00007FF9 -> 00000000
+  as Linux after init GC.SPI_PS_IN_CONTROL: 0000C1BE -> 00000002
+  as Linux after init GC.SPI_BARYC_CNTL: 00D2C2C5 -> 00000000
+  as Linux after init GC.SPI_TMPRING_SIZE: 0117657D -> 00000000
+  as Linux after init GC.CB_BLEND0_CONTROL: 4FCC00FF -> 00000000
+  as Linux after init GC.CB_BLEND1_CONTROL: 8B45000E -> 00000000
+  as Linux after init GC.CB_BLEND2_CONTROL: C9D91691 -> 00000000
+  as Linux after init GC.CB_BLEND3_CONTROL: 58CD0A0F -> 00000000
+  as Linux after init GC.CB_BLEND4_CONTROL: 5F781F03 -> 00000000
+  as Linux after init GC.CB_BLEND5_CONTROL: B33A1D9F -> 00000000
+  as Linux after init GC.CB_BLEND6_CONTROL: E3201012 -> 00000000
+  as Linux after init GC.CB_BLEND7_CONTROL: C21F0B9F -> 00000000
+  OTHER               GC.GFX_COPY_STATE: 00000F00 -> 00000F08   (Linux after init: 00000F11)
+  as Linux after init GC.PA_CL_POINT_X_RAD: 77FBE3BE -> 00000000
+  as Linux after init GC.PA_CL_POINT_Y_RAD: FEB1D352 -> 00000000
+  as Linux after init GC.PA_CL_POINT_SIZE: BEDFEDE3 -> 00000000
+  as Linux after init GC.PA_CL_POINT_CULL_RAD: 7D1C353F -> 00000000
+  as Linux after init GC.GE_MAX_OUTPUT_PER_SUBGROUP: 0000038C -> 00000000
+  as Linux after init GC.DB_DEPTH_CONTROL: 801003CB -> 00000000
+  as Linux after init GC.DB_EQAA: 003B0777 -> 00000000
+  as Linux after init GC.CB_COLOR_CONTROL: 00BE0030 -> 00000000
+  as Linux after init GC.DB_SHADER_CONTROL: 00C3AC36 -> 00000000
+  as Linux after init GC.PA_CL_CLIP_CNTL: 1658A035 -> 00090000
+  as Linux after init GC.PA_SU_SC_MODE_CNTL: 01D9061F -> 00000004
+  as Linux after init GC.PA_CL_VTE_CNTL: 00000538 -> 00000000
+  as Linux after init GC.PA_CL_VS_OUT_CNTL: 0BFC31E3 -> 00000000
+  as Linux after init GC.PA_CL_NANINF_CNTL: 0000389A -> 00000000
+  as Linux after init GC.PA_SU_LINE_STIPPLE_CNTL: 0000000A -> 00000000
+  as Linux after init GC.PA_SU_LINE_STIPPLE_SCALE: BAB81C87 -> 00000000
+  as Linux after init GC.PA_SU_PRIM_FILTER_CNTL: 8000CDC7 -> 00000000
+  as Linux after init GC.PA_SU_SMALL_PRIM_FILTER_CNTL: 00000039 -> 00000000
+  as Linux after init GC.PA_CL_NGG_CNTL: 00000002 -> 00000000
+  as Linux after init GC.PA_SU_OVER_RASTERIZATION_CNTL: 0000000A -> 00000000
+  as Linux after init GC.PA_STEREO_CNTL: 0B230B40 -> 00000000
+  as Linux after init GC.PA_STATE_STEREO_X: 947F86CB -> 00000000
+  as Linux after init GC.PA_SU_POINT_SIZE: D08CD0A9 -> 00000000
+  as Linux after init GC.PA_SU_POINT_MINMAX: FE908C15 -> 00000000
+  as Linux after init GC.PA_SU_LINE_CNTL: 0000080F -> 00000000
+  as Linux after init GC.PA_SC_LINE_STIPPLE: 60EBFA09 -> 00000000
+  as Linux after init GC.VGT_HOS_MAX_TESS_LEVEL: 302598C6 -> 00000000
+  as Linux after init GC.VGT_HOS_MIN_TESS_LEVEL: 10AB68EA -> 00000000
+  as Linux after init GC.VGT_GS_MODE: 001C6816 -> 00000000
+  as Linux after init GC.VGT_GS_ONCHIP_CNTL: CEAAF9AF -> 00000000
+  as Linux after init GC.PA_SC_MODE_CNTL_0: 00000011 -> 00000000
+  as Linux after init GC.PA_SC_MODE_CNTL_1: 06000000 -> 00000000
+  as Linux after init GC.VGT_ENHANCE: B87F97DA -> 00000000
+  as Linux after init GC.VGT_GS_PER_ES: 000007E3 -> 00000100
+  as Linux after init GC.VGT_ES_PER_GS: 000007DF -> 00000080
+  as Linux after init GC.VGT_GS_PER_VS: 00000007 -> 00000002
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_1: 000073D7 -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_2: 000029EF -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_3: 00005EDF -> 00000000
+  as Linux after init GC.VGT_GS_OUT_PRIM_TYPE: 0FDF032A -> 00000000
+  as Linux after init GC.IA_ENHANCE: 956DDC39 -> 00000000
+  as Linux after init GC.WD_ENHANCE: AEDF0E63 -> 00000000
+  as Linux after init GC.VGT_DRAW_PAYLOAD_CNTL: 0000003F -> 00000000
+  as Linux after init GC.VGT_ESGS_RING_ITEMSIZE: 00007DD7 -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_ITEMSIZE: 0000588C -> 00000000
+  as Linux after init GC.VGT_REUSE_OFF: 00000001 -> 00000000
+  as Linux after init GC.VGT_VTX_CNT_EN: 00000001 -> 00000000
+  as Linux after init GC.DB_HTILE_SURFACE: 000143FF -> 00000000
+  as Linux after init GC.DB_SRESULTS_COMPARE_STATE0: 010F7DF5 -> 00000000
+  as Linux after init GC.DB_SRESULTS_COMPARE_STATE1: 000CD477 -> 00000000
+  as Linux after init GC.DB_PRELOAD_CONTROL: 8A95DEE4 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_0: 0DC14FFF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_0: 000003CD -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_0: DBA5DCCF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_1: 489F9EF7 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_1: 000001DB -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_1: E8DFC364 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_2: 9FF1FEEF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_2: 000003EA -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_2: F2737D99 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_3: 3F6DB86A -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_3: 000003BE -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_3: FEC7A10C -> 00000000
+  as Linux after init GC.VGT_GS_MAX_VERT_OUT: 000005EC -> 00000000
+  as Linux after init GC.GE_NGG_SUBGRP_CNTL: 0000B2DD -> 00000000
+  as Linux after init GC.VGT_TESS_DISTRIBUTION: 444F01A8 -> 00000000
+  as Linux after init GC.VGT_LS_HS_CONFIG: 0009D0CE -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE: 00003D8B -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_1: 00000348 -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_2: 00003DFF -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_3: 00002FDD -> 00000000
+  as Linux after init GC.DB_ALPHA_TO_MASK: 0000FF00 -> 00000000
+  as Linux after init GC.VGT_DISPATCH_DRAW_INDEX: BF948FD5 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_DB_FMT_CNTL: 0000011F -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_CLAMP: DCEB0F0E -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_FRONT_SCALE: 1EA170FC -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_FRONT_OFFSET: F4F6D821 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_BACK_SCALE: D9D0C9D8 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_BACK_OFFSET: BFC59DCC -> 00000000
+  as Linux after init GC.PA_SC_CENTROID_PRIORITY_0: 8221C8CF -> 00000000
+  as Linux after init GC.PA_SC_CENTROID_PRIORITY_1: D10C90CE -> 00000000
+  as Linux after init GC.PA_SC_LINE_CNTL: 00002600 -> 00001000
+  as Linux after init GC.PA_SC_AA_CONFIG: 0F712011 -> 00000000
+  as Linux after init GC.PA_SU_VTX_CNTL: 0000002B -> 00000005
+  as Linux after init GC.PA_CL_GB_VERT_CLIP_ADJ: FE27F2FF -> 3F800000
+  as Linux after init GC.PA_CL_GB_VERT_DISC_ADJ: B5FEAFFF -> 3F800000
+  as Linux after init GC.PA_CL_GB_HORZ_CLIP_ADJ: 2FB67D67 -> 3F800000
+  as Linux after init GC.PA_CL_GB_HORZ_DISC_ADJ: 7FD6BBF3 -> 3F800000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_0: 08C5E701 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_1: 6FAE8E0B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_2: 81A1EC8C -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_3: CEF1751F -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_0: 4350AA7B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_1: B9D4A44B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_2: C4B975E1 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_3: 86FEB9D9 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_0: EAC6C88A -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_1: ACE7CF01 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_2: F7CC7983 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_3: F55C0CFE -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_0: 3440F10D -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_1: C738FAAB -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_2: 22D8044C -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_3: B0D8C10A -> 00000000
+  as Linux after init GC.PA_SC_AA_MASK_X0Y0_X1Y0: D81CF7DE -> FFFFFFFF
+  as Linux after init GC.PA_SC_AA_MASK_X0Y1_X1Y1: 99E29D3C -> FFFFFFFF
+  as Linux after init GC.PA_SC_BINNER_CNTL_0: 575F458F -> 00000003
+  as Linux after init GC.PA_SC_BINNER_CNTL_1: 883B087B -> 00000000
+  as Linux after init GC.PA_SC_CONSERVATIVE_RASTERIZATION_CNTL: 0F7FFC71 -> 00100000
+  as Linux after init GC.PA_SC_NGG_MODE_CNTL: 00AD0639 -> 00000000
+  as Linux after init GC.VGT_VERTEX_REUSE_BLOCK_CNTL: 000000D3 -> 0000001E
+  as Linux after init GC.VGT_OUT_DEALLOC_CNTL: 00000036 -> 00000020
+  as Linux after init GC.CB_COLOR0_BASE: 9E715FCE -> 00000000
+  as Linux after init GC.CB_COLOR0_PITCH: 19C007F9 -> 00000000
+  as Linux after init GC.CB_COLOR0_SLICE: 0037CF59 -> 00000000
+  as Linux after init GC.CB_COLOR0_VIEW: 39FDC4E9 -> 00000000
+  as Linux after init GC.CB_COLOR0_INFO: 87EBA4FD -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB: 000E5154 -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_CONTROL: 001B66DB -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK: 35D6913F -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK_SLICE: 00000E5A -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK: ADCEB9ED -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK_SLICE: 0030B314 -> 00000000
+  as Linux after init GC.CB_COLOR0_CLEAR_WORD0: ECFFBE3C -> 00000000
+  as Linux after init GC.CB_COLOR0_CLEAR_WORD1: F9DB5BCA -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_BASE: 84662FAF -> 00000000
+  as Linux after init GC.CB_COLOR1_BASE: 19E7D98E -> 00000000
+  as Linux after init GC.CB_COLOR1_PITCH: 20F0064F -> 00000000
+  as Linux after init GC.CB_COLOR1_SLICE: 003DDB91 -> 00000000
+  as Linux after init GC.CB_COLOR1_VIEW: 0C02ECDD -> 00000000
+  as Linux after init GC.CB_COLOR1_INFO: 0D57C997 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB: 00009AB4 -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_CONTROL: 0015D5CF -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK: B2E06294 -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK_SLICE: 000028FC -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK: 09AEDAFA -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK_SLICE: 000BF9EF -> 00000000
+  as Linux after init GC.CB_COLOR1_CLEAR_WORD0: E9F4C760 -> 00000000
+  as Linux after init GC.CB_COLOR1_CLEAR_WORD1: A8B33EFF -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_BASE: AC07D3E9 -> 00000000
+  as Linux after init GC.CB_COLOR2_BASE: 0B8F67D3 -> 00000000
+  as Linux after init GC.CB_COLOR2_PITCH: 657004DF -> 00000000
+  as Linux after init GC.CB_COLOR2_SLICE: 00318DBD -> 00000000
+  as Linux after init GC.CB_COLOR2_VIEW: 2FFF2E44 -> 00000000
+  as Linux after init GC.CB_COLOR2_INFO: D85FDCF7 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB: 000F3E97 -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_CONTROL: 001FEFA4 -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK: EF4FFF2E -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK_SLICE: 00003CD8 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK: 1ADEAFD0 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK_SLICE: 00368FB3 -> 00000000
+  as Linux after init GC.CB_COLOR2_CLEAR_WORD0: 41BFC4D8 -> 00000000
+  as Linux after init GC.CB_COLOR2_CLEAR_WORD1: FFBF96EE -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_BASE: AFE3999C -> 00000000
+  as Linux after init GC.CB_COLOR3_BASE: D2AEF996 -> 00000000
+  as Linux after init GC.CB_COLOR3_PITCH: 334003D1 -> 00000000
+  as Linux after init GC.CB_COLOR3_SLICE: 003CF5F6 -> 00000000
+  as Linux after init GC.CB_COLOR3_VIEW: 36E2DE7E -> 00000000
+  as Linux after init GC.CB_COLOR3_INFO: 7B51CDF3 -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB: 0009779B -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_CONTROL: 00108DE5 -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK: 4EE1C4FF -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK_SLICE: 000001E7 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK: A9A2EE44 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK_SLICE: 003ECFE1 -> 00000000
+  as Linux after init GC.CB_COLOR3_CLEAR_WORD0: 3E1CDC2E -> 00000000
+  as Linux after init GC.CB_COLOR3_CLEAR_WORD1: DDEE0F78 -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_BASE: 5C7C7CA2 -> 00000000
+  as Linux after init GC.CB_COLOR4_BASE: 4CC95500 -> 00000000
+  as Linux after init GC.CB_COLOR4_PITCH: 7F0007AF -> 00000000
+  as Linux after init GC.CB_COLOR4_SLICE: 00221F9C -> 00000000
+  as Linux after init GC.CB_COLOR4_VIEW: 18DEFEFF -> 00000000
+  as Linux after init GC.CB_COLOR4_INFO: EBFF67CF -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB: 0000AF9C -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_CONTROL: 001F59E9 -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK: 908FEAD8 -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK_SLICE: 00002E8C -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK: 32DF3F31 -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK_SLICE: 0030E3B6 -> 00000000
+  as Linux after init GC.CB_COLOR4_CLEAR_WORD0: DDDFAED8 -> 00000000
+  as Linux after init GC.CB_COLOR4_CLEAR_WORD1: F8CB0DBD -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_BASE: DCFFE5CC -> 00000000
+  as Linux after init GC.CB_COLOR5_BASE: C6C9C866 -> 00000000
+  as Linux after init GC.CB_COLOR5_PITCH: 7DE00095 -> 00000000
+  as Linux after init GC.CB_COLOR5_SLICE: 003C2F7D -> 00000000
+  as Linux after init GC.CB_COLOR5_VIEW: 1E857FAB -> 00000000
+  as Linux after init GC.CB_COLOR5_INFO: EEF64174 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB: 000B1F6D -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_CONTROL: 0012E0F2 -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK: FB95EFF7 -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK_SLICE: 0000215E -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK: D4FDEDB1 -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK_SLICE: 003F7CE2 -> 00000000
+  as Linux after init GC.CB_COLOR5_CLEAR_WORD0: 9444BC4E -> 00000000
+  as Linux after init GC.CB_COLOR5_CLEAR_WORD1: F896DD32 -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_BASE: D775515E -> 00000000
+  as Linux after init GC.CB_COLOR6_BASE: 4136C6EE -> 00000000
+  as Linux after init GC.CB_COLOR6_PITCH: 7EE003DF -> 00000000
+  as Linux after init GC.CB_COLOR6_SLICE: 00271FDD -> 00000000
+  as Linux after init GC.CB_COLOR6_VIEW: 1F5A5610 -> 00000000
+  as Linux after init GC.CB_COLOR6_INFO: DDA9DFEB -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB: 0005E8CC -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_CONTROL: 001F5447 -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK: CFF9D8FE -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK_SLICE: 000012FB -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK: A9FCC8F3 -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK_SLICE: 001FFFEF -> 00000000
+  as Linux after init GC.CB_COLOR6_CLEAR_WORD0: 2CFFF3D1 -> 00000000
+  as Linux after init GC.CB_COLOR6_CLEAR_WORD1: 5F728A0F -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_BASE: D13D93C8 -> 00000000
+  as Linux after init GC.CB_COLOR7_BASE: 15DC1BAC -> 00000000
+  as Linux after init GC.CB_COLOR7_PITCH: 4EB003F5 -> 00000000
+  as Linux after init GC.CB_COLOR7_SLICE: 002FD18C -> 00000000
+  as Linux after init GC.CB_COLOR7_VIEW: 2DDDFF1F -> 00000000
+  as Linux after init GC.CB_COLOR7_INFO: 9971F5B6 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB: 000EEDF3 -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_CONTROL: 001C53E3 -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK: 0FDF5EDD -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK_SLICE: 00003BBD -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK: DF8ABFF1 -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK_SLICE: 001E2CD5 -> 00000000
+  as Linux after init GC.CB_COLOR7_CLEAR_WORD0: E684C3EF -> 00000000
+  as Linux after init GC.CB_COLOR7_CLEAR_WORD1: 9C8DCAAC -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_BASE: 311BEBD5 -> 00000000
+  as Linux after init GC.CB_COLOR0_BASE_EXT: 000000E4 -> 00000000
+  as Linux after init GC.CB_COLOR1_BASE_EXT: 0000005C -> 00000000
+  as Linux after init GC.CB_COLOR2_BASE_EXT: 00000079 -> 00000000
+  as Linux after init GC.CB_COLOR3_BASE_EXT: 000000BA -> 00000000
+  as Linux after init GC.CB_COLOR4_BASE_EXT: 000000F7 -> 00000000
+  as Linux after init GC.CB_COLOR5_BASE_EXT: 0000007A -> 00000000
+  as Linux after init GC.CB_COLOR6_BASE_EXT: 0000000F -> 00000000
+  as Linux after init GC.CB_COLOR7_BASE_EXT: 000000D8 -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK_BASE_EXT: 000000F8 -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK_BASE_EXT: 00000080 -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK_BASE_EXT: 000000DB -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK_BASE_EXT: 0000004F -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK_BASE_EXT: 0000005F -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK_BASE_EXT: 00000030 -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK_BASE_EXT: 00000059 -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK_BASE_EXT: 00000004 -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK_BASE_EXT: 000000D9 -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK_BASE_EXT: 00000018 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK_BASE_EXT: 000000E0 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK_BASE_EXT: 000000D9 -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK_BASE_EXT: 00000049 -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK_BASE_EXT: 00000002 -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK_BASE_EXT: 000000D6 -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK_BASE_EXT: 000000CE -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_BASE_EXT: 00000015 -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_BASE_EXT: 00000098 -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_BASE_EXT: 00000098 -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_BASE_EXT: 000000C4 -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_BASE_EXT: 000000BE -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_BASE_EXT: 00000095 -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_BASE_EXT: 000000EF -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_BASE_EXT: 000000E4 -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB2: 1A9C1C52 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB2: 150B11E6 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB2: 4D2B89FD -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB2: 1191CA01 -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB2: 0228CFD9 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB2: 0DAFD175 -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB2: FCCC1F48 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB2: 87E8D8D7 -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB3: 73FBB816 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB3: 51C30D60 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB3: 310C9F38 -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB3: 149E372F -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB3: 7E54E8D5 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB3: 04CAA5CD -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB3: 6DF6B884 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB3: 79297E9A -> 00000000
+  as Linux after init GC.SCRATCH_REG0: 00000000 -> DEADBEEF
+  clock/counter GC.CP_DMA_READ_TAGS: 08B44004 -> 09B44804
+  as Linux after init GC.CP_PFP_LOAD_CONTROL: 00000000 -> 01018003
+  as Linux after init GC.CP_SCRATCH_INDEX: 00000000 -> 0000009B
+  OTHER               GC.CP_RB_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.GUS_L1_CH1_CMD_IN: 00000000 -> 00000005   (Linux after init: 00000022)
+  OTHER               GC.GUS_L1_CH1_CMD_OUT: 00000000 -> 00000005   (Linux after init: 00000022)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 69CD5FBB -> D1D17B65
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000000C -> 0000000D
+  clock/counter GC.RLC_GPU_CLOCK_32: 7510C6B7 -> DD14E30B
+  OTHER               GC.RLC_CP_SCHEDULERS: 58504840 -> 585048C8   (Linux after init: 5850C0C8)
+  OTHER               MP0.MP0_SMN_C2PMSG_60: D600000B -> B500000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002CF0B1 -> 002D1740   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 593 to Linux's value after init, 34 to something else
+
+== stage 7: state, control = the sweep before it (s6)
+  as Linux after init NBIO.BIF_SDMA0_DOORBELL_RANGE: 00000000 -> 00140800
+  as Linux after init NBIO.BIF_SDMA1_DOORBELL_RANGE: 00000000 -> 00140850
+  OTHER               GC.SDMA0_CNTL: 000000C2 -> 000400E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA0_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  as Linux after init GC.SDMA0_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA0_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000604 -> 000007F4   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA0_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA0_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA0_PHASE2_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA0_GFX_RB_CNTL: 80840000 -> 80841017
+  OTHER               GC.SDMA0_GFX_RB_BASE: 00000000 -> 000051D0   (Linux after init: 00006600)
+  as Linux after init GC.SDMA0_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA0_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C000   (Linux after init: 00401680)
+  as Linux after init GC.SDMA0_GFX_IB_CNTL: 00000100 -> 00000101
+  OTHER               GC.SDMA0_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA0_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA0_GFX_DOORBELL_OFFSET: 00000000 -> 00000800
+  OTHER               GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C008   (Linux after init: 004016A0)
+  as Linux after init GC.SDMA0_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  OTHER               GC.SDMA1_CNTL: 000000C2 -> 000400E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA1_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  as Linux after init GC.SDMA1_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA1_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000605 -> 00000E5D   (Linux after init: 00000419)
+  as Linux after init GC.SDMA1_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA1_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA1_PHASE2_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA1_GFX_RB_CNTL: 80840000 -> 80841017
+  OTHER               GC.SDMA1_GFX_RB_BASE: 00000000 -> 000051F0   (Linux after init: 00006620)
+  as Linux after init GC.SDMA1_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA1_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C010   (Linux after init: 00401720)
+  as Linux after init GC.SDMA1_GFX_IB_CNTL: 00000100 -> 00000101
+  OTHER               GC.SDMA1_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA1_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA1_GFX_DOORBELL_OFFSET: 00000000 -> 00000850
+  OTHER               GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C018   (Linux after init: 00401740)
+  as Linux after init GC.SDMA1_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  clock/counter GC.SQ_TIME_HI: 00000091 -> 0000009E
+  clock/counter GC.SQ_TIME_LO: D916342A -> D45BDD34
+  OTHER               GC.GC_CAC_AGGR_LOWER: 026E80F0 -> 027023D8   (Linux after init: 03A3C930)
+  clock/counter GC.CP_DMA_READ_TAGS: 09B44804 -> 0AB45004
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: D1D17B65 -> 170919D9
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 0000000D -> 0000000F
+  clock/counter GC.RLC_GPU_CLOCK_32: DD14E30B -> 224C824F
+  OTHER               MP0.MP0_SMN_C2PMSG_60: B500000B -> 9400000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002D1740 -> 002D3B97   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 42 to Linux's value after init, 15 to something else
+
+== H9a: state after gfx fini, control = the sweep after the PSP load
+  as Linux after init NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN: 00000000 -> 00000001
+  as Linux after init NBIO.BIF_SDMA0_DOORBELL_RANGE: 00000000 -> 00140800
+  as Linux after init NBIO.BIF_SDMA1_DOORBELL_RANGE: 00000000 -> 00140850
+  OTHER               GC.SDMA0_CNTL: 000000C2 -> 000000E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA0_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  OTHER               GC.SDMA0_F32_CNTL: 00000000 -> 00000001   (Linux after init: 00000000)
+  as Linux after init GC.SDMA0_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA0_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000704 -> 0000081C   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA0_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA0_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA0_PHASE2_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_GFX_RB_CNTL: 80840000 -> 80841016   (Linux after init: 80841017)
+  OTHER               GC.SDMA0_GFX_RB_BASE: 00000000 -> 000051D0   (Linux after init: 00006600)
+  as Linux after init GC.SDMA0_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA0_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C000   (Linux after init: 00401680)
+  OTHER               GC.SDMA0_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA0_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA0_GFX_DOORBELL_OFFSET: 00000000 -> 00000800
+  OTHER               GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C008   (Linux after init: 004016A0)
+  as Linux after init GC.SDMA0_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  OTHER               GC.SDMA1_CNTL: 000000C2 -> 000000E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA1_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  OTHER               GC.SDMA1_F32_CNTL: 00000000 -> 00000001   (Linux after init: 00000000)
+  as Linux after init GC.SDMA1_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA1_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000E91 -> 00000EA1   (Linux after init: 00000419)
+  as Linux after init GC.SDMA1_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA1_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA1_PHASE2_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_GFX_RB_CNTL: 80840000 -> 80841016   (Linux after init: 80841017)
+  OTHER               GC.SDMA1_GFX_RB_BASE: 00000000 -> 000051F0   (Linux after init: 00006620)
+  as Linux after init GC.SDMA1_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA1_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C010   (Linux after init: 00401720)
+  OTHER               GC.SDMA1_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA1_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA1_GFX_DOORBELL_OFFSET: 00000000 -> 00000850
+  OTHER               GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C018   (Linux after init: 00401740)
+  as Linux after init GC.SDMA1_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.GRBM_CNTL: 00000018 -> 000000FF
+  OTHER               GC.GRBM_STATUS2: 00000008 -> 30000008   (Linux after init: 00000008)
+  OTHER               GC.GRBM_STATUS: 00003028 -> A0003028   (Linux after init: 00003028)
+  OTHER               GC.CP_CPC_STATUS: 00000000 -> A0000082   (Linux after init: 00000000)
+  OTHER               GC.CP_CPC_BUSY_STAT: 00000000 -> 08000000   (Linux after init: 00000000)
+  OTHER               GC.CP_CPC_STALLED_STAT1: 00000000 -> 00210000   (Linux after init: 00000000)
+  OTHER               GC.CP_CPF_STATUS: 00000000 -> A8008001   (Linux after init: 00000000)
+  OTHER               GC.CP_CPF_BUSY_STAT: 00000000 -> 48460000   (Linux after init: 00000000)
+  as Linux after init GC.CP_STALLED_STAT1: 00000000 -> 00000C00
+  OTHER               GC.CP_CNTX_STAT: 00000000 -> 10000000   (Linux after init: 20000000)
+  OTHER               GC.CP_RB0_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_MEQ_STAT: 00000000 -> 01C301C3   (Linux after init: 01E901E9)
+  OTHER               GC.VGT_LAST_COPY_STATE: 00000000 -> 00010000   (Linux after init: 00020001)
+  as Linux after init GC.GE_FAST_CLKS: 00000000 -> 0000493E
+  as Linux after init GC.PA_SC_ENHANCE: 08000001 -> 08000009
+  as Linux after init GC.SQ_ARB_CONFIG: 00000030 -> 00000130
+  as Linux after init GC.SH_MEM_CONFIG: 00000000 -> 0000C00C
+  clock/counter GC.SQ_TIME_HI: 00000042 -> 000000AB
+  clock/counter GC.SQ_TIME_LO: 160836BC -> 23B85BDB
+  as Linux after init GC.TA_CNTL_AUX: 01030008 -> 01030000
+  as Linux after init GC.DB_DEBUG: 00000000 -> 20000000
+  as Linux after init GC.DB_DEBUG3: 00000000 -> 00000200
+  as Linux after init GC.DB_DEBUG4: 04000000 -> 04800000
+  as Linux after init GC.DB_LAST_OF_BURST_CONFIG: 02060410 -> 03860210
+  as Linux after init GC.CB_HW_CONTROL_4: 003C0014 -> 003C8014
+  as Linux after init GC.CB_HW_CONTROL_3: 20000000 -> A0000000
+  as Linux after init GC.RMI_SPARE: FFFF3108 -> FFFF3100
+  as Linux after init GC.GCR_GENERAL_CNTL: 00F00400 -> 00F08500
+  OTHER               GC.GCR_CMD_STATUS: 00000000 -> 003103C1   (Linux after init: 0000C3A1)
+  as Linux after init GC.UTCL1_CTRL: 00000000 -> 00800000
+  OTHER               GC.CP_RB0_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  as Linux after init GC.CP_RB0_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_RB0_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  as Linux after init GC.CP_RB0_BUFSZ_MASK: 00000000 -> 000007FF
+  as Linux after init GC.CP_DEVICE_ID: 00000000 -> 00000001
+  OTHER               GC.CP_RB0_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_LOWER: 00000000 -> 00000458
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_UPPER: 00000108 -> 0FFFFFFC
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_LOWER: 00000110 -> 00000000
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_UPPER: 0FFFFFFC -> 00000450
+  as Linux after init GC.CP_ME1_INT_STAT_DEBUG: 00000000 -> 04000000
+  as Linux after init GC.CP_PQ_STATUS: 00000000 -> 00000002
+  as Linux after init GC.CP_CE_CS_PARTITION_INDEX: 00000000 -> 00008000
+  as Linux after init GC.CP_SUSPEND_CNTL: 00000002 -> 00000000
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR: 00000000 -> FE009000   (Linux after init: 008CC000)
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.CP_GFX_HQD_ACTIVE: 00000000 -> 00000001
+  OTHER               GC.CP_GFX_HQD_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_RB_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  as Linux after init GC.CP_RB_DOORBELL_CONTROL: 00000000 -> C0000458
+  OTHER               GC.CP_GFX_HQD_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_BASE: CDCDCDCD -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_CE_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  OTHER               GC.CP_GFX_HQD_CE_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CE_CNTL: 08A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CE_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_CE_DOORBELL_CONTROL: 00000000 -> C0000458
+  as Linux after init GC.CP_PFP_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_CE_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_MEC_JT_STAT: 00000000 -> 000000FF
+  as Linux after init GC.CP_RB0_ACTIVE: 00000000 -> 00000001
+  as Linux after init GC.CP_SD_CNTL: 0000045F -> 000005FF
+  as Linux after init GC.SPI_GDBG_TRAP_CONFIG: 00000000 -> FF008000
+  OTHER               GC.GC_CAC_AGGR_LOWER: 00000000 -> 026E0058   (Linux after init: 03A3C930)
+  as Linux after init GC.GDS_VMID1_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID2_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID3_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID4_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID5_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID6_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID7_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID8_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID9_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID10_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID11_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID12_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID13_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID14_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID15_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID1: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID2: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID3: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID4: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID5: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID6: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID7: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID8: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID9: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID10: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID11: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID12: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID13: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID14: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID15: 00400000 -> 00000000
+  as Linux after init GC.DB_RENDER_CONTROL: 00000DFD -> 00000000
+  as Linux after init GC.DB_DEPTH_VIEW: 43F56F6C -> 00000000
+  as Linux after init GC.DB_RENDER_OVERRIDE: F81F7DFE -> 00000000
+  as Linux after init GC.DB_RENDER_OVERRIDE2: 021DA560 -> 00000000
+  as Linux after init GC.DB_DEPTH_SIZE_XY: 3C543CE8 -> 00000000
+  as Linux after init GC.DB_DEPTH_BOUNDS_MIN: 2F75FF7D -> 00000000
+  as Linux after init GC.DB_DEPTH_BOUNDS_MAX: B82F7FB5 -> 00000000
+  as Linux after init GC.DB_STENCIL_CLEAR: 00000099 -> 00000000
+  as Linux after init GC.DB_DEPTH_CLEAR: DC65FFCC -> 00000000
+  as Linux after init GC.PA_SC_SCREEN_SCISSOR_TL: 3F827C12 -> 00000000
+  as Linux after init GC.PA_SC_SCREEN_SCISSOR_BR: CD4F6FAF -> 40004000
+  as Linux after init GC.DB_DFSM_CONTROL: 0000000F -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_2: E01FF0BD -> 00000000
+  as Linux after init GC.DB_Z_INFO: B8025E0C -> 00000000
+  as Linux after init GC.DB_STENCIL_INFO: 2810DA00 -> 00000000
+  as Linux after init GC.DB_Z_READ_BASE: 8FF782DE -> 00000000
+  as Linux after init GC.DB_STENCIL_READ_BASE: 9FABF5BE -> 00000000
+  as Linux after init GC.DB_Z_WRITE_BASE: F8FA6C6C -> 00000000
+  as Linux after init GC.DB_STENCIL_WRITE_BASE: F774359A -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_1: 000AE8D9 -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_3: 003DEBDA -> 00000000
+  as Linux after init GC.DB_Z_READ_BASE_HI: 00000099 -> 00000000
+  as Linux after init GC.DB_STENCIL_READ_BASE_HI: 000000DC -> 00000000
+  as Linux after init GC.DB_Z_WRITE_BASE_HI: 00000027 -> 00000000
+  as Linux after init GC.DB_STENCIL_WRITE_BASE_HI: 000000FE -> 00000000
+  as Linux after init GC.DB_RMI_L2_CACHE_CONTROL: 033700AF -> 00150055
+  as Linux after init GC.TA_BC_BASE_ADDR: 77DB7FDC -> 00000000
+  as Linux after init GC.TA_BC_BASE_ADDR_HI: 000000D7 -> 00000000
+  as Linux after init GC.PA_SC_WINDOW_OFFSET: D5B4F8FD -> 00000000
+  as Linux after init GC.PA_SC_WINDOW_SCISSOR_TL: 6CFD347F -> 80000000
+  as Linux after init GC.PA_SC_WINDOW_SCISSOR_BR: 35627D9B -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_RULE: 0000CCC7 -> 0000FFFF
+  as Linux after init GC.PA_SC_CLIPRECT_0_TL: 2DCF6ADE -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_0_BR: 3D047D5B -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_1_TL: 7BF13907 -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_1_BR: 00D25FAD -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_2_TL: 1A5E2E7F -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_2_BR: 5BB759B9 -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_3_TL: 653C1359 -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_3_BR: 5EB6401A -> 40004000
+  as Linux after init GC.PA_SC_EDGERULE: B2FC9E16 -> AA99AAAA
+  as Linux after init GC.PA_SU_HARDWARE_SCREEN_OFFSET: 00EC001B -> 00000000
+  as Linux after init GC.CB_TARGET_MASK: F588FBDE -> FFFFFFFF
+  as Linux after init GC.CB_SHADER_MASK: FEAC0E7E -> FFFFFFFF
+  as Linux after init GC.PA_SC_GENERIC_SCISSOR_TL: 45DF516F -> 80000000
+  as Linux after init GC.PA_SC_GENERIC_SCISSOR_BR: 75597D0B -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_TL: 58F43658 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_BR: 55EF0DFB -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_TL: C1405DC3 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_BR: 488C0310 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_TL: BA805F7B -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_BR: 18270CFA -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_TL: F8010105 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_BR: 20850892 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_TL: D6F07155 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_BR: 239F6EA3 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_TL: D4C20A49 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_BR: 08010F02 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_TL: EA81546E -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_BR: 7B6D12CF -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_TL: E240706A -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_BR: 040706C6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_TL: 7D7A7E71 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_BR: 50721C67 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_TL: 340868C9 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_BR: 50640002 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_TL: 6AC67FB1 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_BR: 798F227D -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_TL: 30056260 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_BR: 6000324A -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_TL: 7E792C3F -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_BR: 254432ED -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_TL: 8C600634 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_BR: 400C462F -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_TL: AB3E6F36 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_BR: 59F77DEC -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_TL: 41400901 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_BR: 08C15DA6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_0: AED9CEF6 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_0: 52EA1CED -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_1: 10101810 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_1: 82820815 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_2: C87C4C5E -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_2: 76FFB2FF -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_3: 426028A4 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_3: 10FD0052 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_4: DB1EE1E3 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_4: F35E2E8F -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_5: 4000A69B -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_5: AEB1249A -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_6: 3BFB5DF1 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_6: FF1E9970 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_7: F20C2234 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_7: A81F03A4 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_8: F3F2B496 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_8: 18BEBA3D -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_9: 2049A801 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_9: DEAA8013 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_10: ABA14BFF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_10: F62FB8E9 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_11: C06DC646 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_11: 0C020234 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_12: E61CB2FF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_12: F7D6EED7 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_13: 070D8851 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_13: 88428000 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_14: A88265AC -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_14: 1FD3BF34 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_15: 05126840 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_15: 44286210 -> 3F800000
+  as Linux after init GC.PA_SC_RASTER_CONFIG: 2A00126A -> 00000000
+  as Linux after init GC.PA_SC_RASTER_CONFIG_1: 00000036 -> 00000000
+  OTHER               GC.PA_SC_TILE_STEERING_OVERRIDE: 00123126 -> 00002000   (Linux after init: 00122000)
+  as Linux after init GC.PA_SC_RIGHT_VERT_GRID: D832EF82 -> 00000000
+  as Linux after init GC.PA_SC_LEFT_VERT_GRID: F36CC81A -> 00000000
+  as Linux after init GC.PA_SC_HORIZ_GRID: FF82968F -> 00000000
+  as Linux after init GC.CB_RMI_GL2_CACHE_CONTROL: C05500D0 -> 00550055
+  as Linux after init GC.CB_BLEND_RED: 204EBED5 -> 00000000
+  as Linux after init GC.CB_BLEND_GREEN: 114067FC -> 00000000
+  as Linux after init GC.CB_BLEND_BLUE: F9B7FDC2 -> 00000000
+  as Linux after init GC.CB_BLEND_ALPHA: 8686F7C0 -> 00000000
+  as Linux after init GC.CB_DCC_CONTROL: 00004779 -> 00000000
+  as Linux after init GC.CB_COVERAGE_OUT_CONTROL: 00000B25 -> 00000000
+  as Linux after init GC.DB_STENCIL_CONTROL: 00D0FD3D -> 00000000
+  as Linux after init GC.DB_STENCILREFMASK: 72EF6BFF -> 01000000
+  as Linux after init GC.DB_STENCILREFMASK_BF: 74C5EB67 -> 01000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE: 26B3BB8C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET: 197D6C7B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE: A76CEF38 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET: 2BA7B35F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE: B4EC1FFB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET: D77BCE77 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_1: 80100014 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_1: 58840492 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_1: 01005404 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_1: 4A910402 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_1: 6400058B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_1: C6428260 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_2: 24B8CF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_2: 7B375CDF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_2: FEDFD8DE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_2: 02746BDB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_2: F75F6FAF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_2: 37A7CE76 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_3: 20ECC18D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_3: D1610001 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_3: E8121280 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_3: 24A14001 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_3: 20281C04 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_3: F989084A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_4: 59FFF7F9 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_4: EB2B2FF3 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_4: BF83CABD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_4: AEDADA78 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_4: 8F2F5A5B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_4: 4DB9ADEB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_5: 984034DD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_5: A1024408 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_5: 4233A381 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_5: 54532864 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_5: 51060124 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_5: B06200A0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_6: FFB7FDEF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_6: BFFFFF6F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_6: DFABEF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_6: AE66E83A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_6: B6B6337E -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_6: 5DF7FF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_7: 054B80E4 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_7: 0729040E -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_7: 2B421876 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_7: 188C620C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_7: 8C9500A6 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_7: D60DE819 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_8: F9FC3A6F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_8: 7F3249FC -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_8: BB7FE73D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_8: 7DFEDB2B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_8: EE6EFEF6 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_8: BFDE9BFE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_9: C1E0710C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_9: 51001D03 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_9: 8F450004 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_9: C8A0890A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_9: 30280217 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_9: 0AC20084 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_10: 579F3EF7 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_10: DEE362B2 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_10: D56DE1F5 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_10: 9F77E9F9 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_10: BB3DFF1A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_10: 775EFBFD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_11: F88D4144 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_11: 32000221 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_11: 41B30022 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_11: C25E11B0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_11: 488E3182 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_11: 22040146 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_12: 3B7AEFFE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_12: 8DBF6BCF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_12: E31EFE75 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_12: 224FC9BB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_12: AEBDBF1D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_12: CA3F6F73 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_13: 224A6240 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_13: A0C60C24 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_13: 2D210805 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_13: 00500094 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_13: 050111A1 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_13: 22766860 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_14: 4ADAFEFF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_14: FFCEDEDD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_14: E1EBC9F0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_14: 56BE76FB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_14: E7D4E8BD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_14: FEFEE5CF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_15: 8B004801 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_15: 84021572 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_15: 002A834D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_15: 8E809682 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_15: 2813481A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_15: 50C4A002 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_X: BFF3E676 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_Y: F4CFDDD8 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_Z: EEFEFE5F -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_W: B3DF8EBA -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_X: 5BEF8BFE -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_Y: 7DF6FEFD -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_Z: 5568BFB8 -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_W: 5FFEBAB5 -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_X: 2EFAB73E -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_Y: F4FE9FAE -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_Z: F3AF0DFF -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_W: 3ECD77FE -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_X: 56F1E5EC -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_Y: 2FE3DAAD -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_Z: 653F732E -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_W: CEEDD57E -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_X: 1F994FED -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_Y: 7BF758B3 -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_Z: 5D5DB192 -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_W: BBE9AEBF -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_X: BFDEC36E -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_Y: 55BED873 -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_Z: B9D74527 -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_W: ADEDBAEF -> 00000000
+  as Linux after init GC.PA_CL_PROG_NEAR_CLIP_Z: 6F393CA1 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_0: 0162E732 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_1: 03FD4503 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_2: 023F822F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_3: 0085630D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_4: 01E7E43D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_5: 01450706 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_6: 0271C73B -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_7: 01B7A23A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_8: 02FDE73E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_9: 0388E117 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_10: 02F7813A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_11: 03C4661F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_12: 03AD8519 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_13: 01B5272E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_14: 00EA8108 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_15: 038FC13B -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_16: 03CD2210 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_17: 031BC32D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_18: 02D2C22E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_19: 01FFE230 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_20: 022C050F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_21: 035C0433 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_22: 03380212 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_23: 0358013D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_24: 02700706 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_25: 0170032A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_26: 0178051F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_27: 0258061C -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_28: 02680535 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_29: 02540320 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_30: 031C0207 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_31: 021C073A -> 00000000
+  as Linux after init GC.SPI_VS_OUT_CONFIG: 00000066 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_ENA: 0000E0E8 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_ADDR: 0000DACE -> 00000000
+  as Linux after init GC.SPI_INTERP_CONTROL_0: 00007FF9 -> 00000000
+  as Linux after init GC.SPI_PS_IN_CONTROL: 0000C1BE -> 00000002
+  as Linux after init GC.SPI_BARYC_CNTL: 00D2C2C5 -> 00000000
+  as Linux after init GC.SPI_TMPRING_SIZE: 0117657D -> 00000000
+  as Linux after init GC.CB_BLEND0_CONTROL: 4FCC00FF -> 00000000
+  as Linux after init GC.CB_BLEND1_CONTROL: 8B45000E -> 00000000
+  as Linux after init GC.CB_BLEND2_CONTROL: C9D91691 -> 00000000
+  as Linux after init GC.CB_BLEND3_CONTROL: 58CD0A0F -> 00000000
+  as Linux after init GC.CB_BLEND4_CONTROL: 5F781F03 -> 00000000
+  as Linux after init GC.CB_BLEND5_CONTROL: B33A1D9F -> 00000000
+  as Linux after init GC.CB_BLEND6_CONTROL: E3201012 -> 00000000
+  as Linux after init GC.CB_BLEND7_CONTROL: C21F0B9F -> 00000000
+  OTHER               GC.GFX_COPY_STATE: 00000F00 -> 00000F08   (Linux after init: 00000F11)
+  as Linux after init GC.PA_CL_POINT_X_RAD: 77FBE3BE -> 00000000
+  as Linux after init GC.PA_CL_POINT_Y_RAD: FEB1D352 -> 00000000
+  as Linux after init GC.PA_CL_POINT_SIZE: BEDFEDE3 -> 00000000
+  as Linux after init GC.PA_CL_POINT_CULL_RAD: 7D1C353F -> 00000000
+  as Linux after init GC.GE_MAX_OUTPUT_PER_SUBGROUP: 0000038C -> 00000000
+  as Linux after init GC.DB_DEPTH_CONTROL: 801003CB -> 00000000
+  as Linux after init GC.DB_EQAA: 003B0777 -> 00000000
+  as Linux after init GC.CB_COLOR_CONTROL: 00BE0030 -> 00000000
+  as Linux after init GC.DB_SHADER_CONTROL: 00C3AC36 -> 00000000
+  as Linux after init GC.PA_CL_CLIP_CNTL: 1658A035 -> 00090000
+  as Linux after init GC.PA_SU_SC_MODE_CNTL: 01D9061F -> 00000004
+  as Linux after init GC.PA_CL_VTE_CNTL: 00000538 -> 00000000
+  as Linux after init GC.PA_CL_VS_OUT_CNTL: 0BFC31E3 -> 00000000
+  as Linux after init GC.PA_CL_NANINF_CNTL: 0000389A -> 00000000
+  as Linux after init GC.PA_SU_LINE_STIPPLE_CNTL: 0000000A -> 00000000
+  as Linux after init GC.PA_SU_LINE_STIPPLE_SCALE: BAB81C87 -> 00000000
+  as Linux after init GC.PA_SU_PRIM_FILTER_CNTL: 8000CDC7 -> 00000000
+  as Linux after init GC.PA_SU_SMALL_PRIM_FILTER_CNTL: 00000039 -> 00000000
+  as Linux after init GC.PA_CL_NGG_CNTL: 00000002 -> 00000000
+  as Linux after init GC.PA_SU_OVER_RASTERIZATION_CNTL: 0000000A -> 00000000
+  as Linux after init GC.PA_STEREO_CNTL: 0B230B40 -> 00000000
+  as Linux after init GC.PA_STATE_STEREO_X: 947F86CB -> 00000000
+  as Linux after init GC.PA_SU_POINT_SIZE: D08CD0A9 -> 00000000
+  as Linux after init GC.PA_SU_POINT_MINMAX: FE908C15 -> 00000000
+  as Linux after init GC.PA_SU_LINE_CNTL: 0000080F -> 00000000
+  as Linux after init GC.PA_SC_LINE_STIPPLE: 60EBFA09 -> 00000000
+  as Linux after init GC.VGT_HOS_MAX_TESS_LEVEL: 302598C6 -> 00000000
+  as Linux after init GC.VGT_HOS_MIN_TESS_LEVEL: 10AB68EA -> 00000000
+  as Linux after init GC.VGT_GS_MODE: 001C6816 -> 00000000
+  as Linux after init GC.VGT_GS_ONCHIP_CNTL: CEAAF9AF -> 00000000
+  as Linux after init GC.PA_SC_MODE_CNTL_0: 00000011 -> 00000000
+  as Linux after init GC.PA_SC_MODE_CNTL_1: 06000000 -> 00000000
+  as Linux after init GC.VGT_ENHANCE: B87F97DA -> 00000000
+  as Linux after init GC.VGT_GS_PER_ES: 000007E3 -> 00000100
+  as Linux after init GC.VGT_ES_PER_GS: 000007DF -> 00000080
+  as Linux after init GC.VGT_GS_PER_VS: 00000007 -> 00000002
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_1: 000073D7 -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_2: 000029EF -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_3: 00005EDF -> 00000000
+  as Linux after init GC.VGT_GS_OUT_PRIM_TYPE: 0FDF032A -> 00000000
+  as Linux after init GC.IA_ENHANCE: 956DDC39 -> 00000000
+  as Linux after init GC.WD_ENHANCE: AEDF0E63 -> 00000000
+  as Linux after init GC.VGT_DRAW_PAYLOAD_CNTL: 0000003F -> 00000000
+  as Linux after init GC.VGT_ESGS_RING_ITEMSIZE: 00007DD7 -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_ITEMSIZE: 0000588C -> 00000000
+  as Linux after init GC.VGT_REUSE_OFF: 00000001 -> 00000000
+  as Linux after init GC.VGT_VTX_CNT_EN: 00000001 -> 00000000
+  as Linux after init GC.DB_HTILE_SURFACE: 000143FF -> 00000000
+  as Linux after init GC.DB_SRESULTS_COMPARE_STATE0: 010F7DF5 -> 00000000
+  as Linux after init GC.DB_SRESULTS_COMPARE_STATE1: 000CD477 -> 00000000
+  as Linux after init GC.DB_PRELOAD_CONTROL: 8A95DEE4 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_0: 0DC14FFF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_0: 000003CD -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_0: DBA5DCCF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_1: 489F9EF7 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_1: 000001DB -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_1: E8DFC364 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_2: 9FF1FEEF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_2: 000003EA -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_2: F2737D99 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_3: 3F6DB86A -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_3: 000003BE -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_3: FEC7A10C -> 00000000
+  as Linux after init GC.VGT_GS_MAX_VERT_OUT: 000005EC -> 00000000
+  as Linux after init GC.GE_NGG_SUBGRP_CNTL: 0000B2DD -> 00000000
+  as Linux after init GC.VGT_TESS_DISTRIBUTION: 444F01A8 -> 00000000
+  as Linux after init GC.VGT_LS_HS_CONFIG: 0009D0CE -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE: 00003D8B -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_1: 00000348 -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_2: 00003DFF -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_3: 00002FDD -> 00000000
+  as Linux after init GC.DB_ALPHA_TO_MASK: 0000FF00 -> 00000000
+  as Linux after init GC.VGT_DISPATCH_DRAW_INDEX: BF948FD5 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_DB_FMT_CNTL: 0000011F -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_CLAMP: DCEB0F0E -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_FRONT_SCALE: 1EA170FC -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_FRONT_OFFSET: F4F6D821 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_BACK_SCALE: D9D0C9D8 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_BACK_OFFSET: BFC59DCC -> 00000000
+  as Linux after init GC.PA_SC_CENTROID_PRIORITY_0: 8221C8CF -> 00000000
+  as Linux after init GC.PA_SC_CENTROID_PRIORITY_1: D10C90CE -> 00000000
+  as Linux after init GC.PA_SC_LINE_CNTL: 00002600 -> 00001000
+  as Linux after init GC.PA_SC_AA_CONFIG: 0F712011 -> 00000000
+  as Linux after init GC.PA_SU_VTX_CNTL: 0000002B -> 00000005
+  as Linux after init GC.PA_CL_GB_VERT_CLIP_ADJ: FE27F2FF -> 3F800000
+  as Linux after init GC.PA_CL_GB_VERT_DISC_ADJ: B5FEAFFF -> 3F800000
+  as Linux after init GC.PA_CL_GB_HORZ_CLIP_ADJ: 2FB67D67 -> 3F800000
+  as Linux after init GC.PA_CL_GB_HORZ_DISC_ADJ: 7FD6BBF3 -> 3F800000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_0: 08C5E701 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_1: 6FAE8E0B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_2: 81A1EC8C -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_3: CEF1751F -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_0: 4350AA7B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_1: B9D4A44B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_2: C4B975E1 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_3: 86FEB9D9 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_0: EAC6C88A -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_1: ACE7CF01 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_2: F7CC7983 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_3: F55C0CFE -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_0: 3440F10D -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_1: C738FAAB -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_2: 22D8044C -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_3: B0D8C10A -> 00000000
+  as Linux after init GC.PA_SC_AA_MASK_X0Y0_X1Y0: D81CF7DE -> FFFFFFFF
+  as Linux after init GC.PA_SC_AA_MASK_X0Y1_X1Y1: 99E29D3C -> FFFFFFFF
+  as Linux after init GC.PA_SC_BINNER_CNTL_0: 575F458F -> 00000003
+  as Linux after init GC.PA_SC_BINNER_CNTL_1: 883B087B -> 00000000
+  as Linux after init GC.PA_SC_CONSERVATIVE_RASTERIZATION_CNTL: 0F7FFC71 -> 00100000
+  as Linux after init GC.PA_SC_NGG_MODE_CNTL: 00AD0639 -> 00000000
+  as Linux after init GC.VGT_VERTEX_REUSE_BLOCK_CNTL: 000000D3 -> 0000001E
+  as Linux after init GC.VGT_OUT_DEALLOC_CNTL: 00000036 -> 00000020
+  as Linux after init GC.CB_COLOR0_BASE: 9E715FCE -> 00000000
+  as Linux after init GC.CB_COLOR0_PITCH: 19C007F9 -> 00000000
+  as Linux after init GC.CB_COLOR0_SLICE: 0037CF59 -> 00000000
+  as Linux after init GC.CB_COLOR0_VIEW: 39FDC4E9 -> 00000000
+  as Linux after init GC.CB_COLOR0_INFO: 87EBA4FD -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB: 000E5154 -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_CONTROL: 001B66DB -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK: 35D6913F -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK_SLICE: 00000E5A -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK: ADCEB9ED -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK_SLICE: 0030B314 -> 00000000
+  as Linux after init GC.CB_COLOR0_CLEAR_WORD0: ECFFBE3C -> 00000000
+  as Linux after init GC.CB_COLOR0_CLEAR_WORD1: F9DB5BCA -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_BASE: 84662FAF -> 00000000
+  as Linux after init GC.CB_COLOR1_BASE: 19E7D98E -> 00000000
+  as Linux after init GC.CB_COLOR1_PITCH: 20F0064F -> 00000000
+  as Linux after init GC.CB_COLOR1_SLICE: 003DDB91 -> 00000000
+  as Linux after init GC.CB_COLOR1_VIEW: 0C02ECDD -> 00000000
+  as Linux after init GC.CB_COLOR1_INFO: 0D57C997 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB: 00009AB4 -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_CONTROL: 0015D5CF -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK: B2E06294 -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK_SLICE: 000028FC -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK: 09AEDAFA -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK_SLICE: 000BF9EF -> 00000000
+  as Linux after init GC.CB_COLOR1_CLEAR_WORD0: E9F4C760 -> 00000000
+  as Linux after init GC.CB_COLOR1_CLEAR_WORD1: A8B33EFF -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_BASE: AC07D3E9 -> 00000000
+  as Linux after init GC.CB_COLOR2_BASE: 0B8F67D3 -> 00000000
+  as Linux after init GC.CB_COLOR2_PITCH: 657004DF -> 00000000
+  as Linux after init GC.CB_COLOR2_SLICE: 00318DBD -> 00000000
+  as Linux after init GC.CB_COLOR2_VIEW: 2FFF2E44 -> 00000000
+  as Linux after init GC.CB_COLOR2_INFO: D85FDCF7 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB: 000F3E97 -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_CONTROL: 001FEFA4 -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK: EF4FFF2E -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK_SLICE: 00003CD8 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK: 1ADEAFD0 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK_SLICE: 00368FB3 -> 00000000
+  as Linux after init GC.CB_COLOR2_CLEAR_WORD0: 41BFC4D8 -> 00000000
+  as Linux after init GC.CB_COLOR2_CLEAR_WORD1: FFBF96EE -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_BASE: AFE3999C -> 00000000
+  as Linux after init GC.CB_COLOR3_BASE: D2AEF996 -> 00000000
+  as Linux after init GC.CB_COLOR3_PITCH: 334003D1 -> 00000000
+  as Linux after init GC.CB_COLOR3_SLICE: 003CF5F6 -> 00000000
+  as Linux after init GC.CB_COLOR3_VIEW: 36E2DE7E -> 00000000
+  as Linux after init GC.CB_COLOR3_INFO: 7B51CDF3 -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB: 0009779B -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_CONTROL: 00108DE5 -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK: 4EE1C4FF -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK_SLICE: 000001E7 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK: A9A2EE44 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK_SLICE: 003ECFE1 -> 00000000
+  as Linux after init GC.CB_COLOR3_CLEAR_WORD0: 3E1CDC2E -> 00000000
+  as Linux after init GC.CB_COLOR3_CLEAR_WORD1: DDEE0F78 -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_BASE: 5C7C7CA2 -> 00000000
+  as Linux after init GC.CB_COLOR4_BASE: 4CC95500 -> 00000000
+  as Linux after init GC.CB_COLOR4_PITCH: 7F0007AF -> 00000000
+  as Linux after init GC.CB_COLOR4_SLICE: 00221F9C -> 00000000
+  as Linux after init GC.CB_COLOR4_VIEW: 18DEFEFF -> 00000000
+  as Linux after init GC.CB_COLOR4_INFO: EBFF67CF -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB: 0000AF9C -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_CONTROL: 001F59E9 -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK: 908FEAD8 -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK_SLICE: 00002E8C -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK: 32DF3F31 -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK_SLICE: 0030E3B6 -> 00000000
+  as Linux after init GC.CB_COLOR4_CLEAR_WORD0: DDDFAED8 -> 00000000
+  as Linux after init GC.CB_COLOR4_CLEAR_WORD1: F8CB0DBD -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_BASE: DCFFE5CC -> 00000000
+  as Linux after init GC.CB_COLOR5_BASE: C6C9C866 -> 00000000
+  as Linux after init GC.CB_COLOR5_PITCH: 7DE00095 -> 00000000
+  as Linux after init GC.CB_COLOR5_SLICE: 003C2F7D -> 00000000
+  as Linux after init GC.CB_COLOR5_VIEW: 1E857FAB -> 00000000
+  as Linux after init GC.CB_COLOR5_INFO: EEF64174 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB: 000B1F6D -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_CONTROL: 0012E0F2 -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK: FB95EFF7 -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK_SLICE: 0000215E -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK: D4FDEDB1 -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK_SLICE: 003F7CE2 -> 00000000
+  as Linux after init GC.CB_COLOR5_CLEAR_WORD0: 9444BC4E -> 00000000
+  as Linux after init GC.CB_COLOR5_CLEAR_WORD1: F896DD32 -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_BASE: D775515E -> 00000000
+  as Linux after init GC.CB_COLOR6_BASE: 4136C6EE -> 00000000
+  as Linux after init GC.CB_COLOR6_PITCH: 7EE003DF -> 00000000
+  as Linux after init GC.CB_COLOR6_SLICE: 00271FDD -> 00000000
+  as Linux after init GC.CB_COLOR6_VIEW: 1F5A5610 -> 00000000
+  as Linux after init GC.CB_COLOR6_INFO: DDA9DFEB -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB: 0005E8CC -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_CONTROL: 001F5447 -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK: CFF9D8FE -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK_SLICE: 000012FB -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK: A9FCC8F3 -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK_SLICE: 001FFFEF -> 00000000
+  as Linux after init GC.CB_COLOR6_CLEAR_WORD0: 2CFFF3D1 -> 00000000
+  as Linux after init GC.CB_COLOR6_CLEAR_WORD1: 5F728A0F -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_BASE: D13D93C8 -> 00000000
+  as Linux after init GC.CB_COLOR7_BASE: 15DC1BAC -> 00000000
+  as Linux after init GC.CB_COLOR7_PITCH: 4EB003F5 -> 00000000
+  as Linux after init GC.CB_COLOR7_SLICE: 002FD18C -> 00000000
+  as Linux after init GC.CB_COLOR7_VIEW: 2DDDFF1F -> 00000000
+  as Linux after init GC.CB_COLOR7_INFO: 9971F5B6 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB: 000EEDF3 -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_CONTROL: 001C53E3 -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK: 0FDF5EDD -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK_SLICE: 00003BBD -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK: DF8ABFF1 -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK_SLICE: 001E2CD5 -> 00000000
+  as Linux after init GC.CB_COLOR7_CLEAR_WORD0: E684C3EF -> 00000000
+  as Linux after init GC.CB_COLOR7_CLEAR_WORD1: 9C8DCAAC -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_BASE: 311BEBD5 -> 00000000
+  as Linux after init GC.CB_COLOR0_BASE_EXT: 000000E4 -> 00000000
+  as Linux after init GC.CB_COLOR1_BASE_EXT: 0000005C -> 00000000
+  as Linux after init GC.CB_COLOR2_BASE_EXT: 00000079 -> 00000000
+  as Linux after init GC.CB_COLOR3_BASE_EXT: 000000BA -> 00000000
+  as Linux after init GC.CB_COLOR4_BASE_EXT: 000000F7 -> 00000000
+  as Linux after init GC.CB_COLOR5_BASE_EXT: 0000007A -> 00000000
+  as Linux after init GC.CB_COLOR6_BASE_EXT: 0000000F -> 00000000
+  as Linux after init GC.CB_COLOR7_BASE_EXT: 000000D8 -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK_BASE_EXT: 000000F8 -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK_BASE_EXT: 00000080 -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK_BASE_EXT: 000000DB -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK_BASE_EXT: 0000004F -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK_BASE_EXT: 0000005F -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK_BASE_EXT: 00000030 -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK_BASE_EXT: 00000059 -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK_BASE_EXT: 00000004 -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK_BASE_EXT: 000000D9 -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK_BASE_EXT: 00000018 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK_BASE_EXT: 000000E0 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK_BASE_EXT: 000000D9 -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK_BASE_EXT: 00000049 -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK_BASE_EXT: 00000002 -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK_BASE_EXT: 000000D6 -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK_BASE_EXT: 000000CE -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_BASE_EXT: 00000015 -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_BASE_EXT: 00000098 -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_BASE_EXT: 00000098 -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_BASE_EXT: 000000C4 -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_BASE_EXT: 000000BE -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_BASE_EXT: 00000095 -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_BASE_EXT: 000000EF -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_BASE_EXT: 000000E4 -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB2: 1A9C1C52 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB2: 150B11E6 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB2: 4D2B89FD -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB2: 1191CA01 -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB2: 0228CFD9 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB2: 0DAFD175 -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB2: FCCC1F48 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB2: 87E8D8D7 -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB3: 73FBB816 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB3: 51C30D60 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB3: 310C9F38 -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB3: 149E372F -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB3: 7E54E8D5 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB3: 04CAA5CD -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB3: 6DF6B884 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB3: 79297E9A -> 00000000
+  as Linux after init GC.SCRATCH_REG0: 00000000 -> DEADBEEF
+  clock/counter GC.CP_DMA_READ_TAGS: 02B41004 -> 0BB45804
+  as Linux after init GC.CP_PFP_LOAD_CONTROL: 00000000 -> 01018003
+  as Linux after init GC.CP_SCRATCH_INDEX: 00000000 -> 0000009B
+  OTHER               GC.CP_RB_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.GUS_L1_CH1_CMD_IN: 00000000 -> 00000005   (Linux after init: 00000022)
+  OTHER               GC.GUS_L1_CH1_CMD_OUT: 00000000 -> 00000005   (Linux after init: 00000022)
+  as Linux after init GC.GL1_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_VC5_ENABLE: 00000000 -> 00000003
+  as Linux after init GC.GL2C_CTRL2: 1402002F -> 9402002F
+  as Linux after init GC.GL2C_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2C_CTRL3: 00002188 -> 00000188
+  as Linux after init GC.GL2A_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2_PIPE_STEER_0: 32103210 -> 21302130
+  as Linux after init GC.GL2_PIPE_STEER_1: 32103210 -> 21302130
+  OTHER               GC.RLC_CNTL: 00000001 -> 00000000   (Linux after init: 00000001)
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 03DDFE33 -> 4B5BF797
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 00000006 -> 00000010
+  clock/counter GC.RLC_GPU_CLOCK_32: 0F215577 -> 569F785F
+  as Linux after init GC.RLC_PG_CNTL: 00000008 -> 00000000
+  as Linux after init GC.RLC_CGCG_CGLS_CTRL: 0001003C -> 00000000
+  as Linux after init GC.RLC_SPM_MC_CNTL: 00000000 -> 0000000F
+  OTHER               GC.RLC_CSIB_ADDR_LO: 00000000 -> FE00A000   (Linux after init: 008CE000)
+  OTHER               GC.RLC_CSIB_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.RLC_CSIB_LENGTH: 00000000 -> 000003B5
+  as Linux after init GC.RLC_PACE_INT_STAT: 00000000 -> 00000001
+  OTHER               GC.RLC_CP_SCHEDULERS: 58504840 -> 585048C8   (Linux after init: 5850C0C8)
+  OTHER               GC.RLC_CP_STAT_INVAL_STAT: 00000000 -> 00000010   (Linux after init: 00000018)
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000003 -> 00000001   (Linux after init: 00000000)
+  as Linux after init GC.RLC_RLCS_CMP_IDLE_CNTL: 00000104 -> 00010100
+  as Linux after init GC.CGTT_SPI_CLK_CTRL: 00000100 -> 3C000100
+  as Linux after init GC.SQ_LDS_CLK_CTRL: 00000000 -> FFFFFFFF
+  as Linux after init GC.GL2C_CGTT_SCLK_CTRL: 00000100 -> 10000100
+  as Linux after init GC.CGTT_CPF_CLK_CTRL: 00000100 -> F8000100
+  OTHER               MP0.MP0_SMN_C2PMSG_60: 9C00000B -> 7300000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002C2BA8 -> 002D5ECA   (Linux after init: 00443F08)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 694 to Linux's value after init, 59 to something else
+
+== after the device restart that followed, control = before, before2
+  as Linux after init NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN: 00000000 -> 00000001
+  as Linux after init NBIO.BIF_SDMA0_DOORBELL_RANGE: 00000000 -> 00140800
+  as Linux after init NBIO.BIF_SDMA1_DOORBELL_RANGE: 00000000 -> 00140850
+  OTHER               GC.SDMA0_CNTL: 000000C2 -> 000000E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA0_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  as Linux after init GC.SDMA0_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA0_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000000 -> 0000081C   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA0_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA0_UTCL1_INV0: 00000800 -> 01000800
+  as Linux after init GC.SDMA0_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA0_PHASE2_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_GFX_RB_CNTL: 80840000 -> 80841016   (Linux after init: 80841017)
+  OTHER               GC.SDMA0_GFX_RB_BASE: 00000000 -> 000051D0   (Linux after init: 00006600)
+  as Linux after init GC.SDMA0_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA0_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C000   (Linux after init: 00401680)
+  OTHER               GC.SDMA0_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA0_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA0_GFX_DOORBELL_OFFSET: 00000000 -> 00000800
+  OTHER               GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C008   (Linux after init: 004016A0)
+  as Linux after init GC.SDMA0_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  OTHER               GC.SDMA1_CNTL: 000000C2 -> 000000E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA1_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  as Linux after init GC.SDMA1_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA1_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000001 -> 00000EA1   (Linux after init: 00000419)
+  as Linux after init GC.SDMA1_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA1_UTCL1_INV0: 00000800 -> 01000800
+  as Linux after init GC.SDMA1_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA1_PHASE2_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_GFX_RB_CNTL: 80840000 -> 80841016   (Linux after init: 80841017)
+  OTHER               GC.SDMA1_GFX_RB_BASE: 00000000 -> 000051F0   (Linux after init: 00006620)
+  as Linux after init GC.SDMA1_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA1_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C010   (Linux after init: 00401720)
+  OTHER               GC.SDMA1_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA1_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA1_GFX_DOORBELL_OFFSET: 00000000 -> 00000850
+  OTHER               GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C018   (Linux after init: 00401740)
+  as Linux after init GC.SDMA1_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.GRBM_CNTL: 00000018 -> 000000FF
+  OTHER               GC.GRBM_STATUS2: 00000008 -> 30000008   (Linux after init: 00000008)
+  OTHER               GC.GRBM_STATUS: 00003028 -> A0003028   (Linux after init: 00003028)
+  OTHER               GC.CP_CPC_STATUS: 00000000 -> A0000082   (Linux after init: 00000000)
+  OTHER               GC.CP_CPC_BUSY_STAT: 00000000 -> 08000000   (Linux after init: 00000000)
+  OTHER               GC.CP_CPC_STALLED_STAT1: 00000000 -> 00210000   (Linux after init: 00000000)
+  OTHER               GC.CP_CPF_STATUS: 00000000 -> A8008001   (Linux after init: 00000000)
+  OTHER               GC.CP_CPF_BUSY_STAT: 00000000 -> 48460000   (Linux after init: 00000000)
+  as Linux after init GC.CP_STALLED_STAT1: 00000000 -> 00000C00
+  OTHER               GC.CP_CNTX_STAT: 00000000 -> 10000000   (Linux after init: 20000000)
+  OTHER               GC.CP_RB0_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_MEQ_STAT: 00000000 -> 01C301C3   (Linux after init: 01E901E9)
+  OTHER               GC.VGT_LAST_COPY_STATE: 00000000 -> 00010000   (Linux after init: 00020001)
+  as Linux after init GC.GE_FAST_CLKS: 00000000 -> 0000493E
+  as Linux after init GC.CC_GC_SHADER_ARRAY_CONFIG_GEN0: 00000000 -> 00FC0001
+  as Linux after init GC.PA_SC_ENHANCE: 08000001 -> 08000009
+  as Linux after init GC.SQ_ARB_CONFIG: 00000030 -> 00000130
+  as Linux after init GC.SH_MEM_CONFIG: 00000000 -> 0000C00C
+  as Linux after init GC.SPI_PG_ENABLE_STATIC_WGP_MASK: 0000FFFF -> 00000007
+  as Linux after init GC.TA_CNTL_AUX: 01030008 -> 01030000
+  as Linux after init GC.DB_DEBUG: 00000000 -> 20000000
+  as Linux after init GC.DB_DEBUG3: 00000000 -> 00000200
+  as Linux after init GC.DB_DEBUG4: 04000000 -> 04800000
+  as Linux after init GC.DB_LAST_OF_BURST_CONFIG: 02060410 -> 03860210
+  as Linux after init GC.CB_HW_CONTROL_4: 003C0014 -> 003C8014
+  as Linux after init GC.CB_HW_CONTROL_3: 20000000 -> A0000000
+  as Linux after init GC.RMI_SPARE: FFFF3108 -> FFFF3100
+  as Linux after init GC.GCR_GENERAL_CNTL: 00F00400 -> 00F08500
+  OTHER               GC.GCR_CMD_STATUS: 00000000 -> 003103C1   (Linux after init: 0000C3A1)
+  as Linux after init GC.UTCL1_CTRL: 00000000 -> 00800000
+  as Linux after init GC.GCVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001
+  OTHER               GC.GCVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001   (Linux after init: 00010001)
+  OTHER               GC.CP_RB0_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  as Linux after init GC.CP_RB0_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_RB0_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  as Linux after init GC.CP_RB0_BUFSZ_MASK: 00000000 -> 000007FF
+  as Linux after init GC.CP_DEVICE_ID: 00000000 -> 00000001
+  OTHER               GC.CP_RB0_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_LOWER: 00000000 -> 00000458
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_UPPER: 00000108 -> 0FFFFFFC
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_LOWER: 00000110 -> 00000000
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_UPPER: 0FFFFFFC -> 00000450
+  as Linux after init GC.CP_ME1_INT_STAT_DEBUG: 00000000 -> 04000000
+  as Linux after init GC.CP_PQ_STATUS: 00000000 -> 00000002
+  as Linux after init GC.CP_CE_CS_PARTITION_INDEX: 00000000 -> 00008000
+  as Linux after init GC.CP_SUSPEND_CNTL: 00000002 -> 00000000
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR: 00000000 -> FE009000   (Linux after init: 008CC000)
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.CP_GFX_HQD_ACTIVE: 00000000 -> 00000001
+  OTHER               GC.CP_GFX_HQD_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_RB_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  as Linux after init GC.CP_RB_DOORBELL_CONTROL: 00000000 -> C0000458
+  OTHER               GC.CP_GFX_HQD_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_BASE: CDCDCDCD -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_CE_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  OTHER               GC.CP_GFX_HQD_CE_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CE_CNTL: 08A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CE_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_CE_DOORBELL_CONTROL: 00000000 -> C0000458
+  as Linux after init GC.CP_PFP_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_CE_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_MEC_JT_STAT: 00000000 -> 000000FF
+  as Linux after init GC.CP_RB0_ACTIVE: 00000000 -> 00000001
+  as Linux after init GC.CP_SD_CNTL: 0000045F -> 000005FF
+  as Linux after init GC.SPI_GDBG_TRAP_CONFIG: 00000000 -> FF008000
+  OTHER               GC.GC_CAC_AGGR_LOWER: 00000000 -> 0253B130   (Linux after init: 03A3C930)
+  as Linux after init GC.GDS_VMID1_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID2_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID3_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID4_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID5_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID6_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID7_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID8_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID9_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID10_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID11_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID12_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID13_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID14_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID15_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID1: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID2: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID3: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID4: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID5: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID6: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID7: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID8: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID9: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID10: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID11: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID12: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID13: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID14: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID15: 00400000 -> 00000000
+  as Linux after init GC.DB_RENDER_CONTROL: 00000DFD -> 00000000
+  as Linux after init GC.DB_DEPTH_VIEW: 43F56F6C -> 00000000
+  as Linux after init GC.DB_RENDER_OVERRIDE: F81F7DFE -> 00000000
+  as Linux after init GC.DB_RENDER_OVERRIDE2: 021DA560 -> 00000000
+  as Linux after init GC.DB_DEPTH_SIZE_XY: 3C543CE8 -> 00000000
+  as Linux after init GC.DB_DEPTH_BOUNDS_MIN: 2F75FF7D -> 00000000
+  as Linux after init GC.DB_DEPTH_BOUNDS_MAX: B82F7FB5 -> 00000000
+  as Linux after init GC.DB_STENCIL_CLEAR: 00000099 -> 00000000
+  as Linux after init GC.DB_DEPTH_CLEAR: DC65FFCC -> 00000000
+  as Linux after init GC.PA_SC_SCREEN_SCISSOR_TL: 3F827C12 -> 00000000
+  as Linux after init GC.PA_SC_SCREEN_SCISSOR_BR: CD4F6FAF -> 40004000
+  as Linux after init GC.DB_DFSM_CONTROL: 0000000F -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_2: E01FF0BD -> 00000000
+  as Linux after init GC.DB_Z_INFO: B8025E0C -> 00000000
+  as Linux after init GC.DB_STENCIL_INFO: 2810DA00 -> 00000000
+  as Linux after init GC.DB_Z_READ_BASE: 8FF782DE -> 00000000
+  as Linux after init GC.DB_STENCIL_READ_BASE: 9FABF5BE -> 00000000
+  as Linux after init GC.DB_Z_WRITE_BASE: F8FA6C6C -> 00000000
+  as Linux after init GC.DB_STENCIL_WRITE_BASE: F774359A -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_1: 000AE8D9 -> 00000000
+  as Linux after init GC.DB_RESERVED_REG_3: 003DEBDA -> 00000000
+  as Linux after init GC.DB_Z_READ_BASE_HI: 00000099 -> 00000000
+  as Linux after init GC.DB_STENCIL_READ_BASE_HI: 000000DC -> 00000000
+  as Linux after init GC.DB_Z_WRITE_BASE_HI: 00000027 -> 00000000
+  as Linux after init GC.DB_STENCIL_WRITE_BASE_HI: 000000FE -> 00000000
+  as Linux after init GC.DB_RMI_L2_CACHE_CONTROL: 033700AF -> 00150055
+  as Linux after init GC.TA_BC_BASE_ADDR: 77DB7FDC -> 00000000
+  as Linux after init GC.TA_BC_BASE_ADDR_HI: 000000D7 -> 00000000
+  as Linux after init GC.PA_SC_WINDOW_OFFSET: D5B4F8FD -> 00000000
+  as Linux after init GC.PA_SC_WINDOW_SCISSOR_TL: 6CFD347F -> 80000000
+  as Linux after init GC.PA_SC_WINDOW_SCISSOR_BR: 35627D9B -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_RULE: 0000CCC7 -> 0000FFFF
+  as Linux after init GC.PA_SC_CLIPRECT_0_TL: 2DCF6ADE -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_0_BR: 3D047D5B -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_1_TL: 7BF13907 -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_1_BR: 00D25FAD -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_2_TL: 1A5E2E7F -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_2_BR: 5BB759B9 -> 40004000
+  as Linux after init GC.PA_SC_CLIPRECT_3_TL: 653C1359 -> 00000000
+  as Linux after init GC.PA_SC_CLIPRECT_3_BR: 5EB6401A -> 40004000
+  as Linux after init GC.PA_SC_EDGERULE: B2FC9E16 -> AA99AAAA
+  as Linux after init GC.PA_SU_HARDWARE_SCREEN_OFFSET: 00EC001B -> 00000000
+  as Linux after init GC.CB_TARGET_MASK: F588FBDE -> FFFFFFFF
+  as Linux after init GC.CB_SHADER_MASK: FEAC0E7E -> FFFFFFFF
+  as Linux after init GC.PA_SC_GENERIC_SCISSOR_TL: 45DF516F -> 80000000
+  as Linux after init GC.PA_SC_GENERIC_SCISSOR_BR: 75597D0B -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_TL: 58F43658 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_BR: 55EF0DFB -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_TL: C1405DC3 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_BR: 488C0310 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_TL: BA805F7B -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_BR: 18270CFA -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_TL: F8010105 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_BR: 20850892 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_TL: D6F07155 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_BR: 239F6EA3 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_TL: D4C20A49 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_BR: 08010F02 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_TL: EA81546E -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_BR: 7B6D12CF -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_TL: E240706A -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_BR: 040706C6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_TL: 7D7A7E71 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_BR: 50721C67 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_TL: 340868C9 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_BR: 50640002 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_TL: 6AC67FB1 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_BR: 798F227D -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_TL: 30056260 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_BR: 6000324A -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_TL: 7E792C3F -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_BR: 254432ED -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_TL: 8C600634 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_BR: 400C462F -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_TL: AB3E6F36 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_BR: 59F77DEC -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_TL: 41400901 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_BR: 08C15DA6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_0: AED9CEF6 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_0: 52EA1CED -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_1: 10101810 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_1: 82820815 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_2: C87C4C5E -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_2: 76FFB2FF -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_3: 426028A4 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_3: 10FD0052 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_4: DB1EE1E3 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_4: F35E2E8F -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_5: 4000A69B -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_5: AEB1249A -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_6: 3BFB5DF1 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_6: FF1E9970 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_7: F20C2234 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_7: A81F03A4 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_8: F3F2B496 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_8: 18BEBA3D -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_9: 2049A801 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_9: DEAA8013 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_10: ABA14BFF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_10: F62FB8E9 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_11: C06DC646 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_11: 0C020234 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_12: E61CB2FF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_12: F7D6EED7 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_13: 070D8851 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_13: 88428000 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_14: A88265AC -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_14: 1FD3BF34 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_15: 05126840 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_15: 44286210 -> 3F800000
+  as Linux after init GC.PA_SC_RASTER_CONFIG: 2A00126A -> 00000000
+  as Linux after init GC.PA_SC_RASTER_CONFIG_1: 00000036 -> 00000000
+  OTHER               GC.PA_SC_TILE_STEERING_OVERRIDE: 00123126 -> 00002000   (Linux after init: 00122000)
+  as Linux after init GC.PA_SC_RIGHT_VERT_GRID: D832EF82 -> 00000000
+  as Linux after init GC.PA_SC_LEFT_VERT_GRID: F36CC81A -> 00000000
+  as Linux after init GC.PA_SC_HORIZ_GRID: FF82968F -> 00000000
+  as Linux after init GC.CB_RMI_GL2_CACHE_CONTROL: C05500D0 -> 00550055
+  as Linux after init GC.CB_BLEND_RED: 204EBED5 -> 00000000
+  as Linux after init GC.CB_BLEND_GREEN: 114067FC -> 00000000
+  as Linux after init GC.CB_BLEND_BLUE: F9B7FDC2 -> 00000000
+  as Linux after init GC.CB_BLEND_ALPHA: 8686F7C0 -> 00000000
+  as Linux after init GC.CB_DCC_CONTROL: 00004779 -> 00000000
+  as Linux after init GC.CB_COVERAGE_OUT_CONTROL: 00000B25 -> 00000000
+  as Linux after init GC.DB_STENCIL_CONTROL: 00D0FD3D -> 00000000
+  as Linux after init GC.DB_STENCILREFMASK: 72EF6BFF -> 01000000
+  as Linux after init GC.DB_STENCILREFMASK_BF: 74C5EB67 -> 01000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE: 26B3BB8C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET: 197D6C7B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE: A76CEF38 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET: 2BA7B35F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE: B4EC1FFB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET: D77BCE77 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_1: 80100014 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_1: 58840492 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_1: 01005404 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_1: 4A910402 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_1: 6400058B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_1: C6428260 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_2: 24B8CF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_2: 7B375CDF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_2: FEDFD8DE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_2: 02746BDB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_2: F75F6FAF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_2: 37A7CE76 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_3: 20ECC18D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_3: D1610001 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_3: E8121280 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_3: 24A14001 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_3: 20281C04 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_3: F989084A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_4: 59FFF7F9 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_4: EB2B2FF3 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_4: BF83CABD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_4: AEDADA78 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_4: 8F2F5A5B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_4: 4DB9ADEB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_5: 984034DD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_5: A1024408 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_5: 4233A381 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_5: 54532864 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_5: 51060124 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_5: B06200A0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_6: FFB7FDEF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_6: BFFFFF6F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_6: DFABEF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_6: AE66E83A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_6: B6B6337E -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_6: 5DF7FF7F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_7: 054B80E4 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_7: 0729040E -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_7: 2B421876 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_7: 188C620C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_7: 8C9500A6 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_7: D60DE819 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_8: F9FC3A6F -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_8: 7F3249FC -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_8: BB7FE73D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_8: 7DFEDB2B -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_8: EE6EFEF6 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_8: BFDE9BFE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_9: C1E0710C -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_9: 51001D03 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_9: 8F450004 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_9: C8A0890A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_9: 30280217 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_9: 0AC20084 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_10: 579F3EF7 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_10: DEE362B2 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_10: D56DE1F5 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_10: 9F77E9F9 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_10: BB3DFF1A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_10: 775EFBFD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_11: F88D4144 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_11: 32000221 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_11: 41B30022 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_11: C25E11B0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_11: 488E3182 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_11: 22040146 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_12: 3B7AEFFE -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_12: 8DBF6BCF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_12: E31EFE75 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_12: 224FC9BB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_12: AEBDBF1D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_12: CA3F6F73 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_13: 224A6240 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_13: A0C60C24 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_13: 2D210805 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_13: 00500094 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_13: 050111A1 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_13: 22766860 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_14: 4ADAFEFF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_14: FFCEDEDD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_14: E1EBC9F0 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_14: 56BE76FB -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_14: E7D4E8BD -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_14: FEFEE5CF -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XSCALE_15: 8B004801 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_XOFFSET_15: 84021572 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YSCALE_15: 002A834D -> 00000000
+  as Linux after init GC.PA_CL_VPORT_YOFFSET_15: 8E809682 -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZSCALE_15: 2813481A -> 00000000
+  as Linux after init GC.PA_CL_VPORT_ZOFFSET_15: 50C4A002 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_X: BFF3E676 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_Y: F4CFDDD8 -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_Z: EEFEFE5F -> 00000000
+  as Linux after init GC.PA_CL_UCP_0_W: B3DF8EBA -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_X: 5BEF8BFE -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_Y: 7DF6FEFD -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_Z: 5568BFB8 -> 00000000
+  as Linux after init GC.PA_CL_UCP_1_W: 5FFEBAB5 -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_X: 2EFAB73E -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_Y: F4FE9FAE -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_Z: F3AF0DFF -> 00000000
+  as Linux after init GC.PA_CL_UCP_2_W: 3ECD77FE -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_X: 56F1E5EC -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_Y: 2FE3DAAD -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_Z: 653F732E -> 00000000
+  as Linux after init GC.PA_CL_UCP_3_W: CEEDD57E -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_X: 1F994FED -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_Y: 7BF758B3 -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_Z: 5D5DB192 -> 00000000
+  as Linux after init GC.PA_CL_UCP_4_W: BBE9AEBF -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_X: BFDEC36E -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_Y: 55BED873 -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_Z: B9D74527 -> 00000000
+  as Linux after init GC.PA_CL_UCP_5_W: ADEDBAEF -> 00000000
+  as Linux after init GC.PA_CL_PROG_NEAR_CLIP_Z: 6F393CA1 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_0: 0162E732 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_1: 03FD4503 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_2: 023F822F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_3: 0085630D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_4: 01E7E43D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_5: 01450706 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_6: 0271C73B -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_7: 01B7A23A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_8: 02FDE73E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_9: 0388E117 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_10: 02F7813A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_11: 03C4661F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_12: 03AD8519 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_13: 01B5272E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_14: 00EA8108 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_15: 038FC13B -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_16: 03CD2210 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_17: 031BC32D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_18: 02D2C22E -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_19: 01FFE230 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_20: 022C050F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_21: 035C0433 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_22: 03380212 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_23: 0358013D -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_24: 02700706 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_25: 0170032A -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_26: 0178051F -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_27: 0258061C -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_28: 02680535 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_29: 02540320 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_30: 031C0207 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_CNTL_31: 021C073A -> 00000000
+  as Linux after init GC.SPI_VS_OUT_CONFIG: 00000066 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_ENA: 0000E0E8 -> 00000000
+  as Linux after init GC.SPI_PS_INPUT_ADDR: 0000DACE -> 00000000
+  as Linux after init GC.SPI_INTERP_CONTROL_0: 00007FF9 -> 00000000
+  as Linux after init GC.SPI_PS_IN_CONTROL: 0000C1BE -> 00000002
+  as Linux after init GC.SPI_BARYC_CNTL: 00D2C2C5 -> 00000000
+  as Linux after init GC.SPI_TMPRING_SIZE: 0117657D -> 00000000
+  as Linux after init GC.CB_BLEND0_CONTROL: 4FCC00FF -> 00000000
+  as Linux after init GC.CB_BLEND1_CONTROL: 8B45000E -> 00000000
+  as Linux after init GC.CB_BLEND2_CONTROL: C9D91691 -> 00000000
+  as Linux after init GC.CB_BLEND3_CONTROL: 58CD0A0F -> 00000000
+  as Linux after init GC.CB_BLEND4_CONTROL: 5F781F03 -> 00000000
+  as Linux after init GC.CB_BLEND5_CONTROL: B33A1D9F -> 00000000
+  as Linux after init GC.CB_BLEND6_CONTROL: E3201012 -> 00000000
+  as Linux after init GC.CB_BLEND7_CONTROL: C21F0B9F -> 00000000
+  OTHER               GC.GFX_COPY_STATE: 00000F00 -> 00000F08   (Linux after init: 00000F11)
+  as Linux after init GC.PA_CL_POINT_X_RAD: 77FBE3BE -> 00000000
+  as Linux after init GC.PA_CL_POINT_Y_RAD: FEB1D352 -> 00000000
+  as Linux after init GC.PA_CL_POINT_SIZE: BEDFEDE3 -> 00000000
+  as Linux after init GC.PA_CL_POINT_CULL_RAD: 7D1C353F -> 00000000
+  as Linux after init GC.GE_MAX_OUTPUT_PER_SUBGROUP: 0000038C -> 00000000
+  as Linux after init GC.DB_DEPTH_CONTROL: 801003CB -> 00000000
+  as Linux after init GC.DB_EQAA: 003B0777 -> 00000000
+  as Linux after init GC.CB_COLOR_CONTROL: 00BE0030 -> 00000000
+  as Linux after init GC.DB_SHADER_CONTROL: 00C3AC36 -> 00000000
+  as Linux after init GC.PA_CL_CLIP_CNTL: 1658A035 -> 00090000
+  as Linux after init GC.PA_SU_SC_MODE_CNTL: 01D9061F -> 00000004
+  as Linux after init GC.PA_CL_VTE_CNTL: 00000538 -> 00000000
+  as Linux after init GC.PA_CL_VS_OUT_CNTL: 0BFC31E3 -> 00000000
+  as Linux after init GC.PA_CL_NANINF_CNTL: 0000389A -> 00000000
+  as Linux after init GC.PA_SU_LINE_STIPPLE_CNTL: 0000000A -> 00000000
+  as Linux after init GC.PA_SU_LINE_STIPPLE_SCALE: BAB81C87 -> 00000000
+  as Linux after init GC.PA_SU_PRIM_FILTER_CNTL: 8000CDC7 -> 00000000
+  as Linux after init GC.PA_SU_SMALL_PRIM_FILTER_CNTL: 00000039 -> 00000000
+  as Linux after init GC.PA_CL_NGG_CNTL: 00000002 -> 00000000
+  as Linux after init GC.PA_SU_OVER_RASTERIZATION_CNTL: 0000000A -> 00000000
+  as Linux after init GC.PA_STEREO_CNTL: 0B230B40 -> 00000000
+  as Linux after init GC.PA_STATE_STEREO_X: 947F86CB -> 00000000
+  as Linux after init GC.PA_SU_POINT_SIZE: D08CD0A9 -> 00000000
+  as Linux after init GC.PA_SU_POINT_MINMAX: FE908C15 -> 00000000
+  as Linux after init GC.PA_SU_LINE_CNTL: 0000080F -> 00000000
+  as Linux after init GC.PA_SC_LINE_STIPPLE: 60EBFA09 -> 00000000
+  as Linux after init GC.VGT_HOS_MAX_TESS_LEVEL: 302598C6 -> 00000000
+  as Linux after init GC.VGT_HOS_MIN_TESS_LEVEL: 10AB68EA -> 00000000
+  as Linux after init GC.VGT_GS_MODE: 001C6816 -> 00000000
+  as Linux after init GC.VGT_GS_ONCHIP_CNTL: CEAAF9AF -> 00000000
+  as Linux after init GC.PA_SC_MODE_CNTL_0: 00000011 -> 00000000
+  as Linux after init GC.PA_SC_MODE_CNTL_1: 06000000 -> 00000000
+  as Linux after init GC.VGT_ENHANCE: B87F97DA -> 00000000
+  as Linux after init GC.VGT_GS_PER_ES: 000007E3 -> 00000100
+  as Linux after init GC.VGT_ES_PER_GS: 000007DF -> 00000080
+  as Linux after init GC.VGT_GS_PER_VS: 00000007 -> 00000002
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_1: 000073D7 -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_2: 000029EF -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_OFFSET_3: 00005EDF -> 00000000
+  as Linux after init GC.VGT_GS_OUT_PRIM_TYPE: 0FDF032A -> 00000000
+  as Linux after init GC.IA_ENHANCE: 956DDC39 -> 00000000
+  as Linux after init GC.WD_ENHANCE: AEDF0E63 -> 00000000
+  as Linux after init GC.VGT_DRAW_PAYLOAD_CNTL: 0000003F -> 00000000
+  as Linux after init GC.VGT_ESGS_RING_ITEMSIZE: 00007DD7 -> 00000000
+  as Linux after init GC.VGT_GSVS_RING_ITEMSIZE: 0000588C -> 00000000
+  as Linux after init GC.VGT_REUSE_OFF: 00000001 -> 00000000
+  as Linux after init GC.VGT_VTX_CNT_EN: 00000001 -> 00000000
+  as Linux after init GC.DB_HTILE_SURFACE: 000143FF -> 00000000
+  as Linux after init GC.DB_SRESULTS_COMPARE_STATE0: 010F7DF5 -> 00000000
+  as Linux after init GC.DB_SRESULTS_COMPARE_STATE1: 000CD477 -> 00000000
+  as Linux after init GC.DB_PRELOAD_CONTROL: 8A95DEE4 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_0: 0DC14FFF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_0: 000003CD -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_0: DBA5DCCF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_1: 489F9EF7 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_1: 000001DB -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_1: E8DFC364 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_2: 9FF1FEEF -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_2: 000003EA -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_2: F2737D99 -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_SIZE_3: 3F6DB86A -> 00000000
+  as Linux after init GC.VGT_STRMOUT_VTX_STRIDE_3: 000003BE -> 00000000
+  as Linux after init GC.VGT_STRMOUT_BUFFER_OFFSET_3: FEC7A10C -> 00000000
+  as Linux after init GC.VGT_GS_MAX_VERT_OUT: 000005EC -> 00000000
+  as Linux after init GC.GE_NGG_SUBGRP_CNTL: 0000B2DD -> 00000000
+  as Linux after init GC.VGT_TESS_DISTRIBUTION: 444F01A8 -> 00000000
+  as Linux after init GC.VGT_LS_HS_CONFIG: 0009D0CE -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE: 00003D8B -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_1: 00000348 -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_2: 00003DFF -> 00000000
+  as Linux after init GC.VGT_GS_VERT_ITEMSIZE_3: 00002FDD -> 00000000
+  as Linux after init GC.DB_ALPHA_TO_MASK: 0000FF00 -> 00000000
+  as Linux after init GC.VGT_DISPATCH_DRAW_INDEX: BF948FD5 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_DB_FMT_CNTL: 0000011F -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_CLAMP: DCEB0F0E -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_FRONT_SCALE: 1EA170FC -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_FRONT_OFFSET: F4F6D821 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_BACK_SCALE: D9D0C9D8 -> 00000000
+  as Linux after init GC.PA_SU_POLY_OFFSET_BACK_OFFSET: BFC59DCC -> 00000000
+  as Linux after init GC.PA_SC_CENTROID_PRIORITY_0: 8221C8CF -> 00000000
+  as Linux after init GC.PA_SC_CENTROID_PRIORITY_1: D10C90CE -> 00000000
+  as Linux after init GC.PA_SC_LINE_CNTL: 00002600 -> 00001000
+  as Linux after init GC.PA_SC_AA_CONFIG: 0F712011 -> 00000000
+  as Linux after init GC.PA_SU_VTX_CNTL: 0000002B -> 00000005
+  as Linux after init GC.PA_CL_GB_VERT_CLIP_ADJ: FE27F2FF -> 3F800000
+  as Linux after init GC.PA_CL_GB_VERT_DISC_ADJ: B5FEAFFF -> 3F800000
+  as Linux after init GC.PA_CL_GB_HORZ_CLIP_ADJ: 2FB67D67 -> 3F800000
+  as Linux after init GC.PA_CL_GB_HORZ_DISC_ADJ: 7FD6BBF3 -> 3F800000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_0: 08C5E701 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_1: 6FAE8E0B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_2: 81A1EC8C -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y0_3: CEF1751F -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_0: 4350AA7B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_1: B9D4A44B -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_2: C4B975E1 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y0_3: 86FEB9D9 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_0: EAC6C88A -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_1: ACE7CF01 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_2: F7CC7983 -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X0Y1_3: F55C0CFE -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_0: 3440F10D -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_1: C738FAAB -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_2: 22D8044C -> 00000000
+  as Linux after init GC.PA_SC_AA_SAMPLE_LOCS_PIXEL_X1Y1_3: B0D8C10A -> 00000000
+  as Linux after init GC.PA_SC_AA_MASK_X0Y0_X1Y0: D81CF7DE -> FFFFFFFF
+  as Linux after init GC.PA_SC_AA_MASK_X0Y1_X1Y1: 99E29D3C -> FFFFFFFF
+  as Linux after init GC.PA_SC_BINNER_CNTL_0: 575F458F -> 00000003
+  as Linux after init GC.PA_SC_BINNER_CNTL_1: 883B087B -> 00000000
+  as Linux after init GC.PA_SC_CONSERVATIVE_RASTERIZATION_CNTL: 0F7FFC71 -> 00100000
+  as Linux after init GC.PA_SC_NGG_MODE_CNTL: 00AD0639 -> 00000000
+  as Linux after init GC.VGT_VERTEX_REUSE_BLOCK_CNTL: 000000D3 -> 0000001E
+  as Linux after init GC.VGT_OUT_DEALLOC_CNTL: 00000036 -> 00000020
+  as Linux after init GC.CB_COLOR0_BASE: 9E715FCE -> 00000000
+  as Linux after init GC.CB_COLOR0_PITCH: 19C007F9 -> 00000000
+  as Linux after init GC.CB_COLOR0_SLICE: 0037CF59 -> 00000000
+  as Linux after init GC.CB_COLOR0_VIEW: 39FDC4E9 -> 00000000
+  as Linux after init GC.CB_COLOR0_INFO: 87EBA4FD -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB: 000E5154 -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_CONTROL: 001B66DB -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK: 35D6913F -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK_SLICE: 00000E5A -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK: ADCEB9ED -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK_SLICE: 0030B314 -> 00000000
+  as Linux after init GC.CB_COLOR0_CLEAR_WORD0: ECFFBE3C -> 00000000
+  as Linux after init GC.CB_COLOR0_CLEAR_WORD1: F9DB5BCA -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_BASE: 84662FAF -> 00000000
+  as Linux after init GC.CB_COLOR1_BASE: 19E7D98E -> 00000000
+  as Linux after init GC.CB_COLOR1_PITCH: 20F0064F -> 00000000
+  as Linux after init GC.CB_COLOR1_SLICE: 003DDB91 -> 00000000
+  as Linux after init GC.CB_COLOR1_VIEW: 0C02ECDD -> 00000000
+  as Linux after init GC.CB_COLOR1_INFO: 0D57C997 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB: 00009AB4 -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_CONTROL: 0015D5CF -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK: B2E06294 -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK_SLICE: 000028FC -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK: 09AEDAFA -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK_SLICE: 000BF9EF -> 00000000
+  as Linux after init GC.CB_COLOR1_CLEAR_WORD0: E9F4C760 -> 00000000
+  as Linux after init GC.CB_COLOR1_CLEAR_WORD1: A8B33EFF -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_BASE: AC07D3E9 -> 00000000
+  as Linux after init GC.CB_COLOR2_BASE: 0B8F67D3 -> 00000000
+  as Linux after init GC.CB_COLOR2_PITCH: 657004DF -> 00000000
+  as Linux after init GC.CB_COLOR2_SLICE: 00318DBD -> 00000000
+  as Linux after init GC.CB_COLOR2_VIEW: 2FFF2E44 -> 00000000
+  as Linux after init GC.CB_COLOR2_INFO: D85FDCF7 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB: 000F3E97 -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_CONTROL: 001FEFA4 -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK: EF4FFF2E -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK_SLICE: 00003CD8 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK: 1ADEAFD0 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK_SLICE: 00368FB3 -> 00000000
+  as Linux after init GC.CB_COLOR2_CLEAR_WORD0: 41BFC4D8 -> 00000000
+  as Linux after init GC.CB_COLOR2_CLEAR_WORD1: FFBF96EE -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_BASE: AFE3999C -> 00000000
+  as Linux after init GC.CB_COLOR3_BASE: D2AEF996 -> 00000000
+  as Linux after init GC.CB_COLOR3_PITCH: 334003D1 -> 00000000
+  as Linux after init GC.CB_COLOR3_SLICE: 003CF5F6 -> 00000000
+  as Linux after init GC.CB_COLOR3_VIEW: 36E2DE7E -> 00000000
+  as Linux after init GC.CB_COLOR3_INFO: 7B51CDF3 -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB: 0009779B -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_CONTROL: 00108DE5 -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK: 4EE1C4FF -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK_SLICE: 000001E7 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK: A9A2EE44 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK_SLICE: 003ECFE1 -> 00000000
+  as Linux after init GC.CB_COLOR3_CLEAR_WORD0: 3E1CDC2E -> 00000000
+  as Linux after init GC.CB_COLOR3_CLEAR_WORD1: DDEE0F78 -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_BASE: 5C7C7CA2 -> 00000000
+  as Linux after init GC.CB_COLOR4_BASE: 4CC95500 -> 00000000
+  as Linux after init GC.CB_COLOR4_PITCH: 7F0007AF -> 00000000
+  as Linux after init GC.CB_COLOR4_SLICE: 00221F9C -> 00000000
+  as Linux after init GC.CB_COLOR4_VIEW: 18DEFEFF -> 00000000
+  as Linux after init GC.CB_COLOR4_INFO: EBFF67CF -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB: 0000AF9C -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_CONTROL: 001F59E9 -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK: 908FEAD8 -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK_SLICE: 00002E8C -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK: 32DF3F31 -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK_SLICE: 0030E3B6 -> 00000000
+  as Linux after init GC.CB_COLOR4_CLEAR_WORD0: DDDFAED8 -> 00000000
+  as Linux after init GC.CB_COLOR4_CLEAR_WORD1: F8CB0DBD -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_BASE: DCFFE5CC -> 00000000
+  as Linux after init GC.CB_COLOR5_BASE: C6C9C866 -> 00000000
+  as Linux after init GC.CB_COLOR5_PITCH: 7DE00095 -> 00000000
+  as Linux after init GC.CB_COLOR5_SLICE: 003C2F7D -> 00000000
+  as Linux after init GC.CB_COLOR5_VIEW: 1E857FAB -> 00000000
+  as Linux after init GC.CB_COLOR5_INFO: EEF64174 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB: 000B1F6D -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_CONTROL: 0012E0F2 -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK: FB95EFF7 -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK_SLICE: 0000215E -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK: D4FDEDB1 -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK_SLICE: 003F7CE2 -> 00000000
+  as Linux after init GC.CB_COLOR5_CLEAR_WORD0: 9444BC4E -> 00000000
+  as Linux after init GC.CB_COLOR5_CLEAR_WORD1: F896DD32 -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_BASE: D775515E -> 00000000
+  as Linux after init GC.CB_COLOR6_BASE: 4136C6EE -> 00000000
+  as Linux after init GC.CB_COLOR6_PITCH: 7EE003DF -> 00000000
+  as Linux after init GC.CB_COLOR6_SLICE: 00271FDD -> 00000000
+  as Linux after init GC.CB_COLOR6_VIEW: 1F5A5610 -> 00000000
+  as Linux after init GC.CB_COLOR6_INFO: DDA9DFEB -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB: 0005E8CC -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_CONTROL: 001F5447 -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK: CFF9D8FE -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK_SLICE: 000012FB -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK: A9FCC8F3 -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK_SLICE: 001FFFEF -> 00000000
+  as Linux after init GC.CB_COLOR6_CLEAR_WORD0: 2CFFF3D1 -> 00000000
+  as Linux after init GC.CB_COLOR6_CLEAR_WORD1: 5F728A0F -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_BASE: D13D93C8 -> 00000000
+  as Linux after init GC.CB_COLOR7_BASE: 15DC1BAC -> 00000000
+  as Linux after init GC.CB_COLOR7_PITCH: 4EB003F5 -> 00000000
+  as Linux after init GC.CB_COLOR7_SLICE: 002FD18C -> 00000000
+  as Linux after init GC.CB_COLOR7_VIEW: 2DDDFF1F -> 00000000
+  as Linux after init GC.CB_COLOR7_INFO: 9971F5B6 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB: 000EEDF3 -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_CONTROL: 001C53E3 -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK: 0FDF5EDD -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK_SLICE: 00003BBD -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK: DF8ABFF1 -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK_SLICE: 001E2CD5 -> 00000000
+  as Linux after init GC.CB_COLOR7_CLEAR_WORD0: E684C3EF -> 00000000
+  as Linux after init GC.CB_COLOR7_CLEAR_WORD1: 9C8DCAAC -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_BASE: 311BEBD5 -> 00000000
+  as Linux after init GC.CB_COLOR0_BASE_EXT: 000000E4 -> 00000000
+  as Linux after init GC.CB_COLOR1_BASE_EXT: 0000005C -> 00000000
+  as Linux after init GC.CB_COLOR2_BASE_EXT: 00000079 -> 00000000
+  as Linux after init GC.CB_COLOR3_BASE_EXT: 000000BA -> 00000000
+  as Linux after init GC.CB_COLOR4_BASE_EXT: 000000F7 -> 00000000
+  as Linux after init GC.CB_COLOR5_BASE_EXT: 0000007A -> 00000000
+  as Linux after init GC.CB_COLOR6_BASE_EXT: 0000000F -> 00000000
+  as Linux after init GC.CB_COLOR7_BASE_EXT: 000000D8 -> 00000000
+  as Linux after init GC.CB_COLOR0_CMASK_BASE_EXT: 000000F8 -> 00000000
+  as Linux after init GC.CB_COLOR1_CMASK_BASE_EXT: 00000080 -> 00000000
+  as Linux after init GC.CB_COLOR2_CMASK_BASE_EXT: 000000DB -> 00000000
+  as Linux after init GC.CB_COLOR3_CMASK_BASE_EXT: 0000004F -> 00000000
+  as Linux after init GC.CB_COLOR4_CMASK_BASE_EXT: 0000005F -> 00000000
+  as Linux after init GC.CB_COLOR5_CMASK_BASE_EXT: 00000030 -> 00000000
+  as Linux after init GC.CB_COLOR6_CMASK_BASE_EXT: 00000059 -> 00000000
+  as Linux after init GC.CB_COLOR7_CMASK_BASE_EXT: 00000004 -> 00000000
+  as Linux after init GC.CB_COLOR0_FMASK_BASE_EXT: 000000D9 -> 00000000
+  as Linux after init GC.CB_COLOR1_FMASK_BASE_EXT: 00000018 -> 00000000
+  as Linux after init GC.CB_COLOR2_FMASK_BASE_EXT: 000000E0 -> 00000000
+  as Linux after init GC.CB_COLOR3_FMASK_BASE_EXT: 000000D9 -> 00000000
+  as Linux after init GC.CB_COLOR4_FMASK_BASE_EXT: 00000049 -> 00000000
+  as Linux after init GC.CB_COLOR5_FMASK_BASE_EXT: 00000002 -> 00000000
+  as Linux after init GC.CB_COLOR6_FMASK_BASE_EXT: 000000D6 -> 00000000
+  as Linux after init GC.CB_COLOR7_FMASK_BASE_EXT: 000000CE -> 00000000
+  as Linux after init GC.CB_COLOR0_DCC_BASE_EXT: 00000015 -> 00000000
+  as Linux after init GC.CB_COLOR1_DCC_BASE_EXT: 00000098 -> 00000000
+  as Linux after init GC.CB_COLOR2_DCC_BASE_EXT: 00000098 -> 00000000
+  as Linux after init GC.CB_COLOR3_DCC_BASE_EXT: 000000C4 -> 00000000
+  as Linux after init GC.CB_COLOR4_DCC_BASE_EXT: 000000BE -> 00000000
+  as Linux after init GC.CB_COLOR5_DCC_BASE_EXT: 00000095 -> 00000000
+  as Linux after init GC.CB_COLOR6_DCC_BASE_EXT: 000000EF -> 00000000
+  as Linux after init GC.CB_COLOR7_DCC_BASE_EXT: 000000E4 -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB2: 1A9C1C52 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB2: 150B11E6 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB2: 4D2B89FD -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB2: 1191CA01 -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB2: 0228CFD9 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB2: 0DAFD175 -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB2: FCCC1F48 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB2: 87E8D8D7 -> 00000000
+  as Linux after init GC.CB_COLOR0_ATTRIB3: 73FBB816 -> 00000000
+  as Linux after init GC.CB_COLOR1_ATTRIB3: 51C30D60 -> 00000000
+  as Linux after init GC.CB_COLOR2_ATTRIB3: 310C9F38 -> 00000000
+  as Linux after init GC.CB_COLOR3_ATTRIB3: 149E372F -> 00000000
+  as Linux after init GC.CB_COLOR4_ATTRIB3: 7E54E8D5 -> 00000000
+  as Linux after init GC.CB_COLOR5_ATTRIB3: 04CAA5CD -> 00000000
+  as Linux after init GC.CB_COLOR6_ATTRIB3: 6DF6B884 -> 00000000
+  as Linux after init GC.CB_COLOR7_ATTRIB3: 79297E9A -> 00000000
+  as Linux after init GC.SCRATCH_REG0: 00000000 -> DEADBEEF
+  as Linux after init GC.CP_PFP_LOAD_CONTROL: 00000000 -> 01018003
+  as Linux after init GC.CP_SCRATCH_INDEX: 00000000 -> 0000009B
+  OTHER               GC.CP_RB_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.GUS_L1_CH1_CMD_IN: 00000000 -> 00000005   (Linux after init: 00000022)
+  OTHER               GC.GUS_L1_CH1_CMD_OUT: 00000000 -> 00000005   (Linux after init: 00000022)
+  as Linux after init GC.GL1_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_VC5_ENABLE: 00000000 -> 00000003
+  as Linux after init GC.GL2C_CTRL2: 1402002F -> 9402002F
+  as Linux after init GC.GL2C_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2C_CTRL3: 00002188 -> 00000188
+  as Linux after init GC.GL2A_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2_PIPE_STEER_0: 32103210 -> 21302130
+  as Linux after init GC.GL2_PIPE_STEER_1: 32103210 -> 21302130
+  as Linux after init GC.RLC_GPM_TIMER_INT_1: 00000063 -> 00006789
+  as Linux after init GC.RLC_GPM_TIMER_INT_2: 00000063 -> 000004F6
+  as Linux after init GC.RLC_GPM_DEBUG_INST_ADDR: 055000FD -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_A: 27F40001 -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_B: 33740000 -> 00000000
+  as Linux after init GC.RLC_CGCG_CGLS_CTRL: 0001003C -> 00000000
+  as Linux after init GC.RLC_DYN_PG_STATUS: FFFFFFFF -> 0000001F
+  as Linux after init GC.RLC_MAX_PG_WGP: 0000000A -> 0000000C
+  as Linux after init GC.RLC_SERDES_MASK: 00030003 -> 00000000
+  as Linux after init GC.RLC_SERDES_CTRL: 0012FFFB -> 00096512
+  as Linux after init GC.RLC_STATIC_PG_STATUS: FFFFFFFF -> 0000FFE7
+  as Linux after init GC.RLC_SPM_MC_CNTL: 00000000 -> 0000000F
+  as Linux after init GC.RLC_GPM_INT_DISABLE_TH0: FFFFFFFF -> 00000000
+  OTHER               GC.RLC_CSIB_ADDR_LO: 00000000 -> FE00A000   (Linux after init: 008CE000)
+  OTHER               GC.RLC_CSIB_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.RLC_CSIB_LENGTH: 00000000 -> 000003B5
+  as Linux after init GC.RLC_PACE_INT_STAT: 00000000 -> 00000001
+  as Linux after init GC.RLC_SMU_COMMAND: 00000000 -> 00000013
+  OTHER               GC.RLC_CP_SCHEDULERS: 58504840 -> 585048C8   (Linux after init: 5850C0C8)
+  OTHER               GC.RLC_SMU_ARGUMENT_1: 00000000 -> 01D550C8   (Linux after init: 0207512C)
+  as Linux after init GC.RLC_GPM_INT_STAT_TH0: A0000000 -> 00000000
+  OTHER               GC.RLC_SMU_ARGUMENT_3: 00000000 -> 000001D5   (Linux after init: 00000207)
+  as Linux after init GC.RLC_GPM_STAT: 00F40016 -> 00B40016
+  as Linux after init GC.RLC_RLCS_GPM_STAT_2: 00000004 -> 00000000
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000083 -> 00000001   (Linux after init: 00000000)
+  as Linux after init GC.RLC_RLCS_CMP_IDLE_CNTL: 00000104 -> 00010100
+  as Linux after init GC.CGTS_SA0_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA0_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTT_SPI_CLK_CTRL: 00000100 -> 3C000100
+  as Linux after init GC.SQ_LDS_CLK_CTRL: 00000000 -> FFFFFFFF
+  as Linux after init GC.GL2C_CGTT_SCLK_CTRL: 00000100 -> 10000100
+  as Linux after init GC.CGTT_CPF_CLK_CTRL: 00000100 -> F8000100
+  OTHER               MP0.MP0_SMN_C2PMSG_64: 80000000 -> 80030000   (Linux after init: 80020000)
+  OTHER               MP0.MP0_SMN_C2PMSG_67: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  OTHER               MP0.MP0_SMN_C2PMSG_68: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  as Linux after init MP0.MP0_SMN_C2PMSG_69: 00000000 -> FFFE7000
+  as Linux after init MP0.MP0_SMN_C2PMSG_70: 00000000 -> 000000F5
+  as Linux after init MP0.MP0_SMN_C2PMSG_71: 00000000 -> 00001000
+  as Linux after init MP0.MP1_SMN_C2PMSG_64: 00000000 -> 00000010
+  as Linux after init MMHUB.MMVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001
+  OTHER               MMHUB.MMVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001   (Linux after init: 00010001)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 11 registers; changed: 722 to Linux's value after init, 60 to something else
+
+== boot 2: all seven stages in one call, the whole step against the trace
+driver: 355 register writes in 7 stages   trace: 355 writes in the step
+TLB flush writes after binds: 69, with a value other than amdgpu's: 0
+  stage 1: rc 0, writes from [69]
+  stage 2: rc 0, writes from [70]
+  stage 3: rc 0, writes from [104]
+  stage 4: rc 0, writes from [107]
+  stage 5: rc 0, writes from [264]
+  stage 6: rc 0, writes from [272]
+  stage 7: rc 0, writes from [334]
+  [ 198] address driver 0x3B28C 000000F5 GC.RLC_CSIB_ADDR_HI   trace GC.RLC_CSIB_ADDR_HI 0x3B28C 000000F4
+  [ 199] address driver 0x3B288 FE00A000 GC.RLC_CSIB_ADDR_LO   trace GC.RLC_CSIB_ADDR_LO 0x3B288 008CE000
+  [ 207] address driver 0x0C8B8 00005010 GC.CP_HQD_EOP_BASE_ADDR   trace GC.CP_HQD_EOP_BASE_ADDR 0x0C8B8 000065F0
+  [ 210] address driver 0x0C824 FE000000 GC.CP_MQD_BASE_ADDR   trace GC.CP_MQD_BASE_ADDR 0x0C824 008CD000
+  [ 211] address driver 0x0C828 000000F5 GC.CP_MQD_BASE_ADDR_HI   trace GC.CP_MQD_BASE_ADDR_HI 0x0C828 000000F4
+  [ 213] address driver 0x0C844 00004010 GC.CP_HQD_PQ_BASE   trace GC.CP_HQD_PQ_BASE 0x0C844 00008000
+  [ 216] address driver 0x0C850 00400000 GC.CP_HQD_PQ_RPTR_REPORT_ADDR   trace GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0C850 004015E0
+  [ 218] address driver 0x0C858 00400008 GC.CP_HQD_PQ_WPTR_POLL_ADDR   trace GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0C858 00401600
+  [ 309] address driver 0x04C4C 0051C008 GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO   trace GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO 0x04C4C 004016A0
+  [ 313] address driver 0x04BA4 0051C000 GC.SDMA0_GFX_RB_RPTR_ADDR_LO   trace GC.SDMA0_GFX_RB_RPTR_ADDR_LO 0x04BA4 00401680
+  [ 314] address driver 0x04B84 000051D0 GC.SDMA0_GFX_RB_BASE   trace GC.SDMA0_GFX_RB_BASE 0x04B84 00006600
+  [ 335] address driver 0x0644C 0051C018 GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO   trace GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO 0x0644C 00401740
+  [ 339] address driver 0x063A4 0051C010 GC.SDMA1_GFX_RB_RPTR_ADDR_LO   trace GC.SDMA1_GFX_RB_RPTR_ADDR_LO 0x063A4 00401720
+  [ 340] address driver 0x06384 000051F0 GC.SDMA1_GFX_RB_BASE   trace GC.SDMA1_GFX_RB_BASE 0x06384 00006620
+equal 341, address registers with another value 14, other differences 0
+verdict: AS EXPECTED
+
+== boot 2, H10: state after a device restart while the engines ran, control = before
+  as Linux after init NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN: 00000000 -> 00000001
+  as Linux after init NBIO.BIF_SDMA0_DOORBELL_RANGE: 00000000 -> 00140800
+  as Linux after init NBIO.BIF_SDMA1_DOORBELL_RANGE: 00000000 -> 00140850
+  OTHER               GC.SDMA0_CNTL: 000000C2 -> 000000E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA0_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  as Linux after init GC.SDMA0_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA0_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_STATUS2_REG: 00000000 -> 00000F80   (Linux after init: 00000DAC)
+  as Linux after init GC.SDMA0_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA0_UTCL1_INV0: 00000800 -> 01000800
+  as Linux after init GC.SDMA0_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA0_PHASE2_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA0_GFX_RB_CNTL: 80840000 -> 80841016   (Linux after init: 80841017)
+  OTHER               GC.SDMA0_GFX_RB_BASE: 00000000 -> 000051D0   (Linux after init: 00006600)
+  as Linux after init GC.SDMA0_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA0_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C000   (Linux after init: 00401680)
+  OTHER               GC.SDMA0_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA0_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA0_GFX_DOORBELL_OFFSET: 00000000 -> 00000800
+  OTHER               GC.SDMA0_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C008   (Linux after init: 004016A0)
+  as Linux after init GC.SDMA0_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA0_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  OTHER               GC.SDMA1_CNTL: 000000C2 -> 000000E2   (Linux after init: 000400E3)
+  as Linux after init GC.SDMA1_CHICKEN_BITS: 01AF0107 -> 03AB0107
+  as Linux after init GC.SDMA1_PHASE0_QUANTUM: 00010002 -> 00002000
+  as Linux after init GC.SDMA1_PHASE1_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_STATUS2_REG: 00000001 -> 00000719   (Linux after init: 00000419)
+  as Linux after init GC.SDMA1_UTCL1_CNTL: D0000191 -> D0000793
+  as Linux after init GC.SDMA1_UTCL1_INV0: 00000800 -> 01000800
+  as Linux after init GC.SDMA1_UTCL1_PAGE: 000C5C20 -> 004CEC00
+  as Linux after init GC.SDMA1_PHASE2_QUANTUM: 00010002 -> 00002000
+  OTHER               GC.SDMA1_GFX_RB_CNTL: 80840000 -> 80841016   (Linux after init: 80841017)
+  OTHER               GC.SDMA1_GFX_RB_BASE: 00000000 -> 000051F0   (Linux after init: 00006620)
+  as Linux after init GC.SDMA1_GFX_RB_WPTR_POLL_CNTL: 00401000 -> 00403004
+  OTHER               GC.SDMA1_GFX_RB_RPTR_ADDR_LO: 00000000 -> 0051C010   (Linux after init: 00401720)
+  OTHER               GC.SDMA1_GFX_DOORBELL: 00000000 -> 10000000   (Linux after init: 50000000)
+  as Linux after init GC.SDMA1_GFX_STATUS: 00000000 -> 00000001
+  as Linux after init GC.SDMA1_GFX_DOORBELL_OFFSET: 00000000 -> 00000850
+  OTHER               GC.SDMA1_GFX_RB_WPTR_POLL_ADDR_LO: 00000000 -> 0051C018   (Linux after init: 00401740)
+  as Linux after init GC.SDMA1_PAGE_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC0_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC1_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC2_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC3_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC4_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC5_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC6_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.SDMA1_RLC7_RB_WPTR_POLL_CNTL: 00401000 -> 00403000
+  as Linux after init GC.GRBM_CNTL: 00000018 -> 000000FF
+  OTHER               GC.GRBM_STATUS2: 00000008 -> 30000008   (Linux after init: 00000008)
+  OTHER               GC.GRBM_STATUS: 00003028 -> A0003028   (Linux after init: 00003028)
+  OTHER               GC.GRBM_READ_ERROR: 00000000 -> 80008090   (Linux after init: 80030800)
+  as Linux after init GC.GRBM_READ_ERROR2: 00000000 -> 00020000
+  OTHER               GC.CP_CPC_STATUS: 00000000 -> A0000082   (Linux after init: 00000000)
+  OTHER               GC.CP_CPC_BUSY_STAT: 00000000 -> 08000000   (Linux after init: 00000000)
+  OTHER               GC.CP_CPC_STALLED_STAT1: 00000000 -> 00210000   (Linux after init: 00000000)
+  OTHER               GC.CP_CPF_STATUS: 00000000 -> A8008001   (Linux after init: 00000000)
+  OTHER               GC.CP_CPF_BUSY_STAT: 00000000 -> 48460000   (Linux after init: 00000000)
+  as Linux after init GC.CP_STALLED_STAT1: 00000000 -> 00000C00
+  OTHER               GC.CP_CNTX_STAT: 00000000 -> 10000000   (Linux after init: 20000000)
+  OTHER               GC.CP_RB0_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_MEQ_STAT: 00000000 -> 01C301C3   (Linux after init: 01E901E9)
+  OTHER               GC.VGT_LAST_COPY_STATE: 00000000 -> 00010000   (Linux after init: 00020001)
+  as Linux after init GC.GE_FAST_CLKS: 00000000 -> 0000493E
+  as Linux after init GC.CC_GC_SHADER_ARRAY_CONFIG_GEN0: 00000000 -> 00FC0001
+  as Linux after init GC.PA_SC_ENHANCE: 08000001 -> 08000009
+  as Linux after init GC.SQ_ARB_CONFIG: 00000030 -> 00000130
+  as Linux after init GC.SH_MEM_CONFIG: 00000000 -> 0000C00C
+  clock/counter GC.SQ_TIME_HI: 00000027 -> 00000044
+  clock/counter GC.SQ_TIME_LO: 8FA6F313 -> 38A567B9
+  as Linux after init GC.SPI_PG_ENABLE_STATIC_WGP_MASK: 0000FFFF -> 00000007
+  as Linux after init GC.TA_CNTL_AUX: 01030008 -> 01030000
+  OTHER               GC.GDS_VM_PROTECTION_FAULT: 00000000 -> 0000001B   (Linux after init: 00000000)
+  as Linux after init GC.DB_DEBUG: 00000000 -> 20000000
+  as Linux after init GC.DB_DEBUG3: 00000000 -> 00000200
+  as Linux after init GC.DB_DEBUG4: 04000000 -> 04800000
+  as Linux after init GC.DB_LAST_OF_BURST_CONFIG: 02060410 -> 03860210
+  as Linux after init GC.CB_HW_CONTROL_4: 003C0014 -> 003C8014
+  as Linux after init GC.CB_HW_CONTROL_3: 20000000 -> A0000000
+  as Linux after init GC.RMI_SPARE: FFFF3108 -> FFFF3100
+  as Linux after init GC.GCR_GENERAL_CNTL: 00F00400 -> 00F08500
+  OTHER               GC.GCR_CMD_STATUS: 00000000 -> 003103C1   (Linux after init: 0000C3A1)
+  as Linux after init GC.UTCL1_CTRL: 00000000 -> 00800000
+  as Linux after init GC.GCVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001
+  OTHER               GC.GCVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001   (Linux after init: 00010001)
+  OTHER               GC.CP_RB0_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  as Linux after init GC.CP_RB0_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_RB0_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  as Linux after init GC.CP_RB0_BUFSZ_MASK: 00000000 -> 000007FF
+  as Linux after init GC.CP_DEVICE_ID: 00000000 -> 00000001
+  OTHER               GC.CP_RB0_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_LOWER: 00000000 -> 00000458
+  as Linux after init GC.CP_RB_DOORBELL_RANGE_UPPER: 00000108 -> 0FFFFFFC
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_LOWER: 00000110 -> 00000000
+  as Linux after init GC.CP_MEC_DOORBELL_RANGE_UPPER: 0FFFFFFC -> 00000450
+  as Linux after init GC.CP_ME1_INT_STAT_DEBUG: 00000000 -> 04000000
+  as Linux after init GC.CP_PQ_STATUS: 00000000 -> 00000002
+  as Linux after init GC.CP_CE_CS_PARTITION_INDEX: 00000000 -> 00008000
+  as Linux after init GC.CP_SUSPEND_CNTL: 00000002 -> 00000000
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR: 00000000 -> FE009000   (Linux after init: 008CC000)
+  OTHER               GC.CP_GFX_MQD_BASE_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.CP_GFX_HQD_ACTIVE: 00000000 -> 00000001
+  OTHER               GC.CP_GFX_HQD_BASE: FEDCBAEF -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_RB_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  as Linux after init GC.CP_RB_DOORBELL_CONTROL: 00000000 -> C0000458
+  OTHER               GC.CP_GFX_HQD_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CNTL: 00A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_BASE: CDCDCDCD -> 000051A0   (Linux after init: 000064D0)
+  OTHER               GC.CP_GFX_HQD_CE_RPTR_ADDR: 00000000 -> 00400090   (Linux after init: 00401040)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR_POLL_ADDR_LO: 00000000 -> 00400098   (Linux after init: 00401060)
+  OTHER               GC.CP_GFX_HQD_CE_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_GFX_HQD_CE_CNTL: 08A00000 -> 00A0080A
+  OTHER               GC.CP_GFX_HQD_CE_CSMD_RPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.CP_GFX_HQD_CE_WPTR: 00000000 -> 00000500   (Linux after init: 00000600)
+  as Linux after init GC.CP_CE_DOORBELL_CONTROL: 00000000 -> C0000458
+  as Linux after init GC.CP_PFP_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_CE_JT_STAT: 00000000 -> 00000003
+  as Linux after init GC.CP_MEC_JT_STAT: 00000000 -> 000000FF
+  as Linux after init GC.CP_RB0_ACTIVE: 00000000 -> 00000001
+  as Linux after init GC.CP_SD_CNTL: 0000045F -> 000005FF
+  as Linux after init GC.SPI_GDBG_TRAP_CONFIG: 00000000 -> FF008000
+  OTHER               GC.GC_CAC_AGGR_LOWER: 00000000 -> 02700B00   (Linux after init: 03A3C930)
+  as Linux after init GC.GDS_VMID1_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID2_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID3_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID4_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID5_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID6_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID7_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID8_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID9_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID10_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID11_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID12_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID13_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID14_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_VMID15_SIZE: 00010000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID1: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID2: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID3: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID4: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID5: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID6: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID7: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID8: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID9: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID10: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID11: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID12: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID13: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID14: 00400000 -> 00000000
+  as Linux after init GC.GDS_GWS_VMID15: 00400000 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_TL: 58F43658 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_0_BR: 55EF0DFB -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_TL: C1405DC3 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_1_BR: 488C0310 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_TL: BA805F7B -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_2_BR: 18270CFA -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_TL: F8010105 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_3_BR: 20850892 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_TL: D6F07155 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_4_BR: 239F6EA3 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_TL: D4C20A49 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_5_BR: 08010F02 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_TL: EA81546E -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_6_BR: 7B6D12CF -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_TL: E240706A -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_7_BR: 040706C6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_TL: 7D7A7E71 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_8_BR: 50721C67 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_TL: 340868C9 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_9_BR: 50640002 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_TL: 6AC67FB1 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_10_BR: 798F227D -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_TL: 30056260 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_11_BR: 6000324A -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_TL: 7E792C3F -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_12_BR: 254432ED -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_TL: 8C600634 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_13_BR: 400C462F -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_TL: AB3E6F36 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_14_BR: 59F77DEC -> 40004000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_TL: 41400901 -> 80000000
+  as Linux after init GC.PA_SC_VPORT_SCISSOR_15_BR: 08C15DA6 -> 40004000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_0: AED9CEF6 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_0: 52EA1CED -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_1: 10101810 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_1: 82820815 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_2: C87C4C5E -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_2: 76FFB2FF -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_3: 426028A4 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_3: 10FD0052 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_4: DB1EE1E3 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_4: F35E2E8F -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_5: 4000A69B -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_5: AEB1249A -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_6: 3BFB5DF1 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_6: FF1E9970 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_7: F20C2234 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_7: A81F03A4 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_8: F3F2B496 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_8: 18BEBA3D -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_9: 2049A801 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_9: DEAA8013 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_10: ABA14BFF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_10: F62FB8E9 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_11: C06DC646 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_11: 0C020234 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_12: E61CB2FF -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_12: F7D6EED7 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_13: 070D8851 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_13: 88428000 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_14: A88265AC -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_14: 1FD3BF34 -> 3F800000
+  as Linux after init GC.PA_SC_VPORT_ZMIN_15: 05126840 -> 00000000
+  as Linux after init GC.PA_SC_VPORT_ZMAX_15: 44286210 -> 3F800000
+  as Linux after init GC.PA_SC_RASTER_CONFIG: 2A00126A -> 00000000
+  OTHER               GC.GFX_COPY_STATE: 00000F00 -> 00000F08   (Linux after init: 00000F11)
+  as Linux after init GC.PA_SC_MODE_CNTL_1: 06000000 -> 00000000
+  as Linux after init GC.SCRATCH_REG0: 00000000 -> DEADBEEF
+  clock/counter GC.CP_DMA_READ_TAGS: 00B40004 -> 02B41004
+  as Linux after init GC.CP_PFP_LOAD_CONTROL: 00000000 -> 01018003
+  as Linux after init GC.CP_SCRATCH_INDEX: 00000000 -> 0000009B
+  OTHER               GC.CP_RB_OFFSET: 00000000 -> 00000500   (Linux after init: 00000600)
+  OTHER               GC.GUS_L1_CH1_CMD_IN: 00000000 -> 00000005   (Linux after init: 00000022)
+  OTHER               GC.GUS_L1_CH1_CMD_OUT: 00000000 -> 00000005   (Linux after init: 00000022)
+  as Linux after init GC.GL1_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_PIPE_STEER: E4E4E4E4 -> D8D8D8D8
+  as Linux after init GC.CH_VC5_ENABLE: 00000000 -> 00000003
+  as Linux after init GC.GL2C_CTRL2: 1402002F -> 9402002F
+  as Linux after init GC.GL2C_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2C_CTRL3: 00002188 -> 00000188
+  as Linux after init GC.GL2A_ADDR_MATCH_MASK: FFFFFFFF -> FFFFFFCF
+  as Linux after init GC.GL2_PIPE_STEER_0: 32103210 -> 21302130
+  as Linux after init GC.GL2_PIPE_STEER_1: 32103210 -> 21302130
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_LSB: 5C58B1B1 -> 307838A3
+  clock/counter GC.RLC_REFCLOCK_TIMESTAMP_MSB: 00000003 -> 00000006
+  as Linux after init GC.RLC_GPM_TIMER_INT_1: 00000063 -> 00006789
+  as Linux after init GC.RLC_GPM_TIMER_INT_2: 00000063 -> 000004F6
+  as Linux after init GC.RLC_GPM_DEBUG_INST_ADDR: 055000FD -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_A: 27F40001 -> 00000000
+  as Linux after init GC.RLC_GPM_DEBUG_INST_B: 33740000 -> 00000000
+  clock/counter GC.RLC_GPU_CLOCK_32: CFAE8F01 -> A3EF7A39
+  as Linux after init GC.RLC_CGCG_CGLS_CTRL: 0001003C -> 00000000
+  as Linux after init GC.RLC_DYN_PG_STATUS: FFFFFFFF -> 0000001F
+  as Linux after init GC.RLC_MAX_PG_WGP: 0000000A -> 0000000C
+  as Linux after init GC.RLC_SERDES_MASK: 00030003 -> 00000000
+  as Linux after init GC.RLC_SERDES_CTRL: 0012FFFB -> 00096512
+  as Linux after init GC.RLC_STATIC_PG_STATUS: FFFFFFFF -> 0000FFE7
+  as Linux after init GC.RLC_SPM_MC_CNTL: 00000000 -> 0000000F
+  as Linux after init GC.RLC_GPM_INT_DISABLE_TH0: FFFFFFFF -> 00000000
+  OTHER               GC.RLC_CSIB_ADDR_LO: 00000000 -> FE00A000   (Linux after init: 008CE000)
+  OTHER               GC.RLC_CSIB_ADDR_HI: 00000000 -> 000000F5   (Linux after init: 000000F4)
+  as Linux after init GC.RLC_CSIB_LENGTH: 00000000 -> 000003B5
+  as Linux after init GC.RLC_PACE_INT_STAT: 00000000 -> 00000001
+  as Linux after init GC.RLC_SMU_COMMAND: 00000000 -> 00000013
+  OTHER               GC.RLC_CP_SCHEDULERS: 58504840 -> 585048C8   (Linux after init: 5850C0C8)
+  OTHER               GC.RLC_SMU_ARGUMENT_1: 00000000 -> 01D550C8   (Linux after init: 0207512C)
+  as Linux after init GC.RLC_GPM_INT_STAT_TH0: A0000000 -> 00000000
+  OTHER               GC.RLC_SMU_ARGUMENT_3: 00000000 -> 000001D5   (Linux after init: 00000207)
+  OTHER               GC.RLC_CP_STAT_INVAL_STAT: 00000000 -> 00000010   (Linux after init: 00000018)
+  as Linux after init GC.RLC_GPM_STAT: 00F40016 -> 00B40016
+  as Linux after init GC.RLC_RLCS_GPM_STAT_2: 00000004 -> 00000000
+  OTHER               GC.RLC_RLCS_GRBM_IDLE_BUSY_STAT: 00000083 -> 00000001   (Linux after init: 00000000)
+  as Linux after init GC.RLC_RLCS_CMP_IDLE_CNTL: 00000104 -> 00010100
+  as Linux after init GC.CGTS_SA0_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA0_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD0_SM_CTRL_REG: 44E00200 -> C0F40200
+  as Linux after init GC.CGTS_SA1_QUAD1_SM_CTRL_REG: 40E00200 -> C0F40200
+  as Linux after init GC.CGTT_SPI_CLK_CTRL: 00000100 -> 3C000100
+  as Linux after init GC.SQ_LDS_CLK_CTRL: 00000000 -> FFFFFFFF
+  as Linux after init GC.GL2C_CGTT_SCLK_CTRL: 00000100 -> 10000100
+  as Linux after init GC.CGTT_CPF_CLK_CTRL: 00000100 -> F8000100
+  OTHER               MP0.MP0_SMN_C2PMSG_60: DE00000B -> 9C00000B   (Linux after init: E600000B)
+  OTHER               MP0.MP0_SMN_C2PMSG_64: 80000000 -> 80030000   (Linux after init: 80020000)
+  OTHER               MP0.MP0_SMN_C2PMSG_67: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  OTHER               MP0.MP0_SMN_C2PMSG_68: 00000000 -> 000000C0   (Linux after init: 000000B0)
+  as Linux after init MP0.MP0_SMN_C2PMSG_69: 00000000 -> FFFE7000
+  as Linux after init MP0.MP0_SMN_C2PMSG_70: 00000000 -> 000000F5
+  as Linux after init MP0.MP0_SMN_C2PMSG_71: 00000000 -> 00001000
+  OTHER               MP0.MP0_SMN_C2PMSG_81: 002B575B -> 002C3393   (Linux after init: 00443F08)
+  as Linux after init MP0.MP1_SMN_C2PMSG_64: 00000000 -> 00000010
+  as Linux after init MMHUB.MMVM_INVALIDATE_ENG17_REQ: 02F80000 -> 00F80001
+  OTHER               MMHUB.MMVM_INVALIDATE_ENG17_ACK: 00000000 -> 00000001   (Linux after init: 00010001)
+  GC.GCVM_L2_PROTECTION_FAULT_STATUS = 00000000
+  MMHUB.MMVM_L2_PROTECTION_FAULT_STATUS = 00000000
+noise set: 0 registers; changed: 224 to Linux's value after init, 64 to something else

@@ -34,7 +34,10 @@ $sources = (Get-ChildItem (Join-Path $here '*.c')).FullName
 # disables documented in driver\amdgpu-import\PROVENANCE.md, from the build line, never by editing them.
 $repo = Split-Path (Split-Path $here)
 $shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", '/DBC250_SHIM_KERNEL')
-$shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_psp.c")
+$shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_psp.c")
+# M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
+# imported nvd.h is a signed int with bit 31 set (driver\shim\README.md).
+$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_nbio.c', 'bc250_irq.c') | ForEach-Object { "$repo\driver\shim\$_" }
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
@@ -45,6 +48,7 @@ $clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Z
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\um",
     "/Fo$obj\", "/Fd$obj\cl.pdb")
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
+Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244', '/wd4701', '/wd4100') + $importSources)
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',

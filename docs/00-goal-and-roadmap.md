@@ -27,7 +27,7 @@ Each milestone has an exit criterion that is a measurement. A milestone is close
 | M8 | **User mode** | Direction: Vulkan first (RADV with a WDDM winsys), Direct3D by translation (ADR 0005). Exit criterion set at M8 |
 | O1 | Optional: 40 CU | Only after M5. Mirrors `bc250-40cu-unlock`: two per-bank register writes during gfx init |
 
-Status 2026-09-21: M0-M4 closed on unit A (facts M1-M33; M3 by experiment E06: our display-only miniport runs the
+Status 2026-09-21: M0-M5 closed on unit A (facts M1-M33; M3 by experiment E06: our display-only miniport runs the
 lab machine's display, and `D3DKMTEscape` reaches it, which gives M4-M6 their control channel). M2's debugger
 works over KDNET but its host-side server is disabled after it hung the development PC (journal 2026-09-21).
 M4 by experiments E07-E09: AMD's hub code, imported unmodified and run inside the miniport, programs GART and VM
@@ -36,7 +36,10 @@ picture undisturbed, reversible. The driver does it on command behind gates; doi
 with M5, whose ring buffer is the first thing that needs a GART mapping. M5 is under way: its first part, the
 firmware through the PSP, works under Windows (E10, facts M34, M35: AMD's `psp_v11_0_8.c` imported unmodified,
 eleven commands accepted, same register traffic and timing as amdgpu on this unit; the PSP itself starts the RLC
-and releases SDMA). Next: M5's second part, RLC and CP bring-up, KIQ, the ring tests, SDMA.
+and releases SDMA). M5 is reached (E11, facts M36, M37): amdgpu's GFX and SDMA bring-up for this part, transcribed
+against AMD's unmodified tables and run in stages inside the miniport, makes the same 355 register writes amdgpu
+made (14 of them carrying our addresses), and all eleven ring tests pass with the rings in system memory behind
+our GART. Next: M6, the IH ring and the first interrupt, fences, a compute dispatch.
 
 Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years. The project stays useful at every step because each milestone leaves verified, published knowledge.
 

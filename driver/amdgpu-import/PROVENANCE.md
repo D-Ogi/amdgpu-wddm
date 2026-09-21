@@ -22,9 +22,22 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/amdgpu/<file> > driver/am
 | `psp_v11_0_8.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2021 Advanced Micro Devices, Inc. |
 | `psp_v11_0_8.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2021 Advanced Micro Devices, Inc. |
 | `psp_gfx_if.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2017 Advanced Micro Devices, Inc. |
+| `v10_structs.h` | `drivers/gpu/drm/amd/include/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
+| `nvd.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
+| `clearstate_defs.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2012 Advanced Micro Devices, Inc. |
+| `clearstate_gfx10.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
+| `amdgpu_doorbell.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2018 Advanced Micro Devices, Inc. |
+| `sdma_common.h` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
+| `reference/gfx_v10_0.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
+| `reference/sdma_v5_0.c` | `drivers/gpu/drm/amd/amdgpu/` | v6.18 | `7d0a66e4bb90` | MIT text, Copyright 2019 Advanced Micro Devices, Inc. |
 
 Every one of the files carries the full MIT permission notice; only `cyan_skillfish_reg_init.c` also
 carries the SPDX tag. Checked file by file, not assumed from the directory.
+
+The commit column is the same for every row because `P:\BC-250\ref\linux-src` is a depth-1 clone of
+the tag, so the tag commit is the only one it has. It is the commit the bytes come from, which is
+what the column is for; it is not the last commit that touched each file, and `git log -- <path>`
+in that clone cannot tell us what that was.
 
 `soc15_common.h` compiles under the shim as it is, so it is imported rather than reimplemented: the
 shim supplies the names its macros reach for (`RREG32`/`WREG32`, `amdgpu_sriov_vf` and the two
@@ -46,3 +59,50 @@ union and `uint32_t` bit fields raise C4201 and C4214 at `/W4`, and `psp_v11_0_8
 not use its `ring_type` argument (C4100): all three are switched off from the build line
 (`driver/shim/test/run_psp.ps1`, `driver/kmd/build.ps1`), nowhere else. `amdgpu_psp.c` itself is
 not imported: see `driver/shim/include/bc250_psp.h` for why and for what follows it instead.
+
+## GFX, KIQ and SDMA (milestone M5 part B)
+
+Six headers are compiled: `v10_structs.h` (the MQD layouts), `nvd.h` (the GFX10 PM4 packet
+definitions), `clearstate_defs.h` and `clearstate_gfx10.h` (the clear-state section tables and the
+921 register values in them), `amdgpu_doorbell.h` (the NAVI10 doorbell index assignment) and
+`sdma_common.h` (the two UTCL2 cache-policy enums the SDMA `UTCL1_PAGE` write uses). All six have no
+`#include` lines of their own; the shim supplies the handful of typedefs they reach for. Note that `clearstate_gfx10.h` defines `static const` arrays, so it is included in exactly one
+translation unit (`driver/shim/bc250_gfx.c`), and that `soc15d.h` is deliberately **not** imported:
+it defines `PACKET3` a second time and its include guard is `SOC15_H`, the same as `soc15.h`.
+
+`reference/gfx_v10_0.c` and `reference/sdma_v5_0.c` are **reference only: they are never compiled**.
+That is why they sit in a subdirectory: `driver/kmd/build.ps1` globs `driver/amdgpu-import/*.c`
+non-recursively, so everything directly in this directory compiles and everything under `reference/`
+cannot be picked up by accident. They are here for
+two reasons. First, every function in `driver/shim/bc250_gfx.c` and `bc250_sdma.c` carries a comment
+naming the upstream function and line it follows, and a reviewer can check that citation against a
+file in this tree instead of against a kernel checkout at the right tag. Second, the one data table
+we need out of `gfx_v10_0.c`, `golden_settings_gc_10_0_cyan_skillfish`, is extracted from this copy
+mechanically by `tools/import/extract_table.py` into
+`driver/shim/generated/gfx10_golden_cyan_skillfish.inc`, and the same is done with
+`golden_settings_sdma_cyan_skillfish` out of `sdma_v5_0.c` into
+`driver/shim/generated/sdma5_golden_cyan_skillfish.inc`; the replay test re-runs both extractions
+and diffs, so no register address, mask or value is ever typed by hand and an upstream change to a
+table fails loudly instead of silently.
+
+They are not compiled because they cannot be: `gfx_v10_0.c` is 10247 lines and calls about ninety
+functions it does not define, among them the buffer-object allocator, the writeback allocator,
+`amdgpu_ring_init`, the DRM scheduler, `dma_fence`, `request_firmware` and the ucode header parsers,
+interrupt registration, sysfs, debugfs and delayed work. A shim for that would be a partial Linux.
+`sdma_v5_0.c` is the same story at 2102 lines and thirty external functions, of which only three are
+reachable from the ring bring-up path. What those two files do for the hardware is reimplemented in
+`driver/shim/bc250_gfx.c` and `bc250_sdma.c`, function by function, with the citation comments.
+
+### Deviations from the imported tag
+
+Where our transcription does not follow mainline v6.18, it is because the trace decides. Unit A ran
+Alpine's `6.18.52-0-lts`, not the tag the imports come from, and where the two disagree the kernel
+that produced the trace is the one that is right.
+
+| Where | Mainline v6.18 | 6.18.52-0-lts, and what unit A shows | Our choice |
+| --- | --- | --- | --- |
+| `gfx_v10_0_cp_gfx_resume()`, `CP_RB_DOORBELL_CONTROL` / `CP_RB0_WPTR_POLL_CNTL` | `gfx_v10_0.c:5348` region has no `DB_RING_CONTROL` write | `gfx_v10_0.c:5352` writes it; the E03 trace contains the write | follow 6.18.52, comment at the write site in `driver/shim/bc250_gfx.c` |
+| `amdgpu_gmc_noretry_set()` | tests `gc_ver >= IP_VERSION(10, 3, 0)`, giving `noretry = false` for GC 10.1.3 | tests `>= IP_VERSION(10, 1, 0)`, giving `true`; the traced `GCVM_CONTEXT1..15_CNTL` have the retry bit clear | `noretry = true`, measured; see `driver/shim/README.md` |
+
+Both are recorded rather than silently absorbed, because a future reader comparing our code with a
+mainline checkout would otherwise find a difference and have no way to tell whether it was a bug.

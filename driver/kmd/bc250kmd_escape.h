@@ -13,7 +13,8 @@
 #define BC250_ESCAPE_VRAM_WRITE 6u          // BC250_ESCAPE_MEMORY in: Path, Offset, Value; out: Value read back
 #define BC250_ESCAPE_RUN_GART 7u            // BC250_ESCAPE_GART in: Op; out: what the sequence wrote (or would write)
 #define BC250_ESCAPE_RUN_PSP 8u             // BC250_ESCAPE_PSP in: Op; out: register writes and PSP commands
-#define BC250_KMD_VERSION 0x00050002u       // milestone 5 work, revision 2
+#define BC250_ESCAPE_RUN_GFX 9u             // BC250_ESCAPE_GFX in: Op, LastStage; out: stages, register and doorbell writes
+#define BC250_KMD_VERSION 0x00050005u       // milestone 5 work, revision 3
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -26,6 +27,7 @@
 #define BC250_ESCAPE_FLAG_VRAM_WRITE 8u
 #define BC250_ESCAPE_FLAG_GART 16u          // the EnableGart gate was open at start
 #define BC250_ESCAPE_FLAG_PSP 32u           // the EnablePsp gate was open at start
+#define BC250_ESCAPE_FLAG_GFX 64u           // the EnableGfx gate was open at start
 
 // The two independent ways to the same VRAM byte (vram.c).
 #define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
@@ -136,3 +138,48 @@ typedef struct _BC250_ESCAPE_PSP {
     BC250_ESCAPE_WRITE Writes[BC250_PSP_MAX_WRITES];
     BC250_ESCAPE_PSP_COMMAND Commands[BC250_PSP_MAX_COMMANDS];
 } BC250_ESCAPE_PSP;
+
+// ---- BC250_ESCAPE_RUN_GFX (gfx.c): RLC, CP, KIQ, queues, ring tests, SDMA -------------------------------------------------
+#define BC250_GFX_OP_PLAN 0u                // stages 1..LastStage against the real registers, no register or doorbell write
+#define BC250_GFX_OP_RUN 1u                 // stages (next not yet done)..LastStage
+#define BC250_GFX_OP_FINI 2u                // halt SDMA, CP and MEC, give the memory back
+#define BC250_GFX_OP_STATE 3u               // nothing but the out fields
+#define BC250_GFX_MAX_WRITES 1536
+#define BC250_GFX_MAX_DOORBELLS 32
+#define BC250_GFX_MAX_STAGES 16
+
+typedef struct _BC250_ESCAPE_DOORBELL {
+    unsigned long Index;                    // dword index into the doorbell BAR, amdgpu's doorbell index
+    unsigned long AfterWrite;               // how many register writes of the sequence came before it
+    unsigned long long Value;
+} BC250_ESCAPE_DOORBELL;
+
+typedef struct _BC250_ESCAPE_GFX_STAGE {
+    unsigned long Stage;                    // BC250_GFX_STAGE_* (gfx.c names them in its table)
+    long Result;                            // the shim function's return code
+    unsigned long FirstWrite;               // index of the stage's first register write in Writes
+    unsigned long Microseconds;
+} BC250_ESCAPE_GFX_STAGE;
+
+typedef struct _BC250_ESCAPE_GFX {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_GFX
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Op;                       // in: BC250_GFX_OP_*
+    unsigned long LastStage;                // in: PLAN and RUN stop after this stage
+    long Result;                            // out: first failing return code, 0 if none
+    unsigned long FailedStage;              // out: the stage that returned it, 0 if none
+    unsigned long FaultOffset;              // out: the first register the driver's table refused (0xD0000000 | index for a
+                                            //      refused doorbell), 0 if none
+    unsigned long StagesDone;               // out: the last stage that has been run on the hardware since the device started
+    unsigned long WriteCount;               // out: register writes issued (or planned)
+    unsigned long DoorbellCount;
+    unsigned long StageCount;
+    unsigned long VramBytes, GttBytes;      // out: GPU-visible memory held by the sequence
+    BC250_ESCAPE_GFX_STAGE Stages[BC250_GFX_MAX_STAGES];
+    BC250_ESCAPE_DOORBELL Doorbells[BC250_GFX_MAX_DOORBELLS];
+    BC250_ESCAPE_WRITE Writes[BC250_GFX_MAX_WRITES];
+} BC250_ESCAPE_GFX;

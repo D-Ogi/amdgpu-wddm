@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/21/2026,0.5.2.0
+DriverVer   = 09/21/2026,0.5.5.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -54,6 +54,7 @@ HKR, Parameters, EnableVram,        0x00010001, 0
 HKR, Parameters, EnableVramWrite,   0x00010001, 0
 HKR, Parameters, EnableGart,        0x00010001, 0
 HKR, Parameters, EnablePsp,         0x00010001, 0
+HKR, Parameters, EnableGfx,         0x00010001, 0
 
 [Strings]
 Provider   = "BC-250 lab (D-Ogi)"

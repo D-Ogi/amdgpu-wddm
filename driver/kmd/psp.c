@@ -49,6 +49,7 @@ typedef struct _BC250_PSP {
     PUCHAR Pages;                   // mapping of ring, command buffer and fence, kept from LOAD to UNLOAD
     BOOLEAN RingUp;                 // the PSP has been told about our ring
     BOOLEAN TmrUp;                  // the PSP has been told about our TMR
+    BOOLEAN Loaded;                 // all eleven commands of a LOAD were accepted, and no unload since
 } BC250_PSP;
 
 typedef struct _BC250_PSP_FILES {
@@ -237,6 +238,7 @@ static NTSTATUS Unload(_Inout_ BC250_PSP* Psp, _Out_ long* Result)
 {
     int tmr = 0, ring = 0;
 
+    Psp->Loaded = FALSE;
     // DESTROY_TMR travels over the ring: without a ring the PSP knows, there is no way to send it (what is left is a reboot).
     if (Psp->TmrUp && !Psp->RingUp) tmr = -EINVAL;
     else if (Psp->TmrUp) { tmr = bc250_psp_tmr_unload(&Psp->Context); if (tmr == 0) Psp->TmrUp = FALSE; }
@@ -361,10 +363,12 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
                          got->CommandId, got->FirmwareType, got->Size, got->Result, got->PspStatus, got->Microseconds, got->TmrAddress);
                 if (got->Result != 0) { result = got->Result; break; }
             }
+            psp->Loaded = (result == 0 && Data->CommandsDone == Data->CommandCount && NT_SUCCESS(psp->Sequence.Fault));
             break;
 
         case BC250_PSP_OP_UNLOAD:
-            if (!psp->RingUp && !psp->TmrUp) { status = STATUS_INVALID_DEVICE_STATE; break; }
+            // amdgpu's order: the engines go before the PSP does (gfx.c's FINI first).
+            if ((!psp->RingUp && !psp->TmrUp) || GfxIsActive(Device)) { status = STATUS_INVALID_DEVICE_STATE; break; }
             status = Unload(psp, &result);
             break;
         }
@@ -387,6 +391,14 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
     Data->Result = result;
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+// With GartLock held. For gfx.c: has this driver instance loaded the firmware?
+BOOLEAN PspIsLoaded(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_PSP* psp = (const BC250_PSP*)Device->Psp;
+
+    return psp != NULL && psp->Loaded;
 }
 
 // ---- start and stop -------------------------------------------------------------------------------------------------------

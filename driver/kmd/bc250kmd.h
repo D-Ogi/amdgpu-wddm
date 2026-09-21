@@ -64,6 +64,7 @@ typedef struct _BC250_DEVICE {
     BOOLEAN MmioWriteEnabled;
     BOOLEAN MmioGartEnabled;
     BOOLEAN MmioPspEnabled;
+    BOOLEAN MmioGfxEnabled;
 
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
@@ -76,7 +77,9 @@ typedef struct _BC250_DEVICE {
 
     PVOID Gart;                         // gart.c, NULL unless the EnableGart gate was open at start
     PVOID Psp;                          // psp.c, NULL unless the EnablePsp gate was open at start
-    FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c) and the stop;
+    PVOID GpuMem;                       // gpumem.c, NULL unless the EnableGfx gate was open at start
+    PVOID Gfx;                          // gfx.c, the same
+    FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
 } BC250_DEVICE;
 
@@ -120,6 +123,8 @@ NTSTATUS MmioGartWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Valu
 ULONG MmioGartTable(_Outptr_ const unsigned long** Table);
 NTSTATUS MmioPspRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 NTSTATUS MmioPspWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+NTSTATUS MmioGfxRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
+NTSTATUS MmioGfxWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 
 // sequence.c
 void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,
@@ -146,6 +151,23 @@ struct _BC250_ESCAPE_PSP;
 NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
 void PspStop(_Inout_ BC250_DEVICE* Device);
 void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_PSP* Data);
+BOOLEAN PspIsLoaded(_In_ const BC250_DEVICE* Device);
+
+// gpumem.c: GPU-visible memory and doorbells for the sequences. All with GartLock held.
+struct _BC250_ESCAPE_DOORBELL;
+NTSTATUS GpuMemStart(_Inout_ BC250_DEVICE* Device);
+void GpuMemStop(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet);
+void GpuMemRelease(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet);
+void GpuMemBeginSequence(_Inout_ BC250_DEVICE* Device, _Out_writes_opt_(MaxDoorbells) struct _BC250_ESCAPE_DOORBELL* Doorbells,
+                         ULONG MaxDoorbells);
+ULONG GpuMemEndSequence(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* VramBytes, _Out_ ULONG* GttBytes);
+
+// gfx.c
+struct _BC250_ESCAPE_GFX;
+NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device);
+void GfxStop(_Inout_ BC250_DEVICE* Device);
+void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GFX* Data);
+BOOLEAN GfxIsActive(_In_ const BC250_DEVICE* Device);
 
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;

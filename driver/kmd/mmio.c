@@ -9,6 +9,8 @@
 //                                 which no escape can reach register by register. Default 0.
 //     EnablePsp        REG_DWORD  1 = also allow the PSP command of psp.c its own table, g_MmioPspAllow. Needs
 //                                 EnableGart. Default 0.
+//     EnableGfx        REG_DWORD  1 = also allow the GFX command of gfx.c its own table, g_MmioGfxAllow. Needs
+//                                 EnablePsp. Default 0.
 //
 // Both are read once per start. A read of a wrong BAR5 address can hang this SoC (facts M16) and some reads
 // change state (facts M25), hence a table for reads as well.
@@ -76,6 +78,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioWriteEnabled = FALSE;
     Device->MmioGartEnabled = FALSE;
     Device->MmioPspEnabled = FALSE;
+    Device->MmioGfxEnabled = FALSE;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);
@@ -94,6 +97,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioWriteEnabled = (GuardReadSetting(L"EnableMmioWrite", 0) == 1);
     Device->MmioGartEnabled = (GuardReadSetting(L"EnableGart", 0) == 1);
     Device->MmioPspEnabled = Device->MmioGartEnabled && (GuardReadSetting(L"EnablePsp", 0) == 1);
+    Device->MmioGfxEnabled = Device->MmioPspEnabled && (GuardReadSetting(L"EnableGfx", 0) == 1);
     GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
@@ -105,6 +109,7 @@ void MmioStop(_Inout_ BC250_DEVICE* Device)
     Device->MmioWriteEnabled = FALSE;
     Device->MmioGartEnabled = FALSE;
     Device->MmioPspEnabled = FALSE;
+    Device->MmioGfxEnabled = FALSE;
 }
 
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
@@ -165,6 +170,29 @@ NTSTATUS MmioPspWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value
 {
     if (Device->Mmio == NULL || !Device->MmioPspEnabled) return STATUS_DEVICE_NOT_READY;
     if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioPspAllow, BC250_MMIO_PSP_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
+    return STATUS_SUCCESS;
+}
+
+// The GFX command's registers (gfx.c): what amdgpu read or wrote on unit A in gfx_v10_0_hw_init(), sdma_v5_0_hw_init()
+// and the doorbell aperture enable. Reads and writes: this table only. It holds registers that are on no other list
+// because reading them has an effect (GRBM_GFX_CNTL latches GRBM_READ_ERROR, facts M25): here amdgpu's own sequence
+// reads them, at the point where amdgpu read them.
+NTSTATUS MmioGfxRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
+{
+    *Value = 0;
+    if (Device->Mmio == NULL || !Device->MmioGfxEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioGfxAllow, BC250_MMIO_GFX_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    *Value = READ_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4]);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS MmioGfxWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    if (Device->Mmio == NULL || !Device->MmioGfxEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioGfxAllow, BC250_MMIO_GFX_ALLOW_COUNT, Offset))
         return STATUS_ACCESS_DENIED;
     WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
     return STATUS_SUCCESS;
