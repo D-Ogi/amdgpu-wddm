@@ -12,7 +12,7 @@
 #   -Phase d3d -Tag <t>                D3D11CreateDevice on the hardware adapter and on WARP; the HRESULTs are the data
 #   -Phase sweep -Tag <t>              witness sweeps
 param(
-    [Parameter(Mandatory)][ValidateSet('install', 'unumd', 'gate', 'state', 'log', 'confirm', 'd3d', 'sweep', 'gart', 'psp', 'ih', 'gfx', 'fence', 'submit')][string]$Phase,
+    [Parameter(Mandatory)][ValidateSet('install', 'unumd', 'gate', 'state', 'log', 'confirm', 'd3d', 'sweep', 'gart', 'psp', 'ih', 'gfx', 'fence', 'submit', 'read')][string]$Phase,
     [string]$Tag = 'x',
     [int]$Full = 0,
     [int]$Engines = 0,                  # with -Phase gate: EnableGart, EnablePsp, EnableGfx, EnableIh
@@ -21,6 +21,7 @@ param(
     [int]$Count = 1,
     [ValidateSet('', 'noint', 'test', 'dispatch', 'ib')][string]$Mode = '',
     [int]$GpuVa = 0,                    # with -Phase gate: EnableGpuVa and EnableVramWrite (stage B writes)
+    [string]$Scratch = '',              # with -Phase submit: kmtprobe --scratch <hex32> (H4); with -Phase read: the BAR5 offset, hex
     [int]$GpuSubmit = 0,                # with -Phase gate: EnableGpuSubmit (stage C: DMA buffers go down the gfx ring)
     [string]$Package = 'C:\BC250\e16'
 )
@@ -159,7 +160,13 @@ switch ($Phase) {
     }
     'submit' {
         # Stage C's client: a D3DKMT context, a monitored fence, one command buffer of PM4 NOPs (tools/win/kmtprobe).
-        & 'C:\BC250\tmp\kmtprobe.exe' --submit --fence-timeout 4000 --timeout 20 2>&1 | ForEach-Object { Say "$_" }
+        if ($Scratch -ne '') { & 'C:\BC250\tmp\kmtprobe.exe' --submit --scratch $Scratch --fence-timeout 4000 --timeout 20 2>&1 | ForEach-Object { Say "$_" } }
+        else { & 'C:\BC250\tmp\kmtprobe.exe' --submit --fence-timeout 4000 --timeout 20 2>&1 | ForEach-Object { Say "$_" } }
+        Say "exit code $LASTEXITCODE"
+    }
+    'read' {
+        # One register through bc250kmd's read escape (allow-listed offsets only). -Scratch carries the hex offset.
+        & $cli read $Scratch 2>&1 | ForEach-Object { Say "$_" }
         Say "exit code $LASTEXITCODE"
     }
     'confirm' {

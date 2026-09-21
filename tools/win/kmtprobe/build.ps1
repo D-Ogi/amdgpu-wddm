@@ -20,20 +20,36 @@ $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object N
 $cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
 New-Item -ItemType Directory -Force $Out | Out-Null
 
-# kmtprobe.c repeats driver/kmd/wddm.c's allocation private blob. A tool that sends a blob the KMD refuses
-# would look like a VidMm problem, so the magic is checked against the driver here, at build time.
-$wddm = Join-Path $here '..\..\..\driver\kmd\wddm.c'
-if (Test-Path $wddm) {
-    $pattern = '#define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC\s+(0x[0-9A-Fa-f]+)'
-    $inDriver = (Select-String -Path $wddm -Pattern $pattern).Matches[0].Groups[1].Value
-    $inTool = (Select-String -Path (Join-Path $here 'kmtprobe.c') -Pattern $pattern).Matches[0].Groups[1].Value
-    if ($inDriver -ne $inTool) {
-        throw "BC250_WDDM_ALLOCATION_PRIVATE_MAGIC differs: driver $inDriver, kmtprobe $inTool"
+# kmtprobe.c repeats constants that belong to the driver and to the vendored AMD headers: the allocation
+# private blob's magic, the SET_UCONFIG_REG packet numbers and the BAR5 offset of GC.SCRATCH_REG0. Repo rules
+# 1 and 2 - no register address or name from memory - only hold if a copy that drifts is a build failure, so
+# each one is compared against its source here. A missing source is a warning, not a silent pass.
+$tool = Join-Path $here 'kmtprobe.c'
+function Assert-Constant($SourcePath, $Pattern, $Name) {
+    if (-not (Test-Path $SourcePath)) {
+        Write-Warning "$SourcePath not found, skipping the $Name check"
+        return
     }
-    Write-Host "  allocation private magic $inTool matches driver\kmd\wddm.c"
-} else {
-    Write-Warning "driver\kmd\wddm.c not found next to the tool, skipping the private-blob magic check"
+    $inSource = (Select-String -Path $SourcePath -Pattern $Pattern | Select-Object -First 1)
+    $inTool = (Select-String -Path $tool -Pattern $Pattern | Select-Object -First 1)
+    if ($null -eq $inSource) { throw "$Name not found in $SourcePath - has it been renamed?" }
+    if ($null -eq $inTool) { throw "$Name not found in kmtprobe.c" }
+    $a = $inSource.Matches[0].Groups[1].Value
+    $b = $inTool.Matches[0].Groups[1].Value
+    if ([Convert]::ToUInt64(($a -replace '^0x', ''), 16) -ne [Convert]::ToUInt64(($b -replace '^0x', ''), 16)) {
+        throw "$Name differs: $(Split-Path -Leaf $SourcePath) $a, kmtprobe.c $b"
+    }
+    Write-Host "  $Name $b matches $(Split-Path -Leaf $SourcePath)"
 }
+
+$kmd = Join-Path $here '..\..\..\driver\kmd'
+$import = Join-Path $here '..\..\..\driver\amdgpu-import'
+Assert-Constant (Join-Path $kmd 'wddm.c') '#define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC\s+(0x[0-9A-Fa-f]+)' 'allocation private magic'
+Assert-Constant (Join-Path $kmd 'regs.generated.h') '#define BC250_REG_GC_SCRATCH_REG0\s+(0x[0-9A-Fa-f]+)' 'GC.SCRATCH_REG0'
+Assert-Constant (Join-Path $import 'nvd.h') '#define\s+PACKET3_SET_UCONFIG_REG\s+(0x[0-9A-Fa-f]+)' 'PACKET3_SET_UCONFIG_REG'
+Assert-Constant (Join-Path $import 'nvd.h') '#define\s+PACKET3_SET_UCONFIG_REG_START\s+(0x[0-9A-Fa-f]+)' 'PACKET3_SET_UCONFIG_REG_START'
+Assert-Constant (Join-Path $import 'nvd.h') '#define\s+PACKET3_SET_UCONFIG_REG_END\s+(0x[0-9A-Fa-f]+)' 'PACKET3_SET_UCONFIG_REG_END'
+Assert-Constant (Join-Path $import 'nvd.h') '#define\s+PACKET3_NOP\s+(0x[0-9A-Fa-f]+)' 'PACKET3_NOP'
 
 $env:INCLUDE = ''; $env:LIB = ''
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',

@@ -70,6 +70,33 @@ C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE) == 32);
 // bc250_gfx.c:66: "All three CP ring types pad to 8 dwords". The command stream is rounded to that.
 #define PM4_DWORD_ALIGN 8u
 
+// ---- the scratch write, as the driver's own ring and IB tests write it --------------------------------
+//
+// driver/shim/bc250_gfx.c:1707, bc250_gfx_ib_ring_test_build(), which is bc250_gfx_ring_test() (:1323) moved
+// into an indirect buffer:
+//
+//     ib[0] = PACKET3(PACKET3_SET_UCONFIG_REG, 1);
+//     ib[1] = scratch - PACKET3_SET_UCONFIG_REG_START;    // scratch = SOC15_REG_OFFSET(GC, 0, mmSCRATCH_REG0)
+//     ib[2] = 0xDEADBEEF;
+//
+// Three dwords, and the only thing --scratch changes is the value in ib[2]. The two packet constants are
+// nvd.h:535-537; the register is driver/kmd/regs.generated.h:4, which gen_regs.py generated from the
+// vendored AMD headers through tools/regcalc (regcalc lookup mmSCRATCH_REG0: mm=0x2040 seg1=0xA000 ->
+// BAR5+0x30100). Repo rules 1 and 2: nothing here is typed from memory, and build.ps1 checks all four
+// against their sources. SOC15_REG_OFFSET is a dword index into BAR5, hence the division by four.
+#define PACKET3_SET_UCONFIG_REG 0x79u
+#define PACKET3_SET_UCONFIG_REG_START 0x0000c000u
+#define PACKET3_SET_UCONFIG_REG_END 0x0000c400u
+#define BC250_REG_GC_SCRATCH_REG0 0x30100ul
+#define SCRATCH_REG0_DWORD ((UINT32)(BC250_REG_GC_SCRATCH_REG0 / 4ul))
+#define SCRATCH_REG0_UCONFIG (SCRATCH_REG0_DWORD - PACKET3_SET_UCONFIG_REG_START)
+#define PM4_SCRATCH_DWORDS 3u
+
+// A register outside the UCONFIG window cannot be written by this packet at all, and the offset in ib[1]
+// would silently address something else. Better a build failure than a run that writes somewhere unknown.
+C_ASSERT(SCRATCH_REG0_DWORD >= PACKET3_SET_UCONFIG_REG_START);
+C_ASSERT(SCRATCH_REG0_DWORD < PACKET3_SET_UCONFIG_REG_END);
+
 // ---- options ------------------------------------------------------------------------------------------
 
 typedef struct _OPTIONS {
@@ -84,6 +111,8 @@ typedef struct _OPTIONS {
     BOOL ResidentFirst;                 // MakeResident before MapGpuVirtualAddress
     BOOL NoWrite;                       // lock, but leave the contents alone
     BOOL Submit;                        // stage C: context, monitored fence, one submission of NOPs
+    BOOL HaveScratch;                   // H4: lead the stream with a SET_UCONFIG_REG write to SCRATCH_REG0
+    UINT32 Scratch;                     // the value that write carries
     UINT64 CommandVa;                   // where the command buffer is mapped
     UINT32 Nops;                        // dwords of PM4 in the command buffer
     DWORD HoldSeconds;
@@ -712,25 +741,56 @@ static BOOL StepCreateFence(PROBE* Probe)
     return TRUE;
 }
 
-// One type-3 NOP covering the whole stream, the way gfx_v10_0_ring_insert_nop writes one, then PACKET2 pad to
-// the end of the page so that a CP which ever ran past CommandLength would still find no-ops rather than a
-// type-0 register write to register 0.
+// With --scratch: the three dwords of the driver's own IB ring test first, then NOP padding. Without it:
+// one type-3 NOP covering the whole stream, the way gfx_v10_0_ring_insert_nop writes one. Either way the
+// rest of the page is PACKET2 pad, so that a CP which ever ran past CommandLength would still find no-ops
+// rather than a type-0 register write to register 0.
 static BOOL StepFillCommandBuffer(PROBE* Probe, BUFFER* Buffer)
 {
     UINT32* dwords;
     UINT32 total = Probe->Opt.Nops;
     UINT32 page = (UINT32)(Buffer->Size / sizeof(UINT32));
+    UINT32 at = 0;
+    UINT32 rest;
     UINT32 i;
 
     if (!LockBuffer(Probe, Buffer)) return FALSE;
     dwords = (UINT32*)Buffer->Locked;
-    dwords[0] = PACKET3(PACKET3_NOP, total - 2u);
-    for (i = 1; i < total; i++) dwords[i] = 0;                  // the NOP body, ignored by the CP
+
+    if (Probe->Opt.HaveScratch)
+    {
+        dwords[0] = PACKET3(PACKET3_SET_UCONFIG_REG, 1);
+        dwords[1] = SCRATCH_REG0_UCONFIG;
+        dwords[2] = Probe->Opt.Scratch;
+        at = PM4_SCRATCH_DWORDS;
+    }
+    // Whatever is left is one type-3 NOP, or a single PACKET2 when there is no room for a header and a body.
+    rest = total - at;
+    if (rest >= 2)
+    {
+        dwords[at] = PACKET3(PACKET3_NOP, rest - 2u);
+        for (i = at + 1; i < total; i++) dwords[i] = 0;         // the NOP body, ignored by the CP
+    }
+    else if (rest == 1)
+    {
+        dwords[at] = BC250_CP_NOP;
+    }
     for (i = total; i < page; i++) dwords[i] = BC250_CP_NOP;    // PACKET2 pad over the rest of the page
     Probe->CommandLength = total * (UINT32)sizeof(UINT32);
-    Note("PM4: header 0x%08lX = PACKET3(NOP, %lu), %lu dword(s) = %lu bytes, page padded with PACKET2 0x%08lX",
-         (unsigned long)dwords[0], (unsigned long)(total - 2u), (unsigned long)total,
+
+    // The dwords that will be fetched, in full: this is the evidence that the CP saw what we think it saw.
+    for (i = 0; i < total && i < 8u; i++)
+        Note("PM4[%lu] = 0x%08lX%s", (unsigned long)i, (unsigned long)dwords[i],
+             (Probe->Opt.HaveScratch && i == 0) ? "  PACKET3(SET_UCONFIG_REG, 1)" :
+             (Probe->Opt.HaveScratch && i == 1) ? "  SCRATCH_REG0 - SET_UCONFIG_REG_START" :
+             (Probe->Opt.HaveScratch && i == 2) ? "  the --scratch value" :
+             (i == at) ? "  PACKET3(NOP, ...)" : "  NOP body");
+    if (total > 8u) Note("PM4[%lu..%lu] = 0x00000000 (NOP body)", 8ul, (unsigned long)(total - 1u));
+    Note("%lu dword(s) = %lu bytes submitted, page padded with PACKET2 0x%08lX", (unsigned long)total,
          (unsigned long)Probe->CommandLength, (unsigned long)BC250_CP_NOP);
+    if (Probe->Opt.HaveScratch)
+        Note("SCRATCH_REG0 is BAR5+0x%05lX, dword 0x%04lX, UCONFIG index 0x%04lX",
+             BC250_REG_GC_SCRATCH_REG0, (unsigned long)SCRATCH_REG0_DWORD, (unsigned long)SCRATCH_REG0_UCONFIG);
     return UnlockBuffer(Probe, Buffer);
 }
 
@@ -853,6 +913,12 @@ static void PrintResult(const PROBE* Probe)
                Probe->FenceCpuVa != NULL ? *Probe->FenceCpuVa : 0ull, SubmitWord(Probe->Submit),
                Probe->SubmitElapsedMs);
     printf("\n");
+    // A line of its own, because nothing in this process can read the register back: the comparison happens
+    // in the run script, from the values printed here.
+    if (Probe->Opt.HaveScratch)
+        printf("SCRATCH asked=0x%08lX reg=0x%05lX uconfig=0x%04lX submit=%s\n",
+               (unsigned long)Probe->Opt.Scratch, BC250_REG_GC_SCRATCH_REG0,
+               (unsigned long)SCRATCH_REG0_UCONFIG, SubmitWord(Probe->Submit));
     fflush(stdout);
 }
 
@@ -1033,9 +1099,12 @@ static void Usage(void)
         "  --submit          stage C: context, monitored fence, one command buffer of PM4 NOPs, submit it\n"
         "  --cmdva <address> where the command buffer is mapped (default 0x20000000)\n"
         "  --nops <dwords>   PM4 dwords in that command buffer (default 16, at least 2, rounded up to 8)\n"
+        "  --scratch <hex32> with --submit: lead the stream with the driver's own IB ring test packet,\n"
+        "                    SET_UCONFIG_REG writing this value to GC.SCRATCH_REG0 (BAR5+0x30100).\n"
+        "                    Read it back on the target with: bc250kmd_cli read 30100\n"
         "  --hold <s>        keep everything alive for s seconds after the write (default 0)\n"
         "  --fence-timeout <ms>  paging fence and monitored fence deadline (default 5000)\n"
-        "  --timeout <s>     watchdog on the whole process (default 30, raised to cover --hold)\n"
+        "  --timeout <s>     watchdog on the whole process, in SECONDS (default 30, raised to cover --hold)\n"
         "  --help\n"
         "\n"
         "Exit: 0 all steps passed, 1 a step failed, 2 bad arguments, 4 the watchdog fired.\n");
@@ -1070,6 +1139,32 @@ static BOOL ParseU64(const char* Text, UINT64* Value)
     else if (*p == 'G' || *p == 'g') { result *= 1024ull * 1024ull * 1024ull; p++; }
     if (*p != '\0') return FALSE;
     *Value = result;
+    return TRUE;
+}
+
+// A register value: hexadecimal whether or not it carries 0x, the way every register value in this project
+// is written, and every character has to be a hex digit.
+static BOOL ParseHex32(const char* Text, UINT32* Value)
+{
+    const char* p = Text;
+    UINT64 result = 0;
+    int digits = 0;
+
+    if (p == NULL) return FALSE;
+    if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) p += 2;
+    for (; *p != '\0'; p++, digits++)
+    {
+        int digit;
+
+        if (*p >= '0' && *p <= '9') digit = *p - '0';
+        else if (*p >= 'a' && *p <= 'f') digit = *p - 'a' + 10;
+        else if (*p >= 'A' && *p <= 'F') digit = *p - 'A' + 10;
+        else return FALSE;
+        result = result * 16ull + (UINT64)digit;
+        if (result > 0xFFFFFFFFull) return FALSE;
+    }
+    if (digits == 0) return FALSE;
+    *Value = (UINT32)result;
     return TRUE;
 }
 
@@ -1160,7 +1255,11 @@ int main(int argc, char** argv)
             UINT64 seconds;
 
             NEED_VALUE(i, argc);
-            if (!ParseU64(argv[++i], &seconds) || seconds == 0 || seconds > 3600) { printf("bad --timeout\n"); return 2; }
+            if (!ParseU64(argv[++i], &seconds) || seconds == 0 || seconds > 3600)
+            {
+                printf("bad --timeout: it is in SECONDS, 1 to 3600 (--fence-timeout is the one in ms)\n");
+                return 2;
+            }
             probe.Opt.WatchdogMs = (DWORD)(seconds * 1000);
         }
         else if (strcmp(argv[i], "--cmdva") == 0)
@@ -1181,6 +1280,15 @@ int main(int argc, char** argv)
             }
             probe.Opt.Nops = (UINT32)dwords;
         }
+        else if (strcmp(argv[i], "--scratch") == 0)
+        {
+            UINT32 value;
+
+            NEED_VALUE(i, argc);
+            if (!ParseHex32(argv[++i], &value)) { printf("bad --scratch, want a 32-bit hex value\n"); return 2; }
+            probe.Opt.Scratch = value;
+            probe.Opt.HaveScratch = TRUE;
+        }
         else if (strcmp(argv[i], "--submit") == 0) probe.Opt.Submit = TRUE;
         else if (strcmp(argv[i], "--reserve") == 0) probe.Opt.Reserve = TRUE;
         else if (strcmp(argv[i], "--resident-first") == 0) probe.Opt.ResidentFirst = TRUE;
@@ -1199,6 +1307,17 @@ int main(int argc, char** argv)
     probe.Command.RequestedVa = probe.Opt.CommandVa;
     probe.Opt.Nops = (probe.Opt.Nops + PM4_DWORD_ALIGN - 1u) & ~(PM4_DWORD_ALIGN - 1u);
     if (probe.Opt.Nops > GPU_PAGE_SIZE / 4) probe.Opt.Nops = (UINT32)(GPU_PAGE_SIZE / 4);
+    if (probe.Opt.HaveScratch && !probe.Opt.Submit)
+    {
+        printf("--scratch needs --submit: there is nothing to execute the packet otherwise\n");
+        return 2;
+    }
+    if (probe.Opt.HaveScratch && probe.Opt.Nops < PM4_SCRATCH_DWORDS)
+    {
+        printf("--scratch needs at least %lu dwords, --nops gives %lu\n", (unsigned long)PM4_SCRATCH_DWORDS,
+               (unsigned long)probe.Opt.Nops);
+        return 2;
+    }
     {
         UINT64 alignment = probe.Opt.Reserve ? GPU_RESERVE_ALIGN : GPU_PAGE_SIZE;
 
@@ -1249,6 +1368,10 @@ int main(int argc, char** argv)
     if (probe.Opt.Submit)
         printf("kmtprobe: --submit, command buffer 0x%llX bytes at 0x%016llX, %lu PM4 dword(s)\n",
                probe.Command.Size, probe.Opt.CommandVa, (unsigned long)probe.Opt.Nops);
+    if (probe.Opt.HaveScratch)
+        printf("kmtprobe: --scratch 0x%08lX into GC.SCRATCH_REG0 (BAR5+0x%05lX); read it back with"
+               " \"bc250kmd_cli read %05lX\"\n", (unsigned long)probe.Opt.Scratch, BC250_REG_GC_SCRATCH_REG0,
+               BC250_REG_GC_SCRATCH_REG0);
     fflush(stdout);
 
     ok = RunProbe(&probe);

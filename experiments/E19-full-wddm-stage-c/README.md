@@ -35,8 +35,13 @@ IH ring, fences, a compute dispatch. The first question is therefore not about p
   this device start and says so in the log; the scheduler sees no timeout. A page fault on this part may still wedge
   the gfx engine (no reset, M53) - then `gfx fini` will say so and the unit needs a power cycle. That is the risk the
   second half of run 002 takes; its first half exists to take everything else out of it first.
-- H4 (if H3 holds): the same submission with a SET_UCONFIG_REG write in the buffer (`kmtprobe --submit --ib-dwords`,
-  if the probe has it by then) changes the scratch register: the buffer's CONTENT was executed, not only fetched.
+- H4 (run 006; written after run 005, before run 006). The same submission with the shim's own ring-test packet at
+  the head of the buffer (`kmtprobe --submit --scratch BC250B01`: `PACKET3_SET_UCONFIG_REG` of `mmSCRATCH_REG0`, the
+  three dwords of `bc250_gfx_ib_ring_test_build()` with another value). Prediction: `bc250kmd_cli read 30100` gives
+  `DEADBEEF` before it (left by run 006's own `fence gfx 1 ib`, which is also the proof that the read-back works) and
+  `BC250B01` after it, with `submit=ok` and one more end-of-pipe vector. Then the CP fetched the buffer's bytes
+  through VidMm's page tables at VMID 1 and executed them. Falsifier: `submit=ok` with `DEADBEEF` still there - the
+  packet was passed but its content never ran (a fetch from somewhere else, or a fault that the CP skipped).
 
 ## Safety
 
