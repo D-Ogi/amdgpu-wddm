@@ -43,7 +43,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GuardStage(StageStartGuardPassed);
 
     device->StartInfo = *DxgkStartInfo;
-    device->Dxgk = *DxgkInterface;
+    // dxgkrnl hands out the interface at the size of the version we asked for (WIN8), while this structure is
+    // compiled at the newest layout: copy what was given, not what we could hold.
+    RtlZeroMemory(&device->Dxgk, sizeof(device->Dxgk));
+    RtlCopyMemory(&device->Dxgk, DxgkInterface, min((SIZE_T)DxgkInterface->Size, sizeof(device->Dxgk)));
 
     status = device->Dxgk.DxgkCbGetDeviceInformation(device->Dxgk.DeviceHandle, &device->DeviceInfo);
     if (!NT_SUCCESS(status)) goto failed;
