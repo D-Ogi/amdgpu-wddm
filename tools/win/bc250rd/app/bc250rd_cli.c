@@ -2,6 +2,7 @@
 // of the Linux sweep logs ("<ip>.<name> <offset> <value>"), so that the two can be compared line by line.
 //
 //   bc250rd_cli info
+//   bc250rd_cli temp [count [interval_s]]     SoC temperature (Tctl), the sensor Linux' k10temp reads
 //   bc250rd_cli sweep reglist.txt [regex-free prefix filter, e.g. GC.]
 //
 // Like sweep_stream.py it prints the name and offset, flushes, and only then reads: if a read ever hangs the
@@ -32,14 +33,38 @@ static int Attach(HANDLE h, BC250RD_INFO *info)
     return 1;
 }
 
+// THM_TCON_CUR_TMP: CUR_TEMP in bits 31:21, 0.125 C per step; bit 19 selects the -49 C range (as in k10temp).
+static int ReadTemp(HANDLE h, double *celsius, ULONG *raw)
+{
+    ULONG v = BC250RD_SMN_THM_TCON_CUR_TMP;
+    DWORD got = 0;
+    if (!DeviceIoControl(h, IOCTL_BC250RD_SMN_READ, &v, sizeof(v), &v, sizeof(v), &got, NULL)) return 0;
+    *raw = v;
+    *celsius = (v >> 21) * 0.125 - ((v & (1u << 19)) ? 49.0 : 0.0);
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
-    if (argc < 2 || (strcmp(argv[1], "info") && strcmp(argv[1], "sweep")) || (!strcmp(argv[1], "sweep") && argc < 3)) {
-        fprintf(stderr, "usage: bc250rd_cli info | sweep <reglist.txt> [name prefix]\n");
+    if (argc < 2 || (strcmp(argv[1], "info") && strcmp(argv[1], "sweep") && strcmp(argv[1], "temp")) ||
+        (!strcmp(argv[1], "sweep") && argc < 3)) {
+        fprintf(stderr, "usage: bc250rd_cli info | temp [count [interval_s]] | sweep <reglist.txt> [name prefix]\n");
         return 2;
     }
     HANDLE h = OpenReader();
     if (h == INVALID_HANDLE_VALUE) return 1;
+    if (!strcmp(argv[1], "temp")) {
+        int count = argc > 2 ? atoi(argv[2]) : 1, interval = argc > 3 ? atoi(argv[3]) : 1;
+        for (int i = 0; i < count; i++) {
+            double c; ULONG raw; SYSTEMTIME t;
+            if (!ReadTemp(h, &c, &raw)) { fprintf(stderr, "temperature read failed, error %lu\n", GetLastError()); return 1; }
+            GetLocalTime(&t);
+            printf("%02u:%02u:%02u Tctl %.1f C (raw %08lX)\n", t.wHour, t.wMinute, t.wSecond, c, raw);
+            fflush(stdout);
+            if (i + 1 < count) Sleep(interval * 1000);
+        }
+        return 0;
+    }
     BC250RD_INFO info;
     if (!Attach(h, &info)) return 1;
 

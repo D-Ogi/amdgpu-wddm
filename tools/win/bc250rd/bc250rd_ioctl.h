@@ -1,4 +1,5 @@
-// Interface between bc250rd.sys and its command line tool. Read-only by construction: there is no write IOCTL.
+// Interface between bc250rd.sys and its command line tool. Read-only towards the GPU by construction:
+// there is no IOCTL that writes to it.
 #pragma once
 
 #define BC250RD_DEVICE_NT   L"\\Device\\Bc250Rd"
@@ -14,6 +15,16 @@
 // Input: array of BAR5 byte offsets (ULONG). Output: array of values (ULONG), same order.
 // Every offset must be in the driver's allow-list, otherwise the whole request fails and nothing is read.
 #define IOCTL_BC250RD_READ   CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+// Input: one SMN address (ULONG). Output: its value (ULONG). Only addresses in the driver's SMN allow-list.
+// Goes through the root complex's SMN index/data pair in PCI configuration space (0x60/0x64), the way the
+// Linux k10temp driver reads the same sensor. This is the only write the driver ever issues, and it goes
+// to the host bridge's index register, not to the GPU.
+#define IOCTL_BC250RD_SMN_READ CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+#define BC250RD_HOST_BRIDGE_VENDOR 0x1022
+#define BC250RD_HOST_BRIDGE_DEVICE 0x13E0      // Ariel Root Complex, 00:00.0
+#define BC250RD_SMN_THM_TCON_CUR_TMP 0x00059800u
 
 #define BC250RD_MAX_READS 1024
 

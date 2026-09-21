@@ -3,7 +3,11 @@
 // A software-only WDM driver: it does not bind to the GPU, so the Microsoft Basic Display driver keeps the
 // device and the screen. It finds 1002:13FE in PCI configuration space, maps BAR5 with a read-only mapping
 // and returns 32-bit reads, but only for offsets in allowlist.h: a read of the wrong BAR5 address can hang
-// this SoC (docs/facts.md M16). There is no code path that writes to the device.
+// this SoC (docs/facts.md M16). There is no code path that writes to the GPU.
+//
+// Temperature: the thermal sensor is an SMN register. It is read through the root complex's SMN index/data
+// pair (configuration space 0x60/0x64 of 00:00.0), exactly as Linux' k10temp does on this unit. That is one
+// write, to the host bridge's index register, restored afterwards; SMN addresses are allow-listed too.
 //
 // Not a product driver: HalGetBusDataByOffset is a legacy way to read configuration space, acceptable for
 // a measurement tool that must stay out of the device stack.
@@ -33,6 +37,29 @@ static BOOLEAN IsAllowed(ULONG Offset)
         if (g_Allow[mid] < Offset) lo = mid + 1; else hi = mid - 1;
     }
     return FALSE;
+}
+
+static const ULONG g_SmnAllow[] = { BC250RD_SMN_THM_TCON_CUR_TMP };
+
+static NTSTATUS SmnRead(ULONG Address, PULONG Value)
+{
+    PCI_SLOT_NUMBER slot = { 0 };   // 00:00.0
+    USHORT ids[2] = { 0, 0 };
+    ULONG saved = 0;
+    BOOLEAN allowed = FALSE;
+
+    for (ULONG i = 0; i < RTL_NUMBER_OF(g_SmnAllow); i++) allowed = allowed || g_SmnAllow[i] == Address;
+    if (!allowed) return STATUS_ACCESS_DENIED;
+
+    if (HalGetBusDataByOffset(PCIConfiguration, 0, slot.u.AsULONG, ids, 0, sizeof(ids)) != sizeof(ids) ||
+        ids[0] != BC250RD_HOST_BRIDGE_VENDOR || ids[1] != BC250RD_HOST_BRIDGE_DEVICE)
+        return STATUS_NO_SUCH_DEVICE;
+
+    if (HalGetBusDataByOffset(PCIConfiguration, 0, slot.u.AsULONG, &saved, 0x60, 4) != 4) return STATUS_IO_DEVICE_ERROR;
+    if (HalSetBusDataByOffset(PCIConfiguration, 0, slot.u.AsULONG, &Address, 0x60, 4) != 4) return STATUS_IO_DEVICE_ERROR;
+    ULONG got = HalGetBusDataByOffset(PCIConfiguration, 0, slot.u.AsULONG, Value, 0x64, 4);
+    HalSetBusDataByOffset(PCIConfiguration, 0, slot.u.AsULONG, &saved, 0x60, 4);
+    return got == 4 ? STATUS_SUCCESS : STATUS_IO_DEVICE_ERROR;
 }
 
 static NTSTATUS Attach(void)
@@ -111,6 +138,14 @@ static NTSTATUS Bc250DeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
         for (ULONG i = 0; i < count; i++)   // METHOD_BUFFERED: input and output share the buffer
             buf[i] = READ_REGISTER_ULONG((PULONG)(g_Bar5 + buf[i]));
         written = (ULONG_PTR)count * sizeof(ULONG);
+        break;
+    }
+
+    case IOCTL_BC250RD_SMN_READ: {
+        ULONG value = 0;
+        if (inLen != sizeof(ULONG) || outLen < sizeof(ULONG)) { status = STATUS_INVALID_PARAMETER; break; }
+        status = SmnRead(buf[0], &value);
+        if (NT_SUCCESS(status)) { buf[0] = value; written = sizeof(ULONG); }
         break;
     }
     }
