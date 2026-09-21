@@ -1,0 +1,48 @@
+
+
+Status                 : OK
+Class                  : Display
+FriendlyName           : Microsoft Basic Display Adapter
+InstanceId             : PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041
+Problem                : CM_PROB_NONE
+ConfigManagerErrorCode : CM_PROB_NONE
+
+
+
+DEVPKEY_Device_DriverInfPath       display.inf
+DEVPKEY_Device_DriverVersion       10.0.22621.1
+DEVPKEY_Device_DriverProvider      Microsoft
+DEVPKEY_Device_Service             BasicDisplay
+DEVPKEY_Device_LocationInfo        PCI bus 1, device 0, function 0
+DEVPKEY_Device_PowerData           56 0 0 0 1 0 0 0 233 0 0 0 0 0 0 0 2 0 0 0 100 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 0 0 0 4 0 0 0 5 0 0 0
+DEVPKEY_Device_BusNumber           1
+DEVPKEY_Device_Address             0
+--- resources
+Win32_DeviceMemoryAddress EndingAddress=0 StartingAddress=C0000000
+Win32_DeviceMemoryAddress EndingAddress=0 StartingAddress=D0000000
+Win32_PortResource EndingAddress=0 StartingAddress=EF00
+Win32_DeviceMemoryAddress EndingAddress=0 StartingAddress=FE800000
+--- other AMD functions
+
+Status Class   FriendlyName                         Id                                      
+------ -----   ------------                         --                                      
+OK     System  High Definition Audio Controller     PCI\VEN_1002&DEV_13FF&SUBSYS_15DE1002&RE
+Error          PCI Encryption/Decryption Controller PCI\VEN_1022&DEV_143E&SUBSYS_00001022&RE
+OK     MEDIA   High Definition Audio Device         HDAUDIO\FUNC_01&VEN_1002&DEV_AA01&SUBSYS
+OK     Display Microsoft Basic Display Adapter      PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&RE
+
+
+
+--- display
+
+
+Name                        : Microsoft Basic Display Adapter
+DriverVersion               : 10.0.22621.1
+VideoProcessor              : 
+AdapterRAM                  : 0
+CurrentHorizontalResolution : 1920
+CurrentVerticalResolution   : 1200
+Status                      : OK
+
+
+

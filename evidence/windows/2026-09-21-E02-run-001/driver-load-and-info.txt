@@ -1,0 +1,8 @@
+[SC] CreateService SUCCESS
+
+        STATE              : 4  RUNNING 
+        WIN32_EXIT_CODE    : 0  (0x0)
+# bc250rd pci=01:00.0 id=1002:13fe rev=00 command=0406 status=0010 bar5=0xfe800000 size=0x80000 allow=5398
+# bars c000000c 00000000 d000000c 00000000 0000ef01 fe800000
+
+

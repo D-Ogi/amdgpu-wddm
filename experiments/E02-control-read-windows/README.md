@@ -1,6 +1,6 @@
 # E02: Control read of the same registers under Windows
 
-State: prepared, not run. Windows is on the NVMe (`tools/wininstall`), the reader is built (`tools/win/bc250rd`).
+State: run 001 done on 2026-09-21. Evidence: `evidence/windows/2026-09-21-E02-run-001/`.
 
 ## Hypotheses
 
@@ -35,6 +35,18 @@ Equality on all stable registers. Any difference is either a volatile register (
 finding about what Windows' boot path does to the GPU that Linux' does not. Both outcomes are useful;
 neither is a reason to write to anything.
 
-## Result
+## Result (run 001)
 
-_Not run yet._
+- H1 holds. 5542 registers read through `bc250rd.sys`, no hang, 5074 bit-identical to the Linux
+  pre-driver reference, including every register our earlier conclusions rest on. The 468 others are
+  explained without Windows: 457 differ in 1-5 bits of uninitialized-looking state, the rest are
+  clocks and three PSP mailbox registers carrying state from the previous Linux session (facts M19;
+  the cause is a hypothesis until a sweep after a recorded cold start confirms it).
+- H2 holds, with one surprise: decoding is on and BAR5 is assigned, but at `0xFE800000`, not where Linux
+  put it (facts M20).
+- H3 holds. The "locked" and "zero" findings of prior art are not a Windows or firmware effect: read at
+  the correct offsets, the registers show the same values under Windows as under Linux.
+- Not tested: writes. `bc250rd` cannot write. Whether `SCRATCH_REG0` and `GRBM_GFX_INDEX` accept writes
+  under Windows as they did under Linux (M3) is the obvious next control, and needs a deliberate,
+  separately reviewed write path limited to those two registers.
+- A self-signed test certificate is enough to load a kernel driver on this install with test signing on.
