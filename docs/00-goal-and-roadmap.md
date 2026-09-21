@@ -24,7 +24,7 @@ Each milestone has an exit criterion that is a measurement. A milestone is close
 | M5 | **First command execution** | Firmware loaded the way Linux does for this ASIC, RLC and CP running, the `gfx_v10_0_ring_test_ring` equivalent passes: a PM4 packet written by the CPU changes `SCRATCH_REG0`. Then the SDMA ring test |
 | M6 | **Interrupts, fences, compute queue** | IH ring delivers EOP interrupts; a compute queue mapped through MQD/HQD runs a dispatch that writes a known pattern to memory |
 | M7 | **WDDM scheduling and memory management** | VidMm/VidSch contracts implemented for real: GPU VA, paging through SDMA, TDR recovery |
-| M8 | **User mode** | Decision recorded in an ADR first (compute-first via a minimal UMD, or D3D12/Vulkan path). Exit criterion set then |
+| M8 | **User mode** | Direction: Vulkan first (RADV with a WDDM winsys), Direct3D by translation (ADR 0005). Exit criterion set at M8 |
 | O1 | Optional: 40 CU | Only after M5. Mirrors `bc250-40cu-unlock`: two per-bank register writes during gfx init |
 
 Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years. The project stays useful at every step because each milestone leaves verified, published knowledge.
