@@ -58,4 +58,49 @@ void bc250_sdma_hw_fini(struct amdgpu_device *adev);
  * how the two drift apart. */
 u32 bc250_sdma_reg_offset(struct amdgpu_device *adev, u32 instance, u32 internal_offset);
 
+/* ---------------------------------------------------------------------------------------------
+ * Fences and the ring test (milestone M6)
+ *
+ * The SDMA half of what bc250_gfx.h declares for the CP rings, and the same flags: the two
+ * AMDGPU_FENCE_FLAG_* bits are amdgpu_ring.h's, declared once in amdgpu.h.
+ *
+ * Which vector a fence produces. An SDMA fence with AMDGPU_FENCE_FLAG_INT ends in an SDMA_OP_TRAP,
+ * and the trap arrives as source id 224 under client id SOC15_IH_CLIENTID_SDMA0 or _SDMA1 by
+ * engine - not under one client with the engine in ring_id, which is how the CP does it.
+ * bc250_ih_is_sdma_trap() is the routing helper, and it hands back the instance.
+ * Measured on unit A: evidence/linux/2026-09-21-E13-reference-2/boot3-readonly/amdgpu-events-ib.txt
+ * lines 24 and 25, client_id 8 src_id 224 and client_id 9 src_id 224, both with ring 0.
+ * ------------------------------------------------------------------------------------------- */
+
+/* Slots 0 and 1 are the two engines' ring-test scratch dwords; 2 upwards are fence slots. One page
+ * of eight-byte slots, as bc250_gfx.h cuts its own. */
+#define BC250_SDMA_FENCE_SLOTS	16u
+
+/* How many dwords bc250_sdma_emit_fence() will write for these flags. 0 if the ring is not an SDMA
+ * ring, which is the same refusal the emitter makes. */
+unsigned int bc250_sdma_fence_size(const struct amdgpu_ring *ring, unsigned int flags);
+
+/* sdma_v5_0.c:523 sdma_v5_0_ring_emit_fence(). Writes into a ring the caller has already reserved
+ * space in with amdgpu_ring_alloc(); it does not commit. Returns BC250_EINVAL without writing a
+ * single dword if the ring is wrong or the address is not 4-byte aligned. */
+int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
+
+/* [shim] the alloc, the emit and the commit together, which is what a caller actually wants. On a
+ * refusal from the emitter the reservation is undone and the ring is left as it was. */
+int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
+
+/* The scratch and fence page. Not allocated by bc250_sdma_setup(); whoever wants a fence or a ring
+ * test allocates it, and frees it before bc250_sdma_teardown(). Idempotent. */
+int bc250_sdma_fence_page_alloc(struct amdgpu_device *adev);
+void bc250_sdma_fence_page_free(struct amdgpu_device *adev);
+
+/* The GPU address of a slot, and the 64 bits the engine last wrote there. Both return 0 if the page
+ * is not allocated or the slot is out of range. */
+u64 bc250_sdma_fence_addr(struct amdgpu_device *adev, unsigned int slot);
+u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
+
+/* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(): a WRITE_LINEAR of one dword into this engine's
+ * scratch slot, then a poll. Needs the page above. Returns 0, BC250_EINVAL or BC250_ETIME. */
+int bc250_sdma_ring_test(struct amdgpu_ring *ring);
+
 #endif /* BC250_SDMA_H */

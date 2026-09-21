@@ -16,7 +16,7 @@
 #define BC250_ESCAPE_RUN_GFX 9u             // BC250_ESCAPE_GFX in: Op, LastStage; out: stages, register and doorbell writes
 #define BC250_ESCAPE_RUN_IH 10u             // BC250_ESCAPE_IH in: Op; out: interrupt counts, vectors seen, register writes
 #define BC250_ESCAPE_RUN_FENCE 11u          // BC250_ESCAPE_FENCE in: Ring, Count, Interrupt; out: fences completed, timing
-#define BC250_KMD_VERSION 0x00060001u       // milestone 6 work, revision 1
+#define BC250_KMD_VERSION 0x00060002u       // milestone 6 work, revision 2
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -239,6 +239,10 @@ typedef struct _BC250_ESCAPE_IH {
 #define BC250_FENCE_RING_GFX 0u
 #define BC250_FENCE_RING_COMPUTE0 1u        // 1..8: the eight compute rings
 #define BC250_FENCE_RING_KIQ 9u
+#define BC250_FENCE_RING_SDMA0 10u          // 10, 11: the two SDMA engines (their fence ends in a trap, not an end of pipe)
+#define BC250_FENCE_MODE_VALUE 0u           // Interrupt: the control, the value and no interrupt
+#define BC250_FENCE_MODE_INTERRUPT 1u
+#define BC250_FENCE_MODE_RING_TEST 2u       // SDMA rings only: sdma_v5_0_ring_test_ring(), Count is ignored
 #define BC250_FENCE_MAX_COUNT 1000u
 
 typedef struct _BC250_ESCAPE_FENCE {
@@ -250,7 +254,7 @@ typedef struct _BC250_ESCAPE_FENCE {
     unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
     unsigned long Ring;                     // in: BC250_FENCE_RING_*
     unsigned long Count;                    // in: 1..BC250_FENCE_MAX_COUNT
-    unsigned long Interrupt;                // in: 1 = with AMDGPU_FENCE_FLAG_INT, 0 = the control: the value, no interrupt
+    unsigned long Interrupt;                // in: BC250_FENCE_MODE_*
     long Result;                            // out: the shim's return code, -62 when a value did not arrive in time
     unsigned long FaultOffset;
     unsigned long Completed;                // out: fences whose value was read back

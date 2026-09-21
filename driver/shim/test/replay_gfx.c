@@ -97,12 +97,14 @@
 #include "bc250_irq.h"
 #include "bc250_nbio.h"
 #include "bc250_sdma.h"
+#include "nv.h"
 
 #include "gc/gc_10_1_0_offset.h"
 #include "gc/gc_10_1_0_sh_mask.h"
 #include "soc15_common.h"
 #include "v10_structs.h"
 #include "nvd.h"
+#include "soc15_ih_clientid.h"
 
 /* ---------------------------------------------------------------------------------------------
  * Unit A, experiment E03 (evidence/linux/2026-09-21-E03-init-trace), kernel 6.18.52-0-lts.
@@ -128,10 +130,13 @@
  * struct bc250_gfx_inputs. Two is what every Navi part with this SE/SH layout reports, and the
  * value only scales a mask that ends up in the clear-state PM4 stream, which the trace does not
  * contain. It is stated here so that the test says what it was given. */
-/* The KIQ's read pointer at the end of a bring-up, measured on unit A: experiment E12 run 001 wrote
- * CP_HQD_PQ_RPTR = 0x737 in the second bring-up of one boot. It is an input to check_rerun(), which
- * has no CP of its own to produce it. See the comment there. */
-#define UNITA_RERUN_KIQ_RPTR       0x737u
+/* The fault unit A raised in experiment E12 run 002 when the second bring-up un-halted the MEC:
+ * client 27, source 0, src_data[0] = 0x444 - the first run's KIQ base 0x442000 plus the offset its
+ * read pointer had reached, an address no register in either run names
+ * (P:\BC-250\scratch\e12\run002\out\ih-state-failed-153224.txt, last vector). The client id is
+ * SOC15_IH_CLIENTID_UTCL2 from AMD's header; the source id has no name in any header we have, so it
+ * is written here as the number that was measured and nowhere else. */
+#define UNITA_UTCL2_FAULT_SRCID    0u
 
 #define UNITA_MAX_SHADER_ENGINES   2u
 #define UNITA_MAX_SH_PER_SE        2u
@@ -570,6 +575,29 @@ static void declare_dequeue_reaction(struct amdgpu_device *adev)
 			     SOC15_REG_OFFSET(GC, 0, mmCP_HQD_ACTIVE) * 4u, 0u);
 }
 
+/* The fourth declared model: the MEC's own copy of a queue's base and read pointer, which survives
+ * a halt and which no register write reaches while the engine is stopped. backend_mem.h sets out
+ * the four things that were measured on unit A in E12 run 002 and the one that was not.
+ *
+ * As with the reaction above, every offset and mask is resolved through AMD's headers. */
+static void declare_mec_fetch_state(struct amdgpu_device *adev)
+{
+	struct backend_mec_regs r;
+
+	memset(&r, 0, sizeof(r));
+	r.mec_cntl            = SOC15_REG_OFFSET(GC, 0, mmCP_MEC_CNTL) * 4u;
+	r.mec_halt_mask       = CP_MEC_CNTL__MEC_ME1_HALT_MASK | CP_MEC_CNTL__MEC_ME2_HALT_MASK;
+	r.grbm_gfx_cntl       = SOC15_REG_OFFSET(GC, 0, mmGRBM_GFX_CNTL) * 4u;
+	r.hqd_active          = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_ACTIVE) * 4u;
+	r.hqd_pq_base         = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_BASE) * 4u;
+	r.hqd_pq_base_hi      = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_BASE_HI) * 4u;
+	r.hqd_pq_rptr         = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR) * 4u;
+	r.hqd_dequeue_request = SOC15_REG_OFFSET(GC, 0, mmCP_HQD_DEQUEUE_REQUEST) * 4u;
+	r.fault_client_id     = SOC15_IH_CLIENTID_UTCL2;
+	r.fault_src_id        = UNITA_UTCL2_FAULT_SRCID;
+	backend_add_mec_fetch_state(&r);
+}
+
 static void check_windows_state(const char *sweep, struct amdgpu_device *adev, int verbose)
 {
 	struct amdgpu_bo gart_bo;
@@ -839,11 +867,13 @@ static unsigned int check_halted(struct amdgpu_device *adev)
 static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_writes, int verbose)
 {
 	unsigned int hits_before, writes, bad = 0;
+	u64 kiq_before;
 	int r;
 
 	printf("\n== teardown, then the whole bring-up again ==\n");
 
 	hits_before = backend_cp_stub_count();
+	kiq_before = adev->gfx.kiq[0].ring.gpu_addr;
 	printf("  before: %u doorbells, %u packets decoded, KIQ wptr %llu\n",
 	       backend_doorbell_count(), backend_packet_count(),
 	       (unsigned long long)adev->gfx.kiq[0].ring.wptr);
@@ -858,28 +888,41 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 	bad += check_halted(adev);
 	bad += survey_fini_registers("the teardown", adev, verbose);
 
-	printf("\n== the second bring-up ==\n");
-
 	/*
-	 * The one thing this replay does not have, declared: a CP that moves its own read pointer.
+	 * Give the memory back and allocate it again, which is what the miniport does: its FINI
+	 * escape frees once the engines read halted, and the next RUN sets up from scratch
+	 * (driver/kmd/gfx.c, TearDown() and SetUp()).
 	 *
-	 * On hardware the CP advances CP_HQD_PQ_RPTR as it consumes the ring, so at the end of a
-	 * bring-up the register holds that run's final write pointer. Here nothing ever writes it, so
-	 * it reads 0 on the second run and the second run looks clean. Unit A is not so kind: in
-	 * experiment E12 run 001 the second bring-up wrote CP_HQD_PQ_RPTR = 0x737, because
-	 * gfx_v10_0_compute_mqd_init() samples the register (gfx_v10_0.c:6998) and
-	 * gfx_v10_0_kiq_init_register() writes the sample back (:7044) - in the CP_HQD_ACTIVE branch,
-	 * which only a re-init enters.
-	 *
-	 * So the value is put there, from the one hardware run that has been made, and what the shim
-	 * does with it is checked below. This is a poke and not a write: it changes what a read
-	 * returns and never enters the comparison.
-	 *
-	 * Note the replay has one flat register file and no GRBM windowing, so this stands in for
-	 * every HQD slot at once rather than for the KIQ's alone. That is the conservative direction:
-	 * all nine MQD builds see it, as they would on hardware where each slot keeps its own.
+	 * This is not decoration. gpumem does not reuse a freed GART range, so the second bring-up's
+	 * rings land at addresses the first run never used - unit A's KIQ moved from 0x442000 to
+	 * 0x564000 between the two runs of E12 run 002 - and that is the whole reason the stale MEC
+	 * fetch showed itself as a page fault rather than as a long walk through someone else's NOPs.
+	 * Until this test did the same, it re-ran the stages on the first run's buffers and could not
+	 * see the failure at all.
 	 */
-	backend_poke(SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR) * 4u, UNITA_RERUN_KIQ_RPTR);
+	bc250_sdma_teardown(adev);
+	bc250_gfx_teardown(adev);
+	{
+		struct bc250_gfx_inputs fin;
+
+		memset(&fin, 0, sizeof(fin));
+		fin.max_shader_engines = UNITA_MAX_SHADER_ENGINES;
+		fin.max_sh_per_se = UNITA_MAX_SH_PER_SE;
+		fin.max_cu_per_sh = UNITA_MAX_CU_PER_SH;
+		fin.max_backends_per_se = UNITA_MAX_BACKENDS_PER_SE;
+		fin.async_gfx_ring = true;
+		fin.pp_gfxoff = true;
+		if (bc250_gfx_setup(adev, &fin) != 0 || bc250_sdma_setup(adev) != 0) {
+			printf("  the second setup failed; nothing to re-run\n");
+			return bad + 1;
+		}
+		register_rings(adev);
+		printf("  the rings were freed and allocated again: the KIQ moved from 0x%llX"
+		       " to 0x%llX\n", (unsigned long long)kiq_before,
+		       (unsigned long long)adev->gfx.kiq[0].ring.gpu_addr);
+	}
+
+	printf("\n== the second bring-up ==\n");
 
 	/* The stages one at a time rather than bc250_gfx_hw_init(), so that a failure names itself. */
 	backend_reset_writes();
@@ -933,33 +976,27 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 	}
 
 	/*
-	 * What the re-init tells the CP its read pointer is.
+	 * Did the teardown leave a live KIQ fetcher behind?
 	 *
-	 * The ring starts again at write pointer 0 - bc250_compute_mqd_init() sets
-	 * cp_hqd_pq_wptr_lo/hi to 0 and the ring's own wptr is 0 - so the only read pointer consistent
-	 * with that MQD is 0. Upstream samples the register instead (gfx_v10_0.c:6998), which is clean
-	 * only on parts that lose GFX power between loads; this one does not.
+	 * This is what experiment E12 run 002 found on unit A and what the MEC fetch-state model
+	 * reproduces here. The first bring-up activated the KIQ and the engine took its own copy of
+	 * the ring's base and read pointer. The teardown halted the MEC without ever telling the
+	 * engine to let the queue go, so the copy survived; the second bring-up allocated its rings
+	 * at fresh addresses, wrote the new base into CP_HQD_PQ_BASE while the engine was halted -
+	 * where it does not reach it - and un-halted. The engine resumed at the OLD base plus the old
+	 * read pointer, which is no longer mapped, and UTCL2 raised a fault. The queue never ran
+	 * again and the KIQ ring test timed out after 165 ms.
 	 *
-	 * Handing the CP rptr = 0x737 against wptr = 0 says there are 262144 - 1847 = 260297 dwords of
-	 * work pending, and unit A duly walked all of them: stage 6 took 5222 us against 349 us on the
-	 * cold run. Declared deviation, driver/amdgpu-import/PROVENANCE.md.
+	 * The test is therefore not about a register value at all. It is: after a teardown and a
+	 * second bring-up, no stale fetch happened.
 	 */
-	{
-		int found;
-		u32 got = shim_wrote(SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR) * 4u, &found);
-
-		if (!found) {
-			printf("  the re-init never wrote CP_HQD_PQ_RPTR   <-- the CP_HQD_ACTIVE"
-			       " branch was not entered, so this run is not testing the re-init\n");
-			bad++;
-		} else if (got != 0) {
-			printf("  the re-init told the CP its read pointer is 0x%X while the ring"
-			       " restarts at write pointer 0   <-- wrong\n", got);
-			bad++;
-		} else {
-			printf("  the re-init writes CP_HQD_PQ_RPTR = 0 over a register holding"
-			       " 0x%X: yes\n", UNITA_RERUN_KIQ_RPTR);
-		}
+	if (backend_mec_faults() != 0) {
+		printf("  the MEC resumed fetching at 0x%llX after the re-init, which is in no"
+		       " allocation   <-- the teardown left the KIQ's fetcher live\n",
+		       (unsigned long long)backend_mec_fault_address());
+		bad++;
+	} else {
+		printf("  no stale KIQ fetch survived the teardown            : yes\n");
 	}
 
 	/* The teardown's own ring test plus eleven more from the second bring-up. If the CP had not
@@ -1038,6 +1075,130 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 		printf("  incomplete: the run above stopped early, so a second bring-up that got"
 		       " further could touch more\n");
 
+	printf("  %u wrong\n", bad);
+	return bad;
+}
+
+/*
+ * The read pointer unit A's KIQ held when a second bring-up sampled it, and what it cost.
+ *
+ * evidence, E12 run 001: CP_HQD_PQ_RPTR read 0x737 = 1847 on the second bring-up in one boot,
+ * gfx_v10_0_kiq_init_register()'s active branch wrote it back, and the queue was told 262144 - 1847
+ * = 260297 dwords were pending against a ring whose write pointer restarts at 0. Stage 6 took
+ * 5222 us against 349 us cold. Used below only to give the recovery branch a stale value to correct;
+ * on hardware the CP puts it there itself.
+ */
+#define UNITA_STALE_KIQ_RPTR 0x737u
+
+/*
+ * The one case the teardown fix does not cover: an instance that stopped without taking the KIQ
+ * down. It is not hypothetical - that is exactly what 0.6.1 does, so the first 0.6.2 start on the
+ * lab machine goes through here - and it is what the recovery branch at the top of
+ * bc250_kiq_init_register() is for.
+ *
+ * The starting state is built out of two register writes, both through the shim's own write path so
+ * that the MEC model follows them by its own rules instead of being poked into place: the KIQ is
+ * left active exactly as the bring-up above left it, with the engine holding its copy of base and
+ * read pointer, and then the MEC is halted. As far as this queue is concerned that IS 0.6.1's
+ * teardown; the UNMAP_QUEUES for the other eight rings and the RLC stop change nothing about it.
+ *
+ * Then the rings are freed and allocated again, as the miniport does, and the bring-up runs. What
+ * has to happen: the recovery branch finds the queue active with the engine halted, un-halts, the
+ * engine takes its one stale fetch into the freed ring and faults, the dequeue is answered because
+ * the engine is now running, the read pointer is corrected to 0 instead of the 0x737 the register
+ * offers, and the rest of the bring-up succeeds.
+ *
+ * Exactly one fault is the point. Zero would mean the arm did not reproduce the condition; two or
+ * more would mean the recovery did not clear the engine's copy and the later un-halt in kcq_resume
+ * hit it again.
+ */
+static unsigned int check_unclean_start(struct amdgpu_device *adev, int verbose)
+{
+	struct amdgpu_ring *kiq = &adev->gfx.kiq[0].ring;
+	struct bc250_gfx_inputs fin;
+	unsigned int faults_before, faults, bad = 0;
+	u64 stale_base, stale_end;
+	u32 rptr;
+	int r;
+
+	printf("\n== a previous instance that left the KIQ up (0.6.1's teardown) ==\n");
+
+	stale_base = kiq->gpu_addr;
+	stale_end = stale_base + kiq->ring_size;
+	faults_before = backend_mec_faults();
+
+	nv_grbm_select(adev, kiq->me, kiq->pipe, kiq->queue, 0);
+	if ((bc250_shim_rreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_ACTIVE)) & 1u) == 0) {
+		printf("  the KIQ is not active here, so this arm tests nothing   <-- wrong\n");
+		nv_grbm_select(adev, 0, 0, 0, 0);
+		return 1;
+	}
+	bc250_shim_wreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR), UNITA_STALE_KIQ_RPTR);
+	nv_grbm_select(adev, 0, 0, 0, 0);
+	bc250_shim_wreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_MEC_CNTL),
+			CP_MEC_CNTL__MEC_ME1_HALT_MASK | CP_MEC_CNTL__MEC_ME2_HALT_MASK);
+	printf("  the KIQ at 0x%llX left active, read pointer 0x%X, MEC halted\n",
+	       (unsigned long long)stale_base, UNITA_STALE_KIQ_RPTR);
+
+	bc250_sdma_teardown(adev);
+	bc250_gfx_teardown(adev);
+	memset(&fin, 0, sizeof(fin));
+	fin.max_shader_engines = UNITA_MAX_SHADER_ENGINES;
+	fin.max_sh_per_se = UNITA_MAX_SH_PER_SE;
+	fin.max_cu_per_sh = UNITA_MAX_CU_PER_SH;
+	fin.max_backends_per_se = UNITA_MAX_BACKENDS_PER_SE;
+	fin.async_gfx_ring = true;
+	fin.pp_gfxoff = true;
+	if (bc250_gfx_setup(adev, &fin) != 0 || bc250_sdma_setup(adev) != 0) {
+		printf("  the setup failed; nothing to bring up\n");
+		return bad + 1;
+	}
+	register_rings(adev);
+
+	backend_reset_writes();
+	backend_touched_start();
+	r = bc250_gfx_hw_init(adev);
+	if (r == 0)
+		r = bc250_sdma_hw_init(adev);
+	backend_touched_stop();
+
+	if (r != 0) {
+		printf("  the bring-up returned %d   <-- wrong: the recovery did not work\n", r);
+		bad++;
+	} else {
+		printf("  the bring-up recovered and succeeded, %u writes, KIQ now at 0x%llX\n",
+		       backend_write_count(), (unsigned long long)kiq->gpu_addr);
+	}
+
+	faults = backend_mec_faults() - faults_before;
+	if (faults != 1) {
+		printf("  %u stale fetches, not the one this arm expects   <-- wrong\n", faults);
+		bad++;
+	} else if (backend_mec_fault_address() < stale_base ||
+		   backend_mec_fault_address() >= stale_end) {
+		printf("  the one stale fetch was at 0x%llX, which is not inside the ring the last"
+		       " instance left behind (0x%llX..0x%llX)   <-- wrong\n",
+		       (unsigned long long)backend_mec_fault_address(),
+		       (unsigned long long)stale_base, (unsigned long long)stale_end);
+		bad++;
+	} else {
+		printf("  one stale fetch, at 0x%llX, inside the freed ring, and the queue came"
+		       " back: yes\n", (unsigned long long)backend_mec_fault_address());
+	}
+
+	nv_grbm_select(adev, kiq->me, kiq->pipe, kiq->queue, 0);
+	rptr = bc250_shim_rreg(adev, SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR));
+	nv_grbm_select(adev, 0, 0, 0, 0);
+	if (rptr != 0 || ((struct v10_compute_mqd *)kiq->mqd_ptr)->cp_hqd_pq_rptr != 0) {
+		printf("  the read pointer survived: register 0x%X, MQD 0x%X   <-- wrong\n", rptr,
+		       ((struct v10_compute_mqd *)kiq->mqd_ptr)->cp_hqd_pq_rptr);
+		bad++;
+	} else {
+		printf("  the stale read pointer was corrected to 0 in both the register and the"
+		       " MQD: yes\n");
+	}
+
+	bad += survey_fini_registers("the recovering bring-up", adev, verbose);
 	printf("  %u wrong\n", bad);
 	return bad;
 }
@@ -1334,6 +1495,11 @@ static void run_one(const char *title, const struct run_opts *opt, struct amdgpu
 	 * CP_HQD_ACTIVE reads 0 on a cold boot, and the comparison above is unaffected either way:
 	 * a reaction is applied to the register state and is never recorded as a write. */
 	declare_dequeue_reaction(adev);
+
+	/* The MEC's own fetch state, the fourth declared model, measured in E12 run 002. It has to be
+	 * on before the first bring-up, because what it reproduces is the first run's engine state
+	 * surviving into the second. Every offset comes from AMD's headers over adev->reg_offset. */
+	declare_mec_fetch_state(adev);
 
 	/* Stage 0, before anything else touches the GPU. rmmio_base stays 0: the only thing it feeds
 	 * is rmmio_remap.bus_addr, which no register carries and the trace therefore cannot show. */
@@ -1816,7 +1982,7 @@ int main(int argc, char **argv)
 	struct amdgpu_device adev;
 	struct result derived, ctl_async, ctl_gfxoff, ctl_nostub, ctl_perring;
 	struct run_opts opt;
-	unsigned int i, stray = 0, gart_bad = 0, mqd_bad = 0, rerun_bad = 0;
+	unsigned int i, stray = 0, gart_bad = 0, mqd_bad = 0, rerun_bad = 0, unclean_bad = 0;
 	int verbose = 0, exact, controls_fail;
 	const char *sweep1, *sweep2, *trace, *trace_irq, *dumpdir = NULL, *ringsdir = NULL;
 	const char *winsweep = NULL;
@@ -1902,6 +2068,10 @@ int main(int argc, char **argv)
 	if (derived.irq_rc == 0)
 		rerun_bad = check_rerun(&adev, derived.bringup.produced, verbose);
 
+	/* And after that, because it starts from the device the re-run left running. */
+	if (derived.irq_rc == 0 && rerun_bad == 0)
+		unclean_bad = check_unclean_start(&adev, verbose);
+
 	/* Four controls, one per claim that is not forced by the register sequence itself.
 	 *
 	 * The first two are the two module parameters struct bc250_gfx_inputs carries: its comment
@@ -1967,6 +2137,7 @@ int main(int argc, char **argv)
 	if (ringsdir != NULL)
 		printf("  MQD fields differing from unit A    : %u\n", mqd_bad);
 	printf("  teardown-and-rerun checks wrong     : %u\n", rerun_bad);
+	printf("  unclean-start recovery wrong        : %u\n", unclean_bad);
 	printf("  mismatches, control async_gfx_ring  : %u\n", ctl_async.bringup.mismatches);
 	printf("  mismatches, control pp_gfxoff       : %u\n", ctl_gfxoff.bringup.mismatches);
 	printf("  control with the CP stub off        : gfx_hw_init returned %d\n", ctl_nostub.gfx_rc);
@@ -2008,6 +2179,10 @@ int main(int argc, char **argv)
 		printf("NO MATCH - %u GART page table checks failed\n", gart_bad);
 	else if (mqd_bad != 0)
 		printf("NO MATCH - %u compute MQD fields differ from unit A's own MQDs\n", mqd_bad);
+	else if (unclean_bad != 0)
+		printf("BRING-UP EXACT over %u + %u writes, BUT it does not recover from a start where\n"
+		       "           the last instance left the KIQ up (%u failing check above)\n",
+		       derived.bringup.compared, derived.irq.compared, unclean_bad);
 	else if (rerun_bad != 0)
 		printf("BRING-UP EXACT over %u + %u writes, BUT it does not survive its own teardown\n"
 		       "           (%u failing check above. The first bring-up, which is what experiment\n"
@@ -2024,5 +2199,6 @@ int main(int argc, char **argv)
 	return (derived.irq_rc == 0 && derived.unknown_reads == 0 && exact &&
 		derived.address_failures == 0 && derived.stub_hits == 11 &&
 		derived.stub_rejects == 0 && stray == 0 &&
-		derived.stage0_bad == 0 && gart_bad == 0 && mqd_bad == 0 && rerun_bad == 0 && controls_fail) ? 0 : 1;
+		derived.stage0_bad == 0 && gart_bad == 0 && mqd_bad == 0 && rerun_bad == 0 &&
+		unclean_bad == 0 && controls_fail) ? 0 : 1;
 }

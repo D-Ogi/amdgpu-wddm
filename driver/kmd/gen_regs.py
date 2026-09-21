@@ -47,7 +47,12 @@ SEQUENCES = [
     ("Gfx", "E11", r"^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|"
                    r"NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|"
                    r"BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)",
-     [(0.0375, 0.0385), (0.2495, 0.2528), (0.5496, 0.551), (1.560, 1.562)], []),
+     [(0.0375, 0.0385), (0.2495, 0.2528), (0.5496, 0.551), (1.560, 1.562)],
+     # The one register of this table that no trace of ours holds: the undo asks the MEC to let go of the KIQ's queue
+     # before it halts the engine (bc250_kiq_dequeue(), upstream's handshake of kgd_hqd_destroy(),
+     # amdgpu_amdkfd_gfx_v10.c:606-619). Without it the MEC keeps the queue's fetch state across the halt and the next
+     # bring-up faults at the old ring's address (facts M44, E12 run 002).
+     [("GC", "mmCP_HQD_DEQUEUE_REQUEST", "not traced: the undo's dequeue handshake, facts M44")]),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
     # The ring is GTT memory: gpumem.c flushes the TLB after the bind as amdgpu did (its binds of 0.2495 to 0.2528 s,
@@ -125,8 +130,8 @@ def main():
             if offset(maps, ip, "mm" + reg) != off:
                 sys.exit(f"{name}: the trace has 0x{off:05X}, regcalc says 0x{offset(maps, ip, 'mm' + reg):05X}")
             entries[off] = name
-        for ip, reg in read_only:
-            entries[offset(maps, ip, reg)] = f"{ip}.{reg[2:]} (read only)"
+        for ip, reg, *note in read_only:
+            entries[offset(maps, ip, reg)] = f"{ip}.{reg[2:]} ({note[0] if note else 'read only'})"
         if max(entries) >= BAR5_LENGTH:
             sys.exit(f"{table}: 0x{max(entries):X} is beyond BAR5")
         when = ", ".join(f"{a} to {b} s" for a, b in until) if isinstance(until, list) else f"first {until} s"

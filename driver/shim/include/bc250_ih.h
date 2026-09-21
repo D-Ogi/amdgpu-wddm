@@ -176,6 +176,11 @@ void bc250_ih_set_rptr(struct amdgpu_device *adev, u32 rptr);
  * These are pure functions over a decoded entry, so the miniport can count and route without
  * repeating the bit arithmetic. The packing is the CP's and is taken from gfx_v10_0_eop_irq()
  * (gfx_v10_0.c:9195-9197), which is the only statement of it in the kernel.
+ *
+ * One warning, measured rather than derived (facts M45): on a vector the CP raises for an
+ * UNMAP_QUEUES rather than for a fence, the queue field names the queue last active on that pipe,
+ * not the queue the packet named. Trust me and pipe always, the queue only for a fence. See the
+ * comment at bc250_ih_eop_ring_id() for the evidence.
  * ------------------------------------------------------------------------------------------- */
 void bc250_ih_eop_ring_id(const struct bc250_iv_entry *e, u32 *me, u32 *pipe, u32 *queue);
 

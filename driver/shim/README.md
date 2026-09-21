@@ -159,10 +159,11 @@ Two things in this stage are **not** amdgpu's:
   writes its own doorbells through at physical address 0.
 
 Two things the sequence deliberately stops short of, each named in the headers rather than left to
-be discovered: the gfx and SDMA ring tests (they need a live CP and, for SDMA, touch no register at
-all, so a register replay cannot cover them); and `gfx_v10_0_setup_grbm_cam_remapping()` (the CAM
-probe returns "already remapped" on unit A, so the programming path has no traced counterpart and is
-not transcribed - `bc250_gfx_grbm_cam_probe()` returns an error rather than carrying on quietly).
+be discovered: the SDMA ring test (`bc250_sdma_ring_test()` exists and follows upstream, but it is a
+separate call, because it needs a scratch page the traced bring-up does not allocate and it touches
+no register a replay could compare); and `gfx_v10_0_setup_grbm_cam_remapping()` (the CAM probe
+returns "already remapped" on unit A, so the programming path has no traced counterpart and is not
+transcribed - `bc250_gfx_grbm_cam_probe()` returns an error rather than carrying on quietly).
 The fence and interrupt path is M6 and is the next section.
 
 Where the 6.18.52 kernel that produced the trace and mainline v6.18 disagree, the trace decides and
@@ -261,6 +262,21 @@ GTT page of 8-byte slots for the value to land in - a separate call and not part
 `bc250_gfx_setup()`, because allocating it there would move every MC address the traced bring-up
 programs. Without `AMDGPU_FENCE_FLAG_INT` the same packet writes the value and raises nothing, which
 is the control worth running first on hardware.
+
+The SDMA engines have the same pair, and they close M36's "SDMA: rings programmed and engines
+released, not tested". `bc250_sdma_emit_fence()` / `bc250_sdma_signal_fence()` follow
+`sdma_v5_0_ring_emit_fence()` (`sdma_v5_0.c:523`): a 32-bit `SDMA_OP_FENCE` with `MTYPE(3)`, the
+address and the sequence, then an `SDMA_OP_TRAP` with interrupt context 0 when
+`AMDGPU_FENCE_FLAG_INT` is set. `bc250_sdma_ring_test()` follows `sdma_v5_0_ring_test_ring()`
+(`:1012`): a `WRITE_LINEAR` of `0xDEADBEEF` over a slot seeded with `0xCAFEDEAD`, then a poll.
+`bc250_sdma_fence_page_alloc()` is the separate GTT page, for the same reason as the graphics one.
+The packets are built out of `navi10_sdma_pkt_open.h`, AMD's own opcode and header macros, so no
+SDMA dword is typed here either.
+
+One thing an SDMA ring does differently and the shim has to know: its write pointer is in **bytes**,
+not dwords. `sdma_v5_0_ring_set_wptr()` publishes `ring->wptr << 2` (`sdma_v5_0.c:371`), so
+`amdgpu_ring_commit()` shifts for `AMDGPU_RING_TYPE_SDMA` and leaves CP rings alone. A doorbell rung
+in the wrong units is a ring the engine reads at four times the offset.
 
 ## Building
 
@@ -434,12 +450,20 @@ Four more things it checks, none of which the two windows can reach:
   the eight compute MQDs amdgpu actually left in memory, 2048 bytes each, read out of debugfs. Each
   dump is matched to the ring that says it is that me, pipe and queue - the dumps sort by (pipe,
   queue) and the rings are ordered queue-major, so pairing them by index compares the wrong pairs.
-- **Teardown and re-run.** `bc250_gfx_hw_fini` then the whole bring-up again on the same adev. On
-  Windows a second PSP load in one boot leaves the RLC disabled and busy (facts M35), so the kmd gets
-  one load per boot and everything after it has to be undoable with registers and the KIQ alone. The
-  engines are checked halted afterwards against AMD's own field masks, and every register the two
-  fini paths touch is surveyed against the trace windows the miniport's allow-list is generated from
-  - the teardown has no window of its own, so what it touches can only be found by running it.
+- **Teardown and re-run.** `bc250_gfx_hw_fini`, then the rings freed and allocated again as the
+  miniport's FINI and RUN do, then the whole bring-up on the same adev. On Windows a second PSP load
+  in one boot leaves the RLC disabled and busy (facts M35), so the kmd gets one load per boot and
+  everything after it has to be undoable with registers and the KIQ alone. The engines are checked
+  halted afterwards against AMD's own field masks, and every register the two fini paths touch is
+  surveyed against the trace windows the miniport's allow-list is generated from - the teardown has
+  no window of its own, so what it touches can only be found by running it. The free and re-allocate
+  is not decoration: gpumem does not hand a freed GART range back, so the second run's rings land
+  where the first run's never were, and that is what turns a stale engine fetch into a page fault
+  instead of a quiet walk through someone else's memory.
+- **A start where the last instance left the KIQ up.** What 0.6.1's teardown leaves behind, which
+  makes it the state the first 0.6.2 start finds on the lab machine. The bring-up has to notice,
+  recover and come back, taking exactly one stale fetch - inside the ring the previous instance
+  left - and no more.
 
 and one pass that reports rather than checks:
 
@@ -460,18 +484,25 @@ assigns is zero.
 Stage 0: 3 of 3 writes identical. GART: all checks pass.
 
 Teardown: the engines read halted - `CP_ME_CNTL 0x15000000`, `CP_MEC_CNTL 0x50000000`, `RLC_CNTL 0`,
-both `SDMAn_F32_CNTL` with `HALT` set - and the 18 registers it touches are all named by a trace
-window, so the miniport's allow-list needs nothing added for it.
+both `SDMAn_F32_CNTL` with `HALT` set - and of the 25 registers it touches, 24 are named by a trace
+window. The one that is not is **`CP_HQD_DEQUEUE_REQUEST`**, which the KIQ dequeue writes and no
+traced window names, so the miniport's allow-list needs that one offset added for the teardown.
 
-Re-run: the whole bring-up succeeds a second time on the state the teardown left, 357 writes against
-the first run's 354, with 13 ring tests passing across the two. It touches **no register outside the
-trace windows**, so a second run needs nothing added to the miniport's table.
+Re-run: the whole bring-up succeeds a second time on rings that were freed and allocated again, 353
+writes against the first run's 354, with 13 ring tests passing across the two, and no stale fetch
+surviving the teardown. It touches **no register outside the trace windows**, so a second run needs
+nothing added to the miniport's table.
 
-The 3-write difference is accounted for exactly, which is the point of checking it rather than
-reporting a count: +4 from the declared deviation's branch (`CP_HQD_ACTIVE`, `CP_HQD_PQ_RPTR`,
-`CP_HQD_PQ_WPTR_LO`, `CP_HQD_PQ_WPTR_HI`), and -1 for `RLC_SPM_MC_CNTL`, which upstream's own
-`pre_data != data` guard (`gfx_v10_0.c:8297`) skips because the field already holds what the first
-run put there. The test lists every register whose write count differs, in both directions.
+The one-write difference is accounted for exactly, which is the point of checking it rather than
+reporting a count: `RLC_SPM_MC_CNTL`, which upstream's own `pre_data != data` guard
+(`gfx_v10_0.c:8297`) skips because the field already holds what the first run put there. The test
+lists every register whose write count differs, in both directions.
+
+Unclean start: from the state 0.6.1's teardown leaves - the KIQ active with the MEC halted and a
+stale read pointer of `0x737` in the register - the bring-up recovers. It takes exactly one stale
+fetch, inside the ring the previous instance left behind, dequeues the queue with the engine
+un-halted for the handshake, corrects the read pointer to 0 in both the register and the MQD, and
+succeeds in 360 writes.
 
 **The MQD comparison found a real bug.** All eight compute MQDs now agree with unit A on every one of
 the 20 comparable fields, but they did not at first: `compute_ring[0]` was missing
@@ -642,51 +673,58 @@ separately so a staged hardware run can stop after any of them and read the regi
 
 `bc250_sdma_hw_fini(adev)` then `bc250_gfx_hw_fini(adev)`. Frees nothing. It follows
 `gfx_v10_0_hw_fini()` in its order: the three fault interrupt sources off, `UNMAP_QUEUES` through the
-KIQ for the gfx ring and the eight compute rings with the ring test upstream does after it, then the
-CP and the MEC halted. The RLC stop at the end is not upstream's and is there for the miniport, which
-needs a way to stop the RLC before asking the PSP to load firmware again; `bc250_gfx_rlc_stop(adev)`
-exposes that step on its own.
+KIQ for the gfx ring and the eight compute rings with the ring test upstream does after it, **the
+KIQ's own HQD dequeued while the MEC still runs**, then the CP and the MEC halted. The RLC stop at
+the end is not upstream's and is there for the miniport, which needs a way to stop the RLC before
+asking the PSP to load firmware again; `bc250_gfx_rlc_stop(adev)` exposes that step on its own.
 
 What it leaves behind, measured by the host test rather than asserted: `CP_ME_CNTL = 0x15000000`,
-`CP_MEC_CNTL = 0x50000000`, `RLC_CNTL = 0`, both `SDMAn_F32_CNTL` with `HALT` set. It touches 18
-distinct registers and every one of them is already named by a trace window, so it needs nothing
-added to the miniport's generated allow-list.
+`CP_MEC_CNTL = 0x50000000`, `RLC_CNTL = 0`, both `SDMAn_F32_CNTL` with `HALT` set. It touches 25
+distinct registers, 24 of them already named by a trace window. The exception is
+**`CP_HQD_DEQUEUE_REQUEST`**, which the KIQ dequeue writes: the miniport's generated allow-list needs
+that one offset for the teardown.
 
-A second `bc250_gfx_hw_init()` after this works, and getting there needed the two declared deviations
-from upstream's behaviour in this driver (`driver/amdgpu-import/PROVENANCE.md`). Both are in the same
-branch of `gfx_v10_0_kiq_init_register()`, the one only a re-initialisation without a GPU reset
-enters - which is the branch this part reaches because it keeps GFX powered across a teardown and
-upstream's parts do not.
+#### Why the KIQ dequeue is there
 
-The KIQ's own HQD is the queue nothing dequeues: `gfx_v10_0_hw_fini()` unmaps the client queues
-through the KIQ but never the KIQ itself, and the only write of `CP_HQD_ACTIVE = 0` in `gfx_v10_0.c`
-is the SR-IOV one at :7029. So on a second run `bc250_kiq_init_register()` finds `CP_HQD_ACTIVE` set
-and upstream would write `CP_HQD_DEQUEUE_REQUEST = 1` and poll - while the MEC is halted, because
-`gfx_v10_0_cp_compute_enable(adev, true)` runs at :7208 from `kcq_resume` at :7243, one step *after*
-`kiq_resume` at :7239. Upstream never notices: it does not look at the poll's outcome (`j` is unused
-after the loop at :7037-7041), and on the parts it exercises either GFX power is dropped across
-suspend or a reset intervenes, so `CP_HQD_ACTIVE` reads 0 and the branch is skipped. This part keeps
-GFX powered, so it lands in the case upstream has no mechanism for.
+The KIQ's own HQD is the queue nothing upstream dequeues: `gfx_v10_0_hw_fini()` unmaps the client
+queues through the KIQ but never the KIQ itself, and the only write of `CP_HQD_ACTIVE = 0` in
+`gfx_v10_0.c` is the SR-IOV one at `:7029`. That is safe on a part that drops GFX power across a
+teardown or takes a reset before the next load. This one does neither, and hardware said what that
+costs (E12 run 002, unit A):
 
-What we do: read `CP_MEC_CNTL` first, and when the engine that would answer is halted, take
-upstream's own `:7029` write on that measured condition instead of a handshake nothing can service.
-The live-CP arm is upstream's, unchanged, and a cold boot never enters the branch at all - which is
-why the 354-write comparison against unit A is byte-identical either way.
+**The MEC keeps its own copy of an active queue's base and read pointer. Writes to the `CP_HQD_*`
+registers while it is halted do not reach that copy, and on un-halt it resumes from it.**
 
-The host test models the CP's dequeue handshake **only while the MEC is running**
-(`backend_add_reaction()` in `test/backend_trace.h`). That condition is what makes the check
-meaningful: without it the replay would answer a poll the hardware cannot answer, and did, which is
-how the problem stayed hidden through an earlier round of this work.
+The second bring-up in that run programmed the new ring under halt and un-halted; the engine went
+back to the *first* run's ring, which had been freed, and UTCL2 raised a VMID 0 fault at `0x444000`
+= the first run's base `0x442000` plus about where its read pointer stood. An address no register in
+either run names. The KIQ ring test then timed out after 165 ms.
 
-The second deviation lives in the same branch. Upstream's `gfx_v10_0_compute_mqd_init()` builds the
-MQD's read pointer by **sampling** `CP_HQD_PQ_RPTR` (`gfx_v10_0.c:6998`), which is clean only where
-GFX power is dropped between loads; here the slot still holds the previous run's read pointer, and
-the branch above writes it back. On unit A that meant the CP was told a ring restarting at write
-pointer 0 had 260297 dwords pending, and it walked all of them: stage 6 took 5222 us against 349 us
-cold. We write 0, which is what the rest of that same function already implies and what AMD write
-from gfx11 on. `check_rerun()` in `test/replay_gfx.c` pokes unit A's measured 0x737 into the
-register first - the host replay has no CP to put it there - and then checks what the shim writes
-back, which is the test that would have caught this before hardware did.
+So the teardown dequeues the KIQ while the engine can still answer: `CP_HQD_DEQUEUE_REQUEST = 1`,
+poll `CP_HQD_ACTIVE` to 0, then the pointer registers zeroed. The handshake is upstream's own
+(`kgd_hqd_destroy()`, `amdgpu_amdkfd_gfx_v10.c:606-619`); only the place it is called from is new.
+There is no documented MEC reset to use instead - `kgd_gfx_v10_hqd_reset()` returns 0 without
+touching anything, and `SOFT_RESET_CPC` exists only from gfx11 on.
+
+One deviation from upstream's behaviour is left, and it is the fallback for a KIQ found active with
+the MEC already halted - what 0.6.1's teardown leaves behind, so the first 0.6.2 start on a machine
+that ran 0.6.1 goes through it. There `bc250_kiq_init_register()` un-halts the MEC for the length of
+the handshake, halts it again, and zeroes the read pointer instead of writing back the previous
+instance's. `driver/amdgpu-import/PROVENANCE.md` carries it in full, including why a
+`GRBM_SOFT_RESET.SOFT_RESET_CP` pulse is written down there rather than shipped.
+
+Two things that were declared deviations in 0.6.1 are gone. Writing `CP_HQD_ACTIVE = 0` under halt
+did nothing to the engine, which is the whole point of the measurement above; and
+`mqd->cp_hqd_pq_rptr = 0` in the MQD builder treated a symptom, so it is back to upstream's sample
+now that the teardown leaves a 0 there to sample. The refutation is kept in PROVENANCE rather than
+deleted.
+
+The host test carries both arms (`check_rerun()` and `check_unclean_start()` in
+`test/replay_gfx.c`), and both rest on the fourth declared model,
+`backend_add_mec_fetch_state()` - a replayed register file has no MEC and forgets everything the
+moment a register is overwritten. `test/backend_mem.h` states what was measured for it and the one
+point that was not: that a dequeue serviced by a running MEC clears the copy. That is what both the
+teardown and the fallback assume, and the next hardware run is what tests it.
 
 ### Interrupts (M6)
 

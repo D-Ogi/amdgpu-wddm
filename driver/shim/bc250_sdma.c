@@ -27,6 +27,12 @@
 /* Imported data, unmodified: the two UTCL2 cache-policy enums the UTCL1_PAGE write uses. */
 #include "sdma_common.h"
 
+/* AMD's SDMA 5.0 packet definitions, imported unmodified at v6.18 (see the PROVENANCE row). Until
+ * M6 nothing here emitted an SDMA packet and the note below said to import this header the day one
+ * was needed rather than write the bits out. That day is the fence and the ring test at the end of
+ * this file, so it is imported, and no opcode, field shift or mask below is typed. */
+#include "navi10_sdma_pkt_open.h"
+
 /* ---------------------------------------------------------------------------------------------
  * Constants
  * ------------------------------------------------------------------------------------------- */
@@ -46,13 +52,11 @@
 #define BC250_SDMA_RING_MAX_DW	1024u
 #define BC250_SDMA_RING_SIZE	(BC250_SDMA_RING_MAX_DW * 4u * 2u)
 
-/* sdma_v5_0.c:1751 sdma_v5_0_ring_funcs. `.nop` is SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP); SDMA_OP_NOP
- * is 0 and the op field starts at bit 0 (navi10_sdma_pkt_open.h:26, :4502), so the fill value is
- * zero. That header is not imported: nothing here emits an SDMA packet, and one opcode is not worth
- * a 4500-line import. If the miniport ever does emit one, import it then rather than writing the
- * bits out. */
+/* sdma_v5_0.c:1941-1944 sdma_v5_0_ring_funcs: align_mask 0xf, and `.nop` is
+ * SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP). Now that the header is imported the fill value is that
+ * expression rather than the zero it works out to. */
 #define BC250_SDMA_ALIGN_MASK	0xfu
-#define BC250_SDMA_NOP		0u
+#define BC250_SDMA_NOP		SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP)
 
 /* nbio_v2_3.c:266 nbio_v2_3_sdma_doorbell_range(..., 20): the doorbell window size, in doorbells,
  * that amdgpu reserves per SDMA engine. The trace writes SIZE = 20 into both
@@ -468,6 +472,10 @@ int bc250_sdma_setup(struct amdgpu_device *adev)
 		ring = &adev->sdma.instance[i].ring;
 		ring->adev = adev;
 		ring->funcs = &bc250_ring_funcs_sdma;
+		/* sdma_v5_0.c:1878 sdma_v5_0_sw_init(): ring->me is the engine index, and
+		 * sdma_v5_0_ring_get_wptr() and the trap handler both read it back. Nothing in the
+		 * bring-up used it, so it was not set; the ring test and the fence do. */
+		ring->me = (u32)i;
 		ring->use_doorbell = true;
 		ring->doorbell_index = adev->doorbell_index.sdma_engine[i] << 1;
 
@@ -516,4 +524,216 @@ void bc250_sdma_teardown(struct amdgpu_device *adev)
 		bc250_shim_mem_free(adev, &adev->sdma.instance[i].ring.ring_mem);
 
 	bc250_shim_mem_free(adev, &adev->sdma.wb_mem);
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Fences and the ring test (milestone M6)
+ *
+ * sdma_v5_0.c:523 sdma_v5_0_ring_emit_fence() and sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring().
+ *
+ * What the packets are is not taken on trust. Unit A's own Linux driver emitted both of them while
+ * E13 was recording, and the dwords below are the dwords in those rings:
+ *
+ *   evidence/linux/2026-09-21-E13-reference-2/boot3-readonly/rings-after-ib/amdgpu_ring_sdma1.txt
+ *     dw 0x0000  00000002 004017c0 00000000 00000000 deadbeef      the ring test
+ *     dw 0x0005  000a0000 then ten zero dwords                     the pad to sixteen
+ *     dw 0x0020  00030005 00401760 00000000 00000001               the fence
+ *     dw 0x0024  00000006 00000000                                 the trap
+ *
+ * and the same shapes nineteen times over in amdgpu_ring_sdma0.txt. Every fence in both rings is
+ * the 32-bit form - one FENCE packet carrying the low dword of the sequence - so nothing on this
+ * chip asks for AMDGPU_FENCE_FLAG_64BIT; the 64-bit arm below is transcribed anyway, because
+ * leaving out an arm of an upstream function is how a driver grows a hole.
+ *
+ * Deviations, both of the same kind as bc250_gfx_emit_fence()'s:
+ *   - upstream BUG_ON()s a misaligned address, and it does so after the header dword is already in
+ *     the ring. A BUG() in a Windows miniport is a bugcheck on a caller's mistake, and a partly
+ *     written packet is worse than no packet, so the condition is upstream's, checked before
+ *     anything is written, and a refusal is BC250_EINVAL with the ring untouched.
+ *   - upstream takes the ring test's scratch dword from the device write-back pool, which this
+ *     driver does not have. bc250_sdma_fence_page_alloc() cuts one GTT page into slots instead,
+ *     exactly as bc250_gfx.c does for the graphics fence, and it is not allocated by
+ *     bc250_sdma_setup(): a page the bring-up does not allocate cannot move an address the
+ *     bring-up programs.
+ * ------------------------------------------------------------------------------------------- */
+
+/* sdma_v5_0.c:1021 and :1044. Upstream's own two constants, kept as they are written there. */
+#define BC250_SDMA_TEST_BEFORE	0xCAFEDEADu
+#define BC250_SDMA_TEST_AFTER	0xDEADBEEFu
+
+unsigned int bc250_sdma_fence_size(const struct amdgpu_ring *ring, unsigned int flags)
+{
+	unsigned int ndw;
+
+	if (ring == NULL || ring->funcs == NULL || ring->funcs->type != AMDGPU_RING_TYPE_SDMA)
+		return 0;
+
+	ndw = 4u;                               /* header, address low and high, sequence */
+	if (flags & AMDGPU_FENCE_FLAG_64BIT)
+		ndw += 4u;                      /* a second fence for the sequence's high dword */
+	if (flags & AMDGPU_FENCE_FLAG_INT)
+		ndw += 2u;                      /* the trap that raises the interrupt */
+	return ndw;
+}
+
+int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags)
+{
+	bool write64bit = (flags & AMDGPU_FENCE_FLAG_64BIT) != 0;
+
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_SDMA)
+		return BC250_EINVAL;
+
+	/* "zero in first two bits", twice: upstream checks the address again after adding 4 for the
+	 * second fence. Adding 4 cannot break a 4-byte alignment, so the second check can only fail
+	 * where the first already has; it is kept so that both BUG_ON()s are accounted for. */
+	if ((addr & 0x3u) != 0)
+		return BC250_EINVAL;
+	if (write64bit && (((addr + 4u) & 0x3u) != 0))
+		return BC250_EINVAL;
+
+	/* write the fence */
+	amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_FENCE) |
+				SDMA_PKT_FENCE_HEADER_MTYPE(0x3)); /* Ucached(UC) */
+	amdgpu_ring_write(ring, lower_32_bits(addr));
+	amdgpu_ring_write(ring, upper_32_bits(addr));
+	amdgpu_ring_write(ring, lower_32_bits(seq));
+
+	/* optionally write high bits as well */
+	if (write64bit) {
+		addr += 4;
+		amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_FENCE) |
+					SDMA_PKT_FENCE_HEADER_MTYPE(0x3));
+		amdgpu_ring_write(ring, lower_32_bits(addr));
+		amdgpu_ring_write(ring, upper_32_bits(addr));
+		amdgpu_ring_write(ring, upper_32_bits(seq));
+	}
+
+	if (flags & AMDGPU_FENCE_FLAG_INT) {
+		/* generate an interrupt */
+		amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_TRAP));
+		amdgpu_ring_write(ring, SDMA_PKT_TRAP_INT_CONTEXT_INT_CONTEXT(0));
+	}
+
+	return 0;
+}
+
+/* [shim] alloc, emit and commit together, the same shape as bc250_gfx_signal_fence(). */
+int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags)
+{
+	unsigned int ndw = bc250_sdma_fence_size(ring, flags);
+	int r;
+
+	if (ndw == 0)
+		return BC250_EINVAL;
+
+	r = amdgpu_ring_alloc(ring, ndw);
+	if (r)
+		return r;
+
+	r = bc250_sdma_emit_fence(ring, addr, seq, flags);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+
+	amdgpu_ring_commit(ring);
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The scratch and fence page
+ *
+ * One GTT page cut into eight-byte slots, the arrangement bc250_gfx.c already uses. Slots 0 and 1
+ * belong to the two engines' ring tests and the rest are fence slots, so a ring test and a fence
+ * can be outstanding at once without the caller having to think about it.
+ * ------------------------------------------------------------------------------------------- */
+
+int bc250_sdma_fence_page_alloc(struct amdgpu_device *adev)
+{
+	int r;
+
+	if (adev == NULL)
+		return BC250_EINVAL;
+	if (adev->sdma.fence_mem.cpu != NULL)
+		return 0;                       /* already there; idempotent */
+
+	r = bc250_shim_mem_alloc(adev, BC250_MEM_GTT, AMDGPU_GPU_PAGE_SIZE, AMDGPU_GPU_PAGE_SIZE,
+				 &adev->sdma.fence_mem);
+	if (r)
+		return r;
+	if (adev->sdma.fence_mem.cpu == NULL)
+		return BC250_EINVAL;
+	return 0;
+}
+
+void bc250_sdma_fence_page_free(struct amdgpu_device *adev)
+{
+	if (adev == NULL)
+		return;
+	bc250_shim_mem_free(adev, &adev->sdma.fence_mem);
+}
+
+u64 bc250_sdma_fence_addr(struct amdgpu_device *adev, unsigned int slot)
+{
+	if (adev == NULL || adev->sdma.fence_mem.cpu == NULL || slot >= BC250_SDMA_FENCE_SLOTS)
+		return 0;
+	return adev->sdma.fence_mem.mc + (u64)slot * 8u;
+}
+
+u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot)
+{
+	if (adev == NULL || adev->sdma.fence_mem.cpu == NULL || slot >= BC250_SDMA_FENCE_SLOTS)
+		return 0;
+	return *(volatile u64 *)((char *)adev->sdma.fence_mem.cpu + (size_t)slot * 8u);
+}
+
+/* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(). One WRITE_LINEAR of a single dword into a slot the
+ * driver can read, then poll it. The value the engine has to overwrite is put there first, so a
+ * slot that already held the answer cannot pass the test. */
+int bc250_sdma_ring_test(struct amdgpu_ring *ring)
+{
+	struct amdgpu_device *adev;
+	volatile u32 *slot_cpu;
+	unsigned int slot;
+	u64 gpu_addr;
+	unsigned int i;
+	int r;
+
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_SDMA)
+		return BC250_EINVAL;
+
+	adev = ring->adev;
+	if (adev->sdma.fence_mem.cpu == NULL)
+		return BC250_EINVAL;            /* bc250_sdma_fence_page_alloc() was not called */
+
+	slot = ring->me & 0x1u;                 /* one scratch slot per engine */
+	gpu_addr = bc250_sdma_fence_addr(adev, slot);
+	if (gpu_addr == 0)
+		return BC250_EINVAL;
+	slot_cpu = (volatile u32 *)((char *)adev->sdma.fence_mem.cpu + (size_t)slot * 8u);
+	*slot_cpu = BC250_SDMA_TEST_BEFORE;
+
+	r = amdgpu_ring_alloc(ring, 20);
+	if (r)
+		return r;
+
+	amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_WRITE) |
+				SDMA_PKT_HEADER_SUB_OP(SDMA_SUBOP_WRITE_LINEAR));
+	amdgpu_ring_write(ring, lower_32_bits(gpu_addr));
+	amdgpu_ring_write(ring, upper_32_bits(gpu_addr));
+	amdgpu_ring_write(ring, SDMA_PKT_WRITE_UNTILED_DW_3_COUNT(0));
+	amdgpu_ring_write(ring, BC250_SDMA_TEST_AFTER);
+	amdgpu_ring_commit(ring);
+
+	for (i = 0; i < adev->usec_timeout; i++) {
+		if (*slot_cpu == BC250_SDMA_TEST_AFTER)
+			break;
+		bc250_shim_udelay(1);
+	}
+
+	return (i < adev->usec_timeout) ? 0 : BC250_ETIME;
 }

@@ -68,6 +68,7 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 };
 #define BC250_GFX_STAGE_COUNT (RTL_NUMBER_OF(g_Stages) - 1)
 #define BC250_GFX_STAGE_CP 6
+#define BC250_GFX_STAGE_SDMA 7
 #define BC250_GFX_STAGE_INTERRUPTS 8
 #define BC250_FENCE_BUDGET_US 1000000     // all fences of one call
 #define BC250_FENCE_TIMEOUT_US 100000ul
@@ -77,6 +78,7 @@ typedef struct _BC250_GFX {
     BOOLEAN SetUp;                  // bc250_gfx_setup and bc250_sdma_setup have allocated
     BOOLEAN Failed;                 // a stage failed on the hardware: only FINI from here
     BOOLEAN FencePage;              // bc250_gfx_fence_page_alloc has allocated
+    BOOLEAN SdmaFencePage;          // bc250_sdma_fence_page_alloc has
     ULONG FenceSeq;                 // last fence value emitted
     ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
 } BC250_GFX;
@@ -118,6 +120,7 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 {
     if (!Gfx->SetUp) return;
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
+    if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
     bc250_sdma_teardown(Adev);
     bc250_gfx_teardown(Adev);
     Gfx->SetUp = FALSE;
@@ -285,6 +288,7 @@ static struct amdgpu_ring* FenceRing(_In_ struct amdgpu_device* Adev, ULONG Ring
     if (Ring == BC250_FENCE_RING_GFX) return &Adev->gfx.gfx_ring[0];
     if (Ring >= BC250_FENCE_RING_COMPUTE0 && Ring < BC250_FENCE_RING_COMPUTE0 + 8) return &Adev->gfx.compute_ring[Ring - BC250_FENCE_RING_COMPUTE0];
     if (Ring == BC250_FENCE_RING_KIQ) return &Adev->gfx.kiq[0].ring;
+    if (Ring >= BC250_FENCE_RING_SDMA0 && Ring < BC250_FENCE_RING_SDMA0 + 2) return &Adev->sdma.instance[Ring - BC250_FENCE_RING_SDMA0].ring;
     return NULL;
 }
 
@@ -299,7 +303,9 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     BOOLEAN gartEnabled = FALSE;
     NTSTATUS status = STATUS_SUCCESS;
     LARGE_INTEGER frequency, start;
-    ULONG i, waited, vram, gtt, flags = Data->Interrupt ? AMDGPU_FENCE_FLAG_INT : 0;
+    ULONG i, waited, vram, gtt, flags = Data->Interrupt == BC250_FENCE_MODE_INTERRUPT ? AMDGPU_FENCE_FLAG_INT : 0;
+    BOOLEAN sdma = Data->Ring >= BC250_FENCE_RING_SDMA0;
+    ULONG slot = sdma ? 2 + (Data->Ring - BC250_FENCE_RING_SDMA0) : Data->Ring;     // SDMA slots 0 and 1 are the ring tests'
     long result = 0;
 
     Data->Version = BC250_KMD_VERSION;
@@ -317,7 +323,8 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     gfx = (BC250_GFX*)Device->Gfx;
     if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
     else if (Data->Count == 0 || Data->Count > BC250_FENCE_MAX_COUNT) status = STATUS_INVALID_PARAMETER;
-    else if (gfx->Failed || !gfx->SetUp || gfx->StagesDone < BC250_GFX_STAGE_CP) status = STATUS_INVALID_DEVICE_STATE;
+    else if (Data->Interrupt > BC250_FENCE_MODE_RING_TEST || (Data->Interrupt == BC250_FENCE_MODE_RING_TEST && !sdma)) status = STATUS_INVALID_PARAMETER;
+    else if (gfx->Failed || !gfx->SetUp || gfx->StagesDone < (ULONG)(sdma ? BC250_GFX_STAGE_SDMA : BC250_GFX_STAGE_CP)) status = STATUS_INVALID_DEVICE_STATE;
     if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
     if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
     if (NT_SUCCESS(status) && (ring = FenceRing(adev, Data->Ring)) == NULL) status = STATUS_INVALID_PARAMETER;
@@ -327,26 +334,39 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
         adev->backend = &gfx->Sequence;
         SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
         GpuMemBeginSequence(Device, NULL, 0);
-        if (!gfx->FencePage)
+        if (sdma && !gfx->SdmaFencePage)
+        {
+            result = bc250_sdma_fence_page_alloc(adev);
+            if (result == 0) gfx->SdmaFencePage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+        if (!sdma && !gfx->FencePage)
         {
             result = bc250_gfx_fence_page_alloc(adev);
             if (result == 0) gfx->FencePage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
         }
         start = KeQueryPerformanceCounter(NULL);
-        for (i = 0; NT_SUCCESS(status) && i < Data->Count; i++)
+        if (NT_SUCCESS(status) && Data->Interrupt == BC250_FENCE_MODE_RING_TEST)
+        {
+            // sdma_v5_0_ring_test_ring(): one WRITE_LINEAR of 0xDEADBEEF into the engine's scratch slot, polled by the shim.
+            result = bc250_sdma_ring_test(ring);
+            Data->LastSeq = 0xDEADBEEF;
+            Data->LastValue = (unsigned long)bc250_sdma_fence_read(adev, Data->Ring - BC250_FENCE_RING_SDMA0);
+            if (result == 0) Data->Completed = 1;
+        }
+        for (i = 0; NT_SUCCESS(status) && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
         {
             LARGE_INTEGER one = KeQueryPerformanceCounter(NULL);
             ULONG seq = ++gfx->FenceSeq, took;
-            u64 address = bc250_gfx_fence_addr(adev, Data->Ring);
+            u64 address = sdma ? bc250_sdma_fence_addr(adev, slot) : bc250_gfx_fence_addr(adev, slot);
 
             // The whole call holds GartLock and stalls: a run of slow fences ends here, not after Count timeouts.
             if (address == 0 || Microseconds(start, frequency) > BC250_FENCE_BUDGET_US) { result = -62; break; }
-            result = bc250_gfx_signal_fence(ring, address, seq, flags);
+            result = sdma ? bc250_sdma_signal_fence(ring, address, seq, flags) : bc250_gfx_signal_fence(ring, address, seq, flags);
             if (result != 0 || !NT_SUCCESS(gfx->Sequence.Fault)) break;
             Data->LastSeq = seq;
             for (waited = 0; waited < BC250_FENCE_TIMEOUT_US; waited += 10)
             {
-                Data->LastValue = (unsigned long)bc250_gfx_fence_read(adev, Data->Ring);
+                Data->LastValue = (unsigned long)(sdma ? bc250_sdma_fence_read(adev, slot) : bc250_gfx_fence_read(adev, slot));
                 if (Data->LastValue == seq) break;
                 KeStallExecutionProcessor(10);
             }

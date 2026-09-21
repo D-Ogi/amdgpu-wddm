@@ -102,6 +102,19 @@ int backend_add_selfclear(u32 byte_offset, u32 mask);
 /* Forget every alias, every reaction and every self-clearing bit. */
 void backend_clear_aliases(void);
 
+/*
+ * Be told about every register write, after the three declarations above have been applied.
+ *
+ * For a model that cannot be expressed as a register changing, which is what the MEC's own fetch
+ * state is: an engine remembering a queue's base and read pointer across a halt. backend_mem.c
+ * installs the hook from backend_add_mec_fetch_state() and takes it off again on reset, so this file
+ * neither knows nor needs that file - replay.c links it without backend_mem.c at all.
+ *
+ * NULL is the default and means nobody is listening.
+ */
+typedef void (*backend_write_hook)(u32 byte_offset, u32 value);
+void backend_set_write_hook(backend_write_hook hook);
+
 /* Load the read values of a trace extract taken with `--reads`, so that the first read of a register
  * in the replayed window returns what unit A's hardware returned at that moment rather than what the
  * pre-driver sweep saw. Later reads come from the run's own writes, as they do on hardware.

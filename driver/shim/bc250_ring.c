@@ -79,6 +79,7 @@ void amdgpu_ring_clear_ring(struct amdgpu_ring *ring)
 void amdgpu_ring_commit(struct amdgpu_ring *ring)
 {
 	uint32_t count;
+	u64 wptr;
 
 	if (ring->count_dw < 0)
 		dev_err(ring->adev->dev, "writing more dwords to the ring than expected\n");
@@ -97,9 +98,23 @@ void amdgpu_ring_commit(struct amdgpu_ring *ring)
 		return;
 	}
 
+	/* The write pointer an SDMA engine is given counts BYTES, not dwords.
+	 * sdma_v5_0_ring_set_wptr() (sdma_v5_0.c:371-389) publishes ring->wptr << 2 into both the
+	 * write-back slot and the doorbell, and sdma_v5_0_ring_get_wptr() (:345-361) reads it back
+	 * with >> 2; gfx_v10_0_ring_set_wptr_compute() (gfx_v10_0.c:8598) publishes ring->wptr as it
+	 * stands. Upstream keeps the two apart in per-ring set_wptr callbacks. The shim's
+	 * amdgpu_ring_funcs carries no callbacks (see amdgpu.h), so the ring type decides here, the
+	 * same way bc250_gfx_emit_fence() branches on it.
+	 *
+	 * Nothing had committed on an SDMA ring before M6, so this was latent rather than wrong: the
+	 * bring-up programs SDMA0_GFX_RB_WPTR directly and never goes through here. The first caller
+	 * is bc250_sdma_ring_test(), and with the unshifted value the engine would have been told a
+	 * write pointer four times too small and would have executed nothing. */
+	wptr = (ring->funcs->type == AMDGPU_RING_TYPE_SDMA) ? (ring->wptr << 2) : ring->wptr;
+
 	if (ring->wptr_cpu_addr != NULL)
-		*(volatile u64 *)ring->wptr_cpu_addr = ring->wptr;
-	bc250_shim_wdoorbell64(ring->adev, ring->doorbell_index, ring->wptr);
+		*(volatile u64 *)ring->wptr_cpu_addr = wptr;
+	bc250_shim_wdoorbell64(ring->adev, ring->doorbell_index, wptr);
 }
 
 /* amdgpu_ring.c:204 amdgpu_ring_undo() */

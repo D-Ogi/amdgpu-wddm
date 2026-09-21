@@ -59,6 +59,7 @@
 #include "bc250_gmc.h"
 #include "bc250_ih.h"
 #include "bc250_nbio.h"
+#include "bc250_sdma.h"
 
 #include <oss/osssys_5_0_0_offset.h>
 #include <oss/osssys_5_0_0_sh_mask.h>
@@ -943,6 +944,230 @@ static unsigned int test_fence(struct amdgpu_device *adev, int quiet)
 }
 
 /* ---------------------------------------------------------------------------------------------
+ * The SDMA engines: a ring test, a fence, and the trap it raises
+ *
+ * M36 said "SDMA: rings programmed and engines released, not tested". This is the test. It is the
+ * same shape as the CP one above - emit, let the stub execute, read the value back, decode the
+ * vector - with one addition: the dwords bc250_sdma.c emits are compared against the dwords unit
+ * A's own Linux driver left in the same two rings, so this is not only self-consistent.
+ *
+ *   evidence/linux/2026-09-21-E13-reference-2/boot3-readonly/rings-after-ib/amdgpu_ring_sdma1.txt
+ *     dw 0x0000  00000002 004017c0 00000000 00000000 deadbeef
+ *     dw 0x0020  00030005 00401760 00000000 00000001
+ *     dw 0x0024  00000006 00000000
+ *
+ * Only the addresses differ here, because this driver cuts its slots out of its own page. Every
+ * other dword is asserted literally.
+ * ------------------------------------------------------------------------------------------- */
+
+#define SDMA_TEST_HDR       0x00000002u  /* SDMA_OP_WRITE, SDMA_SUBOP_WRITE_LINEAR */
+#define SDMA_TEST_COUNT     0x00000000u  /* SDMA_PKT_WRITE_UNTILED_DW_3_COUNT(0), one data dword */
+#define SDMA_TEST_VALUE     0xDEADBEEFu
+#define SDMA_FENCE_HDR      0x00030005u  /* SDMA_OP_FENCE with MTYPE(3), Ucached */
+#define SDMA_TRAP_HDR       0x00000006u  /* SDMA_OP_TRAP */
+#define SDMA_TRAP_CONTEXT   0x00000000u
+#define SDMA_FENCE_SLOT(i)  (2u + (unsigned int)(i))
+#define SDMA_FENCE_SEQ      0x00000000C0FFEE01ULL
+
+/* The dwords a ring holds between `from` and the write pointer, so the test can read back what the
+ * emitter put there rather than what it meant to put there. */
+static u32 sdma_ring_dw(const struct amdgpu_ring *ring, u64 at)
+{
+	return ring->ring[(size_t)(at & ring->buf_mask)];
+}
+
+static unsigned int sdma_expect(const char *what, u32 got, u32 want)
+{
+	if (got == want)
+		return 0;
+	printf("  %s: %08X, unit A emits %08X\n", what, got, want);
+	return 1;
+}
+
+static unsigned int sdma_one(struct amdgpu_device *adev, unsigned int inst, u32 *rptr, int quiet)
+{
+	struct amdgpu_ring *ring = &adev->sdma.instance[inst].ring;
+	struct bc250_iv_entry e;
+	const struct backend_doorbell *db;
+	unsigned int bad = 0, before, delivered, n;
+	u64 at, addr;
+	u32 instance = 0xffffffffu;
+	int r;
+
+	/* --- the ring test ------------------------------------------------------------------ */
+	at = ring->wptr;
+	before = backend_doorbell_count();
+	r = bc250_sdma_ring_test(ring);
+	if (r != 0) {
+		printf("  sdma%u: bc250_sdma_ring_test returned %d\n", inst, r);
+		return 1;
+	}
+
+	bad += sdma_expect("sdma ring-test header", sdma_ring_dw(ring, at), SDMA_TEST_HDR);
+	bad += sdma_expect("sdma ring-test address high", sdma_ring_dw(ring, at + 2u), 0u);
+	bad += sdma_expect("sdma ring-test count", sdma_ring_dw(ring, at + 3u), SDMA_TEST_COUNT);
+	bad += sdma_expect("sdma ring-test value", sdma_ring_dw(ring, at + 4u), SDMA_TEST_VALUE);
+	if (sdma_ring_dw(ring, at + 1u) != lower_32_bits(bc250_sdma_fence_addr(adev, inst))) {
+		printf("  sdma%u: the ring test names an address that is not its scratch slot\n", inst);
+		bad++;
+	}
+
+	/* The write pointer an SDMA engine is handed counts bytes. This is the assertion that says
+	 * so: the doorbell this commit rang must be the ring's dword write pointer times four. */
+	n = backend_doorbell_count();
+	db = backend_doorbells();
+	if (n == before) {
+		printf("  sdma%u: the ring test rang no doorbell\n", inst);
+		bad++;
+	} else if (db[n - 1].value != (ring->wptr << 2)) {
+		printf("  sdma%u: the doorbell carries 0x%llX; an SDMA engine is given wptr << 2,"
+		       " which is 0x%llX\n", inst,
+		       (unsigned long long)db[n - 1].value, (unsigned long long)(ring->wptr << 2));
+		bad++;
+	} else if (db[n - 1].width != 64) {
+		printf("  sdma%u: the doorbell is %u bits; sdma_v5_0_ring_set_wptr() uses 64\n",
+		       inst, db[n - 1].width);
+		bad++;
+	}
+
+	/* --- the fence and its trap --------------------------------------------------------- */
+	at = ring->wptr;
+	addr = bc250_sdma_fence_addr(adev, SDMA_FENCE_SLOT(inst));
+	before = backend_ih_delivered();
+	r = bc250_sdma_signal_fence(ring, addr, SDMA_FENCE_SEQ, AMDGPU_FENCE_FLAG_INT);
+	if (r != 0) {
+		printf("  sdma%u: bc250_sdma_signal_fence returned %d\n", inst, r);
+		return bad + 1;
+	}
+
+	bad += sdma_expect("sdma fence header", sdma_ring_dw(ring, at), SDMA_FENCE_HDR);
+	bad += sdma_expect("sdma fence sequence", sdma_ring_dw(ring, at + 3u),
+			   lower_32_bits(SDMA_FENCE_SEQ));
+	bad += sdma_expect("sdma trap header", sdma_ring_dw(ring, at + 4u), SDMA_TRAP_HDR);
+	bad += sdma_expect("sdma trap context", sdma_ring_dw(ring, at + 5u), SDMA_TRAP_CONTEXT);
+	if (((u64)sdma_ring_dw(ring, at + 1u) | ((u64)sdma_ring_dw(ring, at + 2u) << 32)) != addr) {
+		printf("  sdma%u: the fence names an address that is not its slot\n", inst);
+		bad++;
+	}
+	if (bc250_sdma_fence_size(ring, AMDGPU_FENCE_FLAG_INT) != 6u) {
+		printf("  sdma%u: bc250_sdma_fence_size says %u dwords, the packets are 6\n",
+		       inst, bc250_sdma_fence_size(ring, AMDGPU_FENCE_FLAG_INT));
+		bad++;
+	}
+
+	if ((u32)bc250_sdma_fence_read(adev, SDMA_FENCE_SLOT(inst)) != (u32)SDMA_FENCE_SEQ) {
+		printf("  sdma%u: the fence slot holds %08X, not %08X\n", inst,
+		       (u32)bc250_sdma_fence_read(adev, SDMA_FENCE_SLOT(inst)),
+		       (u32)SDMA_FENCE_SEQ);
+		bad++;
+	}
+
+	delivered = backend_ih_delivered() - before;
+	if (delivered != 1u) {
+		printf("  sdma%u: %u vectors delivered, expected 1\n", inst, delivered);
+		return bad + 1;
+	}
+	if (bc250_ih_decode(adev, rptr, &e) != 0) {
+		printf("  sdma%u: the delivered vector would not decode\n", inst);
+		return bad + 1;
+	}
+	if (!bc250_ih_is_sdma_trap(&e, &instance) || instance != inst) {
+		printf("  sdma%u: the vector decoded as client %02X src %u instance %u, which is not"
+		       " this engine's trap\n", inst, e.client_id, e.src_id, instance);
+		bad++;
+	}
+
+	if (!quiet && bad == 0)
+		printf("  sdma%u: ring test, fence and trap all as unit A emits them  : yes\n", inst);
+	return bad;
+}
+
+static unsigned int test_sdma(struct amdgpu_device *adev, int quiet)
+{
+	unsigned int bad = 0, i;
+	u32 rptr = 0;
+	int r;
+
+	printf("\n== the SDMA engines: a ring test, a fence, and its trap ==\n");
+
+	r = bc250_sdma_setup(adev);
+	if (r != 0) {
+		printf("  bc250_sdma_setup returned %d; no rings to test\n", r);
+		return 1;
+	}
+	for (i = 0; i < (unsigned int)adev->sdma.num_instances; i++)
+		backend_ring_register(&adev->sdma.instance[i].ring);
+
+	r = bc250_sdma_fence_page_alloc(adev);
+	if (r != 0) {
+		printf("  bc250_sdma_fence_page_alloc returned %d\n", r);
+		bc250_sdma_teardown(adev);
+		return 1;
+	}
+
+	/* Nothing from here on may touch a register: this is memory and two doorbells per engine. */
+	backend_reset_writes();
+	backend_ih_attach(adev);
+
+	for (i = 0; i < (unsigned int)adev->sdma.num_instances; i++)
+		bad += sdma_one(adev, i, &rptr, quiet);
+
+	if (backend_write_count() != 0) {
+		printf("  the SDMA ring test and fence produced %u register writes; they should"
+		       " produce none\n", backend_write_count());
+		bad++;
+	}
+
+	/* The control that says the trap is the TRAP packet's doing and not the fence's. */
+	{
+		struct amdgpu_ring *ring = &adev->sdma.instance[0].ring;
+		u64 addr = bc250_sdma_fence_addr(adev, SDMA_FENCE_SLOT(0));
+		unsigned int before = backend_ih_delivered();
+
+		*(volatile u32 *)((char *)adev->sdma.fence_mem.cpu +
+				  SDMA_FENCE_SLOT(0) * 8u) = 0;
+		r = bc250_sdma_signal_fence(ring, addr, SDMA_FENCE_SEQ, 0);
+		if (r != 0 ||
+		    (u32)bc250_sdma_fence_read(adev, SDMA_FENCE_SLOT(0)) != (u32)SDMA_FENCE_SEQ) {
+			printf("  the no-interrupt SDMA fence did not write its value (%d)\n", r);
+			bad++;
+		}
+		if (bc250_sdma_fence_size(ring, 0) != 4u) {
+			printf("  a fence without _INT should be four dwords, not %u\n",
+			       bc250_sdma_fence_size(ring, 0));
+			bad++;
+		}
+		if (backend_ih_delivered() != before) {
+			printf("  an SDMA fence without AMDGPU_FENCE_FLAG_INT still raised an"
+			       " interrupt\n");
+			bad++;
+		} else if (!quiet) {
+			printf("  the same fence without _INT raises nothing            : yes\n");
+		}
+	}
+
+	/* The refusal upstream spells BUG_ON(addr & 0x3). Nothing may be written to the ring. */
+	{
+		struct amdgpu_ring *ring = &adev->sdma.instance[0].ring;
+		u64 wptr_before = ring->wptr;
+
+		if (bc250_sdma_emit_fence(ring, bc250_sdma_fence_addr(adev, SDMA_FENCE_SLOT(0)) + 1u,
+					  SDMA_FENCE_SEQ, AMDGPU_FENCE_FLAG_INT) != BC250_EINVAL ||
+		    ring->wptr != wptr_before) {
+			printf("  a fence on an unaligned address was not refused\n");
+			bad++;
+		} else if (!quiet) {
+			printf("  a fence on an unaligned address is refused            : yes\n");
+		}
+	}
+
+	backend_ih_detach();
+	bc250_sdma_fence_page_free(adev);
+	bc250_sdma_teardown(adev);
+	return bad;
+}
+
+/* ---------------------------------------------------------------------------------------------
  * main
  * ------------------------------------------------------------------------------------------- */
 
@@ -951,7 +1176,7 @@ int main(int argc, char **argv)
 	static struct amdgpu_device adev;
 	struct run_opts opt;
 	struct result res, ctl;
-	unsigned int failures = 0, decode_bad, ptr_bad, fence_bad;
+	unsigned int failures = 0, decode_bad, ptr_bad, fence_bad, sdma_bad;
 	int verbose = 0, seeded, i;
 	const char *sweep1 = NULL, *sweep2 = NULL, *trace = NULL;
 
@@ -1025,6 +1250,10 @@ int main(int argc, char **argv)
 
 	ptr_bad = test_wptr_rptr(&adev, 0);
 	if (ptr_bad)
+		failures++;
+
+	sdma_bad = test_sdma(&adev, 0);
+	if (sdma_bad)
 		failures++;
 
 	fence_bad = test_fence(&adev, 0);

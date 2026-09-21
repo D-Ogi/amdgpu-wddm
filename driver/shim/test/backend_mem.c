@@ -46,6 +46,9 @@
 #include "nvd.h"
 #include "soc15_ih_clientid.h"
 #include "irqsrcs_gfx_10_1.h"
+#include "irqsrcs_sdma0_5_0.h"
+#include "irqsrcs_sdma1_5_0.h"
+#include "navi10_sdma_pkt_open.h"       /* the SDMA opcodes the second stub below decodes */
 #include <navi10_enum.h>                /* CACHE_FLUSH_AND_INV_TS_EVENT */
 #include "gc/gc_10_1_0_offset.h"        /* mmCPC_INT_STATUS */
 #include "soc15_common.h"               /* SOC15_REG_OFFSET() */
@@ -104,6 +107,7 @@ static u64 g_gtt_base, g_gtt_next;
 struct ring_slot {
 	struct amdgpu_ring *ring;
 	u64 decoded_to;                 /* how far into the ring the stub has looked, in dwords */
+	int dead;                       /* the MEC model faulted on this ring: it executes nothing */
 };
 
 static struct ring_slot g_ring[MAX_RINGS];
@@ -137,10 +141,13 @@ void backend_mem_set_bases(u64 vram_base, u64 gtt_base)
 	g_gtt_base = g_gtt_next = gtt_base;
 }
 
+static void mec_model_off(void);        /* the MEC model, further down; reset turns it off */
+
 void backend_mem_reset(void)
 {
 	unsigned int i;
 
+	mec_model_off();
 	for (i = 0; i < g_alloc_count; i++)
 		free(g_alloc[i].cpu);
 	g_alloc_count = 0;
@@ -161,12 +168,26 @@ void backend_mem_reset(void)
 
 void backend_ring_register(struct amdgpu_ring *ring)
 {
+	unsigned int i;
+
+	/* Idempotent by ring, because a teardown and a fresh setup hand back the same ring objects
+	 * with new buffers behind them: a second entry would leave the stub reading the first one's
+	 * decoded_to and looking at a ring that no longer exists. */
+	for (i = 0; i < g_ring_count; i++) {
+		if (g_ring[i].ring == ring) {
+			g_ring[i].decoded_to = 0;
+			g_ring[i].dead = 0;
+			return;
+		}
+	}
+
 	if (g_ring_count >= MAX_RINGS) {
 		fprintf(stderr, "backend_mem: more than %u rings, raise MAX_RINGS\n", MAX_RINGS);
 		exit(2);
 	}
 	g_ring[g_ring_count].ring = ring;
 	g_ring[g_ring_count].decoded_to = 0;
+	g_ring[g_ring_count].dead = 0;
 	g_ring_count++;
 }
 
@@ -369,7 +390,14 @@ static void deliver_iv(u32 client_id, u32 src_id, u32 ring_id, const u32 src_dat
  * Against unit A, evidence/linux/2026-09-21-E13-reference-2/boot3-readonly/amdgpu-events-ib.txt
  * lines 14-25: the gfx ring gives ring 0, the eight compute rings give 4, 5, 6, 7 and 20, 21, 22,
  * 23, and the KIQ - named kiq_0.2.1.0 in the ring dumps, so me 2, pipe 1, queue 0 - gives 9. This
- * expression reproduces all ten. */
+ * expression reproduces all ten.
+ *
+ * It holds for a FENCE, which is the only vector this stub raises. It does not hold for the vectors
+ * the CP raises when it completes an UNMAP_QUEUES: unit A sends those with the queue last active on
+ * each pipe (facts M45, ring ids 20, 21, 22, 7 twice over for eight distinct queues) and with
+ * src_data[0] = 1 where a fence carries 0x80000000. Nothing here models those, deliberately - a
+ * stub that invented them from this expression would assert something hardware has already
+ * contradicted. */
 static u32 eop_ring_id(const struct amdgpu_ring *ring)
 {
 	return ((ring->me & 0x3u) << 2) | (ring->pipe & 0x3u) | ((ring->queue & 0x7u) << 4);
@@ -563,6 +591,310 @@ static int stub_execute(const struct backend_packet *p, const struct amdgpu_ring
 	return 1;
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * The second stub: the SDMA engine
+ *
+ * An SDMA packet carries no length in its header, so unlike the CP decoder above this one has to
+ * know how long each opcode is. It knows the four bc250_sdma.c emits and refuses anything else,
+ * which is the point: a packet the stub cannot name is a packet the test must not pass silently.
+ *
+ * The sizes are the packet layouts in navi10_sdma_pkt_open.h, and every one of them is confirmed by
+ * what unit A's Linux driver left in its rings:
+ * evidence/linux/2026-09-21-E13-reference-2/boot3-readonly/rings-after-ib/amdgpu_ring_sdma1.txt
+ * dw 0x0000 is a five-dword WRITE_LINEAR of one dword, dw 0x0005 an eleven-dword NOP, dw 0x0020 a
+ * four-dword FENCE and dw 0x0024 a two-dword TRAP.
+ * ------------------------------------------------------------------------------------------- */
+
+static u32 sdma_dw(const struct amdgpu_ring *ring, u64 at, unsigned int k)
+{
+	return ring->ring[(size_t)((at + k) & ring->buf_mask)];
+}
+
+/* sdma_v5_0.c:1387-1399 registers one source id under two client ids, one per engine, and
+ * sdma_v5_0_process_trap_irq() picks the instance from entry->client_id. ring->me is the engine.
+ * Unit A: E13 amdgpu-events-ib.txt:24 and :25, client_id 8 and 9, both src_id 224, both ring 0. */
+static void deliver_sdma_trap(const struct amdgpu_ring *ring)
+{
+	if (ring->me == 0)
+		deliver_iv(SOC15_IH_CLIENTID_SDMA0, SDMA0_5_0__SRCID__SDMA_TRAP, 0, NULL);
+	else
+		deliver_iv(SOC15_IH_CLIENTID_SDMA1, SDMA1_5_0__SRCID__SDMA_TRAP, 0, NULL);
+}
+
+/* Decodes the packet at `at`, executes it, and reports its length in dwords. Returns 0 and leaves
+ * *size alone if the opcode is not one of the four. */
+static int stub_sdma_execute(const struct amdgpu_ring *ring, u64 at, unsigned int *size)
+{
+	u32 header = sdma_dw(ring, at, 0);
+	u32 op = header & SDMA_PKT_HEADER_op_mask;
+	u32 sub_op = (header >> SDMA_PKT_HEADER_sub_op_shift) & SDMA_PKT_HEADER_sub_op_mask;
+	u64 addr;
+	void *dst;
+	u32 count, k;
+
+	if (op == SDMA_OP_NOP) {
+		/* One header plus COUNT more dwords, the burst form amdgpu uses when the firmware
+		 * supports it; COUNT 0 is the plain one-dword filler. */
+		*size = 1u + ((header >> SDMA_PKT_NOP_HEADER_count_shift) &
+			      SDMA_PKT_NOP_HEADER_count_mask);
+		return 1;
+	}
+
+	if (op == SDMA_OP_WRITE && sub_op == SDMA_SUBOP_WRITE_LINEAR) {
+		addr = (u64)sdma_dw(ring, at, 1) | ((u64)sdma_dw(ring, at, 2) << 32);
+		count = sdma_dw(ring, at, 3) & SDMA_PKT_WRITE_UNTILED_DW_3_count_mask;
+		*size = 5u + count;     /* header, address, count, then count + 1 data dwords */
+
+		dst = mc_to_cpu(addr, (count + 1u) * 4u);
+		if (dst == NULL) {
+			fprintf(stderr, "backend_mem: SDMA WRITE_LINEAR writes 0x%llX, which is in no"
+					" allocation\n", (unsigned long long)addr);
+			g_stub_rejects++;
+			return 0;
+		}
+		for (k = 0; k <= count; k++)
+			((volatile u32 *)dst)[k] = sdma_dw(ring, at, 4u + k);
+		return 1;
+	}
+
+	if (op == SDMA_OP_FENCE) {
+		/* MTYPE 3, Ucached, is the only value sdma_v5_0_ring_emit_fence() writes, and the one
+		 * in every fence of both of unit A's rings. */
+		u32 mtype = (header >> SDMA_PKT_FENCE_HEADER_mtype_shift) &
+			    SDMA_PKT_FENCE_HEADER_mtype_mask;
+
+		*size = 4u;
+		if (mtype != 3u) {
+			fprintf(stderr, "backend_mem: SDMA FENCE MTYPE %u; amdgpu emits 3 (Ucached)\n",
+				mtype);
+			g_stub_rejects++;
+			return 0;
+		}
+		addr = (u64)sdma_dw(ring, at, 1) | ((u64)sdma_dw(ring, at, 2) << 32);
+		dst = mc_to_cpu(addr, 4u);
+		if (dst == NULL) {
+			fprintf(stderr, "backend_mem: SDMA FENCE writes 0x%llX, which is in no"
+					" allocation\n", (unsigned long long)addr);
+			g_stub_rejects++;
+			return 0;
+		}
+		*(volatile u32 *)dst = sdma_dw(ring, at, 3);
+		return 1;
+	}
+
+	if (op == SDMA_OP_TRAP) {
+		*size = 2u;
+		deliver_sdma_trap(ring);
+		return 1;
+	}
+
+	fprintf(stderr, "backend_mem: SDMA opcode %u sub-op %u at dword %llu; the stub knows NOP,"
+			" WRITE_LINEAR, FENCE and TRAP\n",
+		op, sub_op, (unsigned long long)at);
+	g_stub_rejects++;
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The MEC's own fetch state. What this models and what was measured is in backend_mem.h.
+ * ------------------------------------------------------------------------------------------- */
+
+#define MAX_HQD_SLOTS 16u
+
+struct hqd_slot {
+	u32 selection;                  /* the GRBM_GFX_CNTL value that names this slot */
+	int used;
+	/* What the registers of this slot currently say. */
+	u32 reg_base_lo, reg_base_hi, reg_rptr;
+	/* What the ENGINE remembers, which is a different thing and the whole point. */
+	int engine_live;
+	u64 engine_base;                /* bytes */
+	u64 engine_rptr;                /* dwords */
+};
+
+static struct backend_mec_regs g_mec;
+static int g_mec_on;
+static u32 g_mec_selection;
+static int g_mec_halted = 1;            /* CP_MEC_CNTL comes out of reset with the halt bits set */
+static struct hqd_slot g_hqd[MAX_HQD_SLOTS];
+static unsigned int g_hqd_count;
+static unsigned int g_mec_fault_count;
+static u64 g_mec_fault_address;
+
+int backend_add_mec_fetch_state(const struct backend_mec_regs *regs)
+{
+	if (g_mec_on || regs == NULL)
+		return -1;
+	g_mec = *regs;
+	g_mec_on = 1;
+	backend_set_write_hook(backend_mec_observe);
+	g_mec_selection = 0;
+	g_mec_halted = 1;
+	g_hqd_count = 0;
+	memset(g_hqd, 0, sizeof(g_hqd));
+	g_mec_fault_count = 0;
+	g_mec_fault_address = 0;
+	return 0;
+}
+
+unsigned int backend_mec_faults(void)   { return g_mec_fault_count; }
+u64 backend_mec_fault_address(void)     { return g_mec_fault_address; }
+
+static void mec_model_off(void)
+{
+	backend_set_write_hook(NULL);
+	g_mec_on = 0;
+	g_mec_selection = 0;
+	g_mec_halted = 1;
+	g_hqd_count = 0;
+	g_mec_fault_count = 0;
+	g_mec_fault_address = 0;
+}
+
+static struct hqd_slot *hqd_current(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < g_hqd_count; i++)
+		if (g_hqd[i].selection == g_mec_selection)
+			return &g_hqd[i];
+	if (g_hqd_count >= MAX_HQD_SLOTS) {
+		fprintf(stderr, "backend_mem: more than %u HQD slots selected, raise MAX_HQD_SLOTS\n",
+			MAX_HQD_SLOTS);
+		exit(2);
+	}
+	g_hqd[g_hqd_count].selection = g_mec_selection;
+	g_hqd[g_hqd_count].used = 1;
+	return &g_hqd[g_hqd_count++];
+}
+
+/* The engine starts fetching. Either it finds memory and picks up where its copy left off, or it
+ * does not and UTCL2 raises the fault unit A raised. */
+static void mec_resume_slot(struct hqd_slot *s)
+{
+	unsigned int i;
+	u64 at = s->engine_base + s->engine_rptr * 4u;
+
+	if (mc_to_cpu(at, 4u) == NULL) {
+		u32 src_data[4];
+
+		g_mec_fault_count++;
+		g_mec_fault_address = at;
+		s->engine_live = 0;
+
+		/* Any ring that was about to be used on this slot now executes nothing, which is how
+		 * the failure showed itself: the KIQ ring test timed out. */
+		{
+			u64 programmed = ((u64)s->reg_base_lo << 8) | ((u64)s->reg_base_hi << 40);
+
+			for (i = 0; i < g_ring_count; i++)
+				if (g_ring[i].ring->gpu_addr == programmed)
+					g_ring[i].dead = 1;
+		}
+
+		memset(src_data, 0, sizeof(src_data));
+		src_data[0] = (u32)(at >> 12);
+		deliver_iv(g_mec.fault_client_id, g_mec.fault_src_id, 0, src_data);
+		return;
+	}
+
+	/* The address is mapped, so the engine walks forward from where it stopped. This is the
+	 * arm E12 run 001 took, where the second ring happened to land on the first one's address
+	 * and the stale fetch found valid NOPs: no fault, just a long walk. */
+	for (i = 0; i < g_ring_count; i++)
+		if (g_ring[i].ring->gpu_addr == s->engine_base)
+			g_ring[i].decoded_to = s->engine_rptr;
+}
+
+/* The engine advances its own read pointer as it consumes the ring. Nothing in a replayed register
+ * file would do that, and without it the stale fetch of the next bring-up would start at the ring's
+ * first dword - which is exactly the case that does NOT fault. So the stub's own progress is the
+ * model's read pointer, which is what the read pointer means. */
+static void mec_note_consumed(const struct amdgpu_ring *ring, u64 to)
+{
+	unsigned int i;
+
+	if (!g_mec_on)
+		return;
+	for (i = 0; i < g_hqd_count; i++)
+		if (g_hqd[i].engine_live && g_hqd[i].engine_base == ring->gpu_addr)
+			g_hqd[i].engine_rptr = to;
+}
+
+void backend_mec_observe(u32 byte_offset, u32 value)
+{
+	struct hqd_slot *s;
+	unsigned int i;
+
+	if (!g_mec_on)
+		return;
+
+	if (byte_offset == g_mec.grbm_gfx_cntl) {
+		g_mec_selection = value;
+		return;
+	}
+
+	if (byte_offset == g_mec.mec_cntl) {
+		int halted = (value & g_mec.mec_halt_mask) != 0;
+
+		if (g_mec_halted && !halted) {
+			/* Un-halt. Every slot either has an engine copy to resume from, or takes
+			 * what its registers say - which is what a cold boot does. */
+			for (i = 0; i < g_hqd_count; i++) {
+				s = &g_hqd[i];
+				if (!s->used)
+					continue;
+				if (!s->engine_live) {
+					s->engine_base = ((u64)s->reg_base_lo << 8) |
+							 ((u64)s->reg_base_hi << 40);
+					s->engine_rptr = s->reg_rptr;
+					if (s->engine_base != 0)
+						s->engine_live = 1;
+					continue;
+				}
+				mec_resume_slot(s);
+			}
+		}
+		g_mec_halted = halted;
+		return;
+	}
+
+	if (byte_offset == g_mec.hqd_pq_base) {
+		hqd_current()->reg_base_lo = value;
+		return;
+	}
+	if (byte_offset == g_mec.hqd_pq_base_hi) {
+		hqd_current()->reg_base_hi = value;
+		return;
+	}
+	if (byte_offset == g_mec.hqd_pq_rptr) {
+		hqd_current()->reg_rptr = value;
+		return;
+	}
+
+	if (byte_offset == g_mec.hqd_dequeue_request) {
+		if (value == 0 || g_mec_halted)
+			return;                 /* a halted engine services nothing */
+		s = hqd_current();
+		s->engine_live = 0;             /* the engine lets the queue go */
+		backend_poke(g_mec.hqd_active, 0);
+		return;
+	}
+
+	if (byte_offset == g_mec.hqd_active) {
+		s = hqd_current();
+		if (g_mec_halted)
+			return;                 /* point 2: the write does not reach the engine */
+		if (value & 1u) {
+			s->engine_base = ((u64)s->reg_base_lo << 8) | ((u64)s->reg_base_hi << 40);
+			s->engine_rptr = s->reg_rptr;
+			s->engine_live = 1;
+		} else {
+			s->engine_live = 0;
+		}
+	}
+}
+
 void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsigned long long value)
 {
 	unsigned int i;
@@ -586,6 +918,34 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 	if (ring->ring == NULL)
 		return;
 
+	/* The MEC model faulted on this ring's slot: the engine is off in the weeds and this queue
+	 * executes nothing, so a ring test on it times out. That is how E12 run 002 presented. */
+	if (slot->dead)
+		return;
+
+	/* An SDMA doorbell carries the write pointer in BYTES - sdma_v5_0_ring_set_wptr() rings it
+	 * with ring->wptr << 2 - so it is brought back to dwords before anything below counts with
+	 * it, and the packets are decoded by the other stub. */
+	if (ring->funcs->type == AMDGPU_RING_TYPE_SDMA) {
+		u64 to = value >> 2;
+
+		if (to <= slot->decoded_to)
+			slot->decoded_to = 0;
+
+		for (at = slot->decoded_to; at < to; ) {
+			unsigned int size = 0;
+
+			if (!g_stub_on)
+				break;
+			if (!stub_sdma_execute(ring, at, &size) || size == 0)
+				break;
+			g_stub_hits++;
+			at += size;
+		}
+		slot->decoded_to = to;
+		return;
+	}
+
 	/* A doorbell that does not advance the write pointer means the ring was re-initialised: the
 	 * MQD builders set ring->wptr = 0, exactly as amdgpu_ring_init_mqd() does, and MAP_QUEUES then
 	 * gives the CP an MQD whose cp_hqd_pq_rptr is 0 too, so the CP starts reading from the
@@ -599,8 +959,7 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 	if (value <= slot->decoded_to)
 		slot->decoded_to = 0;
 
-	/* The doorbell value is the write pointer. For the CP rings it counts dwords, which is what
-	 * bc250_ring.c writes; an SDMA ring would count bytes, and no SDMA ring is rung here. */
+	/* The doorbell value is the write pointer, counting dwords on the CP rings. */
 	for (at = slot->decoded_to; at < value; ) {
 		u32 header = ring->ring[(size_t)(at & ring->buf_mask)];
 		unsigned int count, body, k;
@@ -640,4 +999,5 @@ void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index, unsi
 		at += 1u + body;
 	}
 	slot->decoded_to = value;
+	mec_note_consumed(ring, value);
 }

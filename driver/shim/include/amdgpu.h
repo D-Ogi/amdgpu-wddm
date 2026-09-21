@@ -687,6 +687,12 @@ struct amdgpu_gfx {
 	 * programs. bc250_gfx_fence_page_alloc() is a separate call for that reason. */
 	struct bc250_mem	fence_mem;
 
+	/* [shim] the compute dispatch's two buffers: the shader program and the memory it writes.
+	 * Allocated by bc250_gfx_dispatch_setup() and by nothing else, for the same reason as
+	 * fence_mem above - the traced bring-up must not see them. See bc250_dispatch.h. */
+	struct bc250_mem	dispatch_shader;
+	struct bc250_mem	dispatch_dst;
+
 	/* upstream adev->gfx.mec_bitmap[0].queue_bitmap, which is a bitmap over
 	 * AMDGPU_MAX_COMPUTE_QUEUES; eight queues fit in a u64 and gfx10_kiq_set_resources()
 	 * already folds it into a 64-bit queue_mask. */
@@ -713,6 +719,12 @@ struct amdgpu_sdma {
 	/* [shim] the writeback page the two rings' read- and write-pointer slots are cut from, the
 	 * same arrangement as adev->gfx.wb_mem. */
 	struct bc250_mem wb_mem;
+
+	/* [shim] the scratch and fence page, and NOT allocated by bc250_sdma_setup() - see
+	 * bc250_sdma_fence_page_alloc(). It stands to the SDMA rings as adev->gfx.fence_mem does to
+	 * the CP ones, and for the same reason: an allocation the bring-up does not make cannot
+	 * move an address the bring-up programs into a register. */
+	struct bc250_mem fence_mem;
 };
 
 /* [amdgpu] amdgpu.h: struct amdgpu_mem_scratch, the scratch page whose MC address becomes

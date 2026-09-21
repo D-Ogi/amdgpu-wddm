@@ -42,6 +42,7 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/<path> | sha256sum
 | `irqsrcs_gfx_10_1.h` | `drivers/gpu/drm/amd/include/ivsrcid/gfx/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `irqsrcs_sdma0_5_0.h` | `drivers/gpu/drm/amd/include/ivsrcid/sdma0/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `irqsrcs_sdma1_5_0.h` | `drivers/gpu/drm/amd/include/ivsrcid/sdma1/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `navi10_sdma_pkt_open.h` | `drivers/gpu/drm/amd/amdgpu/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 
 License: MIT, with the full permission notice at the top of every file, Copyright Advanced Micro
 Devices, Inc. Checked file by file on 2026-09-21.
@@ -74,3 +75,10 @@ Who uses what:
   two SDMA headers are both imported although `SDMA0_5_0__SRCID__SDMA_TRAP` and
   `SDMA1_5_0__SRCID__SDMA_TRAP` are the same value: the instance is told by the client id, and
   naming both is what makes that visible.
+- `navi10_sdma_pkt_open.h` - added for the SDMA fence and ring test: the SDMA 5.0 opcodes
+  (`SDMA_OP_FENCE`, `SDMA_OP_TRAP`, `SDMA_OP_WRITE`, `SDMA_OP_NOP`) and the header field macros
+  around them, so that `driver/shim/bc250_sdma.c` and the stub in
+  `driver/shim/test/backend_mem.c` build and decode those packets out of AMD's own definitions
+  rather than out of typed dwords. It is not a register header and it does not live under
+  `asic_reg/`, but it is imported the same way and for the same reason, so it is listed here rather
+  than in a second place. `sdma_v5_0.c` includes it exactly as we do.

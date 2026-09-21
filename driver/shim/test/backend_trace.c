@@ -75,6 +75,15 @@ struct reg_selfclear {
 static struct reg_selfclear g_selfclear[MAX_SELFCLEAR];
 static unsigned int g_selfclear_count;
 
+/* Told about every register write, for a model that needs more than this file's own three can
+ * express. backend_mem.c's MEC fetch state is the only user; see backend_set_write_hook(). */
+static backend_write_hook g_write_hook;
+
+void backend_set_write_hook(backend_write_hook hook)
+{
+	g_write_hook = hook;
+}
+
 int backend_add_alias(u32 alias_offset, u32 target_offset)
 {
 	if (g_alias_count >= MAX_ALIASES)
@@ -462,6 +471,15 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int dword_index, unsig
 		g_value[g_reaction[i].target / 4u] = g_reaction[i].value;
 		g_known[g_reaction[i].target / 4u] = 1;
 	}
+
+	/* The fourth declared model, and the only one that is not about a register: the MEC's own
+	 * copy of a queue's base and read pointer, which survives a halt. It observes rather than
+	 * reacts, and it lives in backend_mem.c, because a stale fetch ends in a ring that executes
+	 * nothing and an interrupt vector - both of which are that file's. See backend_mem.h for what
+	 * was measured. It is reached through a hook rather than by name so that this file stays
+	 * linkable on its own: replay.c uses it without backend_mem.c at all. */
+	if (g_write_hook != NULL)
+		g_write_hook(dword_index * 4u, value);
 
 	/* Bits the hardware drops on the way in. The RECORDED write above is what the driver asked
 	 * for, so the comparison with the trace's W line is untouched; only the state a later read

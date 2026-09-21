@@ -607,7 +607,8 @@ static int Ih(const WCHAR *opText)
 
 // ---- fence: fences on one ring (BC250_ESCAPE_RUN_FENCE) ----------------------------------------------------------------
 //
-// fence gfx|c0..c7|kiq [count] [noint]: emit <count> fences one after the other and poll each value in memory. With the
+// fence gfx|c0..c7|kiq|s0|s1 [count] [noint|test]: emit <count> fences one after the other and poll each value in memory
+// (test, SDMA only: the ring test, one WRITE_LINEAR of 0xDEADBEEF, instead). With the
 // IH ring up and stage 8 done each one also raises an end-of-pipe interrupt (`ih state` counts them); noint is the
 // control: the same packet without the interrupt bit.
 
@@ -626,10 +627,14 @@ static int Fence(int argc, WCHAR **argv)
     else if (!_wcsicmp(argv[2], L"kiq")) f.Ring = BC250_FENCE_RING_KIQ;
     else if ((argv[2][0] == L'c' || argv[2][0] == L'C') && argv[2][1] >= L'0' && argv[2][1] <= L'7' && argv[2][2] == 0)
         f.Ring = BC250_FENCE_RING_COMPUTE0 + (unsigned long)(argv[2][1] - L'0');
-    else { fprintf(stderr, "fence gfx|c0..c7|kiq [count] [noint], not %ls\n", argv[2]); return 2; }
+    else if ((argv[2][0] == L's' || argv[2][0] == L'S') && (argv[2][1] == L'0' || argv[2][1] == L'1') && argv[2][2] == 0)
+        f.Ring = BC250_FENCE_RING_SDMA0 + (unsigned long)(argv[2][1] - L'0');
+    else { fprintf(stderr, "fence gfx|c0..c7|kiq|s0|s1 [count] [noint|test], not %ls\n", argv[2]); return 2; }
     for (i = 3; i < argc; i++)
     {
-        if (!_wcsicmp(argv[i], L"noint")) f.Interrupt = 0; else f.Count = wcstoul(argv[i], NULL, 0);
+        if (!_wcsicmp(argv[i], L"noint")) f.Interrupt = BC250_FENCE_MODE_VALUE;
+        else if (!_wcsicmp(argv[i], L"test")) f.Interrupt = BC250_FENCE_MODE_RING_TEST;
+        else f.Count = wcstoul(argv[i], NULL, 0);
     }
 
     if (SendEscape(BC250_DEFAULT_HWID, &f, sizeof(f), &status)) return 1;
@@ -637,7 +642,8 @@ static int Fence(int argc, WCHAR **argv)
     if (f.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
     if (f.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no fence command\n"); return 3; }
 
-    printf("fence %ls x%lu%s: %s, NTSTATUS 0x%08lX %s, result %ld\n", argv[2], f.Count, f.Interrupt ? "" : " without the interrupt bit",
+    printf("fence %ls x%lu%s: %s, NTSTATUS 0x%08lX %s, result %ld\n", argv[2], f.Count,
+           f.Interrupt == BC250_FENCE_MODE_RING_TEST ? " as a ring test" : f.Interrupt ? "" : " without the interrupt bit",
            f.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", f.NtStatus, StatusName((NTSTATUS)f.NtStatus), f.Result);
     if (f.FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", f.FaultOffset);
     printf("fences       %lu of %lu values read back, %lu doorbells; last emitted 0x%lX, slot holds 0x%lX\n", f.Completed, f.Count,

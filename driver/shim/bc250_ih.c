@@ -294,7 +294,18 @@ void bc250_ih_set_rptr(struct amdgpu_device *adev, u32 rptr)
 /* gfx_v10_0.c:9195-9197, the only statement of this packing in the kernel:
  *     me_id    = (entry->ring_id & 0x0c) >> 2;
  *     pipe_id  = (entry->ring_id & 0x03) >> 0;
- *     queue_id = (entry->ring_id & 0x70) >> 4;  */
+ *     queue_id = (entry->ring_id & 0x70) >> 4;
+ *
+ * The queue field is not always the queue that caused the vector. Measured on unit A (facts M45,
+ * evidence/windows/2026-09-21-E12-run-002/ih-state-afterfini-153128.txt): the eight source 181
+ * vectors the UNMAP_QUEUES of a teardown produces carry ring ids 20, 21, 22, 7, 20, 21, 22, 7 for
+ * eight distinct queues, which is the queue LAST ACTIVE on each pipe rather than the queue the
+ * packet named, and they carry src_data[0] = 1 where a fence carries 0x80000000. So me and pipe can
+ * be trusted; the queue field can be used to attribute a vector to one ring only where the vector
+ * is known to be a fence. Upstream would mis-attribute here - gfx_v10_0_eop_irq() calls
+ * amdgpu_fence_process() on whichever compute ring matches all three fields - but it does not
+ * matter to it, because amdgpu_fence_process() only advances a fence sequence that has already been
+ * signalled in memory. The routing helpers below look at me only, and are unaffected. */
 void bc250_ih_eop_ring_id(const struct bc250_iv_entry *e, u32 *me, u32 *pipe, u32 *queue)
 {
 	if (e == NULL)
