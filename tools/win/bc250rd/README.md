@@ -11,7 +11,7 @@
 
 Why an allow-list inside the driver: on this SoC a read of the wrong BAR5 address hangs the machine
 (`docs/facts.md` M16). A generic "read physical memory" driver would also be a dangerous thing to publish;
-this one can read 5398 fixed offsets of one PCI device and nothing else.
+this one can read 5355 fixed offsets of one PCI device and nothing else.
 
 ## On the target (elevated, test signing on)
 

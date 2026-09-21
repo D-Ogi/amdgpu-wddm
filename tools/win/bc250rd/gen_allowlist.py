@@ -6,13 +6,20 @@ all GC registers of run 1 and the non-GC registers of run 2 (which already honou
 skip list). A read of the wrong BAR5 address can hang this SoC (facts M16), so the kernel driver
 refuses every offset that is not in this table.
 
+"Without harm" turned out to be too weak a test: some of those reads change state (facts M25). Their
+offsets are taken out here, by offset, so the driver refuses them like any unknown address.
+
 Run:  python tools/win/bc250rd/gen_allowlist.py
 """
 
 import re
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1] / "diagusb"))
+from gen_sweep import SIDE_EFFECT  # noqa: E402  (one definition for both sweeps)
+
 EVID = HERE.parents[2] / "evidence" / "linux" / "2026-09-21-E03-init-trace"
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+) ([0-9A-F]{8})$")
 
@@ -27,6 +34,9 @@ def good_reads(path, only_ip=None):
 def main():
     regs = list(good_reads(EVID / "sweep-before-run1-GC-complete-then-hang.log", only_ip="GC"))
     regs += [r for r in good_reads(EVID / "sweep-before-run2-nonGC.log") if r[0] != "GC"]
+    bad = {off for _, name, off in regs if SIDE_EFFECT.search(name)}
+    dropped = [r for r in regs if r[2] in bad]
+    regs = [r for r in regs if r[2] not in bad]
     offsets = sorted({off for _, _, off in regs})
     rows = [", ".join(f"0x{o:05X}" for o in offsets[i:i + 10]) for i in range(0, len(offsets), 10)]
     (HERE / "driver" / "allowlist.h").write_text(
@@ -37,7 +47,7 @@ def main():
         + ",\n    ".join(rows) + "\n};\n", encoding="utf-8", newline="\n")
     (HERE / "reglist.txt").write_text(
         "".join(f"{ip}.{name} 0x{off:05x}\n" for ip, name, off in regs), encoding="utf-8", newline="\n")
-    print(f"{len(regs)} registers, {len(offsets)} unique offsets")
+    print(f"{len(regs)} registers, {len(offsets)} unique offsets, {len(dropped)} dropped for read side effects")
 
 
 if __name__ == "__main__":

@@ -28,6 +28,9 @@ from gen_probes import SPEC  # noqa: E402  (ip, header, registers) - reuse the h
 BAR5_SIZE = 0x80000
 # Indexed data ports and ucode/RAM windows: a read moves an internal pointer. Never swept.
 SKIP = re.compile(r"DATA|UCODE|RAM|INDEX(?!$)|_IND_")
+# Registers whose read changes state, measured (facts M25): a read of an invalidation semaphore acquires it,
+# the header dumps advance per read, a read of GRBM_GFX_CNTL latches GRBM_READ_ERROR. Never swept.
+SIDE_EFFECT = re.compile(r"_INVALIDATE_ENG\d+_SEM$|_HEADER_DUMP$|^GRBM_GFX_CNTL$")
 # Literal offsets quoted from the prior-art PSP driver (inc/PspIoctl.h @3bfa7a2). Read-only here.
 PSP_DRIVER_LITERALS = {
     "PSP_C2PMSG_35": 0x1056C, "PSP_C2PMSG_36": 0x10570, "PSP_C2PMSG_37": 0x10574,
@@ -44,12 +47,15 @@ def build():
     rules = []
     for ip, header, key_regs in SPEC:
         rm = RegMap(ip=ip, reg_header=HDR_DIR / header)
+        # by offset, not by name: an alias of a side-effect register is the same register
+        bad = {(rm.segs[idx] + mm) * 4 for name, (mm, idx) in rm.regs.items()
+               if idx in rm.segs and SIDE_EFFECT.search(name[2:] if name.startswith("mm") else name)}
         for name, (mm, idx) in sorted(rm.regs.items()):
             if idx not in rm.segs:
                 continue
             off = (rm.segs[idx] + mm) * 4
             short = name[2:] if name.startswith("mm") else name
-            if off >= BAR5_SIZE or SKIP.search(short) or (ip, off) in seen:
+            if off >= BAR5_SIZE or SKIP.search(short) or off in bad or (ip, off) in seen:
                 continue
             seen.add((ip, off))
             regs.append([ip, short, off])
