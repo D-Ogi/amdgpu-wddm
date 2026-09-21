@@ -1,7 +1,8 @@
 # ADR 0005: Vulkan first in user mode, Direct3D by translation
 
 Date: 2026-09-21. Status: accepted (direction only; the exit criteria that follow from it are M8, M10 and M12 in
-`docs/00-goal-and-roadmap.md`, set the same day).
+`docs/00-goal-and-roadmap.md`, set the same day). Point 2's second sentence ("A native D3D UMD is not a goal") and
+the first consequence's "acceptable" are superseded by ADR 0009: the WARP desktop is a stage, M13 ends it.
 
 ## Context
 
