@@ -1,0 +1,37 @@
+Added 2026-09-21 after the run (a new file; nothing else in this directory was changed).
+
+1. Version of the display kernel on unit A, read on the target (read-only script) and from the pulled copy:
+
+   dxgkrnl.sys  file 10.0.22621.6199  size 4761000  sha256 AAF502AD1D6050C855480AE4057222A6375587DE0D77AEFBADF9039EF4DD72F9
+   dxgmms2.sys  file 10.0.22621.6199  size 1152384  sha256 861D969A2D9D5E7CDA8949B5978D80D8896EE68A8825FD015EE8193FB417B1A0
+
+   Working notes of this day said "build 26200" for the target. That is the development PC's build and was never
+   measured on unit A. README.txt in this directory does not carry the number; docs/facts.md M63 did and is corrected.
+
+2. Offline reading of that dxgkrnl.sys (cdb -z, public symbols, no live debugger; the binary, the PDB and the full
+   disassembly stay outside the repository, in the workspace's scratch\e16\dxgk\). Summary of what was read:
+
+   - DpiGetAdapterInfo reads the value UserModeDriverName from the driver's software key. When the value is absent it
+     sets a byte in the adapter object (adapter+0x621 = 1). The sibling values (UserModeDriverNameWow, ...WSL,
+     ...WsaImage) are logged when absent and have no such consequence.
+   - DXGADAPTER::Initialize calls QueryAdapterInfo type 1 into a buffer sized by GetDriverCapsSizeFromDdiVersion
+     (interface 0x5023 -> 0x240 = 576 bytes, the size in our log), normalises WDDMVersion (0x2000 passes), and then,
+     at +0x762: if that byte is set and MiscCaps has neither VirtualGpuOnly nor ComputeOnly, it logs the internal
+     triage event "UMD name is missing and device is not compute only" and returns 0xC0000034
+     (STATUS_OBJECT_NAME_NOT_FOUND). MiscCaps does not exist at interface 0x5023.
+   - Apart from a pool allocation failure this is the only failing exit between the first QueryAdapterInfo call
+     (type 1) and the second (type 15, PHYSICALADAPTERCAPS). Our ring holds exactly one QueryAdapterInfo call.
+   - Runs 001 and 002 used the plain package on purpose: no UserModeDriverName.
+
+   Checks the same reading found further down the function, not reached by our runs:
+   - interface >= 0x5008 with a render core: DxgkDdiCalibrateGpuClock AND DxgkDdiSetStablePowerState must both be
+     in the table ("... does not fill in the pfnCalibrateGpuClock or pfnSetStablePowerState DDI"). Ours leaves
+     SetStablePowerState NULL.
+   - behind a global enforcement switch whose state cannot be read statically: WDDMVersion >= 1.2 on a full adapter
+     needs SupportDirectFlip; WDDMVersion >= 1.3 needs FlipCaps.FlipIndependent ("WDDM 1.3 driver must support
+     independent flip."). SupportPerEngineTDR and SupportSmoothRotation are not tested there; SupportPerEngineTDR = 1
+     without the three engine DDIs is refused elsewhere.
+   - not read: the rest of DXGADAPTER::Initialize and the body of ADAPTER_RENDER::Initialize.
+
+   Status: a reading of code, not a measurement. Not explained by it: Windows shows the device with
+   CM_PROB_FAILED_POST_START and problem status 0, not 0xC0000034.

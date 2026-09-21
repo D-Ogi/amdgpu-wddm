@@ -1,6 +1,6 @@
 # E16: a full WDDM adapter nobody can render on (milestone M7, stage A of ADR 0008)
 
-State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), and it does so on the DRIVERCAPS answer, the only question it asks (M63). The README above "Result" was written before the runs.**
+State: **runs 001 and 002 done (2026-09-21): dxgkrnl refuses the full table after the start, quietly and reversibly (M62), right after DRIVERCAPS, the only question it asks (M63); an offline reading of the lab's dxgkrnl blames the missing UMD name (M64, to be tested by run 003). The README above "Result" was written before the runs.**
 
 ## Why
 
@@ -35,6 +35,24 @@ the DDIs that are called a thousand times before the first window appears are th
 - H6. Gate closed again: the display-only driver comes back, stage 61, presents counting, as if nothing had happened.
   A witness sweep (GC, MMHUB, MP0, NBIO, OSSSYS) before run 1 and after run 2 differs only where it differed between
   two idle sweeps before.
+
+Added after run 002, before run 003:
+
+- H7 (first version, withdrawn before any run tested it): "the refusal is about the three WDDM 1.2 caps the answer
+  left at 0". Microsoft's enforcement page suggested it; an offline reading of the lab's own `dxgkrnl.sys`
+  (10.0.22621.6199, `evidence/windows/2026-09-21-E16-run-002/dxgkrnl-static-reading.txt`) says otherwise, and it
+  is kept here because a hypothesis replaced is not a hypothesis that never existed.
+- H7. The refusal of M63 is the missing `UserModeDriverName` (facts M64, hypothesis). Run 003 changes nothing but
+  the package: the same 0.7.3 binary, installed as the run 2 package with the UMD stub, gate open. Prediction:
+  the kept log shows a second `QueryAdapterInfo` call after DRIVERCAPS (type 15, which the driver refuses and
+  dxgkrnl tolerates) and further adapter queries. Refuted if the log again ends with the DRIVERCAPS line and
+  stage 70.
+- H8. With the 0.7.3 table the start then fails further down, because `DxgkDdiSetStablePowerState` is NULL at
+  interface `0x5023` (same reading). The device ends in a problem code again and the log says how far dxgkrnl got.
+  If the device instead starts, H2 to H5 apply at once and the static reading has a hole worth finding.
+- Run 004 is 0.7.4: `DxgkDdiSetStablePowerState`, `SupportDirectFlip`, `FlipCaps.FlipIndependent`, and the
+  per-engine TDR set (three DDIs plus the cap) that every WDDM 1.2+ sample driver carries. Its hypotheses are
+  H2 to H5 as written above, with the UMD stub package.
 
 ## Safety
 
@@ -104,11 +122,12 @@ Evidence: `evidence/windows/2026-09-21-E16-run-002/` (README.txt has the timelin
 - Windows still gives no reason: both DxgKrnl event channels are enabled and empty.
 - M61 needed a correction: the POST display's `TargetId` is ours (`0x250001`) when the previous owner was a build
   that fills it at release (0.7.2 and later), and `0xFFFFFFFF` otherwise. The rule for the driver is unchanged.
-- What is left is the content of the answer. Microsoft's WDDM 1.2 enforcement text says a full graphics driver that
-  claims WDDM 1.2 or later without every mandatory feature "will fail to create an adapter, and the system will
-  fall back to the Microsoft Basic Display Driver", which is this symptom to the letter; of the mandatory caps,
-  ours says no to per-engine TDR, DirectFlip and smooth rotation. A documented rule is not a measurement of what
-  this dxgkrnl checks: the next build changes the caps, and the kept log says whether dxgkrnl then asks a second
-  question.
+- My first reading of this was wrong, and it took an hour to find out: "what is left is the content of the answer"
+  (the three WDDM 1.2 caps we left at 0, after Microsoft's enforcement page). The lab's dxgkrnl, read offline, stops
+  right after DRIVERCAPS for a reason that is not in DRIVERCAPS: the driver's software key has no
+  `UserModeDriverName` (M64, hypothesis until run 003). Run 1 of this experiment was designed without a UMD on
+  purpose, so it was designed to fail, and H5's first half ("without a user-mode driver name Direct3D has nothing
+  to load") never had a chance to be observed. Nie szukaj dziury w całym (do not look for a hole in the whole):
+  the part I suspected was fine.
 
 Run 2 (the UMD stub) waits until a plain full-table start survives.
