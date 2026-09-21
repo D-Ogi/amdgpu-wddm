@@ -75,6 +75,10 @@ typedef enum _BC250_WDDM_DDI {
     WddmDdiPreemptCommand,
     WddmDdiResetFromTimeout,
     WddmDdiRestartFromTimeout,
+    WddmDdiQueryDependentEngineGroup,
+    WddmDdiQueryEngineStatus,
+    WddmDdiResetEngine,
+    WddmDdiSetStablePowerState,
     WddmDdiCalibrateGpuClock,
     WddmDdiFormatHistoryBuffer,
     WddmDdiPresent,
@@ -89,10 +93,14 @@ static const char* const g_DdiNames[] = {
     "CreateProcess", "DestroyProcess", "GetRootPageTableSize", "SetRootPageTable", "CreateAllocation",
     "DestroyAllocation", "DescribeAllocation", "GetStandardAllocationDriverData", "OpenAllocation",
     "CloseAllocation", "BuildPagingBuffer", "SubmitCommand", "SubmitCommandVirtual", "PreemptCommand",
-    "ResetFromTimeout", "RestartFromTimeout", "CalibrateGpuClock", "FormatHistoryBuffer", "Present",
-    "SetVidPnSourceAddress", "ControlInterrupt", "GetScanLine",
+    "ResetFromTimeout", "RestartFromTimeout", "QueryDependentEngineGroup", "QueryEngineStatus", "ResetEngine",
+    "SetStablePowerState", "CalibrateGpuClock", "FormatHistoryBuffer", "Present", "SetVidPnSourceAddress", "ControlInterrupt",
+    "GetScanLine",
 };
 C_ASSERT(RTL_NUMBER_OF(g_DdiNames) == WddmDdiCount);
+
+// CollectDbgInfo is a Level Zero DDI and may not touch BC250_WDDM (see the function): its counter lives here.
+static volatile LONG g_CollectDbgInfoCalls;
 
 // A counter is only half the evidence: "QueryAdapterInfo was called 31 times" does not say which 31 things
 // dxgkrnl wanted. These tables hold the distinct argument values a DDI was called with - QueryAdapterInfo's
@@ -605,11 +613,15 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // The one result that changes what stage A means: the scheduler declaring this adapter hung. Loud, and
     // repeated here even though every call was logged where it happened, because the summary may be all anybody
     // reads.
-    if (Wddm->Calls[WddmDdiResetFromTimeout] != 0 || Wddm->Calls[WddmDdiRestartFromTimeout] != 0)
-        GuardLog("wddm summary: *** TDR: ResetFromTimeout %ld, RestartFromTimeout %ld - the scheduler timed this "
-                 "adapter out ***", Wddm->Calls[WddmDdiResetFromTimeout], Wddm->Calls[WddmDdiRestartFromTimeout]);
+    if (Wddm->Calls[WddmDdiResetFromTimeout] != 0 || Wddm->Calls[WddmDdiRestartFromTimeout] != 0 ||
+        Wddm->Calls[WddmDdiResetEngine] != 0)
+        GuardLog("wddm summary: *** TDR: ResetEngine %ld, ResetFromTimeout %ld, RestartFromTimeout %ld - the "
+                 "scheduler timed this adapter out ***", Wddm->Calls[WddmDdiResetEngine],
+                 Wddm->Calls[WddmDdiResetFromTimeout], Wddm->Calls[WddmDdiRestartFromTimeout]);
     else
-        GuardLog("wddm summary: no TDR (ResetFromTimeout and RestartFromTimeout were never called)");
+        GuardLog("wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)");
+    // Counted since the driver image was loaded, not since this start: the counter cannot live in the block.
+    GuardLog("wddm summary: CollectDbgInfo called %ld time(s) since the driver was loaded", g_CollectDbgInfoCalls);
 }
 
 // Reached from DxgkDdiEscape, and holds the pointer across some 40 GuardLog calls while WddmStop frees the block.
@@ -784,6 +796,7 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
         RtlZeroMemory(descriptor, sizeof(*descriptor));
         descriptor->Flags.CpuVisible = 1;               // the carve-out is reachable by physical address (M31)
         descriptor->Flags.LocalBudgetGroup = 1;         // local memory, not an aperture: Aperture and Agp stay 0
+        descriptor->Flags.DirectFlip = 1;               // the cap says DirectFlip; this is the segment scanned out
         // PreservedDuringStandby and PreservedDuringHibernate stay 0: whether this memory survives S3 on this
         // board is not known, and claiming it wrongly would hand back corrupt surfaces after a resume.
         descriptor->BaseAddress.QuadPart = (LONGLONG)(Device->VramMcBase + offset);
@@ -829,7 +842,18 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->HighestAcceptableAddress.QuadPart = -1;       // no addressing limit; too low a value fails the load
     caps->SupportNonVGA = TRUE;
     caps->NumberOfSwizzlingRanges = 0;                  // swizzling range support has been removed from WDDM
-    caps->SupportPerEngineTDR = FALSE;                  // so the three per-engine DDIs may stay NULL
+    // The caps Microsoft documents as mandatory for a full graphics driver that claims WDDM 1.2 or later ("WDDM 1.2
+    // driver enforcement"), and which its own sample drivers all set. They are NOT what refused E16 runs 001 and
+    // 002 (that was the missing UMD name, facts M64), but the lab's dxgkrnl does test DirectFlip further down
+    // DXGADAPTER::Initialize when its enforcement switch is on, and an answer that differs from every known-good
+    // driver in three mandatory members is a poor place to save three lines.
+    //  - PerEngineTDR: the three DDIs are in the table; ResetEngine refuses, as the part has no reset (M53).
+    //  - SmoothRotation: "must support updating path rotation in UpdateActiveVidPnPresentPath"; ours does, and
+    //    the only rotation it offers is identity.
+    //  - DirectFlip: a promise about shared primaries that an adapter nobody can render on is never held to.
+    caps->SupportSmoothRotation = TRUE;
+    caps->SupportPerEngineTDR = TRUE;
+    caps->SupportDirectFlip = TRUE;
     caps->SupportSurpriseRemoval = FALSE;
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
 
@@ -875,20 +899,27 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->InternalGpuVirtualAddressRangeEnd = 0;
 
     // The flip model of a full miniport: DxgkDdiPresent produces no DMA and SetVidPnSourceAddress does the flip.
+    // FlipIndependent: "WDDM 1.3 driver must support independent flip." is a refusal in the lab's dxgkrnl (behind
+    // the same enforcement switch as DirectFlip). What it promises is that SetVidPnSourceAddress may be pointed at
+    // a surface DWM did not present; ours takes whatever address it is given.
     caps->FlipCaps.FlipOnVSyncMmIo = 1;
+    caps->FlipCaps.FlipIndependent = 1;
     caps->MaxQueuedFlipOnVSync = 1;
 
     // No hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor into the image it presents,
     // exactly as in the display-only build.
 
     // What was promised, and into how large a structure: the size says which DXGK_DRIVERCAPS this dxgkrnl thinks
-    // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 129 of
-    // the 160 bytes of a log line: count before adding a field.
+    // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
+    // the 160 bytes of a log line: count before adding a field. Our own sizeof and the paging node are not in
+    // it: both are constants of the build (576 at interface 0x5023, which is what dxgkrnl offers; node 0).
     if (WddmAnswersLogged(Device))
-        GuardLog("wddm: DRIVERCAPS %u of %u bytes: wddm %u sched 0x%X mm 0x%X paging node %u flip 0x%X slots %u",
-             (ULONG)sizeof(*caps), Query->OutputDataSize, (ULONG)caps->WDDMVersion, caps->SchedulingCaps.Value,
-             caps->MemoryManagementCaps.Value, caps->MemoryManagementCaps.PagingNode, caps->FlipCaps.Value,
-             caps->MaxAllocationListSlotId);
+        GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u "
+                 "tdr %u dflip %u rot %u",
+             Query->OutputDataSize, (ULONG)caps->WDDMVersion, caps->SchedulingCaps.Value,
+             caps->MemoryManagementCaps.Value, caps->FlipCaps.Value,
+             caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? 1u : 0u, caps->SupportDirectFlip ? 1u : 0u,
+             caps->SupportSmoothRotation ? 1u : 0u);
     return STATUS_SUCCESS;
 }
 
@@ -967,6 +998,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         break;
     default:
         // Including UMDRIVERPRIVATE and the pre-WDDM2 segment queries, which a WDDM 2 driver must not answer.
+        // Seen on the lab and tolerated by its dxgkrnl (E16 run 003): type 15 PHYSICALADAPTERCAPS and type 47
+        // 64BITONLYCAPS, for which the WDK has no structure at all. Two refusals in a kept log are expected.
         // STATUS_NOT_SUPPORTED is safe for an unhandled type, and which types are asked for is stage A evidence.
         status = STATUS_NOT_SUPPORTED;
         break;
@@ -1406,7 +1439,79 @@ static NTSTATUS Bc250WddmRestartFromTimeout(_In_ const HANDLE hAdapter)
     return STATUS_SUCCESS;       // "can simply return STATUS_SUCCESS immediately"
 }
 
+// Per-engine TDR. Not because this part can reset an engine - it cannot reset anything (facts M53) - but because
+// Microsoft documents SupportPerEngineTDR as mandatory for a full graphics driver that claims WDDM 1.2 or later,
+// and saying it obliges the table to carry all three (the lab's dxgkrnl refuses the cap without the DDIs).
+static DXGKDDI_QUERYDEPENDENTENGINEGROUP Bc250WddmQueryDependentEngineGroup;
+static NTSTATUS Bc250WddmQueryDependentEngineGroup(_In_ const HANDLE hAdapter,
+                                                   _Inout_ DXGKARG_QUERYDEPENDENTENGINEGROUP* pQueryDependentEngineGroup)
+{
+    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiQueryDependentEngineGroup))
+        GuardLog("wddm: QueryDependentEngineGroup node %u engine %u", pQueryDependentEngineGroup->NodeOrdinal,
+                 pQueryDependentEngineGroup->EngineOrdinal);
+    if (pQueryDependentEngineGroup->NodeOrdinal >= BC250_WDDM_NODE_COUNT) return STATUS_INVALID_PARAMETER;
+    // A reset of a node affects that node; with one node there is nobody else to name.
+    pQueryDependentEngineGroup->DependentNodeOrdinalMask = 1ull << pQueryDependentEngineGroup->NodeOrdinal;
+    return STATUS_SUCCESS;
+}
+
+static DXGKDDI_QUERYENGINESTATUS Bc250WddmQueryEngineStatus;
+static NTSTATUS Bc250WddmQueryEngineStatus(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_QUERYENGINESTATUS* pQueryEngineStatus)
+{
+    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiQueryEngineStatus))
+        GuardLog("wddm: QueryEngineStatus node %u engine %u", pQueryEngineStatus->NodeOrdinal,
+                 pQueryEngineStatus->EngineOrdinal);
+    if (pQueryEngineStatus->NodeOrdinal >= BC250_WDDM_NODE_COUNT) return STATUS_INVALID_PARAMETER;
+    // Stage A completes every fence in software, in the DPC that follows the submit: the "engine" cannot stall.
+    pQueryEngineStatus->EngineStatus.Value = 0;
+    pQueryEngineStatus->EngineStatus.Responsive = 1;
+    return STATUS_SUCCESS;
+}
+
+static DXGKDDI_RESETENGINE Bc250WddmResetEngine;
+static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_RESETENGINE* pResetEngine)
+{
+    // The documented answer of hardware that "is incapable of resetting the nodes": a failure status, after which
+    // the scheduler falls back to the adapter-wide ResetFromTimeout. It is also the careful answer: a success
+    // with a LastAbortedFenceId outside [last completed, last submitted] is bugcheck 0x119, and a failure names
+    // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
+    (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetEngine);
+    GuardLog("wddm: *** ResetEngine node %u engine %u: refused, this part has no engine reset ***",
+             pResetEngine->NodeOrdinal, pResetEngine->EngineOrdinal);
+    return STATUS_NOT_SUPPORTED;
+}
+
+// "A driver that supports these functions [per-engine TDR] must also support level zero synchronization for
+// DxgkDdiCollectDbgInfo". Level Zero means it may run beside anything, a hanging adapter included, so this body
+// takes no lock, reads no device state and does not even log: it has nothing to add to a debug report (stage A
+// runs no engine). The structure has no "bytes written" member, so "nothing" has to be said with zeroes: on
+// success dxgkrnl takes the whole buffer into the report, and what was in it before is not ours to publish.
+// The call counter is a file-scope variable for the same reason the body stays away from Device->Wddm: WddmStop
+// frees that block, and this DDI may run beside it (g_CollectDbgInfoCalls, declared with the DDI names).
+static DXGKDDI_COLLECTDBGINFO Bc250WddmCollectDbgInfo;
+static NTSTATUS Bc250WddmCollectDbgInfo(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COLLECTDBGINFO* pCollectDbgInfo)
+{
+    UNREFERENCED_PARAMETER(hAdapter);
+    (void)InterlockedIncrement(&g_CollectDbgInfoCalls);
+    if (pCollectDbgInfo->pBuffer != NULL && pCollectDbgInfo->BufferSize != 0)
+        RtlZeroMemory(pCollectDbgInfo->pBuffer, pCollectDbgInfo->BufferSize);
+    return STATUS_SUCCESS;
+}
+
 // ---- clock and history buffer -------------------------------------------------------------------------------------
+
+// Required next to CalibrateGpuClock: the lab's dxgkrnl (10.0.22621.6199) refuses a render adapter whose table is
+// "compiled against WDDM2_0_M2_2_1 or greater, but does not fill in the pfnCalibrateGpuClock or
+// pfnSetStablePowerState DDI" (facts M64; E16 run 003 stopped at a point consistent with that check, which is
+// not the same as having seen it fail). What it asks for - clocks
+// that do not move while a profiler looks - is what this part has anyway: one fixed clock, set once by the startup
+// task (1000 MHz), and no power management in the driver. So there is nothing to do, and the DDI returns nothing.
+static DXGKDDI_SETSTABLEPOWERSTATE Bc250WddmSetStablePowerState;
+static VOID Bc250WddmSetStablePowerState(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETSTABLEPOWERSTATE* pArgs)
+{
+    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetStablePowerState))
+        GuardLog("wddm: SetStablePowerState enabled %u (clocks are fixed: nothing to do)", pArgs->Enabled ? 1u : 0u);
+}
 
 static DXGKDDI_CALIBRATEGPUCLOCK Bc250WddmCalibrateGpuClock;
 static NTSTATUS Bc250WddmCalibrateGpuClock(_In_ const HANDLE hAdapter, _In_ UINT32 NodeOrdinal, _In_ UINT32 EngineOrdinal,
@@ -1692,6 +1797,12 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiPreemptCommand = Bc250WddmPreemptCommand;
     Data->DxgkDdiResetFromTimeout = Bc250WddmResetFromTimeout;
     Data->DxgkDdiRestartFromTimeout = Bc250WddmRestartFromTimeout;
+    // SupportPerEngineTDR = 1 obliges the table to carry all three.
+    Data->DxgkDdiQueryDependentEngineGroup = Bc250WddmQueryDependentEngineGroup;
+    Data->DxgkDdiQueryEngineStatus = Bc250WddmQueryEngineStatus;
+    Data->DxgkDdiResetEngine = Bc250WddmResetEngine;
+    Data->DxgkDdiCollectDbgInfo = Bc250WddmCollectDbgInfo;              // Level Zero, as per-engine TDR requires
+    Data->DxgkDdiSetStablePowerState = Bc250WddmSetStablePowerState;    // dxgkrnl wants it wherever CalibrateGpuClock is
     Data->DxgkDdiCalibrateGpuClock = Bc250WddmCalibrateGpuClock;
     Data->DxgkDdiFormatHistoryBuffer = Bc250WddmFormatHistoryBuffer;
     Data->DxgkDdiPresent = Bc250WddmPresent;
@@ -1703,13 +1814,12 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
     // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat, RenderKm,
-    // RenderGdi, ControlInterrupt2 (WDDM 2.1+, and it does not exist at 2.0), the three per-engine TDR DDIs
-    // (SupportPerEngineTDR = 0), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
-    // UnmapCpuHostAperture (no host aperture), SetStablePowerState, SetVideoProtectedRegion, and the
+    // RenderGdi, ControlInterrupt2 (WDDM 2.1+, and it does not exist at 2.0), CancelCommand (CancelCommandAware
+    // = 0), MapCpuHostAperture and UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and the
     // hardware-scheduling DDIs, which do not exist at all at WDDM 2.0. QueryInterface, ControlEtwLogging,
-    // NotifyAcpiEvent, CollectDbgInfo, SetPalette, NotifySurpriseRemoval, GetChildContainerId,
-    // SetPowerComponentFState, PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as
-    // they are in the display-only table today. ControlInterrupt and GetScanLine are **not** in this list any
-    // more: the flip path above sets both.
+    // NotifyAcpiEvent, SetPalette, NotifySurpriseRemoval, GetChildContainerId, SetPowerComponentFState,
+    // PowerRuntimeControlRequest and PowerRuntimeSetDeviceHandle stay NULL exactly as they are in the
+    // display-only table today. ControlInterrupt and GetScanLine are **not** in this list any more: the flip
+    // path above sets both. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
     WddmCheckReserved(Data);
 }
