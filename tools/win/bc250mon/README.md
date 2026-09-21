@@ -91,6 +91,8 @@ privileges" that runs it.
 ## mon.py
 
 Every call goes over SSH, so the JSON body travels base64-encoded and images come back base64 on one line.
+Which machine and which of its addresses is `tools/win/target.py`'s decision, from the configuration outside
+the repository; `mon.py` holds no address and no ssh options of its own.
 
 ```
 mon.py state

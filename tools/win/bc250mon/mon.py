@@ -15,26 +15,30 @@ every call goes through SSH; the JSON body travels base64-encoded to stay clear 
 
 Screenshots land in P:/BC-250/scratch/screens/<timestamp>.<ext> unless --out says otherwise. Every capture
 is written to the monitor's log, so the owner sees on the overlay that a picture was taken.
+
+Which machine and which address: `tools/win/target.py` decides, from the configuration outside this repo.
 """
 
 import base64
 import datetime
 import json
 import os
-import subprocess
 import sys
 from urllib.parse import quote
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import target  # noqa: E402  how to reach the target lives in one place, tools/win/target.py
+
 ROOT = os.environ.get("BC250_ROOT", "P:/BC-250")
-HOST = os.environ.get("BC250_WIN_HOST", "bc250@192.168.69.41")
 API = "http://127.0.0.1:2250"
+TARGET = None
 
 
 def ssh(ps):
-    cmd = ["ssh", "-i", f"{ROOT}/secrets/client/bc250diag_ed25519", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes",
-           "-o", "ConnectTimeout=10", "-o", f"UserKnownHostsFile={ROOT}/secrets/client/known_hosts_win", HOST,
-           "powershell -NoProfile -EncodedCommand " + base64.b64encode(ps.encode("utf-16-le")).decode()]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=120).stdout
+    global TARGET
+    if TARGET is None:
+        TARGET = target.Target()
+    return TARGET.run(ps)
 
 
 def call(method, path, body=None):
@@ -137,4 +141,7 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    try:
+        main(sys.argv[1:])
+    except target.TargetError as e:
+        sys.exit(str(e))
