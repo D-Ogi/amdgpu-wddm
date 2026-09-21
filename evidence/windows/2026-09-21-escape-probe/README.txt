@@ -16,6 +16,11 @@ Files:
   probe-kmdod-e05.txt      07:12, captured from the console while the main session had Microsoft's KMDOD
                            sample bound to the same device (experiment E05). Console transcript, not a file
                            written on the target
+  probe-basicdisplay-after-e05-rollback.txt
+                           07:22:49, the same probe repeated after E05 was rolled back. Identical statuses,
+                           so the measurement survives a driver cycle on the device. At this moment the
+                           service bc250kmdod still existed but was Stopped and the device was bound to
+                           BasicDisplay (DEVPKEY_Device_Service = BasicDisplay, driver 10.0.22621.1)
 
 Results, all three with the identical request:
 
