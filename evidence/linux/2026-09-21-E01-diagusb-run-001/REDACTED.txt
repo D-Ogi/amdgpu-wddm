@@ -1,0 +1,11 @@
+Redacted before the first commit (evidence rules, docs/01-evidence-rules.md):
+
+- dmesg.txt line 771: MAC address of the on-board RTL8168h replaced with xx:xx:xx:xx:xx:xx
+- dmesg.txt line 732: serial number of the USB boot stick replaced with REDACTED
+
+Nothing else was changed. SHA-256 of the files as they came off the stick:
+b43175b4c834fc0c64bcd2c4d1d200fd6e1d68f8169a8d6ddbb51586d416b8f0  report.json
+9042350db92f684476d8aab3c4634cd013521d4ed6f4c79ccff31ce79a0fd10b  summary.json
+17218127339c793865d5ffa273f23e3c67e70589d33f758521ea3ae3bc3922e0  dmesg.txt (before redaction)
+
+The board's RTC was not set: timestamps inside the run say 2026-09-09, the run took place on 2026-09-21.

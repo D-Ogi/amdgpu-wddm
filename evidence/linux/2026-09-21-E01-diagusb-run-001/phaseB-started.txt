@@ -1,0 +1,1 @@
+modprobe amdgpu issued; if this is the newest file, the load hung the machine
