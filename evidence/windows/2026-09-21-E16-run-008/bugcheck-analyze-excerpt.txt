@@ -1,0 +1,65 @@
+Kernel dump of the E16 run 008 bugcheck (C:\Windows\MEMORY.DMP, 676903734 bytes, written 22:45:53), opened offline
+with cdb -z, public symbols and the 0.7.8 PDB. The dump stays outside the repository.
+
+Faulting instruction: dxgmms2!VIDMM_DMA_POOL::AddDmaBufferToPool+0x432  mov rax,[rdx+8]  with rdx = [r14+40h] = 0,
+right after CVirtualAddressAllocator::MapVirtualAddressRange returned; r13 = 0x1000 (the DmaBufferSize we answered).
+In the same function [r14+40h] is filled by VIDMM_GLOBAL::OpenOneAllocation on the segment-backed path only; the
+segment-set-0 path (contiguous system memory) leaves it NULL, and the pool's "map into GPU VA" branch uses it.
+
+SYSTEM_SERVICE_EXCEPTION (3b)
+Arg1: 00000000c0000005, Exception code that caused the BugCheck
+BUGCHECK_CODE:  3b
+PROCESS_NAME:  csrss.exe
+
+STACK_TEXT:  
+    dxgmms2!VIDMM_DMA_POOL::AddDmaBufferToPool+0x432
+    dxgmms2!VIDMM_DMA_POOL::Init+0x6b
+    dxgmms2!VidMmInitDmaPool+0x9
+    dxgkrnl!DXGCONTEXT::EnsurePriviledgedDmaPool+0xc5
+    dxgkrnl!DXGCONTEXT::Initialize+0xb19
+    dxgkrnl!DXGDEVICE::CreateContext+0x104
+    dxgkrnl!SESSION_ADAPTER::CreateCddDevice+0x245
+    dxgkrnl!SESSION_ADAPTER::GetCddDeviceAndContext+0x202
+    dxgkrnl!DxgkGetCddDeviceAndContextForCurrentSession+0x93
+    dxgkrnl!CCD_TOPOLOGY::ApplyTopologyOnAdapter+0x110
+    dxgkrnl!CCD_TOPOLOGY::ApplyTopologyWorker+0x6c6
+    dxgkrnl!CCD_TOPOLOGY::ApplyTopology+0x88
+    dxgkrnl!DxgkApplyPathsModality+0xae
+    win32kbase!ApplyPathsModality+0x8f
+    win32kbase!DrvSetDisplayConfig+0xd7e
+    win32kbase!xxxUserSetDisplayConfig+0x268
+    win32kbase!Win32kPnpNotify+0x2e5
+    win32kbase!VideoPortCalloutThread+0x5ebf3
+    win32kbase!xxxCreateSystemThreads+0xa4
+    win32kbase!NtUserCreateSystemThreads+0x7a
+    win32k!NtUserCreateSystemThreads+0x15
+    nt!KiSystemServiceCopyEnd+0x28
+    0x00007ffd`c02a8e84
+
+
+
+SYMBOL_NAME:  dxgmms2!VIDMM_DMA_POOL::AddDmaBufferToPool+432
+IMAGE_NAME:  dxgmms2.sys
+FAILURE_BUCKET_ID:  AV_dxgmms2!VIDMM_DMA_POOL::AddDmaBufferToPool
+
+The driver's own log ring, read out of the dump (bc250kmd!g_Log, last lines):
+
+    wddm: SetRootPageTable segment 1 offset 0x0, 512 entries
+    wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+    wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+    wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+    wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+    wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+    wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+    wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+    wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+    wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+    wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+    wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+    wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+    wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+    wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+    wddm: CreateProcess flags 0x00000002 pasids 1
+    wddm: CreateDevice flags 0x00000002 pasid 0
+    wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    wddm: CreateContext answered dma 4096 bytes segment set 0x0, lists 0/0, caps 0x00000001

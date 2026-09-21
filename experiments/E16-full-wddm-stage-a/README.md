@@ -235,3 +235,15 @@ VidPN callbacks is a bugcheck, not a status. Co nagle, to po diable - what is do
   display path are read offline (`scratch\tmp\dxgk_bugcheck113_static.md`) and our answers checked against them;
   the gate is opened with the owner at the box, and it is closed in the registry right after the device reload
   so that a bugcheck cannot repeat at the next boot.
+
+### Run 008 (2026-09-21, bc250kmd 0.7.8)
+
+H12 holds: the VidPN negotiation passes. The next step, win32k's CDD context (`GdiContext | VirtualAddressing`), takes
+the machine down inside dxgmms2 (0x3B, NULL allocation in `VIDMM_DMA_POOL::AddDmaBufferToPool`, facts M70). The
+one-shot gate did what it was made for: one bugcheck, one restart, picture back on the display-only table.
+
+- H13 (before run 009). bc250kmd 0.7.9 adds an aperture segment as Microsoft's RosKmd has one (inert in stage A) and
+  names it in `DmaBufferSegmentSet`. Prediction: `CreateContext` for the CDD context is survived and the log goes on to
+  the primary surface (`GetStandardAllocationDriverData`, `CreateAllocation`) and `CommitVidPn` (stage 50); new in the
+  log: `BuildPagingBuffer` operations other than 11 (MapApertureSegment). What follows is recorded, not predicted.
+  The answers are compared with the two Microsoft samples beforehand (`scratch\tmp\sample_diff.md`).
