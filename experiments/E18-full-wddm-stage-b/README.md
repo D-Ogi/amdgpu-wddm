@@ -1,6 +1,6 @@
 # E18: the full WDDM table, stage B - VidMm's page tables in the hardware's format
 
-Date: 2026-09-21. State: run 001 done (M72); run 002 (writes) next. ADR 0008 stage B; follows E16 (stage A, facts M71).
+Date: 2026-09-21. State: DONE - stage B's exit criterion met in run 003 (M72, M73). ADR 0008 stage B; follows E16 (stage A, facts M71).
 
 ## Why
 
@@ -51,3 +51,16 @@ Evidence: `evidence/windows/2026-09-21-E18-run-001/`. Facts M72.
 - Not predicted at all: the 1028 page table updates at adapter start come in `CPU_VIRTUAL` mode, with a pointer, for
   the system paging process - although the driver declares `GPU_PHYSICAL`. 0.7.10 refused them as calls.
 - bc250kmd 0.7.11: units = page frames, CPU_VIRTUAL calls written through VidMm's pointer. Run 002 opens `EnableGpuVa`.
+
+### Runs 002 and 003 (2026-09-21, bc250kmd 0.7.11 and 0.7.12, `EnableGpuVa` = 1)
+
+Evidence: `evidence/windows/2026-09-21-E18-run-003/`. Facts M73, M74.
+
+- **H2 holds.** 280643 entries written at the start, none refused; the desktop's kernel side behaves as in stage A. The
+  leaf for the shared primary names the very address `SetVidPnSourceAddress` gets. The witness walked the paging
+  process's chain in run 002; the CDD's root sat above what the read escape allowed (fixed in 0.7.12).
+- **H3 holds**, and with it the exit criterion: `kmtprobe` got the GPU VA it asked for, and the witness found 16 leaves
+  for exactly that range whose pages hold the pattern. One detour: a client without a context never gets a
+  `SetRootPageTable`, so the witness had to find the chain by scanning the table pages below the top of the segment.
+- A lesson paid for with a restart: never install over a running full table (M74). Close the gate first.
+- What stage B does not show: that the GPU's walker agrees. No VMID points at these tables; stage C does that.

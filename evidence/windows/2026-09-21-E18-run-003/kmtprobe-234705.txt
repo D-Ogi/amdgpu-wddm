@@ -1,0 +1,49 @@
+watchdog raised to 105000 ms to cover --hold
+kmtprobe: size 0x10000, va 0x0000000010000000, reserve no, resident-first no, hold 90 s, watchdog 105000 ms
+D3DKMTEnumAdapters2 (count)        0x00000000  STATUS_SUCCESS
+    34 adapter(s)
+D3DKMTEnumAdapters2                0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:00165011  NumOfSources 0
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "bc250umd.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008854  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+D3DKMTOpenAdapterFromLuid          0x00000000  STATUS_SUCCESS
+    hAdapter 0x40000080 for LUID 00000000:00165011
+QueryAdapterInfo GPUMMU_CAPS       0x00000000  STATUS_SUCCESS
+    VirtualAddressBitCount 48, flags 0x00000000 (ReadOnly 0, NoExecute 0, CacheCoherent 0)
+QueryAdapterInfo NODEMETADATA 0    0x00000000  STATUS_SUCCESS
+    node 0: EngineType 1 "BC-250 GFX" GpuMmu 1 IoMmu 0 flags 0x00000000
+QueryAdapterInfo DRIVERVERSION     0x00000000  STATUS_SUCCESS
+    KMT_DRIVERVERSION 2000 (2000 = WDDM 2.0)
+QueryAdapterInfo WDDM_2_0_CAPS     0x00000000  STATUS_SUCCESS
+    WDDM_2_0_CAPS 0x00000003 (GpuMmuSupported 1, IoMmuSupported 0)
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000018515990000, current value 7000
+    private blob 32 bytes, magic 0x4137424C, Size 65536, 16384x1 pitch 65536 format 21
+D3DKMTCreateAllocation2            0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000180, GpuVirtualAddress reported 0x0000000000000000
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000010000000
+D3DKMTMapGpuVirtualAddress         0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000010000000 (asked 0x0000000010000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident                 0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7002 (waited for 7002)
+D3DKMTLock2                        0x00000000  STATUS_SUCCESS
+    locked at CPU VA 00000185159A0000
+    wrote 8192 qword(s), first 0x4243323530420000 last 0x4243323530421FFF
+D3DKMTUnlock2                      0x00000000  STATUS_SUCCESS
+RESULT va=0x0000000010000000 size=0x10000 pattern=0x4243323530420000 words=8192 luid=00000000:00165011 alloc=0x40000180
+-- holding for 90 s, the witness may read now
+-- teardown
+D3DKMTFreeGpuVirtualAddress        0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+kmtprobe: all steps passed
