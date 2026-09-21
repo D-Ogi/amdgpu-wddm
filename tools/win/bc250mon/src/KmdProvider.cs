@@ -181,51 +181,19 @@ namespace Bc250Mon
         public const int ConfirmAfterSeconds = 60;
 
         readonly KmdRegistry _kmd;
-        readonly string _markerFile;
         readonly int _startTick = Environment.TickCount;
-        bool _confirmed;
         bool? _wasInstalled;
         string _lastError;
 
         public KmdProvider(KmdRegistry kmd, string dataDir)
         {
             _kmd = kmd;
-            _markerFile = System.IO.Path.Combine(dataDir, "kmd-confirmed.txt");
         }
 
         public string Name { get { return "kmd"; } }
         public TimeSpan Period { get { return TimeSpan.FromSeconds(5); } }
 
         int UptimeSeconds { get { return unchecked(Environment.TickCount - _startTick) / 1000; } }
-
-        // A counter Windows raises at every boot. It lets a monitor that was restarted inside one boot see that
-        // the start of this boot was already confirmed, so "once per boot" survives a restart of this process.
-        static string BootId()
-        {
-            try
-            {
-                object v = Registry.GetValue(
-                    @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters",
-                    "BootId", null);
-                return v == null ? null : Convert.ToString(v, CultureInfo.InvariantCulture);
-            }
-            catch { return null; }
-        }
-
-        bool ConfirmedEarlierThisBoot()
-        {
-            string id = BootId();
-            if (id == null) return false;
-            try { return File.Exists(_markerFile) && File.ReadAllText(_markerFile).Trim() == id; }
-            catch { return false; }
-        }
-
-        void RememberConfirmed()
-        {
-            string id = BootId();
-            if (id == null) return;
-            try { File.WriteAllText(_markerFile, id); } catch { }
-        }
 
         // The overlay is 460 px wide and the service path wraps over three lines there, so it is only worth a
         // row when it is not the usual one, i.e. when the debug switch points this provider somewhere else.
@@ -284,32 +252,32 @@ namespace Bc250Mon
             state.SetPanel(p);
         }
 
-        // Once per boot (ADR 0006 point 3). A counter above zero after that means the driver started again
-        // inside this boot, which is worth seeing but is not ours to clear a second time.
-        static string Done(int starts)
-        {
-            return starts > 0 ? "done this boot (the driver has started again since)" : "done this boot";
-        }
+        // ADR 0006 point 3, as refined by E06: a start is good when the driver sits at "first present done" and
+        // the desktop has stayed up for ConfirmAfterSeconds since we first saw that. Every start gets its own
+        // confirmation: once per boot turned out too strict, a disable/enable or a re-install inside one boot
+        // stayed unconfirmed and the next device cycle would have run into the guard.
+        int _pendingStarts = -1, _pendingSince;
 
         string Confirm(State state, KmdSnapshot s, int starts)
         {
-            if (_confirmed) return Done(starts);
-            if (ConfirmedEarlierThisBoot()) { _confirmed = true; return Done(starts); }
-
-            int up = UptimeSeconds;
-            if (!s.LastStage.HasValue || s.LastStage.Value < KmdStages.FirstPresentDone)
+            if (starts == 0) { _pendingStarts = -1; return "nothing to confirm"; }
+            if (!s.LastStage.HasValue || s.LastStage.Value != KmdStages.FirstPresentDone)
+            {
+                _pendingStarts = -1;
                 return "waiting for stage " + KmdStages.FirstPresentDone;
+            }
+            if (_pendingStarts != starts) { _pendingStarts = starts; _pendingSince = Environment.TickCount; }
+            int up = Math.Min(UptimeSeconds, unchecked(Environment.TickCount - _pendingSince) / 1000);
             if (up < ConfirmAfterSeconds)
-                return "waiting, desktop up " + up + " s of " + ConfirmAfterSeconds;
+                return "waiting, good for " + up + " s of " + ConfirmAfterSeconds;
 
             try
             {
                 _kmd.Confirm();
-                RememberConfirmed();
-                _confirmed = true;
-                state.Log(Name, Level.Good, "start confirmed: UnconfirmedStarts reset to 0 (stage " +
-                                            KmdStages.Describe(s.LastStage.Value) + ", desktop up " + up + " s)");
-                return "done this boot";        // the counter has just been cleared, so Done(0) would say the same
+                _pendingStarts = -1;
+                state.Log(Name, Level.Good, "start confirmed: UnconfirmedStarts " + starts + " -> 0 (stage " +
+                                            KmdStages.Describe(s.LastStage.Value) + ", good for " + up + " s)");
+                return "done";
             }
             catch (Exception e)
             {

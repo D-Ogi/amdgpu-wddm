@@ -22,6 +22,7 @@ namespace Bc250Mon
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int index);
         [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int index, int value);
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, int modifiers, int vk);
+        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
 
         readonly State _state;
         readonly Actions _actions;
@@ -31,7 +32,7 @@ namespace Bc250Mon
         // (hence pixel units). Point-sized fonts on a fixed pixel grid fell apart when Windows chose 200 %.
         readonly Font _title = new Font("Segoe UI Semibold", 14.7f, GraphicsUnit.Pixel), _text = new Font("Consolas", 13.3f, GraphicsUnit.Pixel),
                       _small = new Font("Consolas", 11.3f, GraphicsUnit.Pixel), _button = new Font("Consolas", 10f);
-        readonly float _scale;
+        float _scale = 1f;
         volatile bool _dirty = true;
         bool _interactive;
         DateTime _lastPaint;
@@ -44,8 +45,7 @@ namespace Bc250Mon
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(16, 18, 22);
             Opacity = 0.88;
-            using (var g = Graphics.FromHwnd(IntPtr.Zero)) _scale = g.DpiX / 96f;
-            Width = (int)(PanelWidth * _scale); Height = (int)(300 * _scale);
+            Width = PanelWidth; Height = 300;
 
             _buttons.Dock = DockStyle.Bottom; _buttons.AutoSize = true; _buttons.Visible = false;
             _buttons.Padding = new Padding(8); _buttons.BackColor = Color.FromArgb(30, 34, 40);
@@ -61,7 +61,7 @@ namespace Bc250Mon
 
             state.Changed += () => _dirty = true;
             actions.UiRequest += what => BeginInvoke((Action)(() => OnUiRequest(what)));
-            _timer.Tick += (s, e) => { if (_dirty || (DateTime.Now - _lastPaint).TotalSeconds >= 1) { _dirty = false; Invalidate(); } };
+            _timer.Tick += (s, e) => { FollowDpi(); if (_dirty || (DateTime.Now - _lastPaint).TotalSeconds >= 1) { _dirty = false; Invalidate(); } };
             _timer.Start();
         }
 
@@ -84,6 +84,7 @@ namespace Bc250Mon
             Hotkey(HotHide, Keys.F10, "hide/show");
             Hotkey(HotStop, Keys.F12, "STOP");
             Screenshot.OverlayWindow = Handle;      // lets a capture with overlay=0 leave this window out
+            FollowDpi();
             Dock_();
         }
 
@@ -93,6 +94,19 @@ namespace Bc250Mon
         {
             if (!RegisterHotKey(Handle, id, MOD_CONTROL | MOD_ALT, (int)key))
                 _state.Log("ui", Level.Warn, "hotkey Ctrl+Alt+" + key + " (" + what + ") is taken, use the buttons or the API");
+        }
+
+        // The scaling can change under us (Windows picks another one when the display driver changes), and this
+        // process is per-monitor aware, so nobody rescales the window for us.
+        void FollowDpi()
+        {
+            if (!IsHandleCreated) return;
+            float scale = Math.Max(96u, GetDpiForWindow(Handle)) / 96f;
+            if (Math.Abs(scale - _scale) < 0.01f) return;
+            _scale = scale;
+            Width = (int)(PanelWidth * _scale);
+            Dock_();
+            _dirty = true;
         }
 
         void Dock_()
