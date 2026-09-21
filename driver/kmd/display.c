@@ -494,6 +494,13 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
                 if (device->FullWddm) update.ContentTransformation.RotationSupport.Offset0 = 1;
                 changed = TRUE;
             }
+            // dxgkrnl judges RotationSupport on EVERY pfnUpdatePathSupportInfo call, also when only the scaling
+            // branch above asked for it, and the copy taken from the path may still be all zero there.
+            if (changed && device->FullWddm)
+            {
+                update.ContentTransformation.RotationSupport.Identity = 1;
+                update.ContentTransformation.RotationSupport.Offset0 = 1;
+            }
             if (changed) step = topology->pfnUpdatePathSupportInfo(hTopology, &update);
         }
 

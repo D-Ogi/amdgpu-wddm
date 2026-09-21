@@ -28,6 +28,13 @@
 
 // Segment ids are one-based: DXGK_QUERYSEGMENTOUT4.PagingBufferSegmentId is "the index (starting from 1)".
 #define BC250_WDDM_SEGMENT_VRAM 1u
+// An aperture segment, as Microsoft's RosKmd has one: VidMm backs it with system pages and asks for them to be mapped
+// with BuildPagingBuffer (MapApertureSegment), which stage A answers inertly like every other operation. It exists
+// because a GPU-VA context's DMA buffers must be VidMm allocations in an aperture segment: with "system memory"
+// (segment set 0) dxgmms2 maps a NULL allocation into the context's address space and the machine goes down
+// (E16 run 008, VIDMM_DMA_POOL::AddDmaBufferToPool). Stage B gives it the real GART behind it.
+#define BC250_WDDM_SEGMENT_APERTURE 2u
+#define BC250_WDDM_APERTURE_BYTES 0x10000000ull     // 256 MB of GPU address space, no memory behind it in stage A
 #define BC250_WDDM_SEGMENT_SET(id) (1u << ((id) - 1))
 #define BC250_WDDM_NODE_3D 0u
 #define BC250_WDDM_NODE_COUNT 1u            // what DXGK_DRIVERCAPS.GpuEngineTopology reports; see the assert below
@@ -210,6 +217,7 @@ typedef struct _BC250_WDDM {
 C_ASSERT(BC250_WDDM_NODE_COUNT == 1);
 
 static BOOLEAN g_FullWddm;              // the gate, read once in DriverEntry
+static BOOLEAN g_ApertureOffered;       // QUERYSEGMENT4 described segment 2; CreateContext may only name it then
 
 // TRUE once WddmStop has begun. Read under the lock, because the whole point of the flag is the ordering.
 static BOOLEAN WddmStopping(_In_ BC250_WDDM* Wddm)
@@ -787,6 +795,8 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
     if (Query->OutputDataSize < sizeof(*out) || out == NULL) return STATUS_BUFFER_TOO_SMALL;
     count = WddmSegment(Device, &offset, &length) ? 1u : 0u;
 
+    if (count != 0) count = 2;          // the local segment, then the aperture segment
+    g_ApertureOffered = (count == 2);
     if (out->NbSegment == 0)
     {
         out->NbSegment = count;
@@ -810,6 +820,19 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
         // CommitLimit is left 0: the header says it applies to aperture segments only, and this is a memory
         // segment. Everything else in the descriptor - the VPR range, the invalid ranges - is zero for the same
         // reason: stage A has none of it.
+
+        // Segment 2, the aperture, filled as RosKmd fills its own: CPU-visible is the legacy lie the sample
+        // documents ("a bad physical address that will never be used"), the base is the GART's place in the MC
+        // address space on this part (gart_start 0, below the carve-out), and nothing is behind it yet.
+        descriptor = (DXGK_SEGMENTDESCRIPTOR4*)((UCHAR*)out->pSegmentDescriptor + out->SegmentDescriptorStride);
+        RtlZeroMemory(descriptor, sizeof(*descriptor));
+        descriptor->Flags.Aperture = 1;
+        descriptor->Flags.CacheCoherent = 1;
+        descriptor->Flags.CpuVisible = 1;
+        descriptor->BaseAddress.QuadPart = 0;
+        descriptor->CpuTranslatedAddress.QuadPart = (LONGLONG)0xFFFFFFFE00000000ull;
+        descriptor->Size = (SIZE_T)BC250_WDDM_APERTURE_BYTES;
+        descriptor->CommitLimit = (SIZE_T)BC250_WDDM_APERTURE_BYTES;
     }
     out->NbSegment = count;
     // 0 is "system memory": VidMm then allocates the paging buffer itself, contiguous and write-combined. The
@@ -878,7 +901,8 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->PresentationCaps.NoSameBitmapStretchBlt = 1;
     caps->PresentationCaps.NoSameBitmapOverlappedStretchBlt = 1;
     caps->PresentationCaps.NoSameBitmapTransparentBlt = 1;
-    caps->PresentationCaps.NoCacheCoherentApertureMemory = 1;   // there is no aperture segment at all
+    // NoCacheCoherentApertureMemory stays 0 since 0.7.9: the aperture segment is declared CacheCoherent, and the cap
+    // would contradict the segment it describes (coherent is also true of this SoC's unified memory).
     // Not a flag: the header says this field must be >= 2. Four-byte pitch alignment, which is what a 32 bits per
     // pixel surface needs anyway. Zero here would be out of contract, and nothing in the research says so.
     caps->PresentationCaps.AlignmentShift = 2;
@@ -1093,10 +1117,15 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     RtlZeroMemory(&pCreateContext->ContextInfo, sizeof(pCreateContext->ContextInfo));
     // Stage A submits nothing, so the DMA buffer it asks for is the smallest that is still a buffer, and there is
     // no allocation or patch-location list to keep: with virtual addressing there is no patching to do at all.
+    // One page, the size both reference drivers use (ROSD_COMMAND_BUFFER_SIZE, COS_COMMAND_BUFFER_SIZE).
     pCreateContext->ContextInfo.DmaBufferSize = PAGE_SIZE;
-    // System memory, not one of our segments - and it has to stay 0 until there is a real aperture segment: VidMm
-    // holds DMA buffers to the same "aperture segments only" rule that refused the paging buffer (facts M66).
-    pCreateContext->ContextInfo.DmaBufferSegmentSet = 0;
+    // The aperture segment. Not 0 ("system memory"): for a GPU-VA context dxgmms2 maps the DMA buffer's VidMm
+    // allocation into the context's address space, and with segment set 0 there is no allocation (E16 run 008).
+    // Not the local segment either: DMA buffers may only come from aperture segments (facts M66).
+    // With EnableVram closed no segment is declared at all, and a set naming one dxgkrnl never heard of would be
+    // the same class of mistake; 0 is then the only answer left, and that configuration does not reach the CDD.
+    pCreateContext->ContextInfo.DmaBufferSegmentSet =
+        g_ApertureOffered ? BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_APERTURE) : 0;
     pCreateContext->ContextInfo.DmaBufferPrivateDataSize = 0;
     pCreateContext->ContextInfo.AllocationListSize = 0;
     pCreateContext->ContextInfo.PatchLocationListSize = 0;
@@ -1276,12 +1305,18 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
 
         info->hAllocation = object;
         info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
-        info->PitchAlignedSize = 0;                     // no pitch-aligned aperture segment exists
+        // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
+        // reference drivers do (Alignment 64 is theirs too).
+        info->Alignment = 64;
+        info->HintedBank.Value = 0;
+        info->MaximumRenamingListLength = 0;
+        info->pAllocationUsageHint = NULL;
+        info->PitchAlignedSize = 0;                     // the aperture segment is not a pitch-aligned one
         info->PreferredSegment.Value = 0;
         info->PreferredSegment.SegmentId0 = BC250_WDDM_SEGMENT_VRAM;
         info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_VRAM);
         info->SupportedWriteSegmentSet = BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_VRAM);
-        info->EvictionSegmentSet = 0;                   // nothing to evict to: there is no aperture segment
+        info->EvictionSegmentSet = 0;                   // surfaces live in the local segment only; no eviction target
         info->PhysicalAdapterIndex = 0;
         info->FlagsWddm2.Value = 0;
         info->FlagsWddm2.CpuVisible = 1;                // the whole segment is CPU visible (facts M31)
@@ -1373,9 +1408,21 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGK
     // Which operations VidMm asks for is the other half of stage A's evidence, and it decides what stage B has to
     // build first. All of them are counted; only the first few are logged.
     if (wddm != NULL) WddmNoteKind(wddm->PagingOps, (ULONG)pBuildPagingBuffer->Operation, &wddm->PagingOpsOverflow);
-    if (WddmFirstCalls(wddm, WddmDdiBuildPagingBuffer))
-        GuardLog("wddm: BuildPagingBuffer operation %u, %u bytes free, pass offset %u",
-                 (ULONG)pBuildPagingBuffer->Operation, pBuildPagingBuffer->DmaSize, pBuildPagingBuffer->MultipassOffset);
+    // The first few calls of EACH operation, not of the DDI: a thousand page table updates come first (E16 run 005)
+    // and would use up the DDI's allowance before the first aperture mapping shows.
+    {
+        static volatile LONG seen[32];
+        ULONG operation = (ULONG)pBuildPagingBuffer->Operation;
+        ULONG segment = 0;
+
+        (void)WddmFirstCalls(wddm, WddmDdiBuildPagingBuffer);
+        if (operation == DXGK_OPERATION_MAP_APERTURE_SEGMENT) segment = pBuildPagingBuffer->MapApertureSegment.SegmentId;
+        else if (operation == DXGK_OPERATION_UNMAP_APERTURE_SEGMENT) segment = pBuildPagingBuffer->UnmapApertureSegment.SegmentId;
+        if (wddm != NULL && operation < RTL_NUMBER_OF(seen) && InterlockedIncrement(&seen[operation]) <= 4 &&
+            KeGetCurrentIrql() <= DISPATCH_LEVEL)
+            GuardLog("wddm: BuildPagingBuffer operation %u segment %u, %u bytes free, pass offset %u", operation, segment,
+                     pBuildPagingBuffer->DmaSize, pBuildPagingBuffer->MultipassOffset);
+    }
     return STATUS_SUCCESS;
 }
 
