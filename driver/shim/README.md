@@ -371,14 +371,15 @@ Teardown: the engines read halted - `CP_ME_CNTL 0x15000000`, `CP_MEC_CNTL 0x5000
 both `SDMAn_F32_CNTL` with `HALT` set - and the 18 registers it touches are all named by a trace
 window, so the miniport's allow-list needs nothing added for it.
 
-**Re-run: it fails, and that is the finding rather than a defect in the transcription.**
-`bc250_gfx_cp_resume` returns `BC250_ETIME` in `bc250_kiq_init_register`, because nothing has cleared
-the KIQ's own `CP_HQD_ACTIVE` and the dequeue request that would clear it goes to a halted MEC. See
-"Undo" above for the upstream lines. The second run touches exactly one register no trace window
-names, `CP_HQD_DEQUEUE_REQUEST` (0x0C884) - a register the miniport would have to allow before any
-second run can be attempted on hardware.
+Re-run: the whole bring-up succeeds a second time on the state the teardown left, 357 writes against
+the first run's 354, with 13 ring tests passing across the two. It touches **no register outside the
+trace windows**, so a second run needs nothing added to the miniport's table.
 
-This is the one check `run_gfx.ps1` reports as failing; the bring-up comparison itself is exact.
+The 3-write difference is accounted for exactly, which is the point of checking it rather than
+reporting a count: +4 from the declared deviation's branch (`CP_HQD_ACTIVE`, `CP_HQD_PQ_RPTR`,
+`CP_HQD_PQ_WPTR_LO`, `CP_HQD_PQ_WPTR_HI`), and -1 for `RLC_SPM_MC_CNTL`, which upstream's own
+`pre_data != data` guard (`gfx_v10_0.c:8297`) skips because the field already holds what the first
+run put there. The test lists every register whose write count differs, in both directions.
 
 **The MQD comparison found a real bug.** All eight compute MQDs now agree with unit A on every one of
 the 20 comparable fields, but they did not at first: `compute_ring[0]` was missing
@@ -488,21 +489,28 @@ What it leaves behind, measured by the host test rather than asserted: `CP_ME_CN
 distinct registers and every one of them is already named by a trace window, so it needs nothing
 added to the miniport's generated allow-list.
 
-**A second `bc250_gfx_hw_init()` after this does not work yet, and the reason is upstream's.** The
-KIQ's own HQD is the one queue nothing dequeues: `gfx_v10_0_hw_fini()` unmaps the client queues
+A second `bc250_gfx_hw_init()` after this works, and getting there needed the one declared deviation
+from upstream's behaviour in this driver (`driver/amdgpu-import/PROVENANCE.md`).
+
+The KIQ's own HQD is the queue nothing dequeues: `gfx_v10_0_hw_fini()` unmaps the client queues
 through the KIQ but never the KIQ itself, and the only write of `CP_HQD_ACTIVE = 0` in `gfx_v10_0.c`
-is the SR-IOV one at :7029. So on a second run `bc250_kiq_init_register()` finds `CP_HQD_ACTIVE` set,
-writes `CP_HQD_DEQUEUE_REQUEST = 1` and polls - while the MEC is halted, because
+is the SR-IOV one at :7029. So on a second run `bc250_kiq_init_register()` finds `CP_HQD_ACTIVE` set
+and upstream would write `CP_HQD_DEQUEUE_REQUEST = 1` and poll - while the MEC is halted, because
 `gfx_v10_0_cp_compute_enable(adev, true)` runs at :7208 from `kcq_resume` at :7243, one step *after*
 `kiq_resume` at :7239. Upstream never notices: it does not look at the poll's outcome (`j` is unused
 after the loop at :7037-7041), and on the parts it exercises either GFX power is dropped across
 suspend or a reset intervenes, so `CP_HQD_ACTIVE` reads 0 and the branch is skipped. This part keeps
-GFX powered, so it lands in the case upstream has no mechanism for. The transcription returns
-`BC250_ETIME` rather than falling through silently, which is why the host test reports it.
+GFX powered, so it lands in the case upstream has no mechanism for.
 
-Settling it needs a declared deviation, and none is in the tree. The host test models the CP's
-dequeue handshake only while the MEC is actually running (`backend_add_reaction()` in
-`test/backend_trace.h`), so the replay reproduces the failure instead of papering over it.
+What we do: read `CP_MEC_CNTL` first, and when the engine that would answer is halted, take
+upstream's own `:7029` write on that measured condition instead of a handshake nothing can service.
+The live-CP arm is upstream's, unchanged, and a cold boot never enters the branch at all - which is
+why the 354-write comparison against unit A is byte-identical either way.
+
+The host test models the CP's dequeue handshake **only while the MEC is running**
+(`backend_add_reaction()` in `test/backend_trace.h`). That condition is what makes the check
+meaningful: without it the replay would answer a poll the hardware cannot answer, and did, which is
+how the problem stayed hidden through an earlier round of this work.
 
 ### Interrupts, after the interrupt ring exists (M6)
 

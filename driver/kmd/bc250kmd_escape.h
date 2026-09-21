@@ -14,7 +14,8 @@
 #define BC250_ESCAPE_RUN_GART 7u            // BC250_ESCAPE_GART in: Op; out: what the sequence wrote (or would write)
 #define BC250_ESCAPE_RUN_PSP 8u             // BC250_ESCAPE_PSP in: Op; out: register writes and PSP commands
 #define BC250_ESCAPE_RUN_GFX 9u             // BC250_ESCAPE_GFX in: Op, LastStage; out: stages, register and doorbell writes
-#define BC250_KMD_VERSION 0x00050005u       // milestone 5 work, revision 3
+#define BC250_ESCAPE_RUN_IH 10u             // BC250_ESCAPE_IH in: Op; out: interrupt counts, vectors seen, register writes
+#define BC250_KMD_VERSION 0x00060000u       // milestone 6 work, revision 0
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -28,6 +29,7 @@
 #define BC250_ESCAPE_FLAG_GART 16u          // the EnableGart gate was open at start
 #define BC250_ESCAPE_FLAG_PSP 32u           // the EnablePsp gate was open at start
 #define BC250_ESCAPE_FLAG_GFX 64u           // the EnableGfx gate was open at start
+#define BC250_ESCAPE_FLAG_IH 128u           // the EnableIh gate was open at start
 
 // The two independent ways to the same VRAM byte (vram.c).
 #define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
@@ -183,3 +185,56 @@ typedef struct _BC250_ESCAPE_GFX {
     BC250_ESCAPE_DOORBELL Doorbells[BC250_GFX_MAX_DOORBELLS];
     BC250_ESCAPE_WRITE Writes[BC250_GFX_MAX_WRITES];
 } BC250_ESCAPE_GFX;
+
+// ---- BC250_ESCAPE_RUN_IH (ih.c): the interrupt controller's ring, interrupt and DPC counts ---------------------------------
+#define BC250_IH_OP_PLAN 0u                 // the init sequence against the real registers, no write
+#define BC250_IH_OP_INIT 1u                 // ring set up and enabled
+#define BC250_IH_OP_FINI 2u                 // ring disabled, memory given back
+#define BC250_IH_OP_STATE 3u                // nothing but the out fields; answers with the gate closed as well
+#define BC250_IH_MAX_WRITES 64
+#define BC250_IH_MAX_KINDS 16
+#define BC250_IH_MAX_LAST 32
+
+// One interrupt vector as the DPC decoded it (amdgpu_iv_entry).
+typedef struct _BC250_ESCAPE_IV {
+    unsigned long ClientId, SourceId, RingId, VmId, VmIdSrc, Pasid;
+    unsigned long SrcData[4];
+    unsigned long long Timestamp;
+} BC250_ESCAPE_IV;
+
+typedef struct _BC250_ESCAPE_IV_KIND {
+    unsigned long ClientId, SourceId, Count;
+} BC250_ESCAPE_IV_KIND;
+
+typedef struct _BC250_ESCAPE_IH {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_IH
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Op;                       // in: BC250_IH_OP_*
+    long Result;                            // out: the shim's return code
+    unsigned long FaultOffset;              // out: first refused register access of the sequence
+    unsigned long WriteCount;               // out: register writes issued (or planned)
+    unsigned long InterruptIsMessage;       // out: what Windows assigned: 1 a message (MSI), 0 the line
+    unsigned long InterruptVector;
+    unsigned long InterruptCount;           // out: calls of the interrupt routine since the device started, ours or not
+    unsigned long LastMessageNumber;
+    unsigned long Active;                   // out: the ring is enabled
+    unsigned long OurInterrupts;            // out: calls taken as ours
+    unsigned long DpcCount;
+    unsigned long EntryCount;               // out: vectors consumed from the ring
+    unsigned long OverflowCount;
+    unsigned long Rptr, Wptr;
+    unsigned long KindCount;
+    unsigned long LastCount;
+    BC250_ESCAPE_IV_KIND Kinds[BC250_IH_MAX_KINDS];     // how many of each (client, source) pair
+    BC250_ESCAPE_IV Last[BC250_IH_MAX_LAST];            // the most recent vectors, oldest first
+    BC250_ESCAPE_WRITE Writes[BC250_IH_MAX_WRITES];
+} BC250_ESCAPE_IH;
+
+// The first escape struct with mixed 4 and 8 byte alignment (four bytes of padding before Last[]). The driver and the
+// CLI must agree on it; a packing option on either side makes this a build failure instead of garbage vectors.
+typedef char BC250_ESCAPE_IV_SIZE_CHECK[(sizeof(BC250_ESCAPE_IV) == 48) ? 1 : -1];
+typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2336) ? 1 : -1];

@@ -106,3 +106,20 @@ that produced the trace is the one that is right.
 
 Both are recorded rather than silently absorbed, because a future reader comparing our code with a
 mainline checkout would otherwise find a difference and have no way to tell whether it was a bug.
+
+### Deviations from upstream's behaviour, where upstream has no mechanism for this part
+
+The two above follow a different kernel. This one follows neither, and is the only place where this
+driver knowingly does something amdgpu does not.
+
+| Where | What upstream does | Why it cannot work here | What we do instead |
+| --- | --- | --- | --- |
+| `gfx_v10_0_kiq_init_register()`, the `CP_HQD_ACTIVE` branch (`gfx_v10_0.c:7034-7050`), transcribed in `driver/shim/bc250_gfx.c` | Writes `CP_HQD_DEQUEUE_REQUEST = 1` and polls `CP_HQD_ACTIVE` until the CP clears it (`:7036-7041`) | A dequeue request is serviced by the MEC, and on a re-init without a GPU reset the MEC is halted: `hw_fini` halted it and `gfx_v10_0_cp_compute_enable(adev, true)` runs at `:7208` from `kcq_resume` (`:7243`), one step **after** `kiq_resume` (`:7239`). Nothing else clears the KIQ's own `CP_HQD_ACTIVE` - `hw_fini` unmaps the client queues but never the KIQ (`amdgpu_gfx.c:531, :584`), and the only `CP_HQD_ACTIVE = 0` in the file is SR-IOV's at `:7028-7029`. Upstream never notices because it does not check the poll's outcome (`j` unused after `:7041`) and its parts drop GFX power across suspend or take a reset, so the branch is not entered | Read `CP_MEC_CNTL`; if a halt bit is set, take upstream's own `:7029` write (`CP_HQD_ACTIVE = 0`) on that measured condition instead of the handshake, and skip only the `CP_HQD_DEQUEUE_REQUEST` restore, which exists to undo a request that was never made. The live-CP arm is upstream's, unchanged. Cold boot is unaffected: `CP_HQD_ACTIVE` reads 0 and the branch is not entered, which the 354-write replay confirms |
+
+Measured consequence, from `driver/shim/test/run_gfx.ps1`: with this, teardown followed by the whole
+bring-up again succeeds (357 writes against the first run's 354, 13 ring tests across the two), and
+the second run touches **no register outside the trace windows the miniport's table is generated
+from**. The 3-write difference is fully accounted for: +4 from this branch (`CP_HQD_ACTIVE`,
+`CP_HQD_PQ_RPTR`, `CP_HQD_PQ_WPTR_LO`, `CP_HQD_PQ_WPTR_HI`) and -1 for `RLC_SPM_MC_CNTL`, which
+upstream's own `pre_data != data` guard (`gfx_v10_0.c:8297`) skips because the field already holds
+the value the first run put there.

@@ -15,6 +15,9 @@
 #define BC250_REG_MMHUB_MMVM_INVALIDATE_ENG17_SEM 0x69B88ul
 #define BC250_REG_GC_VGT_ESGS_RING_SIZE 0x088C8ul
 #define BC250_REG_GC_VGT_ESGS_RING_SIZE_UMD 0x30900ul
+#define BC250_REG_OSSSYS_IH_RB_CNTL 0x04480ul
+#define BC250_REG_OSSSYS_IH_RB_RPTR 0x0448Cul
+#define BC250_REG_OSSSYS_IH_RB_WPTR 0x04490ul
 
 // The tables are for mmio.c alone; everybody else gets the names.
 #ifdef BC250_REGS_WITH_TABLES
@@ -1125,6 +1128,23 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x69B88ul,   // MMHUB.MMVM_INVALIDATE_ENG17_SEM
     0x69BD0ul,   // MMHUB.MMVM_INVALIDATE_ENG17_REQ
     0x69C18ul,   // MMHUB.MMVM_INVALIDATE_ENG17_ACK
+};
+
+// E12: what amdgpu wrote on unit A in this step (E03 trace, 0.25282 to 0.2529 s, names matching
+// ^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$)), plus the registers it only polled. For the kernel command alone.
+#define BC250_MMIO_IH_ALLOW_COUNT 11
+static const unsigned long g_MmioIhAllow[BC250_MMIO_IH_ALLOW_COUNT] = {
+    0x03844ul,   // NBIO.INTERRUPT_CNTL
+    0x03848ul,   // NBIO.INTERRUPT_CNTL2
+    0x03BC8ul,   // NBIO.BIF_IH_DOORBELL_RANGE
+    0x04480ul,   // OSSSYS.IH_RB_CNTL
+    0x04484ul,   // OSSSYS.IH_RB_BASE
+    0x04488ul,   // OSSSYS.IH_RB_BASE_HI
+    0x0448Cul,   // OSSSYS.IH_RB_RPTR
+    0x04490ul,   // OSSSYS.IH_RB_WPTR
+    0x04494ul,   // OSSSYS.IH_RB_WPTR_ADDR_HI
+    0x04498ul,   // OSSSYS.IH_RB_WPTR_ADDR_LO
+    0x0449Cul,   // OSSSYS.IH_DOORBELL_RPTR
 };
 
 #endif

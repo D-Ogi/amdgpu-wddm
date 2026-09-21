@@ -879,19 +879,59 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 	/* disable wptr polling */
 	WREG32_FIELD15(GC, 0, CP_PQ_WPTR_POLL_CNTL, EN, 0);
 
-	/* disable the queue if it's active */
+	/* disable the queue if it's active.
+	 *
+	 * DECLARED DEVIATION (driver/amdgpu-import/PROVENANCE.md). Upstream always asks the CP to
+	 * dequeue and then polls CP_HQD_ACTIVE until it clears. That handshake needs a running MEC, and
+	 * on the path this driver has to support there is none: bc250_gfx_hw_fini() halts the MEC, and
+	 * nothing unhalts it before here, because gfx_v10_0_cp_compute_enable(adev, true) runs from
+	 * kcq_resume (gfx_v10_0.c:7208, called at :7243) one step AFTER kiq_resume (:7239). Upstream
+	 * does not notice, because it never looks at the poll's outcome - j is unused after the loop at
+	 * :7037-7041 - and on the parts it exercises GFX power is dropped across suspend or a reset
+	 * intervenes, so CP_HQD_ACTIVE reads 0 and this branch is never taken at all. This part keeps
+	 * GFX powered, so it lands in the case upstream has no mechanism for.
+	 *
+	 * So: read CP_MEC_CNTL, and if the engine that would service the request is halted, take
+	 * upstream's own "inactivate the queue" write instead - gfx_v10_0.c:7028-7029, which upstream
+	 * reserves for SR-IOV - on a measured condition rather than on amdgpu_sriov_vf(). It is safe
+	 * precisely because the MEC is halted: there is no running CP whose state could be left
+	 * inconsistent, and the whole HQD is reprogrammed and re-activated a few lines below.
+	 *
+	 * The CP_HQD_DEQUEUE_REQUEST restore stays in the live-CP arm only. It exists to undo the
+	 * request this function made; where no request was made there is nothing to undo, and leaving
+	 * it alone puts the register in exactly the state the first, trace-matching bring-up leaves it
+	 * in - it is the one register in this branch no trace window names, so not writing it keeps a
+	 * second bring-up inside the miniport's generated table.
+	 *
+	 * On a cold boot none of this happens: CP_HQD_ACTIVE reads 0 and the branch is skipped, which
+	 * is why the 354-write comparison against unit A is unaffected either way. */
 	if (RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1) {
-		WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, 1);
-		for (j = 0; j < adev->usec_timeout; j++) {
-			if (!(RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1))
-				break;
-			bc250_shim_udelay(1);
+		bool mec_halted = (RREG32_SOC15(GC, 0, mmCP_MEC_CNTL) &
+				   (CP_MEC_CNTL__MEC_ME1_HALT_MASK |
+				    CP_MEC_CNTL__MEC_ME2_HALT_MASK)) != 0;
+		bool timed_out = false;
+
+		if (mec_halted) {
+			WREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE, 0);
+		} else {
+			WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, 1);
+			for (j = 0; j < adev->usec_timeout; j++) {
+				if (!(RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1))
+					break;
+				bc250_shim_udelay(1);
+			}
+			timed_out = j >= adev->usec_timeout;
+			WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST,
+				     mqd->cp_hqd_dequeue_request);
 		}
-		WREG32_SOC15(GC, 0, mmCP_HQD_DEQUEUE_REQUEST, mqd->cp_hqd_dequeue_request);
+
 		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR, mqd->cp_hqd_pq_rptr);
 		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_LO, mqd->cp_hqd_pq_wptr_lo);
 		WREG32_SOC15(GC, 0, mmCP_HQD_PQ_WPTR_HI, mqd->cp_hqd_pq_wptr_hi);
-		if (j >= adev->usec_timeout)
+
+		/* Upstream carries on regardless; a dequeue that never completed on a LIVE CP means the
+		 * queue is still running and reprogramming it underneath would be worse than stopping. */
+		if (timed_out)
 			return BC250_ETIME;
 	}
 

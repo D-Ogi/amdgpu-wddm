@@ -11,6 +11,8 @@
 //                                 EnableGart. Default 0.
 //     EnableGfx        REG_DWORD  1 = also allow the GFX command of gfx.c its own table, g_MmioGfxAllow. Needs
 //                                 EnablePsp. Default 0.
+//     EnableIh         REG_DWORD  1 = also allow the IH command of ih.c its own table, g_MmioIhAllow. Needs
+//                                 EnableGfx (the ring is GTT memory of gpumem.c). Default 0.
 //
 // Both are read once per start. A read of a wrong BAR5 address can hang this SoC (facts M16) and some reads
 // change state (facts M25), hence a table for reads as well.
@@ -79,6 +81,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioGartEnabled = FALSE;
     Device->MmioPspEnabled = FALSE;
     Device->MmioGfxEnabled = FALSE;
+    Device->MmioIhEnabled = FALSE;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);
@@ -98,6 +101,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioGartEnabled = (GuardReadSetting(L"EnableGart", 0) == 1);
     Device->MmioPspEnabled = Device->MmioGartEnabled && (GuardReadSetting(L"EnablePsp", 0) == 1);
     Device->MmioGfxEnabled = Device->MmioPspEnabled && (GuardReadSetting(L"EnableGfx", 0) == 1);
+    Device->MmioIhEnabled = Device->MmioGfxEnabled && (GuardReadSetting(L"EnableIh", 0) == 1);
     GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
@@ -110,6 +114,7 @@ void MmioStop(_Inout_ BC250_DEVICE* Device)
     Device->MmioGartEnabled = FALSE;
     Device->MmioPspEnabled = FALSE;
     Device->MmioGfxEnabled = FALSE;
+    Device->MmioIhEnabled = FALSE;
 }
 
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
@@ -203,4 +208,26 @@ ULONG MmioGartTable(_Outptr_ const unsigned long** Table)
 {
     *Table = g_MmioGartAllow;
     return BC250_MMIO_GART_ALLOW_COUNT;
+}
+
+// The IH command's registers (ih.c): what amdgpu read or wrote on unit A in navi10_ih_irq_init(). The DPC's three
+// registers are in this table too; it reaches them through these functions, which take no lock and touch nothing
+// but the mapping.
+NTSTATUS MmioIhRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
+{
+    *Value = 0;
+    if (Device->Mmio == NULL || !Device->MmioIhEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioIhAllow, BC250_MMIO_IH_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    *Value = READ_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4]);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS MmioIhWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    if (Device->Mmio == NULL || !Device->MmioIhEnabled) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioIhAllow, BC250_MMIO_IH_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
+    return STATUS_SUCCESS;
 }

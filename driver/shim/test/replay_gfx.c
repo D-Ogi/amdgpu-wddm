@@ -872,14 +872,24 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 		bool remapped = false;
 		unsigned int s;
 
+		unsigned int before = 0;
+
 		r = bc250_gfx_grbm_cam_probe(adev, &remapped);
 		if (r)
 			printf("  grbm_cam_probe returned %d\n", r);
+		if (verbose)
+			printf("    grbm_cam_probe        %3u writes\n", backend_write_count());
+		before = backend_write_count();
 		for (s = 0; r == 0 && s < ARRAY_SIZE(stage); s++) {
 			r = stage[s].fn(adev);
 			if (r)
 				printf("  %s returned %d   <-- this is where it stops\n",
 				       stage[s].name, r);
+			if (verbose) {
+				printf("    %-21s %3u writes\n", stage[s].name,
+				       backend_write_count() - before);
+				before = backend_write_count();
+			}
 		}
 	}
 	backend_touched_stop();
@@ -904,6 +914,67 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 	if (backend_cp_stub_rejects() != 0) {
 		printf("  %u malformed ring-test packets   <-- wrong\n", backend_cp_stub_rejects());
 		bad++;
+	}
+
+	/* Where the second run's write stream differs in SHAPE from the first's, per register. The two
+	 * are not required to be identical - several writes are read-modify-write and the second run
+	 * starts from a different state - but every difference should be one this file can name, so it
+	 * is listed rather than left as a bare count. */
+	{
+		const struct bc250_reg_write *w = backend_writes();
+		unsigned int n = backend_write_count(), i, k, shown = 0;
+
+		printf("  where the two runs differ in how often they write a register:\n");
+		/* Both directions. Walking only the second run's offsets would hide a register the
+		 * first run wrote and the second does not, which is the more interesting case. */
+		for (i = 0; i < n + g_trace_count; i++) {
+			unsigned int mine = 0, theirs = 0, seen_before = 0;
+			u32 off = i < n ? w[i].byte_offset : g_trace[i - n].byte_offset;
+
+			for (k = 0; k < i; k++)
+				if ((k < n ? w[k].byte_offset : g_trace[k - n].byte_offset) == off)
+					seen_before = 1;
+			if (seen_before)
+				continue;
+			for (k = 0; k < n; k++)
+				if (w[k].byte_offset == off)
+					mine++;
+			for (k = 0; k < g_trace_count; k++)
+				if (g_trace[k].byte_offset == off)
+					theirs++;
+			if (mine == theirs)
+				continue;
+			printf("    %-34s 0x%05X   first %u, second %u\n",
+			       seen_name(off) ? seen_name(off) : "(unnamed)", off, theirs, mine);
+			shown++;
+		}
+		if (shown == 0)
+			printf("    none - the two runs write the same registers the same number of times\n");
+		{
+			unsigned int distinct = 0, sum_mine = 0, sum_theirs = 0;
+
+			for (i = 0; i < n + g_trace_count; i++) {
+				unsigned int seen_before = 0;
+				u32 off = i < n ? w[i].byte_offset : g_trace[i - n].byte_offset;
+
+				for (k = 0; k < i; k++)
+					if ((k < n ? w[k].byte_offset
+						   : g_trace[k - n].byte_offset) == off)
+						seen_before = 1;
+				if (seen_before)
+					continue;
+				distinct++;
+				for (k = 0; k < n; k++)
+					if (w[k].byte_offset == off)
+						sum_mine++;
+				for (k = 0; k < g_trace_count; k++)
+					if (g_trace[k].byte_offset == off)
+						sum_theirs++;
+			}
+			printf("    (%u distinct offsets; they account for %u of the second run's %u"
+			       " writes and %u of the first's %u)\n",
+			       distinct, sum_mine, n, sum_theirs, g_trace_count);
+		}
 	}
 
 	bad += survey_fini_registers("the second bring-up", adev, verbose);

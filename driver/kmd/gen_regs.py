@@ -48,6 +48,9 @@ SEQUENCES = [
                    r"NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|"
                    r"BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)",
      [(0.0375, 0.0385), (0.2495, 0.2528), (0.5496, 0.551), (1.560, 1.562)], []),
+    # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
+    # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
+    ("Ih", "E12", r"^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$)", [(0.25282, 0.25290)], []),
 ]
 
 # (ip, register, experiment that put it here, why it is safe)
@@ -66,7 +69,9 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
          # gfx.c: the one write that passes a stopped sequence (gpumem.c flushes the TLB after its binds)
          ("MMHUB", "mmMMVM_INVALIDATE_ENG17_SEM"),
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
-         ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD")]
+         ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD"),
+         # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
+         ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR")]
 
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 

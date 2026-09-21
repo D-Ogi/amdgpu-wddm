@@ -2,7 +2,7 @@
 
 State: **run 001 done on unit A, 2026-09-21. M5's criterion is met: PM4 packets written by the CPU into rings in
 GART memory executed; every ring test passed. H2 to H8, H9a and H10 hold, H1 holds except one sub-claim, H9b was
-not attempted.**
+not attempted in run 001 and was settled in E12 run 001 (a second bring-up in the same boot works, facts M39).**
 
 ## Why
 
@@ -168,7 +168,12 @@ Run 001, 2026-09-21, unit A, bc250kmd 0.5.5.0 (after two attempts that executed 
   memory given back to Windows (engines read halted). New observation: with the engines halted this way
   `GRBM_STATUS` reads `0xA0003028` and `GRBM_STATUS2` `0x30000008` (busy bits of the CP front ends stay set),
   also after the device restart; a reboot of the target clears them.
-- H9b not attempted (predicted to fail, above). The shim has a declared fix in work.
+- H9b not attempted in run 001 (predicted to fail, above). Settled later the same day in E12 run 001 with the
+  declared deviation in the tree (`driver/amdgpu-import/PROVENANCE.md`: `CP_HQD_ACTIVE = 0` instead of a dequeue
+  request when the MEC is halted): run, undo, run again, undo in one boot, all seven stages rc 0 both times, all
+  ring tests pass, no register outside the table. The second run writes 358 registers against 355; the edit script
+  is `evidence/windows/2026-09-21-E12-run-001/comparison.txt` (facts M39). Open: stage 6 takes 5222 us in the second
+  run against 349 us in the first.
 - H10 holds (boot 2): device restart with all engines running: the new instance reports no stage done and no
   memory held, engines halted, `GCVM_CONTEXT0_CNTL` back at the firmware's `0x007FFE80`, no fault bit, machine
   and picture fine.

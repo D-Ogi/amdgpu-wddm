@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/21/2026,0.5.5.0
+DriverVer   = 09/21/2026,0.6.0.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -32,6 +32,18 @@ CopyFiles    = Bc250_Files
 [Bc250_Files]
 bc250kmd.sys
 
+; Message-signalled interrupts (milestone M6). The function has MSI (1 of 4 messages) and MSI-X (3) capabilities
+; (evidence/linux/2026-09-21-E01-recon/lspci-gpu-vvv.txt); amdgpu used them on this unit. Without this section
+; Windows assigns the line interrupt. The driver enables no interrupt source unless the EnableIh gate is open.
+[Bc250_Install.HW]
+AddReg = Bc250_Msi
+
+[Bc250_Msi]
+HKR, "Interrupt Management", , 0x00000010
+HKR, "Interrupt Management\MessageSignaledInterruptProperties", , 0x00000010
+HKR, "Interrupt Management\MessageSignaledInterruptProperties", MSISupported, 0x00010001, 1
+HKR, "Interrupt Management\MessageSignaledInterruptProperties", MessageNumberLimit, 0x00010001, 1
+
 [Bc250_Install.Services]
 AddService = bc250kmd, 0x00000002, Bc250_Service
 
@@ -55,6 +67,7 @@ HKR, Parameters, EnableVramWrite,   0x00010001, 0
 HKR, Parameters, EnableGart,        0x00010001, 0
 HKR, Parameters, EnablePsp,         0x00010001, 0
 HKR, Parameters, EnableGfx,         0x00010001, 0
+HKR, Parameters, EnableIh,          0x00010001, 0
 
 [Strings]
 Provider   = "BC-250 lab (D-Ogi)"

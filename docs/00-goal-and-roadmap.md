@@ -39,7 +39,7 @@ eleven commands accepted, same register traffic and timing as amdgpu on this uni
 and releases SDMA). M5 is reached (E11, facts M36, M37): amdgpu's GFX and SDMA bring-up for this part, transcribed
 against AMD's unmodified tables and run in stages inside the miniport, makes the same 355 register writes amdgpu
 made (14 of them carrying our addresses), and all eleven ring tests pass with the rings in system memory behind
-our GART. Next: M6, the IH ring and the first interrupt, fences, a compute dispatch.
+our GART. M6 in progress: Windows assigns the miniport a message interrupt and it is silent with no source enabled (E12 part A, facts M38); a second bring-up in the same boot works (M39). Next: the IH ring and the first interrupt, fences, a compute dispatch.
 
 Honest sizing: M0-M1 days, M2-M3 weeks, M4-M6 the real research, M7-M8 months to years. The project stays useful at every step because each milestone leaves verified, published knowledge.
 

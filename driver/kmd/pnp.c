@@ -20,9 +20,12 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
     DisplayUnmapFramebuffer(device);
+    IhRemove(device);
     ExFreePoolWithTag(device, BC250_TAG);
     return STATUS_SUCCESS;
 }
+
+static void NoteInterruptResource(_Inout_ BC250_DEVICE* Device);
 
 NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_START_INFO DxgkStartInfo,
                           _In_ PDXGKRNL_INTERFACE DxgkInterface, _Out_ PULONG NumberOfVideoPresentSources,
@@ -69,12 +72,14 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     if (!NT_SUCCESS(status)) goto failed;
     GuardStage(StageStartFramebufferMapped);
 
+    NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
     VramStart(device);      // same rule
     GartStart(device);      // same rule
     PspStart(device);       // same rule
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
+    IhStart(device);        // same rule
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
@@ -99,7 +104,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
     device->CommitSeen = FALSE;
     device->PresentSeen = FALSE;
-    GfxStop(device);        // first, in amdgpu's order: engines halted, then their memory (gpumem.c) given back or kept
+    IhStop(device);         // no interrupt of ours from here on
+    GfxStop(device);        // then, in amdgpu's order: engines halted, then their memory (gpumem.c) given back or kept
     PspStop(device);        // then, in amdgpu's order: the PSP forgets our ring and TMR while the GART state still stands
     GartStop(device);       // while the registers are still mapped: it may have a state to give back
     VramStop(device);
@@ -137,17 +143,44 @@ NTSTATUS Bc250DispatchIoRequest(_In_ const PVOID MiniportDeviceContext, _In_ ULO
     return STATUS_NOT_SUPPORTED;
 }
 
+// What Windows assigned: a message (INF, MessageSignaledInterruptProperties) or the line. For the log and the IH state.
+static void NoteInterruptResource(_Inout_ BC250_DEVICE* Device)
+{
+    PCM_RESOURCE_LIST list = Device->DeviceInfo.TranslatedResourceList;
+    ULONG i, j, found = 0;
+
+    InterlockedExchange(&Device->InterruptCount, 0);
+    for (i = 0; list != NULL && i < list->Count; i++)
+    {
+        PCM_PARTIAL_RESOURCE_LIST partial = &list->List[i].PartialResourceList;
+        for (j = 0; j < partial->Count; j++)
+        {
+            PCM_PARTIAL_RESOURCE_DESCRIPTOR d = &partial->PartialDescriptors[j];
+            if (d->Type != CmResourceTypeInterrupt) continue;
+            found++;
+            Device->InterruptIsMessage = (d->Flags & CM_RESOURCE_INTERRUPT_MESSAGE) != 0;
+            Device->InterruptVector = Device->InterruptIsMessage ? d->u.MessageInterrupt.Translated.Vector : d->u.Interrupt.Vector;
+            GuardLog("interrupt resource %u: %s, vector 0x%X, flags 0x%X", found, Device->InterruptIsMessage ? "message" : "line",
+                     Device->InterruptVector, (ULONG)d->Flags);
+        }
+    }
+    if (found == 0) GuardLog("no interrupt resource");
+}
+
+// The display path enables no interrupt source; the only one this driver ever enables is the IH ring (ih.c, behind its
+// gate). Everything else that fires on a shared line is not ours. Counted either way: the count is evidence.
 BOOLEAN Bc250InterruptRoutine(_In_ const PVOID MiniportDeviceContext, _In_ ULONG MessageNumber)
 {
-    // M3 enables no interrupt source. Whatever fires on a shared line is not ours.
-    UNREFERENCED_PARAMETER(MiniportDeviceContext);
-    UNREFERENCED_PARAMETER(MessageNumber);
-    return FALSE;
+    BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+
+    InterlockedIncrement(&device->InterruptCount);
+    InterlockedExchange(&device->LastMessageNumber, (LONG)MessageNumber);
+    return IhInterrupt(device);
 }
 
 void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
 {
-    UNREFERENCED_PARAMETER(MiniportDeviceContext);
+    IhDpc((BC250_DEVICE*)MiniportDeviceContext);
 }
 
 NTSTATUS Bc250QueryChildRelations(_In_ const PVOID MiniportDeviceContext,

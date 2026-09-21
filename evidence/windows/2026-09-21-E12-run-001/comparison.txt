@@ -1,0 +1,22 @@
+first run: 355 writes and 69 TLB flush writes   second run: 358 and 69
+  only first  [ 201] 0x3B1C4 0000000F GC.RLC_SPM_MC_CNTL
+  only second [ 205] 0x0C82C 00000000 GC.CP_HQD_ACTIVE
+  only second [ 205] 0x0C84C 00000737 GC.CP_HQD_PQ_RPTR
+  only second [ 205] 0x0C8FC 00000000 GC.CP_HQD_PQ_WPTR_LO
+  only second [ 205] 0x0C900 00000000 GC.CP_HQD_PQ_WPTR_HI
+  only first  [ 215] 0x0C868 D0308911 GC.CP_HQD_PQ_CONTROL
+  only second [ 218] 0x0C868 D0300911 GC.CP_HQD_PQ_CONTROL
+  only first  [ 226] 0x0C834 0BE05301 GC.CP_HQD_PERSISTENT_STATE
+  only second [ 229] 0x0C834 0BEC5301 GC.CP_HQD_PERSISTENT_STATE
+  only first  [ 298] 0x049F0 000400C2 GC.SDMA0_CNTL
+  only second [ 301] 0x049F0 000400E2 GC.SDMA0_CNTL
+  only first  [ 302] 0x061F0 000400C2 GC.SDMA1_CNTL
+  only second [ 305] 0x061F0 000400E2 GC.SDMA1_CNTL
+  only first  [ 304] 0x04B80 80840016 GC.SDMA0_GFX_RB_CNTL
+  only second [ 307] 0x04B80 80841016 GC.SDMA0_GFX_RB_CNTL
+  only first  [ 330] 0x06380 80840016 GC.SDMA1_GFX_RB_CNTL
+  only second [ 333] 0x06380 80841016 GC.SDMA1_GFX_RB_CNTL
+only in the first run 7, only in the second run 10
+  [ 340] address driver 0x06384 000051F0 GC.SDMA1_GFX_RB_BASE   trace GC.SDMA1_GFX_RB_BASE 0x06384 00006620
+equal 341, address registers with another value 14, other differences 0
+verdict: AS EXPECTED

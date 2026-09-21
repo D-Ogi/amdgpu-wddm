@@ -79,6 +79,12 @@ typedef struct _BC250_DEVICE {
     PVOID Psp;                          // psp.c, NULL unless the EnablePsp gate was open at start
     PVOID GpuMem;                       // gpumem.c, NULL unless the EnableGfx gate was open at start
     PVOID Gfx;                          // gfx.c, the same
+    PVOID Ih;                           // ih.c, NULL unless the EnableIh gate was open at start
+    BOOLEAN MmioIhEnabled;
+    volatile LONG InterruptCount;       // every call of the interrupt routine since start, ours or not
+    volatile LONG LastMessageNumber;
+    BOOLEAN InterruptIsMessage;         // what Windows assigned (pnp.c, from the translated resources)
+    ULONG InterruptVector;
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
 } BC250_DEVICE;
@@ -125,6 +131,18 @@ NTSTATUS MmioPspRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG*
 NTSTATUS MmioPspWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 NTSTATUS MmioGfxRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 NTSTATUS MmioGfxWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+NTSTATUS MmioIhRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
+NTSTATUS MmioIhWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+
+// ih.c
+struct _BC250_ESCAPE_IH;
+NTSTATUS IhStart(_Inout_ BC250_DEVICE* Device);
+void IhStop(_Inout_ BC250_DEVICE* Device);
+void IhRemove(_Inout_ BC250_DEVICE* Device);
+BOOLEAN IhInterrupt(_Inout_ BC250_DEVICE* Device);
+void IhDpc(_Inout_ BC250_DEVICE* Device);
+BOOLEAN IhIsActive(_In_ const BC250_DEVICE* Device);
+void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_IH* Data);
 
 // sequence.c
 void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,

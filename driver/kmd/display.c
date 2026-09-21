@@ -134,6 +134,17 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (!CallerIsAdmin()) gfx->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else GfxEscape(device, gfx);
         return STATUS_SUCCESS;
     }
+    if (data->Command == BC250_ESCAPE_RUN_IH)
+    {
+        BC250_ESCAPE_IH* ih = (BC250_ESCAPE_IH*)Escape->pPrivateDriverData;
+
+        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_IH)) return STATUS_INVALID_PARAMETER;
+        ih->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) |
+                    (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) | (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0) |
+                    (device->MmioIhEnabled ? BC250_ESCAPE_FLAG_IH : 0);
+        if (!CallerIsAdmin()) ih->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else IhEscape(device, ih);
+        return STATUS_SUCCESS;
+    }
     data->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) |
                   (device->MmioWriteEnabled ? BC250_ESCAPE_FLAG_MMIO_WRITE : 0) |
                   (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) | (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0);

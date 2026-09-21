@@ -562,6 +562,49 @@ static int Gfx(const WCHAR *opText, const WCHAR *stageText)
     return g.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
+// ---- ih: the interrupt controller's ring (BC250_ESCAPE_RUN_IH) ---------------------------------------------------
+
+static int Ih(const WCHAR *opText)
+{
+    static BC250_ESCAPE_IH h;
+    NTSTATUS status;
+
+    memset(&h, 0, sizeof(h));
+    h.Magic = BC250_ESCAPE_MAGIC;
+    h.Command = BC250_ESCAPE_RUN_IH;
+    if (!_wcsicmp(opText, L"plan")) h.Op = BC250_IH_OP_PLAN;
+    else if (!_wcsicmp(opText, L"init")) h.Op = BC250_IH_OP_INIT;
+    else if (!_wcsicmp(opText, L"fini")) h.Op = BC250_IH_OP_FINI;
+    else if (!_wcsicmp(opText, L"state")) h.Op = BC250_IH_OP_STATE;
+    else { fprintf(stderr, "ih plan | init | fini | state, not %ls\n", opText); return 2; }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &h, sizeof(h), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (h.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (h.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no IH command\n"); return 3; }
+
+    printf("ih %ls: %s, NTSTATUS 0x%08lX %s, result %ld, %lu register writes%s\n", opText,
+           h.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", h.NtStatus, StatusName((NTSTATUS)h.NtStatus), h.Result, h.WriteCount,
+           h.Op == BC250_IH_OP_PLAN ? " planned, none executed" : " executed");
+    printf("gates        mmio %s, gart %s, psp %s, gfx %s, ih %s\n", (h.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
+           (h.Flags & BC250_ESCAPE_FLAG_GART) ? "open" : "closed", (h.Flags & BC250_ESCAPE_FLAG_PSP) ? "open" : "closed",
+           (h.Flags & BC250_ESCAPE_FLAG_GFX) ? "open" : "closed", (h.Flags & BC250_ESCAPE_FLAG_IH) ? "open" : "closed");
+    if (h.FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", h.FaultOffset);
+    printf("windows      interrupt resource: %s, vector 0x%lX; interrupt routine called %lu times since the device started, last message %lu\n",
+           h.InterruptIsMessage ? "message (MSI)" : "line", h.InterruptVector, h.InterruptCount, h.LastMessageNumber);
+    printf("ring         %s, %lu interrupts taken as ours, %lu DPCs, %lu vectors consumed, %lu overflows, rptr 0x%lX wptr 0x%lX\n",
+           h.Active ? "ENABLED" : "off", h.OurInterrupts, h.DpcCount, h.EntryCount, h.OverflowCount, h.Rptr, h.Wptr);
+    for (unsigned long i = 0; i < h.KindCount && i < BC250_IH_MAX_KINDS; i++)
+        printf("K client %lu source %lu count %lu\n", h.Kinds[i].ClientId, h.Kinds[i].SourceId, h.Kinds[i].Count);
+    for (unsigned long i = 0; i < h.LastCount && i < BC250_IH_MAX_LAST; i++)
+        printf("V client %lu source %lu ring %lu vmid %lu pasid %lu data %08lX %08lX %08lX %08lX ts %llu\n", h.Last[i].ClientId,
+               h.Last[i].SourceId, h.Last[i].RingId, h.Last[i].VmId, h.Last[i].Pasid, h.Last[i].SrcData[0], h.Last[i].SrcData[1],
+               h.Last[i].SrcData[2], h.Last[i].SrcData[3], h.Last[i].Timestamp);
+    for (unsigned long i = 0; i < h.WriteCount && i < BC250_IH_MAX_WRITES; i++)
+        printf("W 0x%05lX %08lX\n", h.Writes[i].Offset, h.Writes[i].Value);
+    return h.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -672,6 +715,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gart") && argc == 3) return Gart(argv[2]);
     if (!_wcsicmp(argv[1], L"psp") && argc == 3) return Psp(argv[2]);
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
+    if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }
