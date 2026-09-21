@@ -126,12 +126,12 @@ written reason per field, and the script exits non-zero unless everything falls 
   `has_smem_with_null_prt_bug` is new, and when it is 1 `ac_gpu_info.c:1817-1827` makes
   `ac_query_gpu_info()` issue an extra `amdgpu_sw_info_address_prt_wa_control_bit` query and
   **fail the whole probe** if it errors. A future Mesa bump turns that into a blob requirement.
-- **5 unresolved** - and deliberately still failing. See the next section.
+- **5 more expected** - `max_submitted_ibs` for the five IP types this part does not have. See
+  below; this one was open for a while and is now closed by a source reading.
 
-### The one open question
+### The `max_submitted_ibs` question, and how it closed
 
-`max_submitted_ibs` for the five video IPs: the raw `AMDGPU_INFO_MAX_IBS` reply says 49, RADV on
-the device says 1.
+For the five video IPs the raw `AMDGPU_INFO_MAX_IBS` reply says 49 and RADV on the device says 1:
 
 ```
                   GFX  COMPUTE  SDMA  UVD  VCE  UVD_ENC  VCN_DEC  VCN_ENC  JPEG  VPE
@@ -139,16 +139,17 @@ E13b4 info.txt    192   125      49    49   49   49       49       49       16  
 E14 radv-info     192   125      49     1    1    1        1        1       16    49
 ```
 
-Both sides are reporting an ioctl reply - nothing in Mesa writes a 1, since `ac_gpu_info.c:1699`
-copies the reply straight into the array and the only other writer is the failure fallback at
-`:1704-1714`, which writes 50/192/124/16/0. So the two replies genuinely differ, on exactly the
-five IPs this part does not have. Every IP that exists agrees to the digit.
+The first guess was that the two captures came from different boots, and the fix would have been
+another Linux session. It would have been wasted: the kernel side is static. `amdgpu_kms.c:1325-1333`
+answers this query by looping `amdgpu_ring_max_ibs(type)` over every `AMDGPU_HW_IP_*` into a local
+array, with no per-boot state and no check for whether the IP exists. **49 is what the ioctl
+returns on any boot**, so re-capturing could not have changed it.
 
-Nothing depends on it: those IPs have no queues, so no IB is ever submitted to them. It is left as
-a failing row rather than excused, because a comparison that goes green while two measurements
-disagree is the failure mode this script was written to prevent. **To settle it:** capture
-`MAX_IBS` and `RADV_DEBUG=info` in the same boot - the two we have are from different sessions,
-which is the likeliest explanation.
+That leaves the 1 coming from Mesa 26.1.6's own derivation for IPs with no queues. *(Mesa 26.1.6
+side, source not checked - only `main` is checked out in `ref\mesa`.)*
+
+The blob keeps the kernel's values, because the kernel's values are what a WDDM KMD would have to
+supply. Every IP that actually exists agrees to the digit.
 
 ## What the raw ioctl dump refuted
 
@@ -400,6 +401,7 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 - `marketing_name` is empty. On Linux it comes from libdrm's `amdgpu.ids` data file rather than
   from the kernel, so a WDDM driver has to supply the string. A blob field for it is a v3 change
   and nothing needs it yet.
-- The five unresolved `max_submitted_ibs` rows above. They block nothing and are left visible.
+- The next layer up - BO allocation, VA mapping, contexts and submission - is `README-winsys.md`
+  and `bc250_umd_submit.h`, and is likewise a contract rather than an implementation.
 - The blob carries no per-process or per-adapter state (GPU VA layout, doorbell assignment,
   paging queue). That is a separate contract and belongs with the M7 memory-manager work.

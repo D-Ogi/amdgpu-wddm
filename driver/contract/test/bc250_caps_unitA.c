@@ -213,10 +213,16 @@ static struct bc250_umd_private g_blob;
  *   pa_sc_tile_steering_override 0x00122000, not the 0 this file assumed. amdgpu_kms.c fills it
  *                          for family >= AMDGPU_FAMILY_NV from adev->gfx.config; it is non-zero
  *                          here and reaches addrlib, so the old assumption was not harmless.
- *   ids_flags              0x11 = FUSION | GANG_SUBMIT. PREEMPTION (0x02) and TMZ (0x04) are
+ *   ids_flags              0x11 = FUSION | GANG_SUBMIT (AMDGPU_IDS_FLAGS_GANG_SUBMIT = 0x10,
+ *                          third_party/amdgpu_drm.h:1095, the v6.18 import). The older copies in
+ *                          ref/ predate the bit - ref/libdrm stops at 0x04, ref/mesa's drm-uapi
+ *                          copy at 0x08 plus MODE_MASK 0x300 - so check the imported header, not
+ *                          ref/, when a bit looks unnamed. PREEMPTION (0x02) and TMZ (0x04) are
  *                          clear, which confirms E03 dmesg's "TMZ ... feature disabled" line from
  *                          the other side, and CONFORMANT_TRUNC_COORD (0x08) is clear as gfx10.1
- *                          requires.
+ *                          requires. Nothing in Mesa reads ids_flags bit 0x10; gang submit is a
+ *                          multi-IP submission path and GFX1013 has only the gfx ring, so it has
+ *                          no bearing on the winsys contract.
  *   ce_ram_size            0x10000 = 64 KiB, not the 0 this file asserted on the theory that
  *                          gfx10 has no CE RAM. amdgpu reports 64 KiB. Mesa does not read it.
  *   high_va_max            0xFFFFFFFFFFBF0000. This file computed 0xFFFFFFFFFFBFE000 from

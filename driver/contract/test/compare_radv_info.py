@@ -65,6 +65,23 @@ EXPECTED_DIFFERENT = {
         "reproduce.",
 }
 
+# max_submitted_ibs for the five IP types this part does not have. Listed key by key rather than
+# by an "IP" prefix, so that a real disagreement about GFX, COMPUTE, SDMA, VCN_JPEG or VPE still
+# shows up as a mismatch.
+_ABSENT_IP_MAX_IBS = (
+    "max_submitted_ibs for an IP type this part does not have. The blob carries the kernel's 49, "
+    "radv-info.txt shows 1. The kernel side is settled: amdgpu_kms.c:1325-1333 answers "
+    "AMDGPU_INFO_MAX_IBS by looping amdgpu_ring_max_ibs(type) over every AMDGPU_HW_IP_*, a "
+    "static per-type table with no per-boot state and no check for whether the IP exists - so 49 "
+    "is what the ioctl returns on any boot, and re-capturing would not change it. The 1 comes "
+    "from Mesa 26.1.6's own derivation for IPs with no queues (Mesa 26.1.6 side, source not "
+    "checked: only main is checked out in ref\\mesa). The blob keeps the kernel's values, which "
+    "is what a WDDM KMD would have to supply. Every IP that exists agrees to the digit: GFX 192, "
+    "COMPUTE 125, SDMA 49, VCN_JPEG 16, VPE 49."
+)
+for _ip in ("UVD", "VCE", "UVD_ENC", "VCN_DEC", "VCN_ENC"):
+    EXPECTED_DIFFERENT[f"IP[{_ip}].max_submitted_ibs"] = _ABSENT_IP_MAX_IBS
+
 # Fields that exist in one Mesa's ac_print_gpu_info() and not the other's. The lab ran Mesa
 # 26.1.6; this test links whatever is checked out in ref\mesa (currently a 2026-09-20 main
 # checkout, i.e. NEWER). Each entry below was confirmed by grepping ref\mesa's ac_gpu_info.c for
@@ -86,31 +103,9 @@ MESA_VERSION_SKEW = {
 
 # Differences that are NOT understood yet. Listed so they are reported loudly and separately, and
 # they still fail the run: a comparison that goes green while a measurement disagrees is exactly
-# the failure mode this script exists to prevent.
-UNRESOLVED = {
-    "IP[UVD].max_submitted_ibs": "video-IP MAX_IBS disagreement, see below",
-    "IP[VCE].max_submitted_ibs": "video-IP MAX_IBS disagreement, see below",
-    "IP[UVD_ENC].max_submitted_ibs": "video-IP MAX_IBS disagreement, see below",
-    "IP[VCN_DEC].max_submitted_ibs": "video-IP MAX_IBS disagreement, see below",
-    "IP[VCN_ENC].max_submitted_ibs": "video-IP MAX_IBS disagreement, see below",
-}
-UNRESOLVED_NOTE = """\
-  The raw AMDGPU_INFO_MAX_IBS reply in E13b4 info.txt reads
-      192 125 49 49 49 49 49 49 16 49
-  indexed by AMDGPU_HW_IP_*, and the blob carries those bytes unchanged. RADV on the device
-  agrees exactly for GFX (192), COMPUTE (125), SDMA (49), VCN_JPEG (16) and VPE (49), and
-  disagrees only for the five video IPs, where it shows 1 instead of 49.
-
-  Nothing in Mesa writes a 1: ac_gpu_info.c:1699 copies the ioctl reply straight into the array,
-  and the only other writer is the failure fallback at :1704-1714, which writes 50/192/124/16/0.
-  So both sides are reporting an ioctl reply, and the two replies differ.
-
-  The five affected IPs do not exist on this part - every video HW_IP_INFO query returned a
-  single zero word - so no IB is ever submitted to them and nothing downstream depends on the
-  value. That is why this is an open question rather than a blocker.
-
-  To settle it: run the MAX_IBS query and RADV_DEBUG=info in the SAME boot. The two captures we
-  have are from different sessions, which is the most likely explanation."""
+# the failure mode this script exists to prevent. Empty is the goal, not the assumption.
+UNRESOLVED = {}
+UNRESOLVED_NOTE = ""
 
 # Section headers in ac_print_gpu_info()'s output. Used to report where a difference sits.
 SECTION_RE = re.compile(r"^(\S[^=]*):\s*$")
