@@ -21,6 +21,8 @@ mkdir -p "$OUT"
 T=/sys/kernel/tracing
 
 $SSH "mountpoint -q $T || mount -t tracefs nodev $T; mountpoint -q /sys/kernel/debug || mount -t debugfs nodev /sys/kernel/debug; echo 0 > $T/tracing_on; echo 65536 > $T/buffer_size_kb; echo > $T/trace; echo ':mod:amdgpu' > $T/set_event 2>/dev/null || echo 'amdgpu:*' > $T/set_event; echo 1 > $T/tracing_on; echo armed"
+# The reload's events cannot be armed by name (the module is not there): arm_kprobes.sh, uploaded next to session.sh.
+[ "$STEP" = reload ] && $SSH "sh /tmp/e13s/arm_kprobes.sh"
 $SSH "cat $T/trace_pipe" > "$OUT/$STEP-trace.txt" 2>/dev/null &
 tracer=$!
 $SSH "cat /dev/kmsg" > "$OUT/$STEP-kmsg.txt" 2>/dev/null &
@@ -42,7 +44,14 @@ unload)
 	CMD="pkill -f '[q]rshow.py'; for v in /sys/class/vtconsole/vtcon*; do grep -q 'frame buffer' \$v/name && echo 0 > \$v/bind; done; echo 'bc250 begin unload' > $T/trace_marker; sync; modprobe -r amdgpu; echo rc \$?; echo 'bc250 end unload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
 	;;
 reload)
-	CMD="echo 'bc250 begin reload' > $T/trace_marker; sync; modprobe amdgpu; echo rc \$?; echo 'bc250 end reload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
+	# BC250_WATCHDOG=1: the board's sp5100_tco watchdog (60 s) is fed by a shell loop for the step's duration, so a hard
+	# hang ends in a reset without the owner's hand. A load that survives stops the loop with the magic close.
+	WD=""; WDOFF=""
+	if [ "${BC250_WATCHDOG:-}" = 1 ]; then
+		WD="(exec 3>/dev/watchdog; while [ ! -e /tmp/e13/wd-stop ]; do echo . >&3; sleep 5; done; echo V >&3) & "
+		WDOFF="; touch /tmp/e13/wd-stop; sleep 6"
+	fi
+	CMD="rm -f /tmp/e13/wd-stop; ${WD}echo 'bc250 begin reload' > $T/trace_marker; sync; modprobe amdgpu; echo rc \$?; echo 'bc250 end reload' > $T/trace_marker; lsmod | grep -c '^amdgpu'$WDOFF"
 	;;
 *)
 	echo "reset|suspend|unload|reload"; kill $tracer $logger; exit 2
