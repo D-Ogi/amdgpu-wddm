@@ -417,6 +417,30 @@ static int VramCompare(const WCHAR *offsetText, const WCHAR *countText)
     return same == count ? 0 : 4;
 }
 
+// One page table page: 512 entries of 8 bytes at <offset> (from VRAM byte 0), read through the physical path; the
+// non-zero ones are printed. E18's witness walks VidMm's page tables with this.
+static int VramTable(const WCHAR *offsetText)
+{
+    BC250_ESCAPE_MEMORY lo, hi;
+    unsigned long long offset;
+    unsigned long nonzero = 0;
+    WCHAR *end;
+    int r;
+
+    offset = _wcstoui64(offsetText, &end, 16);
+    if (*end || (offset & 0xFFF)) { fprintf(stderr, "offset %ls is not a page-aligned hex number\n", offsetText); return 2; }
+    for (unsigned long i = 0; i < 512; i++) {
+        unsigned long long entry;
+
+        if ((r = MemoryEscape(&lo, BC250_ESCAPE_VRAM_READ, BC250_VRAM_PATH_PHYSICAL, offset + 8ull * i, 0)) != 0) return r;
+        if ((r = MemoryEscape(&hi, BC250_ESCAPE_VRAM_READ, BC250_VRAM_PATH_PHYSICAL, offset + 8ull * i + 4, 0)) != 0) return r;
+        entry = ((unsigned long long)hi.Value << 32) | lo.Value;
+        if (entry != 0) { printf("%3lu 0x%016llX\n", i, entry); nonzero++; }
+    }
+    printf("table at 0x%llX: %lu of 512 entries nonzero\n", offset, nonzero);
+    return 0;
+}
+
 // ---- gart: the M4 sequence (experiment E09) ---------------------------------------------------------------------
 //
 // plan executes no write: the driver runs AMD's imported sequence against the real registers and returns what
@@ -817,6 +841,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
+                        "       bc250kmd_cli vtable <hex offset>          (one page table page, nonzero entries)\n"
                         "       bc250kmd_cli gart plan | enable | restore\n"
                         "       bc250kmd_cli psp plan | load | unload\n"
                         "       bc250kmd_cli gfx plan <stage> | run <stage> | fini | state\n"
@@ -834,6 +859,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"vread") && argc == 4) return VramWord(0, argv[2], argv[3], NULL);
     if (!_wcsicmp(argv[1], L"vwrite") && argc == 5) return VramWord(1, argv[2], argv[3], argv[4]);
     if (!_wcsicmp(argv[1], L"vcompare") && argc == 4) return VramCompare(argv[2], argv[3]);
+    if (!_wcsicmp(argv[1], L"vtable") && argc == 3) return VramTable(argv[2]);
     if (!_wcsicmp(argv[1], L"gart") && argc == 3) return Gart(argv[2]);
     if (!_wcsicmp(argv[1], L"psp") && argc == 3) return Psp(argv[2]);
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);

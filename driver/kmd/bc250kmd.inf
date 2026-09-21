@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/21/2026,0.7.9.0
+DriverVer   = 09/21/2026,0.7.10.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -117,6 +117,7 @@ HKR, Parameters, EnableIh,          0x00010001, 0
 ; The DDI table gate (entry.c, ADR 0008). 0 = DxgkInitializeDisplayOnlyDriver, the driver that runs the display
 ; today. 1 = DxgkInitialize with the full WDDM table of wddm.c. Closed by every install, like every gate above.
 HKR, Parameters, EnableFullWddm,    0x00010001, 0
+HKR, Parameters, EnableGpuVa,       0x00010001, 0
 ; The log ring into a file under C:\BC250\kmdlog at every device stop (guard.c GuardLogKeep). A synchronous file
 ; write in a PnP stop, so closed unless an experiment expects dxgkrnl to end the start and unload the driver.
 HKR, Parameters, KeepLog,           0x00010001, 0

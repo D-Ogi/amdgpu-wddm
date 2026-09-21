@@ -654,13 +654,17 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         return;
     }
     WddmSummaryOf(wddm);
+    VidMmSummary();
 }
 
 // ---- start, stop, DPC ------------------------------------------------------------------------------------------
 
+static BOOLEAN WddmSegment(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Length);
+
 void WddmStart(_Inout_ BC250_DEVICE* Device)
 {
     BC250_WDDM* wddm;
+    ULONGLONG segmentOffset, segmentLength;
 
     Device->FullWddm = g_FullWddm;
     Device->Wddm = NULL;
@@ -687,6 +691,9 @@ void WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->VSyncLast = KeQueryPerformanceCounter(&wddm->VSyncFrequency);
     Device->Wddm = wddm;
     GuardLog("wddm: full table started, VRAM %s", Device->VramEnabled ? "identified" : "unknown (EnableVram closed)");
+    // Stage B: the page tables VidMm keeps in the segment (vidmm.c). Without a segment it stays off.
+    if (WddmSegment(Device, &segmentOffset, &segmentLength))
+        VidMmStart(Device, segmentOffset, segmentLength, BC250_WDDM_SEGMENT_VRAM);
     // dxgkrnl fills DXGKRNL_INTERFACE to the size the declared version defines, and pnp.c copies only that much,
     // so the four callbacks every report in this file depends on are only there because the full table declares
     // WDDM 2.0. Say so once at the start rather than discover it from a silent no-op in the lab.
@@ -726,6 +733,7 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     KeRemoveQueueDpc(&wddm->ReportDpc);
     KeFlushQueuedDpcs();
     Device->Wddm = NULL;                // from here no DDI and no DPC of ours can find the state
+    VidMmStop();
 
     // The counters are the point of stage A: all of them, once, at the stop. The state is ours alone now, so the
     // summary cannot race anything.
@@ -1204,6 +1212,7 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetRootPageTable))
         GuardLog("wddm: SetRootPageTable segment %u offset 0x%llX, %u entries", pSetPageTable->Address.SegmentId,
                  pSetPageTable->Address.SegmentOffset, pSetPageTable->NumEntries);
+    VidMmSetRootPageTable(pSetPageTable);
 }
 
 // ---- allocations ------------------------------------------------------------------------------------------------
@@ -1423,6 +1432,9 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGK
             GuardLog("wddm: BuildPagingBuffer operation %u segment %u, %u bytes free, pass offset %u", operation, segment,
                      pBuildPagingBuffer->DmaSize, pBuildPagingBuffer->MultipassOffset);
     }
+    // Stage B: page table updates are carried out by the CPU, here and now (vidmm.c); the paging buffer stays empty.
+    if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE)
+        VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);
     return STATUS_SUCCESS;
 }
 
