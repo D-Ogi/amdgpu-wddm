@@ -69,6 +69,7 @@ Evidence and the run-by-run account: `evidence/windows/2026-09-22-E19-run-005/`.
 - H3 holds (M77, n = 1, run 005), with the limit H3 itself did not state: NOPs prove that the CP got past the IB
   packet at VMID 1 and that no fault vector came, not that the buffer's bytes were read through the page tables.
   Run 004's attempt submitted nothing: the script passed `--timeout` in milliseconds to an option in seconds.
-- The gfx ring's `ring_id` in the end-of-pipe vector: see the `ih-state` files of run 005 in the evidence directory.
+- The gfx ring's end-of-pipe vector: client 20, source 181, `ring_id` 0 (M79), also for the submission at VMID 1 -
+  so run 005's third interrupt was an end-of-pipe, not a fault.
 - Procedure from now on: fresh boot before a bring-up, complete undo after it (`gfx fini`, `ih fini`, `psp unload`,
   `gart restore`), the cli pushed to the directory the script uses.
