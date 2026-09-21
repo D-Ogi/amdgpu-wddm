@@ -1,0 +1,3 @@
+sh: can't create /sys/class/rtc/rtc0/wakealarm: Permission denied
+sh: can't create /sys/class/rtc/rtc0/wakealarm: Permission denied
+Timeout, server <lan-address> not responding.

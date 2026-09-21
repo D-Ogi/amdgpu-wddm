@@ -8,11 +8,13 @@
 #   risky_pc.sh suspend    s2idle: amdgpu's suspend and resume. Unit A's RTC has no alarm (rtc_cmos: "no alarms", there
 #                          is no wakealarm file), so the wake is the owner's key press: BC250_WAKE=owner says they are there.
 #   risky_pc.sh unload     console unbound, then modprobe -r amdgpu: its hw_fini. Hung the machine once (facts M42).
+#   risky_pc.sh reload     modprobe amdgpu again after an unload in the same boot. Took the machine down once (boot 7):
+#                          the second bring-up after a teardown, the very thing facts M44 is about under Windows.
 #
 # Owner's consent needed for each; run them last, in this order, with everything else already pulled.
 # SSH is a parameter so that the key and the known_hosts file stay where they are kept (outside the repository).
 set -u
-STEP=${1:?reset|suspend|unload}
+STEP=${1:?reset|suspend|unload|reload}
 SSH=${BC250_SSH:?set BC250_SSH to the full ssh command for the probe}
 OUT=${BC250_OUT:-/p/BC-250/scratch/e13b/risky}
 mkdir -p "$OUT"
@@ -39,8 +41,11 @@ suspend)
 unload)
 	CMD="pkill -f '[q]rshow.py'; for v in /sys/class/vtconsole/vtcon*; do grep -q 'frame buffer' \$v/name && echo 0 > \$v/bind; done; echo 'bc250 begin unload' > $T/trace_marker; sync; modprobe -r amdgpu; echo rc \$?; echo 'bc250 end unload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
 	;;
+reload)
+	CMD="echo 'bc250 begin reload' > $T/trace_marker; sync; modprobe amdgpu; echo rc \$?; echo 'bc250 end reload' > $T/trace_marker; lsmod | grep -c '^amdgpu'"
+	;;
 *)
-	echo "reset|suspend|unload"; kill $tracer $logger; exit 2
+	echo "reset|suspend|unload|reload"; kill $tracer $logger; exit 2
 	;;
 esac
 echo "== $STEP $(date +%T)"
