@@ -255,6 +255,34 @@
    49524
   ],
   [
+   "GC.GB_ADDR_CONFIG",
+   39160
+  ],
+  [
+   "GC.CC_GC_SHADER_ARRAY_CONFIG",
+   35260
+  ],
+  [
+   "GC.GC_USER_SHADER_ARRAY_CONFIG",
+   35264
+  ],
+  [
+   "GC.CC_RB_BACKEND_DISABLE",
+   39156
+  ],
+  [
+   "GC.GC_USER_RB_BACKEND_DISABLE",
+   39804
+  ],
+  [
+   "GC.PA_SC_RASTER_CONFIG",
+   164688
+  ],
+  [
+   "GC.PA_SC_RASTER_CONFIG_1",
+   164692
+  ],
+  [
    "OSSSYS.IH_RB_CNTL",
    17536
   ],

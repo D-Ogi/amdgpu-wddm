@@ -1,0 +1,1130 @@
+== dmesg
+1073 /tmp/e13/dmesg.txt
+== module parameters (L15)
+/sys/module/amdgpu/parameters/abmlevel:-1
+/sys/module/amdgpu/parameters/agp:-1
+/sys/module/amdgpu/parameters/aspm:-1
+/sys/module/amdgpu/parameters/async_gfx_ring:1
+/sys/module/amdgpu/parameters/audio:-1
+/sys/module/amdgpu/parameters/backlight:-1
+/sys/module/amdgpu/parameters/bad_page_threshold:-1
+/sys/module/amdgpu/parameters/bapm:-1
+/sys/module/amdgpu/parameters/cg_mask:18446744073709551615
+/sys/module/amdgpu/parameters/cik_support:0
+/sys/module/amdgpu/parameters/compute_multipipe:-1
+/sys/module/amdgpu/parameters/cwsr_enable:1
+/sys/module/amdgpu/parameters/damageclips:-1
+/sys/module/amdgpu/parameters/dc:-1
+/sys/module/amdgpu/parameters/dcdebugmask:0
+/sys/module/amdgpu/parameters/dcfeaturemask:2
+/sys/module/amdgpu/parameters/debug_evictions:N
+/sys/module/amdgpu/parameters/debug_mask:0
+/sys/module/amdgpu/parameters/deep_color:0
+/sys/module/amdgpu/parameters/disable_cu:(null)
+/sys/module/amdgpu/parameters/discovery:-1
+/sys/module/amdgpu/parameters/disp_priority:0
+/sys/module/amdgpu/parameters/dpm:-1
+/sys/module/amdgpu/parameters/emu_mode:0
+/sys/module/amdgpu/parameters/enforce_isolation:-1
+/sys/module/amdgpu/parameters/exp_hw_support:0
+/sys/module/amdgpu/parameters/force_asic_type:-1
+/sys/module/amdgpu/parameters/forcelongtraining:0
+/sys/module/amdgpu/parameters/freesync_video:0
+/sys/module/amdgpu/parameters/fw_load_type:-1
+/sys/module/amdgpu/parameters/gartsize:4294967295
+/sys/module/amdgpu/parameters/gpu_recovery:-1
+/sys/module/amdgpu/parameters/gttsize:-1
+/sys/module/amdgpu/parameters/halt_if_hws_hang:0
+/sys/module/amdgpu/parameters/hdmi_hpd_debounce_delay_ms:0
+/sys/module/amdgpu/parameters/hw_i2c:0
+/sys/module/amdgpu/parameters/hws_gws_support:N
+/sys/module/amdgpu/parameters/hws_max_conc_proc:-1
+/sys/module/amdgpu/parameters/ip_block_mask:4294967295
+/sys/module/amdgpu/parameters/lbpw:-1
+/sys/module/amdgpu/parameters/max_num_of_queues_per_device:4096
+/sys/module/amdgpu/parameters/mcbp:-1
+/sys/module/amdgpu/parameters/mes:0
+/sys/module/amdgpu/parameters/mes_kiq:0
+/sys/module/amdgpu/parameters/mes_log_enable:0
+/sys/module/amdgpu/parameters/modeset:-1
+/sys/module/amdgpu/parameters/moverate:-1
+/sys/module/amdgpu/parameters/msi:-1
+/sys/module/amdgpu/parameters/mtype_local:0
+/sys/module/amdgpu/parameters/no_queue_eviction_on_vm_fault:0
+/sys/module/amdgpu/parameters/no_system_mem_limit:N
+/sys/module/amdgpu/parameters/noretry:-1
+/sys/module/amdgpu/parameters/num_kcq:-1
+/sys/module/amdgpu/parameters/pcie_gen2:-1
+/sys/module/amdgpu/parameters/pcie_gen_cap:0
+/sys/module/amdgpu/parameters/pcie_lane_cap:0
+/sys/module/amdgpu/parameters/pg_mask:4294967295
+/sys/module/amdgpu/parameters/ppfeaturemask:0xfff7bfff
+/sys/module/amdgpu/parameters/queue_preemption_timeout_ms:9000
+/sys/module/amdgpu/parameters/ras_enable:-1
+/sys/module/amdgpu/parameters/ras_mask:4294967295
+/sys/module/amdgpu/parameters/rebar:-1
+/sys/module/amdgpu/parameters/reset_method:-1
+/sys/module/amdgpu/parameters/runpm:-1
+/sys/module/amdgpu/parameters/sched_hw_submission:2
+/sys/module/amdgpu/parameters/sched_jobs:32
+/sys/module/amdgpu/parameters/sched_policy:0
+/sys/module/amdgpu/parameters/sdma_phase_quantum:32
+/sys/module/amdgpu/parameters/seamless:-1
+/sys/module/amdgpu/parameters/send_sigterm:0
+/sys/module/amdgpu/parameters/sg_display:-1
+/sys/module/amdgpu/parameters/si_support:0
+/sys/module/amdgpu/parameters/smu_memory_pool_size:0
+/sys/module/amdgpu/parameters/smu_pptable_id:-1
+/sys/module/amdgpu/parameters/svm_default_granularity:9
+/sys/module/amdgpu/parameters/timeout_fatal_disable:N
+/sys/module/amdgpu/parameters/timeout_period:0
+/sys/module/amdgpu/parameters/tmz:-1
+/sys/module/amdgpu/parameters/umsch_mm:0
+/sys/module/amdgpu/parameters/umsch_mm_fwlog:0
+/sys/module/amdgpu/parameters/uni_mes:1
+/sys/module/amdgpu/parameters/use_xgmi_p2p:1
+/sys/module/amdgpu/parameters/user_partt_mode:4294967294
+/sys/module/amdgpu/parameters/user_queue:-1
+/sys/module/amdgpu/parameters/vcnfw_log:0
+/sys/module/amdgpu/parameters/virtual_display:(null)
+/sys/module/amdgpu/parameters/vis_vramlimit:0
+/sys/module/amdgpu/parameters/visualconfirm:0
+/sys/module/amdgpu/parameters/vm_block_size:-1
+/sys/module/amdgpu/parameters/vm_fault_stop:0
+/sys/module/amdgpu/parameters/vm_fragment_size:-1
+/sys/module/amdgpu/parameters/vm_size:-1
+/sys/module/amdgpu/parameters/vm_update_mode:-1
+/sys/module/amdgpu/parameters/vramlimit:-1
+/sys/module/amdgpu/parameters/wbrf:-1
+== modinfo
+filename:       /lib/modules/6.18.52-0-lts/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko
+vermagic:       6.18.52-0-lts SMP preempt mod_unload modversions 
+== interrupts (L11)
+            CPU0       CPU1       CPU2       CPU3       CPU4       CPU5       CPU6       CPU7       CPU8       CPU9       CPU10      CPU11      
+  54:          0          0         34          0          0          0          0          0          0          0          0          0 PCI-MSIX-0000:01:00.0    0-edge      amdgpu
+== GPU function after init (MSI state, L11)
+01:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Cyan Skillfish [BC-250] (prog-if 00 [VGA controller])
+	Subsystem: Advanced Micro Devices, Inc. [AMD] Device 0000
+	Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort+ <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Latency: 0, Cache Line Size: 64 bytes
+	Interrupts: pin B disabled, MSI(X) routed to IRQ 54
+	Region 0: Memory at c0000000 (64-bit, prefetchable) [size=256M]
+	Region 2: Memory at d0000000 (64-bit, prefetchable) [size=2M]
+	Region 4: I/O ports at e000 [size=256]
+	Region 5: Memory at fe800000 (32-bit, non-prefetchable) [size=512K]
+	Capabilities: [48] Vendor Specific Information: Len=08 <?>
+	Capabilities: [50] Power Management version 3
+		Flags: PMEClk- DSI- D1- D2- AuxCurrent=0mA PME(D0-,D1+,D2+,D3hot+,D3cold+)
+		Status: D0 NoSoftRst- PME-Enable- DSel=0 DScale=0 PME-
+	Capabilities: [64] Express (v2) Legacy Endpoint, IntMsgNum 0
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s <4us, L1 unlimited
+			ExtTag+ AttnBtn- AttnInd- PwrInd- RBE+ FLReset+ TEE-IO-
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag+ PhantFunc- AuxPwr- NoSnoop+ FLReset-
+			MaxPayload 256 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr- NonFatalErr- FatalErr- UnsupReq- AuxPwr- TransPend-
+		LnkCap:	Port #0, Speed 16GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+			ClockPM- Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+			ExtSynch- ClockPM- AutWidDis- BWInt- AutBWInt- FltModeDis-
+		LnkSta:	Speed 16GT/s, Width x16
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Not Supported, TimeoutDis- NROPrPrP- LTR+
+			 10BitTagComp+ 10BitTagReq- OBFF Not Supported, ExtFmt+ EETLPPrefix+, MaxEETLPPrefixes 1
+			 EmergencyPowerReduction Not Supported, EmergencyPowerReductionInit-
+			 FRS-
+			 AtomicOpsCap: 32bit- 64bit- 128bitCAS-
+		DevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis-
+			 AtomicOpsCtl: ReqEn-
+			 IDOReq- IDOCompl- LTR- EmergencyPowerReductionReq-
+			 10BitTagReq- OBFF Disabled, EETLPPrefixBlk-
+		LnkCap2: Supported Link Speeds: 2.5-16GT/s, Crosslink- Retimer+ 2Retimers+ DRS-
+		LnkCtl2: Target Link Speed: 16GT/s, EnterCompliance- SpeedDis-
+			 Transmit Margin: Normal Operating Range, EnterModifiedCompliance- ComplianceSOS-
+			 Compliance Preset/De-emphasis: -6dB de-emphasis, 0dB preshoot
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete+ EqualizationPhase1+
+			 EqualizationPhase2+ EqualizationPhase3+ LinkEqualizationRequest-
+			 Retimer- 2Retimers- CrosslinkRes: unsupported, FltMode-
+	Capabilities: [a0] MSI: Enable- Count=1/4 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [c0] MSI-X: Enable+ Count=3 Masked-
+		Vector table: BAR=5 offset=00042000
+		PBA: BAR=5 offset=00043000
+	Capabilities: [100 v1] Vendor Specific Information: ID=0001 Rev=1 Len=010 <?>
+	Capabilities: [200 v1] Physical Resizable BAR
+		BAR 0: current size: 256MB, supported: 256MB 512MB 1GB
+		BAR 2: current size: 2MB, supported: 2MB 4MB 8MB 16MB 32MB 64MB 128MB 256MB
+	Capabilities: [270 v1] Secondary PCI Express
+		LnkCtl3: LnkEquIntrruptEn- PerformEqu-
+		LaneErrStat: 0
+	Capabilities: [2a0 v1] Access Control Services
+		ACSCap:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+		ACSCtl:	SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- DirectTrans-
+	Capabilities: [2b0 v1] Address Translation Service (ATS)
+		ATSCap:	Invalidate Queue Depth: 00
+		ATSCtl:	Enable-, Smallest Translation Unit: 00
+	Capabilities: [2c0 v1] Page Request Interface (PRI)
+		PRICtl: Enable- Reset-
+		PRISta: RF- UPRGI- Stopped+ PASID-
+		Page Request Capacity: 00000100, Page Request Allocation: 00000000
+	Capabilities: [2d0 v1] Process Address Space ID (PASID)
+		PASIDCap: Exec+ Priv+, Max PASID Width: 10
+		PASIDCtl: Enable- Exec- Priv-
+	Capabilities: [320 v1] Latency Tolerance Reporting
+		Max snoop latency: 0ns
+		Max no snoop latency: 0ns
+	Capabilities: [400 v1] Data Link Feature <?>
+	Capabilities: [410 v1] Physical Layer 16.0 GT/s
+		Phy16Sta: EquComplete+ EquPhase1+ EquPhase2+ EquPhase3+ LinkEquRequest-
+	Capabilities: [440 v1] Lane Margining at the Receiver
+		PortCap: Uses Driver-
+		PortSta: MargReady- MargSoftReady-
+	Kernel driver in use: amdgpu
+
+== debugfs /sys/kernel/debug/dri/0000:01:00.0
+DP-1
+DP-2
+amdgpu_benchmark
+amdgpu_compute_sched_mask
+amdgpu_discovery
+amdgpu_dm_capabilities
+amdgpu_dm_dcc_en
+amdgpu_dm_disable_hpd
+amdgpu_dm_dmcub_trace_event_en
+amdgpu_dm_dmub_fw_state
+amdgpu_dm_dmub_trace_mask
+amdgpu_dm_dmub_tracebuffer
+amdgpu_dm_dp_ignore_cable_id
+amdgpu_dm_dp_set_mst_en_for_sst
+amdgpu_dm_dtn_log
+amdgpu_dm_force_timing_sync
+amdgpu_dm_skip_detection_link_training
+amdgpu_dm_trigger_hpd_mst
+amdgpu_dm_visual_confirm
+amdgpu_error_comp_1.0.0
+amdgpu_error_comp_1.0.1
+amdgpu_error_comp_1.1.0
+amdgpu_error_comp_1.1.1
+amdgpu_error_comp_1.2.0
+amdgpu_error_comp_1.2.1
+amdgpu_error_comp_1.3.0
+amdgpu_error_comp_1.3.1
+amdgpu_error_gfx_0.0.0
+amdgpu_error_kiq_0.2.1.0
+amdgpu_error_sdma0
+amdgpu_error_sdma1
+amdgpu_evict_gtt
+amdgpu_evict_vram
+amdgpu_fence_info
+amdgpu_firmware_info
+amdgpu_force_sclk
+amdgpu_gca_config
+amdgpu_gds_mm
+amdgpu_gem_info
+amdgpu_gfxoff
+amdgpu_gfxoff_count
+amdgpu_gfxoff_residency
+amdgpu_gfxoff_status
+amdgpu_gpr
+amdgpu_gprwave
+amdgpu_gpu_recover
+amdgpu_gtt_mm
+amdgpu_gws_mm
+amdgpu_iomem
+amdgpu_mqd_comp_1.0.0
+amdgpu_mqd_comp_1.0.1
+amdgpu_mqd_comp_1.1.0
+amdgpu_mqd_comp_1.1.1
+amdgpu_mqd_comp_1.2.0
+amdgpu_mqd_comp_1.2.1
+amdgpu_mqd_comp_1.3.0
+amdgpu_mqd_comp_1.3.1
+amdgpu_mqd_gfx_0.0.0
+amdgpu_mqd_kiq_0.2.1.0
+amdgpu_mst_topology
+amdgpu_oa_mm
+amdgpu_pm_info
+amdgpu_preempt_ib
+amdgpu_regs
+amdgpu_regs2
+amdgpu_regs_didt
+amdgpu_regs_pcie
+amdgpu_regs_smc
+amdgpu_ring_comp_1.0.0
+amdgpu_ring_comp_1.0.1
+amdgpu_ring_comp_1.1.0
+amdgpu_ring_comp_1.1.1
+amdgpu_ring_comp_1.2.0
+amdgpu_ring_comp_1.2.1
+amdgpu_ring_comp_1.3.0
+amdgpu_ring_comp_1.3.1
+amdgpu_ring_gfx_0.0.0
+amdgpu_ring_kiq_0.2.1.0
+amdgpu_ring_sdma0
+amdgpu_ring_sdma1
+amdgpu_sa_info
+amdgpu_sdma_sched_mask
+amdgpu_sensors
+amdgpu_smu_debug
+amdgpu_test_ib
+amdgpu_vbios
+amdgpu_vm_info
+amdgpu_vram
+amdgpu_vram_mm
+amdgpu_wave
+clients
+crtc-0
+crtc-1
+encoder-0
+encoder-1
+encoder-2
+encoder-3
+framebuffer
+gem_names
+internal_clients
+name
+psp_spirom_dump
+state
+ta_if
+ttm_page_pool
+== firmware info (L3)
+VCE feature version: 0, firmware version: 0x00000000
+UVD feature version: 0, firmware version: 0x00000000
+MC feature version: 0, firmware version: 0x00000000
+ME feature version: 32, firmware version: 0x00000063
+PFP feature version: 32, firmware version: 0x00000094
+CE feature version: 32, firmware version: 0x00000025
+RLC feature version: 0, firmware version: 0x0000000d
+RLC SRLC feature version: 0, firmware version: 0x00000000
+RLC SRLG feature version: 0, firmware version: 0x00000000
+RLC SRLS feature version: 0, firmware version: 0x00000000
+RLCP feature version: 0, firmware version: 0x00000000
+RLCV feature version: 0, firmware version: 0x00000000
+MEC feature version: 32, firmware version: 0x00000090
+MEC2 feature version: 32, firmware version: 0x00000090
+IMU feature version: 0, firmware version: 0x00000000
+SOS feature version: 0, firmware version: 0x00000000
+ASD feature version: 0, firmware version: 0x00000000
+TA XGMI feature version: 0x00000000, firmware version: 0x00000000
+TA RAS feature version: 0x00000000, firmware version: 0x00000000
+TA HDCP feature version: 0x00000000, firmware version: 0x00000000
+TA DTM feature version: 0x00000000, firmware version: 0x00000000
+TA RAP feature version: 0x00000000, firmware version: 0x00000000
+TA SECUREDISPLAY feature version: 0x00000000, firmware version: 0x00000000
+SMC feature version: 0, program: 0, firmware version: 0x00580600 (88.6.0)
+SDMA0 feature version: 50, firmware version: 0x00000034
+SDMA1 feature version: 50, firmware version: 0x00000034
+VCN feature version: 0, firmware version: 0x00000000
+DMCU feature version: 0, firmware version: 0x00000000
+DMCUB feature version: 0, firmware version: 0x00000000
+TOC feature version: 0, firmware version: 0x00000000
+MES_KIQ feature version: 0, firmware version: 0x00000000
+MES feature version: 0, firmware version: 0x00000000
+VPE feature version: 0, firmware version: 0x00000000
+VBIOS version: 113-AMDRBN-003
+== firmware files
+-rwxr-xr-x    1 root     root          3786 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_ce.bin.zst
+-rwxr-xr-x    1 root     root          8090 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_me.bin.zst
+-rwxr-xr-x    1 root     root         32753 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_mec.bin.zst
+-rwxr-xr-x    1 root     root         32753 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_mec2.bin.zst
+-rwxr-xr-x    1 root     root         13895 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_pfp.bin.zst
+-rwxr-xr-x    1 root     root          8837 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_rlc.bin.zst
+-rwxr-xr-x    1 root     root          9959 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_sdma.bin.zst
+-rwxr-xr-x    1 root     root          9960 May 24 07:32 /lib/firmware/amdgpu/cyan_skillfish2_sdma1.bin.zst
+39f86f43a30b2224a2f1521638ddcf3ee6e43eecf642d4a627f512a9f331bd8f  /lib/firmware/amdgpu/cyan_skillfish2_ce.bin.zst
+9f4e864fdb93ea53f77ad3f4fc4dbaf8c25eee3edf60046e9aa43b83150738b5  /lib/firmware/amdgpu/cyan_skillfish2_me.bin.zst
+dfe8111a73093d2c72c19e454eaabc9c72b5ebe854c0521a88f1b209cce65343  /lib/firmware/amdgpu/cyan_skillfish2_mec.bin.zst
+dfe8111a73093d2c72c19e454eaabc9c72b5ebe854c0521a88f1b209cce65343  /lib/firmware/amdgpu/cyan_skillfish2_mec2.bin.zst
+bbe2c6d837d5229819b0b78022ea5492fff5fa7dafc3914c411515c54358472b  /lib/firmware/amdgpu/cyan_skillfish2_pfp.bin.zst
+6a2f259cea65060d7d987dcc9b7708918bb18e0d2ab26b0cef58417870e3b9cd  /lib/firmware/amdgpu/cyan_skillfish2_rlc.bin.zst
+70c623bc6341fbcfb8499ef3084683a21fb93b80a3ce02e5974e30255a789e5e  /lib/firmware/amdgpu/cyan_skillfish2_sdma.bin.zst
+0c0343cc0db114d4f0f6bffb6ec755bd58f5ba3b624f36c43141aba8eabe7d42  /lib/firmware/amdgpu/cyan_skillfish2_sdma1.bin.zst
+== memory (L7)
+  use_type: 1
+  use_tt: 0
+  size: 8589934592
+  usage: 14614528
+  vis usage:14614528
+default_page_size: 4KiB
+chunk_size: 4KiB, total: 8192MiB, free: 8178MiB, clear_free: 0MiB
+order-21 free:        0 KiB, blocks: 0
+order-20 free:        0 KiB, blocks: 0
+order-19 free:     4096 MiB, blocks: 2
+order-18 free:     2048 MiB, blocks: 2
+order-17 free:     1024 MiB, blocks: 2
+order-16 free:      512 MiB, blocks: 2
+order-15 free:      256 MiB, blocks: 2
+order-14 free:      128 MiB, blocks: 2
+order-13 free:       64 MiB, blocks: 2
+order-12 free:       16 MiB, blocks: 1
+order-11 free:       16 MiB, blocks: 2
+order-10 free:        8 MiB, blocks: 2
+order- 9 free:        6 MiB, blocks: 3
+order- 8 free:        2 MiB, blocks: 2
+order- 7 free:        1 MiB, blocks: 2
+order- 6 free:      512 KiB, blocks: 2
+order- 5 free:      384 KiB, blocks: 3
+order- 4 free:      128 KiB, blocks: 2
+order- 3 free:       32 KiB, blocks: 1
+order- 2 free:       16 KiB, blocks: 1
+order- 1 free:        8 KiB, blocks: 1
+order- 0 free:        8 KiB, blocks: 2
+reserved:
+  use_type: 1
+  use_tt: 1
+  size: 4020457472
+  usage: 13185024
+0x0000000000000400-0x0000000000000401: 1: used
+0x0000000000000401-0x0000000000000409: 8: used
+0x0000000000000409-0x0000000000000609: 512: used
+0x0000000000000609-0x0000000000000649: 64: used
+0x0000000000000649-0x000000000000064d: 4: used
+0x000000000000064d-0x000000000000064f: 2: used
+0x000000000000064f-0x0000000000000651: 2: used
+0x0000000000000651-0x0000000000000653: 2: used
+0x0000000000000653-0x0000000000000655: 2: used
+0x0000000000000655-0x0000000000000657: 2: used
+0x0000000000000657-0x0000000000000659: 2: used
+0x0000000000000659-0x000000000000065b: 2: used
+0x000000000000065b-0x000000000000065d: 2: used
+0x000000000000065d-0x000000000000065f: 2: used
+0x000000000000065f-0x0000000000000660: 1: used
+0x0000000000000660-0x0000000000000662: 2: used
+0x0000000000000662-0x0000000000000664: 2: used
+0x0000000000000664-0x0000000000000667: 3: used
+0x0000000000000667-0x0000000000000700: 153: free
+0x0000000000000700-0x0000000000000800: 256: used
+0x0000000000000800-0x0000000000000900: 256: used
+0x0000000000000900-0x0000000000000a00: 256: used
+0x0000000000000a00-0x0000000000000b00: 256: used
+0x0000000000000b00-0x0000000000000c00: 256: used
+0x0000000000000c00-0x0000000000000d62: 354: used
+0x0000000000000d62-0x000000000000112c: 970: used
+0x000000000000112c-0x0000000000020000: 126676: free
+total: 130048, used 3219 free 126829
+4020457472
+13185024
+0
+8589934592
+14614528
+8589934592
+14614528
+== pm info (L10)
+GFX Clocks and Power:
+	450 MHz (MCLK)
+	1500 MHz (SCLK)
+	0 MHz (PSTATE_SCLK)
+	0 MHz (PSTATE_MCLK)
+	906 mV (VDDGFX)
+	1193 mV (VDDNB)
+	58.05 W (average SoC including CPU)
+	61.22 W (current SoC including CPU)
+
+GPU Temperature: 69 C
+
+SMC Feature Mask: 0xffffffffffffffff
+VCN: Powered down
+
+Clock Gating Flags Mask: 0x8090800
+	Graphics Fine Grain Clock Gating: Off
+	Graphics Medium Grain Clock Gating: Off
+	Graphics Medium Grain memory Light Sleep: Off
+	Graphics Coarse Grain Clock Gating: Off
+	Graphics Coarse Grain memory Light Sleep: Off
+	Graphics Coarse Grain Tree Shader Clock Gating: Off
+	Graphics Coarse Grain Tree Shader Light Sleep: Off
+	Graphics Command Processor Light Sleep: Off
+	Graphics Run List Controller Light Sleep: Off
+	Graphics 3D Coarse Grain Clock Gating: Off
+	Graphics 3D Coarse Grain memory Light Sleep: Off
+	Memory Controller Light Sleep: Off
+	Memory Controller Medium Grain Clock Gating: Off
+	System Direct Memory Access Light Sleep: Off
+	System Direct Memory Access Medium Grain Clock Gating: On
+	Bus Interface Medium Grain Clock Gating: On
+	Bus Interface Light Sleep: Off
+	Unified Video Decoder Medium Grain Clock Gating: Off
+	Video Compression Engine Medium Grain Clock Gating: Off
+	Host Data Path Light Sleep: Off
+	Host Data Path Medium Grain Clock Gating: On
+	Digital Right Management Medium Grain Clock Gating: Off
+	Digital Right Management Light Sleep: Off
+	Rom Medium Grain Clock Gating: Off
+	Data Fabric Medium Grain Clock Gating: Off
+	VCN Medium Grain Clock Gating: Off
+	Host Data Path Deep Sleep: Off
+	Host Data Path Shutdown: Off
+	Interrupt Handler Clock Gating: On
+	JPEG Medium Grain Clock Gating: Off
+	Repeater Fine Grain Clock Gating: Off
+	Perfmon Clock Gating: Off
+	Address Translation Hub Medium Grain Clock Gating: Off
+	Address Translation Hub Light Sleep: Off
+
+== gpu_metrics (L10)
+000000 80 00 02 02 26 1b 45 1a c2 1a b5 18 e1 19 9c 18
+000010 38 18 32 19 ff ff ff ff 64 19 83 18 ff ff ff ff
+000020 68 10 ef 94 13 00 00 00 e9 fa ff ff f3 1c b5 78
+000030 fc 07 19 01 72 00 12 01 e6 00 c5 03 ff ff ff ff
+000040 dc 05 e6 04 c2 01 c2 01 00 00 57 04 dc 05 e6 04
+000050 c2 01 c2 01 00 00 57 04 ac 0d ac 0d ac 0d ac 0d
+000060 ac 0d ac 0d ff ff ff ff ac 0d ac 0d 00 00 00 00
+000070 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+000080
+== display DTN log (L8)
+[dtn begin]
+HUBBUB WM:      data_urgent  pte_meta_urgent         sr_enter          sr_exit  dram_clk_change
+WM_Set[0]:            6.160            4.000            0.000            0.000          281.160
+WM_Set[1]:            5.760            4.000            0.000            0.000          280.760
+WM_Set[2]:            4.680            4.000            0.000            0.000          279.680
+WM_Set[3]:            5.760            4.000            0.000            0.000          280.760
+
+HUBP:  format  addr_hi  width  height  rot  mir  sw_mode  dcc_en  blank_en  clock_en  ttu_dis  underflow   min_ttu_vblank       qos_low_wm      qos_high_wm
+[ 0]:      8h       4h    960    1200   0h   0h       0h       0         0         1        0         0h          258.640            0.000           54.020
+[ 2]:      8h       0h   1920    1200   0h   0h       0h       0         0         1        1         0h            0.000            0.000            0.000
+[ 3]:      8h       4h    960    1200   0h   0h       0h       0         0         1        0         0h          258.640            0.000           54.020
+
+=======HUBP FL======
+inst 	        0h
+Enabled  	        0h
+Done  	        0h
+adr_mode  	        0h
+width  	        0h
+mpc_width  	        0h
+tmz 	        0h
+xbar_sel_R 	        0h
+xbar_sel_G 	        0h
+xbar_sel_B 	        0h
+adr_hi  	        0h
+adr_low 	        0h
+REFCYC 	        0h
+Bias 	        0h
+Scale 	        0h
+Mode 	        0h
+Format 	        0h
+prefetch 	        bh
+inst 	        2h
+Enabled  	        0h
+Done  	        0h
+adr_mode  	        0h
+width  	        0h
+mpc_width  	        0h
+tmz 	        0h
+xbar_sel_R 	        0h
+xbar_sel_G 	        0h
+xbar_sel_B 	        0h
+adr_hi  	        0h
+adr_low 	        0h
+REFCYC 	        0h
+Bias 	        0h
+Scale 	        0h
+Mode 	        0h
+Format 	        0h
+prefetch 	       28h
+inst 	        3h
+Enabled  	        0h
+Done  	        0h
+adr_mode  	        0h
+width  	        0h
+mpc_width  	        0h
+tmz 	        0h
+xbar_sel_R 	        0h
+xbar_sel_G 	        0h
+xbar_sel_B 	        0h
+adr_hi  	        0h
+adr_low 	        0h
+REFCYC 	        0h
+Bias 	        0h
+Scale 	        0h
+Mode 	        0h
+Format 	        0h
+prefetch 	        bh
+
+=========RQ========
+HUBP:  drq_exp_m  prq_exp_m  mrq_exp_m  crq_exp_m  plane1_ba  L:chunk_s  min_chu_s  meta_ch_s  min_m_c_s  dpte_gr_s  mpte_gr_s  swath_hei  pte_row_h  C:chunk_s  min_chu_s  meta_ch_s  min_m_c_s  dpte_gr_s  mpte_gr_s  swath_hei  pte_row_h
+[ 0]:         2h         1h         1h         1h         0h         3h         3h         1h         3h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h
+[ 2]:         1h         1h         1h         1h         0h         3h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h
+[ 3]:         2h         1h         1h         1h         0h         3h         3h         1h         3h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h
+========DLG========
+HUBP:  rc_hbe     dlg_vbe    min_d_y_n  rc_per_ht  rc_x_a_s   dst_y_a_s  dst_y_pf   dst_y_vvb  dst_y_rvb  dst_y_vfl  dst_y_rfl  rf_pix_fq  vratio_pf  vrat_pf_c  rc_pg_vbl  rc_pg_vbc  rc_mc_vbl  rc_mc_vbc  rc_pg_fll  rc_pg_flc  rc_mc_fll  rc_mc_flc  pr_nom_l   pr_nom_c   rc_pg_nl   rc_pg_nc   mr_nom_l   mr_nom_c   rc_mc_nl   rc_mc_nc   rc_ld_pl   rc_ld_pc   rc_ld_l    rc_ld_c    cha_cur0   ofst_cur1  cha_cur1   vr_af_vc0  ddrq_limt  x_rt_dlay  x_rp_dlay  x_rr_sfl  rc_td_grp
+[ 0]:        24h        20h      1340h     2a353h       198h         0h         bh         1h         3h         0h         0h     298efh     92492h     80000h       1fah         0h       1fah       1fah         0h         0h         0h         0h         0h         0h         0h         0h        20h        20h      151ah         0h       14bh         0h       26fh         0h         0h         0h         0h         0h         0h         0h         0h         0h 0h
+[ 2]:         0h         0h         0h         0h         0h         0h        28h         1h         3h         0h         0h         0h     80000h     80000h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h 0h
+[ 3]:        24h        20h      1340h     2a353h       198h         0h         bh         1h         3h         0h         0h     298efh     92492h     80000h       1fah         0h       1fah       1fah         0h         0h         0h         0h         0h         0h         0h         0h        20h        20h      151ah         0h       14bh         0h       26fh         0h         0h         0h         0h         0h         0h         0h         0h         0h 0h
+========TTU========
+HUBP:  qos_ll_wm  qos_lh_wm  mn_ttu_vb  qos_l_flp  rc_rd_p_l  rc_rd_l    rc_rd_p_c  rc_rd_c    rc_rd_c0   rc_rd_pc0  rc_rd_c1   rc_rd_pc1  qos_lf_l   qos_rds_l  qos_lf_c   qos_rds_c  qos_lf_c0  qos_rds_c0 qos_lf_c1  qos_rds_c1
+[ 0]:         0h       a8dh      3284h         eh      4db0h      9bd8h         0h         0h         0h         0h         0h         0h         8h         0h         8h         0h         0h         0h         0h         0h
+[ 2]:         0h         0h         0h         eh         0h         0h         0h         0h         0h         0h         0h         0h         8h         0h         0h         0h         0h         0h         0h         0h
+[ 3]:         0h       a8dh      3284h         eh      4db0h      9bd8h         0h         0h         0h         0h         0h         0h         8h         0h         8h         0h         0h         0h         0h         0h
+
+DPP:    IGAM format    IGAM mode    DGAM mode    RGAM mode  GAMUT adjust  C11        C12        C13        C14        C21        C22        C23        C24        C31        C32        C33        C34        
+[ 0]:            0h  BypassFixed       Bypass       Bypass        Bypass  0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000
+[ 3]:            0h  BypassFixed       Bypass       Bypass        Bypass  0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000
+
+DPP Color Caps: input_lut_shared:0  icsc:1  dgam_ram:1  dgam_rom: srgb:1,bt2020:1,gamma2_2:0,pq:0,hlg:0  post_csc:0  gamcor:0  dgam_rom_for_yuv:1  3d_lut:1  blnd_lut:1  oscs:0
+
+MPCC:  OPP  DPP  MPCCBOT  MODE  ALPHA_MODE  PREMULT  OVERLAP_ONLY  IDLE
+[ 0]:   0h   0h       3h     3           2        0             0     0
+[ 3]:   0h   3h       fh     2           2        0             0     0
+
+MPC Color Caps: gamut_remap:0, 3dlut:0, ogam_ram:1, ocsc:1
+
+===== MPC RMCM 3DLUT =====
+MPCC 	        0h
+SIZE 	        0h
+MODE 	        0h
+MODE_CUR 	        0h
+RD_SEL 	        0h
+30BIT_EN 	        0h
+WR_EN_MASK 	        0h
+RAM_SEL 	        0h
+OUT_NORM_FACTOR 	        0h
+FL_SEL 	        0h
+OUT_OFFSET 	        0h
+OUT_SCALE 	        0h
+FL_DONE 	        0h
+SOFT_UNDERFLOW 	        0h
+HARD_UNDERFLOW 	        0h
+MEM_PWR_ST 	        0h
+FORCE 	        0h
+DIS 	        0h
+MODE 	        0h
+MPCC 	        3h
+SIZE 	        0h
+MODE 	        0h
+MODE_CUR 	        0h
+== rings and MQDs (L4) -> /tmp/e13/rings
+amdgpu_ring_comp_1.0.0 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.0.1 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.1.0 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.1.1 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.2.0 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.2.1 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.3.0 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_comp_1.3.1 514 lines; head: 000000 00000200 00000200 00000200 c0017900
+amdgpu_ring_gfx_0.0.0 514 lines; head: 000000 00000600 00000600 00000600 c0004a00
+amdgpu_ring_kiq_0.2.1.0 65538 lines; head: 000000 00000e00 00000e00 00000e00 c006a000
+amdgpu_ring_sdma0 514 lines; head: 000000 00000270 00000270 00000270 00000002
+amdgpu_ring_sdma1 514 lines; head: 000000 000000f0 000000f0 000000f0 00000002
+amdgpu_mqd_comp_1.0.0 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.0.1 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.1.0 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.1.1 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.2.0 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.2.1 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.3.0 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_comp_1.3.1 129 lines; head: 000000 c0310800 00004000 00000000 00000000
+amdgpu_mqd_gfx_0.0.0 129 lines; head: 000000 00000000 00000000 00000000 00000000
+amdgpu_mqd_kiq_0.2.1.0 1 lines; head: 000000
+== state registers
+# /sys/kernel/debug/dri/1/amdgpu_regs2 state 15:56:25
+GC.GRBM_STATUS 0x08010 00003028
+GC.GRBM_STATUS2 0x08008 00000008
+GC.CP_STAT 0x08680 00000000
+GC.CP_ME_CNTL 0x086d8 00000000
+GC.CP_MEC_CNTL 0x08234 00000000
+GC.RLC_CNTL 0x3b000 00000001
+GC.RLC_STAT 0x3b010 00000000
+GC.RLC_GPM_STAT 0x3b9b8 00b40016
+GC.RLC_PG_CNTL 0x3b10c 00000000
+GC.SDMA0_F32_CNTL 0x04a28 00000000
+GC.SDMA1_F32_CNTL 0x06228 00000000
+GC.SDMA0_STATUS_REG 0x04a14 46deed57
+GC.SDMA1_STATUS_REG 0x06214 46deed57
+GC.SDMA0_CNTL 0x049f0 000400e3
+GC.SDMA1_CNTL 0x061f0 000400e3
+GC.SDMA0_GFX_RB_CNTL 0x04b80 80841017
+GC.SDMA1_GFX_RB_CNTL 0x06380 80841017
+GC.SDMA0_GFX_RB_RPTR 0x04b8c 000009c0
+GC.SDMA0_GFX_RB_WPTR 0x04b94 000009c0
+GC.CP_INT_CNTL_RING0 0x0c1a8 05c00000
+GC.CP_RB0_RPTR 0x08700 00000600
+GC.CP_RB0_WPTR 0x0c150 00000600
+GC.CP_RB_DOORBELL_CONTROL 0x0c3b4 c0000458
+GC.SCRATCH_REG0 0x30100 deadbeef
+GC.CP_PQ_WPTR_POLL_CNTL 0x0c20c 00000000
+GC.RLC_CP_SCHEDULERS 0x3b2a8 5850c0c8
+GC.CP_MEC_DOORBELL_RANGE_LOWER 0x0c170 00000000
+GC.CP_MEC_DOORBELL_RANGE_UPPER 0x0c174 00000450
+GC.GB_ADDR_CONFIG 0x098f8 00000044
+GC.CC_GC_SHADER_ARRAY_CONFIG 0x089bc fff80000
+GC.GC_USER_SHADER_ARRAY_CONFIG 0x089c0 00000000
+GC.CC_RB_BACKEND_DISABLE 0x098f4 00000000
+GC.GC_USER_RB_BACKEND_DISABLE 0x09b7c 00000000
+GC.PA_SC_RASTER_CONFIG 0x28350 00000000
+GC.PA_SC_RASTER_CONFIG_1 0x28354 00000000
+OSSSYS.IH_RB_CNTL 0x04480 403301a1
+OSSSYS.IH_RB_BASE 0x04484 00006090
+OSSSYS.IH_RB_BASE_HI 0x04488 00000000
+OSSSYS.IH_RB_RPTR 0x0448c 00000440
+OSSSYS.IH_RB_WPTR 0x04490 00000440
+OSSSYS.IH_RB_WPTR_ADDR_LO 0x04498 00401000
+OSSSYS.IH_RB_WPTR_ADDR_HI 0x04494 00000000
+OSSSYS.IH_DOORBELL_RPTR 0x0449c 100002f0
+OSSSYS.IH_CNTL 0x04580 01000000
+OSSSYS.IH_STATUS 0x04588 000c0847
+OSSSYS.IH_INT_FLOOD_CNTL 0x045d4 00000000
+NBIO.BIF_IH_DOORBELL_RANGE 0x03bc8 00020bc0
+NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN 0x03780 00000001
+NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_CNTL 0x03854 00000003
+NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_LOW 0x03850 d0000000
+NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH 0x0384c 00000000
+MP0.MP0_SMN_C2PMSG_64 0x58200 80020000
+MP0.MP0_SMN_C2PMSG_81 0x58244 002ba637
+== per-queue registers
+# /sys/kernel/debug/dri/1/amdgpu_regs2 hqd 15:56:25
+me0.pipe0.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 00000000
+me0.pipe0.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 00000000
+me0.pipe0.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000000
+me0.pipe0.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me0.pipe0.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 00000000
+me0.pipe0.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me0.pipe0.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_BASE 0x0c844 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 00000000
+me0.pipe0.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me0.pipe0.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 00000000
+me0.pipe0.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me0.pipe0.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000000
+me0.pipe0.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 00000000
+me0.pipe0.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000000
+me0.pipe0.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me0.pipe0.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00000000
+me0.pipe0.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me0.pipe0.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000000
+me0.pipe0.queue0 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me0.pipe0.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me0.pipe0.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me0.pipe0.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me0.pipe0.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me0.pipe0.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me0.pipe0.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me0.pipe0.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe0.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 fffef000
+me1.pipe0.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe0.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe0.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe0.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe0.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000002
+me1.pipe0.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 0000000f
+me1.pipe0.queue0 GC.CP_HQD_PQ_BASE 0x0c844 000064f0
+me1.pipe0.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe0.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe0.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 004010e0
+me1.pipe0.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe0.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00401100
+me1.pipe0.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe0.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000018
+me1.pipe0.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 f030890a
+me1.pipe0.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe0.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 00006490
+me1.pipe0.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe0.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe0.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe0.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe0.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe0.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe0.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe0.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe0.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe0.queue0 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe0.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe0.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe0.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe0.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe0.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe0.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe0.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe0.queue1 GC.CP_MQD_BASE_ADDR 0x0c824 fffeb000
+me1.pipe0.queue1 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe0.queue1 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe0.queue1 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe0.queue1 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe0.queue1 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe0.queue1 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe0.queue1 GC.CP_HQD_PQ_BASE 0x0c844 00006570
+me1.pipe0.queue1 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe0.queue1 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe0.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00401360
+me1.pipe0.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe0.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00401380
+me1.pipe0.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe0.queue1 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000038
+me1.pipe0.queue1 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe0.queue1 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe0.queue1 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000064b0
+me1.pipe0.queue1 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe0.queue1 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe0.queue1 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe0.queue1 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe0.queue1 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe0.queue1 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe0.queue1 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe0.queue1 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe0.queue1 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe0.queue1 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe0.queue1 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe0.queue1 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe0.queue1 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe0.queue1 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe0.queue1 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe0.queue1 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe0.queue1 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe1.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 fffee000
+me1.pipe1.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe1.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe1.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe1.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe1.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe1.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe1.queue0 GC.CP_HQD_PQ_BASE 0x0c844 00006510
+me1.pipe1.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe1.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe1.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00401180
+me1.pipe1.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe1.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 004011a0
+me1.pipe1.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe1.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000020
+me1.pipe1.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe1.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe1.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 00006498
+me1.pipe1.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe1.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe1.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe1.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe1.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe1.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe1.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe1.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe1.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe1.queue0 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe1.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe1.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe1.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe1.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe1.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe1.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe1.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe1.queue1 GC.CP_MQD_BASE_ADDR 0x0c824 fffea000
+me1.pipe1.queue1 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe1.queue1 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe1.queue1 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe1.queue1 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe1.queue1 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe1.queue1 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe1.queue1 GC.CP_HQD_PQ_BASE 0x0c844 00006590
+me1.pipe1.queue1 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe1.queue1 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe1.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00401400
+me1.pipe1.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe1.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00401420
+me1.pipe1.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe1.queue1 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000040
+me1.pipe1.queue1 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe1.queue1 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe1.queue1 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000064b8
+me1.pipe1.queue1 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe1.queue1 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe1.queue1 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe1.queue1 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe1.queue1 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe1.queue1 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe1.queue1 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe1.queue1 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe1.queue1 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe1.queue1 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe1.queue1 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe1.queue1 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe1.queue1 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe1.queue1 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe1.queue1 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe1.queue1 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe1.queue1 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe2.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 fffed000
+me1.pipe2.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe2.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe2.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe2.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe2.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe2.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe2.queue0 GC.CP_HQD_PQ_BASE 0x0c844 00006530
+me1.pipe2.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe2.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe2.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00401220
+me1.pipe2.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe2.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00401240
+me1.pipe2.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe2.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000028
+me1.pipe2.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe2.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe2.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000064a0
+me1.pipe2.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe2.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe2.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe2.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe2.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe2.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe2.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe2.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe2.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe2.queue0 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe2.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe2.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe2.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe2.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe2.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe2.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe2.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe2.queue1 GC.CP_MQD_BASE_ADDR 0x0c824 fffe9000
+me1.pipe2.queue1 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe2.queue1 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe2.queue1 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe2.queue1 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe2.queue1 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe2.queue1 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe2.queue1 GC.CP_HQD_PQ_BASE 0x0c844 000065b0
+me1.pipe2.queue1 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe2.queue1 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe2.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 004014a0
+me1.pipe2.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe2.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 004014c0
+me1.pipe2.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe2.queue1 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000048
+me1.pipe2.queue1 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe2.queue1 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe2.queue1 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000064c0
+me1.pipe2.queue1 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe2.queue1 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe2.queue1 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe2.queue1 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe2.queue1 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe2.queue1 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe2.queue1 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe2.queue1 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe2.queue1 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe2.queue1 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe2.queue1 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe2.queue1 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe2.queue1 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe2.queue1 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe2.queue1 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe2.queue1 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe2.queue1 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe3.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 fffec000
+me1.pipe3.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe3.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe3.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe3.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe3.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe3.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe3.queue0 GC.CP_HQD_PQ_BASE 0x0c844 00006550
+me1.pipe3.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe3.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe3.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 004012c0
+me1.pipe3.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe3.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 004012e0
+me1.pipe3.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe3.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000030
+me1.pipe3.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe3.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe3.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000064a8
+me1.pipe3.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe3.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe3.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe3.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe3.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe3.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe3.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe3.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe3.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe3.queue0 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe3.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe3.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe3.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe3.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe3.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe3.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe3.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me1.pipe3.queue1 GC.CP_MQD_BASE_ADDR 0x0c824 fffe8000
+me1.pipe3.queue1 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f5
+me1.pipe3.queue1 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me1.pipe3.queue1 GC.CP_HQD_VMID 0x0c830 00000000
+me1.pipe3.queue1 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me1.pipe3.queue1 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me1.pipe3.queue1 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me1.pipe3.queue1 GC.CP_HQD_PQ_BASE 0x0c844 000065d0
+me1.pipe3.queue1 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me1.pipe3.queue1 GC.CP_HQD_PQ_RPTR 0x0c84c 00000200
+me1.pipe3.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00401540
+me1.pipe3.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me1.pipe3.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00401560
+me1.pipe3.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me1.pipe3.queue1 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0000050
+me1.pipe3.queue1 GC.CP_HQD_PQ_CONTROL 0x0c868 d030890a
+me1.pipe3.queue1 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me1.pipe3.queue1 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000064c8
+me1.pipe3.queue1 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me1.pipe3.queue1 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me1.pipe3.queue1 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000008
+me1.pipe3.queue1 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8008
+me1.pipe3.queue1 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000200
+me1.pipe3.queue1 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me1.pipe3.queue1 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me1.pipe3.queue1 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me1.pipe3.queue1 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me1.pipe3.queue1 GC.CPC_INT_CNTL 0x0c2d0 05800000
+me1.pipe3.queue1 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me1.pipe3.queue1 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me1.pipe3.queue1 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me1.pipe3.queue1 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me1.pipe3.queue1 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me1.pipe3.queue1 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me1.pipe3.queue1 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me2.pipe0.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 00664000
+me2.pipe0.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 00000000
+me2.pipe0.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me2.pipe0.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me2.pipe0.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 400c5301
+me2.pipe0.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me2.pipe0.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000001
+me2.pipe0.queue0 GC.CP_HQD_PQ_BASE 0x0c844 0000d620
+me2.pipe0.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me2.pipe0.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000008
+me2.pipe0.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00d63800
+me2.pipe0.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me2.pipe0.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00d63a00
+me2.pipe0.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me2.pipe0.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 e0003000
+me2.pipe0.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 d0008508
+me2.pipe0.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me2.pipe0.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 0000d628
+me2.pipe0.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me2.pipe0.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000009
+me2.pipe0.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000000
+me2.pipe0.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 03ff8000
+me2.pipe0.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000008
+me2.pipe0.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me2.pipe0.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me2.pipe0.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me2.pipe0.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me2.pipe0.queue0 GC.CPC_INT_CNTL 0x0c2d0 00000000
+me2.pipe0.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me2.pipe0.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me2.pipe0.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me2.pipe0.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me2.pipe0.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me2.pipe0.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me2.pipe0.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me2.pipe0.queue1 GC.CP_MQD_BASE_ADDR 0x0c824 00000000
+me2.pipe0.queue1 GC.CP_MQD_BASE_ADDR_HI 0x0c828 00000000
+me2.pipe0.queue1 GC.CP_HQD_ACTIVE 0x0c82c 00000000
+me2.pipe0.queue1 GC.CP_HQD_VMID 0x0c830 00000000
+me2.pipe0.queue1 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me2.pipe0.queue1 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me2.pipe0.queue1 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_BASE 0x0c844 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_RPTR 0x0c84c 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_CONTROL 0x0c868 00308509
+me2.pipe0.queue1 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me2.pipe0.queue1 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 00000000
+me2.pipe0.queue1 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me2.pipe0.queue1 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000006
+me2.pipe0.queue1 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000000
+me2.pipe0.queue1 GC.CP_HQD_EOP_WPTR 0x0c8c8 007f8000
+me2.pipe0.queue1 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000000
+me2.pipe0.queue1 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me2.pipe0.queue1 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me2.pipe0.queue1 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me2.pipe0.queue1 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me2.pipe0.queue1 GC.CPC_INT_CNTL 0x0c2d0 00000000
+me2.pipe0.queue1 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me2.pipe0.queue1 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me2.pipe0.queue1 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me2.pipe0.queue1 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me2.pipe0.queue1 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me2.pipe0.queue1 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me2.pipe0.queue1 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me2.pipe1.queue0 GC.CP_MQD_BASE_ADDR 0x0c824 008cd000
+me2.pipe1.queue0 GC.CP_MQD_BASE_ADDR_HI 0x0c828 000000f4
+me2.pipe1.queue0 GC.CP_HQD_ACTIVE 0x0c82c 00000001
+me2.pipe1.queue0 GC.CP_HQD_VMID 0x0c830 00000000
+me2.pipe1.queue0 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0bec5301
+me2.pipe1.queue0 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me2.pipe1.queue0 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me2.pipe1.queue0 GC.CP_HQD_PQ_BASE 0x0c844 00008000
+me2.pipe1.queue0 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me2.pipe1.queue0 GC.CP_HQD_PQ_RPTR 0x0c84c 00000e00
+me2.pipe1.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 004015e0
+me2.pipe1.queue0 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me2.pipe1.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00401600
+me2.pipe1.queue0 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me2.pipe1.queue0 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 c0000000
+me2.pipe1.queue0 GC.CP_HQD_PQ_CONTROL 0x0c868 d0308911
+me2.pipe1.queue0 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me2.pipe1.queue0 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 000065f0
+me2.pipe1.queue0 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me2.pipe1.queue0 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000008
+me2.pipe1.queue0 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000000
+me2.pipe1.queue0 GC.CP_HQD_EOP_WPTR 0x0c8c8 01ff8000
+me2.pipe1.queue0 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000e00
+me2.pipe1.queue0 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me2.pipe1.queue0 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me2.pipe1.queue0 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me2.pipe1.queue0 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me2.pipe1.queue0 GC.CPC_INT_CNTL 0x0c2d0 20000000
+me2.pipe1.queue0 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me2.pipe1.queue0 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me2.pipe1.queue0 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me2.pipe1.queue0 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me2.pipe1.queue0 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me2.pipe1.queue0 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me2.pipe1.queue0 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000
+me2.pipe1.queue1 GC.CP_MQD_BASE_ADDR 0x0c824 00000000
+me2.pipe1.queue1 GC.CP_MQD_BASE_ADDR_HI 0x0c828 00000000
+me2.pipe1.queue1 GC.CP_HQD_ACTIVE 0x0c82c 00000000
+me2.pipe1.queue1 GC.CP_HQD_VMID 0x0c830 00000000
+me2.pipe1.queue1 GC.CP_HQD_PERSISTENT_STATE 0x0c834 0be05301
+me2.pipe1.queue1 GC.CP_HQD_PIPE_PRIORITY 0x0c838 00000000
+me2.pipe1.queue1 GC.CP_HQD_QUEUE_PRIORITY 0x0c83c 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_BASE 0x0c844 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_BASE_HI 0x0c848 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_RPTR 0x0c84c 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR 0x0c850 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_RPTR_REPORT_ADDR_HI 0x0c854 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR 0x0c858 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_WPTR_POLL_ADDR_HI 0x0c85c 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_DOORBELL_CONTROL 0x0c860 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_CONTROL 0x0c868 00308509
+me2.pipe1.queue1 GC.CP_HQD_DEQUEUE_REQUEST 0x0c884 00000000
+me2.pipe1.queue1 GC.CP_HQD_EOP_BASE_ADDR 0x0c8b8 00000000
+me2.pipe1.queue1 GC.CP_HQD_EOP_BASE_ADDR_HI 0x0c8bc 00000000
+me2.pipe1.queue1 GC.CP_HQD_EOP_CONTROL 0x0c8c0 00000006
+me2.pipe1.queue1 GC.CP_HQD_EOP_RPTR 0x0c8c4 40000000
+me2.pipe1.queue1 GC.CP_HQD_EOP_WPTR 0x0c8c8 007f8000
+me2.pipe1.queue1 GC.CP_HQD_PQ_WPTR_LO 0x0c8fc 00000000
+me2.pipe1.queue1 GC.CP_HQD_PQ_WPTR_HI 0x0c900 00000000
+me2.pipe1.queue1 GC.CP_HQD_IB_CONTROL 0x0c878 00300000
+me2.pipe1.queue1 GC.CP_HQD_IQ_TIMER 0x0c87c 00000000
+me2.pipe1.queue1 GC.CP_MQD_CONTROL 0x0c8ac 00000100
+me2.pipe1.queue1 GC.CPC_INT_CNTL 0x0c2d0 20000000
+me2.pipe1.queue1 GC.CPC_INT_STATUS 0x0c2d4 00000000
+me2.pipe1.queue1 GC.CP_ME1_PIPE0_INT_CNTL 0x0c214 05800000
+me2.pipe1.queue1 GC.CP_ME1_PIPE1_INT_CNTL 0x0c218 05800000
+me2.pipe1.queue1 GC.CP_ME1_PIPE2_INT_CNTL 0x0c21c 05800000
+me2.pipe1.queue1 GC.CP_ME1_PIPE3_INT_CNTL 0x0c220 05800000
+me2.pipe1.queue1 GC.CP_ME2_PIPE0_INT_CNTL 0x0c224 00000000
+me2.pipe1.queue1 GC.CP_ME2_PIPE1_INT_CNTL 0x0c228 20000000

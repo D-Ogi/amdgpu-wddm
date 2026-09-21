@@ -7,6 +7,8 @@
 #   sh session.sh state    after init: dmesg, module parameters, interrupts, MSI state, debugfs, firmware, rings, MQDs,
 #                          named registers through amdgpu_regs2 (regs2.py)
 #   sh session.sh ib       amdgpu's own IB tests on every ring with the trace armed: a minimal submission with fences
+#   sh session.sh extras   read-only material for later milestones: debugfs by name, sysfs attributes, power tables, hwmon,
+#                          IP discovery, KFD topology, iomem, ACPI tables (the binaries stay out of the repository)
 #   sh session.sh reset    LAST, may hang the machine: amdgpu_gpu_recover with the trace armed
 #
 # Read-only towards the GPU except what amdgpu itself does. Nothing is written to a disk, the firmware or NVRAM.
@@ -102,6 +104,40 @@ ib)
 	done
 	say "event kinds in the trace"; awk '{for (i=1;i<=NF;i++) if ($i ~ /^amdgpu_[a-z_]+:$/) c[$i]++} END {for (k in c) print c[k], k}' "$OUT/amdgpu-events-ib.txt" | sort -rn
 	;;
+extras)
+	# Read-only odds and ends for later milestones. debugfs files by name only: reading amdgpu_evict_*, amdgpu_test_ib,
+	# amdgpu_gpu_recover or amdgpu_benchmark DOES something, so nothing is globbed there.
+	mountpoint -q /sys/kernel/debug || mount -t debugfs nodev /sys/kernel/debug
+	D=$(dri)
+	DEV=$(dirname "$(ls -d /sys/class/drm/card*/device/mem_info_vram_total | head -1)")
+	for f in amdgpu_fence_info amdgpu_gem_info amdgpu_vm_info amdgpu_sa_info state clients name; do
+		say "debugfs $f"; [ -e "$D/$f" ] && head -300 "$D/$f"
+	done
+	say "device attributes"
+	for f in vendor device revision subsystem_vendor subsystem_device vbios_version current_link_speed current_link_width \
+		max_link_speed max_link_width gpu_busy_percent power_dpm_force_performance_level pp_dpm_sclk pp_dpm_mclk pp_dpm_fclk \
+		pp_od_clk_voltage pp_features pp_power_profile_mode thermal_throttling_logging; do
+		[ -r "$DEV/$f" ] && { echo "-- $f"; cat "$DEV/$f" 2>&1; }
+	done
+	say "hwmon"
+	for h in "$DEV"/hwmon/hwmon*; do
+		for f in "$h"/name "$h"/*_label "$h"/*_input "$h"/*_cap "$h"/*_crit "$h"/*_min "$h"/*_max; do
+			[ -r "$f" ] && echo "$(basename "$f") $(cat "$f" 2>&1)"
+		done
+	done
+	say "ip_discovery (sysfs)"; if [ -d "$DEV/ip_discovery" ]; then find "$DEV/ip_discovery" -type f | sort | while read -r f; do echo "${f#$DEV/} $(cat "$f" 2>&1 | tr '\n' ' ')"; done; else echo "absent"; fi
+	say "kfd topology"
+	for n in /sys/class/kfd/kfd/topology/nodes/*; do
+		echo "-- node $(basename "$n") gpu_id $(cat "$n/gpu_id" 2>&1)"; cat "$n/properties" 2>&1
+		for m in "$n"/mem_banks/*/properties "$n"/caches/*/properties "$n"/io_links/*/properties; do [ -r "$m" ] && { echo "-- ${m#$n/}"; cat "$m"; }; done
+	done
+	say "iomem"; cat /proc/iomem
+	say "meminfo"; head -8 /proc/meminfo
+	say "iommu, acpi, firmware lines of dmesg"; dmesg | grep -iE 'iommu|AMD-Vi|ACPI (Error|Warning|BIOS)|DMI:|efi:|microcode' | head -60
+	say "acpi tables -> $OUT/acpi (kept out of the repository: firmware code, VFCT carries the video BIOS)"
+	mkdir -p "$OUT/acpi"
+	for t in /sys/firmware/acpi/tables/*; do [ -f "$t" ] && cat "$t" > "$OUT/acpi/$(basename "$t").bin" && echo "$(basename "$t") $(wc -c < "$t") bytes"; done
+	;;
 reset)
 	mountpoint -q /sys/kernel/debug || mount -t debugfs nodev /sys/kernel/debug
 	D=$(dri)
@@ -114,6 +150,6 @@ reset)
 	python3 -u "$HERE/regs2.py" "$HERE/lists.json" state
 	;;
 *)
-	echo "pre | load | state | ib | reset"; exit 2
+	echo "pre | load | state | ib | extras | reset"; exit 2
 	;;
 esac

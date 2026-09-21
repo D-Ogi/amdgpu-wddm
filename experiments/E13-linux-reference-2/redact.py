@@ -19,6 +19,7 @@ RULES = [
     ("dmi serial", re.compile(r"((?:serial|Serial Number|UUID)\s*[:=]\s*)[0-9A-Za-z-]{6,}"), r"\1<redacted>"),
     ("uuid", re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b"), "<uuid>"),
     ("ipv4", re.compile(r"\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b"), "<lan-address>"),
+    ("nul", re.compile(r"\x00+"), ""),      # sysfs pads pp_od_clk_voltage with NUL bytes; git would call the file binary
     ("edid", re.compile(r"(?im)^(.*edid.*)$\n(?:^[0-9a-f \t]{32,}$\n?)+"), r"\1\n<edid block removed>\n"),
 ]
 

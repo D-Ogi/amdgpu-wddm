@@ -1,0 +1,1328 @@
+== debugfs amdgpu_fence_info
+--- ring 0 (gfx_0.0.0) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+Last preempted               0x00000000
+Last reset                   0x00000000
+Last both                    0x00000000
+--- ring 1 (comp_1.0.0) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 3 (comp_1.2.0) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 4 (comp_1.3.0) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 5 (comp_1.0.1) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 6 (comp_1.1.1) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 7 (comp_1.2.1) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 8 (comp_1.3.1) ---
+Last signaled fence          0x00000002
+Last emitted                 0x00000002
+--- ring 9 (kiq_0.2.1.0) ---
+Last signaled fence          0x0000000a
+Last emitted                 0x0000000a
+--- ring 10 (sdma0) ---
+Last signaled fence          0x00000013
+Last emitted                 0x00000013
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+--- ring 11 (sdma1) ---
+Last signaled fence          0x0000000b
+Last emitted                 0x0000000b
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+== debugfs amdgpu_gem_info
+== debugfs amdgpu_vm_info
+== debugfs amdgpu_sa_info
+--------------------- DELAYED ---------------------
+ [0x0000900000 0x0000900400] size     1024 protected by 0x0000000000000001 on context 309
+ [0x0000900400 0x0000900800] size     1024 protected by 0x0000000000000004 on context 309
+ [0x0000900800 0x0000900c00] size     1024 protected by 0x0000000000000002 on context 309
+ [0x0000900c00 0x0000901000] size     1024 protected by 0x0000000000000003 on context 309
+ [0x0000901000 0x0000901400] size     1024 protected by 0x0000000000000001 on context 315
+ [0x0000901400 0x0000901800] size     1024 protected by 0x0000000000000004 on context 315
+ [0x0000901800 0x0000901c00] size     1024 protected by 0x0000000000000002 on context 315
+ [0x0000901c00 0x0000902000] size     1024 protected by 0x0000000000000003 on context 315
+ [0x0000902000 0x0000902040] size       64 protected by 0x0000000000000001 on context 305
+ [0x0000902100 0x0000902120] size       32 protected by 0x0000000000000002 on context 305
+ [0x0000902200 0x0000902220] size       32 protected by 0x0000000000000003 on context 305
+ [0x0000902300 0x0000902320] size       32 protected by 0x0000000000000004 on context 305
+ [0x0000902400 0x0000902420] size       32 protected by 0x0000000000000005 on context 305
+ [0x0000902500 0x0000902900] size     1024 protected by 0x0000000000000001 on context 321
+ [0x0000902900 0x0000902d00] size     1024 protected by 0x0000000000000004 on context 321
+ [0x0000902d00 0x0000903100] size     1024 protected by 0x0000000000000002 on context 321
+>[0x0000903100 0x0000903500] size     1024 protected by 0x0000000000000003 on context 321
+-------------------- IMMEDIATE --------------------
+ [0x0000a00000 0x0000a00040] size       64 protected by 0x0000000000000001 on context 303
+>[0x0000a00100 0x0000a00140] size       64 protected by 0x0000000000000002 on context 303
+--------------------- DIRECT ----------------------
+== debugfs state
+plane[41]: plane-0
+	crtc=(null)
+	fb=0
+	crtc-pos=0x0+0+0
+	src-pos=0.000000x0.000000+0.000000+0.000000
+	rotation=1
+	normalized-zpos=1
+	color-encoding=ITU-R BT.601 YCbCr
+	color-range=YCbCr limited range
+	color_mgmt_changed=0
+plane[45]: plane-1
+	crtc=crtc-0
+	fb=72
+		allocated by = [fbcon]
+		refcount=2
+		format=XR24 little-endian (0x34325258)
+		modifier=0x0
+		size=1920x1200
+		layers:
+			size[0]=1920x1200
+			pitch[0]=7680
+			offset[0]=0
+			obj[0]:
+				name=0
+				refcount=4
+				start=00100001
+				size=9216000
+				imported=no
+	crtc-pos=1920x1200+0+0
+	src-pos=1920.000000x1200.000000+0.000000+0.000000
+	rotation=1
+	normalized-zpos=0
+	color-encoding=ITU-R BT.601 YCbCr
+	color-range=YCbCr limited range
+	color_mgmt_changed=0
+plane[49]: plane-2
+	crtc=(null)
+	fb=0
+	crtc-pos=0x0+0+0
+	src-pos=0.000000x0.000000+0.000000+0.000000
+	rotation=1
+	normalized-zpos=4
+	color-encoding=ITU-R BT.601 YCbCr
+	color-range=YCbCr limited range
+	color_mgmt_changed=0
+plane[55]: plane-3
+	crtc=(null)
+	fb=0
+	crtc-pos=0x0+0+0
+	src-pos=0.000000x0.000000+0.000000+0.000000
+	rotation=1
+	normalized-zpos=ff
+	color-encoding=ITU-R BT.601 YCbCr
+	color-range=YCbCr limited range
+	color_mgmt_changed=0
+plane[59]: plane-4
+	crtc=(null)
+	fb=0
+	crtc-pos=0x0+0+0
+	src-pos=0.000000x0.000000+0.000000+0.000000
+	rotation=1
+	normalized-zpos=ff
+	color-encoding=ITU-R BT.601 YCbCr
+	color-range=YCbCr limited range
+	color_mgmt_changed=0
+crtc[58]: crtc-0
+	enable=1
+	active=1
+	self_refresh_active=0
+	planes_changed=1
+	mode_changed=0
+	active_changed=0
+	connectors_changed=0
+	color_mgmt_changed=0
+	plane_mask=2
+	connector_mask=1
+	encoder_mask=1
+	mode: "1920x1200": 60 154000 1920 1968 2000 2080 1200 1203 1209 1235 0x48 0x9
+crtc[62]: crtc-1
+	enable=0
+	active=0
+	self_refresh_active=0
+	planes_changed=0
+	mode_changed=0
+	active_changed=0
+	connectors_changed=0
+	color_mgmt_changed=0
+	plane_mask=0
+	connector_mask=0
+	encoder_mask=0
+	mode: "": 0 0 0 0 0 0 0 0 0 0 0x0 0x0
+connector[64]: DP-1
+	crtc=crtc-0
+	self_refresh_aware=0
+	interlace_allowed=0
+	ycbcr_420_allowed=1
+	max_requested_bpc=16
+	colorspace=Default
+connector[74]: DP-2
+	crtc=(null)
+	self_refresh_aware=0
+	interlace_allowed=0
+	ycbcr_420_allowed=1
+	max_requested_bpc=16
+	colorspace=Default
+== debugfs clients
+             command  tgid dev master a   uid      magic                                                             name                   id
+== debugfs name
+amdgpu dev=0000:01:00.0 unique=0000:01:00.0
+== device attributes
+-- vendor
+0x1002
+-- device
+0x13fe
+-- revision
+0x00
+-- subsystem_vendor
+0x1022
+-- subsystem_device
+0x0000
+-- vbios_version
+113-AMDRBN-003
+-- current_link_speed
+16.0 GT/s PCIe
+-- current_link_width
+16
+-- max_link_speed
+16.0 GT/s PCIe
+-- max_link_width
+16
+-- gpu_busy_percent
+cat: read error: Not supported
+-- power_dpm_force_performance_level
+auto
+-- pp_dpm_sclk
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+-- pp_dpm_mclk
+0: 450Mhz *
+-- pp_dpm_fclk
+0: 450Mhz *
+-- pp_od_clk_voltage
+OD_SCLK:
+0: 1500Mhz *
+OD_VDDC:
+0: 906mV *
+OD_RANGE:
+SCLK:    1000Mhz       2000Mhz
+VDDC:     700mV        1129mV
+-- thermal_throttling_logging
+0000:01:00.0: thermal throttling logging enabled, with interval 60 seconds
+== hwmon
+name amdgpu
+freq1_label sclk
+in0_label vddgfx
+in1_label vddnb
+power1_label PPT
+temp1_label edge
+freq1_input 1500000000
+in0_input 906
+in1_input 1187
+power1_input 63078000
+temp1_input 70000
+== ip_discovery (sysfs)
+ip_discovery/die/0/0/0/base_addr 0x0001B800 0x01440000 0x01480000 0x014C0000 0x02411000 
+ip_discovery/die/0/0/0/harvest 0x0 
+ip_discovery/die/0/0/0/hw_id 0 
+ip_discovery/die/0/0/0/major 11 
+ip_discovery/die/0/0/0/minor 0 
+ip_discovery/die/0/0/0/num_base_addresses 5 
+ip_discovery/die/0/0/0/num_instance 0 
+ip_discovery/die/0/0/0/revision 1 
+ip_discovery/die/0/0/1/base_addr 0x0001BA00 0x01500000 0x01540000 0x01580000 0x02411400 
+ip_discovery/die/0/0/1/harvest 0x0 
+ip_discovery/die/0/0/1/hw_id 0 
+ip_discovery/die/0/0/1/major 11 
+ip_discovery/die/0/0/1/minor 0 
+ip_discovery/die/0/0/1/num_base_addresses 5 
+ip_discovery/die/0/0/1/num_instance 1 
+ip_discovery/die/0/0/1/revision 1 
+ip_discovery/die/0/1/0/base_addr 0x00016000 0x00DC0000 0x00E00000 0x00E40000 0x0243FC00 
+ip_discovery/die/0/1/0/harvest 0x0 
+ip_discovery/die/0/1/0/hw_id 1 
+ip_discovery/die/0/1/0/major 11 
+ip_discovery/die/0/1/0/minor 0 
+ip_discovery/die/0/1/0/num_base_addresses 5 
+ip_discovery/die/0/1/0/num_instance 0 
+ip_discovery/die/0/1/0/revision 8 
+ip_discovery/die/0/108/0/base_addr 0x00000000 0x00000014 0x00000D20 0x00010400 0x0241B000 0x04040000 
+ip_discovery/die/0/108/0/harvest 0x0 
+ip_discovery/die/0/108/0/hw_id 108 
+ip_discovery/die/0/108/0/major 2 
+ip_discovery/die/0/108/0/minor 1 
+ip_discovery/die/0/108/0/num_base_addresses 6 
+ip_discovery/die/0/108/0/num_instance 0 
+ip_discovery/die/0/108/0/revision 1 
+ip_discovery/die/0/11/0/base_addr 0x00001260 0x0000A000 0x02402C00 
+ip_discovery/die/0/11/0/harvest 0x0 
+ip_discovery/die/0/11/0/hw_id 11 
+ip_discovery/die/0/11/0/major 10 
+ip_discovery/die/0/11/0/minor 1 
+ip_discovery/die/0/11/0/num_base_addresses 3 
+ip_discovery/die/0/11/0/num_instance 0 
+ip_discovery/die/0/11/0/revision 3 
+ip_discovery/die/0/12/0/base_addr 0x00007800 0x00007E00 0x02403000 
+ip_discovery/die/0/12/0/harvest 0x0 
+ip_discovery/die/0/12/0/hw_id 12 
+ip_discovery/die/0/12/0/major 2 
+ip_discovery/die/0/12/0/minor 0 
+ip_discovery/die/0/12/0/num_base_addresses 3 
+ip_discovery/die/0/12/0/num_instance 0 
+ip_discovery/die/0/12/0/revision 3 
+ip_discovery/die/0/128/0/base_addr 0x00000EA0 0x00500000 0x02420000 
+ip_discovery/die/0/128/0/harvest 0x0 
+ip_discovery/die/0/128/0/hw_id 128 
+ip_discovery/die/0/128/0/major 2 
+ip_discovery/die/0/128/0/minor 1 
+ip_discovery/die/0/128/0/num_base_addresses 3 
+ip_discovery/die/0/128/0/num_instance 0 
+ip_discovery/die/0/128/0/revision 0 
+ip_discovery/die/0/14/0/base_addr 0x00480000 0x02403800 
+ip_discovery/die/0/14/0/harvest 0x0 
+ip_discovery/die/0/14/0/hw_id 14 
+ip_discovery/die/0/14/0/major 4 
+ip_discovery/die/0/14/0/minor 0 
+ip_discovery/die/0/14/0/num_base_addresses 2 
+ip_discovery/die/0/14/0/num_instance 0 
+ip_discovery/die/0/14/0/revision 0 
+ip_discovery/die/0/150/0/base_addr 0x00014000 0x02425800 
+ip_discovery/die/0/150/0/harvest 0x0 
+ip_discovery/die/0/150/0/hw_id 150 
+ip_discovery/die/0/150/0/major 8 
+ip_discovery/die/0/150/0/minor 1 
+ip_discovery/die/0/150/0/num_base_addresses 2 
+ip_discovery/die/0/150/0/num_instance 0 
+ip_discovery/die/0/150/0/revision 1 
+ip_discovery/die/0/150/1/base_addr 0x00054000 0x02425C00 
+ip_discovery/die/0/150/1/harvest 0x0 
+ip_discovery/die/0/150/1/hw_id 150 
+ip_discovery/die/0/150/1/major 8 
+ip_discovery/die/0/150/1/minor 1 
+ip_discovery/die/0/150/1/num_base_addresses 2 
+ip_discovery/die/0/150/1/num_instance 1 
+ip_discovery/die/0/150/1/revision 1 
+ip_discovery/die/0/170/0/base_addr 0x0242A800 0x05B00000 
+ip_discovery/die/0/170/0/harvest 0x0 
+ip_discovery/die/0/170/0/hw_id 170 
+ip_discovery/die/0/170/0/major 4 
+ip_discovery/die/0/170/0/minor 5 
+ip_discovery/die/0/170/0/num_base_addresses 2 
+ip_discovery/die/0/170/0/num_instance 0 
+ip_discovery/die/0/170/0/revision 0 
+ip_discovery/die/0/170/1/base_addr 0x0242AC00 0x05B80000 
+ip_discovery/die/0/170/1/harvest 0x0 
+ip_discovery/die/0/170/1/hw_id 170 
+ip_discovery/die/0/170/1/major 4 
+ip_discovery/die/0/170/1/minor 5 
+ip_discovery/die/0/170/1/num_base_addresses 2 
+ip_discovery/die/0/170/1/num_instance 1 
+ip_discovery/die/0/170/1/revision 0 
+ip_discovery/die/0/24/0/base_addr 0x00010000 0x02406000 0x04EC0000 
+ip_discovery/die/0/24/0/harvest 0x0 
+ip_discovery/die/0/24/0/hw_id 24 
+ip_discovery/die/0/24/0/major 0 
+ip_discovery/die/0/24/0/minor 0 
+ip_discovery/die/0/24/0/num_base_addresses 3 
+ip_discovery/die/0/24/0/num_instance 0 
+ip_discovery/die/0/24/0/revision 0 
+ip_discovery/die/0/255/0/base_addr 0x00016000 0x00DC0000 0x00E00000 0x00E40000 0x0243FC00 
+ip_discovery/die/0/255/0/harvest 0x0 
+ip_discovery/die/0/255/0/hw_id 255 
+ip_discovery/die/0/255/0/major 11 
+ip_discovery/die/0/255/0/minor 0 
+ip_discovery/die/0/255/0/num_base_addresses 5 
+ip_discovery/die/0/255/0/num_instance 0 
+ip_discovery/die/0/255/0/revision 8 
+ip_discovery/die/0/271/0/base_addr 0x00000012 0x000000C0 0x000034C0 0x00009000 0x02403C00 
+ip_discovery/die/0/271/0/harvest 0x0 
+ip_discovery/die/0/271/0/hw_id 271 
+ip_discovery/die/0/271/0/major 2 
+ip_discovery/die/0/271/0/minor 0 
+ip_discovery/die/0/271/0/num_base_addresses 5 
+ip_discovery/die/0/271/0/num_instance 0 
+ip_discovery/die/0/271/0/revision 3 
+ip_discovery/die/0/272/0/base_addr 0x02404000 
+ip_discovery/die/0/272/0/harvest 0x0 
+ip_discovery/die/0/272/0/hw_id 272 
+ip_discovery/die/0/272/0/major 127 
+ip_discovery/die/0/272/0/minor 127 
+ip_discovery/die/0/272/0/num_base_addresses 1 
+ip_discovery/die/0/272/0/num_instance 0 
+ip_discovery/die/0/272/0/revision 63 
+ip_discovery/die/0/274/0/base_addr 0x004C0000 0x02404800 
+ip_discovery/die/0/274/0/harvest 0x0 
+ip_discovery/die/0/274/0/hw_id 274 
+ip_discovery/die/0/274/0/major 127 
+ip_discovery/die/0/274/0/minor 127 
+ip_discovery/die/0/274/0/num_base_addresses 2 
+ip_discovery/die/0/274/0/num_instance 0 
+ip_discovery/die/0/274/0/revision 63 
+ip_discovery/die/0/28/0/base_addr 0x00007DC0 0x00900000 0x02407000 0x04FC0000 0x055C0000 
+ip_discovery/die/0/28/0/harvest 0x0 
+ip_discovery/die/0/28/0/hw_id 28 
+ip_discovery/die/0/28/0/major 0 
+ip_discovery/die/0/28/0/minor 0 
+ip_discovery/die/0/28/0/num_base_addresses 5 
+ip_discovery/die/0/28/0/num_instance 0 
+ip_discovery/die/0/28/0/revision 0 
+ip_discovery/die/0/3/0/base_addr 0x00016600 0x02400C00 
+ip_discovery/die/0/3/0/harvest 0x0 
+ip_discovery/die/0/3/0/hw_id 3 
+ip_discovery/die/0/3/0/major 11 
+ip_discovery/die/0/3/0/minor 0 
+ip_discovery/die/0/3/0/num_base_addresses 2 
+ip_discovery/die/0/3/0/num_instance 0 
+ip_discovery/die/0/3/0/revision 1 
+ip_discovery/die/0/34/0/base_addr 0x0001A000 0x02408800 
+ip_discovery/die/0/34/0/harvest 0x0 
+ip_discovery/die/0/34/0/hw_id 34 
+ip_discovery/die/0/34/0/major 2 
+ip_discovery/die/0/34/0/minor 0 
+ip_discovery/die/0/34/0/num_base_addresses 2 
+ip_discovery/die/0/34/0/num_instance 0 
+ip_discovery/die/0/34/0/revision 3 
+ip_discovery/die/0/35/0/base_addr 0x00000C00 0x02408C00 
+ip_discovery/die/0/35/0/harvest 0x0 
+ip_discovery/die/0/35/0/hw_id 35 
+ip_discovery/die/0/35/0/major 2 
+ip_discovery/die/0/35/0/minor 0 
+ip_discovery/die/0/35/0/num_base_addresses 2 
+ip_discovery/die/0/35/0/num_instance 0 
+ip_discovery/die/0/35/0/revision 3 
+ip_discovery/die/0/36/0/base_addr 0x000001C0 
+ip_discovery/die/0/36/0/harvest 0x0 
+ip_discovery/die/0/36/0/hw_id 36 
+ip_discovery/die/0/36/0/major 3 
+ip_discovery/die/0/36/0/minor 0 
+ip_discovery/die/0/36/0/num_base_addresses 1 
+ip_discovery/die/0/36/0/num_instance 0 
+ip_discovery/die/0/36/0/revision 0 
+ip_discovery/die/0/37/0/base_addr 0x00000580 0x02409400 
+ip_discovery/die/0/37/0/harvest 0x0 
+ip_discovery/die/0/37/0/hw_id 37 
+ip_discovery/die/0/37/0/major 2 
+ip_discovery/die/0/37/0/minor 0 
+ip_discovery/die/0/37/0/num_base_addresses 2 
+ip_discovery/die/0/37/0/num_instance 0 
+ip_discovery/die/0/37/0/revision 0 
+ip_discovery/die/0/4/0/base_addr 0x00016800 0x00016A00 0x00440000 0x02401000 
+ip_discovery/die/0/4/0/harvest 0x0 
+ip_discovery/die/0/4/0/hw_id 4 
+ip_discovery/die/0/4/0/major 11 
+ip_discovery/die/0/4/0/minor 0 
+ip_discovery/die/0/4/0/num_base_addresses 4 
+ip_discovery/die/0/4/0/num_instance 0 
+ip_discovery/die/0/4/0/revision 8 
+ip_discovery/die/0/40/0/base_addr 0x000010A0 0x0240A000 
+ip_discovery/die/0/40/0/harvest 0x0 
+ip_discovery/die/0/40/0/hw_id 40 
+ip_discovery/die/0/40/0/major 5 
+ip_discovery/die/0/40/0/minor 0 
+ip_discovery/die/0/40/0/num_base_addresses 2 
+ip_discovery/die/0/40/0/num_instance 0 
+ip_discovery/die/0/40/0/revision 1 
+ip_discovery/die/0/41/0/base_addr 0x00000F20 0x0240A400 
+ip_discovery/die/0/41/0/harvest 0x0 
+ip_discovery/die/0/41/0/hw_id 41 
+ip_discovery/die/0/41/0/major 5 
+ip_discovery/die/0/41/0/minor 0 
+ip_discovery/die/0/41/0/num_base_addresses 2 
+ip_discovery/die/0/41/0/num_instance 0 
+ip_discovery/die/0/41/0/revision 1 
+ip_discovery/die/0/42/0/base_addr 0x00001260 0x0000A000 0x02402C00 
+ip_discovery/die/0/42/0/harvest 0x0 
+ip_discovery/die/0/42/0/hw_id 42 
+ip_discovery/die/0/42/0/major 5 
+ip_discovery/die/0/42/0/minor 0 
+ip_discovery/die/0/42/0/num_base_addresses 3 
+ip_discovery/die/0/42/0/num_instance 0 
+ip_discovery/die/0/42/0/revision 1 
+ip_discovery/die/0/43/0/base_addr 0x00001260 0x0000A000 0x02402C00 
+ip_discovery/die/0/43/0/harvest 0x0 
+ip_discovery/die/0/43/0/hw_id 43 
+ip_discovery/die/0/43/0/major 5 
+ip_discovery/die/0/43/0/minor 0 
+ip_discovery/die/0/43/0/num_base_addresses 3 
+ip_discovery/die/0/43/0/num_instance 0 
+ip_discovery/die/0/43/0/revision 1 
+ip_discovery/die/0/45/0/base_addr 0x000001E0 
+ip_discovery/die/0/45/0/harvest 0x0 
+ip_discovery/die/0/45/0/hw_id 45 
+ip_discovery/die/0/45/0/major 3 
+ip_discovery/die/0/45/0/minor 0 
+ip_discovery/die/0/45/0/num_base_addresses 1 
+ip_discovery/die/0/45/0/num_instance 0 
+ip_discovery/die/0/45/0/revision 0 
+ip_discovery/die/0/46/0/base_addr 0x00007000 0x0240B800 
+ip_discovery/die/0/46/0/harvest 0x0 
+ip_discovery/die/0/46/0/hw_id 46 
+ip_discovery/die/0/46/0/major 3 
+ip_discovery/die/0/46/0/minor 5 
+ip_discovery/die/0/46/0/num_base_addresses 2 
+ip_discovery/die/0/46/0/num_instance 0 
+ip_discovery/die/0/46/0/revision 0 
+ip_discovery/die/0/47/0/base_addr 0x00017E00 0x0240BC00 
+ip_discovery/die/0/47/0/harvest 0x0 
+ip_discovery/die/0/47/0/hw_id 47 
+ip_discovery/die/0/47/0/major 11 
+ip_discovery/die/0/47/0/minor 0 
+ip_discovery/die/0/47/0/num_base_addresses 2 
+ip_discovery/die/0/47/0/num_instance 0 
+ip_discovery/die/0/47/0/revision 1 
+ip_discovery/die/0/49/0/base_addr 0x000005A0 0x00B80000 0x0240C400 
+ip_discovery/die/0/49/0/harvest 0x0 
+ip_discovery/die/0/49/0/hw_id 49 
+ip_discovery/die/0/49/0/major 2 
+ip_discovery/die/0/49/0/minor 0 
+ip_discovery/die/0/49/0/num_base_addresses 3 
+ip_discovery/die/0/49/0/num_instance 0 
+ip_discovery/die/0/49/0/revision 0 
+ip_discovery/die/0/5/0/base_addr 0x00017400 0x02401400 
+ip_discovery/die/0/5/0/harvest 0x0 
+ip_discovery/die/0/5/0/hw_id 5 
+ip_discovery/die/0/5/0/major 11 
+ip_discovery/die/0/5/0/minor 0 
+ip_discovery/die/0/5/0/num_base_addresses 2 
+ip_discovery/die/0/5/0/num_instance 0 
+ip_discovery/die/0/5/0/revision 1 
+ip_discovery/die/0/6/0/base_addr 0x00016C00 0x02401800 
+ip_discovery/die/0/6/0/harvest 0x0 
+ip_discovery/die/0/6/0/hw_id 6 
+ip_discovery/die/0/6/0/major 11 
+ip_discovery/die/0/6/0/minor 0 
+ip_discovery/die/0/6/0/num_base_addresses 2 
+ip_discovery/die/0/6/0/num_instance 0 
+ip_discovery/die/0/6/0/revision 1 
+ip_discovery/die/0/6/1/base_addr 0x00016E00 0x02401C00 
+ip_discovery/die/0/6/1/harvest 0x0 
+ip_discovery/die/0/6/1/hw_id 6 
+ip_discovery/die/0/6/1/major 11 
+ip_discovery/die/0/6/1/minor 0 
+ip_discovery/die/0/6/1/num_base_addresses 2 
+ip_discovery/die/0/6/1/num_instance 1 
+ip_discovery/die/0/6/1/revision 1 
+ip_discovery/die/0/6/2/base_addr 0x00017000 0x02402000 
+ip_discovery/die/0/6/2/harvest 0x0 
+ip_discovery/die/0/6/2/hw_id 6 
+ip_discovery/die/0/6/2/major 11 
+ip_discovery/die/0/6/2/minor 0 
+ip_discovery/die/0/6/2/num_base_addresses 2 
+ip_discovery/die/0/6/2/num_instance 2 
+ip_discovery/die/0/6/2/revision 1 
+ip_discovery/die/0/70/0/base_addr 0x02411800 0x04440000 
+ip_discovery/die/0/70/0/harvest 0x0 
+ip_discovery/die/0/70/0/hw_id 70 
+ip_discovery/die/0/70/0/major 4 
+ip_discovery/die/0/70/0/minor 2 
+ip_discovery/die/0/70/0/num_base_addresses 2 
+ip_discovery/die/0/70/0/num_instance 0 
+ip_discovery/die/0/70/0/revision 0 
+ip_discovery/die/0/80/0/base_addr 0x02414000 0x04680000 
+ip_discovery/die/0/80/0/harvest 0x0 
+ip_discovery/die/0/80/0/hw_id 80 
+ip_discovery/die/0/80/0/major 3 
+ip_discovery/die/0/80/0/minor 6 
+ip_discovery/die/0/80/0/num_base_addresses 2 
+ip_discovery/die/0/80/0/num_instance 0 
+ip_discovery/die/0/80/0/revision 0 
+ip_discovery/die/0/num_ips 38 
+== kfd topology
+-- node 0 gpu_id 0
+cpu_cores_count 12
+simd_count 0
+mem_banks_count 1
+caches_count 0
+io_links_count 1
+p2p_links_count 0
+cpu_core_id_base 0
+simd_id_base 0
+max_waves_per_simd 0
+lds_size_in_kb 0
+gds_size_in_kb 0
+num_gws 0
+wave_front_size 0
+array_count 0
+simd_arrays_per_engine 0
+cu_per_simd_array 0
+simd_per_cu 0
+max_slots_scratch_cu 0
+gfx_target_version 0
+vendor_id 0
+device_id 0
+location_id 0
+domain 0
+drm_render_minor 0
+hive_id 0
+num_sdma_engines 0
+num_sdma_xgmi_engines 0
+num_sdma_queues_per_engine 0
+num_cp_queues 0
+cwsr_size 0
+ctl_stack_size 0
+max_engine_clk_ccompute 0
+-- mem_banks/0/properties
+heap_type 0
+size_in_bytes 8040914944
+flags 0
+width 32
+mem_clk_max 0
+-- io_links/0/properties
+type 2
+version_major 0
+version_minor 0
+node_from 0
+node_to 1
+weight 20
+min_latency 0
+max_latency 0
+min_bandwidth 0
+max_bandwidth 32000
+recommended_transfer_size 0
+recommended_sdma_engine_id_mask 3
+flags 15
+-- node 1 gpu_id 15192
+cpu_cores_count 0
+simd_count 48
+mem_banks_count 1
+caches_count 53
+io_links_count 1
+p2p_links_count 0
+cpu_core_id_base 0
+simd_id_base 2147487744
+max_waves_per_simd 20
+lds_size_in_kb 64
+gds_size_in_kb 0
+num_gws 0
+wave_front_size 32
+array_count 4
+simd_arrays_per_engine 2
+cu_per_simd_array 10
+simd_per_cu 2
+max_slots_scratch_cu 32
+gfx_target_version 100103
+vendor_id 4098
+device_id 5118
+location_id 256
+domain 0
+drm_render_minor 128
+hive_id 0
+num_sdma_engines 2
+num_sdma_xgmi_engines 0
+num_sdma_queues_per_engine 8
+num_cp_queues 24
+cwsr_size 8368128
+ctl_stack_size 12288
+max_engine_clk_fcompute 2000
+local_mem_size 0
+fw_version 144
+capability 8626816
+capability2 0
+debug_prop 1495
+sdma_fw_version 52
+unique_id 0
+num_xcc 1
+max_engine_clk_ccompute 0
+-- mem_banks/0/properties
+heap_type 1
+size_in_bytes 8589934592
+flags 0
+width 1024
+mem_clk_max 0
+-- caches/0/properties
+processor_id_low 2147487744
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/1/properties
+processor_id_low 2147487745
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/10/properties
+processor_id_low 2147487758
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/11/properties
+processor_id_low 2147487759
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/12/properties
+processor_id_low 2147487764
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/13/properties
+processor_id_low 2147487765
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/14/properties
+processor_id_low 2147487766
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/15/properties
+processor_id_low 2147487767
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/16/properties
+processor_id_low 2147487768
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/17/properties
+processor_id_low 2147487769
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/18/properties
+processor_id_low 2147487774
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/19/properties
+processor_id_low 2147487775
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/2/properties
+processor_id_low 2147487746
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/20/properties
+processor_id_low 2147487776
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/21/properties
+processor_id_low 2147487777
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/22/properties
+processor_id_low 2147487778
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/23/properties
+processor_id_low 2147487779
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/24/properties
+processor_id_low 2147487744
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/25/properties
+processor_id_low 2147487746
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/26/properties
+processor_id_low 2147487748
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/27/properties
+processor_id_low 2147487754
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/28/properties
+processor_id_low 2147487756
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/29/properties
+processor_id_low 2147487758
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/3/properties
+processor_id_low 2147487747
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/30/properties
+processor_id_low 2147487764
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/31/properties
+processor_id_low 2147487766
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/32/properties
+processor_id_low 2147487768
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/33/properties
+processor_id_low 2147487774
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/34/properties
+processor_id_low 2147487776
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/35/properties
+processor_id_low 2147487778
+level 1
+size 32
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 10
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/36/properties
+processor_id_low 2147487744
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/37/properties
+processor_id_low 2147487746
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/38/properties
+processor_id_low 2147487748
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/39/properties
+processor_id_low 2147487754
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/4/properties
+processor_id_low 2147487748
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/40/properties
+processor_id_low 2147487756
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/41/properties
+processor_id_low 2147487758
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/42/properties
+processor_id_low 2147487764
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/43/properties
+processor_id_low 2147487766
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/44/properties
+processor_id_low 2147487768
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/45/properties
+processor_id_low 2147487774
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/46/properties
+processor_id_low 2147487776
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/47/properties
+processor_id_low 2147487778
+level 1
+size 16
+cache_line_size 64
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/48/properties
+processor_id_low 2147487744
+level 1
+size 128
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/49/properties
+processor_id_low 2147487754
+level 1
+size 128
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/5/properties
+processor_id_low 2147487749
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/50/properties
+processor_id_low 2147487764
+level 1
+size 128
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/51/properties
+processor_id_low 2147487774
+level 1
+size 128
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/52/properties
+processor_id_low 2147487744
+level 2
+size 4096
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/6/properties
+processor_id_low 2147487754
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/7/properties
+processor_id_low 2147487755
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/8/properties
+processor_id_low 2147487756
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- caches/9/properties
+processor_id_low 2147487757
+level 1
+size 16
+cache_line_size 128
+cache_lines_per_tag 0
+association 0
+latency 0
+type 9
+sibling_map 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+-- io_links/0/properties
+type 2
+version_major 0
+version_minor 0
+node_from 1
+node_to 0
+weight 20
+min_latency 0
+max_latency 0
+min_bandwidth 0
+max_bandwidth 32000
+recommended_transfer_size 0
+recommended_sdma_engine_id_mask 3
+flags 1
+== iomem
+00000000-00000fff : Reserved
+00001000-0009ffff : System RAM
+000a0000-000fffff : Reserved
+  000a0000-000dffff : PCI Bus 0000:00
+  000f0000-000fffff : System ROM
+00100000-03ffffff : System RAM
+04000000-04000fff : ACPI Non-volatile Storage
+04001000-09e01fff : System RAM
+09e02000-09ffffff : Reserved
+0a000000-7cc1ffff : System RAM
+7cc20000-7cc20fff : Reserved
+7cc21000-7cd1afff : System RAM
+7cd1b000-7cd1bfff : Reserved
+7cd1c000-7dce3fff : System RAM
+7dce4000-7ddf9fff : Reserved
+7ddfa000-7de09fff : ACPI Tables
+7de0a000-7defbfff : ACPI Non-volatile Storage
+7defc000-7e23ffff : Reserved
+7e240000-7effffff : System RAM
+7f000000-7fffffff : Reserved
+80000000-febfffff : PCI Bus 0000:00
+  c0000000-d01fffff : PCI Bus 0000:01
+    c0000000-cfffffff : 0000:01:00.0
+    d0000000-d01fffff : 0000:01:00.0
+  e0000000-efffffff : PCI ECAM 0000 [bus 00-ff]
+    e0000000-efffffff : pnp 00:00
+  fe700000-fe8fffff : PCI Bus 0000:01
+    fe700000-fe7fffff : 0000:01:00.2
+    fe800000-fe87ffff : 0000:01:00.0
+    fe880000-fe883fff : 0000:01:00.1
+      fe880000-fe883fff : ICH HD audio
+    fe884000-fe885fff : 0000:01:00.2
+  fe900000-fe9fffff : PCI Bus 0000:04
+    fe900000-fe903fff : 0000:04:00.0
+    fe904000-fe904fff : 0000:04:00.0
+      fe904000-fe904fff : r8169
+  fea00000-feafffff : PCI Bus 0000:03
+    fea00000-fea03fff : 0000:03:00.0
+      fea00000-fea03fff : nvme
+  feb00000-feb01fff : 0000:00:10.0
+    feb00000-feb01fff : xhci-hcd
+  feb02000-feb02fff : 0000:00:14.5
+    feb02000-feb02fff : ohci_hcd
+  feb03000-feb030ff : 0000:00:13.2
+    feb03000-feb030ff : ehci_hcd
+  feb04000-feb04fff : 0000:00:13.0
+    feb04000-feb04fff : ohci_hcd
+  feb05000-feb050ff : 0000:00:12.2
+    feb05000-feb050ff : ehci_hcd
+  feb06000-feb06fff : 0000:00:12.0
+    feb06000-feb06fff : ohci_hcd
+  feb07000-feb077ff : 0000:00:11.0
+    feb07000-feb077ff : ahci
+fec00000-fec003ff : IOAPIC 0
+fec01000-fec013ff : IOAPIC 1
+fec10000-fec10fff : Reserved
+  fec10000-fec10fff : pnp 00:03
+fed00000-fed003ff : HPET 0
+  fed00000-fed003ff : PNP0103:00
+fed61000-fed70fff : pnp 00:03
+fed80000-fed8ffff : Reserved
+  fed80000-fed8ffff : pnp 00:03
+    fed80b00-fed80b07 : SB800 TCO
+fee00000-ffffffff : PCI Bus 0000:00
+  fee00000-fee00fff : pnp 00:03
+  ff000000-ffffffff : pnp 00:03
+100000000-26fffffff : System RAM
+  1db000000-1dbffd067 : Kernel code
+  1dc000000-1dcb07fff : Kernel rodata
+  1dcc00000-1dce0d5bf : Kernel data
+  1dd649000-1dd9fffff : Kernel bss
+270000000-46fffffff : Reserved
+== meminfo
+MemTotal:        7852456 kB
+MemFree:         6351476 kB
+MemAvailable:    6507844 kB
+Buffers:             408 kB
+Cached:           438092 kB
+SwapCached:            0 kB
+Active:            87624 kB
+Inactive:         370608 kB
+== iommu, acpi, firmware lines of dmesg
+[    0.000000] efi: EFI v2.6 by American Megatrends
+[    0.000000] efi: ACPI 2.0=0x7de34000 ACPI=0x7de34000 SMBIOS=0x7e133000 SMBIOS 3.0=0x7e132000 ESRT=0x7cd1b418 MEMATTR=0x7b4da518 INITRD=0x78dbae98 
+[    0.000000] efi: Remove mem30: MMIO range=[0xe0000000-0xefffffff] (256MB) from e820 map
+[    0.000000] efi: Remove mem31: MMIO range=[0xfdd00000-0xfddfffff] (1MB) from e820 map
+[    0.000000] efi: Remove mem32: MMIO range=[0xfeb80000-0xfec01fff] (0MB) from e820 map
+[    0.000000] efi: Not removing mem33: MMIO range=[0xfec10000-0xfec10fff] (4KB) from e820 map
+[    0.000000] efi: Not removing mem34: MMIO range=[0xfed80000-0xfed8ffff] (64KB) from e820 map
+[    0.000000] efi: Remove mem35: MMIO range=[0xfee00000-0xfeefffff] (1MB) from e820 map
+[    0.000000] efi: Remove mem36: MMIO range=[0xff000000-0xffffffff] (16MB) from e820 map
+[    0.000000] DMI: Default string AMD BC-250/AMD BC-250, BIOS P3.00 12/09/2021
+[    0.000000] DMI: Memory slots populated: 16/16
+[    0.005378] ACPI BIOS Warning (bug): Optional FADT field Pm2ControlBlock has valid Length but zero Address: 0x0000000000000000/0x1 (20250807/tbfadt-611)
+[    0.068413] Zenbleed: please update your microcode for the most optimal fix
+[    0.230248] efi: Freeing EFI boot services memory: 26796K
+[    0.236269] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C000], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236284] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236304] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C001], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236316] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236335] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C002], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236346] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236365] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C003], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236376] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236394] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C004], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236405] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236424] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C005], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236435] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236454] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C006], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236465] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236484] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C007], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236495] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236514] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C008], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236525] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236544] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C009], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236555] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236574] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C00A], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236585] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.236604] ACPI BIOS Error (bug): Could not resolve symbol [\_PR.C00B], AE_NOT_FOUND (20250807/dswload2-162)
+[    0.236615] ACPI Error: AE_NOT_FOUND, During name lookup/catalog (20250807/psobject-220)
+[    0.257459] iommu: Default domain type: Translated
+[    0.257465] iommu: DMA domain TLB invalidation policy: lazy mode
+[    0.588111] microcode: Current revision: 0x08407007
+== acpi tables -> /tmp/e13/acpi (kept out of the repository: firmware code, VFCT carries the video BIOS)
+APIC 222 bytes
+BGRT 56 bytes
+CDIT 41 bytes
+CRAT 3024 bytes
+DSDT 24208 bytes
+FACP 276 bytes
+FACS 64 bytes
+FIDT 156 bytes
+FPDT 68 bytes
+HPET 56 bytes
+MCFG 60 bytes
+SSDT1 1560 bytes
+SSDT2 6466 bytes
+UEFI 66 bytes
+VFCT 55428 bytes
