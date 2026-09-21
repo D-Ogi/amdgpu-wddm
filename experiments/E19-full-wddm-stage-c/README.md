@@ -1,6 +1,6 @@
 # E19: the full WDDM table, stage C - a real submission on the gfx ring
 
-Date: 2026-09-22. State: H2 and H3 hold (M76, M77): stage C's exit criterion is met, n = 1. H4 (content executed) is open. ADR 0008 stage C; follows E18 (M73).
+Date: 2026-09-22. State: DONE. H2, H3 and H4 hold (M76, M77, M80): stage C's exit criterion is met and the buffer's content ran. ADR 0008 stage C; follows E18 (M73).
 
 ## Why
 
@@ -78,3 +78,11 @@ Evidence and the run-by-run account: `evidence/windows/2026-09-22-E19-run-005/`.
   so run 005's third interrupt was an end-of-pipe, not a fault.
 - Procedure from now on: fresh boot before a bring-up, complete undo after it (`gfx fini`, `ih fini`, `psp unload`,
   `gart restore`), the cli pushed to the directory the script uses.
+
+### Run 006 (2026-09-22, bc250kmd 0.7.13, kmtprobe --scratch)
+
+H4 holds as predicted (facts M80, `evidence/windows/2026-09-22-E19-run-006/`): `SCRATCH_REG0` read `DEADBEEF` before the submission and `BC250B01`
+after it, with `submit=ok`, one more end-of-pipe vector and the fence reported from the hardware path. H3 repeated on
+the way (M77, n = 2). The warm restart before this run did not come up (M21 again); the run used the boot that followed.
+What stage C leaves for later: the watchdog and `ResetFromTimeout` paths were never exercised on the hardware; a
+second bring-up in one boot after a complete undo was never measured (M78); one submission in flight at a time.
