@@ -14,7 +14,8 @@ __pycache__/
 *.cer
 *.pfx
 
-# Never commit: AMD firmware blobs, secrets, local scratch
+# Never commit: AMD firmware blobs, crash dumps, secrets, local scratch
+*.dmp
 *.bin
 *.bin.zst
 /secrets/
