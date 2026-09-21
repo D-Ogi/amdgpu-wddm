@@ -1,0 +1,15 @@
+registers per sweep: [4512, 4512, 4512]
+noise floor (sweep-GC-before-082449.log vs sweep-GC-before2-082522.log): 9 registers differ with nothing changed
+  ~ GC.CP_DMA_READ_TAGS                          0x3022c  00B40004 -> 01B40804
+  ~ GC.GDS_VM_PROTECTION_FAULT                   0x09710  00000000 -> 0000001B
+  ~ GC.GRBM_READ_ERROR                           0x08058  00000000 -> 80008090
+  ~ GC.GRBM_READ_ERROR2                          0x0805c  00000000 -> 00020000
+  ~ GC.RLC_GPU_CLOCK_32                          0x3b108  4ABBB298 -> 0BBAA588
+  ~ GC.RLC_REFCLOCK_TIMESTAMP_LSB                0x3b030  6203BA8D -> 2302B32B
+  ~ GC.RLC_REFCLOCK_TIMESTAMP_MSB                0x3b034  00000018 -> 00000019
+  ~ GC.SQ_TIME_HI                                0x08df0  000000F9 -> 00000101
+  ~ GC.SQ_TIME_LO                                0x08df4  D3C46E85 -> 5C619015
+
+sweep-GC-after-082603.log: 8 differ from the control sweep, 2 of them outside the noise set
+  ! GC.SCRATCH_REG0                              0x30100  00000000 -> CAFEDEAD
+  ! GC.SCRATCH_REG1                              0x30104  00000000 -> 0BC25001

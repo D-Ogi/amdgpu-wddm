@@ -1,6 +1,6 @@
 # E07: first register write under Windows, through our own miniport
 
-State: **prepared, not run.**
+State: **run 001 done, H1-H5 hold** (2026-09-21). Evidence: `evidence/windows/2026-09-21-E07-run-001/`.
 
 ## Why
 
@@ -46,6 +46,16 @@ path: the gates are opened by this experiment's script only and closed again at 
 `gate -Mmio 1 -Write 1` + restart device -> two noise-floor sweeps -> `writes` (H3) -> sweep (H4) ->
 `restore` (H5) -> `gate -Mmio 0 -Write 0` + restart device.
 
-## Result
+## Result (run 001)
 
-Not run yet.
+| | Outcome |
+|---|---|
+| H1 closed gates | **holds**: every register escape refused with `STATUS_DEVICE_NOT_READY`; start history `10 20 30 31 32 33 34 35 39 50 60 61` |
+| H2 read gate | **holds**: six registers bit-identical through `bc250kmd` and `bc250rd`; `GRBM_GFX_CNTL` refused with `STATUS_ACCESS_DENIED`; writes still refused |
+| H3 writes | **holds**: `SCRATCH_REG0 = 0xCAFEDEAD`, `SCRATCH_REG1 = 0x0BC25001`, read back by the driver and by the independent witness; a write to `GRBM_SCRATCH_REG0` refused with `STATUS_ACCESS_DENIED`, value unchanged |
+| H4 nothing else changed | **holds**: the sweep after the writes differs from the control in exactly these two registers outside the noise set |
+| H5 restore, display untouched | **holds**: both back to 0; stage 61, presents counting, no problem code throughout; gates closed again at the end |
+
+This is the first write to a GPU register under Windows on this project, and it went to the address regcalc
+computed (facts M30). Three device restarts inside one boot went through because the script confirms each
+start once it has seen stage 61.
