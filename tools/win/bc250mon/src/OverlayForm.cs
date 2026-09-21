@@ -27,7 +27,11 @@ namespace Bc250Mon
         readonly Actions _actions;
         readonly FlowLayoutPanel _buttons = new FlowLayoutPanel();
         readonly Timer _timer = new Timer { Interval = 500 };
-        readonly Font _title = new Font("Segoe UI Semibold", 11f), _text = new Font("Consolas", 10f), _small = new Font("Consolas", 8.5f);
+        // The layout below is written in 96-dpi pixels and painted through one scale transform, fonts included
+        // (hence pixel units). Point-sized fonts on a fixed pixel grid fell apart when Windows chose 200 %.
+        readonly Font _title = new Font("Segoe UI Semibold", 14.7f, GraphicsUnit.Pixel), _text = new Font("Consolas", 13.3f, GraphicsUnit.Pixel),
+                      _small = new Font("Consolas", 11.3f, GraphicsUnit.Pixel), _button = new Font("Consolas", 10f);
+        readonly float _scale;
         volatile bool _dirty = true;
         bool _interactive;
         DateTime _lastPaint;
@@ -40,14 +44,15 @@ namespace Bc250Mon
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.FromArgb(16, 18, 22);
             Opacity = 0.88;
-            Width = PanelWidth; Height = 300;
+            using (var g = Graphics.FromHwnd(IntPtr.Zero)) _scale = g.DpiX / 96f;
+            Width = (int)(PanelWidth * _scale); Height = (int)(300 * _scale);
 
             _buttons.Dock = DockStyle.Bottom; _buttons.AutoSize = true; _buttons.Visible = false;
             _buttons.Padding = new Padding(8); _buttons.BackColor = Color.FromArgb(30, 34, 40);
             foreach (var a in actions.All.Where(x => x.ShowButton))
             {
                 var info = a;
-                var b = new Button { Text = a.Label, AutoSize = true, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, Font = _text,
+                var b = new Button { Text = a.Label, AutoSize = true, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, Font = _button,
                                      BackColor = a.Name == "stop.set" ? Color.FromArgb(150, 30, 30) : Color.FromArgb(50, 56, 66), Margin = new Padding(4) };
                 b.Click += (s, e) => { string err; _actions.Invoke(info.Name, null, "overlay button", out err); };
                 _buttons.Controls.Add(b);
@@ -139,7 +144,8 @@ namespace Bc250Mon
             var g = e.Graphics;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             var snap = _state.Take(LogLines);
-            int x = Margin_, y = 10, w = Width - 2 * Margin_;
+            g.ScaleTransform(_scale, _scale);
+            int x = Margin_, y = 10, w = PanelWidth - 2 * Margin_;
             var dim = Color.FromArgb(140, 148, 160);
 
             using (var b = new SolidBrush(Color.FromArgb(150, 190, 255)))
@@ -199,7 +205,7 @@ namespace Bc250Mon
                 g.DrawString("Ctrl+Alt+F9 controls   Ctrl+Alt+F10 hide   Ctrl+Alt+F12 STOP", _small, b, x, y);
             y += 22;
 
-            int wanted = y + (_buttons.Visible ? _buttons.Height : 0);
+            int wanted = (int)(y * _scale) + (_buttons.Visible ? _buttons.Height : 0);
             if (Math.Abs(wanted - Height) > 2) BeginInvoke((Action)(() => { Height = wanted; Dock_(); }));
         }
     }
