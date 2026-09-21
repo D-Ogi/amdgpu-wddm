@@ -82,6 +82,53 @@ int bc250_nbio_enable_doorbell_selfring_aperture(struct amdgpu_device *adev, boo
 	return 0;
 }
 
+/* nbio_v2_3.c:206 nbio_v2_3_ih_control(). Traced on unit A at 0.252835-0.252836:
+ *     W  NBIO.INTERRUPT_CNTL2  0x03848  007E3C10      (the dummy page, >> 8)
+ *     R  NBIO.INTERRUPT_CNTL   0x03844  00000000
+ *     W  NBIO.INTERRUPT_CNTL   0x03844  00000000
+ *
+ * INTERRUPT_CNTL2 is a whole-register write of the dummy read target; INTERRUPT_CNTL is a
+ * read-modify-write clearing IH_DUMMY_RD_OVERRIDE (so the dummy read follows MSI rather than the
+ * override bit) and IH_REQ_NONSNOOP_EN (the ring is snooped system memory, not VRAM). Upstream's
+ * two comments on those choices are kept at the writes. */
+void bc250_nbio_ih_control(struct amdgpu_device *adev)
+{
+	u32 interrupt_cntl;
+
+	WREG32_SOC15(NBIO, 0, mmINTERRUPT_CNTL2, (u32)(adev->dummy_page_addr >> 8));
+
+	interrupt_cntl = RREG32_SOC15(NBIO, 0, mmINTERRUPT_CNTL);
+	/* IH_DUMMY_RD_OVERRIDE = 0: dummy read disabled with msi, enabled without msi */
+	interrupt_cntl = REG_SET_FIELD(interrupt_cntl, INTERRUPT_CNTL, IH_DUMMY_RD_OVERRIDE, 0);
+	/* IH_REQ_NONSNOOP_EN = 1 would be for a ring in non-cacheable memory, e.g. VRAM */
+	interrupt_cntl = REG_SET_FIELD(interrupt_cntl, INTERRUPT_CNTL, IH_REQ_NONSNOOP_EN, 0);
+	WREG32_SOC15(NBIO, 0, mmINTERRUPT_CNTL, interrupt_cntl);
+}
+
+/* nbio_v2_3.c:186 nbio_v2_3_ih_doorbell_range(). Traced at 0.252841-0.252842:
+ *     R  NBIO.BIF_IH_DOORBELL_RANGE  0x03bc8  00000000
+ *     W  NBIO.BIF_IH_DOORBELL_RANGE  0x03bc8  00020BC0
+ *
+ * OFFSET starts at bit 2 and SIZE at bit 16, so 0x00020BC0 is index 0x2F0 with a window of 2 -
+ * which is AMDGPU_NAVI10_DOORBELL_IH (0x178) doubled, exactly what bc250_ih_setup() computes. */
+void bc250_nbio_ih_doorbell_range(struct amdgpu_device *adev, bool use_doorbell,
+				  int doorbell_index)
+{
+	u32 ih_doorbell_range = RREG32_SOC15(NBIO, 0, mmBIF_IH_DOORBELL_RANGE);
+
+	if (use_doorbell) {
+		ih_doorbell_range = REG_SET_FIELD(ih_doorbell_range, BIF_IH_DOORBELL_RANGE,
+						  OFFSET, doorbell_index);
+		ih_doorbell_range = REG_SET_FIELD(ih_doorbell_range, BIF_IH_DOORBELL_RANGE,
+						  SIZE, 2);
+	} else {
+		ih_doorbell_range = REG_SET_FIELD(ih_doorbell_range, BIF_IH_DOORBELL_RANGE,
+						  SIZE, 0);
+	}
+
+	WREG32_SOC15(NBIO, 0, mmBIF_IH_DOORBELL_RANGE, ih_doorbell_range);
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Stage 0: what nv_common_hw_init() does at t = 0.0383 on unit A, half a second before the GFX
  * block is touched.

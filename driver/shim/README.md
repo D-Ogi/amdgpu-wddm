@@ -158,17 +158,109 @@ Two things in this stage are **not** amdgpu's:
   out of the translated resource list, and EN = 1 over a zero base would point the window the GPU
   writes its own doorbells through at physical address 0.
 
-Three things the sequence deliberately stops short of, each named in the headers rather than left to
+Two things the sequence deliberately stops short of, each named in the headers rather than left to
 be discovered: the gfx and SDMA ring tests (they need a live CP and, for SDMA, touch no register at
-all, so a register replay cannot cover them); `gfx_v10_0_setup_grbm_cam_remapping()` (the CAM probe
-returns "already remapped" on unit A, so the programming path has no traced counterpart and is not
-transcribed - `bc250_gfx_grbm_cam_probe()` returns an error rather than carrying on quietly); and
-the fence and interrupt path the ring tests would otherwise use (M6).
+all, so a register replay cannot cover them); and `gfx_v10_0_setup_grbm_cam_remapping()` (the CAM
+probe returns "already remapped" on unit A, so the programming path has no traced counterpart and is
+not transcribed - `bc250_gfx_grbm_cam_probe()` returns an error rather than carrying on quietly).
+The fence and interrupt path is M6 and is the next section.
 
 Where the 6.18.52 kernel that produced the trace and mainline v6.18 disagree, the trace decides and
 the difference is written down. There is one in this stage: the `DB_RING_CONTROL` write that 6.18.52
 added to `gfx_v10_0_constants_init()`. The full note, with the diff it comes from, is at that line in
 `bc250_gfx.c`.
+
+## The interrupt ring and the fence (milestone M6)
+
+Every ring M5 brought up signals completion the same way: the engine writes a 32-byte interrupt
+vector into a ring in system memory and raises the line. Until something reads that ring, a fence is
+only a value in memory nobody is waiting on. `bc250_ih.c` is the reader, and
+`bc250_gfx_emit_fence()` is the one thing that makes a vector appear on purpose.
+
+```c
+int  bc250_ih_setup(struct amdgpu_device *adev, bool msi);   /* allocates; writes no register */
+void bc250_ih_teardown(struct amdgpu_device *adev);
+int  bc250_ih_hw_init(struct amdgpu_device *adev);           /* navi10_ih_irq_init()    */
+void bc250_ih_hw_fini(struct amdgpu_device *adev);           /* navi10_ih_irq_disable() */
+
+/* DISPATCH_LEVEL: no lock, no allocation, no sleep */
+u32  bc250_ih_get_wptr(struct amdgpu_device *adev, bool *overflowed);
+int  bc250_ih_decode(struct amdgpu_device *adev, u32 *rptr, struct bc250_iv_entry *out);
+void bc250_ih_set_rptr(struct amdgpu_device *adev, u32 rptr);
+
+/* pure functions over a decoded vector */
+void bc250_ih_eop_ring_id(const struct bc250_iv_entry *e, u32 *me, u32 *pipe, u32 *queue);
+bool bc250_ih_is_gfx_eop(const struct bc250_iv_entry *e);
+bool bc250_ih_is_compute_eop(const struct bc250_iv_entry *e);
+bool bc250_ih_is_kiq(const struct bc250_iv_entry *e);
+bool bc250_ih_is_sdma_trap(const struct bc250_iv_entry *e, u32 *instance);
+
+/* the fence, in bc250_gfx.h */
+int  bc250_gfx_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
+```
+
+The three middle ones are the DPC trio and the constraint on them is absolute: the miniport's DPC
+runs at `DISPATCH_LEVEL`, so they use `RREG32`/`WREG32`, one doorbell write and volatile reads of
+the GTT ring, and nothing else. A DPC is `get_wptr` once, `decode` in a loop while the read pointer
+differs from the write pointer, and `set_rptr` once at the end. The read pointer is the caller's,
+not `adev`'s, which is a deliberate departure from upstream: upstream keeps it in the ring struct
+and mutates it from one thread, and that is a rule a DPC cannot be given by a comment.
+
+The contract is written at the top of `include/bc250_ih.h` and the host test checks it rather than
+restating it. The trio reaches into `adev` at exactly two places, `adev->irq.ih` and
+`adev->backend`; it takes no lock, allocates nothing, logs nothing, never sleeps, and reads
+GPU-written memory through volatile pointers. The registers it can touch are these three and no
+others, measured by a survey in `test/replay_ih.c`:
+
+| Register | By | When |
+|---|---|---|
+| `OSSSYS.IH_RB_CNTL` (read and written) | `get_wptr` | overflow only, the two-write `WPTR_OVERFLOW_CLEAR` pulse |
+| `OSSSYS.IH_RB_WPTR` (read) | `get_wptr` | only when the write-back slot says overflow |
+| `OSSSYS.IH_RB_RPTR` (written) | `set_rptr` | only when `use_doorbell` is false |
+
+With a doorbell and no overflow - the ordinary case - the trio touches no register at all.
+
+Two details make that possible and both are upstream's, not inventions. The register offsets are
+dword indices carried in `ih->ih_regs` and resolved once in `bc250_ih_setup()` (upstream's
+`struct amdgpu_ih_regs`, filled by `navi10_ih_init_register_offset()`), so the trio never goes
+through `SOC15_REG_OFFSET()` and therefore never touches `adev->reg_offset`. And
+`struct amdgpu_ih_ring` holds no pointer into itself or into `adev`, so the miniport can give its
+DPC a `struct amdgpu_device` of its own - zeroed, its own backend, `irq.ih` copied by value - which
+is what it does, because the escape's `adev->backend` belongs to whoever holds the lock. The one
+rule with that copy is that it must never be passed to `bc250_ih_setup()` or `bc250_ih_teardown()`:
+`ring_mem` and `wb_mem` are copied too, and a teardown through the copy would free memory the
+original still points at. The test runs the trio through exactly such a zeroed device.
+
+`bc250_ih_set_rptr()` rings a **32-bit** doorbell (`bc250_shim_wdoorbell32`), which is upstream's
+`WDOORBELL32` at `navi10_ih.c:499` and the only narrow doorbell in this driver - everything else
+(`gfx_v10_0.c:8571` and `:8605`, `sdma_v5_0.c:389`) is 64-bit. A 64-bit store at the IH's index
+would also write the next dword, and `BIF_IH_DOORBELL_RANGE` opens a two-entry window, so that
+dword is inside it and would reach the hardware. The host backend records the width of every
+doorbell and the test insists on it.
+
+`bc250_ih_get_wptr()` is not a pure read. An overflow is acknowledged with a two-write pulse of
+`IH_RB_CNTL.WPTR_OVERFLOW_CLEAR` and the read pointer is moved to the oldest entry the hardware has
+not yet trampled; that is upstream's recovery, and `*overflowed` tells the caller it happened so it
+can be counted rather than only logged.
+
+What is deliberately left out of the transcription - ih1 and ih2, `ih_soft`, `IH_CHICKEN`,
+`force_update_wptr_for_self_int()`, every SR-IOV arm, `IH_STORM_CLIENT_LIST_CNTL` and
+`pci_set_master()` - is listed with an upstream citation each at the top of `include/bc250_ih.h`,
+so that a reader comparing against `navi10_ih.c` does not have to guess which omissions are
+decisions and which are oversights.
+
+Two NBIO registers belong to this sequence and live in `bc250_nbio.c`, because they are NBIO's and
+upstream keeps them in `nbio_v2_3.c`: `bc250_nbio_ih_control()` and
+`bc250_nbio_ih_doorbell_range()`. `bc250_ih_hw_init()` calls them in upstream's order.
+
+The fence is the smallest submission that both writes a value the driver can read and raises an
+interrupt, which together are the proof that the rings and the interrupt ring are connected. A gfx
+or compute ring gets a `RELEASE_MEM`; the KIQ gets two `WRITE_DATA` packets, because it has no
+end-of-pipe and signals by writing `CPC_INT_STATUS`. `bc250_gfx_fence_page_alloc()` hands out one
+GTT page of 8-byte slots for the value to land in - a separate call and not part of
+`bc250_gfx_setup()`, because allocating it there would move every MC address the traced bring-up
+programs. Without `AMDGPU_FENCE_FLAG_INT` the same packet writes the value and raises nothing, which
+is the control worth running first on hardware.
 
 ## Building
 
@@ -428,6 +520,77 @@ memory can be read against the kernel's own definitions instead of taken on trus
 - `gfx-clear-state.txt` - the clear-state stream on the gfx ring. It is 949 dwords, which is the
   `RLC_CSIB_LENGTH` the trace writes (0x3B5), plus the framing packets.
 
+## The host replay test: the interrupt ring and the fence (M6)
+
+```
+pwsh driver\shim\test\run_ih.ps1
+```
+
+Builds `bc250_ih.c` and everything it calls both ways - user-mode for the replay, and with the WDK
+kernel flags, which for this file is not a formality because three of its functions run in a DPC -
+and runs `test/replay_ih.c` against unit A's E03 window at 0.2528 s. That window is the whole of
+`navi10_ih_irq_init()`: twenty accesses, fifteen of them writes, OSSSYS and NBIO only, because the
+IH block comes up with the common IP long before the CP.
+
+### Result, 2026-09-21
+
+```
+trace window: 15 writes, 3 offsets seeded with their traced read values
+  bc250_ih_hw_init                    : 0
+  writes produced / window            : 15 / 15
+  mismatches                          : 0
+  address exceptions (offset only)    : 4
+  address registers wrong             : 0
+  reads with no recorded value        : 0
+```
+
+Four address exceptions: `IH_RB_BASE`, `IH_RB_BASE_HI`, `IH_RB_WPTR_ADDR_LO` and `_HI` carry the
+ring and the write-back page, which this test allocates. Each is separately checked against the
+address the test handed out, so "not compared with the trace" does not mean "not checked".
+`INTERRUPT_CNTL2` is deliberately **not** an exception: it carries the dummy page, which is an input
+this test is given rather than an address it chooses, so it is compared in full and matches.
+
+`hw_fini` writes three registers, and a second `hw_init` on the same `adev` produces the same
+fifteen writes - the miniport needs that, because a PSP reload in one boot forces it.
+
+Then, on the ring that bring-up produced:
+
+- the decode, against vectors the test builds with every field set to a different value: all
+  thirteen fields of `amdgpu_ih_decode_iv_helper()` round-trip, a me-0 and a me-1 end-of-pipe are
+  routed apart although they carry the same client and source id, the KIQ's vector and an SDMA1 trap
+  are each recognised, and the last entry of the ring leaves the read pointer at 0 rather than at
+  `ring_size`;
+- `get_wptr` reads the write-back slot and touches no register when there is no overflow, reports an
+  overflow only when the register agrees with the slot, moves the read pointer to `wptr + 32`, and
+  acknowledges with a set-then-clear pulse of `IH_RB_CNTL` - two writes, both required;
+- `set_rptr` publishes the slot and then rings the doorbell, with no MMIO write at all, and the
+  doorbell is 32 bits wide at index 0x2F0, not 64 - the backend records the width so this is
+  measured and not taken from the source;
+- the survey of every register offset the trio touches: `IH_RB_CNTL` read and written on the
+  overflow path, `IH_RB_WPTR` read there, and `IH_RB_RPTR` written only in a separate run with
+  `use_doorbell` forced false, so the third entry of the list is measured rather than asserted;
+- the trio run again through a second `struct amdgpu_device` that is zeroed except for `irq.ih`
+  copied by value, which is what the miniport's DPC gets, with the same results;
+- a fence emitted on the gfx ring, on compute ring 3 and on the KIQ: each lands its value in a GTT
+  slot and produces exactly one vector, which decodes back to that ring.
+
+One model is declared and one is inherited. The declared one is `IH_RB_CNTL` bit 31,
+`WPTR_OVERFLOW_CLEAR`, which the hardware retires as the write lands: the trace puts `C03101A0` in
+at 0.252838 and reads `403101A0` back at 0.252845, and the last read-modify-write of the sequence
+depends on it. `backend_add_selfclear()` corrects only the value a later read returns; the write is
+still compared exactly as the driver issued it. The inherited one is the CP stub in `backend_mem.c`,
+extended here to execute a `RELEASE_MEM` and deliver a vector.
+
+Both controls fail, as they must: with MSI off the sequence produces `RPTR_REARM = 0` and two writes
+differ; with the self-clearing bit not modelled the final `IH_RB_CNTL` comes out `C03301A1` instead
+of `403301A1`. A fence without `AMDGPU_FENCE_FLAG_INT` writes its value and delivers nothing, and a
+misaligned 64-bit fence and a 64-bit KIQ fence are both refused with nothing written to the ring.
+
+What this test cannot say is that the ASIC raises the interrupt. No hardware raises one anywhere in
+it, and the stub's encoder is the test's own code; what is established is that the encode and the
+decode agree and that the packet the shim emits is the packet upstream's emitter builds. The rest is
+the first hardware run's job, and it is what the fence exists for.
+
 ## What the miniport calls, in order (M5 part B)
 
 The whole of milestone M5 part B, as the kernel-mode driver sees it. Everything takes
@@ -489,8 +652,11 @@ What it leaves behind, measured by the host test rather than asserted: `CP_ME_CN
 distinct registers and every one of them is already named by a trace window, so it needs nothing
 added to the miniport's generated allow-list.
 
-A second `bc250_gfx_hw_init()` after this works, and getting there needed the one declared deviation
-from upstream's behaviour in this driver (`driver/amdgpu-import/PROVENANCE.md`).
+A second `bc250_gfx_hw_init()` after this works, and getting there needed the two declared deviations
+from upstream's behaviour in this driver (`driver/amdgpu-import/PROVENANCE.md`). Both are in the same
+branch of `gfx_v10_0_kiq_init_register()`, the one only a re-initialisation without a GPU reset
+enters - which is the branch this part reaches because it keeps GFX powered across a teardown and
+upstream's parts do not.
 
 The KIQ's own HQD is the queue nothing dequeues: `gfx_v10_0_hw_fini()` unmaps the client queues
 through the KIQ but never the KIQ itself, and the only write of `CP_HQD_ACTIVE = 0` in `gfx_v10_0.c`
@@ -512,13 +678,69 @@ The host test models the CP's dequeue handshake **only while the MEC is running*
 meaningful: without it the replay would answer a poll the hardware cannot answer, and did, which is
 how the problem stayed hidden through an earlier round of this work.
 
-### Interrupts, after the interrupt ring exists (M6)
+The second deviation lives in the same branch. Upstream's `gfx_v10_0_compute_mqd_init()` builds the
+MQD's read pointer by **sampling** `CP_HQD_PQ_RPTR` (`gfx_v10_0.c:6998`), which is clean only where
+GFX power is dropped between loads; here the slot still holds the previous run's read pointer, and
+the branch above writes it back. On unit A that meant the CP was told a ring restarting at write
+pointer 0 had 260297 dwords pending, and it walked all of them: stage 6 took 5222 us against 349 us
+cold. We write 0, which is what the rest of that same function already implies and what AMD write
+from gfx11 on. `check_rerun()` in `test/replay_gfx.c` pokes unit A's measured 0x737 into the
+register first - the host replay has no CP to put it there - and then checks what the shim writes
+back, which is the test that would have caught this before hardware did.
 
+### Interrupts (M6)
+
+The ring comes first, and early: on unit A `navi10_ih_irq_init()` runs at 0.2528 s, before the GART
+and long before the CP. So `bc250_ih_setup(adev, msi)` and `bc250_ih_hw_init(adev)` belong with the
+common IP bring-up, not after the CP. `msi` is `!!adev->irq.msi_enabled` upstream; under Windows it
+is what the INF's `MessageSignaledInterruptProperties` produced, and the caller states it rather
+than this code assuming. `bc250_ih_hw_init()` needs the GART up (the ring is GTT memory) and
+`adev->dummy_page_addr` set.
+
+| Call | Needs beforehand | What it does |
+| --- | --- | --- |
+| `bc250_ih_setup(adev, msi)` | `bc250_shim_mem_alloc` | 256 KB GTT ring plus a page for the two write-back shadows. No register. |
+| `bc250_ih_hw_init(adev)` | the above, the GART up, `dummy_page_addr` set | The fifteen writes of `navi10_ih_irq_init()`. |
+
+The source enables come after the rings exist:
 `bc250_irq_init_mec_pipes(adev)`, `bc250_irq_hw_init(adev)`,
 `bc250_nbio_enable_doorbell_selfring_aperture(adev, true)`, `bc250_irq_late_init(adev)`, in that
 order - it is the order unit A has and `bc250_nbio_enable_doorbell_selfring_aperture` really does sit
 between the two irq calls, because upstream runs it from a different IP block. These only enable
-sources in the CP and SDMA blocks; the ring, the handlers and the ISR/DPC path are the miniport's.
+sources in the CP and SDMA blocks.
+
+The miniport owns the ISR and the DPC. The DPC is:
+
+```c
+bool overflow;
+u32 wptr = bc250_ih_get_wptr(adev, &overflow);
+u32 rptr = adev->irq.ih.rptr;            /* get_wptr may have moved it, on overflow */
+struct bc250_iv_entry e;
+
+while (rptr != wptr) {
+        if (bc250_ih_decode(adev, &rptr, &e) != 0)
+                break;
+        /* route: bc250_ih_is_gfx_eop(&e), _is_compute_eop, _is_kiq, _is_sdma_trap */
+}
+bc250_ih_set_rptr(adev, rptr);
+```
+
+`set_rptr` once at the end, not once per entry.
+
+### The first interrupt, on purpose
+
+With the ring up and the matching source enabled, one call raises one end-of-pipe:
+
+```c
+bc250_gfx_fence_page_alloc(adev);
+u64 addr = bc250_gfx_fence_addr(adev, 0);
+bc250_gfx_signal_fence(&adev->gfx.gfx_ring[0], addr, seq, AMDGPU_FENCE_FLAG_64BIT | AMDGPU_FENCE_FLAG_INT);
+/* then: bc250_gfx_fence_read(adev, 0) == seq, and one vector on the interrupt ring */
+```
+
+Run it once without `AMDGPU_FENCE_FLAG_INT` first: the value must land and nothing must arrive. That
+separates "the CP executed the packet" from "the interrupt path works", which are two failures worth
+telling apart on a part nobody has driven under Windows before.
 
 ## Firmware through the PSP (M5)
 

@@ -43,6 +43,7 @@ typedef struct _BC250_GPUMEM_ENTRY {
     BOOLEAN Gtt;
     BOOLEAN Bound;                  // GTT only: entered into the GART table (a PLAN's pages never are)
     BOOLEAN Retired;                // GTT only: freed by the sequence, unbound if it was bound, waiting for GpuMemRelease
+    const VOID* Owner;              // the sequence that allocated it: "quiet" is a statement about that owner's hardware only
     PVOID Cpu;
     ULONGLONG Mc;
     ULONGLONG GartOffset;
@@ -153,9 +154,10 @@ static void ReleaseEntry(_Inout_ BC250_GPUMEM* Mem, _Inout_ BC250_GPUMEM_ENTRY* 
     if (Mem->GttLive == 0) Mem->GttNext = BC250_GPUMEM_GTT_FIRST;
 }
 
-// Give back what the sequences no longer use. GpuQuiet: the caller has seen the engines halted and the TLB flushed
-// after the last unbind; without it no GTT page returns to Windows.
-void GpuMemRelease(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet)
+// Give back what one sequence no longer uses. GpuQuiet: the caller has seen ITS hardware stopped (gfx.c: the engines
+// halted; ih.c: the IH ring disabled) and the TLB flushed after the last unbind; without it no GTT page returns to
+// Windows. Another owner's retired pages are not touched: nothing here knows whether their hardware is quiet.
+void GpuMemRelease(_Inout_ BC250_DEVICE* Device, _In_ const VOID* Owner, BOOLEAN GpuQuiet)
 {
     BC250_GPUMEM* mem = (BC250_GPUMEM*)Device->GpuMem;
     ULONG i, leaked = 0;
@@ -164,7 +166,7 @@ void GpuMemRelease(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet)
     for (i = 0; i < BC250_GPUMEM_MAX; i++)
     {
         BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
-        if (!entry->Used || !entry->Gtt || !entry->Retired) continue;
+        if (!entry->Used || !entry->Gtt || !entry->Retired || entry->Owner != Owner) continue;
         if (GpuQuiet || !entry->Bound) ReleaseEntry(mem, entry); else leaked += entry->Size;
     }
     if (leaked != 0) GuardLog("gpumem: GPU not known to be quiet, %u bytes of GTT memory stay allocated", leaked);
@@ -190,6 +192,14 @@ void GpuMemStop(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet)
     if (mem->Table != NULL) MmUnmapIoSpace(mem->Table, BC250_GPUMEM_TABLE_LENGTH);
     if (mem->Doorbell != NULL) MmUnmapIoSpace((PVOID)mem->Doorbell, PAGE_SIZE);
     ExFreePoolWithTag(mem, BC250_GPUMEM_TAG);
+}
+
+// The doorbell BAR's physical address, for the self-ring aperture (gfx.c stage 8). 0 if there is none.
+ULONGLONG GpuMemDoorbellBase(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GPUMEM* mem = (const BC250_GPUMEM*)Device->GpuMem;
+
+    return mem != NULL ? (ULONGLONG)mem->DoorbellPhysical.QuadPart : 0;
 }
 
 // The doorbell writes of one sequence run are listed for the caller, like the register writes (sequence.c).
@@ -323,6 +333,7 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
             entry->Gtt = TRUE;
             entry->Bound = TRUE;
             entry->Retired = TRUE;
+            entry->Owner = sequence;
             entry->GartOffset = at;
             entry->Size = rounded;
             mem->GttNext = at + rounded;
@@ -339,6 +350,7 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
     else return -22;
 
     entry->Used = TRUE;
+    entry->Owner = sequence;
     entry->Size = rounded;
     RtlZeroMemory(entry->Cpu, rounded);
     out->cpu = entry->Cpu;
@@ -386,7 +398,7 @@ void bc250_shim_wdoorbell64(struct amdgpu_device* adev, unsigned int index, unsi
     {
         sequence->Fault = STATUS_ACCESS_DENIED;         // stops every further register write as well (sequence.c)
         sequence->FaultOffset = 0xD0000000ul | (index & 0xFFFFul);     // 0xD marks a doorbell, the full index is in the log
-        GuardLog("%s: doorbell index 0x%X refused, sequence stopped", sequence->Name, index);
+        if (!sequence->Dpc) GuardLog("%s: doorbell index 0x%X refused, sequence stopped", sequence->Name, index);
         return;
     }
     if (!sequence->Plan)
@@ -394,6 +406,34 @@ void bc250_shim_wdoorbell64(struct amdgpu_device* adev, unsigned int index, unsi
         // amdgpu_mm_wdoorbell64(): one 64-bit store (atomic64_set on a u32 pointer).
         WRITE_REGISTER_ULONG64((volatile ULONG64*)&mem->Doorbell[index], value);
     }
+    if (mem->DoorbellCount < mem->MaxDoorbells)
+    {
+        mem->Doorbells[mem->DoorbellCount].Index = index;
+        mem->Doorbells[mem->DoorbellCount].AfterWrite = sequence->WriteCount;
+        mem->Doorbells[mem->DoorbellCount].Value = value;
+    }
+    mem->DoorbellCount++;
+}
+
+// amdgpu's WDOORBELL32 (amdgpu_mm_wdoorbell): the IH ring's read pointer is the one 32-bit doorbell of this part
+// (navi10_ih_set_rptr). Two callers: a sequence under GartLock, recorded like the 64-bit ones, and ih.c's DPC, whose
+// sequence says so: nothing recorded, nothing logged, nothing shared. The mapping outlives the DPC: ih.c's stop drains
+// the DPCs before gfx.c's stop unmaps it.
+void bc250_shim_wdoorbell32(struct amdgpu_device* adev, unsigned int index, unsigned int value)
+{
+    BC250_SEQUENCE* sequence;
+    BC250_GPUMEM* mem = MemOf(adev, &sequence);
+
+    if (mem == NULL || !NT_SUCCESS(sequence->Fault)) return;
+    if (index > BC250_DOORBELL_LAST_INDEX || ((SIZE_T)index + 1) * sizeof(ULONG) > PAGE_SIZE)
+    {
+        sequence->Fault = STATUS_ACCESS_DENIED;
+        sequence->FaultOffset = 0xD0000000ul | (index & 0xFFFFul);
+        if (!sequence->Dpc) GuardLog("%s: doorbell index 0x%X refused, sequence stopped", sequence->Name, index);
+        return;
+    }
+    if (!sequence->Plan) WRITE_REGISTER_ULONG((volatile ULONG*)&mem->Doorbell[index], value);
+    if (sequence->Dpc) return;
     if (mem->DoorbellCount < mem->MaxDoorbells)
     {
         mem->Doorbells[mem->DoorbellCount].Index = index;

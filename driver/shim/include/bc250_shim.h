@@ -57,6 +57,23 @@ void bc250_shim_udelay(unsigned int usec);
 void bc250_shim_wdoorbell64(struct amdgpu_device *adev, unsigned int index,
 			    unsigned long long value);
 
+/* Write 32 bits into the doorbell aperture, at the same dword index. amdgpu's WDOORBELL32
+ * (amdgpu_mm_wdoorbell, amdgpu_device.c) as against WDOORBELL64.
+ *
+ * The width is not cosmetic and it is not a choice. Upstream uses the 32-bit store in exactly one
+ * place on this part - navi10_ih_set_rptr()'s doorbell arm (navi10_ih.c:474 and :499) - and the
+ * 64-bit store everywhere else (gfx_v10_0.c:8571 and :8605 for the gfx and compute write pointers,
+ * sdma_v5_0.c:389 for SDMA). A 64-bit store at the IH's index would also write the next dword with
+ * zero, which is a doorbell amdgpu never rings; the IH doorbell window is two entries wide
+ * (BIF_IH_DOORBELL_RANGE SIZE = 2), so that dword is inside the window and would reach the hardware.
+ *
+ *   Kernel: one 32-bit write to the mapped doorbell BAR (driver/kmd/gpumem.c).
+ *   Host replay: recorded with its width, so a test can insist on it.
+ *
+ * DPC note: this is the one shim call bc250_ih_set_rptr() makes at DISPATCH_LEVEL, so the kernel
+ * implementation must not log, allocate or take a lock. See bc250_ih.h. */
+void bc250_shim_wdoorbell32(struct amdgpu_device *adev, unsigned int index, unsigned int value);
+
 /* Allocate GPU-visible memory. The shim never allocates: the miniport hands out VRAM by physical
  * address and GART-mapped system pages, the host test hands out plain memory plus the MC addresses
  * unit A used. Must zero the allocation (amdgpu's buffer objects are zeroed on create, and the MQD

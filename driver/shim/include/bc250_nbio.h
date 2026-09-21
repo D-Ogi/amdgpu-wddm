@@ -55,4 +55,15 @@ void bc250_nbio_sdma_doorbell_range(struct amdgpu_device *adev, int instance,
  * bc250_psp.c applies to its own missing preconditions. */
 int bc250_nbio_enable_doorbell_selfring_aperture(struct amdgpu_device *adev, bool enable);
 
+/* [amdgpu] nbio_v2_3.c:206 nbio_v2_3_ih_control() and :186 nbio_v2_3_ih_doorbell_range(), the two
+ * NBIO calls navi10_ih_irq_init() makes (navi10_ih.c:329 and :361). ih_control points the IH
+ * block's dummy read at adev->dummy_page_addr and clears the two IH bits of INTERRUPT_CNTL;
+ * ih_doorbell_range opens a two-entry doorbell window at the IH ring's index.
+ *
+ * They live here rather than in bc250_ih.c because they are NBIO's registers and upstream keeps
+ * them in nbio_v2_3.c; bc250_ih.c calls them in upstream's order. */
+void bc250_nbio_ih_control(struct amdgpu_device *adev);
+void bc250_nbio_ih_doorbell_range(struct amdgpu_device *adev, bool use_doorbell,
+				  int doorbell_index);
+
 #endif /* BC250_NBIO_H */

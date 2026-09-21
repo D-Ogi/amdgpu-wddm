@@ -28,7 +28,7 @@ static void RecordFault(_Inout_ BC250_SEQUENCE* Sequence, NTSTATUS Status, ULONG
     {
         Sequence->Fault = Status;
         Sequence->FaultOffset = Offset;
-        GuardLog("%s: register 0x%05X refused (0x%08X), sequence stopped", Sequence->Name, Offset, Status);
+        if (!Sequence->Dpc) GuardLog("%s: register 0x%05X refused (0x%08X), sequence stopped", Sequence->Name, Offset, Status);
     }
 }
 

@@ -228,7 +228,7 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
     status = CheckWindow(Device);
     // Every GART command sets the shim's device up afresh, and gfx.c keeps its state in that device; a restore would
     // also take the GART away from under mapped queues. amdgpu's order: the engines go first (gfx.c's FINI).
-    if (NT_SUCCESS(status) && GfxIsActive(Device)) status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status) && (GfxIsActive(Device) || IhIsActive(Device))) status = STATUS_INVALID_DEVICE_STATE;
     SequenceBegin(&gart->Sequence, Device, Data->Op == BC250_GART_OP_PLAN, Data->Writes, BC250_GART_MAX_WRITES);
 
     if (NT_SUCCESS(status) && RunSetup(gart) != 0) status = STATUS_DEVICE_DATA_ERROR;

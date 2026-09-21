@@ -81,6 +81,7 @@ typedef struct _BC250_DEVICE {
     PVOID Gfx;                          // gfx.c, the same
     PVOID Ih;                           // ih.c, NULL unless the EnableIh gate was open at start
     BOOLEAN MmioIhEnabled;
+    BOOLEAN IhQuiet;                    // ih.c's stop: the IH ring reads disabled (or never was enabled); for gpumem.c's stop
     volatile LONG InterruptCount;       // every call of the interrupt routine since start, ours or not
     volatile LONG LastMessageNumber;
     BOOLEAN InterruptIsMessage;         // what Windows assigned (pnp.c, from the translated resources)
@@ -100,6 +101,7 @@ typedef struct _BC250_SEQUENCE {
     // Optional. A write that must reach the hardware even after the sequence was stopped by a fault.
     BOOLEAN (*PassesFault)(_In_ struct _BC250_SEQUENCE* Sequence, ULONG DwordIndex, ULONG Value);
     PVOID Owner;
+    BOOLEAN Dpc;                        // the sequence of ih.c's DPC: no log, no list, nothing shared with the escapes
 
     BC250_DEVICE* Device;               // set by SequenceBegin
     BOOLEAN Plan;
@@ -175,7 +177,8 @@ BOOLEAN PspIsLoaded(_In_ const BC250_DEVICE* Device);
 struct _BC250_ESCAPE_DOORBELL;
 NTSTATUS GpuMemStart(_Inout_ BC250_DEVICE* Device);
 void GpuMemStop(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet);
-void GpuMemRelease(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet);
+void GpuMemRelease(_Inout_ BC250_DEVICE* Device, _In_ const VOID* Owner, BOOLEAN GpuQuiet);
+ULONGLONG GpuMemDoorbellBase(_In_ const BC250_DEVICE* Device);
 void GpuMemBeginSequence(_Inout_ BC250_DEVICE* Device, _Out_writes_opt_(MaxDoorbells) struct _BC250_ESCAPE_DOORBELL* Doorbells,
                          ULONG MaxDoorbells);
 ULONG GpuMemEndSequence(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* VramBytes, _Out_ ULONG* GttBytes);
@@ -186,6 +189,8 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device);
 void GfxStop(_Inout_ BC250_DEVICE* Device);
 void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GFX* Data);
 BOOLEAN GfxIsActive(_In_ const BC250_DEVICE* Device);
+struct _BC250_ESCAPE_FENCE;
+void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_FENCE* Data);
 
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;

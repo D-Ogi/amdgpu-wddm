@@ -15,7 +15,8 @@
 #define BC250_ESCAPE_RUN_PSP 8u             // BC250_ESCAPE_PSP in: Op; out: register writes and PSP commands
 #define BC250_ESCAPE_RUN_GFX 9u             // BC250_ESCAPE_GFX in: Op, LastStage; out: stages, register and doorbell writes
 #define BC250_ESCAPE_RUN_IH 10u             // BC250_ESCAPE_IH in: Op; out: interrupt counts, vectors seen, register writes
-#define BC250_KMD_VERSION 0x00060000u       // milestone 6 work, revision 0
+#define BC250_ESCAPE_RUN_FENCE 11u          // BC250_ESCAPE_FENCE in: Ring, Count, Interrupt; out: fences completed, timing
+#define BC250_KMD_VERSION 0x00060001u       // milestone 6 work, revision 1
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -233,6 +234,31 @@ typedef struct _BC250_ESCAPE_IH {
     BC250_ESCAPE_IV Last[BC250_IH_MAX_LAST];            // the most recent vectors, oldest first
     BC250_ESCAPE_WRITE Writes[BC250_IH_MAX_WRITES];
 } BC250_ESCAPE_IH;
+
+// ---- BC250_ESCAPE_RUN_FENCE (gfx.c): fences on one ring, one after the other ----------------------------------------------
+#define BC250_FENCE_RING_GFX 0u
+#define BC250_FENCE_RING_COMPUTE0 1u        // 1..8: the eight compute rings
+#define BC250_FENCE_RING_KIQ 9u
+#define BC250_FENCE_MAX_COUNT 1000u
+
+typedef struct _BC250_ESCAPE_FENCE {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_FENCE
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Ring;                     // in: BC250_FENCE_RING_*
+    unsigned long Count;                    // in: 1..BC250_FENCE_MAX_COUNT
+    unsigned long Interrupt;                // in: 1 = with AMDGPU_FENCE_FLAG_INT, 0 = the control: the value, no interrupt
+    long Result;                            // out: the shim's return code, -62 when a value did not arrive in time
+    unsigned long FaultOffset;
+    unsigned long Completed;                // out: fences whose value was read back
+    unsigned long DoorbellCount;
+    unsigned long LastSeq, LastValue;       // out: the last value emitted and what the slot held last
+    unsigned long Microseconds;             // out: all of them
+    unsigned long SlowestMicroseconds;      // out: the slowest single emit-to-value
+} BC250_ESCAPE_FENCE;
 
 // The first escape struct with mixed 4 and 8 byte alignment (four bytes of padding before Last[]). The driver and the
 // CLI must agree on it; a packing option on either side makes this a build failure instead of garbage vectors.

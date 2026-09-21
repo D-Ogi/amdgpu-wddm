@@ -50,7 +50,10 @@ SEQUENCES = [
      [(0.0375, 0.0385), (0.2495, 0.2528), (0.5496, 0.551), (1.560, 1.562)], []),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
-    ("Ih", "E12", r"^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$)", [(0.25282, 0.25290)], []),
+    # The ring is GTT memory: gpumem.c flushes the TLB after the bind as amdgpu did (its binds of 0.2495 to 0.2528 s,
+    # the IH ring's among them), so the five registers of that flush belong to this sequence as well.
+    ("Ih", "E12", r"^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|"
+                  r"MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$)", [(0.2495, 0.25290)], []),
 ]
 
 # (ip, register, experiment that put it here, why it is safe)

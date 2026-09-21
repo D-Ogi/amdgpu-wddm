@@ -70,6 +70,44 @@ int bc250_irq_hw_init(struct amdgpu_device *adev);
  * register, privileged instruction, bad opcode. */
 int bc250_irq_late_init(struct amdgpu_device *adev);
 
+/*
+ * THE INTERRUPT STAGE, as one thing the miniport can call.
+ *
+ * Four calls, in this order, and the order is unit A's (E03 trace 1.5601 to 1.5609 s), not a
+ * grouping chosen here. All four return int; every one of them must be propagated, because a
+ * failure means a source the driver believes is armed is not.
+ *
+ *     1  bc250_irq_init_mec_pipes(adev)
+ *     2  bc250_irq_hw_init(adev)
+ *     3  bc250_nbio_enable_doorbell_selfring_aperture(adev, true)     [bc250_nbio.h]
+ *     4  bc250_irq_late_init(adev)
+ *
+ * Step 3 is NBIO's, not the gfx block's - upstream runs it from nv_common_hw_init() - and it really
+ * does fall between the two irq calls in the trace, which is why it is listed here rather than left
+ * for the caller to place.
+ *
+ * What has to be in `adev` before the stage runs:
+ *
+ *   bc250_gfx_setup() and bc250_sdma_setup() have run.  Steps 1, 2 and 4 decide which registers to
+ *       walk from adev->gfx.me, adev->gfx.mec, adev->gfx.kiq[0].ring and adev->sdma.num_instances.
+ *       On a zeroed adev every loop runs zero times, writes nothing, and returns 0 - a silent
+ *       no-op, not an error. That is the one failure mode of this stage that does not announce
+ *       itself, so the caller checks the write count as well as the return value.
+ *
+ *   adev->doorbell.base is the physical address of the doorbell aperture, taken from the
+ *       miniport's translated resource list (BAR2 on this function; unit A's trace shows
+ *       0xD0000000). Step 3 needs it and nothing else does. It is the one precondition that IS
+ *       checked: bc250_nbio_enable_doorbell_selfring_aperture() returns BC250_EINVAL and writes
+ *       nothing rather than pointing the window the GPU rings its own doorbells through at
+ *       physical address 0.
+ *
+ * What the stage does NOT need: the IH ring. These are the source enables in the CP and SDMA
+ * blocks, and they are just bits - with the ring off they arm sources whose vectors go nowhere.
+ * Running the stage before bc250_ih_hw_init() is therefore safe and is what unit A does; running it
+ * after is equally fine. The one order that matters is that the ring is up before anything is
+ * submitted that would raise a vector (bc250_gfx_signal_fence(), bc250_gfx.h).
+ */
+
 /* The individual callbacks, exposed so the replay test can compare them one at a time and so the
  * miniport can turn a single source off. `state` is BC250_IRQ_STATE_ENABLE or _DISABLE. */
 void bc250_irq_set_gfx_eop(struct amdgpu_device *adev, u32 me, u32 pipe, enum bc250_irq_state state);

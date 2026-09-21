@@ -7,6 +7,14 @@
       are compared by count only. The first run is compared with amdgpu's trace by E11's compare.py; this one says how
       far a bring-up over a GPU that was already brought up and torn down differs from a cold one.
 
+  compare.py ih <ih plan or init log>
+      The IH sequence's register writes against amdgpu's navi10_ih_irq_init() on unit A (E03 trace, 0.25282 to
+      0.25290 s), in order. Address registers (the ring, the write-back slot, the dummy page) may differ, nothing else.
+      The TLB flush after the ring's GART bind is taken out first and checked by value, as in E11.
+
+  compare.py irq <gfx run log whose last stage is 8>
+      Stage 8's writes against the trace's interrupt block (1.560 to 1.562 s, E11's register filter).
+
 Logs from the target are UTF-16 (Windows PowerShell); both encodings are accepted.
 """
 
@@ -46,14 +54,64 @@ def cmd_rerun(args):
     return 0
 
 
+IH_STEP = r"^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$)"
+ADDRESS = {"OSSSYS.IH_RB_BASE", "OSSSYS.IH_RB_BASE_HI", "OSSSYS.IH_RB_WPTR_ADDR_LO", "OSSSYS.IH_RB_WPTR_ADDR_HI",
+           "NBIO.INTERRUPT_CNTL2", "NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_LOW",
+           "NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH"}
+
+
+def against_trace(ours, flushes, step, window, names):
+    trace = [(off, val, name) for _, _, name, off, val in
+             _e11.accesses(_e11.E03 / "amdgpu-events.txt", step, since=window[0], until=window[1], names=names)]
+    wrong = [(o, v) for o, v in flushes if _e11.FLUSH[names[o]] != v]
+    print(f"driver: {len(ours)} register writes   trace: {len(trace)} writes   TLB flush writes: {len(flushes)}, wrong value: {len(wrong)}")
+    same = address = 0
+    other = len(wrong)
+    for i in range(max(len(ours), len(trace))):
+        o = ours[i] if i < len(ours) else None
+        t = trace[i] if i < len(trace) else None
+        if o and t and o == t[:2]:
+            same += 1
+            continue
+        if o and t and o[0] == t[0] and t[2] in ADDRESS:
+            address += 1
+            kind = "address"
+        else:
+            other += 1
+            kind = "OTHER  "
+        print(f"  [{i:3}] {kind} driver {o and f'0x{o[0]:05X} {o[1]:08X} {names.get(o[0])}'}   trace {t and f'{t[2]} 0x{t[0]:05X} {t[1]:08X}'}")
+    print(f"equal {same}, address registers with another value {address}, other differences {other}")
+    print(f"verdict: {'AS EXPECTED' if other == 0 else 'NOT AS EXPECTED'}")
+    return 0 if other == 0 else 1
+
+
+def cmd_ih(args):
+    names = _e11.register_names()
+    ours, flushes = writes(args.log, names)
+    return against_trace(ours, flushes, IH_STEP, (0.25282, 0.25290), names)
+
+
+def cmd_irq(args):
+    names = _e11.register_names()
+    lines = _e11.text(args.log).splitlines()
+    first = [int(m.group(3)) for m in map(_e11.STAGE.match, lines) if m and int(m.group(1)) == 8]
+    if not first:
+        sys.exit("no stage 8 in this log")
+    every = [(int(m.group(1), 16), int(m.group(2), 16)) for m in map(_e11.WRITE.match, lines) if m]
+    ours = [w for w in every[first[0]:] if names.get(w[0]) not in _e11.FLUSH]
+    return against_trace(ours, [], _e11.STEP, (1.560, 1.562), names)
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("rerun")
     r.add_argument("first")
     r.add_argument("second")
+    for name in ("ih", "irq"):
+        sub.add_parser(name).add_argument("log")
     args = ap.parse_args()
-    return {"rerun": cmd_rerun}[args.cmd](args)
+    return {"rerun": cmd_rerun, "ih": cmd_ih, "irq": cmd_irq}[args.cmd](args)
 
 
 if __name__ == "__main__":

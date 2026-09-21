@@ -372,6 +372,62 @@ struct amdgpu_mmio_remap {
 #define KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL	0
 #define KFD_MMIO_REMAP_HDP_REG_FLUSH_CNTL	4
 
+/* [amdgpu] amdgpu_ih.h:39 struct amdgpu_ih_ring, reduced to ring 0 of the hardware IH.
+ *
+ * Upstream carries three rings plus a software one; navi10_ih_sw_init() zeroes ring_size for ih1
+ * and ih2 unconditionally (navi10_ih.c:580-581), so only this one has ever existed on this family.
+ * The fields upstream keeps for the BO, the DMA mapping and the IP block are gone: the shim owns no
+ * memory, so the two bc250_mem allocations are what stands in for them.
+ *
+ * ptr_mask, rptr and the write pointer are all BYTE offsets, as upstream's are. */
+/* [amdgpu] amdgpu_ih.h:29 struct amdgpu_ih_regs, minus the two ring-1/ring-2 members this part
+ * never has and minus psp_reg_id, which only the SR-IOV path uses.
+ *
+ * These are dword indices, resolved ONCE by bc250_ih_setup() through navi10_ih_init_register_offset
+ * (navi10_ih.c:49). Upstream carries them on the ring for its own reasons; here it is also what lets
+ * the DPC trio run without reaching into adev->reg_offset, which the miniport's DPC-only
+ * struct amdgpu_device does not have. See the contract at the top of bc250_ih.h. */
+struct amdgpu_ih_regs {
+	u32	ih_rb_base;
+	u32	ih_rb_base_hi;
+	u32	ih_rb_cntl;
+	u32	ih_rb_wptr;
+	u32	ih_rb_rptr;
+	u32	ih_doorbell_rptr;
+	u32	ih_rb_wptr_addr_lo;
+	u32	ih_rb_wptr_addr_hi;
+};
+
+struct amdgpu_ih_ring {
+	struct amdgpu_ih_regs	ih_regs;
+
+	u32			*ring;          /* CPU side of the GTT ring */
+	u64			gpu_addr;       /* what the IH block walks the GART to reach */
+	u32			ring_size;
+	u32			ptr_mask;       /* ring_size - 1, in bytes */
+	u32			rptr;
+
+	u64			wptr_addr;      /* MC address of the write-pointer slot */
+	volatile u32		*wptr_cpu;
+	u64			rptr_addr;
+	volatile u32		*rptr_cpu;
+
+	bool			use_doorbell;
+	u32			doorbell_index; /* dword index, i.e. amdgpu's qword index << 1 */
+	bool			enabled;
+
+	struct bc250_mem	ring_mem;
+	struct bc250_mem	wb_mem;
+};
+
+/* [amdgpu] amdgpu_irq.h:64 struct amdgpu_irq, reduced to what this driver has: one ring and the
+ * one flag that reaches a register (RPTR_REARM). The source table, the handlers and the Linux irq
+ * domain are the miniport's ISR/DPC, not the shim's. */
+struct amdgpu_irq {
+	struct amdgpu_ih_ring	ih;
+	bool			msi_enabled;
+};
+
 /* [amdgpu] amdgpu.h */
 #define AMDGPU_GPU_PAGE_SIZE	4096
 
@@ -416,6 +472,14 @@ enum amdgpu_ring_type {
 	AMDGPU_RING_TYPE_SDMA,
 	AMDGPU_RING_TYPE_KIQ
 };
+
+/* [amdgpu] amdgpu_ring.h:62-65. The flags gfx_v10_0_ring_emit_fence() and its KIQ twin branch on,
+ * taken over with upstream's names so that bc250_gfx_emit_fence() reads as the transcription it is.
+ * TC_WB_ONLY and EXEC are upstream's and are not here: neither gfx10 fence emitter looks at them
+ * (gfx_v10_0.c:8712 and :8780 read only these two), so carrying them would suggest a behaviour this
+ * driver does not have. */
+#define AMDGPU_FENCE_FLAG_64BIT		(1 << 0)
+#define AMDGPU_FENCE_FLAG_INT		(1 << 1)
 
 /* [amdgpu] amdgpu_ring.h, cut down. Upstream carries scheduler, fence and IB callbacks; the shim
  * submits nothing but bring-up packets, so only the three members the write path reads are here. */
@@ -616,6 +680,13 @@ struct amdgpu_gfx {
 	/* [shim] the writeback page the rings' read- and write-pointer slots are cut from. */
 	struct bc250_mem	wb_mem;
 
+	/* [shim] a second GTT page, for the fence slots bc250_gfx_emit_fence() writes into. It stands
+	 * in for upstream's adev->wb pool (amdgpu_device_wb_get()), which the fence driver takes a slot
+	 * from per ring. It is deliberately NOT allocated by bc250_gfx_setup(): nothing in the traced
+	 * bring-up window needs it, and allocating it there would move every MC address the bring-up
+	 * programs. bc250_gfx_fence_page_alloc() is a separate call for that reason. */
+	struct bc250_mem	fence_mem;
+
 	/* upstream adev->gfx.mec_bitmap[0].queue_bitmap, which is a bitmap over
 	 * AMDGPU_MAX_COMPUTE_QUEUES; eight queues fit in a u64 and gfx10_kiq_set_resources()
 	 * already folds it into a 64-bit queue_mask. */
@@ -684,6 +755,7 @@ struct amdgpu_device {
 	struct amdgpu_mmio_remap     rmmio_remap;
 	struct amdgpu_doorbell	     doorbell;
 	struct amdgpu_doorbell_index doorbell_index;
+	struct amdgpu_irq	irq;               /* M6: the interrupt ring, see bc250_ih.h */
 
 	u64			dummy_page_addr;   /* DMA address of the dummy page (dma_addr_t upstream) */
 	u64			cg_flags;

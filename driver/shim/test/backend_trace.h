@@ -76,7 +76,30 @@ int backend_add_reaction(u32 trigger_offset, u32 trigger_mask,
 			 u32 cond_offset, u32 cond_mask, u32 cond_value,
 			 u32 target_offset, u32 target_value);
 
-/* Forget every alias and every reaction. */
+/*
+ * Declare that the hardware clears `mask` in `byte_offset` as the write lands, so that the value a
+ * later read returns is not the value that was written.
+ *
+ * This is a third kind of thing from an alias and a reaction and needs its own call, because it
+ * must not disturb the comparison: the write is recorded exactly as the driver issued it, and only
+ * the state behind subsequent reads is corrected.
+ *
+ * One bit is declared, by replay_ih.c, and the trace states it outright - the value goes in with
+ * bit 31 set and comes back out without it:
+ *
+ *     0.252838  W  OSSSYS.IH_RB_CNTL  0x04480  C03101A0
+ *     0.252845  R  OSSSYS.IH_RB_CNTL  0x04480  403101A0
+ *
+ * That bit is WPTR_OVERFLOW_CLEAR, and it is a pulse, not a setting (navi10_ih_get_wptr() sets it
+ * and clears it again on every overflow). Without this the final read-modify-write of
+ * navi10_ih_irq_init() would carry the stale bit forward and produce C03301A1 where unit A produced
+ * 403301A1 - a mismatch caused entirely by the model, in a register the driver got right.
+ *
+ * Returns 0, or -1 if the table is full.
+ */
+int backend_add_selfclear(u32 byte_offset, u32 mask);
+
+/* Forget every alias, every reaction and every self-clearing bit. */
 void backend_clear_aliases(void);
 
 /* Load the read values of a trace extract taken with `--reads`, so that the first read of a register

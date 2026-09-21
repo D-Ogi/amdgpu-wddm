@@ -513,7 +513,7 @@ static int Psp(const WCHAR *opText)
 
 static const char *GfxStageName(unsigned long stage)
 {
-    static const char *names[] = { "?", "doorbell aperture", "golden registers", "GRBM CAM probe", "constants", "RLC", "CP", "SDMA" };
+    static const char *names[] = { "?", "doorbell aperture", "golden registers", "GRBM CAM probe", "constants", "RLC", "CP", "SDMA", "interrupt sources" };
 
     return stage < sizeof(names) / sizeof(names[0]) ? names[stage] : "?";
 }
@@ -533,7 +533,7 @@ static int Gfx(const WCHAR *opText, const WCHAR *stageText)
     else { fprintf(stderr, "gfx plan <stage> | run <stage> | fini | state, not %ls\n", opText); return 2; }
     if (g.Op <= BC250_GFX_OP_RUN)
     {
-        if (stageText == NULL) { fprintf(stderr, "gfx %ls needs the last stage to run (1..7)\n", opText); return 2; }
+        if (stageText == NULL) { fprintf(stderr, "gfx %ls needs the last stage to run (1..8)\n", opText); return 2; }
         g.LastStage = wcstoul(stageText, NULL, 0);
     }
 
@@ -603,6 +603,47 @@ static int Ih(const WCHAR *opText)
     for (unsigned long i = 0; i < h.WriteCount && i < BC250_IH_MAX_WRITES; i++)
         printf("W 0x%05lX %08lX\n", h.Writes[i].Offset, h.Writes[i].Value);
     return h.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
+// ---- fence: fences on one ring (BC250_ESCAPE_RUN_FENCE) ----------------------------------------------------------------
+//
+// fence gfx|c0..c7|kiq [count] [noint]: emit <count> fences one after the other and poll each value in memory. With the
+// IH ring up and stage 8 done each one also raises an end-of-pipe interrupt (`ih state` counts them); noint is the
+// control: the same packet without the interrupt bit.
+
+static int Fence(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_FENCE f;
+    NTSTATUS status;
+    int i;
+
+    memset(&f, 0, sizeof(f));
+    f.Magic = BC250_ESCAPE_MAGIC;
+    f.Command = BC250_ESCAPE_RUN_FENCE;
+    f.Count = 1;
+    f.Interrupt = 1;
+    if (!_wcsicmp(argv[2], L"gfx")) f.Ring = BC250_FENCE_RING_GFX;
+    else if (!_wcsicmp(argv[2], L"kiq")) f.Ring = BC250_FENCE_RING_KIQ;
+    else if ((argv[2][0] == L'c' || argv[2][0] == L'C') && argv[2][1] >= L'0' && argv[2][1] <= L'7' && argv[2][2] == 0)
+        f.Ring = BC250_FENCE_RING_COMPUTE0 + (unsigned long)(argv[2][1] - L'0');
+    else { fprintf(stderr, "fence gfx|c0..c7|kiq [count] [noint], not %ls\n", argv[2]); return 2; }
+    for (i = 3; i < argc; i++)
+    {
+        if (!_wcsicmp(argv[i], L"noint")) f.Interrupt = 0; else f.Count = wcstoul(argv[i], NULL, 0);
+    }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &f, sizeof(f), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (f.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (f.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no fence command\n"); return 3; }
+
+    printf("fence %ls x%lu%s: %s, NTSTATUS 0x%08lX %s, result %ld\n", argv[2], f.Count, f.Interrupt ? "" : " without the interrupt bit",
+           f.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", f.NtStatus, StatusName((NTSTATUS)f.NtStatus), f.Result);
+    if (f.FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", f.FaultOffset);
+    printf("fences       %lu of %lu values read back, %lu doorbells; last emitted 0x%lX, slot holds 0x%lX\n", f.Completed, f.Count,
+           f.DoorbellCount, f.LastSeq, f.LastValue);
+    printf("time         %lu us in all, slowest single fence %lu us\n", f.Microseconds, f.SlowestMicroseconds);
+    return f.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
 // ---- stages: the registry ------------------------------------------------------------------------------------
@@ -716,6 +757,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"psp") && argc == 3) return Psp(argv[2]);
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
+    if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     fprintf(stderr, "unknown command %ls\n", argv[1]);
     return 2;
 }

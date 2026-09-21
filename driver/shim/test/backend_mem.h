@@ -17,6 +17,21 @@ void backend_mem_reset(void);
  * after bc250_gfx_setup()/bc250_sdma_setup() and before the bring-up. */
 void backend_ring_register(struct amdgpu_ring *ring);
 
+/* Every doorbell the run rang, with the width of the store.
+ *
+ * The width is here because it is the one property of a doorbell no register trace can show and
+ * upstream is specific about: `WDOORBELL32` for the IH ring's read pointer (navi10_ih.c:474, :499)
+ * and `WDOORBELL64` everywhere else on this part. A 64-bit store at the IH's index would also write
+ * the next dword, which is inside the two-entry window `BIF_IH_DOORBELL_RANGE` opens, so it would
+ * reach the hardware. Recorded so a test can insist rather than trust the source. */
+struct backend_doorbell {
+	unsigned int index;
+	unsigned int width;             /* 32 or 64 */
+	unsigned long long value;
+};
+
+const struct backend_doorbell *backend_doorbells(void);
+
 /* Counters, for the test to print and to check. */
 unsigned int backend_doorbell_count(void);
 unsigned int backend_cp_stub_count(void);
@@ -35,6 +50,23 @@ unsigned int backend_packet_count(void);
 /* Turn the CP stub off, so that a ring test times out instead of being satisfied. The control run
  * uses this to show that the ring tests are really being driven by the packets. */
 void backend_cp_stub_enable(int on);
+
+/*
+ * Give the CP stub an interrupt ring to deliver end-of-pipe vectors into, so that a fence submitted
+ * on a ring arrives as a decodable vector the way it will on hardware. `adev` must already have been
+ * through bc250_ih_setup(); the stub writes into adev->irq.ih and nowhere else, and it never calls
+ * anything in driver/shim.
+ *
+ * Without an attached ring the stub still writes the fence value and delivers nothing, which is what
+ * every run that is only about register writes wants. backend_mem_reset() detaches.
+ */
+void backend_ih_attach(struct amdgpu_device *adev);
+void backend_ih_detach(void);
+
+/* How many vectors the stub has delivered, and where its write pointer stands (a byte offset, the
+ * same units as the hardware's). For the test to check against what the decode consumed. */
+unsigned int backend_ih_delivered(void);
+u32 backend_ih_wptr(void);
 
 /* The decoded PM4 log: one entry per packet the stub saw go past a doorbell. */
 struct backend_packet {

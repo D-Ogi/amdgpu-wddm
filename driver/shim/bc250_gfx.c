@@ -748,8 +748,32 @@ static void bc250_compute_mqd_init(struct amdgpu_device *adev, struct v10_comput
 	mqd->cp_hqd_pq_wptr_poll_addr_lo = (u32)(wb_gpu_addr & 0xfffffffc);
 	mqd->cp_hqd_pq_wptr_poll_addr_hi = upper_32_bits(wb_gpu_addr) & 0xffff;
 
-	/* reset read and write pointers, similar to CP_RB0_WPTR/_RPTR */
-	mqd->cp_hqd_pq_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR);
+	/* reset read and write pointers, similar to CP_RB0_WPTR/_RPTR
+	 *
+	 * DECLARED DEVIATION (driver/amdgpu-import/PROVENANCE.md). Upstream is
+	 *
+	 *     mqd->cp_hqd_pq_rptr = RREG32_SOC15(GC, 0, mmCP_HQD_PQ_RPTR);   gfx_v10_0.c:6998
+	 *
+	 * which samples the register rather than resetting it, whatever its own comment - the one
+	 * kept above - says. The sample is under a GRBM selection of this queue's slot, so it picks up
+	 * whatever read pointer the CP left there.
+	 *
+	 * That is clean only on a part that loses GFX power between loads. This one does not: on unit
+	 * A's second bring-up in one boot the register held 0x737, gfx_v10_0_kiq_init_register()
+	 * wrote it back (:7044, in the CP_HQD_ACTIVE branch that only a re-init enters), and the CP
+	 * was told there were 262144 - 1847 = 260297 dwords of work pending against a ring that
+	 * restarts at write pointer 0. It walked every one of them: stage 6 took 5222 us against
+	 * 349 us cold (E12 run 001).
+	 *
+	 * Zero is the only value consistent with the rest of this function, which sets
+	 * cp_hqd_pq_wptr_lo and _hi to 0 four lines above, and with amdgpu_ring_init_mqd()'s
+	 * ring->wptr = 0. It is also what AMD themselves write from the next generation on:
+	 * gfx_v11_0.c:4337 and gfx_v12_0.c:3216 use regCP_HQD_PQ_RPTR_DEFAULT, which
+	 * gc_11_0_0_default.h:2091 defines as 0.
+	 *
+	 * A cold boot is unaffected, because there the register reads 0 and the sample was already 0.
+	 */
+	mqd->cp_hqd_pq_rptr = 0;
 
 	/* set the vmid for the queue */
 	mqd->cp_hqd_vmid = 0;
@@ -1246,6 +1270,179 @@ int bc250_gfx_ring_test(struct amdgpu_ring *ring)
 		return BC250_ETIME;
 
 	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The fence: the smallest thing that ends in an end-of-pipe interrupt
+ *
+ * gfx_v10_0.c:8712 gfx_v10_0_ring_emit_fence(), used by both the gfx ring funcs (:9863) and the
+ * compute ring funcs (:9908), and gfx_v10_0.c:8780 gfx_v10_0_ring_emit_fence_kiq(), used by the KIQ
+ * ring funcs (:9945). Which one a ring gets is ring->funcs->emit_fence upstream; here it is one
+ * function that branches on ring->funcs->type, because the shim's amdgpu_ring_funcs carries no
+ * callbacks (see amdgpu.h).
+ *
+ * Deviations, all of the same kind - upstream stops the machine where the shim refuses:
+ *   - upstream BUG_ON()s a misaligned address and a 64-bit KIQ fence. A BUG() in a Windows miniport
+ *     is a bugcheck on a caller's mistake, so each becomes BC250_EINVAL with nothing written. The
+ *     conditions are upstream's, unchanged.
+ *   - upstream's emitters return void and are called inside an amdgpu_ring_alloc() the fence driver
+ *     already did. bc250_gfx_emit_fence() keeps that shape; bc250_gfx_signal_fence() is the alloc,
+ *     emit and commit together, which is what the miniport actually wants and what makes the
+ *     dword count a thing the code computes rather than the caller guesses.
+ * ------------------------------------------------------------------------------------------- */
+
+unsigned int bc250_gfx_fence_size(const struct amdgpu_ring *ring, unsigned int flags)
+{
+	if (ring == NULL || ring->funcs == NULL)
+		return 0;
+
+	/* KIQ: one WRITE_DATA of 5 dwords, and a second one only if an interrupt was asked for. */
+	if (ring->funcs->type == AMDGPU_RING_TYPE_KIQ)
+		return (flags & AMDGPU_FENCE_FLAG_INT) ? 10u : 5u;
+
+	/* gfx and compute: PACKET3(PACKET3_RELEASE_MEM, 6), one header and seven body dwords. */
+	return 8u;
+}
+
+int bc250_gfx_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags)
+{
+	bool write64bit = (flags & AMDGPU_FENCE_FLAG_64BIT) != 0;
+	bool int_sel = (flags & AMDGPU_FENCE_FLAG_INT) != 0;
+	struct amdgpu_device *adev;
+
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	adev = ring->adev;      /* SOC15_REG_OFFSET() resolves through it, as upstream's does */
+
+	if (ring->funcs->type == AMDGPU_RING_TYPE_KIQ) {
+		/* gfx_v10_0.c:8786 "we only allocate 32bit for each seq wb address" */
+		if (write64bit)
+			return BC250_EINVAL;
+		if ((addr & 0x3u) != 0)
+			return BC250_EINVAL;
+
+		amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
+		amdgpu_ring_write(ring, (WRITE_DATA_ENGINE_SEL(0) |
+					 WRITE_DATA_DST_SEL(5) | WR_CONFIRM));
+		amdgpu_ring_write(ring, lower_32_bits(addr));
+		amdgpu_ring_write(ring, upper_32_bits(addr));
+		amdgpu_ring_write(ring, lower_32_bits(seq));
+
+		if (int_sel) {
+			/* The KIQ has no end-of-pipe of its own: it raises its interrupt by writing
+			 * CPC_INT_STATUS, and the comment upstream leaves on the value - "src_id is
+			 * 178" - is why bc250_ih_is_kiq() matches CP_IB2_INTERRUPT_PKT, which is 178.
+			 * The register is named through AMD's headers, not by its address. */
+			amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
+			amdgpu_ring_write(ring, (WRITE_DATA_ENGINE_SEL(0) |
+						 WRITE_DATA_DST_SEL(0) | WR_CONFIRM));
+			amdgpu_ring_write(ring, SOC15_REG_OFFSET(GC, 0, mmCPC_INT_STATUS));
+			amdgpu_ring_write(ring, 0);
+			amdgpu_ring_write(ring, 0x20000000);
+		}
+		return 0;
+	}
+
+	/* The alignment upstream BUG_ON()s, checked before a single dword is written so that a
+	 * refusal leaves the ring exactly as it was. */
+	if (write64bit) {
+		if ((addr & 0x7u) != 0)
+			return BC250_EINVAL;
+	} else {
+		if ((addr & 0x3u) != 0)
+			return BC250_EINVAL;
+	}
+
+	/* RELEASE_MEM - flush caches, send int */
+	amdgpu_ring_write(ring, PACKET3(PACKET3_RELEASE_MEM, 6));
+	amdgpu_ring_write(ring, (PACKET3_RELEASE_MEM_GCR_SEQ |
+				 PACKET3_RELEASE_MEM_GCR_GL2_WB |
+				 PACKET3_RELEASE_MEM_GCR_GLM_INV | /* must be set with GLM_WB */
+				 PACKET3_RELEASE_MEM_GCR_GLM_WB |
+				 PACKET3_RELEASE_MEM_CACHE_POLICY(3) |
+				 PACKET3_RELEASE_MEM_EVENT_TYPE(CACHE_FLUSH_AND_INV_TS_EVENT) |
+				 PACKET3_RELEASE_MEM_EVENT_INDEX(5)));
+	amdgpu_ring_write(ring, (PACKET3_RELEASE_MEM_DATA_SEL(write64bit ? 2 : 1) |
+				 PACKET3_RELEASE_MEM_INT_SEL(int_sel ? 2 : 0)));
+	amdgpu_ring_write(ring, lower_32_bits(addr));
+	amdgpu_ring_write(ring, upper_32_bits(addr));
+	amdgpu_ring_write(ring, lower_32_bits(seq));
+	amdgpu_ring_write(ring, upper_32_bits(seq));
+	amdgpu_ring_write(ring, 0);
+
+	return 0;
+}
+
+int bc250_gfx_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags)
+{
+	unsigned int ndw = bc250_gfx_fence_size(ring, flags);
+	int r;
+
+	if (ndw == 0)
+		return BC250_EINVAL;
+
+	r = amdgpu_ring_alloc(ring, ndw);
+	if (r)
+		return r;
+
+	r = bc250_gfx_emit_fence(ring, addr, seq, flags);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+
+	amdgpu_ring_commit(ring);
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The fence slots
+ *
+ * Upstream takes one writeback slot per ring out of adev->wb (amdgpu_device_wb_get(),
+ * amdgpu_fence_driver_init_ring()). There is no such pool here, so this is one GTT page cut into
+ * 8-byte slots - 8 and not 4 so that a 64-bit RELEASE_MEM is legal in every slot.
+ * ------------------------------------------------------------------------------------------- */
+
+int bc250_gfx_fence_page_alloc(struct amdgpu_device *adev)
+{
+	int r;
+
+	if (adev == NULL)
+		return BC250_EINVAL;
+	if (adev->gfx.fence_mem.cpu != NULL)
+		return 0;                               /* already there; idempotent */
+
+	r = bc250_shim_mem_alloc(adev, BC250_MEM_GTT, AMDGPU_GPU_PAGE_SIZE, AMDGPU_GPU_PAGE_SIZE,
+				 &adev->gfx.fence_mem);
+	if (r)
+		return r;
+	if (adev->gfx.fence_mem.cpu == NULL)
+		return BC250_EINVAL;
+	return 0;
+}
+
+void bc250_gfx_fence_page_free(struct amdgpu_device *adev)
+{
+	if (adev == NULL)
+		return;
+	bc250_shim_mem_free(adev, &adev->gfx.fence_mem);
+}
+
+u64 bc250_gfx_fence_addr(struct amdgpu_device *adev, unsigned int slot)
+{
+	if (adev == NULL || adev->gfx.fence_mem.cpu == NULL || slot >= BC250_GFX_FENCE_SLOTS)
+		return 0;
+	return adev->gfx.fence_mem.mc + (u64)slot * 8u;
+}
+
+u64 bc250_gfx_fence_read(struct amdgpu_device *adev, unsigned int slot)
+{
+	const volatile u64 *p;
+
+	if (adev == NULL || adev->gfx.fence_mem.cpu == NULL || slot >= BC250_GFX_FENCE_SLOTS)
+		return 0;
+	p = (const volatile u64 *)adev->gfx.fence_mem.cpu;
+	return p[slot];
 }
 
 /* amdgpu_gfx.c:656 amdgpu_gfx_enable_kcq(), without MES, without the HDP flush (which returns

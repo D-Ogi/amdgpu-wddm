@@ -8,13 +8,16 @@
 #   -Phase psp -Op plan|load|unload         the PSP command of bc250kmd
 #   -Phase gfx -Op plan|run|fini|state -Stage N     the GFX command of bc250kmd (stages 1..7)
 #   -Phase ih -Op plan|init|fini|state      the IH command of bc250kmd (interrupt counts, vectors seen)
+#   -Phase fence -Op gfx|c0..c7|kiq -Count N [-NoInt]   N fences on one ring (needs gfx run 6 or later; interrupts need ih init and stage 8)
 #   -Phase firmware                 sizes and SHA-256 of the firmware files the driver will read
 param(
-    [Parameter(Mandatory)][ValidateSet('install', 'gate', 'sweep', 'gart', 'psp', 'gfx', 'ih', 'firmware')][string]$Phase,
+    [Parameter(Mandatory)][ValidateSet('install', 'gate', 'sweep', 'gart', 'psp', 'gfx', 'ih', 'fence', 'firmware')][string]$Phase,
     [string]$Op = 'plan',
     [string]$Tag = 'x',
     [int]$On = 0,
     [int]$Stage = 0,
+    [int]$Count = 1,
+    [switch]$NoInt,
     [string]$Package = 'C:\BC250\e12'
 )
 
@@ -77,7 +80,7 @@ switch ($Phase) {
         State
     }
     'sweep' {
-        foreach ($ip in 'GC', 'MMHUB', 'MP0', 'NBIO') {
+        foreach ($ip in 'GC', 'MMHUB', 'MP0', 'NBIO', 'OSSSYS') {
             $file = Join-Path $out "sweep-$ip-$Tag-$stamp.log"
             & $rd sweep $reglist "$ip." > $file 2>&1
             Say ("sweep $ip exit $LASTEXITCODE, $((Get-Content $file | Measure-Object -Line).Lines) lines -> $file")
@@ -93,6 +96,10 @@ switch ($Phase) {
         if ($Stage -gt 0) { & $cli gfx $Op $Stage 2>&1 | ForEach-Object { Say "$_" } } else { & $cli gfx $Op 2>&1 | ForEach-Object { Say "$_" } }
         Say "exit code $LASTEXITCODE"
         Alive
+    }
+    'fence' {
+        if ($NoInt) { & $cli fence $Op $Count noint 2>&1 | ForEach-Object { Say "$_" } } else { & $cli fence $Op $Count 2>&1 | ForEach-Object { Say "$_" } }
+        Say "exit code $LASTEXITCODE"
     }
     default {
         & $cli $Phase $Op 2>&1 | ForEach-Object { Say "$_" }

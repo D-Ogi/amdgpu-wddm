@@ -1,0 +1,1069 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/*
+ * Host replay of amdgpu's interrupt-ring bring-up on unit A, and a host proof that a fence
+ * submitted on a CP ring comes back as a decodable interrupt vector (milestone M6, ADR 0002).
+ *
+ * Runs driver/shim/bc250_ih.c and the two NBIO functions it calls against a backend that answers
+ * reads with what unit A's hardware returned during experiment E03, compares every register write
+ * with what amdgpu wrote in the same window, and then exercises the three DPC functions -
+ * bc250_ih_get_wptr(), bc250_ih_decode(), bc250_ih_set_rptr() - against vectors the test builds and
+ * against vectors the CP stub delivers.
+ *
+ *   replay_ih <sweep-run1.log> <sweep-run2.log> <trace-ih.txt> [-v]
+ *
+ * The trace extract is
+ *   python tools/trace/extract_phase.py <evidence>/amdgpu-events.txt \
+ *          --match '^(OSSSYS|NBIO)\.' --reads --no-fold --precision 6 --since 0.2520 --until 0.2540
+ *
+ * Twenty accesses, fifteen of them writes, and they are the whole of navi10_ih_irq_init() on this
+ * part. The window is early - 0.2528 s, before the GFX window this milestone's sibling replays -
+ * because the IH block comes up with the rest of the common IP, long before the CP.
+ *
+ * Four things about the numbers below.
+ *
+ * 1. Reads. As in replay_gfx.c, the FIRST read of each register in the window is answered from the
+ *    trace's own read record and everything after that from what the run itself wrote. A read with
+ *    neither is counted and reported, and must be 0.
+ *
+ * 2. A bit that does not stay written. The trace puts 0xC03101A0 into IH_RB_CNTL and reads back
+ *    0x403101A0 seven microseconds later: bit 31, WPTR_OVERFLOW_CLEAR, is a pulse the hardware
+ *    retires, not a setting. The final read-modify-write of the sequence depends on that, so the
+ *    backend is told about the bit through backend_add_selfclear() - the write is still compared
+ *    exactly as the driver issued it, and only the value a later read returns is corrected. The
+ *    declaration is made from those two trace lines and nothing else, and one of the controls below
+ *    removes it and has to fail.
+ *
+ * 3. Addresses. The ring and the write-back page are allocated by this test, so the four registers
+ *    carrying their addresses cannot equal the trace. For those the offset is compared, the value is
+ *    not, and each is separately checked against the address this test handed out. INTERRUPT_CNTL2
+ *    is NOT one of them: it carries the dummy page, which is an input this test is given rather than
+ *    an address it chooses, so it is compared in full.
+ *
+ * 4. The interrupt itself. No hardware here raises one. Vectors arrive in two ways, both of them
+ *    declared: the decode tests write entries into the ring directly, and the end-to-end test lets
+ *    the CP stub in backend_mem.c deliver one in response to a RELEASE_MEM the shim emitted. The
+ *    stub's encoder and bc250_ih_decode() were written from the same upstream lines in opposite
+ *    directions, so a field either of them has wrong shows up rather than cancelling out.
+ *
+ * Nothing in this file decides what the hardware is told; that is bc250_ih.c's and bc250_nbio.c's
+ * job, and bc250_gfx.c's for the fence.
+ */
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "backend_mem.h"
+#include "backend_trace.h"
+#include "bc250_gfx.h"
+#include "bc250_gmc.h"
+#include "bc250_ih.h"
+#include "bc250_nbio.h"
+
+#include <oss/osssys_5_0_0_offset.h>
+#include <oss/osssys_5_0_0_sh_mask.h>
+#include "soc15_common.h"
+#include "soc15_ih_clientid.h"
+#include "irqsrcs_gfx_10_1.h"
+#include "irqsrcs_sdma0_5_0.h"
+#include "irqsrcs_sdma1_5_0.h"
+
+/* ---------------------------------------------------------------------------------------------
+ * Unit A, experiment E03 (evidence/linux/2026-09-21-E03-init-trace), kernel 6.18.52-0-lts.
+ * The same three inputs replay.c and replay_gfx.c use; see replay.c for where each comes from.
+ * ------------------------------------------------------------------------------------------- */
+#define UNITA_GART_TABLE_MC                     0x000000F5FFE00000ULL
+#define UNITA_TRACED_SYS_APERTURE_DEFAULT_LSB   0x002708C9u
+#define UNITA_TRACED_FAULT_DEFAULT_ADDR_LO32    0x0007E3C1u
+#define UNITA_DOORBELL_BASE                     0x00000000D0000000ULL
+
+/* evidence/linux/2026-09-21-E03-init-trace/dmesg.txt:1038. Only the fence part of this test needs
+ * them, and only to get rings allocated; nothing here reads a shader-engine register. */
+#define UNITA_MAX_SHADER_ENGINES   2u
+#define UNITA_MAX_SH_PER_SE        2u
+#define UNITA_MAX_CU_PER_SH        10u
+#define UNITA_MAX_BACKENDS_PER_SE  2u
+
+/* Unit A ran with MSI, and the trace says so rather than the kernel log: IH_RB_CNTL comes out of
+ * navi10_ih_enable_ring() as 0xC03101A0, and bit 21 of that is RPTR_REARM, which is
+ * `!!adev->irq.msi_enabled` (navi10_ih.c:277). With MSI off the same code produces 0xC01101A0.
+ * One of the controls below runs it that way and has to fail. */
+#define UNITA_MSI  true
+
+/* ---------------------------------------------------------------------------------------------
+ * The reference trace
+ * ------------------------------------------------------------------------------------------- */
+
+#define MAX_TRACE 128
+
+struct trace_entry {
+	u32 byte_offset;
+	u32 value;
+	char name[64];
+};
+
+static struct trace_entry g_trace[MAX_TRACE];
+static unsigned int g_trace_count;
+
+static int load_trace_writes(const char *path)
+{
+	char line[512];
+	FILE *f = fopen(path, "r");
+
+	if (f == NULL)
+		return -1;
+	while (fgets(line, (int)sizeof(line), f) != NULL) {
+		double t;
+		char kind[8], name[256];
+		unsigned int off = 0, val = 0;
+
+		if (sscanf(line, "%lf %7s %255s 0x%x %x", &t, kind, name, &off, &val) != 5)
+			continue;
+		if (kind[0] != 'W')
+			continue;
+		if (g_trace_count >= MAX_TRACE)
+			break;
+		g_trace[g_trace_count].byte_offset = off;
+		g_trace[g_trace_count].value = val;
+		strncpy(g_trace[g_trace_count].name, name, sizeof(g_trace[0].name) - 1);
+		g_trace[g_trace_count].name[sizeof(g_trace[0].name) - 1] = '\0';
+		g_trace_count++;
+	}
+	fclose(f);
+	return (int)g_trace_count;
+}
+
+/* The registers whose value carries an address this test chose. See point 3 of the header. */
+static const char *const g_address_registers[] = {
+	"OSSSYS.IH_RB_BASE",		"OSSSYS.IH_RB_BASE_HI",
+	"OSSSYS.IH_RB_WPTR_ADDR_LO",	"OSSSYS.IH_RB_WPTR_ADDR_HI"
+};
+
+static int is_address_register(const char *name)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(g_address_registers); i++)
+		if (strcmp(name, g_address_registers[i]) == 0)
+			return 1;
+	return 0;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The comparison
+ * ------------------------------------------------------------------------------------------- */
+
+struct result {
+	unsigned int produced;
+	unsigned int compared;
+	unsigned int mismatches;
+	unsigned int address_exceptions;
+	unsigned int address_failures;
+	unsigned int unknown_reads;
+	int          hw_init_rc;
+};
+
+static void compare_window(struct result *out, int quiet)
+{
+	const struct bc250_reg_write *w = backend_writes();
+	unsigned int i, n;
+
+	out->produced = backend_write_count();
+	n = out->produced < g_trace_count ? out->produced : g_trace_count;
+	out->compared = n;
+
+	for (i = 0; i < n; i++) {
+		int addr = is_address_register(g_trace[i].name);
+
+		if (w[i].byte_offset != g_trace[i].byte_offset) {
+			out->mismatches++;
+		} else if (addr) {
+			out->address_exceptions++;
+			continue;
+		} else if (w[i].value == g_trace[i].value) {
+			continue;
+		} else {
+			out->mismatches++;
+		}
+
+		if (!quiet)
+			printf("  [%2u] shim 0x%05X = %08X   trace %-28s 0x%05X = %08X   bits %08X\n",
+			       i, w[i].byte_offset, w[i].value,
+			       g_trace[i].name, g_trace[i].byte_offset, g_trace[i].value,
+			       w[i].byte_offset == g_trace[i].byte_offset
+				       ? (w[i].value ^ g_trace[i].value) : 0u);
+	}
+
+	if (out->produced != g_trace_count && !quiet)
+		printf("  produced %u writes, the window has %u\n", out->produced, g_trace_count);
+}
+
+/* The last value the run wrote to one byte offset, or 0 with *found cleared. */
+static u32 shim_wrote(u32 byte_offset, int *found)
+{
+	const struct bc250_reg_write *w = backend_writes();
+	unsigned int n = backend_write_count();
+	unsigned int i;
+	u32 value = 0;
+
+	*found = 0;
+	for (i = 0; i < n; i++) {
+		if (w[i].byte_offset == byte_offset) {
+			value = w[i].value;
+			*found = 1;
+		}
+	}
+	return value;
+}
+
+/* Each address register checked against the allocation it is supposed to describe, so that "not
+ * compared with the trace" does not mean "not checked". Returns the number that failed. */
+static unsigned int check_addresses(struct amdgpu_device *adev, int quiet)
+{
+	const struct amdgpu_ih_ring *ih = &adev->irq.ih;
+	unsigned int bad = 0;
+	int found;
+	u32 got, want;
+	unsigned int i;
+
+	struct {
+		const char *name;
+		u32 offset;
+		u32 want;
+	} expect[4];
+
+	expect[0].name = "IH_RB_BASE";
+	expect[0].offset = SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE) * 4u;
+	expect[0].want = (u32)(ih->gpu_addr >> 8);
+	expect[1].name = "IH_RB_BASE_HI";
+	expect[1].offset = SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_BASE_HI) * 4u;
+	expect[1].want = (u32)((ih->gpu_addr >> 40) & 0xffu);
+	expect[2].name = "IH_RB_WPTR_ADDR_LO";
+	expect[2].offset = SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_LO) * 4u;
+	expect[2].want = lower_32_bits(ih->wptr_addr);
+	expect[3].name = "IH_RB_WPTR_ADDR_HI";
+	expect[3].offset = SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_WPTR_ADDR_HI) * 4u;
+	expect[3].want = upper_32_bits(ih->wptr_addr) & 0xFFFFu;
+
+	for (i = 0; i < ARRAY_SIZE(expect); i++) {
+		got = shim_wrote(expect[i].offset, &found);
+		want = expect[i].want;
+		if (!found || got != want) {
+			bad++;
+			if (!quiet)
+				printf("  %s = %08X, but the allocation says %08X%s\n",
+				       expect[i].name, got, want, found ? "" : " (never written)");
+		}
+	}
+	return bad;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * One run of the bring-up
+ * ------------------------------------------------------------------------------------------- */
+
+struct run_opts {
+	bool msi;
+	int  selfclear;         /* 0 removes the declared self-clearing bit; see the controls */
+};
+
+/* Everything up to, but not including, the first register write of navi10_ih_irq_init(). Returns 0,
+ * or -1 if the memory layout could not be learnt. */
+static int prepare(struct amdgpu_device *adev, const struct run_opts *opt)
+{
+	struct amdgpu_bo gart_bo;
+	struct bc250_gmc_inputs gin;
+
+	memset(adev, 0, sizeof(*adev));
+	memset(&gart_bo, 0, sizeof(gart_bo));
+	memset(&gin, 0, sizeof(gin));
+	adev->dev = (void *)"BC250-A";
+	adev->doorbell.base = UNITA_DOORBELL_BASE;
+
+	backend_reset_state();
+	backend_reset_writes();
+	backend_mem_reset();
+	backend_clear_aliases();
+
+	gin.gart_table_mc = UNITA_GART_TABLE_MC;
+	gin.dummy_page_dma = (u64)UNITA_TRACED_FAULT_DEFAULT_ADDR_LO32 << 12;
+	gin.noretry = true;
+	if (bc250_gmc_setup(adev, &gin, &gart_bo) != 0)
+		return -1;
+	gin.mem_scratch_mc = ((u64)UNITA_TRACED_SYS_APERTURE_DEFAULT_LSB << 12)
+			     - adev->vm_manager.vram_base_offset + adev->gmc.vram_start;
+	(void)bc250_gmc_setup(adev, &gin, &gart_bo);
+
+	backend_mem_set_bases(adev->gmc.vram_start, adev->gmc.gart_start);
+
+	/* The one declared self-clearing bit, named through AMD's headers rather than by its offset
+	 * and its mask. See point 2 of the header comment for the two trace lines behind it. */
+	if (opt->selfclear)
+		backend_add_selfclear(SOC15_REG_OFFSET(OSSSYS, 0, mmIH_RB_CNTL) * 4u,
+				      IH_RB_CNTL__WPTR_OVERFLOW_CLEAR_MASK);
+
+	if (bc250_ih_setup(adev, opt->msi) != 0)
+		return -1;
+
+	/* The setup only allocates. The record starts at the first write of the bring-up. */
+	backend_reset_writes();
+	return 0;
+}
+
+static void run_one(const char *title, const struct run_opts *opt, struct amdgpu_device *adev,
+		    struct result *res, int quiet)
+{
+	memset(res, 0, sizeof(*res));
+
+	if (!quiet)
+		printf("\n== %s ==\n", title);
+
+	if (prepare(adev, opt) != 0) {
+		if (!quiet)
+			printf("  could not learn the memory layout; nothing to compare\n");
+		res->mismatches = 1;
+		res->hw_init_rc = -1;
+		return;
+	}
+
+	res->hw_init_rc = bc250_ih_hw_init(adev);
+
+	compare_window(res, quiet);
+	res->address_failures = check_addresses(adev, quiet);
+	res->unknown_reads = backend_unknown_reads();
+
+	if (!quiet) {
+		printf("  bc250_ih_hw_init                    : %d\n", res->hw_init_rc);
+		printf("  writes produced / window            : %u / %u\n",
+		       res->produced, g_trace_count);
+		printf("  mismatches                          : %u\n", res->mismatches);
+		printf("  address exceptions (offset only)    : %u\n", res->address_exceptions);
+		printf("  address registers wrong             : %u\n", res->address_failures);
+		printf("  reads with no recorded value        : %u\n", res->unknown_reads);
+	}
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * The decode, against vectors this test builds
+ *
+ * The encoder here is separate from the CP stub's on purpose: this one sets every field to a
+ * different value, including the ones no real vector on this part uses, so that a decode that
+ * shifted a field by a few bits cannot pass by accident.
+ * ------------------------------------------------------------------------------------------- */
+
+struct iv_fields {
+	u32 client_id, src_id, ring_id, vmid, vmid_src;
+	u64 timestamp;          /* 48 bits */
+	u32 timestamp_src, pasid, node_id;
+	u32 src_data[4];
+};
+
+/* amdgpu_ih.c:263 amdgpu_ih_decode_iv_helper(), written backwards. */
+static void put_iv(struct amdgpu_ih_ring *ih, u32 at, const struct iv_fields *f)
+{
+	volatile u32 *p = (volatile u32 *)ih->ring + ((at & ih->ptr_mask) >> 2);
+	u32 i;
+
+	p[0] = (f->client_id & 0xffu) | ((f->src_id & 0xffu) << 8) |
+	       ((f->ring_id & 0xffu) << 16) | ((f->vmid & 0xfu) << 24) |
+	       ((f->vmid_src & 0x1u) << 31);
+	p[1] = (u32)(f->timestamp & 0xffffffffu);
+	p[2] = (u32)((f->timestamp >> 32) & 0xffffu) | ((f->timestamp_src & 0x1u) << 31);
+	p[3] = (f->pasid & 0xffffu) | ((f->node_id & 0xffu) << 16);
+	for (i = 0; i < 4; i++)
+		p[4 + i] = f->src_data[i];
+}
+
+static unsigned int check_field(const char *what, u64 got, u64 want)
+{
+	if (got == want)
+		return 0;
+	printf("  %-22s decoded %llu, put in %llu\n", what,
+	       (unsigned long long)got, (unsigned long long)want);
+	return 1;
+}
+
+/* Returns the number of failures. */
+static unsigned int test_decode(struct amdgpu_device *adev)
+{
+	struct amdgpu_ih_ring *ih = &adev->irq.ih;
+	struct bc250_iv_entry e;
+	struct iv_fields f;
+	unsigned int bad = 0;
+	u32 rptr, me, pipe, queue, instance;
+
+	printf("\n== the decode ==\n");
+
+	/* 1. Every field distinct, so nothing can pass by lining up with a neighbour. */
+	memset(&f, 0, sizeof(f));
+	f.client_id = 0xA5;
+	f.src_id = 0x5A;
+	f.ring_id = 0x3C;
+	f.vmid = 0xD;
+	f.vmid_src = 1;
+	f.timestamp = 0x0000123456789ABCULL;
+	f.timestamp_src = 1;
+	f.pasid = 0xBEEF;
+	f.node_id = 0x77;
+	f.src_data[0] = 0x11111111;
+	f.src_data[1] = 0x22222222;
+	f.src_data[2] = 0x33333333;
+	f.src_data[3] = 0x44444444;
+	put_iv(ih, 0, &f);
+
+	rptr = 0;
+	memset(&e, 0xCC, sizeof(e));
+	if (bc250_ih_decode(adev, &rptr, &e) != 0) {
+		printf("  bc250_ih_decode refused a well-formed entry\n");
+		return 1;
+	}
+	bad += check_field("client_id", e.client_id, f.client_id);
+	bad += check_field("src_id", e.src_id, f.src_id);
+	bad += check_field("ring_id", e.ring_id, f.ring_id);
+	bad += check_field("vmid", e.vmid, f.vmid);
+	bad += check_field("vmid_src", e.vmid_src, f.vmid_src);
+	bad += check_field("timestamp", e.timestamp, f.timestamp);
+	bad += check_field("timestamp_src", e.timestamp_src, f.timestamp_src);
+	bad += check_field("pasid", e.pasid, f.pasid);
+	bad += check_field("node_id", e.node_id, f.node_id);
+	bad += check_field("src_data[0]", e.src_data[0], f.src_data[0]);
+	bad += check_field("src_data[3]", e.src_data[3], f.src_data[3]);
+	bad += check_field("rptr after one entry", rptr, 32);
+	printf("  all thirteen fields of one vector round-trip: %s\n", bad ? "NO" : "yes");
+
+	/* 2. Routing. A gfx and a compute end-of-pipe carry the same client and source id and differ
+	 * only in ring_id, which is the reason bc250_ih_is_*_eop() are functions. */
+	memset(&f, 0, sizeof(f));
+	f.client_id = SOC15_IH_CLIENTID_GRBM_CP;
+	f.src_id = GFX_10_1__SRCID__CP_EOP_INTERRUPT;
+	f.ring_id = 0;                                  /* me 0, pipe 0, queue 0 */
+	put_iv(ih, 32, &f);
+	f.ring_id = (1u << 2) | 2u | (1u << 4);         /* me 1, pipe 2, queue 1 */
+	put_iv(ih, 64, &f);
+	f.src_id = GFX_10_1__SRCID__CP_IB2_INTERRUPT_PKT;
+	f.ring_id = 0;
+	put_iv(ih, 96, &f);
+	memset(&f, 0, sizeof(f));
+	f.client_id = SOC15_IH_CLIENTID_SDMA1;
+	f.src_id = SDMA1_5_0__SRCID__SDMA_TRAP;
+	put_iv(ih, 128, &f);
+
+	rptr = 32;
+	(void)bc250_ih_decode(adev, &rptr, &e);
+	if (!bc250_ih_is_gfx_eop(&e) || bc250_ih_is_compute_eop(&e) || bc250_ih_is_kiq(&e)) {
+		printf("  a me-0 end-of-pipe is not routed as the gfx ring's\n");
+		bad++;
+	}
+	(void)bc250_ih_decode(adev, &rptr, &e);
+	bc250_ih_eop_ring_id(&e, &me, &pipe, &queue);
+	if (!bc250_ih_is_compute_eop(&e) || bc250_ih_is_gfx_eop(&e) ||
+	    me != 1 || pipe != 2 || queue != 1) {
+		printf("  a me-1 pipe-2 queue-1 end-of-pipe decodes as me %u pipe %u queue %u\n",
+		       me, pipe, queue);
+		bad++;
+	}
+	(void)bc250_ih_decode(adev, &rptr, &e);
+	if (!bc250_ih_is_kiq(&e) || bc250_ih_is_gfx_eop(&e)) {
+		printf("  the KIQ's vector is not routed to the KIQ\n");
+		bad++;
+	}
+	instance = 99;
+	(void)bc250_ih_decode(adev, &rptr, &e);
+	if (!bc250_ih_is_sdma_trap(&e, &instance) || instance != 1) {
+		printf("  an SDMA1 trap decodes as instance %u\n", instance);
+		bad++;
+	}
+	printf("  gfx / compute / KIQ / SDMA1 routed apart : %s\n", bad ? "NO" : "yes");
+
+	/* 3. Wrap-around. The last entry of the ring, decoded, must leave the read pointer at 0 and
+	 * not at ring_size - a mask applied to the wrong side would only show up here. */
+	memset(&f, 0, sizeof(f));
+	f.client_id = SOC15_IH_CLIENTID_SDMA0;
+	f.src_id = SDMA0_5_0__SRCID__SDMA_TRAP;
+	f.src_data[0] = 0xFEEDFACE;
+	put_iv(ih, ih->ring_size - 32u, &f);
+
+	rptr = ih->ring_size - 32u;
+	memset(&e, 0, sizeof(e));
+	(void)bc250_ih_decode(adev, &rptr, &e);
+	instance = 99;
+	if (rptr != 0 || e.src_data[0] != 0xFEEDFACE ||
+	    !bc250_ih_is_sdma_trap(&e, &instance) || instance != 0) {
+		printf("  the last entry of the ring decodes wrong: rptr %u, src_data0 %08X\n",
+		       rptr, e.src_data[0]);
+		bad++;
+	}
+	printf("  the last entry wraps to 0               : %s\n",
+	       rptr == 0 ? "yes" : "NO");
+
+	return bad;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * get_wptr and set_rptr, including the overflow arm
+ * ------------------------------------------------------------------------------------------- */
+
+/* The whole list of registers the DPC trio is allowed to touch, by the name the trace gives them.
+ * The header states this list; this is the survey that checks it, the same way the GFX test surveys
+ * what teardown touches. The miniport gives its DPC a sequence with exactly these on it. */
+static const char *const g_dpc_registers[] = {
+	"OSSSYS.IH_RB_CNTL",	/* read and written, overflow path only */
+	"OSSSYS.IH_RB_WPTR",	/* read, overflow path only */
+	"OSSSYS.IH_RB_RPTR"	/* written, only when the doorbell is not used */
+};
+
+static unsigned int survey_dpc_registers(struct amdgpu_device *adev, int quiet)
+{
+	unsigned int i, j, bad = 0;
+
+	if (backend_touched_overflow()) {
+		printf("  the touched-register table overflowed\n");
+		return 1;
+	}
+	if (!quiet)
+		printf("  registers the trio touched                : %u\n", backend_touched_count());
+
+	for (i = 0; i < backend_touched_count(); i++) {
+		u32 off = backend_touched_offset(i);
+		const char *name = NULL;
+
+		for (j = 0; j < ARRAY_SIZE(g_dpc_registers); j++) {
+			u32 want = 0;
+
+			if (j == 0) want = adev->irq.ih.ih_regs.ih_rb_cntl * 4u;
+			if (j == 1) want = adev->irq.ih.ih_regs.ih_rb_wptr * 4u;
+			if (j == 2) want = adev->irq.ih.ih_regs.ih_rb_rptr * 4u;
+			if (off == want) {
+				name = g_dpc_registers[j];
+				break;
+			}
+		}
+		if (name == NULL) {
+			printf("  the DPC trio touched 0x%05X, which is not on its list\n", off);
+			bad++;
+		} else if (!quiet) {
+			printf("    0x%05X %-20s %s\n", off, name,
+			       backend_touched_written(i) ? "read and written" : "read only");
+		}
+	}
+	return bad;
+}
+
+static unsigned int test_wptr_rptr(struct amdgpu_device *adev, int quiet)
+{
+	struct amdgpu_ih_ring *ih = &adev->irq.ih;
+	unsigned int bad = 0, doorbells_before;
+	u32 wptr_off = ih->ih_regs.ih_rb_wptr * 4u;
+	u32 cntl_off = ih->ih_regs.ih_rb_cntl * 4u;
+	u32 wptr;
+	bool overflowed = true;
+
+	if (!quiet)
+		printf("\n== the write and read pointers ==\n");
+
+	backend_touched_start();
+
+	/* The fast path: the write-back slot, no register read, no write. */
+	backend_reset_writes();
+	*ih->wptr_cpu = 3u * 32u;
+	wptr = bc250_ih_get_wptr(adev, &overflowed);
+	if (wptr != 96u || overflowed || backend_write_count() != 0) {
+		printf("  the plain path returned %u, overflowed %d, and made %u register writes\n",
+		       wptr, (int)overflowed, backend_write_count());
+		bad++;
+	} else if (!quiet) {
+		printf("  three vectors pending, read from memory, no register touched: yes\n");
+	}
+
+	/* The overflow arm. The write-back says overflow; the register has to agree, which is
+	 * upstream's "double check that the overflow wasn't already cleared". */
+	backend_reset_writes();
+	*ih->wptr_cpu = (17u * 32u) | IH_RB_WPTR__RB_OVERFLOW_MASK;
+	backend_poke(wptr_off, (17u * 32u) | IH_RB_WPTR__RB_OVERFLOW_MASK);
+	overflowed = false;
+	wptr = bc250_ih_get_wptr(adev, &overflowed);
+
+	if (!overflowed) {
+		printf("  an overflow was not reported\n");
+		bad++;
+	}
+	if (wptr != 17u * 32u) {
+		printf("  the overflow path returned %u, not the write pointer with bit 0 cleared\n",
+		       wptr);
+		bad++;
+	}
+	/* Recovery: parsing restarts one whole entry past the write pointer, which is the oldest
+	 * entry the hardware has not yet trampled. */
+	if (ih->rptr != (17u * 32u + 32u)) {
+		printf("  the read pointer was moved to %u, not to wptr + 32\n", ih->rptr);
+		bad++;
+	}
+	/* The acknowledge is a pulse: set, then clear, and both writes are needed. */
+	{
+		const struct bc250_reg_write *w = backend_writes();
+		unsigned int n = backend_write_count();
+
+		if (n != 2 || w[0].byte_offset != cntl_off || w[1].byte_offset != cntl_off ||
+		    (w[0].value & IH_RB_CNTL__WPTR_OVERFLOW_CLEAR_MASK) == 0 ||
+		    (w[1].value & IH_RB_CNTL__WPTR_OVERFLOW_CLEAR_MASK) != 0) {
+			printf("  the overflow acknowledge was not a set-then-clear pulse of"
+			       " IH_RB_CNTL (%u writes)\n", n);
+			bad++;
+		} else if (!quiet) {
+			printf("  an overflow is acknowledged with a two-write pulse   : yes\n");
+		}
+	}
+
+	/* The overflow contract the header states: the caller's read pointer is stale and has to be
+	 * taken from adev->irq.ih.rptr, or the loop walks entries the hardware already overwrote. */
+	{
+		u32 stale = 2u * 32u;
+		u32 resynced = overflowed ? ih->rptr : stale;
+
+		if (resynced != 17u * 32u + 32u) {
+			printf("  the documented overflow resync does not reach the new read"
+			       " pointer (%u)\n", resynced);
+			bad++;
+		} else if (!quiet) {
+			printf("  on overflow the caller picks rptr up from adev    : yes\n");
+		}
+	}
+
+	/* set_rptr publishes the slot and then rings the doorbell, and does not touch IH_RB_RPTR
+	 * while the doorbell is in use. The doorbell must be 32 bits wide: see bc250_shim.h. */
+	backend_reset_writes();
+	doorbells_before = backend_doorbell_count();
+	bc250_ih_set_rptr(adev, 5u * 32u);
+	if (*ih->rptr_cpu != 5u * 32u ||
+	    backend_doorbell_count() != doorbells_before + 1u ||
+	    backend_write_count() != 0) {
+		printf("  set_rptr wrote slot %u, %u doorbells, %u register writes\n",
+		       (unsigned int)*ih->rptr_cpu, backend_doorbell_count() - doorbells_before,
+		       backend_write_count());
+		bad++;
+	} else if (!quiet) {
+		printf("  set_rptr: write-back slot then doorbell, no MMIO   : yes\n");
+	}
+	{
+		const struct backend_doorbell *d = &backend_doorbells()[doorbells_before];
+
+		if (d->width != 32u || d->index != ih->doorbell_index || d->value != 5u * 32u) {
+			printf("  the read pointer's doorbell was %u bits at index 0x%X = %llu;"
+			       " upstream's WDOORBELL32 is 32 bits at 0x%X\n",
+			       d->width, d->index, (unsigned long long)d->value,
+			       ih->doorbell_index);
+			bad++;
+		} else if (!quiet) {
+			printf("  it is a 32-bit doorbell at 0x%X, not 64            : yes\n",
+			       d->index);
+		}
+	}
+
+	backend_touched_stop();
+	bad += survey_dpc_registers(adev, quiet);
+
+	/* The third register on the list only appears without a doorbell, so the survey above can
+	 * never see it and the list would otherwise be two measured entries and one asserted one.
+	 * This is the run that measures it. */
+	{
+		bool saved = ih->use_doorbell;
+
+		backend_reset_writes();
+		doorbells_before = backend_doorbell_count();
+		ih->use_doorbell = false;
+		backend_touched_start();
+		bc250_ih_set_rptr(adev, 6u * 32u);
+		backend_touched_stop();
+		ih->use_doorbell = saved;
+
+		if (backend_touched_count() != 1u ||
+		    backend_touched_offset(0) != ih->ih_regs.ih_rb_rptr * 4u ||
+		    backend_doorbell_count() != doorbells_before ||
+		    backend_write_count() != 1u) {
+			printf("  without a doorbell set_rptr touched %u registers and rang %u"
+			       " doorbells; it should write IH_RB_RPTR and nothing else\n",
+			       backend_touched_count(),
+			       backend_doorbell_count() - doorbells_before);
+			bad++;
+		} else if (!quiet) {
+			printf("    0x%05X OSSSYS.IH_RB_RPTR     written, doorbell off only\n",
+			       backend_touched_offset(0));
+		}
+		/* Put the read pointer back where the doorbell path left it. */
+		bc250_ih_set_rptr(adev, 5u * 32u);
+	}
+
+	/*
+	 * The miniport's DPC does not get the escape's adev: that one carries a backend swapped under
+	 * a fast mutex at APC_LEVEL. It gets a device of its own, zeroed except for irq.ih copied by
+	 * value. Run the trio through exactly that and it must behave identically.
+	 *
+	 * This is the test of the header's contract, not a restatement of it: a device with no
+	 * reg_offset table, no gmc, no gfx and no doorbell_index would break anything that reached
+	 * for them. It works because the register offsets ride along inside ih_regs.
+	 */
+	{
+		static struct amdgpu_device dpc;
+		bool of = true;
+		u32 w, r2;
+		struct bc250_iv_entry e;
+
+		memset(&dpc, 0, sizeof(dpc));
+		dpc.irq.ih = adev->irq.ih;      /* by value, and nothing else */
+
+		*ih->wptr_cpu = 4u * 32u;
+		backend_reset_writes();
+		doorbells_before = backend_doorbell_count();
+
+		w = bc250_ih_get_wptr(&dpc, &of);
+		r2 = 0;
+		while (r2 != w) {
+			if (bc250_ih_decode(&dpc, &r2, &e) != 0) {
+				printf("  the DPC-only device could not decode\n");
+				bad++;
+				break;
+			}
+		}
+		bc250_ih_set_rptr(&dpc, r2);
+
+		if (w != 128u || of || r2 != 128u || backend_write_count() != 0 ||
+		    backend_doorbell_count() != doorbells_before + 1u) {
+			printf("  a zeroed device with only irq.ih copied behaves differently:"
+			       " wptr %u, overflowed %d, rptr %u, %u writes\n",
+			       w, (int)of, r2, backend_write_count());
+			bad++;
+		} else if (!quiet) {
+			printf("  a zeroed adev with only irq.ih copied works       : yes\n");
+		}
+
+		/* And the rule that goes with the copy: it must never be torn down. Nothing to run
+		 * here - the check is that adev still owns the memory the copy points at. */
+		if (dpc.irq.ih.ring != adev->irq.ih.ring ||
+		    dpc.irq.ih.ring_mem.cpu != adev->irq.ih.ring_mem.cpu) {
+			printf("  the copy does not point at the same ring\n");
+			bad++;
+		}
+	}
+
+	return bad;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * End to end: a fence emitted on a ring, an interrupt decoded off the ring
+ *
+ * This is the rehearsal of the first hardware run. The shim emits the packet, the CP stub executes
+ * it and delivers a vector, and the shim's own decode reads it back. The stub is the one thing here
+ * that is not the driver, and it is declared in backend_mem.c.
+ * ------------------------------------------------------------------------------------------- */
+
+#define FENCE_SLOT_GFX      0u
+#define FENCE_SLOT_COMPUTE  1u
+#define FENCE_SLOT_KIQ      2u
+#define FENCE_SEQ           0x00000000DEADC0DEULL
+
+static unsigned int fence_one(struct amdgpu_device *adev, struct amdgpu_ring *ring,
+			      const char *what, unsigned int slot, unsigned int flags,
+			      u32 *rptr, unsigned int expect_vectors)
+{
+	struct bc250_iv_entry e;
+	unsigned int before = backend_ih_delivered();
+	unsigned int delivered;
+	u64 addr = bc250_gfx_fence_addr(adev, slot);
+	u64 got;
+	unsigned int bad = 0;
+	int r;
+
+	r = bc250_gfx_signal_fence(ring, addr, FENCE_SEQ, flags);
+	if (r != 0) {
+		printf("  %s: bc250_gfx_signal_fence returned %d\n", what, r);
+		return 1;
+	}
+
+	got = bc250_gfx_fence_read(adev, slot);
+	if ((flags & AMDGPU_FENCE_FLAG_64BIT) ? (got != FENCE_SEQ)
+					      : ((u32)got != (u32)FENCE_SEQ)) {
+		printf("  %s: the fence slot holds %016llX, not %016llX\n",
+		       what, (unsigned long long)got, (unsigned long long)FENCE_SEQ);
+		bad++;
+	}
+
+	delivered = backend_ih_delivered() - before;
+	if (delivered != expect_vectors) {
+		printf("  %s: %u vectors delivered, expected %u\n", what, delivered, expect_vectors);
+		return bad + 1;
+	}
+	if (expect_vectors == 0)
+		return bad;
+
+	if (bc250_ih_decode(adev, rptr, &e) != 0) {
+		printf("  %s: the delivered vector would not decode\n", what);
+		return bad + 1;
+	}
+
+	if (ring->funcs->type == AMDGPU_RING_TYPE_KIQ) {
+		u32 me = 0, pipe = 0, queue = 0;
+
+		/* gfx_v10_0_kiq_irq() (gfx_v10_0.c:9456-9471) decodes me, pipe and queue out of the
+		 * KIQ vector for a debug line and then processes the ring whatever they are, and
+		 * bc250_ih_is_kiq() matches the client and the source id the same way. The fields are
+		 * still checked here, because unit A does fill them: E13 amdgpu-events-ib.txt:23 is
+		 * client_id 20 src_id 178 ring 9, and 9 is this ring's me 2, pipe 1, queue 0. */
+		bc250_ih_eop_ring_id(&e, &me, &pipe, &queue);
+		if (!bc250_ih_is_kiq(&e) || me != ring->me || pipe != ring->pipe ||
+		    queue != ring->queue)
+			bad++;
+	} else if (ring->funcs->type == AMDGPU_RING_TYPE_GFX) {
+		if (!bc250_ih_is_gfx_eop(&e))
+			bad++;
+	} else {
+		u32 me = 0, pipe = 0, queue = 0;
+
+		bc250_ih_eop_ring_id(&e, &me, &pipe, &queue);
+		if (!bc250_ih_is_compute_eop(&e) || me != ring->me ||
+		    pipe != ring->pipe || queue != ring->queue)
+			bad++;
+	}
+
+	if (bad)
+		printf("  %s: the vector decoded as client %02X src %u ring_id %02X, which is not"
+		       " this ring's end-of-pipe\n", what, e.client_id, e.src_id, e.ring_id);
+	return bad;
+}
+
+static unsigned int test_fence(struct amdgpu_device *adev, int quiet)
+{
+	struct bc250_gfx_inputs fin;
+	struct amdgpu_ring *compute;
+	unsigned int bad = 0, rejects_before;
+	u32 rptr = 0;
+	u32 i;
+	int r;
+
+	printf("\n== a fence, and the interrupt it raises ==\n");
+
+	memset(&fin, 0, sizeof(fin));
+	fin.max_shader_engines = UNITA_MAX_SHADER_ENGINES;
+	fin.max_sh_per_se = UNITA_MAX_SH_PER_SE;
+	fin.max_cu_per_sh = UNITA_MAX_CU_PER_SH;
+	fin.max_backends_per_se = UNITA_MAX_BACKENDS_PER_SE;
+	fin.async_gfx_ring = true;
+	fin.pp_gfxoff = true;
+
+	r = bc250_gfx_setup(adev, &fin);
+	if (r != 0) {
+		printf("  bc250_gfx_setup returned %d; no rings to fence on\n", r);
+		return 1;
+	}
+	backend_ring_register(&adev->gfx.gfx_ring[0]);
+	for (i = 0; i < adev->gfx.num_compute_rings; i++)
+		backend_ring_register(&adev->gfx.compute_ring[i]);
+	backend_ring_register(&adev->gfx.kiq[0].ring);
+
+	r = bc250_gfx_fence_page_alloc(adev);
+	if (r != 0) {
+		printf("  bc250_gfx_fence_page_alloc returned %d\n", r);
+		return 1;
+	}
+
+	/* No register write happens from here on; the rest is memory and one doorbell each. */
+	backend_reset_writes();
+	backend_ih_attach(adev);
+	rejects_before = backend_cp_stub_rejects();
+	compute = &adev->gfx.compute_ring[3];   /* me 1, pipe 3, queue 0 */
+
+	bad += fence_one(adev, &adev->gfx.gfx_ring[0], "gfx ring", FENCE_SLOT_GFX,
+			 AMDGPU_FENCE_FLAG_64BIT | AMDGPU_FENCE_FLAG_INT, &rptr, 1);
+	bad += fence_one(adev, compute, "compute ring 3", FENCE_SLOT_COMPUTE,
+			 AMDGPU_FENCE_FLAG_64BIT | AMDGPU_FENCE_FLAG_INT, &rptr, 1);
+	bad += fence_one(adev, &adev->gfx.kiq[0].ring, "KIQ", FENCE_SLOT_KIQ,
+			 AMDGPU_FENCE_FLAG_INT, &rptr, 1);
+
+	if (backend_write_count() != 0) {
+		printf("  emitting fences produced %u register writes; it should produce none\n",
+		       backend_write_count());
+		bad++;
+	}
+	if (backend_cp_stub_rejects() != rejects_before) {
+		printf("  the CP stub rejected %u of the fence packets\n",
+		       backend_cp_stub_rejects() - rejects_before);
+		bad++;
+	}
+	if (!quiet && bad == 0)
+		printf("  gfx, compute 3 and the KIQ each land a value and one vector : yes\n");
+
+	/* The control that says the interrupt is the packet's doing. Same call, same ring, same
+	 * slot, one bit fewer: the value still lands and nothing is delivered. */
+	{
+		u64 addr = bc250_gfx_fence_addr(adev, FENCE_SLOT_GFX);
+		unsigned int before = backend_ih_delivered();
+
+		*(volatile u64 *)((char *)adev->gfx.fence_mem.cpu + FENCE_SLOT_GFX * 8u) = 0;
+		r = bc250_gfx_signal_fence(&adev->gfx.gfx_ring[0], addr, FENCE_SEQ,
+					   AMDGPU_FENCE_FLAG_64BIT);
+		if (r != 0 || bc250_gfx_fence_read(adev, FENCE_SLOT_GFX) != FENCE_SEQ) {
+			printf("  the no-interrupt fence did not write its value (%d)\n", r);
+			bad++;
+		}
+		if (backend_ih_delivered() != before) {
+			printf("  a fence without AMDGPU_FENCE_FLAG_INT still raised an"
+			       " interrupt\n");
+			bad++;
+		} else if (!quiet) {
+			printf("  the same fence without _INT raises nothing            : yes\n");
+		}
+	}
+
+	/* The refusals upstream spells BUG_ON(). Nothing may be written to the ring. */
+	{
+		u64 wptr_before = adev->gfx.gfx_ring[0].wptr;
+
+		if (bc250_gfx_emit_fence(&adev->gfx.gfx_ring[0],
+					 bc250_gfx_fence_addr(adev, FENCE_SLOT_GFX) + 4u,
+					 FENCE_SEQ, AMDGPU_FENCE_FLAG_64BIT) != BC250_EINVAL ||
+		    adev->gfx.gfx_ring[0].wptr != wptr_before) {
+			printf("  a 64-bit fence on a 4-byte-aligned address was not refused\n");
+			bad++;
+		}
+		wptr_before = adev->gfx.kiq[0].ring.wptr;
+		if (bc250_gfx_emit_fence(&adev->gfx.kiq[0].ring,
+					 bc250_gfx_fence_addr(adev, FENCE_SLOT_KIQ),
+					 FENCE_SEQ, AMDGPU_FENCE_FLAG_64BIT) != BC250_EINVAL ||
+		    adev->gfx.kiq[0].ring.wptr != wptr_before) {
+			printf("  a 64-bit fence on the KIQ was not refused\n");
+			bad++;
+		} else if (!quiet) {
+			printf("  a misaligned fence and a 64-bit KIQ fence are refused : yes\n");
+		}
+	}
+
+	backend_ih_detach();
+	bc250_gfx_fence_page_free(adev);
+	bc250_gfx_teardown(adev);
+	return bad;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * main
+ * ------------------------------------------------------------------------------------------- */
+
+int main(int argc, char **argv)
+{
+	static struct amdgpu_device adev;
+	struct run_opts opt;
+	struct result res, ctl;
+	unsigned int failures = 0, decode_bad, ptr_bad, fence_bad;
+	int verbose = 0, seeded, i;
+	const char *sweep1 = NULL, *sweep2 = NULL, *trace = NULL;
+
+	for (i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "-v") == 0)
+			verbose = 1;
+		else if (sweep1 == NULL)
+			sweep1 = argv[i];
+		else if (sweep2 == NULL)
+			sweep2 = argv[i];
+		else if (trace == NULL)
+			trace = argv[i];
+	}
+	if (trace == NULL) {
+		fprintf(stderr, "usage: replay_ih <sweep-run1.log> <sweep-run2.log>"
+				" <trace-ih.txt> [-v]\n");
+		return 2;
+	}
+
+	backend_set_verbose(verbose);
+
+	if (backend_load_sweep(sweep1) < 0 || backend_load_sweep(sweep2) < 0) {
+		fprintf(stderr, "could not read the register sweeps\n");
+		return 2;
+	}
+	if (load_trace_writes(trace) < 0) {
+		fprintf(stderr, "could not read %s\n", trace);
+		return 2;
+	}
+	seeded = backend_seed_reads(trace);
+	if (seeded < 0) {
+		fprintf(stderr, "could not seed reads from %s\n", trace);
+		return 2;
+	}
+	printf("trace window: %u writes, %d offsets seeded with their traced read values\n",
+	       g_trace_count, seeded);
+
+	/* The one run under test. */
+	opt.msi = UNITA_MSI;
+	opt.selfclear = 1;
+	run_one("navi10_ih_irq_init, replayed", &opt, &adev, &res, 0);
+
+	if (res.hw_init_rc != 0 || res.mismatches != 0 || res.address_failures != 0 ||
+	    res.unknown_reads != 0 || res.produced != g_trace_count)
+		failures++;
+
+	/* fini then init again. Upstream's disable leaves the ring allocated on purpose, and the
+	 * miniport needs the second init to work: a PSP reload in one boot forces exactly that. */
+	{
+		unsigned int again;
+
+		printf("\n== hw_fini, then hw_init again on the same adev ==\n");
+		backend_reset_writes();
+		bc250_ih_hw_fini(&adev);
+		again = backend_write_count();
+		printf("  the disable writes %u registers\n", again);
+
+		backend_reset_writes();
+		res.hw_init_rc = bc250_ih_hw_init(&adev);
+		printf("  the second bc250_ih_hw_init returns %d and writes %u registers\n",
+		       res.hw_init_rc, backend_write_count());
+		if (res.hw_init_rc != 0 || backend_write_count() != g_trace_count) {
+			printf("  the second bring-up is not the same shape as the first\n");
+			failures++;
+		}
+	}
+
+	decode_bad = test_decode(&adev);
+	if (decode_bad)
+		failures++;
+
+	ptr_bad = test_wptr_rptr(&adev, 0);
+	if (ptr_bad)
+		failures++;
+
+	fence_bad = test_fence(&adev, 0);
+	if (fence_bad)
+		failures++;
+
+	bc250_ih_teardown(&adev);
+
+	/* ------------------------------------------------------------------------------------
+	 * The controls. Each one changes exactly one thing that the run above depends on, and each
+	 * one has to fail; a control that passes means the run above was not testing what it claims.
+	 * ---------------------------------------------------------------------------------- */
+	printf("\n== controls, each of which must FAIL ==\n");
+
+	opt.msi = false;
+	opt.selfclear = 1;
+	run_one("MSI off", &opt, &adev, &ctl, 1);
+	printf("  MSI off                          : %s (%u mismatches)\n",
+	       ctl.mismatches ? "fails, as it should" : "PASSES, which is wrong", ctl.mismatches);
+	if (ctl.mismatches == 0)
+		failures++;
+	bc250_ih_teardown(&adev);
+
+	opt.msi = UNITA_MSI;
+	opt.selfclear = 0;
+	run_one("WPTR_OVERFLOW_CLEAR not modelled", &opt, &adev, &ctl, 1);
+	printf("  the self-clearing bit not modelled: %s (%u mismatches)\n",
+	       ctl.mismatches ? "fails, as it should" : "PASSES, which is wrong", ctl.mismatches);
+	if (ctl.mismatches == 0)
+		failures++;
+	bc250_ih_teardown(&adev);
+
+	printf("\n");
+	if (failures == 0)
+		printf("EXACT MATCH over %u writes (%u address exceptions); the decode, the pointers"
+		       " and the fence all check out, and both controls fail as they should\n",
+		       res.compared, res.address_exceptions);
+	else
+		printf("%u checks failed\n", failures);
+
+	return failures == 0 ? 0 : 1;
+}

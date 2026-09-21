@@ -108,6 +108,62 @@ void bc250_gfx_hw_fini(struct amdgpu_device *adev);
 /* Stop the RLC and nothing else. For the kmd, before a second PSP firmware load in one boot. */
 void bc250_gfx_rlc_stop(struct amdgpu_device *adev);
 
+/* ---------------------------------------------------------------------------------------------
+ * The fence: raising one end-of-pipe interrupt on purpose (milestone M6)
+ *
+ * This is the smallest submission that makes the hardware both write a value the driver can read
+ * and raise an interrupt, which together are the proof that the rings this file brought up and the
+ * interrupt ring in bc250_ih.c are connected to each other. Nothing above needs it; it exists to be
+ * fired once, by hand, with the IH ring already up.
+ *
+ * gfx and compute rings get a RELEASE_MEM (gfx_v10_0.c:8712); the KIQ gets two WRITE_DATA packets
+ * (gfx_v10_0.c:8780), because it has no end-of-pipe and signals by writing CPC_INT_STATUS.
+ *
+ * What comes back on the interrupt ring:
+ *   gfx ring      client SOC15_IH_CLIENTID_GRBM_CP, src GFX_10_1__SRCID__CP_EOP_INTERRUPT,
+ *                 ring_id me 0   -> bc250_ih_is_gfx_eop()
+ *   compute ring  the same client and source, ring_id me 1 -> bc250_ih_is_compute_eop(), with
+ *                 pipe and queue in the rest of ring_id (bc250_ih_eop_ring_id())
+ *   KIQ           src GFX_10_1__SRCID__CP_IB2_INTERRUPT_PKT -> bc250_ih_is_kiq()
+ * The matching enable has to be on first: bc250_irq_hw_init(), or one of the bc250_irq_set_*()
+ * calls for the single ring being fired.
+ * ------------------------------------------------------------------------------------------- */
+
+/* Flags are AMDGPU_FENCE_FLAG_64BIT and AMDGPU_FENCE_FLAG_INT, in amdgpu.h. Without _INT the packet
+ * still writes the value but raises nothing, which is the useful control: the same code path, one
+ * bit different, and no interrupt should arrive. */
+
+/* How many dwords bc250_gfx_emit_fence() will write for this ring and these flags. */
+unsigned int bc250_gfx_fence_size(const struct amdgpu_ring *ring, unsigned int flags);
+
+/* Emit into a ring amdgpu_ring_alloc() has already reserved space in. Returns 0, or BC250_EINVAL
+ * with nothing written: a misaligned `addr` (4 bytes, or 8 with _64BIT), or _64BIT on the KIQ,
+ * which upstream BUG_ON()s in both cases. */
+int bc250_gfx_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
+
+/* alloc + emit + commit. The one call the miniport makes; the doorbell is rung on return. */
+int bc250_gfx_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
+
+/*
+ * The GTT slots the fence value lands in, one page cut into 8-byte slots so that a 64-bit fence is
+ * legal in any of them. Allocated on its own, not by bc250_gfx_setup(): the traced bring-up does
+ * not need it, and allocating it there would move every MC address that window programs.
+ *
+ * The slot number is the caller's to choose - there is no per-ring slot, because there is no fence
+ * driver here to own one. Ring index is the obvious choice and is what the replay test uses.
+ */
+#define BC250_GFX_FENCE_SLOTS	16u
+
+int  bc250_gfx_fence_page_alloc(struct amdgpu_device *adev);
+void bc250_gfx_fence_page_free(struct amdgpu_device *adev);
+
+/* The MC address to pass as `addr`, or 0 if the page is not allocated or the slot is out of range. */
+u64  bc250_gfx_fence_addr(struct amdgpu_device *adev, unsigned int slot);
+
+/* What the CP wrote there. A 32-bit fence leaves the upper half at whatever it was, so a caller
+ * that did not pass _64BIT should look at the low 32 bits only. */
+u64  bc250_gfx_fence_read(struct amdgpu_device *adev, unsigned int slot);
+
 /* One ring test: write 0xCAFEDEAD to SCRATCH_REG0, submit a SET_UCONFIG_REG packet writing
  * 0xDEADBEEF, poll for it. gfx_v10_0.c:4033 gfx_v10_0_ring_test_ring(). Returns 0 or BC250_ETIME.
  * Exposed because it is the only part of the sequence that needs a live CP, so a host replay has

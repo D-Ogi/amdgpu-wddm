@@ -64,6 +64,17 @@ struct reg_reaction {
 static struct reg_reaction g_reaction[MAX_REACTIONS];
 static unsigned int g_reaction_count;
 
+#define MAX_SELFCLEAR  4u
+
+/* Bits that do not stay where the driver put them. See backend_add_selfclear() in the header. */
+struct reg_selfclear {
+	u32 offset;
+	u32 mask;
+};
+
+static struct reg_selfclear g_selfclear[MAX_SELFCLEAR];
+static unsigned int g_selfclear_count;
+
 int backend_add_alias(u32 alias_offset, u32 target_offset)
 {
 	if (g_alias_count >= MAX_ALIASES)
@@ -78,6 +89,17 @@ void backend_clear_aliases(void)
 {
 	g_alias_count = 0;
 	g_reaction_count = 0;
+	g_selfclear_count = 0;
+}
+
+int backend_add_selfclear(u32 byte_offset, u32 mask)
+{
+	if (g_selfclear_count >= MAX_SELFCLEAR)
+		return -1;
+	g_selfclear[g_selfclear_count].offset = byte_offset;
+	g_selfclear[g_selfclear_count].mask = mask;
+	g_selfclear_count++;
+	return 0;
 }
 
 int backend_add_reaction(u32 trigger_offset, u32 trigger_mask,
@@ -439,6 +461,14 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int dword_index, unsig
 			continue;
 		g_value[g_reaction[i].target / 4u] = g_reaction[i].value;
 		g_known[g_reaction[i].target / 4u] = 1;
+	}
+
+	/* Bits the hardware drops on the way in. The RECORDED write above is what the driver asked
+	 * for, so the comparison with the trace's W line is untouched; only the state a later read
+	 * sees is corrected, which is what the trace's R line shows. */
+	for (i = 0; i < g_selfclear_count; i++) {
+		if (g_selfclear[i].offset == dword_index * 4u)
+			g_value[dword_index] &= ~g_selfclear[i].mask;
 	}
 }
 

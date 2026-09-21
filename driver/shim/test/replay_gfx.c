@@ -128,6 +128,11 @@
  * struct bc250_gfx_inputs. Two is what every Navi part with this SE/SH layout reports, and the
  * value only scales a mask that ends up in the clear-state PM4 stream, which the trace does not
  * contain. It is stated here so that the test says what it was given. */
+/* The KIQ's read pointer at the end of a bring-up, measured on unit A: experiment E12 run 001 wrote
+ * CP_HQD_PQ_RPTR = 0x737 in the second bring-up of one boot. It is an input to check_rerun(), which
+ * has no CP of its own to produce it. See the comment there. */
+#define UNITA_RERUN_KIQ_RPTR       0x737u
+
 #define UNITA_MAX_SHADER_ENGINES   2u
 #define UNITA_MAX_SH_PER_SE        2u
 #define UNITA_MAX_CU_PER_SH        10u
@@ -855,6 +860,27 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 
 	printf("\n== the second bring-up ==\n");
 
+	/*
+	 * The one thing this replay does not have, declared: a CP that moves its own read pointer.
+	 *
+	 * On hardware the CP advances CP_HQD_PQ_RPTR as it consumes the ring, so at the end of a
+	 * bring-up the register holds that run's final write pointer. Here nothing ever writes it, so
+	 * it reads 0 on the second run and the second run looks clean. Unit A is not so kind: in
+	 * experiment E12 run 001 the second bring-up wrote CP_HQD_PQ_RPTR = 0x737, because
+	 * gfx_v10_0_compute_mqd_init() samples the register (gfx_v10_0.c:6998) and
+	 * gfx_v10_0_kiq_init_register() writes the sample back (:7044) - in the CP_HQD_ACTIVE branch,
+	 * which only a re-init enters.
+	 *
+	 * So the value is put there, from the one hardware run that has been made, and what the shim
+	 * does with it is checked below. This is a poke and not a write: it changes what a read
+	 * returns and never enters the comparison.
+	 *
+	 * Note the replay has one flat register file and no GRBM windowing, so this stands in for
+	 * every HQD slot at once rather than for the KIQ's alone. That is the conservative direction:
+	 * all nine MQD builds see it, as they would on hardware where each slot keeps its own.
+	 */
+	backend_poke(SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR) * 4u, UNITA_RERUN_KIQ_RPTR);
+
 	/* The stages one at a time rather than bc250_gfx_hw_init(), so that a failure names itself. */
 	backend_reset_writes();
 	backend_touched_start();
@@ -904,6 +930,36 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 	} else {
 		printf("  the second bring-up succeeded, %u writes (the first made %u)\n",
 		       writes, first_writes);
+	}
+
+	/*
+	 * What the re-init tells the CP its read pointer is.
+	 *
+	 * The ring starts again at write pointer 0 - bc250_compute_mqd_init() sets
+	 * cp_hqd_pq_wptr_lo/hi to 0 and the ring's own wptr is 0 - so the only read pointer consistent
+	 * with that MQD is 0. Upstream samples the register instead (gfx_v10_0.c:6998), which is clean
+	 * only on parts that lose GFX power between loads; this one does not.
+	 *
+	 * Handing the CP rptr = 0x737 against wptr = 0 says there are 262144 - 1847 = 260297 dwords of
+	 * work pending, and unit A duly walked all of them: stage 6 took 5222 us against 349 us on the
+	 * cold run. Declared deviation, driver/amdgpu-import/PROVENANCE.md.
+	 */
+	{
+		int found;
+		u32 got = shim_wrote(SOC15_REG_OFFSET(GC, 0, mmCP_HQD_PQ_RPTR) * 4u, &found);
+
+		if (!found) {
+			printf("  the re-init never wrote CP_HQD_PQ_RPTR   <-- the CP_HQD_ACTIVE"
+			       " branch was not entered, so this run is not testing the re-init\n");
+			bad++;
+		} else if (got != 0) {
+			printf("  the re-init told the CP its read pointer is 0x%X while the ring"
+			       " restarts at write pointer 0   <-- wrong\n", got);
+			bad++;
+		} else {
+			printf("  the re-init writes CP_HQD_PQ_RPTR = 0 over a register holding"
+			       " 0x%X: yes\n", UNITA_RERUN_KIQ_RPTR);
+		}
 	}
 
 	/* The teardown's own ring test plus eleven more from the second bring-up. If the CP had not

@@ -37,6 +37,11 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/<path> | sha256sum
 | `navi10_enum.h` | `drivers/gpu/drm/amd/include/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `soc15_hw_ip.h` | `drivers/gpu/drm/amd/include/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `nbio_2_3_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/nbio/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `osssys_5_0_0_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/oss/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `soc15_ih_clientid.h` | `drivers/gpu/drm/amd/include/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `irqsrcs_gfx_10_1.h` | `drivers/gpu/drm/amd/include/ivsrcid/gfx/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `irqsrcs_sdma0_5_0.h` | `drivers/gpu/drm/amd/include/ivsrcid/sdma0/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
+| `irqsrcs_sdma1_5_0.h` | `drivers/gpu/drm/amd/include/ivsrcid/sdma1/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 
 License: MIT, with the full permission notice at the top of every file, Copyright Advanced Micro
 Devices, Inc. Checked file by file on 2026-09-21.
@@ -57,5 +62,15 @@ Who uses what:
   `BIF_BX_PF_DOORBELL_SELFRING_GPA_APER_CNTL` field definitions.
 - `gc_10_1_0_default.h`, `mmhub_2_0_0_default.h` - the `*_DEFAULT` reset values the hub code starts
   some registers from (`GCVM_L2_CNTL3/4/5` and the MMHUB equivalents).
-- `navi10_enum.h` - the memory-type enum (`MTYPE_UC`) the TLB setup uses.
+- `navi10_enum.h` - the memory-type enum (`MTYPE_UC`) the TLB setup uses, and `VGT_EVENT_TYPE`,
+  whose `CACHE_FLUSH_AND_INV_TS_EVENT` is the event `bc250_gfx_emit_fence()` puts in its
+  `RELEASE_MEM`. `gfx_v10_0.c` gets it from the same header.
 - `soc15_hw_ip.h` - hardware IP ids, included by `cyan_skillfish_reg_init.c`.
+- `osssys_5_0_0_sh_mask.h` - added for M6: the `IH_RB_CNTL`, `IH_RB_WPTR` and `IH_DOORBELL_RPTR`
+  field definitions `driver/shim/bc250_ih.c` sets through `REG_SET_FIELD`.
+- `soc15_ih_clientid.h`, `irqsrcs_gfx_10_1.h`, `irqsrcs_sdma0_5_0.h`, `irqsrcs_sdma1_5_0.h` - added
+  for M6: the client and source ids a decoded interrupt vector carries, so that
+  `bc250_ih_is_gfx_eop()` and the rest compare against AMD's own numbers rather than literals. The
+  two SDMA headers are both imported although `SDMA0_5_0__SRCID__SDMA_TRAP` and
+  `SDMA1_5_0__SRCID__SDMA_TRAP` are the same value: the instance is told by the client id, and
+  naming both is what makes that visible.

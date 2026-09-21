@@ -83,6 +83,16 @@ Part A: `install` -> `ih state -Tag installed` -> reboot -> `ih state -Tag boot`
 -> `sweep before` -> wait two minutes -> `ih state -Tag quiet` -> E11's sequence -> `ih state -Tag aftergfx`
 -> `gate -On 0` -> reboot.
 
+Part B (bc250kmd 0.6.1, its own boot): `install` -> `gate -On 1` -> `sweep before` (now with OSSSYS) -> `gart enable`
+-> `ih plan` (`compare.py ih`) -> `sweep afterplan` -> `ih init` (`compare.py ih`) -> `ih state` -> `sweep init` -> wait
+a minute -> `ih state -Tag quiet` -> `ih fini` -> `ih state` -> `sweep fini` -> `ih init` again -> `ih fini`.
+
+Part C (same boot or the next): `gart enable` -> `psp load` -> `ih init` -> `gfx run -Stage 7` -> `ih state` ->
+`gfx run -Stage 8` (`compare.py irq`) -> `ih state -Tag sources` -> `fence -Op gfx -NoInt` -> `ih state` (the control:
+the value, no vector) -> `fence -Op gfx` -> `ih state` -> `fence -Op c0`, `c5`, `kiq` with `ih state` after each ->
+`fence -Op gfx -Count 100` -> `ih state` -> `gate -On 1` (a device restart with everything running, C4) -> `ih state`
+-> `gate -On 0` -> reboot.
+
 ## Result
 
 ### Part A, run 001 (2026-09-21, bc250kmd 0.6.0.0, `evidence/windows/2026-09-21-E12-run-001/`)
