@@ -471,6 +471,11 @@ void DcnStop(_Inout_ BC250_DEVICE* Device)
 {
     BC250_ESCAPE_DCNFLIP scratch;
 
+    // Idempotent: WddmStop already runs this once, earlier in pnp.c's stop order (docs/design/vidpn-flip.md
+    // section 8), so the ordinary case finds Device->DcnScanoutMap already NULL here. Unconditional, ahead of
+    // the DcnDiverged check below, for the same reason WddmStop's own call is unconditional - a caller that
+    // skipped WddmStop (there is none today) must not find a dangling mapping either.
+    DcnUnmapScanout(Device);
     if (!Device->DcnDiverged) return;
     if (Device->Mmio == NULL || !Device->DcnWriteEnabled)
     {
@@ -621,4 +626,87 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
     InterlockedIncrement(&Device->DcnVsyncAcked);
     Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
     return TRUE;
+}
+
+// ---- the present path's own destination once the flip is live (2026-09-22, ADR 0011 consequences) -------------
+//
+// M97/M100: once DxgkDdiSetVidPnSourceAddress has flipped HUBP0 away from the firmware's framebuffer, nothing
+// scans that framebuffer out any more, and wddm.c's WddmPresentBlit has to land its CPU copy at
+// Device->DcnCurrentAddress instead. Mapping 9.2 MB (BC250_DCNFLIP_SURFACE_BYTES) on every present is not
+// acceptable at a present rate that can reach 60 Hz, so this mapping is made once, kept across presents, and
+// only remade when the flip target actually changed - which M97 measured happening far less often than
+// presents arrive (one flip served 60 of them).
+//
+// IRQL is why this lives here and not in DcnFlipSourceAddress, right where DcnCurrentAddress itself changes:
+// that DDI may run above DISPATCH_LEVEL (design note section 3, d3dkmddi.h's own
+// _IRQL_requires_max_(PROFILE_LEVEL - 1) on DXGKDDI_SETVIDPNSOURCEADDRESS), where MmMapIoSpaceEx and
+// MmUnmapIoSpace - PASSIVE_LEVEL only - would be illegal to call. WddmPresentBlit already requires
+// PASSIVE_LEVEL for its own source mapping (wddm.c: "else if (KeGetCurrentIrql() != PASSIVE_LEVEL) why =
+// \"IRQL\""), so the remap happens lazily there instead, on the next present after a flip - a comparison
+// against Device->DcnScanoutMapAddress on every other present, and the actual MmMapIoSpaceEx only when it
+// changed.
+BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length)
+{
+    ULONGLONG target = Device->DcnCurrentAddress;
+    ULONGLONG bytes;
+    PHYSICAL_ADDRESS phys;
+    SIZE_T length;
+
+    *Mapping = NULL;
+    *Length = 0;
+    if (!Device->DcnDiverged) return FALSE;     // scanning out the firmware's own surface: not this function's job
+    if (Device->DcnScanoutMap != NULL && Device->DcnScanoutMapAddress == target)
+    {
+        *Mapping = Device->DcnScanoutMap;
+        *Length = Device->DcnScanoutMapLength;
+        return TRUE;
+    }
+
+    DcnUnmapScanout(Device);            // the old target, if any, is not what HUBP0 reads any more
+
+    // Re-validated here, not trusted from the flip that set DcnCurrentAddress (review 16's own standard: a
+    // privileged CPU mapping earns its own bounds check at the point it is made). AddressAllowed is the exact
+    // rule DcnFlipSourceAddress already refused this address against, over dcn_translate.c's DcnAddressFits -
+    // never a second, hand-typed range.
+    if (!AddressAllowed(Device, target))
+    {
+        if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
+            GuardLog("dcnflip: scanout mapping refused: 0x%llX is no longer inside the carve-out", target);
+        return FALSE;
+    }
+
+    // BC250_DCNFLIP_SURFACE_BYTES is the size AddressAllowed just proved fits below target; Device->
+    // FramebufferLength is the same fixed mode's own byte count (Post.Pitch * Post.Height, display.c's
+    // DisplayMapFramebuffer) and should equal it exactly (facts M84 - the flip surface is the mode the
+    // firmware left). The smaller of the two is what gets mapped, so a future mismatch between them shrinks
+    // the mapping instead of ever reading past what AddressAllowed validated.
+    bytes = ((ULONGLONG)Device->FramebufferLength < BC250_DCNFLIP_SURFACE_BYTES) ?
+            (ULONGLONG)Device->FramebufferLength : BC250_DCNFLIP_SURFACE_BYTES;
+    length = (SIZE_T)bytes;
+    phys.QuadPart = (LONGLONG)target;
+    Device->DcnScanoutMap = MmMapIoSpaceEx(phys, length, PAGE_READWRITE | PAGE_NOCACHE);
+    if (Device->DcnScanoutMap == NULL)
+    {
+        if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
+            GuardLog("dcnflip: scanout mapping failed: 0x%llX, %lu bytes", target, (ULONG)length);
+        return FALSE;
+    }
+    Device->DcnScanoutMapAddress = target;
+    Device->DcnScanoutMapLength = length;
+    if (InterlockedIncrement(&Device->DcnScanoutRemaps) <= BC250_DCN_LOG_CALLS)
+        GuardLog("dcnflip: scanout mapping: 0x%llX, %lu bytes", target, (ULONG)length);
+    *Mapping = Device->DcnScanoutMap;
+    *Length = Device->DcnScanoutMapLength;
+    return TRUE;
+}
+
+// Unmap, if mapped, and zero the three fields either way - called from WddmStop and, idempotently, from
+// DcnStop above. Not a DDI: PASSIVE_LEVEL only (MmUnmapIoSpace), same as its only real caller, WddmPresentBlit,
+// by way of DcnScanoutMapping above.
+void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device)
+{
+    if (Device->DcnScanoutMap != NULL) MmUnmapIoSpace(Device->DcnScanoutMap, Device->DcnScanoutMapLength);
+    Device->DcnScanoutMap = NULL;
+    Device->DcnScanoutMapAddress = 0;
+    Device->DcnScanoutMapLength = 0;
 }

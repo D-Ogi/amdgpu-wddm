@@ -185,3 +185,78 @@ and by `tools/wddm_contract_check/check.py` staying 34 OK / 4 n/a.
    serviced** is unmeasured; `DcnFlipWriteSequence` always writes the newest address (last write wins, matching
    `MaxQueuedFlipOnVSync = 1`'s promise of at most one outstanding flip), so this is believed safe by
    construction rather than proven by a lab run.
+
+## 11. Where the present path writes once the flip is live (2026-09-22, fact M100)
+
+M100 found the consequence this note's step 3 did not address: once `DxgkDdiSetVidPnSourceAddress` has flipped
+HUBP0 away from the firmware's framebuffer, nothing scans that framebuffer out any more, and E20's CPU blit
+(`WddmPresentBlit`, `wddm.c`) kept painting it anyway. The fix, bc250kmd 0.7.31, is in
+`WddmPresentBlit` and `dcn.c`'s new `DcnScanoutMapping`/`DcnUnmapScanout`: once `Device->VidPnFlipEnabled &&
+Device->DcnDiverged`, the blit's destination becomes a CPU mapping of `Device->DcnCurrentAddress` instead of
+`Device->Framebuffer`, remapped only when that address changes (once a flip, matching M97's "one flip served 60
+presents", never once a present) and bounded by the mapped length, never by anything user mode supplied. The
+mapping is made and torn down at `PASSIVE_LEVEL` only, from `WddmPresentBlit` and from `WddmStop`/`DcnStop` -
+never from `DcnFlipSourceAddress` itself, which `d3dkmddi.h`'s own `_IRQL_requires_max_(PROFILE_LEVEL - 1)` on
+`DXGKDDI_SETVIDPNSOURCEADDRESS` allows to run above `DISPATCH_LEVEL`, where `MmMapIoSpaceEx`/`MmUnmapIoSpace`
+would be illegal to call. A mapping failure falls back to `Device->Framebuffer` rather than dropping the
+present, counted apart from the ordinary case (`WddmSummaryOf`'s new blit-destination line) so a run's evidence
+says which of the two reasons a present landed on the POST framebuffer.
+
+**The question this section actually answers: is copying at all the right shape, or should the scanout instead
+flip straight to the CDD's own render target** - the allocation `Present` already names as its source, physical
+`0x271398000` in the E22 runs (M100) - **so the copy becomes unnecessary?** Read against
+`P:\BC-250\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared\d3dkmddi.h`, the WDDM2_0
+shape this build compiles at (`bc250kmd.h:42-48`):
+
+- `DXGKARG_SETVIDPNSOURCEADDRESS` (`d3dkmddi.h:6363-6381`) is address-only - `PrimarySegment`, `PrimaryAddress`,
+  `hAllocation`, `ContextCount`/`Context[]`, `Flags`, `Duration`, and at WDDM2_0 also
+  `PrimaryData[D3DDDI_MAX_BROADCAST_CONTEXT]` (`DXGK_PRIMARYDATA`: `hAllocation`/`SegmentId`/`SegmentAddress`,
+  `d3dkmddi.h:6355-6360`). No pitch, no stride, no format. `Bc250WddmSetVidPnSourceAddress` (`wddm.c:2719`)
+  already reads only `PrimaryAddress`/`PrimarySegment` and ignores the rest, which the struct's shape allows: it
+  hands over an address, not a description of what is at it.
+- The driver is not purely reactive about which allocation is primary, as it first looked: `DXGKARG_COMMITVIDPN`
+  already carries `hPrimaryAllocation`, "driver assigned primary surface allocation handle" (`d3dkmddi.h:6913`),
+  an `IN` parameter `Bc250CommitVidPn` (`display.c:587`) does not read today - it only inspects
+  `hFunctionalVidPn`, `Flags.PathPowerTransition` and the pinned source mode's `PrimSurfSize`. So there are two
+  DDI-level places the KMD could learn a primary allocation's identity ahead of a flip (`CommitVidPn`'s handle)
+  or at one (`SetVidPnSourceAddress`'s `hAllocation`/`PrimaryData`), not zero - option B would read one of these
+  rather than continue guessing a present's source by position the way `WddmPresentBlit`'s three-arm union
+  lookup does today (facts M82).
+- `DXGK_ALLOCATIONINFOFLAGS`/`_WDDM2_0` (`d3dkmddi.h:3750-3847`) mark no allocation "primary" at
+  `CreateAllocation` time - the nearest thing, `D3DKMDT_SHAREDPRIMARYSURFACEDATA` (`d3dkmddi.h:4167`), is the
+  legacy shared-desktop-primary path, and the E22 evidence shows the CDD's surfaces arriving as ordinary
+  per-present allocations through `Present`'s own list instead. Either way, this driver only ever finds out
+  which allocation is primary by being told, never by asking.
+- **The pitch is the real gap, and it is this driver's own, not a documented WDDM one.** `DcnFlipWriteSequence`
+  (`dcn.c:328`) never writes `HUBPREQ0_DCSURF_SURFACE_PITCH`, and no `SETVIDPNSOURCEADDRESS` field carries a
+  pitch either. Today that is safe only because `OfferSourceMode` (`display.c:363`) offers exactly one source
+  mode - `Stride = Device->Post.Pitch` (`display.c:381`) - and `Bc250CommitVidPn` refuses any pinned mode whose
+  `PrimSurfSize` differs from `Device->Post.Width`/`Height`, so every allocation dxgkrnl could ever pin as this
+  adapter's primary is constrained to 7680 by the mode set, not by anything DCN or the flip DDI enforces.
+  Flipping to a CDD allocation on trust of that constraint, rather than reading the allocation's own pitch back
+  out of `BC250_WDDM_ALLOCATION_PRIVATE` (`wddm.c:138-146`) the way `WddmPresentBlit` already does for its
+  source, would be assuming an invariant instead of checking it.
+- `DXGK_FLIPCAPS.FlipIndependent` (`d3dkmddi.h:1972-1980`, a cap this driver already declares at
+  `wddm.c:1521`, unchanged since M7 stage A) documents an MMIO flip straight to a redirected surface with
+  no compositor copy in between - option B, not option A. The CPU blit this section fixes is the improvised
+  piece standing in for a capability the driver already advertises but does not yet fully implement.
+
+**DECISION: ship the mapped-copy fix above now; treat flipping straight to the CDD's own allocation as the next
+step, not this one.**
+
+1. It answers the measured defect (M100) inside gates already exercised (`EnablePresentBlit`, `EnableVidPnFlip`)
+   with no new register write - `DcnFlipWriteSequence` is untouched - and no new hardware risk: the only new
+   operation is a CPU-side `MmMapIoSpaceEx` of memory the existing carve-out check already allows.
+2. Option B has an open question this note does not resolve: which of `PrimaryData[]`'s (up to
+   `D3DDDI_MAX_BROADCAST_CONTEXT`) entries, or `CommitVidPn`'s `hPrimaryAllocation`, is authoritative for a
+   single-target adapter that has only ever measured one broadcast context - unmeasured, because this driver has
+   only ever seen `NumSrcAllocations == 0` and read a present's source by position (M82), never by being handed
+   a handle directly.
+3. Option B needs the pitch question above actually answered from the allocation's own data, not assumed from
+   the mode set, before any write sequence - this one or a new one that also programs `DCSURF_SURFACE_PITCH` -
+   can flip to an allocation whose stride was never independently confirmed to be 7680.
+
+The two are not in tension: the mapped-copy path is a strict improvement on 0.7.25 either way, and needs no
+revisiting if a later step adds a real flip-to-CDD-allocation path - that step would just mean
+`Device->DcnDiverged`'s present-time consumer sees fewer presents needing a copy at all, not that this one was
+wrong.

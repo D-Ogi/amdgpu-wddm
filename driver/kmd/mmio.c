@@ -104,6 +104,14 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnVsyncDeferred = 0;
     Device->DcnFlipsHardware = 0;
     Device->DcnFlipRefused = 0;
+    // 2026-09-22 (ADR 0011 consequences): the present path's own destination mapping, same reset rule and the
+    // same trust as Device->Mmio just above - the stop path (WddmStop/DcnStop, dcn.c's DcnUnmapScanout) already
+    // unmapped it; this only documents that a fresh start never inherits a stale pointer from the last one.
+    Device->DcnScanoutMap = NULL;
+    Device->DcnScanoutMapAddress = 0;
+    Device->DcnScanoutMapLength = 0;
+    Device->DcnScanoutRemaps = 0;
+    Device->DcnScanoutMapFailed = 0;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);

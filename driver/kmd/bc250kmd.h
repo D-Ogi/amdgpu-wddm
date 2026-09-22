@@ -139,6 +139,18 @@ typedef struct _BC250_DEVICE {
     volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
     volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress targets the translation or the range check refused
 
+    // 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip is
+    // live - a CPU mapping of whatever DcnCurrentAddress currently names, next to that field for the same
+    // reason DcnDiverged sits next to it. Owned by dcn.c's DcnScanoutMapping/DcnUnmapScanout and consulted only
+    // by wddm.c's WddmPresentBlit, PASSIVE_LEVEL only - never DcnFlipSourceAddress itself, which may run above
+    // DISPATCH_LEVEL and must never call MmMapIoSpaceEx/MmUnmapIoSpace (see dcn.c). NULL/0 whenever nothing is
+    // mapped: gate closed, no flip yet, DcnDiverged clear, or the last mapping attempt failed.
+    PVOID DcnScanoutMap;
+    ULONGLONG DcnScanoutMapAddress;      // the physical address DcnScanoutMap corresponds to
+    SIZE_T DcnScanoutMapLength;
+    volatile LONG DcnScanoutRemaps;      // DcnScanoutMapping: successful (re)maps of the flip target
+    volatile LONG DcnScanoutMapFailed;   // DcnScanoutMapping: AddressAllowed or MmMapIoSpaceEx refused it
+
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
     BOOLEAN VramWriteEnabled;
@@ -294,6 +306,21 @@ BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device);
 // section 24: no DbgPrintEx from here on every vblank).
 NTSTATUS DcnVsyncEnable(_In_ const BC250_DEVICE* Device, BOOLEAN On);
 BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device);
+
+// 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip has
+// moved the scanout away from the firmware's framebuffer. PASSIVE_LEVEL only (MmMapIoSpaceEx/MmUnmapIoSpace);
+// the only caller is wddm.c's WddmPresentBlit, which already requires PASSIVE_LEVEL for its own source
+// mapping. DcnScanoutMapping remaps only when Device->DcnCurrentAddress changed since the last call - once a
+// flip, not once a present (M97: one flip served 60 presents) - and re-validates the address with the same
+// AddressAllowed/DcnAddressFits rule DcnFlipSourceAddress itself refused it against, never trusting that a
+// past check still holds. FALSE (*Mapping left NULL) whenever the flip is not live (Device->DcnDiverged
+// clear) or the mapping could not be made, either way leaving the POST framebuffer as the caller's own
+// fallback - this function never decides that, it only reports what it could map.
+// DcnUnmapScanout tears the mapping down; called from WddmStop and, idempotently, from DcnStop
+// (docs/design/vidpn-flip.md section 8's stop order has WddmStop run first, so DcnStop's own call finds it
+// already NULL in the ordinary case).
+BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length);
+void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device);
 
 // sequence.c
 void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,

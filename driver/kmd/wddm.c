@@ -305,6 +305,12 @@ typedef struct _BC250_WDDM {
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
     volatile LONG BlitTranslations;             // sources whose first and last page translated and were contiguous
+    // 2026-09-22 (ADR 0011 consequences, facts M100): of Blits, the breakdown by destination. BlitsToFlip +
+    // BlitsToFirmware == Blits always; BlitsMapFailed is the subset of BlitsToFirmware that landed there only
+    // because the flip surface would not map (a fallback, never a skip - see WddmPresentBlit).
+    volatile LONG BlitsToFlip;                  // copied to the surface the scanout has actually flipped to
+    volatile LONG BlitsToFirmware;              // copied to the POST framebuffer (flip not live, or the fallback below)
+    volatile LONG BlitsMapFailed;                // of BlitsToFirmware, a fallback because DcnScanoutMapping refused
     volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
 } BC250_WDDM;
@@ -1109,6 +1115,14 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->FlipsAboveDispatch);
     GuardLog("wddm summary: blit gate %s, %ld blits, %ld skips, %ld sources translated contiguous", Wddm->BlitGate ? "open" : "closed",
              Wddm->Blits, Wddm->BlitSkips, Wddm->BlitTranslations);
+    // 2026-09-22 (ADR 0011 consequences, facts M100): where the copy actually landed. BlitsToFlip should be
+    // every blit once a flip is live and stays mappable; BlitsMapFailed says how many of BlitsToFirmware are a
+    // fallback rather than the ordinary gate-closed/pre-flip case, and the two scanout-remap counters say how
+    // much of that mapping work DcnScanoutMapping actually did (once a flip, not once a present - M97).
+    GuardLog("wddm summary: blit destination: %ld to the flipped surface, %ld to the POST framebuffer (%ld a "
+             "failed-mapping fallback), %ld scanout remaps (%ld failed)",
+             Wddm->BlitsToFlip, Wddm->BlitsToFirmware, Wddm->BlitsMapFailed,
+             Wddm->Device->DcnScanoutRemaps, Wddm->Device->DcnScanoutMapFailed);
     GuardLog("wddm summary: vsync %s, %ld ticks, %ld reported to dxgkrnl",
              Wddm->VSyncEnabled ? "enabled" : "not enabled by ControlInterrupt", Wddm->VSyncTicks,
              Wddm->VSyncReports);
@@ -1286,6 +1300,10 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     KeFlushQueuedDpcs();
     Device->Wddm = NULL;                // from here no DDI and no DPC of ours can find the state
     VidMmStop();
+    // 2026-09-22 (ADR 0011 consequences): the present path's own destination mapping (dcn.c), torn down here -
+    // first in the stop order (docs/design/vidpn-flip.md section 8) - so it is gone before DcnStop's own
+    // restore-to-firmware write runs and before MmioStop unmaps BAR5, whatever happens to either of those.
+    DcnUnmapScanout(Device);
 
     // The counters are the point of stage A: all of them, once, at the stop. The state is ours alone now, so the
     // summary cannot race anything.
@@ -2484,6 +2502,9 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     UINT count, i, rows = 0;
     LONG dx, dy;                        // destination to source offset (no scaling: the rectangles are the same size)
     const char* why = NULL;
+    UCHAR* dst;                          // where the copy lands: Device->Framebuffer, or the flipped surface below
+    SIZE_T dstLength;
+    BOOLEAN toFlip = FALSE, mapFailed = FALSE;    // for the counters and the log line at the end
 
     verbose = (wddm->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS);
     if (Present->pAllocationList == NULL || Context->AllocationListSize <= DXGK_PRESENT_MAX_INDEX) why = "no list";
@@ -2561,6 +2582,33 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS) GuardLog("wddm: blit skipped: no mapping for 0x%llX", first);
         return;
     }
+
+    // Where the picture goes (2026-09-22, ADR 0011 consequences, facts M100): Device->Framebuffer - the POST
+    // framebuffer - only until a flip has actually moved HUBP0 off it. Once VidPnFlipEnabled and DcnDiverged
+    // are both true, nothing scans the POST framebuffer out any more, so the copy has to land at
+    // Device->DcnCurrentAddress instead (dcn.c's DcnScanoutMapping, PASSIVE_LEVEL, guaranteed by the IRQL
+    // check above). A mapping failure falls back to the POST framebuffer rather than dropping the present -
+    // the picture is still produced somewhere the log can point at, never skipped silently - and is counted
+    // apart from the ordinary gate-closed/pre-flip case so the two reasons stay distinguishable.
+    dst = (UCHAR*)device->Framebuffer;
+    dstLength = device->FramebufferLength;
+    if (device->VidPnFlipEnabled && device->DcnDiverged)
+    {
+        PVOID flipMap = NULL;
+        SIZE_T flipLength = 0;
+
+        if (DcnScanoutMapping(device, &flipMap, &flipLength))
+        {
+            dst = (UCHAR*)flipMap;
+            dstLength = flipLength;
+            toFlip = TRUE;
+        }
+        else
+        {
+            mapFailed = TRUE;
+        }
+    }
+
     whole = Present->DstRect;
     rects = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->pDstSubRects : &whole;
     count = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->SubRectCnt : 1;
@@ -2584,18 +2632,30 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         if (right <= left || bottom <= top) continue;
         for (y = top; y < bottom; y++)
         {
-            SIZE_T dst = (SIZE_T)y * device->Post.Pitch + (SIZE_T)left * 4;
+            // The geometry (pitch, and so this offset) is always the firmware's mode, Device->Post - the one
+            // the VidPn primary is pinned to (display.c's Bc250CommitVidPn) - whichever buffer dst points at;
+            // only the bound changes between the two destinations. dstLength is one of the two driver-owned
+            // lengths set above, never a number that came from user mode.
+            SIZE_T dstOff = (SIZE_T)y * device->Post.Pitch + (SIZE_T)left * 4;
             SIZE_T src = (SIZE_T)(y + dy) * alloc->Pitch + (SIZE_T)(left + dx) * 4;
             SIZE_T bytes = (SIZE_T)(right - left) * 4;
 
-            if (dst + bytes > device->FramebufferLength || src + bytes > alloc->Size) break;
-            RtlCopyMemory((UCHAR*)device->Framebuffer + dst, map + src, bytes);
+            if (dstOff + bytes > dstLength || src + bytes > alloc->Size) break;
+            RtlCopyMemory(dst + dstOff, map + src, bytes);
             rows++;
         }
     }
     MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
     InterlockedIncrement(&wddm->Blits);
-    if (verbose) GuardLog("wddm: blit %u rectangles, %u rows copied", count, rows);
+    if (toFlip) InterlockedIncrement(&wddm->BlitsToFlip);
+    else
+    {
+        InterlockedIncrement(&wddm->BlitsToFirmware);
+        if (mapFailed) InterlockedIncrement(&wddm->BlitsMapFailed);
+    }
+    if (verbose)
+        GuardLog("wddm: blit %u rectangles, %u rows copied, destination %s%s", count, rows,
+                 toFlip ? "flipped surface" : "POST framebuffer", mapFailed ? " (mapping failed, fell back)" : "");
 }
 
 static DXGKDDI_PRESENT Bc250WddmPresent;
