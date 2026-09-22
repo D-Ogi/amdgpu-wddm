@@ -143,6 +143,7 @@ typedef struct _BC250_WDDM_OBJECT {
     BC250_DEVICE* Device;
     UINT NodeOrdinal;                   // contexts
     ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
+    UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
 } BC250_WDDM_OBJECT;
 
@@ -1295,6 +1296,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // cannot show it. Still no patch-location list: with virtual addressing there is nothing to patch.
     pCreateContext->ContextInfo.AllocationListSize =
         pCreateContext->Flags.GdiContext ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
+    object->AllocationListSize = pCreateContext->ContextInfo.AllocationListSize;
     // Review 14: the adapter declares GpuMmu, so no context should come without virtual addressing. If one does, it
     // has a list, no patch list and no Patch DDI behind it - say so here rather than leave it to a 0x113 later.
     if (pCreateContext->Flags.GdiContext && !pCreateContext->Flags.VirtualAddressing)
@@ -1838,14 +1840,33 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     // (DXGK_ALLOCATIONLIST, 24 bytes an entry) and pAllocationInfo (DXGK_PRESENTALLOCATIONINFO, 32 bytes) in one
     // union and does not say which arm a GpuMmu driver is given, so the first three qwords of each of the first two
     // entries are logged raw - inside the array under either reading - and the arm is decided from the log.
-    if (context != NULL && pPresent->pAllocationList != NULL && pPresent->NumSrcAllocations + pPresent->NumDstAllocations != 0 &&
-        ((BC250_WDDM*)context->Device->Wddm)->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS)
+    // 0.7.15: E20 run 001 showed NumSrcAllocations = NumDstAllocations = 0 even with a list of 256, and 0.7.14 had
+    // tied its dump to those counters, so it said nothing. The classic contract puts the source and the destination
+    // at fixed indices (DXGK_PRESENT_SOURCE_INDEX 1, DXGK_PRESENT_DESTINATION_INDEX 2) of pAllocationList, 24 bytes
+    // an entry. The pointer is logged whatever it is; entries 1 and 2 are read only if this context was given a list
+    // that long AND the 72 bytes lie in the pointer's own page - a read that cannot fault whatever is behind it.
+    if (context != NULL && ((BC250_WDDM*)context->Device->Wddm)->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS)
     {
         const ULONGLONG* raw = (const ULONGLONG*)pPresent->pAllocationList;
-        UINT entries = pPresent->NumSrcAllocations + pPresent->NumDstAllocations;
+        C_ASSERT(sizeof(DXGK_ALLOCATIONLIST) == 3 * sizeof(ULONGLONG));    // raw[3..5] is entry 1, raw[6..8] entry 2
 
-        GuardLog("wddm: Present list[0] %016llX %016llX %016llX", raw[0], raw[1], raw[2]);
-        if (entries >= 2) GuardLog("wddm: Present list[1] %016llX %016llX %016llX", raw[3], raw[4], raw[5]);
+        GuardLog("wddm: Present list %p (context list %u), private %p/%u, driver data %u", (void*)raw, context->AllocationListSize,
+                 pPresent->pDmaBufferPrivateData, pPresent->DmaBufferPrivateDataSize, pPresent->PrivateDriverDataSize);
+        if (raw != NULL && context->AllocationListSize > DXGK_PRESENT_MAX_INDEX &&
+            ((ULONG_PTR)raw & (PAGE_SIZE - 1)) <= PAGE_SIZE - (DXGK_PRESENT_MAX_INDEX + 1) * sizeof(DXGK_ALLOCATIONLIST))
+        {
+            // Review 15: the pointer is dxgkrnl's word and nothing here proves it. A kernel address that is not mapped
+            // bugchecks whatever surrounds it; this catches the other case, a user-mode one, as vidmm.c does.
+            __try
+            {
+                GuardLog("wddm: Present source [1] %016llX %016llX %016llX", raw[3], raw[4], raw[5]);
+                GuardLog("wddm: Present dest   [2] %016llX %016llX %016llX", raw[6], raw[7], raw[8]);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                GuardLog("wddm: Present list %p could not be read (0x%08X)", (void*)raw, (ULONG)GetExceptionCode());
+            }
+        }
         GuardLog("wddm: Present dst (%d,%d)-(%d,%d) src (%d,%d)-(%d,%d) va 0x%llX", pPresent->DstRect.left, pPresent->DstRect.top,
                  pPresent->DstRect.right, pPresent->DstRect.bottom, pPresent->SrcRect.left, pPresent->SrcRect.top,
                  pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);

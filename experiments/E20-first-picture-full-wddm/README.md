@@ -1,6 +1,6 @@
 # E20: a picture under the full WDDM table
 
-Date: 2026-09-22. State: run 001 (bc250kmd 0.7.14, a logging build) prepared. Follows E19 (stage C, M77, M80).
+Date: 2026-09-22. State: run 001 done (H1 refuted as written); run 002 (0.7.15) prepared. Follows E19 (stage C, M77, M80).
 Design brief: `scratch\tmp\present_design.md` (an Opus agent; not a source of facts).
 
 ## Why
@@ -34,6 +34,17 @@ Czarno to widzę - "I see it black", which is how a Pole says the outlook is poo
   `D3DDDIFMT_A8R8G8B8`), and copying its dirty rectangles into the firmware framebuffer by physical address gives a
   desktop picture: the overlay's screenshot is no longer the 3.6 kB black frame of E16 run 009.
 
+- H2b (run 002, 0.7.15; written after run 001, before run 002). The counters of H1 are not where the surfaces are:
+  `d3dkmddi.h` defines `DXGK_PRESENT_SOURCE_INDEX 1` and `DXGK_PRESENT_DESTINATION_INDEX 2`, fixed indices into
+  `pAllocationList` (24-byte `DXGK_ALLOCATIONLIST` entries). Prediction: with the 256-entry list of 0.7.14 the
+  pointer is not NULL, and entries 1 and 2 each hold one of our `BC250_WDDM_OBJECT` pointers in qword 0 (a kernel
+  address, the same two values present after present: the shadow surface and the primary of `CreateAllocation`), a
+  small flags value in qword 1, and in qword 2 the surface's GPU virtual address (the union's WDDM 2.0 member).
+  Falsifiers: a NULL pointer; qword 0 not a kernel address; values that change wildly between presents. The
+  context of flags 0x5 (system, list 0) would then also explain nothing arriving there. If it holds, H3's blit
+  has its source: handle -> our allocation record (size, pitch, format) and VA -> VRAM offset through the
+  context's page tables.
+
 ## Safety
 
 Run 001 starts no engine: no GART, no PSP, no ring, no interrupt source - so facts M78 does not apply and no fresh
@@ -46,4 +57,10 @@ gate one-shot, AutoReboot on, STOP flag honoured, 60 to 90 s under the full tabl
 
 ## Result
 
-(after the runs)
+### Run 001 (2026-09-22 02:03, bc250kmd 0.7.14)
+
+H1 is refuted as written: the GDI context (flags 0x6) was answered `lists 256/0`, and all eight logged presents
+still came with `source 0 dest 0`. Its second half held: the desktop survived the list (no TDR, no bugcheck, no
+live kernel report, gate closed, picture back). H2 got no answer, and that is the build's fault, not dxgkrnl's:
+0.7.14 printed the list only when the counters were non-zero and did not even log the pointer. Evidence is
+recorded with run 002.
