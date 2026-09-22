@@ -36,6 +36,8 @@ which - including whether C is the right language, or whether Rust or hand-writt
 
 ## Consequences
 
+- Points 3 to 6 are each a decision of their own and are carried by ADR 0011 (present is a flip), ADR 0012
+  (submission), ADR 0013 (node layout) and ADR 0014 (clocks); this ADR keeps points 1 and 2 and the ordering.
 - Nothing already built is thrown away. Points 3 to 5 are work ahead, in that order of stickiness: 5, 3, 4.
 - Until point 4 is done, no performance number from this driver means anything, and none is to be recorded as a fact.
 - If the owner prefers Rust for new modules regardless, point 1 is the only one that changes, and the cost is the
