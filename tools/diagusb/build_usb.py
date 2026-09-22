@@ -33,7 +33,10 @@ ALPINE_BRANCH = "v3.24"
 ALPINE_VERSION = "3.24.2"
 ISO_NAME = f"alpine-standard-{ALPINE_VERSION}-x86_64.iso"
 MIRROR = "https://dl-cdn.alpinelinux.org/alpine"
-EXTRA_PACKAGES = ["python3", "pciutils"]  # not on the ISO; installed from bc250/apks at boot
+EXTRA_PACKAGES = ["python3", "pciutils",
+                  # added 2026-09-22 (E21): KMS and Vulkan tools, scp, hex dumps
+                  "libdrm-tests", "drm_info", "mesa-vulkan-ati", "vulkan-loader", "vulkan-tools",
+                  "openssh-sftp-server", "xxd"]  # not on the ISO; installed from bc250/apks at boot
 SEGNO_VERSION = "1.6.6"
 
 
