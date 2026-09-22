@@ -1,0 +1,44 @@
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.4.335
+
+
+Instance Extensions: count = 16
+-------------------------------
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_surface_maintenance1            : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_portability_enumeration         : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_maintenance1            : extension revision 1
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_win32_surface                   : extension revision 6
+VK_LUNARG_direct_driver_loading        : extension revision 1
+
+Instance Layers:
+----------------
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.4.348
+	driverVersion      = 26.1.99
+	vendorID           = 0x1002
+	deviceID           = 0x13fe
+	deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+	deviceName         = AMD BC-250 (RADV GFX1013)
+	driverID           = DRIVER_ID_MESA_RADV
+	driverName         = radv
+	driverInfo         = Mesa 26.2.0-devel (git-801c9763c6)
+	conformanceVersion = 1.4.0.0
+	deviceUUID         = 00000000-0100-0000-0000-000000000000
+	driverUUID         = 414d442d-4d45-5341-2d44-525600000000

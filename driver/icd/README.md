@@ -4,7 +4,9 @@ PROVENANCE: Mesa, MIT. Base is fork `lfrb/wddm2` commit `801c976` (mesa 26.2.0-d
 sparse tree under `ref/mesa`.
 
 `mesa-wddm2-bc250.patch` teaches that branch's WDDM winsys to read the 1472-byte caps blob and
-to write the BC2A / BC2C / BC2S private data. One IB is submitted with `D3DKMTSubmitCommand`.
+to write the BC2A / BC2C / BC2S private data. Adapters are enumerated with DXGI: DXCore's D3D12
+list on this machine contains only the Microsoft Basic Render Driver. One IB is submitted with
+`D3DKMTSubmitCommand`.
 Several IBs are copied into one gather buffer first, because the KMD runs one IB and does not
 half-run a list. Node 1 is not a queue. The patch has not been run on unit A.
 

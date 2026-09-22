@@ -1,0 +1,64 @@
+radv: info: Created an instance.
+radv: info: Found compatible device 0x19e3a4:0x0.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x19e3a4
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+allocation handle=0x40000500
+allocation handle=0x40000580
+allocation handle=0x40000600
+allocation handle=0x40000680
+allocation handle=0x40000740
+allocation handle=0x400007c0
+allocation handle=0x40000840
+allocation handle=0x400008c0
+allocation handle=0x40000940
+allocation handle=0x400009c0
+allocation handle=0x40000a40
+allocation handle=0x40000ac0
+bc250: SubmitCommand ib 0x20006c000 352 bytes (from 2)
+allocation handle=0x40000b40
+allocation handle=0x40000bc0
+allocation handle=0x40000c40
+bc250: SubmitCommand ib 0x20006c000 352 bytes (from 2)
+allocation handle=0x40000cc0
+allocation handle=0x40000d40
+allocation handle=0x40000dc0
+allocation handle=0x40000e40
+bc250: SubmitCommand ib 0x20006c000 320 bytes (from 2)
+allocation handle=0x40000ec0
+allocation handle=0x40000f40
+allocation handle=0x40000fc0
+allocation handle=0x40001040
+allocation handle=0x400010c0
+bc250: SubmitCommand ib 0x20006c000 352 bytes (from 2)
+allocation handle=0x40001140
+allocation handle=0x400011c0
+allocation handle=0x40001240
+allocation handle=0x400012c0
+allocation handle=0x40001340
+bc250: SubmitCommand ib 0x20006c000 320 bytes (from 2)
+allocation handle=0x400013c0
+allocation handle=0x40001440
+allocation handle=0x400014c0
+allocation handle=0x40001540
+allocation handle=0x400015c0
+bc250: SubmitCommand ib 0x20006c000 320 bytes (from 2)
+allocation handle=0x40001640
+allocation handle=0x400016c0
+allocation handle=0x40001740
+allocation handle=0x400017c0
+allocation handle=0x40001840
+allocation handle=0x400018c0
+allocation handle=0x40001940
+allocation handle=0x400019c0
+allocation handle=0x40001a40
+bc250: SubmitCommand ib 0x20006c000 544 bytes (from 2)
+allocation handle=0x40001ac0
+allocation handle=0x40001b40
+allocation handle=0x40001bc0
+allocation handle=0x40001c40
+allocation handle=0x40001cc0
+bc250: SubmitCommand ib 0x20006c000 512 bytes (from 2)

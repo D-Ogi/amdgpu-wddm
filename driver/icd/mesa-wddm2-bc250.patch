@@ -337,7 +337,7 @@ index 088f69f..5fbfa08 100644
        struct submit_pdd_writer pdd;
  
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
-index e2f4987..cad53ed 100644
+index e2f4987..fa625d0 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
 @@ -34,6 +34,7 @@
@@ -489,22 +489,20 @@ index e2f4987..cad53ed 100644
     struct PACKED umdprivatedata_header {
        uint32_t flags[3];
        uint32_t vendor_id;
-@@ -656,9 +784,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+@@ -655,7 +783,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+ 
     status = radv_wddm2_query_marketing_name(ws, ws->gpu_info.marketing_name,
                                              sizeof(ws->gpu_info.marketing_name));
-    if (!NT_SUCCESS(status)) {
--      fprintf(stderr, "Can't query marketing name\n");
--      result = VK_ERROR_INITIALIZATION_FAILED;
--      goto error_open_adapter;
-+      if (!ws->bc250) {
-+         fprintf(stderr, "Can't query marketing name\n");
-+         result = VK_ERROR_INITIALIZATION_FAILED;
-+         goto error_open_adapter;
-+      }
+-   if (!NT_SUCCESS(status)) {
++   if (ws->bc250) {
++      /* The render-adapter string is "Microsoft Basic Display Adapter". The part's
++       * name is not in that query. The Linux ICD reports AMD BC-250.
++       */
 +      snprintf(ws->gpu_info.marketing_name, sizeof(ws->gpu_info.marketing_name), "AMD BC-250");
-    }
- 
-    D3DKMT_CLOSEADAPTER close_adapter = {
++   } else if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "Can't query marketing name\n");
+       result = VK_ERROR_INITIALIZATION_FAILED;
+       goto error_open_adapter;
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
 index 75cbc71..f355e8d 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
@@ -535,3 +533,41 @@ index 8e622bd..6581190 100644
      vulkan_lite_runtime_inc += '../../../include/winddk'
    endif
  endif
+diff --git a/src/vulkan/runtime/vk_instance.c b/src/vulkan/runtime/vk_instance.c
+index 912b9f6..445254c 100644
+--- a/src/vulkan/runtime/vk_instance.c
++++ b/src/vulkan/runtime/vk_instance.c
+@@ -30,6 +30,7 @@
+ #include "vk_common_entrypoints.h"
+ #include "vk_dispatch_trampolines.h"
+ #include "vk_dxcore.h"
++#include "vk_dxgi.h"
+ #include "vk_log.h"
+ #include "vk_util.h"
+ #include "vk_debug_utils.h"
+@@ -465,10 +466,24 @@ try_add_dx_physical_device(const struct vk_dx_adapter_info *info,
+    return VK_SUCCESS;
+ }
+ 
++static VkResult
++try_add_dxgi_physical_device(const struct vk_dx_adapter_info *info, void *adapter, void *user_data)
++{
++   /* DXGI lists the Microsoft Basic Render Driver beside the WDDM adapter.
++    * It is not a device this ICD can drive.
++    */
++   if (info->is_warp)
++      return VK_SUCCESS;
++   return try_add_dx_physical_device(info, (IUnknown *)adapter, user_data);
++}
++
+ static VkResult
+ enumerate_dx_physical_devices_locked(struct vk_instance *instance)
+ {
+-   return vk_dxcore_adapter_foreach(try_add_dx_physical_device, instance);
++   /* DXCore's D3D12 filter does not contain a display adapter that has no
++    * D3D12 user-mode driver. DXGI does, and that is the adapter bc250kmd is.
++    */
++   return vk_dxgi_adapter_foreach(try_add_dxgi_physical_device, instance);
+ }
+ #else
+ static VkResult

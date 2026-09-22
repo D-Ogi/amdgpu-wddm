@@ -1,0 +1,18 @@
+   270    623.086 wddm: paging hardware fence arrived, reporting fence 1
+   305    718.530 wddm: paging hardware fence arrived, reporting fence 2
+   336    719.174 wddm: paging hardware fence arrived, reporting fence 3
+   344    719.176 wddm: paging hardware fence arrived, reporting fence 4
+   349    719.186 wddm: paging hardware fence arrived, reporting fence 5
+   354    719.186 wddm: paging hardware fence arrived, reporting fence 6
+   359    719.188 wddm: umd submit fence 839 ib 0x20006C000 352 bytes
+   361    719.689 wddm: HARDWARE FENCE TIMEOUT after 500 ms (sequence 7): fence 839 completed in software, ring path closed
+   370    719.701 wddm: paging hardware fence arrived, reporting fence 7
+   375    719.705 wddm: paging hardware fence arrived, reporting fence 8
+   378    719.705 wddm: umd submit fence 840 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   387    719.735 wddm: umd submit fence 841 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   398    720.445 wddm: umd submit fence 842 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   409    721.262 wddm: umd submit fence 847 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   420    726.655 wddm: umd submit fence 855 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   439    732.031 wddm: umd submit fence 863 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   450    734.956 wddm: umd submit fence 866 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)
+   469    735.068 wddm: umd submit fence 867 not run: ring not ready (0 ibs, private 72/576, first 0x53324342)

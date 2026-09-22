@@ -1,0 +1,8 @@
+boot 2026-09-22T17:32:17  host BC250-A
+driver 0.7.42.0 oem51.inf  one GFX bring-up, then undo back to display-only stage 61
+temperature Tctl 73.1 C at the start of the boot, 71.4 C after the compute run, 65.4 C after the undo. Never at or above 85 C.
+Display 4101 (TDR) since boot: 0
+BugCheck 1001 since boot: 0
+live kernel reports written since boot: 0
+driver watchdog: the first UMD IB was rung and its hardware fence did not arrive. Log: "HARDWARE FENCE TIMEOUT after 500 ms (sequence 7): fence 839 completed in software, ring path closed". Later UMD submits were "not run: ring not ready".
+undo: gfx fini exit 0, ih fini exit 0, psp unload exit 0, gart restore exit 0, gates closed, stage 61, mode 1920x1200 display-only, UnconfirmedStarts 0.
