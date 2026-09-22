@@ -1,0 +1,54 @@
+
+=== gate -Full 1 -GpuVa 1 -Blit 1 (no engines)
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 0  EnablePresentBlit 1
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          349
+presents     0
+P:\BC-250\scratch\screens\20260922-031501.png   960x600 px   3586 bytes
+   134      4.045 wddm: blit skipped: context has no root
+   144      4.091 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   145      4.091 wddm: blit 3 rectangles, 144 rows copied
+   153      4.107 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   154      4.107 wddm: blit 3 rectangles, 144 rows copied
+   162      4.107 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   163      4.109 wddm: blit 1 rectangles, 48 rows copied
+   171      4.123 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   172      4.123 wddm: blit 2 rectangles, 80 rows copied
+   180      8.569 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   181      8.585 wddm: blit 1 rectangles, 586 rows copied
+   134      4.045 wddm: blit skipped: context has no root
+   144      4.091 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   145      4.091 wddm: blit 3 rectangles, 144 rows copied
+   153      4.107 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   154      4.107 wddm: blit 3 rectangles, 144 rows copied
+   162      4.107 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   163      4.109 wddm: blit 1 rectangles, 48 rows copied
+   171      4.123 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   172      4.123 wddm: blit 2 rectangles, 80 rows copied
+   180      8.569 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   181      8.585 wddm: blit 1 rectangles, 586 rows copied
+   189      8.607 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   190      8.607 wddm: blit 5 rectangles, 104 rows copied
+   198      8.607 wddm: blit source (reading 3) FFFF928DDEFD6EF0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC0
+00 -> 0x271398000 .. 0x271C61FFF
+   199      8.607 wddm: blit 2 rectangles, 80 rows copied
+03:15:58 Tctl 69.1 C (raw 763B0FEF)
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          395
+presents     34
+

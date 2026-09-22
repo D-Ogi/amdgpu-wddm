@@ -1,6 +1,6 @@
 # E20: a picture under the full WDDM table
 
-Date: 2026-09-22. State: runs 001 and 002 done (M82); runs 003 (0.7.16, blit gate closed) and 004 (gate open) prepared. Follows E19 (stage C, M77, M80).
+Date: 2026-09-22. State: DONE (run 008, M84). Runs 001-008. Follows E19 (stage C, M77, M80).
 Design brief: `scratch\tmp\present_design.md` (an Opus agent; not a source of facts).
 
 ## Why
@@ -95,3 +95,24 @@ is all zero: for a present to the primary the destination appears to be implied 
 Jak sobie pościelesz, tak się wyśpisz - as you make your bed, so you will sleep in it. We made it with a NULL.
 
 Evidence: `evidence/windows/2026-09-22-E20-run-002/run-002-console.txt`.
+
+### Runs 003, 005, 007 (0.7.16, 0.7.17, 0.7.18 with the blit gate closed)
+
+H4 held in the end, and in two steps that were not in it. Run 003: `DxgkCbGetHandleData` gave nothing back for the
+CDD's handles, so 0.7.17 built the opened object from `pPrivateDriverData` instead. Run 005: handles handed out, and
+the 24-byte reading of slot 1 still said 0. Run 007: the same bytes read as 32-byte `DXGK_PRESENTALLOCATIONINFO`
+entries name our object in entry 1 and the other one in entry 2 (facts M83), and the source translates through the
+GDI context's root to one contiguous VRAM range of exactly 0x8CA000 bytes. No refusal, no TDR.
+
+### Run 008 (2026-09-22 03:15, bc250kmd 0.7.18, EnablePresentBlit 1)
+
+H3 holds, by the only instrument that can see it: the owner, at the monitor, saw the whole desktop, correct, for the
+minute the full table ran (facts M84). The driver's log shows every present copied (3 rectangles / 144 rows, 586
+rows for a full refresh, and so on). The overlay's screenshot is still the black 3586-byte frame - `CopyFromScreen`
+reads the CDD's surfaces through GDI, not the scanout, so under the full table it cannot see what the firmware
+framebuffer shows. H3's exit criterion as written ("the screenshot is no longer black") was the wrong instrument;
+the observation replaces it and the README of the evidence says so.
+
+Nie taki diabeł straszny, jak go malują - the devil is not as black as he is painted. Nor was the screen.
+
+Evidence: `evidence/windows/2026-09-22-E20-run-008/`.
