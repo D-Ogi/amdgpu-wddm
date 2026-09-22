@@ -1,0 +1,139 @@
+{'ok': True}
+{'ok': True}
+driver   0.7.24.1   (oem38.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 0
+UnconfirmedStarts = 0
+08:25:39 Tctl 66.1 C (raw 733B0FEF)
+=== gate -Full 1 -GpuVa 1 -Blit 1 -VidPnFlip 1 (no engines)
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 0  EnablePresentBlit 1  EnablePagingNode 0  EnableDcnWrite 1  EnableVidPnFlip 1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+gates    EnableDcnWrite 1  EnableVidPnFlip 1
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          5
+presents     0
+gates        mmio open, mmio writes off, vram open, vram writes on, gart closed, psp closed, gfx closed, ih closed
+P:\BC-250\scratch\screens\20260922-082625.png   960x600 px   3586 bytes
+wrote C:\BC250\tmp\fbdump.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+P:\BC-250\scratch\screens\e22r3-flip-half.png   960x600 px   1368083 bytes
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS    0x0EB28 70ACE000
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH 0x0EB2C 00000002
+R HUBPREQ0_DCSURF_FLIP_CONTROL               0x0EB6C 00000000
+R HUBP0_DCHUBP_CNTL                          0x0EACC 000E1000
+R OTG0_OTG_GLOBAL_SYNC_STATUS                0x14128 0010D104
+R OTG0_OTG_STATUS_FRAME_COUNT                0x14030 00076690
+decoded (this run / Linux reference E21 run 4, dmupre.txt):
+hubp0        address 0x0000000270ACE000 / 0x0000000270000000
+otg0         OTG_CONTROL 0x80011311 / 0x80011311, master enable ENABLED / ENABLED
+    10      0.118 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    18      0.122 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   116      0.180 dcnflip: SetVidPnSourceAddress flip: card 0xF400ACE000 -> physical 0x270ACE000
+   118      0.180 dcnflip: write 0x14128 = 0x00115104 -> 0x00000000
+   119      0.180 wddm: hardware vsync on (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)
+   130      5.176 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   131      5.176 wddm: Present list FFFFFA0BAACE5BB0 (context list 256), private 0000000000000000/0, driver data 0
+   132      5.176 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   133      5.176 wddm: Present list q4-7  FFFFD00704C0C0B0 00000000008DC000 0000000000000000 0000000000000000
+   134      5.176 wddm: Present list q8-11 FFFFD00704C0B470 0000000000012000 0000000000000000 0000000000000000
+   135      5.176 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   136      5.176 wddm: blit skipped: context has no root
+   140      5.218 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   141      5.218 wddm: Present list FFFFFA0BAACE5BB0 (context list 256), private 0000000000000000/0, driver data 0
+   142      5.218 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   143      5.218 wddm: Present list q4-7  FFFFD00704C0C0B0 00000000008DC000 0000000000000000 0000000000000000
+   144      5.218 wddm: Present list q8-11 FFFFD00704C0B470 0000000000012000 0000000000000000 0000000000000000
+   145      5.218 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   146      5.218 wddm: blit source (reading 3) FFFFD00704C0C0B0 1920x1200 pitch 7680 format 21 size 0x8CA000 va 0x8DC000 -> 0x271398000 .. 0x271C61FFF
+   147      5.218 wddm: blit 1 rectangles, 48 rows copied
+log exit 0, 274 lines -> C:\BC250\e16\out\ring-e22r3-082659.log
+ring-e22r3-082659.log
+    10      0.118 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    18      0.122 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    29      0.122 wddm: QUERYSEGMENT4 pass 2: 2 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+    37      0.124 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    40      0.124 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    43      0.124 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    46      0.124 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    91      0.172 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+    94      0.174 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   103      0.174 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   104      0.174 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   105      0.174 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   112      0.176 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   116      0.180 dcnflip: SetVidPnSourceAddress flip: card 0xF400ACE000 -> physical 0x270ACE000
+   117      0.180 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   118      0.180 dcnflip: write 0x14128 = 0x00115104 -> 0x00000000
+   119      0.180 wddm: hardware vsync on (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)
+   139      5.176 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   148      5.218 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 0
+   157      5.234 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 0
+   166      5.252 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 0
+   175      5.254 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 0
+   184      5.268 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 0
+   193      9.932 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 0
+   202      9.952 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 0
+   223     64.413 wddm summary: ---- DDI calls: name, count, first log line ----
+   224     64.413 wddm summary: QueryAdapterInfo                   12  first at 19
+   225     64.413 wddm summary: GetNodeMetadata                     1  first at 27
+   226     64.413 wddm summary: CreateDevice                        3  first at 33
+   227     64.413 wddm summary: CreateContext                       2  first at 35
+   228     64.413 wddm summary: CreateProcess                       2  first at 32
+   229     64.413 wddm summary: SetRootPageTable                    2  first at 58
+   230     64.413 wddm summary: CreateAllocation                    2  first at 98
+   231     64.413 wddm summary: DescribeAllocation                  3  first at 106
+   232     64.413 wddm summary: GetStandardAllocationDriverData      4  first at 96
+   233     64.413 wddm summary: OpenAllocation                      2  first at 100
+   234     64.413 wddm summary: BuildPagingBuffer                1079  first at 37
+   235     64.413 wddm summary: SubmitCommandVirtual               60  first at 139
+   236     64.413 wddm summary: Present                            60  first at 130
+   237     64.413 wddm summary: SetVidPnSourceAddress               1  first at 117
+   238     64.413 wddm summary: ControlInterrupt                  390  first at 122
+   239     64.413 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   240     64.413 wddm summary: adapter info type   1       1  first at 19
+   241     64.413 wddm summary: adapter info type  15       1  first at 20
+   242     64.413 wddm summary: adapter info type  47       1  first at 21
+   243     64.413 wddm summary: adapter info type  13       1  first at 22
+   244     64.413 wddm summary: adapter info type  14       4  first at 23
+   245     64.413 wddm summary: adapter info type  11       2  first at 29
+   246     64.413 wddm summary: adapter info type  10       1  first at 31
+   247     64.413 wddm summary: adapter info type  16       1  first at 31
+   248     64.413 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   249     64.413 wddm summary: paging operation  11    1069  first at 37
+   250     64.413 wddm summary: paging operation  12       8  first at 91
+   251     64.413 wddm summary: paging operation   9       2  first at 104
+   252     64.413 wddm summary: objects created/destroyed: dev 3/0 ctx 2/0 proc 2/0 alloc 2/0, 11 alive
+   253     64.413 wddm summary: allocations opened/closed: 2/0 calls
+   254     64.413 wddm summary: submissions 0 physical + 60 virtual, 0 preemptions, last completed fence 60
+   255     64.413 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   256     64.413 wddm summary: node 1 (paging, closed): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+   257     64.413 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+   258     64.413 wddm summary: presents 60, flips 1 of 1 address calls (0 arrived above DISPATCH_LEVEL)
+   259     64.413 wddm summary: blit gate open, 59 blits, 1 skips, 59 sources translated contiguous
+   260     64.413 wddm summary: vsync not enabled by ControlInterrupt, 0 ticks, 0 reported to dxgkrnl
+   261     64.413 wddm summary: vidpn flip open: 1 hardware flips, 0 refused, 1 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+   262     64.413 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   263     64.413 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   264     64.413 vidmm summary: level 0: 1060 calls, 277051 entries, 9514 valid
+   265     64.413 vidmm summary: level 1: 5 calls, 1544 entries, 521 valid
+   266     64.413 vidmm summary: level 2: 2 calls, 1024 entries, 3 valid
+   267     64.413 vidmm summary: level 3: 2 calls, 1024 entries, 2 valid
+   268     64.413 vidmm summary: segment 0 named by 2 valid entries
+   269     64.415 vidmm summary: segment 1 named by 10038 valid entries
+   270     64.415 vidmm summary: 1028 cpu-virtual calls, 41 gpu-physical calls
+   271     64.415 vidmm summary: 280643 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+08:27:05 Tctl 68.2 C (raw 755B0FEF)
+=== gate closed (the stop restores the firmware's surface address)
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          35
+reports  live kernel reports written since boot: 0
+presents     31
+UnconfirmedStarts = 0
+P:\BC-250\scratch\screens\20260922-082729.png   960x600 px   823252 bytes
+08:27:35 Tctl 67.2 C (raw 745B0FEF)

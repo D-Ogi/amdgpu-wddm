@@ -1,6 +1,6 @@
 # E22 - the display flip on DCN 2.0.1 under Windows (ADR 0011)
 
-State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for the owner (a repeat of run 002 costs a minute); **step 3 (VidPN + interrupt) built, bc250kmd 0.7.24, review 24 GO, not yet run in the lab** - design in `docs/design/vidpn-flip.md`.
+State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for the owner (a repeat of run 002 costs a minute); **step 3 run (run 003): the flip works (M97), the interrupt does not arrive without the IH ring (M98)** - design in `docs/design/vidpn-flip.md`.
 
 ## Why
 
@@ -109,3 +109,4 @@ unchanged (`0x70000000`/`0x2`), `SURFACE_FLIP_PENDING` cleared, `OTG_STATUS_FRAM
 the fill flip, the address registers hold `0x71000000`/`0x2` (`0x271000000` split), `DCSURF_SURFACE_INUSE` catches
 up to it once the flip lands, `HUBP_UNDERFLOW_STATUS` (`DCHUBP_CNTL` bits `0x70000000`) clear. After `restore`, the
 address registers are back to `0x70000000`/`0x2`.
+| 003 | 0.7.24 (85fbf5c) | step 3: full table, `-GpuVa 1 -Blit 1 -VidPnFlip 1`, no engines, 40 s of desktop | H6 half: the DDI flip ran and the scanout moved to the CDD's surface (M97), but dxgkrnl flips once and blits the rest, so the desktop picture came from the CDD's own partly painted surface while the blit kept writing the old framebuffer; H7 refuted as written: the interrupt was armed and never fired with the IH ring down (M98); H8 held: no underflow, no TDR, no bugcheck, gates closed clean. `evidence/windows/2026-09-22-E22-dcn-flip-run-003/` |
