@@ -85,7 +85,12 @@ SEQUENCES = [
     # The ring is GTT memory: gpumem.c flushes the TLB after the bind as amdgpu did (its binds of 0.2495 to 0.2528 s,
     # the IH ring's among them), so the five registers of that flush belong to this sequence as well.
     ("Ih", "E12", r"^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|"
-                  r"MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$)", [(0.2495, 0.25290)], []),
+                  r"MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$)", [(0.2495, 0.25290)],
+     # Not traced: amdgpu's own bring-up (navi10_ih_irq_init) never reads this status register, so E12's window
+     # never captured it. Added read-only for docs/design/vsync-interrupt-route.md's diagnostic dump: IDLE,
+     # INPUT_IDLE and BIF_INTERRUPT_LINE are IH's own view of whether anything is incoming, distinct from the
+     # ring's rptr/wptr (which only reflect an entry already written into the ring).
+     [("OSSSYS", "mmIH_STATUS", "not traced: read-only diagnostic, docs/design/vsync-interrupt-route.md")]),
 ]
 
 # (ip, register, experiment that put it here, why it is safe)
@@ -106,7 +111,7 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
          ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD"),
          # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
-         ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"),
+         ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"), ("OSSSYS", "mmIH_STATUS"),
          # dcn.c: the eight registers its decoded summary reads by name (ADR 0011 point 3), out of the 75 on
          # DCN_REGISTERS below.
          ("DMU", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS"), ("DMU", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH"),

@@ -25,7 +25,7 @@
                                             // control (ADR 0013), read back and compared by the CPU
 #define BC250_ESCAPE_RUN_FBDUMP 17u         // BC250_ESCAPE_FBDUMP in: Hubp, FirstRow, RowCount; out: a read-only
                                             // band of the scanned-out surface's pixels, for bc250kmd_cli fbdump
-#define BC250_KMD_VERSION 0x0007001Du       // milestone 7 work, revision 29
+#define BC250_KMD_VERSION 0x0007001Eu       // milestone 7 work, revision 30
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -243,6 +243,14 @@ typedef struct _BC250_ESCAPE_IH {
     unsigned long EntryCount;               // out: vectors consumed from the ring
     unsigned long OverflowCount;
     unsigned long Rptr, Wptr;
+    // docs/design/vsync-interrupt-route.md: IH_STATUS, read best-effort (0 with EnableIh closed, like every other
+    // field above). Rptr/Wptr only show an entry already written into the ring; these three are IH's own view of
+    // whether anything is incoming or queued, from the other end of the same register.
+    unsigned long Idle;                     // IH_STATUS.IDLE: the whole block (ring, input side, write-back) is idle
+    unsigned long InputIdle;                // IH_STATUS.INPUT_IDLE: no client (any IP, DCE included) has anything
+                                            // pending at IH's own input right now
+    unsigned long BifInterruptLine;         // IH_STATUS.BIF_INTERRUPT_LINE: NBIO/BIF's own view of whether the
+                                            // interrupt line toward the host is currently asserted
     unsigned long KindCount;
     unsigned long LastCount;
     BC250_ESCAPE_IV_KIND Kinds[BC250_IH_MAX_KINDS];     // how many of each (client, source) pair
@@ -294,6 +302,16 @@ typedef struct _BC250_ESCAPE_DCN {
                                             // latched by hardware, independent of whether _INT_EN is set; a 1
                                             // here with the ISR's InterruptCount still 0 would mean the event
                                             // fires but never reaches the IH ring/MSI, a 0 that it never fires.
+    unsigned long Otg0VupdateIntStatus;     // OTG_GLOBAL_SYNC_STATUS bit 15, VUPDATE_NO_LOCK_INT_STATUS: never
+                                            // read by amdgpu's own source (irq_service_dcn20.c's generic path
+                                            // only ever writes this register), so its meaning here is empirical,
+                                            // not textual - comparing M92 (INT_EN 0, this bit 0) against M103
+                                            // (INT_EN 1, this bit 1) is the only cross-check on record, and it
+                                            // moved with the enable bit, not with EVENT_OCCURRED (already 1 in
+                                            // both): reads as EVENT_OCCURRED qualified by INT_EN, i.e. "this
+                                            // occurrence is actually armed to raise the interrupt", one register,
+                                            // same read as the two fields above, no extra MmioDcnRead call
+                                            // (docs/design/vsync-interrupt-route.md section 12).
     unsigned long Otg0MasterUpdateLocked;   // OTG_MASTER_UPDATE_LOCK.OTG_MASTER_UPDATE_LOCK field:
                                             // DcnFlipWriteSequence always unlocks (dcn.c), even on its error
                                             // path; 1 here between flips would mean something left it locked
@@ -534,12 +552,20 @@ typedef struct _BC250_ESCAPE_LOG {
 // CLI must agree on it; a packing option on either side makes this a build failure instead of garbage vectors.
 typedef char BC250_ESCAPE_FENCE_SIZE_CHECK[(sizeof(BC250_ESCAPE_FENCE) == 112) ? 1 : -1];
 typedef char BC250_ESCAPE_IV_SIZE_CHECK[(sizeof(BC250_ESCAPE_IV) == 48) ? 1 : -1];
-typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2336) ? 1 : -1];
+typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2344) ? 1 : -1];  // 2336 + 3 new unsigned long
+                                                                                      // fields, minus the 4 bytes
+                                                                                      // of padding they absorbed
+                                                                                      // before Last[] (was 2336 +
+                                                                                      // 12 - 4; vsync-interrupt-route.md)
 typedef char BC250_LOG_LINE_SIZE_CHECK[(sizeof(BC250_LOG_LINE) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_LOG_SIZE_CHECK[(sizeof(BC250_ESCAPE_LOG) == 10812) ? 1 : -1];
 typedef char BC250_ESCAPE_DCN_REG_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN_REG) == 56) ? 1 : -1];
-typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4288) ? 1 : -1];  // 4272 + 4 new unsigned
-                                                                                        // long fields (vsync-interrupt-route.md)
+typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4288) ? 1 : -1];  // still 4288: Otg0VupdateIntStatus
+                                                                                        // (+4 bytes) exactly consumes the 4
+                                                                                        // bytes of trailing pad the struct
+                                                                                        // already needed before Regs[75]
+                                                                                        // to reach a multiple of 8 (Hubp0Address's
+                                                                                        // alignment) - net size unchanged
 typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_SDMACOPY_SIZE_CHECK[(sizeof(BC250_ESCAPE_SDMACOPY) == 88) ? 1 : -1];
 typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 524416) ? 1 : -1];

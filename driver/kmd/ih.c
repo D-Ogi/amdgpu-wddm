@@ -31,6 +31,8 @@
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
+#include "osssys_5_0_0_sh_mask.h"    // IH_STATUS field masks for the escape's decoded summary only; every offset
+                                     // comes from regcalc, same as dcn.c's own sh_mask include
 #include "bc250_gmc.h"
 #include "bc250_ih.h"
 
@@ -276,6 +278,9 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
     Data->OverflowCount = 0;
     Data->Rptr = 0;
     Data->Wptr = 0;
+    Data->Idle = 0;
+    Data->InputIdle = 0;
+    Data->BifInterruptLine = 0;
     Data->KindCount = 0;
     Data->LastCount = 0;
     RtlZeroMemory(Data->Kinds, sizeof(Data->Kinds));
@@ -343,6 +348,16 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
         adev->backend = previousBackend;
     }
 
+    // IH_STATUS, best effort: reads 0 for all three (its own honest answer, not a fabricated one) while EnableIh is
+    // closed, the same convention MmioIhRead already uses for everything else in this escape.
+    {
+        ULONG ihStatus = 0;
+        (void)MmioIhRead(Device, BC250_REG_OSSSYS_IH_STATUS, &ihStatus);
+        Data->Idle = (ihStatus & IH_STATUS__IDLE_MASK) ? 1 : 0;
+        Data->InputIdle = (ihStatus & IH_STATUS__INPUT_IDLE_MASK) ? 1 : 0;
+        Data->BifInterruptLine = (ihStatus & IH_STATUS__BIF_INTERRUPT_LINE_MASK) ? 1 : 0;
+    }
+
     // What Windows assigned and how often the routine ran are known without the gate: they are about Windows, not the GPU.
     Data->InterruptIsMessage = Device->InterruptIsMessage;
     Data->InterruptVector = Device->InterruptVector;
@@ -372,8 +387,10 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
         for (i = 0; i < snap->LastCount; i++) Data->Last[i] = snap->Last[(first + i) % BC250_IH_MAX_LAST];      // oldest first
         if (Data->FaultOffset == 0 && !NT_SUCCESS(ih->DpcSequence.Fault)) Data->FaultOffset = ih->DpcSequence.FaultOffset;
     }
-    GuardLog("ih: op %u -> 0x%08X, result %d, %u writes; %u interrupt routine calls, %u ours, %u DPCs, %u vectors", Data->Op, status,
-             result, Data->WriteCount, Data->InterruptCount, Data->OurInterrupts, Data->DpcCount, Data->EntryCount);
+    GuardLog("ih: op %u -> 0x%08X, result %d, %u writes; %u interrupt routine calls, %u ours, %u DPCs, %u vectors; "
+             "status idle %u input_idle %u bif_interrupt_line %u", Data->Op, status, result, Data->WriteCount,
+             Data->InterruptCount, Data->OurInterrupts, Data->DpcCount, Data->EntryCount, Data->Idle, Data->InputIdle,
+             Data->BifInterruptLine);
     ExReleaseFastMutex(&Device->GartLock);
 
     Data->Result = result;

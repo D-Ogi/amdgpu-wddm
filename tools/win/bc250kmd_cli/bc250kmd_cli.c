@@ -626,6 +626,10 @@ static int Ih(const WCHAR *opText)
            h.InterruptIsMessage ? "message (MSI)" : "line", h.InterruptVector, h.InterruptCount, h.LastMessageNumber);
     printf("ring         %s, %lu interrupts taken as ours, %lu DPCs, %lu vectors consumed, %lu overflows, rptr 0x%lX wptr 0x%lX\n",
            h.Active ? "ENABLED" : "off", h.OurInterrupts, h.DpcCount, h.EntryCount, h.OverflowCount, h.Rptr, h.Wptr);
+    printf("status       IH_STATUS: idle %s, input_idle %s, bif_interrupt_line %s (docs/design/vsync-interrupt-route.md:\n"
+           "             input_idle clear would mean some client has something pending at IH's own input; bif_interrupt_line\n"
+           "             set would mean NBIO/BIF itself sees the host interrupt line asserted right now)\n",
+           h.Idle ? "yes" : "no", h.InputIdle ? "yes" : "no", h.BifInterruptLine ? "SET" : "clear");
     for (unsigned long i = 0; i < h.KindCount && i < BC250_IH_MAX_KINDS; i++)
         printf("K client %lu source %lu count %lu\n", h.Kinds[i].ClientId, h.Kinds[i].SourceId, h.Kinds[i].Count);
     for (unsigned long i = 0; i < h.LastCount && i < BC250_IH_MAX_LAST; i++)
@@ -783,6 +787,9 @@ static int Dcn(void)
     printf("             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) %s (docs/design/vsync-interrupt-route.md: latches\n"
            "             regardless of the enable bit above - a lone way to tell \"never fires\" from \"fires, never arrives\")\n",
            d.Otg0VupdateEventOccurred ? "SET" : "clear");
+    printf("             vupdate int_status (GLOBAL_SYNC_STATUS bit 15) %s (empirical, not read by amdgpu's own source:\n"
+           "             tracked the enable bit in the only cross-check on record, M92 vs M103 - \"qualified to interrupt\")\n",
+           d.Otg0VupdateIntStatus ? "SET" : "clear");
     printf("             master update lock %s, flip pending %s, vupdate keepout %s (all should read off/clear/off outside a flip;\n"
            "             no Linux reference, these hold only mid-sequence)\n",
            d.Otg0MasterUpdateLocked ? "LOCKED" : "unlocked", d.Hubp0FlipPending ? "PENDING" : "clear",

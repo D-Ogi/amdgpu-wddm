@@ -18,6 +18,7 @@
 #define BC250_REG_OSSSYS_IH_RB_CNTL 0x04480ul
 #define BC250_REG_OSSSYS_IH_RB_RPTR 0x0448Cul
 #define BC250_REG_OSSSYS_IH_RB_WPTR 0x04490ul
+#define BC250_REG_OSSSYS_IH_STATUS 0x04588ul
 #define BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS 0x0EB28ul
 #define BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH 0x0EB2Cul
 #define BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH 0x0EB1Cul
@@ -1179,7 +1180,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
 
 // E12: what amdgpu wrote on unit A in this step (E03 trace, 0.2495 to 0.2529 s, names matching
 // ^(OSSSYS\.IH_|NBIO\.(INTERRUPT_CNTL2?|BIF_IH_DOORBELL_RANGE)$|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_IH_ALLOW_COUNT 16
+#define BC250_MMIO_IH_ALLOW_COUNT 17
 static const unsigned long g_MmioIhAllow[BC250_MMIO_IH_ALLOW_COUNT] = {
     0x03844ul,   // NBIO.INTERRUPT_CNTL
     0x03848ul,   // NBIO.INTERRUPT_CNTL2
@@ -1192,6 +1193,7 @@ static const unsigned long g_MmioIhAllow[BC250_MMIO_IH_ALLOW_COUNT] = {
     0x04494ul,   // OSSSYS.IH_RB_WPTR_ADDR_HI
     0x04498ul,   // OSSSYS.IH_RB_WPTR_ADDR_LO
     0x0449Cul,   // OSSSYS.IH_DOORBELL_RPTR
+    0x04588ul,   // OSSSYS.IH_STATUS (not traced: read-only diagnostic, docs/design/vsync-interrupt-route.md)
     0x0A2D0ul,   // GC.GCVM_INVALIDATE_ENG17_REQ
     0x0A318ul,   // GC.GCVM_INVALIDATE_ENG17_ACK
     0x69B88ul,   // MMHUB.MMVM_INVALIDATE_ENG17_SEM

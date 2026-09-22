@@ -39,6 +39,7 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     Data->Otg0VTotal = 0;
     Data->Otg0VblankIntEnabled = 0;
     Data->Otg0VupdateEventOccurred = 0;
+    Data->Otg0VupdateIntStatus = 0;
     Data->Otg0MasterUpdateLocked = 0;
     Data->Hubp0FlipPending = 0;
     Data->Otg0VupdateKeepoutEn = 0;
@@ -94,6 +95,12 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     // one field that can tell "event never happens" and "event happens but never reaches the IH ring/MSI" apart
     // (docs/design/vsync-interrupt-route.md). Same register as the enable bit above, no extra read.
     Data->Otg0VupdateEventOccurred = (syncStatus & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) ? 1 : 0;
+    // Bit 15, VUPDATE_NO_LOCK_INT_STATUS: not read by amdgpu's own source anywhere (irq_service_dcn20.c's generic
+    // path only writes this register), so this is an empirical field - M92 vs M103 (docs/design/vsync-interrupt-
+    // route.md section 12) is the only cross-check on record, and it tracks the enable bit, not EVENT_OCCURRED:
+    // "this occurrence is qualified to raise the interrupt", distinct from "the event happened at all" above.
+    // Same register, same read, no extra MmioDcnRead call.
+    Data->Otg0VupdateIntStatus = (syncStatus & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_INT_STATUS_MASK) ? 1 : 0;
 
     // Three more reads for the same open question: whether gart/psp/gfx/ih coming up (E22 run 004, M98, M99)
     // leaves the OTG update lock or the vupdate keepout window held, or a flip pending, in a way run 001/002's
@@ -108,10 +115,10 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     Data->Otg0VupdateKeepoutEn = (vupdateKeepout & OTG0_OTG_VUPDATE_KEEPOUT__OTG_MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_EN_MASK) ? 1 : 0;
 
     GuardLog("dcn: %u registers, status 0x%08X; hubp0 addr 0x%llX pitch %u cntl 0x%08X; otg0 control 0x%08X h_total %u v_total %u; "
-             "vupdate int_en %u event_occurred %u master_locked %u flip_pending %u keepout_en %u",
+             "vupdate int_en %u event_occurred %u int_status %u master_locked %u flip_pending %u keepout_en %u",
              Data->RegCount, status, Data->Hubp0Address, Data->Hubp0Pitch, Data->Hubp0Cntl, Data->Otg0Control,
              Data->Otg0HTotal, Data->Otg0VTotal, Data->Otg0VblankIntEnabled, Data->Otg0VupdateEventOccurred,
-             Data->Otg0MasterUpdateLocked, Data->Hubp0FlipPending, Data->Otg0VupdateKeepoutEn);
+             Data->Otg0VupdateIntStatus, Data->Otg0MasterUpdateLocked, Data->Hubp0FlipPending, Data->Otg0VupdateKeepoutEn);
     Data->NtStatus = (unsigned long)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
