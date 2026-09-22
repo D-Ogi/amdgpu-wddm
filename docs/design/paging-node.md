@@ -118,6 +118,33 @@ coordinate spaces are the same (dxgkrnl accumulates one buffer across many `Buil
 one `SubmitCommand` flushes it, and both offsets are measured from the same buffer start), and the shadow is
 already a CPU pointer, no mapping needed at DISPATCH_LEVEL.
 
+**Corrected by E24 run 006 (facts M110), and the correction is smaller than it looks.** The shadow, the shared
+coordinate space and the accumulation across calls are all as described - run 006 measured dxgkrnl packing four
+fills into one buffer at 0x0, 0x140, 0x640, 0xB40 (M111). What is wrong above is the name of the door the flush
+comes through. VidMm creates node 1's paging system context with `DXGK_CREATECONTEXTFLAGS::VirtualAddressing`
+set, and a context that addresses virtually is submitted through `DxgkDdiSubmitCommandVirtual`; this driver saw
+`DxgkDdiSubmitCommand` called exactly zero times in 110 seconds against 1581 `BuildPagingBuffer` calls.
+`DXGKARG_SUBMITCOMMANDVIRTUAL` has no `DmaBufferSubmissionStartOffset` at all - it names the submission by
+`DmaBufferVirtualAddress`, a GPU address - so the offset into the shadow is recovered by subtracting
+`DXGKARG_BUILDPAGINGBUFFER::DmaBufferGpuVirtualAddress` (`d3dkmddi.h:5071`, "GPU virtual address of the start of
+the DMA buffer"), recorded on every call that writes bytes. Everything downstream of that subtraction - the
+shadow, `GfxSubmitPaging`, the fence, the IH DPC - is unchanged.
+
+The subtraction itself is the one thing that must never be guessed, because a wrong offset here does not draw a
+wrong picture, it runs a wrong DMA. Two properties hold it down. **One tracked buffer, not several.** The first
+version of this tracked four, on the reasoning that nothing obliges VidMm to use one paging buffer at a time -
+which is true, and beside the point: the shadow above is a single buffer indexed by `DmaBufferWriteOffset`, so
+two paging buffers being built at once write over each other at the same offsets. Tracking four would have been
+a claim to know where four buffers' packets are while the shadow can hold one, and the failure mode is handing
+SDMA0 another buffer's bytes with a matching address to vouch for them. So the driver tracks the buffer whose
+packets are in the shadow now, and a submission naming any other is completed in software and counted. If that
+counter is ever non-zero, the answer is a shadow per buffer, not a longer table. **A high-water mark.**
+`DXGKARG_SUBMITCOMMANDVIRTUAL::DmaBufferSize` may name the whole buffer rather than the submitted length - it
+has no other field that could - so the driver records how far into the buffer it has actually written packets
+and cuts a submission back to it, resetting the mark whenever the buffer changes or dxgkrnl restarts one at
+offset 0. The invariant is the short one: **no byte reaches SDMA0 that this driver did not put in the shadow for
+the buffer being submitted.**
+
 Packets are emitted into the shadow through the *existing, measured* emitters, unmodified: a small, throwaway
 `struct amdgpu_ring` is built on the stack, pointed at the shadow buffer (`.ring = shadow + offset/4`,
 `.buf_mask`/`.max_dw` sized to the room left in the *dxgkrnl* buffer so `amdgpu_ring_alloc`'s own overflow

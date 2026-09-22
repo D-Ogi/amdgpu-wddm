@@ -1,12 +1,16 @@
 # E24 - the paging node in the full table (stage D of ADR 0008, per ADR 0013)
 
-State: **the node answers real paging traffic correctly, and dxgkrnl never submits what it built** (run 005,
-facts M107 and M108). Four `VIRTUAL_FILL`s, 832 MB, translated and emitted with no refusal and no crash - H1
-holds, and so does the half of H2 that is about packets. Then `DxgkDdiSubmitCommand` was never called at all and
-node 1 finished at 0 hardware submitted, so the packets never reached SDMA0. The open question is no longer in
-our packet path but in what makes VidMm submit a paging buffer: a cap we report wrong, or an operation VidMm
-discards because the probe never waits on its paging fence. Next: settle that, then a run that proves the
-hardware half of H2 and H4 - and without `-VidPnFlip 1`, which this run had no use for and which left the owner
+State: **the node answers real paging traffic correctly, and the driver was listening for the submission at the
+wrong door** (runs 005 and 006, facts M107, M110, M111). Four `VIRTUAL_FILL`s, 832 MB, translated and emitted
+with no refusal and no crash - H1 holds, and so does the half of H2 that is about packets. What was read in run
+005 as "dxgkrnl never submits" (M108) is narrower than that: VidMm creates node 1's paging system context with
+`VirtualAddressing` set, so the buffer is submitted through `DxgkDdiSubmitCommandVirtual`, which this driver had
+wired to node 0 alone - and the software completion at the end of that function retired the paging fence without
+anybody noticing. `DxgkDdiSubmitCommand` is simply not the door a paging buffer uses on this machine. 0.7.29
+opens the other one, and makes a node-1 arrival visible in its own right rather than by subtracting presents
+from submissions. Next: run 007, which is the first run that can prove the hardware half of H2 and H4.
+
+Runs after 005 keep `-VidPnFlip 1` closed unless the run needs it: run 005 had no use for it and left the owner
 looking at M100's unpainted primary for four minutes.
 
 Getting here cost a bugcheck: run 004's first real call blew the kernel stack on a 0x5B00-byte local (M104,
@@ -43,9 +47,11 @@ this stage touches `driver/shim/bc250_sdma.h`'s callers, not its packet emitters
   recorded for `hSystemContext`, resolves to the same physical address the CPU-side allocation actually has - i.e.
   the paging node's addresses agree with stage B's own page tables, not just with a synthetic escape's.
 - H2: the packets `GfxPagingBuild` writes into the shadow buffer and the ones it copies into `pDmaBuffer` are byte
-  for byte the same, and `SubmitCommand`'s push of the shadow's bytes onto SDMA0 runs them with a fence that
+  for byte the same, and the submit DDI's push of the shadow's bytes onto SDMA0 runs them with a fence that
   retires through the IH DPC as `DXGK_INTERRUPT_DMA_COMPLETED`, `NodeOrdinal` 1 - the same completion path node 0's
   stage C already proved (facts M77), now on the second engine and through the interrupt rather than a poll.
+  (Written as `SubmitCommand` before run 006. It is `SubmitCommandVirtual` on this machine - M110 - which changes
+  which function does the pushing and nothing about what the hypothesis claims.)
 - H3: with `EnablePagingNode` closed, the table is unchanged from today's one-node table in every caps query,
   `NODEMETADATA` answer and `CreateContext` refusal - the regression bar. With it open, nothing about node 0's own
   behaviour changes (`GfxSubmitIb`, its fence, its watchdog) and no TDR fires on either node during a gated run.
@@ -71,3 +77,4 @@ either node, `WddmSummary`'s per-node counters agreeing with the escape's own. E
 | 003 | 0.7.25 (5dcf020) | fresh boot, node and flip gates open, one escape call per stage, dumps before and after | all eight stages returned, node 1 advertised and given a context by dxgkrnl, 1079 page-table operations and no transfers, no TDR, clean undo (M101, M102, M103). H3 holds; H1, H2 and H4 still untested for want of paging traffic. `evidence/windows/2026-09-22-E24-paging-node-run-003/` |
 | 004 | 0.7.25 (5dcf020) | fresh boot, same gates, then the two controls E24 was missing: `fence gfx x2` for the IH ring, then `kmtprobe --size 512M --hold 20` for VidMm | the ring delivers (202 interrupts, 203 vectors, `client 4 source 87` - M106, which refutes the reading of M98/M103); the pressure reached `GfxPagingBuild` and bugchecked 0x50 in `nt!_chkstk` on our own 23 KB stack frame (M104, M105). H1, H2, H4 still untested - the crash came before a packet was built. `evidence/windows/2026-09-22-E24-paging-node-run-004/` |
 | 005 | 0.7.26 (4042b0e) | fresh boot, same gates, pressure in three steps: 64, 256, 512 MB | four `VIRTUAL_FILL`s answered, 872,415,232 bytes, 80 and 320 dwords of CONST_FILL at physical 0x271C62000 and 0x281C62000, no TDR, no bugcheck, clean undo (M107): **H1 holds and H2's build half with it**. But `DxgkDdiSubmitCommand` was never called and node 1 ends at 0 hardware submitted (M108), so nothing ran - H2's hardware half and H4 still open. `evidence/windows/2026-09-22-E24-paging-node-run-005/` |
+| 006 | 0.7.28 (963f23a) | fresh boot, same gates but **flip gate closed**, same three pressure steps; the question was whether advancing `pDmaBuffer` (M108) makes dxgkrnl submit | it makes dxgkrnl *pack*: the four fills are built at shadow offsets 0x0, 0x140, 0x640, 0xB40 and the DDI reports 320 fewer bytes free on the next call (M111). It does not make it submit: `SubmitCommand` is still absent from the tally. The run's own `CreateContext node 1 ... flags 0x00000005` says why - the paging context addresses virtually, so the buffer goes out through `SubmitCommandVirtual`, where node 1 was being completed in software unlogged (M110). No TDR, no bugcheck, clean undo, 68-73 C. `evidence/windows/2026-09-22-E24-paging-node-run-006/` |

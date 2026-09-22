@@ -216,6 +216,15 @@ typedef struct _BC250_WDDM {
     BOOLEAN PagingHwPending;
     ULONG PagingHwSeq;                  // gfx.c's PagingSubmitSeq of the submission in flight
     UINT PagingHwFence;
+    // Node 1's own deferral, the counterpart of DeferredValid/DeferredFence below. A completion of fence N
+    // retires every fence up to N, so a software completion that arrives while a submission is in flight must
+    // wait for it - but that ordering is per node, and until this field existed node 1 borrowed node 0's flag
+    // and node 0's slot: a node-1 fence could be published early (node 0 idle) or, worse, published under node
+    // 0's ordinal (node 0 busy). Unreachable while nothing ran on node 1; ADR 0008 stage D makes it a certainty,
+    // because a second paging submission arriving while the first is on the ring is refused with
+    // STATUS_DEVICE_BUSY and completed in software, which is exactly this case.
+    BOOLEAN PagingDeferredValid;
+    UINT PagingDeferredFence;
     KTIMER PagingSubmitTimer;
     KDPC PagingSubmitDpc;
     volatile LONG PagingHwSubmitted;
@@ -228,6 +237,37 @@ typedef struct _BC250_WDDM {
     volatile LONG PagingBytesMoved;
     volatile LONG PagingInsufficientBuffer;
     volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
+    // E24 run 006 (facts M110): the paging buffer leaves through SubmitCommandVirtual, not SubmitCommand, because
+    // VidMm creates node 1's system context with DXGK_CREATECONTEXTFLAGS::VirtualAddressing set (flags 0x5 in the
+    // run's own log). DXGKARG_SUBMITCOMMANDVIRTUAL has no submission start/end offsets - only
+    // DmaBufferVirtualAddress, the GPU address of the START OF THE SUBMISSION - so the shadow offset the packets
+    // were written at can only be recovered against the start of the buffer, which BuildPagingBuffer alone is
+    // told (DXGKARG_BUILDPAGINGBUFFER::DmaBufferGpuVirtualAddress, "GPU virtual address of the start of the DMA
+    // buffer").
+    //
+    // ONE buffer, and one is not a simplification: Gfx->PagingShadowMem is a single buffer indexed by
+    // DmaBufferWriteOffset (design note section 4a), so the packets of two paging buffers being built at the
+    // same time land on each other at the same offsets. Tracking several would be a claim to know where four
+    // buffers' packets are while the shadow can hold one - it would match a submission against bytes that
+    // belong to a different buffer and put them on SDMA0. So: the buffer whose packets are in the shadow right
+    // now, and nothing else. PagingVirtualUnmapped counts what that costs, and a run where it is not 0 is the
+    // evidence that would justify a shadow per buffer.
+    //
+    // Written is how far into that buffer this driver has actually put packets. The submit never runs past it,
+    // whatever size dxgkrnl names, and it is reset whenever the buffer changes or dxgkrnl restarts one at
+    // offset 0. No lock: BuildPagingBuffer is the only writer, everything is read through an interlocked
+    // accessor, and every race lands on the refusing side - a buffer that looks unwritten refuses, it does not
+    // invent bytes.
+    volatile LONG64 PagingBufferGpuVa;    // DmaBufferGpuVirtualAddress of the buffer the shadow holds, or 0
+    volatile LONG PagingBufferWritten;    // high-water mark in bytes: packets exist in the shadow below this
+    volatile LONG PagingVirtualSubmits[BC250_WDDM_NODE_COUNT_MAX];  // SubmitCommandVirtual, by node
+    volatile LONG PagingVirtualUnmapped;  // node-1 submissions that named no buffer the shadow was holding
+    volatile LONG PagingVirtualClamped;   // node-1 submissions cut back to the bytes actually written
+    // The question the paragraph above turns on, asked of the hardware instead of assumed: how often the shadow
+    // was taken over by a different paging buffer while it still held packets of the one before. 0 means VidMm
+    // builds one buffer at a time and a single shadow is the right shape; anything else means the packets of
+    // two buffers were landing on each other at the same offsets, and the answer is a shadow per buffer.
+    volatile LONG PagingBufferSwitches;
 
     // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, one in flight at most) and its fence is
     // reported when the hardware's arrives - from the IH DPC, from the submit itself if the interrupt won the race,
@@ -537,17 +577,22 @@ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT No
 #define BC250_WDDM_VMID 1u                  // the one hardware VMID, re-pointed at the submitter's root by gfx.c
 #define BC250_WDDM_SUBMIT_TIMEOUT_MS 500    // an M6 dispatch takes 28 us (facts M57); the TDR default is 2 s
 
-// A completion that did not come from the hardware. While a hardware submission is in flight it waits for it.
+// A completion that did not come from the hardware. While a hardware submission is in flight ON THAT NODE it
+// waits for it: the two nodes run on different rings, with different fences and different watchdogs, and node
+// 1's completion has no business waiting behind node 0's packet or being published under node 0's ordinal (the
+// PagingDeferredValid field's own comment).
 static void WddmCompleteSoftware(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT NodeOrdinal)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    BOOLEAN paging = NodeOrdinal == BC250_WDDM_NODE_COPY;
     BOOLEAN deferred;
     KIRQL irql;
 
     if (wddm == NULL) return;
     KeAcquireSpinLock(&wddm->Lock, &irql);
-    deferred = wddm->HwPending;
-    if (deferred) { wddm->DeferredValid = TRUE; wddm->DeferredFence = FenceId; }
+    deferred = paging ? wddm->PagingHwPending : wddm->HwPending;
+    if (deferred && paging) { wddm->PagingDeferredValid = TRUE; wddm->PagingDeferredFence = FenceId; }
+    else if (deferred) { wddm->DeferredValid = TRUE; wddm->DeferredFence = FenceId; }
     KeReleaseSpinLock(&wddm->Lock, irql);
     if (!deferred) WddmCompleteFence(Device, FenceId, NodeOrdinal);
 }
@@ -656,6 +701,65 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
 // GfxSubmitPaging instead, which takes no lock beyond gfx.c's own Sdma0RingLock. The two channels fail
 // independently: a node-1 timeout calls GfxPagingSubmitFail, never GfxSubmitFail, and vice versa.
 
+// The buffer the shadow is holding (the PagingBufferGpuVa field). BuildPagingBuffer is the only writer. The
+// mark is reset on two events, and both mean the same thing - the shadow's contents no longer describe what the
+// mark claims: a different buffer, and dxgkrnl restarting a buffer at offset 0, which it does on reuse.
+// Zeroing the mark before publishing the address is what keeps a submission from ever being matched against the
+// previous buffer's bytes.
+static void WddmPagingBufferWritten(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULONG WriteOffset, ULONG WrittenEnd)
+{
+    LONG old;
+
+    if (Wddm == NULL || GpuVa == 0 || WrittenEnd > BC250_WDDM_PAGING_BUFFER_BYTES) return;
+    if (WriteOffset == 0 || InterlockedCompareExchange64(&Wddm->PagingBufferGpuVa, GpuVa, GpuVa) != GpuVa)
+    {
+        LONG64 previous = InterlockedExchange64(&Wddm->PagingBufferGpuVa, 0);
+        LONG live = InterlockedExchange(&Wddm->PagingBufferWritten, 0);
+
+        // A different buffer arriving while this one still had packets in the shadow is the case the single
+        // shadow cannot serve (the PagingBufferSwitches field). A buffer dxgkrnl restarted at offset 0 is not
+        // that case: it is the same buffer, and its old packets are the ones being replaced on purpose.
+        if (previous != 0 && previous != GpuVa && live > 0 &&
+            InterlockedIncrement(&Wddm->PagingBufferSwitches) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: paging buffer 0x%llX took the shadow from 0x%llX, which still held %ld bytes of "
+                     "packets - a submission naming the old one will be refused from here on",
+                     (ULONGLONG)GpuVa, (ULONGLONG)previous, live);
+        InterlockedExchange64(&Wddm->PagingBufferGpuVa, GpuVa);
+    }
+    for (;;)
+    {
+        old = InterlockedCompareExchange(&Wddm->PagingBufferWritten, 0, 0);
+        if ((LONG)WrittenEnd <= old) break;
+        if (InterlockedCompareExchange(&Wddm->PagingBufferWritten, (LONG)WrittenEnd, old) == old) break;
+    }
+}
+
+// The reverse: an address from a submission back to [offset, end) of the shadow, or FALSE unless the shadow is
+// holding exactly that buffer and has packets at that point. End is capped at the high-water mark on purpose -
+// dxgkrnl may name a size that covers the whole buffer, and the bytes above the mark are not this submission's.
+static BOOLEAN WddmPagingBufferRange(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULONG Size, _Out_ ULONG* Offset,
+                                     _Out_ ULONG* End)
+{
+    LONG64 base;
+    ULONGLONG offset;
+    LONG written;
+
+    *Offset = 0;
+    *End = 0;
+    if (Wddm == NULL || GpuVa == 0) return FALSE;
+    base = InterlockedCompareExchange64(&Wddm->PagingBufferGpuVa, 0, 0);
+    if (base == 0 || GpuVa < base) return FALSE;
+    offset = (ULONGLONG)GpuVa - (ULONGLONG)base;
+    if (offset >= BC250_WDDM_PAGING_BUFFER_BYTES) return FALSE;
+    // Read after the address, and the address is published after the mark is cleared: a reader that saw this
+    // buffer can only see a mark belonging to it or a mark of 0, never the previous buffer's.
+    written = InterlockedCompareExchange(&Wddm->PagingBufferWritten, 0, 0);
+    if (written <= (LONG)offset) return FALSE;
+    *Offset = (ULONG)offset;
+    *End = ((ULONGLONG)offset + Size < (ULONGLONG)written) ? (ULONG)offset + Size : (ULONG)written;
+    return TRUE;
+}
+
 // Has node 1's in-flight fence arrived? Same shape as WddmGpuFence, called from the same places (the IH DPC,
 // the submit itself, the watchdog), at <= DISPATCH_LEVEL.
 void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
@@ -670,7 +774,9 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
     if (wddm->PagingHwPending && GfxPagingFenceArrived(Device, wddm->PagingHwSeq))
     {
         done = TRUE;
-        fence = wddm->PagingHwFence;
+        // The held-back completion, if there is one, is the later fence and retires this one with it.
+        fence = wddm->PagingDeferredValid ? wddm->PagingDeferredFence : wddm->PagingHwFence;
+        wddm->PagingDeferredValid = FALSE;
         wddm->PagingHwPending = FALSE;
         KeCancelTimer(&wddm->PagingSubmitTimer);
     }
@@ -700,7 +806,8 @@ static void WddmPagingSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _
     if (wddm->PagingHwPending)
     {
         timedOut = TRUE;
-        fence = wddm->PagingHwFence;
+        fence = wddm->PagingDeferredValid ? wddm->PagingDeferredFence : wddm->PagingHwFence;
+        wddm->PagingDeferredValid = FALSE;
         seq = wddm->PagingHwSeq;
         wddm->PagingHwPending = FALSE;
     }
@@ -981,6 +1088,16 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
              Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
+    // Which node SubmitCommandVirtual was called on, and how the node-1 ones were resolved against the paging
+    // buffers. Run 006 had to infer the node-1 count by subtracting presents from submissions (facts M110);
+    // no run after it does.
+    GuardLog("wddm summary: SubmitCommandVirtual by node: 0: %ld, 1: %ld (%ld named no buffer, %ld clamped), "
+             "shadow holds buffer 0x%llX to 0x%lX",
+             Wddm->PagingVirtualSubmits[BC250_WDDM_NODE_3D], Wddm->PagingVirtualSubmits[BC250_WDDM_NODE_COPY],
+             Wddm->PagingVirtualUnmapped, Wddm->PagingVirtualClamped, (ULONGLONG)Wddm->PagingBufferGpuVa,
+             (ULONG)Wddm->PagingBufferWritten);
+    GuardLog("wddm summary: paging buffer switches with packets still live: %ld (0 means one buffer at a time, "
+             "which is what the single shadow assumes)", Wddm->PagingBufferSwitches);
     GuardLog("wddm summary: BuildPagingBuffer: %ld transfers, %ld fills, %ld bytes, %ld insufficient-buffer, "
              "unsupported (not ready/no root/no translation/system memory/not contiguous) %ld/%ld/%ld/%ld/%ld",
              Wddm->PagingTransfersBuilt, Wddm->PagingFillsBuilt, Wddm->PagingBytesMoved, Wddm->PagingInsufficientBuffer,
@@ -2012,6 +2129,12 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGK
             // and a paging buffer of zero length has nothing to submit. Every other arm of this function
             // genuinely writes nothing and leaves it alone on purpose - this is the one arm that must not.
             pBuildPagingBuffer->pDmaBuffer = (PVOID)((PUCHAR)pBuildPagingBuffer->pDmaBuffer + (SIZE_T)written * 4u);
+            // Where this buffer starts in GPU address space and how far into it the packets now reach, for the
+            // submission that will name an address inside it and nothing else (the PagingBuffers field's own
+            // comment). After the write, so that a slot is only ever published for bytes that exist.
+            WddmPagingBufferWritten(wddm, (LONG64)pBuildPagingBuffer->DmaBufferGpuVirtualAddress,
+                                    pBuildPagingBuffer->DmaBufferWriteOffset,
+                                    pBuildPagingBuffer->DmaBufferWriteOffset + written * 4u);
             if (fill) InterlockedIncrement(&wddm->PagingFillsBuilt); else InterlockedIncrement(&wddm->PagingTransfersBuilt);
             InterlockedExchangeAdd(&wddm->PagingBytesMoved, (LONG)(bytes > 0x7FFFFFFFull ? 0x7FFFFFFF : bytes));
         }
@@ -2030,8 +2153,12 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
     UINT node = (context != NULL) ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
 
-    // This is also the path paging buffers take: hContext is NULL there and NodeOrdinal names the node. A failure
-    // return bugchecks (0x119, parameter 1 = 0x2), so there is none.
+    // This is the path a paging buffer takes only where the paging context addresses physically: hContext is NULL
+    // there and NodeOrdinal names the node. On this machine it does not - VidMm creates node 1's system context
+    // with VirtualAddressing set, and E24 run 006 measured this DDI as never called once in 110 seconds while
+    // 1581 paging buffers were built (facts M110). Kept, and kept correct, because nothing in the contract
+    // promises the virtual route is the only one. A failure return bugchecks (0x119, parameter 1 = 0x2), so
+    // there is none.
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSubmitCommand))
         GuardLog("wddm: SubmitCommand fence %u node %u flags 0x%08X segment %u size %u", pSubmitCommand->SubmissionFenceId,
                  node, pSubmitCommand->Flags.Value, pSubmitCommand->DmaBufferSegmentId, pSubmitCommand->DmaBufferSize);
@@ -2056,20 +2183,68 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
                                               _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* pSubmitCommand)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
     BC250_WDDM_OBJECT* context = WddmObject(pSubmitCommand->hContext, BC250_WDDM_MAGIC_CONTEXT);
     UINT node = (context != NULL) ? context->NodeOrdinal : pSubmitCommand->NodeOrdinal;
+    BOOLEAN first;
 
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSubmitCommandVirtual))
+    // The first few calls of each NODE, not of the DDI. Until E24 run 006 this logged the first few calls full
+    // stop, and the desktop's own presents on node 0 spent that budget in the first five seconds of the run - so
+    // the node-1 paging submissions that arrived a minute later left no trace whatsoever, and the summary's
+    // "0 hardware submitted" could not be told apart from "dxgkrnl never submitted anything" (facts M110). The
+    // same shape BuildPagingBuffer already uses for its own operations, and for the same reason.
+    {
+        static volatile LONG seen[BC250_WDDM_NODE_COUNT_MAX];
+        LONG calls = (node < RTL_NUMBER_OF(seen)) ? InterlockedIncrement(&seen[node]) : 0;
+        first = calls > 0 && calls <= BC250_WDDM_LOG_CALLS && KeGetCurrentIrql() <= DISPATCH_LEVEL;
+    }
+    (void)WddmFirstCalls(wddm, WddmDdiSubmitCommandVirtual);    // the DDI's own call count, logging aside
+    if (wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX) InterlockedIncrement(&wddm->PagingVirtualSubmits[node]);
+    if (first)
         GuardLog("wddm: SubmitCommandVirtual fence %u node %u flags 0x%08X va 0x%llX size %u",
                  pSubmitCommand->SubmissionFenceId, node, pSubmitCommand->Flags.Value,
                  (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize);
+
+    // ADR 0008 stage D, the half run 006 found missing. Node 1's paging buffer arrives HERE and not at
+    // Bc250WddmSubmitCommand: VidMm creates the paging system context with DXGK_CREATECONTEXTFLAGS::
+    // VirtualAddressing set (flags 0x5 in run 006's log, d3dkmddi.h line 1521), and a virtual-addressing context
+    // is submitted by address. DXGKARG_SUBMITCOMMANDVIRTUAL carries no submission start/end offsets at all, so
+    // the shadow range is recovered by WddmPagingBufferRange: DmaBufferVirtualAddress is the first byte of this
+    // submission, the table holds the first byte of each buffer BuildPagingBuffer wrote into, and the difference
+    // is the coordinate DmaBufferWriteOffset spoke in while the packets were written (design note section 4a).
+    // A submission that names any buffer other than the one the shadow is holding is completed in software and
+    // counted - never guessed at, because a wrong offset here does not draw a wrong picture, it runs a wrong DMA.
+    if (node == BC250_WDDM_NODE_COPY && wddm != NULL && wddm->NodeCount > BC250_WDDM_NODE_COPY &&
+        pSubmitCommand->DmaBufferSize != 0 && KeGetCurrentIrql() <= APC_LEVEL)
+    {
+        ULONG offset = 0, end = 0;
+
+        if (!WddmPagingBufferRange(wddm, (LONG64)pSubmitCommand->DmaBufferVirtualAddress,
+                                   pSubmitCommand->DmaBufferSize, &offset, &end))
+        {
+            if (InterlockedIncrement(&wddm->PagingVirtualUnmapped) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: node 1 submission at va 0x%llX, %u bytes: no paging buffer this driver wrote to "
+                         "contains it - completed in software",
+                         (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize);
+        }
+        else
+        {
+            if (end - offset != pSubmitCommand->DmaBufferSize &&
+                InterlockedIncrement(&wddm->PagingVirtualClamped) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: node 1 submission at va 0x%llX names %u bytes, %lu were written: running "
+                         "[0x%lX, 0x%lX) of the shadow", (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress,
+                         pSubmitCommand->DmaBufferSize, (ULONG)(end - offset), offset, end);
+            if (GfxPagingSubmitReady(device) &&
+                WddmSubmitPagingHardware(device, wddm, offset, end - offset, pSubmitCommand->SubmissionFenceId))
+                return STATUS_SUCCESS;
+        }
+    }
+
     // Stage C. An empty DMA buffer (every Present of stage A's inert DDI) has nothing to run; one with bytes in it
     // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root. Everything else
     // is completed in software as before. The header says PASSIVE_LEVEL, and gfx.c's lock needs <= APC_LEVEL.
-    // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a fixed VMID - node 1's
-    // own path (GfxSubmitPaging, SDMA0, no VMID) only exists behind Bc250WddmSubmitCommand (ADR 0008 stage D,
-    // design note section 6). A node-1 context reaching this DDI is unreached today (the UMD stub answers
-    // E_NOTIMPL before any context is created), and this guard is what keeps it that way if that ever changes.
+    // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a fixed VMID, and it stays
+    // node 0's alone - node 1 has its own arm above, its own ring (SDMA0, no VMID) and its own failure counters.
     if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
         device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
         WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, pSubmitCommand, node))
