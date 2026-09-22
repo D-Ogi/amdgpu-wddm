@@ -1,12 +1,16 @@
 # E24 - the paging node in the full table (stage D of ADR 0008, per ADR 0013)
 
-State: **VidMm reaches the node, and the first call it ever made killed the machine** (run 004, facts M104-M106).
-512 MB held by `kmtprobe` brought a `VIRTUAL_FILL` down `FillAllocationUsingGpuVa` -> `DdiBuildPagingBuffer` ->
-`GfxPagingBuild` (M105) - the traffic run 003 could not produce - and `bc250_sdma_paging_fill()` bugchecked 0x50
-in `nt!_chkstk` because it declared a 0x5B00-byte `struct amdgpu_device` on a 24 KB kernel stack (M104). Fixed in
-0.7.26, with `tools/win/stackbudget.py` now failing any build whose fixed frames reach 4 KB. The same run's
-positive control settled the other open question: the IH ring does deliver the display's vectors (M106). Next:
-run 005, the same pressure on 0.7.26, from a fresh boot, one bring-up (M78) - H1, H2 and H4 all ride on it.
+State: **the node answers real paging traffic correctly, and dxgkrnl never submits what it built** (run 005,
+facts M107 and M108). Four `VIRTUAL_FILL`s, 832 MB, translated and emitted with no refusal and no crash - H1
+holds, and so does the half of H2 that is about packets. Then `DxgkDdiSubmitCommand` was never called at all and
+node 1 finished at 0 hardware submitted, so the packets never reached SDMA0. The open question is no longer in
+our packet path but in what makes VidMm submit a paging buffer: a cap we report wrong, or an operation VidMm
+discards because the probe never waits on its paging fence. Next: settle that, then a run that proves the
+hardware half of H2 and H4 - and without `-VidPnFlip 1`, which this run had no use for and which left the owner
+looking at M100's unpainted primary for four minutes.
+
+Getting here cost a bugcheck: run 004's first real call blew the kernel stack on a 0x5B00-byte local (M104,
+M105), fixed in 0.7.26 with `tools/win/stackbudget.py` now failing any build whose fixed frames reach 4 KB.
 
 ## Why
 
@@ -66,3 +70,4 @@ either node, `WddmSummary`'s per-node counters agreeing with the escape's own. E
 | 002 | 0.7.24 (85fbf5c) | the control: node gate CLOSED, one escape call per stage | stages 1-5 returned, stage 6 (CP) hung the machine - and this was the second bring-up of its boot, the shape of M78. `evidence/windows/2026-09-22-E24-paging-node-run-002/` |
 | 003 | 0.7.25 (5dcf020) | fresh boot, node and flip gates open, one escape call per stage, dumps before and after | all eight stages returned, node 1 advertised and given a context by dxgkrnl, 1079 page-table operations and no transfers, no TDR, clean undo (M101, M102, M103). H3 holds; H1, H2 and H4 still untested for want of paging traffic. `evidence/windows/2026-09-22-E24-paging-node-run-003/` |
 | 004 | 0.7.25 (5dcf020) | fresh boot, same gates, then the two controls E24 was missing: `fence gfx x2` for the IH ring, then `kmtprobe --size 512M --hold 20` for VidMm | the ring delivers (202 interrupts, 203 vectors, `client 4 source 87` - M106, which refutes the reading of M98/M103); the pressure reached `GfxPagingBuild` and bugchecked 0x50 in `nt!_chkstk` on our own 23 KB stack frame (M104, M105). H1, H2, H4 still untested - the crash came before a packet was built. `evidence/windows/2026-09-22-E24-paging-node-run-004/` |
+| 005 | 0.7.26 (4042b0e) | fresh boot, same gates, pressure in three steps: 64, 256, 512 MB | four `VIRTUAL_FILL`s answered, 872,415,232 bytes, 80 and 320 dwords of CONST_FILL at physical 0x271C62000 and 0x281C62000, no TDR, no bugcheck, clean undo (M107): **H1 holds and H2's build half with it**. But `DxgkDdiSubmitCommand` was never called and node 1 ends at 0 hardware submitted (M108), so nothing ran - H2's hardware half and H4 still open. `evidence/windows/2026-09-22-E24-paging-node-run-005/` |
