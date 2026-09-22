@@ -1213,6 +1213,13 @@ static BOOLEAN PagingRangeContiguous(ULONGLONG RootPhysical, ULONGLONG Va, ULONG
 // is the host-testable half (driver/shim/test/paging_packets.c checks it dword for dword against
 // bc250_sdma_emit_copy_linear()/emit_fill(), M95, plus the room check below), and this one supplies only what
 // that file cannot have - the physical addresses and the shadow buffer to write them into.
+//
+// DmaBuffer is pBuildPagingBuffer->pDmaBuffer as the DDI hands it over: "a virtual address to the first
+// available byte in the paging buffer", not the buffer's start. DmaBufferOffset is that same byte's distance
+// from the start (pBuildPagingBuffer->DmaBufferWriteOffset), which is what the shadow is indexed by and what
+// SubmitCommand will later name in DmaBufferSubmissionStartOffset. The caller - and only the caller - advances
+// pDmaBuffer past what this function wrote; leaving it where it was is how the DDI says "nothing was written",
+// and saying that by accident is what left four built fills unsubmitted in E24 run 005 (facts M108).
 NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
                         ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
                         ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
@@ -1278,9 +1285,14 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     if (result == BC250_SDMA_PAGING_INSUFFICIENT) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
     if (result != BC250_SDMA_PAGING_OK) { status = STATUS_INVALID_PARAMETER; goto Done; }
 
-    // dxgkrnl's own buffer gets the same bytes, at the same offset: the documented contract (VidMm owns
-    // pDmaBuffer and may inspect it), even though GfxSubmitPaging never reads it back from there.
-    RtlCopyMemory((PUCHAR)DmaBuffer + DmaBufferOffset, shadow, (SIZE_T)written * 4u);
+    // dxgkrnl's own buffer gets the same bytes. DmaBuffer is pBuildPagingBuffer->pDmaBuffer, which the DDI
+    // documents as "a virtual address to the first available byte in the paging buffer" - the byte
+    // DmaBufferOffset already counts from the start - so the copy goes there directly. Adding the offset a
+    // second time, which this did until M108 was diagnosed, wrote the packet one whole operation further into
+    // dxgkrnl's buffer than dxgkrnl believed; harmless only while every operation of a run started at offset 0.
+    // The shadow keeps the offset, because that is the coordinate SubmitCommand's
+    // DmaBufferSubmissionStartOffset speaks in (bytes from the start of the buffer).
+    RtlCopyMemory(DmaBuffer, shadow, (SIZE_T)written * 4u);
     *DwordsWritten = (ULONG)written;
     GuardLog("gfx: paging %s %llu bytes at 0x%llX -> 0x%llX physical, %u dwords at shadow offset 0x%lX",
              Fill ? "fill" : "transfer", Bytes, srcPhysical, dstPhysical, written, DmaBufferOffset);

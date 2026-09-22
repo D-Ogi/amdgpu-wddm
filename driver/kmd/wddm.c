@@ -2004,6 +2004,14 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGK
         }
         if (written != 0)
         {
+            // The DDI's own words for pDmaBuffer: "[in/out] A virtual address to the first available byte in
+            // the paging buffer ... Before the DxgkDdiBuildPagingBuffer function returns, the driver should
+            // update pDmaBuffer to point past the last byte that is written to the paging buffer."
+            // Until this line existed, E24 run 005 built four correct fills and dxgkrnl submitted none of them
+            // (facts M108): leaving the pointer where it was is exactly how this DDI says "I wrote nothing",
+            // and a paging buffer of zero length has nothing to submit. Every other arm of this function
+            // genuinely writes nothing and leaves it alone on purpose - this is the one arm that must not.
+            pBuildPagingBuffer->pDmaBuffer = (PVOID)((PUCHAR)pBuildPagingBuffer->pDmaBuffer + (SIZE_T)written * 4u);
             if (fill) InterlockedIncrement(&wddm->PagingFillsBuilt); else InterlockedIncrement(&wddm->PagingTransfersBuilt);
             InterlockedExchangeAdd(&wddm->PagingBytesMoved, (LONG)(bytes > 0x7FFFFFFFull ? 0x7FFFFFFF : bytes));
         }
