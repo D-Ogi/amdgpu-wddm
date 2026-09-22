@@ -1,9 +1,8 @@
 # E24 - the paging node in the full table (stage D of ADR 0008, per ADR 0013)
 
-State: **run 001 hung the machine** (fact M96, cause under analysis; the gate stays closed until it is found). Built
-and reviewed before that run (bc250kmd 0.7.23, review 23 GO after four fixes: contiguity check before any multi-page
-packet, remaining-room arithmetic, interlocked fence sequence, narrow ring lock), which is exactly as much as a
-review can buy: the hang is in something no host test reaches.
+State: **the node runs in the full table** (run 003, facts M101-M103). Its hardware path is still unmeasured:
+an idle desktop never asks VidMm to move anything, so `BuildPagingBuffer` saw only page-table operations. Next: a
+run that gives VidMm something to page (M102), from a fresh boot, one bring-up (M78).
 
 ## Why
 
@@ -60,3 +59,5 @@ either node, `WddmSummary`'s per-node counters agreeing with the escape's own. E
 | Run | Build | What | Result |
 |---|---|---|---|
 | 001 | 0.7.24 (85fbf5c) | full table with every stage C gate plus `-PagingNode 1`, then the E19 run 003 bring-up: gart, psp, ih, `gfx run 8` | start, gart, psp and ih all fine; `gfx run 8` hung the whole machine (no bugcheck, no TDR, power button). H1-H4 untested. M96. `evidence/windows/2026-09-22-E24-paging-node-run-001/` |
+| 002 | 0.7.24 (85fbf5c) | the control: node gate CLOSED, one escape call per stage | stages 1-5 returned, stage 6 (CP) hung the machine - and this was the second bring-up of its boot, the shape of M78. `evidence/windows/2026-09-22-E24-paging-node-run-002/` |
+| 003 | 0.7.25 (5dcf020) | fresh boot, node and flip gates open, one escape call per stage, dumps before and after | all eight stages returned, node 1 advertised and given a context by dxgkrnl, 1079 page-table operations and no transfers, no TDR, clean undo (M101, M102, M103). H3 holds; H1, H2 and H4 still untested for want of paging traffic. `evidence/windows/2026-09-22-E24-paging-node-run-003/` |
