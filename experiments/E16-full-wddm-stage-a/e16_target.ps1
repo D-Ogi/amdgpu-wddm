@@ -112,12 +112,16 @@ switch ($Phase) {
         Set-ItemProperty $params -Name EnableFullWddm -Value $Full -Type DWord
         # 0.7.3: the ring goes into C:\BC250\kmdlog at every stop while the gate is open, because dxgkrnl may end a
         # full WDDM start by itself and unload the driver, ring and all (run 1 with 0.7.2 did exactly that).
-        Set-ItemProperty $params -Name KeepLog -Value $Full -Type DWord
+        # GuardLogKeep reads KeepLog at stop time. Clearing it before the disable throws away the session that
+        # is just ending (the 0.7.35 picture run). Leave it set across the stop, and clear it only once the
+        # closed driver is the one running.
+        Set-ItemProperty $params -Name KeepLog -Value 1 -Type DWord
         $gpu = Gpu
         Say ("disable: " + ((pnputil /disable-device "$($gpu.InstanceId)" 2>&1 | Out-String).Trim() -replace '\s+', ' '))
         Start-Sleep -Seconds 4
         Say ("enable:  " + ((pnputil /enable-device "$($gpu.InstanceId)" 2>&1 | Out-String).Trim() -replace '\s+', ' '))
         Start-Sleep -Seconds 10
+        if ($Full -eq 0) { Set-ItemProperty $params -Name KeepLog -Value 0 -Type DWord }
         State
         & $cli info 2>&1 | ForEach-Object { Say "$_" }
     }
