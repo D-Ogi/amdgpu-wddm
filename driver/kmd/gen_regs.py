@@ -13,6 +13,10 @@ Nobody types an offset (docs/02-register-addressing.md). Two tables come out of 
   g_MmioDcnAllow    ADR 0011 point 3: the offsets the read-only DCN dump (dcn.c) may read. Not from a trace -
                     there is none yet for this IP under Windows, which is what this table is the first step of -
                     but from DCN_REGISTERS below, computed the same way as every other table here.
+  g_MmioDcnWriteAllow  ADR 0011 point 3 / 0.7.20: the six HUBP0/OTG0 registers the gated flip (dcn.c's DcnFlip)
+                    may write, from DCN_WRITE_REGISTERS below - the M87 flip sequence, minus the two registers
+                    (FLIP_CONTROL2, VUPDATE_KEEPOUT) and the OTG0_OTG_GLOBAL_CONTROL0 write amdgpu issues but
+                    that were already at the value it wrote (facts M87 note, ADR 0011 step 2 of E22).
 
 Run:  python driver/kmd/gen_regs.py
 """
@@ -105,7 +109,20 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
          ("DMU", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS"), ("DMU", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH"),
          ("DMU", "mmHUBPREQ0_DCSURF_SURFACE_PITCH"), ("DMU", "mmHUBP0_DCHUBP_CNTL"),
          ("DMU", "mmOTG0_OTG_CONTROL"), ("DMU", "mmOTG0_OTG_H_TOTAL"), ("DMU", "mmOTG0_OTG_V_TOTAL"),
-         ("DMU", "mmOTG0_OTG_GLOBAL_SYNC_STATUS")]
+         ("DMU", "mmOTG0_OTG_GLOBAL_SYNC_STATUS"),
+         # dcn.c: DcnFlip's own registers (0.7.20, ADR 0011 point 3 step 2), the four read besides the six it
+         # writes (the write six are named again in DCN_WRITE_REGISTERS below, offset() caches the IP map so
+         # this costs nothing).
+         ("DMU", "mmHUBPREQ0_DCSURF_SURFACE_INUSE"), ("DMU", "mmOTG0_OTG_STATUS_FRAME_COUNT"),
+         ("DMU", "mmHUBPREQ0_DCSURF_FLIP_CONTROL"), ("DMU", "mmHUBPREQ0_DCSURF_SURFACE_CONTROL"),
+         ("DMU", "mmOTG0_OTG_MASTER_UPDATE_LOCK"), ("DMU", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
+
+# 0.7.20, ADR 0011 point 3 step 2 (M87, HUBP0 only): the write side of DcnFlip's sequence, on its own allow
+# list so that nothing outside this exact set can be written through the escape. Every name is already on
+# DCN_REGISTERS (the read table) below; MmioDcnWrite (mmio.c) checks this list, never the read one.
+DCN_WRITE_REGISTERS = ["mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmHUBPREQ0_DCSURF_FLIP_CONTROL",
+                       "mmHUBPREQ0_DCSURF_SURFACE_CONTROL", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH",
+                       "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG"]
 
 # ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
 # write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of
@@ -221,6 +238,23 @@ def main():
     out += [f'    {{ "{name}", 0x{off:05X}ul }},' for off, name in dcn_named]
     out += ["};", ""]
     summary.append(f"{len(dcn_named)} in the DCN dump")
+
+    # 0.7.20: DcnFlip's write allow list. Every offset must already be on dcn_allow (the read table) above -
+    # DcnFlip reads a register before it ever writes it (M87's sequence), so a write-only register here would
+    # be a register this driver never proved readable under Windows.
+    dcn_write = sorted({offset(maps, "DMU", name) for name in DCN_WRITE_REGISTERS})
+    if len(dcn_write) != len(DCN_WRITE_REGISTERS):
+        sys.exit("DCN_WRITE_REGISTERS has two names for the same offset: gen_regs.py assumed they are all distinct")
+    for off in dcn_write:
+        if off not in dcn_allow:
+            sys.exit(f"dcn write: 0x{off:05X} is not on DCN_REGISTERS (the read table) - add it there first")
+    out += ["// 0.7.20, ADR 0011 point 3 step 2 (M87, HUBP0 only): DcnFlip's write allow list (gen_regs.py's",
+            "// DCN_WRITE_REGISTERS). Sorted, unique, checked by MmioDcnWrite; every offset is also in g_MmioDcnAllow.",
+            f"#define BC250_MMIO_DCN_WRITE_ALLOW_COUNT {len(dcn_write)}",
+            "static const unsigned long g_MmioDcnWriteAllow[BC250_MMIO_DCN_WRITE_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in dcn_write[i:i + 10]) + "," for i in range(0, len(dcn_write), 10)]
+    out += ["};", ""]
+    summary.append(f"{len(dcn_write)} in the DCN flip's write list")
 
     for ip, name in NAMED:
         if offset(maps, ip, name) not in reads and offset(maps, ip, name) not in sequenced and offset(maps, ip, name) not in dcn_allow:

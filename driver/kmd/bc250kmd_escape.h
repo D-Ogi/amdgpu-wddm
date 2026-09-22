@@ -19,7 +19,9 @@
 #define BC250_ESCAPE_GET_LOG 12u            // BC250_ESCAPE_LOG in: From; out: the driver's log ring from that sequence on
 #define BC250_ESCAPE_LOG_SUMMARY 13u        // BC250_ESCAPE_LOG: wddm.c writes its counter tables into the ring, then as GET_LOG
 #define BC250_ESCAPE_RUN_DCN 14u            // BC250_ESCAPE_DCN: a read-only dump of the DCN registers (ADR 0011 point 3)
-#define BC250_KMD_VERSION 0x00070013u       // milestone 7 work, revision 19
+#define BC250_ESCAPE_RUN_DCNFLIP 15u        // BC250_ESCAPE_DCNFLIP in: Physical, Fill, FillColor, Restore; out: the
+                                            // whole flip sequence, decoded (ADR 0011 point 3 step 2)
+#define BC250_KMD_VERSION 0x00070014u       // milestone 7 work, revision 20
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -35,6 +37,7 @@
 #define BC250_ESCAPE_FLAG_GFX 64u           // the EnableGfx gate was open at start
 #define BC250_ESCAPE_FLAG_IH 128u           // the EnableIh gate was open at start
 #define BC250_ESCAPE_FLAG_FULL_WDDM 256u    // the EnableFullWddm gate was open in DriverEntry: the full table is live
+#define BC250_ESCAPE_FLAG_DCN_WRITE 512u    // the EnableDcnWrite gate was open at start (needs EnableMmio too)
 
 // The two independent ways to the same VRAM byte (vram.c).
 #define BC250_VRAM_PATH_PHYSICAL 0u         // system physical address of the carve-out: GCMC_VM_FB_OFFSET << 24
@@ -278,6 +281,38 @@ typedef struct _BC250_ESCAPE_DCN {
     BC250_ESCAPE_DCN_REG Regs[BC250_DCN_REG_COUNT];
 } BC250_ESCAPE_DCN;
 
+// ---- BC250_ESCAPE_RUN_DCNFLIP (dcn.c): one gated display flip on HUBP0/OTG0 ------------------------------------------------
+//
+// ADR 0011 point 3 step 2, E22 step 2, the M87 sequence for HUBP0 only: OTG0_OTG_MASTER_UPDATE_LOCK = 1;
+// HUBPREQ0_DCSURF_FLIP_CONTROL = 0; _SURFACE_CONTROL = 0; the new address; OTG0_OTG_MASTER_UPDATE_LOCK = 0;
+// OTG0_OTG_TRIGA_MANUAL_TRIG = 1; then a poll of _FLIP_CONTROL bit 0x100 (SURFACE_FLIP_PENDING). Needs EnableMmio
+// and EnableDcnWrite (BC250_ESCAPE_FLAG_DCN_WRITE); Fill needs EnableVramWrite as well. Not yet
+// SetVidPnSourceAddress and not yet the interrupt - both come with the full table and the IH ring.
+#define BC250_DCNFLIP_REASON_LEN 64
+
+typedef struct _BC250_ESCAPE_DCNFLIP {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_DCNFLIP
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long long Physical;            // in: system physical address to flip HUBP0 to; ignored when Restore != 0
+    unsigned long Fill;                     // in: nonzero = paint the target surface before the flip (needs EnableVramWrite,
+                                            //     refused for the firmware's own address, ignored when Restore != 0)
+    unsigned long FillColor;                // in: ARGB8888 fill colour
+    unsigned long Restore;                  // in: nonzero = flip back to the firmware's own stored address
+    char Reason[BC250_DCNFLIP_REASON_LEN];  // out: why, when Status is REFUSED; empty otherwise
+    unsigned long long FirmwareAddress;     // out: the address stored as the firmware's own (device state, ADR 0011)
+    unsigned long long AddressBefore, AddressAfter;     // out: HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS[_HIGH]
+    unsigned long InUseBefore, InUseAfter;              // out: HUBPREQ0_DCSURF_SURFACE_INUSE
+    unsigned long FrameCountBefore, FrameCountAfter;    // out: OTG0_OTG_STATUS_FRAME_COUNT
+    unsigned long FlipPendingCleared;       // out: 1 when SURFACE_FLIP_PENDING (0x100) cleared inside the wait
+    unsigned long WaitUs;                   // out: microseconds spent polling it
+    unsigned long DchubpCntl;               // out: HUBP0_DCHUBP_CNTL, raw, read after the flip
+    unsigned long Underflow;                // out: DchubpCntl's HUBP_UNDERFLOW_STATUS field (0x70000000), decoded
+} BC250_ESCAPE_DCNFLIP;
+
 // ---- BC250_ESCAPE_RUN_FENCE (gfx.c): fences on one ring, one after the other ----------------------------------------------
 #define BC250_FENCE_RING_GFX 0u
 #define BC250_FENCE_RING_COMPUTE0 1u        // 1..8: the eight compute rings
@@ -388,3 +423,4 @@ typedef char BC250_LOG_LINE_SIZE_CHECK[(sizeof(BC250_LOG_LINE) == 168) ? 1 : -1]
 typedef char BC250_ESCAPE_LOG_SIZE_CHECK[(sizeof(BC250_ESCAPE_LOG) == 10812) ? 1 : -1];
 typedef char BC250_ESCAPE_DCN_REG_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN_REG) == 56) ? 1 : -1];
 typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4272) ? 1 : -1];
+typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];

@@ -111,6 +111,17 @@ typedef struct _BC250_DEVICE {
     BOOLEAN MmioPspEnabled;
     BOOLEAN MmioGfxEnabled;
 
+    // dcn.c's gated flip (0.7.20, ADR 0011 point 3 step 2). DcnWriteEnabled is EnableMmio && EnableDcnWrite
+    // (mmio.c's MmioStart). The other four are the flip's own memory: the firmware's own HUBP0 address, captured
+    // once per device start on the first DcnFlip call of any kind (flip, fill or restore) before anything is
+    // written; the address the most recent successful flip left HUBP0 at; and whether that address is still the
+    // firmware's - which is what the stop path (pnp.c) asks before it calls DcnRestore.
+    BOOLEAN DcnWriteEnabled;
+    BOOLEAN DcnFirmwareKnown;
+    ULONGLONG DcnFirmwareAddress;
+    ULONGLONG DcnCurrentAddress;
+    BOOLEAN DcnDiverged;
+
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
     BOOLEAN VramWriteEnabled;
@@ -200,6 +211,9 @@ typedef struct _BC250_DCN_REG_INFO {
 } BC250_DCN_REG_INFO;
 NTSTATUS MmioDcnRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table);
+// 0.7.20 (ADR 0011 point 3 step 2): the write side, g_MmioDcnWriteAllow's six HUBP0/OTG0 registers only, gated
+// by Device->DcnWriteEnabled. Every call logged (dcn.c's DcnFlip is the only caller).
+NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
 
 // ih.c
 struct _BC250_ESCAPE_IH;
@@ -215,6 +229,18 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_IH* Dat
 // Device state - so, unlike gart.c/psp.c/gfx.c/ih.c, no Start/Stop and no GartLock.
 struct _BC250_ESCAPE_DCN;
 void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DCN* Data);
+
+// dcn.c (0.7.20, ADR 0011 point 3 step 2): the gated flip. PASSIVE_LEVEL only (KeStallExecutionProcessor's poll,
+// MmMapIoSpaceEx for the optional fill). Physical is a system physical address (M31); ignored when Restore is
+// set, when the target is instead Device->DcnFirmwareAddress. No GartLock: DMU is not on the register set any
+// GART/PSP/GFX/IH sequence touches, so nothing here can race a bring-up sequence, only a second flip escape -
+// which dxgkrnl already serializes through Escape->Flags.HardwareAccess like every write escape in this driver.
+struct _BC250_ESCAPE_DCNFLIP;
+void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DCNFLIP* Data);
+// The stop path's undo (pnp.c, ADR 0011 consequences): flips back to the firmware's address when Device->DcnDiverged
+// says the most recent flip left it somewhere else. A no-op, logged as one, when it does not - so pnp.c can call
+// it unconditionally rather than reach into dcn.c's state.
+void DcnStop(_Inout_ BC250_DEVICE* Device);
 
 // sequence.c
 void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,

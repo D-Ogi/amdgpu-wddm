@@ -26,6 +26,12 @@
 #define BC250_REG_DMU_OTG0_OTG_H_TOTAL 0x13FA8ul
 #define BC250_REG_DMU_OTG0_OTG_V_TOTAL 0x13FBCul
 #define BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS 0x14128ul
+#define BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_INUSE 0x0EB84ul
+#define BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT 0x14030ul
+#define BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL 0x0EB6Cul
+#define BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL 0x0EB68ul
+#define BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK 0x1412Cul
+#define BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG 0x13FE8ul
 #define BC250_DCN_REG_INFO_COUNT 75
 
 // The tables are for mmio.c alone; everybody else gets the names.
@@ -1283,6 +1289,13 @@ static const BC250_DCN_REG_INFO g_DcnRegisters[BC250_DCN_REG_INFO_COUNT] = {
     { "OTG1_OTG_VUPDATE_PARAM", 0x14320ul },
     { "OTG1_OTG_TRIGA_MANUAL_TRIG", 0x141E8ul },
     { "DCHUBBUB_CTRL_STATUS", 0x0E7D0ul },
+};
+
+// 0.7.20, ADR 0011 point 3 step 2 (M87, HUBP0 only): DcnFlip's write allow list (gen_regs.py's
+// DCN_WRITE_REGISTERS). Sorted, unique, checked by MmioDcnWrite; every offset is also in g_MmioDcnAllow.
+#define BC250_MMIO_DCN_WRITE_ALLOW_COUNT 6
+static const unsigned long g_MmioDcnWriteAllow[BC250_MMIO_DCN_WRITE_ALLOW_COUNT] = {
+    0x0EB28, 0x0EB2C, 0x0EB68, 0x0EB6C, 0x13FE8, 0x1412C,
 };
 
 #endif

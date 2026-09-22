@@ -1,6 +1,6 @@
 # E22 - the display flip on DCN 2.0.1 under Windows (ADR 0011)
 
-State: **step 1 done** (run 001, facts M92); step 2 (the flip) not started.
+State: **step 1 done** (run 001, facts M92); step 2 (the flip) built (bc250kmd 0.7.20), run 002 not yet on the lab.
 
 ## Why
 
@@ -20,17 +20,63 @@ siedzi (who takes no risk sits in no jail) - so no risk in step 1: reads only.
    - H2: the firmware's display programming is untouched by the display-only driver and by dxgkrnl's POST path
      -> **confirmed** (M92).
    - H3: OTG0 keeps scanning at 60 Hz while our driver runs -> **confirmed**, frame count +60 in ~1 s (M92).
-2. **Flip** (next build): behind a new gate `EnableDcnFlip`, `SetVidPnSourceAddress` writes the M87 sequence
-   for HUBP0 only (the firmware lights HUBP0 alone; amdgpu's HUBP0+HUBP3 split is wishlist L30), with the
-   address converted MC -> physical (M85), the firmware's address restored at stop, and the vblank interrupt
-   from `OTG0_OTG_GLOBAL_SYNC_STATUS` bit 12 / IH client 4 src 0x57 (M88) reported through
-   `DxgkCbNotifyInterrupt` as `DXGK_INTERRUPT_CRTC_VSYNC`. Flip-done = `HUBPREQ0_DCSURF_FLIP_CONTROL` bit 0x100
-   clear, polled from the vblank DPC the way 6.18.52 does. Hypotheses to write before that run: H4 the first
-   flip to the firmware's own address (a no-op flip) leaves the picture intact; H5 a flip to a driver-filled
-   surface shows it; H6 the interrupt arrives once per frame and stops when disabled.
+2. **One gated flip, no VidPN yet, no interrupt yet** (bc250kmd 0.7.20, `bc250kmd_cli dcnflip`, escape
+   `BC250_ESCAPE_RUN_DCNFLIP`): behind a new gate `EnableDcnWrite` (needs `EnableMmio`), the M87 write sequence
+   for HUBP0/OTG0 only - `OTG0_OTG_MASTER_UPDATE_LOCK` = 1, `HUBPREQ0_DCSURF_FLIP_CONTROL` = 0,
+   `_SURFACE_CONTROL` = 0, the new address, `OTG0_OTG_MASTER_UPDATE_LOCK` = 0, `OTG0_OTG_TRIGA_MANUAL_TRIG` = 1,
+   then a poll of `_FLIP_CONTROL` bit 0x100 (`SURFACE_FLIP_PENDING`) up to 50 ms - on a write allow list of its
+   own (`g_MmioDcnWriteAllow`, `gen_regs.py`'s `DCN_WRITE_REGISTERS`, six registers). The firmware's own HUBP0
+   address is captured once per device start (the first `dcnflip` of any kind) and restored at stop if the last
+   flip left HUBP0 elsewhere (ADR 0011, consequences). An optional CPU fill (`Fill`/`FillColor`, needs
+   `EnableVramWrite`, refused for the firmware's own address) paints the target surface before the flip, so a
+   flip shows something visibly different without `SetVidPnSourceAddress` or a real allocation yet. Not
+   `OTG0_OTG_GLOBAL_CONTROL0`, `OTG_VUPDATE_KEEPOUT` or `FLIP_CONTROL2`: amdgpu wrote those to values the
+   firmware already has (0, 0, and `0x440` triple buffering) - M87's note - so this driver leaves them alone.
+   Address validation: 4 KiB aligned, the whole 1920x1200 A8R8G8B8 surface (pitch 7680) inside the VRAM
+   carve-out (M31), or the firmware's own address (always allowed, the no-op flip and the restore).
+3. **`SetVidPnSourceAddress` and the interrupt** (later build): the same write sequence from the full table's
+   present path instead of the escape, and the vblank interrupt from `OTG0_OTG_GLOBAL_SYNC_STATUS` bit 12 /
+   IH client 4 src 0x57 (M88) reported through `DxgkCbNotifyInterrupt` as `DXGK_INTERRUPT_CRTC_VSYNC`, polled
+   from the vblank DPC the way 6.18.52 does - both need the full interrupt table and the IH ring, not built yet.
+
+Hypotheses for run 002 (step 2, the escape only - H6 needs step 3's interrupt and stays open until then):
+
+- **H4**: a flip to the firmware's own address (a no-op flip: `dcnflip <firmware address>` or `dcnflip
+  restore` before anything else has flipped) leaves the picture on the monitor intact, `SURFACE_FLIP_PENDING`
+  clears, and `OTG0_OTG_STATUS_FRAME_COUNT` keeps advancing across it.
+- **H5**: a flip to a driver-filled surface (`dcnflip 0x271000000 fill 0xFF2060C0`) shows the fill on the
+  monitor - a blue field with a white border and a diagonal line - in place of the desktop, and `dcnflip
+  restore` afterwards brings the desktop back.
+- **H6** (deferred to step 3): the vblank interrupt arrives once per frame while a flip is live and stops when
+  `EnableDcnWrite`/`EnableIh` are closed. Not testable yet: this build raises no interrupt of its own for DCN.
 
 ## Runs
 
 | Run | Build | What | Result |
 |---|---|---|---|
 | 001 | 0.7.19 (d1b7651) | dump twice, EnableMmio only, display-only | all 75 registers read, values = Linux firmware state, frame count moving. `evidence/windows/2026-09-22-E22-dcn-read-run-001/` |
+| 002 | 0.7.20 | `EnableMmio` + `EnableDcnWrite` + `EnableVramWrite` = 1, display-only; sequence: `dcn` dump, `dcnflip` to the firmware's own address (H4, no-op), `dcnflip 0x271000000 fill 0xFF2060C0` (H5), `dcnflip restore`, `dcn` dump again | not yet run: needs the owner's lab session (built, not installed) |
+
+Run plan for 002 (a script like
+`evidence/windows/2026-09-22-E22-dcn-read-run-001/run-001-script.ps1`, extended):
+
+```
+Set-ItemProperty $params -Name EnableMmio -Value 1 -Type DWord
+Set-ItemProperty $params -Name EnableDcnWrite -Value 1 -Type DWord
+Set-ItemProperty $params -Name EnableVram -Value 1 -Type DWord
+Set-ItemProperty $params -Name EnableVramWrite -Value 1 -Type DWord
+# disable/enable the device, as run 001 did, then:
+& $cli dcn                                              # baseline: firmware state, as M92
+& $cli dcnflip <firmware address from the dump above>   # H4: no-op flip
+& $cli dcnflip 0x271000000 fill 0xFF2060C0               # H5: owner should see a blue field, white border, on the monitor
+& $cli dcnflip restore                                  # back to the firmware's address
+& $cli dcn                                              # confirm: ADDRESS/_HIGH, INUSE back to the firmware values
+Set-ItemProperty $params -Name EnableDcnWrite -Value 0 -Type DWord
+Set-ItemProperty $params -Name EnableMmio -Value 0 -Type DWord
+```
+
+Expected register values after each step (M85-M87, M92): after the no-op flip, `HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS`/`_HIGH`
+unchanged (`0x70000000`/`0x2`), `SURFACE_FLIP_PENDING` cleared, `OTG_STATUS_FRAME_COUNT` higher than before. After
+the fill flip, the address registers hold `0x71000000`/`0x2` (`0x271000000` split), `DCSURF_SURFACE_INUSE` catches
+up to it once the flip lands, `HUBP_UNDERFLOW_STATUS` (`DCHUBP_CNTL` bits `0x70000000`) clear. After `restore`, the
+address registers are back to `0x70000000`/`0x2`.

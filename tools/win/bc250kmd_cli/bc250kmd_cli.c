@@ -775,6 +775,61 @@ static int Dcn(void)
     return 0;
 }
 
+// ---- dcnflip: one gated flip on HUBP0/OTG0 (BC250_ESCAPE_RUN_DCNFLIP, 0.7.20, ADR 0011 point 3 step 2) ------------------
+//
+// "bc250kmd_cli dcnflip <physical hex> [fill <argb hex>]" or "bc250kmd_cli dcnflip restore". Needs EnableMmio and
+// EnableDcnWrite; fill needs EnableVramWrite as well and is refused for the firmware's own address.
+
+static void PrintDcnFlip(const BC250_ESCAPE_DCNFLIP *d)
+{
+    printf("dcnflip: %s, NTSTATUS 0x%08lX %s\n", d->Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED",
+           d->NtStatus, StatusName((NTSTATUS)d->NtStatus));
+    printf("gates        mmio %s, dcn writes %s, vram %s, vram writes %s\n",
+           (d->Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
+           (d->Flags & BC250_ESCAPE_FLAG_DCN_WRITE) ? "open" : "closed (EnableDcnWrite is off)",
+           (d->Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed",
+           (d->Flags & BC250_ESCAPE_FLAG_VRAM_WRITE) ? "on" : "off (needed for fill)");
+    if (d->Reason[0]) printf("reason       %s\n", d->Reason);
+    if (d->Status != BC250_ESCAPE_STATUS_DONE) return;
+    printf("firmware     0x%016llX\n", d->FirmwareAddress);
+    printf("address      0x%016llX -> 0x%016llX\n", d->AddressBefore, d->AddressAfter);
+    printf("inuse        0x%08lX -> 0x%08lX\n", d->InUseBefore, d->InUseAfter);
+    printf("frame count  %lu -> %lu\n", d->FrameCountBefore, d->FrameCountAfter);
+    printf("flip pending %s after %lu us\n", d->FlipPendingCleared ? "cleared" : "STILL SET", d->WaitUs);
+    printf("DCHUBP_CNTL  0x%08lX, underflow 0x%08lX%s\n", d->DchubpCntl, d->Underflow, d->Underflow ? " (SET)" : "");
+}
+
+static int DcnFlip(const WCHAR *physText, const WCHAR *fillWord, const WCHAR *fillText, int restore)
+{
+    static BC250_ESCAPE_DCNFLIP d;
+    NTSTATUS status;
+    WCHAR *end;
+
+    memset(&d, 0, sizeof(d));
+    d.Magic = BC250_ESCAPE_MAGIC;
+    d.Command = BC250_ESCAPE_RUN_DCNFLIP;
+    if (restore) {
+        d.Restore = 1;
+    } else {
+        d.Physical = _wcstoui64(physText, &end, 16);
+        if (*end) { fprintf(stderr, "physical address %ls is not a hex number\n", physText); return 2; }
+        if (fillWord) {
+            if (_wcsicmp(fillWord, L"fill")) { fprintf(stderr, "unknown option %ls (expected fill)\n", fillWord); return 2; }
+            if (!fillText) { fprintf(stderr, "fill needs an ARGB hex value\n"); return 2; }
+            d.Fill = 1;
+            d.FillColor = wcstoul(fillText, &end, 16);
+            if (*end) { fprintf(stderr, "fill colour %ls is not a hex number\n", fillText); return 2; }
+        }
+    }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &d, sizeof(d), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (d.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (d.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no DCN flip command\n"); return 3; }
+    PrintDcnFlip(&d);
+    return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -941,6 +996,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli gfx plan <stage> | run <stage> | fini | state\n"
                         "       bc250kmd_cli ih plan | init | fini | state\n"
                         "       bc250kmd_cli dcn                          (read-only dump of the DCN registers, ADR 0011)\n"
+                        "       bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore\n"
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
@@ -963,6 +1019,9 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
     if (!_wcsicmp(argv[1], L"dcn")) return Dcn();
+    if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3 && !_wcsicmp(argv[2], L"restore")) return DcnFlip(NULL, NULL, NULL, 1);
+    if (!_wcsicmp(argv[1], L"dcnflip") && argc == 3) return DcnFlip(argv[2], NULL, NULL, 0);
+    if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {

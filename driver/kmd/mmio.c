@@ -82,6 +82,14 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioPspEnabled = FALSE;
     Device->MmioGfxEnabled = FALSE;
     Device->MmioIhEnabled = FALSE;
+    Device->DcnWriteEnabled = FALSE;
+    // dcn.c's flip state (0.7.20): reset here, at the top of every start, like every other gate above - not in
+    // DcnStop, because there is none; the DCN dump has never had a Start/Stop of its own (ADR 0011 point 3) and
+    // the write side does not get one either, MmioStart already being the one place every device start passes.
+    Device->DcnFirmwareKnown = FALSE;
+    Device->DcnFirmwareAddress = 0;
+    Device->DcnCurrentAddress = 0;
+    Device->DcnDiverged = FALSE;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);
@@ -102,7 +110,12 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioPspEnabled = Device->MmioGartEnabled && (GuardReadSetting(L"EnablePsp", 0) == 1);
     Device->MmioGfxEnabled = Device->MmioPspEnabled && (GuardReadSetting(L"EnableGfx", 0) == 1);
     Device->MmioIhEnabled = Device->MmioGfxEnabled && (GuardReadSetting(L"EnableIh", 0) == 1);
-    GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off");
+    // Independent of the Gart/Psp/Gfx/Ih chain above (DMU is not behind any of them): EnableMmio and
+    // EnableDcnWrite together, exactly as ADR 0011 point 3 step 2 asks. Read only once mapping succeeded, so
+    // this is already "EnableMmio == 1 && EnableDcnWrite == 1" without saying so twice.
+    Device->DcnWriteEnabled = (GuardReadSetting(L"EnableDcnWrite", 0) == 1);
+    GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s, dcn writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off",
+             Device->DcnWriteEnabled ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
 
@@ -115,6 +128,7 @@ void MmioStop(_Inout_ BC250_DEVICE* Device)
     Device->MmioPspEnabled = FALSE;
     Device->MmioGfxEnabled = FALSE;
     Device->MmioIhEnabled = FALSE;
+    Device->DcnWriteEnabled = FALSE;
 }
 
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
@@ -253,4 +267,25 @@ ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table)
 {
     *Table = g_DcnRegisters;
     return BC250_DCN_REG_INFO_COUNT;
+}
+
+// 0.7.20 (ADR 0011 point 3 step 2): DcnFlip's write, on its own six-register table (g_MmioDcnWriteAllow), gated
+// by Device->DcnWriteEnabled - EnableMmio and EnableDcnWrite together (mmio.c's MmioStart), never EnableMmioWrite:
+// the general WRITE_REG allow list is GC/MMHUB/OSSSYS/HDP only (third_party/linux-amdgpu/PROVENANCE.md) and does
+// not carry DMU. Every write is logged here, the one place all of them pass through, the same way VramEscape logs
+// every VRAM write at its own single call site.
+NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    NTSTATUS status;
+
+    if (Device->Mmio == NULL || !Device->DcnWriteEnabled) status = STATUS_DEVICE_NOT_READY;
+    else if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioDcnWriteAllow, BC250_MMIO_DCN_WRITE_ALLOW_COUNT, Offset))
+        status = STATUS_ACCESS_DENIED;
+    else
+    {
+        WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
+        status = STATUS_SUCCESS;
+    }
+    GuardLog("dcnflip: write 0x%05X = 0x%08X -> 0x%08X", Offset, Value, status);
+    return status;
 }

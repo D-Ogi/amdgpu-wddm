@@ -111,6 +111,9 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     PspStop(device);        // then, in amdgpu's order: the PSP forgets our ring and TMR while the GART state still stands
     GartStop(device);       // while the registers are still mapped: it may have a state to give back
     VramStop(device);
+    // ADR 0011, consequences: if a flip ever moved HUBP0 off the firmware's own address, put it back before
+    // BAR5 goes away. A no-op, logged as one, when nothing ever flipped (dcn.c's DcnStop).
+    DcnStop(device);
     MmioStop(device);
     DisplayUnmapFramebuffer(device);
     GuardStage(StageStopDone);
