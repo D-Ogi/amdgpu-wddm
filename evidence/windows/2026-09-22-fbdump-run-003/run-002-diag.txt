@@ -1,0 +1,79 @@
+gpu Error CM_PROB_FAILED_POST_START
+
+
+EnableMmio        : 0
+EnableMmioWrite   : 0
+EnableVram        : 0
+EnableVramWrite   : 0
+EnableGart        : 0
+EnablePsp         : 0
+EnableGfx         : 0
+EnableIh          : 0
+EnableFullWddm    : 0
+EnableGpuVa       : 0
+EnableGpuSubmit   : 0
+EnablePresentBlit : 0
+EnableDcnWrite    : 0
+KeepLog           : 0
+KeepStatus        : 0
+
+
+
+
+
+
+TimeCreated : 9/21/2026 11:39:51 PM
+Id          : 225
+Message     : The application \Device\HarddiskVolume3\Windows\System32\dwm.exe with process id 
+              5200 stopped the removal or ejection for the device 
+              PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041.
+              Process command line: "dwm.exe"
+              List of affected devices:
+              DISPLAY\Default_Monitor\5&41a81d0&0&UID2424833
+              
+
+TimeCreated : 9/21/2026 10:25:05 PM
+Id          : 219
+Message     : The driver \Driver\RtlWlanu failed to load for the device USB\VID_0B05&PID_19AA\123.
+
+TimeCreated : 9/21/2026 6:33:31 AM
+Id          : 219
+Message     : The driver \Driver\rtcx21 failed to load for the device 
+              PCI\VEN_10EC&DEV_8168&SUBSYS_81681849&REV_15\E538B759A1A8000000.
+
+TimeCreated : 9/21/2026 6:33:31 AM
+Id          : 219
+Message     : The driver \Driver\RtlWlanu failed to load for the device USB\VID_0B05&PID_19AA\123.
+
+
+
+
+disable: Microsoft PnP Utility Disabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device disabled successfully.
+enable:  Microsoft PnP Utility Enabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device enabled successfully.
+gpu after: Error CM_PROB_FAILED_POST_START
+0
+
+ring-20260922-011027-052.log    689
+ring-20260922-011412-723.log    689
+
+
+
+== tail of ring-20260922-011412-723.log
+bc250kmd 0x00070012 log kept at the stop: 17 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.004 stage 10
+     1      0.004 gate: EnableFullWddm 0
+     2      0.006 stage 20
+     3      0.142 stage 30
+     4      0.146 stage 31
+     5      0.148 stage 32
+     6      0.148 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.148 stage 33
+     8      0.150 stage 34
+     9      0.150 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.152 stage 35
+    11      0.152 stage 39
+    12      0.165 stage 50
+    13      0.285 stage 60
+    14      0.289 stage 61
+    15     98.743 stage 70
+    16     98.745 stage 79

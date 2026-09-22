@@ -1,0 +1,117 @@
+gpu PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041 OK
+disable: Microsoft PnP Utility Disabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device disabled successfully.
+enable:  Microsoft PnP Utility Enabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device enabled successfully.
+
+version      0x00070016 (milestone 7 revision 22)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only 
+mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart closed, psp closed, gfx 
+closed, ih closed
+== step 0: dump (baseline)
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS    0x0EB28 70000000
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH 0x0EB2C 00000002
+R HUBPREQ0_DCSURF_SURFACE_INUSE              0x0EB84 00000000
+R HUBPREQ0_DCSURF_SURFACE_PITCH              0x0EB1C 0000077F
+R HUBPREQ0_DCSURF_FLIP_CONTROL               0x0EB6C 00000000
+R HUBPREQ0_DCSURF_FLIP_CONTROL2              0x0EB70 00000040
+R HUBPREQ0_DCSURF_SURFACE_CONTROL            0x0EB68 00000000
+R HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT     0x0EB80 00050000
+R HUBP0_DCHUBP_CNTL                          0x0EACC 000F1002
+R HUBP0_DCSURF_SURFACE_CONFIG                0x0EA94 00000008
+R HUBP0_DCSURF_ADDR_CONFIG                   0x0EA98 00000000
+R HUBP0_DCSURF_TILING_CONFIG                 0x0EA9C 00000080
+R OTG0_OTG_CONTROL                           0x14004 80011311
+R OTG0_OTG_MASTER_UPDATE_LOCK                0x1412C 00000000
+R OTG0_OTG_GLOBAL_CONTROL0                   0x14140 00000000
+R OTG0_OTG_GLOBAL_SYNC_STATUS                0x14128 00104104
+R OTG0_OTG_VUPDATE_KEEPOUT                   0x1413C 00000000
+R OTG0_OTG_H_TOTAL                           0x13FA8 0000081F
+R OTG0_OTG_V_TOTAL                           0x13FBC 000004D2
+R OTG0_OTG_STATUS                            0x14024 00020002
+R OTG0_OTG_STATUS_POSITION                   0x14028 00C501F9
+R OTG0_OTG_STATUS_FRAME_COUNT                0x14030 0006B056
+R OTG0_OTG_VERTICAL_INTERRUPT0_CONTROL       0x1408C 00001000
+R OTG0_OTG_VUPDATE_PARAM                     0x14120 01400208
+R OTG0_OTG_TRIGA_MANUAL_TRIG                 0x13FE8 00000000
+decoded (this run / Linux reference E21 run 4, dmupre.txt):
+hubp0        address 0x0000000270000000 / 0x0000000270000000
+otg0         OTG_CONTROL 0x80011311 / 0x80011311, master enable ENABLED / ENABLED
+== step 1 (H4): no-op flip to the firmware address
+dcnflip: done, NTSTATUS 0x00000000 STATUS_SUCCESS
+gates        mmio mapped, dcn writes open, vram identified, vram writes on
+firmware     0x0000000270000000
+address      0x0000000270000000 -> 0x0000000270000000
+inuse        0x00000000 -> 0x00000000
+frame count  438360 -> 438361
+flip pending cleared after 16100 us
+DCHUBP_CNTL  0x000F1002, underflow 0x00000000
+== step 2 (H5): flip to a filled surface at 0x271000000 (blue field, white border, diagonal)
+dcnflip: done, NTSTATUS 0x00000000 STATUS_SUCCESS
+gates        mmio mapped, dcn writes open, vram identified, vram writes on
+firmware     0x0000000270000000
+address      0x0000000270000000 -> 0x0000000271000000
+inuse        0x00000000 -> 0x00000000
+frame count  438542 -> 438555
+flip pending cleared after 12100 us
+DCHUBP_CNTL  0x000F1002, underflow 0x00000000
+== step 2b: registers while the fill is on screen, and the scanout read back
+wrote C:\BC250\tmp\e22-002-fill.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS    0x0EB28 71000000
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH 0x0EB2C 00000002
+R HUBPREQ0_DCSURF_SURFACE_INUSE              0x0EB84 00000000
+R HUBPREQ0_DCSURF_FLIP_CONTROL               0x0EB6C 00000000
+R HUBP0_DCHUBP_CNTL                          0x0EACC 000F1000
+R OTG0_OTG_STATUS_FRAME_COUNT                0x14030 0006B314
+== step 3: restore
+dcnflip: done, NTSTATUS 0x00000000 STATUS_SUCCESS
+gates        mmio mapped, dcn writes open, vram identified, vram writes on
+firmware     0x0000000270000000
+address      0x0000000271000000 -> 0x0000000270000000
+inuse        0x00000000 -> 0x00000000
+frame count  439062 -> 439063
+flip pending cleared after 13500 us
+DCHUBP_CNTL  0x000F1002, underflow 0x00000000
+== step 4: dump after restore, scanout read back
+wrote C:\BC250\tmp\e22-002-restored.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS    0x0EB28 70000000
+R HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH 0x0EB2C 00000002
+R HUBPREQ0_DCSURF_SURFACE_INUSE              0x0EB84 00000000
+R HUBPREQ0_DCSURF_FLIP_CONTROL               0x0EB6C 00000000
+R HUBP0_DCHUBP_CNTL                          0x0EACC 000F1002
+R HUBP0_DCSURF_SURFACE_CONFIG                0x0EA94 00000008
+R HUBP0_DCSURF_ADDR_CONFIG                   0x0EA98 00000000
+R HUBP0_DCSURF_TILING_CONFIG                 0x0EA9C 00000080
+R OTG0_OTG_CONTROL                           0x14004 80011311
+R OTG0_OTG_MASTER_UPDATE_LOCK                0x1412C 00000000
+R OTG0_OTG_GLOBAL_CONTROL0                   0x14140 00000000
+R OTG0_OTG_GLOBAL_SYNC_STATUS                0x14128 00104104
+R OTG0_OTG_VUPDATE_KEEPOUT                   0x1413C 00000000
+R OTG0_OTG_H_TOTAL                           0x13FA8 0000081F
+R OTG0_OTG_V_TOTAL                           0x13FBC 000004D2
+R OTG0_OTG_STATUS                            0x14024 00020002
+R OTG0_OTG_STATUS_POSITION                   0x14028 018C02BD
+R OTG0_OTG_STATUS_FRAME_COUNT                0x14030 0006B3A7
+R OTG0_OTG_VERTICAL_INTERRUPT0_CONTROL       0x1408C 00001000
+R OTG0_OTG_VUPDATE_PARAM                     0x14120 01400208
+R OTG0_OTG_TRIGA_MANUAL_TRIG                 0x13FE8 00000000
+decoded (this run / Linux reference E21 run 4, dmupre.txt):
+hubp0        address 0x0000000270000000 / 0x0000000270000000
+otg0         OTG_CONTROL 0x80011311 / 0x80011311, master enable ENABLED / ENABLED
+gates closed (take effect at the next device start)
+    72     22.081 fbdump: hubp 0 rows 640..703 of 1200, pitch 7680, address 0x2704B0000
+    73     22.097 fbdump: hubp 0 rows 704..767 of 1200, pitch 7680, address 0x270528000
+    74     22.113 fbdump: hubp 0 rows 768..831 of 1200, pitch 7680, address 0x2705A0000
+    75     22.128 fbdump: hubp 0 rows 832..895 of 1200, pitch 7680, address 0x270618000
+    76     22.160 fbdump: hubp 0 rows 896..959 of 1200, pitch 7680, address 0x270690000
+    77     22.175 fbdump: hubp 0 rows 960..1023 of 1200, pitch 7680, address 0x270708000
+    78     22.191 fbdump: hubp 0 rows 1024..1087 of 1200, pitch 7680, address 0x270780000
+    79     22.206 fbdump: hubp 0 rows 1088..1151 of 1200, pitch 7680, address 0x2707F8000
+    80     22.222 fbdump: hubp 0 rows 1152..1199 of 1200, pitch 7680, address 0x270870000
+    81     22.253 dcn: 75 registers, status 0x00000000; hubp0 addr 0x270000000 pitch 1919 cntl 0x000F1002; otg0 control 0x80011311 h_total 2079 v_total 1234
+    82     22.284 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+             83 lines printed
+OK
+
+

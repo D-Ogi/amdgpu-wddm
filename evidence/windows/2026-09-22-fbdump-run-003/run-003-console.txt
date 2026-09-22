@@ -1,0 +1,47 @@
+gpu PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041 Error
+disable: Microsoft PnP Utility Disabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device disabled successfully.
+enable:  Microsoft PnP Utility Enabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device enabled successfully.
+== info
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-02EE6C69
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070016 (milestone 7 revision 22)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     33
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes off, gart closed, psp closed, gfx closed, ih closed
+== fbdump
+fbdump       rows 0..63 of 1200, address 0x270000000
+fbdump       rows 64..127 of 1200, address 0x270078000
+fbdump       rows 128..191 of 1200, address 0x2700F0000
+fbdump       rows 192..255 of 1200, address 0x270168000
+fbdump       rows 256..319 of 1200, address 0x2701E0000
+fbdump       rows 320..383 of 1200, address 0x270258000
+fbdump       rows 384..447 of 1200, address 0x2702D0000
+fbdump       rows 448..511 of 1200, address 0x270348000
+fbdump       rows 512..575 of 1200, address 0x2703C0000
+fbdump       rows 576..639 of 1200, address 0x270438000
+fbdump       rows 640..703 of 1200, address 0x2704B0000
+fbdump       rows 704..767 of 1200, address 0x270528000
+fbdump       rows 768..831 of 1200, address 0x2705A0000
+fbdump       rows 832..895 of 1200, address 0x270618000
+fbdump       rows 896..959 of 1200, address 0x270690000
+fbdump       rows 960..1023 of 1200, address 0x270708000
+fbdump       rows 1024..1087 of 1200, address 0x270780000
+fbdump       rows 1088..1151 of 1200, address 0x2707F8000
+fbdump       rows 1152..1199 of 1200, address 0x270870000
+wrote C:\BC250\tmp\scanout-003.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+fbdump took 396 ms
+
+
+Length        : 9216054
+LastWriteTime : 9/22/2026 6:04:43 AM
+
+
+
+
+EnableMmio back to 0

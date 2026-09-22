@@ -1,0 +1,34 @@
+bc250kmd_cli.exe : no display adapter with hardware id PCI\VEN_1002&DEV_13FE among the 2 present:
+At C:\BC250\tmp\fbdump_run1.ps1:16 char:1
++ & $cli info 2>&1
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (no display adap... the 2 present::String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  ROOT\BasicRender  (Microsoft Basic Render Driver)
+  ROOT\BasicDisplay  (Microsoft Basic Display Driver)
+bc250kmd_cli.exe : no display adapter with hardware id PCI\VEN_1002&DEV_13FE
+At C:\BC250\tmp\fbdump_run1.ps1:20 char:1
++ & $cli fbdump C:\BC250\tmp\scanout-002.bmp 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (no display adap...N_1002&DEV_13FE:String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Get-Item : Cannot find path 'C:\BC250\tmp\scanout-002.bmp' because it does not exist.
+At C:\BC250\tmp\fbdump_run1.ps1:22 char:1
++ Get-Item C:\BC250\tmp\scanout-002.bmp | Select-Object Length, LastWri ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (C:\BC250\tmp\scanout-002.bmp:String) [Get-Item], I 
+   temNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetItemCommand
+ 
+gpu PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041 OK
+disable: Microsoft PnP Utility Disabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device disabled successfully.
+enable:  Microsoft PnP Utility Enabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device enabled successfully.
+== info
+== fbdump
+fbdump took 17 ms
+
+EnableMmio back to 0

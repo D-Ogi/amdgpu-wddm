@@ -1,6 +1,6 @@
 # E22 - the display flip on DCN 2.0.1 under Windows (ADR 0011)
 
-State: **step 1 done** (run 001, facts M92); step 2 (the flip) built (bc250kmd 0.7.20), run 002 not yet on the lab.
+State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for the owner (a repeat of run 002 costs a minute); step 3 (VidPN + interrupt) next.
 
 ## Why
 
@@ -55,7 +55,7 @@ Hypotheses for run 002 (step 2, the escape only - H6 needs step 3's interrupt an
 | Run | Build | What | Result |
 |---|---|---|---|
 | 001 | 0.7.19 (d1b7651) | dump twice, EnableMmio only, display-only | all 75 registers read, values = Linux firmware state, frame count moving. `evidence/windows/2026-09-22-E22-dcn-read-run-001/` |
-| 002 | 0.7.20 | `EnableMmio` + `EnableDcnWrite` + `EnableVramWrite` = 1, display-only; sequence: `dcn` dump, `dcnflip` to the firmware's own address (H4, no-op), `dcnflip 0x271000000 fill 0xFF2060C0` (H5), `dcnflip restore`, `dcn` dump again | not yet run: needs the owner's lab session (built, not installed) |
+| 002 | 0.7.22 (b197b2b) | as planned, plus `fbdump` while HUBP0 pointed at the fill and after the restore; owner absent | H4 confirmed (address unchanged, pending cleared in 16 ms, frame count on); H5 confirmed at the registers and by the scanout read-back (blue field, border, diagonal), the monitor unobserved; restore OK, desktop back. M94. `evidence/windows/2026-09-22-E22-dcn-flip-run-002/` |
 
 Run plan for 002 (a script like
 `evidence/windows/2026-09-22-E22-dcn-read-run-001/run-001-script.ps1`, extended):
