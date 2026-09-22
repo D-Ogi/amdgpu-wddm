@@ -25,6 +25,7 @@
 
 #define BC250_WDDM_TAG 'wW2B'
 #define BC250_WDDM_LOG_CALLS 8              // how many first calls of each DDI reach the guard log
+#define BC250_WDDM_PRESENT_LIST_QWORDS 12u  // how much of a present's allocation list is read: 3 entries of either arm
 
 // Segment ids are one-based: DXGK_QUERYSEGMENTOUT4.PagingBufferSegmentId is "the index (starting from 1)".
 #define BC250_WDDM_SEGMENT_VRAM 1u
@@ -1904,10 +1905,12 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
 {
     BC250_DEVICE* device = Context->Device;
     BC250_WDDM* wddm = (BC250_WDDM*)device->Wddm;
-    const DXGK_ALLOCATIONLIST* source;
-    BC250_WDDM_OBJECT* object;
+    const ULONGLONG* raw;               // the list, read as qwords: both arms of the union are tried below
+    HANDLE handle = NULL;
+    BC250_WDDM_OBJECT* object = NULL;
+    int reading = 0;
     const BC250_WDDM_ALLOCATION_PRIVATE* alloc = NULL;
-    ULONGLONG va, first = 0, last = 0;
+    ULONGLONG va = 0, first = 0, last = 0;
     BOOLEAN systemFirst = FALSE, systemLast = FALSE, verbose;
     const UCHAR* map;
     PHYSICAL_ADDRESS physical;
@@ -1935,10 +1938,29 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     // The object found is used after the lock is released: a present's allocation holds dxgkrnl's reference for the
     // length of the call and CloseAllocation comes only once nothing references it (review 17) - and the blob it
     // carries came through OpenAllocation's private data, whose bounds the copy below checks on its own anyway.
-    source = &Present->pAllocationList[DXGK_PRESENT_SOURCE_INDEX];
-    object = WddmListedObject(wddm, source->hDeviceSpecificAllocation, BC250_WDDM_MAGIC_OPENED);
-    va = (ULONGLONG)source->VirtualAddress;
-    if (object == NULL) why = "source handle is not an allocation we opened";
+    // E20 run 005 (0.7.17, handles handed out): the 24-byte reading's slot 1 still carried handle 0 with 0x8DC000 in
+    // its third qword. Under the other arm of the union - 32-byte DXGK_PRESENTALLOCATIONINFO entries - those same
+    // qwords are entry 1's handle and virtual address, and entry 0 (qwords 0..3) was never looked at. So both arms
+    // are tried, by lookup only: (1) 32-byte entry 0, (2) 24-byte entry 1, (3) 32-byte entry 1; the first whose
+    // handle is an object we opened wins, and the reading is logged with the result. The 96 bytes lie in the
+    // pointer's page (checked by the caller) and were readable in every present so far.
+    raw = (const ULONGLONG*)Present->pAllocationList;
+    C_ASSERT(sizeof(DXGK_PRESENTALLOCATIONINFO) == 4 * sizeof(ULONGLONG));
+    C_ASSERT(FIELD_OFFSET(DXGK_PRESENTALLOCATIONINFO, AllocationVirtualAddress) == sizeof(ULONGLONG));
+    C_ASSERT(FIELD_OFFSET(DXGK_ALLOCATIONLIST, VirtualAddress) == 2 * sizeof(ULONGLONG));
+    {
+        static const UINT candidates[3][2] = { { 0, 1 }, { 3, 5 }, { 4, 5 } };  // qword of the handle, qword of the VA
+        int c;
+
+        for (c = 0; c < 3 && object == NULL; c++)
+        {
+            handle = (HANDLE)(ULONG_PTR)raw[candidates[c][0]];
+            object = WddmListedObject(wddm, handle, BC250_WDDM_MAGIC_OPENED);
+            va = raw[candidates[c][1]];
+            reading = c + 1;
+        }
+    }
+    if (object == NULL) why = "no slot names an allocation we opened";
     else
     {
         alloc = &object->Allocation;
@@ -1955,14 +1977,14 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         else if (last - first != alloc->Size - 1) why = "source not contiguous";
         else InterlockedIncrement(&wddm->BlitTranslations);
         if (verbose && object != NULL)
-            GuardLog("wddm: blit source %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s", (void*)object,
-                     alloc->Width, alloc->Height, alloc->Pitch, alloc->Format, alloc->Size, va, first, last,
+            GuardLog("wddm: blit source (reading %d) %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s", reading,
+                     (void*)object, alloc->Width, alloc->Height, alloc->Pitch, alloc->Format, alloc->Size, va, first, last,
                      (systemFirst || systemLast) ? " SYSTEM" : "", why != NULL ? " REFUSED" : "");
     }
     if (why != NULL)
     {
         if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS)
-            GuardLog("wddm: blit skipped: %s (handle %p va 0x%llX)", why, source->hDeviceSpecificAllocation, va);
+            GuardLog("wddm: blit skipped: %s (reading %d handle %p va 0x%llX)", why, reading, handle, va);
         return;
     }
     if (!wddm->BlitGate) return;        // translation checked and counted; the copy itself needs the gate
@@ -2041,14 +2063,15 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
         GuardLog("wddm: Present list %p (context list %u), private %p/%u, driver data %u", (void*)raw, context->AllocationListSize,
                  pPresent->pDmaBufferPrivateData, pPresent->DmaBufferPrivateDataSize, pPresent->PrivateDriverDataSize);
         if (raw != NULL && context->AllocationListSize > DXGK_PRESENT_MAX_INDEX &&
-            ((ULONG_PTR)raw & (PAGE_SIZE - 1)) <= PAGE_SIZE - (DXGK_PRESENT_MAX_INDEX + 1) * sizeof(DXGK_ALLOCATIONLIST))
+            ((ULONG_PTR)raw & (PAGE_SIZE - 1)) <= PAGE_SIZE - BC250_WDDM_PRESENT_LIST_QWORDS * sizeof(ULONGLONG))
         {
             // Review 15: the pointer is dxgkrnl's word and nothing here proves it. A kernel address that is not mapped
             // bugchecks whatever surrounds it; this catches the other case, a user-mode one, as vidmm.c does.
             __try
             {
-                GuardLog("wddm: Present source [1] %016llX %016llX %016llX", raw[3], raw[4], raw[5]);
-                GuardLog("wddm: Present dest   [2] %016llX %016llX %016llX", raw[6], raw[7], raw[8]);
+                GuardLog("wddm: Present list q0-3  %016llX %016llX %016llX %016llX", raw[0], raw[1], raw[2], raw[3]);
+                GuardLog("wddm: Present list q4-7  %016llX %016llX %016llX %016llX", raw[4], raw[5], raw[6], raw[7]);
+                GuardLog("wddm: Present list q8-11 %016llX %016llX %016llX %016llX", raw[8], raw[9], raw[10], raw[11]);
             }
             __except (EXCEPTION_EXECUTE_HANDLER)
             {
@@ -2061,7 +2084,8 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     }
     // 0.7.16 (E20 H3): a Blt is translated and, with EnablePresentBlit, copied to the firmware framebuffer. Flips and
     // colour fills still produce nothing; pDmaBuffer stays untouched either way.
-    if (context != NULL && pPresent->Flags.Value == 1 /* Blt alone */)
+    if (context != NULL && pPresent->Flags.Value == 1 /* Blt alone */ && pPresent->pAllocationList != NULL &&
+        ((ULONG_PTR)pPresent->pAllocationList & (PAGE_SIZE - 1)) <= PAGE_SIZE - BC250_WDDM_PRESENT_LIST_QWORDS * sizeof(ULONGLONG))
         WddmPresentBlit(context, pPresent);
     return STATUS_SUCCESS;
 }
