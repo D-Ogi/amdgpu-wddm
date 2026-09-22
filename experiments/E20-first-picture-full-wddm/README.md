@@ -1,6 +1,6 @@
 # E20: a picture under the full WDDM table
 
-Date: 2026-09-22. State: run 001 done (H1 refuted as written); run 002 (0.7.15) prepared. Follows E19 (stage C, M77, M80).
+Date: 2026-09-22. State: runs 001 and 002 done (M82); run 003 (0.7.16: allocation handles, translation, gated blit) next. Follows E19 (stage C, M77, M80).
 Design brief: `scratch\tmp\present_design.md` (an Opus agent; not a source of facts).
 
 ## Why
@@ -62,5 +62,19 @@ gate one-shot, AutoReboot on, STOP flag honoured, 60 to 90 s under the full tabl
 H1 is refuted as written: the GDI context (flags 0x6) was answered `lists 256/0`, and all eight logged presents
 still came with `source 0 dest 0`. Its second half held: the desktop survived the list (no TDR, no bugcheck, no
 live kernel report, gate closed, picture back). H2 got no answer, and that is the build's fault, not dxgkrnl's:
-0.7.14 printed the list only when the counters were non-zero and did not even log the pointer. Evidence is
-recorded with run 002.
+0.7.14 printed the list only when the counters were non-zero and did not even log the pointer. Evidence:
+`evidence/windows/2026-09-22-E20-run-002/run-001-console.txt`.
+
+### Run 002 (2026-09-22 02:12, bc250kmd 0.7.15)
+
+H2b held in half (facts M82). The pointer is not NULL and never changes; the source slot is filled, the same in
+all eight presents, and its third qword `0x8DC000` sits exactly one surface (`0x8CA000`) above `0x12000`, which
+reads as a GPU virtual address. Refuted: qword 0 is not our object pointer, it is zero - and that zero is ours,
+because `OpenAllocation` hands dxgkrnl a NULL `hDeviceSpecificAllocation` and gets it back faithfully. RosKmd maps
+`hAllocation` with `DxgkCbGetHandleData` and returns its own pointer; 0.7.16 does the same. The destination slot
+is all zero: for a present to the primary the destination appears to be implied by the VidPn source. H2's question
+(which arm of the union) is answered by the layout: 24-byte entries at indices 1 and 2.
+
+Jak sobie pościelesz, tak się wyśpisz - as you make your bed, so you will sleep in it. We made it with a NULL.
+
+Evidence: `evidence/windows/2026-09-22-E20-run-002/run-002-console.txt`.

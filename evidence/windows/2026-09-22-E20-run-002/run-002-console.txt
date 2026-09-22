@@ -1,0 +1,85 @@
+{'ok': True}
+{'ok': True}
+Adding driver package:  bc250kmd.inf
+Published Name:         oem31.inf
+Total driver packages:  1
+Added driver packages:  1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+driver   0.7.15.1   (oem31.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 0  EnableVram 0  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+driver   0.7.15.1   (oem31.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 1
+UnconfirmedStarts = 0
+=== gate -Full 1 -GpuVa 1 (no engines)
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 0
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          171
+reports  live kernel reports written since boot: 0
+presents     0
+log exit 0, 178 lines -> C:\BC250\e16\out\ring-p2-021426.log
+ring-p2-021426.log
+    18      0.124 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    35      0.126 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    36      0.126 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+    76      0.174 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    77      0.174 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    98      0.176 wddm: CreateAllocation 1 allocations, resource no
+   108      0.178 wddm: CreateAllocation 1 allocations, resource no
+   114      0.182 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   126      4.742 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   127      4.742 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   128      4.742 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   129      4.742 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   130      4.742 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   134      4.770 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   135      4.770 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   136      4.770 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   137      4.770 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   138      4.770 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   140      4.788 wddm: Present flags 0x00000001 source 0 dest 0, 2 sub-rectangles, 4096 DMA bytes free
+   141      4.788 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   142      4.788 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   143      4.788 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   144      4.788 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   146      4.804 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   147      4.804 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   148      4.804 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   149      4.804 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   150      4.804 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   152      4.804 wddm: Present flags 0x00000001 source 0 dest 0, 2 sub-rectangles, 4096 DMA bytes free
+   153      4.804 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   154      4.804 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   155      4.804 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   156      4.804 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   158      4.820 wddm: Present flags 0x00000001 source 0 dest 0, 4 sub-rectangles, 4096 DMA bytes free
+   159      4.820 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   160      4.820 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   161      4.820 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   162      4.820 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   164      9.382 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   165      9.382 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   166      9.382 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   167      9.382 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   168      9.382 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   170      9.420 wddm: Present flags 0x00000001 source 0 dest 0, 5 sub-rectangles, 4096 DMA bytes free
+   171      9.420 wddm: Present list FFFFE3834143DBB0 (context list 256), private 0000000000000000/0, driver data 0
+   172      9.420 wddm: Present source [1] 0000000000000000 0000000000000000 00000000008DC000
+   173      9.420 wddm: Present dest   [2] 0000000000000000 0000000000000000 0000000000000000
+   174      9.420 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+02:14:43 Tctl 69.4 C (raw 767B0FEF)
+=== gate closed
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          209
+reports  live kernel reports written since boot: 0
+presents     31
+UnconfirmedStarts = 0

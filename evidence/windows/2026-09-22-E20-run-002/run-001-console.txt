@@ -1,0 +1,53 @@
+{'ok': True}
+{'ok': True}
+Adding driver package:  bc250kmd.inf
+Published Name:         oem30.inf
+Total driver packages:  1
+Added driver packages:  1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+driver   0.7.14.1   (oem30.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 0  EnableVram 0  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+driver   0.7.14.1   (oem30.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 1
+UnconfirmedStarts = 0
+=== gate -Full 1 -GpuVa 1 (no engines)
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 0
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          129
+reports  live kernel reports written since boot: 0
+presents     0
+log exit 0, 146 lines -> C:\BC250\e16\out\ring-p1-020424.log
+ring-p1-020424.log
+    18      0.122 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    35      0.124 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    36      0.124 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 0/0, caps 0x00000001
+    76      0.174 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    77      0.174 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    98      0.174 wddm: CreateAllocation 1 allocations, resource no
+   108      0.176 wddm: CreateAllocation 1 allocations, resource no
+   114      0.180 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   126     12.899 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   130     12.935 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   132     12.951 wddm: Present flags 0x00000001 source 0 dest 0, 2 sub-rectangles, 4096 DMA bytes free
+   134     12.967 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   136     12.985 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   138     17.710 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   140     17.752 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   142     17.768 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+02:04:42 Tctl 69.0 C (raw 761B0FEF)
+=== gate closed
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          167
+reports  live kernel reports written since boot: 0
+presents     30
+UnconfirmedStarts = 0
