@@ -321,6 +321,7 @@ void VidMmStop(void);
 void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
 void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root);
 BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULONGLONG* Physical);
+BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Physical, _Out_ BOOLEAN* System);
 void VidMmSummary(void);
 void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
                                                     // when the gate is closed, so the escape can call it either way

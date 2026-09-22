@@ -227,6 +227,12 @@ typedef struct _BC250_WDDM {
 
     PHYSICAL_ADDRESS PrimaryAddress;    // what SetVidPnSourceAddress was last asked to scan out
     UINT PrimarySegment;
+
+    // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
+    BOOLEAN BlitGate;
+    volatile LONG Blits;                        // presents copied
+    volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
+    volatile LONG BlitTranslations;             // sources whose first and last page translated and were contiguous
     volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
 } BC250_WDDM;
@@ -360,6 +366,27 @@ static BC250_WDDM_OBJECT* WddmObject(_In_opt_ const HANDLE Handle, ULONG Magic)
     BC250_WDDM_OBJECT* object = (BC250_WDDM_OBJECT*)Handle;
 
     return (object != NULL && object->Magic == Magic) ? object : NULL;
+}
+
+// For a handle that did not come back through a DDI's own handle parameter but out of an array dxgkrnl filled - the
+// DXGK_ALLOCATIONLIST entries of a Present (review 16). Nothing is read through the value: it is compared against the
+// objects on the adapter's list under the lock, and only a match is dereferenced. <= DISPATCH_LEVEL.
+static BC250_WDDM_OBJECT* WddmListedObject(_In_ BC250_WDDM* Wddm, _In_opt_ const HANDLE Handle, ULONG Magic)
+{
+    BC250_WDDM_OBJECT* found = NULL;
+    const LIST_ENTRY* entry;
+    KIRQL irql;
+
+    if (Handle == NULL) return NULL;
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    for (entry = Wddm->Objects.Flink; entry != &Wddm->Objects; entry = entry->Flink)
+    {
+        BC250_WDDM_OBJECT* object = CONTAINING_RECORD(entry, BC250_WDDM_OBJECT, Link);
+
+        if ((HANDLE)object == Handle) { found = (object->Magic == Magic) ? object : NULL; break; }
+    }
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    return found;
 }
 
 static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
@@ -753,6 +780,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
+    GuardLog("wddm summary: blit gate %s, %ld blits, %ld skips, %ld sources translated contiguous", Wddm->BlitGate ? "open" : "closed",
+             Wddm->Blits, Wddm->BlitSkips, Wddm->BlitTranslations);
     GuardLog("wddm summary: vsync %s, %ld ticks, %ld reported to dxgkrnl",
              Wddm->VSyncEnabled ? "enabled" : "not enabled by ControlInterrupt", Wddm->VSyncTicks,
              Wddm->VSyncReports);
@@ -814,6 +843,7 @@ void WddmStart(_Inout_ BC250_DEVICE* Device)
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
+    wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
     KeInitializeTimerEx(&wddm->VSyncTimer, SynchronizationTimer);
@@ -1554,14 +1584,29 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
     UINT i;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
-    // Stage A keeps no per-device state for an allocation, so the device-specific handle is NULL and there is
-    // nothing for CloseAllocation to give back. Note that hAllocation here is a D3DKMT_HANDLE, not the kernel
-    // handle CreateAllocation returned, so it cannot be mapped back to our object from here anyway.
+    // hAllocation is a D3DKMT_HANDLE, and DxgkCbGetHandleData(DXGK_HANDLE_ALLOCATION) gives back what CreateAllocation
+    // stored in hAllocation: our object. What goes into hDeviceSpecificAllocation comes back in every
+    // DXGK_ALLOCATIONLIST entry of a Present or a Render - E20 run 002 saw the NULL that 0.7.15 put there (facts
+    // M82). No per-device state is kept, so the object itself is the handle and CloseAllocation has nothing to free.
     for (i = 0; i < pOpenAllocation->NumAllocations; i++)
-        pOpenAllocation->pOpenAllocation[i].hDeviceSpecificAllocation = NULL;
+    {
+        DXGKARGCB_GETHANDLEDATA data;
+        BC250_WDDM_OBJECT* object = NULL;
+
+        data.hObject = pOpenAllocation->pOpenAllocation[i].hAllocation;
+        data.Type = DXGK_HANDLE_ALLOCATION;
+        data.Flags.Value = 0;
+        if (parent->Device->Dxgk.DxgkCbGetHandleData != NULL)
+            object = WddmObject((HANDLE)parent->Device->Dxgk.DxgkCbGetHandleData(&data), BC250_WDDM_MAGIC_ALLOCATION);
+        pOpenAllocation->pOpenAllocation[i].hDeviceSpecificAllocation = object;
+        if (object == NULL && parent->Device->Wddm != NULL &&
+            ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X is not one of our allocations", i,
+                     (ULONG)pOpenAllocation->pOpenAllocation[i].hAllocation);
+    }
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiOpenAllocation))
-        GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X", pOpenAllocation->NumAllocations,
-                 pOpenAllocation->Flags.Value);
+        GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X, [0] -> %p", pOpenAllocation->NumAllocations,
+                 pOpenAllocation->Flags.Value, pOpenAllocation->NumAllocations != 0 ? pOpenAllocation->pOpenAllocation[0].hDeviceSpecificAllocation : NULL);
     return STATUS_SUCCESS;
 }
 
@@ -1823,6 +1868,126 @@ static NTSTATUS Bc250WddmFormatHistoryBuffer(_In_ const HANDLE hContext, _In_ DX
 
 // ---- display: present and flip --------------------------------------------------------------------------------------
 
+// E20, H3 (ADR 0011: a diagnostic, never the present path of a game). A Blt present of a GDI context names its
+// source at DXGK_PRESENT_SOURCE_INDEX of pAllocationList (facts M82): our allocation object, once OpenAllocation
+// hands it out, and the surface's GPU virtual address in the context's address space. The source is translated
+// through the context's root (first and last byte: a VRAM allocation is one contiguous range of the segment, so the
+// two must be Size - 1 apart, and the walk proves the tables rather than assuming them), mapped read-only by physical
+// address for this one call - never through BAR0 (facts M32) - and its sub-rectangles are copied into the firmware
+// framebuffer the way display.c's CopyRect does it: clamped to the mode, 4 bytes a pixel, no scaling. Nothing is
+// cached, so no lifetime is shared with DestroyAllocation, and nothing is written except the framebuffer.
+// PASSIVE_LEVEL only (MmUnmapIoSpace); a present is always answered STATUS_SUCCESS whatever happens here.
+// The gate's scope (review 16): reading the list entry, looking the handle up and translating the source run for
+// every Blt present under the full table with EnableGpuVa, gate or no gate, so that a run with the gate closed
+// measures the translation; EnablePresentBlit guards only the mapping and the copy.
+static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
+{
+    BC250_DEVICE* device = Context->Device;
+    BC250_WDDM* wddm = (BC250_WDDM*)device->Wddm;
+    const DXGK_ALLOCATIONLIST* source;
+    BC250_WDDM_OBJECT* object;
+    const BC250_WDDM_ALLOCATION_PRIVATE* alloc = NULL;
+    ULONGLONG va, first = 0, last = 0;
+    BOOLEAN systemFirst = FALSE, systemLast = FALSE, verbose;
+    const UCHAR* map;
+    PHYSICAL_ADDRESS physical;
+    RECT whole;
+    const RECT* rects;
+    UINT count, i, rows = 0;
+    LONG dx, dy;                        // destination to source offset (no scaling: the rectangles are the same size)
+    const char* why = NULL;
+
+    verbose = (wddm->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS);
+    if (Present->pAllocationList == NULL || Context->AllocationListSize <= DXGK_PRESENT_MAX_INDEX) why = "no list";
+    else if (KeGetCurrentIrql() != PASSIVE_LEVEL) why = "IRQL";
+    else if (Context->RootPhysical == 0) why = "context has no root";
+    else if (device->Framebuffer == NULL || device->FramebufferLength == 0) why = "no framebuffer";
+    else if (Present->DstRect.right - Present->DstRect.left != Present->SrcRect.right - Present->SrcRect.left ||
+             Present->DstRect.bottom - Present->DstRect.top != Present->SrcRect.bottom - Present->SrcRect.top) why = "scaled";
+    if (why != NULL)
+    {
+        if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS) GuardLog("wddm: blit skipped: %s", why);
+        return;
+    }
+
+    // The entry itself was read under __try by 0.7.15 in every logged present (facts M82: readable, handle 0 = what
+    // OpenAllocation stored then); the value in it is still not dereferenced, only looked up (review 16).
+    source = &Present->pAllocationList[DXGK_PRESENT_SOURCE_INDEX];
+    object = WddmListedObject(wddm, source->hDeviceSpecificAllocation, BC250_WDDM_MAGIC_ALLOCATION);
+    va = (ULONGLONG)source->VirtualAddress;
+    if (object == NULL) why = "source handle is not our allocation";
+    else
+    {
+        alloc = &object->Allocation;
+        if (alloc->Format != (ULONG)D3DDDIFMT_A8R8G8B8 && alloc->Format != (ULONG)D3DDDIFMT_X8R8G8B8) why = "source format";
+        else if (alloc->Width == 0 || alloc->Height == 0 || alloc->Pitch < alloc->Width * 4ull ||
+                 alloc->Size < (ULONGLONG)alloc->Pitch * alloc->Height || alloc->Size > 0x10000000ull) why = "source geometry";
+        else if ((va & (PAGE_SIZE - 1)) != 0) why = "source VA not page aligned";
+    }
+    if (why == NULL)
+    {
+        if (!VidMmTranslate(Context->RootPhysical, va, &first, &systemFirst) ||
+            !VidMmTranslate(Context->RootPhysical, va + alloc->Size - 1, &last, &systemLast)) why = "source VA does not translate";
+        else if (systemFirst || systemLast) why = "source in system memory";
+        else if (last - first != alloc->Size - 1) why = "source not contiguous";
+        else InterlockedIncrement(&wddm->BlitTranslations);
+        if (verbose && object != NULL)
+            GuardLog("wddm: blit source %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s", (void*)object,
+                     alloc->Width, alloc->Height, alloc->Pitch, alloc->Format, alloc->Size, va, first, last,
+                     (systemFirst || systemLast) ? " SYSTEM" : "", why != NULL ? " REFUSED" : "");
+    }
+    if (why != NULL)
+    {
+        if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: blit skipped: %s (handle %p va 0x%llX)", why, source->hDeviceSpecificAllocation, va);
+        return;
+    }
+    if (!wddm->BlitGate) return;        // translation checked and counted; the copy itself needs the gate
+
+    physical.QuadPart = (LONGLONG)first;
+    map = (const UCHAR*)MmMapIoSpaceEx(physical, (SIZE_T)alloc->Size, PAGE_READONLY | PAGE_NOCACHE);
+    if (map == NULL)
+    {
+        if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS) GuardLog("wddm: blit skipped: no mapping for 0x%llX", first);
+        return;
+    }
+    whole = Present->DstRect;
+    rects = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->pDstSubRects : &whole;
+    count = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->SubRectCnt : 1;
+    dx = Present->SrcRect.left - Present->DstRect.left;
+    dy = Present->SrcRect.top - Present->DstRect.top;
+    for (i = 0; i < count; i++)
+    {
+        // Clamp as display.c:CopyRect does: to the firmware mode on the destination side and to the allocation on
+        // the source side; a rectangle that ends up empty or outside is simply skipped.
+        LONG left = rects[i].left > Present->DstRect.left ? rects[i].left : Present->DstRect.left;
+        LONG top = rects[i].top > Present->DstRect.top ? rects[i].top : Present->DstRect.top;
+        LONG right = rects[i].right < Present->DstRect.right ? rects[i].right : Present->DstRect.right;
+        LONG bottom = rects[i].bottom < Present->DstRect.bottom ? rects[i].bottom : Present->DstRect.bottom;
+        LONG y;
+
+        if (left < 0) left = 0;
+        if (top < 0) top = 0;
+        if (right > (LONG)device->Post.Width) right = (LONG)device->Post.Width;
+        if (bottom > (LONG)device->Post.Height) bottom = (LONG)device->Post.Height;
+        if (left + dx < 0 || top + dy < 0 || right + dx > (LONG)alloc->Width || bottom + dy > (LONG)alloc->Height) continue;
+        if (right <= left || bottom <= top) continue;
+        for (y = top; y < bottom; y++)
+        {
+            SIZE_T dst = (SIZE_T)y * device->Post.Pitch + (SIZE_T)left * 4;
+            SIZE_T src = (SIZE_T)(y + dy) * alloc->Pitch + (SIZE_T)(left + dx) * 4;
+            SIZE_T bytes = (SIZE_T)(right - left) * 4;
+
+            if (dst + bytes > device->FramebufferLength || src + bytes > alloc->Size) break;
+            RtlCopyMemory((UCHAR*)device->Framebuffer + dst, map + src, bytes);
+            rows++;
+        }
+    }
+    MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
+    InterlockedIncrement(&wddm->Blits);
+    if (verbose) GuardLog("wddm: blit %u rectangles, %u rows copied", count, rows);
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -1871,6 +2036,10 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
                  pPresent->DstRect.right, pPresent->DstRect.bottom, pPresent->SrcRect.left, pPresent->SrcRect.top,
                  pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);
     }
+    // 0.7.16 (E20 H3): a Blt is translated and, with EnablePresentBlit, copied to the firmware framebuffer. Flips and
+    // colour fills still produce nothing; pDmaBuffer stays untouched either way.
+    if (context != NULL && pPresent->Flags.Value == 1 /* Blt alone */)
+        WddmPresentBlit(context, pPresent);
     return STATUS_SUCCESS;
 }
 

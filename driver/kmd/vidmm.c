@@ -219,6 +219,54 @@ BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULO
     return TRUE;
 }
 
+// E20 (ADR 0011): the inverse of what this file writes. Walks the four levels from a root SetRootPageTable named
+// (VidMmRootPhysical) down to the page behind one GPU virtual address, reading each table through its own short
+// mapping. Every table must lie inside segment 1, as UpdatePageTable only ever placed them there; a leaf in system
+// memory is reported as such and its address is not one this driver may map. PASSIVE_LEVEL (MmUnmapIoSpace).
+// Nothing serialises this read against UpdatePageTable writing the same table from another thread (review 16):
+// a torn read yields at worst a wrong page inside the segment, which the caller's bounds still contain - a garbled
+// diagnostic frame, not an access outside VRAM.
+BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Physical, _Out_ BOOLEAN* System)
+{
+    const BC250_VIDMM* vm = &g_VidMm;
+    ULONGLONG table = RootPhysical;
+    int level;
+
+    *Physical = 0;
+    *System = FALSE;
+    if (!vm->Ready || !vm->Write || vm->SegmentLength < PAGE_SIZE || RootPhysical == 0 ||
+        (Va >> (PAGE_SHIFT + 9 * BC250_VIDMM_LEVELS)) != 0 || KeGetCurrentIrql() != PASSIVE_LEVEL)
+        return FALSE;
+    for (level = BC250_VIDMM_LEVELS - 1; level >= 0; level--)
+    {
+        struct bc250_pte_fields fields;
+        PHYSICAL_ADDRESS physical;
+        volatile ULONGLONG* page;
+        ULONGLONG entry;
+        UINT index = (UINT)((Va >> (PAGE_SHIFT + 9 * level)) & (BC250_VIDMM_PTES - 1));
+
+        if ((table & (PAGE_SIZE - 1)) != 0 || table < vm->SegmentPhysical || table > vm->SegmentPhysical + vm->SegmentLength - PAGE_SIZE)
+            return FALSE;
+        physical.QuadPart = (LONGLONG)table;
+        page = (volatile ULONGLONG*)MmMapIoSpaceEx(physical, PAGE_SIZE, PAGE_READONLY | PAGE_NOCACHE);
+        if (page == NULL) return FALSE;
+        entry = page[index];
+        MmUnmapIoSpace((void*)page, PAGE_SIZE);
+        bc250_pte_decode(entry, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, &fields);
+        // A directory entry that is itself a page (PDE-as-PTE, a large mapping) is nothing this file writes; refuse
+        // rather than misread it.
+        if (!fields.valid || (level != 0 && fields.pde_pte)) return FALSE;
+        table = fields.address;
+        if (level == 0) *System = (fields.system != 0);
+    }
+    // The leaf's address is a system physical address (vram_base is SegmentPhysical, see VidMmStart), so a VRAM page
+    // maps directly; it is still checked against the segment before anybody maps it.
+    if (!*System && (table < vm->SegmentPhysical || table > vm->SegmentPhysical + vm->SegmentLength - PAGE_SIZE))
+        return FALSE;
+    *Physical = table + (Va & (PAGE_SIZE - 1));
+    return TRUE;
+}
+
 void VidMmSummary(void)
 {
     BC250_VIDMM* vm = &g_VidMm;

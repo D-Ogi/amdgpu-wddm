@@ -1,6 +1,6 @@
 # E20: a picture under the full WDDM table
 
-Date: 2026-09-22. State: runs 001 and 002 done (M82); run 003 (0.7.16: allocation handles, translation, gated blit) next. Follows E19 (stage C, M77, M80).
+Date: 2026-09-22. State: runs 001 and 002 done (M82); runs 003 (0.7.16, blit gate closed) and 004 (gate open) prepared. Follows E19 (stage C, M77, M80).
 Design brief: `scratch\tmp\present_design.md` (an Opus agent; not a source of facts).
 
 ## Why
@@ -45,7 +45,24 @@ Czarno to widzę - "I see it black", which is how a Pole says the outlook is poo
   has its source: handle -> our allocation record (size, pitch, format) and VA -> VRAM offset through the
   context's page tables.
 
+- H4 (runs 003 and 004, 0.7.16; written before both). With `OpenAllocation` returning our object through
+  `DxgkCbGetHandleData`, the source slot's handle is one of our allocation objects, and it is the shadow surface of
+  `CreateAllocation` (1920 x 1200, `D3DDDIFMT_A8R8G8B8`, pitch 7680, size 0x8CA000). Its GPU VA (`0x8DC000` in run
+  002; any page-aligned value counts) translates through the context's root page table to VRAM inside segment 1,
+  and the last byte translates to first + size - 1: one contiguous range, as a memory-segment allocation is by
+  definition. Run 003 checks this with the blit gate closed (`sources translated contiguous` > 0 in the summary, no
+  `blit skipped` lines); run 004 opens the gate and is H3's test: the overlay screenshot is not the black frame.
+  Falsifiers: the handle stays NULL (then `DxgkCbGetHandleData` does not give back `hAllocation` of
+  CreateAllocation); the walk finds an invalid entry (then the CDD's source is not mapped when it presents, or the
+  root is not this context's); the range is not contiguous; the picture stays black with the gate open (then the CPU
+  never wrote into that surface, and the pixels are elsewhere).
+
 ## Safety
+
+Runs 003 and 004 (0.7.16): with the full table and EnableGpuVa open, every Blt present reads its list entry 1, looks
+the handle up on our object list (no dereference of the value) and walks the page tables read-only through short
+mappings - gate or no gate. `EnablePresentBlit` guards only the mapping of the source and the copy into the firmware
+framebuffer, which is the only memory written. No engine is started in either run.
 
 Run 001 starts no engine: no GART, no PSP, no ring, no interrupt source - so facts M78 does not apply and no fresh
 boot is needed. It reads at most 48 bytes of a list dxgkrnl sized at 256 entries. Install with the gate closed (M74),
