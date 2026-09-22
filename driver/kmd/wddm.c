@@ -60,6 +60,7 @@
 #define BC250_WDDM_MAGIC_CONTEXT    'xC7M'
 #define BC250_WDDM_MAGIC_PROCESS    'cP7M'
 #define BC250_WDDM_MAGIC_ALLOCATION 'lA7M'
+#define BC250_WDDM_MAGIC_OPENED     'pO7M'  // an allocation opened on a device: what a DXGK_ALLOCATIONLIST entry names
 
 // The DDIs this file adds, in the order the table declares them. Only used to count calls for the log.
 typedef enum _BC250_WDDM_DDI {
@@ -774,6 +775,7 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Calls[WddmDdiCreateContext], Wddm->Calls[WddmDdiDestroyContext],
              Wddm->Calls[WddmDdiCreateProcess], Wddm->Calls[WddmDdiDestroyProcess],
              Wddm->Calls[WddmDdiCreateAllocation], Wddm->Calls[WddmDdiDestroyAllocation], Wddm->ObjectCount);
+    GuardLog("wddm summary: allocations opened/closed: %ld/%ld calls", Wddm->Calls[WddmDdiOpenAllocation], Wddm->Calls[WddmDdiCloseAllocation]);
     GuardLog("wddm summary: submissions %ld physical + %ld virtual, %ld preemptions, last completed fence %ld",
              Wddm->Calls[WddmDdiSubmitCommand], Wddm->Calls[WddmDdiSubmitCommandVirtual],
              Wddm->Calls[WddmDdiPreemptCommand], Wddm->LastCompletedFence);
@@ -1584,29 +1586,42 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
     UINT i;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
-    // hAllocation is a D3DKMT_HANDLE, and DxgkCbGetHandleData(DXGK_HANDLE_ALLOCATION) gives back what CreateAllocation
-    // stored in hAllocation: our object. What goes into hDeviceSpecificAllocation comes back in every
-    // DXGK_ALLOCATIONLIST entry of a Present or a Render - E20 run 002 saw the NULL that 0.7.15 put there (facts
-    // M82). No per-device state is kept, so the object itself is the handle and CloseAllocation has nothing to free.
+    // What goes into hDeviceSpecificAllocation comes back in every DXGK_ALLOCATIONLIST entry of a Present or a Render
+    // (facts M82 saw the NULL 0.7.15 put there). 0.7.16 asked DxgkCbGetHandleData(DXGK_HANDLE_ALLOCATION) for the
+    // object CreateAllocation stored and got something else for the CDD's handles (E20 run 003: 0xC00006C0,
+    // 0xC0000000 - "not one of our allocations"); the raw answer is still logged below, for the record. What this
+    // DDI does get, by contract, is the allocation's own private driver data - the blob GetStandardAllocationDriverData
+    // wrote and CreateAllocation validated - so the handle handed out is an object of our own holding a copy of it,
+    // and CloseAllocation frees it again. dxgkrnl closes what it opened, and the stop's sweep frees the rest.
     for (i = 0; i < pOpenAllocation->NumAllocations; i++)
     {
-        DXGKARGCB_GETHANDLEDATA data;
-        BC250_WDDM_OBJECT* object = NULL;
+        DXGK_OPENALLOCATIONINFO* info = &pOpenAllocation->pOpenAllocation[i];
+        const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
+        BC250_WDDM_OBJECT* opened = NULL;
+        void* raw = NULL;
 
-        data.hObject = pOpenAllocation->pOpenAllocation[i].hAllocation;
-        data.Type = DXGK_HANDLE_ALLOCATION;
-        data.Flags.Value = 0;
         if (parent->Device->Dxgk.DxgkCbGetHandleData != NULL)
-            object = WddmObject((HANDLE)parent->Device->Dxgk.DxgkCbGetHandleData(&data), BC250_WDDM_MAGIC_ALLOCATION);
-        pOpenAllocation->pOpenAllocation[i].hDeviceSpecificAllocation = object;
-        if (object == NULL && parent->Device->Wddm != NULL &&
-            ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] <= BC250_WDDM_LOG_CALLS)
-            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X is not one of our allocations", i,
-                     (ULONG)pOpenAllocation->pOpenAllocation[i].hAllocation);
+        {
+            DXGKARGCB_GETHANDLEDATA data;
+
+            data.hObject = info->hAllocation;
+            data.Type = DXGK_HANDLE_ALLOCATION;
+            data.Flags.Value = 0;
+            raw = parent->Device->Dxgk.DxgkCbGetHandleData(&data);
+        }
+        if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
+            private->Size != 0)
+        {
+            opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
+            if (opened != NULL) opened->Allocation = *private;
+        }
+        info->hDeviceSpecificAllocation = opened;
+        if (parent->Device->Wddm != NULL && ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] < BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p (GetHandleData said %p)", i, (ULONG)info->hAllocation,
+                     info->PrivateDriverDataSize, (void*)opened, raw);
     }
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiOpenAllocation))
-        GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X, [0] -> %p", pOpenAllocation->NumAllocations,
-                 pOpenAllocation->Flags.Value, pOpenAllocation->NumAllocations != 0 ? pOpenAllocation->pOpenAllocation[0].hDeviceSpecificAllocation : NULL);
+        GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X", pOpenAllocation->NumAllocations, pOpenAllocation->Flags.Value);
     return STATUS_SUCCESS;
 }
 
@@ -1614,10 +1629,15 @@ static DXGKDDI_CLOSEALLOCATION Bc250WddmCloseAllocation;
 static NTSTATUS Bc250WddmCloseAllocation(_In_ const HANDLE hDevice, _In_ const DXGKARG_CLOSEALLOCATION* pCloseAllocation)
 {
     BC250_WDDM_OBJECT* parent = WddmObject(hDevice, BC250_WDDM_MAGIC_DEVICE);
+    UINT i;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCloseAllocation))
         GuardLog("wddm: CloseAllocation %u allocations", pCloseAllocation->NumAllocations);
+    // pOpenHandleList carries what OpenAllocation handed out: our opened objects, or NULL where it handed out nothing.
+    // Looked up on the list before being freed, as the blit does, never dereferenced as given.
+    for (i = 0; i < pCloseAllocation->NumAllocations; i++)
+        WddmFreeObject(WddmListedObject((BC250_WDDM*)parent->Device->Wddm, pCloseAllocation->pOpenHandleList[i], BC250_WDDM_MAGIC_OPENED));
     return STATUS_SUCCESS;
 }
 
@@ -1912,10 +1932,13 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
 
     // The entry itself was read under __try by 0.7.15 in every logged present (facts M82: readable, handle 0 = what
     // OpenAllocation stored then); the value in it is still not dereferenced, only looked up (review 16).
+    // The object found is used after the lock is released: a present's allocation holds dxgkrnl's reference for the
+    // length of the call and CloseAllocation comes only once nothing references it (review 17) - and the blob it
+    // carries came through OpenAllocation's private data, whose bounds the copy below checks on its own anyway.
     source = &Present->pAllocationList[DXGK_PRESENT_SOURCE_INDEX];
-    object = WddmListedObject(wddm, source->hDeviceSpecificAllocation, BC250_WDDM_MAGIC_ALLOCATION);
+    object = WddmListedObject(wddm, source->hDeviceSpecificAllocation, BC250_WDDM_MAGIC_OPENED);
     va = (ULONGLONG)source->VirtualAddress;
-    if (object == NULL) why = "source handle is not our allocation";
+    if (object == NULL) why = "source handle is not an allocation we opened";
     else
     {
         alloc = &object->Allocation;
