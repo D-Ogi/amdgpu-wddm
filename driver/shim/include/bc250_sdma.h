@@ -111,4 +111,57 @@ u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
  * scratch slot, then a poll. Needs the page above. Returns 0, BC250_EINVAL or BC250_ETIME. */
 int bc250_sdma_ring_test(struct amdgpu_ring *ring);
 
+/* ---------------------------------------------------------------------------------------------
+ * Copy and fill (ADR 0013): the two packets BuildPagingBuffer will need once node 1 is wired into
+ * the full WDDM table as the paging node, ahead of that wiring. Not a positive control on the
+ * table - a positive control that never touches it (docs/adr/0013-node-layout-3d-plus-sdma.md).
+ *
+ * reference/sdma_v5_0.c:2018 sdma_v5_0_emit_copy_buffer() and :2045 sdma_v5_0_emit_fill_buffer(),
+ * split into packets the way amdgpu_copy_buffer() and amdgpu_ttm_fill_mem() (amdgpu_ttm.c, same
+ * tag) split them: one packet per up-to-copy_max_bytes (fill_max_bytes) chunk, both 0x400000 on
+ * this engine (sdma_v5_0_buffer_funcs, reference/sdma_v5_0.c:2057-2065). amdgpu_ttm.c is not
+ * imported - it drags in the TTM job, fence and reservation machinery the same way amdgpu_gfx.c
+ * does for the CP side, which driver/amdgpu-import/PROVENANCE.md already explains staying clear
+ * of - so the three-line splitting loop is transcribed instead of imported.
+ * driver/shim/bc250_sdma_copy.c.
+ * ------------------------------------------------------------------------------------------- */
+
+/* Dwords one call of bc250_sdma_emit_copy_linear()/bc250_sdma_emit_fill() will write for this many
+ * bytes: the split packet count times the upstream dwords-per-packet (7, 5;
+ * sdma_v5_0_buffer_funcs.copy_num_dw/.fill_num_dw). 0 if bytes is 0, so a caller can add it
+ * straight into an amdgpu_ring_alloc() budget and treat 0 as "nothing to send". */
+unsigned int bc250_sdma_copy_linear_size(unsigned int bytes);
+unsigned int bc250_sdma_fill_size(unsigned int bytes);
+
+/* reference/sdma_v5_0.c:2018 sdma_v5_0_emit_copy_buffer(), looped as amdgpu_copy_buffer()
+ * (amdgpu_ttm.c) loops it. Writes into a ring the caller has already reserved
+ * bc250_sdma_copy_linear_size(bytes) dwords in with amdgpu_ring_alloc(); does not commit. Returns
+ * BC250_EINVAL without writing a dword if bytes is 0 or the ring is not an SDMA ring. copy_flags is
+ * not a parameter: this driver never asks for TMZ, so SDMA_PKT_COPY_LINEAR_HEADER_TMZ is always 0,
+ * exactly where upstream's own callers leave it when they do not pass AMDGPU_COPY_FLAGS_TMZ. */
+int bc250_sdma_emit_copy_linear(struct amdgpu_ring *ring, u64 src_mc, u64 dst_mc, unsigned int bytes);
+
+/* reference/sdma_v5_0.c:2045 sdma_v5_0_emit_fill_buffer(), split the same way
+ * (amdgpu_ttm_fill_mem(), amdgpu_ttm.c, fill_max_bytes). Same contract as the copy above. */
+int bc250_sdma_emit_fill(struct amdgpu_ring *ring, u64 dst_mc, u32 value, unsigned int bytes);
+
+/* [shim] the positive control, one allocation and one commit: fill(src, pattern) -> copy(src ->
+ * dst) -> the same fence bc250_sdma_signal_fence() emits. Does not poll - the caller reads the
+ * fence slot back exactly as it does after bc250_sdma_signal_fence(), through
+ * bc250_sdma_fence_addr()/bc250_sdma_fence_read(), which is what "returns what to poll" means here:
+ * nothing new to poll, the existing fence machinery is it. Returns BC250_EINVAL without writing
+ * anything on a bad argument, undoes the reservation and returns the emitter's or amdgpu_ring_alloc's
+ * code if either fails partway. */
+int bc250_sdma_copy_test(struct amdgpu_ring *ring, u64 src_mc, u64 dst_mc, unsigned int bytes,
+                         u32 pattern, u64 fence_addr, u64 seq, unsigned int flags);
+
+/* [shim] the two VRAM scratch regions BC250_ESCAPE_RUN_SDMACOPY needs, out of the same VRAM pool
+ * bc250_gfx_fence_page_alloc() and friends allocate from (bc250_shim_mem_alloc(), BC250_MEM_VRAM).
+ * Both or neither: a partial allocation is freed before this returns, exactly as
+ * bc250_sdma_fence_page_alloc() leaves nothing half-allocated behind. Returns BC250_EINVAL on a bad
+ * argument, or bc250_shim_mem_alloc()'s own code (typically BC250_ENOMEM) if the pool has no room. */
+int bc250_sdma_copy_regions_alloc(struct amdgpu_device *adev, unsigned int bytes,
+                                  struct bc250_mem *src, struct bc250_mem *dst);
+void bc250_sdma_copy_regions_free(struct amdgpu_device *adev, struct bc250_mem *src, struct bc250_mem *dst);
+
 #endif /* BC250_SDMA_H */

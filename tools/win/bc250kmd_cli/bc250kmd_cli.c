@@ -830,6 +830,53 @@ static int DcnFlip(const WCHAR *physText, const WCHAR *fillWord, const WCHAR *fi
     return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
+// ---- sdmacopy: the SDMA copy/fill positive control (BC250_ESCAPE_RUN_SDMACOPY, ADR 0013) --------------------------------
+//
+// "bc250kmd_cli sdmacopy [bytes]": one SDMA constant fill and one linear copy on SDMA0, read back and compared by
+// the CPU, that never touches the WDDM table. Needs the same gates as `fence s0 ... test` (EnableGfx, a bring-up
+// that has reached stage 7) plus EnableVramWrite. bytes defaults to 4096, up to BC250_SDMACOPY_MAX_BYTES (64 KiB).
+
+static int SdmaCopy(const WCHAR *bytesText)
+{
+    static BC250_ESCAPE_SDMACOPY s;
+    NTSTATUS status;
+    WCHAR *end;
+
+    memset(&s, 0, sizeof(s));
+    s.Magic = BC250_ESCAPE_MAGIC;
+    s.Command = BC250_ESCAPE_RUN_SDMACOPY;
+    if (bytesText != NULL) {
+        s.Bytes = wcstoul(bytesText, &end, 0);
+        if (*end || s.Bytes == 0 || s.Bytes > BC250_SDMACOPY_MAX_BYTES) {
+            fprintf(stderr, "sdmacopy [bytes 1..%u], not %ls\n", BC250_SDMACOPY_MAX_BYTES, bytesText);
+            return 2;
+        }
+    }
+
+    if (SendEscape(BC250_DEFAULT_HWID, &s, sizeof(s), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (s.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (s.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no sdmacopy command\n"); return 3; }
+
+    printf("sdmacopy %lu bytes: %s, NTSTATUS 0x%08lX %s, result %ld\n", s.Bytes != 0 ? s.Bytes : BC250_SDMACOPY_DEFAULT_BYTES,
+           s.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", s.NtStatus, StatusName((NTSTATUS)s.NtStatus), s.Result);
+    printf("gates        mmio %s, vram %s, vram writes %s, gart %s, psp %s, gfx %s\n",
+           (s.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
+           (s.Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed",
+           (s.Flags & BC250_ESCAPE_FLAG_VRAM_WRITE) ? "on" : "off (EnableVramWrite is needed)",
+           (s.Flags & BC250_ESCAPE_FLAG_GART) ? "open" : "closed", (s.Flags & BC250_ESCAPE_FLAG_PSP) ? "open" : "closed",
+           (s.Flags & BC250_ESCAPE_FLAG_GFX) ? "open" : "closed");
+    if (s.FaultOffset) printf("fault        0x%08lX was refused by the driver's table; the sequence stopped there\n", s.FaultOffset);
+    printf("regions      src 0x%016llX, dst 0x%016llX (VRAM, MC addresses)\n", s.SrcMc, s.DstMc);
+    printf("fence        emitted 0x%lX, slot holds 0x%lX\n", s.LastSeq, s.LastValue);
+    printf("compare      %lu bytes, %s", s.BytesCompared, s.Matched ? "MATCHED (every byte read back 0xA5)\n" : "MISMATCH\n");
+    if (!s.Matched)
+        printf("             first wrong byte at offset 0x%lX: got 0x%02lX, want 0x%02lX\n", s.FirstMismatchOffset,
+               s.FirstMismatchGot, s.FirstMismatchWant);
+    printf("time         %lu us, seed to read-back\n", s.Microseconds);
+    return s.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -999,6 +1046,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore\n"
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
+                        "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
@@ -1024,6 +1072,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
+    if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
         if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);

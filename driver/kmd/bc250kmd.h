@@ -290,6 +290,10 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GFX* D
 BOOLEAN GfxIsActive(_In_ const BC250_DEVICE* Device);
 struct _BC250_ESCAPE_FENCE;
 void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_FENCE* Data);
+// ADR 0013: the SDMA copy/fill positive control, gated the same way the SDMA ring test is (EnableGfx and stage 7)
+// plus EnableVramWrite. PASSIVE_LEVEL only (KeStallExecutionProcessor's poll, the CPU seed and read-back).
+struct _BC250_ESCAPE_SDMACOPY;
+void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_SDMACOPY* Data);
 // ADR 0008 stage C: one indirect buffer on the gfx ring. The ring side of a submission lives here so that wddm.c
 // stays free of shim types, exactly as it is today.
 //   GfxSubmitIb      PASSIVE_LEVEL only; takes Device->GartLock. Programs VMID Vmid's page directory root if

@@ -21,6 +21,8 @@
 #define BC250_ESCAPE_RUN_DCN 14u            // BC250_ESCAPE_DCN: a read-only dump of the DCN registers (ADR 0011 point 3)
 #define BC250_ESCAPE_RUN_DCNFLIP 15u        // BC250_ESCAPE_DCNFLIP in: Physical, Fill, FillColor, Restore; out: the
                                             // whole flip sequence, decoded (ADR 0011 point 3 step 2)
+#define BC250_ESCAPE_RUN_SDMACOPY 16u       // BC250_ESCAPE_SDMACOPY in: Bytes; out: the SDMA copy/fill positive
+                                            // control (ADR 0013), read back and compared by the CPU
 #define BC250_KMD_VERSION 0x00070014u       // milestone 7 work, revision 20
 
 #define BC250_ESCAPE_STATUS_DONE 0u
@@ -313,6 +315,49 @@ typedef struct _BC250_ESCAPE_DCNFLIP {
     unsigned long Underflow;                // out: DchubpCntl's HUBP_UNDERFLOW_STATUS field (0x70000000), decoded
 } BC250_ESCAPE_DCNFLIP;
 
+// ---- BC250_ESCAPE_RUN_SDMACOPY (gfx.c): the SDMA copy/fill positive control (ADR 0013) --------------------------------------
+//
+// The one thing this escape asks: run one SDMA linear copy and one constant fill the way BuildPagingBuffer will
+// once node 1 (ADR 0013) reaches the WDDM table, without going anywhere near that table, and prove it by reading
+// the destination back with the CPU. Needs the same gates the SDMA ring test needs (EnableMmio, EnableVram,
+// EnableGart, EnablePsp, EnableGfx, and a bring-up that has reached stage 7 - see BC250_ESCAPE_RUN_FENCE's
+// BC250_FENCE_MODE_RING_TEST) plus EnableVramWrite: seeding the source and reading the destination back are both
+// raw CPU writes/reads of VRAM, exactly what vram.c's EnableVramWrite gate already exists to gate elsewhere, not
+// the bring-up's own buffers that the other gates already cover.
+//
+// Two 64 KiB VRAM scratch regions, allocated once from the same pool gpumem.c's bring-up buffers come from (the
+// top of the carve-out, facts M31/M32) and reused across calls; refused if either one is not inside
+// Device->VramPhysical/VramLength (gpumem.c's own allocator cannot hand out anything else, but this escape checks
+// it again rather than trust that by construction - the same doubled check vram.c's Access() makes against
+// MmGetPhysicalMemoryRanges()). Sequence: the source is seeded by the CPU with a counting pattern
+// (BC250_SDMACOPY_PATTERN(offset)); bc250_sdma_copy_test() emits a constant-fill-then-linear-copy pair on SDMA0
+// and the same fence bc250_sdma_ring_test() uses, polled the same way (no interrupt: this needs no more of the IH
+// ring than the ring test does); the destination is then read back by the CPU and compared byte for byte with
+// what the source was seeded with.
+#define BC250_SDMACOPY_MAX_BYTES 0x10000u   // one scratch region, 64 KiB
+#define BC250_SDMACOPY_DEFAULT_BYTES 4096u  // what Bytes == 0 asks for
+#define BC250_SDMACOPY_PATTERN 0x000000A5u  // the SDMA fill's own value; every destination byte should read 0xA5
+
+typedef struct _BC250_ESCAPE_SDMACOPY {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_SDMACOPY
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Bytes;                    // in: 1..BC250_SDMACOPY_MAX_BYTES, or 0 for BC250_SDMACOPY_DEFAULT_BYTES
+    long Result;                            // out: the shim's return code, -62 if the fence never arrived
+    unsigned long FaultOffset;
+    unsigned long BytesCompared;            // out: bytes actually read back and compared
+    unsigned long Matched;                  // out: 1 when every byte read back is what the source was seeded with
+    unsigned long FirstMismatchOffset;      // out: byte offset of the first wrong byte, 0 when Matched
+    unsigned long FirstMismatchGot, FirstMismatchWant;
+    unsigned long LastSeq, LastValue;       // out: the fence value emitted and what the slot held when polling stopped
+    unsigned long Microseconds;             // out: seed to read-back compared, all of it
+    unsigned long Padding;                  // explicit, so the two 64-bit fields below start where they read
+    unsigned long long SrcMc, DstMc;        // out: the two VRAM scratch regions' GPU (MC) addresses
+} BC250_ESCAPE_SDMACOPY;
+
 // ---- BC250_ESCAPE_RUN_FENCE (gfx.c): fences on one ring, one after the other ----------------------------------------------
 #define BC250_FENCE_RING_GFX 0u
 #define BC250_FENCE_RING_COMPUTE0 1u        // 1..8: the eight compute rings
@@ -424,3 +469,4 @@ typedef char BC250_ESCAPE_LOG_SIZE_CHECK[(sizeof(BC250_ESCAPE_LOG) == 10812) ? 1
 typedef char BC250_ESCAPE_DCN_REG_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN_REG) == 56) ? 1 : -1];
 typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4272) ? 1 : -1];
 typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];
+typedef char BC250_ESCAPE_SDMACOPY_SIZE_CHECK[(sizeof(BC250_ESCAPE_SDMACOPY) == 88) ? 1 : -1];

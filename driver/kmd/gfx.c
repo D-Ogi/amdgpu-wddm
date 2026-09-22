@@ -114,6 +114,12 @@ typedef struct _BC250_GFX {
     // for an invalidation (bc250_gmc_flush_gpu_tlb polls for up to adev->usec_timeout). Index 0 is unused: VMID 0 is
     // the GART aperture and has no root of ours.
     ULONGLONG VmidRoot[16];
+    // ADR 0013: the two VRAM scratch regions BC250_ESCAPE_RUN_SDMACOPY copies between. Allocated once from the
+    // same VRAM pool the rest of this file's memory comes from (gpumem.c), on the first call, and freed with
+    // everything else in TearDown - not by the escape itself, so that two calls in a row need not pay for the
+    // allocation twice.
+    BOOLEAN SdmaCopyRegions;
+    struct bc250_mem SdmaCopySrc, SdmaCopyDst;
 } BC250_GFX;
 
 // sdma_v5_0_gfx_resume_instance() ends with amdgpu_ring_test_helper(ring); the shim leaves that to the miniport, because an
@@ -174,6 +180,11 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
     if (Gfx->IbPage) { bc250_gfx_ib_page_free(Adev); Gfx->IbPage = FALSE; }
+    if (Gfx->SdmaCopyRegions)
+    {
+        bc250_sdma_copy_regions_free(Adev, &Gfx->SdmaCopySrc, &Gfx->SdmaCopyDst);
+        Gfx->SdmaCopyRegions = FALSE;
+    }
     RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
     RtlZeroMemory(Gfx->RingOwesSlot, sizeof(Gfx->RingOwesSlot));
     // The fence page is gone, so nothing may read a slot in it any more, and the rings are gone, so no VMID root this
@@ -757,6 +768,182 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     }
     GuardLog("gfx: fence ring %u x%u int %u -> 0x%08X, result %d, %u completed, last 0x%X/0x%X, %u us", Data->Ring, Data->Count,
              Data->Interrupt, status, result, Data->Completed, Data->LastValue, Data->LastSeq, Data->Microseconds);
+    ExReleaseFastMutex(&Device->GartLock);
+
+    Data->Result = result;
+    Data->NtStatus = (unsigned long)status;
+    Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+// ---- ADR 0013: the SDMA copy/fill positive control (BC250_ESCAPE_RUN_SDMACOPY) -----------------------------------------
+//
+// One linear copy and one constant fill on SDMA0, checked by the CPU, that never goes near the WDDM table - the
+// positive control ADR 0013 asks for before BuildPagingBuffer is written. The source is seeded by the CPU with a
+// counting pattern first (byte i = i & 0xFF, wrapping every 256 bytes), not left at whatever a previous call left
+// behind or at zero: bc250_sdma_copy_test()'s own SDMA_OP_CONST_FILL packet then overwrites it with
+// BC250_SDMACOPY_PATTERN before the copy runs, so a fill that silently did not execute leaves this byte-varying
+// content for the copy to move instead of the flat pattern - which the comparison below catches and a check
+// against "not zero" or "not the CPU seed" would not. The destination is poisoned to a third value first
+// (0xEE, neither the seed nor the pattern), so "nothing ran at all" fails the comparison exactly as a real
+// mismatch would. What the escape actually asks: does SDMA0 execute both packets, in that order, and does the
+// copy really move what the fill wrote.
+
+// gpumem.c's VRAM pool can only ever hand out addresses inside the top of the carve-out (BC250_GPUMEM_POOL_BELOW/
+// _LENGTH, both well inside Device->VramMcBase/VramLength); checked again here rather than trusted by
+// construction, the same doubled check vram.c's Access() makes against MmGetPhysicalMemoryRanges() for its own
+// writes. Allocates once and keeps the two regions for later calls; TearDown() gives them back with everything
+// else, not this function, so that a second call need not pay for the allocation again.
+static NTSTATUS SdmaCopyAllocateRegions(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev, _In_ const BC250_DEVICE* Device)
+{
+    int r;
+
+    if (Gfx->SdmaCopyRegions) return STATUS_SUCCESS;
+    r = bc250_sdma_copy_regions_alloc(Adev, BC250_SDMACOPY_MAX_BYTES, &Gfx->SdmaCopySrc, &Gfx->SdmaCopyDst);
+    if (r != 0) return STATUS_INSUFFICIENT_RESOURCES;
+    if (Gfx->SdmaCopySrc.mc < Device->VramMcBase || Gfx->SdmaCopySrc.mc + BC250_SDMACOPY_MAX_BYTES > Device->VramMcBase + Device->VramLength ||
+        Gfx->SdmaCopyDst.mc < Device->VramMcBase || Gfx->SdmaCopyDst.mc + BC250_SDMACOPY_MAX_BYTES > Device->VramMcBase + Device->VramLength)
+    {
+        bc250_sdma_copy_regions_free(Adev, &Gfx->SdmaCopySrc, &Gfx->SdmaCopyDst);
+        return STATUS_ACCESS_DENIED;
+    }
+    Gfx->SdmaCopyRegions = TRUE;
+    return STATUS_SUCCESS;
+}
+
+void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY* Data)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    struct amdgpu_ring* ring = NULL;
+    void* previousBackend = NULL;
+    BOOLEAN gartEnabled = FALSE;
+    NTSTATUS status = STATUS_SUCCESS;
+    LARGE_INTEGER frequency, start = { 0 };
+    ULONG bytes, i, waited, vram, gtt;
+    u32 seq = 0;
+    long result = 0;
+
+    Data->Version = BC250_KMD_VERSION;
+    Data->Result = 0;
+    Data->FaultOffset = 0;
+    Data->BytesCompared = 0;
+    Data->Matched = 0;
+    Data->FirstMismatchOffset = 0;
+    Data->FirstMismatchGot = 0;
+    Data->FirstMismatchWant = 0;
+    Data->LastSeq = 0;
+    Data->LastValue = 0;
+    Data->Microseconds = 0;
+    Data->Padding = 0;
+    Data->SrcMc = 0;
+    Data->DstMc = 0;
+    KeQueryPerformanceCounter(&frequency);
+
+    bytes = (Data->Bytes == 0) ? BC250_SDMACOPY_DEFAULT_BYTES : Data->Bytes;
+
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else if (bytes > BC250_SDMACOPY_MAX_BYTES) status = STATUS_INVALID_PARAMETER;
+    // The CPU seed and read-back below are raw VRAM writes/reads of the kind vram.c's EnableVramWrite gate already
+    // exists for, not the bring-up's own buffers that the gates below cover.
+    else if (!Device->VramWriteEnabled) status = STATUS_ACCESS_DENIED;
+    // The same stage the SDMA ring test needs (this file's BC250_FENCE_MODE_RING_TEST arm, above): stage 7 done,
+    // nothing failed. Not stage 8 (EnableIh): the fence here carries no interrupt bit and is polled in memory
+    // exactly as the ring test's own scratch dword is, so the IH ring is not part of what this needs.
+    else if (gfx->Failed || !gfx->SetUp || gfx->StagesDone < (ULONG)BC250_GFX_STAGE_SDMA) status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
+    if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status) && (ring = FenceRing(adev, BC250_FENCE_RING_SDMA0)) == NULL) status = STATUS_INVALID_PARAMETER;
+    if (NT_SUCCESS(status))
+    {
+        previousBackend = adev->backend;
+        adev->backend = &gfx->Sequence;
+        SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+        GpuMemBeginSequence(Device, NULL, 0);
+
+        if (!gfx->SdmaFencePage)
+        {
+            result = bc250_sdma_fence_page_alloc(adev);
+            if (result == 0) gfx->SdmaFencePage = TRUE; else status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+        // As GfxFenceEscape checks before every ring's next submission: a fence this ring still owes from an
+        // earlier timed-out call must be seen before a new one is sent, or a late arrival could be read as this
+        // call's own.
+        if (NT_SUCCESS(status) && gfx->RingOwes[BC250_FENCE_RING_SDMA0] != 0)
+        {
+            ULONG owedSlot = gfx->RingOwesSlot[BC250_FENCE_RING_SDMA0];
+            ULONG now = (ULONG)bc250_sdma_fence_read(adev, owedSlot);
+
+            if (now == gfx->RingOwes[BC250_FENCE_RING_SDMA0]) gfx->RingOwes[BC250_FENCE_RING_SDMA0] = 0;
+            else { result = -16; status = STATUS_DEVICE_BUSY; }
+        }
+        if (NT_SUCCESS(status)) status = SdmaCopyAllocateRegions(gfx, adev, Device);
+
+        if (NT_SUCCESS(status))
+        {
+            u64 fenceAddr = bc250_sdma_fence_addr(adev, 2);       // slot 2: the first fence slot (0, 1 are the ring tests')
+
+            Data->SrcMc = gfx->SdmaCopySrc.mc;
+            Data->DstMc = gfx->SdmaCopyDst.mc;
+            if (fenceAddr == 0) { result = -62; status = STATUS_INSUFFICIENT_RESOURCES; }
+            else
+            {
+                UCHAR* src = (UCHAR*)gfx->SdmaCopySrc.cpu;
+                UCHAR* dst = (UCHAR*)gfx->SdmaCopyDst.cpu;
+
+                for (i = 0; i < bytes; i++) WRITE_REGISTER_UCHAR(&src[i], (UCHAR)(i & 0xFFu));
+                for (i = 0; i < bytes; i++) WRITE_REGISTER_UCHAR(&dst[i], 0xEEu);
+
+                start = KeQueryPerformanceCounter(NULL);
+                seq = ++gfx->FenceSeq;
+                result = bc250_sdma_copy_test(ring, gfx->SdmaCopySrc.mc, gfx->SdmaCopyDst.mc, bytes,
+                                              BC250_SDMACOPY_PATTERN, fenceAddr, seq, 0);
+                if (result == 0 && NT_SUCCESS(gfx->Sequence.Fault))
+                {
+                    Data->LastSeq = seq;
+                    for (waited = 0; waited < BC250_FENCE_TIMEOUT_US; waited += 10)
+                    {
+                        Data->LastValue = (unsigned long)bc250_sdma_fence_read(adev, 2);
+                        if (Data->LastValue == seq) break;
+                        KeStallExecutionProcessor(10);
+                    }
+                    if (Data->LastValue != seq)
+                    {
+                        result = -62;
+                        gfx->RingOwes[BC250_FENCE_RING_SDMA0] = seq;
+                        gfx->RingOwesSlot[BC250_FENCE_RING_SDMA0] = 2;
+                    }
+                }
+                Data->Microseconds = Microseconds(start, frequency);
+
+                // Read back and compare whatever the fence says, timeout included: "the copy never ran" and "the
+                // copy ran and moved the wrong bytes" are different failures and want different next steps, as the
+                // dispatch and IB modes of GfxFenceEscape already read back after a timeout.
+                Data->BytesCompared = bytes;
+                Data->Matched = 1;
+                for (i = 0; i < bytes; i++)
+                {
+                    UCHAR got = READ_REGISTER_UCHAR(&dst[i]);
+                    if (got != (UCHAR)(BC250_SDMACOPY_PATTERN & 0xFFu))
+                    {
+                        Data->Matched = 0;
+                        Data->FirstMismatchOffset = i;
+                        Data->FirstMismatchGot = got;
+                        Data->FirstMismatchWant = BC250_SDMACOPY_PATTERN & 0xFFu;
+                        break;
+                    }
+                }
+                if (result == 0 && !Data->Matched) result = -5;       // the fence arrived, the destination did not
+            }
+        }
+        if (NT_SUCCESS(status)) status = gfx->Sequence.Fault;
+        Data->FaultOffset = gfx->Sequence.FaultOffset;
+        (void)GpuMemEndSequence(Device, &vram, &gtt);
+        adev->backend = previousBackend;
+    }
+    GuardLog("gfx: sdmacopy %lu bytes -> 0x%08X, result %d, matched %lu, first mismatch at 0x%lX (got 0x%02lX want 0x%02lX), %lu us",
+             bytes, status, result, Data->Matched, Data->FirstMismatchOffset, Data->FirstMismatchGot, Data->FirstMismatchWant, Data->Microseconds);
     ExReleaseFastMutex(&Device->GartLock);
 
     Data->Result = result;

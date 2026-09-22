@@ -11,6 +11,7 @@ the replay method are described in `driver/shim/README.md`; this file covers the
 | `run_ih.ps1` | `replay_ih.c` | the interrupt ring, its decode and its pointers. |
 | `run_pte.ps1` | `replay_pte.c` | the page tables. |
 | `run_sdma_faults.ps1` | `sdma_faults.c` | what the SDMA bring-up does when things fail. |
+| `run_sdma_copy.ps1` | `sdma_copy_packets.c` | ADR 0013: does `bc250_sdma_copy.c` write the same copy/fill packets amdgpu's `sdma_v5_0_emit_copy_buffer()`/`emit_fill_buffer()` would, dword for dword, split where they would split? |
 
 The five replays all ask one question - does the shim write what unit A's Linux driver wrote, in that
 order - and they ask it on the path where everything works. Their verdict is EXACT MATCH or nothing.
@@ -59,6 +60,18 @@ No register sequence may change to satisfy this suite. The sequences are confirm
 against unit A's trace and `run_gfx.ps1` says so; this suite only fails the things around them, and
 it checks that an error path writes no register a working bring-up would not - the set it compares
 against is learned from a successful `bc250_sdma_hw_init()` in the same process, never typed.
+
+## `run_sdma_copy.ps1` - the SDMA copy/fill packets (ADR 0013)
+
+The positive control ADR 0013 asks for before node 1 reaches the WDDM table: `bc250_sdma_copy.c`'s
+`bc250_sdma_emit_copy_linear()`/`bc250_sdma_emit_fill()` are checked dword for dword against AMD's
+own `sdma_v5_0_emit_copy_buffer()`/`emit_fill_buffer()` (`driver/amdgpu-import/reference/sdma_v5_0.c`),
+including a request one byte past `copy_max_bytes` (0x400000) that has to split into two packets the
+way `amdgpu_copy_buffer()` splits it. `bc250_sdma_copy_test()` is checked end to end against a
+memory ring: fill, then copy, then the same fence `bc250_sdma_ring_test()` uses, one doorbell.
+Links against `bc250_sdma_copy.c`, `bc250_sdma.c`, `bc250_ring.c` and `bc250_nbio.c` - the four
+files `driver/kmd/build.ps1` compiles into the miniport for this - with its own plain shim backend
+(a working allocator, a no-op register file), the same reason `sdma_faults.c` brings its own.
 
 ### Expected failures
 
