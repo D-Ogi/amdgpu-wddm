@@ -34,8 +34,14 @@ VMID.** Two already-measured facts make this possible instead of a guess:
 2. `bc250_sdma_emit_copy_linear`/`emit_fill` (`bc250_sdma.h:136-146`) take physical MC addresses, not GPU
    virtual ones, and M95 measured them working on this hardware in exactly that form.
 
-Chaining the two - resolve the operation's virtual addresses to physical with `VidMmTranslate`, then emit the
-same physical-address packets M95 already proved - reuses two independent, already-measured facts. The
+Chaining the two needs one conversion the first cut skipped. `VidMmTranslate` returns a *system physical*
+address (`vidmm.c`: `vram_base` is `VramPhysical`). M95's packets carried *MC* addresses (`gpumem.c`'s
+`entry->Mc`, `VramMcBase + offset`). They differ by a constant on this part, and putting the physical one in
+the packet is what E24 run 007b page-faulted on (facts M113: UTCL2 nack, SDMA source 221, fence slot stayed 0).
+`paging_mc.c` does `MC = VramMcBase + (physical - VramPhysical)` for the whole byte range before `emit_fill` /
+`emit_copy_linear`, and nothing else about the packet changes.
+
+Chaining the two - resolve, convert, emit the same packets M95 already proved - reuses those measured facts. The
 alternative the task also asks about (fetch the paging buffer as an SDMA IB via `SDMA_OP_INDIRECT`, in which
 the VMID field of `SDMA_PKT_INDIRECT_HEADER` (`reference/sdma_v5_0.c:448-449`) selects the page tables the
 copy/fill packets *inside* the IB are translated through) would additionally need: a VMID assigned to the

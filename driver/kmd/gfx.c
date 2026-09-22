@@ -32,6 +32,7 @@
 #include "bc250_gfx.h"
 #include "bc250_sdma.h"
 #include "bc250_sdma_paging.h"
+#include "paging_mc.h"
 #include "bc250_dispatch.h"
 #include "bc250_nbio.h"
 #include "bc250_irq.h"
@@ -1212,7 +1213,8 @@ static BOOLEAN PagingRangeContiguous(ULONGLONG RootPhysical, ULONGLONG Va, ULONG
 // The packet itself comes from driver/shim/bc250_sdma_paging.c (ADR 0013), not from this function: that file
 // is the host-testable half (driver/shim/test/paging_packets.c checks it dword for dword against
 // bc250_sdma_emit_copy_linear()/emit_fill(), M95, plus the room check below), and this one supplies only what
-// that file cannot have - the physical addresses and the shadow buffer to write them into.
+// that file cannot have - the MC addresses (paging_mc.c, from VidMmTranslate's system physical) and the
+// shadow buffer to write them into.
 //
 // DmaBuffer is pBuildPagingBuffer->pDmaBuffer as the DDI hands it over: "a virtual address to the first
 // available byte in the paging buffer", not the buffer's start. DmaBufferOffset is that same byte's distance
@@ -1226,7 +1228,7 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
                         _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
 {
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
-    ULONGLONG srcPhysical = 0, dstPhysical = 0;
+    ULONGLONG srcPhysical = 0, dstPhysical = 0, srcMc = 0, dstMc = 0;
     BOOLEAN srcSystem = FALSE, dstSystem = FALSE;
     unsigned int budget, written = 0;
     u32* shadow;
@@ -1269,6 +1271,17 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
         goto Done;
     }
 
+    // VidMmTranslate's number is a system physical address (vidmm.c, vram_base). The packet wants the MC
+    // address M95's sdmacopy used. 0.7.33 put the physical one in and SDMA0 page-faulted (facts M113).
+    if (!PagingPhysicalToMc(dstPhysical, Bytes, (ULONGLONG)Device->VramPhysical.QuadPart, Device->VramMcBase,
+                            Device->VramLength, &dstMc) ||
+        (!Fill && !PagingPhysicalToMc(srcPhysical, Bytes, (ULONGLONG)Device->VramPhysical.QuadPart,
+                                      Device->VramMcBase, Device->VramLength, &srcMc)))
+    {
+        *Unsupported = BC250PagingNoTranslation;
+        goto Done;
+    }
+
     if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_SHADOW_BYTES) { status = STATUS_INVALID_PARAMETER; goto Done; }
 
     // budget: the smaller of dxgkrnl's own remaining DmaBufferFree and the shadow's - bc250_sdma_paging_copy/
@@ -1280,8 +1293,8 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     // non-NULL ring->adev, and struct amdgpu_device is 0x5B00 bytes - the version that put one on the stack died in
     // nt!_chkstk (bugcheck 0x50) the first time VidMm actually called this path, on a kernel stack that dxgmms2's
     // own eight frames had already eaten 0x12D0 of.
-    result = Fill ? bc250_sdma_paging_fill(gfx->PagingDevicePtr, shadow, budget, dstPhysical, FillPattern, (unsigned int)Bytes, &written)
-                  : bc250_sdma_paging_copy(gfx->PagingDevicePtr, shadow, budget, srcPhysical, dstPhysical, (unsigned int)Bytes, &written);
+    result = Fill ? bc250_sdma_paging_fill(gfx->PagingDevicePtr, shadow, budget, dstMc, FillPattern, (unsigned int)Bytes, &written)
+                  : bc250_sdma_paging_copy(gfx->PagingDevicePtr, shadow, budget, srcMc, dstMc, (unsigned int)Bytes, &written);
     if (result == BC250_SDMA_PAGING_INSUFFICIENT) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
     if (result != BC250_SDMA_PAGING_OK) { status = STATUS_INVALID_PARAMETER; goto Done; }
 
@@ -1294,8 +1307,8 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     // DmaBufferSubmissionStartOffset speaks in (bytes from the start of the buffer).
     RtlCopyMemory(DmaBuffer, shadow, (SIZE_T)written * 4u);
     *DwordsWritten = (ULONG)written;
-    GuardLog("gfx: paging %s %llu bytes at 0x%llX -> 0x%llX physical, %u dwords at shadow offset 0x%lX",
-             Fill ? "fill" : "transfer", Bytes, srcPhysical, dstPhysical, written, DmaBufferOffset);
+    GuardLog("gfx: paging %s %llu bytes physical 0x%llX -> 0x%llX, mc 0x%llX -> 0x%llX, %u dwords at shadow offset 0x%lX",
+             Fill ? "fill" : "transfer", Bytes, srcPhysical, dstPhysical, srcMc, dstMc, written, DmaBufferOffset);
 
 Done:
     InterlockedDecrement(&gfx->PagingBuildersActive);

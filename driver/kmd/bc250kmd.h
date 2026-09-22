@@ -400,9 +400,9 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 // touches the shim's register-sequence machinery. It writes straight into the live SDMA0 ring (adev captured
 // once, under GartLock, the same way ih.c's DpcAdev is) under its own spinlock (BC250_GFX::Sdma0RingLock),
 // which every other writer of that ring (the ring test, GfxFenceEscape's SDMA arm, SdmaCopyEscape) also takes,
-// narrowly, around their own ring push. Addresses are physical (MC): the paging operation's virtual addresses
-// are resolved on the CPU first, through VidMmTranslate(), so no VMID is ever pointed at anything for this path
-// (design note section 2).
+// narrowly, around their own ring push. VidMmTranslate returns a system physical address; paging_mc.c turns
+// that into the MC address the packet wants (the number M95 ran) before anything is emitted. No VMID is
+// pointed at anything for this path (design note section 2).
 //   GfxPagingBuild      PASSIVE_LEVEL (BuildPagingBuffer). Emits one operation's SDMA packets into both
 //                       pDmaBuffer (dxgkrnl's own copy, per the DDI contract) and a driver-owned shadow buffer at
 //                       the same offset, through the existing, measured bc250_sdma_emit_copy_linear/emit_fill
