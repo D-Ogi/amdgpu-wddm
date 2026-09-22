@@ -1,0 +1,9 @@
+boot 2026-09-22T19:20:20
+bc250kmd 0.7.45.1
+after gfx run 8, before any Vulkan submit:
+
+fence gfx x1 as an indirect buffer: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       1 of 1 values read back, 1 doorbells; last emitted 0x1, slot holds 0x1
+time         31 us in all, slowest single fence 0 us
+ib           0x574000, 3 dwords, VMID 0, root 0x0: FETCHED (the scratch register took the value)
+exit code 0

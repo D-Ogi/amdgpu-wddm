@@ -1,0 +1,6 @@
+UnconfirmedStarts 0
+Stage 61 FullWddm 0
+boot 2026-09-22T22:14:36
+TDR 0
+BugCheck 0
+22:27:07 Tctl 66.4 C (raw 737B0FEF)

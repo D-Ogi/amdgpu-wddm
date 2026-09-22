@@ -1,0 +1,11 @@
+WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
+radv: info: Created an instance.
+radv: info: Found compatible device 0x2f0616:0x0.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x2f0616
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+allocation handle=0x40000780
+bc250: gfx preamble inlined (no gfx_init IB)

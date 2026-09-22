@@ -1,0 +1,9 @@
+WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x14c9f1
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+allocation handle=0x40000a80
+bc250: gfx preamble inlined (no gfx_init IB)

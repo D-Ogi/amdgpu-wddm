@@ -1,0 +1,26 @@
+boot 2026-09-22T19:28:05
+driver 0.7.45.1 (0x0007002D)
+ICD preamble inlined. BC250_IB_DWORDS cut the one gathered IB. Hash of a cut IB is not the probe.
+
+positive control, before Vulkan, VMID 0 GART:
+fence gfx 1 ib: FETCHED in 31 us
+ib 0x574000, 3 dwords, VMID 0, root 0x0
+slot holds 0x1
+
+fill_g1, VMID 1, same opening c0012800 80000000 80000000 c0001200, leaf low byte 0x73:
+
+  5 dwords, 20 bytes: hardware fence arrived, fence 386, t_submit_to_idle_us 765.8
+    umd ib 0x20006C000 20 bytes -> phys 0x21B560000 system
+    gfx: VMID 1 root 0x46DFF3000 -> 0
+  32 dwords, 128 bytes: hardware fence arrived, fence 604, t_submit_to_idle_us 998.5
+    umd ib 0x20006C000 128 bytes -> phys 0x174707000 system
+  64 dwords, 256 bytes: HARDWARE FENCE TIMEOUT after 500 ms (sequence 16)
+    fence 661 completed in software, ring path closed
+    umd ib 0x20006C000 256 bytes -> phys 0x179355000 system
+    t_submit_to_idle_us 500830.9
+
+hash of all three: 0xeb05052ea5b62325 vs cpu 0x7018cdd513a22325 match=NO
+(the zero buffer; the shader was past the cut)
+eight tests not run: the ring closed on the 64-dword timeout
+
+The 32-dword runner stdout is console-32.txt. compute.txt for that cap was overwritten by the 64-dword run; the KMD lines are in kmd-log.txt.

@@ -1,0 +1,19 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x136b61
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+allocation handle=0x40000600
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000680
+allocation handle=0x40000740
+allocation handle=0x400007c0
+allocation handle=0x40000840
+allocation handle=0x400008c0
+allocation handle=0x40000940
+allocation handle=0x400009c0
+allocation handle=0x40000a40
+allocation handle=0x40000ac0
+bc250: IB clamped to 171 dwords (240 were ready)
+bc250: SubmitCommand ib 0x20006c000 684 bytes (from 2) c0012800 80000000 80000000 c0001200

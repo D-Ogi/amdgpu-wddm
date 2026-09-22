@@ -21,6 +21,7 @@
 // 002 to 004, facts M64 and M65) also what the lab's dxgkrnl and every WDDM 1.2+ sample insist on: per-engine
 // TDR with its three DDIs, DirectFlip, FlipIndependent, SmoothRotation, SetStablePowerState, CollectDbgInfo.
 #include "bc250kmd.h"
+#include "bc250_gfx.h"
 #include "umd_blob.h"
 #include "umd_caps.h"
 #include <ntstrsafe.h>
@@ -2058,7 +2059,10 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
             info->PhysicalAdapterIndex = 0;
             info->FlagsWddm2.Value = 0;
             info->FlagsWddm2.CpuVisible = 1;
-            if (segment == BC250_WDDM_SEGMENT_APERTURE) info->FlagsWddm2.Cached = 1;
+            /* Cached is a write-back CPU mapping, and the system PTE is not snooped unless
+             * VidMm sets CacheCoherent. A command buffer wants write-combined. The run after
+             * this change still timed out, and the CPU saw a real PACKET3 at the start of the
+             * IB, so the cache was not what kept the fence from arriving. */
             info->AllocationPriority = 0;
             if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
                 GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX", view.bytes, view.heap, align,
@@ -2402,6 +2406,58 @@ static void WddmSubmitUmd(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wdd
     {
         LARGE_INTEGER tick;
         ULONG waited = 0;
+        ULONGLONG ibPhys = 0, ibLeaf = 0;
+        BOOLEAN ibSystem = FALSE;
+        BOOLEAN ibMapped;
+        ULONG ibDw[BC250_IB_PROBE_DWORDS];
+
+        /* Before the ring packet. The winsys reads the BO through VidMm's CPU mapping. This
+         * reads the system page the PTE names, at the IB's own offset, which is what the CP
+         * fetches. The +32 and +56 lines are the M127 window. They are bytes in DRAM, not yet
+         * a claim about which packet the CP executed. PASSIVE_LEVEL. */
+        ibMapped = VidMmProbeIb(Context->RootPhysical, ib.ib_va, &ibLeaf, &ibPhys, &ibSystem, ibDw);
+        GuardLog("wddm: umd ib 0x%llX %lu bytes -> %s 0x%llX%s leaf 0x%llX dram %08lX %08lX %08lX %08lX",
+                 ib.ib_va, ib.ib_bytes, ibMapped ? "phys" : "UNMAPPED", ibPhys,
+                 ibMapped ? (ibSystem ? " system" : " vram") : "", ibLeaf, ibDw[0], ibDw[1], ibDw[2], ibDw[3]);
+        if (ibMapped && ibSystem && (ib.ib_va & (PAGE_SIZE - 1)) == 0)
+        {
+            ULONG slice;
+            static const ULONG slices[] = { 32u, 56u, 158u, 166u, 176u, 184u, 192u, 200u, 208u, 216u, 224u, 232u };
+            if (ib.ib_bytes > 32u * 4u)
+                GuardLog("wddm: umd ib +32 %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX",
+                         ibDw[32], ibDw[33], ibDw[34], ibDw[35], ibDw[36], ibDw[37], ibDw[38], ibDw[39]);
+            if (ib.ib_bytes > 56u * 4u)
+                GuardLog("wddm: umd ib +56 %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX",
+                         ibDw[56], ibDw[57], ibDw[58], ibDw[59], ibDw[60], ibDw[61], ibDw[62], ibDw[63]);
+            for (slice = 2; slice < sizeof(slices) / sizeof(slices[0]); slice++)
+            {
+                ULONG at = slices[slice];
+                if (ib.ib_bytes < (at + 8u) * 4u || at + 8u > BC250_IB_PROBE_DWORDS)
+                    continue;
+                GuardLog("wddm: umd ib +%lu %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX",
+                         at, ibDw[at], ibDw[at + 1], ibDw[at + 2], ibDw[at + 3],
+                         ibDw[at + 4], ibDw[at + 5], ibDw[at + 6], ibDw[at + 7]);
+            }
+            {
+                u32 lo = 0, hi = 0, hiWritten = 0, ndw;
+                u64 shaderVa = 0;
+                ULONGLONG sLeaf = 0, sPhys = 0;
+                BOOLEAN sSystem = FALSE, sMapped;
+
+                ndw = ib.ib_bytes / 4u;
+                if (ndw > BC250_IB_PROBE_DWORDS) ndw = BC250_IB_PROBE_DWORDS;
+                if (bc250_pm4_shader_addr((const u32 *)ibDw, ndw, &shaderVa, &lo, &hi, &hiWritten))
+                {
+                    /* Reuses ibDw. The slices above have already been logged. */
+                    sMapped = VidMmProbeIb(Context->RootPhysical, shaderVa, &sLeaf, &sPhys, &sSystem, ibDw);
+                    GuardLog("wddm: shader 0x%llX lo %08X hi %08X%s -> %s 0x%llX%s leaf 0x%llX dram %08lX %08lX %08lX %08lX",
+                             shaderVa, lo, hi, hiWritten ? "" : " (hi not in packet)",
+                             sMapped ? "phys" : "UNMAPPED", sPhys,
+                             sMapped ? (sSystem ? " system" : " vram") : "", sLeaf,
+                             ibDw[0], ibDw[1], ibDw[2], ibDw[3]);
+                }
+            }
+        }
 
         tick.QuadPart = -10000ll * 10;
         for (;;)

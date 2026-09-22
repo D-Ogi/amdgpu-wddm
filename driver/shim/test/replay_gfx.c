@@ -111,6 +111,7 @@
 #include "nv.h"
 
 #include "gc/gc_10_1_0_offset.h"
+#include "cyan_skillfish_ip_offset.h"
 #include "gc/gc_10_1_0_sh_mask.h"
 #include "soc15_common.h"
 #include "v10_structs.h"
@@ -2157,6 +2158,118 @@ static unsigned int check_ib_refusals(struct amdgpu_device *adev, u64 addr, int 
 	return bad;
 }
 
+/* COMPUTE_PGM_LO is addr >> 8. A two-value packet also stores bits 47:40 in PGM_HI. */
+static unsigned int check_shader_addr(void)
+{
+	const u32 pgm = GC_BASE__INST0_SEG0 + mmCOMPUTE_PGM_LO - PACKET3_SET_SH_REG_START;
+	u32 both[7], only[3];
+	u64 addr = 0;
+	u32 lo = 0, hi = 1, wrote = 1;
+	unsigned int bad = 0;
+
+	both[0] = (u32)PACKET3(PACKET3_CONTEXT_CONTROL, 1);
+	both[1] = 0x80000000u;
+	both[2] = 0x80000000u;
+	both[3] = (u32)PACKET3(PACKET3_SET_SH_REG, 2);
+	both[4] = pgm;
+	both[5] = 0x01000400u;
+	both[6] = 0;
+	if (!bc250_pm4_shader_addr(both, 7, &addr, &lo, &hi, &wrote) || !wrote ||
+	    lo != 0x01000400u || hi != 0 || addr != 0x100040000ull) {
+		printf("    shader addr both: lo %08X hi %08X wrote %u addr 0x%llX   <-- wrong\n",
+		       lo, hi, wrote, (unsigned long long)addr);
+		bad++;
+	}
+	only[0] = (u32)PACKET3(PACKET3_SET_SH_REG, 1);
+	only[1] = pgm;
+	only[2] = 0x01000400u;
+	wrote = 1;
+	hi = 1;
+	if (!bc250_pm4_shader_addr(only, 3, &addr, &lo, &hi, &wrote) || wrote ||
+	    lo != 0x01000400u || addr != 0x100040000ull) {
+		printf("    shader addr lo-only: lo %08X hi %08X wrote %u addr 0x%llX   <-- wrong\n",
+		       lo, hi, wrote, (unsigned long long)addr);
+		bad++;
+	}
+	return bad;
+}
+
+/* The job frame is not the ring test. VMID 0 is refused. VMID 1 writes PFP_SYNC_ME,
+ * CONTEXT_CONTROL 0x81018003, FRAME_CONTROL start, the IB, FRAME_CONTROL end, then the fence. */
+static unsigned int check_job_submit(struct amdgpu_device *adev, int verbose)
+{
+	struct amdgpu_ring *ring = &adev->gfx.gfx_ring[0];
+	u64 ib_addr, fence_addr, at;
+	u32 length_dw = 0;
+	u32 dw;
+	int r;
+	unsigned int bad = 0;
+
+	r = bc250_gfx_ib_ring_test_build(adev, &length_dw);
+	if (r != 0 || length_dw != 3u)
+		return 1;
+	ib_addr = bc250_gfx_ib_addr(adev);
+	fence_addr = bc250_gfx_fence_addr(adev, STAGE_C_FENCE_SLOT);
+	at = ring->wptr;
+	r = bc250_gfx_submit_job(ring, ib_addr, length_dw, 0, fence_addr, STAGE_C_SEQ_BASE + 2u,
+				 AMDGPU_FENCE_FLAG_INT);
+	if (r == 0 || ring->wptr != at) {
+		printf("    job vmid 0: accepted or moved the ring (%d)   <-- wrong\n", r);
+		return 1;
+	}
+	at = ring->wptr;
+	r = bc250_gfx_submit_job(ring, ib_addr, length_dw, 1, fence_addr, STAGE_C_SEQ_BASE + 3u,
+				 AMDGPU_FENCE_FLAG_INT);
+	if (r != 0) {
+		printf("    job vmid 1: bc250_gfx_submit_job returned %d   <-- wrong\n", r);
+		return 1;
+	}
+	dw = ring->ring[(size_t)(at & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_PFP_SYNC_ME, 0)) {
+		printf("    job: first dword %08X is not PFP_SYNC_ME   <-- wrong\n", dw);
+		bad++;
+	}
+	dw = ring->ring[(size_t)((at + 2u) & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_CONTEXT_CONTROL, 1) ||
+	    ring->ring[(size_t)((at + 3u) & ring->buf_mask)] != 0x81018003u ||
+	    ring->ring[(size_t)((at + 4u) & ring->buf_mask)] != 0u) {
+		printf("    job: CONTEXT_CONTROL is not 81018003 00000000   <-- wrong\n");
+		bad++;
+	}
+	dw = ring->ring[(size_t)((at + 5u) & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_FRAME_CONTROL, 0) ||
+	    ring->ring[(size_t)((at + 6u) & ring->buf_mask)] != (u32)FRAME_CMD(0)) {
+		printf("    job: FRAME_CONTROL start is wrong   <-- wrong\n");
+		bad++;
+	}
+	dw = ring->ring[(size_t)((at + 7u) & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_INDIRECT_BUFFER, 2)) {
+		printf("    job: IB header %08X   <-- wrong\n", dw);
+		bad++;
+	}
+	dw = ring->ring[(size_t)((at + 11u) & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_FRAME_CONTROL, 0) ||
+	    ring->ring[(size_t)((at + 12u) & ring->buf_mask)] != (u32)FRAME_CMD(1)) {
+		printf("    job: FRAME_CONTROL end is wrong   <-- wrong\n");
+		bad++;
+	}
+	dw = ring->ring[(size_t)((at + 13u) & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_RELEASE_MEM, 6)) {
+		printf("    job: fence header %08X is not RELEASE_MEM   <-- wrong\n", dw);
+		bad++;
+	}
+	dw = ring->ring[(size_t)((at + 21u) & ring->buf_mask)];
+	if (dw != (u32)PACKET3(PACKET3_SWITCH_BUFFER, 0) ||
+	    ring->ring[(size_t)((at + 22u) & ring->buf_mask)] != 0u) {
+		printf("    job: SWITCH_BUFFER is not after the fence   <-- wrong\n");
+		bad++;
+	}
+	if (verbose && bad == 0)
+		printf("    job vmid 1: frame dwords match\n");
+	(void)verbose;
+	return bad;
+}
+
 /* One submission: the IB packet, the fence behind it, the doorbell, and what the CP stub made of
  * them. `vmid` 0 is the run that has to work; 1 is the control the stub cannot follow. */
 static unsigned int check_ib_submit(struct amdgpu_device *adev, u32 vmid, int verbose)
@@ -2364,6 +2477,8 @@ static unsigned int check_stage_c(struct amdgpu_device *adev, int verbose)
 	/* End to end, then the control at a VMID the stub has no address space for. */
 	bad += check_ib_submit(adev, 0u, verbose);
 	bad += check_ib_submit(adev, 1u, verbose);
+	bad += check_shader_addr();
+	bad += check_job_submit(adev, verbose);
 
 	/* The page directory. The offsets are the CONTEXTn names; the code reaches the same
 	 * registers as CONTEXT0 plus hub->ctx_addr_distance * vmid, so a mistake in either the

@@ -267,6 +267,78 @@ BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Ph
     return TRUE;
 }
 
+// Same walk as VidMmTranslate, and then the dwords at Va, not at the base of the page. A CPU mapping
+// of the BO can show PM4 while this page does not: the PTE would then name the wrong frame, or the
+// write would still be sitting in a write-combine buffer. The first four dwords of M125 matched the
+// IB only because that VA was page-aligned. PASSIVE_LEVEL.
+BOOLEAN VidMmProbeIb(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Leaf, _Out_ ULONGLONG* Physical,
+                     _Out_ BOOLEAN* System, _Out_writes_(BC250_IB_PROBE_DWORDS) ULONG* Dwords)
+{
+    const BC250_VIDMM* vm = &g_VidMm;
+    ULONGLONG table = RootPhysical;
+    ULONGLONG leaf = 0;
+    ULONG i;
+    int level;
+
+    *Leaf = 0;
+    *Physical = 0;
+    *System = FALSE;
+    for (i = 0; i < BC250_IB_PROBE_DWORDS; i++) Dwords[i] = 0;
+    if (!vm->Ready || !vm->Write || vm->SegmentLength < PAGE_SIZE || RootPhysical == 0 ||
+        (Va >> (PAGE_SHIFT + 9 * BC250_VIDMM_LEVELS)) != 0 || KeGetCurrentIrql() != PASSIVE_LEVEL)
+        return FALSE;
+    for (level = BC250_VIDMM_LEVELS - 1; level >= 0; level--)
+    {
+        struct bc250_pte_fields fields;
+        PHYSICAL_ADDRESS physical;
+        volatile ULONGLONG* page;
+        ULONGLONG entry;
+        UINT index = (UINT)((Va >> (PAGE_SHIFT + 9 * level)) & (BC250_VIDMM_PTES - 1));
+
+        if ((table & (PAGE_SIZE - 1)) != 0 || table < vm->SegmentPhysical ||
+            table > vm->SegmentPhysical + vm->SegmentLength - PAGE_SIZE)
+            return FALSE;
+        physical.QuadPart = (LONGLONG)table;
+        page = (volatile ULONGLONG*)MmMapIoSpaceEx(physical, PAGE_SIZE, PAGE_READONLY | PAGE_NOCACHE);
+        if (page == NULL) return FALSE;
+        entry = page[index];
+        MmUnmapIoSpace((void*)page, PAGE_SIZE);
+        if (level == 0) leaf = entry;
+        bc250_pte_decode(entry, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, &fields);
+        if (!fields.valid || (level != 0 && fields.pde_pte)) return FALSE;
+        table = fields.address;
+        if (level == 0) *System = (fields.system != 0);
+    }
+    *Leaf = leaf;
+    if (!*System && (table < vm->SegmentPhysical || table > vm->SegmentPhysical + vm->SegmentLength - PAGE_SIZE))
+        return FALSE;
+    *Physical = table + (Va & (PAGE_SIZE - 1));
+    if (*System && vm->Pte.system_limit != 0 && table < vm->Pte.system_limit && (table & (PAGE_SIZE - 1)) == 0 &&
+        (table + PAGE_SIZE < vm->SegmentPhysical || table >= vm->SegmentPhysical + vm->SegmentLength))
+    {
+        PHYSICAL_ADDRESS physical;
+        volatile ULONG* page;
+
+        physical.QuadPart = (LONGLONG)table;
+        page = (volatile ULONG*)MmMapIoSpaceEx(physical, PAGE_SIZE, PAGE_READONLY | PAGE_NOCACHE);
+        if (page != NULL)
+        {
+            ULONG off = (ULONG)(Va & (PAGE_SIZE - 1));
+            // A byte offset that is not a dword is not an IB this driver accepted. Leave the
+            // dwords zero rather than assemble one out of two words.
+            if ((off & 3u) == 0)
+            {
+                ULONG index = off / sizeof(ULONG);
+                ULONG room = (PAGE_SIZE / sizeof(ULONG)) - index;
+                ULONG n = room < BC250_IB_PROBE_DWORDS ? room : BC250_IB_PROBE_DWORDS;
+                for (i = 0; i < n; i++) Dwords[i] = page[index + i];
+            }
+            MmUnmapIoSpace((void*)page, PAGE_SIZE);
+        }
+    }
+    return TRUE;
+}
+
 void VidMmSummary(void)
 {
     BC250_VIDMM* vm = &g_VidMm;

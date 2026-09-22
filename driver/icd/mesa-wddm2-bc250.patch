@@ -1,3 +1,59 @@
+diff --git a/src/amd/vulkan/radv_cmd_buffer.c b/src/amd/vulkan/radv_cmd_buffer.c
+index e09be04..63b11a6 100644
+--- a/src/amd/vulkan/radv_cmd_buffer.c
++++ b/src/amd/vulkan/radv_cmd_buffer.c
+@@ -2878,7 +2878,14 @@ radv_emit_compute_shader(const struct radv_physical_device *pdev, struct radv_cm
+       gfx12_push_sh_reg(R_00B820_COMPUTE_NUM_THREAD_Y, shader->regs.cs.compute_num_thread_y);
+       gfx12_push_sh_reg(R_00B824_COMPUTE_NUM_THREAD_Z, shader->regs.cs.compute_num_thread_z);
+    } else {
+-      radeon_set_sh_reg(shader->regs.pgm_lo, va >> 8);
++      /* The preamble's COMPUTE_PGM_HI is address32_hi >> 8. The caps blob still
++       * says 0xffff8000, so that register stays 0x80, and this used to rewrite
++       * only PGM_LO. A shader at 0x100040000 was then fetched from
++       * 0x800100040000, while DMA_DATA in the same IB used the real VA.
++       * Graphics already emits the high bits from the VA. */
++      radeon_set_sh_reg_seq(shader->regs.pgm_lo, 2);
++      radeon_emit(va >> 8);
++      radeon_emit(S_00B834_DATA(va >> 40));
+       radeon_set_sh_reg_seq(shader->regs.pgm_rsrc1, 2);
+       radeon_emit(shader->config.rsrc1);
+       radeon_emit(shader->config.rsrc2);
+diff --git a/src/amd/vulkan/radv_device.c b/src/amd/vulkan/radv_device.c
+index f5bc8d0..17ab5d2 100644
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -1417,8 +1417,15 @@ radv_CreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCr
+          goto fail;
+    }
+ 
+-   if (pdev->info.has_graphics && !(instance->debug_flags & RADV_DEBUG_NO_IB_CHAINING))
++   /* noibchaining, and bc250: the indirect gfx-init IB is a nested INDIRECT_BUFFER
++    * whose VMID field is 0. The KMD submits one IB, so that packet would be the
++    * first dword the CP executes. The Linux noibchaining capture inlines this
++    * state and starts with CONTEXT_CONTROL. */
++   if (pdev->info.has_graphics && !(instance->debug_flags & RADV_DEBUG_NO_IB_CHAINING) &&
++       !(device->ws->inline_gfx_preamble && device->ws->inline_gfx_preamble(device->ws)))
+       radv_create_gfx_preamble(device);
++   else if (device->ws->inline_gfx_preamble && device->ws->inline_gfx_preamble(device->ws))
++      fprintf(stderr, "bc250: gfx preamble inlined (no gfx_init IB)\n");
+ 
+    if (device->vk.enabled_features.performanceCounterQueryPools) {
+       result = radv_device_init_perf_counter(device);
+diff --git a/src/amd/vulkan/radv_radeon_winsys.h b/src/amd/vulkan/radv_radeon_winsys.h
+index fb1f9bb..c4a9540 100644
+--- a/src/amd/vulkan/radv_radeon_winsys.h
++++ b/src/amd/vulkan/radv_radeon_winsys.h
+@@ -381,6 +381,10 @@ struct radeon_winsys {
+    void (*unreserve_vmid)(struct radeon_winsys *ws);
+ 
+    void (*init_wsi)(struct radeon_winsys *ws, struct wsi_device *wsi);
++
++   /* When non-NULL and true, do not build the indirect gfx-init IB. The state is
++    * emitted inline, the same stream as RADV_DEBUG=noibchaining. NULL means no. */
++   bool (*inline_gfx_preamble)(struct radeon_winsys *ws);
+ };
+ 
+ static inline uint64_t
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bc250.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bc250.h
 new file mode 100644
 index 0000000..76e436f
@@ -122,7 +178,7 @@ index 964e725..df7ccb9 100644
     D3DDDI_ALLOCATIONINFO2 alloc_info = {
        .pSystemMem = cpu_ptr,
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
-index 088f69f..5fbfa08 100644
+index 088f69f..c7b971f 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 @@ -26,6 +26,7 @@
@@ -133,7 +189,23 @@ index 088f69f..5fbfa08 100644
  #include "radv_wddm2_bo.h"
  #include "radv_winsys_cs.h"
  #include "vk_async_event.h"
-@@ -233,8 +234,24 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+@@ -34,6 +35,7 @@
+ #include "util/macros.h"
+ #include "util/set.h"
+ #include "util/u_memory.h"
++#include <stdlib.h>
+ #include "ac_debug.h"
+ #include "radv_cs.h"
+ 
+@@ -50,6 +52,7 @@
+ 
+ #ifdef _WIN32
+ #include <windows.h>
++#include <immintrin.h>
+ #else
+ #include "wsl/winadapter.h"
+ #endif
+@@ -233,8 +236,24 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
        .dw13 = 0x200000,
        .section_size = 0x168,
     };
@@ -160,7 +232,7 @@ index 088f69f..5fbfa08 100644
        create_context_data.flags |= 0x40000;
        create_context_data.version = 9;
     }
-@@ -244,11 +261,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+@@ -244,11 +263,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
        .NodeOrdinal = node,
        .EngineAffinity = 1, // TODO
        .Flags = {
@@ -175,7 +247,7 @@ index 088f69f..5fbfa08 100644
        .ClientHint = D3DKMT_CLIENTHINT_VULKAN,
     };
  
-@@ -259,6 +275,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+@@ -259,6 +277,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
     }
     queue->context_h = create_context.hContext;
  
@@ -186,7 +258,7 @@ index 088f69f..5fbfa08 100644
     if (hw_ip == AMD_IP_GFX || hw_ip == AMD_IP_COMPUTE) {
        struct create_queue_private_data create_queue_pdd = {
           .header_size = sizeof(struct create_queue_private_data),
-@@ -679,6 +699,129 @@ radv_wddm2_submit_add_queue(struct radv_wddm2_ctx *ctx, struct submit_pdd_writer
+@@ -679,6 +701,186 @@ radv_wddm2_submit_add_queue(struct radv_wddm2_ctx *ctx, struct submit_pdd_writer
     radv_wddm2_cs_submit_add_ibs(ctx, pdd, submit, queue->hw_ip, first_ib);
  }
  
@@ -286,6 +358,20 @@ index 088f69f..5fbfa08 100644
 +      va = ws->bc250_gather->va;
 +   }
 +
++   /* BC250_IB_DWORDS cuts the IB the CP executes. 5 is CONTEXT_CONTROL plus
++    * CLEAR_STATE, a packet boundary. The ring fence still follows the IB, so a
++    * timeout here means the CP did not finish that prefix. Unset, the whole IB runs. */
++   {
++      const char *cap_env = getenv("BC250_IB_DWORDS");
++      if (cap_env && cap_env[0]) {
++         unsigned long cap = strtoul(cap_env, NULL, 0);
++         if (cap > 0 && cap < 0x100000ul && cap * 4ul < bytes) {
++            fprintf(stderr, "bc250: IB clamped to %lu dwords (%u were ready)\n", cap, bytes / 4u);
++            bytes = (uint32_t)(cap * 4ul);
++         }
++      }
++   }
++
 +   memset(&blob, 0, sizeof(blob));
 +   _Static_assert(offsetof(struct bc250_submit_blob, ib) == 40, "BC2S prefix is 40 bytes");
 +   _Static_assert(sizeof(struct bc250_ib_blob) == 32, "BC2S ib is 32 bytes");
@@ -305,18 +391,61 @@ index 088f69f..5fbfa08 100644
 +   cmd.PrivateDriverDataSize = blob.size;
 +   cmd.BroadcastContextCount = 1;
 +   cmd.BroadcastContext[0] = queue->context_h;
++   /* Write-combined stores sit in the WC buffers until a fence. The syscall drains them
++    * too; this one makes the order obvious.
++    */
++   _mm_sfence();
 +   status = WDDM2_DISPATCH(SubmitCommand(&cmd));
 +   if (!NT_SUCCESS(status))
 +      fprintf(stderr, "bc250: SubmitCommand 0x%X (%u ibs packed, %u bytes)\n", status, n, bytes);
-+   else
-+      fprintf(stderr, "bc250: SubmitCommand ib 0x%" PRIx64 " %u bytes (from %u)\n", va, bytes, n);
++   else {
++      const uint32_t *dw = NULL;
++      if (n == 1 && ibs[0].bo)
++         dw = (const uint32_t *)((uint8_t *)ws->base.buffer_map(&ws->base, ibs[0].bo, false, NULL) +
++                                 (ibs[0].va - ibs[0].bo->va));
++      else
++         dw = (const uint32_t *)ws->bc250_gather_map;
++      fprintf(stderr, "bc250: SubmitCommand ib 0x%" PRIx64 " %u bytes (from %u) %08x %08x %08x %08x\n",
++              va, bytes, n,
++              dw ? dw[0] : 0, dw && bytes >= 8 ? dw[1] : 0,
++              dw && bytes >= 12 ? dw[2] : 0, dw && bytes >= 16 ? dw[3] : 0);
++      /* Slices of the unclamped preamble and the main CS. 163 is the first
++       * ACQUIRE_MEM, 176 the main IB, 216 the dispatch. */
++      if (dw && bytes >= 176u * 4u) {
++         fprintf(stderr, "bc250: IB +158 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[158], dw[159], dw[160], dw[161], dw[162], dw[163], dw[164], dw[165]);
++         fprintf(stderr, "bc250: IB +166 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[166], dw[167], dw[168], dw[169], dw[170], dw[171], dw[172], dw[173]);
++         fprintf(stderr, "bc250: IB +174 %08x %08x\n", dw[174], dw[175]);
++      }
++      if (dw && bytes >= 216u * 4u) {
++         fprintf(stderr, "bc250: IB +176 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[176], dw[177], dw[178], dw[179], dw[180], dw[181], dw[182], dw[183]);
++         fprintf(stderr, "bc250: IB +184 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[184], dw[185], dw[186], dw[187], dw[188], dw[189], dw[190], dw[191]);
++         fprintf(stderr, "bc250: IB +192 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[192], dw[193], dw[194], dw[195], dw[196], dw[197], dw[198], dw[199]);
++         fprintf(stderr, "bc250: IB +200 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[200], dw[201], dw[202], dw[203], dw[204], dw[205], dw[206], dw[207]);
++         fprintf(stderr, "bc250: IB +208 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[208], dw[209], dw[210], dw[211], dw[212], dw[213], dw[214], dw[215]);
++      }
++      if (dw && bytes >= 240u * 4u) {
++         fprintf(stderr, "bc250: IB +216 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[216], dw[217], dw[218], dw[219], dw[220], dw[221], dw[222], dw[223]);
++         fprintf(stderr, "bc250: IB +224 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[224], dw[225], dw[226], dw[227], dw[228], dw[229], dw[230], dw[231]);
++         fprintf(stderr, "bc250: IB +232 %08x %08x %08x %08x %08x %08x %08x %08x\n",
++                 dw[232], dw[233], dw[234], dw[235], dw[236], dw[237], dw[238], dw[239]);
++      }
++   }
 +   return status;
 +}
 +
  static VkResult
  radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
                       const struct radv_winsys_submit_info *submit,
-@@ -734,7 +877,18 @@ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
+@@ -734,7 +936,18 @@ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
           return VK_ERROR_DEVICE_LOST;
     }
  
@@ -337,7 +466,7 @@ index 088f69f..5fbfa08 100644
        struct submit_pdd_writer pdd;
  
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
-index e2f4987..fa625d0 100644
+index e2f4987..4507bbb 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
 @@ -34,6 +34,7 @@
@@ -348,7 +477,7 @@ index e2f4987..fa625d0 100644
  
  #include "util/macros.h"
  #include "util/u_string.h"
-@@ -113,6 +114,129 @@ kmd_to_amdgpu_vram_type(uint32_t kmd_type)
+@@ -113,6 +114,132 @@ kmd_to_amdgpu_vram_type(uint32_t kmd_type)
     }
  }
  
@@ -414,7 +543,10 @@ index e2f4987..fa625d0 100644
 +   info->drm_minor = bc250_rd32(blob, BC250_OFF_DRM_MAJOR + 4);
 +   info->drm_patchlevel = bc250_rd32(blob, BC250_OFF_DRM_MAJOR + 8);
 +   info->is_amdgpu = true;
-+   info->address32_hi = bc250_rd32(blob, BC250_OFF_ADDR32);
++   /* This is a winsys VA policy, not a hardware capability. The reference
++    * blob carries Linux's high VA aperture; WDDM allocates 32-bit BOs in
++    * RADV_WDDM2_32BIT_HEAP_START. Shader pointer expansion must match it. */
++   info->address32_hi = RADV_WDDM2_32BIT_HEAP_START >> 32;
 +   info->userq_ip_mask = 0;
 +
 +   mask = bc250_rd32(blob, BC250_OFF_HW_IP_MASK);
@@ -478,7 +610,7 @@ index e2f4987..fa625d0 100644
  static NTSTATUS
  radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
                           const struct vk_dx_adapter_info *adapter_info)
-@@ -200,6 +324,10 @@ radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
+@@ -200,6 +327,10 @@ radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
        }
     }
  
@@ -489,7 +621,32 @@ index e2f4987..fa625d0 100644
     struct PACKED umdprivatedata_header {
        uint32_t flags[3];
        uint32_t vendor_id;
-@@ -655,7 +783,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+@@ -425,6 +556,12 @@ radv_wddm2_query_marketing_name(struct radv_wddm2_winsys *ws, char *name, size_t
+    return STATUS_SUCCESS;
+ }
+ 
++static bool
++radv_wddm2_inline_gfx_preamble(struct radeon_winsys *rws)
++{
++   return radv_wddm2_winsys(rws)->bc250;
++}
++
+ static struct radeon_info *
+ radv_wddm2_winsys_query_info(struct radeon_winsys *rws)
+ {
+@@ -647,6 +784,11 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+    ws->adapter_h = open_adapter.hAdapter;
+ 
+    status = radv_wddm2_fill_gpu_info(ws, adapter_info);
++   if (ws->bc250)
++      /* One IB on the ring. Do not also link CS chunks with INDIRECT_BUFFER:
++       * that packet's VMID field is left 0. Skipping the gfx-init IB itself is
++       * inline_gfx_preamble, below; this flag does not do that. */
++      ws->chain_ib = false;
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "Can't fill info for luid %X%X\n", adapter_info->adapter_luid.LowPart, adapter_info->adapter_luid.HighPart);
+       result = VK_ERROR_INITIALIZATION_FAILED;
+@@ -655,7 +797,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
  
     status = radv_wddm2_query_marketing_name(ws, ws->gpu_info.marketing_name,
                                              sizeof(ws->gpu_info.marketing_name));
@@ -503,6 +660,14 @@ index e2f4987..fa625d0 100644
        fprintf(stderr, "Can't query marketing name\n");
        result = VK_ERROR_INITIALIZATION_FAILED;
        goto error_open_adapter;
+@@ -708,6 +855,7 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+    ws->base.get_sync_provider = radv_wddm2_winsys_get_sync_provider;
+    ws->base.query_gpuvm_fault = radv_wddm2_winsys_query_gpuvm_fault;
+    ws->base.init_wsi = radv_wddm2_wsi_init;
++   ws->base.inline_gfx_preamble = radv_wddm2_inline_gfx_preamble;
+    radv_wddm2_bo_init_functions(ws);
+    radv_wddm2_cs_init_functions(ws);
+ 
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
 index 75cbc71..f355e8d 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h

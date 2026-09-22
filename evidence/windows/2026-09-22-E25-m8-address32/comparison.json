@@ -1,0 +1,66 @@
+{
+  "tests": {
+    "fill_g1": {
+      "windows_gpu": "0x7018cdd513a22325",
+      "windows_cpu": "0x7018cdd513a22325",
+      "linux_gpu": "0x7018cdd513a22325",
+      "equal": true
+    },
+    "fill_g16": {
+      "windows_gpu": "0x7018cdd513a22325",
+      "windows_cpu": "0x7018cdd513a22325",
+      "linux_gpu": "0x7018cdd513a22325",
+      "equal": true
+    },
+    "inthash": {
+      "windows_gpu": "0xbc33291b528dfab4",
+      "windows_cpu": "0xbc33291b528dfab4",
+      "linux_gpu": "0xbc33291b528dfab4",
+      "equal": true
+    },
+    "saxpy": {
+      "windows_gpu": "0x3ee3408930ca6e61",
+      "windows_cpu": "0x3ee3408930ca6e61",
+      "linux_gpu": "0x3ee3408930ca6e61",
+      "equal": true
+    },
+    "sgemm": {
+      "windows_gpu": "0x24396beb3a1a7367",
+      "windows_cpu": "0x24396beb3a1a7367",
+      "linux_gpu": "0x24396beb3a1a7367",
+      "equal": true
+    },
+    "sgemm_tiled": {
+      "windows_gpu": "0x24396beb3a1a7367",
+      "windows_cpu": "0x24396beb3a1a7367",
+      "linux_gpu": "0x24396beb3a1a7367",
+      "equal": true
+    },
+    "mlp": {
+      "windows_gpu": "0x0eb467ee3ae0f043",
+      "windows_cpu": "0x0eb467ee3ae0f043",
+      "linux_gpu": "0x0eb467ee3ae0f043",
+      "equal": true
+    },
+    "reduce": {
+      "windows_gpu": "0xe9fc02f21706317a",
+      "windows_cpu": "0xe9fc02f21706317a",
+      "linux_gpu": "0xe9fc02f21706317a",
+      "equal": true
+    }
+  },
+  "identical_spirv_sha256": {
+    "fill.spv": "f44d48c21c4f1af26b09510f9a48d892f0b474899c95653442738f212da362f7",
+    "inthash.spv": "ca33985ea645d415931a60d489ff86ef078a928933fa3ac35dcb02b8d28a11f4",
+    "mlp1.spv": "1bf9eb2b8bfe4f3d2a19c6b44a6f9f257ed4e47c1acd7183630c41ec5660d606",
+    "mlp2.spv": "6ad3b0478b7e3564f0383256bcb5b82877a723b7930c32b8c09d85a9d3217fa4",
+    "reduce1.spv": "28af87f8275f192c536ca84f4ef6be822b46bece77db19f0ba9e898bec2f26c7",
+    "reduce2.spv": "477398679c7e18a7c6b995a34dfd2b69ae4ec78187877cef792c96f9d4f4579e",
+    "saxpy.spv": "cb1301ee2b7bbd8f68c6e74f44bb4a36f937165b1e0546e82f1a7ba92d04aa63",
+    "sgemm.spv": "b3a60831a6cc76cec16d2b9c91e72d3647a43367533abd0f588f83d23a2e7bda",
+    "sgemm_tiled.spv": "6ac4882c745e08dff2fa7103a4efc49f994ebb03417751b684c4a15e9d1ecba8"
+  },
+  "negative_control": "fill_g1 mismatch; 0x881b077929212325 vs CPU 0x7018cdd513a22325",
+  "negative_exit_code": "not captured: batch echo redirection consumed digit; hash mismatch is recorded",
+  "positive_control": "inthash correct after bad shader"
+}

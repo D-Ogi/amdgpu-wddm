@@ -611,12 +611,13 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     if (address == 0) return STATUS_INSUFFICIENT_RESOURCES;
 
     // VMID 0 is the GART aperture, whose root bc250_gmc_gart_enable() programmed and which bc250_gmc_set_vmid_pd()
-    // refuses to touch; a caller submitting at VMID 0 is submitting out of the driver's own GTT pages. For 1..15 the
-    // root is programmed only when it moved, because the invalidation behind it polls for up to 100 ms.
-    if (Vmid != 0 && RootPhysical != Gfx->VmidRoot[Vmid])
+    // refuses to touch; a caller submitting at VMID 0 is submitting out of the driver's own GTT pages. A job
+    // flushes VMID 1 on every submit. Remembering the root misses a leaf change under the same root, and the
+    // invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
+    if (Vmid != 0)
     {
         result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
-        GuardLog("gfx: VMID %lu root 0x%llX -> %d", Vmid, RootPhysical, result);
+        GuardLog("gfx: VMID %lu root 0x%llX flush -> %d", Vmid, RootPhysical, result);
         if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
             return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
         Gfx->VmidRoot[Vmid] = RootPhysical;
@@ -629,7 +630,16 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     Gfx->SubmitAdev = Adev;
     InterlockedExchange(&Gfx->SubmitInFlight, 1);
 
-    result = bc250_gfx_submit_ib(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
+    // The ring test (VMID 0) stays one IB and one fence. A UMD job gets the gfx
+    // job frame. No memory-sync packet: BC2S leaves ib_flags 0, and upstream
+    // emits that packet only for AMDGPU_IB_FLAG_EMIT_MEM_SYNC.
+    if (Vmid == 0)
+        result = bc250_gfx_submit_ib(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
+    else
+    {
+        GuardLog("gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000");
+        result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
+    }
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
     {
         // Nothing was committed: both emitters refuse before writing and bc250_gfx_submit_ib undoes the allocation.

@@ -1,0 +1,15 @@
+boot 2026-09-22T18:51:41
+driver 0.7.44.1 (0x0007002C)
+path SubmitCommand / GfxSubmitIb, node 0
+
+winsys stderr:
+bc250: gfx preamble inlined (no gfx_init IB)
+bc250: SubmitCommand ib 0x20006c000 960 bytes (from 2) c0012800 80000000 80000000 c0001200
+
+kmd log:
+  46.386 wddm: umd ib 0x20006C000 960 bytes -> phys 0x1F2AE5000 system
+  46.386 gfx: VMID 1 root 0x46DFF3000 -> 0
+  46.386 wddm: umd submit fence 33 ib 0x20006C000 960 bytes
+  46.886 wddm: HARDWARE FENCE TIMEOUT after 500 ms (sequence 6): fence 33 completed in software, ring path closed
+
+The VA translates. The fence does not arrive. Hash is the all-zero buffer.

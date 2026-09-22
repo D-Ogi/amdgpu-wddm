@@ -1,0 +1,20 @@
+boot 2026-09-22T20:12:13
+driver 0.7.46.1 (0x0007002E)
+
+positive control, before Vulkan, VMID 0 GART:
+fence gfx 1 ib: FETCHED in 31 us
+ib 0x574000, 3 dwords, VMID 0, root 0x0
+
+one fill_g1, no BC250_IB_DWORDS, preamble inlined, 960 bytes at 0x20006C000:
+  dram C0012800 80000000 80000000 C0001200
+  +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+  +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+  leaf 0x15B830073, phys 0x15B830000 system
+  umd submit fence 50, 960 bytes
+  HARDWARE FENCE TIMEOUT after 500 ms (sequence 6): fence 50 completed in software, ring path closed
+  t_submit_to_idle_us 500125.7
+
+hash 0xeb05052ea5b62325 vs cpu 0x7018cdd513a22325 match=NO
+eight tests not run: the ring closed
+
+The +32 and +56 lines are the same dwords as the 64-dword submit that fenced on boot 2026-09-22T20:01:50 (M128). The full IB still does not finish.

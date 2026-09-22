@@ -1,0 +1,14 @@
+boot 2026-09-22T19:20:20
+driver 0.7.45.1 (0x0007002D)
+
+positive control, before Vulkan, VMID 0 GART:
+fence gfx 1 ib: FETCHED in 31 us
+ib 0x574000, 3 dwords, VMID 0, root 0x0
+slot holds 0x1
+
+then fill_g1, VMID 1:
+  55.508 wddm: umd ib 0x20006C000 960 bytes -> phys 0x219644000 system leaf 0x219644073 dram C0012800 80000000 80000000 C0001200
+  56.009 wddm: HARDWARE FENCE TIMEOUT after 500 ms (sequence 7): fence 58 completed in software, ring path closed
+
+hash 0xeb05052ea5b62325 vs cpu 0x7018cdd513a22325 match=NO
+eight tests not run: the ring closed after this timeout

@@ -1,0 +1,17 @@
+boot 2026-09-22T18:13:34
+driver 0.7.43 (0x0007002B)
+path SubmitCommand / GfxSubmitIb, node 0, not a private escape
+
+winsys stderr:
+bc250: gfx preamble inlined (no gfx_init IB)
+bc250: SubmitCommand ib 0x20006c000 960 bytes (from 2) c0012800 80000000 80000000 c0001200
+
+kmd log:
+  100.085 vidmm: entry REFUSED (rc -22): level 0 index 0 raw 0x3 / 0x0
+  100.194 vidmm: root page table 1:0x1FD729000 = physical 0x46DFF3000, 512 entries
+  100.196 gfx: VMID 1 root 0x46DFF3000 -> 0
+  100.196 wddm: fence 145 on the gfx ring: sequence 6, vmid 1, root 0x46DFF3000, va 0x20006C000, 960 bytes
+  100.196 wddm: umd submit fence 145 ib 0x20006C000 960 bytes
+  100.696 wddm: HARDWARE FENCE TIMEOUT after 500 ms (sequence 6): fence 145 completed in software, ring path closed
+
+paging fences 1-5 arrived before this submit (SDMA). No second UMD submit was issued.

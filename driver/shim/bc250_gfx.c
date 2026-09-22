@@ -23,6 +23,7 @@
 #include "gc/gc_10_1_0_sh_mask.h"
 #include <navi10_enum.h>
 #include "soc15_common.h"
+#include "cyan_skillfish_ip_offset.h"
 
 /* Imported data, unmodified: the MQD layouts, the PM4 packet definitions and the clear-state
  * tables. clearstate_gfx10.h defines static const arrays, so this is the one translation unit that
@@ -1638,6 +1639,129 @@ int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u
 	}
 
 	amdgpu_ring_commit(ring);
+	return 0;
+}
+
+/* gfx_v10_0_ring_emit_cntxcntl with AMDGPU_HAVE_CTX_SWITCH and without
+ * AMDGPU_PREAMBLE_IB_PRESENT. BC2S leaves ib_flags at 0, so the preamble bit
+ * (0x10000000, which would make this 0x91018003) stays clear.
+ *   0x80000000 load_enable, else the packet is NOPs
+ *   0x00008001 load_global_config | load_global_uconfig
+ *   0x01000000 load_cs_sh_regs
+ *   0x00010002 load_per_context_state | load_gfx_sh_regs */
+#define BC250_JOB_CONTEXT_CONTROL 0x81018003u
+
+/* PFP_SYNC_ME, CONTEXT_CONTROL, FRAME_CONTROL start, the 4-dword IB,
+ * FRAME_CONTROL end, SWITCH_BUFFER. The fence size is added by the caller. */
+#define BC250_JOB_FRAME_DWORDS (2u + 3u + 2u + 4u + 2u + 2u)
+
+int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			 u64 fence_addr, u64 seq, unsigned int flags)
+{
+	unsigned int ndw;
+	int r;
+
+	/* The ring test stays on bc250_gfx_submit_ib. A job without a VMID has no
+	 * page tables for the external context load to be about. */
+	if (vmid == 0)
+		return BC250_EINVAL;
+
+	ndw = bc250_gfx_ib_size(ring);
+	if (ndw == 0)
+		return BC250_EINVAL;
+	ndw = BC250_JOB_FRAME_DWORDS + bc250_gfx_fence_size(ring, flags);
+
+	r = amdgpu_ring_alloc(ring, ndw);
+	if (r)
+		return r;
+
+	/* gfx_v10_0_ring_emit_vm_flush's PFP half. The TLB flush itself is MMIO,
+	 * done by the caller before this, on every job. */
+	amdgpu_ring_write(ring, PACKET3(PACKET3_PFP_SYNC_ME, 0));
+	amdgpu_ring_write(ring, 0);
+
+	/* gfx_v10_0_ring_emit_cntxcntl. The IB's own CONTEXT_CONTROL does not
+	 * replace this one: that body is 0x80000000, 0x80000000. */
+	amdgpu_ring_write(ring, PACKET3(PACKET3_CONTEXT_CONTROL, 1));
+	amdgpu_ring_write(ring, BC250_JOB_CONTEXT_CONTROL);
+	amdgpu_ring_write(ring, 0);
+
+	/* gfx_v10_0_ring_emit_frame_cntl(start, secure=false). */
+	amdgpu_ring_write(ring, PACKET3(PACKET3_FRAME_CONTROL, 0));
+	amdgpu_ring_write(ring, FRAME_CMD(0));
+
+	r = bc250_gfx_emit_ib(ring, gpu_addr, length_dw, vmid);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+
+	amdgpu_ring_write(ring, PACKET3(PACKET3_FRAME_CONTROL, 0));
+	amdgpu_ring_write(ring, FRAME_CMD(1));
+
+	r = bc250_gfx_emit_fence(ring, fence_addr, seq, flags);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+
+	/* After the fence, so it cannot be why this fence fails to arrive.
+	 * gfx_v10_0_ring_emit_sb. */
+	amdgpu_ring_write(ring, PACKET3(PACKET3_SWITCH_BUFFER, 0));
+	amdgpu_ring_write(ring, 0);
+
+	amdgpu_ring_commit(ring);
+	return 0;
+}
+
+/* COMPUTE_PGM_LO is addr >> 8 and COMPUTE_PGM_HI is bits 47:40. A SET_SH_REG count is the
+ * number of values; the register offset is one extra dword, so the packet is count + 2
+ * dwords, the same as every other type-3 packet. */
+int bc250_pm4_shader_addr(const u32 *dw, u32 ndw, u64 *byte_addr, u32 *lo, u32 *hi,
+			  u32 *hi_written)
+{
+	/* mmCOMPUTE_PGM_LO is the offset inside the GC block. BASE_IDX 0 is
+	 * GC_BASE__INST0_SEG0. The packet counts from PACKET3_SET_SH_REG_START.
+	 * SOC15_REG_OFFSET would add the same base, but it needs adev. */
+	const u32 pgm = GC_BASE__INST0_SEG0 + mmCOMPUTE_PGM_LO - PACKET3_SET_SH_REG_START;
+	u32 i = 0;
+
+	if (byte_addr == NULL || lo == NULL || hi == NULL || hi_written == NULL)
+		return 0;
+	*byte_addr = 0;
+	*lo = 0;
+	*hi = 0;
+	*hi_written = 0;
+	if (dw == NULL || ndw == 0)
+		return 0;
+
+	while (i < ndw) {
+		u32 word = dw[i];
+		u32 op, count, total;
+
+		if ((word >> 30) != 3u) {
+			i++;
+			continue;
+		}
+		op = (word >> 8) & 0xffu;
+		count = (word >> 16) & 0x3fffu;
+		total = count + 2u;
+		if (total < 2u || i + total > ndw)
+			break;
+		if (op == PACKET3_SET_SH_REG && count >= 1u &&
+		    (dw[i + 1u] & 0xffffu) == pgm) {
+			*lo = dw[i + 2u];
+			if (count >= 2u) {
+				*hi = dw[i + 3u] & 0xffu;
+				*hi_written = 1u;
+				*byte_addr = ((u64)(*hi) << 40) | ((u64)(*lo) << 8);
+			} else {
+				*byte_addr = (u64)(*lo) << 8;
+			}
+			return 1;
+		}
+		i += total;
+	}
 	return 0;
 }
 

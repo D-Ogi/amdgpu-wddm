@@ -1,0 +1,9 @@
+boot 2026-09-22T20:12:13
+driver 0.7.46.1 oem55.inf
+Tctl 71.9 C before the gate, 72.0 C after gfx stage 8, 72.9 C before the submit
+Display 4101 (TDR) 0
+BugCheck 1001 0
+undo exit 0
+gate closed: stage 61, 1920x1200, display-only, all engine gates 0, device status OK
+UnconfirmedStarts confirmed back to 0
+ICD registry and scheduled tasks removed

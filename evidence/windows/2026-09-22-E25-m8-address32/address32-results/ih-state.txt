@@ -1,0 +1,41 @@
+﻿ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+gates        mmio mapped, gart open, psp open, gfx open, ih open
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 82 times since the device started, last message 0
+ring         ENABLED, 82 interrupts taken as ours, 1987 DPCs, 82 vectors consumed, 0 overflows, rptr 0xA40 wptr 0xA40
+status       IH_STATUS: idle yes, input_idle yes, bif_interrupt_line clear (docs/design/vsync-interrupt-route.md:
+             input_idle clear would mean some client has something pending at IH's own input; bif_interrupt_line
+             set would mean NBIO/BIF itself sees the host interrupt line asserted right now)
+K client 20 source 181 count 28
+K client 8 source 224 count 54
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4134737864776
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135270130667
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135270161343
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135270228047
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135270271379
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135270293147
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135270311531
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135272127535
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135272377831
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135274692971
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135274800908
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135274902896
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135275005060
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135563589799
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135563817807
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135566116223
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135566317827
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135567393127
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135567433112
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135567461864
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135567491336
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135579324051
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135579424147
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135580336287
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135580355407
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135580427808
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135587118883
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135587544671
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135588009907
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135588688119
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 4135588713127
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 4135588825444

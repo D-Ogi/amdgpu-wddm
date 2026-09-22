@@ -514,6 +514,15 @@ void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
 void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root);
 BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULONGLONG* Physical);
 BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Physical, _Out_ BOOLEAN* System);
+// How many dwords VidMmProbeIb copies, starting at Va rather than at the base of the page.
+// 240 is the whole unclamped fill_g1 IB (960 bytes) and stays inside one 4K page when Va
+// is page-aligned, which every UMD IB so far has been.
+#define BC250_IB_PROBE_DWORDS 240u
+// The leaf entry VidMmTranslate decoded, plus up to BC250_IB_PROBE_DWORDS dwords at Va.
+// Dwords stay 0 when the page is not system memory, the address is not one this driver may map,
+// or the dword would cross into the next page. PASSIVE_LEVEL. The walk is VidMmTranslate's.
+BOOLEAN VidMmProbeIb(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Leaf, _Out_ ULONGLONG* Physical,
+                     _Out_ BOOLEAN* System, _Out_writes_(BC250_IB_PROBE_DWORDS) ULONG* Dwords);
 void VidMmSummary(void);
 void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
                                                     // when the gate is closed, so the escape can call it either way

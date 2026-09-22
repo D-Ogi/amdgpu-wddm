@@ -57,6 +57,11 @@ one was wrong by two orders of magnitude and a second one would be no better fou
 M7 is the largest kernel-mode step left, M8 the largest user-mode one, M9 to M11 are tests of what M7 and M8 built,
 M12 is breadth, and M13 is the one milestone whose route is not known yet. The project stays useful at every step because each milestone leaves verified, published knowledge.
 
+M8 reached on unit A, 2026-09-22 (E25, facts M138-M139): all eight E14 compute
+hashes match CPU and Linux with byte-identical SPIR-V; the wrong shader is caught.
+The fix makes the ICD's address32_hi match its WDDM VA heap. Full-WDDM display
+corruption remains open and the lab is returned to display-only after the test.
+
 ## Architecture direction (detail in ADRs)
 
 - One WDDM miniport owns the PCI function (GPU and display are the same function, so a display-only driver cannot coexist with a render driver).

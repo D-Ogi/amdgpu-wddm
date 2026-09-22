@@ -1,0 +1,22 @@
+boot 2026-09-22T20:28:27
+driver 0.7.46.1 (0x0007002E)
+
+positive control, before Vulkan, VMID 0 GART:
+fence gfx 1 ib: FETCHED in 32 us
+ib 0x574000, 3 dwords, VMID 0, root 0x0
+
+fill_g1, preamble inlined, same opening and same +32/+56 as M128:
+
+  141 dwords, 564 bytes: hardware fence arrived, fence 37, t_submit_to_idle_us 1257.0
+  163 dwords, 652 bytes: hardware fence arrived, fence 40, t_submit_to_idle_us 1002.7
+  171 dwords, 684 bytes: HARDWARE FENCE TIMEOUT after 500 ms (sequence 16)
+    fence 43 completed in software, ring path closed
+    t_submit_to_idle_us 499299.3
+
+141 ends on the Linux listing's COMPUTE_PGM_HI packet.
+163 is the last dword before that listing's ACQUIRE_MEM.
+171 is the end of that ACQUIRE_MEM (8 dwords, GCR_CNTL 0x0000c3b1 in the listing).
+Those 8 dwords were not read from this IB's DRAM.
+
+hash of all three: 0xeb05052ea5b62325 vs cpu 0x7018cdd513a22325 match=NO
+eight tests not run

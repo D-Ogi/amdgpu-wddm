@@ -1,0 +1,21 @@
+boot 2026-09-22T20:21:03
+driver 0.7.46.1 (0x0007002E)
+
+positive control, before Vulkan, VMID 0 GART:
+fence gfx 1 ib: FETCHED in 31 us
+ib 0x574000, 3 dwords, VMID 0, root 0x0
+
+fill_g1 clamped to 128 dwords, 512 bytes at 0x20006C000:
+  dram C0012800 80000000 80000000 C0001200
+  +32 and +56 same dwords as M128
+  hardware fence arrived, fence 47, t_submit_to_idle_us 1460.6
+
+fill_g1 clamped to 176 dwords, 704 bytes:
+  same opening, same +32 and +56
+  HARDWARE FENCE TIMEOUT after 500 ms (sequence 11): fence 54 completed in software, ring path closed
+  t_submit_to_idle_us 500202.5
+
+hash of both: 0xeb05052ea5b62325 vs cpu 0x7018cdd513a22325 match=NO
+shader is past both cuts
+eight tests not run
+211 and 216 were not submitted

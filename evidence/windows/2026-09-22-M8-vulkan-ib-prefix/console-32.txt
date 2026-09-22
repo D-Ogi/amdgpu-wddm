@@ -1,0 +1,10 @@
+cap 32 state Ready
+bc250: IB clamped to 32 dwords (240 were ready)
+bc250: SubmitCommand ib 0x20006c000 128 bytes (from 2) c0012800 80000000 80000000 c0001200
+fill_g1      n=16384     hash=0xeb05052ea5b62325 cpu_hash=0x7018cdd513a22325 match=NO  t_submit_to_idle_us=    998.5 first_words=00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+   357    580.090 wddm: paging hardware fence arrived, reporting fence 6
+   362    580.094 wddm: paging hardware fence arrived, reporting fence 7
+   367    580.094 wddm: paging hardware fence arrived, reporting fence 8
+   370    580.094 wddm: umd ib 0x20006C000 128 bytes -> phys 0x174707000 system leaf 0x174707073 dram C0012800 80000000 80000000 C0001200
+   372    580.094 wddm: hardware fence arrived, reporting fence 604
+   373    580.094 wddm: umd submit fence 604 ib 0x20006C000 128 bytes

@@ -1,0 +1,16 @@
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+gates        mmio mapped, gart open, psp open, gfx open, ih open
+windows      interrupt resource: message (MSI), vector 0x70; interrupt routine called 6 times since the device started, last message 0
+ring         ENABLED, 6 interrupts taken as ours, 265 DPCs, 7 vectors consumed, 0 overflows, rptr 0xE0 wptr 0xE0
+status       IH_STATUS: idle yes, input_idle yes, bif_interrupt_line clear
+K client 20 source 181 count 1
+K client 8 source 224 count 4
+K client 27 source 0 count 1
+K client 10 source 239 count 1
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 3974527143814
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 3975487960738
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 3975488160594
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 3975499344778
+V client 8 source 224 ring 0 vmid 0 pasid 0 data 00000000 00000000 00000000 00000000 ts 3975499374906
+V client 27 source 0 ring 158 vmid 1 pasid 0 data 00000002 00000048 00000000 00000000 ts 3975499614490
+V client 10 source 239 ring 0 vmid 1 pasid 0 data 00100000 00000080 00000000 00000000 ts 3975499614534

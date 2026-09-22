@@ -1,0 +1,12 @@
+boot 2026-09-22T18:51:41
+driver 0.7.44.1 oem53.inf
+Tctl before bring-up 71.9 C
+Tctl after gfx run 8 72.6 C
+Tctl after undo 65.9 C
+Display 4101 (TDR) 0
+BugCheck 1001 0
+after undo: stage 61, 1920x1200, display-only, gates closed
+UnconfirmedStarts confirmed back to 0
+ICD registry removed
+flip gate stayed 0
+this boot has had its one gfx bring-up

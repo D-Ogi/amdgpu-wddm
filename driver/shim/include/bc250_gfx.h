@@ -207,6 +207,20 @@ int bc250_gfx_emit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32
 int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
 			u64 fence_addr, u64 seq, unsigned int flags);
 
+/* A real job, not the ring test. amdgpu_ib_schedule's order for a gfx job whose
+ * ib_flags do not ask for a memory sync: PFP_SYNC_ME, CONTEXT_CONTROL with the
+ * context-switch load bits, FRAME_CONTROL start (non-TMZ), the IB, FRAME_CONTROL
+ * end, the same RELEASE_MEM fence, SWITCH_BUFFER. VMID 0 stays on submit_ib. */
+int bc250_gfx_submit_job(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+			 u64 fence_addr, u64 seq, unsigned int flags);
+
+/* The first SET_SH_REG of COMPUTE_PGM_LO in a PM4 dword stream. *hi_written is 0 when the
+ * packet stored only LO, which leaves COMPUTE_PGM_HI at whatever the preamble wrote.
+ * *byte_addr is (hi << 40) | (lo << 8) when HI was in the packet, otherwise just lo << 8.
+ * Returns 1 when the register was found. */
+int bc250_pm4_shader_addr(const u32 *dw, u32 ndw, u64 *byte_addr, u32 *lo, u32 *hi,
+			  u32 *hi_written);
+
 /* One GTT page to build an indirect buffer in, and the ring test as an indirect buffer: the first
  * submission of stage C, whose result is already known from the same hardware by another route.
  * bc250_gfx_ib_ring_test_build() seeds SCRATCH_REG0 with 0xCAFEDEAD and writes the three dwords;
