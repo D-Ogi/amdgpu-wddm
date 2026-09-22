@@ -1,8 +1,9 @@
 # E24 - the paging node in the full table (stage D of ADR 0008, per ADR 0013)
 
-State: **built and reviewed** (bc250kmd 0.7.23, review 23 GO after four fixes: contiguity check before any
-multi-page packet, remaining-room arithmetic, interlocked fence sequence, narrow ring lock). No lab run yet: the first
-gated run needs the owner at the monitor (full table).
+State: **run 001 hung the machine** (fact M96, cause under analysis; the gate stays closed until it is found). Built
+and reviewed before that run (bc250kmd 0.7.23, review 23 GO after four fixes: contiguity check before any multi-page
+packet, remaining-room arithmetic, interlocked fence sequence, narrow ring lock), which is exactly as much as a
+review can buy: the hang is in something no host test reaches.
 
 ## Why
 
@@ -58,4 +59,4 @@ either node, `WddmSummary`'s per-node counters agreeing with the escape's own. E
 
 | Run | Build | What | Result |
 |---|---|---|---|
-| - | - | not yet run | host build and packagecheck first |
+| 001 | 0.7.24 (85fbf5c) | full table with every stage C gate plus `-PagingNode 1`, then the E19 run 003 bring-up: gart, psp, ih, `gfx run 8` | start, gart, psp and ih all fine; `gfx run 8` hung the whole machine (no bugcheck, no TDR, power button). H1-H4 untested. M96. `evidence/windows/2026-09-22-E24-paging-node-run-001/` |
