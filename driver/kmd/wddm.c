@@ -21,6 +21,7 @@
 // 002 to 004, facts M64 and M65) also what the lab's dxgkrnl and every WDDM 1.2+ sample insist on: per-engine
 // TDR with its three DDIs, DirectFlip, FlipIndependent, SmoothRotation, SetStablePowerState, CollectDbgInfo.
 #include "bc250kmd.h"
+#include "umd_blob.h"
 #include <ntstrsafe.h>
 
 #define BC250_WDDM_TAG 'wW2B'
@@ -153,6 +154,15 @@ typedef struct _BC250_WDDM_OBJECT {
     ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
     UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
+    // M8: a context or allocation that arrived as a contract blob (umd_blob.c), not the GDI one above.
+    // ExAllocatePool2 zeroes these, so a GDI object stays "not UMD" without a store. UmdRequestedVa is
+    // recorded and not applied: VidMm places the pages, and the winsys maps the GPU VA itself.
+    BOOLEAN UmdAlloc;
+    BOOLEAN UmdContext;
+    unsigned long UmdIpType;
+    unsigned long UmdHeap;
+    ULONGLONG UmdBytes;
+    ULONGLONG UmdRequestedVa;
 } BC250_WDDM_OBJECT;
 
 // The software VSync. FlipOnVSyncMmIo means dxgkrnl retires a queued flip when the driver reports
@@ -289,6 +299,13 @@ typedef struct _BC250_WDDM {
     volatile LONG HwCompleted;
     volatile LONG HwTimeouts;
     volatile LONG HwRefused;
+    // M8: contract blobs (umd_blob.c). Alloc refusals and submits that did not reach the ring are counted
+    // separately from the GDI path, so a desktop present cannot spend the evidence.
+    volatile LONG UmdAllocs;
+    volatile LONG UmdAllocRefused;
+    volatile LONG UmdContexts;
+    volatile LONG UmdSubmitHw;
+    volatile LONG UmdSubmitSoft;
 
     KTIMER VSyncTimer;
     KDPC VSyncDpc;
@@ -680,33 +697,32 @@ static void WddmSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
 
 // PASSIVE_LEVEL (SubmitCommandVirtual). TRUE = the packet is on the ring and its completion will come by itself.
 static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
-                                  _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* Submit, UINT Node)
+                                  ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
 {
     LARGE_INTEGER due;
     ULONG seq = 0;
     NTSTATUS status;
     KIRQL irql;
 
-    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, (ULONGLONG)Submit->DmaBufferVirtualAddress,
-                         Submit->DmaBufferSize, &seq);
+    status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &seq);
     if (!NT_SUCCESS(status))
     {
         if (InterlockedIncrement(&Wddm->HwRefused) <= BC250_WDDM_LOG_CALLS)
             GuardLog("wddm: ring refused 0x%08X (fence %u, va 0x%llX, %u bytes): completed in software", status,
-                     Submit->SubmissionFenceId, (ULONGLONG)Submit->DmaBufferVirtualAddress, Submit->DmaBufferSize);
+                     FenceId, GpuVa, Bytes);
         return FALSE;
     }
     due.QuadPart = -10000ll * BC250_WDDM_SUBMIT_TIMEOUT_MS;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     Wddm->HwPending = TRUE;
     Wddm->HwSeq = seq;
-    Wddm->HwFence = Submit->SubmissionFenceId;
+    Wddm->HwFence = FenceId;
     Wddm->HwNode = Node;
     if (!Wddm->Stopping) KeSetTimer(&Wddm->SubmitTimer, due, &Wddm->SubmitDpc);
     KeReleaseSpinLock(&Wddm->Lock, irql);
     if (InterlockedIncrement(&Wddm->HwSubmitted) <= BC250_WDDM_LOG_CALLS)
-        GuardLog("wddm: fence %u on the gfx ring: sequence %u, vmid %u, root 0x%llX, va 0x%llX, %u bytes", Submit->SubmissionFenceId,
-                 seq, (ULONG)BC250_WDDM_VMID, Context->RootPhysical, (ULONGLONG)Submit->DmaBufferVirtualAddress, Submit->DmaBufferSize);
+        GuardLog("wddm: fence %u on the gfx ring: sequence %u, vmid %u, root 0x%llX, va 0x%llX, %u bytes", FenceId,
+                 seq, (ULONG)BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes);
     WddmGpuFence(Device);               // the interrupt may have come and gone before HwPending was set
     return TRUE;
 }
@@ -1127,6 +1143,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Calls[WddmDdiPreemptCommand], Wddm->LastCompletedFence);
     GuardLog("wddm summary: node 0 hardware: %ld submitted, %ld completed, %ld timeouts, %ld refused",
              Wddm->HwSubmitted, Wddm->HwCompleted, Wddm->HwTimeouts, Wddm->HwRefused);
+    GuardLog("wddm summary: umd: %ld allocs (%ld refused), %ld contexts, %ld submits on the ring, %ld not run",
+             Wddm->UmdAllocs, Wddm->UmdAllocRefused, Wddm->UmdContexts, Wddm->UmdSubmitHw, Wddm->UmdSubmitSoft);
     // ADR 0008 stage D (docs/design/paging-node.md section 7): node 1 exists in this line whether or not the
     // gate is open - every counter stays 0 with it closed, same as every other stage-behind-a-gate counter here.
     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
@@ -1749,7 +1767,11 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     BC250_WDDM* parentWddm;
     BC250_WDDM_OBJECT* object;
     UINT nodeCount;
+    struct umd_context_view umdView;
+    int umdStatus = UMD_BLOB_OK;
+    BOOLEAN umd = FALSE;
 
+    RtlZeroMemory(&umdView, sizeof(umdView));
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
     parentWddm = (BC250_WDDM*)parent->Device->Wddm;
     nodeCount = (parentWddm != NULL) ? parentWddm->NodeCount : BC250_WDDM_NODE_COUNT;
@@ -1758,9 +1780,29 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     if (pCreateContext->NodeOrdinal != BC250_WDDM_NODE_3D &&
         !(pCreateContext->NodeOrdinal == BC250_WDDM_NODE_COPY && nodeCount > BC250_WDDM_NODE_COPY))
         return STATUS_INVALID_PARAMETER;
+    // Empty private data stays the GDI / VidMm path. A blob is a UMD context: GFX, node 0, virtual
+    // addressing, and a private-data slot big enough for the submit blob. CreateContext may fail.
+    if (pCreateContext->PrivateDriverDataSize != 0)
+    {
+        umd = TRUE;
+        umdStatus = UmdBlobParseContext(pCreateContext->pPrivateDriverData, pCreateContext->PrivateDriverDataSize,
+                                        pCreateContext->NodeOrdinal, &umdView);
+        if (umdStatus != UMD_BLOB_OK || pCreateContext->Flags.GdiContext || !pCreateContext->Flags.VirtualAddressing)
+        {
+            GuardLog("wddm: umd context refused, %s, node %u private %u flags 0x%08X",
+                     umdStatus != UMD_BLOB_OK ? UmdBlobStatusText(umdStatus) : "gdi or no va",
+                     pCreateContext->NodeOrdinal, pCreateContext->PrivateDriverDataSize, pCreateContext->Flags.Value);
+            return STATUS_INVALID_PARAMETER;
+        }
+    }
     object = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_CONTEXT);
     if (object == NULL) return STATUS_INSUFFICIENT_RESOURCES;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
+    if (umd)
+    {
+        object->UmdContext = TRUE;
+        object->UmdIpType = umdView.ip_type;
+    }
     pCreateContext->hContext = object;
 
     RtlZeroMemory(&pCreateContext->ContextInfo, sizeof(pCreateContext->ContextInfo));
@@ -1775,7 +1817,10 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // the same class of mistake; 0 is then the only answer left, and that configuration does not reach the CDD.
     pCreateContext->ContextInfo.DmaBufferSegmentSet =
         g_ApertureOffered ? BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_APERTURE) : 0;
-    pCreateContext->ContextInfo.DmaBufferPrivateDataSize = 0;
+    // 0 for GDI: nothing in that path puts a blob on the submit. UMD_BLOB_SUBMIT_BYTES is the whole
+    // submit struct, which is what dxgkrnl allocates and copies the winsys's bytes into. The used
+    // prefix is shorter; the reader checks that itself.
+    pCreateContext->ContextInfo.DmaBufferPrivateDataSize = umd ? UMD_BLOB_SUBMIT_BYTES : 0;
     // 0.7.14: a GDI context gets the allocation list the header sizes for it (RosKmdContext.cpp does the same).
     // With 0 here every Present of the CDD arrived with NumSrcAllocations = NumDstAllocations = 0 (E16 run 009, E18
     // run 003): dxgkrnl had nowhere to put the two surfaces of a Blt, and a driver that cannot name the source
@@ -1795,6 +1840,9 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // node 0 (today's answer) otherwise.
     pCreateContext->ContextInfo.PagingCompanionNodeId = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;
 
+    if (umd && parentWddm != NULL && InterlockedIncrement(&parentWddm->UmdContexts) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: umd context node %u ip %u, private slot %u", pCreateContext->NodeOrdinal,
+                 umdView.ip_type, (ULONG)UMD_BLOB_SUBMIT_BYTES);
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCreateContext))
     {
         GuardLog("wddm: CreateContext node %u engine 0x%X flags 0x%08X private %u", pCreateContext->NodeOrdinal,
@@ -1954,6 +2002,61 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* object;
 
+        // M8: "BC2A" is a UMD allocation, beside the GDI "LB7A" below. The two magics differ on purpose.
+        // requested_va is stored on the object and not programmed here: the winsys maps it afterwards.
+        if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
+        {
+            struct umd_alloc_view view;
+            int st = UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view);
+            UINT segment;
+            UINT align;
+
+            if (st != UMD_BLOB_OK || !g_ApertureOffered)
+            {
+                if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocRefused) <= BC250_WDDM_LOG_CALLS)
+                    GuardLog("wddm: umd alloc refused, %s, private %u, segment %s",
+                             st != UMD_BLOB_OK ? UmdBlobStatusText(st) : "no segment",
+                             info->PrivateDriverDataSize, g_ApertureOffered ? "yes" : "no");
+                while (i-- > 0) WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
+                return STATUS_INVALID_PARAMETER;
+            }
+            object = WddmNewObject(device, BC250_WDDM_MAGIC_ALLOCATION);
+            if (object == NULL)
+            {
+                while (i-- > 0) WddmFreeObject((BC250_WDDM_OBJECT*)pCreateAllocation->pAllocationInfo[i].hAllocation);
+                return STATUS_INSUFFICIENT_RESOURCES;
+            }
+            object->UmdAlloc = TRUE;
+            object->UmdBytes = view.bytes;
+            object->UmdHeap = view.heap;
+            object->UmdRequestedVa = view.requested_va;
+            segment = (view.heap == UMD_BLOB_HEAP_GTT) ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
+            align = 4096;
+            if (view.alignment >= 64 && view.alignment <= 0x100000ull && (view.alignment & (view.alignment - 1ull)) == 0)
+                align = (UINT)view.alignment;
+            info->hAllocation = object;
+            info->Size = (SIZE_T)ROUND_TO_PAGES((SIZE_T)view.bytes);
+            info->Alignment = align;
+            info->HintedBank.Value = 0;
+            info->MaximumRenamingListLength = 0;
+            info->pAllocationUsageHint = NULL;
+            info->PitchAlignedSize = 0;
+            info->PreferredSegment.Value = 0;
+            info->PreferredSegment.SegmentId0 = segment;
+            info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
+            info->SupportedWriteSegmentSet = BC250_WDDM_SEGMENT_SET(segment);
+            info->EvictionSegmentSet = 0;
+            info->PhysicalAdapterIndex = 0;
+            info->FlagsWddm2.Value = 0;
+            info->FlagsWddm2.CpuVisible = 1;
+            if (segment == BC250_WDDM_SEGMENT_APERTURE) info->FlagsWddm2.Cached = 1;
+            info->AllocationPriority = 0;
+            if (wddm != NULL && InterlockedIncrement(&wddm->UmdAllocs) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: umd alloc %llu bytes heap 0x%lX align %u va 0x%llX", view.bytes, view.heap, align,
+                         view.requested_va);
+            continue;
+        }
+
         // Stage A can only size an allocation it described itself. An unknown blob is an honest failure: nothing
         // in the never-fail list reaches this DDI, and guessing a size would put VidMm and us out of step.
         if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
@@ -2067,7 +2170,25 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
             data.Flags.Value = 0;
             raw = parent->Device->Dxgk.DxgkCbGetHandleData(&data);
         }
-        if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
+        if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
+        {
+            struct umd_alloc_view view;
+
+            // Same blob CreateAllocation already accepted. A refusal here leaves a NULL handle, as a bad
+            // GDI blob does, rather than failing the open: dxgkrnl opened what it created.
+            if (UmdBlobParseAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize, &view) == UMD_BLOB_OK)
+            {
+                opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
+                if (opened != NULL)
+                {
+                    opened->UmdAlloc = TRUE;
+                    opened->UmdBytes = view.bytes;
+                    opened->UmdHeap = view.heap;
+                    opened->UmdRequestedVa = view.requested_va;
+                }
+            }
+        }
+        else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
             private->Size != 0)
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
@@ -2238,6 +2359,51 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     return STATUS_SUCCESS;
 }
 
+// A UMD context's command buffer is the IB named in its BC2S blob. dxgkrnl copies that blob to the front of
+// pDmaBufferPrivateData and reports its length in DmaBufferUmdPrivateDataSize (the slot itself is the size
+// CreateContext asked for). One IB takes the gfx ring, still behind EnableGpuSubmit and a root page table.
+// Two IBs are not half-run. A failure return from this DDI bugchecks, so a blob this reader refuses, or a
+// ring that will not take it, is completed in software and logged. That retires the scheduler fence so the
+// queue does not stall. It does not write the monitored fence the IB itself would have written, which is
+// what the winsys waits on.
+static void WddmSubmitUmd(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_OBJECT* Context,
+                          _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* Submit, UINT Node)
+{
+    struct umd_submit_view ib;
+    unsigned umdLen = Submit->DmaBufferUmdPrivateDataSize;
+    unsigned bufLen = Submit->DmaBufferPrivateDataSize;
+    const void* bytes = Submit->pDmaBufferPrivateData;
+    int st = UMD_BLOB_TOO_SMALL;
+    const char* why = "unknown";
+    unsigned nIbs = 0;
+
+    ib.num_ibs = 0;
+    ib.ib_va = 0;
+    ib.ib_bytes = 0;
+    ib.single_ib = 0;
+    if (bytes != NULL && umdLen != 0 && umdLen <= bufLen)
+        st = UmdBlobParseSubmit(bytes, umdLen, &ib);
+    if (st == UMD_BLOB_OK && ib.single_ib && Node == BC250_WDDM_NODE_3D && Context->RootPhysical != 0 &&
+        Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(Device) &&
+        WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
+    {
+        if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
+            GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId, ib.ib_va, ib.ib_bytes);
+        return;
+    }
+    if (st != UMD_BLOB_OK) why = UmdBlobStatusText(st);
+    else if (!ib.single_ib) { why = "multiple ibs"; nIbs = ib.num_ibs; }
+    else if (Node != BC250_WDDM_NODE_3D) why = "not node 0";
+    else if (Context->RootPhysical == 0) why = "no root";
+    else if (KeGetCurrentIrql() > APC_LEVEL) why = "irql";
+    else if (!GfxSubmitReady(Device)) why = "ring not ready";
+    else why = "ring refused";
+    if (Wddm != NULL && InterlockedIncrement(&Wddm->UmdSubmitSoft) <= 128)
+        GuardLog("wddm: umd submit fence %u not run: %s (%u ibs, private %u/%u, first 0x%08lX)",
+                 Submit->SubmissionFenceId, why, nIbs, umdLen, bufLen, UmdBlobFirstWord(bytes, umdLen));
+    WddmCompleteSoftware(Device, Submit->SubmissionFenceId, Node);
+}
+
 static DXGKDDI_SUBMITCOMMANDVIRTUAL Bc250WddmSubmitCommandVirtual;
 static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
                                               _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* pSubmitCommand)
@@ -2300,6 +2466,15 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
         }
     }
 
+    // M8. A UMD context's packet is the IB in its BC2S blob, not the DMA buffer a present uses. Handled
+    // here, before stage C, so a UMD submit can never fall through onto DmaBufferVirtualAddress. One IB
+    // takes the same gated gfx-ring path. Two IBs are not half-run. This DDI still cannot fail.
+    if (context != NULL && context->UmdContext)
+    {
+        WddmSubmitUmd(device, wddm, context, pSubmitCommand, node);
+        return STATUS_SUCCESS;
+    }
+
     // Stage C. An empty DMA buffer (every Present of stage A's inert DDI) has nothing to run; one with bytes in it
     // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root. Everything else
     // is completed in software as before. The header says PASSIVE_LEVEL, and gfx.c's lock needs <= APC_LEVEL.
@@ -2307,7 +2482,8 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
     // node 0's alone - node 1 has its own arm above, its own ring (SDMA0, no VMID) and its own failure counters.
     if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
         device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
-        WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, pSubmitCommand, node))
+        WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress,
+                           pSubmitCommand->DmaBufferSize, pSubmitCommand->SubmissionFenceId, node))
         return STATUS_SUCCESS;
     WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
     return STATUS_SUCCESS;

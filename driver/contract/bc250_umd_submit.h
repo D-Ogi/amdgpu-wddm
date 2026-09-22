@@ -18,9 +18,9 @@
  * and a disagreement with a Linux capture should be a diff rather than an argument. Where WDDM has
  * no equivalent the field is still here, marked, so the gap is visible instead of forgotten.
  *
- * NOT AN IMPLEMENTATION. Nothing writes or reads these yet. README-winsys.md is the argument;
- * this is the shape the argument produces. See README-winsys.md "Open questions" before relying
- * on any of it.
+ * The KMD reads these in driver/kmd/umd_blob.c (host-tested; node 0 only). Nothing in this header
+ * writes them; the winsys does that, and it is not written yet. README-winsys.md is the argument.
+ * See README-winsys.md "Open questions" before relying on any of it.
  *
  * VERSIONING - the same rule as the caps blob, for the same reason. `magic`, `version` and `size`
  * are the first three words of every blob and never move. Fields are only ever appended and the

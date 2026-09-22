@@ -7,8 +7,8 @@ things on WDDM.
 open. This document covers the rest of the surface - allocation, address space, contexts,
 submission, synchronisation - and `bc250_umd_submit.h` is the shape it produces.
 
-**Status: a contract and a header, not an implementation.** Nothing here is wired into
-`driver/kmd`. The point is to have the argument before anything depends on it.
+**Status: the kernel reads the three blobs** (`driver/kmd/umd_blob.c`, node 0 only, host-tested).
+The winsys that fills them is not written yet.
 
 ## Scope: what a compute-only workload on GFX1013 actually touches
 

@@ -392,16 +392,15 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 
 ## Not done
 
-- Nothing is wired into `driver/kmd`, confirmed again by the ADR 0012/0013 review that added
-  version 3 (`docs/design/umd-contract-stage-d.md`): `DxgkDdiQueryAdapterInfo` still refuses
-  `DXGKQAITYPE_UMDRIVERPRIVATE` outright (`wddm.c`'s `default:` arm), `DxgkDdiCreateAllocation`
-  parses a different, GDI-shaped private struct of its own (`BC250_WDDM_ALLOCATION_PRIVATE`, magic
-  `"LB7A"`, not this file's `"BC2A"`) and refuses anything else, `DxgkDdiCreateContext` never hands
-  a context a `bc250_umd_context_private` to fill in (`DmaBufferPrivateDataSize = 0`), and
-  `DxgkDdiSubmitCommandVirtual` reads the raw DMA buffer directly rather than a
-  `bc250_umd_submit_private`. All of that is expected for stages A-C, which have no user-mode
-  driver to hand private data to, and all of it is M8 work, not something this contract update
-  does. No `DxgkDdiQueryAdapterInfo` handler writes this blob yet.
+- `DxgkDdiQueryAdapterInfo` still refuses `DXGKQAITYPE_UMDRIVERPRIVATE` (`wddm.c`'s `default:` arm).
+  No handler writes the caps blob yet. That is the next kernel gap for an ICD that calls
+  `QueryAdapterInfo(UMDRIVERPRIVATE)`.
+- `DxgkDdiCreateAllocation`, `DxgkDdiCreateContext` and `DxgkDdiSubmitCommandVirtual` do read the
+  three blobs in `bc250_umd_submit.h`, on node 0 only (`driver/kmd/umd_blob.c`, bc250kmd 0.7.40).
+  GDI allocations stay on the `"LB7A"` struct. A context with empty private data is unchanged
+  (`DmaBufferPrivateDataSize` stays 0). A UMD submit of one IB uses the gfx ring, still behind
+  `EnableGpuSubmit` and a root page table; more than one IB is not run. `requested_va` is recorded
+  and not programmed. Node 1 is still not a UMD queue.
 - `addrlib` is not exercised. The test establishes that Mesa recognises the chip and derives sane
   limits, not that surfaces tile the same way as on Linux. That needs `ac_surface` and a
   comparison against a Linux capture, and it is where `gb_addr_config` bit 20 actually matters.
@@ -411,6 +410,7 @@ to be able to kill the process, and nothing on this PC gets to open a window.
   from the kernel, so a WDDM driver has to supply the string. A blob field for it is a v3 change
   and nothing needs it yet.
 - The next layer up - BO allocation, VA mapping, contexts and submission - is `README-winsys.md`
-  and `bc250_umd_submit.h`, and is likewise a contract rather than an implementation.
+  and `bc250_umd_submit.h`. The kernel half of allocate / create-context / submit is
+  `driver/kmd/umd_blob.c`. The winsys that fills the blobs is not written yet.
 - The blob carries no per-process or per-adapter state (GPU VA layout, doorbell assignment,
   paging queue). That is a separate contract and belongs with the M7 memory-manager work.
