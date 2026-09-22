@@ -486,6 +486,7 @@ DXGKDDI_SYSTEM_DISPLAY_ENABLE Bc250SystemDisplayEnable;
 DXGKDDI_SYSTEM_DISPLAY_WRITE Bc250SystemDisplayWrite;
 
 NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
+void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device);
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);
 
 // wddm.c (M7 stage A, ADR 0008). Everything here is inert while the EnableFullWddm gate is closed.

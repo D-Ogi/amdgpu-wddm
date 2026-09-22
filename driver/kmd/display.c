@@ -32,6 +32,53 @@ NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device)
     return STATUS_SUCCESS;
 }
 
+// What the CPU can see in the firmware framebuffer at device start. M117 read the BAR0 mapping as zeros and
+// M118 read VRAM offset 0 as zeros, both seconds after a full-table start. This sample is earlier: the mapping
+// display-only actually draws through, plus the carve-out view of the same pixels once VramStart has run.
+void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device)
+{
+    SIZE_T midOff;
+    ULONG first, mid;
+
+    if (Device->Framebuffer == NULL || Device->FramebufferLength < sizeof(ULONG) || Device->Post.Pitch < 4 ||
+        Device->Post.Height == 0 || Device->Post.Width == 0)
+    {
+        GuardLog("fb sample: no mapping");
+        return;
+    }
+    midOff = ((SIZE_T)Device->Post.Height / 2) * Device->Post.Pitch + ((SIZE_T)Device->Post.Width / 2) * 4;
+    first = *(volatile ULONG*)Device->Framebuffer;
+    mid = (midOff + sizeof(ULONG) <= Device->FramebufferLength) ?
+          *(volatile ULONG*)((UCHAR*)Device->Framebuffer + midOff) : 0;
+    GuardLog("fb sample mapped: phys 0x%llX first 0x%08X mid 0x%08X",
+             (ULONGLONG)Device->Post.PhysicAddress.QuadPart, first, mid);
+
+    if (Device->VramEnabled && Device->VramLength != 0)
+    {
+        ULONGLONG offset = 0, at;
+        PHYSICAL_ADDRESS phys;
+        PVOID view;
+
+        if (VramFramebufferOffset(Device, &offset) && offset < Device->VramLength &&
+            (ULONGLONG)Device->FramebufferLength <= Device->VramLength - offset)
+        {
+            at = (ULONGLONG)Device->VramPhysical.QuadPart + offset;
+            phys.QuadPart = (LONGLONG)at;
+            view = MmMapIoSpaceEx(phys, Device->FramebufferLength, PAGE_READONLY | PAGE_NOCACHE);
+            if (view == NULL)
+                GuardLog("fb sample physical: no mapping for 0x%llX", at);
+            else
+            {
+                first = *(volatile ULONG*)view;
+                mid = (midOff + sizeof(ULONG) <= Device->FramebufferLength) ?
+                      *(volatile ULONG*)((UCHAR*)view + midOff) : 0;
+                MmUnmapIoSpace(view, Device->FramebufferLength);
+                GuardLog("fb sample physical: 0x%llX first 0x%08X mid 0x%08X", at, first, mid);
+            }
+        }
+    }
+}
+
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device)
 {
     // The bugcheck display writes through this pointer: take it away before the mapping goes.

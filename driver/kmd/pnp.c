@@ -75,6 +75,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
     VramStart(device);      // same rule
+    DisplayLogFramebufferSample(device);   // after VramStart, so the carve-out view exists when that gate is open
     GartStart(device);      // same rule
     PspStart(device);       // same rule
     GpuMemStart(device);    // same rule
