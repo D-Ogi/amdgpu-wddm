@@ -1,0 +1,3 @@
+E22 present-to-scanout, 2026-09-22, bc250kmd 0.7.35. Fresh boot 14:16:45. Full table, engines through stage 8, blit and VidPn flip open. No memory-pressure probe.
+
+Summary: 30 blits to the flipped surface, 0 to the POST framebuffer, 1 scanout remap, 0 mapping failures, last blit 1200 rows (the mode height). One hardware flip. Hardware vsync re-armed after stage 8, then 947 acks, 0 refused, 0 deferred. fbdump read HUBP0 at 0x270ACE000. scanout.png is that frame, half scale. It is not a legible desktop: the lower part of the frame is uniform noise and the upper part is a noisy blue field with a white bar. The ring was not saved; closing the gate clears KeepLog before the stop. The undo returned the display-only driver to stage 61. No TDR. 67-71 C.
