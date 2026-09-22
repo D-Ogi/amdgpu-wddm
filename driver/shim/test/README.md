@@ -12,6 +12,7 @@ the replay method are described in `driver/shim/README.md`; this file covers the
 | `run_pte.ps1` | `replay_pte.c` | the page tables. |
 | `run_sdma_faults.ps1` | `sdma_faults.c` | what the SDMA bring-up does when things fail. |
 | `run_sdma_copy.ps1` | `sdma_copy_packets.c` | ADR 0013: does `bc250_sdma_copy.c` write the same copy/fill packets amdgpu's `sdma_v5_0_emit_copy_buffer()`/`emit_fill_buffer()` would, dword for dword, split where they would split? |
+| `run_paging.ps1` | `paging_packets.c` | ADR 0008 stage D: does `bc250_sdma_paging.c` write the same TRANSFER_VIRTUAL/FILL_VIRTUAL packets into a caller-owned buffer, and does the room check answer `BC250_SDMA_PAGING_INSUFFICIENT` - writing nothing - when the buffer is too small? |
 
 The five replays all ask one question - does the shim write what unit A's Linux driver wrote, in that
 order - and they ask it on the path where everything works. Their verdict is EXACT MATCH or nothing.
@@ -72,6 +73,23 @@ memory ring: fill, then copy, then the same fence `bc250_sdma_ring_test()` uses,
 Links against `bc250_sdma_copy.c`, `bc250_sdma.c`, `bc250_ring.c` and `bc250_nbio.c` - the four
 files `driver/kmd/build.ps1` compiles into the miniport for this - with its own plain shim backend
 (a working allocator, a no-op register file), the same reason `sdma_faults.c` brings its own.
+
+## `run_paging.ps1` - the paging-node packets (ADR 0008 stage D)
+
+The packet-shape half of `docs/design/paging-node.md` section 4a: `bc250_sdma_paging.c` wraps a
+throwaway `struct amdgpu_ring` around a caller-owned buffer and calls the already-checked
+`bc250_sdma_emit_copy_linear()`/`emit_fill()` (M95, `run_sdma_copy.ps1` above) on it, so this suite
+checks two things beyond what that one already covers: a `DXGK_OPERATION_VIRTUAL_TRANSFER` of 3 pages
+and a `DXGK_OPERATION_VIRTUAL_FILL` of 2 pages build the expected dwords into the buffer, and a buffer
+too small for the operation answers `BC250_SDMA_PAGING_INSUFFICIENT` - nothing written, the dword
+count the operation needs reported back - the shape `DxgkDdiBuildPagingBuffer` needs for
+`STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER`. What resolves a paging operation's virtual addresses to the
+physical ones this file takes as input (`VidMmTranslate()`, driver/kmd) and what pushes the built
+packets onto the live SDMA0 ring (`GfxSubmitPaging()`, DISPATCH_LEVEL, `driver/kmd/gfx.c`) are both
+kernel-mode code with no host harness; this suite is deliberately the part that has one.
+Links against `bc250_sdma_paging.c`, `bc250_sdma_copy.c`, `bc250_sdma.c`, `bc250_ring.c` and
+`bc250_nbio.c` - the same files `driver/kmd/build.ps1` compiles into the miniport for this - with its
+own plain shim backend, the same reason `sdma_faults.c` and `sdma_copy_packets.c` bring their own.
 
 ### Expected failures
 

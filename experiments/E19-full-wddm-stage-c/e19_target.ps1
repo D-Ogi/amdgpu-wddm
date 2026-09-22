@@ -24,6 +24,7 @@ param(
     [string]$Scratch = '',              # with -Phase submit: kmtprobe --scratch <hex32> (H4); with -Phase read: the BAR5 offset, hex
     [int]$GpuSubmit = 0,                # with -Phase gate: EnableGpuSubmit (stage C: DMA buffers go down the gfx ring)
     [int]$Blit = 0,                     # with -Phase gate: EnablePresentBlit (E20: the diagnostic CPU blit of a present)
+    [int]$PagingNode = 0,               # with -Phase gate: EnablePagingNode (E24: node 1 on SDMA0; needs GpuSubmit's engines)
     [string]$Package = 'C:\BC250\e16'
 )
 
@@ -127,7 +128,9 @@ switch ($Phase) {
         Set-ItemProperty $params -Name EnableGpuSubmit -Value $submit -Type DWord
         $blit = if ($Full -eq 1 -and $va -eq 1) { $Blit } else { 0 }
         Set-ItemProperty $params -Name EnablePresentBlit -Value $blit -Type DWord
-        Say "gate     EnableGpuVa $va  EnableVramWrite $va  EnableGpuSubmit $submit  EnablePresentBlit $blit"
+        $paging = if ($submit -eq 1) { $PagingNode } else { 0 }
+        Set-ItemProperty $params -Name EnablePagingNode -Value $paging -Type DWord
+        Say "gate     EnableGpuVa $va  EnableVramWrite $va  EnableGpuSubmit $submit  EnablePresentBlit $blit  EnablePagingNode $paging"
         Set-ItemProperty $params -Name EnableFullWddm -Value $Full -Type DWord
         # 0.7.3: the ring goes into C:\BC250\kmdlog at every stop while the gate is open, because dxgkrnl may end a
         # full WDDM start by itself and unload the driver, ring and all (run 1 with 0.7.2 did exactly that).

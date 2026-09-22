@@ -320,6 +320,63 @@ BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 
+// ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. A
+// second, parallel channel to the four above, not a generalization of them: SubmitCommand (the paging buffer's
+// DDI) is _IRQL_requires_(DISPATCH_LEVEL), exactly, so this path may never take Device->GartLock and never
+// touches the shim's register-sequence machinery. It writes straight into the live SDMA0 ring (adev captured
+// once, under GartLock, the same way ih.c's DpcAdev is) under its own spinlock (BC250_GFX::Sdma0RingLock),
+// which every other writer of that ring (the ring test, GfxFenceEscape's SDMA arm, SdmaCopyEscape) also takes,
+// narrowly, around their own ring push. Addresses are physical (MC): the paging operation's virtual addresses
+// are resolved on the CPU first, through VidMmTranslate(), so no VMID is ever pointed at anything for this path
+// (design note section 2).
+//   GfxPagingBuild      PASSIVE_LEVEL (BuildPagingBuffer). Emits one operation's SDMA packets into both
+//                       pDmaBuffer (dxgkrnl's own copy, per the DDI contract) and a driver-owned shadow buffer at
+//                       the same offset, through the existing, measured bc250_sdma_emit_copy_linear/emit_fill
+//                       (M95), so that SubmitCommand can find the bytes later without dereferencing a physical
+//                       address at DISPATCH_LEVEL. Returns STATUS_SUCCESS (built), STATUS_GRAPHICS_INSUFFICIENT_
+//                       DMA_BUFFER (*MultipassOffset set, nothing written this call) or STATUS_SUCCESS with
+//                       *Written FALSE (an operation this cut does not build: see BC250_WDDM_PAGING_UNSUPPORTED).
+// Reasons a TRANSFER_VIRTUAL/FILL_VIRTUAL is not built, for the caller's own counters:
+typedef enum _BC250_WDDM_PAGING_UNSUPPORTED
+{
+    BC250PagingSupported = 0,           // built; not a reason
+    BC250PagingNotReady,                // the gate is open but RUN has not yet reached stage 8: no shadow, no live ring
+    BC250PagingNoRoot,                  // hSystemContext named no context with a recorded root
+    BC250PagingNoTranslation,           // VidMmTranslate refused (not ready, or the address does not resolve)
+    BC250PagingSystemMemory,            // resolved to system memory: no MC mapping for a dxgkrnl-owned page (note section 2)
+    BC250PagingNotContiguous,           // review 23 MUST-FIX: the operation spans pages that are not physically
+                                         // contiguous - refused rather than built wrong, see PagingRangeContiguous (gfx.c)
+} BC250_WDDM_PAGING_UNSUPPORTED;
+NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
+                        ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
+                        ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
+                        _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
+//   GfxSubmitPaging     DISPATCH_LEVEL, no GartLock. Pushes [ShadowOffset, ShadowOffset + ByteCount) of the
+//                       shadow buffer GfxPagingBuild filled onto the live SDMA0 ring, with an interrupting fence,
+//                       and rings the doorbell. One submission in flight, exactly as GfxSubmitIb: while the
+//                       previous sequence has not arrived it answers STATUS_DEVICE_BUSY and writes nothing.
+NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG ByteCount, _Out_ ULONG* Seq);
+//   GfxPagingFenceArrived, GfxPagingSubmitReady, GfxPagingSubmitFail: node 1's own answers to GfxFenceArrived/
+//   GfxSubmitReady/GfxSubmitFail above, same contracts, independent state (node 0 failing does not fail node 1
+//   and vice versa - the two nodes fail on their own hardware).
+BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
+BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device);
+void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device);
+// Whether the paging node is enabled at all this device start (EnablePagingNode, read once at GfxStart): the
+// gate wddm.c's caps and CreateContext consult to decide whether node 1 exists. FALSE whenever Device->Gfx is
+// NULL (EnableGfx closed), same as every other gfx.c answer.
+BOOLEAN GfxPagingNodeGate(_In_ const BC250_DEVICE* Device);
+// The shadow buffer's total size, i.e. the largest [DmaBufferOffset, DmaBufferOffset+DmaSize) BuildPagingBuffer
+// may address - wddm.c uses it to size DXGK_QUERYSEGMENTOUT4.PagingBufferSize consistently with what
+// GfxSubmitPaging can actually read back.
+ULONG GfxPagingShadowBytes(void);
+
+// gpumem.c: one doorbell write reached directly from Device, with no amdgpu_device/backend involved - what
+// GfxSubmitPaging needs at DISPATCH_LEVEL, where bc250_shim_wdoorbell64's adev->backend dependency (gpumem.c,
+// MemOf()) cannot be used (docs/design/paging-node.md section 4). Same store bc250_shim_wdoorbell64 makes,
+// same bounds; DoorbellCount is not touched, this path is not one of the sequences' own doorbell budgets.
+void GpuMemDoorbellWrite(_In_ const BC250_DEVICE* Device, ULONG Index, ULONGLONG Value);
+
 // pnp.c
 DXGKDDI_ADD_DEVICE Bc250AddDevice;
 DXGKDDI_START_DEVICE Bc250StartDevice;
@@ -364,6 +421,9 @@ void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // d
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
 void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet in flight finished? <= DISPATCH_LEVEL
+// ADR 0008 stage D: node 1's own twin of WddmGpuFence above, same call sites, same IRQL bound - see pnp.c's
+// Bc250DpcRoutine and docs/design/paging-node.md section 5.
+void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device);
 // vidmm.c: VidMm's page tables (ADR 0008 stage B). EnableGpuVa 0 = plan and log, 1 = write the entries.
 void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
 void VidMmStop(void);

@@ -38,7 +38,13 @@
 #define BC250_WDDM_APERTURE_BYTES 0x10000000ull     // 256 MB of GPU address space, no memory behind it in stage A
 #define BC250_WDDM_SEGMENT_SET(id) (1u << ((id) - 1))
 #define BC250_WDDM_NODE_3D 0u
-#define BC250_WDDM_NODE_COUNT 1u            // what DXGK_DRIVERCAPS.GpuEngineTopology reports; see the assert below
+// ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node,
+// behind EnablePagingNode. BC250_WDDM_NODE_COUNT is no longer a compile-time fact - wddm->NodeCount (1 or 2,
+// WddmStart) is what every bound check and caps answer below now reads; the macro stays only as the value that
+// field is initialized to with the gate closed, so that a grep for "how many nodes" still finds one definition.
+#define BC250_WDDM_NODE_COPY 1u
+#define BC250_WDDM_NODE_COUNT 1u            // gate closed: the value wddm->NodeCount starts at, and the only one C_ASSERT still checks
+#define BC250_WDDM_NODE_COUNT_MAX 2u        // sizes every per-node array below, gate open or closed
 
 // The GPU virtual address space stage A declares. Four levels of nine index bits over 4 KB pages is what GFX10's
 // GPUVM does and what M4's page table format (facts M37) is built for, so stage B can keep the numbers; the root
@@ -185,19 +191,43 @@ typedef struct _BC250_WDDM {
     // Submission. The DDI records the fence and queues ReportDpc; the report happens there, after the DDI has
     // returned, so that nothing calls back into dxgkrnl from inside a submit. A completion of fence N retires
     // every fence up to N, which is what real hardware reports out of a write-back slot, so one pair of values
-    // is enough and the order is preserved by construction - but only because there is exactly one node. The
-    // assert below binds that: a second node needs a fence pair per node, not one shared pair.
-    volatile LONG SubmittedFence;
-    volatile LONG SubmittedNode;
-    volatile LONG CompletionPending;    // set by the submit, cleared by the DPC
-    volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value"
+    // per node is enough and the order is preserved by construction. ADR 0008 stage D: with node 1 real, both
+    // nodes can have an outstanding completion at once, so this is a pair of values PER NODE
+    // ([BC250_WDDM_NODE_3D]/[BC250_WDDM_NODE_COPY]), not the single shared pair the C_ASSERT below used to bind -
+    // that assert now only pins wddm->NodeCount's gate-closed starting value, not the array width.
+    volatile LONG SubmittedFence[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG SubmittedNode[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG CompletionPending[BC250_WDDM_NODE_COUNT_MAX];    // set by the submit, cleared by the DPC
+    volatile LONG LastCompletedFence;   // "the driver must always maintain the last completed fence ID value";
+                                         // shared across nodes on purpose (design note section 5): a lab
+                                         // simplification, not a claim that dxgkrnl only ever sees one node's value
+    UINT NodeCount;                     // 1 with EnablePagingNode closed, 2 open; read once in WddmStart
 
     // Preemption goes through the same DPC, and after the completion, so that the fence it reports as last
-    // completed is the one the completion just published rather than the one before it.
-    volatile LONG PreemptionFence;
-    volatile LONG PreemptionNode;
-    volatile LONG PreemptionPending;
+    // completed is the one the completion just published rather than the one before it. Per node, same reason
+    // as the completion pair above.
+    volatile LONG PreemptionFence[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG PreemptionNode[BC250_WDDM_NODE_COUNT_MAX];
+    volatile LONG PreemptionPending[BC250_WDDM_NODE_COUNT_MAX];
     KDPC ReportDpc;
+
+    // ADR 0008 stage D (docs/design/paging-node.md section 5): node 1's own hardware channel, parallel to stage
+    // C's node-0 one below and never touching it - the two nodes fail independently, on their own hardware.
+    BOOLEAN PagingHwPending;
+    ULONG PagingHwSeq;                  // gfx.c's PagingSubmitSeq of the submission in flight
+    UINT PagingHwFence;
+    KTIMER PagingSubmitTimer;
+    KDPC PagingSubmitDpc;
+    volatile LONG PagingHwSubmitted;
+    volatile LONG PagingHwCompleted;
+    volatile LONG PagingHwTimeouts;
+    volatile LONG PagingHwRefused;
+    // BuildPagingBuffer's own counters (design note section 7): built vs. answered inertly, by reason.
+    volatile LONG PagingTransfersBuilt;
+    volatile LONG PagingFillsBuilt;
+    volatile LONG PagingBytesMoved;
+    volatile LONG PagingInsufficientBuffer;
+    volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
 
     // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, one in flight at most) and its fence is
     // reported when the hardware's arrives - from the IH DPC, from the submit itself if the interrupt won the race,
@@ -239,10 +269,10 @@ typedef struct _BC250_WDDM {
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
 } BC250_WDDM;
 
-// One shared fence pair is only correct while there is one node. GpuEngineTopology below reports this same
-// constant, so raising the node count breaks the build here instead of silently reporting one node's fence
-// against another node's packets.
+// The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
+// EnablePagingNode is read: this build must report exactly one node until the gate says otherwise.
 C_ASSERT(BC250_WDDM_NODE_COUNT == 1);
+C_ASSERT(BC250_WDDM_NODE_COPY < BC250_WDDM_NODE_COUNT_MAX);
 
 static BOOLEAN g_FullWddm;              // the gate, read once in DriverEntry
 static BOOLEAN g_ApertureOffered;       // QUERYSEGMENT4 described segment 2; CreateContext may only name it then
@@ -482,10 +512,10 @@ static void WddmCompleteFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT N
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
 
-    if (wddm == NULL) return;
-    InterlockedExchange(&wddm->SubmittedNode, (LONG)NodeOrdinal);
-    InterlockedExchange(&wddm->SubmittedFence, (LONG)FenceId);
-    InterlockedExchange(&wddm->CompletionPending, 1);
+    if (wddm == NULL || NodeOrdinal >= BC250_WDDM_NODE_COUNT_MAX) return;
+    InterlockedExchange(&wddm->SubmittedNode[NodeOrdinal], (LONG)NodeOrdinal);
+    InterlockedExchange(&wddm->SubmittedFence[NodeOrdinal], (LONG)FenceId);
+    InterlockedExchange(&wddm->CompletionPending[NodeOrdinal], 1);
     WddmQueueReport(wddm);
 }
 
@@ -495,10 +525,10 @@ static void WddmPreemptFence(_Inout_ BC250_DEVICE* Device, UINT FenceId, UINT No
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
 
-    if (wddm == NULL) return;
-    InterlockedExchange(&wddm->PreemptionNode, (LONG)NodeOrdinal);
-    InterlockedExchange(&wddm->PreemptionFence, (LONG)FenceId);
-    InterlockedExchange(&wddm->PreemptionPending, 1);
+    if (wddm == NULL || NodeOrdinal >= BC250_WDDM_NODE_COUNT_MAX) return;
+    InterlockedExchange(&wddm->PreemptionNode[NodeOrdinal], (LONG)NodeOrdinal);
+    InterlockedExchange(&wddm->PreemptionFence[NodeOrdinal], (LONG)FenceId);
+    InterlockedExchange(&wddm->PreemptionPending[NodeOrdinal], 1);
     WddmQueueReport(wddm);
 }
 
@@ -618,6 +648,107 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     return TRUE;
 }
 
+// ---- ADR 0008 stage D: node 1's own hardware channel (docs/design/paging-node.md section 5) ---------------------
+//
+// A parallel channel to stage C's above, not a generalization of it: WddmSubmitPagingHardware runs at
+// DISPATCH_LEVEL (Bc250WddmSubmitCommand, exactly, design note section 4), where WddmSubmitHardware runs at
+// PASSIVE_LEVEL (SubmitCommandVirtual) and may call GfxSubmitIb's GartLock-taking path; this one calls
+// GfxSubmitPaging instead, which takes no lock beyond gfx.c's own Sdma0RingLock. The two channels fail
+// independently: a node-1 timeout calls GfxPagingSubmitFail, never GfxSubmitFail, and vice versa.
+
+// Has node 1's in-flight fence arrived? Same shape as WddmGpuFence, called from the same places (the IH DPC,
+// the submit itself, the watchdog), at <= DISPATCH_LEVEL.
+void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    BOOLEAN done = FALSE;
+    UINT fence = 0;
+    KIRQL irql;
+
+    if (wddm == NULL) return;
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    if (wddm->PagingHwPending && GfxPagingFenceArrived(Device, wddm->PagingHwSeq))
+    {
+        done = TRUE;
+        fence = wddm->PagingHwFence;
+        wddm->PagingHwPending = FALSE;
+        KeCancelTimer(&wddm->PagingSubmitTimer);
+    }
+    KeReleaseSpinLock(&wddm->Lock, irql);
+    if (!done) return;
+    if (InterlockedIncrement(&wddm->PagingHwCompleted) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: paging hardware fence arrived, reporting fence %u", fence);
+    WddmCompleteFence(Device, fence, BC250_WDDM_NODE_COPY);
+}
+
+static KDEFERRED_ROUTINE WddmPagingSubmitDpcRoutine;
+static void WddmPagingSubmitDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+    BC250_WDDM* wddm;
+    BOOLEAN timedOut = FALSE;
+    UINT fence = 0;
+    ULONG seq = 0;
+    KIRQL irql;
+
+    UNREFERENCED_PARAMETER(Dpc);
+    UNREFERENCED_PARAMETER(Arg1);
+    UNREFERENCED_PARAMETER(Arg2);
+    if (device == NULL || (wddm = (BC250_WDDM*)device->Wddm) == NULL) return;
+    WddmGpuFencePaging(device);         // late is still arrived
+    KeAcquireSpinLock(&wddm->Lock, &irql);
+    if (wddm->PagingHwPending)
+    {
+        timedOut = TRUE;
+        fence = wddm->PagingHwFence;
+        seq = wddm->PagingHwSeq;
+        wddm->PagingHwPending = FALSE;
+    }
+    KeReleaseSpinLock(&wddm->Lock, irql);
+    if (!timedOut) return;
+    // Same answer as node 0's own timeout: nobody can reset this GPU, so the packet is declared finished and the
+    // SDMA0 ring path is closed for node 1 only - node 0's ring path, and node 0's own SubmitFailed, are untouched.
+    InterlockedIncrement(&wddm->PagingHwTimeouts);
+    GfxPagingSubmitFail(device);
+    GuardLog("wddm: PAGING HARDWARE FENCE TIMEOUT after %u ms (sequence %u): fence %u completed in software, node 1 ring path closed",
+             (ULONG)BC250_WDDM_SUBMIT_TIMEOUT_MS, seq, fence);
+    WddmCompleteFence(device, fence, BC250_WDDM_NODE_COPY);
+}
+
+// DISPATCH_LEVEL (Bc250WddmSubmitCommand, node 1). TRUE = the packet is on SDMA0's ring and its completion will
+// come by itself. ShadowOffset/ByteCount name the range of Gfx's shadow buffer GfxPagingBuild already filled
+// (design note section 4a); FenceId is dxgkrnl's own SubmissionFenceId for this node, unrelated to gfx.c's own
+// sequence numbering, exactly as WddmSubmitHardware keeps the two apart for node 0.
+static BOOLEAN WddmSubmitPagingHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, ULONG ShadowOffset,
+                                        ULONG ByteCount, UINT FenceId)
+{
+    LARGE_INTEGER due;
+    ULONG seq = 0;
+    NTSTATUS status;
+    KIRQL irql;
+
+    status = GfxSubmitPaging(Device, ShadowOffset, ByteCount, &seq);
+    if (!NT_SUCCESS(status))
+    {
+        if (InterlockedIncrement(&Wddm->PagingHwRefused) <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: paging ring refused 0x%08X (fence %u, shadow offset 0x%lX, %lu bytes): completed in software",
+                     status, FenceId, ShadowOffset, ByteCount);
+        return FALSE;
+    }
+    due.QuadPart = -10000ll * BC250_WDDM_SUBMIT_TIMEOUT_MS;
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    Wddm->PagingHwPending = TRUE;
+    Wddm->PagingHwSeq = seq;
+    Wddm->PagingHwFence = FenceId;
+    if (!Wddm->Stopping) KeSetTimer(&Wddm->PagingSubmitTimer, due, &Wddm->PagingSubmitDpc);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    if (InterlockedIncrement(&Wddm->PagingHwSubmitted) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: fence %u on the SDMA0 ring: sequence %u, shadow offset 0x%lX, %lu bytes", FenceId, seq,
+                 ShadowOffset, ByteCount);
+    WddmGpuFencePaging(Device);         // the interrupt may have come and gone before PagingHwPending was set
+    return TRUE;
+}
+
 // The report side, at DISPATCH_LEVEL, with the DDI long returned. Completion first, then preemption: that order
 // is what makes DmaPreempted.LastCompletedFenceId the fence dxgkrnl has just been told about, and it means a
 // packet is never reported as completed after it has been declared preempted.
@@ -628,6 +759,7 @@ static void WddmReportDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
     BC250_WDDM* wddm;
     DXGKARGCB_NOTIFY_INTERRUPT_DATA data;
     LONG fence;
+    UINT node;
 
     UNREFERENCED_PARAMETER(Dpc);
     UNREFERENCED_PARAMETER(Arg1);
@@ -635,27 +767,33 @@ static void WddmReportDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt
     if (device == NULL || (wddm = (BC250_WDDM*)device->Wddm) == NULL) return;
     if (WddmStopping(wddm)) return;
 
-    if (InterlockedExchange(&wddm->CompletionPending, 0) != 0)
+    // ADR 0008 stage D: both nodes' pending completion/preemption are checked, not only node 0's - the array
+    // slot a gate-closed device never sets stays 0, so this loop reports nothing new for node 1 until the gate
+    // opens and something actually submits to it (design note section 5).
+    for (node = 0; node < BC250_WDDM_NODE_COUNT_MAX; node++)
     {
-        fence = InterlockedCompareExchange(&wddm->SubmittedFence, 0, 0);
-        InterlockedExchange(&wddm->LastCompletedFence, fence);
-        RtlZeroMemory(&data, sizeof(data));
-        data.InterruptType = DXGK_INTERRUPT_DMA_COMPLETED;
-        data.DmaCompleted.SubmissionFenceId = (UINT)fence;
-        data.DmaCompleted.NodeOrdinal = (UINT)InterlockedCompareExchange(&wddm->SubmittedNode, 0, 0);
-        data.DmaCompleted.EngineOrdinal = 0;    // "for adapters that are not part of a link, always 0"
-        WddmReport(device, &data);
-    }
+        if (InterlockedExchange(&wddm->CompletionPending[node], 0) != 0)
+        {
+            fence = InterlockedCompareExchange(&wddm->SubmittedFence[node], 0, 0);
+            InterlockedExchange(&wddm->LastCompletedFence, fence);
+            RtlZeroMemory(&data, sizeof(data));
+            data.InterruptType = DXGK_INTERRUPT_DMA_COMPLETED;
+            data.DmaCompleted.SubmissionFenceId = (UINT)fence;
+            data.DmaCompleted.NodeOrdinal = (UINT)InterlockedCompareExchange(&wddm->SubmittedNode[node], 0, 0);
+            data.DmaCompleted.EngineOrdinal = 0;    // "for adapters that are not part of a link, always 0"
+            WddmReport(device, &data);
+        }
 
-    if (InterlockedExchange(&wddm->PreemptionPending, 0) != 0)
-    {
-        RtlZeroMemory(&data, sizeof(data));
-        data.InterruptType = DXGK_INTERRUPT_DMA_PREEMPTED;
-        data.DmaPreempted.PreemptionFenceId = (UINT)InterlockedCompareExchange(&wddm->PreemptionFence, 0, 0);
-        data.DmaPreempted.LastCompletedFenceId = (UINT)InterlockedCompareExchange(&wddm->LastCompletedFence, 0, 0);
-        data.DmaPreempted.NodeOrdinal = (UINT)InterlockedCompareExchange(&wddm->PreemptionNode, 0, 0);
-        data.DmaPreempted.EngineOrdinal = 0;
-        WddmReport(device, &data);
+        if (InterlockedExchange(&wddm->PreemptionPending[node], 0) != 0)
+        {
+            RtlZeroMemory(&data, sizeof(data));
+            data.InterruptType = DXGK_INTERRUPT_DMA_PREEMPTED;
+            data.DmaPreempted.PreemptionFenceId = (UINT)InterlockedCompareExchange(&wddm->PreemptionFence[node], 0, 0);
+            data.DmaPreempted.LastCompletedFenceId = (UINT)InterlockedCompareExchange(&wddm->LastCompletedFence, 0, 0);
+            data.DmaPreempted.NodeOrdinal = (UINT)InterlockedCompareExchange(&wddm->PreemptionNode[node], 0, 0);
+            data.DmaPreempted.EngineOrdinal = 0;
+            WddmReport(device, &data);
+        }
     }
 }
 
@@ -780,6 +918,19 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: submissions %ld physical + %ld virtual, %ld preemptions, last completed fence %ld",
              Wddm->Calls[WddmDdiSubmitCommand], Wddm->Calls[WddmDdiSubmitCommandVirtual],
              Wddm->Calls[WddmDdiPreemptCommand], Wddm->LastCompletedFence);
+    GuardLog("wddm summary: node 0 hardware: %ld submitted, %ld completed, %ld timeouts, %ld refused",
+             Wddm->HwSubmitted, Wddm->HwCompleted, Wddm->HwTimeouts, Wddm->HwRefused);
+    // ADR 0008 stage D (docs/design/paging-node.md section 7): node 1 exists in this line whether or not the
+    // gate is open - every counter stays 0 with it closed, same as every other stage-behind-a-gate counter here.
+    GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
+             Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
+             Wddm->PagingHwCompleted, Wddm->PagingHwTimeouts, Wddm->PagingHwRefused);
+    GuardLog("wddm summary: BuildPagingBuffer: %ld transfers, %ld fills, %ld bytes, %ld insufficient-buffer, "
+             "unsupported (not ready/no root/no translation/system memory/not contiguous) %ld/%ld/%ld/%ld/%ld",
+             Wddm->PagingTransfersBuilt, Wddm->PagingFillsBuilt, Wddm->PagingBytesMoved, Wddm->PagingInsufficientBuffer,
+             Wddm->PagingUnsupported[BC250PagingNotReady], Wddm->PagingUnsupported[BC250PagingNoRoot],
+             Wddm->PagingUnsupported[BC250PagingNoTranslation], Wddm->PagingUnsupported[BC250PagingSystemMemory],
+             Wddm->PagingUnsupported[BC250PagingNotContiguous]);
     GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
@@ -860,6 +1011,12 @@ void WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
+    // ADR 0008 stage D (docs/design/paging-node.md). Read once, like EnableGpuSubmit's own read in gfx.c: node 1's
+    // existence for this whole device start is decided here. gfx.c's own gate (GfxStart) decides separately
+    // whether GfxSubmitPaging itself may ever run; this one decides whether the table admits the node at all.
+    wddm->NodeCount = (GuardReadSetting(L"EnablePagingNode", 0) == 1) ? BC250_WDDM_NODE_COPY + 1u : BC250_WDDM_NODE_COUNT;
+    KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
+    KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeTimerEx(&wddm->VSyncTimer, SynchronizationTimer);
     // The one target this driver has. Every VidPN target is a child's UID and Bc250QueryChildRelations reports
     // exactly one child, so this is the only id a CRTC_VSYNC report or a GetScanLine question can carry. 0.7.1
@@ -907,6 +1064,16 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
             if (wddm->HwPending) KeDelayExecutionThread(KernelMode, FALSE, &tick);
         }
         if (waited != 0) GuardLog("wddm: stop waited %u ms for the packet in flight (%s)", waited, wddm->HwPending ? "STILL PENDING" : "done");
+
+        // ADR 0008 stage D: node 1's own packet in flight, waited for independently - it may still be on SDMA0's
+        // ring after node 0's has long finished (design note section 5).
+        for (waited = 0; waited < BC250_WDDM_SUBMIT_TIMEOUT_MS + 100 && wddm->PagingHwPending; waited += 10)
+        {
+            WddmGpuFencePaging(Device);
+            if (wddm->PagingHwPending) KeDelayExecutionThread(KernelMode, FALSE, &tick);
+        }
+        if (waited != 0) GuardLog("wddm: stop waited %u ms for node 1's packet in flight (%s)", waited,
+                                  wddm->PagingHwPending ? "STILL PENDING" : "done");
     }
 
     // Order matters, and this is the order:
@@ -927,7 +1094,9 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
 
     KeCancelTimer(&wddm->VSyncTimer);   // again, unconditionally: cheap, and it cannot be armed any more
     KeCancelTimer(&wddm->SubmitTimer);
+    KeCancelTimer(&wddm->PagingSubmitTimer);
     KeRemoveQueueDpc(&wddm->SubmitDpc);
+    KeRemoveQueueDpc(&wddm->PagingSubmitDpc);
     KeRemoveQueueDpc(&wddm->VSyncDpc);
     KeRemoveQueueDpc(&wddm->ReportDpc);
     KeFlushQueuedDpcs();
@@ -1070,6 +1239,11 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
 static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
 {
     DXGK_DRIVERCAPS* caps = (DXGK_DRIVERCAPS*)Query->pOutputData;
+    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+    // WddmStart never fails the start (it answers with Device->Wddm left NULL instead, like every other
+    // subsystem here), so a caps query can in principle land before or without it: the gate-closed node count
+    // is the safe answer then, exactly what every other node-count reader in this file falls back to.
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
 
     if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
     // The caller's buffer, not our sizeof: this driver is compiled at WDDM 2.0 and will run under a dxgkrnl that
@@ -1128,11 +1302,14 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // part has 8 GB of local memory to reach (facts M31). Unit A has no IOMMU either (facts M47).
     caps->MemoryManagementCaps.VirtualAddressingSupported = 1;
     caps->MemoryManagementCaps.GpuMmuSupported = 1;
-    caps->MemoryManagementCaps.PagingNode = BC250_WDDM_NODE_3D;
+    // ADR 0008 stage D (docs/design/paging-node.md section 6): with EnablePagingNode open, node 1 (SDMA0) is the
+    // paging node, exactly what ADR 0013 point 2 asks for; closed, paging still rides on node 0, byte-for-byte
+    // as before.
+    caps->MemoryManagementCaps.PagingNode = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;
 
-    // One node, and paging rides on it: that sidesteps PHYSICALADAPTERCAPS and halves the fence plumbing. The
-    // shared fence pair in BC250_WDDM is only correct at this value, and a C_ASSERT there binds the two.
-    caps->GpuEngineTopology.NbAsymetricProcessingNodes = BC250_WDDM_NODE_COUNT;
+    // nodeCount (1 with the gate closed, 2 open) replaces the old compile-time constant here; the six per-node
+    // fence fields in BC250_WDDM are arrays now for exactly this reason (design note section 5).
+    caps->GpuEngineTopology.NbAsymetricProcessingNodes = nodeCount;
 
     // Both zero means "use the entire available VA range", which is what we want while nothing reserves any of it.
     caps->InternalGpuVirtualAddressRangeStart = 0;
@@ -1265,16 +1442,29 @@ static NTSTATUS Bc250WddmGetNodeMetadata(_In_ const HANDLE hAdapter, UINT NodeOr
     BC250_WDDM* wddm = WddmOf(hAdapter);
     UINT node = NodeOrdinalAndAdapterIndex & 0xFFFF;
     UINT adapter = NodeOrdinalAndAdapterIndex >> 16;
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
 
     // "Must return STATUS_INVALID_PARAMETER for NodeOrdinal >= GetNumNodes(), and all calls for in-range ordinals
-    // must be successful." GetNumNodes is what DRIVERCAPS reported, so the bound is the same constant.
-    if (node >= BC250_WDDM_NODE_COUNT || adapter != 0) return STATUS_INVALID_PARAMETER;
+    // must be successful." GetNumNodes is what DRIVERCAPS reported, so the bound is the same value (ADR 0008
+    // stage D: wddm->NodeCount, not the compile-time constant, docs/design/paging-node.md section 6).
+    if (node >= nodeCount || adapter != 0) return STATUS_INVALID_PARAMETER;
 
     // At WDDM 2.0 the member after FriendlyName is a reserved UINT32, not DXGK_NODEMETADATA_FLAGS (that arrives at
     // WDDM 2.2); zeroing covers it either way.
     RtlZeroMemory(pGetNodeMetadata, sizeof(*pGetNodeMetadata));
-    pGetNodeMetadata->EngineType = DXGK_ENGINE_TYPE_3D;         // there is no compute engine type: compute rides on 3D
-    RtlStringCchCopyW(pGetNodeMetadata->FriendlyName, DXGK_MAX_METADATA_NAME_LENGTH, L"BC-250 GFX");
+    if (node == BC250_WDDM_NODE_COPY)
+    {
+        // ADR 0013: node 1, SDMA0, the paging node. GpuMmuSupported TRUE states a hardware fact (SDMA can be
+        // pointed at a VMID) - section 2 of the design note chooses not to use one, which is this build's policy,
+        // not something worth mis-declaring to dxgkrnl.
+        pGetNodeMetadata->EngineType = DXGK_ENGINE_TYPE_COPY;
+        RtlStringCchCopyW(pGetNodeMetadata->FriendlyName, DXGK_MAX_METADATA_NAME_LENGTH, L"BC-250 SDMA0");
+    }
+    else
+    {
+        pGetNodeMetadata->EngineType = DXGK_ENGINE_TYPE_3D;     // there is no compute engine type: compute rides on 3D
+        RtlStringCchCopyW(pGetNodeMetadata->FriendlyName, DXGK_MAX_METADATA_NAME_LENGTH, L"BC-250 GFX");
+    }
     pGetNodeMetadata->GpuMmuSupported = TRUE;
     pGetNodeMetadata->IoMmuSupported = FALSE;
     if (WddmFirstCalls(wddm, WddmDdiGetNodeMetadata)) GuardLog("wddm: GetNodeMetadata node %u adapter %u", node, adapter);
@@ -1312,10 +1502,18 @@ static DXGKDDI_CREATECONTEXT Bc250WddmCreateContext;
 static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKARG_CREATECONTEXT* pCreateContext)
 {
     BC250_WDDM_OBJECT* parent = WddmObject(hDevice, BC250_WDDM_MAGIC_DEVICE);
+    BC250_WDDM* parentWddm;
     BC250_WDDM_OBJECT* object;
+    UINT nodeCount;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
-    if (pCreateContext->NodeOrdinal != BC250_WDDM_NODE_3D) return STATUS_INVALID_PARAMETER;
+    parentWddm = (BC250_WDDM*)parent->Device->Wddm;
+    nodeCount = (parentWddm != NULL) ? parentWddm->NodeCount : BC250_WDDM_NODE_COUNT;
+    // ADR 0008 stage D: node 1 accepted only once wddm->NodeCount says it exists - one more value the check
+    // accepts, the same check otherwise (design note section 6).
+    if (pCreateContext->NodeOrdinal != BC250_WDDM_NODE_3D &&
+        !(pCreateContext->NodeOrdinal == BC250_WDDM_NODE_COPY && nodeCount > BC250_WDDM_NODE_COPY))
+        return STATUS_INVALID_PARAMETER;
     object = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_CONTEXT);
     if (object == NULL) return STATUS_INSUFFICIENT_RESOURCES;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
@@ -1346,8 +1544,12 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     if (pCreateContext->Flags.GdiContext && !pCreateContext->Flags.VirtualAddressing)
         GuardLog("wddm: CreateContext: a GDI context WITHOUT virtual addressing (flags 0x%08X) - unexpected", pCreateContext->Flags.Value);
     pCreateContext->ContextInfo.PatchLocationListSize = 0;
-    pCreateContext->ContextInfo.Caps.NoPatchingRequired = pCreateContext->Flags.VirtualAddressing ? 1u : 0u;
-    pCreateContext->ContextInfo.PagingCompanionNodeId = BC250_WDDM_NODE_3D;
+    // Unconditional (contract rule R37): the table has no DxgkDdiPatch and no patch-location list, so a context that
+    // said "patch me" would meet a 0x113 later; nothing here can patch, whatever the flags say.
+    pCreateContext->ContextInfo.Caps.NoPatchingRequired = 1;
+    // Matches DRIVERCAPS.MemoryManagementCaps.PagingNode above: node 1 once the gate names it the paging node,
+    // node 0 (today's answer) otherwise.
+    pCreateContext->ContextInfo.PagingCompanionNodeId = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;
 
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiCreateContext))
     {
@@ -1684,6 +1886,65 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(_In_ const HANDLE hAdapter, _In_ DXGK
     // Stage B: page table updates are carried out by the CPU, here and now (vidmm.c); the paging buffer stays empty.
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE)
         VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);
+
+    // ADR 0008 stage D (docs/design/paging-node.md): TRANSFER_VIRTUAL and FILL_VIRTUAL, node 1's own operations.
+    // New arms, not a change to the UPDATE_PAGE_TABLE one above: with the gate closed VidMm is never told node 1
+    // exists (WddmDriverCaps, Bc250WddmGetNodeMetadata), so by dxgkrnl's own contract it has no occasion to send
+    // either - written defensively anyway (section 6), through the same gfx.c gate (GfxPagingBuild answers
+    // BC250PagingNotReady, inertly, whenever Device->Gfx is NULL or the RUN escape has not reached stage 8).
+    //
+    // hSystemContext resolves to the same RootPhysical SetRootPageTable already recorded (design note section 2):
+    // both virtual addresses are the paging process's own, so one root serves both Source and Destination -
+    // TransferVirtual's own SourcePageTable/DestinationPageTable fields (for a transfer spanning two GPU MMU
+    // contexts) are not read by this cut, an open item stated rather than silently assumed away (section 8).
+    //
+    // Only STATUS_SUCCESS and STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER ever leave this function (the comment at
+    // its head): GfxPagingBuild's own STATUS_INVALID_PARAMETER answers (a malformed call this driver's own
+    // callers never produce) are folded into STATUS_SUCCESS here, exactly like every other "cannot happen but
+    // must not bugcheck" case in this file.
+    if (wddm != NULL && (pBuildPagingBuffer->Operation == DXGK_OPERATION_VIRTUAL_TRANSFER ||
+                         pBuildPagingBuffer->Operation == DXGK_OPERATION_VIRTUAL_FILL))
+    {
+        BOOLEAN fill = pBuildPagingBuffer->Operation == DXGK_OPERATION_VIRTUAL_FILL;
+        BC250_WDDM_OBJECT* systemContext = WddmObject(pBuildPagingBuffer->hSystemContext, BC250_WDDM_MAGIC_CONTEXT);
+        ULONGLONG root = (systemContext != NULL) ? systemContext->RootPhysical : 0;
+        ULONGLONG bytes = fill ? pBuildPagingBuffer->FillVirtual.FillSizeInBytes : pBuildPagingBuffer->TransferVirtual.TransferSizeInBytes;
+        ULONGLONG srcVa = fill ? 0 : pBuildPagingBuffer->TransferVirtual.SourceVirtualAddress;
+        ULONGLONG dstVa = fill ? pBuildPagingBuffer->FillVirtual.DestinationVirtualAddress : pBuildPagingBuffer->TransferVirtual.DestinationVirtualAddress;
+        ULONG pattern = fill ? pBuildPagingBuffer->FillVirtual.FillPattern : 0;
+        // Review 23 MUST-FIX: DmaSize is the WHOLE buffer (the DDI contract's own naming - "current operation
+        // offset in bytes from the start of the DMA buffer" for DmaBufferWriteOffset only makes sense against a
+        // fixed total), not what is left once earlier operations in this same accumulated buffer have already
+        // used DmaBufferWriteOffset bytes of it. Passing DmaSize itself as the room GfxPagingBuild may still
+        // write into let it copy past the end of dxgkrnl's own pDmaBuffer on any call after the first one packed
+        // into a shared buffer - masked today only because BC250_GFX_PAGING_SHADOW_BYTES happens to equal
+        // BC250_WDDM_PAGING_BUFFER_BYTES (nothing ties the two together, see the SHOULD-FIX on GfxPagingShadowBytes
+        // being dead code), not because this was actually safe.
+        ULONG dmaFree = (pBuildPagingBuffer->DmaBufferWriteOffset < pBuildPagingBuffer->DmaSize)
+                             ? pBuildPagingBuffer->DmaSize - pBuildPagingBuffer->DmaBufferWriteOffset : 0;
+        ULONG written = 0;
+        BC250_WDDM_PAGING_UNSUPPORTED unsupported = BC250PagingSupported;
+        NTSTATUS pagingStatus = GfxPagingBuild((BC250_DEVICE*)hAdapter, root, fill, srcVa, dstVa, bytes, pattern,
+                                               pBuildPagingBuffer->pDmaBuffer, pBuildPagingBuffer->DmaBufferWriteOffset,
+                                               dmaFree, &written, &unsupported);
+        if (pagingStatus == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
+        {
+            InterlockedIncrement(&wddm->PagingInsufficientBuffer);
+            pBuildPagingBuffer->MultipassOffset = 0;    // nothing of this operation was written yet: redo it whole
+            GuardLog("wddm: BuildPagingBuffer %s %llu bytes: insufficient buffer, %u free",
+                     fill ? "fill" : "transfer", bytes, pBuildPagingBuffer->DmaSize);
+            return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+        }
+        if (written != 0)
+        {
+            if (fill) InterlockedIncrement(&wddm->PagingFillsBuilt); else InterlockedIncrement(&wddm->PagingTransfersBuilt);
+            InterlockedExchangeAdd(&wddm->PagingBytesMoved, (LONG)(bytes > 0x7FFFFFFFull ? 0x7FFFFFFF : bytes));
+        }
+        else if (unsupported > BC250PagingSupported && unsupported < RTL_NUMBER_OF(wddm->PagingUnsupported))
+        {
+            InterlockedIncrement(&wddm->PagingUnsupported[unsupported]);
+        }
+    }
     return STATUS_SUCCESS;
 }
 
@@ -1699,6 +1960,18 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSubmitCommand))
         GuardLog("wddm: SubmitCommand fence %u node %u flags 0x%08X segment %u size %u", pSubmitCommand->SubmissionFenceId,
                  node, pSubmitCommand->Flags.Value, pSubmitCommand->DmaBufferSegmentId, pSubmitCommand->DmaBufferSize);
+    // ADR 0008 stage D (docs/design/paging-node.md sections 4 and 6): node 1's paging buffer, submitted through
+    // this DDI (DISPATCH_LEVEL, exactly - the whole reason node 1's own path exists), never through
+    // SubmitCommandVirtual's node-0 one. [Start, End) is the same coordinate space DmaBufferWriteOffset used
+    // while BuildPagingBuffer filled Gfx->PagingShadowMem at those same offsets (design note section 4a); the
+    // shadow, not DmaBufferPhysicalAddress, is what WddmSubmitPagingHardware actually reads.
+    if (node == BC250_WDDM_NODE_COPY && device->Wddm != NULL && ((BC250_WDDM*)device->Wddm)->NodeCount > BC250_WDDM_NODE_COPY &&
+        pSubmitCommand->DmaBufferSubmissionEndOffset > pSubmitCommand->DmaBufferSubmissionStartOffset &&
+        GfxPagingSubmitReady(device) &&
+        WddmSubmitPagingHardware(device, (BC250_WDDM*)device->Wddm, pSubmitCommand->DmaBufferSubmissionStartOffset,
+                                 pSubmitCommand->DmaBufferSubmissionEndOffset - pSubmitCommand->DmaBufferSubmissionStartOffset,
+                                 pSubmitCommand->SubmissionFenceId))
+        return STATUS_SUCCESS;
     WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
     return STATUS_SUCCESS;
 }
@@ -1718,8 +1991,12 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter,
     // Stage C. An empty DMA buffer (every Present of stage A's inert DDI) has nothing to run; one with bytes in it
     // goes to the ring if the GPU is up (EnableGpuSubmit, stage 8, IH) and the context has a root. Everything else
     // is completed in software as before. The header says PASSIVE_LEVEL, and gfx.c's lock needs <= APC_LEVEL.
-    if (pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 && device->Wddm != NULL &&
-        KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
+    // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a fixed VMID - node 1's
+    // own path (GfxSubmitPaging, SDMA0, no VMID) only exists behind Bc250WddmSubmitCommand (ADR 0008 stage D,
+    // design note section 6). A node-1 context reaching this DDI is unreached today (the UMD stub answers
+    // E_NOTIMPL before any context is created), and this guard is what keeps it that way if that ever changes.
+    if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
+        device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
         WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, pSubmitCommand, node))
         return STATUS_SUCCESS;
     WddmCompleteSoftware(device, pSubmitCommand->SubmissionFenceId, node);
@@ -1758,12 +2035,12 @@ static NTSTATUS Bc250WddmResetFromTimeout(_In_ const HANDLE hAdapter)
     // happens a hundred times is a different result from one where it happens once.
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm = WddmOf(hAdapter);
-    BOOLEAN pending = FALSE;
-    UINT fence = 0;
+    BOOLEAN pending = FALSE, pagingPending = FALSE;
+    UINT fence = 0, pagingFence = 0;
     KIRQL irql;
 
     (void)WddmFirstCalls(wddm, WddmDdiResetFromTimeout);
-    if (device != NULL) GfxSubmitFail(device);
+    if (device != NULL) { GfxSubmitFail(device); GfxPagingSubmitFail(device); }
     if (wddm != NULL)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
@@ -1776,10 +2053,23 @@ static NTSTATUS Bc250WddmResetFromTimeout(_In_ const HANDLE hAdapter)
             KeCancelTimer(&wddm->SubmitTimer);
             if ((LONG)fence > wddm->LastCompletedFence) InterlockedExchange(&wddm->LastCompletedFence, (LONG)fence);
         }
+        // ADR 0008 stage D: node 1's own channel, checked and forgotten independently of node 0's above - the
+        // scheduler's ResetFromTimeout is adapter-wide, not per-node, so both must be quiet before this returns
+        // (design note section 6).
+        if (wddm->PagingHwPending)
+        {
+            pagingPending = TRUE;
+            pagingFence = wddm->PagingHwFence;
+            wddm->PagingHwPending = FALSE;
+            KeCancelTimer(&wddm->PagingSubmitTimer);
+            if ((LONG)pagingFence > wddm->LastCompletedFence) InterlockedExchange(&wddm->LastCompletedFence, (LONG)pagingFence);
+        }
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
     if (pending) GuardLog("wddm: *** ResetFromTimeout with fence %u on the ring: ring path closed, fence dropped unreported ***", fence);
     else GuardLog("wddm: *** ResetFromTimeout: the scheduler timed this adapter out (nothing of ours was on the ring) ***");
+    if (pagingPending)
+        GuardLog("wddm: *** ResetFromTimeout with fence %u on the SDMA0 ring: node 1 ring path closed, fence dropped unreported ***", pagingFence);
     return STATUS_SUCCESS;
 }
 
@@ -1798,11 +2088,16 @@ static DXGKDDI_QUERYDEPENDENTENGINEGROUP Bc250WddmQueryDependentEngineGroup;
 static NTSTATUS Bc250WddmQueryDependentEngineGroup(_In_ const HANDLE hAdapter,
                                                    _Inout_ DXGKARG_QUERYDEPENDENTENGINEGROUP* pQueryDependentEngineGroup)
 {
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiQueryDependentEngineGroup))
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
+
+    if (WddmFirstCalls(wddm, WddmDdiQueryDependentEngineGroup))
         GuardLog("wddm: QueryDependentEngineGroup node %u engine %u", pQueryDependentEngineGroup->NodeOrdinal,
                  pQueryDependentEngineGroup->EngineOrdinal);
-    if (pQueryDependentEngineGroup->NodeOrdinal >= BC250_WDDM_NODE_COUNT) return STATUS_INVALID_PARAMETER;
-    // A reset of a node affects that node; with one node there is nobody else to name.
+    // ADR 0008 stage D: the bound is wddm->NodeCount, not the compile-time constant (design note section 6).
+    if (pQueryDependentEngineGroup->NodeOrdinal >= nodeCount) return STATUS_INVALID_PARAMETER;
+    // A reset of a node affects that node and nobody else: node 1 has its own hardware channel, independent of
+    // node 0's (section 5), so neither name is in the other's dependent mask.
     pQueryDependentEngineGroup->DependentNodeOrdinalMask = 1ull << pQueryDependentEngineGroup->NodeOrdinal;
     return STATUS_SUCCESS;
 }
@@ -1810,11 +2105,15 @@ static NTSTATUS Bc250WddmQueryDependentEngineGroup(_In_ const HANDLE hAdapter,
 static DXGKDDI_QUERYENGINESTATUS Bc250WddmQueryEngineStatus;
 static NTSTATUS Bc250WddmQueryEngineStatus(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_QUERYENGINESTATUS* pQueryEngineStatus)
 {
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiQueryEngineStatus))
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
+
+    if (WddmFirstCalls(wddm, WddmDdiQueryEngineStatus))
         GuardLog("wddm: QueryEngineStatus node %u engine %u", pQueryEngineStatus->NodeOrdinal,
                  pQueryEngineStatus->EngineOrdinal);
-    if (pQueryEngineStatus->NodeOrdinal >= BC250_WDDM_NODE_COUNT) return STATUS_INVALID_PARAMETER;
-    // Stage A completes every fence in software, in the DPC that follows the submit: the "engine" cannot stall.
+    if (pQueryEngineStatus->NodeOrdinal >= nodeCount) return STATUS_INVALID_PARAMETER;
+    // Stage A completes every fence in software, in the DPC that follows the submit (node 1 too, once its own
+    // hardware channel retires one): the "engine" cannot stall either way.
     pQueryEngineStatus->EngineStatus.Value = 0;
     pQueryEngineStatus->EngineStatus.Responsive = 1;
     return STATUS_SUCCESS;
@@ -1871,16 +2170,21 @@ static NTSTATUS Bc250WddmCalibrateGpuClock(_In_ const HANDLE hAdapter, _In_ UINT
 {
     LARGE_INTEGER frequency;
     LARGE_INTEGER counter = KeQueryPerformanceCounter(&frequency);
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
 
     UNREFERENCED_PARAMETER(EngineOrdinal);
-    if (NodeOrdinal != BC250_WDDM_NODE_3D) return STATUS_INVALID_PARAMETER;
+    // ADR 0008 stage D: node 1 accepted once wddm->NodeCount says it exists (design note section 6); its answer
+    // is the same shape as node 0's, below - the CPU counter, since node 1 has no GPU timestamp of its own either.
+    if (NodeOrdinal != BC250_WDDM_NODE_3D && !(NodeOrdinal == BC250_WDDM_NODE_COPY && nodeCount > BC250_WDDM_NODE_COPY))
+        return STATUS_INVALID_PARAMETER;
     // Stage A's engine is the CPU, so its clock is the CPU's: one counter, read once, reported as both. A GPU
     // timestamp of our own arrives with the first real submission.
     RtlZeroMemory(pClockCalibration, sizeof(*pClockCalibration));
     pClockCalibration->GpuFrequency = (ULONGLONG)frequency.QuadPart;
     pClockCalibration->GpuClockCounter = (ULONGLONG)counter.QuadPart;
     pClockCalibration->CpuClockCounter = (ULONGLONG)counter.QuadPart;
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiCalibrateGpuClock))
+    if (WddmFirstCalls(wddm, WddmDdiCalibrateGpuClock))
         GuardLog("wddm: CalibrateGpuClock node %u, frequency %llu", NodeOrdinal, pClockCalibration->GpuFrequency);
     return STATUS_SUCCESS;
 }

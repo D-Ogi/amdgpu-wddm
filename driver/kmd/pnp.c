@@ -193,6 +193,9 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
 {
     IhDpc((BC250_DEVICE*)MiniportDeviceContext);
     WddmGpuFence((BC250_DEVICE*)MiniportDeviceContext); // stage C: the vectors are consumed, the fence memory says whose they were
+    // ADR 0008 stage D: node 1's own poll, unconditional like the one above - which vector woke this DPC does not
+    // matter to either read, only whether the fence slot it polls now holds the value it is waiting for.
+    WddmGpuFencePaging((BC250_DEVICE*)MiniportDeviceContext);
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
 }
 

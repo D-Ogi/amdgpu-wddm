@@ -31,6 +31,7 @@
 #include "bc250_gmc.h"
 #include "bc250_gfx.h"
 #include "bc250_sdma.h"
+#include "bc250_sdma_paging.h"
 #include "bc250_dispatch.h"
 #include "bc250_nbio.h"
 #include "bc250_irq.h"
@@ -85,6 +86,17 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 #define BC250_SUBMIT_FENCE_SLOT 10u
 #define BC250_SUBMIT_POLL_US 500000ul
 
+// ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node.
+// Its own fence slot on the SDMA fence page (BC250_SDMA_FENCE_SLOTS = 16, bc250_sdma.h): 0/1 are the ring
+// tests', 2/3 are SdmaCopyEscape's and GfxFenceEscape's SDMA arm's - one past what the escapes use.
+#define BC250_PAGING_FENCE_SLOT 4u
+#define BC250_PAGING_POLL_US 500000ul       // node 1's own watchdog budget, same shape as BC250_SUBMIT_POLL_US
+// The shadow buffer BuildPagingBuffer fills and SubmitCommand reads back at DISPATCH_LEVEL (design note section
+// 4). Matches wddm.c's own BC250_WDDM_PAGING_BUFFER_BYTES (0x10000, wddm.c:57): the driver never advertises a
+// paging buffer larger than what its own shadow can hold, so dxgkrnl's MultipassOffset is the answer to "too
+// big for this call", never a silent truncation on this driver's part.
+#define BC250_GFX_PAGING_SHADOW_BYTES 0x10000ul
+
 typedef struct _BC250_GFX {
     BC250_SEQUENCE Sequence;
     BOOLEAN SetUp;                  // bc250_gfx_setup and bc250_sdma_setup have allocated
@@ -92,7 +104,11 @@ typedef struct _BC250_GFX {
     BOOLEAN FencePage;              // bc250_gfx_fence_page_alloc has allocated
     BOOLEAN SdmaFencePage;          // bc250_sdma_fence_page_alloc has
     BOOLEAN Dispatch;               // bc250_gfx_dispatch_setup has
-    ULONG FenceSeq;                 // last fence value emitted
+    // volatile LONG, not ULONG: ADR 0008 stage D added a writer (GfxSubmitPaging) that runs at DISPATCH_LEVEL,
+    // outside GartLock - review 23 MUST-FIX. Every increment goes through InterlockedIncrement now, so the
+    // PASSIVE_LEVEL/GartLock-serialized writers (GfxSubmitIb, GfxFenceEscape, SdmaCopyEscape) and the new
+    // DISPATCH_LEVEL one share the counter safely instead of racing a plain "++" across two IRQL domains.
+    volatile LONG FenceSeq;         // last fence value emitted
     // Per BC250_FENCE_RING_*: the value a submission that timed out still owes its slot, 0 when none. The shim's
     // amdgpu_ring_alloc() does not look at the read pointer (upstream's scheduler bounds what is in flight); here the
     // synchronous poll does, and a timeout would break that. A ring that owes a fence takes no new submission.
@@ -120,6 +136,20 @@ typedef struct _BC250_GFX {
     // allocation twice.
     BOOLEAN SdmaCopyRegions;
     struct bc250_mem SdmaCopySrc, SdmaCopyDst;
+
+    // ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ----
+    BOOLEAN PagingGate;                   // EnablePagingNode, read once at GfxStart
+    BOOLEAN PagingReady;                  // GfxEscape's RUN arm has captured PagingRing/PagingDevicePtr/PagingShadow
+    struct amdgpu_ring* PagingRing;       // &adev->sdma.instance[0].ring: a pointer into the live, persistent adev,
+                                           // never a copy (section 4: forking .wptr into two counters is the bug this avoids)
+    struct amdgpu_device* PagingDevicePtr; // the same adev; GfxPagingFenceArrived reads bc250_sdma_fence_read through it,
+                                           // with no lock, the same shape as SubmitAdev above
+    KSPIN_LOCK Sdma0RingLock;             // every direct writer of the live SDMA0 ring takes this narrowly (section 4)
+    BOOLEAN PagingShadowAlloc;            // bc250_shim_mem_alloc(BC250_MEM_GTT) has allocated PagingShadowMem
+    struct bc250_mem PagingShadowMem;     // BC250_GFX_PAGING_SHADOW_BYTES: BuildPagingBuffer's own copy of the packets
+    volatile LONG PagingSubmitFailed;     // sticky, like SubmitFailed, but independent: node 1 fails on its own hardware
+    volatile LONG PagingSubmitInFlight;   // one in flight, like SubmitInFlight
+    ULONG PagingSubmitSeq;
 } BC250_GFX;
 
 // sdma_v5_0_gfx_resume_instance() ends with amdgpu_ring_test_helper(ring); the shim leaves that to the miniport, because an
@@ -177,6 +207,12 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 {
     if (!Gfx->SetUp) return;
     Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
+    // Same reasoning, first among the paging fields: GfxPagingFenceArrived and GfxSubmitReady's node-1 twin read
+    // PagingReady/PagingDevicePtr/PagingRing with no lock (design note section 4). A stage-7-and-back-to-8 re-run
+    // must never let a DISPATCH_LEVEL caller find a stale ring or adev pointer here.
+    Gfx->PagingReady = FALSE;
+    Gfx->PagingRing = NULL;
+    Gfx->PagingDevicePtr = NULL;
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
     if (Gfx->IbPage) { bc250_gfx_ib_page_free(Adev); Gfx->IbPage = FALSE; }
@@ -185,6 +221,11 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
         bc250_sdma_copy_regions_free(Adev, &Gfx->SdmaCopySrc, &Gfx->SdmaCopyDst);
         Gfx->SdmaCopyRegions = FALSE;
     }
+    if (Gfx->PagingShadowAlloc)
+    {
+        bc250_shim_mem_free(Adev, &Gfx->PagingShadowMem);
+        Gfx->PagingShadowAlloc = FALSE;
+    }
     RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
     RtlZeroMemory(Gfx->RingOwesSlot, sizeof(Gfx->RingOwesSlot));
     // The fence page is gone, so nothing may read a slot in it any more, and the rings are gone, so no VMID root this
@@ -192,6 +233,9 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     // the whole device start by design, and a teardown is not a reason to trust the path again.
     Gfx->SubmitSeq = 0;
     InterlockedExchange(&Gfx->SubmitInFlight, 0);
+    // PagingSubmitFailed is left exactly like SubmitFailed above, for the same reason and on its own hardware.
+    Gfx->PagingSubmitSeq = 0;
+    InterlockedExchange(&Gfx->PagingSubmitInFlight, 0);
     RtlZeroMemory(Gfx->VmidRoot, sizeof(Gfx->VmidRoot));
     if (Gfx->Dispatch) { bc250_gfx_dispatch_teardown(Adev); Gfx->Dispatch = FALSE; }
     bc250_sdma_teardown(Adev);
@@ -341,6 +385,30 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
                 // are not entered into the GART table (gpumem.c).
                 GpuMemRelease(Device, &gfx->Sequence, TRUE);
             }
+            // ADR 0008 stage D (docs/design/paging-node.md section 4): the first RUN to reach stage 8 with the
+            // gate open captures what GfxSubmitPaging needs at DISPATCH_LEVEL - a live ring pointer and the
+            // shadow buffer - the same place and the same reasoning as ih.c's DpcAdev (ih.c:319-324). Once, not
+            // on every call: PagingReady stays set until the next TearDown, which clears it first of everything
+            // (matching SubmitAdev's own comment above).
+            else if (gfx->PagingGate && !gfx->PagingReady && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS &&
+                     !gfx->Failed && NT_SUCCESS(gfx->Sequence.Fault))
+            {
+                if (!gfx->PagingShadowAlloc)
+                {
+                    result = bc250_shim_mem_alloc(adev, BC250_MEM_GTT, BC250_GFX_PAGING_SHADOW_BYTES, AMDGPU_GPU_PAGE_SIZE,
+                                                  &gfx->PagingShadowMem);
+                    if (result == 0 && gfx->PagingShadowMem.cpu != NULL) gfx->PagingShadowAlloc = TRUE;
+                    else GuardLog("gfx: paging shadow allocation failed, result %d - node 1 stays inert this device start", result);
+                }
+                if (gfx->PagingShadowAlloc)
+                {
+                    gfx->PagingRing = &adev->sdma.instance[0].ring;
+                    gfx->PagingDevicePtr = adev;
+                    gfx->PagingReady = TRUE;
+                    GuardLog("gfx: paging node ready, SDMA0 ring at doorbell 0x%X, shadow %lu bytes",
+                             gfx->PagingRing->doorbell_index, BC250_GFX_PAGING_SHADOW_BYTES);
+                }
+            }
             break;
 
         case BC250_GFX_OP_FINI:
@@ -472,8 +540,8 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         Gfx->VmidRoot[Vmid] = RootPhysical;
     }
 
-    seq = ++Gfx->FenceSeq;
-    if (seq == 0) seq = ++Gfx->FenceSeq;        // 0 means "nothing in flight" to GfxFenceArrived
+    seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);
+    if (seq == 0) seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);  // 0 means "nothing in flight" to GfxFenceArrived
     // Both set before the doorbell: the end-of-pipe interrupt can arrive inside bc250_gfx_submit_ib().
     Gfx->SubmitSeq = seq;
     Gfx->SubmitAdev = Adev;
@@ -549,11 +617,18 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
     LARGE_INTEGER frequency, start;
     ULONG i, waited, vram, gtt, flags = Data->Interrupt == BC250_FENCE_MODE_INTERRUPT ? AMDGPU_FENCE_FLAG_INT : 0;
     BOOLEAN sdma = Data->Ring >= BC250_FENCE_RING_SDMA0;
+    // ADR 0008 stage D: SDMA0 specifically, not "any SDMA ring" - node 1 only ever touches instance 0
+    // (docs/design/paging-node.md section 4), so only this ring's escape traffic needs Sdma0RingLock.
+    BOOLEAN sdma0 = Data->Ring == BC250_FENCE_RING_SDMA0;
     BOOLEAN dispatch = Data->Interrupt == BC250_FENCE_MODE_DISPATCH;
     BOOLEAN compute = Data->Ring >= BC250_FENCE_RING_COMPUTE0 && Data->Ring < BC250_FENCE_RING_COMPUTE0 + 8;
     BOOLEAN ib = Data->Interrupt == BC250_FENCE_MODE_IB;            // the driver's own ring-test IB, VMID 0
     BOOLEAN ibAt = Data->Interrupt == BC250_FENCE_MODE_IB_AT;       // the caller's IB, through GfxSubmitIb
     ULONG slot = sdma ? 2 + (Data->Ring - BC250_FENCE_RING_SDMA0) : Data->Ring;     // SDMA slots 0 and 1 are the ring tests'
+    // Acquired and released under the same "if (sdma0)" each time (two call sites below), so the two are always
+    // paired at run time; the initializer is only to satisfy /W4's flow analysis, which does not correlate two
+    // separate "if" statements testing the same variable.
+    KIRQL sdmaIrql = PASSIVE_LEVEL;
     long result = 0;
 
     Data->Version = BC250_KMD_VERSION;
@@ -637,7 +712,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
         {
             // The M6 exit criterion: ACQUIRE_MEM, libdrm's 18 packets, a partial flush and a fence, straight into the
             // compute ring; then the destination is read back, the part behind the last workgroup included.
-            ULONG seq = ++gfx->FenceSeq;
+            ULONG seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
             u64 address = bc250_gfx_fence_addr(adev, slot);
             u32 bad = 0;
 
@@ -668,7 +743,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
             // alloc, emit, commit and poll the modes above use, with one PACKET3_INDIRECT_BUFFER in front of the
             // fence. None of GfxSubmitIb's policy is involved, so this runs before EnableGpuSubmit is ever opened and
             // before stage 8: what it asks is only whether the CP fetches a buffer it was pointed at.
-            ULONG seq = ++gfx->FenceSeq;
+            ULONG seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
             u64 address = bc250_gfx_fence_addr(adev, slot);
             u32 dwords = 0;
 
@@ -732,7 +807,23 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
         if (NT_SUCCESS(status) && Data->Interrupt == BC250_FENCE_MODE_RING_TEST)
         {
             // sdma_v5_0_ring_test_ring(): one WRITE_LINEAR of 0xDEADBEEF into the engine's scratch slot, polled by the shim.
-            result = bc250_sdma_ring_test(ring);
+            // Sdma0RingLock: unlike StageSdma's own ring-test calls (bring-up only, before node 1 can ever be
+            // ready), this escape is reachable at any time after stage 7, so it can race a node-1 submission.
+            // Review 23 MUST-FIX: only the push (bc250_sdma_ring_test_submit) goes under the lock, narrowly, the
+            // same way the signal_fence/copy_test call sites below already do it - the original single call
+            // held the lock across bc250_sdma_ring_test's own internal poll too, up to adev->usec_timeout
+            // (100 ms) of KeStallExecutionProcessor at DISPATCH_LEVEL, far longer than a spinlock should ever
+            // be held and inconsistent with this file's own pattern two call sites down.
+            if (sdma0)
+            {
+                volatile u32* slotCpu = NULL;
+
+                KeAcquireSpinLock(&gfx->Sdma0RingLock, &sdmaIrql);
+                result = bc250_sdma_ring_test_submit(ring, &slotCpu);
+                KeReleaseSpinLock(&gfx->Sdma0RingLock, sdmaIrql);
+                if (result == 0) result = bc250_sdma_ring_test_wait(adev, slotCpu);
+            }
+            else result = bc250_sdma_ring_test(ring);
             Data->LastSeq = 0xDEADBEEF;
             Data->LastValue = (unsigned long)bc250_sdma_fence_read(adev, Data->Ring - BC250_FENCE_RING_SDMA0);
             if (result == 0) Data->Completed = 1;
@@ -741,12 +832,14 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
         for (i = 0; NT_SUCCESS(status) && !dispatch && !ib && !ibAt && Data->Interrupt != BC250_FENCE_MODE_RING_TEST && i < Data->Count; i++)
         {
             LARGE_INTEGER one = KeQueryPerformanceCounter(NULL);
-            ULONG seq = ++gfx->FenceSeq, took;
+            ULONG seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq), took;
             u64 address = sdma ? bc250_sdma_fence_addr(adev, slot) : bc250_gfx_fence_addr(adev, slot);
 
             // The whole call holds GartLock and stalls: a run of slow fences ends here, not after Count timeouts.
             if (address == 0 || Microseconds(start, frequency) > BC250_FENCE_BUDGET_US) { result = -62; break; }
+            if (sdma0) KeAcquireSpinLock(&gfx->Sdma0RingLock, &sdmaIrql);
             result = sdma ? bc250_sdma_signal_fence(ring, address, seq, flags) : bc250_gfx_signal_fence(ring, address, seq, flags);
+            if (sdma0) KeReleaseSpinLock(&gfx->Sdma0RingLock, sdmaIrql);
             if (result != 0 || !NT_SUCCESS(gfx->Sequence.Fault)) break;
             Data->LastSeq = seq;
             for (waited = 0; waited < BC250_FENCE_TIMEOUT_US; waited += 10)
@@ -821,6 +914,7 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
     LARGE_INTEGER frequency, start = { 0 };
     ULONG bytes, i, waited, vram, gtt;
     u32 seq = 0;
+    KIRQL sdmaIrql;
     long result = 0;
 
     Data->Version = BC250_KMD_VERSION;
@@ -896,9 +990,13 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
                 for (i = 0; i < bytes; i++) WRITE_REGISTER_UCHAR(&dst[i], 0xEEu);
 
                 start = KeQueryPerformanceCounter(NULL);
-                seq = ++gfx->FenceSeq;
+                seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
+                // Sdma0RingLock: this escape always names BC250_FENCE_RING_SDMA0 (FenceRing() call above), the
+                // same physical ring node 1 submits to (design note section 4).
+                KeAcquireSpinLock(&gfx->Sdma0RingLock, &sdmaIrql);
                 result = bc250_sdma_copy_test(ring, gfx->SdmaCopySrc.mc, gfx->SdmaCopyDst.mc, bytes,
                                               BC250_SDMACOPY_PATTERN, fenceAddr, seq, 0);
+                KeReleaseSpinLock(&gfx->Sdma0RingLock, sdmaIrql);
                 if (result == 0 && NT_SUCCESS(gfx->Sequence.Fault))
                 {
                     Data->LastSeq = seq;
@@ -949,6 +1047,239 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
     Data->Result = result;
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+// ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ---------------------------
+//
+// BuildPagingBuffer (PASSIVE_LEVEL, under GartLock, like GfxSubmitIb) turns one paging operation into SDMA
+// packets through the same emitters SdmaCopyEscape already proved (M95): GfxPagingBuild. SubmitCommand
+// (DISPATCH_LEVEL, no GartLock, no adev->backend) pushes the bytes GfxPagingBuild left in the shadow onto the
+// live SDMA0 ring: GfxSubmitPaging. The two meet only through Gfx->PagingShadowMem and Gfx->PagingRing/
+// PagingDevicePtr, both set up once (GfxEscape's RUN arm, below) and read without a lock at DISPATCH_LEVEL,
+// exactly as ih.c's DpcAdev is (design note section 4).
+
+BOOLEAN GfxPagingNodeGate(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+
+    return gfx != NULL && gfx->PagingGate;
+}
+
+ULONG GfxPagingShadowBytes(void)
+{
+    return BC250_GFX_PAGING_SHADOW_BYTES;
+}
+
+BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+
+    // The node-1 twin of GfxSubmitReady: gated, set up, not failed, nothing outstanding, and PagingReady - the
+    // RUN escape has reached stage 8 with the gate open and captured a live ring to write to.
+    return gfx != NULL && gfx->PagingGate && gfx->SetUp && !gfx->Failed && gfx->PagingSubmitFailed == 0 &&
+           gfx->PagingSubmitInFlight == 0 && gfx->PagingReady;
+}
+
+void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+
+    if (gfx == NULL) return;
+    // Sticky, once, independent of node 0's own SubmitFailed (GfxSubmitFail): the two nodes fail on their own
+    // hardware (design note section 5). The write pointer is left where it stands, for the same reason
+    // GfxSubmitFail leaves node 0's: M59/M60 say a hardware pointer only counts up.
+    if (InterlockedExchange(&gfx->PagingSubmitFailed, 1) == 0)
+        GuardLog("gfx: paging submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
+                 gfx->PagingSubmitSeq,
+                 gfx->PagingDevicePtr != NULL ? (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) : 0);
+}
+
+BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+
+    // One read of a GTT page SDMA0 writes, no register, no lock, no allocation - the node-1 twin of
+    // GfxFenceArrived. PagingDevicePtr is only ever non-NULL between GfxEscape's capture and the teardown that
+    // frees the fence page, and pnp.c drains ih.c's DPCs before that teardown runs, exactly as SubmitAdev's own
+    // comment states.
+    if (gfx == NULL || gfx->PagingDevicePtr == NULL || Seq == 0) return FALSE;
+    if ((ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) != Seq) return FALSE;
+    if (gfx->PagingSubmitSeq == Seq) InterlockedExchange(&gfx->PagingSubmitInFlight, 0);
+    return TRUE;
+}
+
+// PASSIVE_LEVEL, under GartLock (VidMmTranslate's own IRQL check enforces this). Verifies that [Va, Va+Bytes)
+// resolves to one physically contiguous run before GfxPagingBuild trusts Physical0 (the translation of Va
+// itself) for the whole range: VidMmTranslate resolves one 4 KB page at a time (bc250_pte_fields, PAGE_SHIFT),
+// and a GPU VA range backed by VidMm's own page tables has no reason to stay physically contiguous past the
+// first page - review 23 MUST-FIX: GfxPagingBuild used to translate only Va and hand the whole Bytes span to
+// bc250_sdma_paging_copy/fill as if it were, which corrupts memory the moment a multi-page TRANSFER_VIRTUAL/
+// FILL_VIRTUAL lands on a fragmented VRAM allocation. Answers FALSE (refuse to build, not build wrong) rather
+// than attempt to split one operation into several packets - out of scope for this cut, same as the
+// system-memory limit section 2 already states plainly instead of hiding.
+static BOOLEAN PagingRangeContiguous(ULONGLONG RootPhysical, ULONGLONG Va, ULONGLONG Physical0, ULONGLONG Bytes)
+{
+    ULONGLONG boundary;
+
+    for (boundary = (Va & ~((ULONGLONG)PAGE_SIZE - 1)) + PAGE_SIZE; boundary < Va + Bytes; boundary += PAGE_SIZE)
+    {
+        ULONGLONG physical = 0;
+        BOOLEAN system = FALSE;
+
+        if (!VidMmTranslate(RootPhysical, boundary, &physical, &system) || system) return FALSE;
+        if (physical != Physical0 + (boundary - Va)) return FALSE;
+    }
+    return TRUE;
+}
+
+// PASSIVE_LEVEL, under GartLock, with a live adev (DXGKARG_BUILDPAGINGBUFFER is a paging-process operation, not
+// a submission: wddm.c calls this the same way it calls VidMmUpdatePageTable today, GartDevice already open).
+//
+// RootPhysical names the paging process's root (wddm.c resolves hSystemContext to it, design note section 2);
+// Fill selects DXGK_OPERATION_VIRTUAL_FILL (SrcVa/FillPattern) over DXGK_OPERATION_VIRTUAL_TRANSFER (SrcVa,
+// DstVa). Both virtual addresses are resolved to physical with VidMmTranslate before any packet is emitted: no
+// VMID is ever pointed at anything for this path (design note section 2). DmaBuffer/DmaBufferOffset/
+// DmaBufferFree describe dxgkrnl's own pDmaBuffer at the caller's DmaBufferWriteOffset, exactly as wddm.c will
+// pass them; this function writes the same bytes there and into Gfx->PagingShadowMem at the same offset, so
+// that GfxSubmitPaging can find them later without ever dereferencing pDmaBuffer's physical address.
+//
+// The packet itself comes from driver/shim/bc250_sdma_paging.c (ADR 0013), not from this function: that file
+// is the host-testable half (driver/shim/test/paging_packets.c checks it dword for dword against
+// bc250_sdma_emit_copy_linear()/emit_fill(), M95, plus the room check below), and this one supplies only what
+// that file cannot have - the physical addresses and the shadow buffer to write them into.
+NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
+                        ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
+                        ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
+                        _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+    ULONGLONG srcPhysical = 0, dstPhysical = 0;
+    BOOLEAN srcSystem = FALSE, dstSystem = FALSE;
+    unsigned int budget, written = 0;
+    u32* shadow;
+    int result;
+
+    *DwordsWritten = 0;
+    *Unsupported = BC250PagingSupported;
+    if (gfx == NULL || Bytes == 0 || Bytes > 0xFFFFFFFFu) return STATUS_INVALID_PARAMETER;
+    if (!gfx->PagingReady) { *Unsupported = BC250PagingNotReady; return STATUS_SUCCESS; }
+
+    // hSystemContext's root: RootPhysical is 0 when wddm.c found no BC250_WDDM_CONTEXT to resolve it against.
+    if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; return STATUS_SUCCESS; }
+
+    if (!VidMmTranslate(RootPhysical, DstVa, &dstPhysical, &dstSystem)) { *Unsupported = BC250PagingNoTranslation; return STATUS_SUCCESS; }
+    if (!Fill)
+    {
+        if (!VidMmTranslate(RootPhysical, SrcVa, &srcPhysical, &srcSystem)) { *Unsupported = BC250PagingNoTranslation; return STATUS_SUCCESS; }
+    }
+    // Section 2's stated limit: no MC mapping exists for a page VidMm resolved to system memory unless this
+    // driver itself allocated it through bc250_shim_mem_alloc(BC250_MEM_GTT, ...). Answered inertly, not refused:
+    // dxgkrnl still gets STATUS_SUCCESS for an operation this cut does not build.
+    if (dstSystem || (!Fill && srcSystem)) { *Unsupported = BC250PagingSystemMemory; return STATUS_SUCCESS; }
+
+    // Review 23 MUST-FIX: one COPY_LINEAR/CONST_FILL packet covers [dstPhysical, dstPhysical+Bytes) (and, for a
+    // transfer, [srcPhysical, srcPhysical+Bytes)) as one physically linear run. dstPhysical/srcPhysical are only
+    // proven for the first page Va names; every further page this operation's Bytes reaches must be confirmed to
+    // continue that run before a packet is built, or a non-contiguous allocation silently corrupts memory instead
+    // of just answering slowly.
+    if (!PagingRangeContiguous(RootPhysical, DstVa, dstPhysical, Bytes) ||
+        (!Fill && !PagingRangeContiguous(RootPhysical, SrcVa, srcPhysical, Bytes)))
+    {
+        *Unsupported = BC250PagingNotContiguous;
+        return STATUS_SUCCESS;
+    }
+
+    if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_SHADOW_BYTES) return STATUS_INVALID_PARAMETER;
+
+    // budget: the smaller of dxgkrnl's own remaining DmaBufferFree and the shadow's - bc250_sdma_paging_copy/
+    // fill's own room check (paging_packets.c's "insufficient buffer" cases) is what turns either one running
+    // out into BC250_SDMA_PAGING_INSUFFICIENT, exactly as the task asks (design note section 4a).
+    budget = (unsigned int)min((BC250_GFX_PAGING_SHADOW_BYTES - DmaBufferOffset) / 4u, DmaBufferFree / 4u);
+    shadow = (u32*)((PUCHAR)gfx->PagingShadowMem.cpu + DmaBufferOffset);
+    result = Fill ? bc250_sdma_paging_fill(shadow, budget, dstPhysical, FillPattern, (unsigned int)Bytes, &written)
+                  : bc250_sdma_paging_copy(shadow, budget, srcPhysical, dstPhysical, (unsigned int)Bytes, &written);
+    if (result == BC250_SDMA_PAGING_INSUFFICIENT) return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    if (result != BC250_SDMA_PAGING_OK) return STATUS_INVALID_PARAMETER;
+
+    // dxgkrnl's own buffer gets the same bytes, at the same offset: the documented contract (VidMm owns
+    // pDmaBuffer and may inspect it), even though GfxSubmitPaging never reads it back from there.
+    RtlCopyMemory((PUCHAR)DmaBuffer + DmaBufferOffset, shadow, (SIZE_T)written * 4u);
+    *DwordsWritten = (ULONG)written;
+    GuardLog("gfx: paging %s %llu bytes at 0x%llX -> 0x%llX physical, %u dwords at shadow offset 0x%lX",
+             Fill ? "fill" : "transfer", Bytes, srcPhysical, dstPhysical, written, DmaBufferOffset);
+    return STATUS_SUCCESS;
+}
+
+// DISPATCH_LEVEL, no GartLock, no sequence, no adev->backend (design note section 4b). Pushes
+// [ShadowOffset, ShadowOffset + ByteCount) of Gfx->PagingShadowMem onto the live SDMA0 ring with an
+// interrupting fence, then rings the doorbell through GpuMemDoorbellWrite - never through
+// amdgpu_ring_commit()/bc250_shim_wdoorbell64(), which need a backend this level does not have. One
+// submission in flight, exactly as GfxSubmitIb's SubmitIbLocked.
+NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG ByteCount, _Out_ ULONG* Seq)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+    struct amdgpu_ring* ring;
+    KIRQL irql;
+    ULONG dwords, count, seq;
+    u64 fenceAddr, wptrBytes;
+    int result;
+
+    *Seq = 0;
+    if (gfx == NULL) return STATUS_DEVICE_NOT_READY;
+    if (gfx->PagingSubmitFailed) return STATUS_DEVICE_HARDWARE_ERROR;
+    if (!GfxPagingSubmitReady(Device)) return STATUS_DEVICE_BUSY;
+    if (ByteCount == 0 || (ByteCount & 3) != 0 || (ShadowOffset & 3) != 0 ||
+        (ULONGLONG)ShadowOffset + ByteCount > BC250_GFX_PAGING_SHADOW_BYTES)
+        return STATUS_INVALID_PARAMETER;
+
+    if (InterlockedCompareExchange(&gfx->PagingSubmitInFlight, 1, 0) != 0) return STATUS_DEVICE_BUSY;
+
+    ring = gfx->PagingRing;
+    dwords = ByteCount / 4u;
+    fenceAddr = bc250_sdma_fence_addr(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT);
+    if (fenceAddr == 0)
+    {
+        InterlockedExchange(&gfx->PagingSubmitInFlight, 0);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    // InterlockedIncrement, not "++": review 23 MUST-FIX. This runs at DISPATCH_LEVEL, outside GartLock, sharing
+    // gfx->FenceSeq with GfxSubmitIb/GfxFenceEscape/SdmaCopyEscape, which only ever ran serialized by GartLock
+    // before this path existed - a plain "++" here could race one of those on another CPU and tear the counter.
+    seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
+    if (seq == 0) seq = (ULONG)InterlockedIncrement(&gfx->FenceSeq);
+
+    KeAcquireSpinLock(&gfx->Sdma0RingLock, &irql);
+    count = dwords + bc250_sdma_fence_size(ring, AMDGPU_FENCE_FLAG_INT);
+    result = amdgpu_ring_alloc(ring, count);
+    if (result == 0)
+    {
+        amdgpu_ring_write_multiple(ring, (const u32*)((PUCHAR)gfx->PagingShadowMem.cpu + ShadowOffset), (int)dwords);
+        result = bc250_sdma_emit_fence(ring, fenceAddr, seq, AMDGPU_FENCE_FLAG_INT);
+    }
+    if (result != 0)
+    {
+        amdgpu_ring_undo(ring);
+        KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
+        InterlockedExchange(&gfx->PagingSubmitInFlight, 0);
+        GuardLog("gfx: paging submit of %lu dwords at shadow offset 0x%lX refused, result %d", dwords, ShadowOffset, result);
+        return STATUS_INVALID_PARAMETER;
+    }
+    // amdgpu_ring_commit(), minus the doorbell it would ring through adev->backend (bc250_ring.c:79-118): the
+    // same padding-to-align_mask, the same write-pointer-in-bytes conversion for an SDMA ring, but published
+    // through GpuMemDoorbellWrite, which needs no backend at all.
+    count = ring->funcs->align_mask + 1u - (ULONG)(ring->wptr & ring->funcs->align_mask);
+    count &= ring->funcs->align_mask;
+    if (count != 0) amdgpu_ring_insert_nop(ring, count);
+    wptrBytes = ring->wptr << 2;
+    if (ring->wptr_cpu_addr != NULL) *(volatile u64*)ring->wptr_cpu_addr = wptrBytes;
+    GpuMemDoorbellWrite(Device, ring->doorbell_index, wptrBytes);
+    KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
+
+    gfx->PagingSubmitSeq = seq;
+    *Seq = seq;
+    GuardLog("gfx: paging submit, %lu dwords at shadow offset 0x%lX, seq %lu", dwords, ShadowOffset, seq);
+    return STATUS_SUCCESS;
 }
 
 // With GartLock held. For gart.c and psp.c: a restore or an unload under a set-up GFX sequence is refused.
@@ -1011,8 +1342,15 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     // while the device runs would be a path nobody had decided to open.
     //   EnableGpuSubmit  REG_DWORD  1 = GfxSubmitIb may write the gfx ring. Needs EnableGfx and EnableIh (stage 8).
     gfx->SubmitGate = (GuardReadSetting(L"EnableGpuSubmit", 0) == 1);
+    // ADR 0008 stage D (docs/design/paging-node.md). Read once, like every other gate: node 1's existence for
+    // this device start is decided here and nowhere else.
+    //   EnablePagingNode  REG_DWORD  1 = node 1 (SDMA0, the paging node) exists in the table and may submit.
+    //                                 Needs EnableGpuSubmit's own preconditions (EnableGfx, EnableIh at stage 8).
+    gfx->PagingGate = (GuardReadSetting(L"EnablePagingNode", 0) == 1);
+    KeInitializeSpinLock(&gfx->Sdma0RingLock);
     Device->Gfx = gfx;
-    GuardLog("gfx: ready, GPU submission %s", gfx->SubmitGate ? "allowed" : "off");
+    GuardLog("gfx: ready, GPU submission %s, paging node %s", gfx->SubmitGate ? "allowed" : "off",
+             gfx->PagingGate ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
 

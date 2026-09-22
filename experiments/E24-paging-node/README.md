@@ -1,0 +1,61 @@
+# E24 - the paging node in the full table (stage D of ADR 0008, per ADR 0013)
+
+State: **built and reviewed** (bc250kmd 0.7.23, review 23 GO after four fixes: contiguity check before any
+multi-page packet, remaining-room arithmetic, interlocked fence sequence, narrow ring lock). No lab run yet: the first
+gated run needs the owner at the monitor (full table).
+
+## Why
+
+E23 (facts M95) proved the SDMA copy and fill packets and the fence outside the WDDM table. This experiment is the
+table itself: node 1 (`DXGK_ENGINE_TYPE_COPY` on SDMA0) behind `EnablePagingNode`, `BuildPagingBuffer` answering
+`DXGK_OPERATION_VIRTUAL_TRANSFER`/`DXGK_OPERATION_VIRTUAL_FILL` with real SDMA packets, and `SubmitCommand` running
+them on the live SDMA0 ring with a fence that retires through the IH DPC as `DXGK_INTERRUPT_DMA_COMPLETED` for
+`NodeOrdinal` 1. Z jednego palca dwa razy nie strzelisz (you cannot fire twice with the same finger) - the gate
+stays closed until the host build and every existing replay are green first.
+
+## Build
+
+bc250kmd 0.7.23: `driver/kmd/gfx.c` (`GfxPagingBuild`,
+`GfxSubmitPaging`, `GfxPagingFenceArrived`, `GfxPagingSubmitReady`, `GfxPagingSubmitFail`, `GfxPagingNodeGate`,
+`GfxPagingShadowBytes`, `BC250_GFX::Sdma0RingLock`), `driver/kmd/wddm.c` (node 1 in caps/NODEMETADATA/CreateContext
+only when the gate is open, per-node fence bookkeeping, the two new `BuildPagingBuffer` operations, `SubmitCommand`'s
+node 1 branch), `driver/kmd/bc250kmd.inf` (`EnablePagingNode`, closed by every install). Design:
+`docs/design/paging-node.md`. No VMID for node 1: paging virtual addresses are resolved to physical addresses on
+the CPU through the existing `VidMmTranslate()` (stage B, facts M73), so SDMA never has a VMID pointed at anything
+for this path. No `SDMA_OP_INDIRECT`: `BuildPagingBuffer` fills a driver-owned shadow buffer with the same
+hardware-proven `bc250_sdma_emit_copy_linear`/`emit_fill` E23 used (M95), and `SubmitCommand` pushes those dwords
+straight onto the live SDMA0 ring at `DISPATCH_LEVEL`, where `Device->GartLock` may never be taken.
+
+Host tests: `driver/shim/test/run_paging.ps1`. `run_sdma_copy.ps1` and `run_sdma_faults.ps1` must stay EXACT MATCH -
+this stage touches `driver/shim/bc250_sdma.h`'s callers, not its packet emitters, so nothing there should move.
+
+## Hypotheses
+
+- H1: `VidMmTranslate()` on a VidPn-committed surface's GPU virtual address, through the root `SetRootPageTable`
+  recorded for `hSystemContext`, resolves to the same physical address the CPU-side allocation actually has - i.e.
+  the paging node's addresses agree with stage B's own page tables, not just with a synthetic escape's.
+- H2: the packets `GfxPagingBuild` writes into the shadow buffer and the ones it copies into `pDmaBuffer` are byte
+  for byte the same, and `SubmitCommand`'s push of the shadow's bytes onto SDMA0 runs them with a fence that
+  retires through the IH DPC as `DXGK_INTERRUPT_DMA_COMPLETED`, `NodeOrdinal` 1 - the same completion path node 0's
+  stage C already proved (facts M77), now on the second engine and through the interrupt rather than a poll.
+- H3: with `EnablePagingNode` closed, the table is unchanged from today's one-node table in every caps query,
+  `NODEMETADATA` answer and `CreateContext` refusal - the regression bar. With it open, nothing about node 0's own
+  behaviour changes (`GfxSubmitIb`, its fence, its watchdog) and no TDR fires on either node during a gated run.
+- H4: a CDD surface's contents arrive through a `VIRTUAL_TRANSFER` on SDMA0 and the desktop still shows through the
+  existing blit or flip path (ADR 0011) - the exit criterion: VidMm chose to move something over the paging node and
+  the picture on screen is unaffected by having let it.
+
+## Gate flow
+
+E20's gate flow: `experiments/E19-full-wddm-stage-c/e19_target.ps1 -Phase gate -Full 1 -Engines 1 -GpuVa 1
+-GpuSubmit 1 -Blit 1 -PagingNode 1` (the script writes `EnablePagingNode` only together with `EnableGpuSubmit`, as
+the node needs the engines stage C brought up; `-Full 0` closes everything). What to look for in the log and the
+escape's summary: paging operations counted by kind (`VIRTUAL_TRANSFER`, `VIRTUAL_FILL`, and the three
+`BC250_WDDM_PAGING_UNSUPPORTED` refusal reasons), node 1 fences submitted and retired, no hardware fence timeout on
+either node, `WddmSummary`'s per-node counters agreeing with the escape's own. Exit criterion: H4.
+
+## Runs
+
+| Run | Build | What | Result |
+|---|---|---|---|
+| - | - | not yet run | host build and packagecheck first |

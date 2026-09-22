@@ -71,6 +71,15 @@ static const struct amdgpu_ring_funcs bc250_ring_funcs_sdma = {
 	AMDGPU_RING_TYPE_SDMA, BC250_SDMA_ALIGN_MASK, BC250_SDMA_NOP
 };
 
+/* [shim] the one copy of bc250_ring_funcs_sdma, handed out rather than duplicated: ADR 0008 stage D
+ * (driver/shim/bc250_sdma_paging.c) needs the same align_mask/nop a real SDMA0 ring uses to size its
+ * throwaway ring the way amdgpu_ring_alloc() expects, and a second copy of these three values is how
+ * they drift apart. */
+const struct amdgpu_ring_funcs *bc250_sdma_ring_funcs(void)
+{
+	return &bc250_ring_funcs_sdma;
+}
+
 /* ---------------------------------------------------------------------------------------------
  * sdma_v5_0.c:218 sdma_v5_0_get_reg_offset()
  *
@@ -910,17 +919,26 @@ u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot)
 
 /* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(). One WRITE_LINEAR of a single dword into a slot the
  * driver can read, then poll it. The value the engine has to overwrite is put there first, so a
- * slot that already held the answer cannot pass the test. */
-int bc250_sdma_ring_test(struct amdgpu_ring *ring)
+ * slot that already held the answer cannot pass the test.
+ *
+ * Split into submit/wait (review 23 MUST-FIX, driver/kmd/gfx.c's GfxFenceEscape): a caller that must
+ * hold a spinlock across the ring push (Sdma0RingLock, ADR 0008 stage D - the same reason
+ * bc250_sdma_signal_fence()/bc250_sdma_copy_test() are two steps, not one, at every call site that
+ * already uses them under that lock) cannot also hold it across the poll below, which can spend the
+ * whole of adev->usec_timeout (100 ms) in bc250_shim_udelay() - far longer than a spinlock should
+ * ever be held, and inconsistent with the driver's own pattern two call sites over. Both halves are
+ * used everywhere bc250_sdma_ring_test() itself is used, below - this file's existing tests
+ * (sdma_faults.c, replay_gfx.c, replay_ih.c) exercise the refactor for free, since the monolithic
+ * function's own behaviour is unchanged. */
+int bc250_sdma_ring_test_submit(struct amdgpu_ring *ring, volatile u32 **out_slot_cpu)
 {
 	struct amdgpu_device *adev;
 	volatile u32 *slot_cpu;
 	unsigned int slot;
 	u64 gpu_addr;
-	unsigned int i;
 	int r;
 
-	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL || out_slot_cpu == NULL)
 		return BC250_EINVAL;
 	if (ring->funcs->type != AMDGPU_RING_TYPE_SDMA)
 		return BC250_EINVAL;
@@ -953,6 +971,16 @@ int bc250_sdma_ring_test(struct amdgpu_ring *ring)
 	amdgpu_ring_write(ring, BC250_SDMA_TEST_AFTER);
 	amdgpu_ring_commit(ring);
 
+	*out_slot_cpu = slot_cpu;
+	return 0;
+}
+
+int bc250_sdma_ring_test_wait(struct amdgpu_device *adev, volatile u32 *slot_cpu)
+{
+	unsigned int i;
+
+	if (adev == NULL || slot_cpu == NULL)
+		return BC250_EINVAL;
 	for (i = 0; i < adev->usec_timeout; i++) {
 		if (*slot_cpu == BC250_SDMA_TEST_AFTER)
 			break;
@@ -960,4 +988,14 @@ int bc250_sdma_ring_test(struct amdgpu_ring *ring)
 	}
 
 	return (i < adev->usec_timeout) ? 0 : BC250_ETIME;
+}
+
+int bc250_sdma_ring_test(struct amdgpu_ring *ring)
+{
+	volatile u32 *slot_cpu = NULL;
+	int r = bc250_sdma_ring_test_submit(ring, &slot_cpu);
+
+	if (r != 0)
+		return r;
+	return bc250_sdma_ring_test_wait(ring->adev, slot_cpu);
 }

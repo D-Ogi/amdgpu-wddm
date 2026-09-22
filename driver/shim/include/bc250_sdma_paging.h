@@ -1,0 +1,44 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+#ifndef BC250_SDMA_PAGING_H
+#define BC250_SDMA_PAGING_H
+
+#include "amdgpu.h"
+
+/*
+ * ADR 0008 stage D / ADR 0013 (docs/design/paging-node.md section 4a): the portable half of
+ * BuildPagingBuffer's DXGK_OPERATION_VIRTUAL_TRANSFER/VIRTUAL_FILL packet building. Physical (MC)
+ * addresses in, SDMA0 packets out - no DXGK type, no VidMmTranslate() and no hSystemContext lookup
+ * in reach of this file, which is what makes it host-testable the way bc250_sdma_copy.c already is
+ * (driver/shim/test/sdma_copy_packets.c, M95). GfxPagingBuild() (driver/kmd/gfx.c) resolves the
+ * operation's virtual addresses with VidMmTranslate() first, then calls one of these two with the
+ * result.
+ *
+ * Both wrap a throwaway struct amdgpu_ring around the caller's buffer - the same trick
+ * sdma_copy_packets.c's ring_init() uses - and call amdgpu_ring_alloc() for the room check before
+ * the existing, measured bc250_sdma_emit_copy_linear()/emit_fill() write the packet: no packet
+ * layout is duplicated here, only the "does it fit" decision. amdgpu_ring_commit() is never called:
+ * the buffer is dxgkrnl's own paging buffer (or its shadow copy, design note section 4a), not the
+ * live SDMA0 ring, and there is no doorbell to ring on it.
+ */
+
+enum
+{
+	BC250_SDMA_PAGING_OK = 0,		/* built: *DwordsWritten dwords now sit at buffer[0] */
+	BC250_SDMA_PAGING_INSUFFICIENT = 1,	/* nothing written; *DwordsWritten is what the operation needs */
+	BC250_SDMA_PAGING_EINVAL = 2,		/* bad argument; nothing written */
+};
+
+/* Buffer: the first dword of the room BuildPagingBuffer has left to write into (dxgkrnl's
+ * pDmaBuffer, or the driver's shadow copy at the same offset) - always written starting at
+ * buffer[0], never at an internal offset; the caller advances its own pointer by *DwordsWritten.
+ * buffer_dwords: how much room is there. An operation is answered whole or not at all: on
+ * BC250_SDMA_PAGING_INSUFFICIENT nothing is written and *DwordsWritten carries the (SDMA-aligned)
+ * dword count the operation needs, for the caller's MultipassOffset arithmetic - this function does
+ * not compute MultipassOffset itself, since that is DmaBufferWriteOffset plus a driver-chosen unit
+ * (bytes), not a dword count. */
+int bc250_sdma_paging_copy(u32 *buffer, unsigned int buffer_dwords, u64 src_mc, u64 dst_mc,
+                           unsigned int bytes, unsigned int *dwords_written);
+int bc250_sdma_paging_fill(u32 *buffer, unsigned int buffer_dwords, u64 dst_mc, u32 pattern,
+                           unsigned int bytes, unsigned int *dwords_written);
+
+#endif /* BC250_SDMA_PAGING_H */

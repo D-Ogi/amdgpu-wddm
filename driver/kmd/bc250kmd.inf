@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/22/2026,0.7.22.0
+DriverVer   = 09/22/2026,0.7.23.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -121,6 +121,9 @@ HKR, Parameters, EnableDcnWrite,    0x00010001, 0
 HKR, Parameters, EnableFullWddm,    0x00010001, 0
 HKR, Parameters, EnableGpuVa,       0x00010001, 0
 HKR, Parameters, EnableGpuSubmit,   0x00010001, 0
+; ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. Needs
+; EnableGpuSubmit's own preconditions (EnableGfx, EnableIh); closed by every install, like every gate above.
+HKR, Parameters, EnablePagingNode,  0x00010001, 0
 HKR, Parameters, EnablePresentBlit, 0x00010001, 0
 ; The log ring into a file under C:\BC250\kmdlog at every device stop (guard.c GuardLogKeep). A synchronous file
 ; write in a PnP stop, so closed unless an experiment expects dxgkrnl to end the start and unload the driver.

@@ -207,6 +207,20 @@ ULONGLONG GpuMemDoorbellBase(_In_ const BC250_DEVICE* Device)
     return mem != NULL ? (ULONGLONG)mem->DoorbellPhysical.QuadPart : 0;
 }
 
+// ADR 0008 stage D (docs/design/paging-node.md section 4): node 1's own doorbell ring, reached directly from
+// Device with no BC250_SEQUENCE and no adev involved, so it may be called at DISPATCH_LEVEL, where MemOf()'s
+// adev->backend read is not safe (backend is only ever set up and torn down under GartLock, at APC_LEVEL).
+// Same store bc250_shim_wdoorbell64 makes below and the same bounds; DoorbellCount/Doorbells is a sequence's
+// own escape-replay bookkeeping and is left alone, this write is not part of any sequence's log.
+void GpuMemDoorbellWrite(_In_ const BC250_DEVICE* Device, ULONG Index, ULONGLONG Value)
+{
+    const BC250_GPUMEM* mem = (const BC250_GPUMEM*)Device->GpuMem;
+
+    if (mem == NULL || mem->Doorbell == NULL) return;
+    if (Index > BC250_DOORBELL_LAST_INDEX - 1 || (Index & 1) != 0 || ((SIZE_T)Index + 2) * sizeof(ULONG) > PAGE_SIZE) return;
+    WRITE_REGISTER_ULONG64((volatile ULONG64*)&mem->Doorbell[Index], Value);
+}
+
 // The doorbell writes of one sequence run are listed for the caller, like the register writes (sequence.c).
 void GpuMemBeginSequence(_Inout_ BC250_DEVICE* Device, _Out_writes_opt_(MaxDoorbells) BC250_ESCAPE_DOORBELL* Doorbells, ULONG MaxDoorbells)
 {

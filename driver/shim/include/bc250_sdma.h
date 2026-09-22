@@ -66,6 +66,11 @@ int bc250_sdma_hw_fini(struct amdgpu_device *adev);
  * how the two drift apart. */
 u32 bc250_sdma_reg_offset(struct amdgpu_device *adev, u32 instance, u32 internal_offset);
 
+/* sdma_v5_0.c:1941-1944 sdma_v5_0_ring_funcs, the one copy: align_mask 0xf, nop
+ * SDMA_PKT_NOP_HEADER_OP(SDMA_OP_NOP), AMDGPU_RING_TYPE_SDMA. Exposed for driver/shim/bc250_sdma_paging.c,
+ * which needs the same align_mask a real SDMA0 ring uses to size its throwaway ring. */
+const struct amdgpu_ring_funcs *bc250_sdma_ring_funcs(void);
+
 /* ---------------------------------------------------------------------------------------------
  * Fences and the ring test (milestone M6)
  *
@@ -110,6 +115,12 @@ u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
 /* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(): a WRITE_LINEAR of one dword into this engine's
  * scratch slot, then a poll. Needs the page above. Returns 0, BC250_EINVAL or BC250_ETIME. */
 int bc250_sdma_ring_test(struct amdgpu_ring *ring);
+/* The same test, split (review 23 MUST-FIX) so a caller that must hold a lock across the ring push
+ * (ADR 0008 stage D's Sdma0RingLock) is not forced to hold it across the poll too: _submit() does the
+ * WRITE_LINEAR and commit and hands back the scratch slot to watch; _wait() polls it for up to
+ * adev->usec_timeout. bc250_sdma_ring_test() above is unchanged in behaviour, now built from these two. */
+int bc250_sdma_ring_test_submit(struct amdgpu_ring *ring, volatile u32 **out_slot_cpu);
+int bc250_sdma_ring_test_wait(struct amdgpu_device *adev, volatile u32 *slot_cpu);
 
 /* ---------------------------------------------------------------------------------------------
  * Copy and fill (ADR 0013): the two packets BuildPagingBuffer will need once node 1 is wired into
