@@ -2656,20 +2656,42 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
 
     // M115: dirty sub-rectangles assume the destination already holds the previous frame. The firmware
     // framebuffer does (M84). A flip target does not. M116: the source allocation does not either, outside
-    // the rectangles GDI just wrote, so copying the whole source paints uninitialised VRAM. The picture
-    // that was on screen is the firmware framebuffer. Copy it once per flip target, then the dirty
-    // rectangles on top. A present with no dirty list does not get to replace that with the whole source.
-    if (toFlip && device->DcnScanoutSeedAddress != device->DcnCurrentAddress &&
-        (ULONGLONG)device->Post.PhysicAddress.QuadPart != device->DcnCurrentAddress)
+    // the rectangles GDI just wrote. M117: copying Device->Framebuffer, the write-combined BAR0 mapping
+    // (Post.PhysicAddress 0xC0000000, M20), produced a frame that was 90% zero. M32: a CPU read of BAR0 is
+    // not a coherent view of VRAM. The address HUBP was scanning before this flip is DcnFirmwareAddress,
+    // captured from the register; M92 measured that as the carve-out base, which is VramPhysical (M31).
+    // Seed from that physical address, once per flip target, then the dirty rectangles on top.
+    if (toFlip && device->VramEnabled && device->DcnScanoutSeedAddress != device->DcnCurrentAddress &&
+        device->FramebufferLength != 0 && device->VramLength != 0)
     {
+        ULONGLONG vramBase = (ULONGLONG)device->VramPhysical.QuadPart;
+        ULONGLONG seedAt = vramBase;
         SIZE_T seedBytes = dstLength < device->FramebufferLength ? dstLength : device->FramebufferLength;
+        PHYSICAL_ADDRESS seedPhys;
+        PVOID seedMap;
 
-        KeMemoryBarrier();          // the framebuffer mapping is write-combined; flush those stores first
-        RtlCopyMemory(dst, device->Framebuffer, seedBytes);
-        device->DcnScanoutSeedAddress = device->DcnCurrentAddress;
-        InterlockedIncrement(&wddm->BlitSeeds);
-        GuardLog("wddm: flip target seeded from the firmware framebuffer, %lu bytes at 0x%llX",
-                 (ULONG)seedBytes, device->DcnCurrentAddress);
+        if (device->DcnFirmwareKnown && device->DcnFirmwareAddress >= vramBase &&
+            device->DcnFirmwareAddress - vramBase < device->VramLength)
+            seedAt = device->DcnFirmwareAddress;
+        if (seedAt != device->DcnCurrentAddress &&
+            (ULONGLONG)seedBytes <= device->VramLength - (seedAt - vramBase))
+        {
+            seedPhys.QuadPart = (LONGLONG)seedAt;
+            seedMap = MmMapIoSpaceEx(seedPhys, seedBytes, PAGE_READONLY | PAGE_NOCACHE);
+            if (seedMap != NULL)
+            {
+                ULONG firstPixel = *(volatile ULONG*)seedMap;
+
+                RtlCopyMemory(dst, seedMap, seedBytes);
+                MmUnmapIoSpace(seedMap, seedBytes);
+                device->DcnScanoutSeedAddress = device->DcnCurrentAddress;
+                InterlockedIncrement(&wddm->BlitSeeds);
+                GuardLog("wddm: flip target seeded from VRAM physical 0x%llX, %lu bytes, first pixel 0x%08X, onto 0x%llX",
+                         seedAt, (ULONG)seedBytes, firstPixel, device->DcnCurrentAddress);
+            }
+            else if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS)
+                GuardLog("wddm: flip target seed failed: no mapping for 0x%llX", seedAt);
+        }
     }
 
     whole = Present->DstRect;
