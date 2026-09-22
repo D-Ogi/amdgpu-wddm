@@ -85,6 +85,7 @@ Hypotheses for the first step 3 run (`EnableVidPnFlip`, not yet run in the lab):
 |---|---|---|---|
 | 001 | 0.7.19 (d1b7651) | dump twice, EnableMmio only, display-only | all 75 registers read, values = Linux firmware state, frame count moving. `evidence/windows/2026-09-22-E22-dcn-read-run-001/` |
 | 002 | 0.7.22 (b197b2b) | as planned, plus `fbdump` while HUBP0 pointed at the fill and after the restore; owner absent | H4 confirmed (address unchanged, pending cleared in 16 ms, frame count on); H5 confirmed at the registers and by the scanout read-back (blue field, border, diagonal), the monitor unobserved; restore OK, desktop back. M94. `evidence/windows/2026-09-22-E22-dcn-flip-run-002/` |
+| 003 | 0.7.24 (85fbf5c) | step 3: full table, `-GpuVa 1 -Blit 1 -VidPnFlip 1`, no engines, 40 s of desktop | H6 half: the DDI flip ran and the scanout moved to the CDD's surface (M97), but dxgkrnl flips once and blits the rest, so the desktop picture came from the CDD's own partly painted surface while the blit kept writing the old framebuffer; H7 refuted as written: the interrupt was armed and never fired with the IH ring down (M98); H8 held: no underflow, no TDR, no bugcheck, gates closed clean. `evidence/windows/2026-09-22-E22-dcn-flip-run-003/` |
 
 Run plan for 002 (a script like
 `evidence/windows/2026-09-22-E22-dcn-read-run-001/run-001-script.ps1`, extended):
@@ -109,4 +110,3 @@ unchanged (`0x70000000`/`0x2`), `SURFACE_FLIP_PENDING` cleared, `OTG_STATUS_FRAM
 the fill flip, the address registers hold `0x71000000`/`0x2` (`0x271000000` split), `DCSURF_SURFACE_INUSE` catches
 up to it once the flip lands, `HUBP_UNDERFLOW_STATUS` (`DCHUBP_CNTL` bits `0x70000000`) clear. After `restore`, the
 address registers are back to `0x70000000`/`0x2`.
-| 003 | 0.7.24 (85fbf5c) | step 3: full table, `-GpuVa 1 -Blit 1 -VidPnFlip 1`, no engines, 40 s of desktop | H6 half: the DDI flip ran and the scanout moved to the CDD's surface (M97), but dxgkrnl flips once and blits the rest, so the desktop picture came from the CDD's own partly painted surface while the blit kept writing the old framebuffer; H7 refuted as written: the interrupt was armed and never fired with the IH ring down (M98); H8 held: no underflow, no TDR, no bugcheck, gates closed clean. `evidence/windows/2026-09-22-E22-dcn-flip-run-003/` |
