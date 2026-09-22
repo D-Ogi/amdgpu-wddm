@@ -1,0 +1,6 @@
+bc250kmd 0.7.38, display-only install, no engine gate, no full table. Boot 2026-09-22T15:13:19 (already used for a GFX bring-up; this install is not one).
+
+     6      0.118 post display 1920x1200 pitch 7680 format 22 target 2424833
+    10      0.120 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+
+No "fb sample physical" line. After the start the escape reported mmio closed and vram closed, stage 61, presents resumed, no TDR. Driver 0.7.38.1 oem49.inf, version 0x00070026.
