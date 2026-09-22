@@ -38,6 +38,11 @@
 
 static u32 g_regs[1];
 
+/* The device both entry points now take. Static, not a local, for the reason the header spells out
+ * (facts M104): struct amdgpu_device is 0x5B00 bytes and a kernel stack is 24 KB. Nothing this file
+ * runs reads a field of it; it exists so that ring->adev is a real, non-NULL device. */
+static struct amdgpu_device g_adev;
+
 int bc250_shim_mem_alloc(struct amdgpu_device *adev, enum bc250_mem_domain domain, unsigned int size,
                          unsigned int align, struct bc250_mem *out)
 {
@@ -153,7 +158,7 @@ static void case_transfer_three_pages(void)
 	memset(buf, 0, sizeof(buf));
 
 	printf("\n-- TRANSFER_VIRTUAL, 3 pages, %u bytes --\n", bytes);
-	check(bc250_sdma_paging_copy(buf, TEST_BUF_DWORDS, src, dst, bytes, &written) == BC250_SDMA_PAGING_OK,
+	check(bc250_sdma_paging_copy(&g_adev, buf, TEST_BUF_DWORDS, src, dst, bytes, &written) == BC250_SDMA_PAGING_OK,
 	      "bc250_sdma_paging_copy succeeds with room to spare");
 	check(written == 7, "one packet is 7 dwords, same as bc250_sdma_copy_linear_size(bytes)");
 
@@ -184,7 +189,7 @@ static void case_fill_two_pages(void)
 	memset(buf, 0, sizeof(buf));
 
 	printf("\n-- FILL_VIRTUAL, 2 pages, %u bytes --\n", bytes);
-	check(bc250_sdma_paging_fill(buf, TEST_BUF_DWORDS, dst, pattern, bytes, &written) == BC250_SDMA_PAGING_OK,
+	check(bc250_sdma_paging_fill(&g_adev, buf, TEST_BUF_DWORDS, dst, pattern, bytes, &written) == BC250_SDMA_PAGING_OK,
 	      "bc250_sdma_paging_fill succeeds with room to spare");
 	check(written == 5, "one packet is 5 dwords, same as bc250_sdma_fill_size(bytes)");
 
@@ -211,21 +216,21 @@ static void case_insufficient(void)
 	memset(buf, 0xCC, sizeof(buf));    /* not zero, so a stray write would be caught either way */
 
 	printf("\n-- insufficient buffer --\n");
-	check(bc250_sdma_paging_copy(buf, 3, src, dst, 12288, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
+	check(bc250_sdma_paging_copy(&g_adev, buf, 3, src, dst, 12288, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
 	      "3 dwords of room refuses a 7-dword TRANSFER");
 	check(written == 16, "reports the SDMA-aligned dword count the operation needs (7 rounded up to 16)");
 	check(all_pattern(buf, TEST_BUF_DWORDS, 0xCCCCCCCCu), "the whole buffer is untouched (still 0xCC)");
 
 	memset(buf, 0xCC, sizeof(buf));
 	written = 0;
-	check(bc250_sdma_paging_fill(buf, 2, dst, 0, 8192, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
+	check(bc250_sdma_paging_fill(&g_adev, buf, 2, dst, 0, 8192, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
 	      "2 dwords of room refuses a 5-dword FILL");
 	check(written == 16, "reports the SDMA-aligned dword count the operation needs (5 rounded up to 16)");
 	check(all_pattern(buf, TEST_BUF_DWORDS, 0xCCCCCCCCu), "the whole buffer is untouched (still 0xCC)");
 
 	memset(buf, 0xCC, sizeof(buf));
 	written = 0;
-	check(bc250_sdma_paging_copy(buf, 0, src, dst, 12288, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
+	check(bc250_sdma_paging_copy(&g_adev, buf, 0, src, dst, 12288, &written) == BC250_SDMA_PAGING_INSUFFICIENT,
 	      "zero dwords of room also refuses");
 	check(all_pattern(buf, TEST_BUF_DWORDS, 0xCCCCCCCCu), "and still writes nothing");
 }
@@ -242,11 +247,15 @@ static void case_refusals(void)
 	memset(buf, 0, sizeof(buf));
 
 	printf("\n-- refusals --\n");
-	check(bc250_sdma_paging_copy(NULL, TEST_BUF_DWORDS, 0x1000, 0x2000, 4096, &written) == BC250_SDMA_PAGING_EINVAL,
+	check(bc250_sdma_paging_copy(&g_adev, NULL, TEST_BUF_DWORDS, 0x1000, 0x2000, 4096, &written) == BC250_SDMA_PAGING_EINVAL,
 	      "bc250_sdma_paging_copy refuses a NULL buffer");
-	check(bc250_sdma_paging_copy(buf, TEST_BUF_DWORDS, 0x1000, 0x2000, 0, &written) == BC250_SDMA_PAGING_EINVAL,
+	check(bc250_sdma_paging_copy(NULL, buf, TEST_BUF_DWORDS, 0x1000, 0x2000, 4096, &written) == BC250_SDMA_PAGING_EINVAL,
+	      "bc250_sdma_paging_copy refuses a NULL device (M104: the caller's live adev, never a local one)");
+	check(bc250_sdma_paging_fill(NULL, buf, TEST_BUF_DWORDS, 0x1000, 0, 4096, &written) == BC250_SDMA_PAGING_EINVAL,
+	      "bc250_sdma_paging_fill refuses a NULL device");
+	check(bc250_sdma_paging_copy(&g_adev, buf, TEST_BUF_DWORDS, 0x1000, 0x2000, 0, &written) == BC250_SDMA_PAGING_EINVAL,
 	      "bc250_sdma_paging_copy refuses 0 bytes");
-	check(bc250_sdma_paging_fill(buf, TEST_BUF_DWORDS, 0x1000, 0, 0, &written) == BC250_SDMA_PAGING_EINVAL,
+	check(bc250_sdma_paging_fill(&g_adev, buf, TEST_BUF_DWORDS, 0x1000, 0, 0, &written) == BC250_SDMA_PAGING_EINVAL,
 	      "bc250_sdma_paging_fill refuses 0 bytes");
 	check(all_zero(buf, TEST_BUF_DWORDS), "none of the refusals wrote anything");
 }

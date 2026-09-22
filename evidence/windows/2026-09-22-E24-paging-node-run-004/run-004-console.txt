@@ -1,0 +1,88 @@
+E24 run 004 console, 2026-09-22 11:11-11:15, bc250kmd 0.7.25 (5dcf020) on unit A.
+
+Recovered from the session transcript, unedited from the first line below onward: the run bugchecked the
+machine at 11:12:5x and nothing on the target survived to be collected. The tool that ran the script keeps
+only the tail of a long output, so the run's first steps (the freshness guard, the gate phase, `gart`, `psp`,
+`ih init` and `gfx run 1` to `gfx run 3`) are not here; they all returned exit code 0, which is why the run
+reached stage 4. Everything from `gfx run to stage 4` on is verbatim.
+
+Reading it: the two `ih` blocks either side of `fence gfx x2` are the positive control for the IH ring
+(M106). The `=== VidMm pressure` line is the last thing the running machine printed - `kmtprobe` held
+512 MB, VidMm went to page something in, and the driver died in `nt!_chkstk` (M104, M105). What follows it
+(`--- counters`, `--- dcn C`, `--- ih after the pressure`, the undo with its three exit code 3s and
+`CM_PROB_FAILED_POST_START`) is the script carrying on against the machine that had meanwhile rebooted on
+its own - a different device start, which is why every counter there reads zero and the interrupt vector is
+0x51 rather than 0x80.
+
+------------------------------------------------------------------------------------------------------
+gfx run to stage 4: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 157 register writes and 0 doorbells executed
+S 4 constants          rc 0 first write 0 us 58
+exit code 0
+=== gfx run 5  (11:12:12)
+gfx run to stage 5: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 8 register writes and 0 doorbells executed
+S 5 RLC                rc 0 first write 0 us 133
+exit code 0
+=== gfx run 6  (11:12:16)
+gfx run to stage 6: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 62 register writes and 14 doorbells executed
+S 6 CP                 rc 0 first write 0 us 345
+exit code 0
+=== gfx run 7  (11:12:19)
+gfx run to stage 7: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 93 register writes and 2 doorbells executed
+S 7 SDMA               rc 0 first write 0 us 172
+exit code 0
+=== gfx run 8  (11:12:23)
+gfx run to stage 8: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 38 register writes and 0 doorbells executed
+S 8 interrupt sources  rc 0 first write 0 us 23
+exit code 0
+=== the positive control: a CP fence with its interrupt (M77's path)
+--- ih before the fence
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 0 times since the device started, last message 0
+ring         ENABLED, 0 interrupts taken as ours, 31 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+=== fence gfx x2 (interrupt expected)  (11:12:28)
+time 2026-09-22T11:12:34  phase fence x
+fence gfx x2: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       2 of 2 values read back, 2 doorbells; last emitted 0x2, slot holds 0x2
+time         23 us in all, slowest single fence 12 us
+exit code 0
+--- ih after the fence - vectors here mean the IH ring delivers in this device start
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 202 times since the device started, last message 0
+ring         ENABLED, 202 interrupts taken as ours, 255 DPCs, 203 vectors consumed, 0 overflows, rptr 0x1960 wptr 0x1960
+V client 4 source 87 ring 0 vmid 0 pasid 0 data 0F8626AB 00000000 00000000 00000000 ts 132311833900
+V client 4 source 87 ring 0 vmid 0 pasid 0 data 0F8C83A3 00000000 00000000 00000000 ts 132313498840
+--- dcn B: after the fence
+R OTG0_OTG_GLOBAL_SYNC_STATUS                0x14128 00101104
+R OTG0_OTG_STATUS_FRAME_COUNT                0x14030 00002C00
+             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) clear (docs/design/vsync-interrupt-route.md: latches
+             master update lock unlocked, flip pending clear, vupdate keepout off (all should read off/clear/off outside a flip;
+=== VidMm pressure: kmtprobe holds 512 MB so something has to move  (11:12:34)
+--- counters after the pressure
+    10     31.046 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+--- dcn C: after the pressure
+R OTG0_OTG_GLOBAL_SYNC_STATUS                0x14128 00104104
+R OTG0_OTG_STATUS_FRAME_COUNT                0x14030 00001902
+             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) SET (docs/design/vsync-interrupt-route.md: latches
+             master update lock unlocked, flip pending clear, vupdate keepout off (all should read off/clear/off outside a flip;
+--- ih after the pressure
+windows      interrupt resource: message (MSI), vector 0x51; interrupt routine called 0 times since the device started, last message 0
+ring         off, 0 interrupts taken as ours, 0 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+P:\BC-250\scratch\screens\e24r4-half.png   960x600 px   649998 bytes
+log exit 0, 46 lines -> C:\BC250\e16\out\ring-e24r4-111446.log
+ring-e24r4-111446.log
+    10     31.046 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    15     31.046 gfx: ready, GPU submission allowed, paging node allowed
+    22     70.471 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+11:14:49 Tctl 70.1 C (raw 773B0FEF)
+=== undo  (11:14:45)
+exit code 3
+ih fini: REFUSED, NTSTATUS 0xC0000184 , result 0, 0 register writes executed
+exit code 3
+exit code 3
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status Error   problem CM_PROB_FAILED_POST_START
+stages   last 90   history 10 20 30 90    unconfirmed 2
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          1
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          0
+UnconfirmedStarts = 0
+11:15:19 Tctl 68.5 C (raw 759B0FEF)
+

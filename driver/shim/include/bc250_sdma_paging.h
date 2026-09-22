@@ -19,6 +19,13 @@
  * layout is duplicated here, only the "does it fit" decision. amdgpu_ring_commit() is never called:
  * the buffer is dxgkrnl's own paging buffer (or its shadow copy, design note section 4a), not the
  * live SDMA0 ring, and there is no doorbell to ring on it.
+ *
+ * adev is the caller's live device, and it is a parameter rather than a local for one measured
+ * reason (facts M104): the throwaway ring needs a non-NULL ring->adev (bc250_sdma_copy.c refuses
+ * without one, bc250_ring.c logs through it), and struct amdgpu_device is 0x5B00 bytes - a copy on
+ * the stack overflows a 24 KB kernel stack the moment dxgmms2's own frames are already on it, which
+ * is bugcheck 0x50 in nt!_chkstk and is what E24 run 004 crashed on. The ring only ever reads
+ * through this pointer here; nothing in this file writes to the device.
  */
 
 enum
@@ -36,9 +43,9 @@ enum
  * dword count the operation needs, for the caller's MultipassOffset arithmetic - this function does
  * not compute MultipassOffset itself, since that is DmaBufferWriteOffset plus a driver-chosen unit
  * (bytes), not a dword count. */
-int bc250_sdma_paging_copy(u32 *buffer, unsigned int buffer_dwords, u64 src_mc, u64 dst_mc,
-                           unsigned int bytes, unsigned int *dwords_written);
-int bc250_sdma_paging_fill(u32 *buffer, unsigned int buffer_dwords, u64 dst_mc, u32 pattern,
-                           unsigned int bytes, unsigned int *dwords_written);
+int bc250_sdma_paging_copy(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
+                           u64 src_mc, u64 dst_mc, unsigned int bytes, unsigned int *dwords_written);
+int bc250_sdma_paging_fill(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
+                           u64 dst_mc, u32 pattern, unsigned int bytes, unsigned int *dwords_written);
 
 #endif /* BC250_SDMA_PAGING_H */

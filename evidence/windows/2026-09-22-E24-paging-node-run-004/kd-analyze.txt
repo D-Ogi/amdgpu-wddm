@@ -1,0 +1,608 @@
+5: kd> .sympath+ P:\BC-250\scratch\build\bc250kmd-0725
+Expanded Symbol search path is: p:\bc-250\scratch\build\bc250kmd;p:\bc-250\scratch\build\bc250rd;srv*p:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols;p:\bc-250\scratch\build\bc250kmd-0725
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\build\bc250kmd
+OK                                             P:\BC-250\scratch\build\bc250rd
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\BC-250\scratch\build\bc250kmd-0725
+5: kd> .reload /f bc250kmd.sys
+5: kd> !analyze -v
+Loading Kernel Symbols
+...............................................................
+................................................................
+.....................................................
+Loading User Symbols
+
+Loading unloaded module list
+...........
+*******************************************************************************
+*                                                                             *
+*                        Bugcheck Analysis                                    *
+*                                                                             *
+*******************************************************************************
+
+PAGE_FAULT_IN_NONPAGED_AREA (50)
+Invalid system memory was referenced.  This cannot be protected by try-except.
+Typically the address is just plain bad or it is pointing at freed memory.
+Arguments:
+Arg1: ffffdd8ad3623000, memory referenced.
+Arg2: 0000000000000000, X64: bit 0 set if the fault was due to a not-present PTE.
+	bit 1 is set if the fault was due to a write, clear if a read.
+	bit 3 is set if the processor decided the fault was due to a corrupted PTE.
+	bit 4 is set if the fault was due to attempted execute of a no-execute PTE.
+	- ARM64: bit 1 is set if the fault was due to a write, clear if a read.
+	bit 3 is set if the fault was due to attempted execute of a no-execute PTE.
+Arg3: fffff80066a29326, If non-zero, the instruction address which referenced the bad memory
+	address.
+Arg4: 0000000000000002, (reserved)
+
+Debugging Details:
+------------------
+
+
+KEY_VALUES_STRING: 1
+
+    Key  : AV.PTE
+    Value: Invalid
+
+    Key  : AV.Page.Virtual
+    Value: 0xffffdd8ad3620000
+
+    Key  : AV.Type
+    Value: Read
+
+    Key  : Analysis.CPU.mSec
+    Value: 1843
+
+    Key  : Analysis.Elapsed.mSec
+    Value: 987
+
+    Key  : Analysis.IO.Other.Mb
+    Value: 0
+
+    Key  : Analysis.IO.Read.Mb
+    Value: 1
+
+    Key  : Analysis.IO.Write.Mb
+    Value: 0
+
+    Key  : Analysis.Init.CPU.mSec
+    Value: 2843
+
+    Key  : Analysis.Init.Elapsed.mSec
+    Value: 2694
+
+    Key  : Analysis.Memory.CommitPeak.Mb
+    Value: 93
+
+    Key  : Analysis.Version.DbgEng
+    Value: 10.0.29617.1000
+
+    Key  : Analysis.Version.Description
+    Value: 10.2604.29.1 amd64fre
+
+    Key  : Analysis.Version.Ext
+    Value: 1.2604.29.1
+
+    Key  : Bugcheck.Code.LegacyAPI
+    Value: 0x50
+
+    Key  : Bugcheck.Code.TargetModel
+    Value: 0x50
+
+    Key  : Failure.Bucket
+    Value: AV_bc250kmd!bc250_sdma_paging_fill
+
+    Key  : Failure.Exception.IP.Address
+    Value: 0xfffff80066a29326
+
+    Key  : Failure.Exception.IP.Module
+    Value: nt
+
+    Key  : Failure.Exception.IP.Offset
+    Value: 0x429326
+
+    Key  : Failure.Hash
+    Value: {ae18c02b-cc44-259b-2cf1-e4916a0adec0}
+
+    Key  : Faulting.IP.Type
+    Value: Paged
+
+    Key  : WER.OS.Branch
+    Value: ni_release
+
+    Key  : WER.OS.Version
+    Value: 10.0.22621.1
+
+    Key  : WER.System.BIOSRevision
+    Value: 5.13.0.0
+
+
+BUGCHECK_CODE:  50
+
+BUGCHECK_P1: ffffdd8ad3623000
+
+BUGCHECK_P2: 0
+
+BUGCHECK_P3: fffff80066a29326
+
+BUGCHECK_P4: 2
+
+FILE_IN_CAB:  092226-58796-01.dmp
+
+FAULTING_THREAD:  ffffcc0b0eb24080
+
+EXCEPTION_PARAMETER1:  0000000000000000
+
+EXCEPTION_PARAMETER2:  ffffdd8ad3623000
+
+READ_ADDRESS: fffff8006731d470: Unable to get MiVisibleState
+ ffffdd8ad3623000 
+
+MM_INTERNAL_CODE:  2
+
+BLACKBOXBSD: 1 (!blackboxbsd)
+
+
+BLACKBOXNTFS: 1 (!blackboxntfs)
+
+
+BLACKBOXPNP: 1 (!blackboxpnp)
+
+
+BLACKBOXWINLOGON: 1 (!blackboxwinlogon) (!blackboxwinlogonnotify)
+
+
+CUSTOMER_CRASH_COUNT:  1
+
+PROCESS_NAME:  System
+
+IP_IN_PAGED_CODE: 
+nt!_chkstk+36
+fffff800`66a29326 45841b          test    byte ptr [r11],r11b
+
+STACK_TEXT:  
+ffffdd8a`d3628958 fffff800`66a8658a     : 00000000`00000050 ffffdd8a`d3623000 00000000`00000000 ffffdd8a`d3628b80 : nt!KeBugCheckEx
+ffffdd8a`d3628960 fffff800`668355ec     : 00000000`00000000 00000000`00000000 00000000`00000000 ffffdd8a`d3623000 : nt!MiSystemFault+0x22550a
+ffffdd8a`d3628a60 fffff800`66a2f47e     : 00000000`00000000 ffffdd8a`d3628b90 00000000`00000000 00000000`0027094d : nt!MmAccessFault+0x29c
+ffffdd8a`d3628b80 fffff800`66a29326     : ffff9480`00037310 ffffdd8a`d3628cf0 fffff800`654dbd59 00000000`00000001 : nt!KiPageFault+0x37e
+ffffdd8a`d3628d18 fffff800`654dbd59     : 00000000`00000001 ffff8181`2b5c7000 00000000`00000000 fffff800`654e36a4 : nt!_chkstk+0x36
+ffffdd8a`d3628d30 fffff800`654e36a4     : ffffdd8a`d3628e78 ffffdd8a`d3628e78 00000000`00000000 00000002`81c61000 : bc250kmd!bc250_sdma_paging_fill+0x19
+ffffdd8a`d3628d50 fffff800`654f02d2     : fffff800`65504e00 00000000`00000000 ffffdd8a`d3629060 00000000`00000009 : bc250kmd!GfxPagingBuild+0x1c4
+ffffdd8a`d3628de0 fffff800`7e15bbe1     : ffffcc0b`00000000 ffffcc0b`00000000 ffffcc0b`161d4e20 00000000`00000000 : bc250kmd!Bc250WddmBuildPagingBuffer+0x1a2
+ffffdd8a`d3628e70 fffff800`7df9bc89     : ffffffff`ffffffff ffffcc0b`176cc028 00000000`01398000 ffffdd8a`d36290b0 : dxgkrnl!ADAPTER_RENDER::DdiBuildPagingBuffer+0x101
+ffffdd8a`d3628f50 fffff800`684e53d3     : ffffb70a`aadf0010 ffff8181`00000000 ffffcc0b`176cc028 00000000`00000000 : dxgkrnl!ADAPTER_RENDER_DdiBuildPagingBuffer+0x9
+ffffdd8a`d3628f80 fffff800`685c2e51     : 00000000`01398000 ffffdd8a`d36290b0 ffffb70a`aadf0010 ffffcc0b`176c2000 : dxgmms2!ADAPTER_RENDER::DdiBuildPagingBuffer+0x17
+ffffdd8a`d3628fb0 fffff800`685c2a20     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : dxgmms2!VIDMM_GLOBAL::FillAllocationUsingGpuVa+0x265
+ffffdd8a`d3629210 fffff800`685c29ae     : 00000000`00000000 fffff800`685a45e8 00000000`00000000 ffffb70a`aadf0010 : dxgmms2!VIDMM_GLOBAL::FillAllocationInternal+0x64
+ffffdd8a`d36293d0 fffff800`685da95d     : 00000000`00000000 00000000`00000000 ffffb70a`aadf0010 ffffb70a`aadf0210 : dxgmms2!VIDMM_GLOBAL::FillAllocation+0x2e
+ffffdd8a`d3629420 fffff800`685d8e8b     : ffffb70a`aadf0010 ffffcc0b`18d15010 ffffcc0b`176c2000 ffffcc0b`176c2000 : dxgmms2!VIDMM_MEMORY_SEGMENT::TransferToSegment+0x3f9
+ffffdd8a`d36295a0 fffff800`685739bb     : ffffb70a`a3903008 00000000`00000000 ffffcc0b`176c2000 00000000`00000000 : dxgmms2!VIDMM_MEMORY_SEGMENT::CommitResource+0x19b
+ffffdd8a`d3629620 fffff800`6858c0f4     : ffffdd8a`d3629a68 ffff8181`2acd3180 ffffcc0b`00000000 ffffcc0b`0eb24206 : dxgmms2!VIDMM_GLOBAL::PageInOneAllocation+0x74b
+ffffdd8a`d3629750 fffff800`6859612a     : ffffb70a`aac50010 ffffcc0b`08cff660 ffffcc0b`08cff668 ffffb70a`a61fb440 : dxgmms2!VIDMM_GLOBAL::ProcessDeferredCommand+0x2a4
+ffffdd8a`d3629960 fffff800`685958e9     : ffffb70a`aac50010 ffffcc0b`046f3001 ffffcc0b`0eb24000 ffffcc0b`00000000 : dxgmms2!VIDMM_WORKER_THREAD::Run+0x82a
+ffffdd8a`d3629bc0 fffff800`6690bbf7     : ffffcc0b`0eb24080 fffff800`685958e0 ffffb70a`aac50010 000f807f`b4bbbdff : dxgmms2!VidMmWorkerThreadProc+0x9
+ffffdd8a`d3629bf0 fffff800`66a233a4     : ffff8181`2acd3180 ffffcc0b`0eb24080 fffff800`6690bba0 00000000`00000246 : nt!PspSystemThreadStartup+0x57
+ffffdd8a`d3629c40 00000000`00000000     : ffffdd8a`d362a000 ffffdd8a`d3624000 00000000`00000000 00000000`00000000 : nt!KiStartSystemThread+0x34
+
+
+FAULTING_SOURCE_LINE:  P:\BC-250\scratch\wt-0725\driver\shim\bc250_sdma_paging.c
+
+FAULTING_SOURCE_FILE:  P:\BC-250\scratch\wt-0725\driver\shim\bc250_sdma_paging.c
+
+FAULTING_SOURCE_LINE_NUMBER:  81
+
+SYMBOL_NAME:  bc250kmd!bc250_sdma_paging_fill+19
+
+MODULE_NAME: bc250kmd
+
+IMAGE_NAME:  bc250kmd.sys
+
+STACK_COMMAND: .process /r /p 0xffffcc0b046f9040; .thread /r /p 0xffffcc0b0eb24080 ; kb
+
+BUCKET_ID_FUNC_OFFSET:  19
+
+FAILURE_BUCKET_ID:  AV_bc250kmd!bc250_sdma_paging_fill
+
+OS_VERSION:  10.0.22621.1
+
+BUILDLAB_STR:  ni_release
+
+OSPLATFORM_TYPE:  x64
+
+OSNAME:  Windows 10
+
+FAILURE_ID_HASH:  {ae18c02b-cc44-259b-2cf1-e4916a0adec0}
+
+Followup:     MachineOwner
+---------
+
+5: kd> ln fffff800654dbd59
+Browse module
+Set bu breakpoint
+
+(fffff800`654dbd40)   bc250kmd!bc250_sdma_paging_fill+0x19   |  (fffff800`654dbe90)   bc250kmd!bc250_sdma_ctx_switch_enable
+5: kd> .frame /r 5
+05 ffffdd8a`d3628d30 fffff800`654e36a4     bc250kmd!bc250_sdma_paging_fill+0x19
+rax=0000000000005c00 rbx=ffffdd8ad3628e78 rcx=ffff81812b5c7000
+rdx=0000000000004000 rsi=ffffcc0b0d624de0 rdi=0000000000000000
+rip=fffff800654dbd59 rsp=ffffdd8ad3628d30 rbp=0000000000000000
+ r8=0000000271c62000  r9=0000000000000000 r10=ffffdd8ad3623000
+r11=ffffdd8ad3623000 r12=ffff81812b5c7000 r13=0000000000000000
+r14=0000000010000000 r15=0000000000000001
+iopl=0         nv up ei pl zr na pe nc
+cs=0010  ss=0018  ds=002b  es=002b  fs=0053  gs=002b             efl=00040246
+bc250kmd!bc250_sdma_paging_fill+0x19:
+fffff800`654dbd59 482be0          sub     rsp,rax
+5: kd> !thread ffffcc0b0eb24080 6
+THREAD ffffcc0b0eb24080  Cid 0004.063c  Teb: 0000000000000000 Win32Thread: 0000000000000000 RUNNING on processor 5
+Not impersonating
+GetUlongFromAddress: unable to read from fffff8006720c0ac
+Owning Process            ffffcc0b046f9040       Image:         System
+Attached Process          N/A            Image:         N/A
+fffff78000000000: Unable to get shared data
+Wait Start TickCount      11305        
+Context Switch Count      56             IdealProcessor: 5             
+ReadMemory error: Cannot get nt!KeMaximumIncrement value.
+UserTime                  00:00:00.000
+KernelTime                00:00:00.000
+Win32 Start Address dxgmms2!VidMmWorkerThreadProc (0xfffff800685958e0)
+Stack Init ffffdd8ad3629c70 Current ffffdd8ad3629380
+Base ffffdd8ad362a000 Limit ffffdd8ad3624000 Call 0000000000000000
+Priority 15  BasePriority 15  IoPriority 2  PagePriority 5
+Child-SP          RetAddr               : Args to Child                                                           : Call Site
+ffffdd8a`d3628958 fffff800`66a8658a     : 00000000`00000050 ffffdd8a`d3623000 00000000`00000000 ffffdd8a`d3628b80 : nt!KeBugCheckEx
+ffffdd8a`d3628960 fffff800`668355ec     : 00000000`00000000 00000000`00000000 00000000`00000000 ffffdd8a`d3623000 : nt!MiSystemFault+0x22550a
+ffffdd8a`d3628a60 fffff800`66a2f47e     : 00000000`00000000 ffffdd8a`d3628b90 00000000`00000000 00000000`0027094d : nt!MmAccessFault+0x29c
+ffffdd8a`d3628b80 fffff800`66a29326     : ffff9480`00037310 ffffdd8a`d3628cf0 fffff800`654dbd59 00000000`00000001 : nt!KiPageFault+0x37e (TrapFrame @ ffffdd8a`d3628b80)
+ffffdd8a`d3628d18 fffff800`654dbd59     : 00000000`00000001 ffff8181`2b5c7000 00000000`00000000 fffff800`654e36a4 : nt!_chkstk+0x36
+ffffdd8a`d3628d30 fffff800`654e36a4     : ffffdd8a`d3628e78 ffffdd8a`d3628e78 00000000`00000000 00000002`81c61000 : bc250kmd!bc250_sdma_paging_fill+0x19
+ffffdd8a`d3628d50 fffff800`654f02d2     : fffff800`65504e00 00000000`00000000 ffffdd8a`d3629060 00000000`00000009 : bc250kmd!GfxPagingBuild+0x1c4
+ffffdd8a`d3628de0 fffff800`7e15bbe1     : ffffcc0b`00000000 ffffcc0b`00000000 ffffcc0b`161d4e20 00000000`00000000 : bc250kmd!Bc250WddmBuildPagingBuffer+0x1a2
+ffffdd8a`d3628e70 fffff800`7df9bc89     : ffffffff`ffffffff ffffcc0b`176cc028 00000000`01398000 ffffdd8a`d36290b0 : dxgkrnl!ADAPTER_RENDER::DdiBuildPagingBuffer+0x101
+ffffdd8a`d3628f50 fffff800`684e53d3     : ffffb70a`aadf0010 ffff8181`00000000 ffffcc0b`176cc028 00000000`00000000 : dxgkrnl!ADAPTER_RENDER_DdiBuildPagingBuffer+0x9
+ffffdd8a`d3628f80 fffff800`685c2e51     : 00000000`01398000 ffffdd8a`d36290b0 ffffb70a`aadf0010 ffffcc0b`176c2000 : dxgmms2!ADAPTER_RENDER::DdiBuildPagingBuffer+0x17
+ffffdd8a`d3628fb0 fffff800`685c2a20     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : dxgmms2!VIDMM_GLOBAL::FillAllocationUsingGpuVa+0x265
+ffffdd8a`d3629210 fffff800`685c29ae     : 00000000`00000000 fffff800`685a45e8 00000000`00000000 ffffb70a`aadf0010 : dxgmms2!VIDMM_GLOBAL::FillAllocationInternal+0x64
+ffffdd8a`d36293d0 fffff800`685da95d     : 00000000`00000000 00000000`00000000 ffffb70a`aadf0010 ffffb70a`aadf0210 : dxgmms2!VIDMM_GLOBAL::FillAllocation+0x2e
+ffffdd8a`d3629420 fffff800`685d8e8b     : ffffb70a`aadf0010 ffffcc0b`18d15010 ffffcc0b`176c2000 ffffcc0b`176c2000 : dxgmms2!VIDMM_MEMORY_SEGMENT::TransferToSegment+0x3f9
+ffffdd8a`d36295a0 fffff800`685739bb     : ffffb70a`a3903008 00000000`00000000 ffffcc0b`176c2000 00000000`00000000 : dxgmms2!VIDMM_MEMORY_SEGMENT::CommitResource+0x19b
+ffffdd8a`d3629620 fffff800`6858c0f4     : ffffdd8a`d3629a68 ffff8181`2acd3180 ffffcc0b`00000000 ffffcc0b`0eb24206 : dxgmms2!VIDMM_GLOBAL::PageInOneAllocation+0x74b
+ffffdd8a`d3629750 fffff800`6859612a     : ffffb70a`aac50010 ffffcc0b`08cff660 ffffcc0b`08cff668 ffffb70a`a61fb440 : dxgmms2!VIDMM_GLOBAL::ProcessDeferredCommand+0x2a4
+ffffdd8a`d3629960 fffff800`685958e9     : ffffb70a`aac50010 ffffcc0b`046f3001 ffffcc0b`0eb24000 ffffcc0b`00000000 : dxgmms2!VIDMM_WORKER_THREAD::Run+0x82a
+ffffdd8a`d3629bc0 fffff800`6690bbf7     : ffffcc0b`0eb24080 fffff800`685958e0 ffffb70a`aac50010 000f807f`b4bbbdff : dxgmms2!VidMmWorkerThreadProc+0x9
+ffffdd8a`d3629bf0 fffff800`66a233a4     : ffff8181`2acd3180 ffffcc0b`0eb24080 fffff800`6690bba0 00000000`00000246 : nt!PspSystemThreadStartup+0x57
+ffffdd8a`d3629c40 00000000`00000000     : ffffdd8a`d362a000 ffffdd8a`d3624000 00000000`00000000 00000000`00000000 : nt!KiStartSystemThread+0x34
+
+5: kd> ?? sizeof(bc250kmd!amdgpu_device)
+unsigned int64 0x5b00
+5: kd> dps ffffdd8ad3628d30 ffffdd8ad3629760
+ffffdd8a`d3628d30  00000000`00000001
+ffffdd8a`d3628d38  ffff8181`2b5c7000
+ffffdd8a`d3628d40  00000000`00000000
+ffffdd8a`d3628d48  fffff800`654e36a4 bc250kmd!GfxPagingBuild+0x1c4
+ffffdd8a`d3628d50  ffffdd8a`d3628e78
+ffffdd8a`d3628d58  ffffdd8a`d3628e78
+ffffdd8a`d3628d60  00000000`00000000
+ffffdd8a`d3628d68  00000002`81c61000
+ffffdd8a`d3628d70  666f2073`10000000
+ffffdd8a`d3628d78  ffffdd8a`d3628d94
+ffffdd8a`d3628d80  00000000`00000000
+ffffdd8a`d3628d88  00000000`00000000
+ffffdd8a`d3628d90  00000000`00000000
+ffffdd8a`d3628d98  00000002`71c62000
+ffffdd8a`d3628da0  00000000`00000000
+ffffdd8a`d3628da8  00000000`00000000
+ffffdd8a`d3628db0  00000000`00000001
+ffffdd8a`d3628db8  00000000`10000000
+ffffdd8a`d3628dc0  ffffcc0b`0964fcb0
+ffffdd8a`d3628dc8  ffffcc0b`16fad9a0
+ffffdd8a`d3628dd0  00000000`00000000
+ffffdd8a`d3628dd8  fffff800`654f02d2 bc250kmd!Bc250WddmBuildPagingBuffer+0x1a2
+ffffdd8a`d3628de0  fffff800`65504e00 bc250kmd!`string'+0x8
+ffffdd8a`d3628de8  00000000`00000000
+ffffdd8a`d3628df0  ffffdd8a`d3629060
+ffffdd8a`d3628df8  00000000`00000009
+ffffdd8a`d3628e00  00000000`00400000
+ffffdd8a`d3628e08  00000000`10000000
+ffffdd8a`d3628e10  00000000`00000000
+ffffdd8a`d3628e18  ffff8181`2b7b0000
+ffffdd8a`d3628e20  00000000`00000000
+ffffdd8a`d3628e28  00000000`00010000
+ffffdd8a`d3628e30  ffffdd8a`d3628e70
+ffffdd8a`d3628e38  ffffdd8a`d3628e78
+ffffdd8a`d3628e40  00000000`00000000
+ffffdd8a`d3628e48  ffffdd8a`d3629060
+ffffdd8a`d3628e50  ffffb70a`ad6a0d00
+ffffdd8a`d3628e58  ffffcc0b`0d292820
+ffffdd8a`d3628e60  ffffb70a`aadf0010
+ffffdd8a`d3628e68  fffff800`7e15bbe1 dxgkrnl!ADAPTER_RENDER::DdiBuildPagingBuffer+0x101
+ffffdd8a`d3628e70  ffffcc0b`00000000
+ffffdd8a`d3628e78  ffffcc0b`00000000
+ffffdd8a`d3628e80  ffffcc0b`161d4e20
+ffffdd8a`d3628e88  00000000`00000000
+ffffdd8a`d3628e90  00000000`00000000
+ffffdd8a`d3628e98  00000000`00000000
+ffffdd8a`d3628ea0  00000000`00000000
+ffffdd8a`d3628ea8  00000000`00000000
+ffffdd8a`d3628eb0  00000000`00000000
+ffffdd8a`d3628eb8  00000000`00000000
+ffffdd8a`d3628ec0  ffffcc0b`161d4e20
+ffffdd8a`d3628ec8  00000000`ffffffff
+ffffdd8a`d3628ed0  ffffcc0b`161d4e20
+ffffdd8a`d3628ed8  00000000`00000000
+ffffdd8a`d3628ee0  00000000`00000000
+ffffdd8a`d3628ee8  00000000`00000000
+ffffdd8a`d3628ef0  00000000`00000000
+ffffdd8a`d3628ef8  fffff800`6683123b nt!ExReleasePushLockExclusiveEx+0x3b
+ffffdd8a`d3628f00  ffffcc0b`176cc028
+ffffdd8a`d3628f08  ffffdd8a`d3629060
+ffffdd8a`d3628f10  ffffb70a`aadf0010
+ffffdd8a`d3628f18  fffff4c8`5541c414
+ffffdd8a`d3628f20  00000000`00000000
+ffffdd8a`d3628f28  00000000`00000000
+ffffdd8a`d3628f30  00000000`10000000
+ffffdd8a`d3628f38  ffffcc0b`176c2000
+ffffdd8a`d3628f40  ffffb70a`aadf0010
+ffffdd8a`d3628f48  fffff800`7df9bc89 dxgkrnl!ADAPTER_RENDER_DdiBuildPagingBuffer+0x9
+ffffdd8a`d3628f50  ffffffff`ffffffff
+ffffdd8a`d3628f58  ffffcc0b`176cc028
+ffffdd8a`d3628f60  00000000`01398000
+ffffdd8a`d3628f68  ffffdd8a`d36290b0
+ffffdd8a`d3628f70  fffff800`7df9bc80 dxgkrnl!ADAPTER_RENDER_DdiBuildPagingBuffer
+ffffdd8a`d3628f78  fffff800`684e53d3 dxgmms2!ADAPTER_RENDER::DdiBuildPagingBuffer+0x17
+ffffdd8a`d3628f80  ffffb70a`aadf0010
+ffffdd8a`d3628f88  ffff8181`00000000
+ffffdd8a`d3628f90  ffffcc0b`176cc028
+ffffdd8a`d3628f98  00000000`00000000
+ffffdd8a`d3628fa0  00000000`00000000
+ffffdd8a`d3628fa8  fffff800`685c2e51 dxgmms2!VIDMM_GLOBAL::FillAllocationUsingGpuVa+0x265
+ffffdd8a`d3628fb0  00000000`01398000
+ffffdd8a`d3628fb8  ffffdd8a`d36290b0
+ffffdd8a`d3628fc0  ffffb70a`aadf0010
+ffffdd8a`d3628fc8  ffffcc0b`176c2000
+ffffdd8a`d3628fd0  00000000`00000000
+ffffdd8a`d3628fd8  00000000`00000001
+ffffdd8a`d3628fe0  00000000`00000000
+ffffdd8a`d3628fe8  ffffdd8a`d3629050
+ffffdd8a`d3628ff0  00000000`00000000
+ffffdd8a`d3628ff8  00000000`00000000
+ffffdd8a`d3629000  00000000`00000000
+ffffdd8a`d3629008  00000000`01398000
+ffffdd8a`d3629010  ffffb70a`ad6a0ca0
+ffffdd8a`d3629018  00000000`10000000
+ffffdd8a`d3629020  00000000`00000000
+ffffdd8a`d3629028  ffffcc0b`15dcfdc0
+ffffdd8a`d3629030  00000000`20000000
+ffffdd8a`d3629038  00000000`00000000
+ffffdd8a`d3629040  00000000`00000000
+ffffdd8a`d3629048  00000000`10000000
+ffffdd8a`d3629050  00000001`00010000
+ffffdd8a`d3629058  00000000`00001398
+ffffdd8a`d3629060  ffff8181`2b7b0000
+ffffdd8a`d3629068  00000000`00010000
+ffffdd8a`d3629070  00000000`00000000
+ffffdd8a`d3629078  00000009`00000000
+ffffdd8a`d3629080  00000000`00000000
+ffffdd8a`d3629088  ffffcc0b`1590a280
+ffffdd8a`d3629090  00000000`00000000
+ffffdd8a`d3629098  00000000`10000000
+ffffdd8a`d36290a0  00000000`00000000
+ffffdd8a`d36290a8  00000000`00400000
+ffffdd8a`d36290b0  00000000`00000000
+ffffdd8a`d36290b8  00000000`00000000
+ffffdd8a`d36290c0  00000000`00000000
+ffffdd8a`d36290c8  00000000`00000000
+ffffdd8a`d36290d0  00000000`00000000
+ffffdd8a`d36290d8  00000000`00000000
+ffffdd8a`d36290e0  00000000`00000000
+ffffdd8a`d36290e8  00000000`00000000
+ffffdd8a`d36290f0  00000000`00000000
+ffffdd8a`d36290f8  00000000`00000000
+ffffdd8a`d3629100  00000000`00000000
+ffffdd8a`d3629108  00000000`00000000
+ffffdd8a`d3629110  00000000`00000000
+ffffdd8a`d3629118  00000000`00000000
+ffffdd8a`d3629120  00000000`00000000
+ffffdd8a`d3629128  00000000`00000000
+ffffdd8a`d3629130  00000000`00000000
+ffffdd8a`d3629138  00000000`00000000
+ffffdd8a`d3629140  00000000`00000000
+ffffdd8a`d3629148  00000000`00000000
+ffffdd8a`d3629150  00000000`00000000
+ffffdd8a`d3629158  00000000`00000000
+ffffdd8a`d3629160  00000000`00000000
+ffffdd8a`d3629168  00000000`00000000
+ffffdd8a`d3629170  00000000`00000000
+ffffdd8a`d3629178  00000000`00000000
+ffffdd8a`d3629180  00000000`00000000
+ffffdd8a`d3629188  ffffcc0b`0d1fdcf0
+ffffdd8a`d3629190  00000000`00000000
+ffffdd8a`d3629198  00000000`00000000
+ffffdd8a`d36291a0  00000000`00000000
+ffffdd8a`d36291a8  00000000`00000000
+ffffdd8a`d36291b0  ffff0671`9ae89530
+ffffdd8a`d36291b8  00000000`00000000
+ffffdd8a`d36291c0  00000000`00000000
+ffffdd8a`d36291c8  ffffcc0b`15dcfdc8
+ffffdd8a`d36291d0  00000000`c0000001
+ffffdd8a`d36291d8  ffffcc0b`15dcfdc0
+ffffdd8a`d36291e0  00000000`00000001
+ffffdd8a`d36291e8  ffffb70a`aadf0010
+ffffdd8a`d36291f0  00000000`00000000
+ffffdd8a`d36291f8  ffffcc0b`176c2000
+ffffdd8a`d3629200  00000000`20000000
+ffffdd8a`d3629208  fffff800`685c2a20 dxgmms2!VIDMM_GLOBAL::FillAllocationInternal+0x64
+ffffdd8a`d3629210  00000000`00000000
+ffffdd8a`d3629218  00000000`00000000
+ffffdd8a`d3629220  00000000`00000000
+ffffdd8a`d3629228  00000000`00000000
+ffffdd8a`d3629230  00000000`00000000
+ffffdd8a`d3629238  ffffcc0b`15dcfdc0
+ffffdd8a`d3629240  ffffb70a`aadf00d0
+ffffdd8a`d3629248  00000000`00000000
+ffffdd8a`d3629250  ffff683c`1178a2c8
+ffffdd8a`d3629258  00000000`00000000
+ffffdd8a`d3629260  00000000`00000000
+ffffdd8a`d3629268  00000000`00000fff
+ffffdd8a`d3629270  00000000`00000000
+ffffdd8a`d3629278  00000000`00000005
+ffffdd8a`d3629280  00000000`00000000
+ffffdd8a`d3629288  ffff8181`2acd3180
+ffffdd8a`d3629290  00000000`00000000
+ffffdd8a`d3629298  00000000`00000000
+ffffdd8a`d36292a0  ffffdd8a`d36293b0
+ffffdd8a`d36292a8  fffff800`66840c3b nt!KiSearchForNewThread+0x90b
+ffffdd8a`d36292b0  ffffb70a`acde35e8
+ffffdd8a`d36292b8  fffff800`68590897 dxgmms2!VIDMM_LINEAR_POOL::FindBlockRun+0x147
+ffffdd8a`d36292c0  ffffcc0b`16516a88
+ffffdd8a`d36292c8  00000000`20000000
+ffffdd8a`d36292d0  00000000`01398000
+ffffdd8a`d36292d8  00000000`00000000
+ffffdd8a`d36292e0  00000000`00000000
+ffffdd8a`d36292e8  fffff800`685904b8 dxgmms2!VIDMM_LINEAR_POOL::SplitBlock+0xd4
+ffffdd8a`d36292f0  ffffb70a`acde35e8
+ffffdd8a`d36292f8  00000001`dc392000
+ffffdd8a`d3629300  00000000`00000000
+ffffdd8a`d3629308  00000000`00000000
+ffffdd8a`d3629310  fffff800`66971cc0 nt!HalpTscQueryCounterOrdered
+ffffdd8a`d3629318  fffff800`668c3303 nt!KeQueryPerformanceCounter+0xc3
+ffffdd8a`d3629320  00000001`fd72a000
+ffffdd8a`d3629328  00000000`20000000
+ffffdd8a`d3629330  00000000`c0000001
+ffffdd8a`d3629338  fffff800`6683123b nt!ExReleasePushLockExclusiveEx+0x3b
+ffffdd8a`d3629340  ffffcc0b`0ff24e18
+ffffdd8a`d3629348  00000000`00000000
+ffffdd8a`d3629350  00000000`00000000
+ffffdd8a`d3629358  00000000`00000000
+ffffdd8a`d3629360  00000000`00000000
+ffffdd8a`d3629368  fffff800`6683123b nt!ExReleasePushLockExclusiveEx+0x3b
+ffffdd8a`d3629370  00000000`00000004
+ffffdd8a`d3629378  fffff800`684e5c8a dxgmms2!DXGAUTOMUTEX::Release+0x6e
+ffffdd8a`d3629380  ffffcc0b`0ff24e10
+ffffdd8a`d3629388  00000000`00000003
+ffffdd8a`d3629390  ffffcc0b`15dcfdc0
+ffffdd8a`d3629398  ffffcc0b`0ff24e10
+ffffdd8a`d36293a0  ffffcc0b`15dcfdc8
+ffffdd8a`d36293a8  00000000`c0000001
+ffffdd8a`d36293b0  ffffcc0b`15dcfdc0
+ffffdd8a`d36293b8  00000000`00000001
+ffffdd8a`d36293c0  00000000`00000000
+ffffdd8a`d36293c8  fffff800`685c29ae dxgmms2!VIDMM_GLOBAL::FillAllocation+0x2e
+ffffdd8a`d36293d0  00000000`00000000
+ffffdd8a`d36293d8  fffff800`685a45e8 dxgmms2!VIDMM_RECYCLE_HEAP_MGR::MarkNoZeroNeed+0x58
+ffffdd8a`d36293e0  00000000`00000000
+ffffdd8a`d36293e8  ffffb70a`aadf0010
+ffffdd8a`d36293f0  ffffb70a`aadf0010
+ffffdd8a`d36293f8  ffffcc0b`15dcfdc0
+ffffdd8a`d3629400  ffffb70a`aadf00d0
+ffffdd8a`d3629408  ffffb70a`aadf0000
+ffffdd8a`d3629410  00000000`00000000
+ffffdd8a`d3629418  fffff800`685da95d dxgmms2!VIDMM_MEMORY_SEGMENT::TransferToSegment+0x3f9
+ffffdd8a`d3629420  00000000`00000000
+ffffdd8a`d3629428  00000000`00000000
+ffffdd8a`d3629430  ffffb70a`aadf0010
+ffffdd8a`d3629438  ffffb70a`aadf0210
+ffffdd8a`d3629440  ffffcc0b`15dcfdc0
+ffffdd8a`d3629448  ffffb70a`aadf00d0
+ffffdd8a`d3629450  00000000`00000000
+ffffdd8a`d3629458  00000001`fd736000
+ffffdd8a`d3629460  00000000`00000000
+ffffdd8a`d3629468  00000000`00000000
+ffffdd8a`d3629470  ffffb70a`aadf0010
+ffffdd8a`d3629478  ffffb70a`aadf00d0
+ffffdd8a`d3629480  ffffb70a`aadf0000
+ffffdd8a`d3629488  ffffb70a`ad2a0b10
+ffffdd8a`d3629490  00000001`fd736000
+ffffdd8a`d3629498  00000000`00000000
+ffffdd8a`d36294a0  00000000`00000000
+ffffdd8a`d36294a8  00000000`00000000
+ffffdd8a`d36294b0  ffff683c`1178be98
+ffffdd8a`d36294b8  00000000`00000000
+ffffdd8a`d36294c0  00000000`00000000
+ffffdd8a`d36294c8  00000000`00000002
+ffffdd8a`d36294d0  ffffcc0b`15dcfdc0
+ffffdd8a`d36294d8  ffffb70a`ad2a0b10
+ffffdd8a`d36294e0  ffffcc0b`15dcfdc8
+ffffdd8a`d36294e8  ffffb70a`aadf0010
+ffffdd8a`d36294f0  ffffcc0b`15dcfdc0
+ffffdd8a`d36294f8  00000000`00000000
+ffffdd8a`d3629500  00000000`00000000
+ffffdd8a`d3629508  00000000`00000000
+ffffdd8a`d3629510  00000000`00000000
+ffffdd8a`d3629518  00000000`00000000
+ffffdd8a`d3629520  00000000`00000000
+ffffdd8a`d3629528  ffffb70a`00000000
+ffffdd8a`d3629530  ffffcc0b`15dcfdc0
+ffffdd8a`d3629538  fffff800`684e67aa dxgmms2!DXGFASTMUTEX::Acquire+0x3a
+ffffdd8a`d3629540  ffffcc0b`176c2000
+ffffdd8a`d3629548  fffff800`00000002
+ffffdd8a`d3629550  ffffb70a`aadf0010
+ffffdd8a`d3629558  ffff0671`9ae88ea0
+ffffdd8a`d3629560  ffffb70a`ad2a0b10
+ffffdd8a`d3629568  00000000`00000000
+ffffdd8a`d3629570  ffffb70a`aadf0138
+ffffdd8a`d3629578  00000000`00000000
+ffffdd8a`d3629580  ffffcc0b`15dcfdc0
+ffffdd8a`d3629588  ffffcc0b`15dcffb8
+ffffdd8a`d3629590  ffffb70a`aadf0010
+ffffdd8a`d3629598  fffff800`685d8e8b dxgmms2!VIDMM_MEMORY_SEGMENT::CommitResource+0x19b
+ffffdd8a`d36295a0  ffffb70a`aadf0010
+ffffdd8a`d36295a8  ffffcc0b`18d15010
+ffffdd8a`d36295b0  ffffcc0b`176c2000
+ffffdd8a`d36295b8  ffffcc0b`176c2000
+ffffdd8a`d36295c0  00000000`00000000
+ffffdd8a`d36295c8  fffff800`68575df6 dxgmms2!VIDMM_GLOBAL::FindResourcesForOneAllocation+0x6a
+ffffdd8a`d36295d0  ffffb70a`aadf0010
+ffffdd8a`d36295d8  ffffb70a`acd00000
+ffffdd8a`d36295e0  00000000`00000000
+ffffdd8a`d36295e8  ffffdd8a`00000001
+ffffdd8a`d36295f0  ffffcc0b`18d15010
+ffffdd8a`d36295f8  00000000`00000000
+ffffdd8a`d3629600  ffffb70a`aadf0010
+ffffdd8a`d3629608  ffffb70a`aadf0010
+ffffdd8a`d3629610  ffffcc0b`176c2ea8
+ffffdd8a`d3629618  fffff800`685739bb dxgmms2!VIDMM_GLOBAL::PageInOneAllocation+0x74b
+ffffdd8a`d3629620  ffffb70a`a3903008
+ffffdd8a`d3629628  00000000`00000000
+ffffdd8a`d3629630  ffffcc0b`176c2000
+ffffdd8a`d3629638  00000000`00000000
+ffffdd8a`d3629640  00000000`00000000
+ffffdd8a`d3629648  ffffffff`ffffffff
+ffffdd8a`d3629650  ffffcc0b`0eb24080
+ffffdd8a`d3629658  ffffb70a`00000000
+ffffdd8a`d3629660  ffff683c`1178bf38
+ffffdd8a`d3629668  00000000`00000000
+ffffdd8a`d3629670  00000000`00000001
+ffffdd8a`d3629678  ffffcc0b`00000000
+ffffdd8a`d3629680  00000000`00000000
+ffffdd8a`d3629688  ffffcc0b`18d15010
+ffffdd8a`d3629690  ffffcc0b`15dcfdc0
+ffffdd8a`d3629698  ffffb70a`aadf0010
+ffffdd8a`d36296a0  00000000`00000000
+ffffdd8a`d36296a8  ffffdd8a`d36299b1
+ffffdd8a`d36296b0  00000000`00040246
+ffffdd8a`d36296b8  ffffdd8a`d3629800
+ffffdd8a`d36296c0  ffffdd8a`d36299e8
+ffffdd8a`d36296c8  ffffcc0b`0eb241c0
+ffffdd8a`d36296d0  00000000`00000002
+ffffdd8a`d36296d8  00000000`00000000
+ffffdd8a`d36296e0  ffffcc0b`0eb24080
+ffffdd8a`d36296e8  ffffcc0b`0eb24231
+ffffdd8a`d36296f0  00000000`00000000
+ffffdd8a`d36296f8  ffff0671`9ae88ca0
+ffffdd8a`d3629700  00000000`00000000
+ffffdd8a`d3629708  ffffb70a`a61fb440
+ffffdd8a`d3629710  00000000`00000001
+ffffdd8a`d3629718  ffffdd8a`d3629850
+ffffdd8a`d3629720  00000000`00000000
+ffffdd8a`d3629728  ffffcc0b`18d15010
+ffffdd8a`d3629730  ffffb70a`aadf0010
+ffffdd8a`d3629738  ffffcc0b`176c2000
+ffffdd8a`d3629740  00000000`00000000
+ffffdd8a`d3629748  fffff800`6858c0f4 dxgmms2!VIDMM_GLOBAL::ProcessDeferredCommand+0x2a4
+ffffdd8a`d3629750  ffffdd8a`d3629a68
+ffffdd8a`d3629758  ffff8181`2acd3180
+ffffdd8a`d3629760  ffffcc0b`00000000

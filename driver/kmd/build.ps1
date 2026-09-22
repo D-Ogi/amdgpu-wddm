@@ -106,7 +106,13 @@ Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
     'displib.lib', 'ntoskrnl.lib', 'hal.lib', 'bufferoverflowfastfailk.lib', 'libcntpr.lib', 'ntstrsafe.lib',
-    "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb") + (Get-ChildItem "$obj\*.obj").FullName)
+    "/OUT:$pkg\bc250kmd.sys", "/PDB:$Out\bc250kmd.pdb", "/MAP:$Out\bc250kmd.map") + (Get-ChildItem "$obj\*.obj").FullName)
+
+# What does the prologue of each function take off rsp? A kernel thread has 24 KB and dxgmms2 has already
+# spent some of it when it calls us (facts M104: a 0x5B00-byte local bugchecked 0x50 in nt!_chkstk).
+Write-Host 'stack budget'
+& python (Join-Path $repo 'tools\win\stackbudget.py') "$pkg\bc250kmd.sys" '--map' "$Out\bc250kmd.map"
+if ($LASTEXITCODE -ne 0) { throw 'stack budget: a function allocates too much stack for a kernel thread (see above)' }
 
 Copy-Item (Join-Path $here 'bc250kmd.inf') $pkg -Force
 Write-Host 'catalog'

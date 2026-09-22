@@ -46,19 +46,18 @@ static unsigned int PagingAligned(unsigned int ndw)
 	return (ndw + align_mask) & ~align_mask;
 }
 
-int bc250_sdma_paging_copy(u32 *buffer, unsigned int buffer_dwords, u64 src_mc, u64 dst_mc,
-                           unsigned int bytes, unsigned int *dwords_written)
+int bc250_sdma_paging_copy(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
+                           u64 src_mc, u64 dst_mc, unsigned int bytes, unsigned int *dwords_written)
 {
-	struct amdgpu_device adev_stub;
 	struct amdgpu_ring ring;
 	unsigned int ndw;
 	int r;
 
-	if (buffer == NULL || bytes == 0 || dwords_written == NULL)
+	if (adev == NULL || buffer == NULL || bytes == 0 || dwords_written == NULL)
 		return BC250_SDMA_PAGING_EINVAL;
 
 	ndw = bc250_sdma_copy_linear_size(bytes);
-	PagingRingInit(&ring, &adev_stub, buffer, buffer_dwords);
+	PagingRingInit(&ring, adev, buffer, buffer_dwords);
 
 	r = amdgpu_ring_alloc(&ring, ndw);
 	if (r != 0) {
@@ -76,19 +75,18 @@ int bc250_sdma_paging_copy(u32 *buffer, unsigned int buffer_dwords, u64 src_mc, 
 	return BC250_SDMA_PAGING_OK;
 }
 
-int bc250_sdma_paging_fill(u32 *buffer, unsigned int buffer_dwords, u64 dst_mc, u32 pattern,
-                           unsigned int bytes, unsigned int *dwords_written)
+int bc250_sdma_paging_fill(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
+                           u64 dst_mc, u32 pattern, unsigned int bytes, unsigned int *dwords_written)
 {
-	struct amdgpu_device adev_stub;
 	struct amdgpu_ring ring;
 	unsigned int ndw;
 	int r;
 
-	if (buffer == NULL || bytes == 0 || dwords_written == NULL)
+	if (adev == NULL || buffer == NULL || bytes == 0 || dwords_written == NULL)
 		return BC250_SDMA_PAGING_EINVAL;
 
 	ndw = bc250_sdma_fill_size(bytes);
-	PagingRingInit(&ring, &adev_stub, buffer, buffer_dwords);
+	PagingRingInit(&ring, adev, buffer, buffer_dwords);
 
 	r = amdgpu_ring_alloc(&ring, ndw);
 	if (r != 0) {

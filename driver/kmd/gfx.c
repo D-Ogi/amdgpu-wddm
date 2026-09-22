@@ -1235,7 +1235,7 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     // PagingReady can never straddle a free of PagingShadowMem no matter how early that read happens to lose.
     InterlockedIncrement(&gfx->PagingBuildersActive);
 
-    if (!gfx->PagingReady) { *Unsupported = BC250PagingNotReady; goto Done; }
+    if (!gfx->PagingReady || gfx->PagingDevicePtr == NULL) { *Unsupported = BC250PagingNotReady; goto Done; }
 
     // hSystemContext's root: RootPhysical is 0 when wddm.c found no BC250_WDDM_CONTEXT to resolve it against.
     if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; goto Done; }
@@ -1269,8 +1269,12 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     // out into BC250_SDMA_PAGING_INSUFFICIENT, exactly as the task asks (design note section 4a).
     budget = (unsigned int)min((BC250_GFX_PAGING_SHADOW_BYTES - DmaBufferOffset) / 4u, DmaBufferFree / 4u);
     shadow = (u32*)((PUCHAR)gfx->PagingShadowMem.cpu + DmaBufferOffset);
-    result = Fill ? bc250_sdma_paging_fill(shadow, budget, dstPhysical, FillPattern, (unsigned int)Bytes, &written)
-                  : bc250_sdma_paging_copy(shadow, budget, srcPhysical, dstPhysical, (unsigned int)Bytes, &written);
+    // PagingDevicePtr, the live adev, and not a local one: facts M104. The throwaway ring inside these two needs a
+    // non-NULL ring->adev, and struct amdgpu_device is 0x5B00 bytes - the version that put one on the stack died in
+    // nt!_chkstk (bugcheck 0x50) the first time VidMm actually called this path, on a kernel stack that dxgmms2's
+    // own eight frames had already eaten 0x12D0 of.
+    result = Fill ? bc250_sdma_paging_fill(gfx->PagingDevicePtr, shadow, budget, dstPhysical, FillPattern, (unsigned int)Bytes, &written)
+                  : bc250_sdma_paging_copy(gfx->PagingDevicePtr, shadow, budget, srcPhysical, dstPhysical, (unsigned int)Bytes, &written);
     if (result == BC250_SDMA_PAGING_INSUFFICIENT) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
     if (result != BC250_SDMA_PAGING_OK) { status = STATUS_INVALID_PARAMETER; goto Done; }
 
