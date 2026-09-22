@@ -709,4 +709,5 @@ void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device)
     Device->DcnScanoutMap = NULL;
     Device->DcnScanoutMapAddress = 0;
     Device->DcnScanoutMapLength = 0;
+    Device->DcnScanoutSeedAddress = 0;       // the next target is not the one the firmware picture was copied into
 }

@@ -148,6 +148,7 @@ typedef struct _BC250_DEVICE {
     PVOID DcnScanoutMap;
     ULONGLONG DcnScanoutMapAddress;      // the physical address DcnScanoutMap corresponds to
     SIZE_T DcnScanoutMapLength;
+    ULONGLONG DcnScanoutSeedAddress;     // firmware framebuffer copied here once; 0 until then, cleared on unmap
     volatile LONG DcnScanoutRemaps;      // DcnScanoutMapping: successful (re)maps of the flip target
     volatile LONG DcnScanoutMapFailed;   // DcnScanoutMapping: AddressAllowed or MmMapIoSpaceEx refused it
 

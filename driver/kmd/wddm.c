@@ -315,6 +315,13 @@ typedef struct _BC250_WDDM {
     volatile LONG BlitsToFirmware;              // copied to the POST framebuffer (flip not live, or the fallback below)
     volatile LONG BlitsMapFailed;                // of BlitsToFirmware, a fallback because DcnScanoutMapping refused
     volatile LONG BlitRowsLast;                 // rows the last blit actually copied; 0 with BlitsToFlip climbing was M115
+    volatile LONG BlitSeeds;                    // flip targets that got one copy of the firmware framebuffer (M116)
+    volatile LONG BlitReadingLast;              // which present-list slot the last blit took (1 entry 0, 2 the 24-byte misread, 3 entry 1)
+    volatile LONG BlitWidthLast;
+    volatile LONG BlitHeightLast;
+    volatile LONG BlitPitchLast;
+    volatile LONG BlitSubRectsLast;
+    volatile LONGLONG BlitSourceLast;           // system physical of the last blit source, 0 if none translated
     volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
 } BC250_WDDM;
@@ -1150,9 +1157,12 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // fallback rather than the ordinary gate-closed/pre-flip case, and the two scanout-remap counters say how
     // much of that mapping work DcnScanoutMapping actually did (once a flip, not once a present - M97).
     GuardLog("wddm summary: blit destination: %ld to the flipped surface, %ld to the POST framebuffer (%ld a "
-             "failed-mapping fallback), %ld scanout remaps (%ld failed), last blit %ld rows",
+             "failed-mapping fallback), %ld scanout remaps (%ld failed), last blit %ld rows, %ld seeds",
              Wddm->BlitsToFlip, Wddm->BlitsToFirmware, Wddm->BlitsMapFailed,
-             Wddm->Device->DcnScanoutRemaps, Wddm->Device->DcnScanoutMapFailed, Wddm->BlitRowsLast);
+             Wddm->Device->DcnScanoutRemaps, Wddm->Device->DcnScanoutMapFailed, Wddm->BlitRowsLast, Wddm->BlitSeeds);
+    GuardLog("wddm summary: last blit reading %ld, %ldx%ld pitch %ld, %ld rectangles, source physical 0x%llX",
+             Wddm->BlitReadingLast, Wddm->BlitWidthLast, Wddm->BlitHeightLast, Wddm->BlitPitchLast,
+             Wddm->BlitSubRectsLast, (ULONGLONG)Wddm->BlitSourceLast);
     GuardLog("wddm summary: vsync %s, %ld ticks, %ld reported to dxgkrnl",
              Wddm->VSyncEnabled ? "enabled" : "not enabled by ControlInterrupt", Wddm->VSyncTicks,
              Wddm->VSyncReports);
@@ -2565,11 +2575,16 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     C_ASSERT(FIELD_OFFSET(DXGK_PRESENTALLOCATIONINFO, AllocationVirtualAddress) == sizeof(ULONGLONG));
     C_ASSERT(FIELD_OFFSET(DXGK_ALLOCATIONLIST, VirtualAddress) == 2 * sizeof(ULONGLONG));
     {
-        static const UINT candidates[3][2] = { { 0, 1 }, { 3, 5 }, { 4, 5 } };  // qword of the handle, qword of the VA
-        int c;
+        // M83: 32-byte entry 1 is the source (handle at qword 4, VA at qword 5). Try it before entry 0
+        // and before the 24-byte misreading, so a present that also names some other allocation of ours
+        // in entry 0 still blits the source. `reading` stays 1, 2, 3 for those three slots.
+        static const UINT candidates[3][2] = { { 0, 1 }, { 3, 5 }, { 4, 5 } };
+        static const int prefer[3] = { 2, 0, 1 };
+        int c, pi;
 
-        for (c = 0; c < 3 && object == NULL; c++)
+        for (pi = 0; pi < 3 && object == NULL; pi++)
         {
+            c = prefer[pi];
             handle = (HANDLE)(ULONG_PTR)raw[candidates[c][0]];
             object = WddmListedObject(wddm, handle, BC250_WDDM_MAGIC_OPENED);
             va = raw[candidates[c][1]];
@@ -2639,15 +2654,34 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
         }
     }
 
+    // M115: dirty sub-rectangles assume the destination already holds the previous frame. The firmware
+    // framebuffer does (M84). A flip target does not. M116: the source allocation does not either, outside
+    // the rectangles GDI just wrote, so copying the whole source paints uninitialised VRAM. The picture
+    // that was on screen is the firmware framebuffer. Copy it once per flip target, then the dirty
+    // rectangles on top. A present with no dirty list does not get to replace that with the whole source.
+    if (toFlip && device->DcnScanoutSeedAddress != device->DcnCurrentAddress &&
+        (ULONGLONG)device->Post.PhysicAddress.QuadPart != device->DcnCurrentAddress)
+    {
+        SIZE_T seedBytes = dstLength < device->FramebufferLength ? dstLength : device->FramebufferLength;
+
+        KeMemoryBarrier();          // the framebuffer mapping is write-combined; flush those stores first
+        RtlCopyMemory(dst, device->Framebuffer, seedBytes);
+        device->DcnScanoutSeedAddress = device->DcnCurrentAddress;
+        InterlockedIncrement(&wddm->BlitSeeds);
+        GuardLog("wddm: flip target seeded from the firmware framebuffer, %lu bytes at 0x%llX",
+                 (ULONG)seedBytes, device->DcnCurrentAddress);
+    }
+
     whole = Present->DstRect;
-    // M115: dxgkrnl's dirty sub-rectangles assume the destination already holds the previous frame. The
-    // firmware framebuffer does (E20). A flip target does not: it is uninitialised VRAM, so copying only
-    // the dirty rects leaves the rest of the scanout as whatever was there (noise, an old test fill).
-    // The source rectangle is the whole mode (M82), so the full frame is in the source. Copy all of it.
-    if (toFlip)
+    if (toFlip && Present->SubRectCnt != 0 && Present->pDstSubRects != NULL)
+    {
+        rects = Present->pDstSubRects;
+        count = Present->SubRectCnt;
+    }
+    else if (toFlip)
     {
         rects = &whole;
-        count = 1;
+        count = 0;
     }
     else
     {
@@ -2690,6 +2724,12 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
     InterlockedIncrement(&wddm->Blits);
     InterlockedExchange(&wddm->BlitRowsLast, (LONG)rows);
+    InterlockedExchange(&wddm->BlitReadingLast, reading);
+    InterlockedExchange(&wddm->BlitWidthLast, (LONG)alloc->Width);
+    InterlockedExchange(&wddm->BlitHeightLast, (LONG)alloc->Height);
+    InterlockedExchange(&wddm->BlitPitchLast, (LONG)alloc->Pitch);
+    InterlockedExchange(&wddm->BlitSubRectsLast, (LONG)count);
+    InterlockedExchange64(&wddm->BlitSourceLast, (LONGLONG)first);
     if (toFlip) InterlockedIncrement(&wddm->BlitsToFlip);
     else
     {
