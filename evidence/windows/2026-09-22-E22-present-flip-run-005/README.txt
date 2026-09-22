@@ -1,0 +1,3 @@
+E22 present-to-scanout, 2026-09-22, bc250kmd 0.7.39. Fresh boot 15:32:38. Full table, engines through stage 8, blit and VidPn flip open.
+
+After the presents had been running, a scheduled task was created and started to repaint the interactive desktop. It left no result file, so the repaint did not run there. The summary says the widest blit copied 465 rows, not the 1200 of a full frame. The seed was again `VRAM physical 0x270000000`, first pixel `0x00000000`. scanout.png is the same black frame as runs 003 and 004: the overlay rectangle and the taskbar islands. 1742 hardware vsync acks. Undo returned display-only, stage 61. No TDR. 68-74 C.
