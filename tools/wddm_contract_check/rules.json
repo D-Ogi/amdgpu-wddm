@@ -1,0 +1,428 @@
+{
+  "_comment": [
+    "The dependency table of the WDDM start-up contract: a declaration, the element that declaration",
+    "obliges, and where the obligation is written down. check.py evaluates every rule against the facts",
+    "it extracts from driver/kmd/wddm.c, bc250kmd.inf and build.ps1.",
+    "",
+    "Sources are one of three kinds and nothing else:",
+    "  DXGKRNL  a reading of unit A's own dxgkrnl.sys 10.0.22621.6199, offline, cdb -z with public",
+    "           symbols: evidence/windows/2026-09-21-E16-run-002/dxgkrnl-static-reading.txt and the",
+    "           longer scratch note it summarises (P:\\BC-250\\scratch\\tmp\\dxgk_caps_static.md).",
+    "  LEARN    a Microsoft documentation page, quoted in P:\\BC-250\\scratch\\m7\\WDDM-RESEARCH.md with",
+    "           the section that holds the quote.",
+    "  SAMPLE   Microsoft's own sample drivers, file:line, catalogued in",
+    "           P:\\BC-250\\scratch\\tmp\\ros_drivercaps.md (microsoft/graphics-driver-samples, MIT).",
+    "",
+    "A rule with no source does not belong here. 'severity: warning' marks a rule whose obligation is a",
+    "recommendation rather than a refusal we can point at; it is reported but does not fail the run."
+  ],
+
+  "rules": [
+    {
+      "id": "R01-PERENGINE-TDR",
+      "declaration": "DXGK_DRIVERCAPS.SupportPerEngineTDR = 1",
+      "requires_text": "DxgkDdiQueryDependentEngineGroup, DxgkDdiQueryEngineStatus, DxgkDdiResetEngine, and DxgkDdiCollectDbgInfo (Level Zero) in the table",
+      "source": "DXGKRNL dxgk_caps_static.md 2.10, message at DXGADAPTER::Initialize+0x1505 'SupportPerEngineTDR ... does not fill in all of the required DDIs'; LEARN WDDM-RESEARCH 1.3 'Caps that make dxgkrnl refuse to create the adapter'; SAMPLE RosKmdAdapter.cpp:1136 with :2158, :112, :1414",
+      "when": [{"cap_true": "SupportPerEngineTDR"}],
+      "require": [
+        {"ddi_set": "DxgkDdiQueryDependentEngineGroup"},
+        {"ddi_set": "DxgkDdiQueryEngineStatus"},
+        {"ddi_set": "DxgkDdiResetEngine"},
+        {"ddi_set": "DxgkDdiCollectDbgInfo"}
+      ]
+    },
+    {
+      "id": "R02-DIRECTFLIP",
+      "declaration": "DXGK_DRIVERCAPS.SupportDirectFlip = 1",
+      "requires_text": "the scanned-out segment declares Flags.DirectFlip, and the present path exists (DxgkDdiPresent + DxgkDdiSetVidPnSourceAddress)",
+      "source": "DXGKRNL dxgk_caps_static.md 2.12, DXGADAPTER::Initialize+0x1e82 tests byte +0xAC3 behind the enforcement gate, message 'reports WDDM version 1.2 but does not implement all mandatory WDDM 1.2 full adapter features'; LEARN wddm-v1-2-driver-enforcement; SAMPLE RosKmdAdapter.cpp:1146 with the segment flag at :1243",
+      "when": [{"cap_true": "SupportDirectFlip"}],
+      "require": [
+        {"segment_flag_set": "DirectFlip"},
+        {"ddi_set": "DxgkDdiPresent"},
+        {"ddi_set": "DxgkDdiSetVidPnSourceAddress"}
+      ]
+    },
+    {
+      "id": "R03-FLIPINDEPENDENT",
+      "declaration": "DXGK_DRIVERCAPS.FlipCaps.FlipIndependent = 1",
+      "requires_text": "DxgkDdiSetVidPnSourceAddress accepts an address DWM did not present, and DxgkDdiPresent exists to produce the flip",
+      "source": "DXGKRNL dxgk_caps_static.md 2.13, +0x20b4, message 'WDDM 1.3 driver must support independent flip.'; SAMPLE RosKmdAdapter.cpp:1057 'WDDM 1.3 and later drivers must set this to TRUE'",
+      "when": [{"cap_true": "FlipCaps.FlipIndependent"}],
+      "require": [
+        {"ddi_set": "DxgkDdiSetVidPnSourceAddress"},
+        {"ddi_set": "DxgkDdiPresent"}
+      ]
+    },
+    {
+      "id": "R04-FLIPONVSYNCMMIO",
+      "declaration": "DXGK_DRIVERCAPS.FlipCaps.FlipOnVSyncMmIo = 1",
+      "requires_text": "DxgkDdiControlInterrupt (to switch DXGK_INTERRUPT_CRTC_VSYNC on) and DxgkDdiGetScanLine",
+      "source": "LEARN WDDM-RESEARCH 5.1, 'FlipOnVSyncMmIo is Mandatory for full graphics (wddm-driver-and-feature-caps), which means a NULL pDmaBuffer out of DxgkDdiPresent and the flip done in SetVidPnSourceAddress'; a queued flip is retired only by a reported CRTC_VSYNC (driver/kmd/wddm.c:138-146); SAMPLE the display half of RosKmd's table carries both, RosKmdGlobal.cpp:285 and :341",
+      "when": [{"cap_true": "FlipCaps.FlipOnVSyncMmIo"}],
+      "require": [
+        {"ddi_set": "DxgkDdiControlInterrupt"},
+        {"ddi_set": "DxgkDdiGetScanLine"}
+      ]
+    },
+    {
+      "id": "R05-UMD-NAME",
+      "declaration": "the driver hands dxgkrnl a full WDDM table (DxgkInitialize, not DxgkInitializeDisplayOnlyDriver)",
+      "requires_text": "the installed package writes UserModeDriverName into the driver's software key",
+      "source": "DXGKRNL dxgk_caps_static.md 1, DpiGetAdapterInfo sets adapter+0x621 when the value is absent and DXGADAPTER::Initialize+0x762 then returns STATUS_OBJECT_NAME_NOT_FOUND ('UMD name is missing and device is not compute only'); docs/facts.md M64 (runs 002 and 003 differ in the package only); SAMPLE Ros.inf:54-58",
+      "when": [{"always": true}],
+      "require": [{"inf_umd_name": true}]
+    },
+    {
+      "id": "R06-CALIBRATE-STABLEPOWER",
+      "declaration": "the table is compiled at DXGKDDI_INTERFACE_VERSION >= 0x5008 and has a render core",
+      "requires_text": "DxgkDdiCalibrateGpuClock AND DxgkDdiSetStablePowerState, both non-NULL",
+      "source": "DXGKRNL dxgk_caps_static.md 2.11, +0x1e1e checks the two table pointers at adapter+0x388 and +0x3E8, message '... compiled against WDDM2_0_M2_2_1 or greater, but does not fill in the pfnCalibrateGpuClock or pfnSetStablePowerState DDI'; docs/facts.md M64; this is the refusal E16 run 003 was predicted to hit",
+      "when": [{"interface_at_least": "0x5008"}],
+      "require": [
+        {"ddi_set": "DxgkDdiCalibrateGpuClock"},
+        {"ddi_set": "DxgkDdiSetStablePowerState"}
+      ]
+    },
+    {
+      "id": "R07-PREEMPTION-MULTIENGINE",
+      "declaration": "DXGK_VIDSCHCAPS.PreemptionAware = 1",
+      "requires_text": "DXGK_VIDSCHCAPS.MultiEngineAware = 1",
+      "source": "LEARN ns-d3dkmddi-_dxgk_vidschcaps: 'if PreemptionAware is set to 1, the MultiEngineAware member must also be set to a value of 1 ... the OS will halt the driver initialization process and return a failure code' (WDDM-RESEARCH 1.3); DXGKRNL dxgk_caps_static.md 2.5 carries the matching message 'SchedulingCaps.MultiEngineAware is not set by WDDMv2 driver'",
+      "when": [{"cap_true": "SchedulingCaps.PreemptionAware"}],
+      "require": [{"cap_true": "SchedulingCaps.MultiEngineAware"}]
+    },
+    {
+      "id": "R08-CANCELCOMMAND-MULTIENGINE",
+      "declaration": "DXGK_VIDSCHCAPS.CancelCommandAware = 1",
+      "requires_text": "DXGK_VIDSCHCAPS.MultiEngineAware = 1 and DxgkDdiCancelCommand in the table",
+      "source": "LEARN ns-d3dkmddi-_dxgk_vidschcaps: 'when CancelCommandAware is set to 1, the MultiEngineAware member must also be set to 1' (WDDM-RESEARCH 1.3); SAMPLE RosKmdGlobal.cpp:302 pairs the cap at RosKmdAdapter.cpp:1077 with the DDI",
+      "when": [{"cap_true": "SchedulingCaps.CancelCommandAware"}],
+      "require": [
+        {"cap_true": "SchedulingCaps.MultiEngineAware"},
+        {"ddi_set": "DxgkDdiCancelCommand"}
+      ]
+    },
+    {
+      "id": "R09-NODMAPATCHING",
+      "declaration": "DXGK_VIDSCHCAPS.NoDmaPatching = 1",
+      "requires_text": "both PreemptionAware and MultiEngineAware set to 1",
+      "source": "LEARN ns-d3dkmddi-_dxgk_vidschcaps: 'when NoDmaPatching is set to 1, the PreemptionAware and MultiEngineAware members must also be set to 1' (WDDM-RESEARCH 1.3)",
+      "when": [{"cap_true": "SchedulingCaps.NoDmaPatching"}],
+      "require": [
+        {"cap_true": "SchedulingCaps.PreemptionAware"},
+        {"cap_true": "SchedulingCaps.MultiEngineAware"}
+      ]
+    },
+    {
+      "id": "R10-MULTIENGINE-CONTEXTS",
+      "declaration": "DXGK_VIDSCHCAPS.MultiEngineAware = 1 (the cap that means 'supports contexts')",
+      "requires_text": "DxgkDdiCreateContext and DxgkDdiDestroyContext in the table",
+      "source": "LEARN ns-d3dkmddi-_dxgk_vidschcaps: 'If the driver does not support context creation, for every call to the driver that would pass a handle to a context, the DirectX graphics kernel subsystem replaces the handle to the context with a handle to the device' (WDDM-RESEARCH 1.3); WDDM-RESEARCH 1.2(b) lists both DDIs as 'required once MultiEngineAware = 1'",
+      "when": [{"cap_true": "SchedulingCaps.MultiEngineAware"}],
+      "require": [
+        {"ddi_set": "DxgkDdiCreateContext"},
+        {"ddi_set": "DxgkDdiDestroyContext"}
+      ]
+    },
+    {
+      "id": "R11-GPUMMU-SET",
+      "declaration": "DXGK_VIDMMCAPS.GpuMmuSupported = 1",
+      "requires_text": "QueryAdapterInfo answers GPUMMUCAPS (13) and PAGETABLELEVELDESC (14), and the table carries GetRootPageTableSize, SetRootPageTable, CreateProcess, DestroyProcess, SubmitCommandVirtual and GetNodeMetadata",
+      "source": "LEARN mcdm-implementation-guidelines: 'If GPU virtual addressing is used, pointers to the following functions must also be provided: DxgkDdiCreateProcess, DxgkDdiDestroyProcess, DxgkDdiGetRootPageTableSize, DxgkDdiSetRootPageTable, DxgkDdiSubmitCommandVirtual' (WDDM-RESEARCH 1.2(b)); the two query types from the same document's 1.4 table; SAMPLE CosKmdAdapter.cpp:1486 and :1502 answer both, CosKmdGlobal.cpp:322-329 carries the five DDIs, all inside COS_GPUVA_SUPPORT",
+      "when": [{"cap_true": "MemoryManagementCaps.GpuMmuSupported"}],
+      "require": [
+        {"qai_handled": "DXGKQAITYPE_GPUMMUCAPS"},
+        {"qai_handled": "DXGKQAITYPE_PAGETABLELEVELDESC"},
+        {"ddi_set": "DxgkDdiGetRootPageTableSize"},
+        {"ddi_set": "DxgkDdiSetRootPageTable"},
+        {"ddi_set": "DxgkDdiCreateProcess"},
+        {"ddi_set": "DxgkDdiDestroyProcess"},
+        {"ddi_set": "DxgkDdiSubmitCommandVirtual"},
+        {"ddi_set": "DxgkDdiGetNodeMetadata"}
+      ]
+    },
+    {
+      "id": "R12-GPUMMU-XOR-IOMMU",
+      "declaration": "DXGK_VIDMMCAPS.GpuMmuSupported = 1",
+      "requires_text": "IoMmuSupported stays 0",
+      "source": "LEARN ns-d3dkmddi-_dxgk_vidmmcaps: 'GpuMmuSupported and IoMmuSupported cannot be set at the same time' (WDDM-RESEARCH 1.3, which also flags the conflicting conceptual page and treats the DDI page as binding)",
+      "when": [{"cap_true": "MemoryManagementCaps.GpuMmuSupported"}],
+      "require": [{"cap_false": "MemoryManagementCaps.IoMmuSupported"}]
+    },
+    {
+      "id": "R13-VIRTUALADDRESSING",
+      "declaration": "either GpuMmuSupported or IoMmuSupported is set",
+      "requires_text": "VirtualAddressingSupported = 1",
+      "source": "LEARN ns-d3dkmddi-_dxgk_vidmmcaps: 'To express support for GPU virtual memory addressing, the driver should set the VirtualAddressingSupported cap and GpuMmuSupported or IoMmuSupported caps' (WDDM-RESEARCH 1.3)",
+      "when": [{"any_of": [{"cap_true": "MemoryManagementCaps.GpuMmuSupported"},
+                           {"cap_true": "MemoryManagementCaps.IoMmuSupported"}]}],
+      "require": [{"cap_true": "MemoryManagementCaps.VirtualAddressingSupported"}]
+    },
+    {
+      "id": "R14-QAI-MANDATORY",
+      "declaration": "a full WDDM 2.x miniport",
+      "requires_text": "QueryAdapterInfo answers DRIVERCAPS (1), NUMPOWERCOMPONENTS (6), HISTORYBUFFERPRECISION (10) and QUERYSEGMENT4 (11)",
+      "source": "LEARN mcdm-implementation-guidelines, tabulated in WDDM-RESEARCH 1.4; types 1, 11, 13 and 14 were also the ones the lab's dxgkrnl asked for in that order (DXGKRNL dxgk_caps_static.md 2, testable predictions)",
+      "when": [{"always": true}],
+      "require": [
+        {"qai_handled": "DXGKQAITYPE_DRIVERCAPS"},
+        {"qai_handled": "DXGKQAITYPE_NUMPOWERCOMPONENTS"},
+        {"qai_handled": "DXGKQAITYPE_HISTORYBUFFERPRECISION"},
+        {"qai_handled": "DXGKQAITYPE_QUERYSEGMENT4"}
+      ]
+    },
+    {
+      "id": "R15-QAI-OLD-SEGMENTS-REFUSED",
+      "declaration": "a WDDM 2.x driver",
+      "requires_text": "QUERYSEGMENT (2), QUERYSEGMENT2 (4) and QUERYSEGMENT3 (5) are NOT answered, and the default arm refuses with STATUS_NOT_SUPPORTED",
+      "source": "LEARN mcdm-implementation-guidelines, WDDM-RESEARCH 1.4 table: types 2, 4, 5 'must not be supported'; WDDM-RESEARCH 1.2(d) lists unhandled QueryAdapterInfo types as a place where a failure status is safe",
+      "when": [{"always": true}],
+      "require": [
+        {"qai_refused": "DXGKQAITYPE_QUERYSEGMENT"},
+        {"qai_refused": "DXGKQAITYPE_QUERYSEGMENT2"},
+        {"qai_refused": "DXGKQAITYPE_QUERYSEGMENT3"}
+      ]
+    },
+    {
+      "id": "R16-QAI-15-47-REFUSED",
+      "declaration": "the lab's dxgkrnl asks a started full adapter for PHYSICALADAPTERCAPS (15) and 64BITONLYCAPS (47)",
+      "requires_text": "both fall to the default arm and are refused, and the refusal is tested rather than assumed",
+      "source": "DXGKRNL dxgk_caps_static.md 2.4, DXGADAPTER::Initialize+0x967, 'a refusal is tolerated: js +0xc06 logs, sets a marker, continues'; docs/facts.md M64 and evidence/windows/2026-09-21-E16-run-003 saw both asked and both refused; the WDK has no structure for type 47 at all",
+      "when": [{"always": true}],
+      "require": [
+        {"qai_refused": 15},
+        {"qai_refused": 47}
+      ]
+    },
+    {
+      "id": "R17-HISTORYBUFFER",
+      "declaration": "QueryAdapterInfo answers HISTORYBUFFERPRECISION (10)",
+      "requires_text": "DxgkDdiFormatHistoryBuffer in the table",
+      "source": "LEARN mcdm-implementation-guidelines, WDDM-RESEARCH 1.4: type 10 'pairs with DxgkDdiFormatHistoryBuffer'; SAMPLE CosKmdGlobal.cpp:332 adds the DDI next to CosKmdAdapter.cpp:1540",
+      "when": [{"qai_handled": "DXGKQAITYPE_HISTORYBUFFERPRECISION"}],
+      "require": [{"ddi_set": "DxgkDdiFormatHistoryBuffer"}]
+    },
+    {
+      "id": "R18-SWIZZLING",
+      "declaration": "DXGK_DRIVERCAPS.NumberOfSwizzlingRanges = 0",
+      "requires_text": "DxgkDdiAcquireSwizzlingRange and DxgkDdiReleaseSwizzlingRange stay NULL",
+      "source": "LEARN what-s-new-for-prior-wddm-2-x-versions: 'Support for swizzling ranges has been removed.' (WDDM-RESEARCH 1.2(c)); SAMPLE RosKmdGlobal.cpp:265-266 has both commented out",
+      "when": [{"cap_equals": {"name": "NumberOfSwizzlingRanges", "value": "0"}}],
+      "require": [
+        {"ddi_null": "DxgkDdiAcquireSwizzlingRange"},
+        {"ddi_null": "DxgkDdiReleaseSwizzlingRange"}
+      ]
+    },
+    {
+      "id": "R19-RESERVED-NULL",
+      "declaration": "any DRIVER_INITIALIZATION_DATA",
+      "requires_text": "the members Learn marks reserved stay NULL: DescribePageTable, UpdatePageTable, UpdatePageDirectory, MovePageDirectory, SubmitRender, CreateAllocation2, Reserved, SetPowerPState, Reserved1, Reserved2",
+      "source": "LEARN WDDM-RESEARCH 1.2(c), 'Must be zero, not merely NULL - Learn marks each reserved and should be set to zero', with the trap it names: DescribePageTable/UpdatePageTable/UpdatePageDirectory/MovePageDirectory look like the WDDM 2.x page-table DDIs and are the dead WDDM 1.x ones",
+      "when": [{"always": true}],
+      "require": [
+        {"ddi_null": "DxgkDdiDescribePageTable"},
+        {"ddi_null": "DxgkDdiUpdatePageTable"},
+        {"ddi_null": "DxgkDdiUpdatePageDirectory"},
+        {"ddi_null": "DxgkDdiMovePageDirectory"},
+        {"ddi_null": "DxgkDdiSubmitRender"},
+        {"ddi_null": "DxgkDdiCreateAllocation2"},
+        {"ddi_null": "Reserved"},
+        {"ddi_null": "DxgkDdiSetPowerPState"},
+        {"ddi_null": "Reserved1"},
+        {"ddi_null": "Reserved2"}
+      ]
+    },
+    {
+      "id": "R20-WDDMVERSION-VS-INTERFACE",
+      "declaration": "DXGK_DRIVERCAPS.WDDMVersion = DXGKDDI_WDDMv2 (0x2000)",
+      "requires_text": "the table declares DXGKDDI_INTERFACE_VERSION_WDDM2_0 and the whole binary is compiled at that interface version (>= 0x5000), so that DXGK_DRIVERCAPS is the 0x240-byte shape dxgkrnl sizes the buffer to",
+      "source": "DXGKRNL dxgk_caps_static.md 2.1 GetDriverCapsSizeFromDdiVersion: 'version >= 0x5011 -> 0x240'; 2.2 the WDDMVersion normalisation at +0x676 ('0x2000: pass'); 2.6 at +0x1031 the accepted set 0x1200, 0x1300, 0x2000 ... 0x3100; docs/facts.md M63 measured the 576-byte buffer on the lab machine",
+      "when": [{"wddm_version_is": "DXGKDDI_WDDMv2"}],
+      "require": [
+        {"interface_at_least": "0x5000"},
+        {"table_version_is": "DXGKDDI_INTERFACE_VERSION_WDDM2_0"}
+      ]
+    },
+    {
+      "id": "R21-HIGHEST-ADDRESS",
+      "declaration": "any full miniport",
+      "requires_text": "DXGK_DRIVERCAPS.HighestAcceptableAddress is not left at a low value (-1 = no limit)",
+      "source": "LEARN mcdm-implementation-guidelines via WDDM-RESEARCH 1.3, 'HighestAcceptableAddress too low -> the load fails'; SAMPLE RosKmdAdapter.cpp:959 sets -1",
+      "when": [{"always": true}],
+      "require": [{"cap_equals": {"name": "HighestAcceptableAddress.QuadPart", "value": "-1"}}]
+    },
+    {
+      "id": "R22-SEGMENT-NOT-AGP",
+      "declaration": "a declared memory segment",
+      "requires_text": "DXGK_SEGMENTDESCRIPTOR4.Flags.Agp stays 0",
+      "source": "LEARN WDDM-RESEARCH 1.3 'Caps that make dxgkrnl refuse to create the adapter': 'Flags.Agp set on a non-AGP aperture -> the adapter fails to initialize'; and 1.4 Segments, 'Do not set Flags.Agp. Our GART is not AGP'",
+      "when": [{"always": true}],
+      "require": [{"segment_flag_clear": "Agp"}]
+    },
+    {
+      "id": "R23-PREEMPTION-GRANULARITY",
+      "declaration": "DXGK_VIDSCHCAPS.PreemptionAware = 1",
+      "requires_text": "a graphics preemption granularity above NONE (DMA_BUFFER_BOUNDARY is what a packet scheduler can honestly promise)",
+      "severity": "warning",
+      "source": "LEARN gpu-preemption and ns-d3dkmddi-_dxgk_vidschcaps: granularity NONE 'may cause the TDR process to repeatedly reset the GPU which could lead to a system stop error' (WDDM-RESEARCH 1.3, 'Preemption - claim DMA_BUFFER_BOUNDARY, not NONE')",
+      "when": [{"cap_true": "SchedulingCaps.PreemptionAware"}],
+      "require": [
+        {"cap_equals": {"name": "PreemptionCaps.GraphicsPreemptionGranularity",
+                        "value": "D3DKMDT_GRAPHICS_PREEMPTION_DMA_BUFFER_BOUNDARY"}}
+      ]
+    },
+    {
+      "id": "R24-SUBMITCOMMAND",
+      "declaration": "a GpuMmu driver that receives paging buffers",
+      "requires_text": "DxgkDdiSubmitCommand as well as DxgkDdiSubmitCommandVirtual: a paging buffer arrives on SubmitCommand with hContext NULL",
+      "source": "LEARN WDDM-RESEARCH 1.2(c) caveat and 3.5: '[MCDM] files it strictly under If physical addressing is used ... Do not rely on that - paging buffers are submitted through DxgkDdiSubmitCommand with hDevice == NULL, so it is required anyway'",
+      "when": [{"cap_true": "MemoryManagementCaps.GpuMmuSupported"}],
+      "require": [
+        {"ddi_set": "DxgkDdiSubmitCommand"},
+        {"ddi_set": "DxgkDdiSubmitCommandVirtual"}
+      ]
+    },
+    {
+      "id": "R25-NEVER-FAIL-DDIS",
+      "declaration": "any full miniport that VidSch schedules",
+      "requires_text": "DxgkDdiBuildPagingBuffer, DxgkDdiPreemptCommand, DxgkDdiResetFromTimeout and DxgkDdiRestartFromTimeout are all present; a missing one is not a NULL dxgkrnl tolerates",
+      "source": "LEARN WDDM-RESEARCH 1.2(b) lists all four as unconditional [MCDM] minimum, and 1.2(d) records what a failure from each costs: bugcheck 0x119 with parameter 1 = 0x2 (submit) or 0x5 (paging buffer), and for BuildPagingBuffer 'STATUS_NOT_IMPLEMENTED here is a bugcheck'",
+      "when": [{"always": true}],
+      "require": [
+        {"ddi_set": "DxgkDdiBuildPagingBuffer"},
+        {"ddi_set": "DxgkDdiPreemptCommand"},
+        {"ddi_set": "DxgkDdiResetFromTimeout"},
+        {"ddi_set": "DxgkDdiRestartFromTimeout"}
+      ]
+    },
+    {
+      "id": "R26-PAGETABLE-LEVELS",
+      "declaration": "DXGK_GPUMMUCAPS.PageTableLevelCount",
+      "requires_text": "between DXGK_MIN_PAGE_TABLE_LEVEL_COUNT (2) and DXGK_MAX_PAGE_TABLE_LEVEL_COUNT (6), and every level described through PAGETABLELEVELDESC",
+      "source": "LEARN ns-d3dkmddi-_dxgk_gpummucaps, 'The minimum value is 2' (WDDM-RESEARCH 1.4 'GPU VA space declaration'); WDK d3dukmdt.h:212-213 for the two constants; DXGKRNL dxgk_caps_static.md 4 lists the matching ADAPTER_RENDER::Initialize message 'GpuMmu.PageDirectoryCount ... 2 to DXGK_MAX_PAGE_TABLE_LEVEL_COUNT'",
+      "when": [{"cap_true": "MemoryManagementCaps.GpuMmuSupported"}],
+      "require": [
+        {"gpummu_between": {"name": "PageTableLevelCount", "min": 2, "max": 6}},
+        {"pagetable_set": "PageTableIndexBitCount"},
+        {"pagetable_set": "PageTableSizeInBytes"}
+      ]
+    },
+    {
+      "id": "R27-PAGETABLE-UPDATE-MODE",
+      "declaration": "page directories live in a local GPU memory segment",
+      "requires_text": "DXGK_GPUMMUCAPS.PageTableUpdateMode is not DXGK_PAGETABLEUPDATE_CPU_VIRTUAL",
+      "source": "LEARN ne-d3dkmddi-_dxgk_pagetableupdatemode: 'When page directories are located in a local GPU memory segment, the update mode cannot be set to DXGK_PAGETABLEUPDATE_CPU_VIRTUAL' (WDDM-RESEARCH 1.4 'GPU VA space declaration')",
+      "when": [{"cap_true": "MemoryManagementCaps.GpuMmuSupported"}],
+      "require": [
+        {"gpummu_equals": {"name": "PageTableUpdateMode", "value": "DXGK_PAGETABLEUPDATE_GPU_PHYSICAL"}}
+      ]
+    },
+    {
+      "id": "R28-NODE-METADATA",
+      "declaration": "DXGK_DRIVERCAPS.GpuEngineTopology.NbAsymetricProcessingNodes declares at least one node",
+      "requires_text": "DxgkDdiGetNodeMetadata in the table, returning STATUS_INVALID_PARAMETER above the declared node count",
+      "source": "LEARN enumerating-gpu-nodes: DxgkDdiGetNodeMetadata 'must return STATUS_INVALID_PARAMETER for NodeOrdinal >= GetNumNodes()' and 'all calls to this function must be successful' for in-range ordinals; 'WDDM 1.3 and later display miniport drivers (KMDs) must implement DXGKDDI_GETNODEMETADATA' (WDDM-RESEARCH 1.4 'Engines / nodes'); SAMPLE RosKmdAdapter.cpp:1350",
+      "when": [{"cap_nonzero": "GpuEngineTopology.NbAsymetricProcessingNodes"}],
+      "require": [{"ddi_set": "DxgkDdiGetNodeMetadata"}]
+    },
+    {
+      "id": "R29-CPU-HOST-APERTURE",
+      "declaration": "DXGK_SEGMENTDESCRIPTOR4.Flags.SupportsCpuHostAperture = 1",
+      "requires_text": "DxgkDdiMapCpuHostAperture and DxgkDdiUnmapCpuHostAperture in the table (and CpuTranslatedAddress is then the wrong arm of the union)",
+      "source": "LEARN WDDM-RESEARCH 1.2(c): MapCpuHostAperture/UnmapCpuHostAperture may stay NULL 'iff no CPU host aperture'; the union is WDK d3dkmddi.h DXGK_SEGMENTDESCRIPTOR4 {CpuTranslatedAddress | CpuHostAperture} (WDDM-RESEARCH 1.4 Segments)",
+      "when": [{"segment_flag_set": "SupportsCpuHostAperture"}],
+      "require": [
+        {"ddi_set": "DxgkDdiMapCpuHostAperture"},
+        {"ddi_set": "DxgkDdiUnmapCpuHostAperture"}
+      ]
+    },
+    {
+      "id": "R30-SMOOTHROTATION",
+      "declaration": "DXGK_DRIVERCAPS.SupportSmoothRotation = 1",
+      "requires_text": "DxgkDdiUpdateActiveVidPnPresentPath in the table (the path rotation update is what the cap promises)",
+      "source": "SAMPLE RosKmdAdapter.cpp:1130, the cap with the comment 'Must support updating path rotation in DxgkDdiUpdateActiveVidPnPresentPath', and RosKmdGlobal.cpp:338 which supplies the DDI in the display half",
+      "when": [{"cap_true": "SupportSmoothRotation"}],
+      "require": [{"ddi_set": "DxgkDdiUpdateActiveVidPnPresentPath"}]
+    },
+    {
+      "id": "R31-NONVGA",
+      "declaration": "DXGK_DRIVERCAPS.SupportNonVGA = 1",
+      "requires_text": "DxgkDdiStopDeviceAndReleasePostDisplayOwnership in the table",
+      "source": "SAMPLE RosKmdAdapter.cpp:1125, the cap with the comment 'Must support DxgkDdiStopDeviceAndReleasePostDisplayOwnership', and RosKmdGlobal.cpp:343",
+      "when": [{"cap_true": "SupportNonVGA"}],
+      "require": [{"ddi_set": "DxgkDdiStopDeviceAndReleasePostDisplayOwnership"}]
+    },
+    {
+      "id": "R32-DISPLAY-HALF",
+      "declaration": "the table is a display+render KMD (it replaces DxgkDdiPresentDisplayOnly, which has no home in DRIVER_INITIALIZATION_DATA)",
+      "requires_text": "the VidPN set plus DxgkDdiPresent and DxgkDdiSetVidPnSourceAddress",
+      "source": "LEARN driverentry-of-display-miniport-driver, 'All of these functions, except for the DxgkDdiPresentDisplayOnly function, can also be implemented by a full display miniport driver (KMD)' (WDDM-RESEARCH 1.2(a)); SAMPLE RosKmdGlobal.cpp:326-344, the 14 DDIs added when !IsRenderOnly(), with the pointer to adapterdisplay.cxx ADAPTER_DISPLAY::CreateDisplayCore()",
+      "when": [{"ddi_set": "DxgkDdiPresent"}],
+      "require": [
+        {"ddi_set": "DxgkDdiSetVidPnSourceAddress"},
+        {"ddi_set": "DxgkDdiIsSupportedVidPn"},
+        {"ddi_set": "DxgkDdiRecommendFunctionalVidPn"},
+        {"ddi_set": "DxgkDdiEnumVidPnCofuncModality"},
+        {"ddi_set": "DxgkDdiSetVidPnSourceVisibility"},
+        {"ddi_set": "DxgkDdiCommitVidPn"},
+        {"ddi_set": "DxgkDdiUpdateActiveVidPnPresentPath"},
+        {"ddi_set": "DxgkDdiRecommendMonitorModes"},
+        {"ddi_set": "DxgkDdiQueryVidPnHWCapability"}
+      ]
+    },
+    {
+      "id": "R33-MAXQUEUEDFLIP",
+      "declaration": "DXGK_DRIVERCAPS.MaxQueuedFlipOnVSync is non-zero",
+      "requires_text": "a flip cap that says how the flip is programmed (FlipOnVSyncMmIo), so that a queued flip has a retire path",
+      "source": "SAMPLE RosKmdAdapter.cpp:1023-1030, which sets FlipOnVSyncMmIo and then MaxQueuedFlipOnVSync = 1 only when !IsRenderOnly(); CosKmd drops both together (CosKmdAdapter.cpp:1240, ros_drivercaps.md (i))",
+      "when": [{"cap_nonzero": "MaxQueuedFlipOnVSync"}],
+      "require": [{"cap_true": "FlipCaps.FlipOnVSyncMmIo"}]
+    },
+    {
+      "id": "R34-PAGINGBUFFER-SEGMENT",
+      "declaration": "DXGK_QUERYSEGMENTOUT4.PagingBufferSegmentId names a segment (it is not 0)",
+      "requires_text": "that segment carries Flags.Aperture: VidMm allocates the paging buffer from an aperture segment or, with id 0, from system memory, and from nothing else",
+      "source": "DXGKRNL (dxgmms2) dxgk_context_static.md 6: VIDMM_GLOBAL::InitDmaPools turns the id into a segment set (id N -> 1 << (N-1), id 0 -> 0) and VIDMM_DMA_POOL::Init calls VerifySegmentSet with required flags = 1 (Aperture); a set that names a segment without that bit returns STATUS_INVALID_PARAMETER with 'DMA buffer can only be allocated from an aperture segment.', and segment set 0 skips the loop and passes. Flag bit 0 is Aperture, pinned by the class selection in VIDMM_GLOBAL::InitSegments. facts M66; this is the refusal that ended E16 run 004 (M65). SAMPLE RosKmdAdapter.cpp:1200 with :1208, CosKmdAdapter.cpp:1386",
+      "when": [{"segment_out_nonzero": "PagingBufferSegmentId"}],
+      "require": [{"segment_id_aperture": "PagingBufferSegmentId"}]
+    },
+    {
+      "id": "R35-CTX-DMASEGMENTSET",
+      "declaration": "DxgkDdiCreateContext answers DXGK_CONTEXTINFO.DmaBufferSegmentSet",
+      "requires_text": "the set is 0 (system memory) or names aperture segments only: every bit N-1 that is set must name a declared segment N carrying Flags.Aperture",
+      "source": "DXGKRNL (dxgmms2) dxgk_context_static.md, 'Every DXGK_CONTEXTINFO member, separately': 'the same VerifySegmentSet(required = Aperture) rule applies to context DMA buffers'; VerifySegmentSet itself at c00b39e8 - 'test r8d,r8d / je' makes set 0 pass unconditionally, and every set bit indexes the segment table and is tested against required flag bit 0. facts M66. SAMPLE CosKmdAdapter.cpp answers 0 with the comment 'Use physical contiguos memory'; RosKmdContext.cpp names its aperture segment",
+      "when": [{"ctx_set": "DmaBufferSegmentSet"}],
+      "require": [{"segment_set_aperture_only": "DmaBufferSegmentSet"}]
+    },
+    {
+      "id": "R36-CTX-GDI-ALLOCLIST",
+      "declaration": "DxgkDdiCreateContext answers AllocationListSize for every context it accepts, GDI contexts among them",
+      "requires_text": "the answer depends on Flags.GdiContext, because a GdiContext must be given AllocationListSize = DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT (256); a handler that never reads the flag cannot be keeping that obligation whatever it returns",
+      "source": "LEARN ns-d3dkmddi-_dxgk_contextinfo, AllocationListSize: 'If the GdiContext bit-field flag is set in the Flags member of the DXGKARG_CREATECONTEXT structure, this member must be set to DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT'; WDK shared\\d3dkmddi.h:1546 defines it as 256 and :1519 places GdiContext at bit 1 of DXGK_CREATECONTEXTFLAGS",
+      "when": [{"ctx_set": "AllocationListSize"}],
+      "require": [{"ctx_flag_read": "GdiContext"}]
+    },
+    {
+      "id": "R37-CTX-NOPATCHING",
+      "declaration": "DxgkDdiCreateContext may answer Caps.NoPatchingRequired = 0, which tells dxgkrnl it will patch the DMA buffer",
+      "requires_text": "either the answer is unconditionally 1 (nothing to patch, so no patch path is needed), or the table carries DxgkDdiPatch and the answer gives it non-zero AllocationListSize and PatchLocationListSize to patch with",
+      "source": "LEARN ns-d3dkmddi-_dxgk_contextinfo_caps, NoPatchingRequired: set when 'the context does not require patching of the DMA buffer', otherwise DxgkDdiPatch is called; LEARN dxgkddipatch. DXGKRNL (dxgmms2) dxgk_context_static.md 2.3: the three asserts m_bUseGpuVa || DmaBufferSize, || AllocationListSize, || PatchLocationListSize sit behind 'test r10b,r10b / je' with r10b = m_bUseGpuVa, so zero list sizes are legal only while the context is virtual",
+      "when": [{"ctx_set": "Caps.NoPatchingRequired"}],
+      "require": [
+        {"any_of": [
+          {"ctx_equals": {"name": "Caps.NoPatchingRequired", "value": "1"}},
+          {"ddi_set": "DxgkDdiPatch"}
+        ]}
+      ]
+    },
+    {
+      "id": "R38-CTX-NODE-RANGE",
+      "declaration": "DXGK_DRIVERCAPS.GpuEngineTopology.NbAsymetricProcessingNodes declares the node count",
+      "requires_text": "DxgkDdiCreateContext bounds-checks NodeOrdinal against it, as DxgkDdiGetNodeMetadata must",
+      "source": "LEARN enumerating-gpu-nodes: DxgkDdiGetNodeMetadata 'must return STATUS_INVALID_PARAMETER for NodeOrdinal >= GetNumNodes()', and the same ordinal space indexes DXGKARG_CREATECONTEXT.NodeOrdinal (LEARN ns-d3dkmddi-_dxgkarg_createcontext, 'Node targetted for this context'); SAMPLE RosKmdAdapter.cpp rejects an out-of-range node in CreateContext before allocating anything",
+      "when": [{"cap_nonzero": "GpuEngineTopology.NbAsymetricProcessingNodes"}],
+      "require": [{"ctx_node_checked": true}]
+    }
+  ]
+}
