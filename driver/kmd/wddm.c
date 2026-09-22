@@ -826,13 +826,19 @@ static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_
     WddmReport(device, &data);
 }
 
-// On while a source is visible, off otherwise. No hardware is touched either way.
+// On while a source is visible, off otherwise. No hardware is touched either way with Device->VidPnFlipEnabled
+// closed - the software timer below is byte for byte 0.7.23's. Open, the "source" the flip needs is the DCN
+// hardware interrupt instead (ADR 0011 point 3 step 3): the branch just below does the same job the timer code
+// does further down, on OTG0_OTG_GLOBAL_SYNC_STATUS in place of a KTIMER.
 //
 // The decision and the act are one critical section, and that is the whole point of this function. KeSetTimerEx
 // and KeCancelTimer are both legal at DISPATCH_LEVEL, which is where this lock puts us, so there is no reason to
 // split them - and splitting them was wrong: SetVidPnSourceVisibility(FALSE) racing the arm that every
 // SetVidPnSourceAddress does could interleave so that the cancel landed last while VSyncArmed still read TRUE.
-// Nothing would ever re-arm after that, no flip would ever be retired again, and nothing would say so.
+// Nothing would ever re-arm after that, no flip would ever be retired again, and nothing would say so. The same
+// argument holds for DcnVsyncEnable's register write, which is why it is inside the lock too: MmioDcnRead/
+// MmioDcnWrite (mmio.c) take no lock of their own and are legal at DISPATCH_LEVEL, so nesting them under this
+// one costs nothing and closes the same race the timer comment describes.
 static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
@@ -841,6 +847,23 @@ static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     KIRQL irql;
 
     if (wddm == NULL) return;
+
+    if (Device->VidPnFlipEnabled)
+    {
+        KeAcquireSpinLock(&wddm->Lock, &irql);
+        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
+        if (On != (Device->DcnVsyncArmed != 0))
+        {
+            InterlockedExchange(&Device->DcnVsyncArmed, On ? 1 : 0);
+            (void)DcnVsyncEnable(Device, On);
+            changed = TRUE;
+        }
+        KeReleaseSpinLock(&wddm->Lock, irql);
+        if (changed)
+            GuardLog("wddm: hardware vsync %s (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)", On ? "on" : "off");
+        return;
+    }
+
     due.QuadPart = -((LONGLONG)BC250_WDDM_VSYNC_MS * 10000);
 
     KeAcquireSpinLock(&wddm->Lock, &irql);
@@ -870,6 +893,39 @@ static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
 {
     WddmVSyncArm(Device, Visible);
+}
+
+// ---- ADR 0011 point 3 step 3: the hardware vsync's own report ------------------------------------------------
+//
+// Called from pnp.c's Bc250DpcRoutine on every DPC, the same unconditional shape as WddmGpuFence/
+// WddmGpuFencePaging above: a no-op unless Device->DcnVsyncAcked says the ISR (dcn.c's DcnVsyncInterrupt) found
+// at least one real VUPDATE_NO_LOCK event since the last time this ran. <= DISPATCH_LEVEL.
+void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    DXGKARGCB_NOTIFY_INTERRUPT_DATA data;
+
+    if (wddm == NULL || !Device->VidPnFlipEnabled) return;
+    if (InterlockedExchange(&Device->DcnVsyncAcked, 0) == 0) return;
+    if (WddmStopping(wddm) || !wddm->VSyncEnabled) return;
+
+    // M88's own gate (amdgpu's dm_vupdate_high_irq completes a flip only once dc_get_flip_pending_on_otg says
+    // none is pending): postponed to the next tick rather than reported with a flip still in flight. A single,
+    // non-blocking read (dcn.c's DcnFlipPending), never PollFlipPending's busy-wait - SURFACE_FLIP_PENDING
+    // clears within one frame (facts M94), so this should not postpone more than once in practice.
+    if (DcnFlipPending(Device))
+    {
+        InterlockedIncrement(&Device->DcnVsyncDeferred);
+        return;
+    }
+
+    RtlZeroMemory(&data, sizeof(data));
+    data.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC;
+    data.CrtcVsync.VidPnTargetId = wddm->VSyncTargetId;
+    data.CrtcVsync.PhysicalAddress = wddm->PrimaryAddress;      // the address SetVidPnSourceAddress last asked for
+    data.CrtcVsync.PhysicalAdapterMask = 0;
+    InterlockedIncrement(&wddm->VSyncReports);
+    WddmReport(Device, &data);
 }
 
 // ---- the summary -------------------------------------------------------------------------------------------------
@@ -939,6 +995,12 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: vsync %s, %ld ticks, %ld reported to dxgkrnl",
              Wddm->VSyncEnabled ? "enabled" : "not enabled by ControlInterrupt", Wddm->VSyncTicks,
              Wddm->VSyncReports);
+    // ADR 0011 point 3 step 3 (0.7.24): VidPn flip gate. Every counter here stays 0 with EnableVidPnFlip
+    // closed, same convention as the node 1 line above.
+    GuardLog("wddm summary: vidpn flip %s: %ld hardware flips, %ld refused, %ld hardware vsyncs armed %ld "
+             "acked %ld refused %ld deferred (flip still pending)",
+             Wddm->Device->VidPnFlipEnabled ? "open" : "closed", Wddm->Device->DcnFlipsHardware, Wddm->Device->DcnFlipRefused,
+             Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred);
     if (Wddm->ReportFailures != 0)
         GuardLog("wddm summary: *** %ld reports refused by DxgkCbSynchronizeExecution ***", Wddm->ReportFailures);
 
@@ -1079,7 +1141,11 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     // Order matters, and this is the order:
     //
     //  1. Stopping under the lock. From here nothing of ours arms a timer, queues a DPC or joins the object
-    //     list, so the cancel and the flush below are final rather than a race they might lose.
+    //     list, so the cancel and the flush below are final rather than a race they might lose. The hardware
+    //     vsync interrupt is disabled and acked here too (ADR 0011 point 3 step 3), in the same critical
+    //     section as the timer's own cancel and for the same reason (WddmVSyncArm's own comment) - so that this
+    //     is strictly before DcnStop's surface restore and MmioStop (pnp.c's Bc250StopDevice), not merely
+    //     usually before them.
     //  2. Cancel the timer and take back both DPCs, then KeFlushQueuedDpcs - PASSIVE_LEVEL only, which is where
     //     StopDevice runs - so that any DPC already running has finished.
     //  3. Only then drop Device->Wddm and read or free anything.
@@ -1090,6 +1156,7 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
     KeAcquireSpinLock(&wddm->Lock, &irql);
     wddm->Stopping = TRUE;
     if (wddm->VSyncArmed) { wddm->VSyncArmed = FALSE; KeCancelTimer(&wddm->VSyncTimer); }
+    if (Device->DcnVsyncArmed != 0) { InterlockedExchange(&Device->DcnVsyncArmed, 0); (void)DcnVsyncEnable(Device, FALSE); }
     KeReleaseSpinLock(&wddm->Lock, irql);
 
     KeCancelTimer(&wddm->VSyncTimer);   // again, unconditionally: cheap, and it cannot be armed any more
@@ -2422,10 +2489,12 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
     const BOOLEAN high = (KeGetCurrentIrql() > DISPATCH_LEVEL);
 
     if (pSetVidPnSourceAddress->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
-    // There is exactly one scan-out address on this adapter and the firmware programmed it; changing it needs the
-    // display core, which this driver does not touch (ADR 0006 point 2). The request is recorded, the firmware's
-    // framebuffer keeps scanning out, and display.c stays the only owner of that mapping. The address is what the
-    // next CRTC_VSYNC report carries, which is how dxgkrnl learns that this flip has retired.
+    // With Device->VidPnFlipEnabled closed there is exactly one scan-out address on this adapter and the
+    // firmware programmed it; changing it needs the display core, which this driver does not touch outside the
+    // gate (ADR 0006 point 2). The request is recorded, the firmware's framebuffer keeps scanning out, and
+    // display.c stays the only owner of that mapping. The address is what the next CRTC_VSYNC report carries,
+    // which is how dxgkrnl learns that this flip has retired - open, the same report still carries it, but the
+    // scanout has actually moved there (ADR 0011 point 3 step 3, DcnFlipSourceAddress below).
     if (wddm != NULL)
     {
         // A call that names the address that is already being scanned out is not a flip; DWM redrawing into one
@@ -2436,11 +2505,19 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
         // report is one interlocked exchange, so the reader sees the old address or the new one and never half
         // of each, and the value it replaced says whether this was a flip. The segment stored next to it is read
         // by nothing but a debugger.
-        if (InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, pSetVidPnSourceAddress->PrimaryAddress.QuadPart) !=
-            pSetVidPnSourceAddress->PrimaryAddress.QuadPart)
-            InterlockedIncrement(&wddm->Flips);
+        BOOLEAN changed = InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, pSetVidPnSourceAddress->PrimaryAddress.QuadPart) !=
+                          pSetVidPnSourceAddress->PrimaryAddress.QuadPart;
+
+        if (changed) InterlockedIncrement(&wddm->Flips);
         wddm->PrimarySegment = pSetVidPnSourceAddress->PrimarySegment;
         if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
+
+        // 0.7.24, ADR 0011 point 3 step 3: a real address change is also the M87 write sequence onto HUBP0/OTG0
+        // (DcnFlipSourceAddress, dcn.c) - never gated on !high, unlike WddmVSyncArm below: MmioDcnWrite takes no
+        // lock (mmio.c) and is legal at any IRQL. Not called when the address did not change: a redundant flip
+        // to the same surface would only add MMIO churn and a spurious trigger, never a visible difference.
+        if (changed && device->VidPnFlipEnabled)
+            (void)DcnFlipSourceAddress(device, (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart, NULL);
     }
     if (WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress))     // FALSE above DISPATCH_LEVEL, count taken all the same
         GuardLog("wddm: SetVidPnSourceAddress segment %u address 0x%llX flags 0x%08X (firmware framebuffer 0x%llX)",

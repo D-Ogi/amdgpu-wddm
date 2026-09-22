@@ -1,6 +1,6 @@
 # E22 - the display flip on DCN 2.0.1 under Windows (ADR 0011)
 
-State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for the owner (a repeat of run 002 costs a minute); step 3 (VidPN + interrupt) next.
+State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for the owner (a repeat of run 002 costs a minute); **step 3 (VidPN + interrupt) built, bc250kmd 0.7.24, review 24 GO, not yet run in the lab** - design in `docs/design/vidpn-flip.md`.
 
 ## Why
 
@@ -34,12 +34,24 @@ siedzi (who takes no risk sits in no jail) - so no risk in step 1: reads only.
    firmware already has (0, 0, and `0x440` triple buffering) - M87's note - so this driver leaves them alone.
    Address validation: 4 KiB aligned, the whole 1920x1200 A8R8G8B8 surface (pitch 7680) inside the VRAM
    carve-out (M31), or the firmware's own address (always allowed, the no-op flip and the restore).
-3. **`SetVidPnSourceAddress` and the interrupt** (later build): the same write sequence from the full table's
-   present path instead of the escape, and the vblank interrupt from `OTG0_OTG_GLOBAL_SYNC_STATUS` bit 12 /
-   IH client 4 src 0x57 (M88) reported through `DxgkCbNotifyInterrupt` as `DXGK_INTERRUPT_CRTC_VSYNC`, polled
-   from the vblank DPC the way 6.18.52 does - both need the full interrupt table and the IH ring, not built yet.
+3. **`SetVidPnSourceAddress` and the interrupt** (bc250kmd 0.7.24, `EnableVidPnFlip`, ADR 0011
+   point 3 step 3): the same M87 write sequence (`DcnFlipWriteSequence`, factored out of step 2's
+   `DcnFlipCore`), called from `Bc250WddmSetVidPnSourceAddress` itself instead of the escape, on a real address
+   change only. `DcnTranslateCardAddress` turns dxgkrnl's card-relative `PrimaryAddress` into the physical
+   address the registers want (`physical = VramBase + (CardAddress - VramMcBase)`, facts M85, both numbers
+   already measured by `VramStart` - never a literal), then the same `AddressAllowed` range check step 2 uses.
+   The vblank interrupt (`OTG0_OTG_GLOBAL_SYNC_STATUS` bit 12 `VUPDATE_NO_LOCK_INT_EN` / IH client 4 src 0x57,
+   M88) is armed by `DxgkDdiControlInterrupt(DXGK_INTERRUPT_CRTC_VSYNC)` in place of the software timer once the
+   gate is open, acked at DIRQL directly on the register (no lock needed - `MmioDcnRead`/`MmioDcnWrite` take
+   none), and reported from the vsync DPC as `DXGK_INTERRUPT_CRTC_VSYNC` carrying the address last flipped -
+   after polling `HUBPREQ0_DCSURF_FLIP_CONTROL`'s `SURFACE_FLIP_PENDING` (M94: clears within one frame) so a
+   report never claims a flip that has not actually landed. The firmware's own address is restored at
+   `StopDevice` (`DcnStop`, unchanged, ordered before `MmioStop` by `WddmStop`'s own disarm of the hardware
+   vsync source). Full reasoning, IRQL legality and the gate-closed regression argument: `docs/design/vidpn-flip.md`.
+   Driven from the lab with `e19_target.ps1 -Phase gate -Full 1 -VidPnFlip 1` (sets `EnableDcnWrite` and
+   `EnableVidPnFlip` together, Full-gated like every other engine).
 
-Hypotheses for run 002 (step 2, the escape only - H6 needs step 3's interrupt and stays open until then):
+Hypotheses for run 002 (step 2, the escape only):
 
 - **H4**: a flip to the firmware's own address (a no-op flip: `dcnflip <firmware address>` or `dcnflip
   restore` before anything else has flipped) leaves the picture on the monitor intact, `SURFACE_FLIP_PENDING`
@@ -47,8 +59,25 @@ Hypotheses for run 002 (step 2, the escape only - H6 needs step 3's interrupt an
 - **H5**: a flip to a driver-filled surface (`dcnflip 0x271000000 fill 0xFF2060C0`) shows the fill on the
   monitor - a blue field with a white border and a diagonal line - in place of the desktop, and `dcnflip
   restore` afterwards brings the desktop back.
-- **H6** (deferred to step 3): the vblank interrupt arrives once per frame while a flip is live and stops when
-  `EnableDcnWrite`/`EnableIh` are closed. Not testable yet: this build raises no interrupt of its own for DCN.
+
+Hypotheses for the first step 3 run (`EnableVidPnFlip`, not yet run in the lab):
+
+- **H6**: with the CDD driving the desktop under the full WDDM table and `EnableVidPnFlip` open, dxgkrnl's own
+  presents (DWM's flips, not the `dcnflip` escape) land on the monitor - the desktop is visible and moves when
+  a window is dragged - and `WddmCounters`' `DcnFlipsHardware` advances roughly once per DWM composition, with
+  `DcnFlipRefused` staying 0 across ordinary desktop use.
+- **H7**: the VUPDATE_NO_LOCK interrupt arrives at the display's own rate (facts M86/M87/M94: 59.95 Hz, the
+  1920x1200 CVT-RB timing) while a source is visible, `DcnVsyncTicks` and `wddm->VSyncReports` both advance at
+  that rate, and
+  `DcnVsyncDeferred` stays at or near 0 - a nonzero, growing `DcnVsyncDeferred` would mean
+  `SURFACE_FLIP_PENDING` is not clearing within one frame the way M94 measured under the escape's own poll
+  (`docs/design/vidpn-flip.md` section 10, open question 1).
+- **H8**: no `HUBP_UNDERFLOW_STATUS` bit sets and no `Display 4101 (TDR)` event appears in `e19_target.ps1
+  -Phase state`'s event counts across a run that includes ordinary desktop use (moving windows, opening an
+  app) - the double-buffered hardware flip should be at least as clean as the software-timer path 0.7.23
+  already exercises, never worse. `EnableDcnWrite`/`EnableVidPnFlip` closing again at the end of the run
+  (`-Phase gate -Full 0`) should show every new counter unchanged from its last value, never a hardware access
+  attempted afterward - the gate-closed regression bar `docs/design/vidpn-flip.md` section 9 states.
 
 ## Runs
 

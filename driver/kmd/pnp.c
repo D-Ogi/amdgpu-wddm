@@ -178,15 +178,21 @@ static void NoteInterruptResource(_Inout_ BC250_DEVICE* Device)
     if (found == 0) GuardLog("no interrupt resource");
 }
 
-// The display path enables no interrupt source; the only one this driver ever enables is the IH ring (ih.c, behind its
-// gate). Everything else that fires on a shared line is not ours. Counted either way: the count is evidence.
+// The display path enables no interrupt source; the two this driver ever enables are the IH ring (ih.c, behind
+// its gate) and, since 0.7.24 (ADR 0011 point 3 step 3), OTG0's VUPDATE_NO_LOCK (dcn.c's DcnVsyncInterrupt,
+// behind EnableVidPnFlip) - independent of each other and of GartLock (dcn.c's registers are not on any
+// GART/PSP/GFX/IH sequence's set). Everything else that fires on a shared line is not ours. Both are called on
+// every interrupt regardless of what the other found, so neither can suppress the other's ack or DPC request.
 BOOLEAN Bc250InterruptRoutine(_In_ const PVOID MiniportDeviceContext, _In_ ULONG MessageNumber)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
+    BOOLEAN ih, vsync;
 
     InterlockedIncrement(&device->InterruptCount);
     InterlockedExchange(&device->LastMessageNumber, (LONG)MessageNumber);
-    return IhInterrupt(device);
+    ih = IhInterrupt(device);
+    vsync = DcnVsyncInterrupt(device);
+    return ih || vsync;
 }
 
 void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
@@ -196,6 +202,9 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
     // ADR 0008 stage D: node 1's own poll, unconditional like the one above - which vector woke this DPC does not
     // matter to either read, only whether the fence slot it polls now holds the value it is waiting for.
     WddmGpuFencePaging((BC250_DEVICE*)MiniportDeviceContext);
+    // ADR 0011 point 3 step 3: the hardware vsync's own report, same shape - a no-op unless Device->DcnVsyncAcked
+    // says an interrupt found a real VUPDATE_NO_LOCK event since the last time this ran.
+    WddmDcnVsync((BC250_DEVICE*)MiniportDeviceContext);
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
 }
 

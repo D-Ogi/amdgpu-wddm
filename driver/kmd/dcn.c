@@ -11,6 +11,7 @@
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"       // field masks for the decoded summary only; every offset comes from regcalc
+#include "dcn_translate.h"           // ADR 0011 point 3 step 3: the WDDM flip's host-testable address conversion
 #include <ntstrsafe.h>
 
 void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
@@ -239,18 +240,15 @@ static void Refuse(_Inout_ BC250_ESCAPE_DCNFLIP* Out, NTSTATUS Status, _In_z_ co
 // Target == the firmware's own address is always allowed (the no-op flip, and what Restore asks for); anything
 // else needs the VRAM carve-out identified (EnableVram) and the whole surface, 4 KiB aligned, inside it (facts
 // M31: base 0x270000000, length from GCMC_VM_FB_LOCATION_BASE/TOP, both already in Device->VramPhysical/VramLength
-// - vram.c's VramStart, the same numbers wddm.c's segment 1 is carved from).
+// - vram.c's VramStart, the same numbers wddm.c's segment 1 is carved from). The alignment-and-range half of
+// this is dcn_translate.c's DcnAddressFits (0.7.24, ADR 0011 point 3 step 3): one host-testable rule shared with
+// DcnFlipSourceAddress below, rather than a second copy of the arithmetic.
 static BOOLEAN AddressAllowed(_In_ const BC250_DEVICE* Device, ULONGLONG Target)
 {
-    ULONGLONG vramBase, vramTop;
-
     if (Device->DcnFirmwareKnown && Target == Device->DcnFirmwareAddress) return TRUE;
-    if ((Target & 0xFFFull) != 0) return FALSE;
     if (!Device->VramEnabled) return FALSE;
-    vramBase = (ULONGLONG)Device->VramPhysical.QuadPart;
-    vramTop = vramBase + Device->VramLength;
-    if (Target < vramBase || Target >= vramTop) return FALSE;
-    return BC250_DCNFLIP_SURFACE_BYTES <= vramTop - Target;
+    return DcnAddressFits(Target, (ULONGLONG)Device->VramPhysical.QuadPart, Device->VramLength,
+                          BC250_DCNFLIP_SURFACE_BYTES) != 0;
 }
 
 // Fill's own pattern: solid FillColor, a 64-pixel white border, and a corner-to-corner diagonal (3 pixels wide)
@@ -289,8 +287,39 @@ static NTSTATUS FillSurface(ULONGLONG Physical, ULONG FillColor)
     return STATUS_SUCCESS;
 }
 
+// The M87 write sequence alone (step 2, in order: lock, arm the flip synchronous/unlocked, the new address,
+// unlock, trigger), factored out of DcnFlipCore below so that DcnFlipSourceAddress (0.7.24, ADR 0011 point 3
+// step 3 - the WDDM DDI path) issues exactly the same six writes in the same order the escape does, without
+// pulling in the escape's poll, fill or diagnostic fields. Every write goes through MmioDcnWriteEx, which takes
+// no lock (mmio.c) and is therefore legal at any IRQL, including above DISPATCH_LEVEL. Quiet is DcnFlipCore's
+// (the escape's, occasional) FALSE against DcnFlipSourceAddress's (the DDI's, once per real present) TRUE -
+// review 16 section 24: MmioDcnWrite's own per-write GuardLog, fine for the escape, is not something a live
+// desktop should call on every flip forever, and DcnFlipSourceAddress already summarizes each outcome itself.
+static NTSTATUS DcnFlipWriteSequence(_In_ const BC250_DEVICE* Device, ULONGLONG Target, BOOLEAN Quiet)
+{
+    NTSTATUS status;
+
+    status = MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 1, Quiet);
+    if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, 0, Quiet);
+    if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL, 0, Quiet);
+    if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, (ULONG)(Target >> 32), Quiet);
+    if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, (ULONG)(Target & 0xFFFFFFFFull), Quiet);
+    if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0, Quiet);
+    if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG, 1, Quiet);
+    if (!NT_SUCCESS(status))
+    {
+        // The lock write is the only one of these six that must never be left standing: if it went through and
+        // a later write in the sequence did not, unlock now, best effort, rather than leave OTG0 locked.
+        // Harmless when the lock write itself was what failed, or when the sequence already unlocked before the
+        // failing write - LOCK=0 onto an already-unlocked OTG0 is a no-op.
+        (void)MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0, Quiet);
+    }
+    return status;
+}
+
 // M87's poll: HUBPREQ0_DCSURF_FLIP_CONTROL bit 0x100 (SURFACE_FLIP_PENDING), 100 us steps, up to 50 ms - the
-// budget amdgpu's own poll never got close to at 60 Hz (facts M88: 2158 reads across 360 flips).
+// budget amdgpu's own poll never got close to at 60 Hz (facts M88: 2158 reads across 360 flips). PASSIVE_LEVEL
+// only (the busy-wait): the escape's own poll, never DcnFlipSourceAddress's (see DcnFlipPending below instead).
 static void PollFlipPending(_In_ const BC250_DEVICE* Device, _Out_ ULONG* WaitUs, _Out_ BOOLEAN* Cleared)
 {
     ULONG waited = 0, value = 0;
@@ -355,21 +384,11 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
         if (!NT_SUCCESS(status)) { Refuse(Out, status, "could not map the target surface to fill it"); return; }
     }
 
-    // Step 2 (M87), in order: lock, arm the flip (synchronous, unlocked), the new address, unlock, trigger.
-    status = MmioDcnWrite(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 1);
-    if (NT_SUCCESS(status)) status = MmioDcnWrite(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, 0);
-    if (NT_SUCCESS(status)) status = MmioDcnWrite(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL, 0);
-    if (NT_SUCCESS(status)) status = MmioDcnWrite(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, (ULONG)(target >> 32));
-    if (NT_SUCCESS(status)) status = MmioDcnWrite(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, (ULONG)(target & 0xFFFFFFFFull));
-    if (NT_SUCCESS(status)) status = MmioDcnWrite(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0);
-    if (NT_SUCCESS(status)) status = MmioDcnWrite(Device, BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG, 1);
+    // Step 2 (M87): the write sequence, factored out (DcnFlipWriteSequence above) so the DDI path shares it.
+    // Quiet = FALSE: the escape's own occasional, human-driven flip keeps its per-write GuardLog, unchanged.
+    status = DcnFlipWriteSequence(Device, target, FALSE);
     if (!NT_SUCCESS(status))
     {
-        // The lock write (step 1) is the only one of these six that must never be left standing: if it went
-        // through and a later write in the sequence did not, unlock now, best effort, rather than leave OTG0
-        // locked. Harmless when the lock write itself was what failed, or when the sequence already unlocked
-        // before the failing write - LOCK=0 onto an already-unlocked OTG0 is a no-op.
-        (void)MmioDcnWrite(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0);
         Refuse(Out, status, "a register write of the flip sequence was refused");
         return;
     }
@@ -435,4 +454,141 @@ void DcnStop(_Inout_ BC250_DEVICE* Device)
     DcnFlipCore(Device, 0, TRUE, 0, 0, &scratch);
     GuardLog("dcnflip: stop: restore to the firmware address %s (NTSTATUS 0x%08X)",
              scratch.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", scratch.NtStatus);
+}
+
+// ---- ADR 0011 point 3 step 3 (0.7.24): SetVidPnSourceAddress's own path, VUPDATE_NO_LOCK ----------------------
+//
+// Everything below is reachable only with Device->VidPnFlipEnabled (mmio.c's MmioStart: EnableMmio &&
+// EnableDcnWrite && EnableVidPnFlip together), which in turn is reachable only under EnableFullWddm - the
+// display-only DDI table never calls DxgkDdiSetVidPnSourceAddress or DxgkDdiControlInterrupt at all. With the
+// gate closed none of this runs and the escape path above (DcnFlipCore/DcnFlipEscape) is untouched.
+#define BC250_DCN_LOG_CALLS 8        // how many of DcnFlipSourceAddress's outcomes reach the guard log, each way
+
+// SetVidPnSourceAddress's own flip: the same M87 write sequence DcnFlipCore uses (DcnFlipWriteSequence), never
+// PollFlipPending's 50 ms busy-wait - d3dkmddi.h allows this DDI up to PROFILE_LEVEL - 1, where a busy-wait of
+// that length would stall the DPC that is supposed to report the flip's completion (WddmDcnVsync, wddm.c;
+// DcnFlipPending below is that DPC's own single, non-blocking read). CardAddress is what dxgkrnl's
+// DXGKARG_SETVIDPNSOURCEADDRESS.PrimaryAddress carries for this adapter's one segment - BaseAddress-relative
+// (Device->VramMcBase + an offset, wddm.c's WddmQuerySegment4), not the physical address DCN wants - and
+// DcnTranslateCardAddress (dcn_translate.c) is the inverse of that same arithmetic (facts M85), run from what
+// VramStart measured, never a literal. PhysicalOut, if not NULL, gets the translated address for the caller's
+// own log line.
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, _Out_opt_ ULONGLONG* PhysicalOut)
+{
+    ULONGLONG physical;
+    NTSTATUS status;
+
+    if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
+    if (!Device->VramEnabled ||
+        !DcnTranslateCardAddress(CardAddress, Device->VramMcBase, (ULONGLONG)Device->VramPhysical.QuadPart,
+                                 Device->VramLength, &physical) ||
+        !AddressAllowed(Device, physical))
+    {
+        if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)
+            GuardLog("dcnflip: SetVidPnSourceAddress refused: card address 0x%llX does not translate inside the carve-out", CardAddress);
+        return STATUS_ACCESS_DENIED;
+    }
+    if (PhysicalOut != NULL) *PhysicalOut = physical;
+
+    // Same capture DcnFlipCore's step 1 does for the escape: the first flip of any kind, escape or DDI, is what
+    // learns the firmware's own address - nothing reads it at StartDevice itself (ADR 0011 point 3).
+    if (!Device->DcnFirmwareKnown)
+    {
+        ULONG lo = 0, hi = 0;
+
+        if (NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, &lo)) &&
+            NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, &hi)))
+        {
+            Device->DcnFirmwareKnown = TRUE;
+            Device->DcnFirmwareAddress = ((ULONGLONG)hi << 32) | lo;
+        }
+    }
+
+    // Quiet = TRUE (review 16 section 24): a real present, potentially once per frame for as long as the
+    // desktop is up - MmioDcnWrite's per-write GuardLog was sized for the escape's occasional calls, not this.
+    // The outcome is still logged, once, below, capped like every other counter here (BC250_DCN_LOG_CALLS).
+    status = DcnFlipWriteSequence(Device, physical, TRUE);
+    if (NT_SUCCESS(status))
+    {
+        // Same benign race wddm.c's own PrimaryAddress accepts (no lock reachable above DISPATCH_LEVEL): these
+        // two fields are diagnostic and the escape's own stop path reads them, not this DDI's caller.
+        Device->DcnCurrentAddress = physical;
+        Device->DcnDiverged = (physical != Device->DcnFirmwareAddress);
+        if (InterlockedIncrement(&Device->DcnFlipsHardware) <= BC250_DCN_LOG_CALLS)
+            GuardLog("dcnflip: SetVidPnSourceAddress flip: card 0x%llX -> physical 0x%llX", CardAddress, physical);
+    }
+    else if (InterlockedIncrement(&Device->DcnFlipRefused) <= BC250_DCN_LOG_CALLS)
+        GuardLog("dcnflip: SetVidPnSourceAddress: a register write of the flip sequence was refused (0x%08X)", status);
+    return status;
+}
+
+// The vsync DPC's own poll (WddmDcnVsync, wddm.c): a single, non-blocking read of
+// HUBPREQ0_DCSURF_FLIP_CONTROL's SURFACE_FLIP_PENDING bit (facts M94: clears within one frame), never
+// PollFlipPending's busy-wait. <= DISPATCH_LEVEL; FALSE (not pending) whenever the register cannot be read, so a
+// transient refusal never holds a vsync report back forever.
+BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device)
+{
+    ULONG value = 0;
+
+    if (Device->Mmio == NULL) return FALSE;
+    if (!NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value))) return FALSE;
+    return (value & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) != 0;
+}
+
+// The hardware vsync source's own enable/ack: a read-modify-write of OTG0_OTG_GLOBAL_SYNC_STATUS (facts M88)
+// that sets or clears VUPDATE_NO_LOCK_INT_EN and always ORs in VUPDATE_NO_LOCK_EVENT_CLEAR, so neither turning
+// the source on nor off can leave a stale event latched - the same ack DcnVsyncInterrupt below performs at
+// DIRQL, done here once instead of writing the sequence twice. wddm.c's WddmVSyncArm is the only caller, from
+// inside its own spin lock, the same way it already holds that lock across KeSetTimerEx/KeCancelTimer for the
+// software path - MmioDcnRead/MmioDcnWrite take no lock of their own (mmio.c), so nesting under it is safe.
+NTSTATUS DcnVsyncEnable(_In_ const BC250_DEVICE* Device, BOOLEAN On)
+{
+    ULONG status;
+    NTSTATUS result;
+
+    if (Device->Mmio == NULL) return STATUS_DEVICE_NOT_READY;
+    result = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS, &status);
+    if (!NT_SUCCESS(result)) return result;
+    if (On) status |= OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_INT_EN_MASK;
+    else status &= ~OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_INT_EN_MASK;
+    status |= OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_CLEAR_MASK;
+    return MmioDcnWrite(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS, status);
+}
+
+// pnp.c's Bc250InterruptRoutine calls this on every interrupt this driver's ISR takes, the same shape as ih.c's
+// own IhInterrupt: a no-op (FALSE, nothing read) unless Device->VidPnFlipEnabled and Device->DcnVsyncArmed are
+// both true, which is what makes this inert with the gate closed or nobody listening. DIRQL: MmioDcnRead and
+// MmioDcnWrite take no lock (mmio.c, a mapped BAR5 and a binary search over a static table), which is what
+// makes both legal here - review 16's checklist item for this step. Device->DcnVsyncArmed is read racily, the
+// same acceptable race as ih->Active's own (ih.c): at most one interrupt either armed a tick early or found the
+// gate already closing.
+BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
+{
+    ULONG status;
+
+    if (Device->Mmio == NULL || !Device->VidPnFlipEnabled || Device->DcnVsyncArmed == 0) return FALSE;
+    if (!NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS, &status)))
+    {
+        InterlockedIncrement(&Device->DcnVsyncRefused);
+        return FALSE;
+    }
+    if ((status & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) == 0) return FALSE;
+
+    // Ack: OR the clear bit into the value just read, so INT_EN (which must stay set) and every other field go
+    // back exactly as read - the same read-modify-write DcnVsyncEnable uses to turn the source on or off.
+    // Quiet = TRUE (review 16 section 24): this runs at DIRQL, once every vblank, for as long as the hardware
+    // vsync stays armed - MmioDcnWrite's own per-write GuardLog would call DbgPrintEx from here on every frame,
+    // forever, which is exactly the kind of unbounded ISR-path cost this driver's hardware-safety rules ask to
+    // avoid (worse under a kernel debugger, where DbgPrint can block on the transport). DcnVsyncTicks below is
+    // the counter that says this ran; nothing here needs a log line to be trusted.
+    if (!NT_SUCCESS(MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS,
+                                   status | OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_CLEAR_MASK, TRUE)))
+    {
+        InterlockedIncrement(&Device->DcnVsyncRefused);
+        return FALSE;
+    }
+    InterlockedIncrement(&Device->DcnVsyncTicks);
+    InterlockedIncrement(&Device->DcnVsyncAcked);
+    Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+    return TRUE;
 }

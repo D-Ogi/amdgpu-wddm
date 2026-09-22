@@ -16,7 +16,10 @@ Nobody types an offset (docs/02-register-addressing.md). Two tables come out of 
   g_MmioDcnWriteAllow  ADR 0011 point 3 / 0.7.20: the six HUBP0/OTG0 registers the gated flip (dcn.c's DcnFlip)
                     may write, from DCN_WRITE_REGISTERS below - the M87 flip sequence, minus the two registers
                     (FLIP_CONTROL2, VUPDATE_KEEPOUT) and the OTG0_OTG_GLOBAL_CONTROL0 write amdgpu issues but
-                    that were already at the value it wrote (facts M87 note, ADR 0011 step 2 of E22).
+                    that were already at the value it wrote (facts M87 note, ADR 0011 step 2 of E22). 0.7.24
+                    (ADR 0011 point 3 step 3) adds OTG0_OTG_GLOBAL_SYNC_STATUS: the VUPDATE_NO_LOCK_INT_EN /
+                    _EVENT_CLEAR read-modify-write the hardware vsync interrupt is enabled and acknowledged
+                    with (facts M88), the same register DcnEscape already reads by name.
 
 Run:  python driver/kmd/gen_regs.py
 """
@@ -118,11 +121,15 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
          ("DMU", "mmOTG0_OTG_MASTER_UPDATE_LOCK"), ("DMU", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
 
 # 0.7.20, ADR 0011 point 3 step 2 (M87, HUBP0 only): the write side of DcnFlip's sequence, on its own allow
-# list so that nothing outside this exact set can be written through the escape. Every name is already on
-# DCN_REGISTERS (the read table) below; MmioDcnWrite (mmio.c) checks this list, never the read one.
+# list so that nothing outside this exact set can be written through the escape or the WDDM flip DDI. Every
+# name is already on DCN_REGISTERS (the read table) below; MmioDcnWrite (mmio.c) checks this list, never the
+# read one. 0.7.24 (ADR 0011 point 3 step 3) adds OTG0_OTG_GLOBAL_SYNC_STATUS for the hardware vsync interrupt's
+# own enable/ack (dcn.c's DcnVsyncEnable, DcnVsyncInterrupt) - not part of the M87 flip sequence itself, but the
+# same write-only-through-one-checked-table rule applies to it.
 DCN_WRITE_REGISTERS = ["mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmHUBPREQ0_DCSURF_FLIP_CONTROL",
                        "mmHUBPREQ0_DCSURF_SURFACE_CONTROL", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH",
-                       "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG"]
+                       "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG",
+                       "mmOTG0_OTG_GLOBAL_SYNC_STATUS"]
 
 # ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
 # write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of

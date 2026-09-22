@@ -1293,9 +1293,9 @@ static const BC250_DCN_REG_INFO g_DcnRegisters[BC250_DCN_REG_INFO_COUNT] = {
 
 // 0.7.20, ADR 0011 point 3 step 2 (M87, HUBP0 only): DcnFlip's write allow list (gen_regs.py's
 // DCN_WRITE_REGISTERS). Sorted, unique, checked by MmioDcnWrite; every offset is also in g_MmioDcnAllow.
-#define BC250_MMIO_DCN_WRITE_ALLOW_COUNT 6
+#define BC250_MMIO_DCN_WRITE_ALLOW_COUNT 7
 static const unsigned long g_MmioDcnWriteAllow[BC250_MMIO_DCN_WRITE_ALLOW_COUNT] = {
-    0x0EB28, 0x0EB2C, 0x0EB68, 0x0EB6C, 0x13FE8, 0x1412C,
+    0x0EB28, 0x0EB2C, 0x0EB68, 0x0EB6C, 0x13FE8, 0x14128, 0x1412C,
 };
 
 #endif

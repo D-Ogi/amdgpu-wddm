@@ -122,6 +122,23 @@ typedef struct _BC250_DEVICE {
     ULONGLONG DcnCurrentAddress;
     BOOLEAN DcnDiverged;
 
+    // dcn.c's VidPn flip (0.7.24, ADR 0011 point 3 step 3): Device->DcnWriteEnabled && EnableVidPnFlip together
+    // (mmio.c's MmioStart), i.e. EnableMmio && EnableDcnWrite && EnableVidPnFlip. Meaningful only under the full
+    // table: the display-only DDI table never calls DxgkDdiSetVidPnSourceAddress or DxgkDdiControlInterrupt.
+    BOOLEAN VidPnFlipEnabled;
+    // The hardware vsync (OTG0's VUPDATE_NO_LOCK, facts M88): armed by wddm.c's WddmVSyncArm in place of the
+    // software timer while VidPnFlipEnabled is open. DcnVsyncArmed is read lock-free by the ISR (DIRQL,
+    // dcn.c's DcnVsyncInterrupt), the same acceptable race as ih.c's own Active; DcnVsyncAcked is what the ISR
+    // hands the vsync DPC (WddmDcnVsync, wddm.c) once per real event it found and acknowledged.
+    volatile LONG DcnVsyncArmed;
+    volatile LONG DcnVsyncAcked;
+    volatile LONG DcnVsyncTicks;         // every VUPDATE_NO_LOCK event the ISR acknowledged, armed or not
+    volatile LONG DcnVsyncRefused;       // MmioDcnRead/MmioDcnWrite failed inside the ISR (should not happen:
+                                         // BAR5 stays mapped for the whole device start; counted, not assumed impossible)
+    volatile LONG DcnVsyncDeferred;      // a hardware tick postponed one DPC because the flip was still pending
+    volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
+    volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress targets the translation or the range check refused
+
     // The VRAM carve-out, all zero unless the EnableVram gate was open at start (vram.c).
     BOOLEAN VramEnabled;
     BOOLEAN VramWriteEnabled;
@@ -212,8 +229,14 @@ typedef struct _BC250_DCN_REG_INFO {
 NTSTATUS MmioDcnRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value);
 ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table);
 // 0.7.20 (ADR 0011 point 3 step 2): the write side, g_MmioDcnWriteAllow's six HUBP0/OTG0 registers only, gated
-// by Device->DcnWriteEnabled. Every call logged (dcn.c's DcnFlip is the only caller).
+// by Device->DcnWriteEnabled. Every call logged - the escape's own occasional writes (dcn.c's DcnFlipCore).
 NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value);
+// 0.7.24 (ADR 0011 point 3 step 3, review 16 section 24): the same validated write, Quiet skips the per-write
+// GuardLog. For the two hot paths this step adds - DcnVsyncInterrupt's ack, once every vblank at DIRQL for as
+// long as the hardware vsync stays armed, and DcnFlipWriteSequence when called from the DDI's own
+// DcnFlipSourceAddress (already summarized by its own capped GuardLog) - so a live desktop does not call
+// DbgPrintEx from the ISR on every frame forever.
+NTSTATUS MmioDcnWriteEx(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value, BOOLEAN Quiet);
 
 // ih.c
 struct _BC250_ESCAPE_IH;
@@ -247,6 +270,30 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 // says the most recent flip left it somewhere else. A no-op, logged as one, when it does not - so pnp.c can call
 // it unconditionally rather than reach into dcn.c's state.
 void DcnStop(_Inout_ BC250_DEVICE* Device);
+
+// dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
+// DcnFlipEscape uses (step 2), never PollFlipPending's blocking poll (this may run above DISPATCH_LEVEL, per
+// d3dkmddi.h's own annotation of DXGKDDI_SETVIDPNSOURCEADDRESS: PASSIVE_LEVEL..PROFILE_LEVEL-1). CardAddress is
+// what dxgkrnl's DXGKARG_SETVIDPNSOURCEADDRESS.PrimaryAddress carries (wddm.c's segment BaseAddress numbers,
+// Device->VramMcBase + an offset), not the physical address DCN wants; PhysicalOut, if not NULL, gets the
+// translated address for the caller's own log line. STATUS_DEVICE_NOT_READY with the gate closed,
+// STATUS_ACCESS_DENIED when the address does not translate inside the carve-out or fails the escape's own 4
+// KiB/range rule.
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, _Out_opt_ ULONGLONG* PhysicalOut);
+// The vsync DPC's own poll (wddm.c's WddmDcnVsync): a single, non-blocking read of
+// HUBPREQ0_DCSURF_FLIP_CONTROL's SURFACE_FLIP_PENDING bit, never PollFlipPending's busy-wait. <= DISPATCH_LEVEL.
+BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device);
+// The hardware vsync interrupt's own enable/ack (0.7.24, ADR 0011 point 3 step 3). DcnVsyncEnable is
+// wddm.c's WddmVSyncArm's hardware branch: a read-modify-write of OTG0_OTG_GLOBAL_SYNC_STATUS that sets or
+// clears VUPDATE_NO_LOCK_INT_EN and always acks whatever VUPDATE_NO_LOCK_EVENT_CLEAR finds pending, so neither
+// turning the source on nor off can leave a stale event behind. DcnVsyncInterrupt is pnp.c's
+// Bc250InterruptRoutine's own call, at DIRQL: a no-op unless Device->VidPnFlipEnabled and Device->DcnVsyncArmed
+// are both true, otherwise one MmioDcnRead and, only when VUPDATE_NO_LOCK_EVENT_OCCURRED is set, one quiet
+// MmioDcnWriteEx that acks it and queues the DPC. Neither takes a lock (mmio.c's MmioDcnRead/MmioDcnWriteEx
+// take none), which is what makes the second one legal at DIRQL - Quiet=TRUE is what keeps it fast (review 16
+// section 24: no DbgPrintEx from here on every vblank).
+NTSTATUS DcnVsyncEnable(_In_ const BC250_DEVICE* Device, BOOLEAN On);
+BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device);
 
 // sequence.c
 void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,
@@ -420,6 +467,11 @@ void WddmStart(_Inout_ BC250_DEVICE* Device);       // never fails the start, li
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
+// ADR 0011 point 3 step 3 (0.7.24): the hardware vsync's own DPC-side report - CRTC_VSYNC once per DPC run that
+// found at least one VUPDATE_NO_LOCK event acknowledged (Device->DcnVsyncAcked), deferred one tick if the flip
+// is still pending (dcn.c's DcnFlipPending). A no-op with Device->VidPnFlipEnabled closed. See pnp.c's
+// Bc250DpcRoutine and docs/design/vidpn-flip.md.
+void WddmDcnVsync(_Inout_ BC250_DEVICE* Device);
 void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet in flight finished? <= DISPATCH_LEVEL
 // ADR 0008 stage D: node 1's own twin of WddmGpuFence above, same call sites, same IRQL bound - see pnp.c's
 // Bc250DpcRoutine and docs/design/paging-node.md section 5.

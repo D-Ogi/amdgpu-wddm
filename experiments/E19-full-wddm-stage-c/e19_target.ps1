@@ -6,6 +6,8 @@
 #   -Phase unumd                       after run 2: remove its package from the store, which returns the plain one
 #   -Phase gate -Full 0|1            EnableMmio, EnableVram and EnableFullWddm = Full, every engine gate 0, then a
 #                                      device disable/enable so that DriverEntry reads the gate again
+#                                      (add -VidPnFlip 1 for E22 step 3: EnableDcnWrite + EnableVidPnFlip, Full-gated
+#                                      like every other engine here, since the DDI needs EnableFullWddm to be called at all)
 #   -Phase state -Tag <t>              device, driver, breadcrumbs, gates, video controller, event and report COUNTS
 #   -Phase log -Tag <t>                the driver's log ring (read it BEFORE the gate is closed: an unload takes it along)
 #   -Phase confirm                     clear UnconfirmedStarts (only after `state` looked healthy)
@@ -25,6 +27,8 @@ param(
     [int]$GpuSubmit = 0,                # with -Phase gate: EnableGpuSubmit (stage C: DMA buffers go down the gfx ring)
     [int]$Blit = 0,                     # with -Phase gate: EnablePresentBlit (E20: the diagnostic CPU blit of a present)
     [int]$PagingNode = 0,               # with -Phase gate: EnablePagingNode (E24: node 1 on SDMA0; needs GpuSubmit's engines)
+    [int]$VidPnFlip = 0,                # with -Phase gate: EnableDcnWrite and EnableVidPnFlip (E22 step 3: SetVidPnSourceAddress's
+                                         # own hardware flip and the VUPDATE_NO_LOCK interrupt; needs only EnableMmio, which -Full opens)
     [string]$Package = 'C:\BC250\e16'
 )
 
@@ -59,6 +63,7 @@ function State {
         @(Get-ChildItem 'C:\BC250\kmdlog' -File -ErrorAction SilentlyContinue).Count)
     Say ("gates    EnableFullWddm {0}  EnableMmio {1}  EnableVram {2}  EnableGart {3}  EnablePsp {4}  EnableGfx {5}  EnableIh {6}" -f `
         $p.EnableFullWddm, $p.EnableMmio, $p.EnableVram, $p.EnableGart, $p.EnablePsp, $p.EnableGfx, $p.EnableIh)
+    Say ("gates    EnableDcnWrite {0}  EnableVidPnFlip {1}" -f $p.EnableDcnWrite, $p.EnableVidPnFlip)
     Get-CimInstance Win32_VideoController | ForEach-Object {
         Say ("video    {0} | status {1} | availability {2} | mode {3} | ram {4} | dll {5}" -f $_.Name, $_.Status, $_.Availability, $_.VideoModeDescription, $_.AdapterRAM, $_.InstalledDisplayDrivers)
     }
@@ -130,7 +135,10 @@ switch ($Phase) {
         Set-ItemProperty $params -Name EnablePresentBlit -Value $blit -Type DWord
         $paging = if ($submit -eq 1) { $PagingNode } else { 0 }
         Set-ItemProperty $params -Name EnablePagingNode -Value $paging -Type DWord
-        Say "gate     EnableGpuVa $va  EnableVramWrite $va  EnableGpuSubmit $submit  EnablePresentBlit $blit  EnablePagingNode $paging"
+        $flip = if ($Full -eq 1) { $VidPnFlip } else { 0 }
+        Set-ItemProperty $params -Name EnableDcnWrite -Value $flip -Type DWord
+        Set-ItemProperty $params -Name EnableVidPnFlip -Value $flip -Type DWord
+        Say "gate     EnableGpuVa $va  EnableVramWrite $va  EnableGpuSubmit $submit  EnablePresentBlit $blit  EnablePagingNode $paging  EnableDcnWrite $flip  EnableVidPnFlip $flip"
         Set-ItemProperty $params -Name EnableFullWddm -Value $Full -Type DWord
         # 0.7.3: the ring goes into C:\BC250\kmdlog at every stop while the gate is open, because dxgkrnl may end a
         # full WDDM start by itself and unload the driver, ring and all (run 1 with 0.7.2 did exactly that).

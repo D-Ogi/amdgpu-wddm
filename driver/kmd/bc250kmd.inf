@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/22/2026,0.7.23.0
+DriverVer   = 09/22/2026,0.7.24.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -116,6 +116,10 @@ HKR, Parameters, EnableGfx,         0x00010001, 0
 HKR, Parameters, EnableIh,          0x00010001, 0
 ; The gated DCN flip (dcn.c, 0.7.20, ADR 0011 point 3 step 2). Needs EnableMmio; the fill needs EnableVramWrite too.
 HKR, Parameters, EnableDcnWrite,    0x00010001, 0
+; SetVidPnSourceAddress's own hardware flip plus the VUPDATE_NO_LOCK interrupt (dcn.c/wddm.c, 0.7.24, E22 step 3,
+; ADR 0011 point 3 step 3). Needs EnableDcnWrite; meaningful only with EnableFullWddm open too. Closed by every
+; install, like every gate above.
+HKR, Parameters, EnableVidPnFlip,   0x00010001, 0
 ; The DDI table gate (entry.c, ADR 0008). 0 = DxgkInitializeDisplayOnlyDriver, the driver that runs the display
 ; today. 1 = DxgkInitialize with the full WDDM table of wddm.c. Closed by every install, like every gate above.
 HKR, Parameters, EnableFullWddm,    0x00010001, 0

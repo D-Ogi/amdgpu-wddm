@@ -13,6 +13,11 @@
 //                                 EnablePsp. Default 0.
 //     EnableIh         REG_DWORD  1 = also allow the IH command of ih.c its own table, g_MmioIhAllow. Needs
 //                                 EnableGfx (the ring is GTT memory of gpumem.c). Default 0.
+//     EnableVidPnFlip  REG_DWORD  1 = SetVidPnSourceAddress performs the DCN flip and ControlInterrupt arms the
+//                                 hardware vsync (dcn.c, ADR 0011 point 3 step 3), instead of 0.7.23's software
+//                                 path. Needs EnableDcnWrite (and so, transitively, EnableMmio) - the same chain
+//                                 shape as EnableIh needing EnableGfx above. Meaningful only under
+//                                 EnableFullWddm: the display-only DDI table never reaches either DDI. Default 0.
 //
 // Both are read once per start. A read of a wrong BAR5 address can hang this SoC (facts M16) and some reads
 // change state (facts M25), hence a table for reads as well.
@@ -83,6 +88,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->MmioGfxEnabled = FALSE;
     Device->MmioIhEnabled = FALSE;
     Device->DcnWriteEnabled = FALSE;
+    Device->VidPnFlipEnabled = FALSE;
     // dcn.c's flip state (0.7.20): reset here, at the top of every start, like every other gate above - not in
     // DcnStop, because there is none; the DCN dump has never had a Start/Stop of its own (ADR 0011 point 3) and
     // the write side does not get one either, MmioStart already being the one place every device start passes.
@@ -90,6 +96,14 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnFirmwareAddress = 0;
     Device->DcnCurrentAddress = 0;
     Device->DcnDiverged = FALSE;
+    // 0.7.24 (ADR 0011 point 3 step 3): the hardware vsync's own state, same reset rule.
+    Device->DcnVsyncArmed = 0;
+    Device->DcnVsyncAcked = 0;
+    Device->DcnVsyncTicks = 0;
+    Device->DcnVsyncRefused = 0;
+    Device->DcnVsyncDeferred = 0;
+    Device->DcnFlipsHardware = 0;
+    Device->DcnFlipRefused = 0;
     if (GuardReadSetting(L"EnableMmio", 0) != 1) return STATUS_SUCCESS;        // the gate is closed: M3 behaviour
 
     status = FindRegisterBar(Device, &start);
@@ -114,8 +128,12 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     // EnableDcnWrite together, exactly as ADR 0011 point 3 step 2 asks. Read only once mapping succeeded, so
     // this is already "EnableMmio == 1 && EnableDcnWrite == 1" without saying so twice.
     Device->DcnWriteEnabled = (GuardReadSetting(L"EnableDcnWrite", 0) == 1);
-    GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s, dcn writes %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off",
-             Device->DcnWriteEnabled ? "allowed" : "off");
+    // 0.7.24 (ADR 0011 point 3 step 3): a fourth link in the same chain - EnableVidPnFlip on top of
+    // Device->DcnWriteEnabled, which already means EnableMmio && EnableDcnWrite. wddm.c and dcn.c read this one
+    // field; neither reads the registry itself.
+    Device->VidPnFlipEnabled = Device->DcnWriteEnabled && (GuardReadSetting(L"EnableVidPnFlip", 0) == 1);
+    GuardLog("mmio: BAR5 at 0x%08X mapped, writes %s, dcn writes %s, vidpn flip %s", start.LowPart, Device->MmioWriteEnabled ? "allowed" : "off",
+             Device->DcnWriteEnabled ? "allowed" : "off", Device->VidPnFlipEnabled ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
 
@@ -129,6 +147,7 @@ void MmioStop(_Inout_ BC250_DEVICE* Device)
     Device->MmioGfxEnabled = FALSE;
     Device->MmioIhEnabled = FALSE;
     Device->DcnWriteEnabled = FALSE;
+    Device->VidPnFlipEnabled = FALSE;
 }
 
 NTSTATUS MmioRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
@@ -273,8 +292,25 @@ ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table)
 // by Device->DcnWriteEnabled - EnableMmio and EnableDcnWrite together (mmio.c's MmioStart), never EnableMmioWrite:
 // the general WRITE_REG allow list is GC/MMHUB/OSSSYS/HDP only (third_party/linux-amdgpu/PROVENANCE.md) and does
 // not carry DMU. Every write is logged here, the one place all of them pass through, the same way VramEscape logs
-// every VRAM write at its own single call site.
+// every VRAM write at its own single call site - Quiet is the one exception (review 16's DIRQL item): the
+// VUPDATE_NO_LOCK ack (dcn.c's DcnVsyncInterrupt) reaches here once every vblank, continuously, for as long as
+// the hardware vsync source stays armed, which the escape's own occasional writes never did. GuardLog itself
+// checks IRQL before it takes its ring's spin lock (guard.c) so calling it from here was never a lock-at-DIRQL
+// bug, but DbgPrintEx runs unconditionally before that check, and a DbgPrint on every vblank forever is exactly
+// the kind of unbounded ISR-path cost this driver's own hardware-safety rules (bc250-win/CLAUDE.md) ask to avoid
+// - worse yet under a kernel debugger, where DbgPrint can block on the transport. Quiet skips the log line and
+// nothing else; the validation and the write themselves are identical either way.
 NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
+{
+    return MmioDcnWriteEx(Device, Offset, Value, FALSE);
+}
+
+// SetVidPnSourceAddress's own flip sequence (dcn.c's DcnFlipWriteSequence, called from DcnFlipSourceAddress) is
+// the other hot path added by 0.7.24 (ADR 0011 point 3 step 3): up to six writes per real present, which
+// DcnFlipSourceAddress's own GuardLog already summarizes and caps (BC250_DCN_LOG_CALLS). Both hot paths call
+// this instead of MmioDcnWrite; the escape (DcnFlipCore, occasional, human-driven) still calls MmioDcnWrite and
+// keeps its per-write log, unchanged from 0.7.20.
+NTSTATUS MmioDcnWriteEx(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value, BOOLEAN Quiet)
 {
     NTSTATUS status;
 
@@ -286,6 +322,6 @@ NTSTATUS MmioDcnWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value
         WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
         status = STATUS_SUCCESS;
     }
-    GuardLog("dcnflip: write 0x%05X = 0x%08X -> 0x%08X", Offset, Value, status);
+    if (!Quiet) GuardLog("dcnflip: write 0x%05X = 0x%08X -> 0x%08X", Offset, Value, status);
     return status;
 }
