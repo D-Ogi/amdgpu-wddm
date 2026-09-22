@@ -127,6 +127,18 @@ answer the task asks for, with `MultipassOffset` set to the offset that failed),
 `amdgpu_ring_commit` is never called on this fake ring - there is nothing to commit, no doorbell to ring, and
 calling it would try to ring one.
 
+The ring is throwaway; the **device behind it is not**. The first cut of this gave the throwaway ring a
+throwaway `struct amdgpu_device` as well, declared as a local next to it, and that was two defects in one line.
+The fatal one is size: the struct is 0x5B00 bytes, an x64 kernel thread's whole stack is 24 KB, and dxgmms2 has
+already spent some of it by the time it calls `DdiBuildPagingBuffer` - so the first `VIRTUAL_FILL` VidMm ever
+sent us bugchecked unit A with 0x50 in `nt!_chkstk` (facts M104, E24 run 004). The quieter one is that the local
+was never initialised, so `ring->adev->dev` - which `bc250_ring.c` passes to `dev_err` on every refusal path -
+was whatever the stack held. Both go away with the same change: `bc250_sdma_paging_copy/fill` take the caller's
+live `adev`, which `GfxPagingBuild` has in `Gfx->PagingDevicePtr`, and refuse a NULL one. Nothing on this path
+writes through the device, touches a register or rings a doorbell; it is read for `dev_err` and NULL-checked by
+`bc250_sdma_copy.c`, and that is all. `tools/win/stackbudget.py` now fails any build whose fixed frames reach
+4 KB, so the size half cannot come back quietly.
+
 **(b) - a dedicated, DISPATCH_LEVEL-safe push, guarded by a spinlock instead of `GartLock`.** The ring write
 path itself (`amdgpu_ring_alloc`/`_write`/`_write_multiple`, `bc250_ring.c`) is pure memory and does not need
 PASSIVE_LEVEL; `amdgpu_ring_commit()`'s doorbell write does, indirectly, because it reaches
