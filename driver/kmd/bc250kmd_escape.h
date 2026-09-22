@@ -23,7 +23,7 @@
                                             // whole flip sequence, decoded (ADR 0011 point 3 step 2)
 #define BC250_ESCAPE_RUN_SDMACOPY 16u       // BC250_ESCAPE_SDMACOPY in: Bytes; out: the SDMA copy/fill positive
                                             // control (ADR 0013), read back and compared by the CPU
-#define BC250_KMD_VERSION 0x00070014u       // milestone 7 work, revision 20
+#define BC250_KMD_VERSION 0x00070015u       // milestone 7 work, revision 21
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
