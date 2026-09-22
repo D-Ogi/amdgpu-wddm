@@ -25,6 +25,18 @@ Narrowing this hard is what makes the surface tractable:
   zero word; there is no KMS to integrate with.
 - Preemption and TMZ are both off (measured `ids_flags` = `0x11`, neither bit set), so
   `AMDGPU_IB_FLAG_PREEMPT` and `AMDGPU_IB_FLAGS_SECURE` never appear.
+- **Node 1 (SDMA0, the ADR 0013 copy/paging node) is not exposed as a queue family in M8.** ADR
+  0013 point 3 wrote "the ICD exposes node 1 as its transfer queue family" before
+  `docs/design/paging-node.md` decided that node 1's hardware path carries only physical MC
+  addresses and never reprograms a VMID - which means it cannot run a UMD-submitted, GPU-VA-
+  addressed buffer at all today (`Bc250WddmSubmitCommandVirtual` explicitly excludes node 1 from
+  its hardware path; a context opened there would have every fence completed in software, silently,
+  without reaching the GPU). `docs/design/umd-contract-stage-d.md` section 1a has the full
+  reasoning and the recommendation: RADV uses the gfx ring only, which costs nothing RADV would
+  notice, since fact M50 already has it dropping compute queues and running everything on the gfx
+  ring on this chip. The caps blob's `submittable_node_mask` (version 3) says so in a form a winsys
+  can check rather than assume: bit 1 (node 1) is clear until a VMID-addressed submit path for it
+  exists.
 
 ## The call set, from RADV's own source
 
@@ -123,6 +135,16 @@ RADV's fixed heap layout is what would collide.
 Every one of these maps onto a monitored fence, and - per `m7:910` - none of them reaches a DDI
 at all: dxgkrnl's scheduler owns them. That makes this the cheapest section of the port, and the
 reason is `has_timeline_syncobj`, which the caps comparison flagged as differing on the device.
+
+**A D3DKMT monitored fence and one of the KMD's own internal fence slots are not the same thing,
+and the contract only ever exposes the former.** `bc250_umd_submit_private.fence_va`/`fence_value`
+name a monitored fence - the GPU VA the IB itself writes and the value it writes there
+(`D3DDDI_MONITORED_FENCE`, created through `CreateSynchronizationObject2`) - and the winsys reads
+it back with zero syscalls, as the Submission section below describes. The KMD separately keeps a
+small, fixed number of hardware fence-page slots per ring for its own bookkeeping
+(`BC250_PAGING_FENCE_SLOT`, `BC250_SUBMIT_FENCE_SLOT`, `docs/design/paging-node.md` section 5) -
+these are never named in any contract blob and a UMD has no business knowing they exist; they are
+how the KMD polls hardware completion, not how a UMD waits for one.
 
 | RADV call | amdgpu ioctl | WDDM carrier | Notes |
 |---|---|---|---|

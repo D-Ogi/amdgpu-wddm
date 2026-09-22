@@ -47,7 +47,8 @@ extern "C" {
 #define BC250_UMD_SUBMIT_MAGIC      0x53324342u
 
 #define BC250_UMD_ALLOC_VERSION     1u
-#define BC250_UMD_CONTEXT_VERSION   1u
+/* 2: version 1 plus node_ordinal, appended - ADR 0013's node layout, see the struct below. */
+#define BC250_UMD_CONTEXT_VERSION   2u
 #define BC250_UMD_SUBMIT_VERSION    1u
 
 /* ---------------------------------------------------------------------------------------------
@@ -167,6 +168,20 @@ struct bc250_umd_context_private {
     __u32 stable_pstate;                /* AMDGPU_CTX_STABLE_PSTATE_*, radv_amdgpu_cs.c:1609-1617.
                                          * Used by RGP capture. Only if BC250_UMD_C_STABLE_PSTATE. */
     __u32 reserved[7];
+
+    /* --- appended in version 2, strictly after version 1's last byte -------------------------
+     * D3DKMTCreateContextVirtual already takes the WDDM NodeOrdinal as its own argument (m7
+     * section 3.5), not through this blob - a context's node is not something the private data
+     * chooses. node_ordinal exists purely as a cross-check: the KMD compares it against the
+     * DDI's own NodeOrdinal and refuses DxgkDdiCreateContext (one of the DDIs allowed to fail;
+     * ADR 0008 point 5's never-fail list does not include it) on a mismatch, catching a winsys
+     * bug where ip_type (AMDGPU_HW_IP_GFX/_DMA, chosen from RADV's own IP type) and the node the
+     * caller actually opened have drifted apart - the two must name the same queue family. See
+     * docs/design/umd-contract-stage-d.md. */
+    __u32 node_ordinal;                 /* BC250_WDDM_NODE_3D or BC250_WDDM_NODE_COPY, matching
+                                         * the value the UMD is about to pass, or already passed,
+                                         * to D3DKMTCreateContextVirtual's own NodeOrdinal. */
+    __u32 reserved_v2[3];
 };
 
 /* ---------------------------------------------------------------------------------------------
@@ -299,10 +314,15 @@ BC250_SUBMIT_CTASSERT(sizeof(struct bc250_umd_ib) == 32);
 /* Sizes, so an edit that changes the wire format has to say so here too. */
 #define BC250_UMD_ALLOC_SIZE_V1     192
 #define BC250_UMD_CONTEXT_SIZE_V1   64
+#define BC250_UMD_CONTEXT_SIZE_V2   80
 #define BC250_UMD_SUBMIT_SIZE_V1    576
 BC250_SUBMIT_CTASSERT(sizeof(struct bc250_umd_alloc_private)   == BC250_UMD_ALLOC_SIZE_V1);
-BC250_SUBMIT_CTASSERT(sizeof(struct bc250_umd_context_private) == BC250_UMD_CONTEXT_SIZE_V1);
+BC250_SUBMIT_CTASSERT(sizeof(struct bc250_umd_context_private) == BC250_UMD_CONTEXT_SIZE_V2);
 BC250_SUBMIT_CTASSERT(sizeof(struct bc250_umd_submit_private)  == BC250_UMD_SUBMIT_SIZE_V1);
+/* Version 2 grew only at the end: node_ordinal starts exactly where version 1's reserved tail
+ * stopped, so a version-1 reader (there are none yet, but the rule is the same as the caps blob's)
+ * still finds every field it knows where it expects it. */
+BC250_SUBMIT_CTASSERT(offsetof(struct bc250_umd_context_private, node_ordinal) == BC250_UMD_CONTEXT_SIZE_V1);
 
 /* A submission blob is copied per submit, on the hot path. Keep it small enough that the copy is
  * never the reason a submission is slow.

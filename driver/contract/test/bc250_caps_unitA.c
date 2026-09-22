@@ -433,6 +433,12 @@ const void *bc250_unitA_blob(enum bc250_mutation mutation, uint32_t *size_out)
     fill_tiling(&b->tiling);
     fill_firmware(&b->firmware);
     fill_kernel(&b->kernel);
+    /* Version 3. Not a Linux/amdgpu value - there is no UAPI equivalent - so it has no evidence ID
+     * of its own; it states policy, and docs/design/umd-contract-stage-d.md is the source of the
+     * policy: node 0 (3D) is a real queue family, node 1 (SDMA0/COPY) is not yet, because its
+     * hardware path (docs/design/paging-node.md) has no VMID. Bit 1 stays clear until that
+     * changes. */
+    b->submittable_node_mask = 0x1u;
 
     switch (mutation) {
     case BC250_MUTATE_NONE:

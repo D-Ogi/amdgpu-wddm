@@ -15,7 +15,7 @@ shape can be argued about before anything depends on it.
 
 | File | What it is |
 |---|---|
-| `bc250_umd_private.h` | The blob. Versioned, fixed-width, **version 2, 1408 bytes**, compile-time size and offset asserts. Compiles both as user-mode C and under the miniport's `/kernel` flags |
+| `bc250_umd_private.h` | The blob. Versioned, fixed-width, **version 3, 1472 bytes**, compile-time size and offset asserts. Compiles both as user-mode C and under the miniport's `/kernel` flags |
 | `bc250_umd_private_fields.h` | The member names of the three imported UAPI structures, as X-macro lists. Names only |
 | `third_party/amdgpu_drm.h` | Linux UAPI, MIT, tag v6.18, imported byte for byte. See `third_party/PROVENANCE.md` |
 | `uapi-shim/drm.h` | Ours. The seven names `amdgpu_drm.h` needs from `drm.h`, so it compiles under MSVC unmodified |
@@ -392,7 +392,16 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 
 ## Not done
 
-- Nothing is wired into `driver/kmd`. No `DxgkDdiQueryAdapterInfo` handler writes this blob yet.
+- Nothing is wired into `driver/kmd`, confirmed again by the ADR 0012/0013 review that added
+  version 3 (`docs/design/umd-contract-stage-d.md`): `DxgkDdiQueryAdapterInfo` still refuses
+  `DXGKQAITYPE_UMDRIVERPRIVATE` outright (`wddm.c`'s `default:` arm), `DxgkDdiCreateAllocation`
+  parses a different, GDI-shaped private struct of its own (`BC250_WDDM_ALLOCATION_PRIVATE`, magic
+  `"LB7A"`, not this file's `"BC2A"`) and refuses anything else, `DxgkDdiCreateContext` never hands
+  a context a `bc250_umd_context_private` to fill in (`DmaBufferPrivateDataSize = 0`), and
+  `DxgkDdiSubmitCommandVirtual` reads the raw DMA buffer directly rather than a
+  `bc250_umd_submit_private`. All of that is expected for stages A-C, which have no user-mode
+  driver to hand private data to, and all of it is M8 work, not something this contract update
+  does. No `DxgkDdiQueryAdapterInfo` handler writes this blob yet.
 - `addrlib` is not exercised. The test establishes that Mesa recognises the chip and derives sane
   limits, not that surfaces tile the same way as on Linux. That needs `ac_surface` and a
   comparison against a Linux capture, and it is where `gb_addr_config` bit 20 actually matters.

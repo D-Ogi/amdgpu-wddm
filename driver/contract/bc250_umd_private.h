@@ -165,10 +165,12 @@ extern "C" {
 /* "BC25" little endian. Any other value: not our blob, do not parse it. */
 #define BC250_UMD_PRIVATE_MAGIC     0x35324342u
 
-/* 2: version 1 plus max_submitted_ibs[], appended. See the versioning rule above. Nothing was
- * moved or removed, so a version-1 reader still finds every field it knows where it expects it;
- * it just stops short. Bumped while nothing consumes the blob yet, which is the cheapest moment. */
-#define BC250_UMD_PRIVATE_VERSION   2u
+/* 3: version 2 plus submittable_node_mask, appended. See the versioning rule above. Nothing was
+ * moved or removed, so a version-1 or version-2 reader still finds every field it knows where it
+ * expects it; it just stops short. Bumped while nothing consumes the blob yet, which is the
+ * cheapest moment. ADR 0013 (docs/adr/0013-node-layout-3d-plus-sdma.md), stage D contract review:
+ * docs/design/umd-contract-stage-d.md. */
+#define BC250_UMD_PRIVATE_VERSION   3u
 
 /* Sized by the UAPI so a future IP type does not silently fall off the end. */
 #define BC250_UMD_HW_IP_MAX         AMDGPU_HW_IP_NUM   /* 10, amdgpu_drm.h:948 */
@@ -256,6 +258,30 @@ struct bc250_umd_private {
     __u32 max_submitted_ibs[BC250_UMD_HW_IP_MAX];
 
     __u32 reserved_v2[6];
+
+    /* --- appended in version 3, strictly after version 2's last byte --- */
+    /* ADR 0013: bit N set means WDDM node N accepts DxgkDdiSubmitCommandVirtual with a user-mode,
+     * GPU-VA-addressed command buffer that the KMD points a process's VMID at before running it -
+     * i.e. node N is a real queue family a UMD may open a context on and submit work to, the way
+     * node 0 already works (facts M77, M80). Node 0 (3D) always has bit 0 set.
+     *
+     * Node 1 (SDMA0 / DXGK_ENGINE_TYPE_COPY) does NOT have bit 1 set in this version, even though
+     * DxgkDdiCreateContext already accepts NodeOrdinal == BC250_WDDM_NODE_COPY once the adapter
+     * reports two nodes (wddm.c, ADR 0008 stage D). docs/design/paging-node.md deliberately built
+     * node 1's hardware path as physical-MC-address-only, with no VMID (section 2: "the paging
+     * node's SDMA submissions carry only physical addresses and never reprogram a VMID"), reachable
+     * only from BuildPagingBuffer/DxgkDdiSubmitCommand - VidMm's own paging queue. Bc250WddmSubmit-
+     * CommandVirtual (wddm.c) explicitly excludes node 1 from its hardware path for exactly this
+     * reason: a context opened on node 1 today would have every fence completed in software,
+     * silently, without ever reaching the GPU. A UMD MUST check this mask before calling
+     * D3DKMTCreateContextVirtual for anything but node 0; GetNodeMetadata/DRIVERCAPS describe
+     * topology (that node 1 exists and is DXGK_ENGINE_TYPE_COPY), not whether it is safe to submit
+     * to from user mode. See docs/design/umd-contract-stage-d.md for the recommendation this
+     * follows: node 1 is not exposed to RADV as a queue family (ADR 0013 point 3 deferred) until a
+     * VMID-addressed SubmitCommandVirtual path for it exists, symmetric to node 0's. */
+    __u32 submittable_node_mask;
+
+    __u32 reserved_v3[15];
 };
 
 /* ---------------------------------------------------------------------------------------------
@@ -300,16 +326,19 @@ BC250_CTASSERT(offsetof(struct bc250_umd_private, device)  == 16);
  * assert below is what guarantees version 2 only grew at the end. */
 #define BC250_UMD_PRIVATE_SIZE_V1 1344
 #define BC250_UMD_PRIVATE_SIZE_V2 1408
-BC250_CTASSERT(sizeof(struct bc250_umd_private) == BC250_UMD_PRIVATE_SIZE_V2);
+#define BC250_UMD_PRIVATE_SIZE_V3 1472
+BC250_CTASSERT(sizeof(struct bc250_umd_private) == BC250_UMD_PRIVATE_SIZE_V3);
 /* Version 2 grew only at the end: the first field it added starts exactly where version 1 stopped,
  * so every version-1 offset, including its reserved tail, is untouched. */
 BC250_CTASSERT(offsetof(struct bc250_umd_private, max_submitted_ibs) == BC250_UMD_PRIVATE_SIZE_V1);
+/* Version 3 likewise grew only at the end, after version 2's own reserved tail. */
+BC250_CTASSERT(offsetof(struct bc250_umd_private, submittable_node_mask) == BC250_UMD_PRIVATE_SIZE_V2);
 
 /* DxgkDdiQueryAdapterInfo copies the blob into a user-mode buffer. Keep it small enough that the
  * copy is never the reason a query fails, and a round multiple of 64 so it does not straddle more
  * cache lines than it must. */
-BC250_CTASSERT(BC250_UMD_PRIVATE_SIZE_V2 % 64 == 0);
-BC250_CTASSERT(BC250_UMD_PRIVATE_SIZE_V2 <= 4096);
+BC250_CTASSERT(BC250_UMD_PRIVATE_SIZE_V3 % 64 == 0);
+BC250_CTASSERT(BC250_UMD_PRIVATE_SIZE_V3 <= 4096);
 
 #if defined(__cplusplus)
 }
