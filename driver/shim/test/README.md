@@ -38,7 +38,7 @@ The other question: what `bc250_sdma_setup()`, `bc250_sdma_start()`,
 `bc250_sdma_fence_page_alloc()` and the undo path do when something does not work. Allocations that
 fail one at a time, allocations that succeed without a CPU mapping, engines that come back holding a
 write pointer that is not a pointer, and an engine that refuses after the other one is already
-running. The report of the first full run is `P:\BC-250\scratch\tmp\sdma_faults_report.md`.
+running. The report, including the fixes of 2026-09-22, is `driver/shim/test/sdma_faults_report.md`.
 
 It shares nothing with the replays. `sdma_faults.c` brings its own allocator and its own register
 file and links against `driver/shim` alone, so that an allocator instrumented to fail can never reach

@@ -17,10 +17,11 @@
  *      allows (bc250_shim.h:31-38). Freed memory is not given back to the C library: it is filled
  *      with a poison byte and kept, so that a write into it after the free is a fact this program
  *      can state rather than a crash it might get away with. The free itself is modelled EXACTLY as
- *      the two shipped backends do it - `if (m == NULL || m->cpu == NULL) return;`, then a lookup by
- *      the CPU pointer (driver/shim/test/backend_mem.c:315-332, driver/kmd/gpumem.c:372-398) -
- *      because one of the findings below is about what that line does with an object whose cpu is
- *      NULL, and a kinder model here would hide it.
+ *      the two shipped backends do it - a zeroed struct is a no-op, and an object whose cpu is NULL is
+ *      looked up by its mc instead of by cpu, since that is all the caller was ever handed for it
+ *      (driver/shim/test/backend_mem.c, driver/kmd/gpumem.c). It used to be modelled as an early
+ *      return on cpu == NULL, which is what D-02 (below) was; the model was fixed alongside the two
+ *      real backends, not left kinder than they now are.
  *
  *   2. The register file. One value per dword index, reads answer the last write, plus a forced-read
  *      table for the one thing E15 measured that a register file cannot hold: an SDMA engine goes on
@@ -37,23 +38,32 @@
  * check_defect() and its defect id: while the defect stands the suite stays green and prints the
  * defect on every run; the day the defect is fixed the expectation passes, which this program
  * reports as a failure (XPASS) so that whoever fixed it comes back here and turns the marker off.
- * The report is P:\BC-250\scratch\tmp\sdma_faults_report.md.
+ * The report is driver/shim/test/sdma_faults_report.md.
  *
- *   D-01  bc250_sdma_setup() accepts a write-back page with cpu == NULL (bc250_sdma.c:633-637 and
- *         :669-671) although the ring buffer's own cpu == NULL is refused eight lines below.
- *   D-02  an allocation whose cpu is NULL can never be given back: bc250_shim_mem_free() looks it up
- *         by that pointer and returns at once. Every "allocated but not mapped" refusal in the shim
- *         therefore leaks the object it just got (bc250_sdma.c:653-656, :843-844).
- *   D-03  bc250_sdma_fence_page_alloc() returns BC250_EINVAL without freeing or clearing
- *         adev->sdma.fence_mem (bc250_sdma.c:843-844); the idempotence test one line above keys on
- *         fence_mem.cpu, so the next call allocates a second page on top of the first.
- *   D-04  bc250_sdma_setup() on an adev that is already set up re-allocates over the three live
- *         allocations and leaks them (bc250_sdma.c:627-674).
- *   D-05  bc250_sdma_start() does not check that the setup succeeded (bc250_sdma.c:516-535).
- *   D-06  bc250_sdma_teardown() leaves ring->ring and ring->wptr_cpu_addr pointing at freed memory
- *         (bc250_sdma.c:683-694), so a ring test run after it writes into a page that is gone.
- *   D-07  bc250_sdma_ring_test() folds an out-of-range engine number onto a valid scratch slot with
- *         `slot = ring->me & 0x1u` (bc250_sdma.c:890) instead of refusing it.
+ * All seven defects below were fixed on 2026-09-22 (see the report's "Fixes" section for what changed
+ * and driver/shim/bc250_sdma.c for the code); every check_defect() that named one has been turned into
+ * a plain check(), which is why none of them are marked XPASS-pending any more. The list stays here as
+ * a record of what each one was.
+ *
+ *   D-01  bc250_sdma_setup() accepted a write-back page with cpu == NULL although the ring buffer's
+ *         own cpu == NULL was refused eight lines below. Fixed: it is refused the same way.
+ *   D-02  an allocation whose cpu is NULL could never be given back: bc250_shim_mem_free() looked it
+ *         up by that pointer and returned at once. Every "allocated but not mapped" refusal in the
+ *         shim therefore leaked the object it just got. Fixed in the free() of both shipped backends
+ *         (and this file's model of them): an object with cpu == NULL is looked up by mc instead.
+ *   D-03  bc250_sdma_fence_page_alloc() returned BC250_EINVAL without freeing or clearing
+ *         adev->sdma.fence_mem; the idempotence test one line above keys on fence_mem.cpu, so the next
+ *         call allocated a second page on top of the first. Fixed: the refusal frees the page (D-02)
+ *         and clears the descriptor.
+ *   D-04  bc250_sdma_setup() on an adev that was already set up re-allocated over the three live
+ *         allocations and leaked them. Fixed: a second setup on the same adev is refused.
+ *   D-05  bc250_sdma_start() did not check that the setup succeeded. Fixed: it refuses an adev whose
+ *         rings have no funcs or no size.
+ *   D-06  bc250_sdma_teardown() left ring->ring and ring->wptr_cpu_addr pointing at freed memory, so a
+ *         ring test run after it wrote into a page that was gone. Fixed: the teardown nulls them.
+ *   D-07  bc250_sdma_ring_test() folded an out-of-range engine number onto a valid scratch slot with
+ *         `slot = ring->me & 0x1u` instead of refusing it. Fixed: an instance number this driver does
+ *         not have is refused.
  */
 #include <stdarg.h>
 #include <stdio.h>
@@ -204,13 +214,15 @@ void bc250_shim_mem_free(struct amdgpu_device *adev, struct bc250_mem *m)
 
 	(void)adev;
 
-	/* Exactly backend_mem.c:320 and gpumem.c:378. An object whose cpu is NULL is not looked for
-	 * at all, which is the whole of D-02. */
-	if (m == NULL || m->cpu == NULL)
+	/* D-02, fixed: now exactly backend_mem.c and gpumem.c after their own fix of the same defect
+	 * (driver/shim/test/sdma_faults_report.md, "Fixes"). A zeroed struct is still a safe no-op; an
+	 * object whose cpu is NULL still exists in this table and is looked up by its mc instead, since
+	 * that is all the caller was ever handed for it. */
+	if (m == NULL || (m->cpu == NULL && m->mc == 0 && m->size == 0))
 		return;
 
 	for (i = 0; i < g_obj_count; i++) {
-		if (g_obj[i].cpu != m->cpu)
+		if (m->cpu != NULL ? g_obj[i].cpu != m->cpu : g_obj[i].mc != m->mc)
 			continue;
 		if (!g_obj[i].live) {
 			g_double_free++;
@@ -218,6 +230,8 @@ void bc250_shim_mem_free(struct amdgpu_device *adev, struct bc250_mem *m)
 		}
 		g_obj[i].live = 0;
 		g_obj[i].poisoned = 1;
+		/* g_obj[i].cpu is this file's own host allocation and is never NULL, whatever cpu ==
+		 * NULL the caller was handed at alloc time (see bc250_shim_mem_alloc above). */
 		memset(g_obj[i].cpu, FAULT_POISON, g_obj[i].size);
 		break;
 	}
@@ -412,7 +426,12 @@ static void check(int ok, const char *what)
 	printf("    FAIL  %s\n", what);
 }
 
-/* An expectation that a CONFIRMED defect breaks. `ok` is what the code SHOULD do. */
+/* An expectation that a CONFIRMED defect breaks. `ok` is what the code SHOULD do. Kept for the next
+ * confirmed defect although nothing calls it right now - the seven of 2026-09-22 are all fixed and
+ * their check_defect() calls turned into plain check() (see the header comment) - so /W4 sees it as
+ * unreferenced. Warn, not error: the day it is used again the pragma is the thing to delete. */
+#pragma warning(push)
+#pragma warning(disable: 4505)
 static void check_defect(int ok, const char *defect, const char *what)
 {
 	g_checks++;
@@ -426,6 +445,7 @@ static void check_defect(int ok, const char *defect, const char *what)
 	printf("    XPASS %s no longer reproduces: %s\n", defect, what);
 	printf("          fix confirmed - turn this expectation into a plain check()\n");
 }
+#pragma warning(pop)
 
 static void note(const char *fmt, ...)
 {
@@ -604,35 +624,22 @@ static void case_fence_page_failure(struct amdgpu_device *adev)
 
 static void case_null_cpu_wb(struct amdgpu_device *adev)
 {
-	struct amdgpu_ring *ring;
 	int r;
 
 	case_begin("2a. the write-back page comes back unmapped (cpu == NULL)", adev);
 	g_null_cpu_at = 0;
 
+	/* Before D-01 was fixed, this refusal did not happen: bc250_sdma_setup() returned 0,
+	 * bc250_sdma_start() went on to program SDMA0_GFX_RB_WPTR_POLL_ADDR_LO/HI with the page's MC
+	 * address and set F32_POLL_ENABLE - the engine told to poll a shadow the driver could never
+	 * write - and D-02 then leaked the page on top of that. See sdma_faults_report.md for the
+	 * measurements; there is nothing left to demonstrate once the setup itself refuses. */
 	r = bc250_sdma_setup(adev);
-	check_defect(r != 0, "D-01",
-		     "bc250_sdma_setup should refuse a write-back page it cannot address");
-
-	if (r == 0) {
-		/* What the acceptance costs, stated rather than assumed. */
-		ring = &adev->sdma.instance[0].ring;
-		check(ring->wptr_cpu_addr == NULL, "ring 0 has no write-pointer shadow");
-		check(ring->wptr_gpu_addr != 0, "but its GPU address was handed to the engine");
-		r = bc250_sdma_start(adev);
-		note("bc250_sdma_start returned %d with no shadow to publish into\n", r);
-		note("SDMA0_GFX_RB_WPTR_POLL_ADDR_LO = %08X, F32_POLL_ENABLE = %d:"
-		     " the engine polls a page the driver never writes\n",
-		     reg_get(sdma_reg(adev, 0, mmSDMA0_GFX_RB_WPTR_POLL_ADDR_LO)),
-		     (reg_get(sdma_reg(adev, 0, mmSDMA0_GFX_RB_WPTR_POLL_CNTL)) &
-		      SDMA0_GFX_RB_WPTR_POLL_CNTL__F32_POLL_ENABLE_MASK) != 0);
-		check(writes_outside_confirmed() == 0,
-		      "and it wrote no register outside the confirmed set");
-	}
+	check(r != 0, "bc250_sdma_setup refuses a write-back page it cannot address");  /* D-01, fixed */
 
 	bc250_sdma_teardown(adev);
-	check_defect(live_objects() == 0, "D-02",
-		     "the unmapped write-back page should be released by the teardown");
+	check(live_objects() == 0,
+	      "and the teardown releases the unmapped write-back page");  /* D-02, fixed */
 	note("live allocations after the teardown: %u\n", live_objects());
 }
 
@@ -650,8 +657,8 @@ static void case_null_cpu_ring(struct amdgpu_device *adev, int which)
 	check(adev->sdma.instance[which].ring.ring == NULL,
 	      "and leaves that ring's CPU pointer NULL");
 	check(g_double_free == 0 && poison_violations() == 0, "no double free, no write after free");
-	check_defect(live_objects() == 0, "D-02",
-		     "the unmapped ring buffer should be released by the unwind");
+	check(live_objects() == 0,
+	      "the unwind releases the unmapped ring buffer too");  /* D-02, fixed */
 	note("live allocations after the unwind: %u (the write-back page and the other ring went"
 	     " back; this one cannot)\n", live_objects());
 }
@@ -667,19 +674,19 @@ static void case_null_cpu_fence_page(struct amdgpu_device *adev)
 	g_null_cpu_at = 3;              /* the fourth call */
 	r = bc250_sdma_fence_page_alloc(adev);
 	check(r == BC250_EINVAL, "bc250_sdma_fence_page_alloc refuses a page it cannot address");
-	check(adev->sdma.fence_mem.mc != 0,
-	      "the refusal leaves the allocation's MC address in adev->sdma.fence_mem");
-	check_defect(live_objects() == 3, "D-03",
-		     "the refused fence page should not still be live");
+	check(adev->sdma.fence_mem.mc == 0 && adev->sdma.fence_mem.size == 0,
+	      "and clears the descriptor instead of leaving a dangling MC address");  /* D-03, fixed */
+	check(live_objects() == 3, "the refused page is given back, not left live");  /* D-03, fixed */
 
-	/* The second half of D-03: the idempotence test one line above keys on fence_mem.cpu, which
-	 * is NULL, so the next call - driver/kmd/gfx.c:384 makes exactly this call whenever
-	 * SdmaFencePage is still FALSE - allocates a second page over the first. */
+	/* The second half of D-03: the idempotence test one line above used to key on fence_mem.cpu,
+	 * which was NULL, so the next call - driver/kmd/gfx.c:384 makes exactly this call whenever
+	 * SdmaFencePage is still FALSE - would allocate a second page over the first. Fixed: the
+	 * descriptor is cleared on the refusal, so this call allocates cleanly. */
 	g_null_cpu_at = -1;
 	r = bc250_sdma_fence_page_alloc(adev);
 	check(r == 0, "a later call succeeds");
-	check_defect(live_objects() == 4, "D-03",
-		     "and should not have left the first page behind");
+	check(live_objects() == 4,
+	      "and does not leave the earlier, refused page behind");  /* D-03, fixed */
 	note("live allocations: %u\n", live_objects());
 
 	bc250_sdma_fence_page_free(adev);
@@ -718,21 +725,21 @@ static void case_engine_number(struct amdgpu_device *adev)
 	slots[2] = SLOT1_SENTINEL;      /* engine 1's, eight bytes on */
 
 	r = bc250_sdma_ring_test(&probe);
-	check_defect(r == BC250_EINVAL, "D-07",
-		     "bc250_sdma_ring_test should refuse an engine number it has no slot for");
-	note("it returned %d, and slot 0 now reads %08X (0xCAFEDEAD is the ring test's own seed)\n",
-	     r, slots[0]);
-	check_defect(slots[0] == SLOT0_SENTINEL, "D-07",
-		     "and should not have taken engine 0's scratch slot");
+	check(r == BC250_EINVAL,
+	      "bc250_sdma_ring_test refuses an engine number it has no slot for");  /* D-07, fixed */
+	note("it returned %d, and slot 0 still reads %08X\n", r, slots[0]);
+	check(slots[0] == SLOT0_SENTINEL,
+	      "and does not take engine 0's scratch slot");  /* D-07, fixed */
 	check(slots[2] == SLOT1_SENTINEL, "engine 1's slot is untouched either way");
 
-	/* What the caller would get: the packet names engine 0's slot. The ring test writes its
-	 * WRITE_LINEAR at the ring's write pointer, which is where this ring stood. */
+	/* The refusal is before amdgpu_ring_alloc(), so no packet is built at all: ring[1] and ring[2]
+	 * are still whatever amdgpu_ring_clear_ring() filled the ring with at bc250_sdma_setup(), not
+	 * a packet naming engine 0's slot. D-07, fixed. */
 	packet_addr = (u64)probe.ring[1] | ((u64)probe.ring[2] << 32);
-	check_defect(packet_addr != bc250_sdma_fence_addr(adev, 0), "D-07",
-		     "the emitted packet should not carry engine 0's scratch address");
-	note("the packet's destination is slot %d's address\n",
-	     packet_addr == bc250_sdma_fence_addr(adev, 0) ? 0 : -1);
+	check(packet_addr != bc250_sdma_fence_addr(adev, 0),
+	      "and the ring carries no packet naming engine 0's scratch address");
+	note("probe.ring[1..2] read %08X %08X (the NOP fill, not a WRITE_LINEAR destination)\n",
+	     probe.ring[1], probe.ring[2]);
 
 	/* The register window of the same bad instance number, for completeness. Upstream folds it
 	 * the same way (sdma_v5_0.c:218: `if (instance == 1)` and nothing else), so this is a note
@@ -842,12 +849,12 @@ static void case_second_engine_fails(struct amdgpu_device *adev)
 	note("driver/kmd/gfx.c Fini() turns that BC250_EBUSY into pages that are kept, so the three"
 	     " allocations below outlive the device\n");
 
-	/* And what a second setup does, which is the other half of the question. */
+	/* And what a second setup does, which is the other half of the question. D-04, fixed: it now
+	 * refuses instead of re-allocating over the three live allocations and leaking them. */
 	r = bc250_sdma_setup(adev);
-	check(r == 0, "a second bc250_sdma_setup on the same adev succeeds");
-	check_defect(live_objects() == 3, "D-04",
-		     "a second setup should not leave the first one's allocations behind");
-	note("live allocations after the second setup: %u\n", live_objects());
+	check(r == BC250_EINVAL, "a second bc250_sdma_setup on the same adev is refused");
+	check(live_objects() == 3, "and leaves the first setup's three allocations alone");
+	note("live allocations after the refused second setup: %u\n", live_objects());
 
 	bc250_sdma_teardown(adev);
 	note("and after the teardown: %u\n", live_objects());
@@ -882,18 +889,15 @@ static void case_fini_after_failed_setup(struct amdgpu_device *adev)
 	 * it is a null dereference, and in the miniport a bugcheck. */
 	g_fail_at = -1;
 	r = bc250_sdma_start(adev);
-	check_defect(r != 0, "D-05",
-		     "bc250_sdma_start should refuse an adev whose setup did not finish");
-	note("it returned %d; SDMA0_GFX_RB_BASE = %08X and RB_CNTL = %08X, which is a ring at MC 0"
-	     " with RB_SIZE %u\n", r,
+	check(r == BC250_EINVAL,
+	      "bc250_sdma_start refuses an adev whose setup did not finish");  /* D-05, fixed */
+	note("it returned %d; SDMA0_GFX_RB_BASE = %08X and RB_CNTL = %08X\n", r,
 	     reg_get(sdma_reg(adev, 0, mmSDMA0_GFX_RB_BASE)),
-	     reg_get(sdma_reg(adev, 0, mmSDMA0_GFX_RB_CNTL)),
-	     (reg_get(sdma_reg(adev, 0, mmSDMA0_GFX_RB_CNTL)) &
-	      SDMA0_GFX_RB_CNTL__RB_SIZE_MASK) >> SDMA0_GFX_RB_CNTL__RB_SIZE__SHIFT);
-	check(engine_rb_enabled(adev, 0) && engine_rb_enabled(adev, 1),
-	      "both engines were enabled on a ring that does not exist");
+	     reg_get(sdma_reg(adev, 0, mmSDMA0_GFX_RB_CNTL)));
+	check(!engine_rb_enabled(adev, 0) && !engine_rb_enabled(adev, 1),
+	      "neither engine was enabled on a ring that does not exist");  /* D-05, fixed */
 	check(writes_outside_confirmed() == 0,
-	      "though it wrote no register outside the confirmed set");
+	      "the refusal wrote no register at all, let alone one outside the confirmed set");
 
 	r = bc250_sdma_hw_fini(adev);
 	note("bc250_sdma_hw_fini after that returns %d\n", r);
@@ -924,17 +928,15 @@ static void case_teardown_leaves_ring_usable(struct amdgpu_device *adev)
 	bc250_sdma_teardown(adev);
 	ring = &adev->sdma.instance[0].ring;
 	check(live_objects() == 1, "only the fence page is still live");
-	check_defect(ring->ring == NULL, "D-06",
-		     "the teardown should leave ring->ring NULL");
-	check_defect(ring->wptr_cpu_addr == NULL, "D-06",
-		     "and the write-pointer shadow pointer NULL");
+	check(ring->ring == NULL, "the teardown leaves ring->ring NULL");  /* D-06, fixed */
+	check(ring->wptr_cpu_addr == NULL,
+	      "and the write-pointer shadow pointer NULL");  /* D-06, fixed */
 
 	r = bc250_sdma_ring_test(ring);
-	check_defect(r == BC250_EINVAL, "D-06",
-		     "a ring test after the teardown should be refused");
+	check(r == BC250_EINVAL, "a ring test after the teardown is refused");  /* D-06, fixed */
 	note("it returned %d\n", r);
-	check_defect(poison_violations() == 0, "D-06",
-		     "and should not have written into the freed ring buffer");
+	check(poison_violations() == 0,
+	      "and nothing was written into the freed ring buffer");  /* D-06, fixed */
 	note("%u freed allocation(s) were written into\n", poison_violations());
 
 	bc250_sdma_fence_page_free(adev);

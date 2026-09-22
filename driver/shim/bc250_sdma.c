@@ -520,6 +520,16 @@ int bc250_sdma_start(struct amdgpu_device *adev)
 	if (adev == NULL)
 		return BC250_EINVAL;
 
+	/* The rings bc250_sdma_setup() filled in, or nothing at all: num_instances is set before its
+	 * allocations and bc250_sdma_teardown() does not put it back, so a setup that failed leaves
+	 * two engines' worth of zeroed rings behind. Enabling those would point the engines at MC 0,
+	 * and the adoption arm in bc250_sdma_gfx_resume_instance() would dereference ring->funcs.
+	 * D-05. */
+	for (i = 0; i < adev->sdma.num_instances; i++)
+		if (adev->sdma.instance[i].ring.funcs == NULL ||
+		    adev->sdma.instance[i].ring.ring_size == 0)
+			return BC250_EINVAL;
+
 	/* unhalt the MEs */
 	bc250_sdma_enable(adev, true);
 	/* enable sdma ring preemption */
@@ -624,6 +634,13 @@ int bc250_sdma_setup(struct amdgpu_device *adev)
 	if (adev == NULL)
 		return BC250_EINVAL;
 
+	/* Not idempotent, unlike bc250_sdma_fence_page_alloc(): allocating over the descriptors below
+	 * would lose three pages, and the engines may still be fetching from the rings they name. A
+	 * caller that wants a second bring-up runs bc250_sdma_teardown() first, which is what
+	 * driver/kmd/gfx.c's Fini() does. D-04. */
+	if (adev->sdma.wb_mem.size != 0)
+		return BC250_EINVAL;
+
 	adev->sdma.num_instances = AMDGPU_MAX_SDMA_INSTANCES;
 
 	/* nv_set_ip_blocks() -> nv_init_doorbell_index(), the NAVI10 assignment. */
@@ -634,6 +651,14 @@ int bc250_sdma_setup(struct amdgpu_device *adev)
 				 &adev->sdma.wb_mem);
 	if (r)
 		goto fail;
+	/* The write pointer every engine polls lives in this page (the shadow set up in
+	 * bc250_sdma_gfx_resume_instance() below). Without a CPU mapping there is nothing to publish
+	 * it into, and a ring buffer's own cpu == NULL is refused eight lines below for exactly that
+	 * reason (bc250_shim.h: the shim refuses rather than guesses). D-01. */
+	if (adev->sdma.wb_mem.cpu == NULL) {
+		r = BC250_EINVAL;
+		goto fail;
+	}
 
 	for (i = 0; i < adev->sdma.num_instances; i++) {
 		ring = &adev->sdma.instance[i].ring;
@@ -682,13 +707,23 @@ fail:
 
 void bc250_sdma_teardown(struct amdgpu_device *adev)
 {
+	struct amdgpu_ring *ring;
 	int i;
 
 	if (adev == NULL)
 		return;
 
-	for (i = 0; i < AMDGPU_MAX_SDMA_INSTANCES; i++)
-		bc250_shim_mem_free(adev, &adev->sdma.instance[i].ring.ring_mem);
+	for (i = 0; i < AMDGPU_MAX_SDMA_INSTANCES; i++) {
+		ring = &adev->sdma.instance[i].ring;
+		bc250_shim_mem_free(adev, &ring->ring_mem);
+		/* The rule bc250_ring_alloc_mem() states for the CP rings (bc250_gfx.c:1702-1704): a
+		 * ring without a buffer is unusable by construction, not by the caller remembering.
+		 * Upstream does the same - amdgpu_bo_free_kernel() nulls ring->ring and zeroes
+		 * ring->gpu_addr (amdgpu_object.c:528-532). D-06. */
+		ring->ring = NULL;
+		ring->gpu_addr = 0;
+		ring->wptr_cpu_addr = NULL;
+	}
 
 	bc250_shim_mem_free(adev, &adev->sdma.wb_mem);
 }
@@ -840,8 +875,15 @@ int bc250_sdma_fence_page_alloc(struct amdgpu_device *adev)
 				 &adev->sdma.fence_mem);
 	if (r)
 		return r;
-	if (adev->sdma.fence_mem.cpu == NULL)
+	if (adev->sdma.fence_mem.cpu == NULL) {
+		/* Give it back and leave the descriptor empty: the idempotence test above keys on
+		 * fence_mem.cpu, so a descriptor left half full would have the next call allocate a
+		 * second page over this one's. D-03. */
+		bc250_shim_mem_free(adev, &adev->sdma.fence_mem);
+		adev->sdma.fence_mem.mc = 0;
+		adev->sdma.fence_mem.size = 0;
 		return BC250_EINVAL;
+	}
 	return 0;
 }
 
@@ -887,7 +929,12 @@ int bc250_sdma_ring_test(struct amdgpu_ring *ring)
 	if (adev->sdma.fence_mem.cpu == NULL)
 		return BC250_EINVAL;            /* bc250_sdma_fence_page_alloc() was not called */
 
-	slot = ring->me & 0x1u;                 /* one scratch slot per engine */
+	/* One scratch slot per engine, and no folding: an engine number this driver does not have is a
+	 * caller's mistake, and masking it would have that caller seed, submit against and poll a slot
+	 * another engine is using. D-07. */
+	if (ring->me >= AMDGPU_MAX_SDMA_INSTANCES)
+		return BC250_EINVAL;
+	slot = ring->me;
 	gpu_addr = bc250_sdma_fence_addr(adev, slot);
 	if (gpu_addr == 0)
 		return BC250_EINVAL;

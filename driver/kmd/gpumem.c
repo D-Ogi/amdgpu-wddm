@@ -375,11 +375,17 @@ void bc250_shim_mem_free(struct amdgpu_device* adev, struct bc250_mem* m)
     BC250_GPUMEM* mem = MemOf(adev, &sequence);
     ULONG i;
 
-    if (mem == NULL || m == NULL || m->cpu == NULL) return;
+    // A zeroed struct (nothing was ever allocated into it) is a safe no-op, as before. An allocation
+    // whose cpu is NULL - bc250_shim.h: the owner could not map it - still exists here and is looked
+    // up by its MC address instead, because there is no cpu pointer to look it up by (D-02; neither
+    // MmMapIoSpaceEx nor MmAllocateContiguousMemorySpecifyCache above ever returns success with a
+    // NULL pointer, so this arm is not reached on this backend today - see sdma_faults_report.md).
+    if (mem == NULL || m == NULL || (m->cpu == NULL && m->mc == 0 && m->size == 0)) return;
     for (i = 0; i < BC250_GPUMEM_MAX; i++)
     {
         BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
-        if (!entry->Used || entry->Cpu != m->cpu || entry->Retired) continue;
+        if (!entry->Used || entry->Retired) continue;
+        if (m->cpu != NULL ? entry->Cpu != m->cpu : entry->Mc != m->mc) continue;
         if (entry->Gtt)
         {
             // The GPU loses the page now; Windows gets it back in GpuMemRelease, once the GPU is known to be quiet.

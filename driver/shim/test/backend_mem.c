@@ -323,11 +323,15 @@ void bc250_shim_mem_free(struct amdgpu_device *adev, struct bc250_mem *m)
 	unsigned int i;
 
 	(void)adev;
-	if (m == NULL || m->cpu == NULL)
+	/* A zeroed struct is a safe no-op, as before. An allocation whose cpu is NULL still exists in
+	 * g_alloc and is looked up by its MC address instead (D-02); this backend's own alloc() above
+	 * never returns success with cpu == NULL, so the arm is not reached by anything but the fault
+	 * suite's model of it. */
+	if (m == NULL || (m->cpu == NULL && m->mc == 0 && m->size == 0))
 		return;
 
 	for (i = 0; i < g_alloc_count; i++) {
-		if (g_alloc[i].cpu == m->cpu) {
+		if (m->cpu != NULL ? g_alloc[i].cpu == m->cpu : g_alloc[i].mc == m->mc) {
 			free(g_alloc[i].cpu);
 			g_alloc[i] = g_alloc[g_alloc_count - 1];
 			g_alloc_count--;

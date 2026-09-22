@@ -81,8 +81,11 @@ void bc250_shim_wdoorbell32(struct amdgpu_device *adev, unsigned int index, unsi
 int bc250_shim_mem_alloc(struct amdgpu_device *adev, enum bc250_mem_domain domain,
 			 unsigned int size, unsigned int align, struct bc250_mem *out);
 
-/* Release an allocation. Must tolerate a zeroed struct, so that an error path can free everything
- * it has without tracking what it got. */
+/* Release an allocation. Must tolerate a zeroed struct (nothing was ever allocated into it), so that
+ * an error path can free everything it has without tracking what it got. Must also release an
+ * allocation whose `cpu` is NULL (the owner could not map it, see the comment on `struct bc250_mem`
+ * above): `mc` and `size` still name it, and a backend that looks it up by `cpu` alone can never give
+ * it back - see driver/shim/test/sdma_faults_report.md, D-02. */
 void bc250_shim_mem_free(struct amdgpu_device *adev, struct bc250_mem *m);
 
 /* Logging behind dev_err/dev_info/dev_warn. Level: 0 info, 1 warning, 2 error. `dev` is whatever
