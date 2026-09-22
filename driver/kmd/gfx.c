@@ -439,12 +439,24 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
                 // are not entered into the GART table (gpumem.c).
                 GpuMemRelease(Device, &gfx->Sequence, TRUE);
             }
+            else
+            {
+            // ControlInterrupt often arms VUPDATE_NO_LOCK during StartDevice, before this bring-up's IH
+            // ring exists, so the enable bit is set and nothing is delivered (the picture run's 0 acks).
+            // Writing it again once stage 8 has enabled the sources is idempotent if the bit survived.
+            // Independent of the paging-node capture below: a run opens both gates.
+            if (Device->VidPnFlipEnabled && Device->DcnVsyncArmed &&
+                gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS && !gfx->Failed)
+            {
+                (void)DcnVsyncEnable(Device, TRUE);
+                GuardLog("gfx: hardware vsync re-armed after the interrupt sources");
+            }
             // ADR 0008 stage D (docs/design/paging-node.md section 4): the first RUN to reach stage 8 with the
             // gate open captures what GfxSubmitPaging needs at DISPATCH_LEVEL - a live ring pointer and the
             // shadow buffer - the same place and the same reasoning as ih.c's DpcAdev (ih.c:319-324). Once, not
             // on every call: PagingReady stays set until the next TearDown, which clears it first of everything
             // (matching SubmitAdev's own comment above).
-            else if (gfx->PagingGate && !gfx->PagingReady && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS &&
+            if (gfx->PagingGate && !gfx->PagingReady && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS &&
                      !gfx->Failed && NT_SUCCESS(gfx->Sequence.Fault))
             {
                 if (!gfx->PagingShadowAlloc)
@@ -462,6 +474,7 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
                     GuardLog("gfx: paging node ready, SDMA0 ring at doorbell 0x%X, shadow %lu bytes",
                              gfx->PagingRing->doorbell_index, BC250_GFX_PAGING_SHADOW_BYTES);
                 }
+            }
             }
             break;
 

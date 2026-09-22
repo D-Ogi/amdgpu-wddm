@@ -314,6 +314,7 @@ typedef struct _BC250_WDDM {
     volatile LONG BlitsToFlip;                  // copied to the surface the scanout has actually flipped to
     volatile LONG BlitsToFirmware;              // copied to the POST framebuffer (flip not live, or the fallback below)
     volatile LONG BlitsMapFailed;                // of BlitsToFirmware, a fallback because DcnScanoutMapping refused
+    volatile LONG BlitRowsLast;                 // rows the last blit actually copied; 0 with BlitsToFlip climbing was M115
     volatile LONG Flips;                        // SetVidPnSourceAddress calls that changed the scanout address
     volatile LONG FlipsAboveDispatch;           // of all SetVidPnSourceAddress calls, those that arrived at DIRQL
 } BC250_WDDM;
@@ -1149,9 +1150,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // fallback rather than the ordinary gate-closed/pre-flip case, and the two scanout-remap counters say how
     // much of that mapping work DcnScanoutMapping actually did (once a flip, not once a present - M97).
     GuardLog("wddm summary: blit destination: %ld to the flipped surface, %ld to the POST framebuffer (%ld a "
-             "failed-mapping fallback), %ld scanout remaps (%ld failed)",
+             "failed-mapping fallback), %ld scanout remaps (%ld failed), last blit %ld rows",
              Wddm->BlitsToFlip, Wddm->BlitsToFirmware, Wddm->BlitsMapFailed,
-             Wddm->Device->DcnScanoutRemaps, Wddm->Device->DcnScanoutMapFailed);
+             Wddm->Device->DcnScanoutRemaps, Wddm->Device->DcnScanoutMapFailed, Wddm->BlitRowsLast);
     GuardLog("wddm summary: vsync %s, %ld ticks, %ld reported to dxgkrnl",
              Wddm->VSyncEnabled ? "enabled" : "not enabled by ControlInterrupt", Wddm->VSyncTicks,
              Wddm->VSyncReports);
@@ -2639,8 +2640,20 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     }
 
     whole = Present->DstRect;
-    rects = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->pDstSubRects : &whole;
-    count = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->SubRectCnt : 1;
+    // M115: dxgkrnl's dirty sub-rectangles assume the destination already holds the previous frame. The
+    // firmware framebuffer does (E20). A flip target does not: it is uninitialised VRAM, so copying only
+    // the dirty rects leaves the rest of the scanout as whatever was there (noise, an old test fill).
+    // The source rectangle is the whole mode (M82), so the full frame is in the source. Copy all of it.
+    if (toFlip)
+    {
+        rects = &whole;
+        count = 1;
+    }
+    else
+    {
+        rects = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->pDstSubRects : &whole;
+        count = (Present->SubRectCnt != 0 && Present->pDstSubRects != NULL) ? Present->SubRectCnt : 1;
+    }
     dx = Present->SrcRect.left - Present->DstRect.left;
     dy = Present->SrcRect.top - Present->DstRect.top;
     for (i = 0; i < count; i++)
@@ -2676,6 +2689,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     }
     MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
     InterlockedIncrement(&wddm->Blits);
+    InterlockedExchange(&wddm->BlitRowsLast, (LONG)rows);
     if (toFlip) InterlockedIncrement(&wddm->BlitsToFlip);
     else
     {
