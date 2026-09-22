@@ -734,6 +734,47 @@ static int Ib(WCHAR **argv)
     return f.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
+// ---- dcn: a read-only dump of the DCN registers (BC250_ESCAPE_RUN_DCN, ADR 0011 point 3) --------------------------------
+//
+// "R <name> <offset hex> <value hex>" per register (all 75 of gen_regs.py's DCN_REGISTERS), then a decoded
+// summary for HUBP0/OTG0 against the Linux reference (evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt),
+// so a lab run compares at a glance. No write of any kind; needs BAR5 mapped (EnableMmio), no other gate.
+
+static int Dcn(void)
+{
+    static BC250_ESCAPE_DCN d;
+    NTSTATUS status;
+
+    memset(&d, 0, sizeof(d));
+    d.Magic = BC250_ESCAPE_MAGIC;
+    d.Command = BC250_ESCAPE_RUN_DCN;
+
+    if (SendEscape(BC250_DEFAULT_HWID, &d, sizeof(d), &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+    if (d.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+    if (d.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no DCN command\n"); return 3; }
+
+    printf("dcn: %s, NTSTATUS 0x%08lX %s, %lu registers\n", d.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED",
+           d.NtStatus, StatusName((NTSTATUS)d.NtStatus), d.RegCount);
+    printf("gates        mmio %s\n", (d.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed (EnableMmio is off)");
+    if (d.FaultOffset)
+        printf("fault        0x%05lX was refused by the driver's own table; the dump stopped short there\n", d.FaultOffset);
+    for (unsigned long i = 0; i < d.RegCount && i < BC250_DCN_REG_COUNT; i++)
+        printf("R %-42s 0x%05lX %08lX\n", d.Regs[i].Name, d.Regs[i].Offset, d.Regs[i].Value);
+    if (d.Status != BC250_ESCAPE_STATUS_DONE) return 3;
+
+    printf("decoded (this run / Linux reference E21 run 4, dmupre.txt):\n");
+    printf("hubp0        address 0x%016llX / 0x0000000270000000\n", d.Hubp0Address);
+    printf("             pitch %lu / 1919\n", d.Hubp0Pitch);
+    printf("             DCHUBP_CNTL 0x%08lX / 0x000F1002\n", d.Hubp0Cntl);
+    printf("otg0         OTG_CONTROL 0x%08lX / 0x80011311, master enable %s / ENABLED\n", d.Otg0Control,
+           d.Otg0MasterEnable ? "ENABLED" : "off");
+    printf("             h_total %lu / 2079, v_total %lu / 1234\n", d.Otg0HTotal, d.Otg0VTotal);
+    printf("             vblank interrupt enable (GLOBAL_SYNC_STATUS bit 12) %s (no Linux reference for this bit alone)\n",
+           d.Otg0VblankIntEnabled ? "on" : "off");
+    return 0;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -898,6 +939,8 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli gart plan | enable | restore\n"
                         "       bc250kmd_cli psp plan | load | unload\n"
                         "       bc250kmd_cli gfx plan <stage> | run <stage> | fini | state\n"
+                        "       bc250kmd_cli ih plan | init | fini | state\n"
+                        "       bc250kmd_cli dcn                          (read-only dump of the DCN registers, ADR 0011)\n"
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
@@ -919,6 +962,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"psp") && argc == 3) return Psp(argv[2]);
     if (!_wcsicmp(argv[1], L"gfx") && (argc == 3 || argc == 4)) return Gfx(argv[2], argc == 4 ? argv[3] : NULL);
     if (!_wcsicmp(argv[1], L"ih") && argc == 3) return Ih(argv[2]);
+    if (!_wcsicmp(argv[1], L"dcn")) return Dcn();
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {

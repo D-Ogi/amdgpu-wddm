@@ -30,6 +30,7 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/<path> | sha256sum
 | `nbio_2_3_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/nbio/` | `93f51579e7df` | yes (verified) |
 | `dcn_2_0_1_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/dcn/` | `93f51579e7df` | yes (verified) |
 | `dpcs_2_0_3_offset.h` | `drivers/gpu/drm/amd/include/asic_reg/dpcs/` | `93f51579e7df` | yes (verified) |
+| `dcn_2_0_1_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/dcn/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `gc_10_1_0_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/gc/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `gc_10_1_0_default.h` | `drivers/gpu/drm/amd/include/asic_reg/gc/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
 | `mmhub_2_0_0_sh_mask.h` | `drivers/gpu/drm/amd/include/asic_reg/mmhub/` | `7d0a66e4bb90` (v6.18) | is v6.18 |
@@ -50,8 +51,9 @@ Devices, Inc. Checked file by file on 2026-09-21.
 Which header version belongs to which IP block on Cyan Skillfish was taken from the `#include` lines
 of `gfx_v10_0.c`, `gmc_v10_0.c`, `mmhub_v2_0.c`, `navi10_ih.c`, `psp_v11_0_8.c` and `nv.c`; the
 display headers (`dcn`, `dpcs`) from `display/dc/resource/dcn201/dcn201_resource.c`. The display
-headers only give names to traced accesses (`tools/trace`); they are deliberately not part of the
-read sweep.
+headers only give names to traced accesses (`tools/trace`) and, since ADR 0011 point 3, to the
+read-only DCN register dump (`driver/kmd/dcn.c`); they are deliberately not part of the general MMIO
+read sweep (`tools/win/bc250rd`, `tools/diagusb`), which stays GC/MMHUB/OSSSYS/HDP only.
 
 Who uses what:
 
@@ -63,6 +65,11 @@ Who uses what:
   `BIF_BX_PF_DOORBELL_SELFRING_GPA_APER_CNTL` field definitions.
 - `gc_10_1_0_default.h`, `mmhub_2_0_0_default.h` - the `*_DEFAULT` reset values the hub code starts
   some registers from (`GCVM_L2_CNTL3/4/5` and the MMHUB equivalents).
+- `dcn_2_0_1_sh_mask.h` - added for ADR 0011 point 3: `driver/kmd/dcn.c` decodes
+  `HUBPREQ0_DCSURF_SURFACE_PITCH.PITCH` and `OTG0_OTG_CONTROL.OTG_MASTER_EN` with its field masks, and
+  reads `OTG0_OTG_GLOBAL_SYNC_STATUS` bit 12 (`VUPDATE_NO_LOCK_INT_EN` in this header) as the vblank
+  interrupt enable the escape's summary reports. Only these three masks are used; the offsets never
+  come from this file, only from `dcn_2_0_1_offset.h` through `tools/regcalc`.
 - `navi10_enum.h` - the memory-type enum (`MTYPE_UC`) the TLB setup uses, and `VGT_EVENT_TYPE`,
   whose `CACHE_FLUSH_AND_INV_TS_EVENT` is the event `bc250_gfx_emit_fence()` puts in its
   `RELEASE_MEM`. `gfx_v10_0.c` gets it from the same header.

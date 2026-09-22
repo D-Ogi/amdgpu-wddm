@@ -156,6 +156,15 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (!CallerIsAdmin()) ih->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else IhEscape(device, ih);
         return STATUS_SUCCESS;
     }
+    if (data->Command == BC250_ESCAPE_RUN_DCN)
+    {
+        BC250_ESCAPE_DCN* dcn = (BC250_ESCAPE_DCN*)Escape->pPrivateDriverData;
+
+        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_DCN)) return STATUS_INVALID_PARAMETER;
+        dcn->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0);
+        if (!CallerIsAdmin()) dcn->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else DcnEscape(device, dcn);
+        return STATUS_SUCCESS;
+    }
     if (data->Command == BC250_ESCAPE_GET_LOG || data->Command == BC250_ESCAPE_LOG_SUMMARY)
     {
         BC250_ESCAPE_LOG* log = (BC250_ESCAPE_LOG*)Escape->pPrivateDriverData;

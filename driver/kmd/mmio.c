@@ -231,3 +231,26 @@ NTSTATUS MmioIhWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value)
     WRITE_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4], Value);
     return STATUS_SUCCESS;
 }
+
+// The DCN dump's registers (dcn.c, ADR 0011 point 3): read-only, and on its own table (g_MmioDcnAllow) rather
+// than g_MmioReadAllow, because these are DMU registers and the general read list is GC/MMHUB/OSSSYS/HDP only
+// (third_party/linux-amdgpu/PROVENANCE.md). No gate of its own: whatever EnableMmio already decided about BAR5
+// is all this needs, the same condition READ_REG answers to.
+NTSTATUS MmioDcnRead(_In_ const BC250_DEVICE* Device, ULONG Offset, _Out_ ULONG* Value)
+{
+    *Value = 0;
+    if (Device->Mmio == NULL) return STATUS_DEVICE_NOT_READY;
+    if ((Offset & 3) != 0 || Offset >= BC250_BAR5_LENGTH || !InTable(g_MmioDcnAllow, BC250_MMIO_DCN_ALLOW_COUNT, Offset))
+        return STATUS_ACCESS_DENIED;
+    *Value = READ_REGISTER_ULONG((PULONG)&Device->Mmio[Offset / 4]);
+    return STATUS_SUCCESS;
+}
+
+// For dcn.c's dump: the same 75 registers, named, in gen_regs.py's DCN_REGISTERS order. Kept private to this
+// translation unit like g_MmioGartAllow (MmioGartTable's table), handed out through a function instead of a
+// second copy of BC250_REGS_WITH_TABLES's tables in dcn.c's own translation unit.
+ULONG MmioDcnTable(_Outptr_ const BC250_DCN_REG_INFO** Table)
+{
+    *Table = g_DcnRegisters;
+    return BC250_DCN_REG_INFO_COUNT;
+}

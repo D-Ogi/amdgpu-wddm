@@ -10,6 +10,9 @@ Nobody types an offset (docs/02-register-addressing.md). Two tables come out of 
   g_MmioGartAllow   the offsets the kernel's GART command (gart.c) may touch, and nobody else: exactly the
                     registers amdgpu itself wrote on unit A during that step of its init, taken from the
                     recorded trace (E03), plus the two acknowledge registers it polled. Not chosen by us.
+  g_MmioDcnAllow    ADR 0011 point 3: the offsets the read-only DCN dump (dcn.c) may read. Not from a trace -
+                    there is none yet for this IP under Windows, which is what this table is the first step of -
+                    but from DCN_REGISTERS below, computed the same way as every other table here.
 
 Run:  python driver/kmd/gen_regs.py
 """
@@ -96,16 +99,47 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
          # gfx.c: a PLAN answers the GRBM CAM probe, which writes one of these and reads the other
          ("GC", "mmVGT_ESGS_RING_SIZE"), ("GC", "mmVGT_ESGS_RING_SIZE_UMD"),
          # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
-         ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR")]
+         ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"),
+         # dcn.c: the eight registers its decoded summary reads by name (ADR 0011 point 3), out of the 75 on
+         # DCN_REGISTERS below.
+         ("DMU", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS"), ("DMU", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH"),
+         ("DMU", "mmHUBPREQ0_DCSURF_SURFACE_PITCH"), ("DMU", "mmHUBP0_DCHUBP_CNTL"),
+         ("DMU", "mmOTG0_OTG_CONTROL"), ("DMU", "mmOTG0_OTG_H_TOTAL"), ("DMU", "mmOTG0_OTG_V_TOTAL"),
+         ("DMU", "mmOTG0_OTG_GLOBAL_SYNC_STATUS")]
+
+# ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
+# write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of
+# each per scanout pipe), OTGm for m in 0..1 (the two timing generators), plus DCHUBBUB_CTRL_STATUS. DMU has
+# exactly one IP_BASE instance on this part (cyan_skillfish_ip_offset.h): the HUBP/OTG numbering is part of the
+# register name, not an instance selector, same as GC's SE/SH banked registers are not here either.
+_DCN_HUBPREQ = ["DCSURF_PRIMARY_SURFACE_ADDRESS", "DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH", "DCSURF_SURFACE_INUSE",
+                "DCSURF_SURFACE_PITCH", "DCSURF_FLIP_CONTROL", "DCSURF_FLIP_CONTROL2", "DCSURF_SURFACE_CONTROL",
+                "DCSURF_SURFACE_FLIP_INTERRUPT"]
+_DCN_HUBP = ["DCHUBP_CNTL", "DCSURF_SURFACE_CONFIG", "DCSURF_ADDR_CONFIG", "DCSURF_TILING_CONFIG"]
+_DCN_OTG = ["OTG_CONTROL", "OTG_MASTER_UPDATE_LOCK", "OTG_GLOBAL_CONTROL0", "OTG_GLOBAL_SYNC_STATUS",
+            "OTG_VUPDATE_KEEPOUT", "OTG_H_TOTAL", "OTG_V_TOTAL", "OTG_STATUS", "OTG_STATUS_POSITION",
+            "OTG_STATUS_FRAME_COUNT", "OTG_VERTICAL_INTERRUPT0_CONTROL", "OTG_VUPDATE_PARAM", "OTG_TRIGA_MANUAL_TRIG"]
+DCN_REGISTERS = ([f"mmHUBPREQ{n}_{r}" for n in range(4) for r in _DCN_HUBPREQ] +
+                 [f"mmHUBP{n}_{r}" for n in range(4) for r in _DCN_HUBP] +
+                 [f"mmOTG{m}_{r}" for m in range(2) for r in _DCN_OTG] +
+                 ["mmDCHUBBUB_CTRL_STATUS"])
 
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
+
+# IPs gen_probes.SPEC does not carry a header for, because they are deliberately not part of the diagusb read
+# sweep (third_party/linux-amdgpu/PROVENANCE.md: "the display headers ... are deliberately not part of the
+# general MMIO read sweep"). gen_regs.py's own DCN table is not that sweep - it is its own generated table,
+# through the same regcalc mechanism - so it gets its header here instead of by adding DMU to SPEC.
+EXTRA_HEADERS = {"DMU": "dcn_2_0_1_offset.h"}
 
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
 
 
 def offset(maps, ip, name):
     if ip not in maps:
-        header = next(h for i, h, _ in SPEC if i == ip)
+        header = next((h for i, h, _ in SPEC if i == ip), None) or EXTRA_HEADERS.get(ip)
+        if header is None:
+            sys.exit(f"no header known for IP {ip} (neither gen_probes.SPEC nor gen_regs.EXTRA_HEADERS)")
         maps[ip] = RegMap(ip=ip, reg_header=HDR_DIR / header)
     return maps[ip].byte_offset(name)
 
@@ -125,6 +159,9 @@ def main():
            "#pragma once", ""]
     for ip, name in NAMED:
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
+    # Not gated like the tables below: bc250kmd_escape.h's BC250_DCN_REG_COUNT (the escape struct's fixed array)
+    # is checked against this one at compile time in dcn.c, which does not define BC250_REGS_WITH_TABLES.
+    out.append(f"#define BC250_DCN_REG_INFO_COUNT {len(DCN_REGISTERS)}")
     out += ["", "// The tables are for mmio.c alone; everybody else gets the names.", "#ifdef BC250_REGS_WITH_TABLES",
             "", "// Offsets that may be written through the escape, with the experiment that allowed each."]
     out.append(f"#define BC250_MMIO_WRITE_ALLOW_COUNT {len(writes)}")
@@ -160,9 +197,34 @@ def main():
         out += ["};", ""]
         sequenced |= set(entries)
         summary.append(f"{len(entries)} in the {table} sequence")
+
+    # ADR 0011 point 3: the DCN dump's own table, not a trace (there is none yet under Windows for this IP) but
+    # every offset still only from regcalc, over DCN_REGISTERS. Two views of the same 75 registers: sorted and
+    # unique for MmioDcnRead's table check (dcn_allow), and in DCN_REGISTERS's fixed order with names for
+    # MmioDcnTable/dcn.c's dump (dcn_named).
+    dcn_named = [(offset(maps, "DMU", name), name[2:]) for name in DCN_REGISTERS]
+    dcn_allow = sorted({off for off, _ in dcn_named})
+    if len(dcn_allow) != len(dcn_named):
+        sys.exit("DCN_REGISTERS has two names for the same offset: gen_regs.py assumed they are all distinct")
+    if dcn_allow[-1] >= BAR5_LENGTH:
+        sys.exit(f"dcn: 0x{dcn_allow[-1]:X} is beyond BAR5")
+    out += ["// ADR 0011 point 3: the DCN dump's own registers (gen_regs.py's DCN_REGISTERS, tools/regcalc, ip DMU).",
+            "// Sorted, unique, for MmioDcnRead's table check.",
+            f"#define BC250_MMIO_DCN_ALLOW_COUNT {len(dcn_allow)}",
+            "static const unsigned long g_MmioDcnAllow[BC250_MMIO_DCN_ALLOW_COUNT] = {"]
+    out += ["    " + ", ".join(f"0x{o:05X}" for o in dcn_allow[i:i + 10]) + "," for i in range(0, len(dcn_allow), 10)]
+    if len(dcn_named) != len(DCN_REGISTERS):
+        sys.exit("BC250_DCN_REG_INFO_COUNT was emitted before dcn_named was built: they must have the same length")
+    out += ["};", "",
+            "// The same registers, in DCN_REGISTERS's order, with their names: what MmioDcnTable() hands dcn.c.",
+            "static const BC250_DCN_REG_INFO g_DcnRegisters[BC250_DCN_REG_INFO_COUNT] = {"]
+    out += [f'    {{ "{name}", 0x{off:05X}ul }},' for off, name in dcn_named]
+    out += ["};", ""]
+    summary.append(f"{len(dcn_named)} in the DCN dump")
+
     for ip, name in NAMED:
-        if offset(maps, ip, name) not in reads and offset(maps, ip, name) not in sequenced:
-            sys.exit(f"{ip}.{name} is used by the driver but neither on the read list nor in a sequence's table")
+        if offset(maps, ip, name) not in reads and offset(maps, ip, name) not in sequenced and offset(maps, ip, name) not in dcn_allow:
+            sys.exit(f"{ip}.{name} is used by the driver but neither on the read list, a sequence's table nor the DCN table")
     out += ["#endif", ""]
     (HERE / "regs.generated.h").write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"{len(reads)} readable, {len(writes)} writable: " + ", ".join(f"{n[2:]}=0x{o:05X}" for o, _, n, _, _ in writes)

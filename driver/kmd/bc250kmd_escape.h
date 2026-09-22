@@ -18,7 +18,8 @@
 #define BC250_ESCAPE_RUN_FENCE 11u          // BC250_ESCAPE_FENCE in: Ring, Count, Interrupt; out: fences completed, timing
 #define BC250_ESCAPE_GET_LOG 12u            // BC250_ESCAPE_LOG in: From; out: the driver's log ring from that sequence on
 #define BC250_ESCAPE_LOG_SUMMARY 13u        // BC250_ESCAPE_LOG: wddm.c writes its counter tables into the ring, then as GET_LOG
-#define BC250_KMD_VERSION 0x00070012u       // milestone 7 work, revision 18
+#define BC250_ESCAPE_RUN_DCN 14u            // BC250_ESCAPE_DCN: a read-only dump of the DCN registers (ADR 0011 point 3)
+#define BC250_KMD_VERSION 0x00070013u       // milestone 7 work, revision 19
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -238,6 +239,45 @@ typedef struct _BC250_ESCAPE_IH {
     BC250_ESCAPE_WRITE Writes[BC250_IH_MAX_WRITES];
 } BC250_ESCAPE_IH;
 
+// ---- BC250_ESCAPE_RUN_DCN (dcn.c): a read-only dump of the DCN 2.0.1 ("DMU") display controller's registers --------------
+//
+// ADR 0011 point 3: proves the offsets and the BAR5 mapping are right under Windows before that ADR's first write.
+// HUBPREQ0..3, HUBP0..3, OTG0..1 and DCHUBBUB_CTRL_STATUS (gen_regs.py's DCN_REGISTERS, 75 registers), each a
+// name and a value. No write of any kind, and no gate beyond EnableMmio (BAR5 mapped): the driver refuses with
+// STATUS_DEVICE_NOT_READY, same as READ_REG, if the mapping is not there.
+#define BC250_DCN_REG_COUNT 75              // kept equal to regs.generated.h's BC250_DCN_REG_INFO_COUNT; dcn.c
+                                            // asserts it at compile time (gen_regs.py is the one place that counts)
+#define BC250_DCN_NAME_LEN 48               // longest today is 44 characters (HUBPREQ0_..._ADDRESS_HIGH) plus the terminator
+
+typedef struct _BC250_ESCAPE_DCN_REG {
+    char Name[BC250_DCN_NAME_LEN];          // the mm* name (dcn_2_0_1_offset.h), "mm" dropped
+    unsigned long Offset;                   // BAR5 byte offset (tools/regcalc, ip DMU)
+    unsigned long Value;
+} BC250_ESCAPE_DCN_REG;
+
+typedef struct _BC250_ESCAPE_DCN {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_DCN
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long RegCount;                 // out: entries in Regs[], BC250_DCN_REG_COUNT when Status is DONE
+    unsigned long FaultOffset;              // out: should stay 0 - every offset in Regs[] is already on the
+                                            //      driver's own generated table; nonzero says the two disagreed
+    // Decoded summary, HUBP0 and OTG0 only: the pipe and timing generator the firmware is already scanning out
+    // on (evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt is the Linux reference to compare against).
+    unsigned long long Hubp0Address;        // DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH<<32 | _ADDRESS
+    unsigned long Hubp0Pitch;               // DCSURF_SURFACE_PITCH.PITCH field (dcn_2_0_1_sh_mask.h)
+    unsigned long Hubp0Cntl;                // DCHUBP_CNTL, raw
+    unsigned long Otg0Control;              // OTG_CONTROL, raw
+    unsigned long Otg0MasterEnable;         // OTG_CONTROL.OTG_MASTER_EN field
+    unsigned long Otg0HTotal, Otg0VTotal;
+    unsigned long Otg0VblankIntEnabled;     // OTG_GLOBAL_SYNC_STATUS bit 12 (AMD's own name for this field in
+                                            // dcn_2_0_1_sh_mask.h is VUPDATE_NO_LOCK_INT_EN, not "vblank")
+    BC250_ESCAPE_DCN_REG Regs[BC250_DCN_REG_COUNT];
+} BC250_ESCAPE_DCN;
+
 // ---- BC250_ESCAPE_RUN_FENCE (gfx.c): fences on one ring, one after the other ----------------------------------------------
 #define BC250_FENCE_RING_GFX 0u
 #define BC250_FENCE_RING_COMPUTE0 1u        // 1..8: the eight compute rings
@@ -346,3 +386,5 @@ typedef char BC250_ESCAPE_IV_SIZE_CHECK[(sizeof(BC250_ESCAPE_IV) == 48) ? 1 : -1
 typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2336) ? 1 : -1];
 typedef char BC250_LOG_LINE_SIZE_CHECK[(sizeof(BC250_LOG_LINE) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_LOG_SIZE_CHECK[(sizeof(BC250_ESCAPE_LOG) == 10812) ? 1 : -1];
+typedef char BC250_ESCAPE_DCN_REG_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN_REG) == 56) ? 1 : -1];
+typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4272) ? 1 : -1];
