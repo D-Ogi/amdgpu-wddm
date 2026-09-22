@@ -825,6 +825,17 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
     VidMmSummary();
 }
 
+// BC250_ESCAPE_GET_INFO (2026-09-22, the overlay's live panel): the two counters worth a glance from outside
+// stage A, without handing the whole BC250_WDDM struct across translation units the way WddmSummary's caller
+// never needs to. Both 0 when the gate is closed (Device->Wddm is NULL then), same as WddmSummary answers either way.
+void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG* Flips)
+{
+    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+
+    *Blits = (wddm != NULL) ? wddm->Blits : 0;
+    *Flips = (wddm != NULL) ? wddm->Flips : 0;
+}
+
 // ---- start, stop, DPC ------------------------------------------------------------------------------------------
 
 static BOOLEAN WddmSegment(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Length);

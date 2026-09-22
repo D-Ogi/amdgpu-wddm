@@ -250,8 +250,16 @@ static int Info(const WCHAR *wantedId)
     }
     printf("version      0x%08lX (milestone %lu revision %lu)\n", data.Version, data.Version >> 16, data.Version & 0xFFFFu);
     printf("last stage   %lu %s\n", data.LastStage, StageName(data.LastStage));
-    printf("mode         %lux%lu pitch %lu format %lu\n", data.Width, data.Height, data.Pitch, data.ColorFormat);
+    printf("mode         %lux%lu pitch %lu format %lu (%s)\n", data.Width, data.Height, data.Pitch, data.ColorFormat,
+           (data.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM TABLE" : "display-only");
     printf("presents     %lu\n", data.Presents);
+    printf("counters     blits %lu, flips %lu (the full table's own present counters; both stay 0 in display-only mode)\n",
+           data.Reserved[0], data.Reserved[1]);
+    printf("gates        mmio %s, mmio writes %s, vram %s, vram writes %s, gart %s, psp %s, gfx %s, ih %s\n",
+           (data.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "open" : "closed", (data.Flags & BC250_ESCAPE_FLAG_MMIO_WRITE) ? "on" : "off",
+           (data.Flags & BC250_ESCAPE_FLAG_VRAM) ? "open" : "closed", (data.Flags & BC250_ESCAPE_FLAG_VRAM_WRITE) ? "on" : "off",
+           (data.Flags & BC250_ESCAPE_FLAG_GART) ? "open" : "closed", (data.Flags & BC250_ESCAPE_FLAG_PSP) ? "open" : "closed",
+           (data.Flags & BC250_ESCAPE_FLAG_GFX) ? "open" : "closed", (data.Flags & BC250_ESCAPE_FLAG_IH) ? "open" : "closed");
     return 0;
 }
 
@@ -877,6 +885,88 @@ static int SdmaCopy(const WCHAR *bytesText)
     return s.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 3;
 }
 
+// ---- fbdump: assemble the scanned-out surface into a BMP (BC250_ESCAPE_RUN_FBDUMP, 2026-09-22) ---------------------------
+//
+// "bc250kmd_cli fbdump <file.bmp>": BC250_FBDUMP_MAX_ROWS rows per escape, until the whole surface is in a
+// buffer of our own, then one 32-bit BI_RGB BMP written bottom-up as the format requires. Only a vertical flip
+// is needed: A8R8G8B8's byte order in memory (B, G, R, A on this little-endian target) already matches BMP's,
+// so there is no channel swap to do, only the row order.
+
+#pragma pack(push, 1)
+typedef struct { unsigned short Type; unsigned long Size, Reserved, OffBits; } BC250_BMP_FILE_HEADER;
+typedef struct {
+    unsigned long HeaderSize, Width; long Height; unsigned short Planes, BitCount;
+    unsigned long Compression, SizeImage; long XPelsPerMeter, YPelsPerMeter;
+    unsigned long ClrUsed, ClrImportant;
+} BC250_BMP_INFO_HEADER;
+#pragma pack(pop)
+
+static int Fbdump(const WCHAR *path)
+{
+    static BC250_ESCAPE_FBDUMP f;
+    unsigned char *frame = NULL;
+    unsigned long width = 0, height = 0, pitch = 0, row;
+    NTSTATUS status;
+    FILE *out;
+
+    memset(&f, 0, sizeof(f));
+    f.Magic = BC250_ESCAPE_MAGIC;
+    f.Command = BC250_ESCAPE_RUN_FBDUMP;
+    f.Hubp = 0;
+    f.FirstRow = 0;
+    f.RowCount = BC250_FBDUMP_MAX_ROWS;
+
+    for (;;) {
+        if (SendEscape(BC250_DEFAULT_HWID, &f, sizeof(f), &status)) { free(frame); return 1; }
+        if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); free(frame); return 1; }
+        if (f.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); free(frame); return 3; }
+        if (f.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no fbdump command\n"); free(frame); return 3; }
+        if (f.Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("fbdump refused at row %lu: NTSTATUS 0x%08lX %s%s%s\n", f.FirstRow, f.NtStatus, StatusName((NTSTATUS)f.NtStatus),
+                   f.Reason[0] ? ": " : "", f.Reason);
+            printf("gates        mmio %s, vram %s\n", (f.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed (EnableMmio is off)",
+                   (f.Flags & BC250_ESCAPE_FLAG_VRAM) ? "identified" : "closed");
+            free(frame);
+            return 3;
+        }
+
+        if (frame == NULL) {
+            width = f.Width; height = f.Height; pitch = f.Pitch;
+            frame = (unsigned char *)malloc((size_t)height * pitch);
+            if (frame == NULL) { fprintf(stderr, "out of memory for %lux%lu\n", width, height); return 1; }
+        } else if (f.Width != width || f.Height != height || f.Pitch != pitch) {
+            fprintf(stderr, "geometry changed mid-dump (%lux%lu pitch %lu -> %lux%lu pitch %lu): a mode change during the dump\n",
+                    width, height, pitch, f.Width, f.Height, f.Pitch);
+            free(frame);
+            return 1;
+        }
+        memcpy(frame + (size_t)f.FirstRow * pitch, f.Pixels, (size_t)f.RowCount * pitch);
+        printf("fbdump       rows %lu..%lu of %lu, address 0x%llX\n", f.FirstRow, f.FirstRow + f.RowCount - 1, height, f.Address);
+
+        row = f.FirstRow + f.RowCount;
+        if (row >= height) break;
+        f.FirstRow = row;
+        f.RowCount = (height - row < BC250_FBDUMP_MAX_ROWS) ? height - row : BC250_FBDUMP_MAX_ROWS;
+    }
+
+    out = _wfopen(path, L"wb");
+    if (out == NULL) { fprintf(stderr, "cannot create %ls\n", path); free(frame); return 1; }
+    {
+        BC250_BMP_FILE_HEADER fh = { 0x4D42, 0, 0, sizeof(BC250_BMP_FILE_HEADER) + sizeof(BC250_BMP_INFO_HEADER) };
+        BC250_BMP_INFO_HEADER ih = { sizeof(BC250_BMP_INFO_HEADER), width, (long)height, 1, 32, 0, pitch * height, 0, 0, 0, 0 };
+        long y;
+
+        fh.Size = fh.OffBits + ih.SizeImage;
+        fwrite(&fh, sizeof(fh), 1, out);
+        fwrite(&ih, sizeof(ih), 1, out);
+        for (y = (long)height - 1; y >= 0; y--) fwrite(frame + (size_t)y * pitch, pitch, 1, out);
+    }
+    fclose(out);
+    printf("wrote %ls: %lux%lu, %lu bytes/row, %lu bytes total\n", path, width, height, pitch, (unsigned long)((size_t)height * pitch));
+    free(frame);
+    return 0;
+}
+
 // ---- stages: the registry ------------------------------------------------------------------------------------
 
 static int ReadDword(const WCHAR *key, const WCHAR *name, DWORD *value)
@@ -1047,6 +1137,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
+                        "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
@@ -1073,6 +1164,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
+    if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
         if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);

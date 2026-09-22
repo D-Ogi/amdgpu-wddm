@@ -23,7 +23,10 @@
                                             // whole flip sequence, decoded (ADR 0011 point 3 step 2)
 #define BC250_ESCAPE_RUN_SDMACOPY 16u       // BC250_ESCAPE_SDMACOPY in: Bytes; out: the SDMA copy/fill positive
                                             // control (ADR 0013), read back and compared by the CPU
-#define BC250_KMD_VERSION 0x00070015u       // milestone 7 work, revision 21
+#define BC250_ESCAPE_RUN_FBDUMP 17u         // BC250_ESCAPE_FBDUMP in: Hubp, FirstRow, RowCount; out: a read-only
+                                            // band of the scanned-out surface's pixels, for bc250kmd_cli fbdump
+#define BC250_KMD_VERSION 0x00070015u       // milestone 7 work, revision 21 (owner's word, 2026-09-22: this
+                                            // lab-tooling change does not earn its own bump)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -56,6 +59,10 @@ typedef struct _BC250_ESCAPE {
     unsigned long RegOffset, RegValue;      // register commands
     unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
     unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    // out, GET_INFO only (0.7.22, the overlay's live panel): Reserved[0] is BC250_WDDM.Blits, Reserved[1] is
+    // .Flips (wddm.c's WddmCounters) - both 0 outside FullWddm, and both 0 for every other command, same as
+    // before this comment. Reusing the two words already here instead of growing the struct is why this did
+    // not need BC250_KMD_VERSION to move.
     unsigned long Reserved[2];
 } BC250_ESCAPE;
 
@@ -358,6 +365,51 @@ typedef struct _BC250_ESCAPE_SDMACOPY {
     unsigned long long SrcMc, DstMc;        // out: the two VRAM scratch regions' GPU (MC) addresses
 } BC250_ESCAPE_SDMACOPY;
 
+// ---- BC250_ESCAPE_RUN_FBDUMP (dcn.c): a read-only band of the scanned-out surface's pixels ----------------------------
+//
+// The owner's request (2026-09-22): a screenshot that also works under the full WDDM table, where mon.py's GDI
+// capture shows black (facts M84) because CopyFromScreen reads the CDD's surfaces, not what the display controller
+// scans out. This reads HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS[_HIGH] and _SURFACE_PITCH fresh every call (the
+// same registers BC250_ESCAPE_RUN_DCN already dumps and BC250_ESCAPE_RUN_DCNFLIP already writes) and hands back
+// one band of rows; bc250kmd_cli fbdump asks for BC250_FBDUMP_MAX_ROWS at a time until it has the whole surface,
+// then writes one BMP. No register write of any kind, no gate beyond EnableMmio (BAR5 mapped) - the same
+// condition BC250_ESCAPE_RUN_DCN already answers to.
+//
+// A present between two calls of the same dump is a torn frame in the tool's own BMP, not a driver bug: locking
+// OTG0 for the whole dump would make this a write escape, which it deliberately is not.
+#define BC250_FBDUMP_MAX_ROWS 64            // rows returned per call
+#define BC250_FBDUMP_ROW_BYTES 8192u        // bytes held per row's slot in Pixels[]; the firmware mode's pitch is
+                                            // 7680 (facts M14/M84), so this leaves headroom without the struct
+                                            // running to the megabyte the whole surface (1920x1200x4) would take
+                                            // in one call; a pitch wider than this is refused, not truncated
+#define BC250_FBDUMP_REASON_LEN 64
+
+typedef struct _BC250_ESCAPE_FBDUMP {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_FBDUMP
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Hubp;                     // in/out: which HUBP; only 0 is supported today, anything else refused
+    unsigned long FirstRow;                 // in: 0-based row to start the band at
+    unsigned long RowCount;                 // in: 1..BC250_FBDUMP_MAX_ROWS; out: rows actually returned (never less
+                                            // than asked - a request that does not fit is refused, not shrunk)
+    unsigned long Width, Height, Pitch, ColorFormat;    // out: the scanned-out surface's geometry; Pitch is read
+                                            // fresh from HUBPREQ0_DCSURF_SURFACE_PITCH every call ((PITCH field +
+                                            // 1) pixels, times 4 for A8R8G8B8), Width/Height/ColorFormat are the
+                                            // firmware's own POST mode (display.c's Device->Post, facts M14)
+    unsigned long Padding;                  // explicit, so Address (8 bytes) starts 8-aligned, like BC250_ESCAPE_SDMACOPY's
+    unsigned long long Address;             // out: this band's own physical address (system physical): the
+                                            // scanout base this call read from HUBPREQ0_DCSURF_PRIMARY_SURFACE_
+                                            // ADDRESS[_HIGH]) plus FirstRow*Pitch, i.e. where Pixels[0] came from
+    char Reason[BC250_FBDUMP_REASON_LEN];   // out: why, when Status is REFUSED; empty otherwise
+    // out: RowCount rows of Pitch bytes each, packed contiguously (no padding between rows), row-major, the
+    // surface's own FirstRow first. Bytes past RowCount*Pitch are left as the driver found them (not necessarily
+    // zero) - the caller knows RowCount and Pitch and reads only that many.
+    unsigned char Pixels[BC250_FBDUMP_MAX_ROWS * BC250_FBDUMP_ROW_BYTES];
+} BC250_ESCAPE_FBDUMP;
+
 // ---- BC250_ESCAPE_RUN_FENCE (gfx.c): fences on one ring, one after the other ----------------------------------------------
 #define BC250_FENCE_RING_GFX 0u
 #define BC250_FENCE_RING_COMPUTE0 1u        // 1..8: the eight compute rings
@@ -470,3 +522,4 @@ typedef char BC250_ESCAPE_DCN_REG_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN_REG) == 56
 typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4272) ? 1 : -1];
 typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_SDMACOPY_SIZE_CHECK[(sizeof(BC250_ESCAPE_SDMACOPY) == 88) ? 1 : -1];
+typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 524416) ? 1 : -1];

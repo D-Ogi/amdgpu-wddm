@@ -33,7 +33,8 @@ namespace Bc250Mon
                 var actions = new Actions(state, driver, kmd);
                 try { new Api(state, actions).Start(); state.Log("api", Level.Info, "listening on " + Api.Prefix); }
                 catch (Exception e) { state.Log("api", Level.Error, "API not started: " + e.Message); }
-                ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider(), new KmdProvider(kmd, dataDir));
+                ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider(), new KmdProvider(kmd, dataDir),
+                                   new KmdInfoProvider(driver));
 
                 Application.EnableVisualStyles();
                 Application.Run(new OverlayForm(state, actions));

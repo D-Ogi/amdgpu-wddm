@@ -92,6 +92,124 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
 
+// ---- FbdumpEscape (BC250_ESCAPE_RUN_FBDUMP, 2026-09-22): a read-only band of the scanned-out surface -----------
+//
+// The owner's practical-debugging request: a screenshot that works under the full WDDM table too, where
+// mon.py's GDI capture reads the CDD's surfaces and shows black (facts M84). PASSIVE_LEVEL only (MmMapIoSpaceEx).
+// No register write; needs EnableMmio only, the same condition DcnEscape above already answers to.
+
+// The band's physical range has to land inside the VRAM carve-out (EnableVram, Device->VramPhysical/VramLength -
+// the same range dcn.c's own AddressAllowed and wddm.c's Blt validate against) or inside the firmware's own
+// framebuffer, which display.c maps at every device start regardless of any gate (Device->Post.PhysicAddress /
+// FramebufferLength) - so a fresh boot that has never taken EnableVram can still be dumped before anything else
+// is enabled, the same way DcnFlip's firmware address is always allowed.
+static BOOLEAN FbdumpRangeAllowed(_In_ const BC250_DEVICE* Device, ULONGLONG Start, ULONGLONG Length)
+{
+    ULONGLONG fwBase = (ULONGLONG)Device->Post.PhysicAddress.QuadPart;
+    ULONGLONG fwTop = fwBase + Device->FramebufferLength;
+    ULONGLONG vramBase, vramTop;
+
+    if (Start >= fwBase && Start < fwTop && Length <= fwTop - Start) return TRUE;
+    if (!Device->VramEnabled) return FALSE;
+    vramBase = (ULONGLONG)Device->VramPhysical.QuadPart;
+    vramTop = vramBase + Device->VramLength;
+    if (Start < vramBase || Start >= vramTop) return FALSE;
+    return Length <= vramTop - Start;
+}
+
+static void FbdumpRefuse(_Inout_ BC250_ESCAPE_FBDUMP* Out, NTSTATUS Status, _In_z_ const char* Reason)
+{
+    Out->NtStatus = (unsigned long)Status;
+    Out->Status = BC250_ESCAPE_STATUS_REFUSED;
+    RtlStringCbCopyA(Out->Reason, sizeof(Out->Reason), Reason);
+    GuardLog("fbdump: refused: %s (0x%08X)", Reason, (ULONG)Status);
+}
+
+void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* Data)
+{
+    ULONG lo = 0, hi = 0, pitchRaw = 0, pitch, height, row;
+    ULONGLONG address, start, length;
+    PHYSICAL_ADDRESS phys;
+    volatile ULONG* map;
+    NTSTATUS status;
+
+    Data->Version = BC250_KMD_VERSION;
+    Data->NtStatus = 0;
+    Data->Width = 0; Data->Height = 0; Data->Pitch = 0; Data->ColorFormat = 0;
+    Data->Address = 0;
+    Data->Reason[0] = '\0';
+    RtlZeroMemory(Data->Pixels, sizeof(Data->Pixels));
+
+    if (Device->Mmio == NULL)
+    {
+        FbdumpRefuse(Data, STATUS_DEVICE_NOT_READY, "BAR5 not mapped (EnableMmio is closed)");
+        return;
+    }
+    if (Data->Hubp != 0)
+    {
+        FbdumpRefuse(Data, STATUS_NOT_SUPPORTED, "only HUBP 0 is read today");
+        return;
+    }
+    if (Data->RowCount == 0 || Data->RowCount > BC250_FBDUMP_MAX_ROWS)
+    {
+        FbdumpRefuse(Data, STATUS_INVALID_PARAMETER, "RowCount must be 1..BC250_FBDUMP_MAX_ROWS");
+        return;
+    }
+    height = (ULONG)Device->Post.Height;
+    if (Data->FirstRow >= height || Data->RowCount > height - Data->FirstRow)
+    {
+        FbdumpRefuse(Data, STATUS_INVALID_PARAMETER, "FirstRow/RowCount runs past the surface height");
+        return;
+    }
+
+    // Read fresh every call, like DcnEscape's decoded summary: a present between two bands of the same dump is a
+    // torn frame in the tool's own BMP, not a driver bug - locking OTG0 for the whole dump would make this the
+    // write escape it deliberately is not.
+    status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS, &lo);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH, &hi);
+    if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_PITCH, &pitchRaw);
+    if (!NT_SUCCESS(status)) { FbdumpRefuse(Data, status, "could not read the scanout address or pitch"); return; }
+
+    address = ((ULONGLONG)hi << 32) | lo;
+    pitch = ((pitchRaw & HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK) + 1) * 4;     // pixels -> A8R8G8B8 bytes
+    if (pitch == 0 || pitch > BC250_FBDUMP_ROW_BYTES)
+    {
+        FbdumpRefuse(Data, STATUS_DEVICE_DATA_ERROR, "the pitch register reads outside what this escape can hold");
+        return;
+    }
+
+    start = address + (ULONGLONG)Data->FirstRow * pitch;
+    length = (ULONGLONG)Data->RowCount * pitch;
+    if (!FbdumpRangeAllowed(Device, start, length))
+    {
+        FbdumpRefuse(Data, STATUS_ACCESS_DENIED, "band not inside VRAM or the firmware framebuffer");
+        return;
+    }
+
+    phys.QuadPart = (LONGLONG)start;
+    map = (volatile ULONG*)MmMapIoSpaceEx(phys, (SIZE_T)length, PAGE_READONLY | PAGE_NOCACHE);
+    if (map == NULL) { FbdumpRefuse(Data, STATUS_INSUFFICIENT_RESOURCES, "could not map the band"); return; }
+
+    for (row = 0; row < Data->RowCount; row++)
+    {
+        ULONG* dst = (ULONG*)(Data->Pixels + (SIZE_T)row * pitch);
+        ULONG x, words = pitch / 4;
+
+        for (x = 0; x < words; x++) dst[x] = READ_REGISTER_ULONG((PULONG)&map[row * words + x]);
+    }
+    MmUnmapIoSpace((PVOID)map, (SIZE_T)length);
+
+    Data->Width = (unsigned long)Device->Post.Width;
+    Data->Height = height;
+    Data->Pitch = pitch;
+    Data->ColorFormat = (unsigned long)Device->Post.ColorFormat;
+    Data->Address = start;
+    Data->NtStatus = (unsigned long)STATUS_SUCCESS;
+    Data->Status = BC250_ESCAPE_STATUS_DONE;
+    GuardLog("fbdump: hubp %u rows %u..%u of %u, pitch %u, address 0x%llX", Data->Hubp, Data->FirstRow,
+             Data->FirstRow + Data->RowCount - 1, height, pitch, start);
+}
+
 // ---- DcnFlip (0.7.20, ADR 0011 point 3 step 2): one gated flip on HUBP0/OTG0 -----------------------------------
 //
 // PASSIVE_LEVEL only (the poll below stalls the processor, and the optional fill maps memory). Gated by

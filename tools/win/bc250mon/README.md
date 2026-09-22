@@ -10,7 +10,7 @@ because `bc250rd.sys` is admin-only.
 ```
  providers (threads)                  remote agent over SSH      owner at the machine
  GpuProvider, SystemProvider,         mon.py -> HTTP            hotkeys, buttons
- KmdProvider                          127.0.0.1:2250
+ KmdProvider, KmdInfoProvider         127.0.0.1:2250
         |                               |                               |
         v                               v                               v
    +---------------------------- State (State.cs) ----------------------------+
@@ -72,6 +72,43 @@ python -m unittest discover -s tools/win/bc250mon      # build.ps1 runs this too
 `--kmd-key HKCU\...` (or the environment variable `BC250MON_KMD_KEY`) points the provider and the actions at
 another registry key. It is a debug switch: it lets the "installed" rows be exercised on a machine where no
 such service exists, without administrator rights.
+
+## The "bc250kmd live" panel
+
+`KmdInfoProvider.cs` is the KMD panel's practical-debugging counterpart (owner's request, 2026-09-22): where
+`KmdProvider` reads the registry trail (works even when the driver has stopped answering), this one asks the
+driver itself, every 5 seconds, by running `C:\BC250\kmd\bc250kmd_cli.exe info` (`BC250_ESCAPE_GET_INFO`) and
+condensing its output:
+
+| Row | From |
+|---|---|
+| `Version` | the driver build |
+| `Stage` | `last stage`, same numbers as the KMD panel's `Stage`, red at 90/91 |
+| `Mode` | `display-only` or `FULL WDDM TABLE` (amber) |
+| `Presents` | the display-only path's own present counter |
+| `Counters` | the full table's own present counters, blits and flips (0 outside it) |
+| `Gates` | `mmio`, `mmio writes`, `vram`, `vram writes`, `gart`, `psp`, `gfx`, `ih` |
+| `Temperature` | Tctl, via `Driver.cs` - the same `bc250rd.sys` method `tools/win/bc250rd/temp.py` drives from the development PC, not a second copy of it: `GpuProvider`'s panel already shows it too, this one repeats it next to the driver's own state for one glance instead of two |
+
+When `bc250kmd_cli.exe` is missing, times out, or the escape itself refuses (not an administrator, or
+`bc250kmd` is not the adapter's active driver), the panel shows that one line under `info` instead of going
+empty or throwing.
+
+## Scanout screenshots (the full WDDM table's own picture)
+
+Under the full WDDM table, `screenshot`'s GDI capture (`Screenshot.CaptureScreen`, `CopyFromScreen`) reads the
+CDD's surfaces and comes back solid black (facts M84) - it is not looking at what the display controller is
+actually scanning out. `mon.py scanout` is the counterpart that is: it runs `bc250kmd_cli fbdump`
+(`BC250_ESCAPE_RUN_FBDUMP`, `driver/kmd/dcn.c` - read-only, HUBP0's own registers) on the target through the
+same SSH transport `mon.py` already uses for a command, pulls the BMP back with `target.py pull`, and downsizes
+it the way `screenshot` does (half scale by default) - in pure Python (`struct` + `zlib`, no Pillow needed on
+either end, matching the workspace rule against installers): a small nearest-neighbour resample and, for the
+default `png` format, a minimal hand-rolled PNG encoder. `--format bmp` skips the encoder and writes the
+(downscaled) BMP as-is. See `tools/win/bc250kmd_cli/README.md`'s fbdump section for the escape itself.
+
+```
+mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]
+```
 
 ## The brake
 
@@ -155,13 +192,23 @@ mon.py stop?                          exit code 1 if the owner asked to stop
 mon.py windows                        handle, process, geometry and title of every titled window
 mon.py screenshot [--scale 0.5] [--format png|jpg] [--quality 80] [--overlay 0|1]
                   [--window TITLE | --handle 0x...] [--out FILE]
+mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]     what HUBP0 actually scans out (full WDDM table)
 ```
 
 `screenshot` writes to `P:\BC-250\scratch\screens\<timestamp>.<ext>` unless `--out` says otherwise, creates
 the folder, and prints the path, the pixel size and the file size. Half scale is the default because the
 reader pays per image token; a 1920x1200 screen at 0.5 is 960x600, about 750 kB as PNG and 30 kB as JPEG 70.
 
+`scanout` runs entirely outside the overlay's HTTP API (it shells `bc250kmd_cli fbdump` on the target through
+`target.py`, then pulls and re-encodes locally), so it needs no `mon.py` command of the overlay's at all; it
+still logs nothing of its own on the overlay side, unlike `screenshot`, since the escape it drives already logs
+each band (`GuardLog`, `dcn.c`). It writes to the same `scratch\screens` folder, `-scanout.<ext>` suffixed, and
+deletes the full-resolution intermediate BMP it pulls once the downscaled picture is written.
+
 ## Not there yet
+
+- `scanout` supports `png` (its own minimal encoder) and `bmp` (no re-encoding) only - no `jpg`, which would
+  need a real JPEG encoder; and HUBP0 only, the pipe the firmware already scans out on.
 
 - No authentication on the API; acceptable only because it is loopback-bound behind SSH.
 - `/screenshot/window` asks the window to draw itself (`PrintWindow` with `PW_RENDERFULLCONTENT`). A window

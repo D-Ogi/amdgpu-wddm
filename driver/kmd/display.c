@@ -175,6 +175,15 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (!CallerIsAdmin()) flip->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else DcnFlipEscape(device, flip);
         return STATUS_SUCCESS;
     }
+    if (data->Command == BC250_ESCAPE_RUN_FBDUMP)
+    {
+        BC250_ESCAPE_FBDUMP* fbdump = (BC250_ESCAPE_FBDUMP*)Escape->pPrivateDriverData;
+
+        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_FBDUMP)) return STATUS_INVALID_PARAMETER;
+        fbdump->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) | (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0);
+        if (!CallerIsAdmin()) fbdump->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else FbdumpEscape(device, fbdump);
+        return STATUS_SUCCESS;
+    }
     if (data->Command == BC250_ESCAPE_RUN_SDMACOPY)
     {
         BC250_ESCAPE_SDMACOPY* sdmacopy = (BC250_ESCAPE_SDMACOPY*)Escape->pPrivateDriverData;
@@ -262,9 +271,15 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         log->Status = BC250_ESCAPE_STATUS_DONE;
         return STATUS_SUCCESS;
     }
+    // 2026-09-22: every gate this driver has, not only the four READ_REG/WRITE_REG cared about before - the
+    // overlay's live panel reads GET_INFO for exactly this, and a caller that only ever checked the first four
+    // bits sees the same answer it always did (they are unchanged).
     data->Flags = (device->Mmio != NULL ? BC250_ESCAPE_FLAG_MMIO_MAPPED : 0) |
                   (device->MmioWriteEnabled ? BC250_ESCAPE_FLAG_MMIO_WRITE : 0) |
-                  (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) | (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0);
+                  (device->VramEnabled ? BC250_ESCAPE_FLAG_VRAM : 0) | (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0) |
+                  (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) | (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) |
+                  (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0) | (device->MmioIhEnabled ? BC250_ESCAPE_FLAG_IH : 0) |
+                  (device->FullWddm ? BC250_ESCAPE_FLAG_FULL_WDDM : 0);
     data->NtStatus = 0;
 
     if (data->Command == BC250_ESCAPE_READ_REG || data->Command == BC250_ESCAPE_WRITE_REG)
@@ -304,7 +319,15 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     data->Height = device->Post.Height;
     data->Pitch = device->Post.Pitch;
     data->ColorFormat = (unsigned long)device->Post.ColorFormat;
-    data->Presents = g_Presents;
+    data->Presents = g_Presents;            // display-only present count (Bc250PresentDisplayOnly); 0 under FullWddm
+    {
+        // Reserved[0]/[1] (2026-09-22): blits and flips, the full table's own present counters - both 0 outside
+        // FullWddm, same as g_Presents above is 0 inside it. See bc250kmd_escape.h's comment on BC250_ESCAPE.
+        LONG blits = 0, flips = 0;
+        WddmCounters(device, &blits, &flips);
+        data->Reserved[0] = (unsigned long)blits;
+        data->Reserved[1] = (unsigned long)flips;
+    }
     return STATUS_SUCCESS;
 }
 

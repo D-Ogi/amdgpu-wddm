@@ -20,6 +20,10 @@ bc250kmd_cli gart plan|enable|restore            the M4 sequence: list what it w
 bc250kmd_cli psp plan|load|unload                firmware through the PSP: list registers and commands, run them, DESTROY_TMR and ring stop (E10)
 bc250kmd_cli gfx plan N|run N|fini|state         RLC, CP, KIQ, queues, ring tests, SDMA in stages 1..7: list the writes, run up to stage N, halt and free (E11)
 bc250kmd_cli dcn                                 read-only dump of the DCN 2.0.1 ("DMU") display registers, decoded HUBP0/OTG0 summary against the Linux reference (ADR 0011 point 3)
+bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore
+                                                  one gated flip on HUBP0/OTG0 (ADR 0011 point 3 step 2)
+bc250kmd_cli sdmacopy [bytes]                     SDMA copy/fill positive control, read back and compared by the CPU (ADR 0013)
+bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0), assembled from several read-only bands into a BMP
 ```
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage
@@ -44,7 +48,10 @@ device, display-only ones included. Measured on the development PC on 2026-09-21
 
 `info` sends `BC250_ESCAPE_GET_INFO` as `D3DKMT_ESCAPE_DRIVERPRIVATE` with the `BC250_ESCAPE` structure of
 `driver/kmd/bc250kmd_escape.h` (included by relative path, never copied). Every step prints its own NTSTATUS,
-because the failure is a measurement too:
+because the failure is a measurement too. On success it prints version, last stage, the mode (display-only vs
+full WDDM table), presents (the display-only path's own counter) plus blits/flips (the full table's, both 0
+outside it - `wddm.c`'s `WddmCounters`, `BC250_ESCAPE.Reserved[0]`/`[1]`), and which gates are open (`Flags`).
+`tools/win/bc250mon`'s overlay runs this every few seconds for its "bc250kmd live" panel; see its README.
 
 - against a driver that has no such escape, the call fails and the hex status is the answer;
 - against bc250kmd, a failure means dxgkrnl does not route escapes to a display-only miniport, and M4 needs
@@ -63,6 +70,27 @@ Measured on unit A, 2026-09-21, same request every time, evidence
 escape itself is what failed. None of these drivers has a private escape of ours to answer with, so this is
 a baseline, not an answer: the question is settled by the same command against bc250kmd, which does fill
 `DxgkDdiEscape`.
+
+## fbdump: what the display controller is actually scanning out
+
+Under the full WDDM table, `mon.py screenshot`'s GDI capture reads the CDD's surfaces and shows black (facts
+M84) - it is not looking at what HUBP0 is scanning out. `fbdump` is `BC250_ESCAPE_RUN_FBDUMP`
+(`driver/kmd/dcn.c`): read-only, no gate beyond `EnableMmio` (BAR5 mapped), the same condition `dcn` already
+answers to. Each call reads `HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS[_HIGH]` and `..._SURFACE_PITCH` fresh (a
+present between two calls of the same dump is a torn frame in the resulting BMP, not a driver bug - locking
+OTG0 for the whole dump would make this the write escape it deliberately is not), maps `RowCount * Pitch` bytes
+read-only (`MmMapIoSpaceEx(..., PAGE_READONLY | PAGE_NOCACHE)`) and copies them out. `BC250_FBDUMP_MAX_ROWS`
+(64) rows per call keeps one escape's buffer at 512 KiB regardless of the true row count, well short of the
+9 MB the whole 1920x1200 A8R8G8B8 surface would take in one call; `bc250kmd_cli fbdump` asks for that many rows
+at a time (about 19 calls for the firmware's own mode) and assembles a bottom-up 32-bit `BI_RGB` BMP - no
+channel swap needed, since A8R8G8B8's in-memory byte order (B, G, R, A) already matches BMP's.
+
+The band's physical range must land inside the VRAM carve-out (`EnableVram`,
+`Device->VramPhysical`/`VramLength` - the same range `dcn.c`'s `AddressAllowed` and `wddm.c`'s Blt validate
+against) or inside the firmware's own framebuffer, which `display.c` maps at every device start regardless of
+any gate - so a fresh boot that has never taken `EnableVram` can still be dumped.
+
+`tools/win/bc250mon`'s `mon.py scanout` runs this on the target and pulls the BMP back; see its README.
 
 ## Stage names
 

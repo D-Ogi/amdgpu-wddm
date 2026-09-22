@@ -230,6 +230,12 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_IH* Dat
 struct _BC250_ESCAPE_DCN;
 void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DCN* Data);
 
+// dcn.c (BC250_ESCAPE_RUN_FBDUMP, 2026-09-22): a read-only band of the scanned-out surface's pixels, for
+// bc250kmd_cli fbdump / mon.py scanout. PASSIVE_LEVEL only (MmMapIoSpaceEx); no register write; no gate beyond
+// EnableMmio, the same condition DcnEscape answers to.
+struct _BC250_ESCAPE_FBDUMP;
+void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_FBDUMP* Data);
+
 // dcn.c (0.7.20, ADR 0011 point 3 step 2): the gated flip. PASSIVE_LEVEL only (KeStallExecutionProcessor's poll,
 // MmMapIoSpaceEx for the optional fill). Physical is a system physical address (M31); ignored when Restore is
 // set, when the target is instead Device->DcnFirmwareAddress. No GartLock: DMU is not on the register set any
@@ -368,3 +374,4 @@ BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Ph
 void VidMmSummary(void);
 void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
                                                     // when the gate is closed, so the escape can call it either way
+void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG* Flips);    // 0/0 when closed
