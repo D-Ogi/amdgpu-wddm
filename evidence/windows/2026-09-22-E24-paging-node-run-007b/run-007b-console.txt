@@ -1,0 +1,222 @@
+driver   0.7.33.1   (oem44.inf)
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 0
+version      0x00070021 (milestone 7 revision 33)
+UnconfirmedStarts = 0
+boot     2026-09-22T13:17:15
+bringup  0 phase log(s) since boot
+verdict  FRESH
+{'ok': True}
+{'ok': True}
+13:19:25 Tctl 70.2 C (raw 775B0FEF)
+=== gate -Full 1 -GpuVa 1 -Engines 1 -GpuSubmit 1 -Blit 1 -PagingNode 1  (flip gate CLOSED)  (13:19:20)
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 1  EnablePresentBlit 1  EnablePagingNode 1  EnableDcnWrite 0  EnableVidPnFlip 0
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+presents     0
+=== gart enable  (13:19:48)
+gart enable: done, NTSTATUS 0x00000000 STATUS_SUCCESS, sequence result 0, 285 writes executed
+exit code 0
+=== psp load  (13:19:52)
+C  7 id 6 type  4 size  267440 mc 0xF5FFCD5000 submitted rc 0 status 0x00000000 us 5954 tmr 0xF5FF800000
+C  8 id 6 type  5 size     896 mc 0xF5FFD17000 submitted rc 0 status 0x00000000 us 130 tmr 0x0
+C  9 id 6 type  4 size  267440 mc 0xF5FFD18000 submitted rc 0 status 0x00000000 us 5954 tmr 0xF5FF800000
+C 10 id 6 type  6 size     896 mc 0xF5FFD5A000 submitted rc 0 status 0x00000000 us 130 tmr 0x0
+C 11 id 6 type  8 size   25088 mc 0xF5FFD5B000 submitted rc 0 status 0x00000000 us 1737 tmr 0x0
+exit code 0
+=== ih init  (13:19:57)
+ih init: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 21 register writes executed
+ring         ENABLED, 0 interrupts taken as ours, 0 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+exit code 0
+=== gfx run 1  (13:20:01)
+gfx run to stage 1: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 70 register writes and 0 doorbells executed
+S 1 doorbell aperture  rc 0 first write 69 us 1
+exit code 0
+=== gfx run 2  (13:20:05)
+gfx run to stage 2: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 34 register writes and 0 doorbells executed
+S 2 golden registers   rc 0 first write 0 us 26
+exit code 0
+=== gfx run 3  (13:20:08)
+gfx run to stage 3: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 3 register writes and 0 doorbells executed
+S 3 GRBM CAM probe     rc 0 first write 0 us 4
+exit code 0
+=== gfx run 4  (13:20:12)
+gfx run to stage 4: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 157 register writes and 0 doorbells executed
+S 4 constants          rc 0 first write 0 us 63
+exit code 0
+=== gfx run 5  (13:20:17)
+gfx run to stage 5: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 8 register writes and 0 doorbells executed
+S 5 RLC                rc 0 first write 0 us 134
+exit code 0
+=== gfx run 6  (13:20:21)
+gfx run to stage 6: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 62 register writes and 14 doorbells executed
+S 6 CP                 rc 0 first write 0 us 342
+exit code 0
+=== gfx run 7  (13:20:25)
+gfx run to stage 7: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 93 register writes and 2 doorbells executed
+S 7 SDMA               rc 0 first write 0 us 188
+exit code 0
+=== gfx run 8  (13:20:28)
+gfx run to stage 8: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 38 register writes and 0 doorbells executed
+S 8 interrupt sources  rc 0 first write 0 us 23
+exit code 0
+=== the control: a CP fence with its interrupt, before anything is asked of the node
+--- ih before the fence
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 0 times since the device started, last message 0
+ring         ENABLED, 0 interrupts taken as ours, 269 DPCs, 0 vectors consumed, 0 overflows, rptr 0x0 wptr 0x0
+status       IH_STATUS: idle yes, input_idle yes, bif_interrupt_line clear (docs/design/vsync-interrupt-route.md:
+             input_idle clear would mean some client has something pending at IH's own input; bif_interrupt_line
+=== fence gfx x2  (13:20:34)
+time 2026-09-22T13:20:41  phase fence x
+fence gfx x2: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0
+fences       2 of 2 values read back, 2 doorbells; last emitted 0x2, slot holds 0x2
+time         23 us in all, slowest single fence 12 us
+exit code 0
+--- ih after the fence
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 1 times since the device started, last message 0
+ring         ENABLED, 1 interrupts taken as ours, 309 DPCs, 2 vectors consumed, 0 overflows, rptr 0x40 wptr 0x40
+status       IH_STATUS: idle yes, input_idle yes, bif_interrupt_line clear (docs/design/vsync-interrupt-route.md:
+             input_idle clear would mean some client has something pending at IH's own input; bif_interrupt_line
+--- paging counters before any pressure
+   269     73.379 wddm summary: paging operation  11    1069  first at 43
+   270     73.379 wddm summary: paging operation  12       8  first at 97
+   271     73.379 wddm summary: paging operation   9       2  first at 110
+   274     73.379 wddm summary: submissions 0 physical + 78 virtual, 0 preemptions, last completed fence 78
+   276     73.379 wddm summary: node 1 (paging, open): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+   277     73.379 wddm summary: SubmitCommandVirtual by node: 0: 78, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+   278     73.379 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+   279     73.379 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+=== VidMm pressure 64 MB  (13:20:41)
+kmtprobe: size 0x4000000, va 0x0000000010000000, reserve no, resident-first no, hold 10 s, watchdog 90000 ms
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000026F5A7D0000, current value 7000
+D3DKMTCreateAllocation2 [data]     0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000180, GpuVirtualAddress reported 0x0000000000000000
+    mapping 16384 page(s) of 0x4000000 bytes at base 0x0000000010000000
+    VirtualAddress 0x0000000010000000 (asked 0x0000000010000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [data]          0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+--- paging counters after 64 MB
+   269     73.379 wddm summary: paging operation  11    1069  first at 43
+   270     73.379 wddm summary: paging operation  12       8  first at 97
+   271     73.379 wddm summary: paging operation   9       2  first at 110
+   274     73.379 wddm summary: submissions 0 physical + 78 virtual, 0 preemptions, last completed fence 78
+   276     73.379 wddm summary: node 1 (paging, open): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+   277     73.379 wddm summary: SubmitCommandVirtual by node: 0: 78, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+   278     73.379 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+   279     73.379 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+   341     85.165 wddm summary: paging operation  11    1171  first at 43
+   342     85.165 wddm summary: paging operation  12      12  first at 97
+--- what node 1 did with it
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+13:21:02 Tctl 73.0 C (raw 7A1B0FEF)
+=== VidMm pressure 256 MB  (13:20:57)
+kmtprobe: size 0x10000000, va 0x0000000010000000, reserve no, resident-first no, hold 10 s, watchdog 90000 ms
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000020AEC0A0000, current value 7000
+D3DKMTCreateAllocation2 [data]     0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000180, GpuVirtualAddress reported 0x0000000000000000
+    mapping 65536 page(s) of 0x10000000 bytes at base 0x0000000010000000
+    VirtualAddress 0x0000000010000000 (asked 0x0000000010000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [data]          0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+--- paging counters after 256 MB
+   269     73.379 wddm summary: paging operation  11    1069  first at 43
+   270     73.379 wddm summary: paging operation  12       8  first at 97
+   271     73.379 wddm summary: paging operation   9       2  first at 110
+   274     73.379 wddm summary: submissions 0 physical + 78 virtual, 0 preemptions, last completed fence 78
+   276     73.379 wddm summary: node 1 (paging, open): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+   277     73.379 wddm summary: SubmitCommandVirtual by node: 0: 78, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+   278     73.379 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+   279     73.379 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+   341     85.165 wddm summary: paging operation  11    1171  first at 43
+   342     85.165 wddm summary: paging operation  12      12  first at 97
+--- what node 1 did with it
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+13:21:17 Tctl 72.5 C (raw 799B0FEF)
+=== VidMm pressure 512 MB  (13:21:13)
+kmtprobe: size 0x20000000, va 0x0000000010000000, reserve no, resident-first no, hold 10 s, watchdog 90000 ms
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000016782560000, current value 7000
+D3DKMTCreateAllocation2 [data]     0x00000000  STATUS_SUCCESS
+    hAllocation 0x40000180, GpuVirtualAddress reported 0x0000000000000000
+    mapping 131072 page(s) of 0x20000000 bytes at base 0x0000000010000000
+    VirtualAddress 0x0000000010000000 (asked 0x0000000010000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [data]          0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+--- paging counters after 512 MB
+   269     73.379 wddm summary: paging operation  11    1069  first at 43
+   270     73.379 wddm summary: paging operation  12       8  first at 97
+   271     73.379 wddm summary: paging operation   9       2  first at 110
+   274     73.379 wddm summary: submissions 0 physical + 78 virtual, 0 preemptions, last completed fence 78
+   276     73.379 wddm summary: node 1 (paging, open): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+   277     73.379 wddm summary: SubmitCommandVirtual by node: 0: 78, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+   278     73.379 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+   279     73.379 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+   341     85.165 wddm summary: paging operation  11    1171  first at 43
+   342     85.165 wddm summary: paging operation  12      12  first at 97
+--- what node 1 did with it
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+13:21:33 Tctl 72.2 C (raw 795B0FEF)
+--- ih after the pressure
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 2 times since the device started, last message 0
+ring         ENABLED, 2 interrupts taken as ours, 679 DPCs, 7 vectors consumed, 0 overflows, rptr 0xE0 wptr 0xE0
+status       IH_STATUS: idle yes, input_idle yes, bif_interrupt_line clear (docs/design/vsync-interrupt-route.md:
+             input_idle clear would mean some client has something pending at IH's own input; bif_interrupt_line
+log exit 0, 506 lines -> C:\BC250\e16\out\ring-e24r7-132138.log
+ring-e24r7-132138.log
+    10      0.072 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    15      0.072 gfx: ready, GPU submission allowed, paging node allowed
+    23      0.074 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    33      0.074 wddm: GetNodeMetadata node 1 adapter 0
+    35      0.074 wddm: QUERYSEGMENT4 pass 2: 2 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+    41      0.076 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+    43      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    46      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    49      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    52      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    97      0.111 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   100      0.111 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   109      0.112 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   110      0.112 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   111      0.112 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   118      0.113 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   122      0.115 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   123      0.115 wddm: software vsync on, 16 ms period, target 2424833
+   143      4.234 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   152      4.252 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 0
+   161      4.268 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 0
+   170      4.270 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 0
+   179      7.282 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 0
+   188      7.302 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 0
+   197     10.759 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 0
+   206     10.769 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 0
+   238     63.380 gfx: paging node ready, SDMA0 ring at doorbell 0x200, shadow 65536 bytes
+   243     73.379 wddm summary: ---- DDI calls: name, count, first log line ----
+   244     73.379 wddm summary: QueryAdapterInfo                   12  first at 24
+13:21:40 Tctl 72.6 C (raw 79BB0FEF)
+=== undo  (13:21:36)
+exit code 3
+ih fini: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 9 register writes executed
+exit code 0
+exit code 0
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          99
+presents     33
+UnconfirmedStarts = 0
+13:22:18 Tctl 68.1 C (raw 753B0FEF)

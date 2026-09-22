@@ -1,0 +1,19 @@
+time 2026-09-22T13:21:35  phase ih x
+ih state: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 0 register writes executed
+gates        mmio mapped, gart open, psp open, gfx open, ih open
+windows      interrupt resource: message (MSI), vector 0x80; interrupt routine called 2 times since the device started, last message 0
+ring         ENABLED, 2 interrupts taken as ours, 679 DPCs, 7 vectors consumed, 0 overflows, rptr 0xE0 wptr 0xE0
+status       IH_STATUS: idle yes, input_idle yes, bif_interrupt_line clear (docs/design/vsync-interrupt-route.md:
+             input_idle clear would mean some client has something pending at IH's own input; bif_interrupt_line
+             set would mean NBIO/BIF itself sees the host interrupt line asserted right now)
+K client 20 source 181 count 2
+K client 27 source 0 count 4
+K client 8 source 221 count 1
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 899241530735
+V client 20 source 181 ring 0 vmid 0 pasid 0 data 80000000 00000000 00000000 00000000 ts 899241531579
+V client 27 source 0 ring 169 vmid 0 pasid 0 data 00271C62 00000020 00000000 00000000 ts 899716967808
+V client 27 source 0 ring 169 vmid 0 pasid 0 data 00271C63 00000020 00000000 00000000 ts 899716967844
+V client 27 source 0 ring 169 vmid 0 pasid 0 data 00271C64 00000020 00000000 00000000 ts 899716967880
+V client 27 source 0 ring 169 vmid 0 pasid 0 data 00271C65 00000020 00000000 00000000 ts 899716967916
+V client 8 source 221 ring 0 vmid 0 pasid 0 data 00000086 00000000 00000000 00000000 ts 899716967972
+exit code 0
