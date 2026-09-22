@@ -167,8 +167,9 @@ extern "C" {
 
 /* 3: version 2 plus submittable_node_mask, appended. See the versioning rule above. Nothing was
  * moved or removed, so a version-1 or version-2 reader still finds every field it knows where it
- * expects it; it just stops short. Bumped while nothing consumes the blob yet, which is the
- * cheapest moment. ADR 0013 (docs/adr/0013-node-layout-3d-plus-sdma.md), stage D contract review:
+ * expects it; it just stops short. Bumped while nothing consumed the blob yet, which was the
+ * cheapest moment. bc250kmd copies these bytes from QueryAdapterInfo (driver/kmd/umd_caps.c).
+ * ADR 0013 (docs/adr/0013-node-layout-3d-plus-sdma.md), stage D contract review:
  * docs/design/umd-contract-stage-d.md. */
 #define BC250_UMD_PRIVATE_VERSION   3u
 

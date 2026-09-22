@@ -392,9 +392,9 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 
 ## Not done
 
-- `DxgkDdiQueryAdapterInfo` still refuses `DXGKQAITYPE_UMDRIVERPRIVATE` (`wddm.c`'s `default:` arm).
-  No handler writes the caps blob yet. That is the next kernel gap for an ICD that calls
-  `QueryAdapterInfo(UMDRIVERPRIVATE)`.
+- `DxgkDdiQueryAdapterInfo(DXGKQAITYPE_UMDRIVERPRIVATE)` copies the unit A caps blob
+  (`driver/kmd/umd_caps.c`, 1472 bytes, bc250kmd 0.7.41). A shorter output buffer is refused.
+  The winsys that asks for it is not written yet.
 - `DxgkDdiCreateAllocation`, `DxgkDdiCreateContext` and `DxgkDdiSubmitCommandVirtual` do read the
   three blobs in `bc250_umd_submit.h`, on node 0 only (`driver/kmd/umd_blob.c`, bc250kmd 0.7.40).
   GDI allocations stay on the `"LB7A"` struct. A context with empty private data is unchanged

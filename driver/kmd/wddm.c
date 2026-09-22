@@ -22,6 +22,7 @@
 // TDR with its three DDIs, DirectFlip, FlipIndependent, SmoothRotation, SetStablePowerState, CollectDbgInfo.
 #include "bc250kmd.h"
 #include "umd_blob.h"
+#include "umd_caps.h"
 #include <ntstrsafe.h>
 
 #define BC250_WDDM_TAG 'wW2B'
@@ -1675,11 +1676,19 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         ((DXGKARG_HISTORYBUFFERPRECISION*)QueryAdapterInfo->pOutputData)->PrecisionBits = 0;
         status = STATUS_SUCCESS;
         break;
+    case DXGKQAITYPE_UMDRIVERPRIVATE:
+        // The caps blob, verbatim (umd_caps.c, unit A's measured answers). A short buffer is a refusal the
+        // UMD can see; this DDI is allowed to fail. The bytes are not a register read and not a guess made here.
+        if (QueryAdapterInfo->pOutputData == NULL) { status = STATUS_INVALID_PARAMETER; break; }
+        if (QueryAdapterInfo->OutputDataSize < UMD_CAPS_BYTES) { status = STATUS_BUFFER_TOO_SMALL; break; }
+        RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
+        status = STATUS_SUCCESS;
+        break;
     default:
-        // Including UMDRIVERPRIVATE and the pre-WDDM2 segment queries, which a WDDM 2 driver must not answer.
-        // Seen on the lab and tolerated by its dxgkrnl (E16 run 003): type 15 PHYSICALADAPTERCAPS and type 47
-        // 64BITONLYCAPS, for which the WDK has no structure at all. Two refusals in a kept log are expected.
-        // STATUS_NOT_SUPPORTED is safe for an unhandled type, and which types are asked for is stage A evidence.
+        // The pre-WDDM2 segment queries, which a WDDM 2 driver must not answer. Seen on the lab and tolerated
+        // by its dxgkrnl (E16 run 003): type 15 PHYSICALADAPTERCAPS and type 47 64BITONLYCAPS, for which the
+        // WDK has no structure at all. Two refusals in a kept log are expected. STATUS_NOT_SUPPORTED is safe
+        // for an unhandled type, and which types are asked for is stage A evidence.
         status = STATUS_NOT_SUPPORTED;
         break;
     }
