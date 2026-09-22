@@ -145,6 +145,21 @@ and cuts a submission back to it, resetting the mark whenever the buffer changes
 offset 0. The invariant is the short one: **no byte reaches SDMA0 that this driver did not put in the shadow for
 the buffer being submitted.**
 
+The address and the mark are one value in two words, and they are only ever touched together under the WDDM
+lock. The first version of this kept them as two interlocked singles, and review 24 found both halves of what
+that always costs: a raise that lands after another builder's reset stamps one buffer's mark onto the other's
+address and the mismatched pair then *stays*, and a reader that takes the address before a switch and the mark
+after it gets a pair that never existed. Neither is a stale read a range check can catch - both look like a
+clean match and put another buffer's packets on a live ring. `gfx.c`'s own `PagingBuildersActive` says two
+builders can genuinely run at once, so this is not a theoretical interleaving. There was never anything to win
+by being lock-free on a path that runs a few times a second.
+
+One thing the DDI side still does not do: `Bc250WddmSubmitCommand`'s own node-1 branch uses dxgkrnl's
+`DmaBufferSubmissionStartOffset`/`EndOffset` directly and has no buffer identity of its own. It is unreachable
+on this machine (M110) and correct on its own terms, since those offsets are that DDI's own coordinates - but
+if it ever becomes reachable it reaches `WddmSubmitPagingHardware` without the check above, and that is the
+first thing to revisit.
+
 Packets are emitted into the shadow through the *existing, measured* emitters, unmodified: a small, throwaway
 `struct amdgpu_ring` is built on the stack, pointed at the shadow buffer (`.ring = shadow + offset/4`,
 `.buf_mask`/`.max_dw` sized to the room left in the *dxgkrnl* buffer so `amdgpu_ring_alloc`'s own overflow

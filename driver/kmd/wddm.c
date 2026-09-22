@@ -258,8 +258,13 @@ typedef struct _BC250_WDDM {
     // offset 0. No lock: BuildPagingBuffer is the only writer, everything is read through an interlocked
     // accessor, and every race lands on the refusing side - a buffer that looks unwritten refuses, it does not
     // invent bytes.
-    volatile LONG64 PagingBufferGpuVa;    // DmaBufferGpuVirtualAddress of the buffer the shadow holds, or 0
-    volatile LONG PagingBufferWritten;    // high-water mark in bytes: packets exist in the shadow below this
+    // These two are one value in two words and are only ever touched under Lock (review 24, two MUST-FIX
+    // items that were the same mistake): an address paired with a mark that belongs to a different buffer is
+    // not a stale read to be range-checked away, it is a correct-looking match that puts another buffer's
+    // packets on the ring. Interlocked singles cannot express "these agree"; the lock can, and this path runs
+    // a few times a second.
+    LONG64 PagingBufferGpuVa;             // DmaBufferGpuVirtualAddress of the buffer the shadow holds, or 0
+    LONG PagingBufferWritten;             // high-water mark in bytes: packets exist in the shadow below this
     volatile LONG PagingVirtualSubmits[BC250_WDDM_NODE_COUNT_MAX];  // SubmitCommandVirtual, by node
     volatile LONG PagingVirtualUnmapped;  // node-1 submissions that named no buffer the shadow was holding
     volatile LONG PagingVirtualClamped;   // node-1 submissions cut back to the bytes actually written
@@ -707,59 +712,78 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
 // GfxSubmitPaging instead, which takes no lock beyond gfx.c's own Sdma0RingLock. The two channels fail
 // independently: a node-1 timeout calls GfxPagingSubmitFail, never GfxSubmitFail, and vice versa.
 
-// The buffer the shadow is holding (the PagingBufferGpuVa field). BuildPagingBuffer is the only writer. The
-// mark is reset on two events, and both mean the same thing - the shadow's contents no longer describe what the
-// mark claims: a different buffer, and dxgkrnl restarting a buffer at offset 0, which it does on reuse.
-// Zeroing the mark before publishing the address is what keeps a submission from ever being matched against the
-// previous buffer's bytes.
+// How much of the shadow a paging buffer may ever claim: the smaller of what this driver told dxgkrnl the
+// paging buffer is (PagingBufferSize, the DDI's own number) and what the shadow physically is. The two are
+// separate constants in separate files and were relied on being equal by nothing but coincidence (review 24
+// SHOULD-FIX, and wddm.c's own older note); the smaller of them is correct whatever either becomes.
+static ULONG WddmPagingBufferLimit(void)
+{
+    ULONG shadow = GfxPagingShadowBytes();
+
+    return (shadow < BC250_WDDM_PAGING_BUFFER_BYTES) ? shadow : (ULONG)BC250_WDDM_PAGING_BUFFER_BYTES;
+}
+
+// The buffer the shadow is holding, and how far into it this driver has written - one pair, under Lock, never
+// two atomics (the fields' own comment). BuildPagingBuffer is the only writer. The pair is reset on two events,
+// and both mean the same thing - the shadow's contents no longer describe what the mark claims: a different
+// buffer, and dxgkrnl restarting a buffer at offset 0, which it does on reuse. gfx.c's PagingBuildersActive
+// says two builders can genuinely run at once, which is exactly why the reset and the raise have to be one
+// critical section: a raise that lands after another builder's reset would otherwise stamp this buffer's mark
+// onto that builder's address and leave the mismatch standing.
 static void WddmPagingBufferWritten(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULONG WriteOffset, ULONG WrittenEnd)
 {
-    LONG old;
+    LONG64 previous;
+    LONG live = 0;
+    BOOLEAN switched = FALSE;
+    KIRQL irql;
 
-    if (Wddm == NULL || GpuVa == 0 || WrittenEnd > BC250_WDDM_PAGING_BUFFER_BYTES) return;
-    if (WriteOffset == 0 || InterlockedCompareExchange64(&Wddm->PagingBufferGpuVa, GpuVa, GpuVa) != GpuVa)
+    if (Wddm == NULL || GpuVa == 0 || WrittenEnd > WddmPagingBufferLimit()) return;
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    previous = Wddm->PagingBufferGpuVa;
+    if (WriteOffset == 0 || previous != GpuVa)
     {
-        LONG64 previous = InterlockedExchange64(&Wddm->PagingBufferGpuVa, 0);
-        LONG live = InterlockedExchange(&Wddm->PagingBufferWritten, 0);
-
+        live = Wddm->PagingBufferWritten;
         // A different buffer arriving while this one still had packets in the shadow is the case the single
         // shadow cannot serve (the PagingBufferSwitches field). A buffer dxgkrnl restarted at offset 0 is not
         // that case: it is the same buffer, and its old packets are the ones being replaced on purpose.
-        if (previous != 0 && previous != GpuVa && live > 0 &&
-            InterlockedIncrement(&Wddm->PagingBufferSwitches) <= BC250_WDDM_LOG_CALLS)
-            GuardLog("wddm: paging buffer 0x%llX took the shadow from 0x%llX, which still held %ld bytes of "
-                     "packets - a submission naming the old one will be refused from here on",
-                     (ULONGLONG)GpuVa, (ULONGLONG)previous, live);
-        InterlockedExchange64(&Wddm->PagingBufferGpuVa, GpuVa);
+        switched = previous != 0 && previous != GpuVa && live > 0;
+        Wddm->PagingBufferGpuVa = GpuVa;
+        Wddm->PagingBufferWritten = 0;
     }
-    for (;;)
-    {
-        old = InterlockedCompareExchange(&Wddm->PagingBufferWritten, 0, 0);
-        if ((LONG)WrittenEnd <= old) break;
-        if (InterlockedCompareExchange(&Wddm->PagingBufferWritten, (LONG)WrittenEnd, old) == old) break;
-    }
+    if ((LONG)WrittenEnd > Wddm->PagingBufferWritten) Wddm->PagingBufferWritten = (LONG)WrittenEnd;
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    // Outside the lock: GuardLog takes its own, and this one is a diagnostic, not part of the invariant.
+    if (switched && InterlockedIncrement(&Wddm->PagingBufferSwitches) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: paging buffer 0x%llX took the shadow from 0x%llX, which still held %ld bytes of "
+                 "packets - a submission naming the old one will be refused from here on",
+                 (ULONGLONG)GpuVa, (ULONGLONG)previous, live);
 }
 
 // The reverse: an address from a submission back to [offset, end) of the shadow, or FALSE unless the shadow is
-// holding exactly that buffer and has packets at that point. End is capped at the high-water mark on purpose -
-// dxgkrnl may name a size that covers the whole buffer, and the bytes above the mark are not this submission's.
+// holding exactly that buffer and has packets at that point. Both fields are taken in one critical section, so
+// the address and the mark are always the same buffer's - reading them one after the other, however atomically,
+// is what let a switch land between them and hand a submission the next buffer's bytes. End is capped at the
+// mark on purpose: dxgkrnl may name a size that covers the whole buffer, and the bytes above the mark are not
+// this submission's.
 static BOOLEAN WddmPagingBufferRange(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULONG Size, _Out_ ULONG* Offset,
                                      _Out_ ULONG* End)
 {
     LONG64 base;
     ULONGLONG offset;
     LONG written;
+    KIRQL irql;
 
     *Offset = 0;
     *End = 0;
     if (Wddm == NULL || GpuVa == 0) return FALSE;
-    base = InterlockedCompareExchange64(&Wddm->PagingBufferGpuVa, 0, 0);
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    base = Wddm->PagingBufferGpuVa;
+    written = Wddm->PagingBufferWritten;
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+
     if (base == 0 || GpuVa < base) return FALSE;
     offset = (ULONGLONG)GpuVa - (ULONGLONG)base;
-    if (offset >= BC250_WDDM_PAGING_BUFFER_BYTES) return FALSE;
-    // Read after the address, and the address is published after the mark is cleared: a reader that saw this
-    // buffer can only see a mark belonging to it or a mark of 0, never the previous buffer's.
-    written = InterlockedCompareExchange(&Wddm->PagingBufferWritten, 0, 0);
+    if (offset >= WddmPagingBufferLimit()) return FALSE;
     if (written <= (LONG)offset) return FALSE;
     *Offset = (ULONG)offset;
     *End = ((ULONGLONG)offset + Size < (ULONGLONG)written) ? (ULONG)offset + Size : (ULONG)written;
