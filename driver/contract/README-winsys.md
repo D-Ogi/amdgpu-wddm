@@ -8,7 +8,9 @@ open. This document covers the rest of the surface - allocation, address space, 
 submission, synchronisation - and `bc250_umd_submit.h` is the shape it produces.
 
 **Status: the kernel reads the three blobs** (`driver/kmd/umd_blob.c`, node 0 only, host-tested).
-The winsys that fills them is not written yet.
+The winsys that fills them is `driver/icd/mesa-wddm2-bc250.patch` (RADV's wddm2 winsys, not yet
+run on unit A). A busy gfx ring is waited out by bc250kmd 0.7.42; more than one IB is still
+packed into one by that winsys, because the ring runs one.
 
 ## Scope: what a compute-only workload on GFX1013 actually touches
 

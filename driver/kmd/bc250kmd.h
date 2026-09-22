@@ -386,6 +386,7 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_S
 //                    the in-flight mark, so it is what lets the next submission through.
 //   GfxSubmitReady   whether a submission would be taken: stage 8 done, nothing failed, nothing in flight and the
 //                    EnableGpuSubmit gate open. Advisory - GfxSubmitIb checks the same things under the lock.
+//   GfxSubmitBusy    the same gates, but the one in-flight IB has not arrived. Advisory, same as Ready.
 //   GfxSubmitFail    sticky, callable at DISPATCH_LEVEL: nothing is written to the ring through GfxSubmitIb again in
 //                    this device start. There is no GPU reset on this part (facts M53), so abandoning the path is the
 //                    only safe answer to a submission that never completed.
@@ -393,6 +394,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
                      ULONG SizeBytes, _Out_ ULONG* Seq);
 BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device);
+BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device);
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node. A

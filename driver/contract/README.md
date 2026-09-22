@@ -394,13 +394,16 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 
 - `DxgkDdiQueryAdapterInfo(DXGKQAITYPE_UMDRIVERPRIVATE)` copies the unit A caps blob
   (`driver/kmd/umd_caps.c`, 1472 bytes, bc250kmd 0.7.41). A shorter output buffer is refused.
-  The winsys that asks for it is not written yet.
+  The winsys that asks for it is `driver/icd/mesa-wddm2-bc250.patch`. It has not been run on
+  unit A.
 - `DxgkDdiCreateAllocation`, `DxgkDdiCreateContext` and `DxgkDdiSubmitCommandVirtual` do read the
   three blobs in `bc250_umd_submit.h`, on node 0 only (`driver/kmd/umd_blob.c`, bc250kmd 0.7.40).
   GDI allocations stay on the `"LB7A"` struct. A context with empty private data is unchanged
   (`DmaBufferPrivateDataSize` stays 0). A UMD submit of one IB uses the gfx ring, still behind
-  `EnableGpuSubmit` and a root page table; more than one IB is not run. `requested_va` is recorded
-  and not programmed. Node 1 is still not a UMD queue.
+  `EnableGpuSubmit` and a root page table. If that ring is already holding its one IB, the submit
+  waits for it (the same bound as the hardware-fence watchdog, bc250kmd 0.7.42) and only then
+  retires the scheduler fence without running. More than one IB is not run. `requested_va` is
+  recorded and not programmed. Node 1 is still not a UMD queue.
 - `addrlib` is not exercised. The test establishes that Mesa recognises the chip and derives sane
   limits, not that surfaces tile the same way as on Linux. That needs `ac_surface` and a
   comparison against a Linux capture, and it is where `gb_addr_config` bit 20 actually matters.
@@ -411,6 +414,6 @@ to be able to kill the process, and nothing on this PC gets to open a window.
   and nothing needs it yet.
 - The next layer up - BO allocation, VA mapping, contexts and submission - is `README-winsys.md`
   and `bc250_umd_submit.h`. The kernel half of allocate / create-context / submit is
-  `driver/kmd/umd_blob.c`. The winsys that fills the blobs is not written yet.
+  `driver/kmd/umd_blob.c`. The winsys that fills the blobs is `driver/icd/mesa-wddm2-bc250.patch`.
 - The blob carries no per-process or per-adapter state (GPU VA layout, doorbell assignment,
   paging queue). That is a separate contract and belongs with the M7 memory-manager work.

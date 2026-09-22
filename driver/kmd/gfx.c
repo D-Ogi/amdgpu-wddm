@@ -527,14 +527,29 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
 // Nothing here waits for the GPU. GfxSubmitIb() returns as soon as the doorbell is rung; the completion is the
 // end-of-pipe interrupt, which ih.c's DPC turns into a GfxFenceArrived() call.
 
+static BOOLEAN GfxSubmitArmed(_In_ const BC250_GFX* gfx)
+{
+    // Stage 8 and not 6: the fence carries AMDGPU_FENCE_FLAG_INT, and without the interrupt sources of stage 8 the
+    // completion would never be reported, only polled. Without the IH ring stage 8 cannot have run at all (GfxEscape).
+    return gfx != NULL && gfx->SubmitGate && gfx->SetUp && !gfx->Failed && gfx->SubmitFailed == 0 &&
+           gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS;
+}
+
 BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device)
 {
     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
 
-    // Stage 8 and not 6: the fence carries AMDGPU_FENCE_FLAG_INT, and without the interrupt sources of stage 8 the
-    // completion would never be reported, only polled. Without the IH ring stage 8 cannot have run at all (GfxEscape).
-    return gfx != NULL && gfx->SubmitGate && gfx->SetUp && !gfx->Failed && gfx->SubmitFailed == 0 &&
-           gfx->SubmitInFlight == 0 && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS;
+    return GfxSubmitArmed(gfx) && gfx->SubmitInFlight == 0;
+}
+
+BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
+
+    // Ready in every way except the one IB the ring is already holding. WddmSubmitUmd waits this
+    // out: retiring that submission's scheduler fence without running the IB would make dxgkrnl
+    // signal the UMD fence for work the GPU never saw.
+    return GfxSubmitArmed(gfx) && gfx->SubmitInFlight != 0;
 }
 
 void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)

@@ -2392,13 +2392,54 @@ static void WddmSubmitUmd(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM* Wdd
     ib.single_ib = 0;
     if (bytes != NULL && umdLen != 0 && umdLen <= bufLen)
         st = UmdBlobParseSubmit(bytes, umdLen, &ib);
+    // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
+    // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
+    // would signal the monitored fence for an IB the GPU never fetched. This DDI is PASSIVE_LEVEL,
+    // so wait the same bound the watchdog uses, polling the fence, and try again. Anything else
+    // (gate closed, ring abandoned, a bad blob) does not get that wait.
     if (st == UMD_BLOB_OK && ib.single_ib && Node == BC250_WDDM_NODE_3D && Context->RootPhysical != 0 &&
-        Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(Device) &&
-        WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
+        Wddm != NULL && KeGetCurrentIrql() == PASSIVE_LEVEL)
     {
-        if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
-            GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId, ib.ib_va, ib.ib_bytes);
-        return;
+        LARGE_INTEGER tick;
+        ULONG waited = 0;
+
+        tick.QuadPart = -10000ll * 10;
+        for (;;)
+        {
+            if (GfxSubmitReady(Device) &&
+                WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
+            {
+                if (waited != 0)
+                    GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring", Submit->SubmissionFenceId, waited);
+                if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
+                    GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
+                             ib.ib_va, ib.ib_bytes);
+                return;
+            }
+            // Not busy: either the ring will not take an IB, or the one it held finished between
+            // the ready check and this one. Try once more in the second case, and do not spin in
+            // the first. A timeout is the same refusal the watchdog already makes.
+            if (!GfxSubmitBusy(Device) || waited >= BC250_WDDM_SUBMIT_TIMEOUT_MS)
+            {
+                if (GfxSubmitReady(Device) &&
+                    WddmSubmitHardware(Device, Wddm, Context, ib.ib_va, ib.ib_bytes, Submit->SubmissionFenceId, Node))
+                {
+                    if (waited != 0)
+                        GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring",
+                                 Submit->SubmissionFenceId, waited);
+                    if (InterlockedIncrement(&Wddm->UmdSubmitHw) <= 128)
+                        GuardLog("wddm: umd submit fence %u ib 0x%llX %lu bytes", Submit->SubmissionFenceId,
+                                 ib.ib_va, ib.ib_bytes);
+                    return;
+                }
+                break;
+            }
+            WddmGpuFence(Device);
+            KeDelayExecutionThread(KernelMode, FALSE, &tick);
+            waited += 10;
+        }
+        if (waited != 0)
+            GuardLog("wddm: umd submit fence %u waited %u ms for the gfx ring", Submit->SubmissionFenceId, waited);
     }
     if (st != UMD_BLOB_OK) why = UmdBlobStatusText(st);
     else if (!ib.single_ib) { why = "multiple ibs"; nIbs = ib.num_ibs; }

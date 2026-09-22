@@ -1,0 +1,537 @@
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bc250.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bc250.h
+new file mode 100644
+index 0000000..76e436f
+--- /dev/null
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bc250.h
+@@ -0,0 +1,64 @@
++/* The private-data blobs bc250kmd reads. Layout is driver/contract/bc250_umd_submit.h and
++ * bc250_umd_private.h. Offsets below were printed from that header (scratch/tmp/blob_off.c).
++ * This file does not include the contract header: Mesa's own amdgpu_drm.h is a different copy.
++ */
++#ifndef RADV_WDDM2_BC250_H
++#define RADV_WDDM2_BC250_H
++
++#include <stdint.h>
++
++#define BC250_ALLOC_MAGIC   0x41324342u /* "BC2A" */
++#define BC250_CONTEXT_MAGIC 0x43324342u /* "BC2C" */
++#define BC250_SUBMIT_MAGIC  0x53324342u /* "BC2S" */
++#define BC250_CAPS_MAGIC    0x35324342u /* "BC25" */
++
++#define BC250_HEAP_GTT  0x2u
++#define BC250_HEAP_VRAM 0x4u
++#define BC250_IP_GFX    0u
++
++#define BC250_A_EXACT_VA 0x1u
++
++struct bc250_alloc_blob {
++   uint32_t magic, version, size, flags;
++   uint64_t alloc_size;
++   uint64_t phys_alignment;
++   uint32_t preferred_heap;
++   uint32_t reserved0;
++   uint64_t gem_flags;
++   uint64_t requested_va;
++   uint64_t va_size;
++   uint64_t va_flags;
++   uint64_t va_offset;
++   uint32_t metadata_size;
++   uint32_t metadata[16];
++   uint32_t reserved[11];
++};
++
++struct bc250_context_blob {
++   uint32_t magic, version, size, flags;
++   uint32_t ip_type, ip_instance, ring, priority, stable_pstate;
++   uint32_t reserved[7];
++   uint32_t node_ordinal;
++   uint32_t reserved_v2[3];
++};
++
++struct bc250_ib_blob {
++   uint64_t va_start;
++   uint32_t ib_bytes;
++   uint32_t ip_type;
++   uint32_t ip_instance;
++   uint32_t ring;
++   uint32_t ib_flags;
++   uint32_t reserved;
++};
++
++struct bc250_submit_blob {
++   uint32_t magic, version, size, flags;
++   uint32_t ip_type;
++   uint32_t num_ibs;
++   uint64_t fence_va;
++   uint64_t fence_value;
++   struct bc250_ib_blob ib[16];
++};
++
++#endif
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+index 964e725..df7ccb9 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -32,6 +32,7 @@
+ #undef VK_USE_PLATFORM_XLIB_XRANDR_EXT
+ 
+ #include "radv_wddm2_bo.h"
++#include "radv_wddm2_bc250.h"
+ #include "radv_wddm2_cs.h"
+ #include "util/u_memory.h"
+ 
+@@ -431,6 +432,10 @@ radv_wddm2_bo_create_internal(struct radeon_winsys *_ws, uint64_t size, unsigned
+    /* Courtesy for users using NULL to check if they need to destroy the BO. */
+    *out_bo = NULL;
+ 
++   /* The contract has no userptr allocation. A normal BO would be the wrong object. */
++   if (ws->bc250 && cpu_ptr)
++      return VK_ERROR_FEATURE_NOT_PRESENT;
++
+    bo = CALLOC_STRUCT(radv_wddm2_bo);
+    if (!bo)
+       return VK_ERROR_OUT_OF_HOST_MEMORY;
+@@ -454,8 +459,27 @@ radv_wddm2_bo_create_internal(struct radeon_winsys *_ws, uint64_t size, unsigned
+ 
+    uint8_t alloc_pdata[824] = {0};
+    uint32_t pdata_size;
+-   pdata_size = fill_alloc_pdata(ws, phys_size, phys_alignment, initial_domain,
+-                                 flags, priority, address, cpu_ptr, alloc_pdata);
++   if (ws->bc250) {
++      struct bc250_alloc_blob blob;
++      memset(&blob, 0, sizeof(blob));
++      blob.magic = BC250_ALLOC_MAGIC;
++      blob.version = 1;
++      blob.size = sizeof(blob);
++      blob.alloc_size = phys_size;
++      blob.phys_alignment = phys_alignment;
++      blob.preferred_heap = (initial_domain & RADEON_DOMAIN_VRAM) ? BC250_HEAP_VRAM : BC250_HEAP_GTT;
++      blob.requested_va = address;
++      blob.va_size = phys_size;
++      if (address)
++         blob.flags = BC250_A_EXACT_VA;
++      _Static_assert(sizeof(blob) == 192, "BC2A is 192 bytes");
++      _Static_assert(sizeof(blob) <= sizeof(alloc_pdata), "BC2A fits the allocation private buffer");
++      memcpy(alloc_pdata, &blob, sizeof(blob));
++      pdata_size = sizeof(blob);
++   } else {
++      pdata_size = fill_alloc_pdata(ws, phys_size, phys_alignment, initial_domain,
++                                    flags, priority, address, cpu_ptr, alloc_pdata);
++   }
+ 
+    D3DDDI_ALLOCATIONINFO2 alloc_info = {
+       .pSystemMem = cpu_ptr,
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+index 088f69f..5fbfa08 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+@@ -26,6 +26,7 @@
+  */
+ 
+ #include "radv_wddm2_cs.h"
++#include "radv_wddm2_bc250.h"
+ #include "radv_wddm2_bo.h"
+ #include "radv_winsys_cs.h"
+ #include "vk_async_event.h"
+@@ -233,8 +234,24 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+       .dw13 = 0x200000,
+       .section_size = 0x168,
+    };
+-
+-   if (hw_ip == AMD_IP_GFX) {
++   struct bc250_context_blob bc250_ctx = {0};
++   void *private_data = &create_context_data;
++   UINT private_size = sizeof(create_context_data);
++
++   if (ws->bc250) {
++      /* GFX1013 has no compute queue (fact M50). Node 1 is not a UMD queue. */
++      if (hw_ip != AMD_IP_GFX)
++         return VK_SUCCESS;
++      node = 0;
++      bc250_ctx.magic = BC250_CONTEXT_MAGIC;
++      bc250_ctx.version = 2;
++      bc250_ctx.size = sizeof(bc250_ctx);
++      _Static_assert(sizeof(bc250_ctx) == 80, "BC2C version 2 is 80 bytes");
++      bc250_ctx.ip_type = BC250_IP_GFX;
++      bc250_ctx.node_ordinal = 0;
++      private_data = &bc250_ctx;
++      private_size = sizeof(bc250_ctx);
++   } else if (hw_ip == AMD_IP_GFX) {
+       create_context_data.flags |= 0x40000;
+       create_context_data.version = 9;
+    }
+@@ -244,11 +261,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+       .NodeOrdinal = node,
+       .EngineAffinity = 1, // TODO
+       .Flags = {
+-         .HwQueueSupported = true,
+-         //.DisableGpuTimeout = true, // D3D sets this to true?
++         .HwQueueSupported = !ws->bc250,
+       },
+-      .pPrivateDriverData = &create_context_data,
+-      .PrivateDriverDataSize = sizeof(create_context_data),
++      .pPrivateDriverData = private_data,
++      .PrivateDriverDataSize = private_size,
+       .ClientHint = D3DKMT_CLIENTHINT_VULKAN,
+    };
+ 
+@@ -259,6 +275,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+    }
+    queue->context_h = create_context.hContext;
+ 
++   /* bc250kmd has no hardware-queue DDIs. SubmitCommand is the packet path. */
++   if (ws->bc250)
++      return VK_SUCCESS;
++
+    if (hw_ip == AMD_IP_GFX || hw_ip == AMD_IP_COMPUTE) {
+       struct create_queue_private_data create_queue_pdd = {
+          .header_size = sizeof(struct create_queue_private_data),
+@@ -679,6 +699,129 @@ radv_wddm2_submit_add_queue(struct radv_wddm2_ctx *ctx, struct submit_pdd_writer
+    radv_wddm2_cs_submit_add_ibs(ctx, pdd, submit, queue->hw_ip, first_ib);
+ }
+ 
++/* A chained CS is one IB: the CP follows the rest. An unchained CS is every piece, in order.
++ * Returns false when the caller's 16-IB cap cannot hold them. Silent truncation would run a prefix.
++ */
++static bool
++bc250_collect_cs(struct radv_winsys_cs *cs, struct radv_winsys_ib *out, unsigned *n, unsigned cap)
++{
++   unsigned count = cs->chain_ib ? 1 : cs->num_ib_buffers;
++   unsigned i;
++   if (*n + count > cap)
++      return false;
++   for (i = 0; i < count; i++)
++      out[(*n)++] = cs->ib_buffers[i];
++   return true;
++}
++
++static bool
++bc250_collect_array(struct ac_cmdbuf **arr, unsigned count, struct radv_winsys_ib *out, unsigned *n, unsigned cap)
++{
++   unsigned i;
++   for (i = 0; i < count; i++) {
++      if (!bc250_collect_cs(radv_winsys_cs(arr[i]), out, n, cap))
++         return false;
++   }
++   return true;
++}
++
++/* One IB on the gfx ring. Several command streams are copied into one gather BO: the KMD
++ * runs a single IB and does not half-run a list.
++ */
++static NTSTATUS
++radv_wddm2_bc250_submit(struct radv_wddm2_ctx *ctx, struct radv_wddm2_queue *queue,
++                        const struct radv_winsys_submit_info *submit)
++{
++   struct radv_wddm2_winsys *ws = ctx->ws;
++   struct radv_winsys_ib ibs[16];
++   struct bc250_submit_blob blob;
++   unsigned n = 0, i, total = 0;
++   uint64_t va;
++   uint32_t bytes;
++   NTSTATUS status;
++   D3DKMT_SUBMITCOMMAND cmd;
++
++   /* Same order as the amdgpu winsys: initial preamble on the first CS, the continue
++    * preamble on every later CS in this submit, postamble once at the end.
++    */
++   for (i = 0; i < submit->cs_count; i++) {
++      struct ac_cmdbuf **preambles = i ? submit->continue_preamble_cs : submit->initial_preamble_cs;
++      unsigned preamble_count = i ? submit->continue_preamble_count : submit->initial_preamble_count;
++      if (!bc250_collect_array(preambles, preamble_count, ibs, &n, 16) ||
++          !bc250_collect_cs(radv_winsys_cs(submit->cs_array[i]), ibs, &n, 16))
++         return STATUS_INVALID_PARAMETER;
++   }
++   if (!bc250_collect_array(submit->postamble_cs, submit->postamble_count, ibs, &n, 16))
++      return STATUS_INVALID_PARAMETER;
++   if (n == 0)
++      return STATUS_SUCCESS;
++
++   if (n == 1) {
++      va = ibs[0].va;
++      bytes = ibs[0].cdw * 4;
++   } else {
++      uint8_t *dst;
++      for (i = 0; i < n; i++)
++         total += ibs[i].cdw;
++      bytes = total * 4;
++      if (bytes == 0 || bytes > (1u << 20))
++         return STATUS_INVALID_PARAMETER;
++      if (!ws->bc250_gather) {
++         VkResult result = ws->base.buffer_create(&ws->base, 1u << 20, 4096, RADEON_DOMAIN_GTT,
++                                                  RADEON_FLAG_CPU_ACCESS | RADEON_FLAG_NO_INTERPROCESS_SHARING,
++                                                  0, 0, NULL, &ws->bc250_gather);
++         if (result != VK_SUCCESS)
++            return STATUS_NO_MEMORY;
++         ws->bc250_gather_map = ws->base.buffer_map(&ws->base, ws->bc250_gather, false, NULL);
++         if (!ws->bc250_gather_map)
++            return STATUS_NO_MEMORY;
++      }
++      dst = ws->bc250_gather_map;
++      for (i = 0; i < n; i++) {
++         uint8_t *src = NULL;
++         uint64_t off = 0;
++         if (!ibs[i].bo)
++            return STATUS_INVALID_PARAMETER;
++         if (ibs[i].va >= ibs[i].bo->va)
++            off = ibs[i].va - ibs[i].bo->va;
++         if (off + (uint64_t)ibs[i].cdw * 4 > ibs[i].bo->size)
++            return STATUS_INVALID_PARAMETER;
++         src = ws->base.buffer_map(&ws->base, ibs[i].bo, false, NULL);
++         if (!src)
++            return STATUS_INVALID_PARAMETER;
++         memcpy(dst, src + off, ibs[i].cdw * 4);
++         dst += ibs[i].cdw * 4;
++      }
++      va = ws->bc250_gather->va;
++   }
++
++   memset(&blob, 0, sizeof(blob));
++   _Static_assert(offsetof(struct bc250_submit_blob, ib) == 40, "BC2S prefix is 40 bytes");
++   _Static_assert(sizeof(struct bc250_ib_blob) == 32, "BC2S ib is 32 bytes");
++   blob.magic = BC250_SUBMIT_MAGIC;
++   blob.version = 1;
++   blob.num_ibs = 1;
++   blob.ip_type = BC250_IP_GFX;
++   blob.size = 40 + sizeof(struct bc250_ib_blob);
++   blob.ib[0].va_start = va;
++   blob.ib[0].ib_bytes = bytes;
++   blob.ib[0].ip_type = BC250_IP_GFX;
++
++   memset(&cmd, 0, sizeof(cmd));
++   cmd.Commands = va;
++   cmd.CommandLength = bytes;
++   cmd.pPrivateDriverData = &blob;
++   cmd.PrivateDriverDataSize = blob.size;
++   cmd.BroadcastContextCount = 1;
++   cmd.BroadcastContext[0] = queue->context_h;
++   status = WDDM2_DISPATCH(SubmitCommand(&cmd));
++   if (!NT_SUCCESS(status))
++      fprintf(stderr, "bc250: SubmitCommand 0x%X (%u ibs packed, %u bytes)\n", status, n, bytes);
++   else
++      fprintf(stderr, "bc250: SubmitCommand ib 0x%" PRIx64 " %u bytes (from %u)\n", va, bytes, n);
++   return status;
++}
++
+ static VkResult
+ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
+                      const struct radv_winsys_submit_info *submit,
+@@ -734,7 +877,18 @@ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
+          return VK_ERROR_DEVICE_LOST;
+    }
+ 
+-   if (submit->cs_count > 0) {
++   if (submit->cs_count > 0 && ctx->ws->bc250) {
++      /* The KMD runs one gfx IB at a time and retires a second without running it. Waiting
++       * for our own previous fence keeps that from happening to the next packet we queue.
++       * A present that lands in the gap is the KMD's wait, not this one.
++       */
++      if (ctx->per_ip[submit->ip_type].last_submission.handle &&
++          !vk_wddm2_fence_wait(ctx->ws->device_h, &ctx->per_ip[submit->ip_type].last_submission))
++         return VK_ERROR_DEVICE_LOST;
++      status = radv_wddm2_bc250_submit(ctx, queue, submit);
++      if (!NT_SUCCESS(status))
++         return VK_ERROR_DEVICE_LOST;
++   } else if (submit->cs_count > 0) {
+       struct radv_winsys_ib first_ib = {};
+       struct submit_pdd_writer pdd;
+ 
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+index e2f4987..cad53ed 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -34,6 +34,7 @@
+ #include <stdint.h>
+ 
+ #include "radv_wddm2_winsys.h"
++#include "radv_wddm2_bc250.h"
+ 
+ #include "util/macros.h"
+ #include "util/u_string.h"
+@@ -113,6 +114,129 @@ kmd_to_amdgpu_vram_type(uint32_t kmd_type)
+    }
+ }
+ 
++/* Offsets of driver/contract/bc250_umd_private.h version 3, checked by blob_off.c. */
++#define BC250_OFF_DEVICE 16u
++#define BC250_OFF_MEMORY 464u
++#define BC250_OFF_HW_IP 560u
++#define BC250_OFF_HW_IP_MASK 960u
++#define BC250_OFF_HW_IP_INST 964u
++#define BC250_OFF_GB_ADDR 1008u
++#define BC250_OFF_MC_ARB 1012u
++#define BC250_OFF_FW_ME 1208u
++#define BC250_OFF_FW_PFP 1216u
++#define BC250_OFF_FW_MEC 1232u
++#define BC250_OFF_DRM_MAJOR 1272u
++#define BC250_OFF_ADDR32 1284u
++#define BC250_OFF_MAX_IBS 1344u
++
++static uint32_t
++bc250_rd32(const uint8_t *p, uint32_t off)
++{
++   uint32_t v;
++   memcpy(&v, p + off, sizeof(v));
++   return v;
++}
++
++static uint64_t
++bc250_rd64(const uint8_t *p, uint32_t off)
++{
++   uint64_t v;
++   memcpy(&v, p + off, sizeof(v));
++   return v;
++}
++
++/* True when QueryAdapterInfo returned our caps blob and radeon_info was filled from it.
++ * The AMD private-data parser below is the wrong shape for this blob (1472 bytes, not 17248).
++ */
++static bool
++radv_wddm2_try_bc250(struct radv_wddm2_winsys *ws, struct drm_amdgpu_info_device *dev,
++                     struct drm_amdgpu_memory_info *mem)
++{
++   struct radeon_info *info = &ws->gpu_info;
++   uint8_t blob[1472];
++   struct amdgpu_gpu_info amdinfo = {0};
++   NTSTATUS status;
++   uint32_t mask, i;
++
++   _Static_assert(sizeof(*dev) == 448, "BC-250 device blob is the kernel's 448-byte structure");
++   /* ac_linux_drm.h's hw-ip struct drops the kernel's capabilities_flags, so it is not the
++    * 40-byte record. The fields below are copied from those kernel offsets.
++    */
++
++   status = query_adapter_info(ws, KMTQAITYPE_UMDRIVERPRIVATE, blob, sizeof(blob));
++   if (!NT_SUCCESS(status) || bc250_rd32(blob, 0) != BC250_CAPS_MAGIC || bc250_rd32(blob, 4) < 3)
++      return false;
++
++   memcpy(dev, blob + BC250_OFF_DEVICE, sizeof(*dev));
++   mem->vram.total_heap_size = bc250_rd64(blob, BC250_OFF_MEMORY + 0 * 32);
++   mem->cpu_accessible_vram.total_heap_size = bc250_rd64(blob, BC250_OFF_MEMORY + 1 * 32);
++   mem->gtt.total_heap_size = bc250_rd64(blob, BC250_OFF_MEMORY + 2 * 32);
++
++   info->drm_major = bc250_rd32(blob, BC250_OFF_DRM_MAJOR);
++   info->drm_minor = bc250_rd32(blob, BC250_OFF_DRM_MAJOR + 4);
++   info->drm_patchlevel = bc250_rd32(blob, BC250_OFF_DRM_MAJOR + 8);
++   info->is_amdgpu = true;
++   info->address32_hi = bc250_rd32(blob, BC250_OFF_ADDR32);
++   info->userq_ip_mask = 0;
++
++   mask = bc250_rd32(blob, BC250_OFF_HW_IP_MASK);
++   for (i = 0; i < 10 && i < AMD_NUM_IP_TYPES; i++) {
++      struct drm_amdgpu_info_hw_ip ip;
++      uint32_t base;
++      if (!(mask & (1u << i)))
++         continue;
++      base = BC250_OFF_HW_IP + i * 40u;
++      memset(&ip, 0, sizeof(ip));
++      ip.hw_ip_version_major = bc250_rd32(blob, base + 0);
++      ip.hw_ip_version_minor = bc250_rd32(blob, base + 4);
++      /* kernel +8 is capabilities_flags (u64); Mesa's struct has no such field */
++      ip.ib_start_alignment = bc250_rd32(blob, base + 16);
++      ip.ib_size_alignment = bc250_rd32(blob, base + 20);
++      ip.available_rings = bc250_rd32(blob, base + 24);
++      ip.ip_discovery_version = bc250_rd32(blob, base + 28);
++      if (ac_fill_hw_ip_info(info, dev, i, &ip))
++         info->ip[i].num_instances = bc250_rd32(blob, BC250_OFF_HW_IP_INST + i * 4);
++   }
++   for (i = 0; i < 10 && i < AMD_NUM_IP_TYPES; i++)
++      info->max_submitted_ibs[i] = bc250_rd32(blob, BC250_OFF_MAX_IBS + i * 4);
++
++   info->me_fw_version = bc250_rd32(blob, BC250_OFF_FW_ME);
++   info->me_fw_feature = bc250_rd32(blob, BC250_OFF_FW_ME + 4);
++   info->pfp_fw_version = bc250_rd32(blob, BC250_OFF_FW_PFP);
++   info->pfp_fw_feature = bc250_rd32(blob, BC250_OFF_FW_PFP + 4);
++   info->mec_fw_version = bc250_rd32(blob, BC250_OFF_FW_MEC);
++   info->mec_fw_feature = bc250_rd32(blob, BC250_OFF_FW_MEC + 4);
++
++   if (!ac_identify_chip(info, dev)) {
++      fprintf(stderr, "bc250: ac_identify_chip refused the caps blob\n");
++      return false;
++   }
++
++   ac_fill_memory_info(info, dev, mem);
++   ac_fill_hw_info(info, dev);
++   amdinfo.gb_addr_cfg = bc250_rd32(blob, BC250_OFF_GB_ADDR);
++   amdinfo.mc_arb_ramcfg = bc250_rd32(blob, BC250_OFF_MC_ARB);
++   ac_fill_tiling_info(info, &amdinfo);
++   ac_fill_feature_info(info, dev);
++   ac_fill_bug_info(info);
++   ac_fill_tess_info(info);
++   ac_fill_compiler_info(info, dev);
++   ac_fill_raster_config(info);
++   ac_fill_scratch_info(info);
++
++   info->has_vm_always_valid = true;
++   info->has_timeline_syncobj = true;
++   info->spi_cu_en = ~0u;
++   info->pcie_gen = dev->pcie_gen;
++   info->pcie_num_lanes = dev->pcie_num_lanes;
++   info->max_gflops = (info->gfx_level >= GFX11 ? 256 : 128) * info->num_cu * info->max_gpu_freq_mhz / 1000;
++
++   ws->bc250 = true;
++   fprintf(stderr, "bc250: caps blob, device 0x%x family %u gfx %u\n", dev->device_id, info->family,
++           info->gfx_level);
++   return true;
++}
++
+ static NTSTATUS
+ radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
+                          const struct vk_dx_adapter_info *adapter_info)
+@@ -200,6 +324,10 @@ radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
+       }
+    }
+ 
++   (void)node;
++   if (radv_wddm2_try_bc250(ws, &dev, &mem))
++      return STATUS_SUCCESS;
++
+    struct PACKED umdprivatedata_header {
+       uint32_t flags[3];
+       uint32_t vendor_id;
+@@ -656,9 +784,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+    status = radv_wddm2_query_marketing_name(ws, ws->gpu_info.marketing_name,
+                                             sizeof(ws->gpu_info.marketing_name));
+    if (!NT_SUCCESS(status)) {
+-      fprintf(stderr, "Can't query marketing name\n");
+-      result = VK_ERROR_INITIALIZATION_FAILED;
+-      goto error_open_adapter;
++      if (!ws->bc250) {
++         fprintf(stderr, "Can't query marketing name\n");
++         result = VK_ERROR_INITIALIZATION_FAILED;
++         goto error_open_adapter;
++      }
++      snprintf(ws->gpu_info.marketing_name, sizeof(ws->gpu_info.marketing_name), "AMD BC-250");
+    }
+ 
+    D3DKMT_CLOSEADAPTER close_adapter = {
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+index 75cbc71..f355e8d 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+@@ -51,6 +51,9 @@ struct radv_wddm2_winsys {
+    bool debug_log_bos;
+    bool chain_ib;
+    bool dump_ibs;
++   bool bc250; /* caps blob was ours; allocate/context/submit use the BC2* contract */
++   struct radeon_winsys_bo *bc250_gather;
++   uint8_t *bc250_gather_map;
+ 
+    uint32_t adapter_h;
+    LUID adapter_luid;
+diff --git a/src/vulkan/runtime/meson.build b/src/vulkan/runtime/meson.build
+index 8e622bd..6581190 100644
+--- a/src/vulkan/runtime/meson.build
++++ b/src/vulkan/runtime/meson.build
+@@ -90,8 +90,10 @@ if with_vulkan_dx
+   )
+   vulkan_lite_runtime_files += vk_wddm2_dispatch_table
+ 
++  # Windows SDKs do not all ship wsl/winadapter.h. DirectX-Headers does, and its
++  # include directory does not shadow d3dkmthk.h.
++  vulkan_lite_runtime_deps += dep_dxheaders
+   if host_machine.system() != 'windows'
+-    vulkan_lite_runtime_deps += dep_dxheaders
+     vulkan_lite_runtime_inc += '../../../include/winddk'
+   endif
+ endif
