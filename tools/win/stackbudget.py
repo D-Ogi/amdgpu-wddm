@@ -17,6 +17,11 @@ kills a driver, is exact.
 Names come from the linker map (/MAP), when one is passed; without it the report carries RVAs, which
 `ln <module>+<rva>` in kd turns into names.
 
+For scale, the same walk over Microsoft's own display stack on this machine (Windows 11 26200):
+dxgkrnl.sys 8474 functions, largest fixed frame 4296 bytes; dxgmms2.sys 2414 functions, largest 2808.
+Those two are at the bottom of the stack when they call us, so a miniport wants to stay well under them;
+0.7.26's largest is 872.
+
 Exit code 1 if any function is at or over --fail, so a build script can stop there.
 """
 
