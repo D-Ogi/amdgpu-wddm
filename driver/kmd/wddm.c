@@ -1289,7 +1289,16 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     pCreateContext->ContextInfo.DmaBufferSegmentSet =
         g_ApertureOffered ? BC250_WDDM_SEGMENT_SET(BC250_WDDM_SEGMENT_APERTURE) : 0;
     pCreateContext->ContextInfo.DmaBufferPrivateDataSize = 0;
-    pCreateContext->ContextInfo.AllocationListSize = 0;
+    // 0.7.14: a GDI context gets the allocation list the header sizes for it (RosKmdContext.cpp does the same).
+    // With 0 here every Present of the CDD arrived with NumSrcAllocations = NumDstAllocations = 0 (E16 run 009, E18
+    // run 003): dxgkrnl had nowhere to put the two surfaces of a Blt, and a driver that cannot name the source
+    // cannot show it. Still no patch-location list: with virtual addressing there is nothing to patch.
+    pCreateContext->ContextInfo.AllocationListSize =
+        pCreateContext->Flags.GdiContext ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
+    // Review 14: the adapter declares GpuMmu, so no context should come without virtual addressing. If one does, it
+    // has a list, no patch list and no Patch DDI behind it - say so here rather than leave it to a 0x113 later.
+    if (pCreateContext->Flags.GdiContext && !pCreateContext->Flags.VirtualAddressing)
+        GuardLog("wddm: CreateContext: a GDI context WITHOUT virtual addressing (flags 0x%08X) - unexpected", pCreateContext->Flags.Value);
     pCreateContext->ContextInfo.PatchLocationListSize = 0;
     pCreateContext->ContextInfo.Caps.NoPatchingRequired = pCreateContext->Flags.VirtualAddressing ? 1u : 0u;
     pCreateContext->ContextInfo.PagingCompanionNodeId = BC250_WDDM_NODE_3D;
@@ -1658,15 +1667,40 @@ static NTSTATUS Bc250WddmPreemptCommand(_In_ const HANDLE hAdapter, _In_ const D
 static DXGKDDI_RESETFROMTIMEOUT Bc250WddmResetFromTimeout;
 static NTSTATUS Bc250WddmResetFromTimeout(_In_ const HANDLE hAdapter)
 {
-    // A failure return bugchecks. Stage A has nothing to reset: it never started an engine, and its hard rule is
-    // that no DDI of this file touches a register. Halting the CP the way the undo path does (ADR 0008 point 7,
-    // facts M44) belongs to the stage that first submits something.
+    // A failure return bugchecks, and nobody can reset this GPU (facts M53). What stage C can do, it does: the ring
+    // path is closed for this device start (GfxSubmitFail, sticky), and the packet in flight, if there is one, is
+    // forgotten WITHOUT a report - after this DDI the scheduler treats every submitted fence as completed by itself
+    // (ref graphics-driver-samples, CosKmdAdapter.cpp ResetFromTimeout: "Implicitly sync up"), so the driver only
+    // brings its own last completed fence up to date. No register is touched: halting the CP the way the undo path
+    // does (ADR 0008 point 7, facts M44) stays with the escape, where a person decides it.
     //
     // These two are the only DDIs in the file that log on every call rather than the first few: a TDR means the
     // scheduler has decided this adapter is hung, which changes what the whole run means, and a run where it
     // happens a hundred times is a different result from one where it happens once.
-    (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetFromTimeout);
-    GuardLog("wddm: *** ResetFromTimeout: the scheduler timed this adapter out (nothing was running) ***");
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    BOOLEAN pending = FALSE;
+    UINT fence = 0;
+    KIRQL irql;
+
+    (void)WddmFirstCalls(wddm, WddmDdiResetFromTimeout);
+    if (device != NULL) GfxSubmitFail(device);
+    if (wddm != NULL)
+    {
+        KeAcquireSpinLock(&wddm->Lock, &irql);
+        if (wddm->HwPending)
+        {
+            pending = TRUE;
+            fence = wddm->DeferredValid ? wddm->DeferredFence : wddm->HwFence;
+            wddm->HwPending = FALSE;
+            wddm->DeferredValid = FALSE;
+            KeCancelTimer(&wddm->SubmitTimer);
+            if ((LONG)fence > wddm->LastCompletedFence) InterlockedExchange(&wddm->LastCompletedFence, (LONG)fence);
+        }
+        KeReleaseSpinLock(&wddm->Lock, irql);
+    }
+    if (pending) GuardLog("wddm: *** ResetFromTimeout with fence %u on the ring: ring path closed, fence dropped unreported ***", fence);
+    else GuardLog("wddm: *** ResetFromTimeout: the scheduler timed this adapter out (nothing of ours was on the ring) ***");
     return STATUS_SUCCESS;
 }
 
@@ -1800,6 +1834,22 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
         GuardLog("wddm: Present flags 0x%08X source %u dest %u, %u sub-rectangles, %u DMA bytes free",
                  pPresent->Flags.Value, pPresent->NumSrcAllocations, pPresent->NumDstAllocations,
                  pPresent->SubRectCnt, pPresent->DmaSize);
+    // 0.7.14, still inert: what the allocation list of a Present holds. The header puts pAllocationList
+    // (DXGK_ALLOCATIONLIST, 24 bytes an entry) and pAllocationInfo (DXGK_PRESENTALLOCATIONINFO, 32 bytes) in one
+    // union and does not say which arm a GpuMmu driver is given, so the first three qwords of each of the first two
+    // entries are logged raw - inside the array under either reading - and the arm is decided from the log.
+    if (context != NULL && pPresent->pAllocationList != NULL && pPresent->NumSrcAllocations + pPresent->NumDstAllocations != 0 &&
+        ((BC250_WDDM*)context->Device->Wddm)->Calls[WddmDdiPresent] <= BC250_WDDM_LOG_CALLS)
+    {
+        const ULONGLONG* raw = (const ULONGLONG*)pPresent->pAllocationList;
+        UINT entries = pPresent->NumSrcAllocations + pPresent->NumDstAllocations;
+
+        GuardLog("wddm: Present list[0] %016llX %016llX %016llX", raw[0], raw[1], raw[2]);
+        if (entries >= 2) GuardLog("wddm: Present list[1] %016llX %016llX %016llX", raw[3], raw[4], raw[5]);
+        GuardLog("wddm: Present dst (%d,%d)-(%d,%d) src (%d,%d)-(%d,%d) va 0x%llX", pPresent->DstRect.left, pPresent->DstRect.top,
+                 pPresent->DstRect.right, pPresent->DstRect.bottom, pPresent->SrcRect.left, pPresent->SrcRect.top,
+                 pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);
+    }
     return STATUS_SUCCESS;
 }
 
