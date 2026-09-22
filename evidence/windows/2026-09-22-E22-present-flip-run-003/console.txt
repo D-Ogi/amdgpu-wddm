@@ -1,0 +1,74 @@
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 1
+version      0x00070024 (milestone 7 revision 36)
+verdict  FRESH
+UnconfirmedStarts = 0
+{'ok': True}
+14:44:31 Tctl 70.4 C (raw 777B0FEF)
+=== gate with flip  (14:44:26)
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 1  EnablePresentBlit 1  EnablePagingNode 1  EnableDcnWrite 1  EnableVidPnFlip 1
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+=== gart enable  (14:44:52)
+exit code 0
+=== psp load  (14:44:55)
+exit code 0
+=== ih init  (14:44:57)
+exit code 0
+=== gfx run 1  (14:44:59)
+exit code 0
+=== gfx run 2  (14:45:02)
+exit code 0
+=== gfx run 3  (14:45:04)
+exit code 0
+=== gfx run 4  (14:45:06)
+exit code 0
+=== gfx run 5  (14:45:09)
+exit code 0
+=== gfx run 6  (14:45:11)
+exit code 0
+=== gfx run 7  (14:45:13)
+exit code 0
+=== gfx run 8  (14:45:15)
+exit code 0
+=== waiting for presents
+   125      0.115 wddm: hardware vsync on (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)
+   154      4.384 wddm: flip target seeded from the firmware framebuffer, 9216000 bytes at 0x270ACE000
+   243     44.772 gfx: hardware vsync re-armed after the interrupt sources
+   285     60.546 wddm summary: blit destination: 56 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 1 scanout remaps (0 failed), last blit 144 
+   286     60.546 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 3 rectangles, source physical 0x271398000
+   288     60.546 wddm summary: vidpn flip open: 1 hardware flips, 0 refused, 1 hardware vsyncs armed 946 acked 0 refused 0 deferred (flip still pending)
+14:45:39 Tctl 73.0 C (raw 7A1B0FEF)
+=== scanout
+fbdump       rows 0..63 of 1200, address 0x270ACE000
+fbdump       rows 64..127 of 1200, address 0x270B46000
+fbdump       rows 128..191 of 1200, address 0x270BBE000
+fbdump       rows 192..255 of 1200, address 0x270C36000
+fbdump       rows 256..319 of 1200, address 0x270CAE000
+fbdump       rows 320..383 of 1200, address 0x270D26000
+fbdump       rows 384..447 of 1200, address 0x270D9E000
+fbdump       rows 448..511 of 1200, address 0x270E16000
+fbdump       rows 512..575 of 1200, address 0x270E8E000
+fbdump       rows 576..639 of 1200, address 0x270F06000
+fbdump       rows 640..703 of 1200, address 0x270F7E000
+fbdump       rows 704..767 of 1200, address 0x270FF6000
+fbdump       rows 768..831 of 1200, address 0x27106E000
+fbdump       rows 832..895 of 1200, address 0x2710E6000
+fbdump       rows 896..959 of 1200, address 0x27115E000
+fbdump       rows 960..1023 of 1200, address 0x2711D6000
+fbdump       rows 1024..1087 of 1200, address 0x27124E000
+fbdump       rows 1088..1151 of 1200, address 0x2712C6000
+fbdump       rows 1152..1199 of 1200, address 0x27133E000
+wrote C:\BC250\tmp\fbdump.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+P:\BC-250\scratch\screens\e22-picture-0736.png   960x600 px   173515 bytes
+=== ring
+321 /p/BC-250/scratch/tmp/e22_picture_ring.txt
+=== undo
+exit code 0
+ih fini: done, NTSTATUS 0x00000000 STATUS_SUCCESS, result 0, 9 register writes executed
+exit code 0
+exit code 0
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+presents     30
+UnconfirmedStarts = 0
+14:46:21 Tctl 68.6 C (raw 75BB0FEF)
