@@ -130,6 +130,13 @@ set, and a context that addresses virtually is submitted through `DxgkDdiSubmitC
 the DMA buffer"), recorded on every call that writes bytes. Everything downstream of that subtraction - the
 shadow, `GfxSubmitPaging`, the fence, the IH DPC - is unchanged.
 
+**Corrected again by E24 run 007 (facts M112).** On this build that GPU address is 0 for the system paging
+buffer, and the submission's `DmaBufferVirtualAddress` is already the byte offset the shadow is indexed by:
+the three submissions named 0x0, 0x140 and 0x640, which are the shadow offsets of the fills they covered.
+Treating 0 as "no buffer" dropped the high-water mark on the floor and completed every one of them in software.
+A recorded base of 0 means the coordinate is the offset. A non-zero base still subtracts; this machine has not
+produced one.
+
 The subtraction itself is the one thing that must never be guessed, because a wrong offset here does not draw a
 wrong picture, it runs a wrong DMA. Two properties hold it down. **One tracked buffer, not several.** The first
 version of this tracked four, on the reasoning that nothing obliges VidMm to use one paging buffer at a time -

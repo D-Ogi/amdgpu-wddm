@@ -240,10 +240,9 @@ typedef struct _BC250_WDDM {
     // E24 run 006 (facts M110): the paging buffer leaves through SubmitCommandVirtual, not SubmitCommand, because
     // VidMm creates node 1's system context with DXGK_CREATECONTEXTFLAGS::VirtualAddressing set (flags 0x5 in the
     // run's own log). DXGKARG_SUBMITCOMMANDVIRTUAL has no submission start/end offsets - only
-    // DmaBufferVirtualAddress, the GPU address of the START OF THE SUBMISSION - so the shadow offset the packets
-    // were written at can only be recovered against the start of the buffer, which BuildPagingBuffer alone is
-    // told (DXGKARG_BUILDPAGINGBUFFER::DmaBufferGpuVirtualAddress, "GPU virtual address of the start of the DMA
-    // buffer").
+    // DmaBufferVirtualAddress. The struct calls it a GPU address. On this machine, for the system paging
+    // buffer, DmaBufferGpuVirtualAddress is 0 and the submission's DmaBufferVirtualAddress is already the byte
+    // offset the shadow is indexed by (facts M112: 0x0, 0x140, 0x640). A non-zero base still means "subtract".
     //
     // ONE buffer, and one is not a simplification: Gfx->PagingShadowMem is a single buffer indexed by
     // DmaBufferWriteOffset (design note section 4a), so the packets of two paging buffers being built at the
@@ -255,15 +254,14 @@ typedef struct _BC250_WDDM {
     //
     // Written is how far into that buffer this driver has actually put packets. The submit never runs past it,
     // whatever size dxgkrnl names, and it is reset whenever the buffer changes or dxgkrnl restarts one at
-    // offset 0. No lock: BuildPagingBuffer is the only writer, everything is read through an interlocked
-    // accessor, and every race lands on the refusing side - a buffer that looks unwritten refuses, it does not
-    // invent bytes.
+    // offset 0. A base of 0 with a mark of 0 means nothing has been recorded. A base of 0 with a mark above 0
+    // is the system paging buffer of M112, whose submissions already speak in shadow offsets.
     // These two are one value in two words and are only ever touched under Lock (review 24, two MUST-FIX
     // items that were the same mistake): an address paired with a mark that belongs to a different buffer is
     // not a stale read to be range-checked away, it is a correct-looking match that puts another buffer's
     // packets on the ring. Interlocked singles cannot express "these agree"; the lock can, and this path runs
     // a few times a second.
-    LONG64 PagingBufferGpuVa;             // DmaBufferGpuVirtualAddress of the buffer the shadow holds, or 0
+    LONG64 PagingBufferGpuVa;             // buffer identity: a GPU VA, or 0 when the submission address is the offset (M112)
     LONG PagingBufferWritten;             // high-water mark in bytes: packets exist in the shadow below this
     volatile LONG PagingVirtualSubmits[BC250_WDDM_NODE_COUNT_MAX];  // SubmitCommandVirtual, by node
     volatile LONG PagingVirtualUnmapped;  // node-1 submissions that named no buffer the shadow was holding
@@ -737,7 +735,8 @@ static void WddmPagingBufferWritten(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULON
     BOOLEAN switched = FALSE;
     KIRQL irql;
 
-    if (Wddm == NULL || GpuVa == 0 || WrittenEnd > WddmPagingBufferLimit()) return;
+    // GpuVa 0 is a real identity here (M112), not "nothing was passed". Only an end past the shadow is refused.
+    if (Wddm == NULL || WrittenEnd > WddmPagingBufferLimit()) return;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     previous = Wddm->PagingBufferGpuVa;
     if (WriteOffset == 0 || previous != GpuVa)
@@ -746,7 +745,7 @@ static void WddmPagingBufferWritten(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULON
         // A different buffer arriving while this one still had packets in the shadow is the case the single
         // shadow cannot serve (the PagingBufferSwitches field). A buffer dxgkrnl restarted at offset 0 is not
         // that case: it is the same buffer, and its old packets are the ones being replaced on purpose.
-        switched = previous != 0 && previous != GpuVa && live > 0;
+        switched = live > 0 && previous != GpuVa;
         Wddm->PagingBufferGpuVa = GpuVa;
         Wddm->PagingBufferWritten = 0;
     }
@@ -775,14 +774,20 @@ static BOOLEAN WddmPagingBufferRange(_Inout_ BC250_WDDM* Wddm, LONG64 GpuVa, ULO
 
     *Offset = 0;
     *End = 0;
-    if (Wddm == NULL || GpuVa == 0) return FALSE;
+    if (Wddm == NULL) return FALSE;
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     base = Wddm->PagingBufferGpuVa;
     written = Wddm->PagingBufferWritten;
     KeReleaseSpinLock(&Wddm->Lock, irql);
 
-    if (base == 0 || GpuVa < base) return FALSE;
-    offset = (ULONGLONG)GpuVa - (ULONGLONG)base;
+    // Nothing recorded yet. A base of 0 with a mark above 0 is M112: the submission address is the offset.
+    if (written <= 0) return FALSE;
+    if (base == 0)
+        offset = (ULONGLONG)GpuVa;
+    else if ((LONG64)GpuVa < base)
+        return FALSE;
+    else
+        offset = (ULONGLONG)GpuVa - (ULONGLONG)base;
     if (offset >= WddmPagingBufferLimit()) return FALSE;
     if (written <= (LONG)offset) return FALSE;
     *Offset = (ULONG)offset;
