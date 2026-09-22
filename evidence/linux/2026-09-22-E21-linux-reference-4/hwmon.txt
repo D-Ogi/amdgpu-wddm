@@ -1,0 +1,10 @@
+freq1_input 1500000000
+in0_input 906
+in1_input 1193
+power1_input 62084000
+temp1_input 71000
+freq1_label sclk
+in0_label vddgfx
+in1_label vddnb
+power1_label PPT
+temp1_label edge

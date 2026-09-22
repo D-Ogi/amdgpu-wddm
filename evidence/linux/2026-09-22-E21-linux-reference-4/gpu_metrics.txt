@@ -1,0 +1,9 @@
+000000 80 00 02 02 bc 1b db 1a 7d 19 c8 19 64 19 00 19
+000010 7d 19 19 19 ff ff ff ff af 19 64 19 ff ff ff ff
+000020 ec ce bf 26 5b 00 00 00 a1 0a ff ff f7 29 46 7b
+000030 62 01 62 00 56 03 56 00 1d 08 54 00 ff ff ff ff
+000040 dc 05 e6 04 c2 01 c2 01 00 00 57 04 dc 05 e6 04
+000050 c2 01 c2 01 00 00 57 04 13 06 13 06 ac 0d 13 06
+000060 ac 0d 13 06 ff ff ff ff ac 0d ac 0d 00 00 00 00
+000070 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+000080

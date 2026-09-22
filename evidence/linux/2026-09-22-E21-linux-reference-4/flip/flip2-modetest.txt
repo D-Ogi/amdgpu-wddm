@@ -1,0 +1,2 @@
+opened device `AMD GPU` on driver `amdgpu` (version 3.64.0 at 0)
+setting mode 1920x1200-59.95Hz on connectors 64, crtc 58

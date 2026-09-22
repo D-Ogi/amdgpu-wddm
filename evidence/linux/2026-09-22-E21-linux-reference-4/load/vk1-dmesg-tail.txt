@@ -1,0 +1,2 @@
+[  980.265486] [drm] Failed to add display topology, DTM TA is not initialized.
+[ 1307.104491] [drm] Failed to add display topology, DTM TA is not initialized.

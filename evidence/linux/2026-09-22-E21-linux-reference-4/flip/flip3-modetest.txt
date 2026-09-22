@@ -1,0 +1,6 @@
+opened device `AMD GPU` on driver `amdgpu` (version 3.64.0 at 0)
+freq: 60.12Hz
+freq: 59.95Hz
+freq: 59.95Hz
+freq: 59.95Hz
+freq: 59.95Hz

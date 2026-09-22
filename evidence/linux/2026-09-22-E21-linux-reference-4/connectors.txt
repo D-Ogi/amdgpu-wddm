@@ -1,0 +1,2 @@
+-- /sys/class/drm/card1-DP-1/ status connected enabled enabled
+-- /sys/class/drm/card1-DP-2/ status disconnected enabled disabled

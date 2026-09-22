@@ -1,0 +1,1 @@
+Selected GPU 0: AMD BC-250 (RADV GFX1013), type: IntegratedGpu

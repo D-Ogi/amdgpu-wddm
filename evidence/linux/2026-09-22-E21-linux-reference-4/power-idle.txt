@@ -1,0 +1,32 @@
+-- pp_dpm_sclk
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+-- pp_dpm_mclk
+0: 450Mhz *
+-- pp_dpm_fclk
+0: 450Mhz *
+-- pp_dpm_pcie
+
+-- pp_features
+cat: can't open '/sys/class/drm/card1/device/pp_features': No such file or directory
+-- power_dpm_state
+performance
+-- power_dpm_force_performance_level
+auto
+-- pp_power_profile_mode
+cat: can't open '/sys/class/drm/card1/device/pp_power_profile_mode': No such file or directory
+-- pp_od_clk_voltage
+OD_SCLK:
+0: 1500Mhz *
+OD_VDDC:
+0: 906mV *
+OD_RANGE:
+SCLK:    1000Mhz       2000Mhz
+VDDC:     700mV        1129mV
+-- gpu_busy_percent
+cat: read error: Not supported
+-- vbios_version
+113-AMDRBN-003
+-- power_state
+D0

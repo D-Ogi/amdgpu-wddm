@@ -1,0 +1,107 @@
+== the whole power surface, READ ONLY (wishlist L10, ADR 0010 point 6). Nothing is written
+-- pp_dpm_sclk
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 
+-- pp_dpm_mclk
+0: 450Mhz *
+-- pp_dpm_fclk
+0: 450Mhz *
+-- pp_dpm_pcie
+
+-- pp_features
+cat: can't open '/sys/class/drm/card1/device/pp_features': No such file or directory
+-- power_dpm_state
+performance
+-- power_dpm_force_performance_level
+auto
+-- pp_power_profile_mode
+cat: can't open '/sys/class/drm/card1/device/pp_power_profile_mode': No such file or directory
+-- pp_od_clk_voltage
+OD_SCLK:
+0: 1500Mhz *
+OD_VDDC:
+0: 906mV *
+OD_RANGE:
+SCLK:    1000Mhz       2000Mhz
+VDDC:     700mV        1129mV
+-- gpu_busy_percent
+cat: read error: Not supported
+-- vbios_version
+113-AMDRBN-003
+-- power_state
+D0
+== hwmon
+freq1_input 1500000000
+in0_input 906
+in1_input 1193
+power1_input 62084000
+temp1_input 71000
+freq1_label sclk
+in0_label vddgfx
+in1_label vddnb
+power1_label PPT
+temp1_label edge
+GFX Clocks and Power:
+	450 MHz (MCLK)
+	1500 MHz (SCLK)
+	0 MHz (PSTATE_SCLK)
+	0 MHz (PSTATE_MCLK)
+	906 mV (VDDGFX)
+	1193 mV (VDDNB)
+	63.10 W (average SoC including CPU)
+	64.01 W (current SoC including CPU)
+
+GPU Temperature: 70 C
+
+SMC Feature Mask: 0xffffffffffffffff
+VCN: Powered down
+
+Clock Gating Flags Mask: 0x8090800
+	Graphics Fine Grain Clock Gating: Off
+	Graphics Medium Grain Clock Gating: Off
+	Graphics Medium Grain memory Light Sleep: Off
+	Graphics Coarse Grain Clock Gating: Off
+	Graphics Coarse Grain memory Light Sleep: Off
+	Graphics Coarse Grain Tree Shader Clock Gating: Off
+	Graphics Coarse Grain Tree Shader Light Sleep: Off
+	Graphics Command Processor Light Sleep: Off
+	Graphics Run List Controller Light Sleep: Off
+	Graphics 3D Coarse Grain Clock Gating: Off
+	Graphics 3D Coarse Grain memory Light Sleep: Off
+	Memory Controller Light Sleep: Off
+	Memory Controller Medium Grain Clock Gating: Off
+	System Direct Memory Access Light Sleep: Off
+	System Direct Memory Access Medium Grain Clock Gating: On
+	Bus Interface Medium Grain Clock Gating: On
+	Bus Interface Light Sleep: Off
+	Unified Video Decoder Medium Grain Clock Gating: Off
+	Video Compression Engine Medium Grain Clock Gating: Off
+	Host Data Path Light Sleep: Off
+	Host Data Path Medium Grain Clock Gating: On
+	Digital Right Management Medium Grain Clock Gating: Off
+	Digital Right Management Light Sleep: Off
+	Rom Medium Grain Clock Gating: Off
+	Data Fabric Medium Grain Clock Gating: Off
+	VCN Medium Grain Clock Gating: Off
+	Host Data Path Deep Sleep: Off
+	Host Data Path Shutdown: Off
+	Interrupt Handler Clock Gating: On
+	JPEG Medium Grain Clock Gating: Off
+	Repeater Fine Grain Clock Gating: Off
+	Perfmon Clock Gating: Off
+	Address Translation Hub Medium Grain Clock Gating: Off
+	Address Translation Hub Light Sleep: Off
+
+== the SMU messages amdgpu itself sent this boot, off the kprobe armed in the load step
+==    ! smu kprobe buffer rc=1
+0 /tmp/lx/out/smu-msgs.txt
+== every message number here must exist in cyan_skillfish_ppt.c - one that does not is
+== the interesting result (our Windows allow-list, facts M22, was built from that file)
+== temperature
+edge 70.0 C
+62088000
+62115000
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 

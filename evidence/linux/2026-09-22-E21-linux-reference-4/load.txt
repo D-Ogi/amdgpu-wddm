@@ -1,0 +1,23 @@
+==    ! kprobe smu_cmn_send_smc_msg_with_param rc=1
+linux_session_collect.sh: line 259: can't create /sys/kernel/tracing/events/kprobes/enable: nonexistent directory
+==    ! enable kprobes rc=1
+== modprobe amdgpu 03:31:49Z
+==    waited 0s for 'Initialized amdgpu'
+==    trace amdgpu-events-load.txt: 188683 lines; overruns: 0
+[  375.664185] amdgpu 0000:01:00.0: amdgpu: ring comp_1.3.1 uses VM inv eng 10 on hub 0
+[  375.664192] amdgpu 0000:01:00.0: amdgpu: ring kiq_0.2.1.0 uses VM inv eng 11 on hub 0
+[  375.664198] amdgpu 0000:01:00.0: amdgpu: ring sdma0 uses VM inv eng 12 on hub 0
+[  375.664204] amdgpu 0000:01:00.0: amdgpu: ring sdma1 uses VM inv eng 13 on hub 0
+[  375.664775] amdgpu 0000:01:00.0: amdgpu: Runtime PM not available
+[  375.665525] [drm] Initialized amdgpu 3.64.0 for 0000:01:00.0 on minor 1
+[  375.676160] fbcon: amdgpudrmfb (fb0) is primary device
+[  375.863480] amdgpu 0000:01:00.0: [drm] fb0: amdgpudrmfb frame buffer device
+== register writes in the init trace (E03 saw 10018)
+10497
+== temperature
+edge 71.0 C
+62230000
+61211000
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 

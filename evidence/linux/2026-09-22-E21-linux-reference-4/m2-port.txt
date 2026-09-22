@@ -1,0 +1,4 @@
+		DevSta:	CorrErr- NonFatalErr- FatalErr- UnsupReq- AuxPwr- TransPend-
+		LnkSta:	Speed 5GT/s, Width x2
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-

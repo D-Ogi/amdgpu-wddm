@@ -1,0 +1,37 @@
+== debugfs dir /sys/kernel/debug/dri/0000:01:00.0, device dir /sys/class/drm/card1/device
+== dmesg, module parameters, modinfo (wishlist L15, a re-check)
+== interrupts and MSI state (L11, already MEASURED as M40 - this confirms the boot matches)
+            CPU0       CPU1       CPU2       CPU3       CPU4       CPU5       CPU6       CPU7       CPU8       CPU9       CPU10      CPU11      
+  54:          0          0         39          0          0          0          0          0          0          0          0          0 PCI-MSIX-0000:01:00.0    0-edge      amdgpu
+== firmware versions and the hashes of the files in use (L3)
+VCE feature version: 0, firmware version: 0x00000000
+UVD feature version: 0, firmware version: 0x00000000
+MC feature version: 0, firmware version: 0x00000000
+ME feature version: 32, firmware version: 0x00000063
+PFP feature version: 32, firmware version: 0x00000094
+CE feature version: 32, firmware version: 0x00000025
+RLC feature version: 0, firmware version: 0x0000000d
+RLC SRLC feature version: 0, firmware version: 0x00000000
+==    ! firmware sha256 rc=1
+== memory managers and totals (L7)
+  use_type: 1
+  use_tt: 0
+  size: 8589934592
+  usage: 14614528
+  vis usage:14614528
+default_page_size: 4KiB
+chunk_size: 4KiB, total: 8192MiB, free: 8178MiB, clear_free: 0MiB
+order-21 free:        0 KiB, blocks: 0
+== rings and MQDs as 32-bit words -> /tmp/lx/out/rings (busybox od alone reads nothing from these
+== files; dd bs=4096 | od does - measured in E13)
+22
+== named registers through amdgpu's own accessor (regs2.py, read-only, under amdgpu's mutex)
+== positive control: M40's idle values must come back
+==    ! control M40 idle values rc=1
+== temperature
+edge 71.0 C
+59088000
+60050000
+0: 1000Mhz 
+1: 1500Mhz *
+2: 2000Mhz 

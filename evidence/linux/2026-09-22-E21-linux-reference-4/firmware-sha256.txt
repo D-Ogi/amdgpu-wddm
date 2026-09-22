@@ -1,0 +1,1 @@
+sha256sum: can't open '/lib/firmware/amdgpu/cyan_skillfish2_*.bin': No such file or directory

@@ -1,0 +1,6 @@
+state rc=0 secs=1
+dmupost rc=0 secs=1
+vmregs rc=0 secs=0
+extras rc=0 secs=1
+info rc=0 secs=0
+power rc=0 secs=0

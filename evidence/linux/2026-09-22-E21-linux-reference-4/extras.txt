@@ -1,0 +1,68 @@
+== ip_discovery in full (wishlist L19) -> ip_discovery.txt
+305 /tmp/lx/out/ip_discovery.txt
+== hardware id 12 (UVD/VCN), the row L19 was written for
+ip_discovery/die/0/12/0/base_addr 0x00007800 0x00007E00 0x02403000 
+ip_discovery/die/0/12/0/harvest 0x0 
+ip_discovery/die/0/12/0/hw_id 12 
+ip_discovery/die/0/12/0/major 2 
+ip_discovery/die/0/12/0/minor 0 
+ip_discovery/die/0/12/0/num_base_addresses 3 
+ip_discovery/die/0/12/0/num_instance 0 
+ip_discovery/die/0/12/0/revision 3 
+== display connectors (L8). EDID is deliberately NOT read
+-- /sys/class/drm/card1-DP-1/ status connected enabled enabled
+-- /sys/class/drm/card1-DP-2/ status disconnected enabled disabled
+== GDS, GWS and OA; KFD topology
+simd_count 0
+simd_id_base 0
+max_waves_per_simd 0
+lds_size_in_kb 0
+gds_size_in_kb 0
+num_gws 0
+array_count 0
+simd_arrays_per_engine 0
+cu_per_simd_array 0
+simd_per_cu 0
+simd_count 48
+simd_id_base 2147487744
+--- ring 0 (gfx_0.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+Last preempted               0x00000000
+Last reset                   0x00000000
+Last both                    0x00000000
+--- ring 1 (comp_1.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 3 (comp_1.2.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 4 (comp_1.3.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 5 (comp_1.0.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 6 (comp_1.1.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 7 (comp_1.2.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 8 (comp_1.3.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 9 (kiq_0.2.1.0) ---
+Last signaled fence          0x00000003
+Last emitted                 0x00000003
+--- ring 10 (sdma0) ---
+Last signaled fence          0x00000014
+Last emitted                 0x00000014
+Last signaled trailing fence 0x00000000
+Last emitted                 0x00000000
+== iomem, for the record

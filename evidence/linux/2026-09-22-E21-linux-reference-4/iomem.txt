@@ -1,0 +1,72 @@
+00000000-00000fff : Reserved
+00001000-0009ffff : System RAM
+000a0000-000fffff : Reserved
+  000a0000-000dffff : PCI Bus 0000:00
+  000f0000-000fffff : System ROM
+00100000-03ffffff : System RAM
+04000000-04000fff : ACPI Non-volatile Storage
+04001000-09e01fff : System RAM
+09e02000-09ffffff : Reserved
+0a000000-7cc1ffff : System RAM
+7cc20000-7cc20fff : Reserved
+7cc21000-7cdb8fff : System RAM
+7cdb9000-7cdb9fff : Reserved
+7cdba000-7dce3fff : System RAM
+7dce4000-7ddf9fff : Reserved
+7ddfa000-7de09fff : ACPI Tables
+7de0a000-7defbfff : ACPI Non-volatile Storage
+7defc000-7e23ffff : Reserved
+7e240000-7effffff : System RAM
+7f000000-7fffffff : Reserved
+80000000-febfffff : PCI Bus 0000:00
+  c0000000-d01fffff : PCI Bus 0000:01
+    c0000000-cfffffff : 0000:01:00.0
+    d0000000-d01fffff : 0000:01:00.0
+  e0000000-efffffff : PCI ECAM 0000 [bus 00-ff]
+    e0000000-efffffff : pnp 00:00
+  fe700000-fe8fffff : PCI Bus 0000:01
+    fe700000-fe7fffff : 0000:01:00.2
+    fe800000-fe87ffff : 0000:01:00.0
+    fe880000-fe883fff : 0000:01:00.1
+      fe880000-fe883fff : ICH HD audio
+    fe884000-fe885fff : 0000:01:00.2
+  fe900000-fe9fffff : PCI Bus 0000:04
+    fe900000-fe903fff : 0000:04:00.0
+    fe904000-fe904fff : 0000:04:00.0
+      fe904000-fe904fff : r8169
+  fea00000-feafffff : PCI Bus 0000:03
+    fea00000-fea03fff : 0000:03:00.0
+      fea00000-fea03fff : nvme
+  feb00000-feb01fff : 0000:00:10.0
+    feb00000-feb01fff : xhci-hcd
+  feb02000-feb02fff : 0000:00:14.5
+    feb02000-feb02fff : ohci_hcd
+  feb03000-feb030ff : 0000:00:13.2
+    feb03000-feb030ff : ehci_hcd
+  feb04000-feb04fff : 0000:00:13.0
+    feb04000-feb04fff : ohci_hcd
+  feb05000-feb050ff : 0000:00:12.2
+    feb05000-feb050ff : ehci_hcd
+  feb06000-feb06fff : 0000:00:12.0
+    feb06000-feb06fff : ohci_hcd
+  feb07000-feb077ff : 0000:00:11.0
+    feb07000-feb077ff : ahci
+fec00000-fec003ff : IOAPIC 0
+fec01000-fec013ff : IOAPIC 1
+fec10000-fec10fff : Reserved
+  fec10000-fec10fff : pnp 00:03
+fed00000-fed003ff : HPET 0
+  fed00000-fed003ff : PNP0103:00
+fed61000-fed70fff : pnp 00:03
+fed80000-fed8ffff : Reserved
+  fed80000-fed8ffff : pnp 00:03
+    fed80b00-fed80b07 : SB800 TCO
+fee00000-ffffffff : PCI Bus 0000:00
+  fee00000-fee00fff : pnp 00:03
+  ff000000-ffffffff : pnp 00:03
+100000000-26fffffff : System RAM
+  18c000000-18cffd067 : Kernel code
+  18d000000-18db07fff : Kernel rodata
+  18dc00000-18de0d5bf : Kernel data
+  18e649000-18e9fffff : Kernel bss
+270000000-46fffffff : Reserved

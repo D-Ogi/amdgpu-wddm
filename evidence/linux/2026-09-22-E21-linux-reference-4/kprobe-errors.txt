@@ -1,0 +1,1 @@
+sh: write error: Invalid argument
