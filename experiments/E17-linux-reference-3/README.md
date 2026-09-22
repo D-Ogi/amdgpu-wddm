@@ -60,10 +60,17 @@ The compute ring from E13 differs exactly where it should: engine `ME` not `PFP`
 engine 4 not 0, and none of the gfx-only packets. That is the M8 scheduler's template, twice, from
 two independent captures, with no boot.
 
-**One thing our headers cannot name.** The pasid-to-VMID LUT write - `BAR5+0x04284` on the gfx ring,
-`BAR5+0x0429C` on the compute ring - has no name in `tools/regcalc`: the OSSSYS/IH register header is
-not in our set. Hard rule 2 says we do not guess, so it stays unnamed. Adding that header is a repo
-task, and it is the one register the M8 wrapper needs that we currently cannot name.
+**Correction, 2026-09-22.** This section used to say that the pasid-to-VMID LUT write - `BAR5+0x04284`
+on the gfx ring, `BAR5+0x0429C` on the compute ring - "has no name in `tools/regcalc`: the OSSSYS/IH
+register header is not in our set". That was wrong: `third_party/linux-amdgpu/osssys_5_0_0_offset.h`
+has been in the repository since the scaffold commit, and `regcalc --ip OSSSYS --reg-header
+third_party/linux-amdgpu/osssys_5_0_0_offset.h reverse 0x04284 0x0429C` answers `mmIH_VMID_1_LUT` and
+`mmIH_VMID_7_LUT`. `ring_wrapper.py` only ever built the default GC map, so it printed `<unnamed>`.
+It now consults the OSSSYS map as well, and the same E14 dump decodes as seven LUT writes:
+`mmIH_VMID_1_LUT <- 0x5B` through `mmIH_VMID_7_LUT <- 0x5A`, which is amdgpu mapping seven VMIDs to
+seven pasids in one submission - exactly what `SOC15_REG_OFFSET(OSSSYS, 0, mmIH_VMID_0_LUT) + vmid`
+writes (`ref/linux-src/drivers/gpu/drm/amd/amdgpu/amdgpu_amdkfd_gfx_v10.c:130`). No register the M8
+wrapper needs is unnamed any more.
 
 ## What is left for hardware, and it is not much
 

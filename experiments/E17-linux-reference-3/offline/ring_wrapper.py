@@ -56,14 +56,26 @@ class Wrapper:
     def __init__(self, header=None):
         self.ops, self.windows = decode_cs.load_header(header or decode_cs.KERNEL_NVD)
         self.regmap = regcalc.RegMap()
+        # The ring also writes registers outside GC. The pasid-to-VMID map the VM flush programs is
+        # mmIH_VMID_<vmid>_LUT, which lives in OSSSYS (amdgpu_amdkfd_gfx_v10.c:130 writes
+        # SOC15_REG_OFFSET(OSSSYS, 0, mmIH_VMID_0_LUT) + vmid), so that header is consulted too.
+        # Without it the LUT write decoded as "<unnamed BAR5+0x04284>".
+        self.regmaps = [self.regmap]
+        for ip, header in (("OSSSYS", "osssys_5_0_0_offset.h"),):
+            path = REPO / "third_party" / "linux-amdgpu" / header
+            if path.exists():
+                self.regmaps.append(regcalc.RegMap(ip=ip, reg_header=path))
         self.dec = decode_cs.Decoder(self.ops, self.windows, self.regmap)
         self.by_name = {name: op for op, name in self.ops.items()}
 
     def reg(self, dword_addr):
         """A register named by regcalc from an absolute dword address. Never a typed offset."""
         byte = dword_addr << 2
-        names = self.regmap.reverse(byte)
-        return (("/".join(names) if names else f"<unnamed BAR5+0x{byte:05X}>"), byte)
+        for regmap in self.regmaps:
+            names = regmap.reverse(byte)
+            if names:
+                return ("/".join(names), byte)
+        return (f"<unnamed BAR5+0x{byte:05X}>", byte)
 
     # ---------------------------------------------------------------- per-packet decode
     def body(self, name, body, out):
