@@ -315,6 +315,7 @@ typedef struct _BC250_WDDM {
     volatile LONG BlitsToFirmware;              // copied to the POST framebuffer (flip not live, or the fallback below)
     volatile LONG BlitsMapFailed;                // of BlitsToFirmware, a fallback because DcnScanoutMapping refused
     volatile LONG BlitRowsLast;                 // rows the last blit actually copied; 0 with BlitsToFlip climbing was M115
+    volatile LONG BlitRowsMax;                  // the most rows any one blit copied; 1200 would be a full frame
     volatile LONG BlitSeeds;                    // flip targets that got one copy of the firmware framebuffer (M116)
     volatile LONG BlitReadingLast;              // which present-list slot the last blit took (1 entry 0, 2 the 24-byte misread, 3 entry 1)
     volatile LONG BlitWidthLast;
@@ -1160,6 +1161,7 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              "failed-mapping fallback), %ld scanout remaps (%ld failed), last blit %ld rows, %ld seeds",
              Wddm->BlitsToFlip, Wddm->BlitsToFirmware, Wddm->BlitsMapFailed,
              Wddm->Device->DcnScanoutRemaps, Wddm->Device->DcnScanoutMapFailed, Wddm->BlitRowsLast, Wddm->BlitSeeds);
+    GuardLog("wddm summary: widest blit %ld rows", Wddm->BlitRowsMax);
     GuardLog("wddm summary: last blit reading %ld, %ldx%ld pitch %ld, %ld rectangles, source physical 0x%llX",
              Wddm->BlitReadingLast, Wddm->BlitWidthLast, Wddm->BlitHeightLast, Wddm->BlitPitchLast,
              Wddm->BlitSubRectsLast, (ULONGLONG)Wddm->BlitSourceLast);
@@ -2714,6 +2716,8 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     dy = Present->SrcRect.top - Present->DstRect.top;
     for (i = 0; i < count; i++)
     {
+        if (verbose && i < 4)
+            GuardLog("wddm: blit rect %u (%d,%d)-(%d,%d)", i, rects[i].left, rects[i].top, rects[i].right, rects[i].bottom);
         // Clamp as display.c:CopyRect does: to the firmware mode on the destination side and to the allocation on
         // the source side; a rectangle that ends up empty or outside is simply skipped.
         LONG left = rects[i].left > Present->DstRect.left ? rects[i].left : Present->DstRect.left;
@@ -2746,6 +2750,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
     InterlockedIncrement(&wddm->Blits);
     InterlockedExchange(&wddm->BlitRowsLast, (LONG)rows);
+    if ((LONG)rows > wddm->BlitRowsMax) InterlockedExchange(&wddm->BlitRowsMax, (LONG)rows);
     InterlockedExchange(&wddm->BlitReadingLast, reading);
     InterlockedExchange(&wddm->BlitWidthLast, (LONG)alloc->Width);
     InterlockedExchange(&wddm->BlitHeightLast, (LONG)alloc->Height);

@@ -25,7 +25,7 @@
                                             // control (ADR 0013), read back and compared by the CPU
 #define BC250_ESCAPE_RUN_FBDUMP 17u         // BC250_ESCAPE_FBDUMP in: Hubp, FirstRow, RowCount; out: a read-only
                                             // band of the scanned-out surface's pixels, for bc250kmd_cli fbdump
-#define BC250_KMD_VERSION 0x00070026u       // milestone 7 work, revision 38
+#define BC250_KMD_VERSION 0x00070027u       // milestone 7 work, revision 39
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
