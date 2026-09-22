@@ -91,6 +91,11 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 // tests', 2/3 are SdmaCopyEscape's and GfxFenceEscape's SDMA arm's - one past what the escapes use.
 #define BC250_PAGING_FENCE_SLOT 4u
 #define BC250_PAGING_POLL_US 500000ul       // node 1's own watchdog budget, same shape as BC250_SUBMIT_POLL_US
+// E24 run 001 (docs/design/paging-node.md, "What run 001 hung on"): the bounded wait TearDown gives a
+// GfxPagingBuild() call that is still touching PagingShadowMem when a FINI or a stop tears it down. Same shape
+// as WddmStop's own wait for a hardware submission (BC250_WDDM_SUBMIT_TIMEOUT_MS): there is no GPU reset on
+// this part (facts M53), so a wait here is bounded and logged loudly on timeout, never infinite.
+#define BC250_GFX_PAGING_DRAIN_TIMEOUT_MS 200ul
 // The shadow buffer BuildPagingBuffer fills and SubmitCommand reads back at DISPATCH_LEVEL (design note section
 // 4). Matches wddm.c's own BC250_WDDM_PAGING_BUFFER_BYTES (0x10000, wddm.c:57): the driver never advertises a
 // paging buffer larger than what its own shadow can hold, so dxgkrnl's MultipassOffset is the answer to "too
@@ -139,7 +144,11 @@ typedef struct _BC250_GFX {
 
     // ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ----
     BOOLEAN PagingGate;                   // EnablePagingNode, read once at GfxStart
-    BOOLEAN PagingReady;                  // GfxEscape's RUN arm has captured PagingRing/PagingDevicePtr/PagingShadow
+    // GfxEscape's RUN arm has captured PagingRing/PagingDevicePtr/PagingShadow. Read with no lock by
+    // GfxPagingBuild (PASSIVE_LEVEL, BuildPagingBuffer - see PagingBuildersActive below, this field's own
+    // publish/clear stays under GartLock) and by the DISPATCH_LEVEL trio (GfxSubmitPaging/GfxPagingFenceArrived/
+    // GfxPagingSubmitReady), the ih.c DpcAdev shape.
+    BOOLEAN PagingReady;
     struct amdgpu_ring* PagingRing;       // &adev->sdma.instance[0].ring: a pointer into the live, persistent adev,
                                            // never a copy (section 4: forking .wptr into two counters is the bug this avoids)
     struct amdgpu_device* PagingDevicePtr; // the same adev; GfxPagingFenceArrived reads bc250_sdma_fence_read through it,
@@ -147,6 +156,15 @@ typedef struct _BC250_GFX {
     KSPIN_LOCK Sdma0RingLock;             // every direct writer of the live SDMA0 ring takes this narrowly (section 4)
     BOOLEAN PagingShadowAlloc;            // bc250_shim_mem_alloc(BC250_MEM_GTT) has allocated PagingShadowMem
     struct bc250_mem PagingShadowMem;     // BC250_GFX_PAGING_SHADOW_BYTES: BuildPagingBuffer's own copy of the packets
+    // E24 run 001 (docs/design/paging-node.md, "What run 001 hung on"): GfxPagingBuild (BuildPagingBuffer,
+    // PASSIVE_LEVEL) cannot serialize against TearDown through Device->GartLock the way every other reader of
+    // gfx.c's PASSIVE_LEVEL state does - GartLock is a FAST_MUTEX, ExAcquireFastMutex raises IRQL to APC_LEVEL,
+    // and VidMmTranslate refuses anything but exactly PASSIVE_LEVEL (vidmm.c:238), so holding GartLock across a
+    // translation makes every translation fail rather than serialize it. This counter is what stands in for the
+    // lock: incremented for the duration of every GfxPagingBuild call that got past the PagingReady check,
+    // decremented on every exit; TearDown waits for it to reach 0 before freeing PagingShadowMem, bounded by
+    // BC250_GFX_PAGING_DRAIN_TIMEOUT_MS.
+    volatile LONG PagingBuildersActive;
     volatile LONG PagingSubmitFailed;     // sticky, like SubmitFailed, but independent: node 1 fails on its own hardware
     volatile LONG PagingSubmitInFlight;   // one in flight, like SubmitInFlight
     ULONG PagingSubmitSeq;
@@ -166,7 +184,24 @@ static int StageSdma(struct amdgpu_device* adev)
     result = bc250_sdma_fence_page_alloc(adev);
     if (result != 0) return result;
     gfx->SdmaFencePage = TRUE;
-    for (i = 0; i < adev->sdma.num_instances && result == 0; i++) result = bc250_sdma_ring_test(&adev->sdma.instance[i].ring);
+    // Sdma0RingLock, narrowly around the push, exactly as every other writer of the live SDMA0 ring takes it
+    // (the ring-test escape, GfxFenceEscape's SDMA arm, SdmaCopyEscape, GfxSubmitPaging) - docs/design/
+    // paging-node.md section 4 already claimed this stage took it and it did not (E24 run 001, "What run 001
+    // hung on"). Node 1 cannot be ready this early in the same RUN (PagingReady is only ever set after stage 8,
+    // below this stage in GfxEscape's loop), so nothing contends for it here today; taking it anyway is what
+    // makes "every writer, no exceptions" true by construction instead of by an argument about call order that
+    // the next change to this file might quietly break.
+    for (i = 0; i < adev->sdma.num_instances && result == 0; i++)
+    {
+        struct amdgpu_ring* ring = &adev->sdma.instance[i].ring;
+        volatile u32* slotCpu = NULL;
+        KIRQL irql;
+
+        KeAcquireSpinLock(&gfx->Sdma0RingLock, &irql);
+        result = bc250_sdma_ring_test_submit(ring, &slotCpu);
+        KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
+        if (result == 0) result = bc250_sdma_ring_test_wait(adev, slotCpu);
+    }
     return result;
 }
 
@@ -209,7 +244,9 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
     // Same reasoning, first among the paging fields: GfxPagingFenceArrived and GfxSubmitReady's node-1 twin read
     // PagingReady/PagingDevicePtr/PagingRing with no lock (design note section 4). A stage-7-and-back-to-8 re-run
-    // must never let a DISPATCH_LEVEL caller find a stale ring or adev pointer here.
+    // must never let a DISPATCH_LEVEL caller find a stale ring or adev pointer here. GfxPagingBuild (PASSIVE_LEVEL)
+    // is the third no-lock reader of PagingReady, and its own PagingShadowMem use is what the wait below, on
+    // PagingBuildersActive, is for - setting PagingReady FALSE here is what stops it from starting a new one.
     Gfx->PagingReady = FALSE;
     Gfx->PagingRing = NULL;
     Gfx->PagingDevicePtr = NULL;
@@ -223,6 +260,22 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     }
     if (Gfx->PagingShadowAlloc)
     {
+        // PagingReady is already FALSE (above), so no new GfxPagingBuild call can start using PagingShadowMem;
+        // this is the bounded wait for one that had already passed that check on another CPU - BuildPagingBuffer
+        // cannot serialize through GartLock here, see PagingBuildersActive's own comment - to finish touching it
+        // before it is freed out from under that call (E24 run 001, docs/design/paging-node.md). PASSIVE_LEVEL:
+        // both of TearDown's callers (Fini, from the FINI escape or GfxStop) are. Timing out and freeing anyway,
+        // loudly, is the same choice WddmStop already makes for a hardware submission that does not finish in
+        // time - there is no GPU reset on this part (facts M53), so waiting forever is not on offer either.
+        LARGE_INTEGER tick;
+        ULONG waited;
+
+        tick.QuadPart = -10000ll * 10;
+        for (waited = 0; waited < BC250_GFX_PAGING_DRAIN_TIMEOUT_MS && Gfx->PagingBuildersActive != 0; waited += 10)
+            KeDelayExecutionThread(KernelMode, FALSE, &tick);
+        if (waited != 0)
+            GuardLog("gfx: paging teardown waited %lu ms for %ld builder(s) touching the shadow buffer%s", waited,
+                     Gfx->PagingBuildersActive, Gfx->PagingBuildersActive != 0 ? " - STILL ACTIVE, freeing anyway" : "");
         bc250_shim_mem_free(Adev, &Gfx->PagingShadowMem);
         Gfx->PagingShadowAlloc = FALSE;
     }
@@ -1108,7 +1161,10 @@ BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
     return TRUE;
 }
 
-// PASSIVE_LEVEL, under GartLock (VidMmTranslate's own IRQL check enforces this). Verifies that [Va, Va+Bytes)
+// PASSIVE_LEVEL, exactly - not under GartLock (E24 run 001, docs/design/paging-node.md, "What run 001 hung
+// on"): a FAST_MUTEX raises IRQL to APC_LEVEL, and VidMmTranslate's own IRQL check refuses anything but exactly
+// PASSIVE_LEVEL (vidmm.c:238), APC_LEVEL included, so GartLock cannot be held across it - see
+// GfxPagingBuild/PagingBuildersActive for what serializes this caller instead. Verifies that [Va, Va+Bytes)
 // resolves to one physically contiguous run before GfxPagingBuild trusts Physical0 (the translation of Va
 // itself) for the whole range: VidMmTranslate resolves one 4 KB page at a time (bc250_pte_fields, PAGE_SHIFT),
 // and a GPU VA range backed by VidMm's own page tables has no reason to stay physically contiguous past the
@@ -1132,8 +1188,18 @@ static BOOLEAN PagingRangeContiguous(ULONGLONG RootPhysical, ULONGLONG Va, ULONG
     return TRUE;
 }
 
-// PASSIVE_LEVEL, under GartLock, with a live adev (DXGKARG_BUILDPAGINGBUFFER is a paging-process operation, not
-// a submission: wddm.c calls this the same way it calls VidMmUpdatePageTable today, GartDevice already open).
+// PASSIVE_LEVEL, exactly - NOT under GartLock, and deliberately so (E24 run 001, docs/design/paging-node.md,
+// "What run 001 hung on"). wddm.c calls VidMmUpdatePageTable, right next to this arm in
+// Bc250WddmBuildPagingBuffer, the same way and with the same absence of GartLock - that much was already true
+// before stage D and is not new. What stage D added is a second thing this function reads with no lock:
+// PagingReady/PagingShadowMem, published by GfxEscape's RUN arm and cleared/freed by TearDown, both under
+// GartLock. Taking GartLock here to close that gap the obvious way does not work: ExAcquireFastMutex raises
+// IRQL to APC_LEVEL, and VidMmTranslate refuses anything but exactly PASSIVE_LEVEL (vidmm.c:238) - a
+// GartLock-held call into it would fail every single translation, silently, for as long as the lock was held.
+// PagingBuildersActive is the narrower thing that is actually possible: an interlocked count of calls that are
+// still touching PagingShadowMem, which TearDown waits to drain (bounded) before freeing it. It does not
+// serialize this function against a concurrent GfxEscape RUN the way GartLock would - two calls can genuinely
+// run at once - only against the one thing that is actually unsafe, PagingShadowMem disappearing mid-use.
 //
 // RootPhysical names the paging process's root (wddm.c resolves hSystemContext to it, design note section 2);
 // Fill selects DXGK_OPERATION_VIRTUAL_FILL (SrcVa/FillPattern) over DXGK_OPERATION_VIRTUAL_TRANSFER (SrcVa,
@@ -1158,24 +1224,31 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     unsigned int budget, written = 0;
     u32* shadow;
     int result;
+    NTSTATUS status = STATUS_SUCCESS;
 
     *DwordsWritten = 0;
     *Unsupported = BC250PagingSupported;
     if (gfx == NULL || Bytes == 0 || Bytes > 0xFFFFFFFFu) return STATUS_INVALID_PARAMETER;
-    if (!gfx->PagingReady) { *Unsupported = BC250PagingNotReady; return STATUS_SUCCESS; }
+
+    // PagingBuildersActive from here to Done: see this function's own header comment and the field's. Counted
+    // even for a call that turns out "not ready" below, so that TearDown's wait and this function's own read of
+    // PagingReady can never straddle a free of PagingShadowMem no matter how early that read happens to lose.
+    InterlockedIncrement(&gfx->PagingBuildersActive);
+
+    if (!gfx->PagingReady) { *Unsupported = BC250PagingNotReady; goto Done; }
 
     // hSystemContext's root: RootPhysical is 0 when wddm.c found no BC250_WDDM_CONTEXT to resolve it against.
-    if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; return STATUS_SUCCESS; }
+    if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; goto Done; }
 
-    if (!VidMmTranslate(RootPhysical, DstVa, &dstPhysical, &dstSystem)) { *Unsupported = BC250PagingNoTranslation; return STATUS_SUCCESS; }
+    if (!VidMmTranslate(RootPhysical, DstVa, &dstPhysical, &dstSystem)) { *Unsupported = BC250PagingNoTranslation; goto Done; }
     if (!Fill)
     {
-        if (!VidMmTranslate(RootPhysical, SrcVa, &srcPhysical, &srcSystem)) { *Unsupported = BC250PagingNoTranslation; return STATUS_SUCCESS; }
+        if (!VidMmTranslate(RootPhysical, SrcVa, &srcPhysical, &srcSystem)) { *Unsupported = BC250PagingNoTranslation; goto Done; }
     }
     // Section 2's stated limit: no MC mapping exists for a page VidMm resolved to system memory unless this
     // driver itself allocated it through bc250_shim_mem_alloc(BC250_MEM_GTT, ...). Answered inertly, not refused:
     // dxgkrnl still gets STATUS_SUCCESS for an operation this cut does not build.
-    if (dstSystem || (!Fill && srcSystem)) { *Unsupported = BC250PagingSystemMemory; return STATUS_SUCCESS; }
+    if (dstSystem || (!Fill && srcSystem)) { *Unsupported = BC250PagingSystemMemory; goto Done; }
 
     // Review 23 MUST-FIX: one COPY_LINEAR/CONST_FILL packet covers [dstPhysical, dstPhysical+Bytes) (and, for a
     // transfer, [srcPhysical, srcPhysical+Bytes)) as one physically linear run. dstPhysical/srcPhysical are only
@@ -1186,10 +1259,10 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
         (!Fill && !PagingRangeContiguous(RootPhysical, SrcVa, srcPhysical, Bytes)))
     {
         *Unsupported = BC250PagingNotContiguous;
-        return STATUS_SUCCESS;
+        goto Done;
     }
 
-    if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_SHADOW_BYTES) return STATUS_INVALID_PARAMETER;
+    if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_SHADOW_BYTES) { status = STATUS_INVALID_PARAMETER; goto Done; }
 
     // budget: the smaller of dxgkrnl's own remaining DmaBufferFree and the shadow's - bc250_sdma_paging_copy/
     // fill's own room check (paging_packets.c's "insufficient buffer" cases) is what turns either one running
@@ -1198,8 +1271,8 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     shadow = (u32*)((PUCHAR)gfx->PagingShadowMem.cpu + DmaBufferOffset);
     result = Fill ? bc250_sdma_paging_fill(shadow, budget, dstPhysical, FillPattern, (unsigned int)Bytes, &written)
                   : bc250_sdma_paging_copy(shadow, budget, srcPhysical, dstPhysical, (unsigned int)Bytes, &written);
-    if (result == BC250_SDMA_PAGING_INSUFFICIENT) return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
-    if (result != BC250_SDMA_PAGING_OK) return STATUS_INVALID_PARAMETER;
+    if (result == BC250_SDMA_PAGING_INSUFFICIENT) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
+    if (result != BC250_SDMA_PAGING_OK) { status = STATUS_INVALID_PARAMETER; goto Done; }
 
     // dxgkrnl's own buffer gets the same bytes, at the same offset: the documented contract (VidMm owns
     // pDmaBuffer and may inspect it), even though GfxSubmitPaging never reads it back from there.
@@ -1207,7 +1280,10 @@ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BO
     *DwordsWritten = (ULONG)written;
     GuardLog("gfx: paging %s %llu bytes at 0x%llX -> 0x%llX physical, %u dwords at shadow offset 0x%lX",
              Fill ? "fill" : "transfer", Bytes, srcPhysical, dstPhysical, written, DmaBufferOffset);
-    return STATUS_SUCCESS;
+
+Done:
+    InterlockedDecrement(&gfx->PagingBuildersActive);
+    return status;
 }
 
 // DISPATCH_LEVEL, no GartLock, no sequence, no adev->backend (design note section 4b). Pushes

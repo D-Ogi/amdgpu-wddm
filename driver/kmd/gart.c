@@ -208,6 +208,8 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
     ULONGLONG window = Device->VramLength - BC250_GART_WINDOW;
     NTSTATUS status;
     int result = 0;
+    const char* activeReason = "-";      // which precondition below refused the call; named so a REFUSED exit code
+                                         // (bc250kmd_cli's 3) has an answer in GuardLog without reading this source
 
     Data->Version = BC250_KMD_VERSION;
     Data->Result = 0;
@@ -228,7 +230,8 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
     status = CheckWindow(Device);
     // Every GART command sets the shim's device up afresh, and gfx.c keeps its state in that device; a restore would
     // also take the GART away from under mapped queues. amdgpu's order: the engines go first (gfx.c's FINI).
-    if (NT_SUCCESS(status) && (GfxIsActive(Device) || IhIsActive(Device))) status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status) && GfxIsActive(Device)) { status = STATUS_INVALID_DEVICE_STATE; activeReason = "gfx active (gfx fini needed first)"; }
+    else if (NT_SUCCESS(status) && IhIsActive(Device)) { status = STATUS_INVALID_DEVICE_STATE; activeReason = "ih active (ih fini needed first)"; }
     SequenceBegin(&gart->Sequence, Device, Data->Op == BC250_GART_OP_PLAN, Data->Writes, BC250_GART_MAX_WRITES);
 
     if (NT_SUCCESS(status) && RunSetup(gart) != 0) status = STATUS_DEVICE_DATA_ERROR;
@@ -262,8 +265,8 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
         }
     }
     if (NT_SUCCESS(status)) status = gart->Sequence.Fault;
-    GuardLog("gart: op %u -> 0x%08X, result %d, %u writes, fault offset 0x%05X", Data->Op, status, result,
-             gart->Sequence.WriteCount, gart->Sequence.FaultOffset);
+    GuardLog("gart: op %u -> 0x%08X (%s), result %d, %u writes, fault offset 0x%05X", Data->Op, status, activeReason,
+             result, gart->Sequence.WriteCount, gart->Sequence.FaultOffset);
 
     gart->Sequence.Writes = NULL;           // the caller's buffer goes away with this call
     gart->Sequence.MaxWrites = 0;

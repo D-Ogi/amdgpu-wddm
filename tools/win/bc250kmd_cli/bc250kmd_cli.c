@@ -780,6 +780,13 @@ static int Dcn(void)
     printf("             h_total %lu / 2079, v_total %lu / 1234\n", d.Otg0HTotal, d.Otg0VTotal);
     printf("             vblank interrupt enable (GLOBAL_SYNC_STATUS bit 12) %s (no Linux reference for this bit alone)\n",
            d.Otg0VblankIntEnabled ? "on" : "off");
+    printf("             vblank event occurred (GLOBAL_SYNC_STATUS bit 14) %s (docs/design/vsync-interrupt-route.md: latches\n"
+           "             regardless of the enable bit above - a lone way to tell \"never fires\" from \"fires, never arrives\")\n",
+           d.Otg0VupdateEventOccurred ? "SET" : "clear");
+    printf("             master update lock %s, flip pending %s, vupdate keepout %s (all should read off/clear/off outside a flip;\n"
+           "             no Linux reference, these hold only mid-sequence)\n",
+           d.Otg0MasterUpdateLocked ? "LOCKED" : "unlocked", d.Hubp0FlipPending ? "PENDING" : "clear",
+           d.Otg0VupdateKeepoutEn ? "ON" : "off");
     return 0;
 }
 

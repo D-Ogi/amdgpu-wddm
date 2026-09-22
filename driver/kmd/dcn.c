@@ -21,6 +21,7 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     ULONG i;
     NTSTATUS status = STATUS_SUCCESS;
     ULONG hubp0Lo = 0, hubp0Hi = 0, pitch = 0, otgControl = 0, syncStatus = 0;
+    ULONG masterLock = 0, flipControl = 0, vupdateKeepout = 0;
 
     // Ties gen_regs.py's count (regs.generated.h) to the escape struct's fixed array (bc250kmd_escape.h): the two
     // are edited in different places and can only be kept equal by a check like every other one in this driver.
@@ -37,6 +38,10 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     Data->Otg0HTotal = 0;
     Data->Otg0VTotal = 0;
     Data->Otg0VblankIntEnabled = 0;
+    Data->Otg0VupdateEventOccurred = 0;
+    Data->Otg0MasterUpdateLocked = 0;
+    Data->Hubp0FlipPending = 0;
+    Data->Otg0VupdateKeepoutEn = 0;
     RtlZeroMemory(Data->Regs, sizeof(Data->Regs));
 
     if (Device->Mmio == NULL)
@@ -85,10 +90,28 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
     // Bit 12: AMD's own name for it in dcn_2_0_1_sh_mask.h is VUPDATE_NO_LOCK_INT_EN, not "vblank" - the field
     // name here is this escape's own, to compare against the Linux reference's timing, not a claim about AMD's.
     Data->Otg0VblankIntEnabled = (syncStatus & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_INT_EN_MASK) ? 1 : 0;
+    // Bit 14, VUPDATE_NO_LOCK_EVENT_OCCURRED: latched by hardware whether or not _INT_EN is set, so this is the
+    // one field that can tell "event never happens" and "event happens but never reaches the IH ring/MSI" apart
+    // (docs/design/vsync-interrupt-route.md). Same register as the enable bit above, no extra read.
+    Data->Otg0VupdateEventOccurred = (syncStatus & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) ? 1 : 0;
 
-    GuardLog("dcn: %u registers, status 0x%08X; hubp0 addr 0x%llX pitch %u cntl 0x%08X; otg0 control 0x%08X h_total %u v_total %u",
+    // Three more reads for the same open question: whether gart/psp/gfx/ih coming up (E22 run 004, M98, M99)
+    // leaves the OTG update lock or the vupdate keepout window held, or a flip pending, in a way run 001/002's
+    // display-only dumps (M92, M94) never exercised. All three offsets are already on DCN_REGISTERS above
+    // (gen_regs.py) and named for BC250_REG_DMU_* besides; reading them again by name costs three MmioDcnRead
+    // calls the loop above already proved safe.
+    (void)MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &masterLock);
+    Data->Otg0MasterUpdateLocked = (masterLock & OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK) ? 1 : 0;
+    (void)MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &flipControl);
+    Data->Hubp0FlipPending = (flipControl & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK) ? 1 : 0;
+    (void)MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_VUPDATE_KEEPOUT, &vupdateKeepout);
+    Data->Otg0VupdateKeepoutEn = (vupdateKeepout & OTG0_OTG_VUPDATE_KEEPOUT__OTG_MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_EN_MASK) ? 1 : 0;
+
+    GuardLog("dcn: %u registers, status 0x%08X; hubp0 addr 0x%llX pitch %u cntl 0x%08X; otg0 control 0x%08X h_total %u v_total %u; "
+             "vupdate int_en %u event_occurred %u master_locked %u flip_pending %u keepout_en %u",
              Data->RegCount, status, Data->Hubp0Address, Data->Hubp0Pitch, Data->Hubp0Cntl, Data->Otg0Control,
-             Data->Otg0HTotal, Data->Otg0VTotal);
+             Data->Otg0HTotal, Data->Otg0VTotal, Data->Otg0VblankIntEnabled, Data->Otg0VupdateEventOccurred,
+             Data->Otg0MasterUpdateLocked, Data->Hubp0FlipPending, Data->Otg0VupdateKeepoutEn);
     Data->NtStatus = (unsigned long)status;
     Data->Status = NT_SUCCESS(status) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }

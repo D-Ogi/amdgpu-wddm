@@ -118,7 +118,12 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
          # this costs nothing).
          ("DMU", "mmHUBPREQ0_DCSURF_SURFACE_INUSE"), ("DMU", "mmOTG0_OTG_STATUS_FRAME_COUNT"),
          ("DMU", "mmHUBPREQ0_DCSURF_FLIP_CONTROL"), ("DMU", "mmHUBPREQ0_DCSURF_SURFACE_CONTROL"),
-         ("DMU", "mmOTG0_OTG_MASTER_UPDATE_LOCK"), ("DMU", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
+         ("DMU", "mmOTG0_OTG_MASTER_UPDATE_LOCK"), ("DMU", "mmOTG0_OTG_TRIGA_MANUAL_TRIG"),
+         # dcn.c: DcnEscape's vsync-interrupt-route diagnostics (docs/design/vsync-interrupt-route.md). Already
+         # on DCN_REGISTERS (the _DCN_OTG list below) as part of the 75-register dump; named here as well so the
+         # decoded summary can read it and log its own field (OTG_MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_EN, bit 31)
+         # by name instead of pulling it back out of Regs[].
+         ("DMU", "mmOTG0_OTG_VUPDATE_KEEPOUT")]
 
 # 0.7.20, ADR 0011 point 3 step 2 (M87, HUBP0 only): the write side of DcnFlip's sequence, on its own allow
 # list so that nothing outside this exact set can be written through the escape or the WDDM flip DDI. Every

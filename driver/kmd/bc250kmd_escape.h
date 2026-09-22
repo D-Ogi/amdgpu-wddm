@@ -25,7 +25,7 @@
                                             // control (ADR 0013), read back and compared by the CPU
 #define BC250_ESCAPE_RUN_FBDUMP 17u         // BC250_ESCAPE_FBDUMP in: Hubp, FirstRow, RowCount; out: a read-only
                                             // band of the scanned-out surface's pixels, for bc250kmd_cli fbdump
-#define BC250_KMD_VERSION 0x00070018u       // milestone 7 work, revision 24
+#define BC250_KMD_VERSION 0x00070019u       // milestone 7 work, revision 25
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -286,6 +286,26 @@ typedef struct _BC250_ESCAPE_DCN {
     unsigned long Otg0HTotal, Otg0VTotal;
     unsigned long Otg0VblankIntEnabled;     // OTG_GLOBAL_SYNC_STATUS bit 12 (AMD's own name for this field in
                                             // dcn_2_0_1_sh_mask.h is VUPDATE_NO_LOCK_INT_EN, not "vblank")
+    // docs/design/vsync-interrupt-route.md: whether the hardware event VUPDATE_NO_LOCK_INT_EN gates an
+    // interrupt on ever actually latches, and whether anything holds the OTG update lock or the vupdate
+    // keepout window open across it - the open question a lab run with gart/psp/gfx/ih up (E22 run 004, M98,
+    // M99) needs these four for, which run 001/002's display-only dumps (M92, M94) never had a reason to read.
+    unsigned long Otg0VupdateEventOccurred; // OTG_GLOBAL_SYNC_STATUS bit 14, VUPDATE_NO_LOCK_EVENT_OCCURRED:
+                                            // latched by hardware, independent of whether _INT_EN is set; a 1
+                                            // here with the ISR's InterruptCount still 0 would mean the event
+                                            // fires but never reaches the IH ring/MSI, a 0 that it never fires.
+    unsigned long Otg0MasterUpdateLocked;   // OTG_MASTER_UPDATE_LOCK.OTG_MASTER_UPDATE_LOCK field:
+                                            // DcnFlipWriteSequence always unlocks (dcn.c), even on its error
+                                            // path; 1 here between flips would mean something left it locked
+                                            // and the double-buffered registers are not taking latest values.
+    unsigned long Hubp0FlipPending;         // DCSURF_FLIP_CONTROL.SURFACE_FLIP_PENDING field: M94 measured this
+                                            // clearing within one frame under display-only gates; stuck at 1
+                                            // here would mean the same latch does not clear once gart/psp/gfx/ih
+                                            // are also up.
+    unsigned long Otg0VupdateKeepoutEn;     // OTG_VUPDATE_KEEPOUT.OTG_MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_EN
+                                            // field: the lock/unlock race-protection window (dcn20_optc.c's
+                                            // triplebuffer lock/unlock, not an interrupt gate); should read 0
+                                            // outside a flip.
     BC250_ESCAPE_DCN_REG Regs[BC250_DCN_REG_COUNT];
 } BC250_ESCAPE_DCN;
 
@@ -518,7 +538,8 @@ typedef char BC250_ESCAPE_IH_SIZE_CHECK[(sizeof(BC250_ESCAPE_IH) == 2336) ? 1 : 
 typedef char BC250_LOG_LINE_SIZE_CHECK[(sizeof(BC250_LOG_LINE) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_LOG_SIZE_CHECK[(sizeof(BC250_ESCAPE_LOG) == 10812) ? 1 : -1];
 typedef char BC250_ESCAPE_DCN_REG_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN_REG) == 56) ? 1 : -1];
-typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4272) ? 1 : -1];
+typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4288) ? 1 : -1];  // 4272 + 4 new unsigned
+                                                                                        // long fields (vsync-interrupt-route.md)
 typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_SDMACOPY_SIZE_CHECK[(sizeof(BC250_ESCAPE_SDMACOPY) == 88) ? 1 : -1];
 typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 524416) ? 1 : -1];
