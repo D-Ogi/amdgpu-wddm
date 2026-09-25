@@ -1,8 +1,8 @@
 {
   "mesa_commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
   "port_origin_base": "f333dd6d1c85297ac41773eaeb9b02f16acf1919",
-  "patch_sha256": "fe84e2f45931b9aa0ec5676ae216bf1dd7615ec11dd172abd750dd23a4d644c2",
+  "patch_sha256": "c5a7527a4e067ba09c07eb69a88c47fd7183763fc3f3594f62e5a1aa65efd64a",
   "license": "Mesa and upstream WDDM2 integration: MIT",
-  "changes": "Separate4KiB resource/map length from64KiB reservation rounding for sparse images. BC250 WDDM2/CPU WSI; OS reservation ownership; canonical bit46 sparse scalar aliases with shared real-zero backing; per-reservation update groups chained on a dedicated paging fence. Sparse stays false by default; explicit RADV_EXPERIMENTAL=sparse passes21release buffer and20image CTS (one1-tile rebind case NotSupported). Queued PTE relocation/image/Linux acceptance remains open.",
-  "candidate_sha256": "0F9FEAE8492B71343B7DBDE6A12DE9E1D95464C3AB20D0ABE45E35E383F7BF2D"
+  "changes": "BC250 WDDM2/CPU WSI, canonical bit46 sparse scalar aliases and real-zero backing, reservation-grouped mapping updates, 4KiB logical lengths with64KiB reservations. Dedicated sparse queues now own a WDDM context and use native queued waits/signals instead of Linux host-wait threads.18release queue cases:17Pass/1queue-capability skip. Full release sparse run and same-Mesa Linux parity pending. Sparse remains experimental.",
+  "candidate_sha256": "4D027149571DC000DA1E5006E6E393FCA6178DB32F1D9CB25D684E60849A5805"
 }

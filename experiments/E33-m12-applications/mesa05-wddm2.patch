@@ -2123,7 +2123,7 @@ index 214d30d5eda..1a6f6b1c32b 100644
  
  bool radv_graphics_queue_enabled(const struct radv_physical_device *pdev);
 diff --git a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
-index 0e6ee2d5781..7b53e998f25 100644
+index 0e6ee2d5781..19708727dcc 100644
 --- a/src/amd/vulkan/radv_queue.c
 +++ b/src/amd/vulkan/radv_queue.c
 @@ -36,7 +36,7 @@ radv_get_queue_global_priority(const VkDeviceQueueGlobalPriorityCreateInfo *pObj
@@ -2314,6 +2314,85 @@ index 0e6ee2d5781..7b53e998f25 100644
     if (!submission->command_buffer_count && !submission->wait_count && !submission->signal_count)
        return VK_SUCCESS;
  
+@@ -1960,6 +2001,19 @@ radv_queue_init(struct radv_device *device, struct radv_queue *queue, int idx,
+    if (result != VK_SUCCESS)
+       return result;
+ 
++   queue->owns_hw_ctx = false;
++   if (queue->state.qf == RADV_QUEUE_SPARSE && device->ws->buffer_virtual_bind_end) {
++      /* WDDM queues mapping waits and signals through its companion context.
++       * A distinct render context keeps waits on this sparse queue from
++       * blocking a signal submitted later to the graphics queue. */
++      struct radeon_winsys_ctx *sparse_ctx = NULL;
++      result = device->ws->ctx_create(device->ws, queue->priority, &sparse_ctx);
++      if (result != VK_SUCCESS)
++         goto fail;
++      queue->hw_ctx = sparse_ctx;
++      queue->owns_hw_ctx = true;
++   }
++
+    queue->state.uses_shadow_regs = device->uses_shadow_regs && queue->state.qf == RADV_QUEUE_GENERAL;
+    if (queue->state.uses_shadow_regs) {
+       result = radv_create_shadow_regs_preamble(device, &queue->state);
+@@ -1979,7 +2033,13 @@ radv_queue_init(struct radv_device *device, struct radv_queue *queue, int idx,
+ 
+    if (queue->state.qf == RADV_QUEUE_SPARSE) {
+       queue->vk.driver_submit = radv_queue_sparse_submit;
+-      vk_queue_enable_submit_thread(&queue->vk);
++      /* Linux performs host waits here. WDDM already queues GPU waits and
++       * signals and uses native timelines, so it must remain immediate. */
++      if (!device->ws->buffer_virtual_bind_end) {
++         result = vk_queue_enable_submit_thread(&queue->vk);
++         if (result != VK_SUCCESS)
++            goto fail;
++      }
+    } else {
+       queue->vk.driver_submit = radv_queue_submit;
+    }
+@@ -2005,6 +2065,10 @@ radv_queue_init(struct radv_device *device, struct radv_queue *queue, int idx,
+    return VK_SUCCESS;
+ fail:
+    vk_queue_finish(&queue->vk);
++   if (queue->owns_hw_ctx) {
++      device->ws->ctx_destroy(queue->hw_ctx);
++      queue->owns_hw_ctx = false;
++   }
+    return result;
+ }
+ 
+@@ -2089,6 +2153,8 @@ radv_queue_finish(struct radv_queue *queue)
+ 
+    radv_queue_state_finish(&queue->state, device);
+    vk_queue_finish(&queue->vk);
++   if (queue->owns_hw_ctx)
++      device->ws->ctx_destroy(queue->hw_ctx);
+ }
+ 
+ enum amd_ip_type
+@@ -2109,6 +2175,11 @@ radv_queue_family_to_ring(const struct radv_physical_device *pdev, enum radv_que
+       return AMD_IP_COMPUTE;
+    case RADV_QUEUE_TRANSFER:
+       return AMD_IP_SDMA;
++   case RADV_QUEUE_SPARSE:
++      /* The WDDM companion attaches to a separately owned graphics context.
++       * Linux sparse queues have no hardware ring and never reach this path. */
++      assert(pdev->ws->buffer_virtual_bind_end);
++      return AMD_IP_GFX;
+    case RADV_QUEUE_VIDEO_DEC:
+       return pdev->vid_decode_ip;
+    case RADV_QUEUE_VIDEO_ENC:
+diff --git a/src/amd/vulkan/radv_queue.h b/src/amd/vulkan/radv_queue.h
+index bb4b49428a6..3a677419e72 100644
+--- a/src/amd/vulkan/radv_queue.h
++++ b/src/amd/vulkan/radv_queue.h
+@@ -84,6 +84,7 @@ struct radv_queue_state {
+ struct radv_queue {
+    struct vk_queue vk;
+    struct radeon_winsys_ctx *hw_ctx;
++   bool owns_hw_ctx; /* WDDM dedicated sparse queue owns an independent context. */
+    enum radeon_ctx_priority priority;
+    struct radv_queue_state state;
+    struct radv_queue_state *follower_state;
 diff --git a/src/amd/vulkan/radv_radeon_winsys.h b/src/amd/vulkan/radv_radeon_winsys.h
 index f4b47f81b61..653a918ba56 100644
 --- a/src/amd/vulkan/radv_radeon_winsys.h
