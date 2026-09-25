@@ -1,0 +1,18 @@
+{
+  "cases": 80,
+  "Pass": 75,
+  "NotSupported": 5,
+  "Fail": 0,
+  "health_samples": 8,
+  "sampled_temperature_max_mc": 67375,
+  "generation_unchanged": true,
+  "inputs_unchanged": 5,
+  "same_boot": true,
+  "new_fault_events": 0,
+  "new_dumps": 0,
+  "binary": {
+    "tag": "vulkan-cts-1.4.6.2",
+    "commit": "f6a29701220f34dd1407513bfe80d74ca7b392ce",
+    "exe_sha256": "ae7befdd190ef08e4a715de0348734879263e1854e017d67865749905a95a2b6"
+  }
+}

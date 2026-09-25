@@ -81,3 +81,12 @@ per run and600normal-user cube frames. The main-branch CTS development group
 has76Pass/5NotSupported/0Fail. See
 [evidence](../../evidence/windows/2026-09-25-E33-system-icd/RESULT.md).
 No release must-pass or Linux parity acceptance follows from this control.
+
+M480 uses the selected release at f6a29701220f34dd1407513bfe80d74ca7b392ce:
+compute-release-basic.txt has80cases,75Pass/5NotSupported/0Fail.
+[Release evidence](../../evidence/windows/2026-09-25-E33-release-cts-basic/RESULT.md).
+The CTS worker runs elevated for the KMD health/temperature checks; ordinary
+application discovery remains covered separately by M479. It checks health
+between cases at least every5seconds and at completion, and retains an external
+45second per-process deadline. The release supports --deqp-watchdog=enable but
+does not support the newer main-branch interval/total timeout parameters.

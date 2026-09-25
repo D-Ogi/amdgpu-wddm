@@ -1,12 +1,17 @@
-param([ValidatePattern('^[a-z0-9-]+$')][string]$Run)
+param(
+ [ValidatePattern('^[a-z0-9-]+$')][string]$Run,
+ [string]$Tools='C:\BC250\m12\system-icd\tools',
+ [string]$SourceExe='C:\BC250\m10\cts-smoke-06\deqp-vk.exe',
+ [ValidatePattern('^[0-9A-Fa-f]{64}$')][string]$ExpectedHash='35CBBC05F04C3B974B8D0638E102A854F78CB5E56B6E56FDA37D1BFEE452183F'
+)
 $ErrorActionPreference='Stop'
-$out="C:\BC250\m12\$Run";$tools='C:\BC250\m12\system-icd\tools'
+$out="C:\BC250\m12\$Run"
 if(Test-Path "$out\start.json"){throw 'Existing run'}
 if(@(Get-ScheduledTask 'BC250-M12-*' | Where-Object State -in @('Running','Queued')).Count){throw 'M12 task still active'}
 if((Invoke-RestMethod http://127.0.0.1:2250/flags).stop){throw 'Owner STOP'}
-$exe='C:\BC250\m10\cts-smoke-06\deqp-vk.exe'
-if((Get-FileHash $exe).Hash -ne '35CBBC05F04C3B974B8D0638E102A854F78CB5E56B6E56FDA37D1BFEE452183F'){throw 'CTS binary mismatch'}
-Copy-Item -LiteralPath $exe -Destination "$tools\deqp-vk.exe"
+$exe=$SourceExe
+if((Get-FileHash $exe).Hash -ne $ExpectedHash){throw 'CTS binary mismatch'}
+if([IO.Path]::GetFullPath($exe) -ne [IO.Path]::GetFullPath("$tools\deqp-vk.exe")){Copy-Item -LiteralPath $exe -Destination "$tools\deqp-vk.exe"}
 $cli='C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'
 foreach($mode in @('clock','health')){
  $p=Start-Process $cli -ArgumentList $mode,'read' -WindowStyle Hidden -PassThru -RedirectStandardOutput "$out\preflight-$mode.txt"
@@ -21,8 +26,8 @@ if((Get-FileHash 'C:\BC250\m10\wsi-final\vulkan_radeon.dll').Hash -ne '9C40083C0
 @("$out\cts-worker.ps1","$out\cases.txt","$tools\deqp-vk.exe","$env:windir\System32\vulkan-1.dll",'C:\BC250\m10\wsi-final\vulkan_radeon.dll') | ForEach-Object {Get-FileHash $_ | Select-Object Path,Hash} | ConvertTo-Json | Set-Content "$out\inputs.json"
 $who=(Get-CimInstance Win32_ComputerSystem).UserName
 if(-not $who){throw 'No interactive user'}
-$action=New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $out\cts-worker.ps1 -Out $out"
-$principal=New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive -RunLevel Limited
+$action=New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $out\cts-worker.ps1 -Out $out -Tools $tools"
+$principal=New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive -RunLevel Highest
 Register-ScheduledTask -TaskName "BC250-M12-$Run" -Action $action -Principal $principal -Settings (New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 2)) | Out-Null
 Start-ScheduledTask "BC250-M12-$Run"
 'CTS_STARTED'
