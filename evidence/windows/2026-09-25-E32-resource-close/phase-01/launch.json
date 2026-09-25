@@ -1,0 +1,8 @@
+{
+    "run":  "phase-01",
+    "monitor_task":  "BC250-M11-phase-01-Monitor",
+    "worker_task":  "BC250-M11-phase-01-Worker",
+    "max_cycles":  2,
+    "utc":  "2026-09-25T08:02:17.0110984Z",
+    "seconds":  3600
+}

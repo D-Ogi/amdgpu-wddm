@@ -168,3 +168,5 @@ Unit A: ASRock BC-250, BIOS P3.00 (12/09/2021), PCI `1002:13FE`. All entries bel
 | R1 | "`SPI_PG_ENABLE_STATIC_WGP_MASK` lives at BAR5+0x5C3C (or 0x34FC), `CC_GC_SHADER_ARRAY_CONFIG` at 0x9C1C (or 0x3264)" | REFUTED (by source and by measurement, M1 + M9) | regcalc: `0x935C` and `0x89BC`; details in `predecessor-analysis.md` | 2026-09-21 |
 
 Claims such as "registers are SOS-locked" or "NBIO is locked at EFI boot" are neither confirmed nor refuted as hardware behaviour: they were measured at wrong offsets and are simply unsupported. Under Linux nothing is locked before the driver loads (M2, M3); the same reads under Windows are experiment E02.
+
+| M477 | Atomic shared-resource closure fixes repeated B2Ww retention: old UMD retains 66 objects / 13,728 bytes per two mixed cycles; UMD8279AC7F returns all measured pool tags to their initial counts/bytes. Shared pixels, eight compute hashes, both model texts and cube pass. Two-cycle control only, no M11 acceptance. | MEASURED (unit A) | [resource closure regression](../evidence/windows/2026-09-25-E32-resource-close/RESULT.md) | 2026-09-25 |

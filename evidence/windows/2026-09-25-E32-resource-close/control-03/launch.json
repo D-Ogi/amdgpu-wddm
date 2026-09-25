@@ -1,0 +1,8 @@
+{
+    "run":  "control-03",
+    "monitor_task":  "BC250-M11-control-03-Monitor",
+    "worker_task":  "BC250-M11-control-03-Worker",
+    "max_cycles":  2,
+    "utc":  "2026-09-25T07:53:51.5737745Z",
+    "seconds":  3600
+}

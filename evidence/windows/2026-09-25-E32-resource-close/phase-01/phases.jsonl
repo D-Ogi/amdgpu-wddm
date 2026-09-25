@@ -1,0 +1,10 @@
+﻿{"phase":"compute","cycle":1,"checkpoint":1}
+{"phase":"stories15M","cycle":1,"checkpoint":2}
+{"phase":"tinyllama","cycle":1,"checkpoint":3}
+{"phase":"cube","cycle":1,"checkpoint":4}
+{"phase":"cycle-end","cycle":1,"checkpoint":5}
+{"phase":"compute","cycle":2,"checkpoint":6}
+{"phase":"stories15M","cycle":2,"checkpoint":7}
+{"phase":"tinyllama","cycle":2,"checkpoint":8}
+{"phase":"cube","cycle":2,"checkpoint":9}
+{"phase":"cycle-end","cycle":2,"checkpoint":10}

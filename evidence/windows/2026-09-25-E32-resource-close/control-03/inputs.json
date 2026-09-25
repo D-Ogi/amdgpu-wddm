@@ -1,0 +1,298 @@
+[
+    {
+        "Path":  "C:\\Windows\\System32\\DriverStore\\FileRepository\\bc250kmd.inf_amd64_f36f290b7e3e2fb7\\bc250kmd.sys",
+        "Hash":  "5FCB554AE77B04506AA80B4590EE33D7CAA4F8D5A6E720CA89666F736760EC31"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\surface-padding\\bc250d3d.dll",
+        "Hash":  "CB1480EC67DB4DC22193E65AAB158680D00063332077205CE307B4474B1986C6"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vkcube.exe",
+        "Hash":  "87A96AF3A4677C4AE0BC293625B9F18BFE80A41362992BC03CA2AA3CADE37721"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\vkcompute.exe",
+        "Hash":  "70F4F3FCCF2CC2D9668F9953021C5D4C1F50EEEABAB7D13901F97810C8FFAD00"
+    },
+    {
+        "Path":  "C:\\BC250\\m11\\worker.ps1",
+        "Hash":  "28CFA6AB34FC70C6126724346CA9B83A482C792424F229156AE1BAF56D293485"
+    },
+    {
+        "Path":  "C:\\BC250\\m11\\monitor.ps1",
+        "Hash":  "F0B8C05BB7CA5B4FD4BF9F4031FE19B40A1A9E7809122DB44FF7CFB5F90FCCCC"
+    },
+    {
+        "Path":  "C:\\BC250\\m11\\poolmon.exe",
+        "Hash":  "9DBB4C68956433FF46F795402C7195D50BCA192A4D8A1F96AC270DD63F343F67"
+    },
+    {
+        "Path":  "C:\\BC250\\m11\\compute-reference.json",
+        "Hash":  "50D2860F2D94A14960B6C29677AEB8CA123AC0B015E86E855EDE451513E8C7BB"
+    },
+    {
+        "Path":  "C:\\BC250\\m11\\stories15M-ngl99.out",
+        "Hash":  "9A75289C5EE188D7ABAC6742089288116FE15FC5CF81E439741E0E524540D4E6"
+    },
+    {
+        "Path":  "C:\\BC250\\m11\\tinyllama-ngl99.out",
+        "Hash":  "8A5491652C871B517BB0074B17AFE8DD67EBB7ED74C592ED77A6AE5FA2981518"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\fill.spv",
+        "Hash":  "F44D48C21C4F1AF26B09510F9A48D892F0B474899C95653442738F212DA362F7"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\inthash.spv",
+        "Hash":  "CA33985EA645D415931A60D489FF86EF078A928933FA3AC35DCB02B8D28A11F4"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\mlp1.spv",
+        "Hash":  "1BF9EB2B8BFE4F3D2A19C6B44A6F9F257ED4E47C1ACD7183630C41EC5660D606"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\mlp2.spv",
+        "Hash":  "6AD3B0478B7E3564F0383256BCB5B82877A723B7930C32B8C09D85A9D3217FA4"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\reduce1.spv",
+        "Hash":  "28AF87F8275F192C536CA84F4EF6BE822B46BECE77DB19F0BA9E898BEC2F26C7"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\reduce2.spv",
+        "Hash":  "477398679C7E18A7C6B995A34DFD2B69AE4EC78187877CEF792C96F9D4F4579E"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\saxpy.spv",
+        "Hash":  "CB1301EE2B7BBD8F68C6E74F44BB4A36F937165B1E0546E82F1A7BA92D04AA63"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\sgemm.spv",
+        "Hash":  "B3A60831A6CC76CEC16D2B9C91E72D3647A43367533ABD0F588F83D23A2E7BDA"
+    },
+    {
+        "Path":  "C:\\BC250\\m8\\spv\\sgemm_tiled.spv",
+        "Hash":  "6AC4882C745E08DFF2FA7103A4EFC49F994EBB03417751B684C4A15E9D1ECBA8"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-base.dll",
+        "Hash":  "D4226E5DB90F82ED1A9B861EE4AB3FB99174FDD4F67BF6DF63D38B183FEFA773"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-alderlake.dll",
+        "Hash":  "DDAF8BACA28D8FCA6E86570303E302B885AB89695B9C15AFF1292B4F6DB00A02"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-cannonlake.dll",
+        "Hash":  "671F6AE39EBB648224EB66955B6FF10CD937FD84B56BC312F00452D056BBCEDB"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-cascadelake.dll",
+        "Hash":  "1C74709CBD10A1D98627C39C91C994A7EB328697A50C4DFBA08AC6D43F7AADA7"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-cooperlake.dll",
+        "Hash":  "800FFB821A6846A5ABCAB495575640289A86A025C7B862202C0FFB11DECE2273"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-haswell.dll",
+        "Hash":  "F7E7962320FF73C5389070B65AEE8B83C836FB4C69D2ABD3EEB781EE10E5CB1B"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-icelake.dll",
+        "Hash":  "C644A1D6B81D3C4F91C9B6570CA6B18B03B04BC234E8F0E4DF4FE760444CE4A3"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-ivybridge.dll",
+        "Hash":  "EEA02536E121764AF5FB3CF44C6D972808595F8CA17F7A13306B39BAE28996EE"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-piledriver.dll",
+        "Hash":  "264D4D5BC23593C1283DE9B63EA8288D6183694B9388A8A78CD63871B56360BF"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-sandybridge.dll",
+        "Hash":  "D3B8F419F3EC772F6C91C0D1AB9A792FE753FABB505F672B90A2A0918C9EEF2B"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-sapphirerapids.dll",
+        "Hash":  "4BC12C27370B36D954057AAE7670436026A187B09059ABD68D5695422E29F40E"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-skylakex.dll",
+        "Hash":  "1F19EB5CDC69A5E461ED342E1EC7A75C1B0967A63982DBA538E97D4524BD91CE"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-sse42.dll",
+        "Hash":  "0770D7909169B642002B89929A95FB911FD1ACC5CDB84258B42AC7B2C0E8CDE0"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-x64.dll",
+        "Hash":  "FAFBEE16667D3B6D6397F00B0694DD2AE5068DF94387F1A935BCFDE4A0853AC4"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-cpu-zen4.dll",
+        "Hash":  "B2D71FF0315C50D5DF202F3469522533AEB64EBD532E366F51F2870B17D5E20D"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-rpc.dll",
+        "Hash":  "A4388965A2307E50D8BDE9FB782B2023DF329820C09B38D82B472EC90352D0C5"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml-vulkan.dll",
+        "Hash":  "EBCD56D43FF2164616AF70619924EC11B1890872486842493D377300D3869FB4"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\ggml.dll",
+        "Hash":  "1641BF378AE3028F19CAE9C4EA203978DE926B8991B866EC3943AC66F55AF575"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\libomp140.x86_64.dll",
+        "Hash":  "9AB1CB787E52B2A36133899C01C1DB1F876067D1471CD224EAD85F40A8152B99"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-batched-bench-impl.dll",
+        "Hash":  "38DFBA878BD1758BAE15E20A88C04543982463FAC90B0B21E1BA5B96FA436608"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-batched-bench.exe",
+        "Hash":  "C7823C8E8503CBD224E63C1C45D11F654A09479D40CE1ACA165420B5AD162ECF"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-bench-impl.dll",
+        "Hash":  "D0DF267E22BCE4EF166B99F9053970E3B3DDD6C05348B0254BF9FBF2A3B8A9A3"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-bench.exe",
+        "Hash":  "333741E180F23CF016A618CA633402448E44BDFBB0BB078870671B2C40CBCAB8"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-cli-impl.dll",
+        "Hash":  "AA8C0EA94C546F5E3B61319E085C387D1703C9362CABC8FDBAF5468919BCFF4B"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-cli.exe",
+        "Hash":  "1C367CA5A5908E038A079BAA7B8B60A300690E66F8232DF0D3FB39A905658097"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-common.dll",
+        "Hash":  "7AE30C267AC32528A5132FCEAB72A6B111AA00F64ADC7E42E2D7E5C149B7AE85"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-completion-impl.dll",
+        "Hash":  "E8916BBDBFAF9F4878D4156EBC561A9FAF8DDF07A660CA95C21EB62C949C3FD1"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-completion.exe",
+        "Hash":  "181C8E6F1E18E90A8228D98BCBB0A611A8F74B8721E47B74F97B87AF7614F856"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-fit-params-impl.dll",
+        "Hash":  "15081DE90FCCD257587872548C9A2F7FAB38199F3CADFAC2ACE554815952EAF4"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-fit-params.exe",
+        "Hash":  "5496A5CF583FF4CCFF755D44303191F433DED80BCF25C1EDAE1BA49DD9ADE345"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-gemma3-cli.exe",
+        "Hash":  "95125E3B8EDD79DD8EEFAFF80F86A46321981D6C53D640B02F7081C74DA08744"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-gguf-split.exe",
+        "Hash":  "512D6EEC876CB17D20452FEF154B965F6F4418E2939B278AB062804851FA24AD"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-imatrix.exe",
+        "Hash":  "A022801981340346F97CC1F99E26D400022AEDEBA24491065EB29EFD664E8550"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-llava-cli.exe",
+        "Hash":  "95125E3B8EDD79DD8EEFAFF80F86A46321981D6C53D640B02F7081C74DA08744"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-minicpmv-cli.exe",
+        "Hash":  "95125E3B8EDD79DD8EEFAFF80F86A46321981D6C53D640B02F7081C74DA08744"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-mtmd-cli.exe",
+        "Hash":  "5B862A7A7F8778EB13D9C13C5F4C33C258D242CECBA1EF9DABF3E40871F68814"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-mtmd-debug.exe",
+        "Hash":  "2754EDD28CC3ADBBA78F0789A5DB48AF02C6661D1D96F0AA1FCA56361D1628E5"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-perplexity-impl.dll",
+        "Hash":  "7FADEB88B154DBD5DFF435F590CC3E82700218EF3C05B1ED6BEF5880045647EC"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-perplexity.exe",
+        "Hash":  "A98C128F43235A6E392491B3437F109B20A63BC9E306C41BA58238AB0951256A"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-quantize-impl.dll",
+        "Hash":  "EA37D140C1BB16272D455E976EFD873147AB62F886125EA07F712091782158D5"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-quantize.exe",
+        "Hash":  "5253DB2A6459C4C5E6C338AE5A036E1CE8B5D3042ACD6B5B90AC9C5B2973220C"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-qwen2vl-cli.exe",
+        "Hash":  "95125E3B8EDD79DD8EEFAFF80F86A46321981D6C53D640B02F7081C74DA08744"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-results.exe",
+        "Hash":  "CCB0EC7A0C5BE3A697E8B19407E45AF426504116CDC4E46F3D67FF3783B8F058"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-server-impl.dll",
+        "Hash":  "1A058354ECF79ACA84C1BFFAAF098E085C8D012D1F511DCBD5925AE9592890A0"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-server.exe",
+        "Hash":  "17E3A327940BE5670C04B41D98090CFD8E0972DFAB4E59ACBC8B91163A26458F"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-template-analysis.exe",
+        "Hash":  "3435AC5090FFF99E5A4A14D612D3A0F08ED5881CEA27B7CDBC86EED053342922"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-tokenize.exe",
+        "Hash":  "2CA11F92A8F9386545FEE692AF0FABAB496EA250227B296991CADB24167A0E2E"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama-tts.exe",
+        "Hash":  "98351353E9CF624122C40E05052FC561967A0BB84D8B8E64F811FD0DC379514A"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama.dll",
+        "Hash":  "EC24BFE4A72E005A0977CC6CE0ED61C404B0130FD7402CF3A5F4DDD61FD94D48"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\llama.exe",
+        "Hash":  "4F73A5D28FD796A517BCCA924CCD9419D728C981AC8DC2B747B97EF2577EE030"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\mtmd.dll",
+        "Hash":  "D55A6F8C61BC77911F2D2AF7161262642BEE433CC2DED50FA98E7136A613C33D"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\llama\\rpc-server.exe",
+        "Hash":  "B00A8FA7B828D913CBA3E2671241D28126EBF9A1B5ADA4218D3E0DD55F8E2BF5"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\models\\stories15M-q4_0.gguf",
+        "Hash":  "66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739"
+    },
+    {
+        "Path":  "C:\\BC250\\m9\\models\\tinyllama-1.1b-chat-v1.0.Q4_0.gguf",
+        "Hash":  "DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556"
+    }
+]

@@ -1,0 +1,19 @@
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -517,8 +517,14 @@
+          device->KTCallbacks.pfnUnlock2Cb(device->hDevice, &unlock);
+       }
+       D3DDDICB_DEALLOCATE2 free = {};
+-      // Close by allocation; VidMm releases the associated GPU VA atomically.
+-      free.NumAllocations = 1; free.HandleList = &pResource->allocation;
++      // Shared resources must be closed atomically by their runtime resource
++      // handle (D3DDDICB_DEALLOCATE2 / pfnDeallocateCb). Closing only the
++      // allocation leaves the resource and its device bindings alive.
++      if (pResource->hRTResource) {
++         free.hResource = pResource->hRTResource;
++      } else {
++         free.NumAllocations = 1; free.HandleList = &pResource->allocation;
++      }
+       HRESULT hr = device->KTCallbacks.pfnDeallocate2Cb(device->hDevice, &free);
+       DebugPrintf("BC250 Deallocate %08lx\n", hr);
+    }
