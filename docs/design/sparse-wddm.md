@@ -1,8 +1,13 @@
 # M12.1 - Sparse resource support on WDDM
 
 Status: implementation in progress,2026-09-25. Part of M12 Vulkan capabilities
-and conformance, not a limitation imposed by the WDDM2 standard. See M481/M482
-in docs/facts.md for current reservation and mapping-order controls.
+and conformance, not a limitation imposed by the WDDM2 standard.
+M485/M487 establish bit46 scalar aliases, real-zero backing and release CTS
+controls: 21 buffer Pass and 20 image Pass, with one small-image prerequisite
+NotSupported. Full format coverage, execution-time privileged PTE relocation
+and same-Mesa Linux parity remain open. Sparse stays experimental.
+M488 adds a host-tested virtual PTE copy builder; it is not yet wired or deployed.
+See [the integration plan](../../experiments/E33-m12-applications/VIRTUAL-PTE-COPIES.md).
 
 ## What is already present and what is missing
 
@@ -25,15 +30,15 @@ UpdatePageTable path without CopyPageTableEntries and without rendering overlap.
 Select and implement the applicable mode explicitly. This requirement concerns
 tiled-resource mapping and does not by itself invalidate ordinary transfer captures.
 
-The concrete migration failure is M414's compiler assertion in
+The original migration failure was M414's compiler assertion in
 ac_nir_fixup_smem_loads_null_prt.c. Current AMD compiler information marks this
 ASIC as affected by scalar-memory reads from NULL PRT pages. Mesa's workaround
 uses two related virtual address ranges. Sparse buffers have a normal HIGH
 view and a LOW view; missing LOW regions map a real zero-filled buffer. Scalar
 loads clear a reserved address bit and use the LOW view. Normal allocations
 must respect that address-bit policy; mappings of resident pages must keep
-both views consistent. The WDDM2 port does not supply that policy or
-address_prt_wa_control_bit. Assigning an arbitrary nonzero bit would only hide
+both views consistent. At M414, the WDDM2 port did not supply that policy or
+address_prt_wa_control_bit. M485 implements the two-view policy with bit46. Assigning an arbitrary nonzero bit would only hide
 the assertion, not establish correct mappings.
 
 Accordingly radv_sparse_enabled returns false when the workaround is required
@@ -44,9 +49,10 @@ all have identical requirements. Evaluate them separately during implementation.
 KMD149 now encodes native Zero/PRT and advertises ZeroInPteSupported.
 M484 verifies initial/unmapped zero reads and discarded writes through CP DMA,
 with exact bound-data controls. Four-level terminal encoding is host-tested;
-higher-level hardware walks, shaders and images remain unverified. The separate
+higher-level hardware walks remain unverified. M485/M487 add scalar/shader
+and RGBA8 image controls. The separate
 COPY_DATA access path still triggers TDR in the observed hole test. Native
-Zero support does not complete the scalar alias or queued mapping requirements.
+Zero support alone does not complete scalar alias or queued mapping requirements.
 
 Local primary references: ref/ddi-display/d3dukmdt.md, DXGK_PTE,
 D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE and
@@ -80,14 +86,14 @@ This work is not performed merely by upgrading Mesa, adding SDMA INDIRECT,
 or enabling a capability flag. It does not require implementing O2 adaptive
 CPU/GPU execution. Sparse hardware acceptance remains open.
 
-## Implemented groundwork
-The current Mesa05e6c962 candidate fixes virtual reservation ownership (M481)
+## Earlier groundwork (M481/M482)
+The Mesa05e6c962 candidate at that stage fixes virtual reservation ownership (M481)
 and batches mapping requests behind application waits and previous rendering
 (M482). A GPU wait on the OS mapping-completion fence precedes later work and
 signals. Host models exercise the actual request-building functions; ordinary
 compute/present controls check regressions. Neither is sparse GPU acceptance.
-The native page semantics, scalar alias mapping and privileged runtime PTE
-resolution described above remain required before enabling capabilities.
+M484-M487 subsequently add native page semantics and scalar alias controls.
+Privileged runtime PTE resolution remains required before general enablement.
 
 ## Native mapping control (M483)
 Native bound alias/rebind reads pass, but the initial-hole CP read causes

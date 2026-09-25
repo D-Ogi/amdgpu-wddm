@@ -15,7 +15,8 @@ param(
     [string]$Out = 'P:\BC-250\scratch\build\paging',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
-    [switch]$Verbose250
+    [switch]$Verbose250,
+    [switch]$VirtualPtes
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,6 +56,11 @@ $packetSources = @('bc250_sdma_paging.c', 'bc250_sdma_copy.c', 'bc250_sdma.c', '
 # never takes.
 $plainSources = @('bc250_nbio.c', 'shim.c') | ForEach-Object { Join-Path $shim $_ }
 $testSources = @((Join-Path $shim 'test\paging_packets.c'))
+
+if ($VirtualPtes) {
+    $packetSources += Join-Path $shim 'bc250_sdma_virtual_ptes.c'
+    $testSources = @(Join-Path $shim 'test\virtual_pte_copy.c')
+}
 
 $incUser = @("/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
