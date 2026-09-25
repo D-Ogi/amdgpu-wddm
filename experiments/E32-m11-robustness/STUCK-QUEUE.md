@@ -29,3 +29,31 @@ from the preceding no-TDR soak, whose 24-hour interval must remain intact.
 
 Source provenance: original test shader; E14 harness and pipeline layout from
 this repository. Compiler and SPIR-V hashes recorded locally in scratch/m11/stuck.
+
+
+## Prepared tools
+stuck-worker.ps1 supports Positive and Stuck stages. Both use the same pinned
+E14 executable and ICD, select fill_g1, and run once. The stuck shader is kept
+in a separate directory; never overwrite the canonical M8 SPIR-V. Positive must
+return the CPU/Linux hash before Stuck can start. The worker has a30second
+process deadline; killing that process does not establish GPU recovery.
+
+stuck_observe.py requires a collected soak that passes audit.py, a new local
+observation directory, working plug readback, no active M11 task and an existing
+prepared BC250-M11-stuck-01-Stuck task under the normal interactive token.
+It checks STOP and operating-point/temperature before launch. It writes one
+arming marker, attempts Start-ScheduledTask only once, and records independent
+host observations for30seconds. A missing launch acknowledgment is ambiguous
+and is never retried. No power transition is automated by this script.
+
+Lab setup remains deliberately deferred until the soak ends: create a new
+C:/BC250/m11/stuck-01 directory, copy the worker and the compiled shader into
+its shader subdirectory, register separate normal-token Positive and Stuck
+tasks, and run only Positive first. Preserve its output and hashes. Invoke
+stuck_observe.py only after this control passes and the complete soak evidence
+is local. Inspect its records and the lab immediately at the deadline; use the
+standing authorized recovery procedure if necessary. Do not leave an unresolved
+GPU hang unattended.
+
+Host syntax/help checks are complete. No stuck worker or shader has been uploaded
+or executed. Runtime proof of the observer and the actual outcome remain open.

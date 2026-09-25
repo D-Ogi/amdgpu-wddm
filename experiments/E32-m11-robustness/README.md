@@ -45,3 +45,24 @@ Apply mesa-resource-close.patch after E26 and M474. The two-cycle regression
 returns every measured project tag to its baseline while pixels, compute hashes,
 model text and presentation pass. See ../../evidence/windows/2026-09-25-E32-resource-close/RESULT.md.
 This does not replace either remaining M11 acceptance requirement.
+
+
+## Final collection and acceptance audit
+After both tasks are terminal, run collect.py with the existing run identifier
+and a new workspace destination. It refuses a live run. final-readback.ps1
+independently reads Windows event logs with positive read controls, compares dump
+metadata and boot identity, rehashes every input and checks the loaded desktop
+UMD. It does not restart the OS, driver or tests.
+
+Run audit.py on the collected directory. It reads every compute result and model
+output against the canonical Linux references, verifies loader witnesses and raw
+output hashes, checks the complete cycle/pool/temperature ledger, and requires
+24 monotonic hours plus the independent final readback. A first-checkpoint rise
+is accepted only if subsequent checkpoints do not grow and every final tag
+returns exactly to its initial count and bytes. Any unexplained change requires
+investigation; never relax a failed check merely to obtain PASS.
+
+The audit deliberately covers only the soak. M11 additionally requires the
+separate one-shot stuck queue and a manual requirement-by-requirement review.
+Measured old/fixed controls and a self-consistent corrupted-output mutation are
+covered by test_audit.py. The short passing control must fail the 24-hour gate.
