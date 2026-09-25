@@ -1,0 +1,82 @@
+[
+  {
+    "name": "capture/Burning-ship-cpu.bin",
+    "sha256": "cd485ad03fc3d5fb1c75e80b890ad7254c398b2bc6cb81af0704d357a2c83fb2"
+  },
+  {
+    "name": "capture/Burning-ship-gpu.bin",
+    "sha256": "cd485ad03fc3d5fb1c75e80b890ad7254c398b2bc6cb81af0704d357a2c83fb2"
+  },
+  {
+    "name": "capture/compute.err",
+    "sha256": "afbefc9020274da2e4873f3dda2efd8414f9a95f892f5c67d62839a6810572d5"
+  },
+  {
+    "name": "capture/compute.out",
+    "sha256": "221dd2ddb5e7ab8d4d869fdbf2001962014ca62443c3dcdbcb26781729e7fb06"
+  },
+  {
+    "name": "capture/identity.json",
+    "sha256": "a640bc0a3152ef81ae8c73c48e92145f978da80b2a2040e2425fafa8329df75c"
+  },
+  {
+    "name": "capture/Julia-cpu.bin",
+    "sha256": "b178683a4c1be9b971361f257b9b9b4ebbcf70491db15fa1e9b59aac9a8f39f1"
+  },
+  {
+    "name": "capture/Julia-gpu.bin",
+    "sha256": "b178683a4c1be9b971361f257b9b9b4ebbcf70491db15fa1e9b59aac9a8f39f1"
+  },
+  {
+    "name": "capture/Mandelbrot-cpu.bin",
+    "sha256": "37ab32cd0d08082cf029f28b155d4531d874f30e20e6ab3a519bf102eaaf4b4e"
+  },
+  {
+    "name": "capture/Mandelbrot-gpu.bin",
+    "sha256": "37ab32cd0d08082cf029f28b155d4531d874f30e20e6ab3a519bf102eaaf4b4e"
+  },
+  {
+    "name": "capture/process.json",
+    "sha256": "ea480df26e03d15b4d26dc4dd3933a2651513a39b56f413e1e62663be83f8e99"
+  },
+  {
+    "name": "capture/progress.txt",
+    "sha256": "3cc6a67156ca1a13778996cd13c5c1f05f07e566a373decc2482ba0ab107f8f0"
+  },
+  {
+    "name": "capture/results.json",
+    "sha256": "b6ad76bc67ecdfa663ce9221013153a89204cafbfca1ad853283793596aafbdd"
+  },
+  {
+    "name": "viewer.json",
+    "sha256": "be36508362d28691a3d22f4d09e6e1565fc3e0b6075b4cacdb911c04a6124c14"
+  },
+  {
+    "name": "worker.ps1",
+    "sha256": "dfce95a61292f04b4447fcd2833123cc17ef6f4a316defffba8a5a56bfec200e"
+  },
+  {
+    "name": "source/shader-gallery-compute.c",
+    "sha256": "b9ae4a76b4a82ee802caadca152ae477832bf473deb6aa46ef8d4a7c2732bafe"
+  },
+  {
+    "name": "source/gallery.comp",
+    "sha256": "9f5aafe6f910e1f81a0d539dd7bbf355b6d0115a96e3c9ed750e5fa21316391a"
+  },
+  {
+    "name": "source/ShaderGallery.cs",
+    "sha256": "81f86d7168fa80c9dc60def6c9e590ecd6b1340034639b3bf4b5de9cce97042f"
+  },
+  {
+    "name": "source/build-shader-gallery.cmd",
+    "sha256": "f70bb1634947e00559c61706373a928f54596bacaa6443049574176191974889"
+  },
+  {
+    "name": "source/gallery.spv",
+    "sha256": "fa0d6688a969e6ddce9ade3bf936ca7f2af86c8f977fa9f2fa549c07d70900bc"
+  },
+  {
+    "name": "source/vkcompute.c",
+    "sha256": "2a4d423bdfb3a360ea35ddc5619fcff832dc1e1ddacfd8015555374dcb9f234a"
+  }
+]

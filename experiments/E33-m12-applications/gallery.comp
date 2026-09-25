@@ -1,0 +1,18 @@
+#version 450
+layout(local_size_x=64) in;
+layout(set=0,binding=0,std430) writeonly buffer Output { uint pixels[]; };
+layout(push_constant) uniform Parameters { uint mode; };
+void main() {
+    uint i=gl_GlobalInvocationID.x;
+    int cx=-2304+int(i%512u)*3072/512, cy=-1536+int(i/512u)*3072/512;
+    int zx=0,zy=0;
+    if(mode==1u){zx=cx;zy=cy;cx=-819;cy=160;}
+    uint n;
+    for(n=0u;n<96u;++n){
+        if(zx*zx+zy*zy>4*1024*1024)break;
+        if(mode==2u){zx=abs(zx);zy=abs(zy);}
+        int nx=(zx*zx-zy*zy)/1024+cx;
+        zy=(2*zx*zy)/1024+cy;zx=nx;
+    }
+    pixels[i]=n;
+}
