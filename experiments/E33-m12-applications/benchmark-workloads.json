@@ -1,0 +1,54 @@
+{
+  "status": "frozen_before_measurements; runtime_validation_and_image_capture_pending",
+  "resolution": [
+    1080,
+    720
+  ],
+  "shader_clock_mhz": 1000,
+  "vid": 116,
+  "warmup_runs": 1,
+  "measured_repeats": 5,
+  "asteroids": {
+    "backends": [
+      "-vk",
+      "-d3d11",
+      "-d3d12"
+    ],
+    "arguments": [
+      "-window",
+      "1080",
+      "720",
+      "-threads",
+      "4",
+      "-benchmark_frames",
+      "660",
+      "-benchmark_output",
+      "frames.csv"
+    ],
+    "simulation_step_seconds": "1/60",
+    "discard_initial_frames": 60,
+    "measured_frames": 600,
+    "csv_metric": "cpu_update_submit_present_ms",
+    "metric_is_gpu_time": false,
+    "image_capture": "pending; identical simulation frame required"
+  },
+  "instancing": {
+    "api_versions": [
+      9,
+      10
+    ],
+    "arguments": [
+      "-windowed",
+      "-width:1080",
+      "-height:720",
+      "-forcevsync:0",
+      "-constantframetime:0.016666666666666667",
+      "-quitafterframe:660",
+      "-forcehal",
+      "-noerrormsgboxes",
+      "-nostats"
+    ],
+    "api_selection": "-forceapi:9 or -forceapi:10",
+    "timing_and_image_capture": "pending instrumentation; no performance acceptance"
+  }
+}

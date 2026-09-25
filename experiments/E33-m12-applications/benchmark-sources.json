@@ -1,0 +1,42 @@
+{
+  "diligent": {
+    "source": "https://github.com/DiligentGraphics/DiligentEngine.git",
+    "commit": "ee29581ef213c564ae15626e24cc38bf8a35a44a",
+    "license": "Apache-2.0",
+    "submodules": " 18bfa7b7563a0ef5b5fe074d37c2e8304100e965 DiligentCore (heads/master)\n 1a6169566c73d3da552748fc372fe2bbb856e46e DiligentCore/ThirdParty/SPIRV-Cross (heads/master)\n ad9184e76a66b1001c29db9b0a3e87f646c64de0 DiligentCore/ThirdParty/SPIRV-Headers (heads/master)\n 0539c81f69a3daeb706fd3477dca61435b475156 DiligentCore/ThirdParty/SPIRV-Tools (heads/master)\n 8864cdc896bbc2a9b6eb36b3218fc9ef57908d77 DiligentCore/ThirdParty/Vulkan-Headers (heads/master)\n 275822a6261ee689aadb1da5f09a0ec2f058685c DiligentCore/ThirdParty/glslang (heads/master)\n 85087857ad10bd407cd6ed2f52f7ea9752db621f DiligentCore/ThirdParty/googletest (heads/master)\n 3ca312a4f38baa63d8006b6905abbeeb89c8087d DiligentCore/ThirdParty/volk (heads/master)\n 66979328cf3f15cecdc61ea58c9f81e6071f8983 DiligentCore/ThirdParty/xxHash (heads/dev)\n f26cfe5b901bf180c4a3c9bbd4d5df0b96536d4b DiligentFX (heads/master)\n 7c96699bdd8392d1fbe5174a6c02e08f5109dd22 DiligentSamples (heads/master)\n c038d7e505cf94e2fecf66c4abf3eeb77fad3fe3 DiligentSamples/ThirdParty/Nuklear (c038d7e)\n b35641f4a3c62aa86a0b3c983d163bc0fe36026d DiligentSamples/ThirdParty/glfw (b35641f)\n 9b278406f118e059f17a8cd5616254c6d1eee237 DiligentTools (heads/master)\n 6c223d46dbb1db72320a93404552117b12d0e7ab DiligentTools/ThirdParty/args (heads/master)\n 2744a710ba671a91b0d80a0e075cd9fcb8b1322d DiligentTools/ThirdParty/imgui (2744a71)\n 55f93686c01528224f448c19128836e7df245f72 DiligentTools/ThirdParty/json (55f9368)\n 65bc84e803c0ccbf7aa1023e91b5808586ea1b66 DiligentTools/ThirdParty/libpng (65bc84e)\n 46fcb30365c5f35425751d275eecd8e5f8efc786 DiligentTools/ThirdParty/stb (46fcb30)\n 0d8cda5065ba1bcea871f0b5ac1410186ea9405e DiligentTools/ThirdParty/zlib (0d8cda5)\n",
+    "python_dependencies": [
+      {
+        "name": "Jinja2",
+        "version": "3.1.6"
+      },
+      {
+        "name": "libclang",
+        "version": "16.0.6"
+      },
+      {
+        "name": "MarkupSafe",
+        "version": "3.0.3"
+      }
+    ],
+    "fetchcontent": {
+      "abseil-cpp-src": "07d2ef8bd61ab88f0b81b0d8c7fb2c7e19b1d01e",
+      "directsr-headers-src": "80ee1ba9075c1437f9e3710f126418398a702f0e",
+      "dlss-headers-src": "84e8ffc94564afa0cfa17badb472b13aeb26abfc",
+      "entt-src": "b4e58bdd364ad72246c123a0c28538eab3252672",
+      "nvapi-src": "9296d671e71608d6d6b7749ed93989af4ada8858"
+    }
+  },
+  "directx_sdk": {
+    "source": "https://github.com/microsoft/DirectX-SDK-Samples.git",
+    "commit": "07e3eaa10e7dd026ec9d95fe326db2d5c4227e1b",
+    "license": "MIT"
+  },
+  "d3dx": {
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.dxsdk.d3dx/9.29.952.8/microsoft.dxsdk.d3dx.9.29.952.8.nupkg",
+    "sha256": "ead0906ae8a26c18a7525da7490127a2110f7c58f18293738283e30e97c6ea4b",
+    "version": "9.29.952.8"
+  },
+  "asteroids_patch_sha256": "61c4809d9eede5773eacfeedef15d2708cf0a21591d8a4fd7d65fd93cb4d30c0",
+  "patch_applies_to": "DiligentSamples submodule",
+  "provenance": "DiligentEngine Apache-2.0; Asteroids retains Intel notices; DirectX-SDK-Samples MIT; dependencies retain own licenses"
+}

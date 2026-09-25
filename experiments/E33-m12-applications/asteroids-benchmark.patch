@@ -1,0 +1,88 @@
+diff --git a/Samples/Asteroids/src/WinWrapper.cpp b/Samples/Asteroids/src/WinWrapper.cpp
+index 7d92c74..838dc14 100644
+--- a/Samples/Asteroids/src/WinWrapper.cpp
++++ b/Samples/Asteroids/src/WinWrapper.cpp
+@@ -21,6 +21,8 @@
+ #include <map>
+ #include <vector>
+ #include <iostream>
++#include <fstream>
++#include <iomanip>
+ 
+ #include "asteroids_d3d11.h"
+ #include "asteroids_d3d12.h"
+@@ -386,9 +388,17 @@ int main(int argc, char** argv)
+     gVulkanAvailable = CheckDll("vulkan-1.dll");
+ #endif
+ 
++    unsigned benchmarkFrames = 0;
++    const char* benchmarkOutput = nullptr;
+     gSettings.mode = Settings::RenderMode::Undefined;
+     for (int a = 1; a < argc; ++a) {
+-        if (_stricmp(argv[a], "-close_after") == 0 && a + 1 < argc) {
++        if (_stricmp(argv[a], "-benchmark_frames") == 0 && a + 1 < argc) {
++            const int frames = atoi(argv[++a]);
++            if (frames <= 0) return 2;
++            benchmarkFrames = static_cast<unsigned>(frames);
++        } else if (_stricmp(argv[a], "-benchmark_output") == 0 && a + 1 < argc) {
++            benchmarkOutput = argv[++a];
++        } else if (_stricmp(argv[a], "-close_after") == 0 && a + 1 < argc) {
+             gSettings.closeAfterSeconds = atof(argv[++a]);
+         } else if (_stricmp(argv[a], "-nod3d11") == 0) {
+             gd3d11Available = false;
+@@ -481,6 +491,16 @@ int main(int argc, char** argv)
+     QueryPerformanceFrequency((LARGE_INTEGER*)&perfCounterFreq);
+     QueryPerformanceCounter((LARGE_INTEGER*)&lastPerfCount);
+ 
++    std::ofstream benchmark;
++    unsigned benchmarkFrame = 0;
++    if (benchmarkFrames) {
++        if (!benchmarkOutput || gSettings.warp || gSettings.lockFrameRate) return 2;
++        benchmark.open(benchmarkOutput, std::ios::out | std::ios::trunc);
++        if (!benchmark) return 2;
++        benchmark << "frame,simulation_step_s,cpu_update_submit_present_ms\n";
++        benchmark << std::fixed << std::setprecision(9);
++    }
++
+     // main loop
+     double elapsedTime = 0.0;
+     double frameTime = 0.0;
+@@ -545,7 +565,8 @@ int main(int argc, char** argv)
+ 
+         // Maintaining absolute time sync is not important in this demo so we can err on the "smoother" side
+         double alpha = 0.2f;
+-        frameTime = alpha * rawFrameTime + (1.0f - alpha) * frameTime;
++        frameTime = benchmarkFrames ? 1.0 / 60.0 :
++            alpha * rawFrameTime + (1.0f - alpha) * frameTime;
+ 
+         // Update GUI
+         {
+@@ -600,7 +621,7 @@ int main(int argc, char** argv)
+             } else {
+                 sprintf_s(buffer, "%.0f fps", 1.0f / filteredFrameTime);
+             }
+-            gFPSControl->Text(buffer);
++            gFPSControl->Text(benchmarkFrames ? "BC250 benchmark" : buffer);
+         }
+ 
+         switch (gSettings.mode)
+@@ -623,6 +644,19 @@ int main(int argc, char** argv)
+             break;
+         }
+ 
++        if (benchmarkFrames) {
++            UINT64 endCount;
++            QueryPerformanceCounter((LARGE_INTEGER*)&endCount);
++            benchmark << ++benchmarkFrame << ',' << frameTime << ','
++                      << 1000.0 * double(endCount - count) / perfCounterFreq << '\n';
++            if (benchmarkFrame == benchmarkFrames) {
++                benchmark.flush();
++                if (!benchmark) return 3;
++                PostMessage(hWnd, WM_CLOSE, 0, 0);
++                continue;
++            }
++        }
++
+         if (gSettings.lockFrameRate) {
+ 
+             UINT64 afterRenderCount;
