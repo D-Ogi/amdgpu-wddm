@@ -5,8 +5,8 @@ Microsoft's local Tile resources guide requires the queued copy to use the
 current mapping at execution. A command containing build-time physical addresses
 cannot provide that guarantee.
 
-The existing physical copy path remains deployed in KMD149. The new
-bc250_sdma_build_virtual_ptes builder prepares a replacement IB: source and
+KMD151 integrates the bc250_sdma_build_virtual_ptes builder behind the
+EnableNativePteCopy gate. The builder prepares an IB: source and
 destination remain GPU virtual addresses, and an intermediate page provides
 snapshot semantics even when two different VAs alias overlapping physical bytes.
 CSA, marker, commands and staging occupy disjoint portions of the retained OS
@@ -14,8 +14,12 @@ DMA span. No allocation, CPU table walk, root choice or submission occurs here.
 
 The packet emitters are the existing AMD-derived copy and fence/poll helpers.
 PROVENANCE: Linux amdgpu, MIT, v6.18 at 7d0a66e4bb9081d75c82ec4957c50034cb0ea449.
-WDDM ownership is a separate caller responsibility. The new module is not wired
-into BuildPagingBuffer, linked into the deployed KMD or hardware-verified.
+WDDM ownership remains the caller responsibility. KMD151 binds the current
+context root at submission, retains the DMA/private buffers through completion
+and publishes whole-range multipass progress. Three owned GPU relocation and
+alias controls pass. The subsequent CTS regression passes 41 cases with one
+geometry skip, but reports native-copy ranges0: actual Windows companion
+execution of this DDI remains unverified. See M489 for the separate evidence.
 
 ## Controls
 
@@ -34,9 +38,13 @@ A one-byte-short DMA span must request another buffer without publishing work.
 
 M488: 148 relocation/alias cases, 1024 alignments, 15048 total checks including
 10064 existing packet checks, zero failures. WDK26100 kernel compilation passes.
-These are host controls, not GPU or Windows scheduler evidence.
+These M488 results are host controls. M489 adds GPU controls and DDI integration;
+it does not establish actual Windows companion execution.
 
 ## Integration and lab procedure
+
+Steps 1-4 are implemented in KMD151 with host and owned GPU controls. Step 5
+remains open: release CTS did not exercise the native-copy route. Step 6 is open.
 
 1. Route CopyPageTableEntries through the privileged context's GPU VA IB.
    Preserve whole-range MultipassOffset progress and exact OS DMA/private

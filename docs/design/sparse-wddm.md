@@ -6,7 +6,9 @@ M485/M487 establish bit46 scalar aliases, real-zero backing and release CTS
 controls: 21 buffer Pass and 20 image Pass, with one small-image prerequisite
 NotSupported. Full format coverage, execution-time privileged PTE relocation
 and same-Mesa Linux parity remain open. Sparse stays experimental.
-M488 adds a host-tested virtual PTE copy builder; it is not yet wired or deployed.
+M488 adds the virtual PTE copy builder. M489 integrates it in KMD151 and passes
+three owned GPU relocation/overlap controls. Actual OS companion execution remains
+unverified: the passing CTS regression reports native-copy ranges0.
 See [the integration plan](../../experiments/E33-m12-applications/VIRTUAL-PTE-COPIES.md).
 
 ## What is already present and what is missing
