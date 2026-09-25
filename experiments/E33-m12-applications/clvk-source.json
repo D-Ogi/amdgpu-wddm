@@ -1,0 +1,69 @@
+{
+  "status": "build_and_host_control_only_runtime_pending",
+  "sources": [
+    {
+      "name": "clvk",
+      "url": "https://github.com/kpet/clvk.git",
+      "commit": "5515919e12e9e82682bb20eb67e2f0269dd138d3",
+      "license": "Apache-2.0",
+      "directory": "clvk"
+    },
+    {
+      "name": "clspv",
+      "url": "https://github.com/google/clspv.git",
+      "commit": "eaa1c1e92fbddbe809108ba8eebc0ef8908a9af9",
+      "license": "Apache-2.0",
+      "directory": "clspv"
+    },
+    {
+      "name": "llvm",
+      "url": "https://github.com/llvm/llvm-project.git",
+      "commit": "3dc4cbeae3ebb2a6091fe86851f62615970ea17d",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "directory": "llvm"
+    },
+    {
+      "name": "SPIRV-Headers",
+      "url": "https://github.com/KhronosGroup/SPIRV-Headers.git",
+      "commit": "575b6512579ebde466ed3dfc04e413439d14d95d",
+      "license": "MIT",
+      "directory": "SPIRV-Headers-clvk"
+    },
+    {
+      "name": "SPIRV-Tools",
+      "url": "https://github.com/KhronosGroup/SPIRV-Tools.git",
+      "commit": "fb7471844504abb16b732dc4fc0837119a32ec24",
+      "license": "Apache-2.0",
+      "directory": "SPIRV-Tools"
+    },
+    {
+      "name": "OpenCL-Headers",
+      "url": "https://github.com/KhronosGroup/OpenCL-Headers.git",
+      "commit": "15b536b7fbe1098cea462a27db496b287ac89b63",
+      "license": "Apache-2.0",
+      "directory": "OpenCL-Headers"
+    },
+    {
+      "name": "SPIRV-LLVM-Translator",
+      "url": "https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git",
+      "commit": "de0bb2ad43bbf45d7da208b9ca0e1e8c3c6cba30",
+      "license": "NCSA",
+      "directory": "SPIRV-LLVM-Translator"
+    }
+  ],
+  "patched_clvk_sha256": {
+    "CMakeLists.txt": "23214ea96d33d092696ea93ce5b0e9e0a6856669772d0f9e9be1737de35676b3",
+    "src/device.cpp": "6e8fb978745ee3824622d165fc99a4fe5f0a8bf1cd6974b695cb8414eb3e02e2",
+    "src/device.hpp": "8bbbd219867bdfcdae3ddc66a336afcb22eee99ed75286d9e42b08a2bbe0d2cf",
+    "src/event.hpp": "6c990ff2a192dd26f5928dcc5c8fe3e243f122d464588290d151118099974ac4",
+    "src/host_clock.hpp": "061907841e8cc5cf019663f89fe121a9d662765441cc3d9a8f8a414f04c69a48"
+  },
+  "patch_sha256": "53ccaf0afe247656bdfc13940b63dc444c4e86a70a6bcc833c69fcc394845ec1",
+  "notes": [
+    "LLVM sparse source requires llvm, clang, libclc, libc, cmake, runtimes, third-party.",
+    "Use the full Vulkan loader import library on Windows, not a restricted compute-test import library.",
+    "SPIRV-Headers uses the translator pin, which supplies opcodes absent from the older clspv pin."
+  ],
+  "replay": "Five modified/new files match byte-for-byte after applying the patch to clean clvk5515919e.",
+  "text_hash_normalization": "CRLF to LF"
+}

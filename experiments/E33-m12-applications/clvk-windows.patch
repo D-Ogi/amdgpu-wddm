@@ -1,0 +1,182 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 72730ea..a0a6626 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -210,3 +210,9 @@ option(CLVK_UNIT_TESTING "Build unit tests that require vulkan properties to be
+ if (CLVK_BUILD_TESTS)
+ add_subdirectory(${PROJECT_SOURCE_DIR}/tests)
+ endif()
++
++# Embedded LLVM and the translator both append the same Ninja pools.
++# Keep a single declaration per identical pool/depth pair.
++get_property(clvk_job_pools GLOBAL PROPERTY JOB_POOLS)
++list(REMOVE_DUPLICATES clvk_job_pools)
++set_property(GLOBAL PROPERTY JOB_POOLS "${clvk_job_pools}")
+diff --git a/src/device.cpp b/src/device.cpp
+index b39ba54..b40bf45 100644
+--- a/src/device.cpp
++++ b/src/device.cpp
+@@ -25,6 +25,7 @@
+ #include "log.hpp"
+ #include "memory.hpp"
+ #include "utils.hpp"
++#include "host_clock.hpp"
+ 
+ constexpr VkMemoryPropertyFlags cvk_device::buffer_supported_memory_types[];
+ constexpr VkMemoryPropertyFlags cvk_device::image_supported_memory_types[];
+@@ -866,12 +867,17 @@ bool cvk_device::init_time_management(VkInstance instance) {
+             return false;
+         }
+ 
++#ifdef _WIN32
++        const auto host_domain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT;
++#else
++        const auto host_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT;
++#endif
+         bool has_device = false;
+         bool has_monotonic = false;
+         for (auto td : supported_time_domains) {
+             cvk_info("  %s",
+                      vulkan_calibrateable_time_domain_string(td).c_str());
+-            if (td == VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT) {
++            if (td == host_domain) {
+                 has_monotonic = true;
+             }
+ 
+@@ -881,6 +887,7 @@ bool cvk_device::init_time_management(VkInstance instance) {
+         }
+ 
+         if (has_device && has_monotonic) {
++            m_host_time_domain = host_domain;
+             m_has_timer_support = true;
+             m_vkfns.vkGetCalibratedTimestampsEXT =
+                 GET_INSTANCE_PROC(instance, vkGetCalibratedTimestampsEXT);
+@@ -890,7 +897,7 @@ bool cvk_device::init_time_management(VkInstance instance) {
+     if (!m_has_timer_support) {
+         cvk_warn("This device does not support VK_EXT_calibrated_timestamps or "
+                  "it does not support the required "
+-                 "VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT and "
++                 "platform host clock and "
+                  "VK_TIME_DOMAIN_DEVICE_EXT time domains");
+         cvk_warn("clGetHostTimer and clGetDeviceAndHostTimer will not work");
+         cvk_warn("Command queue profiling will suffer from limitations");
+@@ -1289,7 +1296,7 @@ cl_int cvk_device::get_device_host_timer(cl_ulong* device_timestamp,
+     uint64_t max_deviation;
+     VkCalibratedTimestampInfoEXT timestamp_infos[2] = {
+         {VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_EXT, nullptr,
+-         VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT},
++         m_host_time_domain},
+         {VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_EXT, nullptr,
+          VK_TIME_DOMAIN_DEVICE_EXT}};
+ 
+@@ -1309,7 +1316,11 @@ cl_int cvk_device::get_device_host_timer(cl_ulong* device_timestamp,
+         return CL_OUT_OF_RESOURCES;
+     }
+ 
++#ifdef _WIN32
++    *host_timestamp = cvk_counter_to_ns(timestamps[0], cvk_host_counter_frequency());
++#else
+     *host_timestamp = timestamps[0];
++#endif
+     if (device_timestamp != nullptr) {
+         *device_timestamp = timestamp_to_ns(timestamps[1]);
+     }
+diff --git a/src/device.hpp b/src/device.hpp
+index 8031035..69b91ae 100644
+--- a/src/device.hpp
++++ b/src/device.hpp
+@@ -25,6 +25,7 @@
+ #include <vulkan/vulkan.h>
+ 
+ #include "cl_headers.hpp"
++#include "host_clock.hpp"
+ #include "config.hpp"
+ #include "device_properties.hpp"
+ #include "icd.hpp"
+@@ -888,6 +889,7 @@ private:
+         m_pipeline_caches;
+     std::mutex m_pipeline_cache_mutex;
+ 
++    VkTimeDomainEXT m_host_time_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT;
+     bool m_has_timer_support{};
+     bool m_has_fp16_support{};
+     bool m_has_int8_support{};
+@@ -974,7 +976,11 @@ struct cvk_platform : public _cl_platform_id,
+                 return 0;
+             }
+         }
++#ifdef _WIN32
++        return 1 + 999999999ULL / cvk_host_counter_frequency();
++#else
+         return 1;
++#endif
+     }
+ 
+ private:
+diff --git a/src/event.hpp b/src/event.hpp
+index 8abc3ea..01d6115 100644
+--- a/src/event.hpp
++++ b/src/event.hpp
+@@ -20,6 +20,7 @@
+ #include "objects.hpp"
+ #include "tracing.hpp"
+ #include "utils.hpp"
++#include "host_clock.hpp"
+ 
+ #include <mutex>
+ #include <unordered_map>
+@@ -122,10 +123,14 @@ struct cvk_event_command : public cvk_event {
+     }
+ 
+     static uint64_t sample_clock() {
++#ifdef _WIN32
++        return cvk_host_clock_ns();
++#else
+         auto time_point = std::chrono::steady_clock::now();
+         auto time_since_epoch = time_point.time_since_epoch();
+         using ns = std::chrono::nanoseconds;
+         return std::chrono::duration_cast<ns>(time_since_epoch).count();
++#endif
+     }
+ 
+     void set_profiling_info_from_monotonic_clock(cl_profiling_info pinfo) {
+diff --git a/src/host_clock.hpp b/src/host_clock.hpp
+new file mode 100644
+index 0000000..2e5805a
+--- /dev/null
++++ b/src/host_clock.hpp
+@@ -0,0 +1,34 @@
++// Windows host timestamps shared by calibrated Vulkan and OpenCL events.
++#pragma once
++#include <cstdint>
++#include <limits>
++#ifdef _WIN32
++#include <windows.h>
++#endif
++
++inline uint64_t cvk_counter_to_ns(uint64_t ticks, uint64_t frequency) {
++    constexpr uint64_t billion = 1000000000;
++    const uint64_t seconds = ticks / frequency;
++    const uint64_t remainder = ticks % frequency;
++    // Split whole seconds to avoid overflow and preserve precision at long uptime.
++    const uint64_t fraction = remainder <= UINT64_MAX / billion
++        ? remainder * billion / frequency
++        : static_cast<uint64_t>(static_cast<long double>(remainder) * billion / frequency);
++    return seconds * billion + fraction;
++}
++#ifdef _WIN32
++inline uint64_t cvk_host_counter_frequency() {
++    static const uint64_t frequency = [] {
++        LARGE_INTEGER value;
++        QueryPerformanceFrequency(&value);
++        return static_cast<uint64_t>(value.QuadPart);
++    }();
++    return frequency;
++}
++inline uint64_t cvk_host_clock_ns() {
++    LARGE_INTEGER counter;
++    QueryPerformanceCounter(&counter);
++    return cvk_counter_to_ns(static_cast<uint64_t>(counter.QuadPart),
++                             cvk_host_counter_frequency());
++}
++#endif

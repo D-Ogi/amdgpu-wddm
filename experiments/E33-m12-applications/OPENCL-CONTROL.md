@@ -66,3 +66,24 @@ CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES=1 is explicitly set. Record this opti
 and run the upstream device_timer cases separately to verify the calibrated host
 clock. Do not label a host-only fallback as measured GPU execution time.
 Runtime results for both variants are pending.
+
+## Reproduce the clvk build
+
+`clvk-source.json` pins every compiler dependency and the five patched clvk files.
+Create source directories using its `directory` fields, check out their exact
+commits, and apply `clvk-windows.patch` to the clean clvk source. The patch adds
+Windows QPC support and removes duplicate identical Ninja job-pool declarations.
+The QPC change shares nanosecond conversion with event timestamps and reports
+the host clock's resolution. Linux retains its monotonic-clock path.
+
+Run `python build_clvk.py --sources <source-root> --verify-only` first. For the
+build, add `--build <build-dir>`. Windows requires an x64 MSVC environment,
+`--vulkan-include <Vulkan-Headers/include>` and `--vulkan-library <vulkan-1.lib>`.
+Generate a full x64 import library from the official Vulkan-Loader `loader/vulkan-1.def`
+if the SDK library is unavailable; the earlier compute-only import library lacks
+entry points used by clvk. CMake and Ninja must be on PATH. Keep TEMP/TMP in the
+workspace on the development PC. The default is six compiler jobs and one linker.
+
+The script verifies source revisions, patch identity and patched file hashes;
+it does not fetch sources, register a driver, or run GPU tests. The Windows build
+has completed. A fresh Linux build and paired runtime acceptance remain pending.
