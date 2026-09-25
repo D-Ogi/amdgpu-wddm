@@ -1,0 +1,8 @@
+﻿{
+    "version_override":  false,
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "manifest_sha256":  "F9B70BE74911D38199B7E7262595D5F26EFBE634794B8660137D3A7376327031",
+    "command":  "--resize-control",
+    "gallium":  "zink",
+    "package":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package007"
+}
