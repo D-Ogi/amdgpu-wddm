@@ -1,0 +1,13 @@
+﻿{
+    "exit_code":  -1073741819,
+    "elapsed_ms":  4126,
+    "gpu_queries_override":  "1",
+    "profile":  true,
+    "radv_experimental":  "sparse",
+    "modules":  [
+                    "C:\\BC250\\m12\\mesa05-queue\\vulkan_radeon.dll",
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\opencl-stage001\\opencl-package003\\clvk.dll",
+                    "C:\\BC250\\m12\\opencl-stage001\\opencl-package003\\OpenCL.dll"
+                ]
+}

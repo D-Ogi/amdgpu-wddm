@@ -65,8 +65,15 @@ try{
  $env:TEMP='C:\BC250\tmp';$env:TMP=$env:TEMP
  $env:BC250_TRACE_SUBMITS='0';$env:RADV_EXPERIMENTAL='sparse'
  $env:PATH=($env:PATH.Split(';') | Where-Object {$_ -notlike 'C:\BC250\*'}) -join ';'
- if($Profile){$env:CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES='1'}
- else{Remove-Item Env:CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES -ErrorAction SilentlyContinue}
+ # Select device profiling only when clvk supports calibrated timers.
+ # Forcing queries otherwise reaches an unset timer function.
+ Remove-Item Env:CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES -ErrorAction SilentlyContinue
+ # Host-clock fallback assigns batch intervals to every event. This ordering
+ # control uses one command per batch; it is not a throughput measurement.
+ foreach($n in @('CLVK_MAX_CMD_BATCH_SIZE','CLVK_MAX_FIRST_CMD_BATCH_SIZE')){
+  if($Profile){Set-Item "Env:$n" '1'}else{Remove-Item "Env:$n" -ErrorAction SilentlyContinue}
+ }
+ $env:CLVK_DYNAMIC_BATCHES='0'
  $psi=[Diagnostics.ProcessStartInfo]::new()
  $psi.FileName=Join-Path $Package 'opencl_content_control.exe'
  $psi.Arguments='"'+$DeviceName+'"';if($Profile){$psi.Arguments+=' --profile'};$psi.WorkingDirectory=$Package
@@ -88,7 +95,7 @@ try{
  if(-not $child.HasExited){Stop-Process -Id $child.Id -Force;throw 'OpenCL control timeout'}
  if(-not $copyOut.Wait(2000) -or -not $copyErr.Wait(2000)){throw 'Output drain timeout'}
  $stdout.Dispose();$stdout=$null;$stderr.Dispose();$stderr=$null
- Save 'process' @{radv_experimental=$env:RADV_EXPERIMENTAL;profile=[bool]$Profile;gpu_queries_override=$env:CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES;exit_code=$child.ExitCode;elapsed_ms=$timer.ElapsedMilliseconds;modules=@($modules.Keys)}
+ Save 'process' @{radv_experimental=$env:RADV_EXPERIMENTAL;profile=[bool]$Profile;max_cmd_batch_size=$env:CLVK_MAX_CMD_BATCH_SIZE;max_first_cmd_batch_size=$env:CLVK_MAX_FIRST_CMD_BATCH_SIZE;dynamic_batches=$env:CLVK_DYNAMIC_BATCHES;profiling_policy='automatic timers, single-command ordering control';gpu_queries_override=$env:CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES;exit_code=$child.ExitCode;elapsed_ms=$timer.ElapsedMilliseconds;modules=@($modules.Keys)}
  if($child.ExitCode -ne 0){throw 'OpenCL control failed'}
  foreach($name in $required.Keys){if(-not $modules.ContainsKey($name)){throw "Missing module witness: $name"}}
  if([IO.File]::ReadAllText("$Out\control.out") -notmatch 'PASS: 4096 map words, 64 group sums, 0 mismatches'){throw 'Missing content result'}

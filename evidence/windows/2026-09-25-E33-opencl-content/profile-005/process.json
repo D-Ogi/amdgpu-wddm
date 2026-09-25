@@ -1,0 +1,17 @@
+﻿{
+    "elapsed_ms":  522,
+    "dynamic_batches":  "0",
+    "max_first_cmd_batch_size":  "1",
+    "profile":  true,
+    "max_cmd_batch_size":  "1",
+    "gpu_queries_override":  null,
+    "profiling_policy":  "automatic timers, single-command ordering control",
+    "radv_experimental":  "sparse",
+    "exit_code":  0,
+    "modules":  [
+                    "C:\\BC250\\m12\\mesa05-queue\\vulkan_radeon.dll",
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\opencl-stage001\\opencl-package003\\clvk.dll",
+                    "C:\\BC250\\m12\\opencl-stage001\\opencl-package003\\OpenCL.dll"
+                ]
+}

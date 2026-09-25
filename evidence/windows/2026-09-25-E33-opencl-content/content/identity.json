@@ -1,0 +1,10 @@
+﻿{
+    "utc":  "2026-09-25T20:02:21.6118789Z",
+    "boot":  "2026-09-25T16:50:35.5000000+02:00",
+    "required_modules":  {
+                             "C:\\BC250\\m12\\mesa05-queue\\vulkan_radeon.dll":  "4D027149571DC000DA1E5006E6E393FCA6178DB32F1D9CB25D684E60849A5805",
+                             "C:\\Windows\\System32\\vulkan-1.dll":  "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73",
+                             "C:\\BC250\\m12\\opencl-stage001\\opencl-package003\\clvk.dll":  "F9BA049AD463262938C32C1110AFFF3C1EFBA012A2391027FCEE01249B3B32EE",
+                             "C:\\BC250\\m12\\opencl-stage001\\opencl-package003\\OpenCL.dll":  "B60FA0E2D2E7476327F9F3489B456CA7CF7ACF2E865C71A0219F40BA50DEB9B9"
+                         }
+}

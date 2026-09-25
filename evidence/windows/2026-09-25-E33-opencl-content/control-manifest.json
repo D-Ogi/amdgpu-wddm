@@ -1,0 +1,82 @@
+{
+  "utc": "2026-09-25T17:49:21.531973+00:00",
+  "status": "packaged_not_run",
+  "files": [
+    {
+      "name": "OpenCL.dll",
+      "sha256": "b60fa0e2d2e7476327f9f3489b456ca7cf7acf2e865c71a0219f40ba50deb9b9"
+    },
+    {
+      "name": "clvk.dll",
+      "sha256": "f9ba049ad463262938c32c1110afff3c1efba012a2391027fcee01249b3b32ee"
+    },
+    {
+      "name": "opencl_content_control.exe",
+      "sha256": "d5889ffe93f9172787d299e93e2e21f90ed62a0ce3aec63df2c846a839fdadd5"
+    },
+    {
+      "name": "llvm-spirv.exe",
+      "sha256": "6664452377ecafa91438c23db06f34d817edec9c435ef556ff5d4400fd55a3c9"
+    }
+  ],
+  "vulkan_sha256": "4D027149571DC000DA1E5006E6E393FCA6178DB32F1D9CB25D684E60849A5805",
+  "sources": [
+    {
+      "name": "clvk",
+      "url": "https://github.com/kpet/clvk.git",
+      "commit": "5515919e12e9e82682bb20eb67e2f0269dd138d3",
+      "license": "Apache-2.0",
+      "local_reference": "clvk"
+    },
+    {
+      "name": "clspv",
+      "url": "https://github.com/google/clspv.git",
+      "commit": "eaa1c1e92fbddbe809108ba8eebc0ef8908a9af9",
+      "license": "Apache-2.0",
+      "local_reference": "clspv"
+    },
+    {
+      "name": "llvm",
+      "url": "https://github.com/llvm/llvm-project.git",
+      "commit": "3dc4cbeae3ebb2a6091fe86851f62615970ea17d",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "local_reference": null
+    },
+    {
+      "name": "SPIRV-Headers",
+      "url": "https://github.com/KhronosGroup/SPIRV-Headers.git",
+      "commit": "b824a462d4256d720bebb40e78b9eb8f78bbb305",
+      "license": "MIT",
+      "local_reference": null
+    },
+    {
+      "name": "SPIRV-Tools",
+      "url": "https://github.com/KhronosGroup/SPIRV-Tools.git",
+      "commit": "fb7471844504abb16b732dc4fc0837119a32ec24",
+      "license": "Apache-2.0",
+      "local_reference": null
+    },
+    {
+      "name": "OpenCL-Headers",
+      "url": "https://github.com/KhronosGroup/OpenCL-Headers.git",
+      "commit": "15b536b7fbe1098cea462a27db496b287ac89b63",
+      "license": "Apache-2.0",
+      "local_reference": "OpenCL-Headers"
+    },
+    {
+      "name": "SPIRV-LLVM-Translator",
+      "url": "https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git",
+      "commit": "de0bb2ad43bbf45d7da208b9ca0e1e8c3c6cba30",
+      "license": "NCSA",
+      "local_reference": null
+    }
+  ],
+  "overrides": {
+    "SPIRV-Headers": "575b6512579ebde466ed3dfc04e413439d14d95d",
+    "Vulkan-Loader-import-def": "3270cf8a1349306f0ddee1b500ee2b0d552e1c82",
+    "OpenCL-ICD-Loader": "5192c84f8059e5f703e5452929b613f9487f6e4c"
+  },
+  "changes": "Windows QPC calibrated host domain, ns conversion shared with event sampling, actual host timer resolution. CPU controls pass; GPU validation pending.",
+  "control_commit": "7df26ac",
+  "runtime_status": "not_run"
+}

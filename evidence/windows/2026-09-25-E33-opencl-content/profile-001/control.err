@@ -1,0 +1,19 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0xad9bdc
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000f80
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001000
+allocation handle=0x40001080
+allocation handle=0x40001100
+allocation handle=0x40001180
+allocation handle=0x40001200
+allocation handle=0x40001280
+allocation handle=0x40001300
+allocation handle=0x40001380
+allocation handle=0x40001400
+allocation handle=0x40001480

@@ -1,0 +1,6 @@
+device=AMD BC-250 (RADV GFX1013)
+version=OpenCL 3.0 CLVK on Vulkan v1.4.363 driver 109060195
+driver=3.0 CLVK on Vulkan v1.4.363 driver 109060195
+profile[0] queued=19682989431700 submit=19682989442200 start=19682989802000 end=19682991814300 ns
+profile[1] queued=19683000979300 submit=19683000982000 start=19683001003400 end=19683001282500 ns
+PASS: 4096 map words, 64 group sums, 0 mismatches
