@@ -228,3 +228,24 @@ Paired native controls passed after obeying the MS one-reservation-per-update ru
 ### Sparse image gate (2026-09-25)
 
 After M485 buffers pass, run21 release CTS RGBA8 2D image cases on the unchanged experimental17ADD01F candidate/KMD149. Cover binding, partial residency, rebind, aliases, mipmaps and shader sparse reads with aligned/nonaligned extents. First the ordinary-bound image positive controls, then holes/aliases. Each case compares content; any failed case stops the shard. Deadlines, module witness,1000MHz/VID116,85C stop and temporary registration restoration remain as in the buffer runner. The captured gallery stays CPU-only and displays progress; these are correctness runs, not performance measurements. Full images/format coverage and Linux comparison remain separate requirements.
+
+
+## Comparing CTS results
+
+`inventory_cts_mustpass.py` inventories the pinned release lists without adding exclusions.
+`normalize_cts_qpa.py SOURCE OUTPUT INPUT...` loads that release's upstream parser and
+converts individual or batch QPA files to the worker's case/status JSONL format. Inputs may
+be QPA paths or directories. Preserve the original QPA evidence.
+
+`compare_cts.py CASES WINDOWS_JSONL LINUX_JSONL OUTPUT_DIRECTORY` requires a flat, exact
+case list and creates a new output directory. It rejects duplicate results and unknown
+statuses, reports missing/extra cases, status differences (including NotSupported), and
+identical nonpassing results. Disk-backed joins support the full release list without
+holding millions of names in RAM. Exit0 means complete matching Pass/NotSupported statuses
+only. It does not prove device/source identity, justify capability skips or certify Vulkan.
+Verify the same physical board, Mesa/CTS revisions and test configuration separately;
+review every difference against original evidence. Never label same-system parser controls
+as Windows/Linux parity.
+
+Run host regression tests with BC250_TEST_TMP set to a workspace scratch directory:
+`python test_compare_cts.py`. No GPU or display access is involved.
