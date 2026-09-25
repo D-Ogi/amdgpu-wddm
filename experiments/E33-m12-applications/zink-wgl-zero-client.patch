@@ -1,0 +1,80 @@
+diff --git a/src/gallium/frontends/wgl/stw_framebuffer.c b/src/gallium/frontends/wgl/stw_framebuffer.c
+index 79f4705f344..2f787f364ea 100644
+--- a/src/gallium/frontends/wgl/stw_framebuffer.c
++++ b/src/gallium/frontends/wgl/stw_framebuffer.c
+@@ -159,6 +159,8 @@ stw_framebuffer_get_size(struct stw_framebuffer *fb)
+    width  = client_rect.right  - client_rect.left;
+    height = client_rect.bottom - client_rect.top;
+ 
++   if (fb->minimized != (width == 0 || height == 0))
++      fb->must_resize = true;
+    fb->minimized = width == 0 || height == 0;
+ 
+    if (width <= 0 || height <= 0) {
+diff --git a/src/gallium/frontends/wgl/stw_st.c b/src/gallium/frontends/wgl/stw_st.c
+index e95c5fae7d1..ba131a819c9 100644
+--- a/src/gallium/frontends/wgl/stw_st.c
++++ b/src/gallium/frontends/wgl/stw_st.c
+@@ -55,6 +55,7 @@ struct stw_st_framebuffer {
+    struct pipe_resource *back_texture;
+    bool needs_fake_front;
+    unsigned texture_width, texture_height;
++   bool zink_offscreen;
+    unsigned texture_mask;
+ };
+ 
+@@ -156,6 +157,10 @@ stw_st_framebuffer_validate_locked(struct st_context *st,
+    struct stw_st_framebuffer *stwfb = stw_st_framebuffer(drawable);
+    struct pipe_resource templ;
+    unsigned i;
++   bool zink_offscreen = false;
++#ifdef GALLIUM_ZINK
++   zink_offscreen = stw_dev->zink && stwfb->fb->minimized;
++#endif
+ 
+    memset(&templ, 0, sizeof(templ));
+    templ.target = PIPE_TEXTURE_2D;
+@@ -185,7 +190,8 @@ stw_st_framebuffer_validate_locked(struct st_context *st,
+       mask |= ST_ATTACHMENT_FRONT_LEFT_MASK;
+ 
+    /* remove outdated textures */
+-   if (stwfb->texture_width != width || stwfb->texture_height != height) {
++   if (stwfb->texture_width != width || stwfb->texture_height != height ||
++       stwfb->zink_offscreen != zink_offscreen) {
+       for (i = 0; i < ST_ATTACHMENT_COUNT; i++) {
+          pipe_resource_reference(&stwfb->msaa_textures[i], NULL);
+          pipe_resource_reference(&stwfb->textures[i], NULL);
+@@ -225,7 +231,7 @@ stw_st_framebuffer_validate_locked(struct st_context *st,
+              * then got swapped and now we have to make a new back buffer.
+              * For Zink, we just alias the front buffer in that case.
+              */
+-            if (i == ST_ATTACHMENT_BACK_LEFT && stwfb->textures[ST_ATTACHMENT_FRONT_LEFT])
++            if (!zink_offscreen && i == ST_ATTACHMENT_BACK_LEFT && stwfb->textures[ST_ATTACHMENT_FRONT_LEFT])
+                bind &= ~PIPE_BIND_DISPLAY_TARGET;
+          }
+ #endif
+@@ -258,11 +264,15 @@ stw_st_framebuffer_validate_locked(struct st_context *st,
+                stw_dev->screen->resource_create(stw_dev->screen, &templ);
+          }
+ 
++         /* Zero-area Win32 windows cannot have a Vulkan swapchain.
++          * Keep their GL attachments offscreen until the client area returns. */
++         if (zink_offscreen)
++            bind &= ~PIPE_BIND_DISPLAY_TARGET;
+          templ.bind = bind;
+          templ.nr_samples = templ.nr_storage_samples = 1;
+ 
+ #ifdef GALLIUM_ZINK
+-         if (stw_dev->zink &&
++         if (stw_dev->zink && !zink_offscreen &&
+              i < ST_ATTACHMENT_DEPTH_STENCIL &&
+              stw_dev->screen->resource_create_drawable) {
+ 
+@@ -324,6 +334,7 @@ stw_st_framebuffer_validate_locked(struct st_context *st,
+                     stwfb->textures[ST_ATTACHMENT_FRONT_LEFT]);
+    }
+ 
++   stwfb->zink_offscreen = zink_offscreen;
+    stwfb->texture_width = width;
+    stwfb->texture_height = height;
+    stwfb->texture_mask = mask;

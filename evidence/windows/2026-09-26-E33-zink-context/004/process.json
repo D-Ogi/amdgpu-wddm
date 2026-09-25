@@ -1,0 +1,9 @@
+﻿{
+    "exit_code":  -1073740791,
+    "modules":  [
+                    "C:\\Windows\\SYSTEM32\\ntdll.dll",
+                    "C:\\BC250\\m12\\zink-stage001\\zink-control-package004\\wflinfo.exe",
+                    "C:\\Windows\\System32\\KERNEL32.DLL",
+                    "C:\\Windows\\System32\\KERNELBASE.dll"
+                ]
+}

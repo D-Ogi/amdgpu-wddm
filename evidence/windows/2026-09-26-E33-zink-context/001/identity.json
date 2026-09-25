@@ -1,0 +1,8 @@
+﻿{
+    "version_override":  false,
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "manifest_sha256":  "8BCD985579BBADF50C39A2974665913024F08E9175AD22222A014F1509B1E2F2",
+    "command":  "--platform wgl --api gl --version 4.6 --profile core --verbose",
+    "gallium":  "zink",
+    "package":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package001"
+}

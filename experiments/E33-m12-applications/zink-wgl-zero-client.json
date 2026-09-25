@@ -1,0 +1,13 @@
+{
+  "mesa_base": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "patch_sha256": "b2b2fb1b669a9691f2c977982f74dec9b5a07a3c29f31e2e38c24a670e945f63",
+  "replay_matches_sources_lf": true,
+  "files": [
+    "src/gallium/frontends/wgl/stw_st.c",
+    "src/gallium/frontends/wgl/stw_framebuffer.c"
+  ],
+  "libgallium_sha256": "dfc11a1421c4dddb95ab348b1ccfacac2fd8459e1e80e0f81d4d4c89db239d24",
+  "base_package": "zink-control-package001",
+  "system_registration": false,
+  "scope": "WGL zero-client-area attachments; context probe only; resize/presentation and piglit pending"
+}

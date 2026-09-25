@@ -1,0 +1,30 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8cf3
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000f40
+allocation handle=0x40000fc0
+allocation handle=0x40001040
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001100
+allocation handle=0x40001180
+allocation handle=0x40001200
+allocation handle=0x40001280
+allocation handle=0x40001300
+allocation handle=0x40001380
+allocation handle=0x40001400
+allocation handle=0x40001480
+allocation handle=0x40001500
+allocation handle=0x40001580
+allocation handle=0x40001600
+allocation handle=0x40001680
+allocation handle=0x40001700
+allocation handle=0x40001780
+allocation handle=0x40001800
+allocation handle=0x40001880
+allocation handle=0x40001900
+allocation handle=0x40001980
+Assertion failed: pCreateInfo->extent.width > 0, file ../mesa-current-src/src/vulkan/runtime/vk_image.c, line 59
