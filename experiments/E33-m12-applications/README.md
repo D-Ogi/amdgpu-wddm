@@ -276,3 +276,12 @@ Host checks: `powershell -NoProfile -File test-cts-qpa-monitor.ps1 -RecordedRun 
 The monitor passed chunk/truncation/failure controls and replay of saved Windows logs.
 The batch worker passed syntax checking only; live validation remains pending and the
 existing sparse per-case worker remains unchanged.
+
+
+Application benchmark launch now requires an explicit CacheDirectory. Use CacheMode Fresh
+for the one warm-up run, then Reuse for the five measured repeats using that same directory.
+Use a separate fresh directory for capture and for each OS/API/artifact set. The worker
+sets Mesa, DXVK and vkd3d-proton cache paths, records file sizes before/after execution,
+and rejects reuse with a different API, package manifest or ICD hash. These are controlled
+warm-cache measurements; no Windows/Linux cache files are shared. The host control verified
+fresh creation/reuse and rejection of API/ICD mismatches; GPU cache behavior remains untested.

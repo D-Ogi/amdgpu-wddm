@@ -4,6 +4,8 @@ param(
  [Parameter(Mandatory=$true)][ValidateSet('Instancing9','Instancing10','AsteroidsVk','Asteroids11','Asteroids12')][string]$Kind,
  [Parameter(Mandatory=$true)][string]$VulkanIcd,
  [Parameter(Mandatory=$true)][string]$Cli,
+ [Parameter(Mandatory=$true)][string]$CacheDirectory,
+ [ValidateSet('Fresh','Reuse')][string]$CacheMode='Fresh',
  [ValidateRange(30,1800)][int]$TimeoutSeconds=300,
  [switch]$Capture
 )
@@ -71,6 +73,25 @@ try {
  $env:PATH=($env:PATH.Split(';') | Where-Object {$_ -notlike 'C:\BC250\*'}) -join ';'
  $env:BC250_TRACE_SUBMITS='0';$env:DXVK_LOG_PATH=$Out;$env:DXVK_LOG_LEVEL='info'
  $env:VKD3D_LOG_FILE=Join-Path $Out 'vkd3d.log'
+
+ $cacheIdentity=[ordered]@{kind=$Kind;package_manifest_sha256=(Get-FileHash (Join-Path $Package 'manifest.json')).Hash;icd_sha256=$icdHash}
+ $cacheIdentityText=$cacheIdentity | ConvertTo-Json -Compress
+ $cacheIdentityPath=Join-Path $CacheDirectory 'identity.json'
+ if($CacheMode -eq 'Fresh'){
+  if(Test-Path -LiteralPath $CacheDirectory){throw 'Fresh cache directory already exists'}
+  New-Item -ItemType Directory -Path $CacheDirectory | Out-Null
+  [IO.File]::WriteAllText($cacheIdentityPath,$cacheIdentityText)
+ }else{
+  if(-not(Test-Path -LiteralPath $cacheIdentityPath)){throw 'Missing cache identity for reuse'}
+  if([IO.File]::ReadAllText($cacheIdentityPath) -ne $cacheIdentityText){throw 'Cache identity mismatch'}
+ }
+ foreach($cache in @('mesa','dxvk','vkd3d')){New-Item -ItemType Directory -Force -Path (Join-Path $CacheDirectory $cache) | Out-Null}
+ Remove-Item Env:MESA_SHADER_CACHE_DISABLE -ErrorAction SilentlyContinue
+ $env:MESA_SHADER_CACHE_DIR=Join-Path $CacheDirectory 'mesa'
+ $env:DXVK_SHADER_CACHE='1';$env:DXVK_SHADER_CACHE_PATH=Join-Path $CacheDirectory 'dxvk'
+ $env:VKD3D_SHADER_CACHE_PATH=Join-Path $CacheDirectory 'vkd3d'
+ Save 'cache-before' @{mode=$CacheMode;directory=$CacheDirectory;identity=$cacheIdentity;files=@(Get-ChildItem -LiteralPath $CacheDirectory -Recurse -File | Select-Object FullName,Length)}
+
  if($Kind -like 'Instancing*'){
   $commandArguments="-forceapi:$api -windowed -width:1080 -height:720 -forcehal -forcevsync:0 -constantframetime:0.016666666666666667 -quitafterframe:660 -noerrormsgboxes -nostats"
   $env:BC250_BENCHMARK_CSV=$csv;$image=Join-Path $Out 'frame660.png'
@@ -79,7 +100,7 @@ try {
   $commandArguments="$mode -window 1080 720 -threads 4 -benchmark_frames 660 -benchmark_output `"$csv`""
   if($Capture){$commandArguments+=" -benchmark_capture `"$image`""}
  }
- Save 'identity' @{kind=$Kind;capture=[bool]$Capture;required_modules=$required;command=$commandArguments;radv_experimental=$env:RADV_EXPERIMENTAL;package=$Package;boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString('o')}
+ Save 'identity' @{kind=$Kind;capture=[bool]$Capture;cache_directory=$CacheDirectory;cache_mode=$CacheMode;required_modules=$required;command=$commandArguments;radv_experimental=$env:RADV_EXPERIMENTAL;package=$Package;boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString('o')}
  Health 'before'
  $psi=[Diagnostics.ProcessStartInfo]::new()
  $psi.FileName=Join-Path $Package $exe;$psi.Arguments=$commandArguments;$psi.WorkingDirectory=$Package
@@ -99,6 +120,7 @@ try {
  if(-not $child.HasExited){throw 'Benchmark timeout'}
  if(-not $copyOut.Wait(2000) -or -not $copyErr.Wait(2000)){throw 'Output drain timeout'}
  $stdout.Dispose();$stdout=$null;$stderr.Dispose();$stderr=$null
+ Save 'cache-after' @{directory=$CacheDirectory;files=@(Get-ChildItem -LiteralPath $CacheDirectory -Recurse -File | Select-Object FullName,Length)}
  Save 'process' @{exit_code=$child.ExitCode;elapsed_ms=$timer.ElapsedMilliseconds;modules=@($modules.Keys)}
  if($child.ExitCode -ne 0){throw 'Application failed'}
  foreach($name in $required.Keys){if(-not $modules.ContainsKey($name)){throw "Missing module witness: $name"}}

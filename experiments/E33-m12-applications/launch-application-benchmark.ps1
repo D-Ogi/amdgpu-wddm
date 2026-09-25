@@ -4,6 +4,8 @@ param(
  [Parameter(Mandatory=$true)][ValidateSet('Instancing9','Instancing10','AsteroidsVk','Asteroids11','Asteroids12')][string]$Kind,
  [Parameter(Mandatory=$true)][string]$VulkanIcd,
  [Parameter(Mandatory=$true)][string]$Cli,
+ [Parameter(Mandatory=$true)][string]$CacheDirectory,
+ [ValidateSet('Fresh','Reuse')][string]$CacheMode='Fresh',
  [ValidateRange(30,1800)][int]$TimeoutSeconds=300,
  [switch]$Capture
 )
@@ -20,12 +22,13 @@ foreach($path in @($Package,$VulkanIcd,$Cli,$worker)){
  if(-not(Test-Path -LiteralPath $path)){throw "Missing input: $path"}
  if($path.Contains('"')){throw 'Quote in path'}
 }
-$arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$worker`" -Out `"$out`" -Package `"$Package`" -Kind $Kind -VulkanIcd `"$VulkanIcd`" -Cli `"$Cli`" -TimeoutSeconds $TimeoutSeconds"
+if(-not [IO.Path]::IsPathRooted($CacheDirectory) -or $CacheDirectory.Contains('"')){throw 'Invalid cache directory'}
+$arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$worker`" -Out `"$out`" -Package `"$Package`" -Kind $Kind -VulkanIcd `"$VulkanIcd`" -Cli `"$Cli`" -TimeoutSeconds $TimeoutSeconds -CacheDirectory `"$CacheDirectory`" -CacheMode $CacheMode"
 if($Capture){$arguments+=' -Capture'}
 $action=New-ScheduledTaskAction -Execute "$env:windir\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument $arguments
 $principal=New-ScheduledTaskPrincipal -UserId $who -LogonType Interactive -RunLevel Highest
 $settings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::FromSeconds($TimeoutSeconds+180)) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings | Out-Null
-@{task=$taskName;kind=$Kind;capture=[bool]$Capture;worker_sha256=(Get-FileHash $worker).Hash;utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json | Set-Content "$out-launch.json" -Encoding UTF8
+@{task=$taskName;kind=$Kind;cache_directory=$CacheDirectory;cache_mode=$CacheMode;capture=[bool]$Capture;worker_sha256=(Get-FileHash $worker).Hash;utc=[DateTime]::UtcNow.ToString('o')} | ConvertTo-Json | Set-Content "$out-launch.json" -Encoding UTF8
 Start-ScheduledTask -TaskName $taskName
 @{task=$taskName;output=$out} | ConvertTo-Json

@@ -82,5 +82,15 @@
       "statistics_ui": "hidden in benchmark mode",
       "runtime_validation": "pending"
     }
+  },
+  "shader_cache": {
+    "policy": "One fresh directory per OS/API/artifact set for warm-up; reuse for all five measured repeats. Capture uses a separate directory.",
+    "environment": [
+      "MESA_SHADER_CACHE_DIR",
+      "DXVK_SHADER_CACHE_PATH",
+      "VKD3D_SHADER_CACHE_PATH"
+    ],
+    "identity": "Kind, package manifest SHA256 and ICD SHA256 must match on reuse. Never share caches across Windows/Linux.",
+    "runtime_validation": "pending"
   }
 }
