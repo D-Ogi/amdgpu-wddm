@@ -1,0 +1,9 @@
+﻿{
+    "modules":  [
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\asteroids-runner009\\asteroids-package008\\GraphicsEngineVk_64r.dll",
+                    "C:\\BC250\\m12\\mesa05-system-dxgi\\vulkan_radeon.dll"
+                ],
+    "elapsed_ms":  29563,
+    "exit_code":  0
+}

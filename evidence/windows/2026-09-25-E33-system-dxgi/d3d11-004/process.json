@@ -1,0 +1,11 @@
+﻿{
+    "modules":  [
+                    "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11\\GraphicsEngineD3D11_64r.dll",
+                    "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11\\dxgi.dll",
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\mesa05-system-dxgi\\vulkan_radeon.dll",
+                    "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11\\d3d11.dll"
+                ],
+    "elapsed_ms":  14022,
+    "exit_code":  -1073740791
+}

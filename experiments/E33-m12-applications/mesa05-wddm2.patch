@@ -8176,6 +8176,34 @@ index 800fdc28608..48099ea5491 100644
  
  if cc.get_argument_syntax() != 'msvc'
    dzn_flags_to_try = [
+diff --git a/src/util/u_win32_library.h b/src/util/u_win32_library.h
+new file mode 100644
+index 00000000000..476989530ee
+--- /dev/null
++++ b/src/util/u_win32_library.h
+@@ -0,0 +1,22 @@
++/* SPDX-License-Identifier: MIT */
++#ifndef U_WIN32_LIBRARY_H
++#define U_WIN32_LIBRARY_H
++#include <windows.h>
++#include <string.h>
++
++/* An ICD must not enter app-local DXVK/vkd3d while initializing native WDDM.
++ * Use a full system path: a bare name can return an already-loaded proxy DLL.
++ */
++static inline HMODULE
++util_load_system_library(const wchar_t *name)
++{
++   wchar_t path[MAX_PATH];
++   UINT len = GetSystemDirectoryW(path, MAX_PATH);
++   size_t name_len = lstrlenW(name);
++   if (!len || len >= MAX_PATH || name_len + len + 2 > MAX_PATH)
++      return NULL;
++   path[len++] = L'\\';
++   memcpy(path + len, name, (name_len + 1) * sizeof(wchar_t));
++   return LoadLibraryW(path);
++}
++#endif
 diff --git a/src/vulkan/runtime/meson.build b/src/vulkan/runtime/meson.build
 index 404f51662ad..c046eed9634 100644
 --- a/src/vulkan/runtime/meson.build
@@ -8508,10 +8536,10 @@ index 00000000000..d3ae00ba360
 +#endif /* VK_DXCORE_H */
 diff --git a/src/vulkan/runtime/vk_dxgi.cpp b/src/vulkan/runtime/vk_dxgi.cpp
 new file mode 100644
-index 00000000000..ce000133410
+index 00000000000..058e6a7514a
 --- /dev/null
 +++ b/src/vulkan/runtime/vk_dxgi.cpp
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,168 @@
 +/*
 + * Copyright © Microsoft Corporation
 + *
@@ -8539,12 +8567,13 @@ index 00000000000..ce000133410
 +
 +#include <windows.h>
 +#include <dxgi1_4.h>
++#include "util/u_win32_library.h"
 +#include <directx/d3d12.h>
 +
 +static IDXGIFactory4 *
 +vk_dxgi_get_factory(bool debug)
 +{
-+   HMODULE dxgi_mod = LoadLibraryA("DXGI.DLL");
++   HMODULE dxgi_mod = util_load_system_library(L"DXGI.DLL");
 +   if (!dxgi_mod) {
 +      return NULL;
 +   }
@@ -8654,7 +8683,7 @@ index 00000000000..ce000133410
 +   if (!adapter)
 +      return NULL;
 +
-+   HMODULE d3d12_mod = LoadLibraryA("D3D12.DLL");
++   HMODULE d3d12_mod = util_load_system_library(L"D3D12.DLL");
 +   if (!d3d12_mod)
 +      goto fail;
 +
@@ -10331,10 +10360,15 @@ index 66857ee1fa5..0f0e3e9b05a 100644
     chain->extent = pCreateInfo->imageExtent;
     chain->vk_format = pCreateInfo->imageFormat;
 diff --git a/src/vulkan/wsi/wsi_common_win32.cpp b/src/vulkan/wsi/wsi_common_win32.cpp
-index 06228571cbf..6679e56dc31 100644
+index 06228571cbf..7e09e7ccf62 100644
 --- a/src/vulkan/wsi/wsi_common_win32.cpp
 +++ b/src/vulkan/wsi/wsi_common_win32.cpp
-@@ -41,6 +41,7 @@
+@@ -37,10 +37,12 @@
+ #include "wsi_common_private.h"
+ 
+ #include <dxgi1_4.h>
++#include "util/u_win32_library.h"
+ #include <directx/d3d12.h>
  #include <dxguids/dxguids.h>
  
  #include <dcomp.h>
@@ -10342,7 +10376,7 @@ index 06228571cbf..6679e56dc31 100644
  
  #if defined(__GNUC__)
  #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"      // warning: cast to pointer from integer of different size
-@@ -73,9 +74,11 @@ struct wsi_win32_image {
+@@ -73,9 +75,11 @@ struct wsi_win32_image {
     struct wsi_win32_swapchain *chain;
     struct {
        ID3D12Resource *swapchain_res;
@@ -10355,7 +10389,7 @@ index 06228571cbf..6679e56dc31 100644
        HBITMAP bmp;
        int bmp_row_pitch;
        void *ppvBits;
-@@ -108,7 +111,9 @@ struct wsi_win32_swapchain {
+@@ -108,7 +112,9 @@ struct wsi_win32_swapchain {
     VkResult                     status;
     VkExtent2D                 extent;
     HWND wnd;
@@ -10366,7 +10400,7 @@ index 06228571cbf..6679e56dc31 100644
     struct wsi_win32_image     images[0];
  };
  
-@@ -201,20 +206,21 @@ wsi_win32_surface_get_capabilities(VkIcdSurfaceBase *surf,
+@@ -201,20 +207,21 @@ wsi_win32_surface_get_capabilities(VkIcdSurfaceBase *surf,
        (uint32_t)win_rect.right - (uint32_t)win_rect.left,
        (uint32_t)win_rect.bottom - (uint32_t)win_rect.top
     };
@@ -10396,7 +10430,7 @@ index 06228571cbf..6679e56dc31 100644
  
     VkImageUsageFlags image_usage = wsi_caps_get_image_usage();
  
-@@ -458,6 +464,178 @@ wsi_win32_surface_get_present_rectangles(VkIcdSurfaceBase *surface,
+@@ -458,6 +465,178 @@ wsi_win32_surface_get_present_rectangles(VkIcdSurfaceBase *surface,
     return vk_outarray_status(&out);
  }
  
@@ -10575,7 +10609,7 @@ index 06228571cbf..6679e56dc31 100644
  static VkResult
  wsi_create_dxgi_image_mem(const struct wsi_swapchain *drv_chain,
                            const struct wsi_image_info *info,
-@@ -466,6 +644,14 @@ wsi_create_dxgi_image_mem(const struct wsi_swapchain *drv_chain,
+@@ -466,6 +645,14 @@ wsi_create_dxgi_image_mem(const struct wsi_swapchain *drv_chain,
     struct wsi_win32_swapchain *chain = (struct wsi_win32_swapchain *)drv_chain;
     const struct wsi_device *wsi = chain->base.wsi;
  
@@ -10590,7 +10624,7 @@ index 06228571cbf..6679e56dc31 100644
     assert(chain->base.blit.type != WSI_SWAPCHAIN_BUFFER_BLIT);
  
     struct wsi_win32_image *win32_image =
-@@ -477,49 +663,59 @@ wsi_create_dxgi_image_mem(const struct wsi_swapchain *drv_chain,
+@@ -477,49 +664,59 @@ wsi_create_dxgi_image_mem(const struct wsi_swapchain *drv_chain,
                                       IID_PPV_ARGS(&win32_image->dxgi.swapchain_res))))
        return VK_ERROR_OUT_OF_DEVICE_MEMORY;
  
@@ -10674,7 +10708,7 @@ index 06228571cbf..6679e56dc31 100644
     return wsi->AllocateMemory(chain->base.device, &memory_info,
                                &chain->base.alloc, &image->memory);
  }
-@@ -542,17 +738,21 @@ wsi_dxgi_configure_image(const struct wsi_swapchain *chain,
+@@ -542,17 +739,21 @@ wsi_dxgi_configure_image(const struct wsi_swapchain *chain,
                           const struct wsi_dxgi_image_params *params,
                           struct wsi_image_info *info)
  {
@@ -10696,7 +10730,7 @@ index 06228571cbf..6679e56dc31 100644
     }
  
     return VK_SUCCESS;
-@@ -577,28 +777,22 @@ wsi_win32_image_init(VkDevice device_h,
+@@ -577,28 +778,22 @@ wsi_win32_image_init(VkDevice device_h,
     if (chain->dxgi)
        return VK_SUCCESS;
  
@@ -10733,7 +10767,7 @@ index 06228571cbf..6679e56dc31 100644
  
     return VK_SUCCESS;
  }
-@@ -611,8 +805,6 @@ wsi_win32_image_finish(struct wsi_win32_swapchain *chain,
+@@ -611,8 +806,6 @@ wsi_win32_image_finish(struct wsi_win32_swapchain *chain,
     if (image->dxgi.swapchain_res)
        image->dxgi.swapchain_res->Release();
  
@@ -10742,7 +10776,7 @@ index 06228571cbf..6679e56dc31 100644
     if(image->sw.bmp)
        DeleteObject(image->sw.bmp);
     wsi_destroy_image(&chain->base, &image->base);
-@@ -628,7 +820,6 @@ wsi_win32_swapchain_destroy(struct wsi_swapchain *drv_chain,
+@@ -628,7 +821,6 @@ wsi_win32_swapchain_destroy(struct wsi_swapchain *drv_chain,
     for (uint32_t i = 0; i < chain->base.image_count; i++)
        wsi_win32_image_finish(chain, allocator, &chain->images[i]);
  
@@ -10750,7 +10784,7 @@ index 06228571cbf..6679e56dc31 100644
  
     if (chain->surface->current_swapchain == chain)
        chain->surface->current_swapchain = NULL;
-@@ -636,6 +827,14 @@ wsi_win32_swapchain_destroy(struct wsi_swapchain *drv_chain,
+@@ -636,6 +828,14 @@ wsi_win32_swapchain_destroy(struct wsi_swapchain *drv_chain,
     if (chain->dxgi)
        chain->dxgi->Release();
  
@@ -10765,7 +10799,7 @@ index 06228571cbf..6679e56dc31 100644
     wsi_swapchain_finish(&chain->base);
  
     u_cnd_monotonic_destroy(&chain->acquire_cond);
-@@ -709,6 +908,10 @@ wsi_win32_acquire_idle_cpu_image_locked(struct wsi_win32_swapchain *chain,
+@@ -709,6 +909,10 @@ wsi_win32_acquire_idle_cpu_image_locked(struct wsi_win32_swapchain *chain,
                                          const VkAcquireNextImageInfoKHR *info,
                                          uint32_t *out_image_index)
  {
@@ -10776,7 +10810,7 @@ index 06228571cbf..6679e56dc31 100644
     if (wsi_win32_find_idle_image(chain, out_image_index))
        return VK_SUCCESS;
  
-@@ -721,6 +924,10 @@ wsi_win32_acquire_idle_cpu_image_locked(struct wsi_win32_swapchain *chain,
+@@ -721,6 +925,10 @@ wsi_win32_acquire_idle_cpu_image_locked(struct wsi_win32_swapchain *chain,
     do {
        int ret = u_cnd_monotonic_timedwait(
           &chain->acquire_cond, &chain->acquire_mutex, &abs_timespec);
@@ -10787,7 +10821,7 @@ index 06228571cbf..6679e56dc31 100644
        if (ret == thrd_timedout)
           return VK_TIMEOUT;
        else if (ret != thrd_success)
-@@ -750,14 +957,14 @@ wsi_win32_acquire_next_image(struct wsi_swapchain *drv_chain,
+@@ -750,14 +958,14 @@ wsi_win32_acquire_next_image(struct wsi_swapchain *drv_chain,
     struct wsi_win32_swapchain *chain =
        (struct wsi_win32_swapchain *)drv_chain;
  
@@ -10806,7 +10840,7 @@ index 06228571cbf..6679e56dc31 100644
     if (wsi_win32_find_idle_image(chain, image_index))
        return VK_SUCCESS;
  
-@@ -838,20 +1045,61 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
+@@ -838,20 +1046,61 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
     if (chain->dxgi)
        return wsi_win32_queue_present_dxgi(chain, image, damage);
  
@@ -10874,7 +10908,7 @@ index 06228571cbf..6679e56dc31 100644
  }
  
  static VkResult
-@@ -925,6 +1173,50 @@ wsi_win32_surface_create_swapchain_dxgi(
+@@ -925,6 +1174,50 @@ wsi_win32_surface_create_swapchain_dxgi(
  
        surface->current_swapchain = chain;
     }
@@ -10925,7 +10959,7 @@ index 06228571cbf..6679e56dc31 100644
     return VK_SUCCESS;
  }
  
-@@ -943,6 +1235,17 @@ wsi_win32_surface_create_swapchain(
+@@ -943,6 +1236,17 @@ wsi_win32_surface_create_swapchain(
  
     assert(create_info->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR);
  
@@ -10943,7 +10977,7 @@ index 06228571cbf..6679e56dc31 100644
     const unsigned num_images = create_info->minImageCount;
     struct wsi_win32_swapchain *chain;
     size_t size = sizeof(*chain) + num_images * sizeof(chain->images[0]);
-@@ -983,9 +1286,8 @@ wsi_win32_surface_create_swapchain(
+@@ -983,9 +1287,8 @@ wsi_win32_surface_create_swapchain(
     struct wsi_base_image_params *image_params = supports_dxgi ?
        &dxgi_image_params.base : &cpu_image_params.base;
  
@@ -10955,7 +10989,7 @@ index 06228571cbf..6679e56dc31 100644
     if (result != VK_SUCCESS) {
        u_cnd_monotonic_destroy(&chain->acquire_cond);
        mtx_destroy(&chain->acquire_mutex);
-@@ -1000,6 +1302,7 @@ wsi_win32_surface_create_swapchain(
+@@ -1000,6 +1303,7 @@ wsi_win32_surface_create_swapchain(
     chain->base.queue_present = wsi_win32_queue_present;
     chain->base.present_mode = wsi_swapchain_get_present_mode(wsi_device, create_info);
     chain->extent = create_info->imageExtent;
@@ -10963,7 +10997,7 @@ index 06228571cbf..6679e56dc31 100644
  
     chain->wsi = wsi;
     chain->status = VK_SUCCESS;
-@@ -1018,8 +1321,6 @@ wsi_win32_surface_create_swapchain(
+@@ -1018,8 +1322,6 @@ wsi_win32_surface_create_swapchain(
                                      &chain->images[image]);
        if (result != VK_SUCCESS)
           goto fail;
@@ -10972,7 +11006,25 @@ index 06228571cbf..6679e56dc31 100644
     }
  
     *swapchain_out = &chain->base;
-@@ -1112,19 +1413,21 @@ wsi_win32_init_wsi(struct wsi_device *wsi_device,
+@@ -1039,7 +1341,7 @@ fail:
+ static IDXGIFactory4 *
+ dxgi_get_factory(bool debug)
+ {
+-   HMODULE dxgi_mod = LoadLibraryA("DXGI.DLL");
++   HMODULE dxgi_mod = util_load_system_library(L"DXGI.DLL");
+    if (!dxgi_mod) {
+       return NULL;
+    }
+@@ -1068,7 +1370,7 @@ dxgi_get_factory(bool debug)
+ static IDCompositionDevice *
+ dcomp_get_device()
+ {
+-   HMODULE dcomp_mod = LoadLibraryA("DComp.DLL");
++   HMODULE dcomp_mod = util_load_system_library(L"DComp.DLL");
+    if (!dcomp_mod) {
+       return NULL;
+    }
+@@ -1112,19 +1414,21 @@ wsi_win32_init_wsi(struct wsi_device *wsi_device,
     if (!wsi_device->sw) {
        wsi->dxgi.factory = dxgi_get_factory(WSI_DEBUG & WSI_DEBUG_DXGI);
        if (!wsi->dxgi.factory) {

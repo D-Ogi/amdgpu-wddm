@@ -1,8 +1,8 @@
 {
   "mesa_commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
   "port_origin_base": "f333dd6d1c85297ac41773eaeb9b02f16acf1919",
-  "patch_sha256": "8b4267ae9b7cabc905bbddd5c1f192bca12d5953885a4aad3ea1cdafc55d1212",
+  "patch_sha256": "8a7e75601f0789dc93f7de8d8e395393067d40b93842e44aab5fd2456c3e3edd",
   "license": "Mesa and upstream WDDM2 integration: MIT",
-  "changes": "BC250 WDDM2/CPU WSI, canonical bit46 sparse scalar aliases and real-zero backing, reservation-grouped mapping updates, 4KiB logical lengths with64KiB reservations. Dedicated sparse queues now own a WDDM context and use native queued waits/signals instead of Linux host-wait threads.18release queue cases:17Pass/1queue-capability skip. Full release sparse run and same-Mesa Linux parity pending. Sparse remains experimental. Gather staging now grows after retiring its queue fence, checked against hardware IB_SIZE. Asteroids660frames completes with corrected duration-query capacity and1080x720 dimensions. Full regressions/Linux parity pending; candidate not system baseline.",
-  "candidate_sha256": "16CDEA79C038F03B1A714994F622FBFE4D0B47CBB40110B35281C080F75765D8"
+  "changes": "BC250 WDDM2/CPU WSI, canonical bit46 sparse scalar aliases and real-zero backing, reservation-grouped mapping updates, 4KiB logical lengths with64KiB reservations. Dedicated sparse queues now own a WDDM context and use native queued waits/signals instead of Linux host-wait threads.18release queue cases:17Pass/1queue-capability skip. Full release sparse run and same-Mesa Linux parity pending. Sparse remains experimental. Gather staging now grows after retiring its queue fence, checked against hardware IB_SIZE. Asteroids660frames completes with corrected duration-query capacity and1080x720 dimensions. Full regressions/Linux parity pending; candidate not system baseline. Native Windows DXGI/D3D12/DComp loading uses full system paths to avoid re-entering app-local translators. D3D11 now initializes and submits, then exposes missing Win32 present-wait callback; not accepted or promoted.",
+  "candidate_sha256": "98C53B48242584F533E43F6134B1BACD76A30A9D1BF8D4C917BF48B5D7919186"
 }

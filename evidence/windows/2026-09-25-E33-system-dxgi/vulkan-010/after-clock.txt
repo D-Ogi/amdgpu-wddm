@@ -1,0 +1,1 @@
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=68500 ready=1

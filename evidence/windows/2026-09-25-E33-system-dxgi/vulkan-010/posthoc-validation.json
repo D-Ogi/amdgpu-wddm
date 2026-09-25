@@ -1,0 +1,19 @@
+{
+  "status": "RUN_COMPLETED_ARTIFACTS_VERIFIED",
+  "original_runner_result": "RUN_COMPLETED",
+  "frames": 660,
+  "image_size": [
+    1080,
+    720
+  ],
+  "unique_colors": 45351,
+  "cpu_median_ms": 40.5055,
+  "gpu_median_ms": 1.7973,
+  "performance_acceptance": "not evaluated: capture enabled; stage tracing disabled; Linux parity pending",
+  "image_correctness": "capture structurally verified; visual and same-frame Linux comparison pending",
+  "sha256": {
+    "frames.csv": "a9ebf9c54c01f2268f74e7c546af8b0ee0c8b8505b3e7e04631aff81d0662b29",
+    "frames.csv.gpu.csv": "4c7250d0d2c596743f3432d78e8c43ab37b6ed4027f62f2508cc29fce7905e81",
+    "frame660.ppm": "ef9caa311b9e6278bc703794a1fe7b3296d4efdaa68714957271dccf87190d9b"
+  }
+}

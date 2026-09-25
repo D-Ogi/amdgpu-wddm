@@ -1,0 +1,109 @@
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+factory before
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+wsi::init();
+m_config = Config::getUserConfig();
+if (!initVulkanLoader(args))
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+if (!initVulkanInstance(args, flags))
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+if (!initAdapters())
+log enter
+log lock before
+log lock after
+log stream before
+log stream after
+log flushed
+factory before

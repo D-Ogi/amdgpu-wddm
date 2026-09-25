@@ -1,0 +1,98 @@
+diff --git a/src/dxgi/dxgi_main.cpp b/src/dxgi/dxgi_main.cpp
+index 158a3c0..8f6ae8b 100644
+--- a/src/dxgi/dxgi_main.cpp
++++ b/src/dxgi/dxgi_main.cpp
+@@ -1,3 +1,4 @@
++#include "../util/bc250_stage.h"
+ #include "dxgi_factory.h"
+ #include "dxgi_include.h"
+ 
+@@ -7,7 +8,9 @@ namespace dxvk {
+   
+   HRESULT createDxgiFactory(UINT Flags, REFIID riid, void **ppFactory) {
+     try {
++      bc250Stage("factory before\n");
+       Com<DxgiFactory> factory = new DxgiFactory(Flags);
++      bc250Stage("factory after\n");
+       HRESULT hr = factory->QueryInterface(riid, ppFactory);
+ 
+       if (FAILED(hr))
+diff --git a/src/dxvk/dxvk_instance.cpp b/src/dxvk/dxvk_instance.cpp
+index a120a21..3187664 100644
+--- a/src/dxvk/dxvk_instance.cpp
++++ b/src/dxvk/dxvk_instance.cpp
+@@ -1,3 +1,4 @@
++#include "../util/bc250_stage.h"
+ #include <version.h>
+ #include <buildenv.h>
+ 
+@@ -27,8 +28,10 @@ namespace dxvk {
+     Logger::info(str::format("DXVK: ", DXVK_VERSION));
+     Logger::info(str::format("Build: ", DXVK_TARGET, " ", DXVK_COMPILER, " ", DXVK_COMPILER_VERSION));
+ 
++    bc250Stage("wsi::init();\n");
+     wsi::init();
+ 
++    bc250Stage("m_config = Config::getUserConfig();\n");
+     m_config = Config::getUserConfig();
+     m_config.merge(Config::getAppConfig(env::getExePath()));
+     m_config.logOptions();
+@@ -36,6 +39,7 @@ namespace dxvk {
+     m_options = DxvkOptions(m_config);
+ 
+     // Load Vulkan library
++    bc250Stage("if (!initVulkanLoader(args))\n");
+     if (!initVulkanLoader(args))
+       throw DxvkError("Failed to load vulkan-1 library.");
+ 
+@@ -53,9 +57,11 @@ namespace dxvk {
+       provider->initInstanceExtensions();
+     }
+ 
++    bc250Stage("if (!initVulkanInstance(args, flags))\n");
+     if (!initVulkanInstance(args, flags))
+       throw DxvkError("Failed to initialize DXVK.");
+ 
++    bc250Stage("if (!initAdapters())\n");
+     if (!initAdapters())
+       throw DxvkError("Failed to initialize DXVK.");
+   }
+diff --git a/src/util/log/log.cpp b/src/util/log/log.cpp
+index 5158cd7..4306f96 100644
+--- a/src/util/log/log.cpp
++++ b/src/util/log/log.cpp
+@@ -1,3 +1,4 @@
++#include "../bc250_stage.h"
+ #include <utility>
+ 
+ #include "log.h"
+@@ -46,8 +47,11 @@ namespace dxvk {
+   
+   
+   void Logger::emitMsg(LogLevel level, const std::string& message) {
++    bc250Stage("log enter\n");
+     if (level >= m_minLevel) {
++      bc250Stage("log lock before\n");
+       std::lock_guard<dxvk::mutex> lock(m_mutex);
++      bc250Stage("log lock after\n");
+       
+       static std::array<const char*, 5> s_prefixes
+         = {{ "trace: ", "debug: ", "info:  ", "warn:  ", "err:   " }};
+@@ -67,7 +71,9 @@ namespace dxvk {
+           m_fileStream = std::ofstream(str::topath(path.c_str()).c_str());
+       }
+ 
++      bc250Stage("log stream before\n");
+       std::stringstream stream(message);
++      bc250Stage("log stream after\n");
+       std::string line;
+ 
+       while (std::getline(stream, line, '\n')) {
+@@ -115,6 +121,7 @@ namespace dxvk {
+         if (m_fileStream) {
+           m_fileStream << adjusted;
+           m_fileStream.flush();
++          bc250Stage("log flushed\n");
+         }
+       }
+     }
