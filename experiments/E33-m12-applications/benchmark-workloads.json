@@ -59,6 +59,17 @@
       "-nostats"
     ],
     "api_selection": "-forceapi:9 or -forceapi:10",
-    "timing_and_image_capture": "pending instrumentation; no performance acceptance"
+    "instrumentation": {
+      "environment": {
+        "BC250_BENCHMARK_CSV": "frames.csv",
+        "BC250_BENCHMARK_CAPTURE": "frame660.png (optional, correctness run only)"
+      },
+      "metric": "cpu_render_submit_ms; excludes Present and GPU completion",
+      "capture_frame": 660,
+      "discard_initial_frames": 60,
+      "measured_frames": 600,
+      "statistics_ui": "hidden in benchmark mode",
+      "runtime_validation": "pending"
+    }
   }
 }

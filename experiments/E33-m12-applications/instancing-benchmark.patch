@@ -1,0 +1,141 @@
+diff --git a/C++/DXUT/Optional/BC250Benchmark.h b/C++/DXUT/Optional/BC250Benchmark.h
+new file mode 100644
+index 0000000..6344e9f
+--- /dev/null
++++ b/C++/DXUT/Optional/BC250Benchmark.h
+@@ -0,0 +1,50 @@
++// BC250 standalone benchmark instrumentation. SPDX-License-Identifier: MIT
++#pragma once
++#include <fstream>
++#include <iomanip>
++#include <cstdio>
++
++class BC250Benchmark {
++    std::ofstream csv;
++    LARGE_INTEGER frequency{};
++    unsigned frame = 0;
++    char capture[MAX_PATH]{};
++public:
++    bool enabled = false;
++    BC250Benchmark() {
++        char path[MAX_PATH]{};
++        enabled = GetEnvironmentVariableA("BC250_BENCHMARK_CSV", path, MAX_PATH) != 0;
++        if (!enabled) return;
++        csv.open(path, std::ios::out | std::ios::trunc);
++        if (!csv) ExitProcess(4);
++        csv << "frame,cpu_render_submit_ms\n" << std::fixed << std::setprecision(9);
++        QueryPerformanceFrequency(&frequency);
++        GetEnvironmentVariableA("BC250_BENCHMARK_CAPTURE", capture, MAX_PATH);
++    }
++    LARGE_INTEGER Begin() const {
++        LARGE_INTEGER tick{};
++        if (enabled) QueryPerformanceCounter(&tick);
++        return tick;
++    }
++    bool End(LARGE_INTEGER start) {
++        if (!enabled) return false;
++        LARGE_INTEGER end;
++        QueryPerformanceCounter(&end);
++        csv << ++frame << ',' << 1000.0 * double(end.QuadPart - start.QuadPart) /
++                                   frequency.QuadPart << '\n';
++        if (frame == 660) {
++            csv.flush();
++            if (!csv) ExitProcess(4);
++            return capture[0] != 0;
++        }
++        return false;
++    }
++    const char* CapturePath() const { return capture; }
++    void CheckCapture(HRESULT hr) const {
++        if (FAILED(hr)) {
++            fprintf(stderr, "BC250 capture failed: 0x%08lx\n", (unsigned long)hr);
++            ExitProcess(5);
++        }
++    }
++};
++static BC250Benchmark g_BC250Benchmark;
+diff --git a/C++/Direct3D/Instancing/Instancing.cpp b/C++/Direct3D/Instancing/Instancing.cpp
+index 770aeb2..a85c6dd 100644
+--- a/C++/Direct3D/Instancing/Instancing.cpp
++++ b/C++/Direct3D/Instancing/Instancing.cpp
+@@ -13,6 +13,7 @@
+ #include "DXUTsettingsdlg.h"
+ #include "SDKmisc.h"
+ #include "resource.h"
++#include "../../DXUT/Optional/BC250Benchmark.h"
+ 
+ //#define DEBUG_VS   // Uncomment this line to debug vertex shaders
+ //#define DEBUG_PS   // Uncomment this line to debug pixel shaders
+@@ -1104,6 +1105,7 @@ void OnRenderStreamInstancing( IDirect3DDevice9* pd3dDevice, double fTime, float
+ //--------------------------------------------------------------------------------------
+ void CALLBACK OnFrameRender( IDirect3DDevice9* pd3dDevice, double fTime, float fElapsedTime, void* pUserContext )
+ {
++    const auto benchmarkStart = g_BC250Benchmark.Begin();
+     // If the settings dialog is being shown, then
+     // render it instead of rendering the app's scene
+     if( g_SettingsDlg.IsActive() )
+@@ -1149,9 +1151,9 @@ void CALLBACK OnFrameRender( IDirect3DDevice9* pd3dDevice, double fTime, float f
+                 OnRenderStreamInstancing( pd3dDevice, fTime, fElapsedTime );
+         }
+ 
+-        if( g_nShowUI > 0 )
++        if( g_nShowUI > 0 && !g_BC250Benchmark.enabled )
+             RenderText();
+-        if( g_nShowUI > 1 )
++        if( g_nShowUI > 1 && !g_BC250Benchmark.enabled )
+         {
+             V( g_HUD.OnRender( fElapsedTime ) );
+             V( g_SampleUI.OnRender( fElapsedTime ) );
+@@ -1159,6 +1161,14 @@ void CALLBACK OnFrameRender( IDirect3DDevice9* pd3dDevice, double fTime, float f
+         }
+ 
+         V( pd3dDevice->EndScene() );
++        if (g_BC250Benchmark.End(benchmarkStart)) {
++            IDirect3DSurface9* surface = nullptr;
++            g_BC250Benchmark.CheckCapture(pd3dDevice->GetRenderTarget(0, &surface));
++            HRESULT captureResult = D3DXSaveSurfaceToFileA(
++                g_BC250Benchmark.CapturePath(), D3DXIFF_PNG, surface, nullptr, nullptr);
++            surface->Release();
++            g_BC250Benchmark.CheckCapture(captureResult);
++        }
+     }
+ }
+ 
+diff --git a/C++/Direct3D10/Instancing10/Instancing.cpp b/C++/Direct3D10/Instancing10/Instancing.cpp
+index 1b258a6..2a1645b 100644
+--- a/C++/Direct3D10/Instancing10/Instancing.cpp
++++ b/C++/Direct3D10/Instancing10/Instancing.cpp
+@@ -12,6 +12,7 @@
+ #include "SDKmesh.h"
+ #include "DXUTRes.h"
+ #include "resource.h"
++#include "../../DXUT/Optional/BC250Benchmark.h"
+ 
+ 
+ //--------------------------------------------------------------------------------------
+@@ -845,6 +846,7 @@ void RenderGrass( ID3D10Device* pd3dDevice, D3DXMATRIX& mView, D3DXMATRIX& mProj
+ //--------------------------------------------------------------------------------------
+ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float fElapsedTime, void* pUserContext )
+ {
++    const auto benchmarkStart = g_BC250Benchmark.Begin();
+     // If the settings dialog is being shown, then render it instead of rendering the app's scene
+     if( g_D3DSettingsDlg.IsActive() )
+     {
+@@ -885,6 +887,9 @@ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float
+     pd3dDevice->ResolveSubresource( pRT, D3D10CalcSubresource( 0, 0, 1 ), g_pRenderTarget, D3D10CalcSubresource( 0, 0,
+                                                                                                                  1 ),
+                                     rtDesc.Format );
++    if (g_BC250Benchmark.End(benchmarkStart))
++        g_BC250Benchmark.CheckCapture(D3DX10SaveTextureToFileA(
++            pRT, D3DX10_IFF_PNG, g_BC250Benchmark.CapturePath()));
+     SAFE_RELEASE( pRT );
+ 
+     // Use our Old RT again
+@@ -893,6 +898,7 @@ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float
+     SAFE_RELEASE( pOrigRT );
+     SAFE_RELEASE( pOrigDS );
+ 
++    if (g_BC250Benchmark.enabled) return;
+     DXUT_BeginPerfEvent( DXUT_PERFEVENTCOLOR, L"HUD / Stats" );
+     g_HUD.OnRender( fElapsedTime );
+     g_SampleUI.OnRender( fElapsedTime );
