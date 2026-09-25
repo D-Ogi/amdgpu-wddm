@@ -90,3 +90,20 @@ application discovery remains covered separately by M479. It checks health
 between cases at least every5seconds and at completion, and retains an external
 45second per-process deadline. The release supports --deqp-watchdog=enable but
 does not support the newer main-branch interval/total timeout parameters.
+
+## Current Mesa and sparse reservation groundwork
+M481 ports the WDDM2 integration to Mesa05e6c962 and fixes virtual reservation
+geometry, adapter selection, initial paging synchronization and cleanup.
+The complete mesa05-wddm2.patch applies to the commit in mesa05-source.json.
+Build command and controls are in the
+[M481 evidence](../../evidence/windows/2026-09-25-E33-sparse-reservation/RESULT.md).
+The candidate passes8compute references and600cube frames on unit A; it is
+not yet the system default and does not enable sparse.
+
+Host control against the actual patched source:
+
+    python experiments/E33-m12-applications/test_sparse_reservation.py --source P:/bc-250/scratch/m12/mesa-current-src --out P:/bc-250/scratch/m12/reservation-control
+    cmd /c P:/bc-250/scratch/m12/reservation-control/run.cmd
+
+The generated C uses actual WDK declarations and a mock OS dispatch; it is
+not a substitute for hardware bind/unbind and residency tests.
