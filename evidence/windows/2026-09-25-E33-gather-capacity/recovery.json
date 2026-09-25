@@ -1,0 +1,99 @@
+{
+    "events":  [
+                   {
+                       "TimeCreated":  "\/Date(1790369534816)\/",
+                       "Id":  1001,
+                       "Message":  "The computer has rebooted from a bugcheck.  The bugcheck was: 0x00000116 (0xffff890f0672d010, 0xfffff803803aaca0, 0xffffffffc0000001, 0x0000000000000003). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: b72c39d0-3c66-4edf-b8ca-1c6071a42c40."
+                   },
+                   {
+                       "TimeCreated":  "\/Date(1790369487456)\/",
+                       "Id":  41,
+                       "Message":  "The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly."
+                   },
+                   {
+                       "TimeCreated":  "\/Date(1790369528841)\/",
+                       "Id":  6008,
+                       "Message":  "The previous system shutdown at 10:11:36 PM on ?9/?25/?2026 was unexpected."
+                   }
+               ],
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "after":  [
+                  "C:\\BC250\\m10\\wsi-final\\radeon_icd.json"
+              ],
+    "before":  {
+                   "names":  [
+                                 "C:\\BC250\\m12\\mesa05-gather-grow\\radeon_icd.json"
+                             ],
+                   "values":  [
+                                  "C:\\BC250\\m10\\wsi-final\\radeon_icd.json"
+                              ]
+               },
+    "old_enabled":  0,
+    "utc":  "2026-09-25T20:54:28.5244276Z",
+    "run_files":  [
+                      {
+                          "Name":  "application.err",
+                          "Length":  143360
+                      },
+                      {
+                          "Name":  "application.out",
+                          "Length":  0
+                      },
+                      {
+                          "Name":  "before-clock.txt",
+                          "Length":  75
+                      },
+                      {
+                          "Name":  "before-health.txt",
+                          "Length":  118
+                      },
+                      {
+                          "Name":  "cache-before.json",
+                          "Length":  629
+                      },
+                      {
+                          "Name":  "during-1-clock.txt",
+                          "Length":  75
+                      },
+                      {
+                          "Name":  "during-1-health.txt",
+                          "Length":  117
+                      },
+                      {
+                          "Name":  "during-2-clock.txt",
+                          "Length":  75
+                      },
+                      {
+                          "Name":  "during-2-health.txt",
+                          "Length":  117
+                      },
+                      {
+                          "Name":  "during-3-clock.txt",
+                          "Length":  75
+                      },
+                      {
+                          "Name":  "during-3-health.txt",
+                          "Length":  117
+                      },
+                      {
+                          "Name":  "during-4-clock.txt",
+                          "Length":  75
+                      },
+                      {
+                          "Name":  "during-4-health.txt",
+                          "Length":  116
+                      },
+                      {
+                          "Name":  "during-5-health.txt",
+                          "Length":  0
+                      },
+                      {
+                          "Name":  "frames.csv",
+                          "Length":  0
+                      },
+                      {
+                          "Name":  "identity.json",
+                          "Length":  1089
+                      }
+                  ]
+}

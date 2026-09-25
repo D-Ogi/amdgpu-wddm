@@ -1,0 +1,15 @@
+﻿{
+    "cache_mode":  "Fresh",
+    "kind":  "AsteroidsVk",
+    "package":  "C:\\BC250\\m12\\asteroids-forensic002\\asteroids-package005",
+    "command":  "-vk -window 1080 720 -threads 4 -benchmark_frames 660 -benchmark_output \"C:\\BC250\\m12\\asteroids-vk151-003\\frames.csv\" -benchmark_capture \"C:\\BC250\\m12\\asteroids-vk151-003\\frame660.ppm\"",
+    "capture":  true,
+    "boot":  "2026-09-25T16:50:35.5000000+02:00",
+    "cache_directory":  "C:\\BC250\\m12\\cache-asteroids-vk151-capture003",
+    "radv_experimental":  "sparse",
+    "required_modules":  {
+                             "C:\\BC250\\m12\\mesa05-queue\\vulkan_radeon.dll":  "4D027149571DC000DA1E5006E6E393FCA6178DB32F1D9CB25D684E60849A5805",
+                             "C:\\Windows\\System32\\vulkan-1.dll":  "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73",
+                             "C:\\BC250\\m12\\asteroids-forensic002\\asteroids-package005\\GraphicsEngineVk_64r.dll":  "5F619A0324F178763659562887DC08DB26C35D46C01B8785E4DD18A86814DFA5"
+                         }
+}

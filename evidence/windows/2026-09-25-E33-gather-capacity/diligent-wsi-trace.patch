@@ -1,0 +1,109 @@
+diff --git a/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp b/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp
+index 8b6e5bb..09ad763 100644
+--- a/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp
++++ b/Graphics/GraphicsEngineVulkan/src/SwapChainVkImpl.cpp
+@@ -1,3 +1,5 @@
++#include <cstdio>
++#include <cstdlib>
+ /*
+  *  Copyright 2019-2025 Diligent Graphics LLC
+  *  Copyright 2015-2019 Egor Yusov
+@@ -599,11 +601,21 @@ void SwapChainVkImpl::InitBuffersAndViews()
+     }
+ }
+ 
++static void BC250PresentStage(const char* stage)
++{
++    if (std::getenv("BC250_BENCHMARK_TRACE")) {
++        std::fprintf(stderr, "BC250_WSI %s\n", stage);
++        std::fflush(stderr);
++    }
++}
++
+ void SwapChainVkImpl::ThrottleFrameSubmission()
+ {
+     if (m_FrameIndex > m_SwapChainDesc.BufferCount)
+     {
++    BC250PresentStage("frame-fence-wait-begin");
+         m_FrameCompleteFence->Wait(m_FrameIndex - m_SwapChainDesc.BufferCount);
++    BC250PresentStage("frame-fence-wait-end");
+     }
+ }
+ 
+@@ -622,11 +634,15 @@ VkResult SwapChainVkImpl::AcquireNextImage(DeviceContextVkImpl* pDeviceCtxVk)
+     // vkAcquireNextImageKHR requires that the semaphore is not in use, so we must wait
+     // for the frame (FrameIndex - BufferCount) to complete.
+     // This also ensures that there are no more than BufferCount frames in flight at any time.
++    BC250PresentStage("throttle-begin");
+     ThrottleFrameSubmission();
++    BC250PresentStage("throttle-end");
+ 
+     RefCntAutoPtr<ManagedSemaphore>& ImageAcquiredSemaphore = m_ImageAcquiredSemaphores[m_SemaphoreIndex];
+ 
++    BC250PresentStage("acquire-begin");
+     VkResult res    = vkAcquireNextImageKHR(LogicalDevice.GetVkDevice(), m_VkSwapChain, UINT64_MAX, ImageAcquiredSemaphore->Get(), VK_NULL_HANDLE, &m_BackBufferIndex);
++    BC250PresentStage("acquire-end");
+     m_ImageAcquired = (res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR);
+ #if PLATFORM_APPLE
+     if (res == VK_SUBOPTIMAL_KHR)
+@@ -690,7 +706,9 @@ void SwapChainVkImpl::Present(Uint32 SyncInterval)
+     }
+ 
+     pImmediateCtxVk->EnqueueSignal(m_FrameCompleteFence, m_FrameIndex++);
++    BC250PresentStage("flush-begin");
+     pImmediateCtxVk->Flush();
++    BC250PresentStage("flush-end");
+ 
+     if (!m_IsMinimized)
+     {
+@@ -713,7 +731,14 @@ void SwapChainVkImpl::Present(Uint32 SyncInterval)
+                 pImmediateCtxVk->GetCommandQueueId(),
+                 [&PresentInfo](ICommandQueueVk* pCmdQueueVk) //
+                 {
+-                    pCmdQueueVk->Present(PresentInfo);
++    BC250PresentStage("queue-present-begin");
++                    const VkResult queueResult = pCmdQueueVk->Present(PresentInfo);
++                    if (std::getenv("BC250_BENCHMARK_TRACE")) {
++                        std::fprintf(stderr, "BC250_WSI present-result queue=%d image=%d\n",
++                                     int(queueResult), int(*PresentInfo.pResults));
++                        std::fflush(stderr);
++                    }
++    BC250PresentStage("queue-present-end");
+                 } //
+             );
+         }
+@@ -731,8 +756,12 @@ void SwapChainVkImpl::Present(Uint32 SyncInterval)
+ 
+     if (m_SwapChainDesc.IsPrimary)
+     {
++    BC250PresentStage("finish-frame-begin");
+         pImmediateCtxVk->FinishFrame();
++    BC250PresentStage("finish-frame-end");
++    BC250PresentStage("release-stale-begin");
+         pDeviceVk->ReleaseStaleResources();
++    BC250PresentStage("release-stale-end");
+     }
+ 
+     if (!m_IsMinimized)
+@@ -769,7 +798,9 @@ void SwapChainVkImpl::Present(Uint32 SyncInterval)
+     {
+         // Throttle frame submission to make sure that resources are released
+         // https://github.com/DiligentGraphics/DiligentSamples/issues/234
+-        ThrottleFrameSubmission();
++        BC250PresentStage("throttle-begin");
++    ThrottleFrameSubmission();
++    BC250PresentStage("throttle-end");
+     }
+ }
+ 
+@@ -781,7 +812,9 @@ void SwapChainVkImpl::ReleaseSwapChainResources(DeviceContextVkImpl* pImmediateC
+     if (pImmediateCtxVk != nullptr)
+     {
+         // Flush to submit all pending commands and semaphores to the queue.
+-        pImmediateCtxVk->Flush();
++        BC250PresentStage("flush-begin");
++    pImmediateCtxVk->Flush();
++    BC250PresentStage("flush-end");
+ 
+         bool RenderTargetsReset = false;
+         for (Uint32 i = 0; i < m_pBackBufferRTV.size() && !RenderTargetsReset; ++i)

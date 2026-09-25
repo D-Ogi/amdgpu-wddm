@@ -1,0 +1,154 @@
+{
+  "status": "built_not_run",
+  "source": {
+    "diligent": {
+      "source": "https://github.com/DiligentGraphics/DiligentEngine.git",
+      "commit": "ee29581ef213c564ae15626e24cc38bf8a35a44a",
+      "license": "Apache-2.0",
+      "submodules": " 18bfa7b7563a0ef5b5fe074d37c2e8304100e965 DiligentCore (heads/master)\n 1a6169566c73d3da552748fc372fe2bbb856e46e DiligentCore/ThirdParty/SPIRV-Cross (heads/master)\n ad9184e76a66b1001c29db9b0a3e87f646c64de0 DiligentCore/ThirdParty/SPIRV-Headers (heads/master)\n 0539c81f69a3daeb706fd3477dca61435b475156 DiligentCore/ThirdParty/SPIRV-Tools (heads/master)\n 8864cdc896bbc2a9b6eb36b3218fc9ef57908d77 DiligentCore/ThirdParty/Vulkan-Headers (heads/master)\n 275822a6261ee689aadb1da5f09a0ec2f058685c DiligentCore/ThirdParty/glslang (heads/master)\n 85087857ad10bd407cd6ed2f52f7ea9752db621f DiligentCore/ThirdParty/googletest (heads/master)\n 3ca312a4f38baa63d8006b6905abbeeb89c8087d DiligentCore/ThirdParty/volk (heads/master)\n 66979328cf3f15cecdc61ea58c9f81e6071f8983 DiligentCore/ThirdParty/xxHash (heads/dev)\n f26cfe5b901bf180c4a3c9bbd4d5df0b96536d4b DiligentFX (heads/master)\n 7c96699bdd8392d1fbe5174a6c02e08f5109dd22 DiligentSamples (heads/master)\n c038d7e505cf94e2fecf66c4abf3eeb77fad3fe3 DiligentSamples/ThirdParty/Nuklear (c038d7e)\n b35641f4a3c62aa86a0b3c983d163bc0fe36026d DiligentSamples/ThirdParty/glfw (b35641f)\n 9b278406f118e059f17a8cd5616254c6d1eee237 DiligentTools (heads/master)\n 6c223d46dbb1db72320a93404552117b12d0e7ab DiligentTools/ThirdParty/args (heads/master)\n 2744a710ba671a91b0d80a0e075cd9fcb8b1322d DiligentTools/ThirdParty/imgui (2744a71)\n 55f93686c01528224f448c19128836e7df245f72 DiligentTools/ThirdParty/json (55f9368)\n 65bc84e803c0ccbf7aa1023e91b5808586ea1b66 DiligentTools/ThirdParty/libpng (65bc84e)\n 46fcb30365c5f35425751d275eecd8e5f8efc786 DiligentTools/ThirdParty/stb (46fcb30)\n 0d8cda5065ba1bcea871f0b5ac1410186ea9405e DiligentTools/ThirdParty/zlib (0d8cda5)\n",
+      "python_dependencies": [
+        {
+          "name": "Jinja2",
+          "version": "3.1.6"
+        },
+        {
+          "name": "libclang",
+          "version": "16.0.6"
+        },
+        {
+          "name": "MarkupSafe",
+          "version": "3.0.3"
+        }
+      ],
+      "fetchcontent": {
+        "abseil-cpp-src": "07d2ef8bd61ab88f0b81b0d8c7fb2c7e19b1d01e",
+        "directsr-headers-src": "80ee1ba9075c1437f9e3710f126418398a702f0e",
+        "dlss-headers-src": "84e8ffc94564afa0cfa17badb472b13aeb26abfc",
+        "entt-src": "b4e58bdd364ad72246c123a0c28538eab3252672",
+        "nvapi-src": "9296d671e71608d6d6b7749ed93989af4ada8858"
+      }
+    },
+    "directx_sdk": {
+      "source": "https://github.com/microsoft/DirectX-SDK-Samples.git",
+      "commit": "07e3eaa10e7dd026ec9d95fe326db2d5c4227e1b",
+      "license": "MIT"
+    },
+    "d3dx": {
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.dxsdk.d3dx/9.29.952.8/microsoft.dxsdk.d3dx.9.29.952.8.nupkg",
+      "sha256": "ead0906ae8a26c18a7525da7490127a2110f7c58f18293738283e30e97c6ea4b",
+      "version": "9.29.952.8"
+    },
+    "asteroids_patch_sha256": "4b6f55c9e9a53b22b93d48d0bc32f6891b5b86111b4ea1f7939cb7d60cd92d56",
+    "patch_applies_to": "DiligentSamples submodule",
+    "provenance": "DiligentEngine Apache-2.0; Asteroids retains Intel notices; DirectX-SDK-Samples MIT; dependencies retain own licenses",
+    "instancing_patch_sha256": "ccf765806c5d169b12b75f4a88762c4a3c3ff420e9368a4536a1401cfa0374ba",
+    "instancing_patch_applies_to": "DirectX-SDK-Samples root"
+  },
+  "files": [
+    {
+      "name": "Archiver_64r.dll",
+      "sha256": "c96e986bed7d21467eb1d94a7b4d6e27f3916f31c7d0b843df491a01aa397323"
+    },
+    {
+      "name": "Asteroids.exe",
+      "sha256": "f66c919309399bbd1e7c037396469273426a57bef0f9c17bd7c547b99fe3d9ba"
+    },
+    {
+      "name": "D3Dcompiler_47.dll",
+      "sha256": "0c38df5cc6a1263def77ae1c06216e8ec2e57c34be5087efc42e84154afad5cb"
+    },
+    {
+      "name": "GraphicsEngineD3D11_64r.dll",
+      "sha256": "5fc73549f794130a0736e71c538a775892e1d28adc805825091e0a5d0229d0ce"
+    },
+    {
+      "name": "GraphicsEngineD3D12_64r.dll",
+      "sha256": "f780b9333f53f9762eaf0bebfebadad8e6d7b0ba4d7a04e4ff3c63100d69f854"
+    },
+    {
+      "name": "GraphicsEngineVk_64r.dll",
+      "sha256": "a6acedca682667c35f5a6c50be3a602a3901eaea4cc5f3029594a98a722143b6"
+    },
+    {
+      "name": "media/DiligentD3D11.dds",
+      "sha256": "28f8771fd2331a19cee2517f908b3a9579426bc30ad770db358811744b6ce3d1"
+    },
+    {
+      "name": "media/DiligentD3D12.dds",
+      "sha256": "94b21fcca9cc92596b0a886bf5891e481323c602a9ce86d42ee07214b18a9b23"
+    },
+    {
+      "name": "media/DiligentGL.dds",
+      "sha256": "cc5d79134c0ff67eb4f73ba52c78244dfa0b637ee7a0691c9685705920df1818"
+    },
+    {
+      "name": "media/DiligentVk.dds",
+      "sha256": "74433dc83108ef49e5d066b297959fa7609566c8571a9e255583cf47134dd76f"
+    },
+    {
+      "name": "media/directx11.dds",
+      "sha256": "2c3c85a4805677fd3c722ec8d6e931e6cb02751299086850d434097945970657"
+    },
+    {
+      "name": "media/directx12.dds",
+      "sha256": "3e6e63b2c1cd224ff7f84e0d6c40566df7db31921cff3d6d4f5e0df3a71ccdf1"
+    },
+    {
+      "name": "media/starbox_1024.dds",
+      "sha256": "f4417e45ae24b00b7f7121e659eda0a136e81d4079e62123e03566d6312a1dc0"
+    },
+    {
+      "name": "shaders/asteroid_ps.psh",
+      "sha256": "360bb146868f590076b945bf6e932deaf69d42e62167076c0bb21341e8d16319"
+    },
+    {
+      "name": "shaders/asteroid_ps_d3d11.psh",
+      "sha256": "c625f619f811d98569689adcd79f5c94a801abf0bd99550d820b06352a61ecfa"
+    },
+    {
+      "name": "shaders/asteroid_ps_diligent.psh",
+      "sha256": "505472453ea2665b039f4a7eef84af0f71dfeda79c8d6aa0a4a4764e7fc9963c"
+    },
+    {
+      "name": "shaders/asteroid_vs.vsh",
+      "sha256": "d083e42e98c7dee9779e5eb62dc2d633d390d4e444373e5562a71d0afcc89cbc"
+    },
+    {
+      "name": "shaders/asteroid_vs_diligent.vsh",
+      "sha256": "1994b52e7e14f3e16b320c3cd686a626209d95eacdc85f9857f1a8b987025457"
+    },
+    {
+      "name": "shaders/common.hlsl",
+      "sha256": "1e90278bf34e74f4a31fe45dfdf2ac0826e684bb7f8cac57fac4340e6d3bf19d"
+    },
+    {
+      "name": "shaders/common_defines.h",
+      "sha256": "8a2e378b277157d22c412294c1ebf7fcdb7da36edd9bbfda4a770a7cefc8acda"
+    },
+    {
+      "name": "shaders/font_ps.psh",
+      "sha256": "f0e28366153369dc3359d955ff0b1154a51a3fe90ec8d337a77007b6a3752212"
+    },
+    {
+      "name": "shaders/shader_common.h",
+      "sha256": "cc8f30d190b70d979f1891ef8d8f541ebff904f5f465ecd510e5769baced7e83"
+    },
+    {
+      "name": "shaders/skybox_ps.psh",
+      "sha256": "6152cdc95e87797b17470efc33925f823dcb6e5192d2fb3cf7a9af42f31e0261"
+    },
+    {
+      "name": "shaders/skybox_vs.vsh",
+      "sha256": "7bcef32fb6bad6cec7eee794ca2b8ebf60e7d578bcb4f9d1270ee7d7051d15e5"
+    },
+    {
+      "name": "shaders/sprite_ps.psh",
+      "sha256": "08dc5f7676e37d980fbd65b4cda3e1920c97cd96186dd322885cac4a972d2995"
+    },
+    {
+      "name": "shaders/sprite_vs.vsh",
+      "sha256": "c2d20c2e1af7618679cdd354025a657dff3ab2782f7a00a3e1a7c8aeda9ae0ac"
+    }
+  ],
+  "diagnostic_core_patch_sha256": "fe20444f5255f7720ad0860084ff312b995441cb2b7c2ce80eb15cbc4dc1ccd1"
+}
