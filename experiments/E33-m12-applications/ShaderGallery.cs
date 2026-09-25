@@ -71,9 +71,10 @@ public sealed class Gallery : Form {
         DoubleBuffered=true;KeyPreview=true;
         StartPosition=FormStartPosition.Manual;
         var screen=Screen.PrimaryScreen.WorkingArea;
-        ClientSize=new Size(Math.Min(1320,screen.Width-100),Math.Min(850,screen.Height-100));
+        int galleryWidth=Math.Min(1320,Math.Max(640,screen.Width/2-40));
+        ClientSize=new Size(galleryWidth,Math.Min(galleryWidth*850/1320,screen.Height-100));
         Location=new Point(20,Math.Max(0,(screen.Height-Height)/2));
-        MinimumSize=new Size(960,720);
+        MinimumSize=new Size(640,440);
         timer.Interval=8000;
         timer.Tick+=(s,e)=>{if(!paused)selected=(selected+1)%gpu.Length;ReadProgress();Invalidate();};
         timer.Start();
@@ -101,7 +102,10 @@ public sealed class Gallery : Form {
     protected override void OnPaint(PaintEventArgs e) {
         base.OnPaint(e);var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;
         g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-        int w=ClientSize.Width,h=ClientSize.Height;var c=results.cases[selected];
+        // Scale the complete layout to leave room for the lab monitor overlay.
+        float scale=Math.Min(ClientSize.Width/1320f,ClientSize.Height/850f);
+        g.ScaleTransform(scale,scale);
+        int w=1320,h=850;var c=results.cases[selected];
         Label(g,"BC-250  /  SHADER OBSERVATORY",title,ink,30,24);
         Label(g,"Real Vulkan compute output, independently checked on the CPU",body,muted,33,77);
         Color status=c.pass?Color.FromArgb(28,218,170):Color.FromArgb(255,80,107);
