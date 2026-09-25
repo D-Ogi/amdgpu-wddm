@@ -1,0 +1,11 @@
+{
+  "base": "07e3eaa10e7dd026ec9d95fe326db2d5c4227e1b",
+  "patch_sha256": "91f5d0989a1fa7bfeb516b6ea8f75e6e4f511bf3caa0c76c68afa124ad19adc2",
+  "files": [
+    "C++/DXUT/Core/DXUTenum.cpp",
+    "C++/DXUT/Optional/BC250Benchmark.h",
+    "C++/Direct3D/Instancing/Instancing.cpp",
+    "C++/Direct3D10/Instancing10/Instancing.cpp"
+  ],
+  "matches_sources_lf": true
+}

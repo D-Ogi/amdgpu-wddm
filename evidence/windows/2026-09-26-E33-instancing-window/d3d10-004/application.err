@@ -1,0 +1,122 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8cf3
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000ec0
+allocation handle=0x40000f40
+allocation handle=0x40000fc0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001040
+allocation handle=0x400011c0
+allocation handle=0x40001240
+allocation handle=0x400012c0
+allocation handle=0x40001340
+allocation handle=0x400013c0
+radv_wddm2_winsys_create
+allocation handle=0x40001580
+allocation handle=0x40001600
+allocation handle=0x40001680
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001700
+allocation handle=0x40001880
+allocation handle=0x40001900
+allocation handle=0x40001980
+allocation handle=0x40001a00
+allocation handle=0x40001a80
+radv_wddm2_winsys_create
+allocation handle=0x40001c40
+allocation handle=0x40001cc0
+allocation handle=0x40001d40
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001dc0
+allocation handle=0x40001f40
+allocation handle=0x40001fc0
+allocation handle=0x40002040
+allocation handle=0x400020c0
+allocation handle=0x40002140
+radv_wddm2_winsys_create
+allocation handle=0x40002300
+allocation handle=0x40002380
+allocation handle=0x40002400
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x80000440
+allocation handle=0x40002500
+allocation handle=0x40002580
+allocation handle=0x40002600
+allocation handle=0x80000740
+allocation handle=0x40002680
+radv_wddm2_winsys_create
+allocation handle=0x40002840
+allocation handle=0x80000980
+allocation handle=0x80000a00
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x400028c0
+allocation handle=0x40002a40
+allocation handle=0x80000a80
+allocation handle=0x80000d00
+allocation handle=0x80000b00
+allocation handle=0x40002ac0
+radv_wddm2_winsys_create
+allocation handle=0x40002c80
+allocation handle=0x40002d00
+allocation handle=0x40002d80
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40002e00
+allocation handle=0x40002f80
+allocation handle=0x40003000
+allocation handle=0x80000dc0
+allocation handle=0x80000e00
+allocation handle=0x80000f40
+radv_wddm2_winsys_create
+allocation handle=0x80001440
+allocation handle=0x80001340
+allocation handle=0x800012c0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40003040
+allocation handle=0x400031c0
+allocation handle=0x40003240
+allocation handle=0x80001480
+allocation handle=0x800014c0
+allocation handle=0x80001600
+allocation handle=0x80001700
+allocation handle=0x80001900
+allocation handle=0x80001740
+allocation handle=0x80001800
+allocation handle=0x80001a80
+allocation handle=0x80001ac0
+allocation handle=0x400032c0
+allocation handle=0x40003340
+allocation handle=0x400033c0
+allocation handle=0x40003440
+allocation handle=0x80001e80
+allocation handle=0x80001bc0
+allocation handle=0x80001c40
+allocation handle=0x80001d40
+allocation handle=0x80001f40
+allocation handle=0x80001e40
+allocation handle=0x800021c0
+allocation handle=0x800020c0
+allocation handle=0x80002040
+allocation handle=0x40003680
+allocation handle=0x800024c0
+allocation handle=0x80002280
+allocation handle=0x80002300
+allocation handle=0x80002400
+allocation handle=0x80002500
+allocation handle=0x80002480
+allocation handle=0x80002700
+allocation handle=0xc0000740
+allocation handle=0x80002600
+bc250: progress before submit previous=0 observed=0 waits=0 signals=2
+allocation handle=0x40003700
+bc250: gather capacity=86016 bytes required=83712 ibs=10
+allocation handle=0x400037c0
+allocation handle=0x40003840
+allocation handle=0x400038c0
+allocation handle=0x80002980
+allocation handle=0x800027c0
+allocation handle=0x80002840
+BC250 capture failed: 0x80004005

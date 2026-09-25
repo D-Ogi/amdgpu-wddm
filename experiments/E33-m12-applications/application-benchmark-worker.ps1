@@ -92,8 +92,9 @@ try {
  $env:VKD3D_SHADER_CACHE_PATH=Join-Path $CacheDirectory 'vkd3d'
  Save 'cache-before' @{mode=$CacheMode;directory=$CacheDirectory;identity=$cacheIdentity;files=@(Get-ChildItem -LiteralPath $CacheDirectory -Recurse -File | Select-Object FullName,Length)}
 
+ # DXUT exits when its incremented frame count is greater than this option.
  if($Kind -like 'Instancing*'){
-  $commandArguments="-forceapi:$api -windowed -width:1080 -height:720 -forcehal -forcevsync:0 -constantframetime:0.016666666666666667 -quitafterframe:660 -noerrormsgboxes -nostats"
+  $commandArguments="-forceapi:$api -windowed -width:1080 -height:720 -forcehal -forcevsync:0 -constantframetime:0.016666666666666667 -quitafterframe:659 -noerrormsgboxes -nostats"
   $env:BC250_BENCHMARK_CSV=$csv;$image=Join-Path $Out 'frame660.png'
   if($Capture){$env:BC250_BENCHMARK_CAPTURE=$image}
  }else{

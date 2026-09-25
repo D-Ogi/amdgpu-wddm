@@ -1,0 +1,235 @@
+{
+  "api": 10,
+  "status": "packaged_not_run",
+  "source": {
+    "source": "https://github.com/microsoft/DirectX-SDK-Samples.git",
+    "commit": "07e3eaa10e7dd026ec9d95fe326db2d5c4227e1b",
+    "license": "MIT"
+  },
+  "patch_sha256": "91f5d0989a1fa7bfeb516b6ea8f75e6e4f511bf3caa0c76c68afa124ad19adc2",
+  "translator": {
+    "commit": "dc7f97df8a52656d24e286fe3ccde3049445a5bb",
+    "submodules": " 9df86f2341616ef1888ae59919feaa6d4fad693d include/native/directx (heads/main)\n 04f10f650d514df88b76d25e83db360142c7b174 include/spirv (04f10f6)\n 8864cdc896bbc2a9b6eb36b3218fc9ef57908d77 include/vulkan (8864cdc)\n 8dae2d8573af08378c6059aca3d5987da99d20b5 subprojects/dxbc-spirv (8dae2d8)\n c8ad050fcb29e42a2f57d9f59e97488f465c436d subprojects/dxbc-spirv/submodules/spirv_headers (c8ad050)\n 275e6459c7ab1ddd4b125f28d0440716e4888078 subprojects/libdisplay-info (heads/windows)\n",
+    "license": "zlib; dependencies retain their own licenses",
+    "utc": "2026-09-25T18:06:56.319758+00:00"
+  },
+  "assets_checked": [
+    "trees\\\\leaf_v3_green_tex.dds",
+    "trees\\\\leaf_v3_olive_tex.dds",
+    "trees\\\\leaf_v3_dark_tex.dds",
+    "data\\\\leaves5.mtx",
+    "IslandScene\\\\grass_v1_basic_tex.dds",
+    "IslandScene\\\\grass_v2_light_tex.dds",
+    "IslandScene\\\\grass_v3_dark_tex.dds",
+    "IslandScene\\\\dry_flowers_v1_tex.dds",
+    "IslandScene\\\\grass_guide_v3_tex.dds",
+    "Instancing.fx",
+    "CloudBox\\\\skysphere.sdkmesh",
+    "IslandScene\\\\island.sdkmesh",
+    "IslandScene\\\\islandtop_opt.sdkmesh",
+    "trees\\\\tree.sdkmesh"
+  ],
+  "files": [
+    {
+      "name": "d3d10core.dll",
+      "bytes": 135168,
+      "sha256": "555ac9d155f3fd58064b90f7290649afc7a40b86124842bec7b2b28e984b52e1"
+    },
+    {
+      "name": "d3d11.dll",
+      "bytes": 4333568,
+      "sha256": "71e6ef9ad7e666675d1ec3f22568aeacf3705fae2c63cb0b314e1ec8f2e10d3e"
+    },
+    {
+      "name": "D3DCompiler_43.dll",
+      "bytes": 2529176,
+      "sha256": "ffedb064adc25328b24dcf145b04045a867a5574c931516d7845babf2a08937f"
+    },
+    {
+      "name": "d3dx10_43.dll",
+      "bytes": 514480,
+      "sha256": "b5f2e4d842c758fae91323888ace39328c47d9546231757f73831e2369ae58ed"
+    },
+    {
+      "name": "d3dx11_43.dll",
+      "bytes": 279984,
+      "sha256": "25814402ce1d74f198958aa38661242189b4e5d640177087d0ba0ecf65d19a44"
+    },
+    {
+      "name": "d3dx9_43.dll",
+      "bytes": 2404248,
+      "sha256": "36b84dfa0ef9d3ff3549a7ad54d2a8032bd22c879219ee1a959137c4ef8786c4"
+    },
+    {
+      "name": "dxgi.dll",
+      "bytes": 847872,
+      "sha256": "2e674a56a48b2739b2b636105f7cdfa14a4c1964c278bce6f9ee4c31ed50c05f"
+    },
+    {
+      "name": "Instancing.fx",
+      "bytes": 18783,
+      "sha256": "6e85925bf776204b55faad569d98b0cf112ac2eb3f657d6d9aceab1311d07581"
+    },
+    {
+      "name": "Instancing10.exe",
+      "bytes": 613888,
+      "sha256": "45afca8fadfc39fd4599b379541dc27d3cebfd15a3ec3c434489312eb2ca4fa0"
+    },
+    {
+      "name": "media/CloudBox/sky_v2b_tex.dds",
+      "bytes": 2097280,
+      "sha256": "0f3d58655f88aab582e9679ecb9681358ee090d9a6d97f06f72842e11ef3a9d3"
+    },
+    {
+      "name": "media/CloudBox/skysphere.sdkmesh",
+      "bytes": 88252,
+      "sha256": "eb774a42d5ff89409c10ed1615c089c4d3eead6f43c1e6ac8f8e6d4505db102f"
+    },
+    {
+      "name": "media/CloudBox/skysphere.x",
+      "bytes": 101723,
+      "sha256": "72635303281f1e9d8bff97f47125aa2af11af9e613502173a363baf05a2996d8"
+    },
+    {
+      "name": "media/data/leaves5.mtx",
+      "bytes": 169868,
+      "sha256": "01fc3e04a6f53cb11b62d2947f6bba6d6f7cc7ac415c94d555dd4e19a0d9e152"
+    },
+    {
+      "name": "media/IslandScene/dry_flowers_v1_tex.dds",
+      "bytes": 349652,
+      "sha256": "4138104ebece975001e4297a0bcfaf79adc032e209f78ba64b4c0d5c3ed29bb9"
+    },
+    {
+      "name": "media/IslandScene/grass_guide_v3_tex.dds",
+      "bytes": 349652,
+      "sha256": "0d7f2f0d0bf1a1dba45e63615e92d311d817d2f97222fae35392ed63565bd463"
+    },
+    {
+      "name": "media/IslandScene/grass_turf_v2_tex.dds",
+      "bytes": 699192,
+      "sha256": "21cd0b9eb8720fd06d098245426ff48ecd1b7d930aaf4783b373fcee6c1ae641"
+    },
+    {
+      "name": "media/IslandScene/grass_v1_basic_tex.dds",
+      "bytes": 349652,
+      "sha256": "ef6f32dace6ab24aa51e0948ac18986d9e7a808f10f606e01a65ab52627e5ce2"
+    },
+    {
+      "name": "media/IslandScene/grass_v2_light_tex.dds",
+      "bytes": 349652,
+      "sha256": "f2413055e3d2ffe5c4aeb73f1ce7f7c19c810ba9b33218327898c6bc0c3be345"
+    },
+    {
+      "name": "media/IslandScene/grass_v3_dark_tex.dds",
+      "bytes": 349652,
+      "sha256": "7e1c52ce5c372b7994c9a310425132b13ed06e1376ed392c646d8c7c83c13e1b"
+    },
+    {
+      "name": "media/IslandScene/island.sdkmesh",
+      "bytes": 2006584,
+      "sha256": "be8769a160b7458198c7f1098410ccdc009cb40249c3721597f64f181ce3c6ea"
+    },
+    {
+      "name": "media/IslandScene/island.x",
+      "bytes": 2444814,
+      "sha256": "adb210b70240352c593165e85b6904e01b4d2adc90e16484f0255c38e560bcf6"
+    },
+    {
+      "name": "media/IslandScene/island_v1_tex.dds",
+      "bytes": 699192,
+      "sha256": "c73706a3b17fdca4992add976fa03cbb2f2020217889bd5e3029ddbc91622613"
+    },
+    {
+      "name": "media/IslandScene/islandtop_opt.sdkmesh",
+      "bytes": 370876,
+      "sha256": "11e2a6a9e85184a41acb61005ec089f0ebe6c3d7f1aa3397b368950012f937ae"
+    },
+    {
+      "name": "media/IslandScene/islandtop_opt.x",
+      "bytes": 434945,
+      "sha256": "59d6189f83c0123f11eb32a4a61f33dcb0f8330c4b081185e7e5717a23417a1c"
+    },
+    {
+      "name": "media/trees/bark_v1_tex.dds",
+      "bytes": 699192,
+      "sha256": "bbf458d2fa7bb16db316dd9c85c15978c1cd62e8346cf29d564a07b72ae1c0a2"
+    },
+    {
+      "name": "media/trees/leaf_v3_dark_tex.dds",
+      "bytes": 1398228,
+      "sha256": "437e6ce02d7ad45c6ea17c72a42d3929b879dbf5a6724a0ecd18fb0ad903bfa1"
+    },
+    {
+      "name": "media/trees/leaf_v3_green_tex.dds",
+      "bytes": 1398228,
+      "sha256": "30d7c65e87cde52c3323593229453f02f5c5e97071f6287e19ff4f8d49d86c73"
+    },
+    {
+      "name": "media/trees/leaf_v3_olive_tex.dds",
+      "bytes": 1398228,
+      "sha256": "ac6941e554680c54c03f065fd2152e967b5e29d976aa11934e31f13f6bb3764c"
+    },
+    {
+      "name": "media/trees/skybox2.x",
+      "bytes": 7781,
+      "sha256": "6c71a62c5cd7a6edb00e3f47f825cf9d21a910fc7398a53cc39621d5f83c10ce"
+    },
+    {
+      "name": "media/trees/skybox_back.JPG",
+      "bytes": 11484,
+      "sha256": "573ec3cacfa7da23948c191e773c80f21717dd0567123c9ff26343e54421148d"
+    },
+    {
+      "name": "media/trees/skybox_bottom.JPG",
+      "bytes": 16553,
+      "sha256": "fa0af02a0368aea72ea1e882c67c34b86f61458f1bfe6422958d7967fbc8e80b"
+    },
+    {
+      "name": "media/trees/skybox_front.JPG",
+      "bytes": 14462,
+      "sha256": "40ccf974ac602e71f1f02d0e4a604a74435373eb84021b89865ca299e3dafe02"
+    },
+    {
+      "name": "media/trees/skybox_left.JPG",
+      "bytes": 13364,
+      "sha256": "9be780e8e31db407cc824716fe7cc2d1a381e620d446f0bc3a50a9ce750dd559"
+    },
+    {
+      "name": "media/trees/skybox_right.JPG",
+      "bytes": 13880,
+      "sha256": "7c4713c1b91b44681dd05b3b5f0e195b8831fb403937578ac05e7f4b5fe98ada"
+    },
+    {
+      "name": "media/trees/skybox_top.JPG",
+      "bytes": 10739,
+      "sha256": "28f1f5e6bf34c5df6f54036ef6de3d4e519399c6f3a968925116131df8e74dbe"
+    },
+    {
+      "name": "media/trees/tree.sdkmesh",
+      "bytes": 14485692,
+      "sha256": "3b883e925b26b6b2ef1c21a91371f134fe866b26abc49fe40c852ebff1c07656"
+    },
+    {
+      "name": "media/trees/tree.x",
+      "bytes": 17699548,
+      "sha256": "85193f8f13c0eb993a0a59e1e1921c1cae24b7509a8f9b051eb641e7f947cdd6"
+    },
+    {
+      "name": "media/trees/tree01S.dds",
+      "bytes": 53376,
+      "sha256": "34be639dbf71b6326832020005ff10f1105e7017a9bb78eed804c81f789fe25b"
+    },
+    {
+      "name": "media/trees/tree02S.dds",
+      "bytes": 81600,
+      "sha256": "74a55276ae27d11902b74560f00b4e30ccffd752fe0b4dae7a00aaa64a17dc4a"
+    },
+    {
+      "name": "media/trees/tree35S.dds",
+      "bytes": 76736,
+      "sha256": "f631ee2fdd74ce5ff4402954791402cf319bb4e4981777a015daea9e7f0b50b9"
+    }
+  ],
+  "working_directory": "package directory"
+}

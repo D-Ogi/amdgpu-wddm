@@ -1,3 +1,29 @@
+diff --git a/C++/DXUT/Core/DXUTenum.cpp b/C++/DXUT/Core/DXUTenum.cpp
+index 346d00d..021de5e 100644
+--- a/C++/DXUT/Core/DXUTenum.cpp
++++ b/C++/DXUT/Core/DXUTenum.cpp
+@@ -1461,8 +1461,8 @@ bool DXUTDoesD3D9DeviceComboMatchPreserveOptions( CD3D9EnumDeviceSettingsCombo*
+     //---------------------
+     // Resolution
+     //---------------------
+-    // If keep resolution then check that width and height supported by this combo
+-    if( pMatchOptions->eResolution == DXUTMT_PRESERVE_INPUT )
++    // Display modes constrain fullscreen only; windowed buffers have independent dimensions.
++    if( !pDeviceSettingsCombo->Windowed && pMatchOptions->eResolution == DXUTMT_PRESERVE_INPUT )
+     {
+         bool bFound = false;
+         for( int i = 0; i < pDeviceSettingsCombo->pAdapterInfo->displayModeList.GetSize(); i++ )
+@@ -3451,8 +3451,8 @@ bool DXUTDoesD3D10DeviceComboMatchPreserveOptions( CD3D10EnumDeviceSettingsCombo
+     //---------------------
+     // Resolution
+     //---------------------
+-    // If keep resolution then check that width and height supported by this combo
+-    if( pMatchOptions->eResolution == DXUTMT_PRESERVE_INPUT )
++    // Display modes constrain fullscreen only; windowed buffers have independent dimensions.
++    if( !pDeviceSettingsCombo->Windowed && pMatchOptions->eResolution == DXUTMT_PRESERVE_INPUT )
+     {
+         bool bFound = false;
+         for( int i = 0; i < pDeviceSettingsCombo->pOutputInfo->displayModeList.GetSize(); i++ )
 diff --git a/C++/DXUT/Optional/BC250Benchmark.h b/C++/DXUT/Optional/BC250Benchmark.h
 new file mode 100644
 index 0000000..6344e9f

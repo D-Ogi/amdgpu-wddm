@@ -1,0 +1,11 @@
+{
+  "ordered_frames": 660,
+  "dimensions": [
+    1080,
+    720
+  ],
+  "capture_sha256": "fde446d8b6175166aadfea1019dd64bcd3b00ac71b235317008f5be9cb8b4942",
+  "all_required_modules": true,
+  "cpu_metric": "render submission only, excludes present and GPU completion",
+  "visual_inspection": "textured colored cube array on blue background; Linux image reference pending"
+}

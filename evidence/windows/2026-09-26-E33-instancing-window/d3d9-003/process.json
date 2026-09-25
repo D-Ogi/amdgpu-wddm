@@ -1,0 +1,9 @@
+﻿{
+    "modules":  [
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\applications-stage001\\instancing-package003\\d3d9\\d3d9.dll",
+                    "C:\\BC250\\m12\\mesa05-ib-collection\\vulkan_radeon.dll"
+                ],
+    "elapsed_ms":  12856,
+    "exit_code":  0
+}

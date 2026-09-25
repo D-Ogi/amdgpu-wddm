@@ -1,0 +1,413 @@
+{
+  "api": 9,
+  "status": "packaged_not_run",
+  "source": {
+    "source": "https://github.com/microsoft/DirectX-SDK-Samples.git",
+    "commit": "07e3eaa10e7dd026ec9d95fe326db2d5c4227e1b",
+    "license": "MIT"
+  },
+  "patch_sha256": "91f5d0989a1fa7bfeb516b6ea8f75e6e4f511bf3caa0c76c68afa124ad19adc2",
+  "translator": {
+    "commit": "dc7f97df8a52656d24e286fe3ccde3049445a5bb",
+    "submodules": " 9df86f2341616ef1888ae59919feaa6d4fad693d include/native/directx (heads/main)\n 04f10f650d514df88b76d25e83db360142c7b174 include/spirv (04f10f6)\n 8864cdc896bbc2a9b6eb36b3218fc9ef57908d77 include/vulkan (8864cdc)\n 8dae2d8573af08378c6059aca3d5987da99d20b5 subprojects/dxbc-spirv (8dae2d8)\n c8ad050fcb29e42a2f57d9f59e97488f465c436d subprojects/dxbc-spirv/submodules/spirv_headers (c8ad050)\n 275e6459c7ab1ddd4b125f28d0440716e4888078 subprojects/libdisplay-info (heads/windows)\n",
+    "license": "zlib; dependencies retain their own licenses",
+    "utc": "2026-09-25T18:06:56.319758+00:00"
+  },
+  "assets_checked": [
+    "Instancing.fx",
+    "Misc\\\\env2.bmp"
+  ],
+  "files": [
+    {
+      "name": "d3d9.dll",
+      "bytes": 4055040,
+      "sha256": "b23f1e73e7b3d22954da01182c674c38449a2ae0d94f5e29667c9a674dcef9ca"
+    },
+    {
+      "name": "D3DCompiler_43.dll",
+      "bytes": 2529176,
+      "sha256": "ffedb064adc25328b24dcf145b04045a867a5574c931516d7845babf2a08937f"
+    },
+    {
+      "name": "d3dx10_43.dll",
+      "bytes": 514480,
+      "sha256": "b5f2e4d842c758fae91323888ace39328c47d9546231757f73831e2369ae58ed"
+    },
+    {
+      "name": "d3dx11_43.dll",
+      "bytes": 279984,
+      "sha256": "25814402ce1d74f198958aa38661242189b4e5d640177087d0ba0ecf65d19a44"
+    },
+    {
+      "name": "d3dx9_43.dll",
+      "bytes": 2404248,
+      "sha256": "36b84dfa0ef9d3ff3549a7ad54d2a8032bd22c879219ee1a959137c4ef8786c4"
+    },
+    {
+      "name": "Instancing.exe",
+      "bytes": 585728,
+      "sha256": "85f95354463e1248fae48fc3082630a407d111a62d6b0201ba8982ef8a5ace5f"
+    },
+    {
+      "name": "Instancing.fx",
+      "bytes": 8197,
+      "sha256": "ff38875c3f687d9a8991fff3f80f1927054106b3bc992bbdda5bab5e3968368b"
+    },
+    {
+      "name": "media/Misc/Arrows.bmp",
+      "bytes": 3126,
+      "sha256": "046fd38f876d36e9ad68ece912ebf4f24430665f744322dff454b16856b3f17f"
+    },
+    {
+      "name": "media/Misc/ball.dds",
+      "bytes": 262272,
+      "sha256": "09fc092cb1e7e601a12077e0458f3c660f52842972f2765ebbe7a8214b97c4af"
+    },
+    {
+      "name": "media/Misc/ball.sdkmesh",
+      "bytes": 30908,
+      "sha256": "b9680cfbcfd630c0d1bb2bf9e9ba4fd7c7b3e74d2013a2cb9eb1259f982a966b"
+    },
+    {
+      "name": "media/Misc/ball.x",
+      "bytes": 31300,
+      "sha256": "f7991666187891fc7eb7e71fdeb8eb41cbb1d119f7974434b4ed5d050fa119f4"
+    },
+    {
+      "name": "media/Misc/balltan.sdkmesh",
+      "bytes": 39100,
+      "sha256": "42a0be049e964525f2b2e3187770349821514ca4d73029d7b62f8a0938137f0e"
+    },
+    {
+      "name": "media/Misc/Base.bmp",
+      "bytes": 786488,
+      "sha256": "3abd1aa93d5192c76938822545b1d4ac8db61d7af07f40ff23c6385ad818c12c"
+    },
+    {
+      "name": "media/Misc/bigship1.x",
+      "bytes": 480915,
+      "sha256": "e9bad5d74330e0a223f604e48d1127defa586bba92c9471f8742e015cd35f8c7"
+    },
+    {
+      "name": "media/Misc/blank.cur",
+      "bytes": 326,
+      "sha256": "bf79bffdba70f456cb406fd1ece8652750363b94188510b5d73f36c8ea6e7ae9"
+    },
+    {
+      "name": "media/Misc/bobble.sdkmesh",
+      "bytes": 30908,
+      "sha256": "0e7f9e4479b3154c7991064e54ae364be96c0001fa4fdb57c762dbd9d003180d"
+    },
+    {
+      "name": "media/Misc/bobbletex.dds",
+      "bytes": 131200,
+      "sha256": "f34fb1330d0d1786b347904b75ea663dae434c87823daf499d9087735dea6d18"
+    },
+    {
+      "name": "media/Misc/bobbletex2.dds",
+      "bytes": 131200,
+      "sha256": "558e047b5ca07117ef91f73676fad08c82749582e386aa9c594af5e61f3c0113"
+    },
+    {
+      "name": "media/Misc/bobbletex3.dds",
+      "bytes": 131200,
+      "sha256": "094e095a123912be425092da6daee2c48732dd2026a6fbc2800b4442e2de4532"
+    },
+    {
+      "name": "media/Misc/bobbletex4.dds",
+      "bytes": 131200,
+      "sha256": "4585ee3b6513dbcfe1dc6f0df3d0c2c01e65a1c01cb32ef5657a76f7dc341690"
+    },
+    {
+      "name": "media/Misc/bobbletex5.dds",
+      "bytes": 131200,
+      "sha256": "7ee41418fe773845508b8057e636c4e98c01f710ee3638ac17ad19239e6c0c99"
+    },
+    {
+      "name": "media/Misc/car.x",
+      "bytes": 242198,
+      "sha256": "95a7a3a32a4e493bd790a8ee7863b9dc31bd5fff49e2f7961297533a68b33150"
+    },
+    {
+      "name": "media/Misc/cell.sdkmesh",
+      "bytes": 13236,
+      "sha256": "be7c30b462eb2ca66d76cf620bac73c97031118fe3f850a7d9bdac316c84ee9b"
+    },
+    {
+      "name": "media/Misc/cell.x",
+      "bytes": 4816,
+      "sha256": "7972d9bc5083d93de959223af65bf4a14e20463210c0262f0627eef66a76e094"
+    },
+    {
+      "name": "media/Misc/cellceiling.dds",
+      "bytes": 43832,
+      "sha256": "32dd81188e217a51b09c64ad6b9b674f81ab5f44dba9351ddad95063704c2936"
+    },
+    {
+      "name": "media/Misc/cellceiling.jpg",
+      "bytes": 54238,
+      "sha256": "406dbe57781bd10c0ed9279502ff31a25fece5c0605357b49813d823c564a8cd"
+    },
+    {
+      "name": "media/Misc/cellfloor.dds",
+      "bytes": 43832,
+      "sha256": "5fd363dcef0cc7439fa5ed2c6ba2de49e6b918cbe6bd9e42a9f00e8412877ed4"
+    },
+    {
+      "name": "media/Misc/cellfloor.jpg",
+      "bytes": 63849,
+      "sha256": "a9df536d70d4b018d82bf67e34005ddc53f4b819649887bac6daae234c8150f6"
+    },
+    {
+      "name": "media/Misc/cellwall.dds",
+      "bytes": 43832,
+      "sha256": "b48631bf8c1244e17d51c2f1af3a10c0dae1bfbc2ab35e941f6c6b78ec03e239"
+    },
+    {
+      "name": "media/Misc/cellwall.jpg",
+      "bytes": 55123,
+      "sha256": "53bf9bcd0078610c61714a38084d65bfc8c1113da9c8be8f95f496c01105cb86"
+    },
+    {
+      "name": "media/Misc/cookie.dds",
+      "bytes": 1048704,
+      "sha256": "f6cab904c9a19707e3cf52d5d33bcf42fad29a1073859fd22276766185231a64"
+    },
+    {
+      "name": "media/Misc/Crack_Displacement.bmp",
+      "bytes": 1049656,
+      "sha256": "7f46304c590222ce7620f714ab87900d71cfb690c3baf57f89e56a460418e9a6"
+    },
+    {
+      "name": "media/Misc/Crack_Normal.bmp",
+      "bytes": 3145784,
+      "sha256": "425128e4940446992ff2576891b2ed78105697d79ea1092b33ea20b1f3409259"
+    },
+    {
+      "name": "media/Misc/cube.sdkmesh",
+      "bytes": 10428,
+      "sha256": "414f879d07d617f89058e9f30f5253b0932e03234c447923909c0984232e05a6"
+    },
+    {
+      "name": "media/Misc/Cube.x",
+      "bytes": 4250,
+      "sha256": "5273dd5a6b606cf4ac411bacff604067373815847a5eb298b2b3c9effb1edbad"
+    },
+    {
+      "name": "media/Misc/directx.ico",
+      "bytes": 25214,
+      "sha256": "7bde34e08a41effdc9e211c599cb3213058864c4f07174de773f31d862816d55"
+    },
+    {
+      "name": "media/Misc/Earth_Diffuse.dds",
+      "bytes": 1048704,
+      "sha256": "71b656488517cfba63cda1f4734524188e940468d91196ad8983b75846a9d7aa"
+    },
+    {
+      "name": "media/Misc/Earth_Night.dds",
+      "bytes": 8388736,
+      "sha256": "5b8a2b7eb9cf68cf86c1c7e140d6e0c143ba06ee117e0136b29ec7bd2124f5c1"
+    },
+    {
+      "name": "media/Misc/Earth_NormalMap.dds",
+      "bytes": 2097280,
+      "sha256": "ba565d9b9e2a81866ccbeea9d3bb18903d5e013e46a78f66dfbb73f479575790"
+    },
+    {
+      "name": "media/Misc/Earth_ReflectionMask.dds",
+      "bytes": 2000128,
+      "sha256": "1cb07dc435b3c84c32be268fd58c0f2ae0d19658329a08c8c0d7b0325a054b05"
+    },
+    {
+      "name": "media/Misc/env2.bmp",
+      "bytes": 196664,
+      "sha256": "725f26d53daee887b76a533b590a1299442c2c9f517c7237c7485dcb44da875d"
+    },
+    {
+      "name": "media/Misc/env3.bmp",
+      "bytes": 196664,
+      "sha256": "f6c147b2b1ffce092023278f3e4fe3d313a2f23caad1cf1161835c1f2d1674d9"
+    },
+    {
+      "name": "media/Misc/flat.sdkmesh",
+      "bytes": 10428,
+      "sha256": "cccebdbdef5a3c7882e681348107533af23fb9d83362bb0ec97d6d18f9ae428e"
+    },
+    {
+      "name": "media/Misc/floor.bmp",
+      "bytes": 32886,
+      "sha256": "d90a371fa568000e3724b9431a77099b2fcb79685e31e1dd5c728e049768797d"
+    },
+    {
+      "name": "media/Misc/ground2.bmp",
+      "bytes": 196662,
+      "sha256": "1f2588a69325d1fe19949356b3d80dbc01444749ad9fa1d41d4bad5f18cc503d"
+    },
+    {
+      "name": "media/Misc/heli.x",
+      "bytes": 43034,
+      "sha256": "8e0a68bd9d89e935ce9758a15721afb47a50bebc5e5b239d47814d86de60589a"
+    },
+    {
+      "name": "media/Misc/hud.dds",
+      "bytes": 1920128,
+      "sha256": "63d77d174b1d0cbeda760b6246709a11578e7122056d6f133dc29e87d24d8ec3"
+    },
+    {
+      "name": "media/Misc/knot.x",
+      "bytes": 1768573,
+      "sha256": "a22fd24e3e15fb2027a2bf51df75fa458ff826f55136d7aca3e5dce5cf2b1e36"
+    },
+    {
+      "name": "media/Misc/lake.bmp",
+      "bytes": 196662,
+      "sha256": "6e79ea75f50d68331baaa75b4afdc477fe0024a346efdccf7c61a77b430e2a3e"
+    },
+    {
+      "name": "media/Misc/linear.dds",
+      "bytes": 1492,
+      "sha256": "e695815c5cc109c70cc7a3fe327b82e3c7d26b5dc258168540332e6119c2c322"
+    },
+    {
+      "name": "media/Misc/MarbleClouds.dds",
+      "bytes": 262272,
+      "sha256": "b3ebf71b6eb2ec0d8227e7a4c1e5b1ba668fee4c778177f37f4fc8d060ca4263"
+    },
+    {
+      "name": "media/Misc/mcloud.sdkmesh",
+      "bytes": 1603592,
+      "sha256": "c5925c714d0864bd6b5f7ba84734fd6affd513171e3b92869736e73f68877f72"
+    },
+    {
+      "name": "media/Misc/Metal_Displacement.bmp",
+      "bytes": 1049656,
+      "sha256": "df7bbc2b06e4abf3bbca2074f0f3786022538591722f6f35dcc5b263ec0f3d98"
+    },
+    {
+      "name": "media/Misc/Metal_Normal.bmp",
+      "bytes": 3145784,
+      "sha256": "890025857e456afad4dfb835463800840da967b10ddd459b994514e45e1bbc43"
+    },
+    {
+      "name": "media/Misc/mslogo.x",
+      "bytes": 146596,
+      "sha256": "bbe967bbe686d5b3bc25979b70abf2d8ce6aea4b821f4ced9ca59d7902a6727d"
+    },
+    {
+      "name": "media/Misc/Noise2D.dds",
+      "bytes": 21972,
+      "sha256": "fc4d4f1a96f659f341c80fa8157bdfc448d5b62a43b6a0162c196e341ae1a2b7"
+    },
+    {
+      "name": "media/Misc/Noise3D.dds",
+      "bytes": 1048704,
+      "sha256": "7b37ce36035e0b44593bc6486dd75d3765e68575bb5d3e2788c7e5a5181e2df5"
+    },
+    {
+      "name": "media/Misc/NormTest.dds",
+      "bytes": 4194432,
+      "sha256": "eb04b24d72beda8ba1f3b6151c2fc53ffb9bc2b49b22e802e5344635bff6469b"
+    },
+    {
+      "name": "media/Misc/OcclusionBox.x",
+      "bytes": 1092012,
+      "sha256": "d7818d06e8f9ff996e806f572f39322293ca8cdac721242c0b5d5005e391bcc5"
+    },
+    {
+      "name": "media/Misc/particle.bmp",
+      "bytes": 49206,
+      "sha256": "a87872b62687e9e43a6905518643120752d3a601abbcf64cc506da27080d2c84"
+    },
+    {
+      "name": "media/Misc/particle.dds",
+      "bytes": 262272,
+      "sha256": "0958e5991a39a1f6c11591b941c5c798beb587d0a30c5d2894bab8a8c06a3bf9"
+    },
+    {
+      "name": "media/Misc/rainbow.dds",
+      "bytes": 640,
+      "sha256": "0c64643f55a13ea08670a445b8791928c065321ac67258c1fb96703d1c11713c"
+    },
+    {
+      "name": "media/Misc/Ramp.dds",
+      "bytes": 21972,
+      "sha256": "9b47a2e18e541af100a09728e75290f490b9f24363671b359b5e223e83276f86"
+    },
+    {
+      "name": "media/Misc/reflectsphere.sdkmesh",
+      "bytes": 108732,
+      "sha256": "40fdcc8598da54e3d029e3948e4ac5a8bc4e982112d206990722890a6bd26b19"
+    },
+    {
+      "name": "media/Misc/Rock_Displacement.bmp",
+      "bytes": 1049656,
+      "sha256": "dfa02bbd0912fd7334bb80c9bb91af062a3d4b63078db4aca2e172f35c202561"
+    },
+    {
+      "name": "media/Misc/Rock_Normal.bmp",
+      "bytes": 3145784,
+      "sha256": "6383aac904cce6a77fb3344a00ce39012d4ae751ca5ccba35432ad0806c0231f"
+    },
+    {
+      "name": "media/Misc/Sample.bmp",
+      "bytes": 65978,
+      "sha256": "70a04ea568f9b06ab4111a68bc2c0c4ef81903adef4846a9ed65d086d6ae8ee2"
+    },
+    {
+      "name": "media/Misc/seafloor.bmp",
+      "bytes": 66616,
+      "sha256": "a77d9c0a671cd4ab4d17b2727e02193a881ee7691696d8365d8eca60cdeaf938"
+    },
+    {
+      "name": "media/Misc/seafloor.dds",
+      "bytes": 43832,
+      "sha256": "de81e00e6a45f9b2dafdd6eb9c081cd126a350f345ff02ca24ef75c6c8fdca1e"
+    },
+    {
+      "name": "media/Misc/seafloor.sdkmesh",
+      "bytes": 88252,
+      "sha256": "b8cfd063255902ab222acb73118a3bcd74b56b561453051f11d15dc20832a074"
+    },
+    {
+      "name": "media/Misc/seafloor.x",
+      "bytes": 145017,
+      "sha256": "d9b9cd98b1142b514c633042f03e2d52dabb74e9f404ca4ac881315bc730bc06"
+    },
+    {
+      "name": "media/Misc/shapes1.x",
+      "bytes": 456387,
+      "sha256": "8c9e7707bb024da6c825f0e0fead959bfbf355e5da26db5824d03b844aefcced"
+    },
+    {
+      "name": "media/Misc/skullocc.x",
+      "bytes": 792506,
+      "sha256": "7c25285d84cdb3735f375a9c25e49302b415e61f455975e8b8313f3725a26c44"
+    },
+    {
+      "name": "media/Misc/smallnoise3d.dds",
+      "bytes": 131200,
+      "sha256": "61281efb874313f25ab64e61e22e548ac0f54be67d7f0a99b3b0a60a95d1b66c"
+    },
+    {
+      "name": "media/Misc/sphere.x",
+      "bytes": 392355,
+      "sha256": "1a05f397897ad7cab362d215b62cfff613a9ce06d357b549d69b70a701c7c3c9"
+    },
+    {
+      "name": "media/Misc/sphere0.x",
+      "bytes": 5540,
+      "sha256": "73fdc7e7a01da8dd418496ba3f5103165a40058b0ee31bbe33f785070f2ecc02"
+    },
+    {
+      "name": "media/Misc/spheremap.bmp",
+      "bytes": 196664,
+      "sha256": "b8fcde22d6d2f63da50b859f3157a9e52dfd5278ead26580a09dec862145c590"
+    },
+    {
+      "name": "media/Misc/teapot.x",
+      "bytes": 109937,
+      "sha256": "46b96cb46d19d7bcda492cb276bbf5b0cedc461a2db6d028066e397c39f70e38"
+    }
+  ],
+  "working_directory": "package directory"
+}

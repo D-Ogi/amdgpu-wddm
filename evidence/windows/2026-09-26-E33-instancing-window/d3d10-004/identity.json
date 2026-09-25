@@ -1,0 +1,17 @@
+﻿{
+    "cache_mode":  "Fresh",
+    "kind":  "Instancing10",
+    "package":  "C:\\BC250\\m12\\applications-stage001\\instancing-package004\\d3d10",
+    "command":  "-forceapi:10 -windowed -width:1080 -height:720 -forcehal -forcevsync:0 -constantframetime:0.016666666666666667 -quitafterframe:659 -noerrormsgboxes -nostats",
+    "capture":  true,
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "cache_directory":  "C:\\BC250\\m12\\cache-instancing-d3d10-capture004",
+    "radv_experimental":  "sparse",
+    "required_modules":  {
+                             "C:\\BC250\\m12\\applications-stage001\\instancing-package004\\d3d10\\dxgi.dll":  "2E674A56A48B2739B2B636105F7CDFA14A4C1964C278BCE6F9EE4C31ED50C05F",
+                             "C:\\BC250\\m12\\mesa05-ib-collection\\vulkan_radeon.dll":  "8B5EC055501CD042F723F9EBC9FC29787A6173C61937A739DD7C4C520DBD2AA6",
+                             "C:\\Windows\\System32\\vulkan-1.dll":  "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73",
+                             "C:\\BC250\\m12\\applications-stage001\\instancing-package004\\d3d10\\d3d11.dll":  "71E6EF9AD7E666675D1EC3F22568AEACF3705FAE2C63CB0B314E1EC8F2E10D3E",
+                             "C:\\BC250\\m12\\applications-stage001\\instancing-package004\\d3d10\\d3d10core.dll":  "555AC9D155F3FD58064B90F7290649AFC7A40B86124842BEC7B2B28E984B52E1"
+                         }
+}
