@@ -13,7 +13,7 @@ import sqlite3
 import tempfile
 
 STATUSES = {"Pass", "Fail", "QualityWarning", "CompatibilityWarning", "Pending",
-            "NotSupported", "ResourceError", "InternalError", "Crash", "Timeout"}
+            "NotSupported", "ResourceError", "InternalError", "Crash", "Timeout", "DeviceLost", "CapabilityWarning", "Waiver"}
 
 
 def digest(path):

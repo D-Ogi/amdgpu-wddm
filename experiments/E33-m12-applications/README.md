@@ -249,3 +249,13 @@ as Windows/Linux parity.
 
 Run host regression tests with BC250_TEST_TMP set to a workspace scratch directory:
 `python test_compare_cts.py`. No GPU or display access is involved.
+
+
+`prepare_cts_batches.py SOURCE OUTPUT_DIRECTORY --batch-size 1000` expands the complete
+pinned vk-default selection into flat lists in original order. It records each list's hash
+and count, checks the total against the inventory, then reads all output back to verify the
+ordered stream. These are complete partitions, not CTS fraction sampling. The prepared
+manifest requires terminate-on-fail, terminate-on-device-lost and watchdog options. The
+runtime wrapper must retain STOP, hardware health and per-case deadlines, and inspect
+warnings separately: upstream terminate-on-fail counts failures, not every warning.
+The current per-case sparse run is not changed by preparing these files.

@@ -46,6 +46,16 @@ class ComparisonTests(unittest.TestCase):
         result = self.run_pair(rows, rows)
         self.assertEqual(result["issues"]["matching_nonpassing_result"], 1)
 
+    def test_modern_cts_statuses_require_review(self):
+        original_root = self.root
+        for status in ("DeviceLost", "CapabilityWarning", "Waiver"):
+            with self.subTest(status=status):
+                self.root = original_root / status
+                self.root.mkdir()
+                rows = [("a", "Pass"), ("b", status)]
+                result = self.run_pair(rows, rows)
+                self.assertEqual(result["issues"]["matching_nonpassing_result"], 1)
+
     def test_unexpected_cases_are_reported(self):
         rows = [("a", "Pass"), ("b", "Pass")]
         result = self.run_pair(rows + [("c", "Pass")], rows)
