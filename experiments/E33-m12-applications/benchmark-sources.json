@@ -39,6 +39,6 @@
   "asteroids_patch_sha256": "4a6de404a125944df8df263e4c15b888539ea2caf212d035e52885c27f11cdec",
   "patch_applies_to": "DiligentSamples submodule",
   "provenance": "DiligentEngine Apache-2.0; Asteroids retains Intel notices; DirectX-SDK-Samples MIT; dependencies retain own licenses",
-  "instancing_patch_sha256": "91f5d0989a1fa7bfeb516b6ea8f75e6e4f511bf3caa0c76c68afa124ad19adc2",
+  "instancing_patch_sha256": "772457739b488c14bbe0cc466169922e82cb18b69eaacaf4599d1247d55e8c73",
   "instancing_patch_applies_to": "DirectX-SDK-Samples root"
 }

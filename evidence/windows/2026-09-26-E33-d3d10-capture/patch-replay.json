@@ -1,0 +1,12 @@
+{
+  "base": "07e3eaa10e7dd026ec9d95fe326db2d5c4227e1b",
+  "patch_sha256": "772457739b488c14bbe0cc466169922e82cb18b69eaacaf4599d1247d55e8c73",
+  "files": [
+    "C++/DXUT/Core/DXUTenum.cpp",
+    "C++/DXUT/Optional/BC250Benchmark.h",
+    "C++/Direct3D/Instancing/Instancing.cpp",
+    "C++/Direct3D10/Instancing10/Instancing.cpp"
+  ],
+  "matches_sources_lf": true,
+  "tested_executable_sha256": "ea1af071a820ff310a2022182dc70a261a520e89dfeb8312fe144b906e102c22"
+}

@@ -1,0 +1,11 @@
+﻿{
+    "modules":  [
+                    "C:\\BC250\\m12\\applications-stage001\\instancing-package006\\d3d10\\d3d11.dll",
+                    "C:\\BC250\\m12\\mesa05-ib-collection\\vulkan_radeon.dll",
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\applications-stage001\\instancing-package006\\d3d10\\d3d10core.dll",
+                    "C:\\BC250\\m12\\applications-stage001\\instancing-package006\\d3d10\\dxgi.dll"
+                ],
+    "elapsed_ms":  14780,
+    "exit_code":  0
+}

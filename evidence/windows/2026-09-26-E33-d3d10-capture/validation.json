@@ -1,0 +1,11 @@
+{
+  "ordered_frames": 660,
+  "dimensions": [
+    1080,
+    720
+  ],
+  "elapsed_ms": 14780,
+  "capture_sha256": "8b7ea1ac558b171182f3dd91b7ab40ea3340ddaa81279cd6575528cf5abdd001",
+  "all_required_modules": true,
+  "visual_inspection": "island with tree, grass and sky; Linux parity pending"
+}

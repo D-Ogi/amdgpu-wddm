@@ -128,7 +128,7 @@ index 770aeb2..a85c6dd 100644
  }
  
 diff --git a/C++/Direct3D10/Instancing10/Instancing.cpp b/C++/Direct3D10/Instancing10/Instancing.cpp
-index 1b258a6..2a1645b 100644
+index 1b258a6..8763819 100644
 --- a/C++/Direct3D10/Instancing10/Instancing.cpp
 +++ b/C++/Direct3D10/Instancing10/Instancing.cpp
 @@ -12,6 +12,7 @@
@@ -147,17 +147,42 @@ index 1b258a6..2a1645b 100644
      // If the settings dialog is being shown, then render it instead of rendering the app's scene
      if( g_D3DSettingsDlg.IsActive() )
      {
-@@ -885,6 +887,9 @@ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float
+@@ -885,6 +887,34 @@ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float
      pd3dDevice->ResolveSubresource( pRT, D3D10CalcSubresource( 0, 0, 1 ), g_pRenderTarget, D3D10CalcSubresource( 0, 0,
                                                                                                                   1 ),
                                      rtDesc.Format );
-+    if (g_BC250Benchmark.End(benchmarkStart))
-+        g_BC250Benchmark.CheckCapture(D3DX10SaveTextureToFileA(
-+            pRT, D3DX10_IFF_PNG, g_BC250Benchmark.CapturePath()));
++    if (g_BC250Benchmark.End(benchmarkStart)) {
++        ID3D10Texture2D* source = NULL;
++        g_BC250Benchmark.CheckCapture(pRT->QueryInterface(__uuidof(ID3D10Texture2D), (void**)&source));
++        D3D10_TEXTURE2D_DESC desc;
++        source->GetDesc(&desc);
++        // Copy identical encoded bytes to a CPU-readable texture. No gamma conversion.
++        if (desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)
++            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
++        desc.Usage = D3D10_USAGE_STAGING;
++        desc.BindFlags = 0;
++        desc.CPUAccessFlags = D3D10_CPU_ACCESS_READ;
++        desc.MiscFlags = 0;
++        ID3D10Texture2D* staging = NULL;
++        HRESULT captureHr = pd3dDevice->CreateTexture2D(&desc, NULL, &staging);
++        fprintf(stderr, "BC250 capture staging create=%08lx\n", (unsigned long)captureHr);
++        g_BC250Benchmark.CheckCapture(captureHr);
++        pd3dDevice->CopyResource(staging, source);
++        D3D10_MAPPED_TEXTURE2D mapped;
++        captureHr = staging->Map(0, D3D10_MAP_READ, 0, &mapped);
++        fprintf(stderr, "BC250 capture staging map=%08lx\n", (unsigned long)captureHr);
++        g_BC250Benchmark.CheckCapture(captureHr);
++        fprintf(stderr, "BC250 capture staging rowPitch=%u\n", mapped.RowPitch);
++        staging->Unmap(0);
++        captureHr = D3DX10SaveTextureToFileA(staging, D3DX10_IFF_PNG, g_BC250Benchmark.CapturePath());
++        staging->Release();
++        source->Release();
++        g_BC250Benchmark.CheckCapture(captureHr);
++    }
      SAFE_RELEASE( pRT );
  
      // Use our Old RT again
-@@ -893,6 +898,7 @@ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float
+@@ -893,6 +923,7 @@ void CALLBACK OnD3D10FrameRender( ID3D10Device* pd3dDevice, double fTime, float
      SAFE_RELEASE( pOrigRT );
      SAFE_RELEASE( pOrigDS );
  
