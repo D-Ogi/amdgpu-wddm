@@ -87,3 +87,14 @@ workspace on the development PC. The default is six compiler jobs and one linker
 The script verifies source revisions, patch identity and patched file hashes;
 it does not fetch sources, register a driver, or run GPU tests. The Windows build
 has completed. A fresh Linux build and paired runtime acceptance remain pending.
+
+
+## Prepared Windows worker
+
+`opencl-control-worker.ps1` validates the package manifest and loaded OpenCL/Vulkan module
+paths, checks STOP and native health, and uses a120-second external deadline. It temporarily
+adds only this clvk vendor value to the OpenCL registry and restores that value in finally.
+Select the expected Vulkan ICD through the actual Vulkan registration before invoking it;
+Vulkan registration is not changed by this worker. An active/queued CTS task prevents launch.
+Run the ordinary content control before the optional Profile variant. Worker syntax passed;
+neither runtime control has run. Staging DLLs alone does not register or activate OpenCL.
