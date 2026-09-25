@@ -125,6 +125,11 @@ static int bc250_pte_address(const struct bc250_pte_context *ctx, u64 dxgk_addre
 	return BC250_EINVAL;
 }
 
+static void bc250_pte_set_prt(u64 *flags)
+{
+#include "../amdgpu-import/gfx10_prt_flags.inc"
+}
+
 int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind kind,
 			u64 dxgk_flags, u64 dxgk_address, u64 *out)
 {
@@ -136,13 +141,10 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
 
 	*out = 0;
 
-	/* An entry VidMm marks not present translates to a flags word of 0 and nothing else is
-	 * read. amdgpu_gart.c:308-309 states the rule and the reason: "Starting from VEGA10, system
-	 * bit must be 0 to mean invalid", so clearing every flag is how absence is spelled on this
-	 * hardware, not a valid entry pointing somewhere harmless. The early return is also what
-	 * makes an unmap safe to hand over verbatim: the fields beside Valid may be anything at
-	 * all, and none of them can turn into a refusal here. */
-	if ((dxgk_flags & BC250_DXGK_PTE_VALID) == 0)
+	/* MS DXGK_PTE.Valid: invalid access faults unless Zero is set.
+	 * Zero is the exception, so test it before discarding a non-valid entry.
+	 * Ordinary invalid entries continue to ignore their remaining fields. */
+	if ((dxgk_flags & (BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_ZERO)) == 0)
 		return 0;
 
 	/* A context that names the same id for both segments cannot be resolved, and the ambiguity
@@ -150,9 +152,9 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
 	if (ctx->system_segment == ctx->vram_segment)
 		return BC250_EINVAL;
 
-	/* Fields we do not understand must be zero rather than ignored. `Zero` is named for its
-	 * only legal value; SystemReserved0 and Reserved belong to Microsoft. */
-	if ((dxgk_flags & (BC250_DXGK_PTE_ZERO | BC250_DXGK_PTE_SYSRESERVED0 |
+	/* SystemReserved0/Reserved remain reserved. Zero is handled below without
+	 * resolving a physical page: it is a terminal zero-resource mapping. */
+	if ((dxgk_flags & (BC250_DXGK_PTE_SYSRESERVED0 |
 			   BC250_DXGK_PTE_RESERVED_MASK)) != 0)
 		return BC250_EINVAL;
 
@@ -168,6 +170,24 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
 	if ((dxgk_flags & BC250_DXGK_PTE_PAGESIZE_MASK) !=
 	    ((u64)BC250_DXGK_PAGE_TABLE_PAGE_4KB << BC250_DXGK_PTE_PAGESIZE_SHIFT))
 		return BC250_EINVAL;
+
+	if ((dxgk_flags & BC250_DXGK_PTE_ZERO) != 0) {
+		if (ctx->aperture != BC250_PTE_VM)
+			return BC250_EINVAL;
+		/* RADV's null BO starts with no permissions/address. Linux vm.c
+		 * keeps those clear; gmc_v10_0_get_vm_pte adds PRT/SYSTEM/SNOOP/LOG.
+		 * Do not use bc250_pte_vm_flags: its READ/WRITE/EXEC bits differ.
+		 * Import the AMD body unchanged, with its pointer name in scope. */
+		flags = AMDGPU_PTE_MTYPE_NV10(0, MTYPE_NC);
+		bc250_pte_set_prt(&flags);
+		/* amdgpu_vm_pte_update_flags marks terminal entries above PTB
+		 * PDE_PTE. GFX10 translate_further is off, at all three directories.
+		 * Windows ZeroInPteSupported covers every page-table level. */
+		if (kind == BC250_PTE_DIRECTORY)
+			flags |= AMDGPU_PDE_PTE;
+		*out = flags;
+		return 0;
+	}
 
 	rc = bc250_pte_address(ctx, dxgk_address, dxgk_flags, &phys, &system);
 	if (rc != 0)

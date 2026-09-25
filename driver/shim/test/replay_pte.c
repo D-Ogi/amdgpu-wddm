@@ -274,7 +274,7 @@ static const struct good_case g_good[] = {
 
 	{ "not valid: every flag clear, and the rest of the entry ignored",
 	  BC250_PTE_LEAF, BC250_PTE_VM, BC250_PTE_ADDR_BYTES,
-	  { 0, 1, 1, 1, 1, 7, 1, 3, 3, 1, 1, 0x0000001234567800ull }, 0ull },
+	  { 0, 0, 1, 1, 1, 7, 1, 3, 3, 1, 1, 0x0000001234567800ull }, 0ull },
 
 	{ "GART leaf, system memory: the entry fact M37 measured",
 	  BC250_PTE_LEAF, BC250_PTE_GART, BC250_PTE_ADDR_BYTES,
@@ -288,6 +288,38 @@ static const struct good_case g_good[] = {
 	  BC250_PTE_LEAF, BC250_PTE_VM, BC250_PTE_ADDR_BYTES,
 	  RWX_SYSTEM(0x0000FFFFFFFFF000ull), 0x0000FFFFFFFFF077ull },
 };
+
+/* Match the real WDK Zero flag to the Linux GFX10 null-BO encoding.
+ * An arbitrary PageAddress must never become a backing page. Directory Zero
+ * terminates the walk rather than following a pointer to address zero. */
+static void check_zero_prt(void)
+{
+	struct bc250_pte_context ctx = vm_ctx();
+	unsigned int level, readonly, noexec, valid;
+	for (valid=0; valid<2; valid++) for (level=0; level<4; level++)
+	for (readonly=0; readonly<2; readonly++)
+	for (noexec=0; noexec<2; noexec++) {
+		DXGK_PTE pte;
+		u64 out=~0ull;
+		u64 expected=level ? 0x00C8000000000006ull : 0x0088000000000006ull;
+		struct bc250_pte_fields fields;
+		enum bc250_pte_kind kind=level ? BC250_PTE_DIRECTORY : BC250_PTE_LEAF;
+		memset(&pte,0,sizeof(pte));
+		pte.Valid=valid; pte.Zero=1; pte.ReadOnly=readonly; pte.NoExecute=noexec;
+		pte.PageAddress=~0ull; pte.Segment=7;
+		if (bc250_pte_from_dxgk(&ctx,kind,pte.Flags,pte.PageAddress,&out)!=0 ||
+		    out!=expected) fail("Zero terminal encoding differs from GFX10 null BO");
+		bc250_pte_decode(out,kind,&fields);
+		if (fields.valid || fields.address || !fields.prt || !fields.system ||
+		    !fields.snooped || !fields.log || fields.readable || fields.writeable ||
+		    fields.executable || fields.pde_pte!=(level!=0))
+			fail("Zero entry carries a backing address or wrong terminal flags");
+		pte.Zero=0; pte.Valid=1;
+		if (bc250_pte_from_dxgk(&ctx,kind,pte.Flags,pte.PageAddress,&out)==0)
+			fail("ordinary entry must still resolve its backing address");
+	}
+	printf("  Zero/PRT: 4 levels, protection variants and ordinary-map controls PASS\n");
+}
 
 static void check_good(void)
 {
@@ -353,7 +385,7 @@ static const struct bad_case g_bad[] = {
 	{ "a byte address above the 48 bits the field carries", BC250_PTE_LEAF, BC250_PTE_VM,
 	  BC250_PTE_ADDR_BYTES, CTX_PLAIN, RWX_SYSTEM(0x0001000000000000ull) },
 
-	{ "the Zero field set", BC250_PTE_LEAF, BC250_PTE_VM, BC250_PTE_ADDR_BYTES, CTX_PLAIN,
+	{ "Zero is not supported by the fixed GART", BC250_PTE_LEAF, BC250_PTE_GART, BC250_PTE_ADDR_BYTES, CTX_PLAIN,
 	  { 1, 1, 1, 0, 0, SYS_SEGMENT, 0, 0, 0, 0, 0, 0x1000ull } },
 
 	{ "SystemReserved0 set", BC250_PTE_LEAF, BC250_PTE_VM, BC250_PTE_ADDR_BYTES, CTX_PLAIN,
@@ -630,6 +662,7 @@ int main(int argc, char **argv)
 	check_layout();
 	check_gart_flags();
 	check_good();
+	check_zero_prt();
 	check_bad();
 	check_decode();
 	check_controls();

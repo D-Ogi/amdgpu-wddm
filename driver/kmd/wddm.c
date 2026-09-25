@@ -1611,6 +1611,8 @@ static NTSTATUS WddmGpuMmuCaps(_In_ const DXGKARG_QUERYADAPTERINFO* Query)
     if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
     RtlZeroMemory(caps, Query->OutputDataSize);
     // Page directories live in a local memory segment, where CPU_VIRTUAL is documented as not allowed.
+    // Native GFX10 PRT terminal encoding exists at all four levels.
+    caps->ZeroInPteSupported = 1;
     caps->PageTableUpdateMode = DXGK_PAGETABLEUPDATE_GPU_PHYSICAL;
     caps->VirtualAddressBitCount = BC250_WDDM_VA_BITS;
     caps->PageTableLevelCount = BC250_WDDM_LEVEL_COUNT;

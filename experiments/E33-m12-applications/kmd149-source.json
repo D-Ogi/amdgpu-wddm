@@ -1,0 +1,43 @@
+{
+  "base": "frozen deployed KMD147, scratch/m9/combined147-build-source",
+  "base_manifest_sha256": "3f441ef9d57e2d3ac37681fbdafe828ad3f1f9a30f1ec33a2864f4ff87c5771e",
+  "patch_sha256": "968b36840ce3498077256738ba05b92f9d86714a43c1759250d759d96ea2ca87",
+  "deployed_sys_sha256": "93ECB1BE4A4F33B1F59834B6BF5A006DE88CD9C778514472C0FEF5EDCBF3C221",
+  "files": [
+    {
+      "path": "driver/amdgpu-import/gfx10_prt_flags.inc",
+      "before_sha256": null,
+      "after_sha256": "5650058df929d05627837bf7e856201b18d4d668ee29a974d30ef73edf34602d"
+    },
+    {
+      "path": "driver/kmd/bc250kmd.inf",
+      "before_sha256": "16e8853d1249c51848504b3b480e419e95bda2c105b8b25f07d2bd64ab32c8f1",
+      "after_sha256": "d037e6b72ba947335ed466577ab4035a466a78b21897958f0f2b79f1b2861739"
+    },
+    {
+      "path": "driver/kmd/bc250kmd_escape.h",
+      "before_sha256": "27e825a3de13ba7ca9046a69da7e0fe2a0c9a20a56ab86d2d7d9b591594ebd2a",
+      "after_sha256": "ef69e07fb04cd0c073c34c23320b1642315e4583c8f54ddbe28fb27a0a5c54da"
+    },
+    {
+      "path": "driver/kmd/vidmm.c",
+      "before_sha256": "0a0f942e75930f7393c7f6b83a45fd09969dd0f7af3e7da56e9eaa8a82e3ea0d",
+      "after_sha256": "63578fec2870bc970c07798ff1150369bf3d49d846592ec37f9e66441b0a3186"
+    },
+    {
+      "path": "driver/kmd/wddm.c",
+      "before_sha256": "bc9950ba2fb948005f3a59ae7b06c1c76c0bddc899abf826215592f5913d2c00",
+      "after_sha256": "54c3f14dc36cb9354381461ab15c08a19a214ce16927c2a54b028d0a7a2d550a"
+    },
+    {
+      "path": "driver/shim/bc250_pte.c",
+      "before_sha256": "cff8a4695a9a4a12ba1ccc345055d7c4bebbbaae7bfcd03fec412c129575fd76",
+      "after_sha256": "d7d75edc9efe3679bc8424b6c5531cf9a47cf448773c06fc289469910e7b2310"
+    },
+    {
+      "path": "driver/shim/test/replay_pte.c",
+      "before_sha256": "1d7f63d6589eb59b2f699ca636e163e8f54900e45b51185b9a241ac864177fdd",
+      "after_sha256": "f66c9222aa0070900df5daac02893cccb814c82ab6d6c48e00ddd9af91a4b311"
+    }
+  ]
+}

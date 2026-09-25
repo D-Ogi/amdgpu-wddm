@@ -364,3 +364,5 @@ goes in at 0.252838 and `403101A0` comes back at 0.252845 - and the last read-mo
 sequence depends on it. The write is still compared exactly as the driver issued it; only the value
 a later read returns is corrected. A control run removes the declaration and fails, which is what
 says the declaration is doing work rather than covering a difference.
+
+- gfx10_prt_flags.inc: Linux amdgpu (MIT), v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449, unchanged PRT flag body from gmc_v10_0_get_vm_pte.

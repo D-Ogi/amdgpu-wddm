@@ -60,13 +60,26 @@ static BOOL CpuRelease(D3DKMT_HANDLE device,D3DKMT_HANDLE handle)
 #include "../../driver/amdgpu-import/nvd.h"
 #include <emmintrin.h>
 
-static BOOL ReadContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
-                        UINT64 expected,UINT64 sequence,const char *label)
+/* Mesa radv_cp_dma.c uses DMA_DATA for bulk copies; COPY_DATA is a
+ * different access path and its PRT behavior is not implied by CP DMA support. */
+static BOOL g_UseDma;
+static BOOL CopyContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
+                        UINT64 destination,UINT64 sequence)
 {
-    UINT32 *dw;UINT64 destination=p->Data.MappedVa+131072+sequence*8,observed;
+    UINT32 *dw;
     D3DKMT_SUBMITCOMMAND submit={0};
     if(!LockBuffer(p,ib))return FALSE;
     dw=(UINT32*)ib->Locked;
+    if(g_UseDma) {
+        /* Mesa radv_cs_emit_cp_dma, GFX10, CP_DMA_SYNC | CP_DMA_USE_L2.
+         * Seven dwords plus packet2 padding. nvd.h defines L2 selector3. */
+        dw[0]=PACKET3(PACKET3_DMA_DATA,5);
+        dw[1]=(UINT32)PACKET3_DMA_DATA_CP_SYNC |
+              PACKET3_DMA_DATA_SRC_SEL(3u) | PACKET3_DMA_DATA_DST_SEL(3u);
+        dw[2]=(UINT32)source;dw[3]=(UINT32)(source>>32);
+        dw[4]=(UINT32)destination;dw[5]=(UINT32)(destination>>32);
+        dw[6]=8;dw[7]=BC250_CP_NOP;
+    } else {
     /* Six COPY_DATA dwords plus two packet2 NOPs, matching GFX IB alignment. */
     dw[0]=PACKET3(PACKET3_COPY_DATA,4);
     dw[1]=PACKET3_COPY_DATA__SRC_SEL(PACKET3_COPY_DATA__SRC_SEL__TC_L2_OBSOLETE) |
@@ -76,12 +89,21 @@ static BOOL ReadContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
     dw[2]=(UINT32)source;dw[3]=(UINT32)(source>>32);
     dw[4]=(UINT32)destination;dw[5]=(UINT32)(destination>>32);
     dw[6]=BC250_CP_NOP;dw[7]=BC250_CP_NOP;
+    }
     _mm_sfence();
     if(!UnlockBuffer(p,ib))return FALSE;
     submit.Commands=ib->MappedVa;submit.CommandLength=32;
     submit.BroadcastContextCount=1;submit.BroadcastContext[0]=p->hContext;
-    if(!NT_SUCCESS(Report("Content COPY_DATA SubmitCommand",D3DKMTSubmitCommand(&submit)))||
+    if(!NT_SUCCESS(Report(g_UseDma?"Content DMA_DATA SubmitCommand":"Content COPY_DATA SubmitCommand",D3DKMTSubmitCommand(&submit)))||
        !StepSignalFence(completion,sequence)||!StepWaitFence(completion,sequence))return FALSE;
+    return TRUE;
+}
+
+static BOOL ReadContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
+                        UINT64 expected,UINT64 sequence,const char *label)
+{
+    UINT64 destination=p->Data.MappedVa+131072+sequence*8,observed;
+    if(!CopyContent(p,completion,ib,source,destination,sequence))return FALSE;
     if(!LockBuffer(p,&p->Data))return FALSE;
     observed=*(volatile UINT64*)((char*)p->Data.Locked+131072+sequence*8);
     Note("CONTENT %s observed=0x%016llX expected=0x%016llX %s",
@@ -92,8 +114,16 @@ static BOOL ReadContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
 
 int main(int argc,char **argv)
 {
-    BOOL holes=argc==2 && strcmp(argv[1],"--holes")==0;
-    if(argc>1 && !holes){puts("usage: native-sparse-control [--holes]");return 2;}
+    BOOL holes=FALSE,writeHole=FALSE;
+    int arg;
+    for(arg=1;arg<argc;arg++) {
+        if(strcmp(argv[arg],"--holes")==0)holes=TRUE;
+        else if(strcmp(argv[arg],"--dma")==0)g_UseDma=TRUE;
+        else if(strcmp(argv[arg],"--write-hole")==0)writeHole=TRUE;
+        else {puts("usage: native-sparse-control [--holes] [--dma] [--write-hole]");return 2;}
+    }
+    if(writeHole && (!holes || !g_UseDma)){puts("--write-hole requires --holes --dma");return 2;}
+    printf("Access path: %s\\n",g_UseDma?"CP DMA_DATA":"CP COPY_DATA");
     PROBE p={0},completion={0};BUFFER ib={0};
     BOOL ok=FALSE,released=FALSE;
     const UINT64 a=0x13579BDF2468ACE0ull,b=0xFEDCBA9876543210ull;
@@ -151,7 +181,14 @@ int main(int argc,char **argv)
        radv_wddm2_virtual_bind_end(&ws.base,&ctx.base,AMD_IP_GFX,0,0,NULL,true)||
        !StepWaitFence(&p,6))goto done;
     if(holes && !ReadContent(&p,&completion,&ib,parent.base.va,0,6,"unmapped-zero"))goto done;
-    puts(holes ? "ZERO_READ PASS through CP COPY_DATA; shader and write-discard semantics untested" : "BOUND_READ PASS through CP COPY_DATA; no reads from holes");
+    if(writeHole) {
+        if(!CopyContent(&p,&completion,&ib,p.Data.MappedVa,parent.base.va,7) ||
+           !ReadContent(&p,&completion,&ib,parent.base.va,0,8,"zero-after-write") ||
+           !ReadContent(&p,&completion,&ib,p.Data.MappedVa,a,9,"physical-A-after-write") ||
+           !ReadContent(&p,&completion,&ib,p.Data.MappedVa+65536,b,10,"physical-B-after-write"))goto done;
+        puts("WRITE_DISCARD PASS; hole stays zero and bound controls unchanged");
+    }
+    puts(holes ? "ZERO_READ PASS; shader semantics untested" : "BOUND_READ PASS; no reads from holes");
     ok=TRUE;
 done:
     if(input.hSyncObject&&!released)CpuRelease(p.hDevice,input.hSyncObject);

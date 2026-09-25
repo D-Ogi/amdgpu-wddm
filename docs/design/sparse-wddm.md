@@ -41,14 +41,12 @@ and the bit is absent. This deliberately gates the current sparse feature set;
 it is not proof that basic sparseBinding, buffer residency and image residency
 all have identical requirements. Evaluate them separately during implementation.
 
-KMD groundwork is incomplete too: WddmGpuMmuCaps leaves ZeroInPteSupported0,
-and bc250_pte_from_dxgk rejects a valid Zero entry. Its old comment incorrectly
-called Zero a reserved/must-be-zero field; the local Microsoft DXGK_PTE
-reference defines zero-resource semantics. Correcting the comment changes no
-behavior. Decide between a correct native PRT/Zero policy and documented OS
-emulation; absence of the native capability alone is not proof WDDM cannot
-provide zero mappings. Do not advertise ZeroInPteSupported without meeting its
-all-page-table-level contract.
+KMD149 now encodes native Zero/PRT and advertises ZeroInPteSupported.
+M484 verifies initial/unmapped zero reads and discarded writes through CP DMA,
+with exact bound-data controls. Four-level terminal encoding is host-tested;
+higher-level hardware walks, shaders and images remain unverified. The separate
+COPY_DATA access path still triggers TDR in the observed hole test. Native
+Zero support does not complete the scalar alias or queued mapping requirements.
 
 Local primary references: ref/ddi-display/d3dukmdt.md, DXGK_PTE,
 D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE and
@@ -95,3 +93,6 @@ resolution described above remain required before enabling capabilities.
 Native bound alias/rebind reads pass, but the initial-hole CP read causes
 VIDEO_TDR_FAILURE on KMD147. API/fence success alone did not prove Zero semantics.
 [Results and limits](../../evidence/windows/2026-09-25-E33-native-sparse/RESULT.md).
+
+M484 [native Zero/PRT evidence](../../evidence/windows/2026-09-25-E33-zero-prt/RESULT.md)
+replaces the earlier missing-encoder status. Sparse feature advertisement remains gated.

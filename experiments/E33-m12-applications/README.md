@@ -158,3 +158,39 @@ remain separate requirements.
 Native bound alias/rebind reads pass, but the initial-hole CP read causes
 VIDEO_TDR_FAILURE on KMD147. API/fence success alone did not prove Zero semantics.
 [Results and limits](../../evidence/windows/2026-09-25-E33-native-sparse/RESULT.md).
+
+## KMD148 Zero/PRT lab hypothesis
+A terminal AMD GFX10 PRT entry for Windows Valid+Zero, at each table level,
+will let native initial/unmapped-hole reads retire with zero data. Build from
+the frozen deployed147 source plus only the imported PRT encoder, Zero
+capability, cache-observation exclusion and version148. Keep Mesa sparse gated.
+
+First run the existing four physical/bound alias/rebind controls; then the
+explicit --holes probe, with the corrected UINT64_MAX rejection, 5-second
+fence deadline and 35-second external deadline. Compare exact 64-bit data.
+Stop the series at any failure, collect state/dump, recover if necessary.
+Ordinary CPU-reference Vulkan tests follow a successful hole control.
+A successful CP probe alone does not establish shader/image/scalar semantics.
+
+KMD148 bound controls passed, but CP initial-hole read still timed out.149
+also honors Zero when Valid=0: the local DXGK_PTE.Valid documentation names
+Zero as the exception to an invalid-entry fault. The earlier fast invalid
+return discarded this case. Add first raw/encoded Zero observations per level.
+Run an API-only initial Zero map and inspect that observation before any
+hole access; keep the corrected bound-data positive control.
+
+The149 API-only control observes Windows Valid=1, Zero=1, flags0x3, encoded
+PRT0x0088000000000006. Thus the added Valid=0 path does not explain the148
+failure. Next isolate the access engine: Mesa ac_gpu_info.cp_dma_supports_sparse
+refers to DMA_DATA used by radv_cp_dma.c, not COPY_DATA. The --dma probe uses
+that seven-dword packet with L2 and CP_SYNC; compare bound controls first, then
+initial/unmapped holes. Do not retry the unchanged COPY_DATA hole path.
+
+The149 DMA_DATA bound and hole-read controls pass. Extend the same packet
+path with --write-hole: copy physical A into an unbound hole, read zero back,
+then verify physical A and B remain unchanged. This tests write-discard without
+enabling Vulkan sparse or assuming scalar/shader behavior.
+
+M484: [native Zero/PRT results](../../evidence/windows/2026-09-25-E33-zero-prt/RESULT.md).
+The scoped KMD149 patch and source pin reproduce the deployed candidate from
+frozen147. DMA_DATA holes and discarded writes pass; COPY_DATA does not.
