@@ -43,8 +43,10 @@ int main(int argc, char **argv) {
     char name[1024], version[1024];
     uint32_t input[N], output[N], sums[N / GROUP];
     size_t global = N, local = GROUP;
-    if (argc != 2 || !argv[1][0]) {
-        fprintf(stderr, "usage: opencl_content_control <expected GPU name substring>\n");
+    int profiling = argc == 3 && strcmp(argv[2], "--profile") == 0;
+    cl_event events[2] = {NULL, NULL};
+    if ((argc != 2 && !profiling) || !argv[1][0]) {
+        fprintf(stderr, "usage: opencl_content_control <expected GPU name substring> [--profile]\n");
         return 2;
     }
     CHECK(clGetPlatformIDs(0, NULL, &np));
@@ -74,7 +76,7 @@ int main(int argc, char **argv) {
     fflush(stdout);
     cl_context context = clCreateContext(NULL, 1, &selected, NULL, NULL, &error);
     CHECK(error);
-    cl_command_queue queue = clCreateCommandQueue(context, selected, 0, &error);
+    cl_command_queue queue = clCreateCommandQueue(context, selected, profiling ? CL_QUEUE_PROFILING_ENABLE : 0, &error);
     CHECK(error);
     cl_program program = clCreateProgramWithSource(context, 1, &source, NULL, &error);
     CHECK(error);
@@ -101,8 +103,8 @@ int main(int argc, char **argv) {
     CHECK(clSetKernelArg(reduce, 0, sizeof(b), &b));
     CHECK(clSetKernelArg(reduce, 1, sizeof(c), &c));
     CHECK(clSetKernelArg(reduce, 2, GROUP * sizeof(uint32_t), NULL));
-    CHECK(clEnqueueNDRangeKernel(queue, map, 1, NULL, &global, &local, 0, NULL, NULL));
-    CHECK(clEnqueueNDRangeKernel(queue, reduce, 1, NULL, &global, &local, 0, NULL, NULL));
+    CHECK(clEnqueueNDRangeKernel(queue, map, 1, NULL, &global, &local, 0, NULL, profiling ? &events[0] : NULL));
+    CHECK(clEnqueueNDRangeKernel(queue, reduce, 1, NULL, &global, &local, 0, NULL, profiling ? &events[1] : NULL));
     CHECK(clEnqueueReadBuffer(queue, b, CL_TRUE, 0, sizeof(output), output, 0, NULL, NULL));
     CHECK(clEnqueueReadBuffer(queue, c, CL_TRUE, 0, sizeof(sums), sums, 0, NULL, NULL));
     unsigned failures = 0;
@@ -118,6 +120,30 @@ int main(int argc, char **argv) {
         for (uint32_t j = 0; j < GROUP; ++j) expected += transform(input[g * GROUP + j], g * GROUP + j);
         if (sums[g] != expected) {
             if (failures < 8) fprintf(stderr, "sum[%u]: %08x expected %08x\n", g, sums[g], expected);
+            ++failures;
+        }
+    }
+    if (profiling) {
+        const cl_profiling_info fields[4] = {CL_PROFILING_COMMAND_QUEUED,
+            CL_PROFILING_COMMAND_SUBMIT, CL_PROFILING_COMMAND_START, CL_PROFILING_COMMAND_END};
+        cl_ulong stamps[2][4];
+        for (unsigned event = 0; event < 2; ++event) {
+            for (unsigned field = 0; field < 4; ++field)
+                CHECK(clGetEventProfilingInfo(events[event], fields[field],
+                                             sizeof(cl_ulong), &stamps[event][field], NULL));
+            printf("profile[%u] queued=%llu submit=%llu start=%llu end=%llu ns\n", event,
+                   (unsigned long long)stamps[event][0], (unsigned long long)stamps[event][1],
+                   (unsigned long long)stamps[event][2], (unsigned long long)stamps[event][3]);
+            for (unsigned field = 1; field < 4; ++field) {
+                if (stamps[event][field] < stamps[event][field - 1]) {
+                    fprintf(stderr, "Invalid profiling order in event %u\n", event);
+                    ++failures;
+                }
+            }
+            CHECK(clReleaseEvent(events[event]));
+        }
+        if (stamps[1][2] < stamps[0][3]) {
+            fprintf(stderr, "Dependent reduction starts before map ends\n");
             ++failures;
         }
     }

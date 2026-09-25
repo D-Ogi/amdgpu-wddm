@@ -52,3 +52,17 @@ Exact dependency pins, configuration and logs currently live outside the repo
 in workspace scratch/m12/opencl-src and scratch/m12/*clvk*.
 Archive reproducible source deltas and binary identities with runtime evidence
 before promoting a deployment.
+
+## Profiling variant
+
+After the ordinary content run passes, repeat with `--profile`. This creates a
+profiling-enabled queue and retains both kernel events. Require nondecreasing
+QUEUED/SUBMIT/START/END timestamps and reduction START at or after map END, while
+still comparing all output data. Keep the printed raw nanosecond timestamps.
+This checks timestamp consistency; it is not the fixed M12 performance benchmark.
+
+clvk enables device queries when calibrated timers are available, or when
+CLVK_QUEUE_PROFILING_USE_TIMESTAMP_QUERIES=1 is explicitly set. Record this option
+and run the upstream device_timer cases separately to verify the calibrated host
+clock. Do not label a host-only fallback as measured GPU execution time.
+Runtime results for both variants are pending.
