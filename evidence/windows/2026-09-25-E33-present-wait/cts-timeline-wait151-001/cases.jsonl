@@ -1,0 +1,7 @@
+﻿{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.all_signal_from_device","utc":"2026-09-25T21:45:05.3869662Z","index":1}
+{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.all_signal_from_host","utc":"2026-09-25T21:45:05.6191679Z","index":2}
+{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.host_wait_before_signal","utc":"2026-09-25T21:45:05.8373702Z","index":3}
+{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.one_signal_from_device","utc":"2026-09-25T21:45:06.0575445Z","index":4}
+{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.one_signal_from_host","utc":"2026-09-25T21:45:06.2757306Z","index":5}
+{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_device","utc":"2026-09-25T21:45:06.4939546Z","index":6}
+{"status":"Pass","case":"dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_host","utc":"2026-09-25T21:45:06.7241167Z","index":7}

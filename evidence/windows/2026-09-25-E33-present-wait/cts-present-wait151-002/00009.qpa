@@ -1,0 +1,172 @@
+#sessionInfo releaseName vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce
+#sessionInfo releaseId 0xf6a29701
+#sessionInfo targetName "Default"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x1002
+#sessionInfo deviceID 0x13fe
+#sessionInfo deviceName AMD BC-250 (RADV GFX1013)
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.wsi.win32.present_id_wait.wait.no_frames --deqp-log-filename=C:\BC250\m12\cts-present-wait151-002\00009.qpa --deqp-watchdog=enable --deqp-log-images=enable --deqp-log-shader-sources=enable"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.wsi.win32.present_id_wait.wait.no_frames
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.wsi.win32.present_id_wait.wait.no_frames" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="tri-frag" Description="Program: tri-frag">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <FragmentShader CompileStatus="OK">
+    <ShaderSource>#version 310 es
+layout(location = 0) out lowp vec4 o_color;
+void main (void) { o_color = vec4(1.0, 0.0, 1.0, 1.0); }
+</ShaderSource>
+    <InfoLog></InfoLog>
+</FragmentShader>
+</ShaderProgram>
+  <Number Name="FragmentCompileTime" Description="Fragment shader compile time" Tag="Time" Unit="ms">81.639000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.007000</Number>
+</Section>
+ <ShaderProgram LinkStatus="OK">
+  <InfoLog></InfoLog>
+  <SpirVAssemblySource>; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 13
+; Schema: 0
+OpCapability Shader
+%1 = OpExtInstImport &quot;GLSL.std.450&quot;
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %4 &quot;main&quot; %9
+OpExecutionMode %4 OriginUpperLeft
+OpDecorate %9 RelaxedPrecision
+OpDecorate %9 Location 0
+%2 = OpTypeVoid
+%3 = OpTypeFunction %2
+%6 = OpTypeFloat 32
+%7 = OpTypeVector %6 4
+%8 = OpTypePointer Output %7
+%9 = OpVariable %8 Output
+%10 = OpConstant %6 1
+%11 = OpConstant %6 0
+%12 = OpConstantComposite %7 %10 %11 %10 %10
+%4 = OpFunction %2 None %3
+%5 = OpLabel
+OpStore %9 %12
+OpReturn
+OpFunctionEnd
+</SpirVAssemblySource>
+</ShaderProgram>
+ <Section Name="tri-vert" Description="Program: tri-vert">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <VertexShader CompileStatus="OK">
+    <ShaderSource>#version 310 es
+layout(location = 0) in highp vec4 a_position;
+layout(push_constant) uniform FrameData
+{
+    highp uint frameNdx;
+} frameData;
+void main (void)
+{
+    highp float angle = float(frameData.frameNdx) / 100.0;
+    highp float c     = cos(angle);
+    highp float s     = sin(angle);
+    highp mat4  t     = mat4( c, -s,  0,  0,
+                              s,  c,  0,  0,
+                              0,  0,  1,  0,
+                              0,  0,  0,  1);
+    gl_Position = t * a_position;
+}
+</ShaderSource>
+    <InfoLog></InfoLog>
+</VertexShader>
+</ShaderProgram>
+  <Number Name="VertexCompileTime" Description="Vertex shader compile time" Tag="Time" Unit="ms">0.610000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.004000</Number>
+</Section>
+ <ShaderProgram LinkStatus="OK">
+  <InfoLog></InfoLog>
+  <SpirVAssemblySource>; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 53
+; Schema: 0
+OpCapability Shader
+%1 = OpExtInstImport &quot;GLSL.std.450&quot;
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %4 &quot;main&quot; %45 %48
+OpDecorate %10 Block
+OpMemberDecorate %10 0 Offset 0
+OpDecorate %43 Block
+OpMemberDecorate %43 0 BuiltIn Position
+OpMemberDecorate %43 1 BuiltIn PointSize
+OpDecorate %48 Location 0
+%2 = OpTypeVoid
+%3 = OpTypeFunction %2
+%6 = OpTypeFloat 32
+%7 = OpTypePointer Function %6
+%9 = OpTypeInt 32 0
+%10 = OpTypeStruct %9
+%11 = OpTypePointer PushConstant %10
+%12 = OpVariable %11 PushConstant
+%13 = OpTypeInt 32 1
+%14 = OpConstant %13 0
+%15 = OpTypePointer PushConstant %9
+%19 = OpConstant %6 100
+%27 = OpTypeVector %6 4
+%28 = OpTypeMatrix %27 4
+%29 = OpTypePointer Function %28
+%34 = OpConstant %6 0
+%37 = OpConstant %6 1
+%43 = OpTypeStruct %27 %6
+%44 = OpTypePointer Output %43
+%45 = OpVariable %44 Output
+%47 = OpTypePointer Input %27
+%48 = OpVariable %47 Input
+%51 = OpTypePointer Output %27
+%4 = OpFunction %2 None %3
+%5 = OpLabel
+%8 = OpVariable %7 Function
+%21 = OpVariable %7 Function
+%24 = OpVariable %7 Function
+%30 = OpVariable %29 Function
+%16 = OpAccessChain %15 %12 %14
+%17 = OpLoad %9 %16
+%18 = OpConvertUToF %6 %17
+%20 = OpFDiv %6 %18 %19
+OpStore %8 %20
+%22 = OpLoad %6 %8
+%23 = OpExtInst %6 %1 Cos %22
+OpStore %21 %23
+%25 = OpLoad %6 %8
+%26 = OpExtInst %6 %1 Sin %25
+OpStore %24 %26
+%31 = OpLoad %6 %21
+%32 = OpLoad %6 %24
+%33 = OpFNegate %6 %32
+%35 = OpLoad %6 %24
+%36 = OpLoad %6 %21
+%38 = OpCompositeConstruct %27 %31 %33 %34 %34
+%39 = OpCompositeConstruct %27 %35 %36 %34 %34
+%40 = OpCompositeConstruct %27 %34 %34 %37 %34
+%41 = OpCompositeConstruct %27 %34 %34 %34 %37
+%42 = OpCompositeConstruct %28 %38 %39 %40 %41
+OpStore %30 %42
+%46 = OpLoad %28 %30
+%49 = OpLoad %27 %48
+%50 = OpMatrixTimesVector %27 %46 %49
+%52 = OpAccessChain %51 %45 %14
+OpStore %52 %50
+OpReturn
+OpFunctionEnd
+</SpirVAssemblySource>
+</ShaderProgram>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">1113587</Number>
+ <Result StatusCode="Pass">Pass</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 1.15 seconds
+
+#endSession

@@ -1,0 +1,7 @@
+dEQP-VK.synchronization.timeline_semaphore.wait.all_signal_from_device
+dEQP-VK.synchronization.timeline_semaphore.wait.all_signal_from_host
+dEQP-VK.synchronization.timeline_semaphore.wait.host_wait_before_signal
+dEQP-VK.synchronization.timeline_semaphore.wait.one_signal_from_device
+dEQP-VK.synchronization.timeline_semaphore.wait.one_signal_from_host
+dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_device
+dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_host

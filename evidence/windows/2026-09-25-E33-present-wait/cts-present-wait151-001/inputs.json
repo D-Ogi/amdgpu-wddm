@@ -1,0 +1,22 @@
+[
+    {
+        "Path":  "C:\\BC250\\m12\\cts-present-wait151-001\\cts-worker.ps1",
+        "Hash":  "BA0BA931A1EBA28E384992117DE8C11CE6FFECF265FAF8EE52F5A057C4D252A9"
+    },
+    {
+        "Path":  "C:\\BC250\\m12\\cts-present-wait151-001\\cases.txt",
+        "Hash":  "EF19B58E57A16E716809C5BD1664871436A177C755DF17D30E91FDBCFCD7942E"
+    },
+    {
+        "Path":  "C:\\BC250\\m12\\cts-release-tools\\deqp-vk.exe",
+        "Hash":  "AE7BEFDD190EF08E4A715DE0348734879263E1854E017D67865749905A95A2B6"
+    },
+    {
+        "Path":  "C:\\Windows\\System32\\vulkan-1.dll",
+        "Hash":  "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73"
+    },
+    {
+        "Path":  "C:\\BC250\\m12\\mesa05-present-wait\\vulkan_radeon.dll",
+        "Hash":  "763628F6873547B2BD071C3459E137F43CA5EE73335099241E0D43B78A655FB1"
+    }
+]

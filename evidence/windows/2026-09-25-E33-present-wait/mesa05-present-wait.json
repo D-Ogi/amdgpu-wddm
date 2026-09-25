@@ -1,0 +1,1 @@
+{"sha256": "763628F6873547B2BD071C3459E137F43CA5EE73335099241E0D43B78A655FB1", "change": "Win32 present wait callbacks after DwmFlush", "baseline": "16CDEA79"}

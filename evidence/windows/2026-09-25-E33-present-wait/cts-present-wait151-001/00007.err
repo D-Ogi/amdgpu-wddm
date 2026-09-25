@@ -1,0 +1,207 @@
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanExplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8cf3
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanExplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8cf3
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+[Vulkan Loader] DRIVER:         vkCreateDevice layer callstack setup to:
+[Vulkan Loader] DRIVER:            <Application>
+[Vulkan Loader] DRIVER:              ||
+[Vulkan Loader] DRIVER:            <Loader>
+[Vulkan Loader] DRIVER:              ||
+[Vulkan Loader] DRIVER:            <Device>
+[Vulkan Loader] DRIVER:                Using "AMD BC-250 (RADV GFX1013)" with driver: "C:\BC250\m12\mesa05-present-wait\vulkan_radeon.dll"
+radv_wddm2_winsys_create
+allocation handle=0x40001dc0
+allocation handle=0x40001e40
+allocation handle=0x40001ec0
+bc250: gfx preamble inlined (no gfx_init IB)
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+[Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanExplicitLayers"
+[Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] INFO | DRIVER:  Located json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers"
+[Vulkan Loader] INFO | DRIVER:  Driver C:\BC250\m12\mesa05-present-wait\radeon_icd.json is not recognized as a known driver. It will be assumed to be active
+[Vulkan Loader] INFO | DRIVER:  Skipping adding of json file "C:\BC250\m12\mesa05-present-wait\radeon_icd.json" from registry "HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers" to the list due to duplication
+[Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+[Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\m12\mesa05-present-wait\radeon_icd.json, version 1.0.0
+[Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+radv_wddm2_winsys_create
+[Vulkan Loader] DRIVER:         vkCreateDevice layer callstack setup to:
+[Vulkan Loader] DRIVER:            <Application>
+[Vulkan Loader] DRIVER:              ||
+[Vulkan Loader] DRIVER:            <Loader>
+[Vulkan Loader] DRIVER:              ||
+[Vulkan Loader] DRIVER:            <Device>
+[Vulkan Loader] DRIVER:                Using "AMD BC-250 (RADV GFX1013)" with driver: "C:\BC250\m12\mesa05-present-wait\vulkan_radeon.dll"
+radv_wddm2_winsys_create
+allocation handle=0x400028c0
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x80001140
+allocation handle=0x40002940
+allocation handle=0x400029c0
+allocation handle=0x40002a40
+allocation handle=0x80001340
+allocation handle=0x40002ac0
+allocation handle=0x40002b40
+allocation handle=0x40002bc0
+allocation handle=0x80001540
+allocation handle=0x40002c80
+allocation handle=0x40002f00
+allocation handle=0x40002f80
+allocation handle=0x80001900
+allocation handle=0x80001b80
+allocation handle=0x80001c00
+allocation handle=0x80001c80
+allocation handle=0x80001980
+allocation handle=0x40003000
+bc250: progress before submit previous=0 observed=0 waits=0 signals=2
+allocation handle=0x40003080
+bc250: gather capacity=4096 bytes required=2752 ibs=2
+FATAL ERROR: Watchdog timer timeout for touch interval

@@ -1,0 +1,7 @@
+﻿{
+    "utc":  "2026-09-25T21:37:23.6297273Z",
+    "status":  "FAIL",
+    "case":  "dEQP-VK.wsi.win32.present_id_wait.wait.future_frame",
+    "message":  "Native exit -1 in 00007",
+    "index":  7
+}

@@ -1,0 +1,7 @@
+{
+  "exact_input_cases": 7,
+  "qpa_pass": 7,
+  "skipped": 0,
+  "source": "vulkan-cts-1.4.6.2 f6a29701",
+  "scope": "named groups only; full acceptance and Linux parity pending"
+}

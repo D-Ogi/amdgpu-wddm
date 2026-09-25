@@ -1,0 +1,23 @@
+#sessionInfo releaseName vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce
+#sessionInfo releaseId 0xf6a29701
+#sessionInfo targetName "Default"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x1002
+#sessionInfo deviceID 0x13fe
+#sessionInfo deviceName AMD BC-250 (RADV GFX1013)
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_device --deqp-log-filename=C:\BC250\m12\cts-timeline-wait151-001\00006.qpa --deqp-watchdog=enable --deqp-log-images=enable --deqp-log-shader-sources=enable"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_device
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.synchronization.timeline_semaphore.wait.poll_signal_from_device" Version="0.3.4" CaseType="SelfValidate">
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">1256</Number>
+ <Result StatusCode="Pass">Poll on timeline value succeeded</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 0.04 seconds
+
+#endSession

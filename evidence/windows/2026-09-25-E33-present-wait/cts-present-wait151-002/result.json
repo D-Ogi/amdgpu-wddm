@@ -1,0 +1,9 @@
+﻿{
+    "status":  "COMPLETE",
+    "utc":  "2026-09-25T21:44:21.3675466Z",
+    "counts":  {
+                   "Pass":  15,
+                   "NotSupported":  0
+               },
+    "note":  "Development shard only; Linux parity and full must-pass remain open"
+}

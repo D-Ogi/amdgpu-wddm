@@ -1,0 +1,8 @@
+Creating 1000 meshes, each with 3 subdivision levels...
+Creating 10 256x256 textures...
+[39mDiligent Engine: Info: Can not disable SeparablePrograms
+[39m[39mDiligent Engine: Info: Disjoint query pool: created 0 queries
+[39m[39mDiligent Engine: Info: Disjoint query pool: created 0 queries
+[39m[39mDiligent Engine: Info: Disjoint query pool: created 0 queries
+[39m[39mDiligent Engine: Info: Disjoint query pool: created 660 queries
+[39m

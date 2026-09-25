@@ -1,0 +1,17 @@
+﻿{
+    "cache_mode":  "Fresh",
+    "kind":  "Asteroids11",
+    "package":  "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11",
+    "command":  "-d3d11 -window 1080 720 -threads 4 -benchmark_frames 660 -benchmark_output \"C:\\BC250\\m12\\asteroids-d3d11-151-006\\frames.csv\" -benchmark_capture \"C:\\BC250\\m12\\asteroids-d3d11-151-006\\frame660.ppm\"",
+    "capture":  true,
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "cache_directory":  "C:\\BC250\\m12\\cache-asteroids-d3d11-151-capture006",
+    "radv_experimental":  "sparse",
+    "required_modules":  {
+                             "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11\\GraphicsEngineD3D11_64r.dll":  "5FC73549F794130A0736E71C538A775892E1D28ADC805825091E0A5D0229D0CE",
+                             "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11\\dxgi.dll":  "2E674A56A48B2739B2B636105F7CDFA14A4C1964C278BCE6F9EE4C31ED50C05F",
+                             "C:\\BC250\\m12\\asteroids-runner009\\asteroids-translated003\\d3d11\\d3d11.dll":  "71E6EF9AD7E666675D1EC3F22568AEACF3705FAE2C63CB0B314E1EC8F2E10D3E",
+                             "C:\\Windows\\System32\\vulkan-1.dll":  "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73",
+                             "C:\\BC250\\m12\\mesa05-present-wait2\\vulkan_radeon.dll":  "A6D11B64FEC1543C06760CE993A308C6288E8F52DA3DEE7BC9F3CD068A63C453"
+                         }
+}
