@@ -5362,10 +5362,10 @@ index 00000000000..c263976c05b
 +#endif /* RADV_WDDM2_BO_H */
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 new file mode 100644
-index 00000000000..f7587082e46
+index 00000000000..fab3d3f3b8c
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
-@@ -0,0 +1,1119 @@
+@@ -0,0 +1,1138 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -5394,6 +5394,7 @@ index 00000000000..f7587082e46
 + */
 +
 +#include "radv_wddm2_cs.h"
++#include "sid.h"
 +#include "radv_wddm2_bc250.h"
 +#include "radv_wddm2_bo.h"
 +#include "radv_winsys_cs.h"
@@ -6113,8 +6114,10 @@ index 00000000000..f7587082e46
 +{
 +   unsigned count = cs->chain_ib ? 1 : cs->num_ib_buffers;
 +   unsigned i;
-+   if (*n + count > cap)
++   if (*n + count > cap) {
++      fprintf(stderr, "bc250: gather IB limit used=%u add=%u cap=%u\n", *n, count, cap);
 +      return false;
++   }
 +   for (i = 0; i < count; i++)
 +      out[(*n)++] = cs->ib_buffers[i];
 +   return true;
@@ -6141,7 +6144,8 @@ index 00000000000..f7587082e46
 +   struct radv_wddm2_winsys *ws = ctx->ws;
 +   struct radv_winsys_ib ibs[16];
 +   struct bc250_submit_blob blob;
-+   unsigned n = 0, i, total = 0;
++   unsigned n = 0, i;
++   uint64_t total = 0;
 +   uint64_t va;
 +   uint32_t bytes;
 +   NTSTATUS status;
@@ -6169,18 +6173,31 @@ index 00000000000..f7587082e46
 +      uint8_t *dst;
 +      for (i = 0; i < n; i++)
 +         total += ibs[i].cdw;
-+      bytes = total * 4;
-+      if (bytes == 0 || bytes > (1u << 20))
++      /* Match the GFX INDIRECT_BUFFER IB_SIZE field, not an arbitrary 1 MiB
++       * staging limit. The caller retired this queue's previous gather first. */
++      if (total == 0 || total > G_3F3_IB_SIZE(UINT32_MAX)) {
++         fprintf(stderr, "bc250: gather exceeds IB_SIZE field: %" PRIu64 " dwords\n", total);
 +         return STATUS_INVALID_PARAMETER;
-+      if (!queue->bc250_gather) {
-+         VkResult result = ws->base.buffer_create(&ws->base, 1u << 20, 4096, RADEON_DOMAIN_GTT,
++      }
++      bytes = (uint32_t)(total * 4);
++      if (!queue->bc250_gather || queue->bc250_gather->size < bytes) {
++         struct radeon_winsys_bo *replacement = NULL;
++         uint64_t capacity = align64(bytes, 4096);
++         VkResult result = ws->base.buffer_create(&ws->base, capacity, 4096, RADEON_DOMAIN_GTT,
 +                                                  RADEON_FLAG_CPU_ACCESS | RADEON_FLAG_NO_INTERPROCESS_SHARING,
-+                                                  0, 0, NULL, &queue->bc250_gather);
++                                                  0, 0, NULL, &replacement);
 +         if (result != VK_SUCCESS)
 +            return STATUS_NO_MEMORY;
-+         queue->bc250_gather_map = ws->base.buffer_map(&ws->base, queue->bc250_gather, false, NULL);
-+         if (!queue->bc250_gather_map)
++         uint8_t *mapping = ws->base.buffer_map(&ws->base, replacement, false, NULL);
++         if (!mapping) {
++            ws->base.buffer_destroy(&ws->base, replacement);
 +            return STATUS_NO_MEMORY;
++         }
++         if (queue->bc250_gather)
++            ws->base.buffer_destroy(&ws->base, queue->bc250_gather);
++         queue->bc250_gather = replacement;
++         queue->bc250_gather_map = mapping;
++         fprintf(stderr, "bc250: gather capacity=%" PRIu64 " bytes required=%u ibs=%u\n", capacity, bytes, n);
 +      }
 +      dst = queue->bc250_gather_map;
 +      for (i = 0; i < n; i++) {
@@ -6354,8 +6371,10 @@ index 00000000000..f7587082e46
 +      if (pending_value && !vk_wddm2_fence_wait(ctx->ws->device_h, &queue->bc250_progress))
 +         return VK_ERROR_DEVICE_LOST;
 +      status = radv_wddm2_bc250_submit(ctx, queue, submit);
-+      if (!NT_SUCCESS(status))
++      if (!NT_SUCCESS(status)) {
++         fprintf(stderr, "bc250: native submit failed NTSTATUS=0x%X cs_count=%u\n", status, submit->cs_count);
 +         return VK_ERROR_DEVICE_LOST;
++      }
 +      uint64_t next_value = queue->bc250_progress.wait_value + 1;
 +      D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 progress_signal = {
 +         .ObjectCount = 1,

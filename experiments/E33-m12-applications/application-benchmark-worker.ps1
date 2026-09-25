@@ -135,6 +135,11 @@ try {
  $captureHash=$null
  if($Capture){
   if(-not(Test-Path $image) -or (Get-Item $image).Length -le 100){throw 'Capture missing or truncated'}
+  if($Kind -like 'Asteroids*'){
+   $stream=[IO.File]::OpenRead($image)
+   try{$header=New-Object byte[] 64;$read=$stream.Read($header,0,$header.Length)}finally{$stream.Dispose()}
+   if([Text.Encoding]::ASCII.GetString($header,0,$read) -notmatch '^P6\s+1080\s+720\s+255\s'){throw 'Unexpected capture dimensions or format'}
+  }
   $captureHash=(Get-FileHash $image).Hash
  }
  $gpuHash=$null
@@ -143,8 +148,8 @@ try {
   if($gpuRows.Count -ne 660){throw 'Incomplete GPU frame timings'}
   for($i=0;$i -lt 660;$i++){
    if([int]$gpuRows[$i].frame -ne $i+1){throw 'GPU frame sequence mismatch'}
-   $ticks=[ulong]::Parse($gpuRows[$i].gpu_duration_ticks,[Globalization.CultureInfo]::InvariantCulture)
-   $frequency=[ulong]::Parse($gpuRows[$i].frequency_hz,[Globalization.CultureInfo]::InvariantCulture)
+   $ticks=[uint64]::Parse($gpuRows[$i].gpu_duration_ticks,[Globalization.CultureInfo]::InvariantCulture)
+   $frequency=[uint64]::Parse($gpuRows[$i].frequency_hz,[Globalization.CultureInfo]::InvariantCulture)
    $ms=[double]::Parse($gpuRows[$i].gpu_render_interval_ms,[Globalization.CultureInfo]::InvariantCulture)
    if(-not $ticks -or -not $frequency -or [double]::IsNaN($ms) -or [double]::IsInfinity($ms) -or [Math]::Abs($ms-1000.0*$ticks/$frequency) -gt 0.000001){throw 'Invalid GPU timing conversion'}
   }

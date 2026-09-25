@@ -1,0 +1,19 @@
+{
+  "status": "RUN_COMPLETED_ARTIFACTS_VERIFIED",
+  "original_runner_result": "RUN_COMPLETED",
+  "frames": 660,
+  "image_size": [
+    1080,
+    720
+  ],
+  "unique_colors": 45351,
+  "cpu_median_ms": 37.60335,
+  "gpu_median_ms": 1.7879399999999999,
+  "performance_acceptance": "not evaluated: capture enabled; stage tracing disabled; Linux parity pending",
+  "image_correctness": "visible asteroid field; same-frame Linux reference comparison pending",
+  "sha256": {
+    "frames.csv": "fdf5018423482e0ff96799f88571934abd294f1511e11c1ad851f74aed6fc6bf",
+    "frames.csv.gpu.csv": "7a243e0e980b613af3ed9c55311110ff3bbe1c94c139123153c52c67d1695f11",
+    "frame660.ppm": "ef9caa311b9e6278bc703794a1fe7b3296d4efdaa68714957271dccf87190d9b"
+  }
+}

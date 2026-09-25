@@ -1,0 +1,9 @@
+﻿{
+    "modules":  [
+                    "C:\\BC250\\m12\\asteroids-forensic005\\asteroids-package007\\GraphicsEngineVk_64r.dll",
+                    "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                    "C:\\BC250\\m12\\mesa05-gather-grow\\vulkan_radeon.dll"
+                ],
+    "elapsed_ms":  37195,
+    "exit_code":  0
+}

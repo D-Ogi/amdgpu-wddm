@@ -1,0 +1,10 @@
+﻿{
+    "csv_sha256":  "FDF5018423482E0FF96799F88571934ABD294F1511E11C1AD851F74AED6FC6BF",
+    "gpu_csv_sha256":  "7A243E0E980B613AF3ED9C55311110FF3BBE1C94C139123153C52C67D1695F11",
+    "frames":  660,
+    "status":  "RUN_COMPLETED",
+    "capture_sha256":  "EF9CAA311B9E6278BC703794A1FE7B3296D4EFDAA68714957271DCCF87190D9B",
+    "linux_parity":  "pending",
+    "metric":  "cpu_update_submit_present_ms",
+    "image_correctness":  "not_evaluated"
+}

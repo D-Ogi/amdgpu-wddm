@@ -1,5 +1,5 @@
 diff --git a/Samples/Asteroids/src/WinWrapper.cpp b/Samples/Asteroids/src/WinWrapper.cpp
-index 7d92c74..d6bf314 100644
+index 7d92c74..1c57855 100644
 --- a/Samples/Asteroids/src/WinWrapper.cpp
 +++ b/Samples/Asteroids/src/WinWrapper.cpp
 @@ -1,3 +1,5 @@
@@ -18,6 +18,15 @@ index 7d92c74..d6bf314 100644
  
  #include "asteroids_d3d11.h"
  #include "asteroids_d3d12.h"
+@@ -341,7 +346,7 @@ int InitWorkload(HWND hWnd, AsteroidsSimulation &asteroids)
+ 
+ void CreateDemoWindow(HWND& hWnd)
+ {
+-    RECT windowRect = { 100, 100, gSettings.windowWidth, gSettings.windowHeight };
++    RECT windowRect = { 100, 100, 100 + gSettings.windowWidth, 100 + gSettings.windowHeight };
+     if(hWnd)
+     {
+         GetWindowRect(hWnd, &windowRect);
 @@ -386,9 +391,19 @@ int main(int argc, char** argv)
      gVulkanAvailable = CheckDll("vulkan-1.dll");
  #endif
@@ -114,7 +123,7 @@ index 7d92c74..d6bf314 100644
  
              UINT64 afterRenderCount;
 diff --git a/Samples/Asteroids/src/asteroids_DE.cpp b/Samples/Asteroids/src/asteroids_DE.cpp
-index 24152b8..8d483b7 100644
+index 24152b8..4ccf17f 100644
 --- a/Samples/Asteroids/src/asteroids_DE.cpp
 +++ b/Samples/Asteroids/src/asteroids_DE.cpp
 @@ -1,3 +1,5 @@
@@ -138,7 +147,7 @@ index 24152b8..8d483b7 100644
  
  // Create Direct3D device and swap chain
 -void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
-+void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType, bool capture, bool timing)
++void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType, bool capture, unsigned timingFrames)
  {
      SwapChainDesc SwapChainDesc;
      SwapChainDesc.BufferCount       = NUM_SWAP_CHAIN_BUFFERS;
@@ -150,32 +159,36 @@ index 24152b8..8d483b7 100644
          case RENDER_DEVICE_TYPE_D3D11:
          {
              EngineD3D11CreateInfo EngineCI;
-+            if (timing) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
++            if (timingFrames) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
              EngineCI.NumDeferredContexts = mNumSubsets - 1;
  
              auto* pFactoryD3D11 = LoadAndGetEngineFactoryD3D11();
-@@ -109,6 +116,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+@@ -109,6 +116,9 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
          case RENDER_DEVICE_TYPE_D3D12:
          {
              EngineD3D12CreateInfo EngineCI;
-+            if (timing) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
++            // Retain one duration result per frame until the final readback.
++            if (timingFrames) EngineCI.QueryPoolSizes[QUERY_TYPE_DURATION] = timingFrames;
++            if (timingFrames) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
              EngineCI.NumDeferredContexts             = mNumSubsets - 1;
              EngineCI.GPUDescriptorHeapDynamicSize[0] = 65536 * 4;
              EngineCI.GPUDescriptorHeapSize[0]        = 65536; // For mutable mode
-@@ -128,6 +136,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+@@ -128,6 +138,9 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
          case RENDER_DEVICE_TYPE_VULKAN:
          {
              EngineVkCreateInfo EngineCI;
-+            if (timing) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
++            // Retain one duration result per frame until the final readback.
++            if (timingFrames) EngineCI.QueryPoolSizes[QUERY_TYPE_DURATION] = timingFrames;
++            if (timingFrames) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
              EngineCI.NumDeferredContexts = mNumSubsets - 1;
              EngineCI.DynamicHeapSize     = 64 << 20;
  
-@@ -185,7 +194,15 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
+@@ -185,7 +198,15 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
      mNumSubsets = std::max(settings.numThreads, 1);
      mNumSubsets = std::min(settings.numThreads, 32);
  
 -    InitDevice(hWnd, DevType);
-+    InitDevice(hWnd, DevType, settings.benchmarkCapture != nullptr, settings.benchmarkFrames != 0);
++    InitDevice(hWnd, DevType, settings.benchmarkCapture != nullptr, settings.benchmarkFrames);
 +    mBenchmarkQueries.resize(settings.benchmarkFrames);
 +    for (auto& query : mBenchmarkQueries) {
 +        QueryDesc desc;
@@ -187,7 +200,7 @@ index 24152b8..8d483b7 100644
  
      m_BindingMode = static_cast<BindingMode>(settings.resourceBindingMode);
      if (m_BindingMode == BindingMode::Bindless && !mDevice->GetDeviceInfo().Features.BindlessResources)
-@@ -918,12 +935,29 @@ void Asteroids::RenderSubset(Uint32             SubsetNum,
+@@ -918,12 +939,29 @@ void Asteroids::RenderSubset(Uint32             SubsetNum,
      }
  }
  
@@ -217,7 +230,7 @@ index 24152b8..8d483b7 100644
      // Clear the render target
      float clearcol[4] = {0.0f, 0.0f, 0.0f, 0.0f};
      auto* pRTV        = mSwapChain->GetCurrentBackBufferRTV();
-@@ -932,6 +966,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+@@ -932,6 +970,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
      mDeviceCtxt->ClearRenderTarget(pRTV, clearcol, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
      mDeviceCtxt->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 0.0f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
  
@@ -225,7 +238,7 @@ index 24152b8..8d483b7 100644
      LONG64 currCounter;
      QueryPerformanceCounter((LARGE_INTEGER*)&currCounter);
      mUpdateTicks = currCounter;
-@@ -970,6 +1005,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+@@ -970,6 +1009,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
      QueryPerformanceCounter((LARGE_INTEGER*)&currCounter);
      mUpdateTicks = currCounter - mUpdateTicks;
  
@@ -233,7 +246,7 @@ index 24152b8..8d483b7 100644
      mRenderTicks = currCounter;
  
      if (settings.multithreadedRendering)
-@@ -1005,6 +1041,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+@@ -1005,6 +1045,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
          }
      }
  
@@ -241,7 +254,7 @@ index 24152b8..8d483b7 100644
      // Call FinishFrame() to release dynamic resources allocated by deferred contexts
      // IMPORTANT: we must wait until the command lists are submitted for execution
      // because FinishFrame() invalidates all dynamic resources
-@@ -1016,6 +1053,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+@@ -1016,6 +1057,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
  
      mDeviceCtxt->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
  
@@ -249,7 +262,7 @@ index 24152b8..8d483b7 100644
      // Draw skybox
      {
          {
-@@ -1081,7 +1119,73 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+@@ -1081,7 +1123,73 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
          }
      }
  
@@ -324,7 +337,7 @@ index 24152b8..8d483b7 100644
  
  void Asteroids::GetPerfCounters(float& UpdateTime, float& RenderTime)
 diff --git a/Samples/Asteroids/src/asteroids_DE.h b/Samples/Asteroids/src/asteroids_DE.h
-index b6603e3..7876325 100644
+index b6603e3..28401a4 100644
 --- a/Samples/Asteroids/src/asteroids_DE.h
 +++ b/Samples/Asteroids/src/asteroids_DE.h
 @@ -11,6 +11,7 @@
@@ -347,7 +360,7 @@ index b6603e3..7876325 100644
      void CreateGUIResources();
      void RenderSubset(Diligent::Uint32 SubsetNum, Diligent::IDeviceContext *pCtx, const OrbitCamera& camera, Diligent::Uint32 startIdx, Diligent::Uint32 numAsteroids);
 -    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType);
-+    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType, bool capture, bool timing);
++    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType, bool capture, unsigned timingFrames);
  
      enum class BindingMode
      {

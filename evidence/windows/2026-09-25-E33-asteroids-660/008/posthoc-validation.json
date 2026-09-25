@@ -1,0 +1,19 @@
+{
+  "status": "CONTENT_TIMING_CONTROL_PASS_WRONG_RESOLUTION",
+  "original_runner_result": "FAIL: PowerShell5.1 unknown [ulong] after application exited0",
+  "frames": 660,
+  "image_size": [
+    980,
+    620
+  ],
+  "unique_colors": 41997,
+  "cpu_median_ms": 36.42145,
+  "gpu_median_ms": 1.68614,
+  "performance_acceptance": "not evaluated: capture and diagnostic tracing enabled; Linux parity pending",
+  "image_correctness": "requires visual and reference comparison",
+  "sha256": {
+    "frames.csv": "381e61933c5051a52fd1c199d7830caf9fd9fc2de8b2715083d5124a83f869bd",
+    "frames.csv.gpu.csv": "4d8f4c7fdc156bffe08a06978b0c72dc21a4fc56da0111b622f0ab6bb9a66729",
+    "frame660.ppm": "d27fcfd56dfdf1c8e21f30706b5446aa17c83aa89719d7759b28d9abfb16bb31"
+  }
+}
