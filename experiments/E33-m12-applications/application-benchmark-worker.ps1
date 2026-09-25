@@ -115,8 +115,21 @@ try {
   if(-not(Test-Path $image) -or (Get-Item $image).Length -le 100){throw 'Capture missing or truncated'}
   $captureHash=(Get-FileHash $image).Hash
  }
+ $gpuHash=$null
+ if($Kind -like 'Asteroids*'){
+  $gpuCsv=$csv+'.gpu.csv';$gpuRows=@(Import-Csv $gpuCsv)
+  if($gpuRows.Count -ne 660){throw 'Incomplete GPU frame timings'}
+  for($i=0;$i -lt 660;$i++){
+   if([int]$gpuRows[$i].frame -ne $i+1){throw 'GPU frame sequence mismatch'}
+   $ticks=[ulong]::Parse($gpuRows[$i].gpu_duration_ticks,[Globalization.CultureInfo]::InvariantCulture)
+   $frequency=[ulong]::Parse($gpuRows[$i].frequency_hz,[Globalization.CultureInfo]::InvariantCulture)
+   $ms=[double]::Parse($gpuRows[$i].gpu_render_interval_ms,[Globalization.CultureInfo]::InvariantCulture)
+   if(-not $ticks -or -not $frequency -or [double]::IsNaN($ms) -or [double]::IsInfinity($ms) -or [Math]::Abs($ms-1000.0*$ticks/$frequency) -gt 0.000001){throw 'Invalid GPU timing conversion'}
+  }
+  $gpuHash=(Get-FileHash $gpuCsv).Hash
+ }
  Health 'after'
- Save 'result' @{status='RUN_COMPLETED';frames=660;metric=$metric;csv_sha256=(Get-FileHash $csv).Hash;capture_sha256=$captureHash;image_correctness='not_evaluated';linux_parity='pending'}
+ Save 'result'  @{status='RUN_COMPLETED';frames=660;metric=$metric;csv_sha256=(Get-FileHash $csv).Hash;capture_sha256=$captureHash;gpu_csv_sha256=$gpuHash;image_correctness='not_evaluated';linux_parity='pending'}
 }catch{
  Save 'result' @{status='FAIL';message=$_.ToString();utc=[DateTime]::UtcNow.ToString('o')}
  throw

@@ -1,17 +1,18 @@
 diff --git a/Samples/Asteroids/src/WinWrapper.cpp b/Samples/Asteroids/src/WinWrapper.cpp
-index 7d92c74..2c1184d 100644
+index 7d92c74..bc59625 100644
 --- a/Samples/Asteroids/src/WinWrapper.cpp
 +++ b/Samples/Asteroids/src/WinWrapper.cpp
-@@ -21,6 +21,8 @@
+@@ -21,6 +21,9 @@
  #include <map>
  #include <vector>
  #include <iostream>
 +#include <fstream>
 +#include <iomanip>
++#include <string>
  
  #include "asteroids_d3d11.h"
  #include "asteroids_d3d12.h"
-@@ -386,9 +388,19 @@ int main(int argc, char** argv)
+@@ -386,9 +389,19 @@ int main(int argc, char** argv)
      gVulkanAvailable = CheckDll("vulkan-1.dll");
  #endif
  
@@ -32,11 +33,12 @@ index 7d92c74..2c1184d 100644
              gSettings.closeAfterSeconds = atof(argv[++a]);
          } else if (_stricmp(argv[a], "-nod3d11") == 0) {
              gd3d11Available = false;
-@@ -481,6 +493,17 @@ int main(int argc, char** argv)
+@@ -481,6 +494,18 @@ int main(int argc, char** argv)
      QueryPerformanceFrequency((LARGE_INTEGER*)&perfCounterFreq);
      QueryPerformanceCounter((LARGE_INTEGER*)&lastPerfCount);
  
 +    if (gSettings.benchmarkCapture && !benchmarkFrames) return 2;
++    gSettings.benchmarkFrames = benchmarkFrames;
 +    std::ofstream benchmark;
 +    unsigned benchmarkFrame = 0;
 +    if (benchmarkFrames) {
@@ -50,7 +52,7 @@ index 7d92c74..2c1184d 100644
      // main loop
      double elapsedTime = 0.0;
      double frameTime = 0.0;
-@@ -545,7 +568,8 @@ int main(int argc, char** argv)
+@@ -545,7 +570,8 @@ int main(int argc, char** argv)
  
          // Maintaining absolute time sync is not important in this demo so we can err on the "smoother" side
          double alpha = 0.2f;
@@ -60,7 +62,7 @@ index 7d92c74..2c1184d 100644
  
          // Update GUI
          {
-@@ -600,9 +624,11 @@ int main(int argc, char** argv)
+@@ -600,9 +626,11 @@ int main(int argc, char** argv)
              } else {
                  sprintf_s(buffer, "%.0f fps", 1.0f / filteredFrameTime);
              }
@@ -73,7 +75,7 @@ index 7d92c74..2c1184d 100644
          switch (gSettings.mode)
          {
              case Settings::RenderMode::NativeD3D11: 
-@@ -623,6 +649,19 @@ int main(int argc, char** argv)
+@@ -623,6 +651,21 @@ int main(int argc, char** argv)
              break;
          }
  
@@ -85,6 +87,8 @@ index 7d92c74..2c1184d 100644
 +            if (benchmarkFrame == benchmarkFrames) {
 +                benchmark.flush();
 +                if (!benchmark) return 3;
++                if (gWorkloadDE)
++                    gWorkloadDE->WriteBenchmarkGpuCsv((std::string(benchmarkOutput) + ".gpu.csv").c_str());
 +                PostMessage(hWnd, WM_CLOSE, 0, 0);
 +                continue;
 +            }
@@ -94,24 +98,25 @@ index 7d92c74..2c1184d 100644
  
              UINT64 afterRenderCount;
 diff --git a/Samples/Asteroids/src/asteroids_DE.cpp b/Samples/Asteroids/src/asteroids_DE.cpp
-index 24152b8..39f9528 100644
+index 24152b8..c353b89 100644
 --- a/Samples/Asteroids/src/asteroids_DE.cpp
 +++ b/Samples/Asteroids/src/asteroids_DE.cpp
-@@ -12,6 +12,8 @@
+@@ -12,6 +12,9 @@
  #include <math.h>
  
  #include <iostream>
 +#include <fstream>
++#include <iomanip>
 +#include <stdexcept>
  #include <algorithm>
  #include <vector>
  #include <future>
-@@ -79,10 +81,11 @@ struct SkyboxConstantBuffer
+@@ -79,10 +82,11 @@ struct SkyboxConstantBuffer
  
  
  // Create Direct3D device and swap chain
 -void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
-+void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType, bool capture)
++void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType, bool capture, bool timing)
  {
      SwapChainDesc SwapChainDesc;
      SwapChainDesc.BufferCount       = NUM_SWAP_CHAIN_BUFFERS;
@@ -119,19 +124,69 @@ index 24152b8..39f9528 100644
      SwapChainDesc.ColorBufferFormat = TEX_FORMAT_RGBA8_UNORM_SRGB;
      SwapChainDesc.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
      SwapChainDesc.DefaultDepthValue = 0.f;
-@@ -185,7 +188,7 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
+@@ -95,6 +99,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+         case RENDER_DEVICE_TYPE_D3D11:
+         {
+             EngineD3D11CreateInfo EngineCI;
++            if (timing) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
+             EngineCI.NumDeferredContexts = mNumSubsets - 1;
+ 
+             auto* pFactoryD3D11 = LoadAndGetEngineFactoryD3D11();
+@@ -109,6 +114,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+         case RENDER_DEVICE_TYPE_D3D12:
+         {
+             EngineD3D12CreateInfo EngineCI;
++            if (timing) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
+             EngineCI.NumDeferredContexts             = mNumSubsets - 1;
+             EngineCI.GPUDescriptorHeapDynamicSize[0] = 65536 * 4;
+             EngineCI.GPUDescriptorHeapSize[0]        = 65536; // For mutable mode
+@@ -128,6 +134,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+         case RENDER_DEVICE_TYPE_VULKAN:
+         {
+             EngineVkCreateInfo EngineCI;
++            if (timing) EngineCI.Features.DurationQueries = DEVICE_FEATURE_STATE_ENABLED;
+             EngineCI.NumDeferredContexts = mNumSubsets - 1;
+             EngineCI.DynamicHeapSize     = 64 << 20;
+ 
+@@ -185,7 +192,15 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
      mNumSubsets = std::max(settings.numThreads, 1);
      mNumSubsets = std::min(settings.numThreads, 32);
  
 -    InitDevice(hWnd, DevType);
-+    InitDevice(hWnd, DevType, settings.benchmarkCapture != nullptr);
++    InitDevice(hWnd, DevType, settings.benchmarkCapture != nullptr, settings.benchmarkFrames != 0);
++    mBenchmarkQueries.resize(settings.benchmarkFrames);
++    for (auto& query : mBenchmarkQueries) {
++        QueryDesc desc;
++        desc.Name = "BC250 frame GPU duration";
++        desc.Type = QUERY_TYPE_DURATION;
++        mDevice->CreateQuery(desc, &query);
++        if (!query) throw std::runtime_error("GPU duration query allocation failed");
++    }
  
      m_BindingMode = static_cast<BindingMode>(settings.resourceBindingMode);
      if (m_BindingMode == BindingMode::Bindless && !mDevice->GetDeviceInfo().Features.BindlessResources)
-@@ -1081,6 +1084,47 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+@@ -920,6 +935,13 @@ void Asteroids::RenderSubset(Uint32             SubsetNum,
+ 
+ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Settings& settings)
+ {
++    IQuery* frameQuery = nullptr;
++    if (settings.benchmarkFrames) {
++        if (mBenchmarkFrame >= mBenchmarkQueries.size())
++            throw std::runtime_error("Unexpected benchmark frame");
++        frameQuery = mBenchmarkQueries[mBenchmarkFrame];
++        mDeviceCtxt->BeginQuery(frameQuery);
++    }
+     mFrameAttribs.frameTime = frameTime;
+     mFrameAttribs.camera    = &camera;
+     mFrameAttribs.settings  = &settings;
+@@ -1081,9 +1103,73 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
          }
      }
  
++    if (frameQuery) {
++        mDeviceCtxt->EndQuery(frameQuery);
++        ++mBenchmarkFrame;
++    }
 +    if (settings.benchmarkCaptureThisFrame) {
 +        auto* source = mSwapChain->GetCurrentBackBufferRTV()->GetTexture();
 +        auto desc = source->GetDesc();
@@ -176,27 +231,74 @@ index 24152b8..39f9528 100644
      mSwapChain->Present(settings.vsync ? 1 : 0);
  }
  
++void Asteroids::WriteBenchmarkGpuCsv(const char* path)
++{
++    if (mBenchmarkFrame != mBenchmarkQueries.size())
++        throw std::runtime_error("Incomplete GPU benchmark");
++    mDeviceCtxt->WaitForIdle();
++    std::ofstream output(path, std::ios::out | std::ios::trunc);
++    output << "frame,gpu_duration_ticks,frequency_hz,gpu_render_interval_ms\n";
++    output << std::fixed << std::setprecision(9);
++    for (unsigned frame = 0; frame < mBenchmarkQueries.size(); ++frame) {
++        QueryDataDuration data;
++        if (!mBenchmarkQueries[frame]->GetData(&data, sizeof(data)) || !data.Frequency || !data.Duration)
++            throw std::runtime_error("GPU duration unavailable or invalid");
++        output << frame + 1 << ',' << data.Duration << ',' << data.Frequency << ','
++               << 1000.0 * double(data.Duration) / double(data.Frequency) << '\n';
++    }
++    output.flush();
++    if (!output) throw std::runtime_error("GPU benchmark CSV write failed");
++}
++
+ void Asteroids::GetPerfCounters(float& UpdateTime, float& RenderTime)
+ {
+     UpdateTime = (float)mUpdateTicks / (float)mPerfCounterFreq;
 diff --git a/Samples/Asteroids/src/asteroids_DE.h b/Samples/Asteroids/src/asteroids_DE.h
-index b6603e3..f42edb7 100644
+index b6603e3..7876325 100644
 --- a/Samples/Asteroids/src/asteroids_DE.h
 +++ b/Samples/Asteroids/src/asteroids_DE.h
-@@ -44,7 +44,7 @@ private:
+@@ -11,6 +11,7 @@
+ #pragma once
+ 
+ #include "RenderDevice.h"
++#include "Query.h"
+ #include "SwapChain.h"
+ #include "DeviceContext.h"
+ #include "RefCntAutoPtr.hpp"
+@@ -38,13 +39,14 @@ public:
+     void ResizeSwapChain(HWND outputWindow, unsigned int width, unsigned int height);
+ 
+     void GetPerfCounters(float &UpdateTime, float &RenderTime);
++    void WriteBenchmarkGpuCsv(const char* path);
+ 
+ private:
+     void CreateMeshes();
      void InitializeTextureData();
      void CreateGUIResources();
      void RenderSubset(Diligent::Uint32 SubsetNum, Diligent::IDeviceContext *pCtx, const OrbitCamera& camera, Diligent::Uint32 startIdx, Diligent::Uint32 numAsteroids);
 -    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType);
-+    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType, bool capture);
++    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType, bool capture, bool timing);
  
      enum class BindingMode
      {
+@@ -64,6 +66,8 @@ private:
+     std::vector< Diligent::RefCntAutoPtr<Diligent::ICommandList> > mCmdLists;
+     std::vector< Diligent::ICommandList* > mCmdListPtrs;
+     
++    std::vector<Diligent::RefCntAutoPtr<Diligent::IQuery>> mBenchmarkQueries;
++    unsigned mBenchmarkFrame = 0;
+     Diligent::Uint32 mBackBufferWidth, mBackBufferHeight;
+     Diligent::Uint32 mNumSubsets = 0;
+     std::vector<std::thread> mWorkerThreads;
 diff --git a/Samples/Asteroids/src/settings.h b/Samples/Asteroids/src/settings.h
-index 122d145..a157d95 100644
+index 122d145..bc1fe89 100644
 --- a/Samples/Asteroids/src/settings.h
 +++ b/Samples/Asteroids/src/settings.h
-@@ -52,6 +52,8 @@ enum { MAX_SPRITE_VERTICES_PER_FRAME = 6 * 1024 };
+@@ -52,6 +52,9 @@ enum { MAX_SPRITE_VERTICES_PER_FRAME = 6 * 1024 };
  struct Settings
  {
      double closeAfterSeconds = 0.0;
++    unsigned benchmarkFrames = 0;
 +    const char* benchmarkCapture = nullptr;
 +    bool benchmarkCaptureThisFrame = false;
  

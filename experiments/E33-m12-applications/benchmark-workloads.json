@@ -40,6 +40,17 @@
       "separate_from_performance_run": true,
       "synchronization": "copy to staging; WaitForIdle; map; preserve row pitch",
       "runtime_validation": "pending"
+    },
+    "gpu_timing": {
+      "file": "frames.csv.gpu.csv",
+      "metric": "gpu_render_interval_ms",
+      "raw_fields": [
+        "gpu_duration_ticks",
+        "frequency_hz"
+      ],
+      "scope": "GPU timeline interval around render commands, before readback and Present; may include idle gaps",
+      "queries": "allocated before loop; results drained after last CPU timing",
+      "runtime_validation": "pending"
     }
   },
   "instancing": {
