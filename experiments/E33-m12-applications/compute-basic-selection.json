@@ -1,0 +1,7 @@
+{
+  "source_commit": "93bca01861b0e3ef3c387027a9791e6d065f900c",
+  "source": "external/vulkancts/mustpass/main/vk-default/compute.txt",
+  "source_sha256": "cb1750fcfd4d1f69f3df6db4f66402fa26c849147dc7bc7c10fad16857a4c1f4",
+  "selection": "All dEQP-VK.compute.pipeline.basic.*; copy_ssbo_single_invocation first as known primitive",
+  "count": 81
+}

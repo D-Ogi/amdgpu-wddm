@@ -1,0 +1,35 @@
+{
+  "cts_cases": 81,
+  "pass": 76,
+  "not_supported": [
+    {
+      "case": "dEQP-VK.compute.pipeline.basic.concurrent_compute",
+      "reason": "Queues couldn&apos;t be created at vktComputeBasicComputeShaderTests.cpp:4117"
+    },
+    {
+      "case": "dEQP-VK.compute.pipeline.basic.replicated_composites_coopmat_constant",
+      "reason": "VkPhysicalDeviceCooperativeMatrixFeaturesKHR::cooperativeMatrix not supported at vktComputeBasicComputeShaderTests.cpp:5170"
+    },
+    {
+      "case": "dEQP-VK.compute.pipeline.basic.replicated_composites_coopmat_specconstant",
+      "reason": "VkPhysicalDeviceCooperativeMatrixFeaturesKHR::cooperativeMatrix not supported at vktComputeBasicComputeShaderTests.cpp:5170"
+    },
+    {
+      "case": "dEQP-VK.compute.pipeline.basic.replicated_composites_coopmat_value",
+      "reason": "VkPhysicalDeviceCooperativeMatrixFeaturesKHR::cooperativeMatrix not supported at vktComputeBasicComputeShaderTests.cpp:5170"
+    },
+    {
+      "case": "dEQP-VK.compute.pipeline.basic.secondary_compute_only_queue",
+      "reason": "No queue family found that only supports compute queue. at vktComputeBasicComputeShaderTests.cpp:4994"
+    }
+  ],
+  "system_runs": [
+    "normal-native",
+    "elevated-native"
+  ],
+  "compute_hash_matches_per_run": 8,
+  "input_hashes_unchanged": 5,
+  "same_boot_during_cts": true,
+  "fault_events": 0,
+  "new_dumps": 0
+}
