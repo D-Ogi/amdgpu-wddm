@@ -77,11 +77,13 @@ static void check_case(uint64_t size,unsigned alignment,uint64_t expected_va,uin
 }
 int main(void){
  chosen=0x200010000ull;
+ check_case(4096,4096,0x200010000ull,65536,0);
+ check_case(69632,4096,0x200010000ull,131072,0);
  check_case(65536,65536,0x200010000ull,65536,0);
  check_case(1048576,524288,0x200080000ull,1048576+524288-65536,0);
  check_case(5ull<<30,65536,0x200010000ull,5ull<<30,0);
  check_case(1048576,524288,0x200000080000ull,1048576,0x200000080000ull);
- puts("PASS: 64KiB, interior 512KiB alignment, 5GiB range, exact replay; asynchronous fence precedes return; full reservation released");
+ puts("PASS: 4KiB and68KiB resource/64KiB reservation rounding,64KiB, interior 512KiB alignment, 5GiB range, exact replay; asynchronous fence precedes return; full reservation released");
  return 0;
 }
 '''

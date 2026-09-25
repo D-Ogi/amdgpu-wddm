@@ -1,8 +1,8 @@
 {
   "mesa_commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
   "port_origin_base": "f333dd6d1c85297ac41773eaeb9b02f16acf1919",
-  "patch_sha256": "d39628bee4a2843b6cc679cfb6d39dabdadbdb506080266ab5591b94558f9a0d",
+  "patch_sha256": "fe84e2f45931b9aa0ec5676ae216bf1dd7615ec11dd172abd750dd23a4d644c2",
   "license": "Mesa and upstream WDDM2 integration: MIT",
-  "changes": "BC250 WDDM2/CPU WSI; OS reservation ownership; canonical bit46 sparse scalar aliases with shared real-zero backing; per-reservation update groups chained on a dedicated paging fence. Sparse stays false by default; explicit RADV_EXPERIMENTAL=sparse passes21release buffer CTS. Queued PTE relocation/image/Linux acceptance remains open.",
-  "candidate_sha256": "17ADD01FDEB9B7E4530F19C8E5282406D66F607D71C1B8D6D5B34A24D623E481"
+  "changes": "Separate4KiB resource/map length from64KiB reservation rounding for sparse images. BC250 WDDM2/CPU WSI; OS reservation ownership; canonical bit46 sparse scalar aliases with shared real-zero backing; per-reservation update groups chained on a dedicated paging fence. Sparse stays false by default; explicit RADV_EXPERIMENTAL=sparse passes21release buffer and20image CTS (one1-tile rebind case NotSupported). Queued PTE relocation/image/Linux acceptance remains open.",
+  "candidate_sha256": "0F9FEAE8492B71343B7DBDE6A12DE9E1D95464C3AB20D0ABE45E35E383F7BF2D"
 }

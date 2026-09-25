@@ -3740,10 +3740,10 @@ index 00000000000..76e436fa36f
 +#endif
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
 new file mode 100644
-index 00000000000..052a8713b0d
+index 00000000000..d6a418f3895
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
-@@ -0,0 +1,1455 @@
+@@ -0,0 +1,1459 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -4106,9 +4106,13 @@ index 00000000000..052a8713b0d
 +   NTSTATUS status;
 +
 +   alignment = MAX2(alignment, granularity);
-+   if (!size || (size & (granularity - 1)) ||
-+       (alignment & (alignment - 1)) || (address & (alignment - 1)) ||
-+       size > UINT64_MAX - (alignment - granularity))
++   /* Vulkan sparse-binding images can occupy fewer than64KiB. WDDM rounds
++    * the reservation, not the resource or its4KiB mapping/binding granularity. */
++   if (!size || (size & 4095) || size > UINT64_MAX - (granularity - 1) ||
++       (alignment & (alignment - 1)) || (address & (alignment - 1)))
++      return 0;
++   const uint64_t reserved_size = align64(size, granularity);
++   if (reserved_size > UINT64_MAX - (alignment - granularity))
 +      return 0;
 +
 +   if (flags & RADEON_FLAG_32BIT) {
@@ -4122,7 +4126,7 @@ index 00000000000..052a8713b0d
 +      max = RADV_WDDM2_REPLAY_HEAP_START;
 +   }
 +
-+   if (address && (address < min || address >= max || size > max - address))
++   if (address && (address < min || address >= max || reserved_size > max - address))
 +      return 0;
 +
 +   D3DDDI_RESERVEGPUVIRTUALADDRESS reserve = {
@@ -4131,7 +4135,7 @@ index 00000000000..052a8713b0d
 +      .BaseAddress = address,
 +      .MinimumAddress = min,
 +      .MaximumAddress = max,
-+      .Size = size + (address ? 0 : alignment - granularity),
++      .Size = reserved_size + (address ? 0 : alignment - granularity),
 +   };
 +   status = WDDM2_DISPATCH(ReserveGpuVirtualAddress(&reserve));
 +   if (!NT_SUCCESS(status))
@@ -4216,7 +4220,7 @@ index 00000000000..052a8713b0d
 +   D3DDDI_RESERVEGPUVIRTUALADDRESS reserve = {
 +      .hAdapter = ws->adapter_h,
 +      .BaseAddress = high,
-+      .Size = bo->base.size,
++      .Size = align64(bo->base.size, 65536),
 +   };
 +   NTSTATUS status = WDDM2_DISPATCH(ReserveGpuVirtualAddress(&reserve));
 +   if (!NT_SUCCESS(status))
@@ -4309,7 +4313,7 @@ index 00000000000..052a8713b0d
 +         const D3DKMT_FREEGPUVIRTUALADDRESS high = {
 +            .hAdapter = ws->adapter_h,
 +            .BaseAddress = bo->sparse_high_va,
-+            .Size = bo->base.size,
++            .Size = align64(bo->base.size, 65536),
 +         };
 +         WDDM2_DISPATCH(FreeGpuVirtualAddress(&high));
 +      }
@@ -4865,7 +4869,7 @@ index 00000000000..052a8713b0d
 +      const D3DKMT_FREEGPUVIRTUALADDRESS high = {
 +         .hAdapter = ws->adapter_h,
 +         .BaseAddress = bo->sparse_high_va,
-+         .Size = bo->base.size,
++         .Size = align64(bo->base.size, 65536),
 +      };
 +      status = WDDM2_DISPATCH(FreeGpuVirtualAddress(&high));
 +   }

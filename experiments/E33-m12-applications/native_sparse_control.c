@@ -28,6 +28,7 @@ static void *util_dynarray_grow_bytes(struct util_dynarray *p,unsigned count,siz
 struct vk_wddm2_fence {uint32_t handle;uint64_t wait_value;};
 struct radv_wddm2_queue {uint32_t context_h,handle;struct vk_wddm2_fence vm_fence;struct util_dynarray sparse_ops;bool sparse_batch_active;};
 struct radv_wddm2_ctx {struct radeon_winsys_ctx base;struct {struct radv_wddm2_queue queue;} per_ip[1];};
+#define align64(a,b) (((a)+(b)-1)&~((uint64_t)(b)-1))
 #define RADV_WDDM2_PRT_CONTROL_MASK (1ull<<46)
 #define RADEON_FLAG_READ_ONLY 1
 #ifndef MIN2
