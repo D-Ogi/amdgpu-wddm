@@ -5362,10 +5362,10 @@ index 00000000000..c263976c05b
 +#endif /* RADV_WDDM2_BO_H */
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 new file mode 100644
-index 00000000000..fab3d3f3b8c
+index 00000000000..9ee16d8c9c1
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
-@@ -0,0 +1,1138 @@
+@@ -0,0 +1,1172 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -5567,6 +5567,9 @@ index 00000000000..fab3d3f3b8c
 +      WDDM2_DISPATCH(DestroySynchronizationObject(&destroy_progress));
 +      queue->bc250_progress.handle = 0;
 +   }
++   free(queue->bc250_ibs);
++   queue->bc250_ibs = NULL;
++   queue->bc250_ib_capacity = 0;
 +   if (queue->bc250_gather) {
 +      queue->bc250_ws->base.buffer_destroy(&queue->bc250_ws->base, queue->bc250_gather);
 +      queue->bc250_gather = NULL;
@@ -6107,19 +6110,22 @@ index 00000000000..fab3d3f3b8c
 +}
 +
 +/* A chained CS is one IB: the CP follows the rest. An unchained CS is every piece, in order.
-+ * Returns false when the caller's 16-IB cap cannot hold them. Silent truncation would run a prefix.
++ * A NULL output counts the complete submission before allocating its collection.
 + */
 +static bool
 +bc250_collect_cs(struct radv_winsys_cs *cs, struct radv_winsys_ib *out, unsigned *n, unsigned cap)
 +{
 +   unsigned count = cs->chain_ib ? 1 : cs->num_ib_buffers;
 +   unsigned i;
-+   if (*n + count > cap) {
++   if (*n > cap || count > cap - *n) {
 +      fprintf(stderr, "bc250: gather IB limit used=%u add=%u cap=%u\n", *n, count, cap);
 +      return false;
 +   }
-+   for (i = 0; i < count; i++)
-+      out[(*n)++] = cs->ib_buffers[i];
++   if (out) {
++      for (i = 0; i < count; i++)
++         out[*n + i] = cs->ib_buffers[i];
++   }
++   *n += count;
 +   return true;
 +}
 +
@@ -6134,6 +6140,25 @@ index 00000000000..fab3d3f3b8c
 +   return true;
 +}
 +
++static bool
++bc250_collect_submit(const struct radv_winsys_submit_info *submit,
++                      struct radv_winsys_ib *ibs, unsigned *n, unsigned cap)
++{
++   /* Same order as the amdgpu winsys: initial preamble on the first CS, the continue
++    * preamble on every later CS in this submit, postamble once at the end.
++    */
++   for (unsigned i = 0; i < submit->cs_count; i++) {
++      struct ac_cmdbuf **preambles = i ? submit->continue_preamble_cs : submit->initial_preamble_cs;
++      unsigned preamble_count = i ? submit->continue_preamble_count : submit->initial_preamble_count;
++      if (!bc250_collect_array(preambles, preamble_count, ibs, n, cap) ||
++          !bc250_collect_cs(radv_winsys_cs(submit->cs_array[i]), ibs, n, cap))
++         return false;
++   }
++   if (!bc250_collect_array(submit->postamble_cs, submit->postamble_count, ibs, n, cap))
++      return false;
++   return true;
++}
++
 +/* One IB on the gfx ring. Several command streams are copied into one gather BO: the KMD
 + * runs a single IB and does not half-run a list.
 + */
@@ -6142,7 +6167,8 @@ index 00000000000..fab3d3f3b8c
 +                        const struct radv_winsys_submit_info *submit)
 +{
 +   struct radv_wddm2_winsys *ws = ctx->ws;
-+   struct radv_winsys_ib ibs[16];
++   struct radv_winsys_ib local_ibs[16];
++   struct radv_winsys_ib *ibs = local_ibs;
 +   struct bc250_submit_blob blob;
 +   unsigned n = 0, i;
 +   uint64_t total = 0;
@@ -6151,17 +6177,25 @@ index 00000000000..fab3d3f3b8c
 +   NTSTATUS status;
 +   D3DKMT_SUBMITCOMMAND cmd;
 +
-+   /* Same order as the amdgpu winsys: initial preamble on the first CS, the continue
-+    * preamble on every later CS in this submit, postamble once at the end.
-+    */
-+   for (i = 0; i < submit->cs_count; i++) {
-+      struct ac_cmdbuf **preambles = i ? submit->continue_preamble_cs : submit->initial_preamble_cs;
-+      unsigned preamble_count = i ? submit->continue_preamble_count : submit->initial_preamble_count;
-+      if (!bc250_collect_array(preambles, preamble_count, ibs, &n, 16) ||
-+          !bc250_collect_cs(radv_winsys_cs(submit->cs_array[i]), ibs, &n, 16))
-+         return STATUS_INVALID_PARAMETER;
++   unsigned required = 0;
++   if (!bc250_collect_submit(submit, NULL, &required, UINT_MAX))
++      return STATUS_INVALID_PARAMETER;
++   if (required > ARRAY_SIZE(local_ibs)) {
++      if (required > queue->bc250_ib_capacity) {
++         size_t capacity = MAX2((size_t)required, (size_t)queue->bc250_ib_capacity * 2);
++         if (capacity > UINT_MAX || capacity > SIZE_MAX / sizeof(*ibs))
++            return STATUS_NO_MEMORY;
++         void *replacement = realloc(queue->bc250_ibs, capacity * sizeof(*ibs));
++         if (!replacement)
++            return STATUS_NO_MEMORY;
++         queue->bc250_ibs = replacement;
++         queue->bc250_ib_capacity = (unsigned)capacity;
++         fprintf(stderr, "bc250: IB collection capacity=%u required=%u\n",
++                 queue->bc250_ib_capacity, required);
++      }
++      ibs = queue->bc250_ibs;
 +   }
-+   if (!bc250_collect_array(submit->postamble_cs, submit->postamble_count, ibs, &n, 16))
++   if (!bc250_collect_submit(submit, ibs, &n, required))
 +      return STATUS_INVALID_PARAMETER;
 +   if (n == 0)
 +      return STATUS_SUCCESS;
@@ -6506,10 +6540,10 @@ index 00000000000..fab3d3f3b8c
 +}
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
 new file mode 100644
-index 00000000000..983770473ca
+index 00000000000..058e10b9182
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,79 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -6564,6 +6598,8 @@ index 00000000000..983770473ca
 +   struct radv_wddm2_winsys *bc250_ws;
 +   struct radeon_winsys_bo *bc250_gather;
 +   uint8_t *bc250_gather_map;
++   struct radv_winsys_ib *bc250_ibs;
++   unsigned bc250_ib_capacity;
 +   struct vk_wddm2_fence bc250_progress;
 +};
 +

@@ -1,0 +1,54 @@
+Creating 1000 meshes, each with 3 subdivision levels...
+Creating 10 256x256 textures...
+[39mDiligent Engine: Info: D3D12-capable adapter found: AMD BC-250 (RADV GFX1013) (8017 MB)
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 1.00 MB; GPU virtual address 0x200290000
+[39m[39mDiligent Engine: Info: Can not disable SeparablePrograms
+[39m[39mDiligent Engine: Info: Max device shader model: 6_7
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x208720000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x208940000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x208b70000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x208da0000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 1.00 MB; GPU virtual address 0x200e80000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x209370000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x209570000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x209770000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x2099c0000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x207c80000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x208100000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x208300000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x20a400000
+[39m[39mDiligent Engine: Info: Created dynamic memory page. Size: 2.00 MB; GPU virtual address 0x20ac90000
+[39m[39mDiligent Engine: Info: SAMPLER     dynamic descriptor allocator of deferred context #1 usage stats: peak descriptor count: 0/0
+[39m[39mDiligent Engine: Info: CBV_SRV_UAV dynamic descriptor allocator of deferred context #1 usage stats: peak descriptor count: 0/0
+[39m[39mDiligent Engine: Info: Dynamic heap of deferred context #1 usage stats:
+                       Peak used/aligned/allocated size: 1.14 MB / 1.14 MB / 2.00 MB (2 pages). Peak efficiency (used/aligned): 100.0%. Peak utilization (used/allocated): 57.2%
+[39m[39mDiligent Engine: Info: SAMPLER     dynamic descriptor allocator of deferred context #2 usage stats: peak descriptor count: 0/0
+[39m[39mDiligent Engine: Info: CBV_SRV_UAV dynamic descriptor allocator of deferred context #2 usage stats: peak descriptor count: 0/0
+[39m[39mDiligent Engine: Info: Dynamic heap of deferred context #2 usage stats:
+                       Peak used/aligned/allocated size: 1.14 MB / 1.14 MB / 2.00 MB (2 pages). Peak efficiency (used/aligned): 100.0%. Peak utilization (used/allocated): 57.2%
+[39m[39mDiligent Engine: Info: SAMPLER     dynamic descriptor allocator of deferred context #3 usage stats: peak descriptor count: 0/0
+[39m[39mDiligent Engine: Info: CBV_SRV_UAV dynamic descriptor allocator of deferred context #3 usage stats: peak descriptor count: 0/0
+[39m[39mDiligent Engine: Info: Dynamic heap of deferred context #3 usage stats:
+                       Peak used/aligned/allocated size: 1.14 MB / 1.14 MB / 2.00 MB (2 pages). Peak efficiency (used/aligned): 100.0%. Peak utilization (used/allocated): 57.2%
+[39m[39mDiligent Engine: Info: SAMPLER     dynamic descriptor allocator of immediate context usage stats: peak descriptor count: 1/32
+[39m[39mDiligent Engine: Info: CBV_SRV_UAV dynamic descriptor allocator of immediate context usage stats: peak descriptor count: 1/8192
+[39m[39mDiligent Engine: Info: Dynamic heap of immediate context usage stats:
+                       Peak used/aligned/allocated size: 1.24 MB / 1.24 MB / 3.00 MB (3 pages). Peak efficiency (used/aligned): 100.0%. Peak utilization (used/allocated): 41.3%
+[39m[39mDiligent Engine: Info: Dynamic memory manager usage stats:
+                       Total allocated memory: 28.00 MB
+[39m[39mDiligent Engine: Info: D3D12 query manager peak usage:
+QUERY_TYPE_OCCLUSION          :    0/ 128
+QUERY_TYPE_BINARY_OCCLUSION   :    0/ 128
+QUERY_TYPE_TIMESTAMP          :    0/ 512
+QUERY_TYPE_PIPELINE_STATISTICS:    0/ 128
+QUERY_TYPE_DURATION           : 1320/1320
+[39m[39mDiligent Engine: Info: Command list manager: created 0 allocators
+[39m[39mDiligent Engine: Info: Command list manager: created 0 allocators
+[39m[39mDiligent Engine: Info: Command list manager: created 21 allocators
+[39m[39mDiligent Engine: Info: D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER     GPU heap max allocated size (static|dynamic): 1/1024 (0.10%) | 96/1024 (9.38%).
+[39m[39mDiligent Engine: Info: D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV GPU heap max allocated size (static|dynamic): 42/65536 (0.06%) | 24576/262144 (9.38%).
+[39m[39mDiligent Engine: Info: D3D12_DESCRIPTOR_HEAP_TYPE_DSV         CPU heap allocated pool count: 1. Max descriptors: 1/1024 (0.10%).
+[39m[39mDiligent Engine: Info: D3D12_DESCRIPTOR_HEAP_TYPE_RTV         CPU heap allocated pool count: 1. Max descriptors: 9/1024 (0.88%).
+[39m[39mDiligent Engine: Info: D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER     CPU heap allocated pool count: 1. Max descriptors: 2/2048 (0.10%).
+[39m[39mDiligent Engine: Info: D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV CPU heap allocated pool count: 1. Max descriptors: 19/8192 (0.23%).
+[39m
