@@ -90,3 +90,8 @@ signals. Host models exercise the actual request-building functions; ordinary
 compute/present controls check regressions. Neither is sparse GPU acceptance.
 The native page semantics, scalar alias mapping and privileged runtime PTE
 resolution described above remain required before enabling capabilities.
+
+## Native mapping control (M483)
+Native bound alias/rebind reads pass, but the initial-hole CP read causes
+VIDEO_TDR_FAILURE on KMD147. API/fence success alone did not prove Zero semantics.
+[Results and limits](../../evidence/windows/2026-09-25-E33-native-sparse/RESULT.md).

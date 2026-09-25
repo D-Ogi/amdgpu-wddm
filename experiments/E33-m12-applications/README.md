@@ -119,3 +119,42 @@ controls pass; sparse hardware acceptance is still open.
 
 The historical M481 patch remains in its commit; mesa05-source.json now pins
 the complete patch including M482.
+
+## Initial zero-mapping API control
+Hypothesis: on KMD147, the OS either completes an initial Protection.Zero
+mapping through its paging queue, or returns a concrete API error before sparse
+is advertised. Use the existing kmtprobe adapter/device/paging-queue helpers.
+First create, make resident and map a64KiB physical allocation at an explicitly
+reserved address. Then reserve a separate64KiB VA range and request
+MapGpuVirtualAddress with hAllocation0 and Protection.Zero. Wait for the
+returned paging fence and release both complete reservations. Keep a30second
+process watchdog. Record every NTSTATUS and health before/after. This control
+submits no access to the zero-mapped range and cannot prove nonresident read/
+write semantics. It tests the actual Windows API request, beyond the host model.
+
+The next API control extracts the actual Mesa batch helpers and sends their
+D3DKMT calls to Windows. Queue an initially-unsignaled application fence, one
+map batch, and verify its completion fence stays0 until the application signal.
+Then require completion2, unmap to Zero, and require completion4. Use the
+normal TDR policy and bounded waits. No shader or transfer accesses the remapped
+range; passing establishes API acceptance/fence progress, not page contents or
+correct PTE selection during relocation.
+
+Content control: before using a remapped VA, CP COPY_DATA must copy two known
+64-bit patterns through their ordinary physical-backed VAs. Map the virtual
+range to patternA, copy through that alias, rebind it to patternB at another
+allocation offset, and copy again. Compare CPU-visible destination bytes,
+not only fences. Then unmap and wait; this run does not read holes. Packet
+definitions come from imported AMD nvd.h and the packet order from Mesa
+ac_emit_cp_copy_data. Normal TDR policy,30second watchdog,5second fence bounds.
+
+After the bound-content control passes, repeat it with CP COPY_DATA reads from
+the initial Zero range and after unmap. Expect zero64-bit values, with physical
+A/B controls preceding the first hole read. Stop on mismatch or timeout.
+This measures CP reads only; shader scalar/vector accesses and discarded writes
+remain separate requirements.
+
+## Native mapping control (M483)
+Native bound alias/rebind reads pass, but the initial-hole CP read causes
+VIDEO_TDR_FAILURE on KMD147. API/fence success alone did not prove Zero semantics.
+[Results and limits](../../evidence/windows/2026-09-25-E33-native-sparse/RESULT.md).

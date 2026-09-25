@@ -859,6 +859,13 @@ static BOOL StepWaitFence(PROBE* Probe, UINT64 Value)
     waited = WaitForSingleObject(Probe->WaitEvent, Probe->Opt.FenceTimeoutMs);
     Probe->SubmitElapsedMs = (DWORD)(GetTickCount64() - started);
     seen = *Probe->FenceCpuVa;
+    /* This probe never submits UINT64_MAX. It appeared during the M483 failed
+     * hole read, before Windows bugchecked; do not report it as completion. */
+    if (seen == ~0ull)
+    {
+        Note("monitored fence is UINT64_MAX, not a completed probe submission");
+        return FALSE;
+    }
     if (waited == WAIT_OBJECT_0 && seen >= Value)
     {
         Note("the monitored fence reached %llu after %lu ms", seen, Probe->SubmitElapsedMs);

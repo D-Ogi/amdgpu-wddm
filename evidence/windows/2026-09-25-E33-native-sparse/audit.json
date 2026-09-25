@@ -1,0 +1,29 @@
+{
+  "cts": {
+    "Pass": 75,
+    "NotSupported": 5,
+    "Fail": 0,
+    "matches_M480": true,
+    "same_boot": true
+  },
+  "native": {
+    "initial_zero_api": "PASS, no hole access",
+    "ordered_map_unmap": "PASS, fences 2/4",
+    "bound_contents": "PASS, physical A/B and alias/rebind",
+    "initial_hole_read": "FAIL, VIDEO_TDR_FAILURE 0x116"
+  },
+  "probe_sha256": {
+    "zero-map": "85ff16ede34bd00f2f147eabc39a02ddf8b0c9c531d72b268c35b4508f474ed0",
+    "native-sparse-order": "275c8db1d08e479fbd859298a5dea34d9fb3029ad56782a64a75a39939ef43bc",
+    "native-sparse-content": "376de466a9bd02bf788970ac3a5fa3dd8daeff364c336211500679b755172a6b",
+    "native-sparse-zero-read": "11ac734ee20225ba4f35f8c9f725ace1212f05055bb45c7b998b0eeeeb1351c5"
+  },
+  "private_dump": {
+    "utc": "2026-09-25T12:59:41.418443+00:00",
+    "bytes": 851272298,
+    "sha256": "0f7908056f60ac917a3c2f7a50fcda1e0e26a1e72791198d1a98e454495c66c2",
+    "verified_against_lab": true,
+    "scope": "Owner-approved full lab kernel dump retained in scratch only; never commit dump bytes"
+  },
+  "raw_dump_in_repository": false
+}
