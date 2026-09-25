@@ -72,7 +72,26 @@ static BOOL CpuRelease(D3DKMT_HANDLE device,D3DKMT_HANDLE handle)
 
 /* Mesa radv_cp_dma.c uses DMA_DATA for bulk copies; COPY_DATA is a
  * different access path and its PRT behavior is not implied by CP DMA support. */
-static BOOL g_UseDma;static UINT64 g_ContentFence;
+static BOOL g_UseDma, g_CopyMappings;static UINT64 g_ContentFence;
+/* WDK26100 D3DKMTUpdateGpuVirtualAddress: COPY sources may use a separate
+ * reservation, but each batch has one source and one destination reservation.
+ * This probe copies mappings, not resource contents. */
+static VkResult NativeMap(struct radv_wddm2_winsys *ws, struct radv_wddm2_ctx *ctx,
+                         enum amd_ip_type ip, struct radv_wddm2_bo *parent,
+                         uint64_t offset, uint64_t size, struct radv_wddm2_bo *bo,
+                         uint64_t source_offset)
+{
+    if (!g_CopyMappings)
+        return radv_wddm2_virtual_bo_map(ws,ctx,ip,parent,offset,size,bo,source_offset);
+    D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION op={0};
+    op.OperationType=D3DDDI_UPDATEGPUVIRTUALADDRESS_COPY;
+    op.Copy.SourceAddress=bo->base.va+source_offset;
+    op.Copy.DestAddress=parent->base.va+offset;
+    op.Copy.SizeInBytes=size;
+    Note("COPY_MAPPING source=0x%llX destination=0x%llX bytes=%llu",
+         op.Copy.SourceAddress,op.Copy.DestAddress,op.Copy.SizeInBytes);
+    return radv_wddm2_virtual_bind_append(ctx,ip,parent->base.va,&op);
+}
 static BOOL CopyContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
                         UINT64 destination,UINT64 sequence)
 {
@@ -133,8 +152,10 @@ int main(int argc,char **argv)
         else if(strcmp(argv[arg],"--write-hole")==0)writeHole=TRUE;
         else if(strcmp(argv[arg],"--high")==0)highVa=TRUE;
         else if(strcmp(argv[arg],"--paired")==0)paired=TRUE;
-        else {puts("usage: native-sparse-control [--holes] [--dma] [--write-hole] [--high] [--paired]");return 2;}
+        else if(strcmp(argv[arg],"--copy-map")==0)g_CopyMappings=TRUE;
+        else {puts("usage: native-sparse-control [--holes] [--dma] [--write-hole] [--high] [--paired] [--copy-map]");return 2;}
     }
+    if(g_CopyMappings && (paired || highVa || holes)){puts("--copy-map uses bound low-VA control only");return 2;}
     if(writeHole && (!holes || !g_UseDma)){puts("--write-hole requires --holes --dma");return 2;}
     printf("Access path: %s\n",g_UseDma?"CP DMA_DATA":"CP COPY_DATA");
     PROBE p={0},completion={0};BUFFER ib={0},zeroBacking={0};
@@ -194,7 +215,7 @@ int main(int argc,char **argv)
     physical.base.va=p.Data.MappedVa;physical.base.handle=p.Data.hAllocation;
     app_wait.handle=input.hSyncObject;app_wait.wait_value=1;
     if(radv_wddm2_virtual_bind_begin(&ws.base,&ctx.base,AMD_IP_GFX)||
-       radv_wddm2_virtual_bo_map(&ws,&ctx,AMD_IP_GFX,&parent,0,65536,&physical,0)||
+       NativeMap(&ws,&ctx,AMD_IP_GFX,&parent,0,65536,&physical,0)||
        radv_wddm2_virtual_bind_end(&ws.base,&ctx.base,AMD_IP_GFX,0,1,&app_wait,true))goto done;
     Sleep(20);printf("DELAYED_WAIT vm_fence=%llu expected=0\n",*p.FenceCpuVa);
     if(*p.FenceCpuVa!=0||!CpuRelease(p.hDevice,input.hSyncObject))goto done;
@@ -202,7 +223,7 @@ int main(int argc,char **argv)
     if(!ReadContent(&p,&completion,&ib,parent.base.va,a,4,"alias-A"))goto done;
     if(paired && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,a,12,"low-alias-A"))goto done;
     if(radv_wddm2_virtual_bind_begin(&ws.base,&ctx.base,AMD_IP_GFX)||
-       radv_wddm2_virtual_bo_map(&ws,&ctx,AMD_IP_GFX,&parent,0,65536,&physical,65536)||
+       NativeMap(&ws,&ctx,AMD_IP_GFX,&parent,0,65536,&physical,65536)||
        radv_wddm2_virtual_bind_end(&ws.base,&ctx.base,AMD_IP_GFX,0,0,NULL,true)||
        !StepWaitFence(&p,q->vm_fence.wait_value))goto done;
     if(!ReadContent(&p,&completion,&ib,parent.base.va,b,5,"rebind-B"))goto done;

@@ -1,0 +1,97 @@
+[
+  {
+    "name": "collected/before-driver.log",
+    "original_sha256": "c9125699fd6391eb8a1d769934c078cbf45cf3ef2f2398565ced4a1571a325eb",
+    "published_sha256": "c9125699fd6391eb8a1d769934c078cbf45cf3ef2f2398565ced4a1571a325eb"
+  },
+  {
+    "name": "collected/boot-after.txt",
+    "original_sha256": "79a0e8ef6d6da6b3c642a333d4a2bf5f391cfee82687d99a23e6f49cef96e793",
+    "published_sha256": "79a0e8ef6d6da6b3c642a333d4a2bf5f391cfee82687d99a23e6f49cef96e793"
+  },
+  {
+    "name": "collected/boot-before.txt",
+    "original_sha256": "79a0e8ef6d6da6b3c642a333d4a2bf5f391cfee82687d99a23e6f49cef96e793",
+    "published_sha256": "79a0e8ef6d6da6b3c642a333d4a2bf5f391cfee82687d99a23e6f49cef96e793"
+  },
+  {
+    "name": "collected/control-driver.log",
+    "original_sha256": "99d9d23a8bf24347ed6d8f7a6b7ea58d5fb0668e5a2eb64d5833b3bbf5138443",
+    "published_sha256": "99d9d23a8bf24347ed6d8f7a6b7ea58d5fb0668e5a2eb64d5833b3bbf5138443"
+  },
+  {
+    "name": "collected/dma-copy-map/clock-after.txt",
+    "original_sha256": "67a2f9472fb5758f673bc9e95eb55acbbd06616ac0414768703fa471371bff0f",
+    "published_sha256": "67a2f9472fb5758f673bc9e95eb55acbbd06616ac0414768703fa471371bff0f"
+  },
+  {
+    "name": "collected/dma-copy-map/clock-before.txt",
+    "original_sha256": "67a2f9472fb5758f673bc9e95eb55acbbd06616ac0414768703fa471371bff0f",
+    "published_sha256": "67a2f9472fb5758f673bc9e95eb55acbbd06616ac0414768703fa471371bff0f"
+  },
+  {
+    "name": "collected/dma-copy-map/health-after.txt",
+    "original_sha256": "4ce486812fadf860d0137553d3896dfdde0673fd0ecfe6c4b63cce3b7de62d24",
+    "published_sha256": "4ce486812fadf860d0137553d3896dfdde0673fd0ecfe6c4b63cce3b7de62d24"
+  },
+  {
+    "name": "collected/dma-copy-map/health-before.txt",
+    "original_sha256": "2cda8a2ad9e272abe15215988bb46671cffa6cea5347f60dce4fe4f6b78dc6b0",
+    "published_sha256": "2cda8a2ad9e272abe15215988bb46671cffa6cea5347f60dce4fe4f6b78dc6b0"
+  },
+  {
+    "name": "collected/dma-copy-map/result.json",
+    "original_sha256": "2eed9d83ad0b366a33565f63ccedc0534f126ff4ca1f852a2c59a40469433146",
+    "published_sha256": "2eed9d83ad0b366a33565f63ccedc0534f126ff4ca1f852a2c59a40469433146"
+  },
+  {
+    "name": "collected/dma-copy-map/stderr.txt",
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "collected/dma-copy-map/stdout.txt",
+    "original_sha256": "3ba8da45e0fd51489d6e573dd84c6bf66a44782f6b98951d898c8a15bf0b8460",
+    "published_sha256": "8c420303237ed4c732fcc966f8de20617138b6a4aaeee956b796eb93b30c6efd"
+  },
+  {
+    "name": "build.cmd",
+    "original_sha256": "cc097ec1f9940872b45ddbb8e660b0eabbf87d824fcf7dfc65924846aa680646",
+    "published_sha256": "cc097ec1f9940872b45ddbb8e660b0eabbf87d824fcf7dfc65924846aa680646"
+  },
+  {
+    "name": "inputs.json",
+    "original_sha256": "a12f3fbf1396862fd7630db6206a548a4fe08405af7cb9eb59325166cc3673e5",
+    "published_sha256": "a12f3fbf1396862fd7630db6206a548a4fe08405af7cb9eb59325166cc3673e5"
+  },
+  {
+    "name": "run.ps1",
+    "original_sha256": "c1b5e9673e6d6e6fa90fca3e38cb0f1a7bf5e8e9dd2589f3e642b7491097c39a",
+    "published_sha256": "c1b5e9673e6d6e6fa90fca3e38cb0f1a7bf5e8e9dd2589f3e642b7491097c39a"
+  },
+  {
+    "name": "run.py",
+    "original_sha256": "58c04ad659733175ba29edd4b1a17e8b33ab13b6fb953485f19f2d2b01b64dee",
+    "published_sha256": "58c04ad659733175ba29edd4b1a17e8b33ab13b6fb953485f19f2d2b01b64dee"
+  },
+  {
+    "name": "radv_sparse_helpers.inc",
+    "original_sha256": "754b06c9dcf30cfe4668c92f34519d8796ade5fa289ced5da014be4b682c5216",
+    "published_sha256": "754b06c9dcf30cfe4668c92f34519d8796ade5fa289ced5da014be4b682c5216"
+  },
+  {
+    "name": "experiments/E33-m12-applications/native_sparse_control.c",
+    "original_sha256": "4d9dcf16e4ef239cc14796ab27224aa8653bcd77e185cb10724af72d21cbf9ae",
+    "published_sha256": "4d9dcf16e4ef239cc14796ab27224aa8653bcd77e185cb10724af72d21cbf9ae"
+  },
+  {
+    "name": "tools/win/kmtprobe/kmtprobe.c",
+    "original_sha256": "9701895d6ce425231be982e4db3d1821b462b3e0adaef1c53f843a07835cbf86",
+    "published_sha256": "9701895d6ce425231be982e4db3d1821b462b3e0adaef1c53f843a07835cbf86"
+  },
+  {
+    "name": "experiments/E33-m12-applications/NATIVE-COPY-CONTROL.md",
+    "original_sha256": "b5a8b3cee3573813193351527888f601148ebbf06b06a789545d69dcd4849081",
+    "published_sha256": "b5a8b3cee3573813193351527888f601148ebbf06b06a789545d69dcd4849081"
+  }
+]
