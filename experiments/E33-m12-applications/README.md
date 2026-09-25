@@ -259,3 +259,20 @@ manifest requires terminate-on-fail, terminate-on-device-lost and watchdog optio
 runtime wrapper must retain STOP, hardware health and per-case deadlines, and inspect
 warnings separately: upstream terminate-on-fail counts failures, not every warning.
 The current per-case sparse run is not changed by preparing these files.
+
+
+The prepared `cts-batch-worker.ps1` requires an interactive elevated lab session because
+full CTS includes WSI. Select the candidate through the real Vulkan registry before launch;
+the worker does not change registration. It pins the current CTS executable and ICD hashes,
+rejects another running deqp process, validates each batch file, records module witnesses,
+and checks STOP/1000MHz/VID116/temperature/generation at five-second intervals. Any failure
+stops the run. A positive MaxBatches is a bounded runner control, never full acceptance.
+
+`cts-qpa-monitor.ps1` tracks flushed begin/end markers and permits only Pass/NotSupported.
+Its45-second deadline covers startup, each active case, and gaps between cases; extra log
+text does not extend the deadline. Missing, duplicate or unexpected cases fail completion.
+QPA remains authoritative and should also be normalized with the upstream parser afterward.
+Host checks: `powershell -NoProfile -File test-cts-qpa-monitor.ps1 -RecordedRun PATH`.
+The monitor passed chunk/truncation/failure controls and replay of saved Windows logs.
+The batch worker passed syntax checking only; live validation remains pending and the
+existing sparse per-case worker remains unchanged.
