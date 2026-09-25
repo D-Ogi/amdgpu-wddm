@@ -2123,7 +2123,7 @@ index 214d30d5eda..1a6f6b1c32b 100644
  
  bool radv_graphics_queue_enabled(const struct radv_physical_device *pdev);
 diff --git a/src/amd/vulkan/radv_queue.c b/src/amd/vulkan/radv_queue.c
-index 0e6ee2d5781..ef5c7bbbaa8 100644
+index 0e6ee2d5781..7b53e998f25 100644
 --- a/src/amd/vulkan/radv_queue.c
 +++ b/src/amd/vulkan/radv_queue.c
 @@ -36,7 +36,7 @@ radv_get_queue_global_priority(const VkDeviceQueueGlobalPriorityCreateInfo *pObj
@@ -2202,34 +2202,67 @@ index 0e6ee2d5781..ef5c7bbbaa8 100644
                                               mem ? mem->bo : NULL,
                                               mem_offset + (uint64_t)mem_y_increment * y + mem_z_increment * z);
                 if (result != VK_SUCCESS)
-@@ -185,22 +185,22 @@ radv_sparse_image_bind_memory(struct radv_device *device, const VkSparseImageMem
+@@ -184,28 +184,51 @@ radv_sparse_image_bind_memory(struct radv_device *device, const VkSparseImageMem
+    return VK_SUCCESS;
  }
  
++static bool
++radv_queue_has_sparse_binds(const struct vk_queue_submit *submission)
++{
++   return submission->buffer_bind_count || submission->image_opaque_bind_count || submission->image_bind_count;
++}
++
  static VkResult
 -radv_queue_submit_bind_sparse_memory(struct radv_device *device, struct vk_queue_submit *submission)
 +radv_queue_submit_bind_sparse_memory(struct radv_queue *queue, struct vk_queue_submit *submission)
  {
-    for (uint32_t i = 0; i < submission->buffer_bind_count; ++i) {
+-   for (uint32_t i = 0; i < submission->buffer_bind_count; ++i) {
 -      VkResult result = radv_sparse_buffer_bind_memory(device, submission->buffer_binds + i);
-+      VkResult result = radv_sparse_buffer_bind_memory(queue, submission->buffer_binds + i);
++   struct radv_device *device = radv_queue_device(queue);
++   struct radeon_winsys *ws = device->ws;
++   VkResult result = VK_SUCCESS;
++   const bool transaction = ws->buffer_virtual_bind_begin && radv_queue_has_sparse_binds(submission);
++   if (transaction) {
++      result = ws->buffer_virtual_bind_begin(ws, queue->hw_ctx, radv_queue_ring(queue));
        if (result != VK_SUCCESS)
           return result;
     }
++   for (uint32_t i = 0; i < submission->buffer_bind_count; ++i) {
++      result = radv_sparse_buffer_bind_memory(queue, submission->buffer_binds + i);
++      if (result != VK_SUCCESS)
++         goto finish;
++   }
  
     for (uint32_t i = 0; i < submission->image_opaque_bind_count; ++i) {
 -      VkResult result = radv_sparse_image_opaque_bind_memory(device, submission->image_opaque_binds + i);
-+      VkResult result = radv_sparse_image_opaque_bind_memory(queue, submission->image_opaque_binds + i);
++      result = radv_sparse_image_opaque_bind_memory(queue, submission->image_opaque_binds + i);
        if (result != VK_SUCCESS)
-          return result;
+-         return result;
++         goto finish;
     }
  
     for (uint32_t i = 0; i < submission->image_bind_count; ++i) {
 -      VkResult result = radv_sparse_image_bind_memory(device, submission->image_binds + i);
-+      VkResult result = radv_sparse_image_bind_memory(queue, submission->image_binds + i);
++      result = radv_sparse_image_bind_memory(queue, submission->image_binds + i);
        if (result != VK_SUCCESS)
-          return result;
+-         return result;
++         goto finish;
     }
-@@ -1791,6 +1791,7 @@ radv_queue_submit_normal(struct radv_queue *queue, struct vk_queue_submit *submi
+ 
+-   return VK_SUCCESS;
++finish:
++   if (transaction) {
++      VkResult end_result = ws->buffer_virtual_bind_end(ws, queue->hw_ctx, radv_queue_ring(queue),
++                                                       queue->vk.index_in_family, submission->wait_count,
++                                                       submission->waits, result == VK_SUCCESS);
++      if (result == VK_SUCCESS)
++         result = end_result;
++   }
++   return result;
+ }
+ 
+ static VkResult
+@@ -1791,6 +1814,7 @@ radv_queue_submit_normal(struct radv_queue *queue, struct vk_queue_submit *submi
           chainable = can_chain_next ? cs->b : NULL;
        }
  
@@ -2237,7 +2270,7 @@ index 0e6ee2d5781..ef5c7bbbaa8 100644
        submit.cs_count = num_submitted_cs;
        submit.initial_preamble_count = submit_ace ? num_initial_preambles : num_1q_initial_preambles;
        submit.continue_preamble_count = submit_ace ? num_continue_preambles : num_1q_continue_preambles;
-@@ -1856,7 +1857,7 @@ radv_queue_sparse_submit(struct vk_queue *vqueue, struct vk_queue_submit *submis
+@@ -1856,10 +1880,20 @@ radv_queue_sparse_submit(struct vk_queue *vqueue, struct vk_queue_submit *submis
     struct radv_device *device = radv_queue_device(queue);
     VkResult result;
  
@@ -2246,7 +2279,20 @@ index 0e6ee2d5781..ef5c7bbbaa8 100644
     if (result != VK_SUCCESS)
        goto fail;
  
-@@ -1893,9 +1894,8 @@ static VkResult
++   if (device->ws->buffer_virtual_bind_end) {
++      /* WDDM mapping completion is queued on the GPU. Signal application
++       * fences there too, after the mapping wait inserted by the winsys. */
++      struct vk_queue_submit queued = *submission;
++      if (radv_queue_has_sparse_binds(submission))
++         queued.wait_count = 0;
++      result = radv_queue_submit_empty(queue, &queued);
++      goto fail;
++   }
++
+    /* We do a CPU wait here, in part to avoid more winsys mechanisms. In the likely kernel explicit
+     * sync mechanism, we'd need to do a CPU wait anyway. Haven't seen this be a perf issue yet, but
+     * we have to make sure the queue always has its submission thread enabled. */
+@@ -1893,12 +1927,19 @@ static VkResult
  radv_queue_submit(struct vk_queue *vqueue, struct vk_queue_submit *submission)
  {
     struct radv_queue *queue = (struct radv_queue *)vqueue;
@@ -2257,8 +2303,19 @@ index 0e6ee2d5781..ef5c7bbbaa8 100644
     if (result != VK_SUCCESS)
        goto fail;
  
++   /* Keep the runtime-owned submission intact for its cleanup. WDDM has
++    * already queued these waits before the mapping transaction. */
++   struct vk_queue_submit queued = *submission;
++   if (radv_queue_device(queue)->ws->buffer_virtual_bind_end && radv_queue_has_sparse_binds(submission)) {
++      queued.wait_count = 0;
++      submission = &queued;
++   }
++
+    if (!submission->command_buffer_count && !submission->wait_count && !submission->signal_count)
+       return VK_SUCCESS;
+ 
 diff --git a/src/amd/vulkan/radv_radeon_winsys.h b/src/amd/vulkan/radv_radeon_winsys.h
-index f4b47f81b61..72aa9f721e9 100644
+index f4b47f81b61..653a918ba56 100644
 --- a/src/amd/vulkan/radv_radeon_winsys.h
 +++ b/src/amd/vulkan/radv_radeon_winsys.h
 @@ -17,15 +17,19 @@
@@ -2377,7 +2434,7 @@ index f4b47f81b61..72aa9f721e9 100644
                               struct radeon_winsys_bo **out_bo);
  
     void (*buffer_destroy)(struct radeon_winsys *ws, struct radeon_winsys_bo *bo);
-@@ -247,18 +292,27 @@ struct radeon_winsys {
+@@ -247,18 +292,36 @@ struct radeon_winsys {
     VkResult (*buffer_from_fd)(struct radeon_winsys *ws, int fd, unsigned priority, struct radeon_winsys_bo **out_bo,
                                uint64_t *alloc_size);
  
@@ -2401,13 +2458,22 @@ index f4b47f81b61..72aa9f721e9 100644
  
 -   VkResult (*buffer_virtual_bind)(struct radeon_winsys *ws, struct radeon_winsys_bo *parent, uint64_t offset,
 -                                   uint64_t size, struct radeon_winsys_bo *bo, uint64_t bo_offset);
++   /* Optional queued mapping transaction. When present, end(commit=true)
++    * consumes the input waits on the GPU and orders later queue work after
++    * mapping completion. end(false) discards the unsubmitted mapping list. */
++   VkResult (*buffer_virtual_bind_begin)(struct radeon_winsys *ws, struct radeon_winsys_ctx *ctx,
++                                        enum amd_ip_type ip_type);
++   VkResult (*buffer_virtual_bind_end)(struct radeon_winsys *ws, struct radeon_winsys_ctx *ctx,
++                                      enum amd_ip_type ip_type, uint32_t queue_index,
++                                      uint32_t wait_count, const struct vk_sync_wait *waits, bool commit);
++
 +   VkResult (*buffer_virtual_bind)(struct radeon_winsys *ws, struct radeon_winsys_ctx *ctx, enum amd_ip_type ip_type,
 +                                   struct radeon_winsys_bo *parent, uint64_t offset, uint64_t size,
 +                                   struct radeon_winsys_bo *bo, uint64_t bo_offset);
  
     VkResult (*buffer_make_resident)(struct radeon_winsys *ws, struct radeon_winsys_bo *bo, bool resident);
  
-@@ -300,6 +354,8 @@ struct radeon_winsys {
+@@ -300,6 +363,8 @@ struct radeon_winsys {
  
     void (*cs_dump)(struct ac_cmdbuf *cs, FILE *file, const int *trace_ids, int trace_id_count,
                     enum radv_cs_dump_type type);
@@ -2416,7 +2482,7 @@ index f4b47f81b61..72aa9f721e9 100644
  
     void (*cs_annotate)(struct ac_cmdbuf *cs, const char *marker);
  
-@@ -310,6 +366,8 @@ struct radeon_winsys {
+@@ -310,6 +375,8 @@ struct radeon_winsys {
     void (*dump_bo_log)(struct radeon_winsys *ws, FILE *file);
  
     bool (*bo_wait_for_idle)(struct radeon_winsys *ws, struct radeon_winsys_bo *bo);
@@ -2425,7 +2491,7 @@ index f4b47f81b61..72aa9f721e9 100644
  
     int (*get_fd)(struct radeon_winsys *ws);
  
-@@ -323,6 +381,12 @@ struct radeon_winsys {
+@@ -323,6 +390,12 @@ struct radeon_winsys {
  
     int (*reserve_vmid)(struct radeon_winsys *ws);
     void (*unreserve_vmid)(struct radeon_winsys *ws);
@@ -3674,10 +3740,10 @@ index 00000000000..76e436fa36f
 +#endif
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
 new file mode 100644
-index 00000000000..ca4262abcfa
+index 00000000000..5fee47461c1
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
-@@ -0,0 +1,1154 @@
+@@ -0,0 +1,1266 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -4699,6 +4765,144 @@ index 00000000000..ca4262abcfa
 +   FREE(bo);
 +}
 +static VkResult
++radv_wddm2_virtual_bind_begin(struct radeon_winsys *_ws, struct radeon_winsys_ctx *_ctx,
++                             enum amd_ip_type ip_type)
++{
++   struct radv_wddm2_ctx *ctx = (struct radv_wddm2_ctx *)_ctx;
++   struct radv_wddm2_queue *queue = &ctx->per_ip[ip_type].queue;
++
++   /* RADV externally serializes submission to each advertised hardware queue. */
++   if (queue->sparse_batch_active || !queue->context_h || !queue->vm_fence.handle)
++      return VK_ERROR_DEVICE_LOST;
++   util_dynarray_clear(&queue->sparse_ops);
++   queue->sparse_batch_active = true;
++   return VK_SUCCESS;
++}
++
++static VkResult
++radv_wddm2_virtual_bind_append(struct radv_wddm2_ctx *ctx, enum amd_ip_type ip_type,
++                              const D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION *op)
++{
++   struct radv_wddm2_queue *queue = &ctx->per_ip[ip_type].queue;
++   if (!queue->sparse_batch_active)
++      return VK_ERROR_DEVICE_LOST;
++   D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION *dst =
++      util_dynarray_grow_bytes(&queue->sparse_ops, 1, sizeof(*op));
++   if (!dst)
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
++   *dst = *op;
++   return VK_SUCCESS;
++}
++
++static VkResult
++radv_wddm2_virtual_bind_end(struct radeon_winsys *_ws, struct radeon_winsys_ctx *_ctx,
++                           enum amd_ip_type ip_type, uint32_t queue_index,
++                           uint32_t wait_count, const struct vk_sync_wait *waits, bool commit)
++{
++   struct radv_wddm2_winsys *ws = radv_wddm2_winsys(_ws);
++   struct radv_wddm2_ctx *ctx = (struct radv_wddm2_ctx *)_ctx;
++   struct radv_wddm2_queue *queue = &ctx->per_ip[ip_type].queue;
++   VkResult result = VK_SUCCESS;
++   NTSTATUS status;
++
++   if (!queue->sparse_batch_active)
++      return VK_ERROR_DEVICE_LOST;
++   queue->sparse_batch_active = false;
++   if (!commit)
++      goto done;
++
++   /* An empty GPU submission queues application waits without a CPU wait.
++    * The boundary signal below follows both those waits and earlier rendering.
++    */
++   const struct radv_winsys_submit_info submit = {
++      .ip_type = ip_type,
++      .queue_index = queue_index,
++   };
++   result = _ws->cs_submit(_ctx, &submit, wait_count, waits, 0, NULL);
++   if (result != VK_SUCCESS)
++      goto done;
++
++   const unsigned count =
++      util_dynarray_num_elements(&queue->sparse_ops, D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION);
++   if (!count)
++      goto done;
++   if (queue->vm_fence.wait_value > UINT64_MAX - 2) {
++      result = VK_ERROR_DEVICE_LOST;
++      goto done;
++   }
++   const uint64_t boundary = queue->vm_fence.wait_value + 1;
++   const uint64_t completed = boundary + 1;
++   if (queue->handle) {
++      const D3DKMT_SUBMITSIGNALSYNCOBJECTSTOHWQUEUE signal = {
++         .BroadcastHwQueueCount = 1,
++         .BroadcastHwQueueArray = &queue->handle,
++         .ObjectCount = 1,
++         .ObjectHandleArray = &queue->vm_fence.handle,
++         .FenceValueArray = &boundary,
++      };
++      status = WDDM2_DISPATCH(SubmitSignalSyncObjectsToHwQueue(&signal));
++   } else {
++      const D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal = {
++         .BroadcastContextCount = 1,
++         .BroadcastContextArray = &queue->context_h,
++         .ObjectCount = 1,
++         .ObjectHandleArray = &queue->vm_fence.handle,
++         .MonitoredFenceValueArray = &boundary,
++      };
++      status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu2(&signal));
++   }
++   if (!NT_SUCCESS(status)) {
++      result = VK_ERROR_DEVICE_LOST;
++      goto done;
++   }
++
++   /* WDK26100 D3DKMT_UPDATEGPUVIRTUALADDRESS: wait for FenceValue, then
++    * signal FenceValue+1 from the paging companion context. The runtime owns
++    * backing residency while these mapping operations are queued.
++    */
++   const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
++      .hDevice = ws->device_h,
++      .hContext = queue->context_h,
++      .hFenceObject = queue->vm_fence.handle,
++      .FenceValue = boundary,
++      .Operations = queue->sparse_ops.data,
++      .NumOperations = count,
++   };
++   status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
++   if (!NT_SUCCESS(status)) {
++      result = VK_ERROR_DEVICE_LOST;
++      goto done;
++   }
++
++   if (queue->handle) {
++      const D3DKMT_SUBMITWAITFORSYNCOBJECTSTOHWQUEUE wait = {
++         .hHwQueue = queue->handle,
++         .ObjectCount = 1,
++         .ObjectHandleArray = &queue->vm_fence.handle,
++         .FenceValueArray = &completed,
++      };
++      status = WDDM2_DISPATCH(SubmitWaitForSyncObjectsToHwQueue(&wait));
++   } else {
++      const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait = {
++         .hContext = queue->context_h,
++         .ObjectCount = 1,
++         .ObjectHandleArray = &queue->vm_fence.handle,
++         .MonitoredFenceValueArray = &completed,
++      };
++      status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromGpu(&wait));
++   }
++   if (!NT_SUCCESS(status)) {
++      result = VK_ERROR_DEVICE_LOST;
++      goto done;
++   }
++   queue->vm_fence.wait_value = completed;
++
++done:
++   util_dynarray_clear(&queue->sparse_ops);
++   return result;
++}
++
++static VkResult
 +radv_wddm2_virtual_bo_map(struct radv_wddm2_winsys *ws, struct radv_wddm2_ctx *ctx,
 +                            enum amd_ip_type ip_type, struct radv_wddm2_bo *parent,
 +                            uint64_t offset, uint64_t size, struct radv_wddm2_bo *bo,
@@ -4719,21 +4923,7 @@ index 00000000000..ca4262abcfa
 +      },
 +   };
 +
-+   const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
-+      .hDevice = ws->device_h,
-+      .hContext = ctx->per_ip[ip_type].queue.context_h,
-+      .hFenceObject = ctx->per_ip[ip_type].queue.vm_fence.handle,
-+      .FenceValue = ctx->per_ip[ip_type].queue.vm_fence.wait_value,
-+      .Operations = &op,
-+      .NumOperations = 1,
-+   };
-+
-+   NTSTATUS status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
-+   if (!NT_SUCCESS(status)) {
-+      fprintf(stdout, "mapping 0x%" PRIx64 " failed: 0x%X\n", parent->base.va + offset, status);
-+      return VK_ERROR_OUT_OF_DEVICE_MEMORY;
-+   }
-+   return VK_SUCCESS;
++   return radv_wddm2_virtual_bind_append(ctx, ip_type, &op);
 +}
 +
 +static VkResult
@@ -4752,21 +4942,7 @@ index 00000000000..ca4262abcfa
 +      },
 +   };
 +
-+   const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
-+      .hDevice = ws->device_h,
-+      .hContext = ctx->per_ip[ip_type].queue.context_h,
-+      .hFenceObject = ctx->per_ip[ip_type].queue.vm_fence.handle,
-+      .FenceValue = ctx->per_ip[ip_type].queue.vm_fence.wait_value,
-+      .Operations = &op,
-+      .NumOperations = 1,
-+   };
-+
-+   NTSTATUS status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
-+   if (!NT_SUCCESS(status)) {
-+      fprintf(stderr, "mapping 0x%" PRIx64 " failed: 0x%X\n", parent->base.va + offset, status);
-+      return VK_ERROR_OUT_OF_DEVICE_MEMORY;
-+   }
-+   return VK_SUCCESS;
++   return radv_wddm2_virtual_bind_append(ctx, ip_type, &op);
 +}
 +
 +static VkResult
@@ -4828,6 +5004,8 @@ index 00000000000..ca4262abcfa
 +   ws->base.buffer_from_handle = radv_wddm2_bo_from_handle;
 +   ws->base.buffer_get_flags_from_handle = radv_wddm2_bo_get_flags_from_handle;
 +   ws->base.buffer_get_metadata = radv_wddm2_bo_get_metadata;
++   ws->base.buffer_virtual_bind_begin = radv_wddm2_virtual_bind_begin;
++   ws->base.buffer_virtual_bind_end = radv_wddm2_virtual_bind_end;
 +   ws->base.buffer_virtual_bind = radv_wddm2_bo_virtual_bind;
 +   ws->base.dump_bo_ranges = radv_wddm2_dump_bo_ranges;
 +   ws->base.dump_bo_log = radv_wddm2_dump_bo_log;
@@ -4901,10 +5079,10 @@ index 00000000000..22a445c0639
 +#endif /* RADV_WDDM2_BO_H */
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 new file mode 100644
-index 00000000000..933f71dab17
+index 00000000000..c00b931cccc
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
-@@ -0,0 +1,1105 @@
+@@ -0,0 +1,1107 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -5094,6 +5272,7 @@ index 00000000000..933f71dab17
 +static void
 +radv_wddm2_queue_destroy(struct radv_wddm2_queue *queue)
 +{
++   util_dynarray_fini(&queue->sparse_ops);
 +   if (queue->bc250_progress.handle) {
 +      if (queue->bc250_progress.wait_value)
 +         vk_wddm2_fence_wait(queue->bc250_ws->device_h, &queue->bc250_progress);
@@ -5140,6 +5319,7 @@ index 00000000000..933f71dab17
 +   uint32_t node;
 +
 +   queue->hw_ip = hw_ip;
++   util_dynarray_init(&queue->sparse_ops, NULL);
 +
 +   switch (hw_ip) {
 +   case AMD_IP_GFX:
@@ -6012,10 +6192,10 @@ index 00000000000..933f71dab17
 +}
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
 new file mode 100644
-index 00000000000..455b772e7a6
+index 00000000000..983770473ca
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,77 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -6050,6 +6230,7 @@ index 00000000000..455b772e7a6
 +#include "radv_radeon_winsys.h"
 +
 +#include <stdint.h>
++#include "util/u_dynarray.h"
 +
 +struct vk_wddm2_fence {
 +   uint32_t handle;
@@ -6063,6 +6244,8 @@ index 00000000000..455b772e7a6
 +   uint32_t handle;
 +   uint32_t queue_id; /* KMD identifier */
 +   struct vk_wddm2_fence vm_fence;
++   struct util_dynarray sparse_ops;
++   bool sparse_batch_active;
 +   /* Each queue owns its packed IB and an unconditional retirement fence. */
 +   struct radv_wddm2_winsys *bc250_ws;
 +   struct radeon_winsys_bo *bc250_gather;

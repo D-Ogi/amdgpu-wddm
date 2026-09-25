@@ -107,3 +107,15 @@ Host control against the actual patched source:
 
 The generated C uses actual WDK declarations and a mock OS dispatch; it is
 not a substitute for hardware bind/unbind and residency tests.
+
+## Sparse mapping order
+M482 adds per-submission mapping batches with application waits and GPU
+completion fences. The source-extracted scheduler model and ordinary lab
+controls pass; sparse hardware acceptance is still open.
+[Evidence and scope](../../evidence/windows/2026-09-25-E33-sparse-order/RESULT.md).
+
+    python experiments/E33-m12-applications/test_sparse_order.py --source P:/bc-250/scratch/m12/mesa-current-src --out P:/bc-250/scratch/m12/order-control
+    cmd /c P:/bc-250/scratch/m12/order-control/run.cmd
+
+The historical M481 patch remains in its commit; mesa05-source.json now pins
+the complete patch including M482.
