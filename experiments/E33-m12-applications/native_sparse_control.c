@@ -17,6 +17,9 @@ struct radv_winsys_submit_info {enum amd_ip_type ip_type;uint32_t queue_index;};
 struct radeon_winsys_ctx {int unused;};
 struct radeon_winsys {VkResult (*cs_submit)(struct radeon_winsys_ctx*,const struct radv_winsys_submit_info*,uint32_t,const struct vk_sync_wait*,uint32_t,const void*);};
 struct util_dynarray {void *data;unsigned size;};
+#define util_dynarray_foreach(p,type,it) for(type *it=(p)->data; it<(type*)((char*)(p)->data+(p)->size);it++)
+static void util_dynarray_init(struct util_dynarray *p,void *unused){(void)unused;p->data=NULL;p->size=0;}
+static void util_dynarray_fini(struct util_dynarray *p){free(p->data);p->data=NULL;p->size=0;}
 static void util_dynarray_clear(struct util_dynarray *p){p->size=0;}
 static void *util_dynarray_grow_bytes(struct util_dynarray *p,unsigned count,size_t size){
  unsigned old=p->size;p->data=realloc(p->data,old+count*size);assert(p->data);p->size+=(unsigned)(count*size);return (char*)p->data+old;
@@ -25,8 +28,14 @@ static void *util_dynarray_grow_bytes(struct util_dynarray *p,unsigned count,siz
 struct vk_wddm2_fence {uint32_t handle;uint64_t wait_value;};
 struct radv_wddm2_queue {uint32_t context_h,handle;struct vk_wddm2_fence vm_fence;struct util_dynarray sparse_ops;bool sparse_batch_active;};
 struct radv_wddm2_ctx {struct radeon_winsys_ctx base;struct {struct radv_wddm2_queue queue;} per_ip[1];};
-struct radv_wddm2_winsys {struct radeon_winsys base;uint32_t device_h;};
-struct radv_wddm2_bo {struct {uint64_t va;uint32_t handle;} base;};
+#define RADV_WDDM2_PRT_CONTROL_MASK (1ull<<46)
+#define RADEON_FLAG_READ_ONLY 1
+#ifndef MIN2
+#define MIN2(a,b) ((a)<(b)?(a):(b))
+#endif
+struct radeon_winsys_bo {uint64_t va;uint32_t handle;uint64_t size;};
+struct radv_wddm2_winsys {struct radeon_winsys base;uint32_t device_h,adapter_h,paging_queue_h,paging_fence_h;struct {struct radeon_winsys_bo *bo;} null_prt;};
+struct radv_wddm2_bo {struct radeon_winsys_bo base;unsigned flags;bool emulate_sparse_residency;uint64_t sparse_high_va;};
 static struct radv_wddm2_winsys *radv_wddm2_winsys(struct radeon_winsys *p){return (void*)p;}
 static NTSTATUS NativeStatus(const char *name,NTSTATUS status){return Report(name,status);}
 #define WDDM2_DISPATCH(call) NativeStatus(#call,D3DKMT##call)
@@ -62,10 +71,11 @@ static BOOL CpuRelease(D3DKMT_HANDLE device,D3DKMT_HANDLE handle)
 
 /* Mesa radv_cp_dma.c uses DMA_DATA for bulk copies; COPY_DATA is a
  * different access path and its PRT behavior is not implied by CP DMA support. */
-static BOOL g_UseDma;
+static BOOL g_UseDma;static UINT64 g_ContentFence;
 static BOOL CopyContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
                         UINT64 destination,UINT64 sequence)
 {
+    sequence=++g_ContentFence;
     UINT32 *dw;
     D3DKMT_SUBMITCOMMAND submit={0};
     if(!LockBuffer(p,ib))return FALSE;
@@ -114,22 +124,24 @@ static BOOL ReadContent(PROBE *p,PROBE *completion,BUFFER *ib,UINT64 source,
 
 int main(int argc,char **argv)
 {
-    BOOL holes=FALSE,writeHole=FALSE;
+    BOOL holes=FALSE,writeHole=FALSE,highVa=FALSE,paired=FALSE;
     int arg;
     for(arg=1;arg<argc;arg++) {
         if(strcmp(argv[arg],"--holes")==0)holes=TRUE;
         else if(strcmp(argv[arg],"--dma")==0)g_UseDma=TRUE;
         else if(strcmp(argv[arg],"--write-hole")==0)writeHole=TRUE;
-        else {puts("usage: native-sparse-control [--holes] [--dma] [--write-hole]");return 2;}
+        else if(strcmp(argv[arg],"--high")==0)highVa=TRUE;
+        else if(strcmp(argv[arg],"--paired")==0)paired=TRUE;
+        else {puts("usage: native-sparse-control [--holes] [--dma] [--write-hole] [--high] [--paired]");return 2;}
     }
     if(writeHole && (!holes || !g_UseDma)){puts("--write-hole requires --holes --dma");return 2;}
-    printf("Access path: %s\\n",g_UseDma?"CP DMA_DATA":"CP COPY_DATA");
-    PROBE p={0},completion={0};BUFFER ib={0};
+    printf("Access path: %s\n",g_UseDma?"CP DMA_DATA":"CP COPY_DATA");
+    PROBE p={0},completion={0};BUFFER ib={0},zeroBacking={0};
     BOOL ok=FALSE,released=FALSE;
     const UINT64 a=0x13579BDF2468ACE0ull,b=0xFEDCBA9876543210ull;
     struct radv_wddm2_winsys ws={0};struct radv_wddm2_ctx ctx={0};
     struct radv_wddm2_queue *q=&ctx.per_ip[AMD_IP_GFX].queue;
-    struct radv_wddm2_bo parent={0},physical={0};
+    struct radv_wddm2_bo parent={0},physical={0};struct radeon_winsys_bo zeroBo={0};
     D3DKMT_CREATESYNCHRONIZATIONOBJECT2 input={0};
     D3DKMT_CREATECONTEXTVIRTUAL context={0};
     struct vk_sync_wait app_wait={0};D3DDDI_MAPGPUVIRTUALADDRESS zero={0};
@@ -137,6 +149,7 @@ int main(int argc,char **argv)
     p.Data.Name="physical-control";p.Data.Size=196608;p.Data.RequestedVa=0x200000000ull;
     ib.Name="copy-ib";ib.Size=65536;ib.RequestedVa=0x200040000ull;
     p.Command.Name="virtual-control";p.Command.Size=65536;p.Command.RequestedVa=0x200060000ull;
+    if(highVa && !paired)p.Command.RequestedVa|=1ull<<46;
     setvbuf(stdout,NULL,_IONBF,0);if(!StartWatchdog(30000))return 2;
     if(!StepFindAdapter(&p)||!StepOpenAdapter(&p)||!StepCreateDevice(&p)||!StepCreatePagingQueue(&p)||
        !StepCreateAllocation(&p,&p.Data)||!StepMakeResident(&p,&p.Data)||!StepReserveVa(&p,&p.Data)||
@@ -150,6 +163,20 @@ int main(int argc,char **argv)
     zero.hPagingQueue=p.hPagingQueue;zero.BaseAddress=p.Command.ReservedBase;zero.SizeInPages=16;zero.Protection.Zero=1;
     if(!NT_SUCCESS(Report("Initial zero mapping",D3DKMTMapGpuVirtualAddress(&zero)))||
        !WaitPagingFence(&p,zero.PagingFenceValue,"initial zero"))goto done;
+    ws.base.cs_submit=NativeWaits;ws.device_h=p.hDevice;ws.adapter_h=p.hAdapter;
+    ws.paging_queue_h=p.hPagingQueue;ws.paging_fence_h=p.hPagingFenceObject;
+    parent.base.va=p.Command.ReservedBase;parent.base.size=p.Command.Size;
+    parent.emulate_sparse_residency=paired;
+    if(paired) {
+        zeroBacking.Name="real-zero";zeroBacking.Size=65536;zeroBacking.RequestedVa=0x200080000ull;
+        if(!StepCreateAllocation(&p,&zeroBacking)||!StepMakeResident(&p,&zeroBacking)||
+           !StepReserveVa(&p,&zeroBacking)||!StepMapVa(&p,&zeroBacking)||!LockBuffer(&p,&zeroBacking))goto done;
+        memset(zeroBacking.Locked,0,(size_t)zeroBacking.Size);_mm_sfence();
+        if(!UnlockBuffer(&p,&zeroBacking))goto done;
+        zeroBo.handle=zeroBacking.hAllocation;zeroBo.size=zeroBacking.Size;ws.null_prt.bo=&zeroBo;
+        if(!radv_wddm2_init_sparse_alias(&ws,&parent))goto done;
+        printf("PAIRED high=0x%llX low=0x%llX\n",parent.base.va,p.Command.ReservedBase);
+    }
     context.hDevice=p.hDevice;context.NodeOrdinal=0;context.ClientHint=D3DKMT_CLIENTHINT_VULKAN;
     if(!NT_SUCCESS(Report("CreateContextVirtual (normal TDR policy)",D3DKMTCreateContextVirtual(&context))))goto done;
     p.hContext=context.hContext;if(!StepCreateFence(&p))goto done;
@@ -158,34 +185,39 @@ int main(int argc,char **argv)
     if(!StepCreateFence(&completion))goto done;
     if(!ReadContent(&p,&completion,&ib,p.Data.MappedVa,a,1,"physical-A")||
        !ReadContent(&p,&completion,&ib,p.Data.MappedVa+65536,b,2,"physical-B"))goto done;
-    if(holes && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,0,3,"initial-zero"))goto done;
+    if(holes && !ReadContent(&p,&completion,&ib,parent.base.va,0,3,"initial-zero"))goto done;
+    if(paired && holes && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,0,11,"low-initial-zero"))goto done;
     input.hDevice=p.hDevice;input.Info.Type=D3DDDI_MONITORED_FENCE;input.Info.MonitoredFence.EngineAffinity=1;
     if(!NT_SUCCESS(Report("Create application fence",D3DKMTCreateSynchronizationObject2(&input))))goto done;
     ws.base.cs_submit=NativeWaits;ws.device_h=p.hDevice;q->context_h=p.hContext;q->vm_fence.handle=p.hFence;
-    parent.base.va=p.Command.ReservedBase;physical.base.va=p.Data.MappedVa;physical.base.handle=p.Data.hAllocation;
+    physical.base.va=p.Data.MappedVa;physical.base.handle=p.Data.hAllocation;
     app_wait.handle=input.hSyncObject;app_wait.wait_value=1;
     if(radv_wddm2_virtual_bind_begin(&ws.base,&ctx.base,AMD_IP_GFX)||
        radv_wddm2_virtual_bo_map(&ws,&ctx,AMD_IP_GFX,&parent,0,65536,&physical,0)||
        radv_wddm2_virtual_bind_end(&ws.base,&ctx.base,AMD_IP_GFX,0,1,&app_wait,true))goto done;
     Sleep(20);printf("DELAYED_WAIT vm_fence=%llu expected=0\n",*p.FenceCpuVa);
     if(*p.FenceCpuVa!=0||!CpuRelease(p.hDevice,input.hSyncObject))goto done;
-    released=TRUE;if(!StepWaitFence(&p,2))goto done;
+    released=TRUE;if(!StepWaitFence(&p,q->vm_fence.wait_value))goto done;
     if(!ReadContent(&p,&completion,&ib,parent.base.va,a,4,"alias-A"))goto done;
+    if(paired && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,a,12,"low-alias-A"))goto done;
     if(radv_wddm2_virtual_bind_begin(&ws.base,&ctx.base,AMD_IP_GFX)||
        radv_wddm2_virtual_bo_map(&ws,&ctx,AMD_IP_GFX,&parent,0,65536,&physical,65536)||
        radv_wddm2_virtual_bind_end(&ws.base,&ctx.base,AMD_IP_GFX,0,0,NULL,true)||
-       !StepWaitFence(&p,4))goto done;
+       !StepWaitFence(&p,q->vm_fence.wait_value))goto done;
     if(!ReadContent(&p,&completion,&ib,parent.base.va,b,5,"rebind-B"))goto done;
+    if(paired && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,b,13,"low-rebind-B"))goto done;
     if(radv_wddm2_virtual_bind_begin(&ws.base,&ctx.base,AMD_IP_GFX)||
        radv_wddm2_virtual_bo_unmap(&ws,&ctx,AMD_IP_GFX,&parent,0,65536)||
        radv_wddm2_virtual_bind_end(&ws.base,&ctx.base,AMD_IP_GFX,0,0,NULL,true)||
-       !StepWaitFence(&p,6))goto done;
+       !StepWaitFence(&p,q->vm_fence.wait_value))goto done;
     if(holes && !ReadContent(&p,&completion,&ib,parent.base.va,0,6,"unmapped-zero"))goto done;
+    if(paired && holes && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,0,14,"low-unmapped-zero"))goto done;
     if(writeHole) {
         if(!CopyContent(&p,&completion,&ib,p.Data.MappedVa,parent.base.va,7) ||
            !ReadContent(&p,&completion,&ib,parent.base.va,0,8,"zero-after-write") ||
            !ReadContent(&p,&completion,&ib,p.Data.MappedVa,a,9,"physical-A-after-write") ||
            !ReadContent(&p,&completion,&ib,p.Data.MappedVa+65536,b,10,"physical-B-after-write"))goto done;
+        if(paired && !ReadContent(&p,&completion,&ib,p.Command.ReservedBase,0,15,"low-zero-after-write"))goto done;
         puts("WRITE_DISCARD PASS; hole stays zero and bound controls unchanged");
     }
     puts(holes ? "ZERO_READ PASS; shader semantics untested" : "BOUND_READ PASS; no reads from holes");
@@ -194,6 +226,7 @@ done:
     if(input.hSyncObject&&!released)CpuRelease(p.hDevice,input.hSyncObject);
     if(input.hSyncObject){D3DKMT_DESTROYSYNCHRONIZATIONOBJECT d={0};d.hSyncObject=input.hSyncObject;Report("Destroy application fence",D3DKMTDestroySynchronizationObject(&d));}
     if(completion.hFence){D3DKMT_DESTROYSYNCHRONIZATIONOBJECT d={0};d.hSyncObject=completion.hFence;Report("Destroy copy fence",D3DKMTDestroySynchronizationObject(&d));}
-    TeardownBuffer(&p,&ib);Teardown(&p);free(q->sparse_ops.data);SetEvent(g_Done);
+    if(parent.sparse_high_va){D3DKMT_FREEGPUVIRTUALADDRESS f={0};f.hAdapter=p.hAdapter;f.BaseAddress=parent.sparse_high_va;f.Size=parent.base.size;Report("Free high alias",D3DKMTFreeGpuVirtualAddress(&f));}
+    TeardownBuffer(&p,&zeroBacking);TeardownBuffer(&p,&ib);Teardown(&p);free(q->sparse_ops.data);SetEvent(g_Done);
     puts(ok?"RESULT PASS":"RESULT FAIL");return ok?0:1;
 }

@@ -3740,10 +3740,10 @@ index 00000000000..76e436fa36f
 +#endif
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
 new file mode 100644
-index 00000000000..5fee47461c1
+index 00000000000..052a8713b0d
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
-@@ -0,0 +1,1266 @@
+@@ -0,0 +1,1455 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -4122,6 +4122,9 @@ index 00000000000..5fee47461c1
 +      max = RADV_WDDM2_REPLAY_HEAP_START;
 +   }
 +
++   if (address && (address < min || address >= max || size > max - address))
++      return 0;
++
 +   D3DDDI_RESERVEGPUVIRTUALADDRESS reserve = {
 +      /* The current D3DKMT contract uses hAdapter, not obsolete hPagingQueue. */
 +      .hAdapter = ws->adapter_h,
@@ -4170,6 +4173,97 @@ index 00000000000..5fee47461c1
 +   return va;
 +}
 +
++/* Same two-view policy as radv_amdgpu_bo.c, using WDDM-owned reservations.
++ * The compiler clears the control bit for scalar loads; vector loads/stores keep
++ * the high PRT view. Low unbound ranges reference an actual read-only zero BO.
++ */
++static VkResult
++radv_wddm2_init_null_prt_bo(struct radv_wddm2_winsys *ws)
++{
++   VkResult result = VK_SUCCESS;
++   simple_mtx_lock(&ws->null_prt.lock);
++   if (!ws->null_prt.bo) {
++      struct radeon_winsys_bo *bo = NULL;
++      result = ws->base.buffer_create(&ws->base, 8 * 1024 * 1024, 65536, RADEON_DOMAIN_VRAM,
++                                      RADEON_FLAG_CPU_ACCESS | RADEON_FLAG_READ_ONLY |
++                                         RADEON_FLAG_NO_INTERPROCESS_SHARING | RADEON_FLAG_PREFER_LOCAL_BO,
++                                      RADV_BO_PRIORITY_VIRTUAL, 0, NULL, &bo);
++      if (result == VK_SUCCESS) {
++         /* BC2A does not implement ZERO_VRAM: initialise explicitly before
++          * publishing the shared object. Drain WC CPU stores before unlocking.
++          */
++         void *map = ws->base.buffer_map(&ws->base, bo, false, NULL);
++         if (map) {
++            memset(map, 0, bo->size);
++            MemoryBarrier();
++            ws->base.buffer_unmap(&ws->base, bo, false);
++            ws->null_prt.bo = bo;
++         } else {
++            ws->base.buffer_destroy(&ws->base, bo);
++            result = VK_ERROR_MEMORY_MAP_FAILED;
++         }
++      }
++   }
++   simple_mtx_unlock(&ws->null_prt.lock);
++   return result;
++}
++
++static bool
++radv_wddm2_init_sparse_alias(struct radv_wddm2_winsys *ws, struct radv_wddm2_bo *bo)
++{
++   const uint64_t low = bo->base.va;
++   const uint64_t high = low | RADV_WDDM2_PRT_CONTROL_MASK;
++   D3DDDI_RESERVEGPUVIRTUALADDRESS reserve = {
++      .hAdapter = ws->adapter_h,
++      .BaseAddress = high,
++      .Size = bo->base.size,
++   };
++   NTSTATUS status = WDDM2_DISPATCH(ReserveGpuVirtualAddress(&reserve));
++   if (!NT_SUCCESS(status))
++      return false;
++   bo->sparse_high_va = high;
++
++   D3DDDI_MAPGPUVIRTUALADDRESS map = {
++      .hPagingQueue = ws->paging_queue_h,
++      .BaseAddress = high,
++      .SizeInPages = bo->base.size / 4096,
++      .Protection.Zero = 1,
++   };
++   status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++   if (!NT_SUCCESS(status))
++      return false;
++
++   uint64_t fence = map.PagingFenceValue;
++   for (uint64_t offset = 0; offset < bo->base.size;) {
++      const uint64_t bytes = MIN2(bo->base.size - offset, ws->null_prt.bo->size);
++      map = (D3DDDI_MAPGPUVIRTUALADDRESS){
++         .hPagingQueue = ws->paging_queue_h,
++         .BaseAddress = low + offset,
++         .hAllocation = ws->null_prt.bo->handle,
++         .SizeInPages = bytes / 4096,
++         /* Read-only; every chunk aliases offset zero of the shared BO. */
++      };
++      status = WDDM2_DISPATCH(MapGpuVirtualAddress(&map));
++      if (!NT_SUCCESS(status))
++         return false;
++      fence = map.PagingFenceValue;
++      offset += bytes;
++   }
++
++   /* One paging-queue wait covers both initial views, not one per zero chunk. */
++   const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait = {
++      .hDevice = ws->device_h,
++      .ObjectCount = 1,
++      .ObjectHandleArray = &ws->paging_fence_h,
++      .FenceValueArray = &fence,
++   };
++   status = WDDM2_DISPATCH(WaitForSynchronizationObjectFromCpu(&wait));
++   if (!NT_SUCCESS(status))
++      return false;
++   bo->base.va = high;
++   return true;
++}
++
 +static VkResult
 +radv_wddm2_virtual_bo_create(struct radeon_winsys *_ws, uint64_t size, unsigned alignment,
 +                             enum radeon_bo_domain initial_domain, enum radeon_bo_flag flags,
@@ -4191,8 +4285,34 @@ index 00000000000..5fee47461c1
 +   bo->flags = flags;
 +   bo->base.is_virtual = true;
 +   bo->base.size = size;
++   bo->emulate_sparse_residency = flags & RADEON_FLAG_EMULATE_SPARSE_RESIDENCY;
++   if (bo->emulate_sparse_residency) {
++      result = radv_wddm2_init_null_prt_bo(ws);
++      if (result != VK_SUCCESS)
++         goto error_va_reserve;
++      address &= ~RADV_WDDM2_PRT_CONTROL_MASK;
++   }
 +   bo->base.va = radv_wddm2_reserve_va_range(ws, bo, size, alignment, flags, address);
 +   if (bo->base.va == 0) {
++      result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
++      goto error_va_reserve;
++   }
++
++   if (bo->emulate_sparse_residency && !radv_wddm2_init_sparse_alias(ws, bo)) {
++      const D3DKMT_FREEGPUVIRTUALADDRESS low = {
++         .hAdapter = ws->adapter_h,
++         .BaseAddress = bo->reserved_va,
++         .Size = bo->reserved_size,
++      };
++      WDDM2_DISPATCH(FreeGpuVirtualAddress(&low));
++      if (bo->sparse_high_va) {
++         const D3DKMT_FREEGPUVIRTUALADDRESS high = {
++            .hAdapter = ws->adapter_h,
++            .BaseAddress = bo->sparse_high_va,
++            .Size = bo->base.size,
++         };
++         WDDM2_DISPATCH(FreeGpuVirtualAddress(&high));
++      }
 +      result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
 +      goto error_va_reserve;
 +   }
@@ -4222,6 +4342,9 @@ index 00000000000..5fee47461c1
 +   /* The contract has no userptr allocation. A normal BO would be the wrong object. */
 +   if (ws->bc250 && cpu_ptr)
 +      return VK_ERROR_FEATURE_NOT_PRESENT;
++   if (address && (address >= RADV_WDDM2_PRT_CONTROL_MASK ||
++                   size > RADV_WDDM2_PRT_CONTROL_MASK - address))
++      return VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS;
 +
 +   bo = CALLOC_STRUCT(radv_wddm2_bo);
 +   if (!bo)
@@ -4738,6 +4861,14 @@ index 00000000000..5fee47461c1
 +
 +   radv_wddm2_bo_unmap(_ws, _bo, false);
 +
++   if (bo->sparse_high_va) {
++      const D3DKMT_FREEGPUVIRTUALADDRESS high = {
++         .hAdapter = ws->adapter_h,
++         .BaseAddress = bo->sparse_high_va,
++         .Size = bo->base.size,
++      };
++      status = WDDM2_DISPATCH(FreeGpuVirtualAddress(&high));
++   }
 +   const D3DKMT_FREEGPUVIRTUALADDRESS unmap = {
 +      .hAdapter = ws->adapter_h,
 +      .BaseAddress = bo->reserved_va ? bo->reserved_va : bo->base.va,
@@ -4764,6 +4895,19 @@ index 00000000000..5fee47461c1
 +
 +   FREE(bo);
 +}
++struct radv_wddm2_sparse_group {
++   uint64_t reservation;
++   struct util_dynarray operations;
++};
++
++void
++radv_wddm2_sparse_groups_clear(struct radv_wddm2_queue *queue)
++{
++   util_dynarray_foreach (&queue->sparse_ops, struct radv_wddm2_sparse_group, group)
++      util_dynarray_fini(&group->operations);
++   util_dynarray_clear(&queue->sparse_ops);
++}
++
 +static VkResult
 +radv_wddm2_virtual_bind_begin(struct radeon_winsys *_ws, struct radeon_winsys_ctx *_ctx,
 +                             enum amd_ip_type ip_type)
@@ -4774,20 +4918,40 @@ index 00000000000..5fee47461c1
 +   /* RADV externally serializes submission to each advertised hardware queue. */
 +   if (queue->sparse_batch_active || !queue->context_h || !queue->vm_fence.handle)
 +      return VK_ERROR_DEVICE_LOST;
-+   util_dynarray_clear(&queue->sparse_ops);
++   radv_wddm2_sparse_groups_clear(queue);
 +   queue->sparse_batch_active = true;
 +   return VK_SUCCESS;
 +}
 +
 +static VkResult
 +radv_wddm2_virtual_bind_append(struct radv_wddm2_ctx *ctx, enum amd_ip_type ip_type,
-+                              const D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION *op)
++                              uint64_t reservation, const D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION *op)
 +{
 +   struct radv_wddm2_queue *queue = &ctx->per_ip[ip_type].queue;
 +   if (!queue->sparse_batch_active)
 +      return VK_ERROR_DEVICE_LOST;
++
++   /* MS D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION: one Update call can touch
++    * only one ReserveGpuVirtualAddress reservation. Group by reservation,
++    * preserving the original operation order within every resource/view.
++    * Map/unmap operations in different reservations are independent.
++    */
++   struct radv_wddm2_sparse_group *dst_group = NULL;
++   util_dynarray_foreach (&queue->sparse_ops, struct radv_wddm2_sparse_group, group) {
++      if (group->reservation == reservation) {
++         dst_group = group;
++         break;
++      }
++   }
++   if (!dst_group) {
++      dst_group = util_dynarray_grow_bytes(&queue->sparse_ops, 1, sizeof(*dst_group));
++      if (!dst_group)
++         return VK_ERROR_OUT_OF_HOST_MEMORY;
++      dst_group->reservation = reservation;
++      util_dynarray_init(&dst_group->operations, NULL);
++   }
 +   D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION *dst =
-+      util_dynarray_grow_bytes(&queue->sparse_ops, 1, sizeof(*op));
++      util_dynarray_grow_bytes(&dst_group->operations, 1, sizeof(*op));
 +   if (!dst)
 +      return VK_ERROR_OUT_OF_HOST_MEMORY;
 +   *dst = *op;
@@ -4823,15 +4987,15 @@ index 00000000000..5fee47461c1
 +      goto done;
 +
 +   const unsigned count =
-+      util_dynarray_num_elements(&queue->sparse_ops, D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION);
++      util_dynarray_num_elements(&queue->sparse_ops, struct radv_wddm2_sparse_group);
 +   if (!count)
 +      goto done;
-+   if (queue->vm_fence.wait_value > UINT64_MAX - 2) {
++   if (queue->vm_fence.wait_value > UINT64_MAX - count - 1) {
 +      result = VK_ERROR_DEVICE_LOST;
 +      goto done;
 +   }
 +   const uint64_t boundary = queue->vm_fence.wait_value + 1;
-+   const uint64_t completed = boundary + 1;
++   const uint64_t completed = boundary + count;
 +   if (queue->handle) {
 +      const D3DKMT_SUBMITSIGNALSYNCOBJECTSTOHWQUEUE signal = {
 +         .BroadcastHwQueueCount = 1,
@@ -4856,22 +5020,26 @@ index 00000000000..5fee47461c1
 +      goto done;
 +   }
 +
-+   /* WDK26100 D3DKMT_UPDATEGPUVIRTUALADDRESS: wait for FenceValue, then
-+    * signal FenceValue+1 from the paging companion context. The runtime owns
-+    * backing residency while these mapping operations are queued.
++   /* Chain reservation batches on one monitored fence. The first waits for
++    * earlier rendering/application dependencies; subsequent batches wait for
++    * the previous update. Rendering waits once, for all views/resources.
 +    */
-+   const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
-+      .hDevice = ws->device_h,
-+      .hContext = queue->context_h,
-+      .hFenceObject = queue->vm_fence.handle,
-+      .FenceValue = boundary,
-+      .Operations = queue->sparse_ops.data,
-+      .NumOperations = count,
-+   };
-+   status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
-+   if (!NT_SUCCESS(status)) {
-+      result = VK_ERROR_DEVICE_LOST;
-+      goto done;
++   uint64_t update_fence = boundary;
++   util_dynarray_foreach (&queue->sparse_ops, struct radv_wddm2_sparse_group, group) {
++      const D3DKMT_UPDATEGPUVIRTUALADDRESS update = {
++         .hDevice = ws->device_h,
++         .hContext = queue->context_h,
++         .hFenceObject = queue->vm_fence.handle,
++         .FenceValue = update_fence++,
++         .Operations = group->operations.data,
++         .NumOperations =
++            util_dynarray_num_elements(&group->operations, D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION),
++      };
++      status = WDDM2_DISPATCH(UpdateGpuVirtualAddress(&update));
++      if (!NT_SUCCESS(status)) {
++         result = VK_ERROR_DEVICE_LOST;
++         goto done;
++      }
 +   }
 +
 +   if (queue->handle) {
@@ -4898,7 +5066,7 @@ index 00000000000..5fee47461c1
 +   queue->vm_fence.wait_value = completed;
 +
 +done:
-+   util_dynarray_clear(&queue->sparse_ops);
++   radv_wddm2_sparse_groups_clear(queue);
 +   return result;
 +}
 +
@@ -4916,14 +5084,15 @@ index 00000000000..5fee47461c1
 +         .hAllocation = bo->base.handle,
 +         .AllocationOffsetInBytes = bo_offset,
 +         .AllocationSizeInBytes = size,
-+         .Protection = {
-+            .Write = 1,
-+         },
++         .Protection.Write = !(bo->flags & RADEON_FLAG_READ_ONLY),
 +         .DriverProtection = 1,
 +      },
 +   };
-+
-+   return radv_wddm2_virtual_bind_append(ctx, ip_type, &op);
++   VkResult result = radv_wddm2_virtual_bind_append(ctx, ip_type, parent->base.va, &op);
++   if (result != VK_SUCCESS || !parent->emulate_sparse_residency)
++      return result;
++   op.MapProtect.BaseAddress &= ~RADV_WDDM2_PRT_CONTROL_MASK;
++   return radv_wddm2_virtual_bind_append(ctx, ip_type, parent->base.va & ~RADV_WDDM2_PRT_CONTROL_MASK, &op);
 +}
 +
 +static VkResult
@@ -4936,13 +5105,33 @@ index 00000000000..5fee47461c1
 +      .Unmap = {
 +         .BaseAddress = parent->base.va + offset,
 +         .SizeInBytes = size,
-+         .Protection = {
-+            .Zero = 1,
-+         }
++         .Protection.Zero = 1,
 +      },
 +   };
++   VkResult result = radv_wddm2_virtual_bind_append(ctx, ip_type, parent->base.va, &op);
++   if (result != VK_SUCCESS || !parent->emulate_sparse_residency)
++      return result;
 +
-+   return radv_wddm2_virtual_bind_append(ctx, ip_type, &op);
++   uint64_t va = (parent->base.va & ~RADV_WDDM2_PRT_CONTROL_MASK) + offset;
++   while (size) {
++      const uint64_t bytes = MIN2(size, ws->null_prt.bo->size);
++      op = (D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION){
++         .OperationType = D3DDDI_UPDATEGPUVIRTUALADDRESS_MAP_PROTECT,
++         .MapProtect = {
++            .BaseAddress = va,
++            .SizeInBytes = bytes,
++            .hAllocation = ws->null_prt.bo->handle,
++            .AllocationSizeInBytes = bytes,
++            .DriverProtection = 1,
++         },
++      };
++      result = radv_wddm2_virtual_bind_append(ctx, ip_type, parent->base.va & ~RADV_WDDM2_PRT_CONTROL_MASK, &op);
++      if (result != VK_SUCCESS)
++         return result;
++      size -= bytes;
++      va += bytes;
++   }
++   return VK_SUCCESS;
 +}
 +
 +static VkResult
@@ -5012,10 +5201,10 @@ index 00000000000..5fee47461c1
 +}
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
 new file mode 100644
-index 00000000000..22a445c0639
+index 00000000000..c263976c05b
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,72 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -5050,7 +5239,13 @@ index 00000000000..22a445c0639
 +
 +#define RADV_WDDM2_HEAP_START          0x0000000200000000ull
 +#define RADV_WDDM2_32BIT_HEAP_START    0x0000000100000000ull
-+#define RADV_WDDM2_REPLAY_HEAP_START   0x0000500000000000ull
++/* Both sparse views must stay below the GFX10 canonical-address hole (bit 47).
++ * Ordinary, imported and capture/replay allocations all keep control bit 46 clear.
++ * Linux reference: amdgpu_kms.c AMDGPU_INFO_DEV_INFO VA limits; E33 high-VA controls.
++ */
++#define RADV_WDDM2_PRT_CONTROL_BIT    46
++#define RADV_WDDM2_PRT_CONTROL_MASK   (1ull << RADV_WDDM2_PRT_CONTROL_BIT)
++#define RADV_WDDM2_REPLAY_HEAP_START   (1ull << 45)
 +
 +struct radv_wddm2_bo {
 +   struct radeon_winsys_bo base;
@@ -5061,6 +5256,8 @@ index 00000000000..22a445c0639
 +   /* Entire OS reservation; base.va may be an aligned interior address. */
 +   uint64_t reserved_va;
 +   uint64_t reserved_size;
++   uint64_t sparse_high_va;
++   bool emulate_sparse_residency;
 +
 +   void *map;
 +   uint32_t handle;
@@ -5074,15 +5271,18 @@ index 00000000000..22a445c0639
 +   return (struct radv_wddm2_bo *)bo;
 +}
 +
++struct radv_wddm2_queue;
++void radv_wddm2_sparse_groups_clear(struct radv_wddm2_queue *queue);
++
 +void radv_wddm2_bo_init_functions(struct radv_wddm2_winsys *ws);
 +
 +#endif /* RADV_WDDM2_BO_H */
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 new file mode 100644
-index 00000000000..c00b931cccc
+index 00000000000..f7587082e46
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
-@@ -0,0 +1,1107 @@
+@@ -0,0 +1,1119 @@
 +/*
 + * Copyright © 2020 Valve Corporation
 + *
@@ -5272,6 +5472,7 @@ index 00000000000..c00b931cccc
 +static void
 +radv_wddm2_queue_destroy(struct radv_wddm2_queue *queue)
 +{
++   radv_wddm2_sparse_groups_clear(queue);
 +   util_dynarray_fini(&queue->sparse_ops);
 +   if (queue->bc250_progress.handle) {
 +      if (queue->bc250_progress.wait_value)
@@ -5395,6 +5596,17 @@ index 00000000000..c00b931cccc
 +         goto failed;
 +      queue->bc250_progress.handle = create_progress.hSyncObject;
 +      queue->bc250_progress.value_map = create_progress.Info.MonitoredFence.FenceValueCPUVirtualAddress;
++      /* Packet submission also needs a distinct companion-paging fence.
++       * The render progress fence protects CPU-repacked IBs and cannot share
++       * ownership with UpdateGpuVirtualAddress increments. */
++      create_progress.hSyncObject = 0;
++      create_progress.Info.MonitoredFence.FenceValueCPUVirtualAddress = NULL;
++      create_progress.Info.MonitoredFence.FenceValueGPUVirtualAddress = 0;
++      status = WDDM2_DISPATCH(CreateSynchronizationObject2(&create_progress));
++      if (!NT_SUCCESS(status))
++         goto failed;
++      queue->vm_fence.handle = create_progress.hSyncObject;
++      queue->vm_fence.value_map = create_progress.Info.MonitoredFence.FenceValueCPUVirtualAddress;
 +      return VK_SUCCESS;
 +   }
 +
@@ -6275,10 +6487,10 @@ index 00000000000..983770473ca
 +#endif /* RADV_WDDM2_CS_H */
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
 new file mode 100644
-index 00000000000..0cae15380ef
+index 00000000000..f076ae670a8
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
-@@ -0,0 +1,891 @@
+@@ -0,0 +1,900 @@
 +#include <stdlib.h>
 +/*
 + * Copyright © 2020 Valve Corporation
@@ -6509,6 +6721,10 @@ index 00000000000..0cae15380ef
 +   ac_fill_raster_config(info);
 +   ac_fill_scratch_info(info);
 +
++   /* Native paired-view controls pass (E33). Sparse remains experimental
++    * until shader/image and queued PTE relocation coverage is complete. */
++   info->address_prt_wa_control_bit = RADV_WDDM2_PRT_CONTROL_BIT;
++   info->has_sparse = false;
 +   info->has_vm_always_valid = true;
 +   info->has_timeline_syncobj = true;
 +   info->spi_cu_en = ~0u;
@@ -6931,6 +7147,10 @@ index 00000000000..0cae15380ef
 +   if (!destroy)
 +      return;
 +
++   if (ws->null_prt.bo)
++      ws->base.buffer_destroy(&ws->base, ws->null_prt.bo);
++   simple_mtx_destroy(&ws->null_prt.lock);
++
 +   D3DDDI_DESTROYPAGINGQUEUE destroy_paging_queue = {
 +      .hPagingQueue = ws->paging_queue_h,
 +   };
@@ -7127,6 +7347,7 @@ index 00000000000..0cae15380ef
 +
 +   /* Initialize the heaps */
 +   simple_mtx_init(&ws->heap_mtx, mtx_plain);
++   simple_mtx_init(&ws->null_prt.lock, mtx_plain);
 +   util_vma_heap_init(&ws->_32bit_heap, RADV_WDDM2_32BIT_HEAP_START, 1ull << 32);
 +   util_vma_heap_init(&ws->heap, RADV_WDDM2_HEAP_START, RADV_WDDM2_REPLAY_HEAP_START - RADV_WDDM2_HEAP_START);
 +   util_vma_heap_init(&ws->replay_heap, RADV_WDDM2_REPLAY_HEAP_START, 1ull << 32);
@@ -7172,10 +7393,10 @@ index 00000000000..0cae15380ef
 +}
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
 new file mode 100644
-index 00000000000..3268c8471c2
+index 00000000000..ea9a0535969
 --- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,90 @@
 +/*
 + * Copyright © 2016 Red Hat.
 + * Copyright © 2016 Bas Nieuwenhuizen
@@ -7238,6 +7459,11 @@ index 00000000000..3268c8471c2
 +   uint32_t paging_queue_h;
 +   uint32_t paging_fence_h;
 +
++   /* Real zero backing for the low SMEM view, shared for the winsys lifetime. */
++   struct {
++      simple_mtx_t lock;
++      struct radeon_winsys_bo *bo;
++   } null_prt;
 +   simple_mtx_t heap_mtx;
 +   struct util_vma_heap heap;
 +   struct util_vma_heap _32bit_heap;
@@ -7408,51 +7634,45 @@ index 00000000000..2419fded810
 +   }
 +}
 \ No newline at end of file
-diff --git a/src/microsoft/vulkan/dzn_dxgi.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.h
-similarity index 72%
-rename from src/microsoft/vulkan/dzn_dxgi.h
-rename to src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.h
-index f0a477b33f6..ad0bae75746 100644
---- a/src/microsoft/vulkan/dzn_dxgi.h
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.h
+new file mode 100644
+index 00000000000..ad0bae75746
+--- /dev/null
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_wsi.h
-@@ -1,5 +1,5 @@
- /*
-- * Copyright © Microsoft Corporation
+@@ -0,0 +1,34 @@
++/*
 + * Copyright © 2026 Valve Corporation
-  *
-  * Permission is hereby granted, free of charge, to any person obtaining a
-  * copy of this software and associated documentation files (the "Software"),
-@@ -14,21 +14,21 @@
-  *
-  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice (including the next
++ * paragraph) shall be included in all copies or substantial portions of the
++ * Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 + * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-  * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-  * IN THE SOFTWARE.
-  */
- 
--#ifndef DZN_DXGI_H
--#define DZN_DXGI_H
++ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
++ * IN THE SOFTWARE.
++ */
++
 +#ifndef RADV_WDDM2_WSI_H
 +#define RADV_WDDM2_WSI_H
- 
--#include <dxgi1_4.h>
++
 +struct radeon_winsys;
 +struct radv_wddm2_winsys;
 +struct wsi_device;
- 
--struct dzn_instance;
++
 +void radv_wddm2_wsi_init(struct radeon_winsys *ws, struct wsi_device *wsi);
 +void radv_wddm2_wsi_finish(struct radv_wddm2_winsys *ws);
- 
--IDXGIFactory4 *
--dxgi_get_factory(bool debug);
--
--#endif /* DZN_DXGI_H */
-\ No newline at end of file
++
 +#endif /* RADV_WDDM2_WSI_H */
 \ No newline at end of file
 diff --git a/src/microsoft/vulkan/dzn_device.c b/src/microsoft/vulkan/dzn_device.c
@@ -7965,79 +8185,64 @@ index ce975c0e2dc..d94405f5b6e 100644
  /** Tears down a vk_device
   *
   * :param device:       |out| The device to tear down
-diff --git a/src/microsoft/vulkan/dzn_physical_device_enum.h b/src/vulkan/runtime/vk_dx_adapter_info.h
-similarity index 65%
-rename from src/microsoft/vulkan/dzn_physical_device_enum.h
-rename to src/vulkan/runtime/vk_dx_adapter_info.h
-index 298dcd8977a..84d8f21e439 100644
---- a/src/microsoft/vulkan/dzn_physical_device_enum.h
+diff --git a/src/vulkan/runtime/vk_dx_adapter_info.h b/src/vulkan/runtime/vk_dx_adapter_info.h
+new file mode 100644
+index 00000000000..84d8f21e439
+--- /dev/null
 +++ b/src/vulkan/runtime/vk_dx_adapter_info.h
-@@ -21,22 +21,20 @@
-  * IN THE SOFTWARE.
-  */
- 
--#ifndef DZN_PHYSICAL_DEVICE_ENUM_H
--#define DZN_PHYSICAL_DEVICE_ENUM_H
--
--#include <vulkan/vulkan_core.h>
+@@ -0,0 +1,53 @@
++/*
++ * Copyright © Microsoft Corporation
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice (including the next
++ * paragraph) shall be included in all copies or substantial portions of the
++ * Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
++ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
++ * IN THE SOFTWARE.
++ */
++
 +#ifndef VK_DX_ADAPTER_INFO_H
 +#define VK_DX_ADAPTER_INFO_H
- 
- #include <wsl/winadapter.h>
--
++
++#include <wsl/winadapter.h>
 +#include <vulkan/vulkan_core.h>
- #include <stdbool.h>
- 
- #ifdef __cplusplus
- extern "C" {
- #endif
- 
--struct vk_instance;
--
--struct dzn_physical_device_desc {
++#include <stdbool.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
 +struct vk_dx_adapter_info {
 +   LUID adapter_luid;
 +   uint32_t physical_adapter_index;
-    uint32_t vendor_id;
-    uint32_t device_id;
-    uint32_t subsys_id;
-@@ -44,36 +42,12 @@ struct dzn_physical_device_desc {
-    uint64_t shared_system_memory;
-    uint64_t dedicated_system_memory;
-    uint64_t dedicated_video_memory;
--   LUID adapter_luid;
-    bool is_warp;
-    char description[128];
- };
- 
--struct d3d12_memory_info {
--   uint64_t usage_local;
--   uint64_t budget_local;
--   uint64_t usage_nonlocal;
--   uint64_t budget_nonlocal;
--   uint64_t usage;    // local + nonlocal
--   uint64_t budget;   // local + nonlocal
--};
--
--VkResult
--dzn_enumerate_physical_devices_dxgi(struct vk_instance *instance);
--
--VkResult
--dzn_enumerate_physical_devices_dxcore(struct vk_instance *instance);
--
--void
--dzn_query_memory_info(IUnknown* unk, struct d3d12_memory_info* memory_info);
--
--VkResult
--dzn_instance_add_physical_device(struct vk_instance *instance,
--                                 IUnknown *adapter,
--                                 const struct dzn_physical_device_desc *desc);
--
- #ifdef __cplusplus
- }
- #endif
- 
--#endif /* DZN_PHYSICAL_DEVICE_ENUM_H */
++   uint32_t vendor_id;
++   uint32_t device_id;
++   uint32_t subsys_id;
++   uint32_t revision;
++   uint64_t shared_system_memory;
++   uint64_t dedicated_system_memory;
++   uint64_t dedicated_video_memory;
++   bool is_warp;
++   char description[128];
++};
++
++#ifdef __cplusplus
++}
++#endif
++
 +#endif /* VK_DX_ADAPTER_INFO_H */
 diff --git a/src/vulkan/runtime/vk_dxcore.cpp b/src/vulkan/runtime/vk_dxcore.cpp
 new file mode 100644

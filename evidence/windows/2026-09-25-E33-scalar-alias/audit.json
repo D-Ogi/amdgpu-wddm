@@ -1,0 +1,11 @@
+{
+  "native_exact_comparisons": 20,
+  "cts": {
+    "Pass": 21,
+    "NotSupported": 0
+  },
+  "ordinary_compute_hashes": 8,
+  "ordinary_cube_frames": 600,
+  "patch_replay_files": 75,
+  "system_registration_restored": true
+}

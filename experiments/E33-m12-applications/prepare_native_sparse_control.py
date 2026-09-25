@@ -7,9 +7,11 @@ a=ap.parse_args();w=a.out.resolve();w.mkdir(parents=True,exist_ok=True)
 e=Path(__file__).resolve().parent
 bo=a.source/'src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c'
 text=bo.read_text()
-start=text.index('static VkResult\nradv_wddm2_virtual_bind_begin')
+start=text.index('struct radv_wddm2_sparse_group {')
 end=text.index('static VkResult\nradv_wddm2_bo_virtual_bind',start)
-(w/'radv_sparse_helpers.inc').write_text(text[start:end],newline='\n')
+init_start=text.index('static bool\nradv_wddm2_init_sparse_alias')
+init_end=text.index('static VkResult\nradv_wddm2_virtual_bo_create',init_start)
+(w/'radv_sparse_helpers.inc').write_text(text[init_start:init_end]+text[start:end],newline='\n')
 inputs=[bo,e/'native_sparse_control.c',e/'../../tools/win/kmtprobe/kmtprobe.c',e/'../../driver/amdgpu-import/nvd.h']
 (w/'inputs.json').write_text(json.dumps([{'path':str(p.resolve()),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in inputs],indent=2)+'\n')
 cmd=r"""@echo off

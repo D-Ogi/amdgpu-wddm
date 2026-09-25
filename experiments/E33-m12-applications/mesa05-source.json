@@ -1,7 +1,8 @@
 {
   "mesa_commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
   "port_origin_base": "f333dd6d1c85297ac41773eaeb9b02f16acf1919",
-  "patch_sha256": "663119ba5e85aed17c37b4710f571805877927431d270ac25fd10c6641182ab4",
+  "patch_sha256": "d39628bee4a2843b6cc679cfb6d39dabdadbdb506080266ab5591b94558f9a0d",
   "license": "Mesa and upstream WDDM2 integration: MIT",
-  "changes": "Preserve BC250 WDDM2/CPU-WSI; sparse reservation ownership; batch mapping updates behind application waits and preceding rendering, queue completion waits and subsequent signals. Sparse capability gate remains pending native PRT/alias and hardware validation."
+  "changes": "BC250 WDDM2/CPU WSI; OS reservation ownership; canonical bit46 sparse scalar aliases with shared real-zero backing; per-reservation update groups chained on a dedicated paging fence. Sparse stays false by default; explicit RADV_EXPERIMENTAL=sparse passes21release buffer CTS. Queued PTE relocation/image/Linux acceptance remains open.",
+  "candidate_sha256": "17ADD01FDEB9B7E4530F19C8E5282406D66F607D71C1B8D6D5B34A24D623E481"
 }

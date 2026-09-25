@@ -194,3 +194,32 @@ enabling Vulkan sparse or assuming scalar/shader behavior.
 M484: [native Zero/PRT results](../../evidence/windows/2026-09-25-E33-zero-prt/RESULT.md).
 The scoped KMD149 patch and source pin reproduce the deployed candidate from
 frozen147. DMA_DATA holes and discarded writes pass; COPY_DATA does not.
+
+## Scalar alias address-space preflight
+The proposed WDDM policy keeps ordinary/32-bit/replay addresses below bit47
+(the existing replay heap ends below it) and mirrors sparse views with bit47
+set inside the advertised48-bit GPU VA. Before selecting this policy, verify
+two distinct OS reservations at low and low XOR (1<<47), and initial Zero
+mapping/fence completion for both. This API-only control does not prove GPU
+access or shader pointer behavior at the high address.
+
+The paired API reservations pass at low0x200020000 and high0x800200020000.
+The --high native DMA control now moves only the virtual test range to the
+high view, leaving physical controls/IB in the low range. Run bound, initial
+hole, rebind/unbind and write-discard comparisons there before using bit47
+in the winsys. The address is a GPU VA, not an MMIO register address.
+
+The bit47 API control passed but the first HIGH-hole GPU read TDR'd after the
+two LOW physical controls. AMDGPU_GMC_HOLE_START in amdgpu_gmc.h is 1<<47;
+amdgpu_kms.c caps low virtual_address_max at that boundary. The trial address
+was non-canonical. Supersede the proposed bit47 policy with bit46, splitting
+the canonical low address space into two64TiB views. Ordinary/replay allocations
+must stay below bit46; move the replay heap below it. Validate HIGH bound reads
+before HIGH-hole reads. No conclusion that hardware sparse is unsupported.
+
+
+### Paired scalar alias control (2026-09-25)
+
+Hypothesis: the same WDDM virtual buffer can own a high bit46 PRT view and a low real-zero SMEM view; ordered binds/rebinds map both to identical physical pages and unbind restores zeros in both views. Source-extracted Mesa initialisation and batch helpers are used by native_sparse_control --dma --paired. Run bound controls first, then initial/unmapped holes and high-view write discard; compare exact CPU-read-back words from both addresses. Native deadline35s, normal TDR policy, KMD149,1000MHz/VID116, thermal stop85C. Any failed content/fence stops the run. This does not establish shader semantics or advertise Vulkan sparse.
+
+Paired native controls passed after obeying the MS one-reservation-per-update rule. Next: candidate-only RADV_EXPERIMENTAL=sparse with bit46 compiler lowering, ordinary Vulkan regression first, then release CTS null-buffer scalar/vector read/write and alias cases. Sparse remains false by default, system ICD restored after each temporary elevated CTS registration. No KMD change. Every non-Pass/non-supported result ends the test batch for inspection; no continued work after a GPU timeout.
