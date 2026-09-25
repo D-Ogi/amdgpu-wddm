@@ -1,5 +1,5 @@
 diff --git a/Samples/Asteroids/src/WinWrapper.cpp b/Samples/Asteroids/src/WinWrapper.cpp
-index 7d92c74..838dc14 100644
+index 7d92c74..2c1184d 100644
 --- a/Samples/Asteroids/src/WinWrapper.cpp
 +++ b/Samples/Asteroids/src/WinWrapper.cpp
 @@ -21,6 +21,8 @@
@@ -11,7 +11,7 @@ index 7d92c74..838dc14 100644
  
  #include "asteroids_d3d11.h"
  #include "asteroids_d3d12.h"
-@@ -386,9 +388,17 @@ int main(int argc, char** argv)
+@@ -386,9 +388,19 @@ int main(int argc, char** argv)
      gVulkanAvailable = CheckDll("vulkan-1.dll");
  #endif
  
@@ -24,16 +24,19 @@ index 7d92c74..838dc14 100644
 +            const int frames = atoi(argv[++a]);
 +            if (frames <= 0) return 2;
 +            benchmarkFrames = static_cast<unsigned>(frames);
++        } else if (_stricmp(argv[a], "-benchmark_capture") == 0 && a + 1 < argc) {
++            gSettings.benchmarkCapture = argv[++a];
 +        } else if (_stricmp(argv[a], "-benchmark_output") == 0 && a + 1 < argc) {
 +            benchmarkOutput = argv[++a];
 +        } else if (_stricmp(argv[a], "-close_after") == 0 && a + 1 < argc) {
              gSettings.closeAfterSeconds = atof(argv[++a]);
          } else if (_stricmp(argv[a], "-nod3d11") == 0) {
              gd3d11Available = false;
-@@ -481,6 +491,16 @@ int main(int argc, char** argv)
+@@ -481,6 +493,17 @@ int main(int argc, char** argv)
      QueryPerformanceFrequency((LARGE_INTEGER*)&perfCounterFreq);
      QueryPerformanceCounter((LARGE_INTEGER*)&lastPerfCount);
  
++    if (gSettings.benchmarkCapture && !benchmarkFrames) return 2;
 +    std::ofstream benchmark;
 +    unsigned benchmarkFrame = 0;
 +    if (benchmarkFrames) {
@@ -47,7 +50,7 @@ index 7d92c74..838dc14 100644
      // main loop
      double elapsedTime = 0.0;
      double frameTime = 0.0;
-@@ -545,7 +565,8 @@ int main(int argc, char** argv)
+@@ -545,7 +568,8 @@ int main(int argc, char** argv)
  
          // Maintaining absolute time sync is not important in this demo so we can err on the "smoother" side
          double alpha = 0.2f;
@@ -57,7 +60,7 @@ index 7d92c74..838dc14 100644
  
          // Update GUI
          {
-@@ -600,7 +621,7 @@ int main(int argc, char** argv)
+@@ -600,9 +624,11 @@ int main(int argc, char** argv)
              } else {
                  sprintf_s(buffer, "%.0f fps", 1.0f / filteredFrameTime);
              }
@@ -65,8 +68,12 @@ index 7d92c74..838dc14 100644
 +            gFPSControl->Text(benchmarkFrames ? "BC250 benchmark" : buffer);
          }
  
++        gSettings.benchmarkCaptureThisFrame = gSettings.benchmarkCapture &&
++            benchmarkFrame + 1 == benchmarkFrames;
          switch (gSettings.mode)
-@@ -623,6 +644,19 @@ int main(int argc, char** argv)
+         {
+             case Settings::RenderMode::NativeD3D11: 
+@@ -623,6 +649,19 @@ int main(int argc, char** argv)
              break;
          }
  
@@ -86,3 +93,112 @@ index 7d92c74..838dc14 100644
          if (gSettings.lockFrameRate) {
  
              UINT64 afterRenderCount;
+diff --git a/Samples/Asteroids/src/asteroids_DE.cpp b/Samples/Asteroids/src/asteroids_DE.cpp
+index 24152b8..39f9528 100644
+--- a/Samples/Asteroids/src/asteroids_DE.cpp
++++ b/Samples/Asteroids/src/asteroids_DE.cpp
+@@ -12,6 +12,8 @@
+ #include <math.h>
+ 
+ #include <iostream>
++#include <fstream>
++#include <stdexcept>
+ #include <algorithm>
+ #include <vector>
+ #include <future>
+@@ -79,10 +81,11 @@ struct SkyboxConstantBuffer
+ 
+ 
+ // Create Direct3D device and swap chain
+-void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
++void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType, bool capture)
+ {
+     SwapChainDesc SwapChainDesc;
+     SwapChainDesc.BufferCount       = NUM_SWAP_CHAIN_BUFFERS;
++    if (capture) SwapChainDesc.Usage |= SWAP_CHAIN_USAGE_COPY_SOURCE;
+     SwapChainDesc.ColorBufferFormat = TEX_FORMAT_RGBA8_UNORM_SRGB;
+     SwapChainDesc.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
+     SwapChainDesc.DefaultDepthValue = 0.f;
+@@ -185,7 +188,7 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
+     mNumSubsets = std::max(settings.numThreads, 1);
+     mNumSubsets = std::min(settings.numThreads, 32);
+ 
+-    InitDevice(hWnd, DevType);
++    InitDevice(hWnd, DevType, settings.benchmarkCapture != nullptr);
+ 
+     m_BindingMode = static_cast<BindingMode>(settings.resourceBindingMode);
+     if (m_BindingMode == BindingMode::Bindless && !mDevice->GetDeviceInfo().Features.BindlessResources)
+@@ -1081,6 +1084,47 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+         }
+     }
+ 
++    if (settings.benchmarkCaptureThisFrame) {
++        auto* source = mSwapChain->GetCurrentBackBufferRTV()->GetTexture();
++        auto desc = source->GetDesc();
++        const bool bgra = desc.Format == TEX_FORMAT_BGRA8_UNORM ||
++                          desc.Format == TEX_FORMAT_BGRA8_UNORM_SRGB;
++        if (!bgra && desc.Format != TEX_FORMAT_RGBA8_UNORM &&
++                     desc.Format != TEX_FORMAT_RGBA8_UNORM_SRGB)
++            throw std::runtime_error("Unsupported benchmark capture format");
++        desc.Name = "BC250 benchmark readback";
++        desc.Usage = USAGE_STAGING;
++        desc.BindFlags = BIND_NONE;
++        desc.CPUAccessFlags = CPU_ACCESS_READ;
++        desc.MiscFlags = MISC_TEXTURE_FLAG_NONE;
++        RefCntAutoPtr<ITexture> staging;
++        mDevice->CreateTexture(desc, nullptr, &staging);
++        if (!staging) throw std::runtime_error("Benchmark staging allocation failed");
++        mDeviceCtxt->SetRenderTargets(0, nullptr, nullptr, RESOURCE_STATE_TRANSITION_MODE_NONE);
++        CopyTextureAttribs copy{source, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
++                               staging, RESOURCE_STATE_TRANSITION_MODE_TRANSITION};
++        mDeviceCtxt->CopyTexture(copy);
++        mDeviceCtxt->WaitForIdle();
++        MappedTextureSubresource mapped;
++        mDeviceCtxt->MapTextureSubresource(staging, 0, 0, MAP_READ,
++                                         MAP_FLAG_DO_NOT_WAIT, nullptr, mapped);
++        if (!mapped.pData) throw std::runtime_error("Benchmark readback mapping failed");
++        std::ofstream image(settings.benchmarkCapture, std::ios::binary | std::ios::trunc);
++        image << "P6\n" << desc.Width << ' ' << desc.Height << "\n255\n";
++        std::vector<char> row(desc.Width * 3);
++        for (Uint32 y = 0; y < desc.Height; ++y) {
++            const auto* pixels = static_cast<const Uint8*>(mapped.pData) + y * mapped.Stride;
++            for (Uint32 x = 0; x < desc.Width; ++x) {
++                row[x * 3] = static_cast<char>(pixels[x * 4 + (bgra ? 2 : 0)]);
++                row[x * 3 + 1] = static_cast<char>(pixels[x * 4 + 1]);
++                row[x * 3 + 2] = static_cast<char>(pixels[x * 4 + (bgra ? 0 : 2)]);
++            }
++            image.write(row.data(), row.size());
++        }
++        mDeviceCtxt->UnmapTextureSubresource(staging, 0, 0);
++        image.flush();
++        if (!image) throw std::runtime_error("Benchmark image write failed");
++    }
+     mSwapChain->Present(settings.vsync ? 1 : 0);
+ }
+ 
+diff --git a/Samples/Asteroids/src/asteroids_DE.h b/Samples/Asteroids/src/asteroids_DE.h
+index b6603e3..f42edb7 100644
+--- a/Samples/Asteroids/src/asteroids_DE.h
++++ b/Samples/Asteroids/src/asteroids_DE.h
+@@ -44,7 +44,7 @@ private:
+     void InitializeTextureData();
+     void CreateGUIResources();
+     void RenderSubset(Diligent::Uint32 SubsetNum, Diligent::IDeviceContext *pCtx, const OrbitCamera& camera, Diligent::Uint32 startIdx, Diligent::Uint32 numAsteroids);
+-    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType);
++    void InitDevice(HWND hWnd, Diligent::RENDER_DEVICE_TYPE DevType, bool capture);
+ 
+     enum class BindingMode
+     {
+diff --git a/Samples/Asteroids/src/settings.h b/Samples/Asteroids/src/settings.h
+index 122d145..a157d95 100644
+--- a/Samples/Asteroids/src/settings.h
++++ b/Samples/Asteroids/src/settings.h
+@@ -52,6 +52,8 @@ enum { MAX_SPRITE_VERTICES_PER_FRAME = 6 * 1024 };
+ struct Settings
+ {
+     double closeAfterSeconds = 0.0;
++    const char* benchmarkCapture = nullptr;
++    bool benchmarkCaptureThisFrame = false;
+ 
+     int windowWidth = 1080;
+     int windowHeight = 720;

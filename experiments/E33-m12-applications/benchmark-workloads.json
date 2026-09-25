@@ -30,7 +30,17 @@
     "measured_frames": 600,
     "csv_metric": "cpu_update_submit_present_ms",
     "metric_is_gpu_time": false,
-    "image_capture": "pending; identical simulation frame required"
+    "image_capture": {
+      "arguments": [
+        "-benchmark_capture",
+        "frame660.ppm"
+      ],
+      "format": "P6 RGB8; native sRGB encoded bytes; no alpha",
+      "frame": 660,
+      "separate_from_performance_run": true,
+      "synchronization": "copy to staging; WaitForIdle; map; preserve row pitch",
+      "runtime_validation": "pending"
+    }
   },
   "instancing": {
     "api_versions": [
