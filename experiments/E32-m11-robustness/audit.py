@@ -116,7 +116,7 @@ def audit(folder, reference):
         for key in values:
             if values[key] != initial[key]:
                 retained.append([row["label"], "/".join(key), values[key], initial[key]])
-    check("all final pool counts and bytes equal initial values", not retained, retained[:20])
+    check("all final pool counts and bytes equal initial values", len(finals) == 5 and not retained, retained[:20])
 
     thermal = read_rows(folder / "telemetry.jsonl")
     times = [utc(x["utc"]) for x in thermal]

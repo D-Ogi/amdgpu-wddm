@@ -1,0 +1,1 @@
+{"status":"FAIL","utc":"2026-09-25T09:22:52.0297185Z","message":"Worker failed: Exception calling \"ReadAllText\" with \"1\" argument(s): \"The process cannot access the file \u0027C:\\BC250\\m11\\soak-01\\checkpoint.ack\u0027 because it is being used by another process.\""}

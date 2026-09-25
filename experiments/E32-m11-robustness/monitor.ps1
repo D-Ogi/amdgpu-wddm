@@ -82,15 +82,14 @@ try {
   SaveJson 'monitor-heartbeat.json' @{pid=$PID;utc=[DateTime]::UtcNow.ToString('o');temperature_mc=$temp;checkpoint=$lastCheck}
   if((Get-Date)-$lastAudit -gt [TimeSpan]::FromSeconds(60)){Audit;$lastAudit=Get-Date}
   if((Get-Date)-$lastIntegrity -gt [TimeSpan]::FromHours(1)){Integrity;$lastIntegrity=Get-Date}
-  if(Test-Path "$Out\checkpoint.request"){
-   $request=[int][IO.File]::ReadAllText("$Out\checkpoint.request")
-   if($request -gt $lastCheck){
-    Start-Sleep -Milliseconds 500
-    Pool ('{0:D6}' -f $request)
-    Audit
-    $lastCheck=$request
-    [IO.File]::WriteAllText("$Out\checkpoint.ack",[string]$request)
-   }
+  $request=$lastCheck+1
+  if(Test-Path -LiteralPath (Join-Path $Out ('checkpoint-{0:D6}.request' -f $request))){
+   Start-Sleep -Milliseconds 500
+   Pool ('{0:D6}' -f $request)
+   Audit
+   $lastCheck=$request
+   $ack=Join-Path $Out ('checkpoint-{0:D6}.ack' -f $request)
+   [IO.File]::Open($ack,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::ReadWrite).Dispose()
   }
   if(Test-Path "$Out\worker-result.json"){
    $result=Get-Content "$Out\worker-result.json" -Raw | ConvertFrom-Json

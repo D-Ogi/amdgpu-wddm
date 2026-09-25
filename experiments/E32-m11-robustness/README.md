@@ -17,6 +17,10 @@ health generation/epoch, Windows events and live-kernel-dump metadata. Each
 completed cycle waits at a quiescent checkpoint for PoolMon. Store all project-tag
 rows and allocation/free/bytes counts; missing transient tags are zero, not omitted.
 The monitor must acknowledge each checkpoint before the worker continues.
+Requests and acknowledgments are empty, uniquely numbered files created once
+per cycle. Readers test existence and never open an ACK for text. This avoids
+the sharing collision that stopped soak-01 at cycle88; no old interval is
+carried forward after this harness correction.
 
 First run a bounded two-cycle control. Then freeze scripts, binaries, shaders,
 models and references by SHA256 and start a new 24-hour ledger. The test continues

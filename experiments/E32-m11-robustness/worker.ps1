@@ -15,6 +15,21 @@ function SaveJson($name,$obj){
  [IO.File]::WriteAllText("$path.tmp",($obj | ConvertTo-Json -Depth 8 -Compress),[Text.UTF8Encoding]::new($false))
  if([IO.File]::Exists($path)){[IO.File]::Replace("$path.tmp",$path,[NullString]::Value)}else{[IO.File]::Move("$path.tmp",$path)}
 }
+
+function WaitCheckpoint($number){
+ # Each cycle publishes empty immutable markers. Readers inspect existence only:
+ # no shared text handle can collide with an in-progress acknowledgement write.
+ $request=Join-Path $Out ('checkpoint-{0:D6}.request' -f $number)
+ $ack=Join-Path $Out ('checkpoint-{0:D6}.ack' -f $number)
+ [IO.File]::Open($request,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::ReadWrite).Dispose()
+ $gate=[Diagnostics.Stopwatch]::StartNew()
+ while(-not(Test-Path -LiteralPath $ack)){
+  if(Test-Path "$Out\stop.txt"){throw 'Monitor stop at checkpoint'}
+  if($gate.Elapsed.TotalSeconds -gt 45){throw 'Monitor checkpoint timeout'}
+  Start-Sleep -Milliseconds 200
+ }
+}
+
 function RunNative($name,$exe,$arguments,$folder) {
  if(Test-Path "$Out\stop.txt"){throw 'Monitor stop'}
  if((Invoke-RestMethod http://127.0.0.1:2250/flags).stop){throw 'Owner STOP'}
@@ -57,13 +72,7 @@ try {
   $hashes=@{}
   foreach($name in @('compute','stories15M','tinyllama')){$hashes[$name]=(Get-FileHash "$folder\$name.out").Hash}
   SaveJson 'active.json' @{pid=0;phase='checkpoint';cycle=$cycle;utc=[DateTime]::UtcNow.ToString('o')}
-  [IO.File]::WriteAllText("$Out\checkpoint.request",[string]$cycle)
-  $gate=[Diagnostics.Stopwatch]::StartNew()
-  do {
-   if(Test-Path "$Out\stop.txt"){throw 'Monitor stop at checkpoint'}
-   if($gate.Elapsed.TotalSeconds -gt 45){throw 'Monitor checkpoint timeout'}
-   Start-Sleep -Milliseconds 200
-  } while(-not(Test-Path "$Out\checkpoint.ack") -or [IO.File]::ReadAllText("$Out\checkpoint.ack").Trim() -ne [string]$cycle)
+  WaitCheckpoint $cycle
   $record=@{cycle=$cycle;utc=[DateTime]::UtcNow.ToString('o');elapsed_seconds=$watch.Elapsed.TotalSeconds;stdout_file_sha256=$hashes;compute_reference_hashes_checked=$reference;result='PASS'}
   $record | ConvertTo-Json -Compress | Add-Content "$Out\cycles.jsonl" -Encoding UTF8
   SaveJson 'progress.json' $record
