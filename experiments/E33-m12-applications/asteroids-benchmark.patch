@@ -1,8 +1,14 @@
 diff --git a/Samples/Asteroids/src/WinWrapper.cpp b/Samples/Asteroids/src/WinWrapper.cpp
-index 7d92c74..bc59625 100644
+index 7d92c74..d6bf314 100644
 --- a/Samples/Asteroids/src/WinWrapper.cpp
 +++ b/Samples/Asteroids/src/WinWrapper.cpp
-@@ -21,6 +21,9 @@
+@@ -1,3 +1,5 @@
++#include <cstdio>
++#include <cstdlib>
+ // Copyright 2014 Intel Corporation All Rights Reserved
+ //
+ // Intel makes no representations about the suitability of this software for any purpose.  
+@@ -21,6 +23,9 @@
  #include <map>
  #include <vector>
  #include <iostream>
@@ -12,7 +18,7 @@ index 7d92c74..bc59625 100644
  
  #include "asteroids_d3d11.h"
  #include "asteroids_d3d12.h"
-@@ -386,9 +389,19 @@ int main(int argc, char** argv)
+@@ -386,9 +391,19 @@ int main(int argc, char** argv)
      gVulkanAvailable = CheckDll("vulkan-1.dll");
  #endif
  
@@ -33,7 +39,7 @@ index 7d92c74..bc59625 100644
              gSettings.closeAfterSeconds = atof(argv[++a]);
          } else if (_stricmp(argv[a], "-nod3d11") == 0) {
              gd3d11Available = false;
-@@ -481,6 +494,18 @@ int main(int argc, char** argv)
+@@ -481,6 +496,18 @@ int main(int argc, char** argv)
      QueryPerformanceFrequency((LARGE_INTEGER*)&perfCounterFreq);
      QueryPerformanceCounter((LARGE_INTEGER*)&lastPerfCount);
  
@@ -52,7 +58,17 @@ index 7d92c74..bc59625 100644
      // main loop
      double elapsedTime = 0.0;
      double frameTime = 0.0;
-@@ -545,7 +570,8 @@ int main(int argc, char** argv)
+@@ -523,7 +550,9 @@ int main(int argc, char** argv)
+             gWorkloadDE = nullptr;
+             if (hWnd == NULL || gLastFrameRenderMode != gSettings.mode)
+                 CreateDemoWindow(hWnd);
++            if (std::getenv("BC250_BENCHMARK_TRACE")) { std::fprintf(stderr, "BC250_STAGE init-begin\n"); std::fflush(stderr); }
+             InitWorkload(hWnd, asteroids);
++            if (std::getenv("BC250_BENCHMARK_TRACE")) { std::fprintf(stderr, "BC250_STAGE init-end\n"); std::fflush(stderr); }
+             gLastFrameRenderMode = gSettings.mode;
+             gUpdateWorkload = false;
+         }
+@@ -545,7 +574,8 @@ int main(int argc, char** argv)
  
          // Maintaining absolute time sync is not important in this demo so we can err on the "smoother" side
          double alpha = 0.2f;
@@ -62,7 +78,7 @@ index 7d92c74..bc59625 100644
  
          // Update GUI
          {
-@@ -600,9 +626,11 @@ int main(int argc, char** argv)
+@@ -600,9 +630,11 @@ int main(int argc, char** argv)
              } else {
                  sprintf_s(buffer, "%.0f fps", 1.0f / filteredFrameTime);
              }
@@ -75,7 +91,7 @@ index 7d92c74..bc59625 100644
          switch (gSettings.mode)
          {
              case Settings::RenderMode::NativeD3D11: 
-@@ -623,6 +651,21 @@ int main(int argc, char** argv)
+@@ -623,6 +655,21 @@ int main(int argc, char** argv)
              break;
          }
  
@@ -98,10 +114,16 @@ index 7d92c74..bc59625 100644
  
              UINT64 afterRenderCount;
 diff --git a/Samples/Asteroids/src/asteroids_DE.cpp b/Samples/Asteroids/src/asteroids_DE.cpp
-index 24152b8..c353b89 100644
+index 24152b8..8d483b7 100644
 --- a/Samples/Asteroids/src/asteroids_DE.cpp
 +++ b/Samples/Asteroids/src/asteroids_DE.cpp
-@@ -12,6 +12,9 @@
+@@ -1,3 +1,5 @@
++#include <cstdio>
++#include <cstdlib>
+ // Copyright 2014 Intel Corporation All Rights Reserved
+ //
+ // Intel makes no representations about the suitability of this software for any purpose.
+@@ -12,6 +14,9 @@
  #include <math.h>
  
  #include <iostream>
@@ -111,7 +133,7 @@ index 24152b8..c353b89 100644
  #include <algorithm>
  #include <vector>
  #include <future>
-@@ -79,10 +82,11 @@ struct SkyboxConstantBuffer
+@@ -79,10 +84,11 @@ struct SkyboxConstantBuffer
  
  
  // Create Direct3D device and swap chain
@@ -124,7 +146,7 @@ index 24152b8..c353b89 100644
      SwapChainDesc.ColorBufferFormat = TEX_FORMAT_RGBA8_UNORM_SRGB;
      SwapChainDesc.DepthBufferFormat = TEX_FORMAT_D32_FLOAT;
      SwapChainDesc.DefaultDepthValue = 0.f;
-@@ -95,6 +99,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+@@ -95,6 +101,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
          case RENDER_DEVICE_TYPE_D3D11:
          {
              EngineD3D11CreateInfo EngineCI;
@@ -132,7 +154,7 @@ index 24152b8..c353b89 100644
              EngineCI.NumDeferredContexts = mNumSubsets - 1;
  
              auto* pFactoryD3D11 = LoadAndGetEngineFactoryD3D11();
-@@ -109,6 +114,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+@@ -109,6 +116,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
          case RENDER_DEVICE_TYPE_D3D12:
          {
              EngineD3D12CreateInfo EngineCI;
@@ -140,7 +162,7 @@ index 24152b8..c353b89 100644
              EngineCI.NumDeferredContexts             = mNumSubsets - 1;
              EngineCI.GPUDescriptorHeapDynamicSize[0] = 65536 * 4;
              EngineCI.GPUDescriptorHeapSize[0]        = 65536; // For mutable mode
-@@ -128,6 +134,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
+@@ -128,6 +136,7 @@ void Asteroids::InitDevice(HWND hWnd, RENDER_DEVICE_TYPE DevType)
          case RENDER_DEVICE_TYPE_VULKAN:
          {
              EngineVkCreateInfo EngineCI;
@@ -148,7 +170,7 @@ index 24152b8..c353b89 100644
              EngineCI.NumDeferredContexts = mNumSubsets - 1;
              EngineCI.DynamicHeapSize     = 64 << 20;
  
-@@ -185,7 +192,15 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
+@@ -185,7 +194,15 @@ Asteroids::Asteroids(const Settings& settings, AsteroidsSimulation* asteroids, G
      mNumSubsets = std::max(settings.numThreads, 1);
      mNumSubsets = std::min(settings.numThreads, 32);
  
@@ -165,10 +187,21 @@ index 24152b8..c353b89 100644
  
      m_BindingMode = static_cast<BindingMode>(settings.resourceBindingMode);
      if (m_BindingMode == BindingMode::Bindless && !mDevice->GetDeviceInfo().Features.BindlessResources)
-@@ -920,6 +935,13 @@ void Asteroids::RenderSubset(Uint32             SubsetNum,
+@@ -918,12 +935,29 @@ void Asteroids::RenderSubset(Uint32             SubsetNum,
+     }
+ }
  
++static void BenchmarkStage(const char* stage)
++{
++    if (std::getenv("BC250_BENCHMARK_TRACE")) {
++        std::fprintf(stderr, "BC250_STAGE %s\n", stage);
++        std::fflush(stderr);
++    }
++}
++
  void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Settings& settings)
  {
++    BenchmarkStage("render-begin");
 +    IQuery* frameQuery = nullptr;
 +    if (settings.benchmarkFrames) {
 +        if (mBenchmarkFrame >= mBenchmarkQueries.size())
@@ -179,7 +212,44 @@ index 24152b8..c353b89 100644
      mFrameAttribs.frameTime = frameTime;
      mFrameAttribs.camera    = &camera;
      mFrameAttribs.settings  = &settings;
-@@ -1081,9 +1103,73 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+ 
++    BenchmarkStage("query-begun");
+     // Clear the render target
+     float clearcol[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+     auto* pRTV        = mSwapChain->GetCurrentBackBufferRTV();
+@@ -932,6 +966,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+     mDeviceCtxt->ClearRenderTarget(pRTV, clearcol, RESOURCE_STATE_TRANSITION_MODE_VERIFY);
+     mDeviceCtxt->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 0.0f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+ 
++    BenchmarkStage("clear-recorded");
+     LONG64 currCounter;
+     QueryPerformanceCounter((LARGE_INTEGER*)&currCounter);
+     mUpdateTicks = currCounter;
+@@ -970,6 +1005,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+     QueryPerformanceCounter((LARGE_INTEGER*)&currCounter);
+     mUpdateTicks = currCounter - mUpdateTicks;
+ 
++    BenchmarkStage("update-complete");
+     mRenderTicks = currCounter;
+ 
+     if (settings.multithreadedRendering)
+@@ -1005,6 +1041,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+         }
+     }
+ 
++    BenchmarkStage("command-lists-executed");
+     // Call FinishFrame() to release dynamic resources allocated by deferred contexts
+     // IMPORTANT: we must wait until the command lists are submitted for execution
+     // because FinishFrame() invalidates all dynamic resources
+@@ -1016,6 +1053,7 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
+ 
+     mDeviceCtxt->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+ 
++    BenchmarkStage("subsets-complete");
+     // Draw skybox
+     {
+         {
+@@ -1081,7 +1119,73 @@ void Asteroids::Render(float frameTime, const OrbitCamera& camera, const Setting
          }
      }
  
@@ -228,9 +298,11 @@ index 24152b8..c353b89 100644
 +        image.flush();
 +        if (!image) throw std::runtime_error("Benchmark image write failed");
 +    }
++    BenchmarkStage("before-present");
      mSwapChain->Present(settings.vsync ? 1 : 0);
- }
- 
++    BenchmarkStage("after-present");
++}
++
 +void Asteroids::WriteBenchmarkGpuCsv(const char* path)
 +{
 +    if (mBenchmarkFrame != mBenchmarkQueries.size())
@@ -248,11 +320,9 @@ index 24152b8..c353b89 100644
 +    }
 +    output.flush();
 +    if (!output) throw std::runtime_error("GPU benchmark CSV write failed");
-+}
-+
+ }
+ 
  void Asteroids::GetPerfCounters(float& UpdateTime, float& RenderTime)
- {
-     UpdateTime = (float)mUpdateTicks / (float)mPerfCounterFreq;
 diff --git a/Samples/Asteroids/src/asteroids_DE.h b/Samples/Asteroids/src/asteroids_DE.h
 index b6603e3..7876325 100644
 --- a/Samples/Asteroids/src/asteroids_DE.h
