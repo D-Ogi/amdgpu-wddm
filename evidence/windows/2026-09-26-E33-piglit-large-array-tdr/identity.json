@@ -1,0 +1,11 @@
+﻿{
+    "hashes":  {
+                   "C:\\BC250\\m12\\piglit-full001\\piglit\\bin\\libgallium_wgl.dll":  "D18E2372010F50202BBA556250B69DDDB166BC527C9D4E1324D6D01C8E71DCAD",
+                   "C:\\BC250\\m12\\mesa05-ib-collection\\vulkan_radeon.dll":  "8B5EC055501CD042F723F9EBC9FC29787A6173C61937A739DD7C4C520DBD2AA6",
+                   "C:\\BC250\\m12\\piglit-full001\\piglit\\bin\\opengl32.dll":  "2B1FE59C27D4C21B68C7F429FA79F29730F2C6A02BEA7519400B7532FBBCB480"
+               },
+    "control":  false,
+    "command":  "C:\\BC250\\m12\\piglit-guard.py quick C:\\BC250\\m12\\piglit-gpu004\\results",
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "guard_sha256":  "682F8026C7EF512AE302726A3AA91538FBF3E3BC673D62C18267DBAFC7C489F0"
+}

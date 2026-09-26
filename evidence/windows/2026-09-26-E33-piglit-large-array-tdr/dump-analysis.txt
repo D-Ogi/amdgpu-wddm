@@ -1,0 +1,100 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\BC250\m12\piglit-gpu004\symbols
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 0
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [C:\Windows\MEMORY.DMP]
+Kernel Bitmap Dump File: Kernel address space is available, User address space may not be available.
+
+Primary dump contents written successfully
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\BC250\m12\piglit-gpu004\symbols
+Symbol search path is: C:\BC250\m12\piglit-gpu004\symbols
+Executable search path is: 
+Unable to load image \SystemRoot\system32\ntoskrnl.exe, Win32 error 0n2
+Windows 10 Kernel Version 22621 MP (12 procs) Free x64
+Product: WinNt, suite: TerminalServer SingleUserTS
+Edition build lab: 22621.1.amd64fre.ni_release.220506-1250
+Kernel base = 0xfffff804`73600000 PsLoadedModuleList = 0xfffff804`742135a0
+Debug session time: Sat Sep 26 11:31:30.084 2026 (UTC + 2:00)
+System Uptime: 0 days 12:40:19.358
+Unable to load image \SystemRoot\system32\ntoskrnl.exe, Win32 error 0n2
+Loading Kernel Symbols
+...............................................................
+................................................................
+.............................................................
+Loading User Symbols
+
+Loading unloaded module list
+........
+
+************* Symbol Loading Error Summary **************
+Module name            Error
+ntkrnlmp               The system cannot find the file specified
+
+You can troubleshoot most symbol related issues by turning on symbol loading diagnostics (!sym noisy) and repeating the command that caused symbols to be loaded.
+You should also verify that your symbol search path (.sympath) is correct.
+Unable to add extension DLL: kdexts
+Unable to add extension DLL: kext
+Unable to add extension DLL: exts
+For analysis of this file, run !analyze -v
+0: kd> cdb: Reading initial command '.bugcheck; .writemem C:\BC250\m12\piglit-gpu004\guard-ring.bin bc250kmd!g_Log L2a000; dt bc250kmd!g_VidMm; q'
+Bugcheck code 00000116
+Arguments ffff8005`a3416010 fffff804`8f88aca0 ffffffff`c0000001 00000000`00000003
+Unable to load image \SystemRoot\System32\drivers\dxgkrnl.sys, Win32 error 0n2
+Unable to load image \SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_3ae747c4ca9ca6f2\bc250kmd.sys, Win32 error 0n2
+Writing 2a000 bytes....................................................................................
+   +0x000 Aperture         : PAGING_APERTURE_STATE
+   +0x028 GraphScratch     : PAGING_PT_SHADOW_SLOT
+   +0x1238 Shadow           : PAGING_PT_SHADOW
+   +0x1248 CpuUpdateLock    : 0
+   +0x1250 CpuEntries       : [512] 0
+   +0x2250 Ready            : 0x1 ''
+   +0x2251 Write            : 0x1 ''
+   +0x2258 SegmentPhysical  : 0x00000004`5e150000
+   +0x2260 SegmentLength    : 0xfeb0000
+   +0x2268 SegmentMapping   : 0xffffa67d`ca800000  "Page 45e150 too large to be in the dump file.
+--- memory read error at address 0xffffa67d`ca800000 ---"
+   +0x2270 Pte              : bc250_pte_context
+   +0x22b0 Calls            : [4] 0n1026
+   +0x22c0 CpuCalls         : 0n1030
+   +0x22c4 GpuCalls         : 0n0
+   +0x22c8 Entries          : [4] 0n262688
+   +0x22e8 Valid            : [4] 0n544
+   +0x2308 Written          : 0n264736
+   +0x2310 EncodedZero      : [4] [2] 0n0
+   +0x2350 EncodedCoherent  : [4] [3] 0n1014854
+   +0x23b0 EncodedNoncoherent : [4] [3] 0n11270338
+   +0x2410 EncodedSnoopMismatch : [4] [3] 0n0
+   +0x2470 Refused          : 0n0
+   +0x2474 BadCalls         : 0n0
+   +0x2478 SegmentSeen      : [32] 0n0
+   +0x24f8 Roots            : 0n2758
+quit:

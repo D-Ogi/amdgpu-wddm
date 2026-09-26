@@ -1,0 +1,11 @@
+{
+  "counts": {
+    "pass": 991,
+    "skip": 156,
+    "incomplete": 1
+  },
+  "records": 1148,
+  "full_expected": 45037,
+  "active_case": "shaders@glsl-predication-on-large-array",
+  "raytrace": "pass"
+}

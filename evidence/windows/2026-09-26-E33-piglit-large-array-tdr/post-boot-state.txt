@@ -1,0 +1,79 @@
+{
+    "now":  "2026-09-26T09:34:01.3572967Z",
+    "task":  {
+                 "LastRunTime":  "\/Date(1790414908000)\/",
+                 "LastTaskResult":  0
+             },
+    "boot":  "2026-09-26T11:31:59.5000000+02:00",
+    "state":  "Ready"
+}
+[
+    {
+        "Name":  "results",
+        "Length":  null,
+        "LastWriteTimeUtc":  "\/Date(1790414890968)\/"
+    },
+    {
+        "Name":  "before-clock.txt",
+        "Length":  75,
+        "LastWriteTimeUtc":  "\/Date(1790414890568)\/"
+    },
+    {
+        "Name":  "before-health.txt",
+        "Length":  114,
+        "LastWriteTimeUtc":  "\/Date(1790414890498)\/"
+    },
+    {
+        "Name":  "events.jsonl",
+        "Length":  242141,
+        "LastWriteTimeUtc":  "\/Date(1790415081828)\/"
+    },
+    {
+        "Name":  "identity.json",
+        "Length":  760,
+        "LastWriteTimeUtc":  "\/Date(1790414890728)\/"
+    },
+    {
+        "Name":  "registration-before.json",
+        "Length":  611,
+        "LastWriteTimeUtc":  "\/Date(1790414890600)\/"
+    },
+    {
+        "Name":  "stderr.txt",
+        "Length":  0,
+        "LastWriteTimeUtc":  "\/Date(1790414890732)\/"
+    },
+    {
+        "Name":  "stdout.txt",
+        "Length":  0,
+        "LastWriteTimeUtc":  "\/Date(1790414890730)\/"
+    }
+]
+[
+    {
+        "TimeCreated":  "\/Date(1790415186805)\/",
+        "Id":  1001,
+        "ProviderName":  "Microsoft-Windows-WER-SystemErrorReporting",
+        "Message":  "The computer has rebooted from a bugcheck.  The bugcheck was: 0x00000116 (0xffff8005a3416010, 0xfffff8048f88aca0, 0xffffffffc0000001, 0x0000000000000003). A dump was saved in: C:\\Windows\\MEMORY.DMP. Report Id: [redacted]."
+    },
+    {
+        "TimeCreated":  "\/Date(1790415139329)\/",
+        "Id":  41,
+        "ProviderName":  "Microsoft-Windows-Kernel-Power",
+        "Message":  "The system has rebooted without cleanly shutting down first. This error could be caused if the system stopped responding, crashed, or lost power unexpectedly."
+    },
+    {
+        "TimeCreated":  "\/Date(1790415180721)\/",
+        "Id":  6008,
+        "ProviderName":  "EventLog",
+        "Message":  "The previous system shutdown at 10:52:08 AM on ?9/?26/?2026 was unexpected."
+    }
+]
+{
+    "driver_names":  [
+                         "C:\\BC250\\m12\\mesa05-ib-collection\\radeon_icd.json"
+                     ],
+    "candidate":  0,
+    "old":  1
+}
+
