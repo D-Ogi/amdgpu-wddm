@@ -1,0 +1,144 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+@@ -202,10 +202,11 @@
+    free(queue->bc250_ibs);
+    queue->bc250_ibs = NULL;
+    queue->bc250_ib_capacity = 0;
+-   if (queue->bc250_gather) {
+-      queue->bc250_ws->base.buffer_destroy(&queue->bc250_ws->base, queue->bc250_gather);
+-      queue->bc250_gather = NULL;
+-      queue->bc250_gather_map = NULL;
++   for (unsigned i = 0; i < BC250_GATHER_SLOTS; i++) {
++      if (queue->bc250_gather[i].bo)
++         queue->bc250_ws->base.buffer_destroy(&queue->bc250_ws->base, queue->bc250_gather[i].bo);
++      queue->bc250_gather[i].bo = NULL;
++      queue->bc250_gather[i].map = NULL;
+    }
+    if (queue->vm_fence.handle) {
+       D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy_fence = {
+@@ -840,13 +841,13 @@
+       for (i = 0; i < n; i++)
+          total += ibs[i].cdw;
+       /* Match the GFX INDIRECT_BUFFER IB_SIZE field, not an arbitrary 1 MiB
+-       * staging limit. The caller retired this queue's previous gather first. */
++       * staging limit. The caller retired the selected gather slot before any write or resize. */
+       if (total == 0 || total > G_3F3_IB_SIZE(UINT32_MAX)) {
+          fprintf(stderr, "bc250: gather exceeds IB_SIZE field: %" PRIu64 " dwords\n", total);
+          return STATUS_INVALID_PARAMETER;
+       }
+       bytes = (uint32_t)(total * 4);
+-      if (!queue->bc250_gather || queue->bc250_gather->size < bytes) {
++      if (!queue->bc250_gather[queue->bc250_gather_index].bo || queue->bc250_gather[queue->bc250_gather_index].bo->size < bytes) {
+          struct radeon_winsys_bo *replacement = NULL;
+          uint64_t capacity = align64(bytes, 4096);
+          VkResult result = ws->base.buffer_create(&ws->base, capacity, 4096, RADEON_DOMAIN_GTT,
+@@ -859,13 +860,13 @@
+             ws->base.buffer_destroy(&ws->base, replacement);
+             return STATUS_NO_MEMORY;
+          }
+-         if (queue->bc250_gather)
+-            ws->base.buffer_destroy(&ws->base, queue->bc250_gather);
+-         queue->bc250_gather = replacement;
+-         queue->bc250_gather_map = mapping;
++         if (queue->bc250_gather[queue->bc250_gather_index].bo)
++            ws->base.buffer_destroy(&ws->base, queue->bc250_gather[queue->bc250_gather_index].bo);
++         queue->bc250_gather[queue->bc250_gather_index].bo = replacement;
++         queue->bc250_gather[queue->bc250_gather_index].map = mapping;
+          fprintf(stderr, "bc250: gather capacity=%" PRIu64 " bytes required=%u ibs=%u\n", capacity, bytes, n);
+       }
+-      dst = queue->bc250_gather_map;
++      dst = queue->bc250_gather[queue->bc250_gather_index].map;
+       for (i = 0; i < n; i++) {
+          uint8_t *src = NULL;
+          uint64_t off = 0;
+@@ -881,7 +882,7 @@
+          memcpy(dst, src + off, ibs[i].cdw * 4);
+          dst += ibs[i].cdw * 4;
+       }
+-      va = queue->bc250_gather->va;
++      va = queue->bc250_gather[queue->bc250_gather_index].bo->va;
+    }
+ 
+    /* BC250_IB_DWORDS cuts the IB the CP executes. 5 is CONTEXT_CONTROL plus
+@@ -930,7 +931,7 @@
+          dw = (const uint32_t *)((uint8_t *)ws->base.buffer_map(&ws->base, ibs[0].bo, false, NULL) +
+                                  (ibs[0].va - ibs[0].bo->va));
+       else
+-         dw = (const uint32_t *)queue->bc250_gather_map;
++         dw = (const uint32_t *)queue->bc250_gather[queue->bc250_gather_index].map;
+       fprintf(stderr, "bc250: SubmitCommand ib 0x%" PRIx64 " %u bytes (from %u) %08x %08x %08x %08x\n",
+               va, bytes, n,
+               dw ? dw[0] : 0, dw && bytes >= 8 ? dw[1] : 0,
+@@ -1024,17 +1025,22 @@
+    }
+ 
+    if (submit->cs_count > 0 && ctx->ws->bc250) {
+-      /* Application signals can be absent from an intermediate submit. They
+-       * cannot protect a CPU-rewritten IB. Retire our own previous queue IB
+-       * before packing the next, including submissions with no app signals.
+-       * A separate BO/fence per queue prevents cross-context overwrite. */
++      /* Independent of application signals: retire only the slot being reused,
++       * not the immediately preceding job. Seven BOs match the bounded KMD
++       * completion capacity; CP consumption alone never permits CPU reuse. */
++      struct bc250_gather_slot *slot = &queue->bc250_gather[queue->bc250_gather_index];
+       uint64_t pending_value = queue->bc250_progress.wait_value;
+       uint64_t observed = p_atomic_read(queue->bc250_progress.value_map);
+-      /* Keep one queue identity witness, without formatting every hot-path submit. */
++      if (queue->bc250_submit_failed)
++         return VK_ERROR_DEVICE_LOST;
+       if (ctx->ws->bc250_trace_submits || pending_value == 0)
+          fprintf(stderr, "bc250: progress before submit previous=%" PRIu64 " observed=%" PRIu64
+-                         " waits=%u signals=%u\n", pending_value, observed, wait_count, signal_count);
+-      if (pending_value && !vk_wddm2_fence_wait(ctx->ws->device_h, &queue->bc250_progress))
++                         " slot=%u retire=%" PRIu64 " waits=%u signals=%u\n",
++                         pending_value, observed, queue->bc250_gather_index,
++                         slot->retire_value, wait_count, signal_count);
++      struct vk_wddm2_fence reuse = queue->bc250_progress;
++      reuse.wait_value = slot->retire_value;
++      if (reuse.wait_value && !vk_wddm2_fence_wait(ctx->ws->device_h, &reuse))
+          return VK_ERROR_DEVICE_LOST;
+       status = radv_wddm2_bc250_submit(ctx, queue, submit);
+       if (!NT_SUCCESS(status)) {
+@@ -1050,9 +1056,13 @@
+          .MonitoredFenceValueArray = &next_value,
+       };
+       status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu2(&progress_signal));
+-      if (!NT_SUCCESS(status))
++      if (!NT_SUCCESS(status)) {
++         queue->bc250_submit_failed = true; // accepted IB has no retirement value: never reuse its slot
+          return VK_ERROR_DEVICE_LOST;
++      }
++      slot->retire_value = next_value;
+       queue->bc250_progress.wait_value = next_value;
++      queue->bc250_gather_index = (queue->bc250_gather_index + 1u) % BC250_GATHER_SLOTS;
+    } else if (submit->cs_count > 0) {
+       struct radv_winsys_ib first_ib = {};
+       struct submit_pdd_writer pdd;
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
+@@ -40,6 +40,13 @@
+    uint64_t *value_map;
+ };
+ 
++#define BC250_GATHER_SLOTS 7u
++struct bc250_gather_slot {
++   struct radeon_winsys_bo *bo;
++   uint8_t *map;
++   uint64_t retire_value;
++};
++
+ struct radv_wddm2_queue {
+    enum amd_ip_type hw_ip;
+    uint32_t context_h;
+@@ -50,8 +57,9 @@
+    bool sparse_batch_active;
+    /* Each queue owns its packed IB and an unconditional retirement fence. */
+    struct radv_wddm2_winsys *bc250_ws;
+-   struct radeon_winsys_bo *bc250_gather;
+-   uint8_t *bc250_gather_map;
++   struct bc250_gather_slot bc250_gather[BC250_GATHER_SLOTS];
++   unsigned bc250_gather_index;
++   bool bc250_submit_failed;
+    struct radv_winsys_ib *bc250_ibs;
+    unsigned bc250_ib_capacity;
+    struct vk_wddm2_fence bc250_progress;
