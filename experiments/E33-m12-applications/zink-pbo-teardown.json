@@ -1,0 +1,11 @@
+{
+  "base": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "patch_sha256": "51e0d3e3f497a7761d2c9f5856fe05574ed77f128672833d6d6146b307e4d779",
+  "patched_source_sha256": "60e2b060cc92e1c4f9d29834567c9011fb92bbf66389e916e4ba5cc46789fdde",
+  "final_dll_sha256": "d18e2372010f50202bba556250b69dddb166bc527c9d4e1324d6d01c8e71dcad",
+  "additional_patches": [
+    "zink-wgl-zero-client.patch",
+    "zink-wgl-front-back.patch"
+  ],
+  "replay": "exact after LF normalization"
+}

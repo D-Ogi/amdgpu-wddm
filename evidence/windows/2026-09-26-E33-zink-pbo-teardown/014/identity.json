@@ -1,0 +1,8 @@
+﻿{
+    "version_override":  false,
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "manifest_sha256":  "14C090DB610D0B04CFBD36961D6E28BA7E1C0FCF7D04F5C7C42C7B496F56ED9C",
+    "command":  "-y C:\\BC250\\m12\\zink-stage001\\zink-control-package014 -cf C:\\BC250\\m12\\zink-stage001\\zink-control-package014\\commands.txt C:\\BC250\\m12\\zink-stage001\\zink-control-package014\\glsl-fs-raytrace-bug27060.exe -auto -fbo",
+    "gallium":  "zink",
+    "package":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package014"
+}

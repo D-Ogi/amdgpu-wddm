@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "name": "glsl-fs-raytrace-bug27060.exe",
+      "sha256": "45e49f41d4094f839747256b139221500b1138a2dfba84e082b721978d5d2509"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "d18e2372010f50202bba556250b69dddb166bc527c9d4e1324d6d01c8e71dcad"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "wflinfo.exe",
+      "sha256": "0a4b0290471d51a1c6127a63827cc121267ff0db57821b308031f7f2cc6be01e"
+    }
+  ]
+}

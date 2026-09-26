@@ -1,0 +1,1 @@
+Aborting Piglit execution: shaders@glsl-fs-raytrace-bug27060: warn

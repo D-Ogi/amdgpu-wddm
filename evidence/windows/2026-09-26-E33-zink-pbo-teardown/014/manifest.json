@@ -1,0 +1,28 @@
+{
+  "files": [
+    {
+      "name": "commands.txt",
+      "sha256": "fe5b8eb6c8a63048f0539ac7fbb70ed66c76f4315f883f4b9e2cb84e5fe655a2"
+    },
+    {
+      "name": "glsl-fs-raytrace-bug27060.exe",
+      "sha256": "45e49f41d4094f839747256b139221500b1138a2dfba84e082b721978d5d2509"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "1ec5e9b466fc706ffdccb03440c6994141d583fea58327d9d96edfba64bd7a01"
+    },
+    {
+      "name": "libgallium_wgl.pdb",
+      "sha256": "bfc8a042ae4dad743444a2512c218fe5a232149e1f8ab14313502836e47fbe00"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "wflinfo.exe",
+      "sha256": "0a4b0290471d51a1c6127a63827cc121267ff0db57821b308031f7f2cc6be01e"
+    }
+  ]
+}

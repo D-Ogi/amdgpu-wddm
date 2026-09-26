@@ -1,0 +1,20 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\m12\mesa-zink-build'
+[1/8] Generating src/git_sha1.h with a custom command
+[2/6] Compiling C object src/mesa/libmesa.a.p/state_tracker_st_pbo_compute.c.obj
+[3/6] Linking static target src/mesa/libmesa.a
+[4/6] Linking target src/gallium/targets/wgl/libgallium_wgl.dll
+   Trwa tworzenie biblioteki src\gallium\targets/wgl\libgallium_wgl.lib i obiektu src\gallium\targets/wgl\libgallium_wgl.exp
+
+[5/6] Generating symbol file src/gallium/targets/wgl/libgallium_wgl.dll.p/libgallium_wgl.dll.symbols

@@ -1,0 +1,125 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\BC250\m12\zink-stage001\zink-control-package014
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.015 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 0
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+CommandLine: C:\BC250\m12\zink-stage001\zink-control-package014\glsl-fs-raytrace-bug27060.exe -auto -fbo 
+Unable to add extension DLL: ntsdexts
+Unable to add extension DLL: uext
+Unable to add extension DLL: exts
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             C:\BC250\m12\zink-stage001\zink-control-package014
+Symbol search path is: C:\BC250\m12\zink-stage001\zink-control-package014
+Executable search path is: 
+ModLoad: 00007ff7`634d0000 00007ff7`636c2000   C:\BC250\m12\zink-stage001\zink-control-package014\glsl-fs-raytrace-bug27060.exe
+ModLoad: 00007ff9`cdb50000 00007ff9`cdd68000   ntdll.dll
+ModLoad: 00007ff9`ccb30000 00007ff9`ccbf4000   C:\Windows\System32\KERNEL32.DLL
+ModLoad: 00007ff9`cb2a0000 00007ff9`cb673000   C:\Windows\System32\KERNELBASE.dll
+ModLoad: 00007ff9`c5e30000 00007ff9`c5ec7000   C:\Windows\SYSTEM32\apphelp.dll
+ModLoad: 00007ff9`cd950000 00007ff9`cdb02000   C:\Windows\System32\USER32.dll
+ModLoad: 00007ff9`cae40000 00007ff9`cae66000   C:\Windows\System32\win32u.dll
+ModLoad: 00007ff9`ccc00000 00007ff9`ccc29000   C:\Windows\System32\GDI32.dll
+ModLoad: 00007ff9`cad20000 00007ff9`cae3b000   C:\Windows\System32\gdi32full.dll
+ModLoad: 00007ff9`cb040000 00007ff9`cb0da000   C:\Windows\System32\msvcp_win.dll
+ModLoad: 00007ff9`caea0000 00007ff9`cafb1000   C:\Windows\System32\ucrtbase.dll
+ModLoad: 00007ff9`b1160000 00007ff9`b1186000   C:\BC250\m12\zink-stage001\zink-control-package014\OPENGL32.dll
+ModLoad: 00007ff9`b8af0000 00007ff9`b8b1c000   C:\Windows\SYSTEM32\VCRUNTIME140.dll
+ModLoad: 0000025e`f6990000 0000025e`f69bc000   C:\Windows\SYSTEM32\VCRUNTIME140.dll
+ModLoad: 00007ff9`60d40000 00007ff9`6239e000   C:\BC250\m12\zink-stage001\zink-control-package014\libgallium_wgl.dll
+ModLoad: 00007ff9`c9670000 00007ff9`c967c000   C:\Windows\SYSTEM32\VCRUNTIME140_1.dll
+ModLoad: 00007ff9`930b0000 00007ff9`9314d000   C:\Windows\SYSTEM32\MSVCP140.dll
+(2678.9e4): Break instruction exception - code 80000003 (first chance)
+ntdll!LdrInitShimEngineDynamic+0x344:
+00007ff9`cdc2cbc4 cc              int     3
+0:000> g
+ModLoad: 00007ff9`ccaf0000 00007ff9`ccb21000   C:\Windows\System32\IMM32.DLL
+ModLoad: 00007ff9`c73b0000 00007ff9`c7463000   C:\Windows\system32\uxtheme.dll
+ModLoad: 00007ff9`cbc00000 00007ff9`cbf91000   C:\Windows\System32\combase.dll
+ModLoad: 00007ff9`cb920000 00007ff9`cba38000   C:\Windows\System32\RPCRT4.dll
+ModLoad: 00007ff9`ccd40000 00007ff9`ccea0000   C:\Windows\System32\MSCTF.dll
+ModLoad: 00007ff9`cd560000 00007ff9`cd607000   C:\Windows\System32\msvcrt.dll
+ModLoad: 00007ff9`7dfe0000 00007ff9`7e188000   C:\Windows\SYSTEM32\vulkan-1.dll
+ModLoad: 00007ff9`cd890000 00007ff9`cd941000   C:\Windows\System32\ADVAPI32.dll
+ModLoad: 00007ff9`cd4b0000 00007ff9`cd558000   C:\Windows\System32\sechost.dll
+ModLoad: 00007ff9`ca8d0000 00007ff9`ca91e000   C:\Windows\SYSTEM32\CFGMGR32.dll
+ModLoad: 00007ff9`cae70000 00007ff9`cae98000   C:\Windows\System32\bcrypt.dll
+ModLoad: 00007ff9`c7570000 00007ff9`c7667000   C:\Windows\system32\dxgi.dll
+ModLoad: 00007ff9`ba600000 00007ff9`ba61a000   C:\Windows\SYSTEM32\windows.staterepositorycore.dll
+ModLoad: 00007ff9`c7530000 00007ff9`c7567000   C:\Windows\SYSTEM32\dxcore.dll
+ModLoad: 00007ff9`c7900000 00007ff9`c7915000   C:\Windows\SYSTEM32\resourcepolicyclient.dll
+ModLoad: 00007ff9`c2420000 00007ff9`c2469000   C:\Windows\SYSTEM32\directxdatabasehelper.dll
+ModLoad: 00007ff9`c8ea0000 00007ff9`c8eb8000   C:\Windows\SYSTEM32\kernel.appcore.dll
+ModLoad: 00007ff9`3d920000 00007ff9`3f05e000   C:\BC250\m12\mesa05-ib-collection\vulkan_radeon.dll
+ModLoad: 00007ff9`c76a0000 00007ff9`c76cb000   C:\Windows\SYSTEM32\dwmapi.dll
+ModLoad: 00007ff9`c5170000 00007ff9`c53c5000   C:\Windows\system32\DComp.DLL
+PIGLIT: {"result": "pass" }
+(2678.9e4): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+libgallium_wgl!zink_batch_reference_program+0x1d:
+00007ff9`614dffdd 4839b290000000  cmp     qword ptr [rdx+90h],rsi ds:00000000`00000090=????????????????
+0:000> .ecxr
+Unable to get exception context, HRESULT 0x8000FFFF
+0:000> kv
+Child-SP          RetAddr               : Args to Child                                                           : Call Site
+0000007a`de2fdc80 00007ff9`614cacb3     : 00000000`00000000 0000025e`fcc09b00 0000025e`fccd3388 0000025e`fccd3368 : libgallium_wgl!zink_batch_reference_program+0x1d
+0000007a`de2fdcb0 00007ff9`60d6f256     : 00000000`00000000 0000007a`de2fdde0 0000025e`fccd3280 00000000`00000002 : libgallium_wgl!zink_delete_cs_shader_state+0x13
+(Inline Function) --------`--------     : --------`-------- --------`-------- --------`-------- --------`-------- : libgallium_wgl!tc_call_delete_compute_state+0x10 (Inline Function @ 00007ff9`60d6f256)
+(Inline Function) --------`--------     : --------`-------- --------`-------- --------`-------- --------`-------- : libgallium_wgl!batch_execute+0x161c (Inline Function @ 00007ff9`60d6f256)
+0000007a`de2fdce0 00007ff9`60d6a055     : 0000025e`fcf45418 00000000`000028d8 0000025e`fccd1870 00000000`00000000 : libgallium_wgl!tc_batch_execute+0x2c76
+0000007a`de2ffbb0 00007ff9`60d7409c     : 0000025e`fcf45400 00000000`00000000 0000025e`fcccefb0 00000000`00000001 : libgallium_wgl!_tc_sync+0x1e5
+0000007a`de2ffbf0 00007ff9`60f80237     : 0000025e`fcf45400 00000000`00000000 0000025e`fcf45418 00000000`00000001 : libgallium_wgl!tc_destroy+0x5c
+0000007a`de2ffc30 00007ff9`60f800f2     : 0000025e`fcf45400 0000025e`fcf50d48 0000025e`fa967d60 0000025e`fa967d60 : libgallium_wgl!st_destroy_context_priv+0xf7
+0000007a`de2ffc60 00007ff9`60d49134     : 0000025e`fcf50d48 00000000`00000000 00000000`00000000 0000025e`fabee770 : libgallium_wgl!st_destroy_context+0x452
+(Inline Function) --------`--------     : --------`-------- --------`-------- --------`-------- --------`-------- : libgallium_wgl!stw_destroy_context+0x18 (Inline Function @ 00007ff9`60d49134)
+0000007a`de2ffcc0 00007ff7`635c337e     : 0000025e`fa88f701 00000000`00000001 0000007a`de2ffd70 00007ff9`caeb364b : libgallium_wgl!DrvDeleteContext+0xd4
+0000007a`de2ffcf0 00007ff7`635c0cfa     : 0000025e`fa88f730 0000e151`af78e132 00000000`00000000 00000000`00000001 : glsl_fs_raytrace_bug27060+0xf337e
+0000007a`de2ffd20 00007ff7`635bf620     : 0000025e`fa88f730 00007ff7`634d184d 00000000`00000024 00007ff7`63653580 : glsl_fs_raytrace_bug27060+0xf0cfa
+0000007a`de2ffd50 00007ff7`635be4cb     : 00007ff9`caf9f4f8 00007ff9`3ecc0000 00000000`00000000 0000025e`f6a4acb0 : glsl_fs_raytrace_bug27060+0xef620
+0000007a`de2ffd80 00007ff7`635c0130     : 00007ff9`caf9f4f8 00007ff7`63653564 0000007a`de2ff9d8 00000000`00000001 : glsl_fs_raytrace_bug27060+0xee4cb
+0000007a`de2ffdb0 00007ff7`635be85d     : 00000000`00000000 0000025e`f6a4acb0 00000000`00000000 00000000`00000000 : glsl_fs_raytrace_bug27060+0xf0130
+0000007a`de2ffde0 00007ff7`634d107f     : 0000025e`f6a50f80 00000000`00000000 00007ff7`635c5458 00000000`00000000 : glsl_fs_raytrace_bug27060+0xee85d
+0000007a`de2ffe10 00007ff7`635c3c80     : 00000000`00000001 00007ff7`635c3cf9 00000000`00000000 00000000`00000000 : glsl_fs_raytrace_bug27060+0x107f
+0000007a`de2ffea0 00007ff9`ccb4259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : glsl_fs_raytrace_bug27060+0xf3c80
+0000007a`de2ffee0 00007ff9`cdbaaf78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : KERNEL32!BaseThreadInitThunk+0x1d
+0000007a`de2fff10 00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+0:000> lm m libgallium_wgl
+start             end                 module name
+00007ff9`60d40000 00007ff9`6239e000   libgallium_wgl   (private pdb symbols)  c:\bc250\m12\zink-stage001\zink-control-package014\libgallium_wgl.pdb
+0:000> u @rip L8
+libgallium_wgl!zink_batch_reference_program+0x1d:
+00007ff9`614dffdd 4839b290000000  cmp     qword ptr [rdx+90h],rsi
+00007ff9`614dffe4 7455            je      libgallium_wgl!zink_batch_reference_program+0x7b (00007ff9`614e003b)
+00007ff9`614dffe6 488d8fe8010000  lea     rcx,[rdi+1E8h]
+00007ff9`614dffed c644243000      mov     byte ptr [rsp+30h],0
+00007ff9`614dfff2 4c8d442430      lea     r8,[rsp+30h]
+00007ff9`614dfff7 e80483a4ff      call    libgallium_wgl!_mesa_set_search_or_add (00007ff9`60f28300)
+00007ff9`614dfffc 807c243000      cmp     byte ptr [rsp+30h],0
+00007ff9`614e0001 7538            jne     libgallium_wgl!zink_batch_reference_program+0x7b (00007ff9`614e003b)
+0:000> q
+quit:
