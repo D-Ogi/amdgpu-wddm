@@ -1,0 +1,17 @@
+{
+  "033": {
+    "exit": 0,
+    "deallocations_succeeded": 3,
+    "device_cleanup_finished": 2
+  },
+  "034": {
+    "exit": 0,
+    "deallocations_succeeded": 1,
+    "device_cleanup_finished": 1
+  },
+  "035": {
+    "exit": 0,
+    "deallocations_succeeded": 1,
+    "device_cleanup_finished": 1
+  }
+}

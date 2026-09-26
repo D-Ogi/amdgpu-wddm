@@ -1,0 +1,17 @@
+[
+  {
+    "path": "src/gallium/frontends/d3d10umd/Resource.cpp",
+    "before_lf_sha256": "4449238d371d204074ad0245ac32b3152d710f18afcb8c73462f2695d4dbd2bc",
+    "after_sha256": "054f5f4133b52b6f6af22af779f07a69ba946c2673527afcebd3f20c00420295"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_lf_sha256": "64fae6297caef7b888a87b4b76d5911a652b7966b3eb50ef63d992f2422527a6",
+    "after_sha256": "9a50010def7dea8fd3938ec5bb2b3a8671b359076838501efd88632ee66fac7a"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/State.h",
+    "before_lf_sha256": "c020b95adf91f8b1d567cf6f82a92d723d0a6b3ce958297bc336d140beda38cf",
+    "after_sha256": "9c623b82aacc590ad814adc83b893ba2137d4434f643cd1539a50585ae89b492"
+  }
+]
