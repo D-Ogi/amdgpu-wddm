@@ -137,3 +137,13 @@ captures and exact end-only staging readback. Record the actual swapchain desc.
 Require the requested flip effect, successful resource rotation/sharing, correct
 pixels and rollback. This remains a GPU client under the CPU DWM baseline;
 zero-copy desktop and direct scanout are not inferred from the swapchain enum.
+
+## Borrowed allocation lifetime
+
+Apply lifetime-icd.patch and lifetime-umd.patch after the loss patches; verify
+lifetime-manifest.json input/output hashes with UTF-8/LF replay. The unchanged
+flip control must pass all120 Presents, pixels and teardown. Before runtime
+allocation release, require completed render/Present work, reset Zink batches,
+and check sole resource/object references. Borrowed BO CPU mapping is rejected.
+M546 run031 records this regression; loss-time cleanup and broad sharing remain
+open. This adds teardown waits, not per-frame CPU presentation copies.
