@@ -45,7 +45,7 @@
     "component": "umd",
     "path": "src/gallium/frontends/d3d10umd/Device.cpp",
     "before_sha256": "787eaca27238813179349cfbb45fc0a96be1120d95f0f55b53bc5f6e29d0a3e4",
-    "after_sha256": "4498c31e3d08404fb713ff4a845778cc133085d31bd69e573559f27e0fcc3fc2"
+    "after_sha256": "46b0ffb43e4fe6a40804cc9d089f16af673a1b3eb005d3aa50f47ac35e84699b"
   },
   {
     "component": "umd",

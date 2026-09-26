@@ -1,6 +1,6 @@
 --- a/src/gallium/frontends/d3d10umd/Device.cpp
 +++ b/src/gallium/frontends/d3d10umd/Device.cpp
-@@ -52,28 +52,183 @@
+@@ -52,28 +52,184 @@
  extern "C" struct pipe_screen *d3d10_create_screen(void);
  
  
@@ -198,6 +198,7 @@
 +   HRESULT hr=Bc250HostOperation(s,operation,argument);
 +   unsigned count=operation<64 ? ++s->calls[operation] : 0;
 +   if (count<=2 || FAILED(hr)) fprintf(stderr,"BC250 hosted op=%u count=%u hr=%08lx\n",operation,count,hr);
++   if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
 +   return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb : (int32_t)0xc0000001;
 +}
 +

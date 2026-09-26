@@ -1,0 +1,33 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\m12\mesa-current-build'
+[1/7] Generating src/git_sha1.h with a custom command
+[2/4] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_wddm2_monitored_fence.c.obj
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(36): warning C4005: "STATUS_WAIT_0": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2611): note: zobacz poprzednią definicję „STATUS_WAIT_0”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(39): warning C4005: "STATUS_INVALID_HANDLE": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2638): note: zobacz poprzednią definicję „STATUS_INVALID_HANDLE”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(40): warning C4005: "STATUS_ILLEGAL_INSTRUCTION": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2641): note: zobacz poprzednią definicję „STATUS_ILLEGAL_INSTRUCTION”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(42): warning C4005: "STATUS_PENDING": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2615): note: zobacz poprzednią definicję „STATUS_PENDING”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(48): warning C4005: "STATUS_TIMEOUT": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2614): note: zobacz poprzednią definicję „STATUS_TIMEOUT”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(49): warning C4005: "STATUS_INVALID_PARAMETER": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2639): note: zobacz poprzednią definicję „STATUS_INVALID_PARAMETER”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(50): warning C4005: "STATUS_NO_MEMORY": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2640): note: zobacz poprzednią definicję „STATUS_NO_MEMORY”
+[3/4] Linking static target src/vulkan/runtime/libvulkan_lite_runtime.a
+[4/4] Linking target src/amd/vulkan/vulkan_radeon.dll
+   Trwa tworzenie biblioteki src\amd\vulkan\vulkan_radeon.lib i obiektu src\amd\vulkan\vulkan_radeon.exp
+
