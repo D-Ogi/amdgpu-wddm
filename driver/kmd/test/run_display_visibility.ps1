@@ -1,4 +1,4 @@
-param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\bd013-014\visibility',[string]$Source='')
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\m9\bd013-014\visibility",[string]$Source='')
 $ErrorActionPreference='Stop'
 $repo="$Root\bc250-win"
 if(-not $Source){$Source="$repo\driver\kmd"}

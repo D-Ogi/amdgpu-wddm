@@ -2,7 +2,7 @@
 
 Unmodified copies from the Linux kernel, tag **v6.18**, commit
 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, taken 2026-09-21 from a local checkout
-(`P:\BC-250\ref\linux-src`, see `linux-src.PROVENANCE.txt` next to it).
+(`<BC250_ROOT>\ref\linux-src`, see `linux-src.PROVENANCE.txt` next to it).
 
 Taken with `git show`, so the bytes are the kernel's own, with LF line endings and no checkout
 normalization:
@@ -36,7 +36,7 @@ git -C <linux checkout> show v6.18:drivers/gpu/drm/amd/amdgpu/<file> > driver/am
 Every one of the files carries the full MIT permission notice; only `cyan_skillfish_reg_init.c` also
 carries the SPDX tag. Checked file by file, not assumed from the directory.
 
-The commit column is the same for every row because `P:\BC-250\ref\linux-src` is a depth-1 clone of
+The commit column is the same for every row because `<BC250_ROOT>\ref\linux-src` is a depth-1 clone of
 the tag, so the tag commit is the only one it has. It is the commit the bytes come from, which is
 what the column is for; it is not the last commit that touched each file, and `git log -- <path>`
 in that clone cannot tell us what that was.
@@ -117,7 +117,7 @@ thing this part does that amdgpu's parts do not: it keeps GFX powered across a t
 back without a reset, so the second bring-up meets hardware that still remembers the first.
 
 What that means concretely was measured rather than reasoned about, on unit A, experiment E12 run
-002 (`P:\BC-250\scratch\e12\run002\out`), and it is the fact the rest of this section turns on:
+002 (`<BC250_ROOT>\scratch\e12\run002\out`), and it is the fact the rest of this section turns on:
 
 **The MEC keeps its own copy of an active queue's ring base and read pointer, writes to the
 `CP_HQD_*` registers while it is halted do not reach that copy, and on un-halt it resumes from it.**
@@ -309,7 +309,7 @@ can call: `amdgpu` dispatches only what user space hands it through a command st
 shader the kernel owns is in `amdgpu_ucode.c` as firmware. The dispatch therefore comes from
 **libdrm's own amdgpu tests**, which do exactly this and nothing else, and which run on gfx10 parts.
 
-Source: `P:\BC-250\ref\libdrm`, tag `libdrm-2.4.114`, commit `b9ca37b31348`.
+Source: `<BC250_ROOT>\ref\libdrm`, tag `libdrm-2.4.114`, commit `b9ca37b31348`.
 
 - The shader binary is imported byte for byte with its MIT notice, never retyped:
   `third_party/libdrm/shader_code_gfx10.h`, hash-verified in both directions
@@ -364,5 +364,64 @@ goes in at 0.252838 and `403101A0` comes back at 0.252845 - and the last read-mo
 sequence depends on it. The write is still compared exactly as the driver issued it; only the value
 a later read returns is corrected. A control run removes the declaration and fails, which is what
 says the declaration is doing work rather than covering a difference.
+
+
+M349: imported gfx_v10_0_rlc_reset from Linux amdgpu (AMD MIT), preserving both
+GRBM_SOFT_RESET.RLC field updates and50us waits. Added an opt-in disabled/busy
+RLC plus halted-engine guard before unpublished PSP reload. This is a declared
+experimental deviation; ordinary AMD resume does not invoke that callback.
+
+M352: bc250_rlc_reset_readback imports the assertion/read/delay/deassert/read/delay segment of gfx_v10_0_soft_reset (AMD MIT), with the mask restricted to RLC under the existing project halt guard. Gate2 selects this diagnostic variant; ordinary startup and gate1 remain unchanged. Logs are emitted after deassertion. Not a proven reset or upstream ordinary-resume path.
+
+
+M368 source clarification: bc250_sdma_hw_fini iterates actual SDMA instances.
+The v6.18 sdma_v5_0_enable reference computes a bitmask then passes 1 << inst_mask
+to gfx_stop; for two instances this selects bit3. The shim preserves its bounded
+instance loop, not that shift. No executable change in M368. Ordinary fini is
+not the separate stop_queue freeze/UTC_L1-disable reset preparation.
+
+
+M369: bc250_sdma_quiesce_instance adapts v6.18 sdma_v5_0_stop_queue's register
+body; bc250_sdma_unfreeze_instance adapts the unfreeze fragment of restore_queue
+(AMD MIT). RLC safe-mode scope/serialization/lifetime are explicit caller duties.
+The shim bounds the instance, uses unsigned polling for WDK and BC250_ETIME.
+No KMD caller yet; ordinary fini and register replay remain unchanged.
+
+
+M370: explicit GC10.1 RLC safe-mode scope adapts gfx_v10_0_set/unset_safe_mode
+(AMD MIT), requires entry ACK and returns timeout instead of upstream void.
+It deliberately requests the scope for enabled RLC independently of cg_flags.
+Windows retirement composes this with both SDMA quiescence helpers, then clears
+FREEZE while HALT/disabled queues/UTC_L1-off remain verified before paired exit.
+This avoids assuming FREEZE persists across PSP reload. Not an upstream reset.
+
+
+M372: bc250_sdma_soft_reset_instance mechanically extracts Linux v6.18
+sdma_v5_0_soft_reset_engine (AMD MIT). Adds fixed-instance bounds, omits DRM debug
+printing and substitutes the shim delay; register RMW/readback order is unchanged.
+No KMD caller and no hardware reset-completion claim.
+
+
+M373: Windows stop/reload composes AMD quiescence scope, per-engine reset outside
+the scope, then a second full quiescence/unfreeze scope instead of restoring
+live queues. All backing retained; post-reset state is reestablished/read back.
+Original reset assertion/release reads are logged without additional MMIO.
+
+SDMA virtual IB groundwork: reference/gmc_v10_0.c imported unmodified from
+Linux v6.18 commit7d0a66e4bb9081d75c82ec4957c50034cb0ea449, AMD MIT.
+VM flush uses its root-write/invalidate ordering and the imported SDMA register
+packet emitters, specialized to GFXHUB/SDMA0 invalidate engine0.
+
+## Startup clock preparation (M429)
+
+PROVENANCE: `reference/cyan_skillfish_ppt.c` and `smu_v11_8_ppsmc.h` are unchanged
+AMD MIT sources from Linux v6.18, commit7d0a66e4bb9081d75c82ec4957c50034cb0ea449,
+`drivers/gpu/drm/amd/pm/swsmu/{smu11,inc/pmfw_if}`. `cyan_skillfish_clock.inc` is
+mechanically extracted by `driver/shim/test/extract_clock.py`: original limits
+and complete `cyan_skillfish_od_edit_dpm_table`, including permission notice.
+Only the wrapper supplies per-device state and message callbacks; no MMIO access
+or hardware ownership is established by this source-only preparation.
+
+- SMU mailbox: AMD MIT `reference/smu_cmn.c`, Linux v6.18 @ `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, unchanged. `smu_mailbox.inc` mechanically extracts complete send/response/argument/status bodies; `extract_smu.py --check` verifies them. Port polling uses monotonic time and an iteration bound, with explicit owner and callback-IO errors; debug/no-hardware bypasses are disabled. Generated MP1 byte offsets use regcalc and the existing AMD headers.
 
 - gfx10_prt_flags.inc: Linux amdgpu (MIT), v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449, unchanged PRT flag body from gmc_v10_0_get_vm_pte.

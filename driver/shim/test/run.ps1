@@ -2,14 +2,16 @@
 # flags the miniport uses. Host-side only: nothing here touches the lab machine.
 #
 #   pwsh driver\shim\test\run.ps1
-#   pwsh driver\shim\test\run.ps1 -Out P:\BC-250\scratch\m4shim -Verbose250
+#   pwsh driver\shim\test\run.ps1 -Out $env:BC250_ROOT\scratch\m4shim -Verbose250
 #
-# Everything is written under -Out (default P:\BC-250\scratch\m4shim), never into the repository
-# and never onto drive C:.
+# Everything is written under -Out (default <BC250_ROOT>\scratch\m4shim), never into the repository
+# and never onto drive C:. BC250_ROOT is the workspace root: the environment variable, else the
+# parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\m4shim',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\m4shim",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250,
     [switch]$SkipTrace

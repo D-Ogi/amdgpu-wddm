@@ -13,7 +13,7 @@
  * WHY THE FIELDS LOOK LIKE amdgpu's
  *
  * Every field below exists because a specific call in RADV's amdgpu winsys sets it. The citations
- * are to P:\BC-250\ref\mesa\src\amd\vulkan\winsys\amdgpu. Keeping the amdgpu spelling is
+ * are to <BC250_ROOT>\ref\mesa\src\amd\vulkan\winsys\amdgpu. Keeping the amdgpu spelling is
  * deliberate: a winsys that ports radv_amdgpu_* to WDDM should be filling in fields it recognises,
  * and a disagreement with a Linux capture should be a diff rather than an argument. Where WDDM has
  * no equivalent the field is still here, marked, so the gap is visible instead of forgotten.

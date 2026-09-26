@@ -7,17 +7,21 @@
 # deliberately failing control, never a candidate driver modification.
 #
 #   pwsh driver\shim\test\run_paging.ps1
-#   pwsh driver\shim\test\run_paging.ps1 -Out P:\BC-250\scratch\build\paging -Verbose250
+#   pwsh driver\shim\test\run_paging.ps1 -Out $env:BC250_ROOT\scratch\build\paging -Verbose250
 #
-# Everything is written under -Out (default P:\BC-250\scratch\build\paging), never into the
-# repository and never onto drive C:.
+# Everything is written under -Out (default <BC250_ROOT>\scratch\build\paging), never into the
+# repository and never onto drive C:. BC250_ROOT is the workspace root: the environment variable,
+# else the parent directory of this repository.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\build\paging',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\build\paging",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250,
     [switch]$KmdRouting,
+    [switch]$VirtualPtes,
+    [switch]$VirtualPteRoute,
     [switch]$OmitApertureCommit,
     [switch]$RepeatMdlSourcePage,
     [switch]$OmitLogicalCommit,
@@ -67,6 +71,23 @@ $packetSources = @('bc250_sdma_paging.c', 'bc250_sdma_copy.c', 'bc250_sdma.c', '
 $plainSources = @('bc250_nbio.c', 'shim.c') | ForEach-Object { Join-Path $shim $_ }
 $testSources = @((Join-Path $shim 'test\paging_packets.c'))
 
+if ($VirtualPteRoute) {
+    if ($VirtualPtes -or $KmdRouting) { throw 'Select one host mode' }
+    $generated=Join-Path $Out 'virtual-pte-route.c'
+    & python (Join-Path $repo 'experiments/E33-m12-applications/generate_virtual_pte_route.py') $repo $generated
+    if ($LASTEXITCODE -ne 0) { throw 'Native PTE extraction failed' }
+    $packetSources += Join-Path $shim 'bc250_sdma_virtual_ptes.c'
+    $plainSources += Join-Path $repo 'driver/kmd/paging_private.c'
+    $plainSources += Join-Path $repo 'driver/kmd/paging_stream.c'
+    $testSources = @($generated)
+}
+
+if ($VirtualPtes) {
+    if ($KmdRouting) { throw 'Select VirtualPtes or KmdRouting' }
+    $packetSources += Join-Path $shim 'bc250_sdma_virtual_ptes.c'
+    $testSources = @(Join-Path $shim 'test\virtual_pte_copy.c')
+}
+
 if ($KmdRouting) {
     $plainSources += Join-Path $repo 'driver\kmd\paging_pt_shadow.c'
     $plainSources += Join-Path $repo 'driver\kmd\paging_private.c'
@@ -89,7 +110,7 @@ if ($KmdRouting) {
     $testSources = @($generated, (Join-Path $repo 'driver\kmd\paging_mc.c'), (Join-Path $repo 'driver\kmd\paging_window.c'), (Join-Path $repo 'driver\kmd\paging_stream.c'))
     $packetSources += @((Join-Path $shim 'bc250_gart.c'), (Join-Path $shim 'bc250_pte.c'))
 }
-$incUser = @("/I$repo\driver\kmd","/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
+$incUser = @("/I$repo\driver\kmd","/I$shim\include", "/I$shim\test", "/I$shim", "/I$imports", "/I$amdhdr",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 

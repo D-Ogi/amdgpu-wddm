@@ -28,6 +28,7 @@
 #include "bc250kmd.h"
 #include "bc250_fence_order.h"
 #include "bc250_sdma_virtual_ptes.h"
+#include "gfx_recovery.h"
 #include "paging_intervals.h"
 #include "paging_permutation.h"
 #include "bc250kmd_escape.h"
@@ -3452,6 +3453,134 @@ NTSTATUS GfxSetPowerRetained(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
     ExReleaseFastMutex(&Device->GartLock);
     ExReleasePushLockExclusive(&Device->GfxPagingLock);
     KeLeaveCriticalRegion();
+    return status;
+}
+
+// ---- Unpublished SDMA0 recovery witness --------------------------------------
+// Slots0/1 are startup ring tests,2/3 diagnostic fences,4 paging completion,
+//5 paging marker. These two additional private slots never alias an OS fence.
+#define BC250_RECOVERY_CONTENT_SLOT 6u
+#define BC250_RECOVERY_FENCE_SLOT 7u
+
+NTSTATUS GfxRecoverSdma0Unpublished(BC250_DEVICE* Device, BC250_SDMA0_RECOVERY_REPORT* Report)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev=NULL;
+    struct amdgpu_ring* ring;
+    void* previousBackend=NULL;
+    volatile u64* content;
+    volatile u64* fence;
+    u64 contentAddr,fenceAddr;
+    ULONG sequence,pattern,i;
+    BOOLEAN enabled=FALSE,sequenceActive=FALSE;
+    NTSTATUS status=STATUS_INVALID_DEVICE_STATE;
+    KIRQL irql;
+    int result=0;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Stage=BC250_SDMA0_RECOVERY_ADMISSION;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL || Device->Started ||
+        Device->Wddm || !Device->FullWddm) goto Done;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    // Do not reset a live WDDM queue or unilaterally adopt an already closed
+    // lifecycle owner. GartLock serializes all changes to that owner.
+    if (Device->Started || Device->Wddm || !gfx || Device->GfxStopPrepared ||
+        Device->GpuStopUnconfirmed || Device->GfxTlbBootstrap || !Device->MmioGfxEnabled ||
+        !gfx->SetUp || gfx->PowerSuspended || gfx->Failed || gfx->SubmitFailed ||
+        gfx->StagesDone!=BC250_GFX_STAGE_INTERRUPTS || !gfx->PagingReady ||
+        !gfx->PagingGate || !gfx->SdmaFencePage || !NT_SUCCESS(gfx->Sequence.Fault) ||
+        !PspIsLoaded(Device) || !IhIsActive(Device)) goto Unlock;
+    KeAcquireSpinLock(&Device->GfxAccessLock,&irql);
+    enabled=!Device->GfxAccessClosed;
+    KeReleaseSpinLock(&Device->GfxAccessLock,irql);
+    if (!enabled) goto Unlock;
+    status=GartDevice(Device,&adev,&enabled);
+    if (!NT_SUCCESS(status)) goto Unlock;
+    status=STATUS_DEVICE_NOT_READY;
+    if (!enabled || !adev || adev!=gfx->PagingDevicePtr || adev->sdma.num_instances<2 ||
+        gfx->PagingRing!=&adev->sdma.instance[0].ring || !adev->sdma.fence_mem.cpu ||
+        adev->sdma.fence_mem.size<(BC250_RECOVERY_FENCE_SLOT+1u)*8u) goto Unlock;
+    ring=gfx->PagingRing;
+    contentAddr=bc250_sdma_fence_addr(adev,BC250_RECOVERY_CONTENT_SLOT);
+    fenceAddr=bc250_sdma_fence_addr(adev,BC250_RECOVERY_FENCE_SLOT);
+    if (!contentAddr || !fenceAddr || (contentAddr&7u) || (fenceAddr&7u)) goto Unlock;
+    // Close and join bounded CPU references, including IH fence observers, while
+    // builders/diagnostics are excluded by GfxPagingLock/GartLock. No spinlock is
+    // held across hardware polling. This is not a wait for a hung GPU fence.
+    GfxAccessClose(Device);
+    Report->PriorPagingSeq=gfx->PagingSubmitSeq;
+    Report->PriorPagingInFlight=(ULONG)gfx->PagingSubmitInFlight;
+    Report->PriorPagingFailed=(ULONG)gfx->PagingSubmitFailed;
+    Report->PriorRingOwes=gfx->RingOwes[BC250_FENCE_RING_SDMA0];
+    previousBackend=adev->backend;adev->backend=&gfx->Sequence;
+    SequenceBegin(&gfx->Sequence,Device,FALSE,NULL,0);
+    sequenceActive=TRUE;
+    Report->Stage=BC250_SDMA0_RECOVERY_RESET;
+    result=bc250_sdma_reset_retained_instance(adev,0,&Report->Reset);
+    status=STATUS_IO_DEVICE_ERROR;
+    if (result || !NT_SUCCESS(gfx->Sequence.Fault) ||
+        Report->Reset.stage!=BC250_SDMA_RESET_PROGRAMMED) goto Finish;
+    Report->Stage=BC250_SDMA0_RECOVERY_PROBE;
+    sequence=(ULONG)InterlockedIncrement(&gfx->FenceSeq);
+    if (!sequence) sequence=(ULONG)InterlockedIncrement(&gfx->FenceSeq);
+    pattern=sequence^0xa5c39e71u;
+    Report->ProbeSequence=sequence;
+    Report->ExpectedContent=(u64)pattern | ((u64)(~pattern)<<32);
+    content=(volatile u64*)((char*)adev->sdma.fence_mem.cpu+BC250_RECOVERY_CONTENT_SLOT*8u);
+    fence=(volatile u64*)((char*)adev->sdma.fence_mem.cpu+BC250_RECOVERY_FENCE_SLOT*8u);
+    *content=~Report->ExpectedContent;
+    *fence=~(u64)sequence;
+    KeMemoryBarrier();
+    // A failed probe keeps selected-ring ownership and backing intact. Reset has
+    // already discarded its old transport, but never reports old OS work done.
+    gfx->RingOwes[BC250_FENCE_RING_SDMA0]=sequence;
+    gfx->RingOwesSlot[BC250_FENCE_RING_SDMA0]=BC250_RECOVERY_FENCE_SLOT;
+    KeAcquireSpinLock(&gfx->Sdma0RingLock,&irql);
+    result=bc250_sdma_recovery_probe_submit(ring,contentAddr,fenceAddr,pattern,sequence);
+    KeReleaseSpinLock(&gfx->Sdma0RingLock,irql);
+    if (result || !NT_SUCCESS(gfx->Sequence.Fault)) goto Finish;
+    status=STATUS_IO_TIMEOUT;
+    for (i=0;i<BC250_FENCE_TIMEOUT_US;i++) {
+        Report->Polls=i+1;
+        Report->ObservedFence=bc250_sdma_fence_read(adev,BC250_RECOVERY_FENCE_SLOT);
+        if (Report->ObservedFence==sequence) {
+            KeMemoryBarrier();
+            Report->ObservedContent=bc250_sdma_fence_read(adev,BC250_RECOVERY_CONTENT_SLOT);
+            if (Report->ObservedContent!=Report->ExpectedContent) {
+                status=STATUS_DEVICE_DATA_ERROR;break;
+            }
+            result=bc250_sdma_recovery_transport(ring,&Report->ProbeRptr,&Report->ProbeWptr);
+            if (result || !NT_SUCCESS(gfx->Sequence.Fault)) {status=STATUS_IO_DEVICE_ERROR;break;}
+            if (Report->ProbeRptr==Report->ProbeWptr && Report->ProbeWptr==(ring->wptr<<2)) {
+                status=STATUS_SUCCESS;break;
+            }
+        }
+        KeStallExecutionProcessor(1);
+    }
+    if (NT_SUCCESS(status)) {
+        gfx->RingOwes[BC250_FENCE_RING_SDMA0]=0;
+        InterlockedExchange(&gfx->PagingSubmitInFlight,0);
+        InterlockedExchange(&gfx->PagingSubmitFailed,0);
+        Report->Ready=TRUE;
+        Report->Stage=BC250_SDMA0_RECOVERY_READY;
+        GfxAccessOpen(Device);
+    }
+Finish:
+    if (!NT_SUCCESS(gfx->Sequence.Fault)) status=gfx->Sequence.Fault;
+    if (!NT_SUCCESS(status)) InterlockedExchange(&gfx->PagingSubmitFailed,1);
+    Report->ShimResult=result;
+    if (sequenceActive) adev->backend=previousBackend;
+    GuardLog("gfx: unpublished SDMA0 recovery stage %lu status 0x%08X shim %d probe %lu fence 0x%llX content 0x%llX ready %u",
+        Report->Stage,status,result,Report->ProbeSequence,Report->ObservedFence,Report->ObservedContent,Report->Ready);
+Unlock:
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+Done:
+    Report->Status=status;
     return status;
 }
 

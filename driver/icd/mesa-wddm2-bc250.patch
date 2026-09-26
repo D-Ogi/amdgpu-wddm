@@ -178,7 +178,7 @@ index 964e725..df7ccb9 100644
     D3DDDI_ALLOCATIONINFO2 alloc_info = {
        .pSystemMem = cpu_ptr,
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
-index 088f69f..c7b971f 100644
+index 088f69f..a2767ec 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 @@ -26,6 +26,7 @@
@@ -205,7 +205,33 @@ index 088f69f..c7b971f 100644
  #else
  #include "wsl/winadapter.h"
  #endif
-@@ -233,8 +236,24 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+@@ -179,9 +182,25 @@ submit_pdd_writer_reserve(struct submit_pdd_writer *writer, unsigned size)
+    return ptr;
+ }
+ 
++static bool vk_wddm2_fence_wait(uint32_t device_h, struct vk_wddm2_fence *fence);
++
+ static void
+ radv_wddm2_queue_destroy(struct radv_wddm2_queue *queue)
+ {
++   if (queue->bc250_progress.handle) {
++      if (queue->bc250_progress.wait_value)
++         vk_wddm2_fence_wait(queue->bc250_ws->device_h, &queue->bc250_progress);
++      D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy_progress = {
++         .hSyncObject = queue->bc250_progress.handle,
++      };
++      WDDM2_DISPATCH(DestroySynchronizationObject(&destroy_progress));
++      queue->bc250_progress.handle = 0;
++   }
++   if (queue->bc250_gather) {
++      queue->bc250_ws->base.buffer_destroy(&queue->bc250_ws->base, queue->bc250_gather);
++      queue->bc250_gather = NULL;
++      queue->bc250_gather_map = NULL;
++   }
+    if (queue->vm_fence.handle) {
+       D3DKMT_DESTROYSYNCHRONIZATIONOBJECT destroy_fence = {
+          .hSyncObject = queue->vm_fence.handle,
+@@ -233,8 +252,24 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
        .dw13 = 0x200000,
        .section_size = 0x168,
     };
@@ -232,7 +258,7 @@ index 088f69f..c7b971f 100644
        create_context_data.flags |= 0x40000;
        create_context_data.version = 9;
     }
-@@ -244,11 +263,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+@@ -244,11 +279,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
        .NodeOrdinal = node,
        .EngineAffinity = 1, // TODO
        .Flags = {
@@ -247,18 +273,32 @@ index 088f69f..c7b971f 100644
        .ClientHint = D3DKMT_CLIENTHINT_VULKAN,
     };
  
-@@ -259,6 +277,10 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
+@@ -259,6 +293,24 @@ radv_wddm2_queue_init(struct radv_wddm2_winsys *ws, enum amd_ip_type hw_ip,
     }
     queue->context_h = create_context.hContext;
  
 +   /* bc250kmd has no hardware-queue DDIs. SubmitCommand is the packet path. */
-+   if (ws->bc250)
++   if (ws->bc250) {
++      D3DKMT_CREATESYNCHRONIZATIONOBJECT2 create_progress = {
++         .hDevice = ws->device_h,
++         .Info = {
++            .Type = D3DDDI_MONITORED_FENCE,
++            .MonitoredFence = { .InitialFenceValue = 0, .EngineAffinity = 1 },
++         },
++      };
++      queue->bc250_ws = ws;
++      status = WDDM2_DISPATCH(CreateSynchronizationObject2(&create_progress));
++      if (!NT_SUCCESS(status))
++         goto failed;
++      queue->bc250_progress.handle = create_progress.hSyncObject;
++      queue->bc250_progress.value_map = create_progress.Info.MonitoredFence.FenceValueCPUVirtualAddress;
 +      return VK_SUCCESS;
++   }
 +
     if (hw_ip == AMD_IP_GFX || hw_ip == AMD_IP_COMPUTE) {
        struct create_queue_private_data create_queue_pdd = {
           .header_size = sizeof(struct create_queue_private_data),
-@@ -679,6 +701,186 @@ radv_wddm2_submit_add_queue(struct radv_wddm2_ctx *ctx, struct submit_pdd_writer
+@@ -679,6 +731,186 @@ radv_wddm2_submit_add_queue(struct radv_wddm2_ctx *ctx, struct submit_pdd_writer
     radv_wddm2_cs_submit_add_ibs(ctx, pdd, submit, queue->hw_ip, first_ib);
  }
  
@@ -329,17 +369,17 @@ index 088f69f..c7b971f 100644
 +      bytes = total * 4;
 +      if (bytes == 0 || bytes > (1u << 20))
 +         return STATUS_INVALID_PARAMETER;
-+      if (!ws->bc250_gather) {
++      if (!queue->bc250_gather) {
 +         VkResult result = ws->base.buffer_create(&ws->base, 1u << 20, 4096, RADEON_DOMAIN_GTT,
 +                                                  RADEON_FLAG_CPU_ACCESS | RADEON_FLAG_NO_INTERPROCESS_SHARING,
-+                                                  0, 0, NULL, &ws->bc250_gather);
++                                                  0, 0, NULL, &queue->bc250_gather);
 +         if (result != VK_SUCCESS)
 +            return STATUS_NO_MEMORY;
-+         ws->bc250_gather_map = ws->base.buffer_map(&ws->base, ws->bc250_gather, false, NULL);
-+         if (!ws->bc250_gather_map)
++         queue->bc250_gather_map = ws->base.buffer_map(&ws->base, queue->bc250_gather, false, NULL);
++         if (!queue->bc250_gather_map)
 +            return STATUS_NO_MEMORY;
 +      }
-+      dst = ws->bc250_gather_map;
++      dst = queue->bc250_gather_map;
 +      for (i = 0; i < n; i++) {
 +         uint8_t *src = NULL;
 +         uint64_t off = 0;
@@ -355,7 +395,7 @@ index 088f69f..c7b971f 100644
 +         memcpy(dst, src + off, ibs[i].cdw * 4);
 +         dst += ibs[i].cdw * 4;
 +      }
-+      va = ws->bc250_gather->va;
++      va = queue->bc250_gather->va;
 +   }
 +
 +   /* BC250_IB_DWORDS cuts the IB the CP executes. 5 is CONTEXT_CONTROL plus
@@ -398,13 +438,13 @@ index 088f69f..c7b971f 100644
 +   status = WDDM2_DISPATCH(SubmitCommand(&cmd));
 +   if (!NT_SUCCESS(status))
 +      fprintf(stderr, "bc250: SubmitCommand 0x%X (%u ibs packed, %u bytes)\n", status, n, bytes);
-+   else {
++   else if (ws->bc250_trace_submits) {
 +      const uint32_t *dw = NULL;
 +      if (n == 1 && ibs[0].bo)
 +         dw = (const uint32_t *)((uint8_t *)ws->base.buffer_map(&ws->base, ibs[0].bo, false, NULL) +
 +                                 (ibs[0].va - ibs[0].bo->va));
 +      else
-+         dw = (const uint32_t *)ws->bc250_gather_map;
++         dw = (const uint32_t *)queue->bc250_gather_map;
 +      fprintf(stderr, "bc250: SubmitCommand ib 0x%" PRIx64 " %u bytes (from %u) %08x %08x %08x %08x\n",
 +              va, bytes, n,
 +              dw ? dw[0] : 0, dw && bytes >= 8 ? dw[1] : 0,
@@ -445,31 +485,69 @@ index 088f69f..c7b971f 100644
  static VkResult
  radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
                       const struct radv_winsys_submit_info *submit,
-@@ -734,7 +936,18 @@ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
+@@ -734,7 +966,35 @@ radv_wddm2_cs_submit(struct radeon_winsys_ctx *_ctx,
           return VK_ERROR_DEVICE_LOST;
     }
  
 -   if (submit->cs_count > 0) {
 +   if (submit->cs_count > 0 && ctx->ws->bc250) {
-+      /* The KMD runs one gfx IB at a time and retires a second without running it. Waiting
-+       * for our own previous fence keeps that from happening to the next packet we queue.
-+       * A present that lands in the gap is the KMD's wait, not this one.
-+       */
-+      if (ctx->per_ip[submit->ip_type].last_submission.handle &&
-+          !vk_wddm2_fence_wait(ctx->ws->device_h, &ctx->per_ip[submit->ip_type].last_submission))
++      /* Application signals can be absent from an intermediate submit. They
++       * cannot protect a CPU-rewritten IB. Retire our own previous queue IB
++       * before packing the next, including submissions with no app signals.
++       * A separate BO/fence per queue prevents cross-context overwrite. */
++      uint64_t pending_value = queue->bc250_progress.wait_value;
++      uint64_t observed = p_atomic_read(queue->bc250_progress.value_map);
++      /* Keep one queue identity witness, without formatting every hot-path submit. */
++      if (ctx->ws->bc250_trace_submits || pending_value == 0)
++         fprintf(stderr, "bc250: progress before submit previous=%" PRIu64 " observed=%" PRIu64
++                         " waits=%u signals=%u\n", pending_value, observed, wait_count, signal_count);
++      if (pending_value && !vk_wddm2_fence_wait(ctx->ws->device_h, &queue->bc250_progress))
 +         return VK_ERROR_DEVICE_LOST;
 +      status = radv_wddm2_bc250_submit(ctx, queue, submit);
 +      if (!NT_SUCCESS(status))
 +         return VK_ERROR_DEVICE_LOST;
++      uint64_t next_value = queue->bc250_progress.wait_value + 1;
++      D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 progress_signal = {
++         .ObjectCount = 1,
++         .ObjectHandleArray = &queue->bc250_progress.handle,
++         .BroadcastContextCount = 1,
++         .BroadcastContextArray = &queue->context_h,
++         .MonitoredFenceValueArray = &next_value,
++      };
++      status = WDDM2_DISPATCH(SignalSynchronizationObjectFromGpu2(&progress_signal));
++      if (!NT_SUCCESS(status))
++         return VK_ERROR_DEVICE_LOST;
++      queue->bc250_progress.wait_value = next_value;
 +   } else if (submit->cs_count > 0) {
        struct radv_winsys_ib first_ib = {};
        struct submit_pdd_writer pdd;
  
+diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
+index ef91d5b..455b772 100644
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.h
+@@ -45,6 +45,11 @@ struct radv_wddm2_queue {
+    uint32_t handle;
+    uint32_t queue_id; /* KMD identifier */
+    struct vk_wddm2_fence vm_fence;
++   /* Each queue owns its packed IB and an unconditional retirement fence. */
++   struct radv_wddm2_winsys *bc250_ws;
++   struct radeon_winsys_bo *bc250_gather;
++   uint8_t *bc250_gather_map;
++   struct vk_wddm2_fence bc250_progress;
+ };
+ 
+ struct radv_wddm2_ctx {
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
-index e2f4987..4507bbb 100644
+index e2f4987..31c8416 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
-@@ -34,6 +34,7 @@
+@@ -1,3 +1,4 @@
++#include <stdlib.h>
+ /*
+  * Copyright © 2020 Valve Corporation
+  *
+@@ -34,6 +35,7 @@
  #include <stdint.h>
  
  #include "radv_wddm2_winsys.h"
@@ -477,7 +555,7 @@ index e2f4987..4507bbb 100644
  
  #include "util/macros.h"
  #include "util/u_string.h"
-@@ -113,6 +114,132 @@ kmd_to_amdgpu_vram_type(uint32_t kmd_type)
+@@ -113,6 +115,132 @@ kmd_to_amdgpu_vram_type(uint32_t kmd_type)
     }
  }
  
@@ -610,7 +688,7 @@ index e2f4987..4507bbb 100644
  static NTSTATUS
  radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
                           const struct vk_dx_adapter_info *adapter_info)
-@@ -200,6 +327,10 @@ radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
+@@ -200,6 +328,10 @@ radv_wddm2_fill_gpu_info(struct radv_wddm2_winsys *ws,
        }
     }
  
@@ -621,7 +699,7 @@ index e2f4987..4507bbb 100644
     struct PACKED umdprivatedata_header {
        uint32_t flags[3];
        uint32_t vendor_id;
-@@ -425,6 +556,12 @@ radv_wddm2_query_marketing_name(struct radv_wddm2_winsys *ws, char *name, size_t
+@@ -425,6 +557,12 @@ radv_wddm2_query_marketing_name(struct radv_wddm2_winsys *ws, char *name, size_t
     return STATUS_SUCCESS;
  }
  
@@ -634,7 +712,16 @@ index e2f4987..4507bbb 100644
  static struct radeon_info *
  radv_wddm2_winsys_query_info(struct radeon_winsys *rws)
  {
-@@ -647,6 +784,11 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+@@ -629,6 +767,8 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+    ws->debug_all_bos = !!(debug_flags & RADV_DEBUG_ALL_BOS);
+    ws->debug_log_bos = debug_flags & RADV_DEBUG_HANG;
+    ws->dump_ibs = !!(debug_flags & RADV_DEBUG_DUMP_IBS);
++   const char *trace_submits = getenv("BC250_TRACE_SUBMITS");
++   ws->bc250_trace_submits = trace_submits && strcmp(trace_submits, "1") == 0;
+    radv_winsys_bo_list_init(&ws->global_bo_list);
+    radv_winsys_bo_log_init(&ws->bo_log, debug_flags);
+ 
+@@ -647,6 +787,11 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
     ws->adapter_h = open_adapter.hAdapter;
  
     status = radv_wddm2_fill_gpu_info(ws, adapter_info);
@@ -646,7 +733,7 @@ index e2f4987..4507bbb 100644
     if (!NT_SUCCESS(status)) {
        fprintf(stderr, "Can't fill info for luid %X%X\n", adapter_info->adapter_luid.LowPart, adapter_info->adapter_luid.HighPart);
        result = VK_ERROR_INITIALIZATION_FAILED;
-@@ -655,7 +797,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+@@ -655,7 +800,12 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
  
     status = radv_wddm2_query_marketing_name(ws, ws->gpu_info.marketing_name,
                                              sizeof(ws->gpu_info.marketing_name));
@@ -660,7 +747,7 @@ index e2f4987..4507bbb 100644
        fprintf(stderr, "Can't query marketing name\n");
        result = VK_ERROR_INITIALIZATION_FAILED;
        goto error_open_adapter;
-@@ -708,6 +855,7 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+@@ -708,6 +858,7 @@ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
     ws->base.get_sync_provider = radv_wddm2_winsys_get_sync_provider;
     ws->base.query_gpuvm_fault = radv_wddm2_winsys_query_gpuvm_fault;
     ws->base.init_wsi = radv_wddm2_wsi_init;
@@ -669,16 +756,15 @@ index e2f4987..4507bbb 100644
     radv_wddm2_cs_init_functions(ws);
  
 diff --git a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
-index 75cbc71..f355e8d 100644
+index 75cbc71..3268c84 100644
 --- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
-@@ -51,6 +51,9 @@ struct radv_wddm2_winsys {
+@@ -51,6 +51,8 @@ struct radv_wddm2_winsys {
     bool debug_log_bos;
     bool chain_ib;
     bool dump_ibs;
++   bool bc250_trace_submits; /* optional hot-path diagnostic output */
 +   bool bc250; /* caps blob was ours; allocate/context/submit use the BC2* contract */
-+   struct radeon_winsys_bo *bc250_gather;
-+   uint8_t *bc250_gather_map;
  
     uint32_t adapter_h;
     LUID adapter_luid;
@@ -736,3 +822,23 @@ index 912b9f6..445254c 100644
  }
  #else
  static VkResult
+diff --git a/src/vulkan/util/vk_async_event.c b/src/vulkan/util/vk_async_event.c
+index 53e2387..f170c05 100644
+--- a/src/vulkan/util/vk_async_event.c
++++ b/src/vulkan/util/vk_async_event.c
+@@ -68,14 +68,13 @@ vk_async_event_wait(HANDLE event, uint64_t rel_timeout_ns)
+ 
+ #ifdef _WIN32
+    DWORD ret = WaitForSingleObject(event, rel_timeout_ms);
+-   fprintf(stderr, "WaitForSingleObject: 0x%X\n", ret);
+    switch (ret) {
+    case WAIT_TIMEOUT:
+-      fprintf(stderr, "TIMEOUT\n");
+       return VK_TIMEOUT;
+    case WAIT_OBJECT_0:
+       return VK_SUCCESS;
+    default:
++      fprintf(stderr, "WaitForSingleObject failed: 0x%X\n", ret);
+       return VK_ERROR_UNKNOWN;
+    }
+ #else

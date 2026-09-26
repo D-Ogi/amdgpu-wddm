@@ -2,7 +2,7 @@
 # come from the NuGet packages unpacked under -Kits, the compiler from the installed Visual Studio. Same flow as
 # tools\win\bc250kmd_cli\build.ps1, plus the WDK's um headers, which is where d3dumddi.h and d3d10umddi.h live.
 #
-#   pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
+#   pwsh driver\umd-stub\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250umd
 #
 # The DLL is not signed here and not packaged here. It is packaged by the driver build, which takes this -Out as
 # its -UmdStub and writes a second package with the INF's UserModeDriverName block live and this DLL in the

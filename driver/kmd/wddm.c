@@ -190,12 +190,24 @@ typedef struct _BC250_WDDM_OBJECT {
 typedef struct _BC250_PAGING_JOB {
     struct _BC250_PAGING_JOB* Next;
     ULONGLONG Start;
+    ULONGLONG Epoch; // borrowed queue ownership cannot migrate to a new recovery epoch
     ULONG ByteCount, PrivateBytes;
     UINT Fence;
     BOOLEAN VirtualAddress, Borrowed;
     const UCHAR* Data;
 } BC250_PAGING_JOB;
 C_ASSERT(sizeof(BC250_PAGING_JOB)<=PAGING_PRIVATE_JOB_BYTES);
+
+// OS ownership, actual GPU execution and notification are distinct histories.
+// Submitted includes successful DDIs whose undispatched packet needs recovery;
+// Hardware never includes software completion or a rejected virtual submission.
+// Lock protects this owner-local epoch and every ledger field. Future recovery
+// must close/join publishers before advancing the epoch; power suspend retains it.
+typedef struct _BC250_WDDM_FENCE_LEDGER {
+    ULONGLONG Epoch;
+    UINT Submitted, Hardware;
+    BOOLEAN SubmittedValid, HardwareValid;
+} BC250_WDDM_FENCE_LEDGER;
 
 typedef struct _BC250_WDDM {
     BC250_DEVICE* Device;
@@ -235,6 +247,7 @@ typedef struct _BC250_WDDM {
     volatile LONG SubmittedFence[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG SubmittedNode[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG ActiveSubmissions[BC250_WDDM_NODE_COUNT_MAX];
+    BC250_WDDM_FENCE_LEDGER FenceLedger[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG LastReportedFence[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN LastReportedValid[BC250_WDDM_NODE_COUNT_MAX];
     BOOLEAN RefusalPending[BC250_WDDM_NODE_COUNT_MAX]; // valid DMA never dispatched; cannot retire in software
@@ -265,6 +278,7 @@ typedef struct _BC250_WDDM {
     BOOLEAN PagingHwPending;
     ULONG PagingHwSeq;                  // gfx.c's PagingSubmitSeq of the submission in flight
     UINT PagingHwFence;
+    ULONGLONG PagingHwEpoch;
     // Legacy software-deferral fields; queued node-1 software work now uses FIFO jobs.
     BOOLEAN PagingDeferredValid;
     UINT PagingDeferredFence;
@@ -295,16 +309,17 @@ typedef struct _BC250_WDDM {
     volatile LONG64 PagingNativePtes;
     volatile LONG64 PagingNativeTransfers, PagingNativeFills, PagingNativeBytes, PagingDmaGapProofs;
 
-    // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, one in flight at most) and its fence is
+    // Stage C: a DMA buffer with bytes in it goes down the gfx ring (gfx.c, bounded ring and completion capacity) and its fence is
     // reported when the hardware's arrives - from the IH DPC, from the submit itself if the interrupt won the race,
     // or from the watchdog. Software completions that come while one is in flight are held back and published
     // with it: a completion of fence N retires every fence up to N, so N + 1 must not be reported first.
     // All of it under Lock.
-    FAST_MUTEX GfxSubmitMutex;
+    FAST_MUTEX GfxSubmitMutex;          // serialize submit + completion publication
     BC250_GFX_COMPLETION_QUEUE GfxPending;
-    BOOLEAN HwPending;
+    BOOLEAN HwPending;                 // mirrors GfxPending head for recovery/preemption
     ULONG HwSeq;                        // gfx.c's sequence number of the submission in flight
     UINT HwFence;
+    ULONGLONG HwEpoch;
     UINT HwNode;
     BOOLEAN DeferredValid;
     UINT DeferredFence;
@@ -673,6 +688,31 @@ static void WddmQueueReport(_Inout_ BC250_WDDM* Wddm)
 // inside the submit path re-enters the scheduler with the submit still on the stack.
 // Caller holds Lock. Publish completion atomically with clearing hardware-pending state:
 // otherwise a preemption DPC can observe idle hardware before its completion is queued.
+// Caller owns Lock. Signed fence deltas preserve wrap and do not move history
+// backwards when VidSch replays queued paging packets with their original IDs.
+static void WddmRecordFenceLedgerLocked(BC250_WDDM* Wddm, UINT Node,
+    ULONGLONG Epoch, UINT Fence, BOOLEAN Hardware)
+{
+    BC250_WDDM_FENCE_LEDGER* ledger=&Wddm->FenceLedger[Node];
+    UINT* value=Hardware ? &ledger->Hardware : &ledger->Submitted;
+    BOOLEAN* valid=Hardware ? &ledger->HardwareValid : &ledger->SubmittedValid;
+    if (Epoch!=ledger->Epoch) return;
+    if (!*valid || (LONG)(Fence-*value)>0) *value=Fence;
+    *valid=TRUE;
+}
+
+// Caller owns Lock. A submit can publish and complete before its DDI returns;
+// only the joined snapshot is suitable for a recovery ownership decision.
+static BOOLEAN WddmSnapshotFenceLedgerLocked(const BC250_WDDM* Wddm, UINT Node,
+    BC250_WDDM_FENCE_LEDGER* Ledger, UINT* Reported, BOOLEAN* ReportedValid)
+{
+    if (Node>=Wddm->NodeCount || Wddm->ActiveSubmissions[Node]) return FALSE;
+    *Ledger=Wddm->FenceLedger[Node];
+    *Reported=(UINT)Wddm->LastReportedFence[Node];
+    *ReportedValid=Wddm->LastReportedValid[Node];
+    return TRUE;
+}
+
 static void WddmRecordCompletionLocked(BC250_WDDM* Wddm, UINT FenceId, UINT NodeOrdinal)
 {
     Wddm->SubmittedNode[NodeOrdinal] = (LONG)NodeOrdinal;
@@ -785,6 +825,7 @@ static void WddmGfxHeadLocked(BC250_WDDM* Wddm)
     Wddm->HwSeq = job->Seq;
     Wddm->HwFence = job->Fence;
     Wddm->HwNode = job->Node;
+    Wddm->HwEpoch = job->Epoch;
     now = KeQueryInterruptTime();
     due.QuadPart = job->Deadline > now ? -(LONGLONG)(job->Deadline - now) : -1;
     if (!Wddm->Stopping) KeSetTimer(&Wddm->SubmitTimer, due, &Wddm->SubmitDpc);
@@ -800,11 +841,13 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device)
     if (wddm == NULL) return;
     KeAcquireSpinLock(&wddm->Lock, &irql);
     while ((job = Bc250GfxQueueHead(&wddm->GfxPending)) != NULL &&
+           job->Epoch == wddm->FenceLedger[job->Node].Epoch &&
            GfxFenceArrived(Device, job->Seq))
     {
         done = TRUE;
         node = job->Node;
         fence = job->ReportFence;
+        WddmRecordFenceLedgerLocked(wddm, node, job->Epoch, job->Fence, TRUE);
         Bc250GfxQueuePop(&wddm->GfxPending);
         if (!wddm->GfxPending.Count && wddm->DeferredValid) {
             fence = wddm->DeferredFence;
@@ -872,7 +915,7 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     allowed = !Wddm->Stopping && !Wddm->WatchdogFaulted[Node] &&
               Wddm->GfxPending.Count < BC250_GFX_PENDING_MAX;
-    job.Epoch = 0; //151 baseline has adapter-lifetime ownership, no recovery ledger
+    job.Epoch = Wddm->FenceLedger[Node].Epoch;
     KeReleaseSpinLock(&Wddm->Lock, irql);
     if (!allowed) { ExReleaseFastMutex(&Wddm->GfxSubmitMutex); return FALSE; }
     status = GfxSubmitIb(Device, BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes, &seq);
@@ -931,12 +974,17 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
         KIRQL irql;
         LARGE_INTEGER due;
         KeAcquireSpinLock(&wddm->Lock,&irql);
-        if (wddm->Stopping) {
+        if (wddm->Stopping || (wddm->PagingHead &&
+            wddm->PagingHead->Epoch!=wddm->FenceLedger[BC250_WDDM_NODE_COPY].Epoch) ||
+            (wddm->PagingHwPending &&
+            wddm->PagingHwEpoch!=wddm->FenceLedger[BC250_WDDM_NODE_COPY].Epoch)) {
             KeReleaseSpinLock(&wddm->Lock,irql);
             return;
         }
         if (wddm->PagingHwPending && GfxPagingFenceArrived(Device,wddm->PagingHwSeq)) {
             retired=wddm->PagingHead;
+            WddmRecordFenceLedgerLocked(wddm,BC250_WDDM_NODE_COPY,wddm->PagingHwEpoch,
+                wddm->PagingHwFence,TRUE);
             wddm->PagingHwPending=FALSE;
             KeCancelTimer(&wddm->PagingSubmitTimer);
             completed=TRUE;
@@ -955,6 +1003,7 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
                 if (NT_SUCCESS(status)) {
                     wddm->PagingHwPending=TRUE;
                     wddm->PagingHwSeq=seq;
+                    wddm->PagingHwEpoch=job->Epoch;
                     wddm->PagingHwFence=job->Fence;
                     wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*BC250_WDDM_SUBMIT_TIMEOUT_MS;
                     due.QuadPart=-10000ll*BC250_WDDM_SUBMIT_TIMEOUT_MS;
@@ -1049,6 +1098,7 @@ static BOOLEAN WddmSubmitPagingHardwareRoot(_Inout_ BC250_DEVICE* Device, _Inout
     // All live slot ownership changes are serialized with queue retirement.
     // Replaying a still-owned start cannot overwrite its existing fence/link.
     job->Next=NULL;job->Borrowed=TRUE;
+    job->Epoch=Wddm->FenceLedger[BC250_WDDM_NODE_COPY].Epoch;
     job->Start=Start;job->ByteCount=ByteCount;job->PrivateBytes=PrivateBytes;
     job->Fence=FenceId;job->VirtualAddress=VirtualAddress;
     job->Data=(const UCHAR*)PrivateData;
@@ -1579,6 +1629,10 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     ExInitializePushLock(&wddm->PagingBuildLock);
     KeInitializeSpinLock(&wddm->Lock);
     ExInitializeFastMutex(&wddm->GfxSubmitMutex);
+    {
+        UINT node;
+        for (node=0;node<BC250_WDDM_NODE_COUNT_MAX;node++) wddm->FenceLedger[node].Epoch=1;
+    }
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
@@ -3877,9 +3931,11 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     BOOLEAN tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
     NTSTATUS status;
     KIRQL irql;
+    ULONGLONG epoch=0;
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
+        epoch=wddm->FenceLedger[node].Epoch;
         wddm->ActiveSubmissions[node]++;
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
@@ -3887,6 +3943,10 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
+        // STATUS_SUCCESS transfers responsibility to the driver, even when
+        // RefusalPending retains a valid but undispatched packet for OS TDR.
+        if (NT_SUCCESS(status))
+            WddmRecordFenceLedgerLocked(wddm,node,epoch,pSubmitCommand->SubmissionFenceId,FALSE);
         wddm->ActiveSubmissions[node]--;
         KeReleaseSpinLock(&wddm->Lock, irql);
         WddmQueueReport(wddm);
@@ -3921,7 +3981,7 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
         return STATUS_INVALID_PARAMETER;
     }
 
-    // One IB is already the ring's whole capacity (gfx.c). A second UMD submit that arrives before
+    // Capacity is bounded by CP read-pointer space and seven completion records. A submit before
     // that fence - a present, or dxgkrnl pipelining two packets - must not be retired here: dxgkrnl
     // would signal the monitored fence for an IB the GPU never fetched. This DDI is PASSIVE_LEVEL,
     // so wait the same bound the watchdog uses, polling the fence, and try again. Anything else
@@ -4167,9 +4227,11 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ c
     BOOLEAN tracked = wddm != NULL && node < BC250_WDDM_NODE_COUNT_MAX;
     NTSTATUS status;
     KIRQL irql;
+    ULONGLONG epoch=0;
     if (tracked)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
+        epoch=wddm->FenceLedger[node].Epoch;
         wddm->ActiveSubmissions[node]++;
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
@@ -4184,6 +4246,10 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ c
                 wddm->RejectedFence[node]=pSubmitCommand->SubmissionFenceId;
             wddm->RejectedPending[node]=TRUE;
         }
+        // STATUS_SUCCESS transfers responsibility to the driver, even when
+        // RefusalPending retains a valid but undispatched packet for OS TDR.
+        if (NT_SUCCESS(status))
+            WddmRecordFenceLedgerLocked(wddm,node,epoch,pSubmitCommand->SubmissionFenceId,FALSE);
         wddm->ActiveSubmissions[node]--;
         KeReleaseSpinLock(&wddm->Lock, irql);
         WddmQueueReport(wddm);
@@ -4281,6 +4347,21 @@ static NTSTATUS Bc250WddmResetEngine(_In_ const HANDLE hAdapter, _Inout_ DXGKARG
     // no fence at all. Logged on every call, like the two timeout DDIs and for the same reason.
     StartHealthClose((BC250_DEVICE*)hAdapter);
     (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiResetEngine);
+    {
+        BC250_WDDM* wddm=WddmOf(hAdapter);
+        BC250_WDDM_FENCE_LEDGER ledger={0};
+        UINT reported=0;
+        BOOLEAN valid=FALSE,reportedValid=FALSE;
+        KIRQL irql;
+        if (wddm) {
+            KeAcquireSpinLock(&wddm->Lock,&irql);
+            valid=WddmSnapshotFenceLedgerLocked(wddm,pResetEngine->NodeOrdinal,&ledger,&reported,&reportedValid);
+            KeReleaseSpinLock(&wddm->Lock,irql);
+        }
+        if (valid) GuardLog("wddm: reset fence snapshot epoch %llu submitted %u/%u hardware %u/%u reported %u/%u",
+            ledger.Epoch,ledger.SubmittedValid,ledger.Submitted,ledger.HardwareValid,ledger.Hardware,
+            reportedValid,reported);
+    }
     GuardLog("wddm: *** ResetEngine node %u engine %u: refused, this part has no engine reset ***",
              pResetEngine->NodeOrdinal, pResetEngine->EngineOrdinal);
     return STATUS_NOT_SUPPORTED;
@@ -5161,3 +5242,4 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // path above sets both. Nor are the per-engine TDR set, CollectDbgInfo and SetStablePowerState (0.7.4).
     WddmCheckReserved(Data);
 }
+

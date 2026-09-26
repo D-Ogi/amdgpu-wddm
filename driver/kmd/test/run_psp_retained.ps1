@@ -1,4 +1,4 @@
-param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\psp-retained',[switch]$DropRetain)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\psp-retained",[switch]$DropRetain)
 $ErrorActionPreference='Stop'
 $repo=Join-Path $Root 'bc250-win'
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP

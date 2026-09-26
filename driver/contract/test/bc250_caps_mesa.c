@@ -7,7 +7,7 @@
  * two declarations cannot coexist. It navigates the blob with the offsets the KMD side reports
  * through struct bc250_blob_layout, exactly as a real winsys would have to.
  *
- * It calls Mesa's real functions, unmodified, from P:\BC-250\ref\mesa. Nothing about
+ * It calls Mesa's real functions, unmodified, from <BC250_ROOT>\ref\mesa. Nothing about
  * ac_gpu_info.c is forked, patched or re-implemented here; the only thing this file adds is the
  * translation from the blob's kernel-shaped structures into Mesa's Windows-shaped ones, which is
  * the piece a WDDM winsys will have to carry anyway. Treat the code below as the reference for

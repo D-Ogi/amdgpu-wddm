@@ -22,7 +22,9 @@ param(
     [Parameter(Mandatory)][string]$Out,
     [string]$UmdStub = '',
     [string]$KitVersion = '10.0.26100.0',
-    [string]$CertSubject = 'CN=BC-250 lab test signing'
+    [string]$CertSubject = 'CN=BC-250 lab test signing',
+    [switch]$ExportCommandsOnly,
+    [string]$QualityWorkspace = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,7 +36,7 @@ $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object N
 $bin = Join-Path $msvc.FullName 'bin\Hostx64\x64'
 $pkg = Join-Path $Out 'package'
 $obj = Join-Path $Out 'obj'
-if (Test-Path $obj) { Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue }
+if ((-not $ExportCommandsOnly) -and (Test-Path $obj)) { Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Force $pkg, $obj | Out-Null
 
 function Invoke-Tool([string]$exe, [string[]]$argv) {
@@ -84,6 +86,7 @@ $sources = (Get-ChildItem (Join-Path $here '*.c')).FullName
 # M4, M5: AMD's imported code and the shim it compiles against (ADR 0002). Same flags; the imports get the warning
 # disables documented in driver\amdgpu-import\PROVENANCE.md, from the build line, never by editing them.
 $repo = Split-Path (Split-Path $here)
+if(!$QualityWorkspace){$QualityWorkspace=if($env:BC250_ROOT){$env:BC250_ROOT}else{Split-Path $repo}}
 $shimInc = @("/I$repo\driver\shim\include", "/I$repo\driver\amdgpu-import", "/I$repo\third_party\linux-amdgpu", "/I$repo\third_party\libdrm", '/DBC250_SHIM_KERNEL')
 $shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$repo\driver\shim\bc250_gart.c", "$repo\driver\shim\bc250_pte.c", "$repo\driver\shim\bc250_psp.c")
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
@@ -93,12 +96,31 @@ $shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_c
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
-$clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
+$clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$wdk\Include\$KitVersion\shared",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\um",
     "/Fo$obj\", "/Fd$obj\cl.pdb")
+# Emit the exact per-file commands for targeted static analysis and build auditing.
+$commands = @()
+$groups = @(
+    @{ Files=@($sources)+@($shimSources); Flags=$clFlags+$shimInc },
+    @{ Files=@($shimGfxSources); Flags=$clFlags+$shimInc+@("/I$repo\driver\shim",'/TC','/wd4245') },
+    @{ Files=@($importSources); Flags=$clFlags+$shimInc+@('/TC','/wd4244','/wd4701','/wd4100') }
+)
+foreach($group in $groups) {
+    foreach($source in $group.Files) {
+        $commands += @{ directory=$repo; file=$source; arguments=@((Join-Path $bin 'cl.exe'))+@($group.Flags)+@($source) }
+    }
+}
+$commands | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Out 'compile_commands.json') -Encoding utf8
+if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation or deployment'; return }
+& python (Join-Path $repo 'tools\quality\source_manifest.py') --repo $repo --out $Out --stage begin
+if($LASTEXITCODE -ne 0) { throw 'Source identity capture failed' }
+& (Join-Path $repo 'tools\quality\quick.cmd') $QualityWorkspace (Join-Path $Out 'quality') $repo
+if($LASTEXITCODE -ne 0) { throw 'Fast quality gates failed; KMD package not built' }
+
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
 Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244', '/wd4701', '/wd4100') + $importSources)
@@ -157,3 +179,9 @@ if ($UmdStub) {
 foreach ($p in @($pkg, $pkgUmd)) {
     if ($p) { '  {0}  {1}\bc250kmd.sys' -f (Get-FileHash "$p\bc250kmd.sys" -Algorithm SHA256).Hash, (Split-Path -Leaf $p) }
 }
+
+# Bind the signed artifacts to the exact inputs captured before compilation.
+$manifestArgs = @((Join-Path $repo 'tools\quality\source_manifest.py'), '--repo', $repo, '--out', $Out, '--stage', 'end', '--package', $pkg)
+if($pkgUmd) { $manifestArgs += @('--package', $pkgUmd) }
+& python @manifestArgs
+if($LASTEXITCODE -ne 0) { throw 'Source/artifact identity verification failed; do not deploy this package' }

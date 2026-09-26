@@ -17,7 +17,7 @@
 // of most DXGKARG_* structures, and BC250_DEVICE carries a DXGKRNL_INTERFACE, so two translation units compiled at
 // two versions would disagree about the layout of our own device structure.
 //
-// That this costs the display-only path nothing was measured, not assumed (P:\BC-250\scratch\m7-stagea\probe.c,
+// That this costs the display-only path nothing was measured, not assumed (<BC250_ROOT>\scratch\m7-stagea\probe.c,
 // which emits every size and member offset the display path touches and compares the compilations): of 99 values,
 // 94 are identical between the header's default (WDDM 3.2) and 2.0. The five that differ are the total sizes of
 // DXGKRNL_INTERFACE, DXGK_DRIVERCAPS, DXGKARG_QUERYADAPTERINFO, DXGKARG_ESCAPE and D3DKMDT_VIDPN_TARGET_MODE; in

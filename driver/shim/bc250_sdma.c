@@ -1142,6 +1142,54 @@ int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigne
 	return 0;
 }
 
+/* [shim] The WRITE_LINEAR packet is sdma_v5_0_ring_test_ring's positive
+ * content oracle, extended to two complementary dwords. The following fence
+ * uses sdma_v5_0_ring_emit_fence, not a CPU-emulated completion. */
+int bc250_sdma_recovery_probe_submit(struct amdgpu_ring *ring, u64 content_addr,
+                                    u64 fence_addr, u32 pattern, u32 sequence)
+{
+ unsigned int fence_dw;
+ int result;
+ if (!ring || !ring->adev || !ring->ring || !sequence ||
+     (content_addr & 7u) || (fence_addr & 7u) || content_addr==fence_addr)
+  return BC250_EINVAL;
+ fence_dw=bc250_sdma_fence_size(ring,AMDGPU_FENCE_FLAG_64BIT);
+ if (!fence_dw) return BC250_EINVAL;
+ result=amdgpu_ring_alloc(ring,6u+fence_dw);
+ if (result) return result;
+ amdgpu_ring_write(ring,SDMA_PKT_HEADER_OP(SDMA_OP_WRITE) |
+                       SDMA_PKT_HEADER_SUB_OP(SDMA_SUBOP_WRITE_LINEAR));
+ amdgpu_ring_write(ring,lower_32_bits(content_addr));
+ amdgpu_ring_write(ring,upper_32_bits(content_addr));
+ amdgpu_ring_write(ring,SDMA_PKT_WRITE_UNTILED_DW_3_COUNT(1));
+ amdgpu_ring_write(ring,pattern);
+ amdgpu_ring_write(ring,~pattern);
+ result=bc250_sdma_emit_fence(ring,fence_addr,sequence,AMDGPU_FENCE_FLAG_64BIT);
+ if (result) {amdgpu_ring_undo(ring);return result;}
+ amdgpu_ring_commit(ring);
+ return 0;
+}
+
+/* Same named transport registers and byte units as the retained reset receipt.
+ * Caller excludes writers. After a fresh fence, RPTR==WPTR==published tail also
+ * establishes that trailing alignment NOPs were consumed, not merely enqueued. */
+int bc250_sdma_recovery_transport(struct amdgpu_ring *ring, u64 *rptr, u64 *wptr)
+{
+ struct amdgpu_device *adev;
+ u32 rl,rh,wl,wh;
+ if (!ring || !ring->adev || !rptr || !wptr || ring->me>=2 ||
+     ring!=&ring->adev->sdma.instance[ring->me].ring) return BC250_EINVAL;
+ adev=ring->adev;
+ rl=RREG32(bc250_sdma_reg_offset(adev,ring->me,mmSDMA0_GFX_RB_RPTR));
+ rh=RREG32(bc250_sdma_reg_offset(adev,ring->me,mmSDMA0_GFX_RB_RPTR_HI));
+ wl=RREG32(bc250_sdma_reg_offset(adev,ring->me,mmSDMA0_GFX_RB_WPTR));
+ wh=RREG32(bc250_sdma_reg_offset(adev,ring->me,mmSDMA0_GFX_RB_WPTR_HI));
+ if (rl==~0u || rh==~0u || wl==~0u || wh==~0u) return BC250_EIO;
+ *rptr=(u64)rl | ((u64)rh<<32);
+ *wptr=(u64)wl | ((u64)wh<<32);
+ return 0;
+}
+
 /* AMD sdma_v5_0_ring_emit_ib, with admission checks instead of silently
  * rounding an IB address or truncating a VMID. CSA comes from the caller's
  * preemption policy; it must be valid in the submitted context when required. */

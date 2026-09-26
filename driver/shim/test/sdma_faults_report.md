@@ -9,11 +9,11 @@ with a trace here; `run_gfx.ps1` still says EXACT MATCH over 354 + 35 writes.
 
 Deliverables:
 
-- `P:\BC-250\bc250-win\driver\shim\test\sdma_faults.c` - the suite, self-contained: its own allocator
+- `driver\shim\test\sdma_faults.c` - the suite, self-contained: its own allocator
   and register backend, so nothing it does can reach the replay's `backend_mem.c`.
-- `P:\BC-250\bc250-win\driver\shim\test\run_sdma_faults.ps1` - build and run, output under
-  `P:\BC-250\scratch\build\sdma-faults`, exit code non-zero on a failed expectation.
-- `P:\BC-250\bc250-win\driver\shim\test\README.md` - new file (there was none); what the suite is and
+- `driver\shim\test\run_sdma_faults.ps1` - build and run, output under
+  `<BC250_ROOT>\scratch\build\sdma-faults`, exit code non-zero on a failed expectation.
+- `driver\shim\test\README.md` - new file (there was none); what the suite is and
   how an expected failure is written.
 
 State today: **161 checks, 0 failures, 15 expected failures over 7 confirmed defects, exit 0.**

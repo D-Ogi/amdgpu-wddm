@@ -26,9 +26,9 @@ shape can be argued about before anything depends on it.
 | `test/bc250_caps_test.c` | `main()`: the wishlist, the layout comparison, the cross-checks, the assertions, the controls. Also `--radeon-info`, which dumps the derived caps through Mesa's own `ac_print_gpu_info()` |
 | `test/compare_radv_info.py` | Diffs that dump against what RADV derived on unit A. The only check here that compares against the device |
 
-The test needs a Mesa checkout at `P:\BC-250\ref\mesa` (shallow sparse clone; `src/amd/common`,
+The test needs a Mesa checkout at `<BC250_ROOT>\ref\mesa` (shallow sparse clone; `src/amd/common`,
 `src/amd/registers`, `src/amd/addrlib`, `src/util`, `include`). It writes only under
-`P:\BC-250\scratch\contract`. No hardware, no lab, no driver load.
+`<BC250_ROOT>\scratch\contract`. No hardware, no lab, no driver load.
 
 ## The contract in one paragraph
 
@@ -344,7 +344,7 @@ near this contract.
 
 ## How the test is built, and why it is not a fork of Mesa
 
-`ac_gpu_info.c` is compiled straight out of `P:\BC-250\ref\mesa`, unmodified. It needs:
+`ac_gpu_info.c` is compiled straight out of `<BC250_ROOT>\ref\mesa`, unmodified. It needs:
 
 - `/std:c11`, for `_Alignas` in Mesa's `src/util/u_atomic.h:374`;
 - two headers meson would generate, generated here by Mesa's own scripts into `$Out\gen`

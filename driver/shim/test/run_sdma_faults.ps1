@@ -4,10 +4,11 @@
 # register sequence with a trace - that is run_gfx.ps1's job and this must not change it.
 #
 #   pwsh driver\shim\test\run_sdma_faults.ps1
-#   pwsh driver\shim\test\run_sdma_faults.ps1 -Out P:\BC-250\scratch\build\sdma-faults -Verbose250
+#   pwsh driver\shim\test\run_sdma_faults.ps1 -Out $env:BC250_ROOT\scratch\build\sdma-faults -Verbose250
 #
-# Everything is written under -Out (default P:\BC-250\scratch\build\sdma-faults), never into the
-# repository and never onto drive C:.
+# Everything is written under -Out (default <BC250_ROOT>\scratch\build\sdma-faults), never into the
+# repository and never onto drive C:. BC250_ROOT is the workspace root: the environment variable,
+# else the parent directory of this repository.
 #
 # Exit code 0 when every expectation holds. A confirmed defect is written in the test as an expected
 # failure with its id, so the suite stays green while the defect stands and says its name on every
@@ -15,8 +16,9 @@
 # goes non-zero, which is the reminder to come back and turn the marker off.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\build\sdma-faults',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\build\sdma-faults",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250
 )

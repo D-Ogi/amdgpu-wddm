@@ -36,7 +36,7 @@ Files here are in one of two categories, and `PROVENANCE.md` says which:
 ## How to add a file
 
 ```
-git -C P:\BC-250\ref\linux-src show v6.18:drivers/gpu/drm/amd/amdgpu/<file> > driver/amdgpu-import/<file>
+git -C $env:BC250_ROOT\ref\linux-src show v6.18:drivers/gpu/drm/amd/amdgpu/<file> > driver/amdgpu-import/<file>
 ```
 
 Use `git show`, not a copy out of the working tree: that checkout has `core.autocrlf=true` and a

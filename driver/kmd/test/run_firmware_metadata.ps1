@@ -1,8 +1,10 @@
 # Host only: firmware files read without copying their bytes into test artifacts.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 param(
-    [string]$Out = 'P:\BC-250\scratch\build\bd025\metadata',
-    [string]$Firmware = 'P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\build\bd025\metadata",
+    [string]$Firmware = "$Root\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$OmitRuntimeFirmware
 )
@@ -13,7 +15,7 @@ $repo = Resolve-Path (Join-Path $here '..\..\..')
 $shim = Join-Path $repo 'driver\shim'
 $imports = Join-Path $repo 'driver\amdgpu-import'
 $amdhdr = Join-Path $repo 'third_party\linux-amdgpu'
-$env:TEMP='P:\bc-250\scratch\tmp';$env:TMP=$env:TEMP
+$env:TEMP="$Root\scratch\tmp";$env:TMP=$env:TEMP
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1

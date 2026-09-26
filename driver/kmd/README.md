@@ -211,16 +211,16 @@ session) is 64-bit. The INF says what it would take to add it.
 ## Build
 
 ```powershell
-pwsh driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd
-pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
+pwsh driver\kmd\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250kmd
+pwsh driver\umd-stub\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250umd
 ```
 
 For stage A's second run, build the stub first and hand it to the driver build, which then writes both packages:
 
 ```powershell
-pwsh driver\umd-stub\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250umd
-pwsh driver\kmd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd `
-                          -UmdStub P:\BC-250\scratch\build\bc250umd
+pwsh driver\umd-stub\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250umd
+pwsh driver\kmd\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250kmd `
+                          -UmdStub $env:BC250_ROOT\scratch\build\bc250umd
 ```
 
 `<Out>\package` is run 1 and `<Out>\package-umd` is run 2; both are catalogued and test-signed, and the run 2

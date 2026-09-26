@@ -43,7 +43,7 @@ Narrowing this hard is what makes the surface tractable:
 ## The call set, from RADV's own source
 
 `docs/research/m7-full-wddm-miniport.md` section 3.5 maps D3DKMT calls to DDIs. This table starts
-one layer higher - at the call sites in `P:\BC-250\ref\mesa\src\amd\vulkan\winsys\amdgpu` - so
+one layer higher - at the call sites in `<BC250_ROOT>\ref\mesa\src\amd\vulkan\winsys\amdgpu` - so
 that a port has a checklist of things RADV actually invokes rather than a list of things WDDM
 offers. The DDI column defers to section 3.5 rather than repeating it.
 

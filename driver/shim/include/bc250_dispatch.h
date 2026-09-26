@@ -8,7 +8,7 @@
  * when it is finished. Every part of that - the shader binary, the PM4 sequence, the two magic
  * descriptor dwords - is transcribed from libdrm's own gfx10 dispatch test rather than invented:
  *
- *   P:\BC-250\ref\libdrm, tag libdrm-2.4.114, commit b9ca37b3134861048986b75896c0915cbf2e97f9
+ *   <BC250_ROOT>\ref\libdrm, tag libdrm-2.4.114, commit b9ca37b3134861048986b75896c0915cbf2e97f9
  *   tests/amdgpu/shader_test_util.c   amdgpu_test_dispatch_memset() at :566 and the four
  *                                     functions it calls, :206-253, :309-344, :403-463, :547-565
  *   tests/amdgpu/shader_code_gfx10.h  bufferclear_cs_shader_gfx10, :27-31
