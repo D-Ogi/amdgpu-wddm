@@ -1,0 +1,11 @@
+glx@glx-multi-window-single-context
+{
+  "command": "/opt/piglit/lib/piglit/bin/glx-multi-window-single-context -auto",
+  "out": "An internal exception that should have been handled was not:\nTest run time exceeded timeout value (45 seconds)\n",
+  "err": "Pending expose event- rerunning.\nPending expose event- rerunning.\nPending expose event- rerunning.\nPending expose event- rerunning.\nPending expose event- rerunning.\n",
+  "returncode": null,
+  "result": "timeout"
+}
+gpu_Hz=1000000000
+gpu_mC=64000
+27988 S    Xorg

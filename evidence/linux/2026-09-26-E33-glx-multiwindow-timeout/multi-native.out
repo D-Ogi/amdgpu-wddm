@@ -1,0 +1,481 @@
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+Probe color at (0,0)
+  Expected: 255 0 0
+  Observed: 0 0 0
+Failed probe in window 0
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Failed probe in window 1
+Probe color at (0,0)
+  Expected: 0 0 255
+  Observed: 0 0 0
+Failed probe in window 2
+Probe color at (0,0)
+  Expected: 0 255 255
+  Observed: 0 0 0
+Failed probe in window 3
+Probe color at (0,0)
+  Expected: 255 0 255
+  Observed: 0 0 0
+Failed probe in window 4
+Probe color at (0,0)
+  Expected: 255 255 0
+  Observed: 0 0 0
+Failed probe in window 5
+Probe color at (0,0)
+  Expected: 255 255 255
+  Observed: 0 0 0
+Failed probe in window 6
+Probe color at (0,0)
+  Expected: 127 127 127
+  Observed: 0 0 0
+Failed probe in window 7
+PIGLIT: {"result": "fail" }
