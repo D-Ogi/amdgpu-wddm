@@ -1,0 +1,29 @@
+{
+  "total": 45159,
+  "previous": 1005,
+  "remaining": 44154,
+  "reviewed_outcomes_retained": {
+    "glx@glx-fbconfig-sanity": {
+      "result": "warn",
+      "subtests": {}
+    },
+    "glx@glx-make-current": {
+      "result": "fail",
+      "subtests": {}
+    }
+  },
+  "previous_sha256": "878929f16b704866528cf47d3a1ba6b3d75f24a269232e7592197230068dc910",
+  "input_segments": [
+    {
+      "path": "scratch\\m12\\linux-full003-results.tar",
+      "sha256": "878929f16b704866528cf47d3a1ba6b3d75f24a269232e7592197230068dc910"
+    },
+    {
+      "path": "scratch\\m12\\linux-full006-results.tar",
+      "sha256": "e7ba874e0f8a2221959ec91ccc7626d8b5e47b942e22ad0d268f0db2d5b637e6"
+    }
+  ],
+  "inventory_sha256": "b2bc95470c263f1d6f327334b01b7d5014fbd01cbd1da0756f5dc35051d13bcb",
+  "complete": false,
+  "earlier_results_required": true
+}

@@ -1,0 +1,37 @@
+Probe color at (1,1)
+  Expected: 0.840188 0.394383 0.783099
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 0)
+Probe color at (1,1)
+  Expected: 0.840188 0.394383 0.783099
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 1)
+Probe color at (1,1)
+  Expected: 0.840188 0.394383 0.783099
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 2)
+Probe color at (1,1)
+  Expected: 0.798440 0.911647 0.197551
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 0)
+Probe color at (1,1)
+  Expected: 0.798440 0.911647 0.197551
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 1)
+Probe color at (1,1)
+  Expected: 0.798440 0.911647 0.197551
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 2)
+Probe color at (1,1)
+  Expected: 0.335223 0.768230 0.277775
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 0)
+Probe color at (1,1)
+  Expected: 0.335223 0.768230 0.277775
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 1)
+Probe color at (1,1)
+  Expected: 0.335223 0.768230 0.277775
+  Observed: 0.000000 0.000000 0.000000
+  (test failed for window 2)
+PIGLIT: {"result": "fail" }

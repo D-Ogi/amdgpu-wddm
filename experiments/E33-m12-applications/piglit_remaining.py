@@ -23,22 +23,35 @@ def remaining(names, results, reviewed):
     return [name for name in names if name not in results]
 
 
+def merge_segments(segments):
+    merged = {}
+    for results in segments:
+        overlap = set(merged) & set(results)
+        if overlap:
+            raise ValueError("Duplicate case across segments: " + sorted(overlap)[0])
+        merged.update(results)
+    return merged
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cases", type=Path)
     parser.add_argument("previous", type=Path)
     parser.add_argument("out", type=Path)
     parser.add_argument("--reviewed-stop", action="append", default=[])
+    parser.add_argument("--additional-previous", action="append", type=Path, default=[])
     args = parser.parse_args()
     inventory(args.cases)
     names = [s.strip() for s in args.cases.read_text(encoding="utf-8-sig").splitlines() if s.strip() and not s.lstrip().startswith("#")]
-    results = read_results(args.previous)
+    inputs = [args.previous] + args.additional_previous
+    results = merge_segments(read_results(path) for path in inputs)
     todo = remaining(names, results, args.reviewed_stop)
     args.out.mkdir()
     (args.out / "remaining.txt").write_text("".join(name + "\n" for name in todo), encoding="utf-8", newline="\n")
     report = {"total": len(names), "previous": len(results), "remaining": len(todo),
               "reviewed_outcomes_retained": {name: results[name] for name in args.reviewed_stop},
               "previous_sha256": hashlib.sha256(args.previous.read_bytes()).hexdigest(),
+              "input_segments": [{"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()} for path in inputs],
               "inventory_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest(),
               "complete": not todo, "earlier_results_required": True}
     (args.out / "partition.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

@@ -1,7 +1,7 @@
 import unittest
 import importlib.util
 from pathlib import Path
-from piglit_remaining import remaining
+from piglit_remaining import remaining, merge_segments
 
 class RemainderTests(unittest.TestCase):
     def test_retains_reviewed_failure_and_order(self):
@@ -27,6 +27,13 @@ class RemainderTests(unittest.TestCase):
         for text in ["a\na\n", "a \n", "\n"]:
             with self.assertRaises(ValueError):
                 module.literal_names(text)
+
+    def test_merge_retains_failures_and_rejects_overlap(self):
+        a = {"a": {"result": "warn"}}
+        b = {"b": {"result": "fail"}}
+        self.assertEqual(merge_segments([a, b]), {**a, **b})
+        with self.assertRaises(ValueError):
+            merge_segments([a, a])
 
     def test_inventory_integrity(self):
         for names, rows in [(["a", "a"], {}), (["a"], {"b": {"result": "pass"}})]:
