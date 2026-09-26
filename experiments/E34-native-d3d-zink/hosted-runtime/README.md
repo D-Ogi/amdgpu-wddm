@@ -128,3 +128,12 @@ runner timeouts. A crash, timeout or undetected loss rejects the candidate.
 
 Apply loss-icd.patch and loss-umd.patch after the Present patches.
 loss-manifest.json binds UTF-8/LF inputs and outputs. M544 records027-029.
+
+## Flip-model control
+
+With candidate015 and loss injection disabled, change only the control swapchain
+to two buffers and FLIP_SEQUENTIAL. Run120 Presents with three composed-screen
+captures and exact end-only staging readback. Record the actual swapchain desc.
+Require the requested flip effect, successful resource rotation/sharing, correct
+pixels and rollback. This remains a GPU client under the CPU DWM baseline;
+zero-copy desktop and direct scanout are not inferred from the swapchain enum.
