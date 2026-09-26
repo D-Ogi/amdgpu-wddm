@@ -1,0 +1,44 @@
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:73:   const char *s = os_get_option("MESA_DEBUG");
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:424:      const char *envVal = os_get_option(name);
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:425:      if (envVal != NULL) {
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:431:         if (parseValue(&v, opt->info.type, envVal) &&
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:436:                       "ATTENTION: default value of option %s overridden by environment.\n",
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:441:            fprintf(stderr, "illegal environment value for %s: \"%s\".  Ignoring.\n",
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:442:                    name, envVal);
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:590: * Print message to \c stderr if the \c LIBGL_DEBUG environment variable
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:603:   libgl_debug=os_get_option("LIBGL_DEBUG");
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:949:      else if (os_get_option(cache->info[opt].name)) {
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:981:      else if (os_get_option(cache->info[opt].name)) {
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:1369:      execname = os_get_option("MESA_DRICONF_EXECUTABLE_OVERRIDE");
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:1392:   if ((configdir = os_get_option("DRIRC_CONFIGDIR"))) {
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/xmlconfig.c:1406:   if ((home = os_get_option("HOME"))) {
+   DRI_CONF_OPT_B(force_direct_glx_context, def, \
+                  "Force direct GLX context (even if indirect is requested)")
+
+#define DRI_CONF_ALLOW_INVALID_GLX_DESTROY_WINDOW(def) \
+   DRI_CONF_OPT_B(allow_invalid_glx_destroy_window, def, \
+                  "Allow passing an invalid window into glXDestroyWindow")
+
+#define DRI_CONF_KEEP_NATIVE_WINDOW_GLX_DRAWABLE(def) \
+   DRI_CONF_OPT_B(keep_native_window_glx_drawable, def, \
+                  "Keep GLX drawable created from native window when switch context")
+
+#define DRI_CONF_OVERRIDE_VRAM_SIZE() \
+   DRI_CONF_OPT_I(override_vram_size, -1, -1, 2147483647, \
+                  "Override the VRAM size advertised to the application in MiB (-1 = default)")
+
+#define DRI_CONF_FORCE_GL_MAP_BUFFER_SYNCHRONIZED(def) \
+            <!-- Need ARB_gpu_shader5 for non-const sampler array index support -->
+            <option name="force_glsl_extensions_warn" value="true" />
+        </application>
+
+        <application name="Discovery Studio 2020" executable="DiscoveryStudio2020-bin">
+            <option name="force_direct_glx_context" value="true" />
+        </application>
+
+        <application name="Abaqus" executable="ABQcaeK">
+            <option name="keep_native_window_glx_drawable" value="true" />
+            <option name="allow_rgb10_configs" value="false" />
+        </application>
+
+        <application name="Maya" executable="maya.bin">

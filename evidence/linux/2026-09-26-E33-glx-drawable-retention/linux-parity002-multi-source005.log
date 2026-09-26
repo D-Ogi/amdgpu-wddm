@@ -1,0 +1,8 @@
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/glxext.c:834:      uint8_t keep_native_window_glx_drawable = false;
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/glxext.c:836:                                    "keep_native_window_glx_drawable",
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/glxext.c:837:                                    &keep_native_window_glx_drawable) == 0) {
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/glxext.c:838:         psc->keep_native_window_glx_drawable = keep_native_window_glx_drawable;
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/glxclient.h:543:   bool keep_native_window_glx_drawable;
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/dri_common.c:416:            if (pdraw->psc->keep_native_window_glx_drawable) {
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/driconf.h:288:   DRI_CONF_OPT_B(keep_native_window_glx_drawable, def, \
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/util/00-mesa-defaults.conf:458:            <option name="keep_native_window_glx_drawable" value="true" />

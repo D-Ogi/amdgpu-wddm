@@ -1,0 +1,184 @@
+ * Exported function for obtaining a driver's option list (UTF-8 encoded XML).
+ *
+ * The returned char pointer points directly into the driver. Therefore
+ * it should be treated as a constant.
+ *
+ * If the driver was not found or does not support configuration NULL is
+ * returned.
+ */
+_GLX_PUBLIC const char *
+glXGetDriverConfig(const char *driverName)
+{
+   struct driver_config_entry *e;
+
+   pthread_mutex_lock(&driver_config_mutex);
+
+   for (e = driver_config_cache; e; e = e->next) {
+      if (strcmp(e->driverName, driverName) == 0)
+         goto out;
+   }
+
+   e = malloc(sizeof(*e));
+   if (!e)
+      goto out;
+
+   e->config = driGetDriInfoXML(driverName);
+   e->driverName = strdup(driverName);
+   if (!e->config || !e->driverName) {
+      free(e->config);
+      free(e->driverName);
+      free(e);
+      e = NULL;
+      goto out;
+   }
+
+   e->next = driver_config_cache;
+   driver_config_cache = e;
+
+   if (!e->next)
+      atexit(clear_driver_config_cache);
+
+out:
+   pthread_mutex_unlock(&driver_config_mutex);
+
+   return e ? e->config : NULL;
+}
+
+Bool
+dri_bind_context(struct glx_context *context, GLXDrawable draw, GLXDrawable read)
+{
+   __GLXDRIdrawable *pdraw, *pread;
+   struct dri_drawable *dri_draw = NULL, *dri_read = NULL;
+
+   pdraw = driFetchDrawable(context, draw);
+   pread = driFetchDrawable(context, read);
+
+   driReleaseDrawables(context);
+
+   if (pdraw)
+      dri_draw = pdraw->dri_drawable;
+   else if (draw != None)
+      return GLXBadDrawable;
+
+   if (pread)
+      dri_read = pread->dri_drawable;
+   else if (read != None)
+      return GLXBadDrawable;
+
+   if (!driBindContext(context->driContext, dri_draw, dri_read))
+      return GLXBadContext;
+
+   if (context->psc->display->driver == GLX_DRIVER_DRI3 ||
+       context->psc->display->driver == GLX_DRIVER_ZINK_YES) {
+      if (dri_draw)
+         dri_invalidate_drawable(dri_draw);
+      if (dri_read && dri_read != dri_draw)
+         dri_invalidate_drawable(dri_read);
+   }
+
+   return Success;
+}
+
+void
+dri_unbind_context(struct glx_context *context)
+{
+   driUnbindContext(context->driContext);
+}
+
+void
+dri_destroy_context(struct glx_context *context)
+{
+   driReleaseDrawables(context);
+ 
+   free((char *) context->extensions);
+ 
+   driDestroyContext(context->driContext);
+ 
+   free(context);
+}
+
+struct glx_context *
+dri_create_context_attribs(struct glx_screen *base,
+                           struct glx_config *config_base,
+                           struct glx_context *shareList,
+                           unsigned num_attribs,
+                           const uint32_t *attribs,
+                           unsigned *error)
+{
+   struct glx_context *pcp = NULL;
+   __GLXDRIconfigPrivate *config = (__GLXDRIconfigPrivate *) config_base;
+   struct dri_context *shared = NULL;
+
+   struct dri_ctx_attribs dca;
+   uint32_t ctx_attribs[2 * 6];
+   unsigned num_ctx_attribs = 0;
+
+   *error = dri_convert_glx_attribs(num_attribs, attribs, &dca);
+      drisw_init_drawable(drawable, isPixmap, visual->alphaBits);
+      break;
+   case DRI_SCREEN_KOPPER:
+      kopper_init_drawable(drawable, isPixmap, visual->alphaBits);
+      break;
+   }
+
+   return drawable;
+}
+
+static void
+dri_destroy_drawable(struct dri_drawable *drawable)
+{
+   struct dri_screen *screen = drawable->screen;
+   int i;
+
+   for (i = 0; i < ST_ATTACHMENT_COUNT; i++)
+      pipe_resource_reference(&drawable->textures[i], NULL);
+   for (i = 0; i < ST_ATTACHMENT_COUNT; i++)
+      pipe_resource_reference(&drawable->msaa_textures[i], NULL);
+
+   screen->base.screen->fence_reference(screen->base.screen,
+         &drawable->throttle_fence, NULL);
+
+   /* Notify the st manager that this drawable is no longer valid */
+   st_api_destroy_drawable(&drawable->base);
+
+   if (screen->type == DRI_SCREEN_KOPPER)
+      kopper_destroy_drawable(drawable);
+
+   FREE(drawable->damage_rects);
+   FREE(drawable);
+}
+
+void
+dri_put_drawable(struct dri_drawable *drawable)
+{
+   if (drawable) {
+      int refcount = --drawable->refcount;
+      assert(refcount >= 0);
+
+      if (!refcount)
+         dri_destroy_drawable(drawable);
+   }
+}
+
+/**
+ * Validate the texture at an attachment.  Allocate the texture if it does not
+ * exist.  Used by the TFP extension.
+ */
+static void
+dri_drawable_validate_att(struct dri_context *ctx,
+                          struct dri_drawable *drawable,
+                          enum st_attachment_type statt)
+{
+   enum st_attachment_type statts[ST_ATTACHMENT_COUNT];
+278:driFetchDrawable(struct glx_context *gc, GLXDrawable glxDrawable)
+300:      pdraw->refcount ++;
+357:   pdraw->refcount = 1;
+410:         pdraw->refcount --;
+411:         /* If pbuffer's refcount reaches 0, it must be imported from other
+413:          * hold the last refcount until destroy the GLXPbuffer object.
+415:         if (pdraw->refcount == 0) {
+429:driReleaseDrawables(struct glx_context *gc)
+747:   pdraw = driFetchDrawable(context, draw);
+748:   pread = driFetchDrawable(context, read);
+750:   driReleaseDrawables(context);
+785:   driReleaseDrawables(context);

@@ -1,0 +1,10 @@
+patching file src/vulkan/wsi/wsi_common_x11.c
+ninja: Entering directory `/work/build/mesa'
+[1/9] Generating src/git_sha1.h with a custom command
+[2/4] Compiling C object src/vulkan/wsi/libvulkan_wsi.a.p/wsi_common_x11.c.o
+[3/4] Linking static target src/vulkan/wsi/libvulkan_wsi.a
+[4/4] Linking target src/amd/vulkan/libvulkan_radeon.so
+/work/build/mesa/src/amd/vulkan/libvulkan_radeon.so /opt/bc250/lib/libvulkan_radeon.so differ: char 20520009, line 35082
+98201e38c783713109e28288f4ee397660d5582d835acbf0faf9b8ae10974d02  /mnt/bc250-build/root/work/build/mesa/src/amd/vulkan/libvulkan_radeon.so
+fec7c475cf25d5457bd1550442f91f8f2fb6a1543dadc43e824b71cfe12e4415  /mnt/bc250-build/root/opt/bc250/lib/libvulkan_radeon.so
+source_restored
