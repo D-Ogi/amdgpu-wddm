@@ -47,3 +47,17 @@ require 4096 exact red pixels. Use the M532 ICD during the bounded process, rest
 the previous ICD in finally, and preserve logs. Failure stops this experiment.
 
 Native shared result: run002 passes both D3D and original-allocation pixel checks; see [M533 evidence](../../evidence/windows/2026-09-26-E34-native-shared/RESULT.md).
+
+## Runtime allocation inventory
+
+Hypothesis: a hardware D3D device can create the native context and allocations
+through runtime callbacks, while flag-dependent sharing can be measured before
+choosing hosted integration. Temporarily register the diagnostic UMD for one
+bounded hardware-device process, without restarting DWM; restore registration in
+finally. Create normal, legacy-shared and NT/keyed-mutex 64x64 textures. Record
+DDI MiscFlags, AllocateCb results, ShareObjects status and deallocation. This mode
+intentionally stops before GPU import/presentation and must never serve DWM.
+Expected: native context and AllocateCb succeed; record rather than presume which
+resources accept NT export. No image correctness claim follows from allocation.
+
+Runtime result: run002 passes context/allocation callbacks, with hKMResource zero; [M534 evidence](../../evidence/windows/2026-09-26-E34-runtime-callbacks/RESULT.md). Continue with the [hosted plan](hosted-plan.md).

@@ -1,0 +1,80 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -134,7 +134,7 @@
+    // That runtime cannot service native WDDM presentation callbacks. RADV owns
+    // its rendering context; native primary sharing/presentation is a separate
+    // prerequisite before this DLL may replace the system DWM UMD.
+-#ifndef BC250_ZINK_OFFSCREEN_PROBE
++   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0)) {
+    // E26: DWM requests runtime synchronization while creating its primary,
+    // before the first Present. Register a virtual context at device creation
+    // so the runtime has a context for its broadcast synchronization callbacks.
+@@ -149,7 +149,7 @@
+    if (FAILED(contextResult)) return contextResult;
+    pDevice->hContext = context.hContext;
+ 
+-#endif
++   }
+ 
+    fprintf(stderr,"BC250 D3D device stage 2\n"); fflush(stderr);
+    struct pipe_screen *screen = pAdapter->screen;
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -345,7 +345,11 @@
+    pResource->transfers = (struct pipe_transfer **)calloc(pResource->NumSubResources,
+                                                           sizeof *pResource->transfers);
+ 
+-   if (pResource->primary || (pCreateResource->BindFlags & D3D10_DDI_BIND_PRESENT) ||
++   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0))
++      fprintf(stderr, "BC250 runtime resource misc=%x bind=%x primary=%u\n",
++              pCreateResource->MiscFlags, pCreateResource->BindFlags, pResource->primary);
++   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0) ||
++       pResource->primary || (pCreateResource->BindFlags & D3D10_DDI_BIND_PRESENT) ||
+        (pCreateResource->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED)) {
+       HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), pResource);
+       if (FAILED(hr)) { SetError(hDevice, hr); return; }
+@@ -549,7 +553,7 @@
+          free.NumAllocations = 1; free.HandleList = &pResource->allocation;
+       }
+       HRESULT hr = device->KTCallbacks.pfnDeallocate2Cb(device->hDevice, &free);
+-      DebugPrintf("BC250 Deallocate %08lx\n", hr);
++      fprintf(stderr, "BC250 Deallocate %08lx\n", hr);
+    }
+    free(pResource->transfers);
+ 
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -31,6 +31,9 @@
+  */
+ 
+ #include <stdio.h>
++#include <windows.h>
++#include <winternl.h>
++#include <d3dkmthk.h>
+ #include <vector>
+ 
+ #include "DxgiFns.h"
+@@ -110,11 +113,22 @@
+       DebugPrintf("BC250 Allocate input runtime %p size %llu primary %u\n", resource->hRTResource, data.size, resource->primary);
+       allocate.NumAllocations = 1; allocate.pAllocationInfo2 = &info;
+       hr = device->KTCallbacks.pfnAllocateCb(device->hDevice, &allocate);
+-      DebugPrintf("BC250 Allocate %08lx format %u primary %u handle %x resource %x\n", hr, format, resource->primary, info.hAllocation, allocate.hKMResource);
++      fprintf(stderr, "BC250 Allocate %08lx format %u primary %u handle %x resource %x\n", hr, format, resource->primary, info.hAllocation, allocate.hKMResource);
+       if (FAILED(hr)) return hr;
+       resource->allocation = info.hAllocation;
+       resource->surfacePitch = pitch;
+       resource->surfaceBytes = bytes;
++      if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0)) {
++         // Inventory only: do not claim this unimported resource is presentable.
++         auto share = (decltype(&D3DKMTShareObjects))GetProcAddress(GetModuleHandleA("gdi32.dll"), "D3DKMTShareObjects");
++         if (!share) return E_NOTIMPL;
++         OBJECT_ATTRIBUTES attrs = {}; attrs.Length = sizeof(attrs);
++         HANDLE nt = NULL;
++         NTSTATUS status = share(1, &allocate.hKMResource, &attrs, SHARED_ALLOCATION_ALL_ACCESS, &nt);
++         fprintf(stderr, "BC250 runtime ShareObjects status=%08lx nt=%u\n", status, nt != NULL);
++         if (nt) CloseHandle(nt);
++         return S_OK;
++      }
+    }
+    resource->gpuBytes = (data.size + 4095) & ~UINT64(4095);
+    D3DDDI_MAPGPUVIRTUALADDRESS map = {};

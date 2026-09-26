@@ -1,0 +1,23 @@
+exit=4
+hardware D3D11CreateDevice=00000000
+module bc250d3d_zink.dll: 
+
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\runtime-control.exe",
+        "Hash":  "45574285028B6FE28F194C2D47D87B6BD9D226F32255065DEB3201DFAE8E6135"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\bc250d3d_zink.dll",
+        "Hash":  "B0A8085CC473D85851836832BFE43DE105AA4303445FD9D63FE819EA944542CD"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+UMD registration restored
+DWM before=1856 after=1856
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798
+
