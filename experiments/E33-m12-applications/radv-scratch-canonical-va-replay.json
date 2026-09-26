@@ -1,0 +1,6 @@
+{
+  "upstream": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "original_git_blob_sha256": "3cc631c0e58e6a432fd79d0fe7c87ed3756f2e195ff2ac24ba16d249373ac501",
+  "patched_matches_built_source": true,
+  "patched_source_sha256_lf": "d787dd583d020bc2227f11bd87b9bf26c7f28c4fc5ed1f551d4b588d9da5a916"
+}
