@@ -1,0 +1,80 @@
+{
+  "076": {
+    "mode": "normal",
+    "stack": "CPU",
+    "survivor_pixels": 29376,
+    "exchange_pixels_per_direction": 20480,
+    "release_refs": []
+  },
+  "077": {
+    "mode": "abrupt",
+    "stack": "CPU",
+    "survivor_pixels": 29376,
+    "exchange_pixels_per_direction": 20480,
+    "release_refs": []
+  },
+  "078": {
+    "mode": "normal",
+    "stack": "hosted",
+    "survivor_pixels": 29376,
+    "exchange_pixels_per_direction": 20480,
+    "release_refs": [
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "1"
+      ]
+    ],
+    "kmd-after078": {
+      "objects created/destroyed:": "930923  25691.818 wddm summary: objects created/destroyed: dev 380/366 ctx 635/623 proc 184/176 alloc 6738/8136, 195 alive",
+      "allocations opened/closed:": "930924  25691.818 wddm summary: allocations opened/closed: 7381/7304 calls",
+      "node 0 hardware:": "930926  25691.818 wddm summary: node 0 hardware: 190957 submitted, 190824 completed, 0 timeouts, 0 refused"
+    },
+    "kmd-before078": {
+      "objects created/destroyed:": "929895  25685.478 wddm summary: objects created/destroyed: dev 376/362 ctx 627/615 proc 182/174 alloc 6628/8014, 195 alive",
+      "allocations opened/closed:": "929896  25685.478 wddm summary: allocations opened/closed: 7269/7192 calls",
+      "node 0 hardware:": "929898  25685.478 wddm summary: node 0 hardware: 190862 submitted, 190729 completed, 0 timeouts, 0 refused"
+    }
+  },
+  "079": {
+    "mode": "abrupt",
+    "stack": "hosted",
+    "survivor_pixels": 29376,
+    "exchange_pixels_per_direction": 20480,
+    "release_refs": [
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "1"
+      ]
+    ],
+    "kmd-after079": {
+      "objects created/destroyed:": "932088  25701.954 wddm summary: objects created/destroyed: dev 384/370 ctx 643/631 proc 186/178 alloc 6848/8255, 195 alive",
+      "allocations opened/closed:": "932089  25701.954 wddm summary: allocations opened/closed: 7493/7416 calls",
+      "node 0 hardware:": "932091  25701.954 wddm summary: node 0 hardware: 191052 submitted, 190919 completed, 0 timeouts, 0 refused"
+    },
+    "kmd-before079": {
+      "objects created/destroyed:": "931125  25695.949 wddm summary: objects created/destroyed: dev 380/366 ctx 635/623 proc 184/176 alloc 6738/8136, 195 alive",
+      "allocations opened/closed:": "931126  25695.949 wddm summary: allocations opened/closed: 7381/7304 calls",
+      "node 0 hardware:": "931128  25695.949 wddm summary: node 0 hardware: 190957 submitted, 190824 completed, 0 timeouts, 0 refused"
+    }
+  }
+}

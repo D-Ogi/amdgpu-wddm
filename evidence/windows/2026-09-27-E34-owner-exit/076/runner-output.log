@@ -1,0 +1,8 @@
+pid=11392 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+pid=4152 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+child PASS checked_pixels=20480
+owner_exit=normal child_exit=0 survivor_pixels=29376
+PASS iterations=10 generations=1 parent_pixels=20480 child_pixels=20480 distinct_pids=4152,11392
+
+
+

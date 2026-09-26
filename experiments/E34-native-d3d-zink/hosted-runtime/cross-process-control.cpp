@@ -25,7 +25,7 @@ struct Handle {
    Handle(const Handle&) = delete;
    Handle& operator=(const Handle&) = delete;
 };
-enum Command : LONG { Open = 1, Exchange, Close, Exit };
+enum Command : LONG { Open = 1, Exchange, Close, Exit, CreateOwned, AbruptExit };
 struct Shared {
    LONG command;
    LONG status;
@@ -143,7 +143,22 @@ static int child(Shared* shared, HANDLE go, HANDLE done, bool baseline) {
             shared->checkedPixels += surface.verify(device, shared->iteration, false);
             surface.write(device, shared->iteration, true);
          } else if (command == Close) { device.finish(); surface.reset(); check(device.device->GetDeviceRemovedReason(), "after imported release"); }
-         else require(command == Exit, "invalid IPC command");
+         else if (command == CreateOwned) {
+            surface.setup(device, shared->width, shared->height);
+            surface.write(device, shared->iteration, false);
+            ComPtr<IDXGIResource> resource; check(surface.texture.As(&resource), "child IDXGIResource");
+            check(resource->GetSharedHandle(&shared->texture), "child GetSharedHandle");
+         } else if (command == AbruptExit) {
+            device.finish();
+            shared->status = 0; SetEvent(done);
+            printf("child forced owner exit after GPU completion\n");
+            TerminateProcess(GetCurrentProcess(), 42);
+            return 42;
+         } else {
+            require(command == Exit, "invalid IPC command");
+            device.finish(); surface.reset();
+            check(device.device->GetDeviceRemovedReason(), "after owner exit release");
+         }
          shared->status = 0; SetEvent(done);
          if (command == Exit) break;
       }
@@ -210,9 +225,32 @@ int wmain(int argc, wchar_t** argv) {
          pixels += surface.verify(device, i, true);
          if ((i + 1) % 100 == 0) printf("parent progress=%u generations=%u checked_pixels=%llu\n", i + 1, generations, static_cast<unsigned long long>(pixels));
       }
-      send(Close); surface.reset(); check(device.device->GetDeviceRemovedReason(), "after final owner release"); send(Exit);
+      send(Close); surface.reset(); check(device.device->GetDeviceRemovedReason(), "after final owner release");
+      const bool ownerExit = argc > 3;
+      const bool abrupt = ownerExit && !wcscmp(argv[3], L"abrupt");
+      require(!ownerExit || abrupt || !wcscmp(argv[3], L"normal"), "invalid owner-exit mode");
+      uint64_t survivorPixels = 0;
+      if (ownerExit) {
+         shared->width = 68; shared->height = 36; shared->iteration = 1001;
+         send(CreateOwned);
+         surface.setup(device, shared->width, shared->height, shared->texture);
+         survivorPixels += surface.verify(device, shared->iteration, false);
+      }
+      send(abrupt ? AbruptExit : Exit);
       require(WaitForSingleObject(childProcess.h, 10000) == WAIT_OBJECT_0, "child exit timeout");
-      DWORD exitCode = 125; require(GetExitCodeProcess(childProcess.h, &exitCode) && exitCode == 0, "child exit failure");
+      DWORD exitCode = 125;
+      require(GetExitCodeProcess(childProcess.h, &exitCode) && exitCode == (abrupt ? 42u : 0u), "child exit failure");
+      if (ownerExit) {
+         survivorPixels += surface.verify(device, shared->iteration, false);
+         for (UINT i = 1002; i < 1012; ++i) {
+            surface.write(device, i, true);
+            survivorPixels += surface.verify(device, i, true);
+         }
+         surface.reset();
+         check(device.device->GetDeviceRemovedReason(), "after surviving imported release");
+         printf("owner_exit=%s child_exit=%lu survivor_pixels=%llu\n", abrupt ? "abrupt" : "normal", exitCode,
+            static_cast<unsigned long long>(survivorPixels));
+      }
       printf("PASS iterations=%u generations=%u parent_pixels=%llu child_pixels=%llu distinct_pids=%lu,%lu\n", iterations, generations,
          static_cast<unsigned long long>(pixels), static_cast<unsigned long long>(shared->checkedPixels), GetCurrentProcessId(), process.dwProcessId);
       UnmapViewOfFile(shared); return 0;

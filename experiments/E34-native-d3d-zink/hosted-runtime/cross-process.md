@@ -20,3 +20,15 @@ baseline restoration. Any mismatch, failed HRESULT, timeout or unexpected DWM
 change rejects the control. This is a prerequisite for M13.2, not its complete
 residency/process-exit stress coverage. Readback copies are intentional test
 oracles and do not measure the no-copy presentation path.
+
+## Owner exit with an imported reference still live
+
+Optional fourth argument normal or abrupt reverses ownership after the exchange
+control: the child creates68x36 and publishes its completed GPU write; the parent
+opens and checks it. Then the owner exits normally, or terminates itself with42
+after explicit GPU completion. Keep the parent's imported texture live, wait for
+the owner's actual process exit, check the retained pixels, perform ten new GPU
+writes/readbacks, close the import and check device health. Compare the exact
+control on CPU and hosted GPU stacks. The expected forced exit is42 only; other
+exit codes, stale pixels, timeouts or device loss reject the control. This tests
+owner-process cleanup after completed work, not a deliberately stalled GPU.
