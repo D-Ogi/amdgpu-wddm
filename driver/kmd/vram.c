@@ -81,7 +81,7 @@ static BOOLEAN IsOutsideOsMemory(ULONGLONG Start, ULONGLONG Length)
 
 NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device)
 {
-    ULONG offset = 0, base = 0, top = 0;
+    ULONG offset = 0, base = 0, top = 0, memsize = 0;
     ULONGLONG length;
     NTSTATUS status;
 
@@ -97,6 +97,7 @@ NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device)
     status = MmioRead(Device, BC250_REG_GC_GCMC_VM_FB_OFFSET, &offset);
     if (NT_SUCCESS(status)) status = MmioRead(Device, BC250_REG_GC_GCMC_VM_FB_LOCATION_BASE, &base);
     if (NT_SUCCESS(status)) status = MmioRead(Device, BC250_REG_GC_GCMC_VM_FB_LOCATION_TOP, &top);
+    if (NT_SUCCESS(status)) status = MmioRead(Device, BC250_REG_NBIO_RCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE, &memsize);
     if (!NT_SUCCESS(status))
     {
         GuardLog("vram: location registers not readable (0x%08X)", status);
@@ -110,6 +111,13 @@ NTSTATUS VramStart(_Inout_ BC250_DEVICE* Device)
     {
         GuardLog("vram: implausible location: offset 0x%X base 0x%X top 0x%X", offset, base, top);
         return STATUS_SUCCESS;
+    }
+    // The shim uses NBIO MEMSIZE for GTT/PSP placement. Publish no VRAM unless
+    // that independently read size agrees with the complete GC framebuffer range.
+    if (length != ((ULONGLONG)memsize << 20))
+    {
+        GuardLog("vram: GC length 0x%llX disagrees with NBIO MEMSIZE %u MiB", length, memsize);
+        return STATUS_DEVICE_CONFIGURATION_ERROR;
     }
     if (!IsOutsideOsMemory((ULONGLONG)offset << 24, length))
     {
@@ -148,11 +156,47 @@ BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* 
     return FALSE;
 }
 
+// Match the existing POST mapping at physical-page granularity. Equal VRAM
+// offsets in BAR0 and the carve-out are not equal CPU physical addresses.
+// PnP serialization must retain Device->Framebuffer throughout the caller.
+// This resolves POST aliases only; OS-owned VidMm cache policy remains separate.
+ULONG VramMappingProtection(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, SIZE_T Length, ULONG Access)
+{
+    ULONGLONG post=(ULONGLONG)Device->Post.PhysicAddress.QuadPart;
+    ULONGLONG last,postLast;
+    if (Length==0 || (ULONGLONG)(Length-1)>MAXULONGLONG-Physical) return 0;
+    if (Device->Framebuffer==NULL || Device->FramebufferLength==0) return Access|PAGE_NOCACHE;
+    if ((ULONGLONG)(Device->FramebufferLength-1)>MAXULONGLONG-post) return 0;
+    last=(Physical+Length-1)>>PAGE_SHIFT;
+    postLast=(post+Device->FramebufferLength-1)>>PAGE_SHIFT;
+    if ((Physical>>PAGE_SHIFT)<=postLast && (post>>PAGE_SHIFT)<=last) {
+        // Do not extend this cache choice onto unrelated physical pages.
+        // Callers spanning ownership domains must split their mapping.
+        if ((Physical>>PAGE_SHIFT)<(post>>PAGE_SHIFT) || last>postLast) return 0;
+        if (Device->FramebufferCacheProtect!=PAGE_NOCACHE &&
+            Device->FramebufferCacheProtect!=PAGE_WRITECOMBINE) return 0;
+        return Access|Device->FramebufferCacheProtect;
+    }
+    return Access|PAGE_NOCACHE;
+}
+
+// Surface callers retain their existing bounds and lifetime checks. Reject an
+// unresolved cache domain before invoking the OS mapper with invalid protection.
+PVOID VramMapCpuRange(_In_ const BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical,
+                      SIZE_T Length, ULONG Access)
+{
+    ULONG protection;
+    if (Access!=PAGE_READONLY && Access!=PAGE_READWRITE) return NULL;
+    protection=VramMappingProtection(Device,(ULONGLONG)Physical.QuadPart,Length,Access);
+    if (protection==0) return NULL;
+    return MmMapIoSpaceEx(Physical,Length,protection);
+}
+
 static NTSTATUS Access(_In_ const BC250_DEVICE* Device, ULONG Path, ULONGLONG Offset, BOOLEAN Write, _Inout_ ULONG* Value)
 {
     PHYSICAL_ADDRESS page;
     ULONGLONG fbOffset;
-    ULONG index;
+    ULONG index, protection;
     volatile ULONG* map;
 
     if (!Device->VramEnabled || (Write && !Device->VramWriteEnabled)) return STATUS_DEVICE_NOT_READY;
@@ -186,7 +230,9 @@ static NTSTATUS Access(_In_ const BC250_DEVICE* Device, ULONG Path, ULONGLONG Of
 
     index = (ULONG)((ULONGLONG)page.QuadPart & (PAGE_SIZE - 1)) / 4;     // from the address, not from the VRAM offset
     page.QuadPart &= ~(LONGLONG)(PAGE_SIZE - 1);
-    map = (volatile ULONG*)MmMapIoSpaceEx(page, PAGE_SIZE, PAGE_READWRITE | PAGE_NOCACHE);
+    protection=VramMappingProtection(Device,(ULONGLONG)page.QuadPart,PAGE_SIZE,PAGE_READWRITE);
+    if (protection==0) return STATUS_INVALID_PARAMETER;
+    map = (volatile ULONG*)MmMapIoSpaceEx(page, PAGE_SIZE, protection);
     if (map == NULL) return STATUS_INSUFFICIENT_RESOURCES;
     if (Write) WRITE_REGISTER_ULONG((PULONG)&map[index], *Value);
     *Value = READ_REGISTER_ULONG((PULONG)&map[index]);

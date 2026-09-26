@@ -21,6 +21,7 @@
 #include "bc250kmd_escape.h"
 #include "bc250_gmc.h"
 #include "bc250_gart.h"
+#include "paging_window.h"
 #include "bc250_shim.h"
 
 #define BC250_GPUMEM_TAG 'mG2B'
@@ -29,7 +30,7 @@
 #define BC250_GPUMEM_TABLE_BELOW    BC250_VRAM_GART_BELOW   // gart.c: the GART table, 1 MB
 #define BC250_GPUMEM_TABLE_LENGTH   0x100000ul
 #define BC250_GPUMEM_GTT_FIRST      0x400000ull         // first GART offset handed out: offset 0 stays unmapped
-#define BC250_GPUMEM_GTT_LIMIT      0x4000000ull        // 64 MB of GART address space and of system memory
+#define BC250_GPUMEM_GTT_LIMIT      PAGING_DRIVER_GTT_LIMIT        // 64 MB of GART address space and of system memory
 #define BC250_GPUMEM_MAX            64
 #define BC250_DOORBELL_BAR_INDEX    2
 #define BC250_DOORBELL_LENGTH       0x200000ul          // facts M14
@@ -42,6 +43,7 @@ typedef struct _BC250_GPUMEM_ENTRY {
     BOOLEAN Used;
     BOOLEAN Gtt;
     BOOLEAN Bound;                  // GTT only: entered into the GART table (a PLAN's pages never are)
+    BOOLEAN TranslationsRetired;    // PTE invalidation and both-hub flush completed; backing remains owned
     BOOLEAN Retired;                // GTT only: freed by the sequence, unbound if it was bound, waiting for GpuMemRelease
     const VOID* Owner;              // the sequence that allocated it: "quiet" is a statement about that owner's hardware only
     PVOID Cpu;
@@ -171,7 +173,7 @@ void GpuMemRelease(_Inout_ BC250_DEVICE* Device, _In_ const VOID* Owner, BOOLEAN
         if (!entry->Used || !entry->Gtt || !entry->Retired || entry->Owner != Owner) continue;
         // Halted engines are not enough with a stale translation about: gfx.c's next bring-up may un-halt the MEC to
         // dequeue what the last instance left (bc250_kiq_init_register), and that engine fetches through the TLB.
-        if ((GpuQuiet && !mem->TlbDirty) || !entry->Bound) ReleaseEntry(mem, entry); else leaked += entry->Size;
+        if ((GpuQuiet && !mem->TlbDirty && !Device->GfxTlbBootstrap) || !entry->Bound) ReleaseEntry(mem, entry); else leaked += entry->Size;
     }
     if (leaked != 0) GuardLog("gpumem: GPU not known to be quiet%s, %u bytes of GTT memory stay allocated",
                               mem->TlbDirty ? " (a TLB flush failed)" : "", leaked);
@@ -190,7 +192,7 @@ void GpuMemStop(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet)
         BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
         if (!entry->Used) continue;
         // On purpose, see the head of this file: a bound page goes back only unbound and with the GPU quiet.
-        if (entry->Gtt && entry->Bound && (!GpuQuiet || mem->TlbDirty || !entry->Retired)) { leaked += entry->Size; continue; }
+        if (entry->Gtt && entry->Bound && (!GpuQuiet || mem->TlbDirty || Device->GfxTlbBootstrap || !entry->Retired)) { leaked += entry->Size; continue; }
         ReleaseEntry(mem, entry);
     }
     if (leaked != 0) GuardLog("gpumem: stop with the GPU not known to be quiet: %u bytes of GTT memory leaked on purpose", leaked);
@@ -261,6 +263,21 @@ static BC250_GPUMEM* MemOf(_In_ struct amdgpu_device* adev, _Outptr_ BC250_SEQUE
 // amdgpu_gart_invalidate_tlb() (amdgpu_gart.c): after every change of the table, VMID 0 of every hub, as amdgpu did on
 // unit A after each of its 22 binds (E03 trace, 0.2495 to 0.2528 s). A faulted sequence writes nothing, so the
 // acknowledge could only time out: not tried then, and said.
+static void ObserveRetirementTlb(struct amdgpu_device* adev, const char* phase, u32 value)
+{
+    BC250_SEQUENCE* sequence = (BC250_SEQUENCE*)adev->backend;
+    GuardLog("gpumem: GFXHUB %s sample 0x%08X fault 0x%08X",phase,value,sequence->Fault);
+    // Observe only values already obtained by the flush. Keep unrelated RLC/GRBM
+    // reads out of the request -> dummy read -> ACK sequence from Linux v6.18
+    // gmc_v10_0_flush_gpu_tlb. M396 stopped in the old observer interval; this
+    // removes its extra MMIO, not any required invalidation operation.
+    if (sequence->TraceBootstrapTlb) GuardLogKeep();
+    if (sequence->TraceBootstrapTlb) {
+        GuardLog("startup: visibility observer returned %s",phase);
+        GuardLogKeep();
+    }
+}
+
 static int FlushTlb(struct amdgpu_device* adev, const BC250_SEQUENCE* sequence)
 {
     int gfx, mm;
@@ -270,13 +287,136 @@ static int FlushTlb(struct amdgpu_device* adev, const BC250_SEQUENCE* sequence)
         GuardLog("gpumem: the sequence has stopped, no TLB flush after the table change");
         return -5;
     }
-    gfx = bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_GFXHUB(0), 0);
+    if (sequence->Device->GfxTlbBootstrap && !sequence->Plan) {
+        BC250_GPUMEM* mem=(BC250_GPUMEM*)sequence->Device->GpuMem;
+        mem->TlbDirty=TRUE;
+        mm=bc250_gmc_flush_gpu_tlb(adev,0,AMDGPU_MMHUB0(0),0);
+        if (!NT_SUCCESS(sequence->Fault)) return -5;
+        return mm; // GFX remains explicitly pending, not globally clean.
+    }
+    gfx = bc250_gmc_flush_gpu_tlb_observed(adev, 0, AMDGPU_GFXHUB(0), 0,
+        sequence->TraceRlcRetirement ? ObserveRetirementTlb : NULL);
+    if (sequence->TraceRlcRetirement) GuardLog("gpumem: retirement GFXHUB flush result %d fault 0x%08X",gfx,sequence->Fault);
+    if (sequence->TraceRlcRetirement) GfxTraceRlcState(sequence->Device,"after-retire-gfxhub-flush");
     mm = bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_MMHUB0(0), 0);
+    if (sequence->TraceRlcRetirement) GfxTraceRlcState(sequence->Device,"after-retire-mmhub-flush");
     // A sequence that stopped inside the flush answers every read with all ones, which both of the flush's polls take
     // for "done": the return codes say nothing then. (The semaphore still goes back: gfx.c's PassesFault.)
     if (!NT_SUCCESS(sequence->Fault)) { gfx = -5; mm = -5; }
     if (gfx != 0 || mm != 0) GuardLog("gpumem: TLB flush failed, GFX hub %d, MM hub %d", gfx, mm);
     return gfx != 0 ? gfx : mm;
+}
+
+// Caller holds GartLock and has just completed RLC stage5, before CP or
+// publication. Keep pending ownership on any failure, including sequence faults.
+int GpuMemCompleteGfxBootstrap(struct amdgpu_device* adev)
+{
+    BC250_SEQUENCE* sequence;
+    BC250_GPUMEM* mem=MemOf(adev,&sequence);
+    int gfx,mm;
+    if (!mem || sequence->Plan || !sequence->Device->GfxTlbBootstrap ||
+        !NT_SUCCESS(sequence->Fault)) return -5;
+    mem->TlbDirty=TRUE;
+    gfx=bc250_gmc_flush_gpu_tlb_observed(adev,0,AMDGPU_GFXHUB(0),0,ObserveRetirementTlb);
+    if (sequence->TraceBootstrapTlb) {
+        GuardLog("startup: visibility GFX returned %d, entering MMHUB",gfx);
+        GuardLogKeep();
+    }
+    mm=bc250_gmc_flush_gpu_tlb(adev,0,AMDGPU_MMHUB0(0),0);
+    if (sequence->TraceBootstrapTlb) {
+        GuardLog("startup: visibility MMHUB returned %d",mm);
+        GuardLogKeep();
+    }
+    if (!NT_SUCCESS(sequence->Fault)) return -5;
+    if (gfx || mm) return gfx ? gfx : mm;
+    mem->TlbDirty=FALSE;
+    sequence->Device->GfxTlbBootstrap=FALSE;
+    GuardLog("gpumem: startup GFX translations committed after RLC, before CP");
+    if (sequence->TraceBootstrapTlb) GuardLogKeep();
+    GfxTraceRlcState(sequence->Device,"after-bootstrap-translation-commit");
+    if (sequence->TraceBootstrapTlb) {
+        GuardLog("startup: visibility publication observer returned");
+        GuardLogKeep();
+    }
+    return 0;
+}
+
+// Retained-resume table reconstruction, not ordinary bind/unbind. The power
+// coordinator holds GartLock and has halted ALL GTT consumers, including IH.
+// Rebuild only the driver's reserved aperture prefix; Windows owns the rest.
+// No owner, allocation, physical backing or OS mapping is created/destroyed.
+// Caller configures hubs and commits visibility after RLC; this does not flush
+// a sleeping GFX hub or claim that stale OS page tables survived power loss.
+int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev)
+{
+    BC250_SEQUENCE* sequence;
+    BC250_GPUMEM* mem=MemOf(adev,&sequence);
+    ULONGLONG physical[BC250_GPUMEM_MAX];
+    ULONG i,page;
+    int result;
+    if (!mem || !mem->Table || sequence->Plan || !NT_SUCCESS(sequence->Fault)) return -5;
+    if (adev->gmc.gart_size<BC250_GPUMEM_GTT_LIMIT ||
+        BC250_GPUMEM_GTT_LIMIT/PAGE_SIZE>BC250_GPUMEM_TABLE_LENGTH/sizeof(ULONGLONG)) return -22;
+    // Same retained contiguous nonpaged allocations and identity-DMA contract
+    // as bc250_shim_mem_alloc. This is not support for IOMMU remapping.
+    for (i=0;i<BC250_GPUMEM_MAX;i++) {
+        const BC250_GPUMEM_ENTRY* entry=&mem->Entries[i];
+        physical[i]=0;
+        if (!entry->Used || !entry->Gtt || !entry->Bound ||
+            entry->Retired || entry->TranslationsRetired) continue;
+        if (!entry->Cpu || !entry->Size || (entry->Size&(PAGE_SIZE-1)) ||
+            entry->GartOffset<BC250_GPUMEM_GTT_FIRST ||
+            (entry->GartOffset&(PAGE_SIZE-1)) || entry->GartOffset>BC250_GPUMEM_GTT_LIMIT ||
+            entry->Size>BC250_GPUMEM_GTT_LIMIT-entry->GartOffset ||
+            entry->Mc!=adev->gmc.gart_start+entry->GartOffset) return -22;
+        physical[i]=(ULONGLONG)MmGetPhysicalAddress(entry->Cpu).QuadPart;
+    }
+    mem->TlbDirty=TRUE;
+    result=bc250_gart_unbind(adev,0,(unsigned)(BC250_GPUMEM_GTT_LIMIT/PAGE_SIZE),mem->Table);
+    if (result) return result;
+    for (i=0;i<BC250_GPUMEM_MAX;i++) {
+        const BC250_GPUMEM_ENTRY* entry=&mem->Entries[i];
+        if (!entry->Used || !entry->Gtt || !entry->Bound ||
+            entry->Retired || entry->TranslationsRetired) continue;
+        for (page=0;page<entry->Size/PAGE_SIZE;page++) {
+            ULONGLONG dma=physical[i]+(ULONGLONG)page*PAGE_SIZE;
+            result=bc250_gart_bind(adev,entry->GartOffset+(ULONGLONG)page*PAGE_SIZE,1,&dma,mem->Table);
+            if (result) return result;
+        }
+    }
+    KeMemoryBarrier();
+    return 0; // TlbDirty stays set until the coordinator commits both hubs.
+}
+
+// Caller holds GartLock and has drained/halted this owner's CP/SDMA consumers.
+// RLC/CSB and firmware may remain live. This operation frees no memory and
+// changes no allocation ownership; Bound remains the historical exposure flag.
+int GpuMemRetireGttMappings(struct amdgpu_device* adev)
+{
+    BC250_SEQUENCE* sequence;
+    BC250_GPUMEM* mem = MemOf(adev, &sequence);
+    ULONG i, count = 0;
+    int result;
+    if (mem == NULL || sequence->Plan || sequence->Device->GfxTlbBootstrap || !NT_SUCCESS(sequence->Fault)) return -5;
+    for (i = 0; i < BC250_GPUMEM_MAX; i++) {
+        BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
+        if (!entry->Used || !entry->Gtt || !entry->Bound || entry->TranslationsRetired || entry->Owner != sequence) continue;
+        mem->TlbDirty = TRUE;
+        result = bc250_gart_unbind(adev,entry->GartOffset,entry->Size/PAGE_SIZE,mem->Table);
+        if (result != 0) return result;
+        count++;
+    }
+    if (count == 0) return mem->TlbDirty ? -62 : 0;
+    result = FlushTlb(adev,sequence);
+    if (result != 0) return result;
+    mem->TlbDirty = FALSE;
+    for (i = 0; i < BC250_GPUMEM_MAX; i++) {
+        BC250_GPUMEM_ENTRY* entry = &mem->Entries[i];
+        if (entry->Used && entry->Gtt && entry->Bound && entry->Owner == sequence)
+            entry->TranslationsRetired = TRUE;
+    }
+    GuardLog("gpumem: retired %lu owner GTT mappings; backing retained",count);
+    return 0;
 }
 
 int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domain, unsigned int size, unsigned int align,
@@ -345,14 +485,14 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
         if (failed == 0 && !sequence->Plan)
         {
             failed = FlushTlb(adev, sequence) != 0 ? -62 : 0;
-            mem->TlbDirty = failed != 0 ? mem->TlbDirty : FALSE;
+            mem->TlbDirty = (failed != 0 || device->GfxTlbBootstrap) ? mem->TlbDirty : FALSE;
         }
         if (failed != 0)
         {
             // No engine was given the address. Still: pages that were in the table without a flush after their removal
             // go the way of every bound page (head of this file), retired until GpuMemRelease hears of a quiet GPU.
             bc250_gart_unbind(adev, at, pages, mem->Table);
-            if (!sequence->Plan) mem->TlbDirty = FlushTlb(adev, sequence) != 0;
+            if (!sequence->Plan) mem->TlbDirty = (FlushTlb(adev, sequence) != 0) || sequence->Device->GfxTlbBootstrap;
             entry->Used = TRUE;
             entry->Gtt = TRUE;
             entry->Bound = TRUE;
@@ -403,11 +543,16 @@ void bc250_shim_mem_free(struct amdgpu_device* adev, struct bc250_mem* m)
         if (entry->Gtt)
         {
             // The GPU loses the page now; Windows gets it back in GpuMemRelease, once the GPU is known to be quiet.
-            if (entry->Bound)
+            if (entry->Bound && !entry->TranslationsRetired)
             {
+                if (sequence->TraceRlcRetirement) {
+                    GuardLog("gpumem: retire GTT entry %lu bytes %llu",i,entry->Size);
+                    GfxTraceRlcState(sequence->Device,"before-retire-unbind");
+                }
                 bc250_gart_unbind(adev, entry->GartOffset, entry->Size / PAGE_SIZE, mem->Table);
+                if (sequence->TraceRlcRetirement) GfxTraceRlcState(sequence->Device,"after-retire-unbind");
                 // Failed: logged, and the page then waits for more than a quiet GPU (TlbDirty, GpuMemRelease).
-                mem->TlbDirty = FlushTlb(adev, sequence) != 0;
+                mem->TlbDirty = (FlushTlb(adev, sequence) != 0) || sequence->Device->GfxTlbBootstrap;
             }
             entry->Retired = TRUE;
         }

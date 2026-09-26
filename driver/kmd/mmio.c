@@ -92,6 +92,8 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     // dcn.c's flip state (0.7.20): reset here, at the top of every start, like every other gate above - not in
     // DcnStop, because there is none; the DCN dump has never had a Start/Stop of its own (ADR 0011 point 3) and
     // the write side does not get one either, MmioStart already being the one place every device start passes.
+    Device->DcnSurfaceSequence = 0;
+    Device->DcnFirmwarePitch = Device->DcnCurrentPitch = 0;
     Device->DcnFirmwareKnown = FALSE;
     Device->DcnFirmwareAddress = 0;
     Device->DcnCurrentAddress = 0;
@@ -147,6 +149,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
 
 void MmioStop(_Inout_ BC250_DEVICE* Device)
 {
+    SmuOwnerStop(&Device->Smu); // close/join telemetry before the mapping disappears
     if (Device->Mmio != NULL) MmUnmapIoSpace((PVOID)Device->Mmio, BC250_BAR5_LENGTH);
     Device->Mmio = NULL;
     Device->MmioWriteEnabled = FALSE;

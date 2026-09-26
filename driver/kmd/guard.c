@@ -161,32 +161,63 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default)
     status = ReadDword(key, Name, &value);
     if (NT_SUCCESS(status) && value == 1)
     {
-        WriteDword(key, Name, 0);
-        ZwFlushKey(key);
+        status=WriteDword(key,Name,0);
+        if (!NT_SUCCESS(status)) {
+            GuardLog("gate: one-shot closure write failed, refused (0x%08X)",status);
+            ZwClose(key);
+            return 0;
+        }
+        status=ZwFlushKey(key);
+        if (!NT_SUCCESS(status)) {
+            // Never run a one-shot experiment unless its reset is durable.
+            // Default is for an absent setting, not permission after this failure.
+            GuardLog("gate: one-shot closure flush failed, refused (0x%08X)",status);
+            ZwClose(key);
+            return 0;
+        }
     }
     ZwClose(key);
     return NT_SUCCESS(status) ? value : Default;
 }
 
-NTSTATUS GuardCheckAndCountStart(void)
+NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable)
 {
     HANDLE key;
     ULONG starts;
+    BOOLEAN countWritten;
     NTSTATUS status = OpenParameters(&key);
 
-    // No registry, no guard: refusing to start here would turn a registry problem into a dead display.
-    if (!NT_SUCCESS(status)) return STATUS_SUCCESS;
-
-    ReadDword(key, L"UnconfirmedStarts", &starts);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("guard: open failed 0x%08X, durable required %u",status,RequireDurable);
+        return RequireDurable ? status : STATUS_SUCCESS; // retain display-only recovery policy
+    }
+    status=ReadDword(key, L"UnconfirmedStarts", &starts);
+    // A genuinely absent value starts at zero. Unreadable or malformed data is
+    // not a fresh budget for the full table. ReadDword initializes starts to zero.
+    if (!NT_SUCCESS(status) && status!=STATUS_OBJECT_NAME_NOT_FOUND) {
+        GuardLog("guard: read failed 0x%08X, durable required %u",status,RequireDurable);
+        if (RequireDurable) { ZwClose(key); return status; }
+    }
     if (starts >= BC250_MAX_UNCONFIRMED_STARTS)
     {
         ZwClose(key);
         GuardLog("guard: %u starts nobody confirmed, refusing to start", starts);
         return STATUS_DEVICE_CONFIGURATION_ERROR;
     }
-    WriteDword(key, L"UnconfirmedStarts", starts + 1);
-    ZwFlushKey(key);
+    status=WriteDword(key, L"UnconfirmedStarts", starts + 1);
+    countWritten=NT_SUCCESS(status);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("guard: count write failed 0x%08X, durable required %u",status,RequireDurable);
+        if (RequireDurable) { ZwClose(key); return status; }
+    }
+    status=ZwFlushKey(key);
     ZwClose(key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("guard: count flush failed 0x%08X, durable required %u",status,RequireDurable);
+        if (RequireDurable) return status;
+    } else if (countWritten) {
+        GuardLog("guard: count %u -> %u flushed, durable required %u",starts,starts+1,RequireDurable);
+    }
     return STATUS_SUCCESS;
 }
 
@@ -283,7 +314,7 @@ ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) BC250_LOG_LINE* Line
 // (CM_PROB_FAILED_POST_START, problem status 0). Kto nie ma w głowie, ten ma w nogach (what the head forgets,
 // the legs pay for): the ring can now be written out at the end of a stop.
 //
-// Behind its own gate, Parameters\KeepLog (REG_DWORD, 0 by default and after every install, read here at the
+// Behind its own gate, Parameters\KeepLog (REG_DWORD, 0 by default, preserved across upgrades, read here at the
 // stop): a synchronous file write has no timeout, and a stop during a shutdown or over a wedged volume is no
 // place for one on a board without a BMC. An experiment that expects dxgkrnl to end the start opens it.
 //
@@ -352,7 +383,7 @@ void GuardLogKeep(void)
         cursor = text;
         left = BC250_LOG_MAX_LINES * BC250_LOG_KEEP_LINE;
         RtlStringCchPrintfExA(cursor, left, &cursor, &left, 0,
-                              "bc250kmd 0x%08X log kept at the stop: %lu lines, %lu lost to the wrap, %lu dropped above "
+                              "bc250kmd 0x%08X log snapshot: %lu lines, %lu lost to the wrap, %lu dropped above "
                               "DISPATCH_LEVEL\r\n", BC250_KMD_VERSION, total, lost, above);
         status = ZwWriteFile(file, NULL, NULL, NULL, &io, text, (ULONG)(cursor - text), NULL, NULL);
 
@@ -388,4 +419,17 @@ void GuardLogKeep(void)
     if (page != NULL) ExFreePoolWithTag(page, BC250_TAG);
     ZwClose(file);
     KeepStatus(status);
+}
+
+// Used only after the typed health policy has accepted the live start identity.
+NTSTATUS GuardConfirmStartDurable(void)
+{
+    HANDLE key;
+    NTSTATUS status=OpenParameters(&key);
+    if (!NT_SUCCESS(status)) return status;
+    status=WriteDword(key,L"UnconfirmedStarts",0);
+    if (NT_SUCCESS(status)) status=ZwFlushKey(key);
+    ZwClose(key);
+    GuardLog("guard: healthy start confirmation persistence 0x%08X",status);
+    return status;
 }

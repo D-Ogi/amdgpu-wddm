@@ -2,6 +2,7 @@
 // CPU copy into the firmware's framebuffer. No MMIO. Written against the documented display-only DDI.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "display_timing.h"
 
 static ULONG g_Presents;
 
@@ -17,16 +18,19 @@ NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device)
     if (Device->Post.Pitch < Device->Post.Width * 4) return STATUS_GRAPHICS_INVALID_STRIDE;
 
     Device->FramebufferLength = (SIZE_T)Device->Post.Pitch * Device->Post.Height;
+    Device->FramebufferCacheProtect = PAGE_WRITECOMBINE;
     Device->Framebuffer = MmMapIoSpaceEx(Device->Post.PhysicAddress, Device->FramebufferLength,
                                          PAGE_READWRITE | PAGE_WRITECOMBINE);
-    // Write-combining can be refused when the range already carries another cache attribute (a framebuffer
-    // carved out of system RAM, as on this APU, is a candidate). Slower but always mappable: uncached.
-    if (Device->Framebuffer == NULL)
+    // Record the successful choice so aliases of these physical pages agree.
+    if (Device->Framebuffer == NULL) {
+        Device->FramebufferCacheProtect = PAGE_NOCACHE;
         Device->Framebuffer = MmMapIoSpaceEx(Device->Post.PhysicAddress, Device->FramebufferLength,
                                              PAGE_READWRITE | PAGE_NOCACHE);
+    }
     if (Device->Framebuffer == NULL)
     {
         Device->FramebufferLength = 0;
+        Device->FramebufferCacheProtect = 0;
         return STATUS_INSUFFICIENT_RESOURCES;
     }
     return STATUS_SUCCESS;
@@ -58,13 +62,15 @@ void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device)
         ULONGLONG offset = 0, at;
         PHYSICAL_ADDRESS phys;
         PVOID view;
+        ULONG protection;
 
         if (VramFramebufferOffset(Device, &offset) && offset < Device->VramLength &&
             (ULONGLONG)Device->FramebufferLength <= Device->VramLength - offset)
         {
             at = (ULONGLONG)Device->VramPhysical.QuadPart + offset;
             phys.QuadPart = (LONGLONG)at;
-            view = MmMapIoSpaceEx(phys, Device->FramebufferLength, PAGE_READONLY | PAGE_NOCACHE);
+            protection=VramMappingProtection(Device,at,Device->FramebufferLength,PAGE_READONLY);
+            view = protection ? MmMapIoSpaceEx(phys, Device->FramebufferLength,protection) : NULL;
             if (view == NULL)
                 GuardLog("fb sample physical: no mapping for 0x%llX", at);
             else
@@ -85,8 +91,10 @@ void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device)
     PVOID mapping = Device->Framebuffer;
     SIZE_T length = Device->FramebufferLength;
 
+    Device->SystemDisplayReady = FALSE;
     Device->Framebuffer = NULL;
     Device->FramebufferLength = 0;
+    Device->FramebufferCacheProtect = 0;
     if (mapping != NULL) MmUnmapIoSpace(mapping, length);
 }
 
@@ -135,6 +143,35 @@ static BOOLEAN CallerIsAdmin(void)
     return admin;
 }
 
+// Full WDDM owns the engines and translation tables for its entire lifetime.
+// Diagnostic PLAN can also allocate/reset software state, so only known
+// observational commands are admitted. The entry dispatcher still checks sizes.
+static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
+{
+    switch (Data->Command) {
+    case BC250_ESCAPE_RUN_START_HEALTH:
+    case BC250_ESCAPE_OBSERVE_DCN:
+    case BC250_ESCAPE_RUN_CLOCK:
+    case BC250_ESCAPE_GET_INFO:
+    case BC250_ESCAPE_READ_REG:
+    case BC250_ESCAPE_GET_MEMORY:
+    case BC250_ESCAPE_VRAM_READ:
+    case BC250_ESCAPE_GET_LOG:
+    case BC250_ESCAPE_LOG_SUMMARY:
+    case BC250_ESCAPE_RUN_DCN:
+    case BC250_ESCAPE_RUN_FBDUMP:
+        return TRUE;
+    case BC250_ESCAPE_RUN_GFX:
+        return Bytes>=sizeof(BC250_ESCAPE_GFX) &&
+            ((const BC250_ESCAPE_GFX*)Data)->Op==BC250_GFX_OP_STATE;
+    case BC250_ESCAPE_RUN_IH:
+        return Bytes>=sizeof(BC250_ESCAPE_IH) &&
+            ((const BC250_ESCAPE_IH*)Data)->Op==BC250_IH_OP_STATE;
+    default:
+        return FALSE;
+    }
+}
+
 NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Escape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
@@ -142,6 +179,37 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 
     if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE) || data == NULL || data->Magic != BC250_ESCAPE_MAGIC)
         return STATUS_INVALID_PARAMETER;
+    // Dispatch the adapter-owned snapshot before touching subsystem/lifecycle fields.
+    if (data->Command == BC250_ESCAPE_RUN_START_HEALTH) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_START_HEALTH)) return STATUS_INVALID_PARAMETER;
+        StartHealthRequest(device,(BC250_ESCAPE_START_HEALTH*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // Only adapter-owned health and the separately joined SMU owner support
+    // NoAdapterSynchronization. Other diagnostics rely on OS Level Two/Three
+    // exclusion and must not enter a powered-down/partially restored subsystem.
+    if (data->Command!=BC250_ESCAPE_RUN_CLOCK &&
+        (Escape->Flags.NoAdapterSynchronization ||
+         InterlockedCompareExchange(&device->RetainedPowerPhase,0,0)!=0)) {
+        data->Status=BC250_ESCAPE_STATUS_REFUSED;
+        return STATUS_DEVICE_NOT_READY;
+    }
+    if (device->FullWddm && !WddmDiagnosticAllowed(data,Escape->PrivateDriverDataSize)) {
+        // Only Status is at a common offset in every escape structure.
+        data->Status=BC250_ESCAPE_STATUS_REFUSED;
+        return STATUS_DEVICE_BUSY;
+    }
+    if (data->Command == BC250_ESCAPE_OBSERVE_DCN) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DCN_OBSERVE)) return STATUS_INVALID_PARAMETER;
+        DcnObserve(device,(BC250_ESCAPE_DCN_OBSERVE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS; // typed operation status is in the reply
+    }
+    if (data->Command == BC250_ESCAPE_RUN_CLOCK) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_CLOCK)) return STATUS_INVALID_PARAMETER;
+        SmuClockRequest(&device->Smu,(BC250_ESCAPE_CLOCK*)data,CallerIsAdmin(),
+            (BOOLEAN)Escape->Flags.HardwareAccess,(BOOLEAN)Escape->Flags.NoAdapterSynchronization);
+        return STATUS_SUCCESS; // typed operation status is in the reply
+    }
     if (data->Command >= BC250_ESCAPE_GET_MEMORY && data->Command <= BC250_ESCAPE_VRAM_WRITE)
     {
         BC250_ESCAPE_MEMORY* memory = (BC250_ESCAPE_MEMORY*)Escape->pPrivateDriverData;
@@ -231,7 +299,7 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         if (!CallerIsAdmin()) fbdump->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else FbdumpEscape(device, fbdump);
         return STATUS_SUCCESS;
     }
-    if (data->Command == BC250_ESCAPE_RUN_SDMACOPY)
+    if (data->Command == BC250_ESCAPE_RUN_SDMACOPY || data->Command == BC250_ESCAPE_RUN_SDMAIB)
     {
         BC250_ESCAPE_SDMACOPY* sdmacopy = (BC250_ESCAPE_SDMACOPY*)Escape->pPrivateDriverData;
 
@@ -380,9 +448,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
 
 // ---- VidPN ------------------------------------------------------------------------------------------------
 
-static void FillSignalInfo(_In_ const BC250_DEVICE* Device, _Out_ D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
+NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
 {
-    // We did not set this mode and cannot read its timing without display-core MMIO: say so.
+    D3DKMDT_VIDEO_SIGNAL_INFO signal;
+    D3DKMDT_VIDEO_SIGNAL_INFO* Signal=&signal;
+    NTSTATUS status=STATUS_SUCCESS;
+    Device->InheritedSignalValid=FALSE;
     RtlZeroMemory(Signal, sizeof(*Signal));
     Signal->VideoStandard = D3DKMDT_VSS_OTHER;
     Signal->TotalSize.cx = Device->Post.Width;
@@ -394,17 +465,23 @@ static void FillSignalInfo(_In_ const BC250_DEVICE* Device, _Out_ D3DKMDT_VIDEO_
     Signal->HSyncFreq.Denominator = D3DKMDT_FREQUENCY_NOTSPECIFIED;
     Signal->PixelRate = D3DKMDT_FREQUENCY_NOTSPECIFIED;
     Signal->ScanLineOrdering = D3DDDI_VSSLO_PROGRESSIVE;
-    if (Device->FullWddm)
-    {
-        // "Not specified" is a display-only driver's privilege: with the full table dxgkrnl refuses the mode with
-        // STATUS_GRAPHICS_INVALID_FREQUENCY and the display side never comes up (E16 run 006). The real timing is
-        // still unknown, so this is the nominal rate the software VSync runs at, with the blanking taken as zero.
-        Signal->VSyncFreq.Numerator = 60000;
-        Signal->VSyncFreq.Denominator = 1000;
-        Signal->HSyncFreq.Numerator = 60 * Device->Post.Height;
-        Signal->HSyncFreq.Denominator = 1;
-        Signal->PixelRate = (SIZE_T)60 * Device->Post.Width * Device->Post.Height;
-    }
+    // Display-only retains its documented unspecified-timing path without MMIO.
+    // Full WDDM must provide the actual inherited timing or refuse the mode;
+    // nominal60Hz and zero blanking are not hardware measurements.
+    if (Device->FullWddm) status=DisplayReadInheritedTiming(Device,Signal);
+    if (!NT_SUCCESS(status)) return status;
+    Device->InheritedSignal=*Signal;
+    Device->InheritedSignalValid=TRUE;
+    return STATUS_SUCCESS;
+}
+
+// This driver preserves one inherited mode for the device start. Both mode
+// enumeration and allocation descriptions consume exactly this cached tuple.
+static NTSTATUS FillSignalInfo(_In_ const BC250_DEVICE* Device, _Out_ D3DKMDT_VIDEO_SIGNAL_INFO* Signal)
+{
+    if (!Device->InheritedSignalValid) return STATUS_DEVICE_NOT_READY;
+    *Signal=Device->InheritedSignal;
+    return STATUS_SUCCESS;
 }
 
 static NTSTATUS OfferSourceMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKMDT_HVIDPN hVidPn,
@@ -451,9 +528,9 @@ static NTSTATUS OfferTargetMode(_In_ const BC250_DEVICE* Device, _In_ const DXGK
     status = set->pfnCreateNewModeInfo(hSet, &mode);
     if (NT_SUCCESS(status))
     {
-        FillSignalInfo(Device, &mode->VideoSignalInfo);
+        status=FillSignalInfo(Device, &mode->VideoSignalInfo);
         mode->Preference = D3DKMDT_MP_PREFERRED;
-        status = set->pfnAddMode(hSet, mode);
+        if (NT_SUCCESS(status)) status = set->pfnAddMode(hSet, mode);
         if (!NT_SUCCESS(status)) set->pfnReleaseModeInfo(hSet, mode);
     }
     if (NT_SUCCESS(status)) status = VidPn->pfnAssignTargetModeSet(hVidPn, TargetId, hSet);
@@ -617,21 +694,80 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
     return (status == STATUS_GRAPHICS_DATASET_IS_EMPTY) ? STATUS_SUCCESS : status;
 }
 
-NTSTATUS Bc250SetVidPnSourceVisibility(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETVIDPNSOURCEVISIBILITY* Visibility)
+static void DisplayRetainVisibility(_Inout_ BC250_DEVICE* Device,
+    _In_ const DXGKARG_SETVIDPNSOURCEVISIBILITY* Visibility, NTSTATUS Status, LONGLONG BeginQpc)
 {
-    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
-
-    if (Visibility->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
-    if (!Visibility->Visible && device->SourceVisible && device->Framebuffer != NULL)
-        RtlZeroMemory(device->Framebuffer, device->FramebufferLength);      // blank: there is no plane to disable in M3
-    device->SourceVisible = Visibility->Visible;
-    // M7 stage A: a visible source is the earliest point at which dxgkrnl can queue a flip, and a flip is only
-    // retired by a VSync report. Does nothing at all while the EnableFullWddm gate is closed.
-    WddmSourceVisibility(device, Visibility->Visible);
-    return STATUS_SUCCESS;
+    BC250_VISIBILITY_EVENT* event=&Device->VisibilityHistory[
+        ((ULONG)Device->VisibilityCalls-1u)%BC250_VISIBILITY_HISTORY_COUNT];
+    if (Visibility->Visible)
+    {
+        if (Device->VisibilityTrueCalls==0) Device->VisibilityFirstTrueStatus=Status;
+        Device->VisibilityTrueCalls++;
+        Device->VisibilityLastTrueStatus=Status;
+    }
+    else Device->VisibilityFalseCalls++;
+    if (!NT_SUCCESS(Status)) Device->VisibilityFailures++;
+    Device->VisibilityLastSource=Visibility->VidPnSourceId;
+    Device->VisibilityLastRequested=Visibility->Visible;
+    Device->VisibilityLastStatus=Status;
+    event->Call=(ULONG)Device->VisibilityCalls;
+    event->Source=Visibility->VidPnSourceId;
+    event->Requested=Visibility->Visible;
+    event->Status=Status;
+    event->SourceVisible=Device->SourceVisible;
+    event->Blanked=Device->DcnBlanked;
+    event->BeginQpc=BeginQpc;
+    event->EndQpc=KeQueryPerformanceCounter(NULL).QuadPart;
 }
 
-NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITVIDPN* const Commit)
+static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETVIDPNSOURCEVISIBILITY* Visibility)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    LONG call=InterlockedIncrement(&device->VisibilityCalls);
+    LONGLONG begin=KeQueryPerformanceCounter(NULL).QuadPart;
+    NTSTATUS status=STATUS_SUCCESS;
+
+    // Normal PASSIVE_LEVEL visibility DDI only. The shared quiet restore helper
+    // must remain usable at bugcheck without a logger, allocation or lock.
+    if (call<=32) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
+        call,Visibility->VidPnSourceId,Visibility->Visible,device->SourceVisible,device->VidPnFlipEnabled,device->DcnBlanked);
+    if (Visibility->VidPnSourceId != 0) status=STATUS_INVALID_PARAMETER;
+    else if (device->VidPnFlipEnabled) status=DcnSetVisibility(device,Visibility->Visible);
+    else if (!Visibility->Visible && device->SourceVisible && device->Framebuffer != NULL)
+        RtlZeroMemory(device->Framebuffer, device->FramebufferLength); // legacy no-MMIO display-only fallback
+    if (NT_SUCCESS(status))
+    {
+        device->SourceVisible = Visibility->Visible;
+        // Visibility does not suppress requested VSync signals. A visible source
+        // can queue a flip immediately, so ensure its report source is armed.
+        WddmSourceVisibility(device, Visibility->Visible);
+    }
+    DisplayRetainVisibility(device,Visibility,status,begin);
+    if (call<=32) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
+        call,status,device->SourceVisible,device->DcnBlanked);
+    return status;
+}
+
+NTSTATUS Bc250SetVidPnSourceVisibility(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETVIDPNSOURCEVISIBILITY* Visibility)
+{
+    BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
+    NTSTATUS status;
+    StartHealthEnter(device);
+    status=SetVisibilityCore(hAdapter,Visibility);
+    if (NT_SUCCESS(status)) StartHealthVisibilityLocked(device,device->SourceVisible);
+    StartHealthLeave(device);
+    return status;
+}
+
+static void DisplayRetainCommitPower(_Inout_ BC250_DEVICE* Device,
+    _In_ const DXGKARG_COMMITVIDPN* Commit)
+{
+    InterlockedIncrement(&Device->CommitPowerCalls);
+    Device->CommitLastPowerTransition=(BOOLEAN)Commit->Flags.PathPowerTransition;
+    Device->CommitLastPoweredOff=(BOOLEAN)Commit->Flags.PathPoweredOff;
+}
+
+static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITVIDPN* const Commit)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     const DXGK_VIDPN_INTERFACE* vidpn = NULL;
@@ -642,6 +778,7 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
     BOOLEAN pinned;
     NTSTATUS status;
 
+    DisplayRetainCommitPower(device,Commit);
     if (!device->CommitSeen) { device->CommitSeen = TRUE; GuardStage(StageFirstCommitVidPn); }
     if (Commit->Flags.PathPowerTransition) return STATUS_SUCCESS;       // no mode change, power only
 
@@ -670,6 +807,20 @@ NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITV
     return STATUS_SUCCESS;
 }
 
+NTSTATUS Bc250CommitVidPn(_In_ const HANDLE hAdapter, _In_ const DXGKARG_COMMITVIDPN* const Commit)
+{
+    BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
+    NTSTATUS status;
+    StartHealthEnter(device);
+    status=CommitVidPnCore(hAdapter,Commit);
+    // Only one inherited mode is accepted. Redundant commits of it preserve
+    // the epoch; detach, failed commit and path power-off close presentation.
+    StartHealthDisplayLocked(device,device->SourceVisible,
+        NT_SUCCESS(status) && device->ModeActive && !Commit->Flags.PathPoweredOff);
+    StartHealthLeave(device);
+    return status;
+}
+
 NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ const DXGKARG_UPDATEACTIVEVIDPNPRESENTPATH* const Update)
 {
     UNREFERENCED_PARAMETER(hAdapter);
@@ -690,7 +841,11 @@ NTSTATUS Bc250RecommendMonitorModes(_In_ const HANDLE hAdapter, _In_ const DXGKA
     status = Recommend->pMonitorSourceModeSetInterface->pfnCreateNewModeInfo(Recommend->hMonitorSourceModeSet, &mode);
     if (!NT_SUCCESS(status)) return status;
 
-    FillSignalInfo(device, &mode->VideoSignalInfo);
+    status=FillSignalInfo(device, &mode->VideoSignalInfo);
+    if (!NT_SUCCESS(status)) {
+        Recommend->pMonitorSourceModeSetInterface->pfnReleaseModeInfo(Recommend->hMonitorSourceModeSet, mode);
+        return status;
+    }
     mode->ColorBasis = D3DKMDT_CB_SRGB;
     mode->ColorCoeffDynamicRanges.FirstChannel = 8;
     mode->ColorCoeffDynamicRanges.SecondChannel = 8;
@@ -764,12 +919,24 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
-    UNREFERENCED_PARAMETER(TargetId);
+    NTSTATUS status;
     UNREFERENCED_PARAMETER(Flags);
+    device->SystemDisplayReady=FALSE;
+    *Width=0;*Height=0;*ColorFormat=D3DDDIFMT_UNKNOWN;
+    // Single inherited output, advertised as always connected by QueryChildStatus.
+    if (TargetId!=BC250_CHILD_UID && TargetId!=D3DDDI_ID_UNINITIALIZED) return STATUS_NOT_SUPPORTED;
+    if (!device->Framebuffer || !IsPostFormatSupported(device->Post.ColorFormat) ||
+        !device->Post.Width || !device->Post.Height ||
+        (ULONGLONG)device->Post.Width*4>device->Post.Pitch ||
+        (ULONGLONG)device->Post.Pitch*device->Post.Height>device->FramebufferLength)
+        return STATUS_DEVICE_NOT_READY;
+    status=DcnRestorePostDisplay(device);
+    if (!NT_SUCCESS(status)) return status;
     *Width = device->Post.Width;
     *Height = device->Post.Height;
     *ColorFormat = device->Post.ColorFormat;
-    return (device->Framebuffer != NULL) ? STATUS_SUCCESS : STATUS_UNSUCCESSFUL;
+    device->SystemDisplayReady=TRUE;
+    return STATUS_SUCCESS;
 }
 
 void Bc250SystemDisplayWrite(_In_ const PVOID MiniportDeviceContext, _In_ const PVOID Source, _In_ const UINT SourceWidth,
@@ -779,8 +946,10 @@ void Bc250SystemDisplayWrite(_In_ const PVOID MiniportDeviceContext, _In_ const 
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     UINT y, width, height;
 
-    if (device->Framebuffer == NULL || PositionX >= device->Post.Width || PositionY >= device->Post.Height) return;
+    if (!device->SystemDisplayReady || device->Framebuffer == NULL ||
+        PositionX >= device->Post.Width || PositionY >= device->Post.Height) return;
     width = min(SourceWidth, device->Post.Width - PositionX);
+    width = min(width, SourceStride / 4);
     height = min(SourceHeight, device->Post.Height - PositionY);
     for (y = 0; y < height; y++)
         RtlCopyMemory((UCHAR*)device->Framebuffer + (SIZE_T)(PositionY + y) * device->Post.Pitch + (SIZE_T)PositionX * 4,

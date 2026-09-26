@@ -55,6 +55,8 @@ static void ClearAlloc(struct umd_alloc_view* out)
     out->heap = 0;
     out->flags = 0;
     out->exact_va = 0;
+    out->gem_flags = 0;
+    out->cache_policy_valid = 0;
 }
 
 static void ClearContext(struct umd_context_view* out)
@@ -108,9 +110,17 @@ int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* ou
         out->requested_va = requested;
         out->heap = heap;
         out->flags = flags;
+        out->gem_flags = Rd64(p + 40);
+        out->cache_policy_valid = version >= 2;
         out->exact_va = (flags & UMD_BLOB_A_EXACT_VA) != 0;
     }
     return UMD_BLOB_OK;
+}
+
+int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation)
+{
+    return allocation != 0 && allocation->cache_policy_valid && allocation->heap == UMD_BLOB_HEAP_GTT &&
+        (allocation->gem_flags & (UMD_BLOB_GEM_NO_CPU_ACCESS | UMD_BLOB_GEM_GTT_USWC)) == 0;
 }
 
 int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, struct umd_context_view* out)

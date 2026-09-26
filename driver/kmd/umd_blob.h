@@ -27,6 +27,9 @@
 
 #define UMD_BLOB_HEAP_GTT       0x2u          // AMDGPU_GEM_DOMAIN_GTT
 #define UMD_BLOB_HEAP_VRAM      0x4u          // AMDGPU_GEM_DOMAIN_VRAM
+#define UMD_BLOB_GEM_NO_CPU_ACCESS 0x2ull // AMDGPU_GEM_CREATE_NO_CPU_ACCESS
+#define UMD_BLOB_GEM_GTT_USWC      0x4ull // AMDGPU_GEM_CREATE_CPU_GTT_USWC
+
 #define UMD_BLOB_IP_GFX         0u
 #define UMD_BLOB_IP_COMPUTE     1u
 #define UMD_BLOB_IP_DMA         2u
@@ -66,6 +69,8 @@ struct umd_alloc_view {
     unsigned long long requested_va;  // recorded. This reader does not place it: VidMm does, later.
     unsigned long heap;               // UMD_BLOB_HEAP_GTT or UMD_BLOB_HEAP_VRAM
     unsigned long flags;
+    unsigned long long gem_flags;    // full BC2A cache/access intent, no truncation
+    int cache_policy_valid;           // BC2A v2+, v1 retains legacy WC behavior
     int exact_va;
 };
 
@@ -84,6 +89,10 @@ struct umd_submit_view {
     unsigned long ib_bytes;
     int single_ib;
 };
+
+// Cached backing store is requested only for CPU-accessible GTT without USWC.
+// VRAM and command-buffer USWC allocations retain write-combined backing store.
+int UmdBlobAllocCpuCached(const struct umd_alloc_view* allocation);
 
 // On any refusal *out is zeroed when out is not NULL. bytes may be NULL.
 int UmdBlobParseAlloc(const void* bytes, unsigned len, struct umd_alloc_view* out);

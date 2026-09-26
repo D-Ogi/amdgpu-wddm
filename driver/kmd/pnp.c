@@ -10,7 +10,13 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     if (device == NULL) return STATUS_INSUFFICIENT_RESOURCES;
     device->PhysicalDeviceObject = PhysicalDeviceObject;
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
+    StartHealthInitialize(device);
+    SmuOwnerInitialize(&device->Smu);
     ExInitializeFastMutex(&device->GartLock);
+    ExInitializePushLock(&device->GfxPagingLock);
+    KeInitializeSpinLock(&device->GfxAccessLock);
+    KeInitializeEvent(&device->GfxAccessDrained, NotificationEvent, TRUE);
+    device->GfxAccessClosed = TRUE;
     *MiniportDeviceContext = device;
     return STATUS_SUCCESS;
 }
@@ -19,6 +25,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
+    StartHealthRemove(device);
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
     ExFreePoolWithTag(device, BC250_TAG);
@@ -37,8 +44,13 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
     GuardStage(StageStartEnter);
+    device->InheritedSignalValid=FALSE;
+    if (device->GpuStopUnconfirmed) {
+        GuardLog("start refused: previous GPU stop is unconfirmed for this device object");
+        return STATUS_DEVICE_HARDWARE_ERROR;
+    }
 
-    status = GuardCheckAndCountStart();
+    status = GuardCheckAndCountStart(WddmFullTableSelected());
     if (!NT_SUCCESS(status))
     {
         GuardStage(StageRefusedByGuard);
@@ -46,6 +58,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     }
     GuardStage(StageStartGuardPassed);
 
+    StartHealthBegin(device,WddmFullTableSelected());
     device->StartInfo = *DxgkStartInfo;
     // dxgkrnl hands out the interface at the size of the version we asked for (WIN8), while this structure is
     // compiled at the newest layout: copy what was given, not what we could hold.
@@ -74,6 +87,17 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
     NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
+    // Set only after removing the legacy bc250rd mailbox writer. No implicit
+    // fallback: full-WDDM startup requires this owner through SmuPrepareClock.
+    if (GuardReadSetting(L"EnableNativeSmu",0)==1) {
+        status=SmuOwnerStart(&device->Smu,device->Mmio);
+        GuardLog("smu: native owner start status 0x%08X",status);
+        if (!NT_SUCCESS(status)) {
+            MmioStop(device);
+            DisplayUnmapFramebuffer(device);
+            goto failed;
+        }
+    }
     VramStart(device);      // same rule
     DisplayLogFramebufferSample(device);   // after VramStart, so the carve-out view exists when that gate is open
     GartStart(device);      // same rule
@@ -81,16 +105,32 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GpuMemStart(device);    // same rule
     GfxStart(device);       // same rule
     IhStart(device);        // same rule
-    WddmStart(device);      // same rule: does nothing at all unless EnableFullWddm opened the gate in DriverEntry
+    status = WddmStart(device);
+    if (!NT_SUCCESS(status)) {
+        // Full WDDM may have attempted hardware initialization. Preserve dependency
+        // ordering and retained/quarantined ownership during remaining cleanup.
+        (void)Bc250StopDevice(device);
+        goto failed;
+    }
+    // Capture once before dxgkrnl can enumerate modes or describe a primary.
+    // A single immutable signal keeps those two contracts exactly consistent.
+    status=DisplayPrepareInheritedTiming(device);
+    if (!NT_SUCCESS(status)) {
+        (void)Bc250StopDevice(device);
+        goto failed;
+    }
     GuardStage(StageStartMmioDone);
 
     device->Started = TRUE;
+    StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     *NumberOfVideoPresentSources = 1;
     *NumberOfChildren = 1;
+    InterlockedExchange(&device->RetainedPowerPhase,0);
     GuardStage(StageStartDone);
     return STATUS_SUCCESS;
 
 failed:
+    StartHealthClose(device);
     GuardLog("start failed 0x%08X", status);
     GuardStage(StageStartFailed);
     return status;
@@ -100,21 +140,32 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
+    StartHealthClose(device);
     GuardStage(StageStopEnter);
+    device->InheritedSignalValid=FALSE;
+    SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
+    device->SystemDisplayReady=FALSE;
+    device->PostDisplayStopAttempted=FALSE;
+    device->PostDisplayStopStatus=STATUS_DEVICE_NOT_READY;
     device->Started = FALSE;
     device->ModeActive = FALSE;
     device->SourceVisible = FALSE;      // so that the next start writes its own first-commit and first-present breadcrumbs
     device->CommitSeen = FALSE;
     device->PresentSeen = FALSE;
     WddmStop(device);       // first: it logs what dxgkrnl called, and nothing below it is allowed to have run
+    // Display-only starts have no WDDM object and therefore no WddmStop restore.
+    if (!device->PostDisplayStopAttempted) {
+        device->PostDisplayStopStatus=DcnStop(device);
+        device->PostDisplayStopAttempted=TRUE;
+    }
     IhStop(device);         // no interrupt of ours from here on
-    GfxStop(device);        // then, in amdgpu's order: engines halted, then their memory (gpumem.c) given back or kept
-    PspStop(device);        // then, in amdgpu's order: the PSP forgets our ring and TMR while the GART state still stands
-    GartStop(device);       // while the registers are still mapped: it may have a state to give back
+    GfxPrepareStop(device); // halt engines, retain storage through firmware/translation retirement
+    PspStop(device);
+    GartPrepareStop(device);
+    GfxStop(device);        // destroy storage while the GART owner/table remain available
+    GartStop(device);       // final firmware restore and owner destruction
+    if (device->FullWddm) GfxTraceRlcState(device,"after-gart-stop");
     VramStop(device);
-    // ADR 0011, consequences: if a flip ever moved HUBP0 off the firmware's own address, put it back before
-    // BAR5 goes away. A no-op, logged as one, when nothing ever flipped (dcn.c's DcnStop).
-    DcnStop(device);
     MmioStop(device);
     DisplayUnmapFramebuffer(device);
     GuardStage(StageStopDone);
@@ -132,12 +183,18 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
-    // The mode is the one we were given; the target is the one dxgkrnl is releasing now. Post.TargetId is the
-    // previous owner's name for it, or D3DDDI_ID_UNINITIALIZED after a reload (E16 step 1), and means nothing to
-    // the next owner.
+    NTSTATUS status;
+    UNREFERENCED_PARAMETER(TargetId); // one active output; return its actual id below
+    RtlZeroMemory(DisplayInfo,sizeof(*DisplayInfo));
+    // Local dispmprt contract: failure makes dxgkrnl call ordinary StopDevice.
+    // Never publish a framebuffer that DCN failed to latch. Ordinary StopDevice
+    // still finishes teardown and returns its own completion result.
+    status=Bc250StopDevice(MiniportDeviceContext);
+    if (!NT_SUCCESS(status)) return status;
+    if (!NT_SUCCESS(device->PostDisplayStopStatus)) return device->PostDisplayStopStatus;
     *DisplayInfo = device->Post;
-    DisplayInfo->TargetId = TargetId;
-    return Bc250StopDevice(MiniportDeviceContext);
+    DisplayInfo->TargetId = BC250_CHILD_UID;
+    return STATUS_SUCCESS;
 }
 
 void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
@@ -265,12 +322,14 @@ NTSTATUS Bc250QueryDeviceDescriptor(_In_ const PVOID MiniportDeviceContext, _In_
 NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG DeviceUid,
                             _In_ DEVICE_POWER_STATE DevicePowerState, _In_ POWER_ACTION ActionType)
 {
-    // Nothing of ours to save or restore: the hardware state belongs to the firmware and, for clocks, to the
-    // SMU requests made through tools/win/bc250rd.
-    UNREFERENCED_PARAMETER(MiniportDeviceContext);
-    UNREFERENCED_PARAMETER(DeviceUid);
-    UNREFERENCED_PARAMETER(DevicePowerState);
-    UNREFERENCED_PARAMETER(ActionType);
+    BC250_DEVICE* device=(BC250_DEVICE*)MiniportDeviceContext;
+    if (DeviceUid==DISPLAY_ADAPTER_HW_ID && device->FullWddm && device->Started)
+        return GpuSetPowerRetained(device,DevicePowerState,ActionType);
+    // Display-only/initial PnP handling retains its existing ownership boundary.
+    if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0) {
+        StartHealthClose(device);
+        SmuOwnerStop(&device->Smu);
+    }
     return STATUS_SUCCESS;
 }
 

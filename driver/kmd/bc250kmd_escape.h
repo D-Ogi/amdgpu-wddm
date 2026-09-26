@@ -25,7 +25,11 @@
                                             // control (ADR 0013), read back and compared by the CPU
 #define BC250_ESCAPE_RUN_FBDUMP 17u         // BC250_ESCAPE_FBDUMP in: Hubp, FirstRow, RowCount; out: a read-only
                                             // band of the scanned-out surface's pixels, for bc250kmd_cli fbdump
-#define BC250_KMD_VERSION 0x00070030u       // milestone 8 work, revision 48: log the shader VA's PTE on a UMD submit
+#define BC250_ESCAPE_RUN_SDMAIB 18u         // BC250_ESCAPE_SDMACOPY payload, VMID0 indirect fill/copy control
+#define BC250_ESCAPE_RUN_CLOCK 19u             // typed SMU telemetry or complete operating-point transaction
+#define BC250_ESCAPE_OBSERVE_DCN 20u       // named, read-only scanout and timing observations
+#define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
+#define BC250_KMD_VERSION 0x00070098u       // revision 152: bounded GFX submit pipeline
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -64,6 +68,65 @@ typedef struct _BC250_ESCAPE {
     // not need BC250_KMD_VERSION to move.
     unsigned long Reserved[2];
 } BC250_ESCAPE;
+
+// Fixed-width ABI shared by the native CLI/DLL and monitor. No raw message IDs.
+// READ: HardwareAccess=0, NoAdapterSynchronization=1; the embedded SMU owner
+// serializes transactions and joins stop before BAR unmap. SET: HardwareAccess=1,
+// NoAdapterSynchronization=0 for Level Two synchronization; administrator only.
+#define BC250_CLOCK_ABI 1u
+#define BC250_CLOCK_OP_READ 0u
+#define BC250_CLOCK_OP_SET 1u
+typedef struct _BC250_ESCAPE_CLOCK {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, RequestedMHz, RequestedMv;
+    unsigned long ObservedMHz, ObservedVid;
+    long TemperatureMc;
+    unsigned long InitialMHz, InitialVid, ExpectedVid, VoltageStaged, Ready;
+    unsigned long Reserved[3];
+} BC250_ESCAPE_CLOCK;
+
+// Adapter-owned software snapshot; READ must not idle GPU scheduling or read BARs.
+// CONFIRM names the exact generation and visibility epoch observed by the client.
+#define BC250_START_HEALTH_ABI 1u
+#define BC250_START_HEALTH_READ 0u
+#define BC250_START_HEALTH_CONFIRM 1u
+#define BC250_START_HEALTH_FULL 1u
+#define BC250_START_HEALTH_READY 2u
+#define BC250_START_HEALTH_VISIBLE 4u
+#define BC250_START_HEALTH_CONFIRMED 8u
+#define BC250_START_HEALTH_REQUIRED 7u
+#define BC250_START_HEALTH_MIN_MS 60000ull
+#define BC250_START_HEALTH_FRESH_MS 15000ull
+typedef struct _BC250_ESCAPE_START_HEALTH {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long long Generation, Epoch, Completed, LastCompletionAgeMs, ReadyAgeMs;
+    unsigned long long ExpectedGeneration, ExpectedEpoch;
+    unsigned long Reserved[2];
+} BC250_ESCAPE_START_HEALTH; // 96 bytes on Windows, ABI 1
+
+// Read-only diagnostics, not an atomic hardware snapshot. Require administrator,
+// HardwareAccess=1 and every other D3DDDI_ESCAPEFLAGS bit zero: Level Two keeps
+// BAR mapping alive, but idles GPU scheduling and therefore perturbs the workload.
+// Sequence brackets software surface publication only; raster/flip latch can move.
+// ValidMask bits follow register field order below (0..21). Timing bits 11..21
+// are all set only when the entire shared timing tuple was read successfully.
+#define BC250_DCN_OBSERVE_ABI 1u
+#define BC250_DCN_OBSERVE_REG_COUNT 22u
+#define BC250_DCN_OBSERVE_VALID_ALL ((1u << BC250_DCN_OBSERVE_REG_COUNT) - 1u)
+#define BC250_DCN_OBSERVE_TIMING_MASK (BC250_DCN_OBSERVE_VALID_ALL & ~((1u << 11) - 1u))
+typedef struct _BC250_ESCAPE_DCN_OBSERVE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, RegisterCount, ValidMask;
+    unsigned long PrimaryAddressLow, PrimaryAddressHigh;
+    unsigned long EarliestInUseLow, EarliestInUseHigh;
+    unsigned long FlipControl, SurfacePitch, OtgStatusPosition, OtgGlobalControl0;
+    unsigned long OtgBlankControl, OtgDoubleBufferControl, OtgFrameCount;
+    unsigned long TimingControl, TimingHTotal, TimingVTotal, TimingHBlank, TimingVBlank;
+    unsigned long TimingPixelControl, TimingPhase, TimingModulo, TimingInterlace;
+    unsigned long TimingVTotalControl, TimingReference;
+    unsigned long SequenceBefore, SequenceAfter;
+} BC250_ESCAPE_DCN_OBSERVE; // 128 bytes on Windows, ABI 1
 
 // Memory commands. The first four fields are those of BC250_ESCAPE, so the driver can tell the two apart by
 // Command after checking Magic.
@@ -384,7 +447,7 @@ typedef struct _BC250_ESCAPE_DCNFLIP {
 
 typedef struct _BC250_ESCAPE_SDMACOPY {
     unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
-    unsigned long Command;                  // in: BC250_ESCAPE_RUN_SDMACOPY
+    unsigned long Command;                  // in: BC250_ESCAPE_RUN_SDMACOPY or BC250_ESCAPE_RUN_SDMAIB
     unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
     unsigned long Version;                  // out: BC250_KMD_VERSION
     unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED

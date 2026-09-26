@@ -3,7 +3,7 @@
 
 Nobody types an offset (docs/02-register-addressing.md). Two tables come out of this script:
 
-  g_MmioReadAllow   the offsets the escape READ_REG may read: exactly the list tools/win/bc250rd reads, i.e.
+  g_MmioReadAllow   the offsets the escape READ_REG may read: tools/win/bc250rd plus named positive controls, i.e.
                     registers that were read on unit A without harm and without side effects (facts M16, M25)
   g_MmioWriteAllow  the offsets the escape WRITE_REG may write. A register gets onto WRITABLE below by an
                     experiment that says why, never by convenience.
@@ -78,7 +78,14 @@ SEQUENCES = [
      # before it halts the engine (bc250_kiq_dequeue(), upstream's handshake of kgd_hqd_destroy(),
      # amdgpu_amdkfd_gfx_v10.c:606-619). Without it the MEC keeps the queue's fetch state across the halt and the next
      # bring-up faults at the old ring's address (facts M44, E12 run 002).
-     [("GC", "mmCP_HQD_DEQUEUE_REQUEST", "not traced: the undo's dequeue handshake, facts M44")]
+     [("GC", "mmCP_HQD_DEQUEUE_REQUEST", "not traced: the undo's dequeue handshake, facts M44"),
+      ("GC", "mmGRBM_STATUS2", "read observation for opt-in RLC reload reset, M349"),
+      ("GC", "mmGRBM_SOFT_RESET", "not traced: AMD RLC reset callback, opt-in M349"),
+      ("GC", "mmRLC_SAFE_MODE", "not traced: AMD paired safe-mode scope, M370"),
+      ("GC", "mmSDMA0_FREEZE", "not traced: AMD queue quiescence, M370"),
+      ("GC", "mmSDMA1_FREEZE", "not traced: AMD queue quiescence, M370"),
+      ("GC", "mmSDMA0_STATUS1_REG", "not traced: AMD idle fallback, M370"),
+      ("GC", "mmSDMA1_STATUS1_REG", "not traced: AMD idle fallback, M370")]
      + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.
@@ -100,8 +107,10 @@ WRITABLE = [
 ]
 
 # Named offsets the driver's own code uses (beyond the tables).
-NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STATUS"),
+NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STATUS"),
          ("GC", "mmGCMC_VM_FB_OFFSET"), ("GC", "mmGCMC_VM_FB_LOCATION_BASE"), ("GC", "mmGCMC_VM_FB_LOCATION_TOP"),
+         # gfx.c: read-only RLC retirement observation, no new write permission
+         ("GC", "mmGRBM_STATUS2"), ("GC", "mmRLC_CNTL"),
          # gfx.c: are the engines halted?
          ("GC", "mmCP_ME_CNTL"), ("GC", "mmCP_MEC_CNTL"), ("GC", "mmSDMA0_F32_CNTL"), ("GC", "mmSDMA1_F32_CNTL"),
          # gfx.c: a stage that stopped half way must not leave a me/pipe/queue selected
@@ -136,10 +145,12 @@ NAMED = [("GC", "mmSCRATCH_REG0"), ("GC", "mmSCRATCH_REG1"), ("GC", "mmGRBM_STAT
 # read one. 0.7.24 (ADR 0011 point 3 step 3) adds OTG0_OTG_GLOBAL_SYNC_STATUS for the hardware vsync interrupt's
 # own enable/ack (dcn.c's DcnVsyncEnable, DcnVsyncInterrupt) - not part of the M87 flip sequence itself, but the
 # same write-only-through-one-checked-table rule applies to it.
-DCN_WRITE_REGISTERS = ["mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmHUBPREQ0_DCSURF_FLIP_CONTROL",
+DCN_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmHUBPREQ0_DCSURF_FLIP_CONTROL",
                        "mmHUBPREQ0_DCSURF_SURFACE_CONTROL", "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH",
                        "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG",
-                       "mmOTG0_OTG_GLOBAL_SYNC_STATUS"]
+                       "mmOTG0_OTG_GLOBAL_SYNC_STATUS",
+                       # BD-013: AMD optc1_set_blank, used by dcn201_tg_funcs.
+                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
 
 # ADR 0011 point 3: the DCN 2.0.1 ("DMU") display controller's registers, read-only, the first step before any
 # write to this block (docs/adr/0011-present-is-a-flip.md). HUBPREQn and HUBPn for n in 0..3 (one instance of
@@ -158,13 +169,29 @@ DCN_REGISTERS = ([f"mmHUBPREQ{n}_{r}" for n in range(4) for r in _DCN_HUBPREQ] +
                  [f"mmOTG{m}_{r}" for m in range(2) for r in _DCN_OTG] +
                  ["mmDCHUBBUB_CTRL_STATUS"])
 
+# Internal observation only: keep the existing 75-register escape payload stable.
+# AMD hubp1_is_flip_pending / optc1_get_crtc_scanoutpos (MIT).
+DCN_PRIVATE_READ_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE",
+    "mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH", "mmOTG0_OTG_V_BLANK_START_END"]
+# BD-018: reference-derived readback; no timing/modeset writes.
+DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", "mmDP_DTO0_MODULO",
+    "mmOTG0_PIXEL_RATE_CNTL", "mmOTG0_OTG_INTERLACE_CONTROL", "mmOTG0_OTG_V_TOTAL_CONTROL"]
+DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
+NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
+NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
+
 BAR5_LENGTH = 0x80000     # BC250_BAR5_LENGTH in mmio.c
 
 # IPs gen_probes.SPEC does not carry a header for, because they are deliberately not part of the diagusb read
 # sweep (third_party/linux-amdgpu/PROVENANCE.md: "the display headers ... are deliberately not part of the
 # general MMIO read sweep"). gen_regs.py's own DCN table is not that sweep - it is its own generated table,
 # through the same regcalc mechanism - so it gets its header here instead of by adding DMU to SPEC.
-EXTRA_HEADERS = {"DMU": "dcn_2_0_1_offset.h"}
+EXTRA_HEADERS = {"DMU": "dcn_2_0_1_offset.h", "THM": "thm_10_0_offset.h", "CLK": "clk_11_0_1_offset.h"}
+# M438/E30: 72 pre-amdgpu reads match the live SMN-backed k10temp sensor.
+# This is a read-only addition, not a permission for raw SMU messages.
+EXTRA_READS = [("THM", "mmTHM_TCON_CUR_TMP"), ("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
+# Keep the timing inputs observable through READ_REG for pre-deployment control.
+EXTRA_READS += [("DMU", name) for name in DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_V_BLANK_START_END"]]
 
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
 
@@ -182,6 +209,7 @@ def main():
     maps = {}
     reads = sorted({int(m.group(3), 16) for m in map(LINE.match, (ROOT / "tools/win/bc250rd/reglist.txt")
                                                      .read_text(encoding="utf-8").splitlines()) if m})
+    reads = sorted(set(reads) | {offset(maps, ip, name) for ip, name in EXTRA_READS})
     if reads and reads[-1] >= BAR5_LENGTH:
         sys.exit(f"read list reaches 0x{reads[-1]:X}, beyond the 0x{BAR5_LENGTH:X} bytes of BAR5 that mmio.c maps")
     writes = [(offset(maps, ip, name), ip, name, exp, why) for ip, name, exp, why in WRITABLE]
@@ -191,7 +219,7 @@ def main():
 
     out = ["// Generated by gen_regs.py from the vendored amdgpu headers through tools/regcalc. Do not edit.",
            "#pragma once", ""]
-    for ip, name in NAMED:
+    for ip, name in dict.fromkeys(NAMED + EXTRA_READS):
         out.append(f"#define BC250_REG_{ip}_{name[2:]} 0x{offset(maps, ip, name):05X}ul")
     # Not gated like the tables below: bc250kmd_escape.h's BC250_DCN_REG_COUNT (the escape struct's fixed array)
     # is checked against this one at compile time in dcn.c, which does not define BC250_REGS_WITH_TABLES.
@@ -202,7 +230,7 @@ def main():
     out.append("static const unsigned long g_MmioWriteAllow[BC250_MMIO_WRITE_ALLOW_COUNT] = {")
     for off, ip, name, exp, why in sorted(writes):
         out.append(f"    0x{off:05X}ul,   // {ip}.{name[2:]}  {exp}: {why}")
-    out += ["};", "", "// Offsets that may be read through the escape: tools/win/bc250rd/reglist.txt. Sorted, unique.",
+    out += ["};", "", "// Escape reads: bc250rd/reglist.txt plus named positive controls (EXTRA_READS). Sorted, unique.",
             f"#define BC250_MMIO_READ_ALLOW_COUNT {len(reads)}",
             "static const unsigned long g_MmioReadAllow[BC250_MMIO_READ_ALLOW_COUNT] = {"]
     out += ["    " + ", ".join(f"0x{o:05X}" for o in reads[i:i + 10]) + "," for i in range(0, len(reads), 10)]
@@ -240,10 +268,11 @@ def main():
     dcn_allow = sorted({off for off, _ in dcn_named})
     if len(dcn_allow) != len(dcn_named):
         sys.exit("DCN_REGISTERS has two names for the same offset: gen_regs.py assumed they are all distinct")
+    dcn_allow = sorted(set(dcn_allow) | {offset(maps, "DMU", name) for name in DCN_PRIVATE_READ_REGISTERS})
     if dcn_allow[-1] >= BAR5_LENGTH:
         sys.exit(f"dcn: 0x{dcn_allow[-1]:X} is beyond BAR5")
     out += ["// ADR 0011 point 3: the DCN dump's own registers (gen_regs.py's DCN_REGISTERS, tools/regcalc, ip DMU).",
-            "// Sorted, unique, for MmioDcnRead's table check.",
+            "// Plus internal observation registers; sorted, unique, for MmioDcnRead's table check.",
             f"#define BC250_MMIO_DCN_ALLOW_COUNT {len(dcn_allow)}",
             "static const unsigned long g_MmioDcnAllow[BC250_MMIO_DCN_ALLOW_COUNT] = {"]
     out += ["    " + ", ".join(f"0x{o:05X}" for o in dcn_allow[i:i + 10]) + "," for i in range(0, len(dcn_allow), 10)]

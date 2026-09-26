@@ -32,6 +32,7 @@ typedef struct _BC250_GART {
     BOOLEAN SetUp;                  // Adev holds the register bases and the VRAM window
 
     // Kept from ENABLE until RESTORE.
+    BOOLEAN PowerSuspended;        // hardware off, complete software owner retained
     BOOLEAN Enabled;
     BOOLEAN SnapshotValid;
     ULONG Snapshot[BC250_GART_MAX_WRITES];      // by index into the generated table
@@ -145,6 +146,14 @@ static int RunSetup(_Inout_ BC250_GART* Gart)
     inputs.dummy_page_dma = (u64)Gart->DummyPhysical.QuadPart;
     inputs.noretry = true;          // what amdgpu used on unit A: CONTEXTn_CNTL in the E03 trace, driver/shim/README.md
     Gart->SetUp = (bc250_gmc_setup(&Gart->Adev, &inputs, &Gart->TableBo) == 0);
+    if (Gart->SetUp && (Gart->Adev.gmc.mc_vram_size != device->VramLength ||
+                       Gart->Adev.gmc.real_vram_size != device->VramLength ||
+                       Gart->Adev.gmc.vram_start != device->VramMcBase))
+    {
+        // Reconcile the actual shim result, not just VramStart's earlier reads.
+        GuardLog("gart: shim VRAM geometry differs from the published carve-out");
+        Gart->SetUp = FALSE;
+    }
     return Gart->SetUp ? 0 : -1;
 }
 
@@ -202,7 +211,14 @@ static NTSTATUS WriteSnapshotBack(_Inout_ BC250_GART* Gart)
     return Gart->Sequence.Fault;
 }
 
-void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
+static void ObserveStartupGart(struct amdgpu_device* adev, const char* phase, u32 value)
+{
+    BC250_SEQUENCE* sequence = (BC250_SEQUENCE*)adev->backend;
+    GuardLog("gart: startup %s sample 0x%08X fault 0x%08X",phase,value,sequence->Fault);
+    GfxTraceRlcState(sequence->Device,phase);
+}
+
+static void GartExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
 {
     BC250_GART* gart;
     ULONGLONG window = Device->VramLength - BC250_GART_WINDOW;
@@ -252,7 +268,15 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
             if (NT_SUCCESS(status))
             {
                 gart->Enabled = TRUE;               // from the first write on, a RESTORE is owed
-                result = bc250_gmc_gart_enable(&gart->Adev);
+                if (Device->GfxTlbBootstrap) {
+                    // M362/M364 deviation: defer GFX invalidation until RLC runs.
+                    // Full startup owns the unpublished phase. MM consumers must
+                    // see mappings now; GFX visibility is committed after RLC.
+                    result=bc250_gmc_gart_configure_observed(&gart->Adev,ObserveStartupGart);
+                    if (result==0 && NT_SUCCESS(gart->Sequence.Fault))
+                        result=bc250_gmc_flush_gpu_tlb(&gart->Adev,0,AMDGPU_MMHUB0(0),0);
+                    ObserveStartupGart(&gart->Adev,"bootstrap-after-mmhub-flush",(u32)result);
+                } else result = bc250_gmc_gart_enable_observed(&gart->Adev,Device->FullWddm ? ObserveStartupGart : NULL);
             }
             break;
         case BC250_GART_OP_RESTORE:
@@ -283,6 +307,97 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
     ExReleaseFastMutex(&Device->GartLock);
 }
 
+// Diagnostic commands and device startup share the same implementation.
+void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GART* Data)
+{
+    GartExecute(Device,Data);
+}
+
+// PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
+// call. Keep detailed partial-progress output for the eventual startup unwind.
+NTSTATUS GartInitializeHardware(BC250_DEVICE* Device, BC250_ESCAPE_GART* Report)
+{
+    NTSTATUS status;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_GART;
+    Report->Op=BC250_GART_OP_ENABLE;
+    if (!Device) status=STATUS_INVALID_PARAMETER;
+    else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) status=STATUS_INVALID_DEVICE_STATE;
+    else if (Device->GpuStopUnconfirmed) status=STATUS_DEVICE_HARDWARE_ERROR;
+    else {
+        GartExecute(Device,Report);
+        status=(NTSTATUS)Report->NtStatus;
+        if (NT_SUCCESS(status) && (Report->Status!=BC250_ESCAPE_STATUS_DONE || Report->Result!=0 ||
+            (Report->State&BC250_GART_STATE_ENABLED)==0)) status=STATUS_IO_DEVICE_ERROR;
+    }
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
+
+// Retained power transition. The coordinator closes all engine/PSP/IH users
+// before entry; no RunSetup, firmware snapshot restore or owner reallocation.
+static NTSTATUS GartPowerRetainedLocked(BC250_DEVICE* Device, BC250_GART* Gart,
+                                       BOOLEAN Resume)
+{
+    NTSTATUS status;
+    int result;
+    if (!Gart->SetUp || Device->GpuStopUnconfirmed || !Device->IhQuiet ||
+        !GfxPowerIsSuspended(Device) || !PspPowerIsSuspended(Device))
+        return STATUS_DEVICE_NOT_READY;
+    if (!Resume) {
+        if (Gart->PowerSuspended) return STATUS_SUCCESS;
+        if (!Gart->Enabled || Device->GfxTlbBootstrap) return STATUS_INVALID_DEVICE_STATE;
+        bc250_gmc_gart_disable(&Gart->Adev);
+        if (!NT_SUCCESS(Gart->Sequence.Fault)) return Gart->Sequence.Fault;
+        Gart->Enabled=FALSE;
+        Gart->PowerSuspended=TRUE;
+        return STATUS_SUCCESS;
+    }
+    if (!Gart->PowerSuspended || Gart->Enabled) return STATUS_INVALID_DEVICE_STATE;
+    status=CheckWindow(Device);
+    if (!NT_SUCCESS(status)) return status;
+    // The scratch page is private, not a retained OS allocation. Table entries
+    // are rebuilt from owned backing, never by recreating the AMD context.
+    status=ZeroVram(Device,Device->VramLength-BC250_GART_WINDOW+BC250_GART_SCRATCH_OFFSET,PAGE_SIZE);
+    if (!NT_SUCCESS(status)) return status;
+    result=GpuMemRebuildRetainedGtt(&Gart->Adev);
+    if (result) return STATUS_DEVICE_DATA_ERROR;
+    Device->GfxTlbBootstrap=TRUE;
+    Gart->Enabled=TRUE; // any attempted configuration now owes hardware disable
+    result=bc250_gmc_gart_configure_observed(&Gart->Adev,NULL);
+    if (!NT_SUCCESS(Gart->Sequence.Fault)) return Gart->Sequence.Fault;
+    if (result) return STATUS_IO_DEVICE_ERROR;
+    result=bc250_gmc_flush_gpu_tlb(&Gart->Adev,0,AMDGPU_MMHUB0(0),0);
+    if (!NT_SUCCESS(Gart->Sequence.Fault)) return Gart->Sequence.Fault;
+    if (result) return STATUS_IO_TIMEOUT;
+    Gart->PowerSuspended=FALSE;
+    // MMHUB consumers can be restored. GFX remains closed until RLC and the
+    // existing GpuMemCompleteGfxBootstrap barrier commit its translations.
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS GartSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume)
+{
+    BC250_GART* gart;
+    NTSTATUS status;
+    void* previousBackend;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    ExAcquireFastMutex(&Device->GartLock);
+    gart=(BC250_GART*)Device->Gart;
+    if (!gart || !Device->MmioGartEnabled) {status=STATUS_DEVICE_NOT_READY;goto Done;}
+    previousBackend=gart->Adev.backend;
+    gart->Adev.backend=&gart->Sequence;
+    SequenceBegin(&gart->Sequence,Device,FALSE,NULL,0);
+    status=GartPowerRetainedLocked(Device,gart,Resume);
+    gart->Adev.backend=previousBackend;
+Done:
+    ExReleaseFastMutex(&Device->GartLock);
+    return status;
+}
+
 // For the sequences that come after this one (psp.c): the shim's device. Caller holds GartLock. If no GART command
 // has run yet in this driver instance, the device is set up here, which only reads registers.
 NTSTATUS GartDevice(_In_ BC250_DEVICE* Device, _Outptr_ struct amdgpu_device** Adev, _Out_ BOOLEAN* Enabled)
@@ -305,6 +420,28 @@ NTSTATUS GartDevice(_In_ BC250_DEVICE* Device, _Outptr_ struct amdgpu_device** A
     return STATUS_SUCCESS;
 }
 
+// Copy only geometry while the GART owner is locked. Lazy setup uses the
+// existing AMD placement code in planning mode; this does not enable hardware.
+NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture)
+{
+    struct amdgpu_device* adev=NULL;
+    BOOLEAN enabled=FALSE;
+    NTSTATUS status;
+    if (!Aperture) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Aperture,sizeof(*Aperture));
+    if (!Device) return STATUS_INVALID_PARAMETER;
+    ExAcquireFastMutex(&Device->GartLock);
+    status=GartDevice(Device,&adev,&enabled);
+    if (NT_SUCCESS(status)) {
+        if (!adev || !adev->gart.bo ||
+            !PagingApertureInit(adev->gmc.gart_start,adev->gmc.gart_size,
+                adev->gart.bo->gpu_addr,adev->gart.table_size,Aperture))
+            status=STATUS_DEVICE_NOT_READY;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    return status;
+}
+
 // ---- start and stop ---------------------------------------------------------------------------------------------------
 
 NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
@@ -313,6 +450,8 @@ NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
     BC250_GART* gart;
 
     Device->Gart = NULL;
+    Device->GartStopPrepared = FALSE;
+    Device->GartStopQuiet = TRUE;
     if (!Device->MmioGartEnabled || !Device->VramEnabled) return STATUS_SUCCESS;
 
     gart = (BC250_GART*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*gart), BC250_GART_TAG);
@@ -341,27 +480,66 @@ NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
     return STATUS_SUCCESS;
 }
 
-// Called while MMIO is still mapped. If the GPU was told about our pages, the firmware's state goes back first;
-// if that fails, the pages are deliberately never freed: a leak is better than a GPU writing into freed memory.
+// Hardware retirement only. Retain the adev, table and dummy page until GFX
+// has destroyed its software resources and final firmware restoration succeeds.
+void GartPrepareStop(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GART* gart;
+    ExAcquireFastMutex(&Device->GartLock);
+    if (!Device->GartStopPrepared) {
+        Device->GartStopPrepared = TRUE;
+        Device->GartStopQuiet = FALSE;
+        gart = (BC250_GART*)Device->Gart;
+        if (!Device->GfxTlbBootstrap && Device->GfxStopPrepared && Device->GfxStopQuiet && Device->IhQuiet && Device->PspStopQuiet) {
+            if (gart == NULL || !gart->Enabled) Device->GartStopQuiet = TRUE;
+            else {
+                void* previousBackend = gart->Adev.backend;
+                gart->Adev.backend = &gart->Sequence;
+                SequenceBegin(&gart->Sequence, Device, FALSE, NULL, 0);
+                bc250_gmc_gart_disable(&gart->Adev);
+                Device->GartStopQuiet = NT_SUCCESS(gart->Sequence.Fault);
+                gart->Adev.backend = previousBackend;
+                GuardLog("gart: hardware disable status 0x%08X",gart->Sequence.Fault);
+                GfxTraceRlcState(Device,"after-gart-hardware-disable");
+            }
+        }
+        if (!Device->GartStopQuiet) Device->GpuStopUnconfirmed = TRUE;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+}
+
+// Owner destruction after GFX storage cleanup. Full WDDM keeps the contexts
+// and caches disabled by GartPrepareStop, as gmc_v10_0_hw_fini does in Linux
+// v6.18. Restoring pre-driver register values is diagnostic-mode policy only:
+// that snapshot is not a new set of owned page tables for a stopped adapter.
+// An uncertain hardware phase retains the complete GART owner and dummy page.
 void GartStop(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GART* gart;
-
     ExAcquireFastMutex(&Device->GartLock);
     gart = (BC250_GART*)Device->Gart;
-    Device->Gart = NULL;
-    ExReleaseFastMutex(&Device->GartLock);      // nobody can find the context any more; the rest needs no lock
-    if (gart == NULL) return;
-    if (gart->Enabled)
-    {
+    if (gart == NULL) { ExReleaseFastMutex(&Device->GartLock); return; }
+    if (!Device->GartStopPrepared || !Device->GartStopQuiet || !Device->GfxStopQuiet ||
+        !Device->IhQuiet || !Device->PspStopQuiet) {
+        Device->GpuStopUnconfirmed = TRUE;
+        GuardLog("gart: consumer/translation stop unconfirmed, retaining owner and dummy page");
+        ExReleaseFastMutex(&Device->GartLock);
+        return;
+    }
+    if (gart->Enabled && !Device->FullWddm) {
         SequenceBegin(&gart->Sequence, Device, FALSE, NULL, 0);
-        if (!NT_SUCCESS(WriteSnapshotBack(gart)))
-        {
-            GuardLog("gart: restore at stop failed, keeping the dummy page allocated");
+        if (!NT_SUCCESS(WriteSnapshotBack(gart))) {
+            Device->GpuStopUnconfirmed = TRUE;
+            Device->GartStopQuiet = FALSE; // latch failed restoration; repeated stop cannot retry it
+            GuardLog("gart: restore at stop failed, retaining owner and dummy page");
+            ExReleaseFastMutex(&Device->GartLock);
             return;
         }
-        GuardLog("gart: firmware state restored at stop (%u writes)", gart->Sequence.WriteCount);
+        GuardLog("gart: firmware state restored at stop (%u writes)",gart->Sequence.WriteCount);
     }
+    if (gart->Enabled && Device->FullWddm) GuardLog("gart: full stop retains disabled translation state");
+    Device->Gart = NULL;
+    ExReleaseFastMutex(&Device->GartLock);
     MmFreeContiguousMemory(gart->DummyPage);
     ExFreePoolWithTag(gart, BC250_GART_TAG);
 }

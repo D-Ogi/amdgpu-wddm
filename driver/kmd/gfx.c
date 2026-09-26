@@ -26,13 +26,22 @@
 //
 // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
 #include "bc250kmd.h"
+#include "bc250_fence_order.h"
+#include "bc250_sdma_virtual_ptes.h"
+#include "paging_intervals.h"
+#include "paging_permutation.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
 #include "bc250_gmc.h"
 #include "bc250_gfx.h"
 #include "bc250_sdma.h"
 #include "bc250_sdma_paging.h"
+#include "bc250_pte.h"
 #include "paging_mc.h"
+#include "paging_stream.h"
+#include "paging_window.h"
+#include "bc250_gart.h"
+#include "paging_private.h"
 #include "bc250_dispatch.h"
 #include "bc250_nbio.h"
 #include "bc250_irq.h"
@@ -91,21 +100,16 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 // Its own fence slot on the SDMA fence page (BC250_SDMA_FENCE_SLOTS = 16, bc250_sdma.h): 0/1 are the ring
 // tests', 2/3 are SdmaCopyEscape's and GfxFenceEscape's SDMA arm's - one past what the escapes use.
 #define BC250_PAGING_FENCE_SLOT 4u
+#define BC250_PAGING_MARKER_SLOT 5u // private CPU-reset marker; never the OS completion fence
 #define BC250_PAGING_POLL_US 500000ul       // node 1's own watchdog budget, same shape as BC250_SUBMIT_POLL_US
-// E24 run 001 (docs/design/paging-node.md, "What run 001 hung on"): the bounded wait TearDown gives a
-// GfxPagingBuild() call that is still touching PagingShadowMem when a FINI or a stop tears it down. Same shape
-// as WddmStop's own wait for a hardware submission (BC250_WDDM_SUBMIT_TIMEOUT_MS): there is no GPU reset on
-// this part (facts M53), so a wait here is bounded and logged loudly on timeout, never infinite.
-#define BC250_GFX_PAGING_DRAIN_TIMEOUT_MS 200ul
-// The shadow buffer BuildPagingBuffer fills and SubmitCommand reads back at DISPATCH_LEVEL (design note section
-// 4). Matches wddm.c's own BC250_WDDM_PAGING_BUFFER_BYTES (0x10000, wddm.c:57): the driver never advertises a
-// paging buffer larger than what its own shadow can hold, so dxgkrnl's MultipassOffset is the answer to "too
-// big for this call", never a silent truncation on this driver's part.
-#define BC250_GFX_PAGING_SHADOW_BYTES 0x10000ul
+// OS command-buffer capacity; live-ring reservation further limits each batch.
+#define BC250_GFX_PAGING_BUFFER_BYTES 0x10000ul
 
 typedef struct _BC250_GFX {
     BC250_SEQUENCE Sequence;
+    BOOLEAN PagingCpuBootstrap;     // one-way close before first RUN, under GfxPagingLock
     BOOLEAN SetUp;                  // bc250_gfx_setup and bc250_sdma_setup have allocated
+    BOOLEAN PowerSuspended;         // hardware halted, owners retained; under GartLock
     BOOLEAN Failed;                 // a stage failed on the hardware: only FINI from here
     BOOLEAN FencePage;              // bc250_gfx_fence_page_alloc has allocated
     BOOLEAN SdmaFencePage;          // bc250_sdma_fence_page_alloc has
@@ -120,20 +124,23 @@ typedef struct _BC250_GFX {
     // synchronous poll does, and a timeout would break that. A ring that owes a fence takes no new submission.
     ULONG RingOwes[BC250_FENCE_RING_SDMA0 + 2];
     ULONG RingOwesSlot[BC250_FENCE_RING_SDMA0 + 2];
-    ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
+    ULONG StagesDone;               // last stage attempted on hardware in this driver instance
+    ULONG CpStepDone;               // completed startup CP checkpoint, under GartLock
     // ---- stage C: one indirect buffer at a time on the gfx ring (ADR 0008) ----
     BOOLEAN SubmitGate;             // EnableGpuSubmit, read once at GfxStart
     BOOLEAN IbPage;                 // bc250_gfx_ib_page_alloc has allocated
     volatile LONG SubmitFailed;     // sticky: nothing goes to the ring through GfxSubmitIb again this device start
-    volatile LONG SubmitInFlight;   // a submission whose fence has not been seen; the one-in-flight rule below
+    volatile LONG PipelineSamples;     // first 16 submissions only; no hot-path printf after that
+    ULONG SubmitVmid;                  // last submitted VMID; diagnostic VMID0 cannot overlap jobs
+    volatile LONG SubmitInFlight;   // latest outstanding sequence; CAS protects a newer producer from an old DPC
     ULONG SubmitSeq;                // its sequence number, 0 when none was ever emitted
     // The DPC reads the fence slot without the lock, so it needs a device pointer it can use there. It is this
     // sequence's own adev, set under GartLock at the submission and never freed before GfxStop: pnp.c stops ih.c
     // first, and IhStop() clears Active and drains the DPCs, so by the time TearDown() releases the fence page no
     // consumer of this field can still be running.
     struct amdgpu_device* SubmitAdev;
-    // The page directory root each VMID was last given, so that a submission whose context has not moved does not pay
-    // for an invalidation (bc250_gmc_flush_gpu_tlb polls for up to adev->usec_timeout). Index 0 is unused: VMID 0 is
+    // The page directory root each VMID was last given. A different root must wait
+    // for preceding jobs; the MMIO invalidation still runs on every job. Index 0 is unused: VMID 0 is
     // the GART aperture and has no root of ours.
     ULONGLONG VmidRoot[16];
     // ADR 0013: the two VRAM scratch regions BC250_ESCAPE_RUN_SDMACOPY copies between. Allocated once from the
@@ -142,34 +149,80 @@ typedef struct _BC250_GFX {
     // allocation twice.
     BOOLEAN SdmaCopyRegions;
     struct bc250_mem SdmaCopySrc, SdmaCopyDst;
+    struct bc250_mem SdmaCopyIb; // retained until retirement, including after a diagnostic timeout
+    struct bc250_mem SdmaVaTables, SdmaVaData; // unpublished VMID2 control backing
 
     // ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ----
     BOOLEAN PagingGate;                   // EnablePagingNode, read once at GfxStart
-    // GfxEscape's RUN arm has captured PagingRing/PagingDevicePtr/PagingShadow. Read with no lock by
-    // GfxPagingBuild (PASSIVE_LEVEL, BuildPagingBuffer - see PagingBuildersActive below, this field's own
+    // GfxEscape's RUN arm has captured PagingRing/PagingDevicePtr. Read with no lock by
+    // GfxPagingBuild (PASSIVE_LEVEL, BuildPagingBuffer - under GfxPagingLock, this field's own
     // publish/clear stays under GartLock) and by the DISPATCH_LEVEL trio (GfxSubmitPaging/GfxPagingFenceArrived/
     // GfxPagingSubmitReady), the ih.c DpcAdev shape.
+    struct bc250_mem PagingCopyStaging; // private VRAM page, retained across copy submissions
+    PAGING_WINDOW PagingWindow;
+    BOOLEAN PagingWindowReady;
     BOOLEAN PagingReady;
     struct amdgpu_ring* PagingRing;       // &adev->sdma.instance[0].ring: a pointer into the live, persistent adev,
                                            // never a copy (section 4: forking .wptr into two counters is the bug this avoids)
     struct amdgpu_device* PagingDevicePtr; // the same adev; GfxPagingFenceArrived reads bc250_sdma_fence_read through it,
                                            // with no lock, the same shape as SubmitAdev above
     KSPIN_LOCK Sdma0RingLock;             // every direct writer of the live SDMA0 ring takes this narrowly (section 4)
-    BOOLEAN PagingShadowAlloc;            // bc250_shim_mem_alloc(BC250_MEM_GTT) has allocated PagingShadowMem
-    struct bc250_mem PagingShadowMem;     // BC250_GFX_PAGING_SHADOW_BYTES: BuildPagingBuffer's own copy of the packets
-    // E24 run 001 (docs/design/paging-node.md, "What run 001 hung on"): GfxPagingBuild (BuildPagingBuffer,
-    // PASSIVE_LEVEL) cannot serialize against TearDown through Device->GartLock the way every other reader of
-    // gfx.c's PASSIVE_LEVEL state does - GartLock is a FAST_MUTEX, ExAcquireFastMutex raises IRQL to APC_LEVEL,
-    // and VidMmTranslate refuses anything but exactly PASSIVE_LEVEL (vidmm.c:238), so holding GartLock across a
-    // translation makes every translation fail rather than serialize it. This counter is what stands in for the
-    // lock: incremented for the duration of every GfxPagingBuild call that got past the PagingReady check,
-    // decremented on every exit; TearDown waits for it to reach 0 before freeing PagingShadowMem, bounded by
-    // BC250_GFX_PAGING_DRAIN_TIMEOUT_MS.
-    volatile LONG PagingBuildersActive;
+    // Device->GfxPagingLock protects PASSIVE_LEVEL builders against all engine
+    // setup/teardown and the lifetime of this object. Unlike GartLock it preserves
+    // PASSIVE_LEVEL while VidMmTranslate maps page tables. Lock order: this lock
+    // first, GartLock second; builders never acquire GartLock.
     volatile LONG PagingSubmitFailed;     // sticky, like SubmitFailed, but independent: node 1 fails on its own hardware
-    volatile LONG PagingSubmitInFlight;   // one in flight, like SubmitInFlight
+    volatile LONG PagingSubmitInFlight;   // SDMA paging retains its independent one-in-flight rule
     ULONG PagingSubmitSeq;
 } BC250_GFX;
+
+// DPC-safe CPU lifetime references. Admission and pointer lookup share a device
+// spin lock; users release it before touching rings/fences. No reference holder
+// waits for GPU progress or acquires GartLock. Lifecycle writers already own
+// GfxPagingLock then GartLock, close admission and wait at <= APC_LEVEL for these
+// bounded CPU accesses before changing/freeing the engine state. This is not a
+// hardware-DMA drain and does not replace halt/reset or retained backing pages.
+static BC250_GFX* GfxAccessAcquire(_In_ const BC250_DEVICE* Device)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Device;
+    BC250_GFX* gfx = NULL;
+    KIRQL irql;
+    KeAcquireSpinLock(&device->GfxAccessLock, &irql);
+    if (!device->GfxAccessClosed && device->Gfx != NULL)
+    {
+        gfx = (BC250_GFX*)device->Gfx;
+        if (device->GfxAccessUsers++ == 0) KeClearEvent(&device->GfxAccessDrained);
+    }
+    KeReleaseSpinLock(&device->GfxAccessLock, irql);
+    return gfx;
+}
+
+static void GfxAccessRelease(_In_ const BC250_DEVICE* Device)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Device;
+    KIRQL irql;
+    KeAcquireSpinLock(&device->GfxAccessLock, &irql);
+    NT_ASSERT(device->GfxAccessUsers != 0);
+    if (--device->GfxAccessUsers == 0) KeSetEvent(&device->GfxAccessDrained, IO_NO_INCREMENT, FALSE);
+    KeReleaseSpinLock(&device->GfxAccessLock, irql);
+}
+
+static void GfxAccessClose(_Inout_ BC250_DEVICE* Device)
+{
+    KIRQL irql;
+    KeAcquireSpinLock(&Device->GfxAccessLock, &irql);
+    Device->GfxAccessClosed = TRUE;
+    KeReleaseSpinLock(&Device->GfxAccessLock, irql);
+    (void)KeWaitForSingleObject(&Device->GfxAccessDrained, Executive, KernelMode, FALSE, NULL);
+}
+
+static void GfxAccessOpen(_Inout_ BC250_DEVICE* Device)
+{
+    KIRQL irql;
+    KeAcquireSpinLock(&Device->GfxAccessLock, &irql);
+    Device->GfxAccessClosed = FALSE;
+    KeReleaseSpinLock(&Device->GfxAccessLock, irql);
+}
 
 // sdma_v5_0_gfx_resume_instance() ends with amdgpu_ring_test_helper(ring); the shim leaves that to the miniport, because an
 // SDMA ring test touches no register (bc250_sdma.h). Without it stage 7 proves that registers can be written and nothing
@@ -213,6 +266,30 @@ static ULONG Microseconds(LARGE_INTEGER From, LARGE_INTEGER Frequency)
     return (ULONG)(((now.QuadPart - From.QuadPart) * 1000000ll) / Frequency.QuadPart);
 }
 
+// Called before any engine stage can reference the page. The VRAM allocator's
+// reserved pool is outside the VidMm segment and has its own teardown ownership.
+static int PagingCopyStorageInit(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
+{
+    int result;
+    if (!Gfx->PagingGate) return 0;
+    if (Gfx->PagingCopyStaging.size!=0) return 0;
+    result=bc250_shim_mem_alloc(Adev,BC250_MEM_VRAM,PAGE_SIZE,PAGE_SIZE,&Gfx->PagingCopyStaging);
+    if (result!=0) return result;
+    if (Gfx->PagingCopyStaging.size<PAGE_SIZE || (Gfx->PagingCopyStaging.mc & (PAGE_SIZE-1))!=0 ||
+        Gfx->PagingCopyStaging.mc>~(u64)0-(PAGE_SIZE-1)) {
+        bc250_shim_mem_free(Adev,&Gfx->PagingCopyStaging);
+        return BC250_EINVAL;
+    }
+    return 0;
+}
+
+// Engine halt/retirement is the enclosing Fini/GpuMemRelease responsibility.
+// The shared builder lock and CPU-access drain alone do not prove GPU quiescence.
+static void PagingCopyStorageFree(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
+{
+    if (Gfx->PagingCopyStaging.size!=0) bc250_shim_mem_free(Adev,&Gfx->PagingCopyStaging);
+}
+
 static int SetUp(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 {
     struct bc250_gfx_inputs inputs;
@@ -227,11 +304,21 @@ static int SetUp(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     inputs.max_cu_per_sh = 10;
     inputs.max_backends_per_se = 2;
     inputs.async_gfx_ring = true;       // the trace: no CP_RB0 programming, a KIQ MAP_QUEUES for the gfx queue
-    inputs.pp_gfxoff = true;            // the trace: one RLC_PG_CNTL write, not two
+    // Full WDDM uses AMD's no-GFXOFF startup policy until its power lifecycle
+    // is implemented. This selects the original RLC-SMU handshake-off branch;
+    // diagnostic replay keeps the E03 feature-mask policy for trace comparison.
+    inputs.pp_gfxoff = !Gfx->Sequence.Device->FullWddm;
+    GuardLog("gfx: RLC startup policy pp_gfxoff %u",(ULONG)inputs.pp_gfxoff);
     result = bc250_gfx_setup(Adev, &inputs);
     if (result != 0) return result;
     result = bc250_sdma_setup(Adev);
     if (result != 0) { bc250_gfx_teardown(Adev); return result; }
+    result=PagingCopyStorageInit(Gfx,Adev);
+    if (result!=0) {
+        bc250_sdma_teardown(Adev);
+        bc250_gfx_teardown(Adev);
+        return result;
+    }
     // For the self-ring aperture of stage 8: the doorbell BAR's bus address, which is its CPU physical address here
     // (facts M37). 0 if unknown, and then the shim refuses the stage.
     Adev->doorbell.base = GpuMemDoorbellBase(Gfx->Sequence.Device);
@@ -241,44 +328,26 @@ static int SetUp(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 
 static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
 {
+    GfxAccessClose(Gfx->Sequence.Device);
     if (!Gfx->SetUp) return;
     Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
-    // Same reasoning, first among the paging fields: GfxPagingFenceArrived and GfxSubmitReady's node-1 twin read
-    // PagingReady/PagingDevicePtr/PagingRing with no lock (design note section 4). A stage-7-and-back-to-8 re-run
-    // must never let a DISPATCH_LEVEL caller find a stale ring or adev pointer here. GfxPagingBuild (PASSIVE_LEVEL)
-    // is the third no-lock reader of PagingReady, and its own PagingShadowMem use is what the wait below, on
-    // PagingBuildersActive, is for - setting PagingReady FALSE here is what stops it from starting a new one.
+    // The caller holds GfxPagingLock exclusively before touching engine state.
+    // All admitted builders have exited and no new builder can enter. The DPC
+    // readers require their separate interrupt/timer rundown; this lock is passive.
     Gfx->PagingReady = FALSE;
     Gfx->PagingRing = NULL;
     Gfx->PagingDevicePtr = NULL;
+    PagingCopyStorageFree(Gfx,Adev);
     if (Gfx->FencePage) { bc250_gfx_fence_page_free(Adev); Gfx->FencePage = FALSE; }
     if (Gfx->SdmaFencePage) { bc250_sdma_fence_page_free(Adev); Gfx->SdmaFencePage = FALSE; }
     if (Gfx->IbPage) { bc250_gfx_ib_page_free(Adev); Gfx->IbPage = FALSE; }
+    if (Gfx->SdmaVaTables.size != 0) bc250_shim_mem_free(Adev, &Gfx->SdmaVaTables);
+    if (Gfx->SdmaVaData.size != 0) bc250_shim_mem_free(Adev, &Gfx->SdmaVaData);
+    if (Gfx->SdmaCopyIb.size != 0) bc250_shim_mem_free(Adev, &Gfx->SdmaCopyIb);
     if (Gfx->SdmaCopyRegions)
     {
         bc250_sdma_copy_regions_free(Adev, &Gfx->SdmaCopySrc, &Gfx->SdmaCopyDst);
         Gfx->SdmaCopyRegions = FALSE;
-    }
-    if (Gfx->PagingShadowAlloc)
-    {
-        // PagingReady is already FALSE (above), so no new GfxPagingBuild call can start using PagingShadowMem;
-        // this is the bounded wait for one that had already passed that check on another CPU - BuildPagingBuffer
-        // cannot serialize through GartLock here, see PagingBuildersActive's own comment - to finish touching it
-        // before it is freed out from under that call (E24 run 001, docs/design/paging-node.md). PASSIVE_LEVEL:
-        // both of TearDown's callers (Fini, from the FINI escape or GfxStop) are. Timing out and freeing anyway,
-        // loudly, is the same choice WddmStop already makes for a hardware submission that does not finish in
-        // time - there is no GPU reset on this part (facts M53), so waiting forever is not on offer either.
-        LARGE_INTEGER tick;
-        ULONG waited;
-
-        tick.QuadPart = -10000ll * 10;
-        for (waited = 0; waited < BC250_GFX_PAGING_DRAIN_TIMEOUT_MS && Gfx->PagingBuildersActive != 0; waited += 10)
-            KeDelayExecutionThread(KernelMode, FALSE, &tick);
-        if (waited != 0)
-            GuardLog("gfx: paging teardown waited %lu ms for %ld builder(s) touching the shadow buffer%s", waited,
-                     Gfx->PagingBuildersActive, Gfx->PagingBuildersActive != 0 ? " - STILL ACTIVE, freeing anyway" : "");
-        bc250_shim_mem_free(Adev, &Gfx->PagingShadowMem);
-        Gfx->PagingShadowAlloc = FALSE;
     }
     RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
     RtlZeroMemory(Gfx->RingOwesSlot, sizeof(Gfx->RingOwesSlot));
@@ -310,6 +379,96 @@ static BOOLEAN EnginesHalted(_In_ const BC250_DEVICE* Device)
            (sdma0 & BC250_SDMA_HALTED) != 0 && (sdma1 & BC250_SDMA_HALTED) != 0;
 }
 
+// Startup exclusively owns this unpublished device. No engine may consume
+// new GTT mappings until the stage5 visibility commit completes.
+NTSTATUS GfxBeginTranslationBootstrap(BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx=(BC250_GFX*)Device->Gfx;
+    if (Device->Started || Device->Wddm || !Device->FullWddm ||
+        Device->GfxTlbBootstrap || !gfx || gfx->SetUp || gfx->StagesDone ||
+        !EnginesHalted(Device)) return STATUS_INVALID_DEVICE_STATE;
+    Device->GfxTlbBootstrap=TRUE;
+    GuardLog("gfx: unpublished translation bootstrap entered with engines halted");
+    return STATUS_SUCCESS;
+}
+
+// Runs under GfxPagingLock/GartLock. The barrier is inside the stage loop, so
+// both incremental traced startup and a single full RUN obey the same order.
+static int RunEngineStage(BC250_DEVICE* Device, struct amdgpu_device* Adev, ULONG Stage,
+                          bc250_gfx_checkpoint_fn Checkpoint)
+{
+    BC250_SEQUENCE* sequence=(BC250_SEQUENCE*)Adev->backend;
+    int result;
+    if (Device->GfxTlbBootstrap && Stage>=BC250_GFX_STAGE_CP) return BC250_EINVAL;
+    if (Checkpoint && Stage==BC250_GFX_STAGE_CP-1) Checkpoint("before-rlc-resume");
+    result=g_Stages[Stage].Run(Adev);
+    if (Checkpoint && Stage==BC250_GFX_STAGE_CP-1) Checkpoint("after-rlc-resume");
+    if (result==0 && NT_SUCCESS(sequence->Fault) &&
+        Stage==BC250_GFX_STAGE_CP-1 && Device->GfxTlbBootstrap) {
+        if (Checkpoint) Checkpoint("before-gfx-visibility");
+        result=GpuMemCompleteGfxBootstrap(Adev);
+        if (Checkpoint) Checkpoint("after-gfx-visibility");
+    }
+    return result;
+}
+
+// Diagnostic observation, not a DMA-retirement predicate. AMD gfx_v10_0_soft_reset
+// inspects GRBM_STATUS2.RLC_BUSY; a cleared RLC_ENABLE alone does not provide it.
+// Existing safe-read allow-list only; failures remain explicit in the log.
+void GfxTraceRlcState(_In_ const BC250_DEVICE* Device, _In_ const char* Phase)
+{
+    ULONG control=0, status2=0;
+    NTSTATUS controlStatus=MmioRead(Device,BC250_REG_GC_RLC_CNTL,&control);
+    NTSTATUS busyStatus=MmioRead(Device,BC250_REG_GC_GRBM_STATUS2,&status2);
+    GuardLog("gfx: RLC %s CNTL 0x%08X read 0x%08X STATUS2 0x%08X read 0x%08X",
+             Phase,control,(ULONG)controlStatus,status2,(ULONG)busyStatus);
+    // AMD gfx_v10_0_soft_reset also classifies CP/GFX from GRBM_STATUS.
+    // Keep the raw input and access status; this observation authorizes no reset.
+    {
+        ULONG status = 0;
+        NTSTATUS readStatus = MmioRead(Device,BC250_REG_GC_GRBM_STATUS,&status);
+        GuardLog("gfx: GRBM %s STATUS 0x%08X read 0x%08X",Phase,status,(ULONG)readStatus);
+    }
+}
+
+// Experimental, default off. Only the unpublished automatic startup calls this;
+// it is not a generic escape or an admission/retirement predicate.
+NTSTATUS GfxPreparePspReload(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    BOOLEAN enabled = FALSE;
+    NTSTATUS status = STATUS_SUCCESS;
+    int result = 0;
+    ULONG mode = GuardReadSetting(L"EnableRlcReloadReset",0);
+    if (!Device->FullWddm || (mode != 1 && mode != 2)) return STATUS_SUCCESS;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (Device->Wddm != NULL || gfx == NULL || gfx->SetUp || gfx->StagesDone != 0)
+        status = STATUS_INVALID_DEVICE_STATE;
+    else {
+        status = GartDevice(Device,&adev,&enabled);
+        if (NT_SUCCESS(status) && !enabled) status = STATUS_DEVICE_NOT_READY;
+        if (NT_SUCCESS(status)) {
+            void* previousBackend = adev->backend;
+            adev->backend = &gfx->Sequence;
+            SequenceBegin(&gfx->Sequence,Device,FALSE,NULL,0);
+            result = mode == 2 ? bc250_gfx_rlc_reload_reset_readback(adev) : bc250_gfx_rlc_reload_reset(adev);
+            status = gfx->Sequence.Fault;
+            if (NT_SUCCESS(status) && result < 0) status = STATUS_IO_DEVICE_ERROR;
+            adev->backend = previousBackend;
+            GfxTraceRlcState(Device,"after-reload-reset-check");
+        }
+    }
+    GuardLog("gfx: opt-in RLC reload reset mode %u result %d status 0x%08X",mode,result,status);
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
 // A stage that stopped between nv_grbm_select(me, pipe, queue) and nv_grbm_select(0, 0, 0, 0) leaves GRBM_GFX_CNTL selecting
 // a queue, and every later read of a per-queue register, the witness's sweeps included, would be of that queue. After a
 // failed stage: back to 0, the value amdgpu leaves there after every selection (gfx_v10_0.c, nv.c nv_grbm_select). Outside the
@@ -323,16 +482,17 @@ static void GrbmSelectDefault(_In_ const BC250_DEVICE* Device)
     GuardLog("gfx: GRBM_GFX_CNTL was left at 0x%08X, back to 0: 0x%08X", select, MmioGfxWrite(Device, BC250_REG_GC_GRBM_GFX_CNTL, 0));
 }
 
-// hw_fini in amdgpu's order (SDMA before GFX), then the memory. Returns whether the engines read halted; Undo gets what
+// Hardware halt only, SDMA before GFX. Storage ownership is unchanged. Returns whether engines read halted; Undo gets what
 // the shim's undo returned (BC250_ETIME: the MEC did not let go of the KIQ's queue, facts M44; BC250_EBUSY: an SDMA
 // engine halted with its read pointer still behind its write pointer, so it stopped holding packets that name pages of
 // ours). GFX first if both failed, because the KIQ is the one whose recovery the next bring-up has a branch for.
-static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev, _Out_ long* Undo)
+static BOOLEAN HaltEngines(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev, _Out_ long* Undo)
 {
     BOOLEAN quiet;
     long sdma = 0;
 
     *Undo = 0;
+    GfxAccessClose(Device);
 
     if (Gfx->StagesDone >= BC250_GFX_STAGE_CP)
     {
@@ -345,20 +505,99 @@ static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ s
         if (Gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS) (void)bc250_nbio_enable_doorbell_selfring_aperture(Adev, false);
         // The undo selects queues as well (the KIQ's dequeue), and a sequence that faults in between writes nothing any more.
         GrbmSelectDefault(Device);
+        GfxTraceRlcState(Device,"after-stop");
     }
     // Before the CP stage no engine was released by us and no queue was mapped: nothing of ours is in use. (The PSP
     // releases SDMA by itself, facts M35, but an SDMA engine without a ring has no address of ours.)
     quiet = (Gfx->StagesDone < BC250_GFX_STAGE_CP) || EnginesHalted(Device);
-    TearDown(Gfx, Adev);
-    // An undo that failed leaves an engine that may still hold an address of ours: its pages stay (they go back with a
-    // later undo that succeeds, or never), but the state is reset all the same, because the way out of this is the next
-    // bring-up's recovery branch (bc250_kiq_init_register), not a second undo on a halted MEC.
-    GpuMemRelease(Device, &Gfx->Sequence, quiet && *Undo == 0);
-    if (quiet) { Gfx->StagesDone = 0; Gfx->Failed = FALSE; }
     return quiet;
 }
 
-void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
+// PnP retirement of fully initialized engines: invalidate this owner's GTT
+// while RLC, its VRAM CSB and PSP firmware remain owned. No backing is freed.
+// Diagnostic Fini and pre-CP unwind keep their existing sequence.
+static BOOLEAN HaltForMappingRetirement(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx,
+                                       _In_ struct amdgpu_device* Adev, _Out_ long* Undo)
+{
+    long sdma;
+    BOOLEAN quiet;
+    if (Gfx->StagesDone < BC250_GFX_STAGE_CP) return HaltEngines(Device,Gfx,Adev,Undo);
+    GfxAccessClose(Device);
+    sdma = bc250_sdma_hw_fini(Adev);
+    *Undo = bc250_gfx_hw_fini_keep_rlc(Adev);
+    if (*Undo == 0) *Undo = sdma;
+    if (Gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS)
+        (void)bc250_nbio_enable_doorbell_selfring_aperture(Adev,false);
+    GrbmSelectDefault(Device);
+    quiet = EnginesHalted(Device) && *Undo == 0 && NT_SUCCESS(Gfx->Sequence.Fault);
+    GfxTraceRlcState(Device,"after-cp-stop-before-mapping-retirement");
+    if (quiet) {
+        *Undo=bc250_sdma_reset_for_reload(Adev);
+        quiet=*Undo==0 && NT_SUCCESS(Gfx->Sequence.Fault);
+        GuardLog("gfx: SDMA reload reset result %ld fault 0x%08X",*Undo,Gfx->Sequence.Fault);
+        GfxTraceRlcState(Device,"after-sdma-reload-reset");
+    }
+    if (quiet) {
+        Gfx->Sequence.TraceRlcRetirement = TRUE;
+        *Undo = GpuMemRetireGttMappings(Adev);
+        Gfx->Sequence.TraceRlcRetirement = FALSE;
+        quiet = *Undo == 0 && NT_SUCCESS(Gfx->Sequence.Fault);
+        GfxTraceRlcState(Device,"after-owner-mapping-retirement");
+    }
+    // Even when mapping retirement failed, attempt the original RLC stop.
+    // A faulted backend preserves its no-further-writes rule; caller retains
+    // all owners on failure and never treats this attempt as a quiet verdict.
+    bc250_gfx_rlc_stop(Adev);
+    GfxTraceRlcState(Device,"after-stop");
+    return quiet && NT_SUCCESS(Gfx->Sequence.Fault);
+}
+
+// Storage remains owned after HaltEngines. The caller must establish the
+// applicable consumer/translation retirement before reaching this phase.
+// Fini retains the original combined diagnostic behavior. PnP and startup
+// unwind reach this helper only after PSP and GART hardware retirement.
+static void ReleaseStoppedStorage(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx,
+                                  _In_ struct amdgpu_device* Adev, BOOLEAN Quiet, long Undo)
+{
+    Gfx->Sequence.TraceRlcRetirement = !Gfx->Sequence.Plan && Gfx->StagesDone >= BC250_GFX_STAGE_CP;
+    if (Gfx->Sequence.TraceRlcRetirement) GfxTraceRlcState(Device,"before-gfx-teardown");
+    TearDown(Gfx, Adev);
+    if (Gfx->Sequence.TraceRlcRetirement) GfxTraceRlcState(Device,"before-gfx-memory-release");
+    Gfx->Sequence.TraceRlcRetirement = FALSE;
+    // An undo that failed leaves an engine that may still hold an address of ours: its pages stay (they go back with a
+    // later undo that succeeds, or never), but the state is reset all the same, because the way out of this is the next
+    // bring-up's recovery branch (bc250_kiq_init_register), not a second undo on a halted MEC.
+    Device->GfxStopQuiet=Quiet && Undo==0 && NT_SUCCESS(Gfx->Sequence.Fault);
+    GpuMemRelease(Device, &Gfx->Sequence, Device->GfxStopQuiet);
+    if (Gfx->StagesDone >= BC250_GFX_STAGE_CP) GfxTraceRlcState(Device,"after-gfx-memory-release");
+    if (Quiet) { Gfx->StagesDone = 0; Gfx->CpStepDone = 0; Gfx->Failed = FALSE; }
+}
+
+static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev, _Out_ long* Undo)
+{
+    BOOLEAN quiet = HaltEngines(Device, Gfx, Adev, Undo);
+    ReleaseStoppedStorage(Device, Gfx, Adev, quiet, *Undo);
+    return quiet;
+}
+
+// Diagnostic-only synchronous snapshots during unpublished CP1 startup. The
+// caller retains both locks at PASSIVE_LEVEL, with special APCs enabled.
+static void GfxStartupCheckpoint(const char* Phase)
+{
+    NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL && !KeAreAllApcsDisabled());
+    GuardLog("startup: CP1 checkpoint %s", Phase);
+    GuardLogKeep();
+}
+
+// Same PASSIVE_LEVEL/special-APC contract as the CP1 checkpoint above.
+static void GfxRlcCheckpoint(const char* Phase)
+{
+    NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL && !KeAreAllApcsDisabled());
+    GuardLog("startup: RLC boundary %s", Phase);
+    GuardLogKeep();
+}
+
+static void GfxExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data, ULONG CpStep)
 {
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
@@ -368,6 +607,13 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
     LARGE_INTEGER frequency, start;
     ULONG stage, first;
     long result = 0;
+    BOOLEAN persistKiq = CpStep == BC250_CP_KIQ_INIT &&
+                         KeGetCurrentIrql() == PASSIVE_LEVEL && !KeAreAllApcsDisabled();
+    BOOLEAN persistRlc = !CpStep && Data->Op == BC250_GFX_OP_RUN &&
+                         Device->FullWddm && !Device->Started &&
+                         Data->LastStage == BC250_GFX_STAGE_CP-1 &&
+                         KeGetCurrentIrql() == PASSIVE_LEVEL && !KeAreAllApcsDisabled();
+    BOOLEAN persistStartup = persistKiq || persistRlc;
 
     Data->Version = BC250_KMD_VERSION;
     Data->Result = 0;
@@ -384,11 +630,34 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
     RtlZeroMemory(Data->Writes, sizeof(Data->Writes));
     KeQueryPerformanceCounter(&frequency);
 
-    ExAcquireFastMutex(&Device->GartLock);
+    if (persistKiq) GfxStartupCheckpoint("acquire-paging-lock");
+    if (persistRlc) GfxRlcCheckpoint("acquire-paging-lock");
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+    if (persistStartup) {
+        if (persistKiq) GfxStartupCheckpoint("acquire-gart-lock");
+        if (persistRlc) GfxRlcCheckpoint("acquire-gart-lock");
+        // ExAcquireFastMutexUnsafe is permitted inside KeEnterCriticalRegion.
+        // It preserves PASSIVE_LEVEL and special APC delivery for Zw file I/O.
+        // The same mutex and lock order remain held throughout the sequence.
+        ExAcquireFastMutexUnsafe(&Device->GartLock);
+        if (persistKiq) GfxStartupCheckpoint("locks-acquired");
+        if (persistRlc) GfxRlcCheckpoint("locks-acquired");
+    } else ExAcquireFastMutex(&Device->GartLock);
     gfx = (BC250_GFX*)Device->Gfx;
     if (Data->Op > BC250_GFX_OP_STATE) status = STATUS_INVALID_PARAMETER;
     else if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else if (gfx->PowerSuspended && Data->Op != BC250_GFX_OP_STATE) status = STATUS_INVALID_DEVICE_STATE;
     else if (Data->Op <= BC250_GFX_OP_RUN && (Data->LastStage == 0 || Data->LastStage > BC250_GFX_STAGE_COUNT)) status = STATUS_INVALID_PARAMETER;
+    // CpStep is internal to unpublished StartDevice, never supplied by an escape.
+    if (NT_SUCCESS(status) && !CpStep && Data->Op == BC250_GFX_OP_RUN &&
+        gfx->CpStepDone != 0 && gfx->CpStepDone < BC250_CP_COMPUTE_TEST)
+        status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status) && CpStep &&
+        (Device->GfxTlbBootstrap || Data->Op != BC250_GFX_OP_RUN || Data->LastStage != BC250_GFX_STAGE_CP ||
+         CpStep > BC250_CP_COMPUTE_TEST || CpStep != gfx->CpStepDone + 1 ||
+         gfx->StagesDone != (ULONG)(CpStep == BC250_CP_KIQ_INIT ? BC250_GFX_STAGE_CP - 1 : BC250_GFX_STAGE_CP)))
+        status = STATUS_INVALID_DEVICE_STATE;
     if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
     if (NT_SUCCESS(status) && Data->Op != BC250_GFX_OP_STATE)
     {
@@ -403,15 +672,23 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
         case BC250_GFX_OP_RUN:
             // A plan is about hardware this driver instance has not touched; a run needs what amdgpu had at this point.
             // Interrupt sources only behind an enabled IH ring (amdgpu's order: navi10_ih_irq_init at 0.25 s, the sources at 1.56 s).
-            if (plan ? (gfx->StagesDone != 0 || gfx->SetUp) : (!gartEnabled || !PspIsLoaded(Device) || gfx->Failed || Data->LastStage <= gfx->StagesDone ||
+            if (plan ? (gfx->StagesDone != 0 || gfx->SetUp) : (!gartEnabled || !PspIsLoaded(Device) || gfx->Failed || (!CpStep && Data->LastStage <= gfx->StagesDone) ||
                                                               (Data->LastStage >= BC250_GFX_STAGE_INTERRUPTS && !IhIsActive(Device))))
             {
                 status = STATUS_INVALID_DEVICE_STATE;
                 break;
             }
+            if (!plan) gfx->PagingCpuBootstrap = FALSE;
             result = SetUp(gfx, adev);
             if (result != 0) { status = STATUS_INSUFFICIENT_RESOURCES; break; }
-            first = plan ? 1 : gfx->StagesDone + 1;
+            // OS submission needs its completion page before adapter admission.
+            // The diagnostic IB page is unrelated: OS jobs carry their own IB.
+            if (!plan && gfx->SubmitGate && !gfx->FencePage) {
+                result=bc250_gfx_fence_page_alloc(adev);
+                if (result!=0) { status=STATUS_INSUFFICIENT_RESOURCES; break; }
+                gfx->FencePage=TRUE;
+            }
+            first = CpStep ? BC250_GFX_STAGE_CP : (plan ? 1 : gfx->StagesDone + 1);
             for (stage = first; stage <= Data->LastStage; stage++)
             {
                 BC250_ESCAPE_GFX_STAGE* got = &Data->Stages[Data->StageCount++];
@@ -420,10 +697,17 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
                 got->FirstWrite = gfx->Sequence.WriteCount;
                 start = KeQueryPerformanceCounter(NULL);
                 if (!plan) gfx->StagesDone = stage;         // from its first write on, the stage has touched the hardware
-                got->Result = g_Stages[stage].Run(adev);
+                gfx->Sequence.TraceBootstrapTlb = persistRlc;
+                got->Result = CpStep ? bc250_gfx_cp_resume_step_traced(adev, CpStep,
+                    persistKiq ? GfxStartupCheckpoint : NULL) : RunEngineStage(Device,adev,stage,
+                        persistRlc ? GfxRlcCheckpoint : NULL);
+                gfx->Sequence.TraceBootstrapTlb = FALSE;
+                if (CpStep && got->Result == 0 && NT_SUCCESS(gfx->Sequence.Fault)) gfx->CpStepDone = CpStep;
                 got->Microseconds = Microseconds(start, frequency);
-                GuardLog("gfx: stage %u (%s)%s: rc %d, %u writes so far, %u us", stage, g_Stages[stage].Name, plan ? " planned" : "",
-                         got->Result, gfx->Sequence.WriteCount, got->Microseconds);
+                if (CpStep) GuardLog("gfx: CP step %lu: rc %d, %u writes, %u us", CpStep,
+                                    got->Result, gfx->Sequence.WriteCount, got->Microseconds);
+                else GuardLog("gfx: stage %u (%s)%s: rc %d, %u writes so far, %u us", stage, g_Stages[stage].Name, plan ? " planned" : "",
+                              got->Result, gfx->Sequence.WriteCount, got->Microseconds);
                 if (got->Result != 0 || !NT_SUCCESS(gfx->Sequence.Fault))
                 {
                     result = got->Result;
@@ -453,27 +737,20 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
             }
             // ADR 0008 stage D (docs/design/paging-node.md section 4): the first RUN to reach stage 8 with the
             // gate open captures what GfxSubmitPaging needs at DISPATCH_LEVEL - a live ring pointer and the
-            // shadow buffer - the same place and the same reasoning as ih.c's DpcAdev (ih.c:319-324). Once, not
+            // engine state - the same place as ih.c's DpcAdev. Once, not
             // on every call: PagingReady stays set until the next TearDown, which clears it first of everything
             // (matching SubmitAdev's own comment above).
-            if (gfx->PagingGate && !gfx->PagingReady && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS &&
+            if (gfx->PagingGate && gfx->PagingCopyStaging.size>=PAGE_SIZE && !gfx->PagingReady && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS &&
                      !gfx->Failed && NT_SUCCESS(gfx->Sequence.Fault))
             {
-                if (!gfx->PagingShadowAlloc)
-                {
-                    result = bc250_shim_mem_alloc(adev, BC250_MEM_GTT, BC250_GFX_PAGING_SHADOW_BYTES, AMDGPU_GPU_PAGE_SIZE,
-                                                  &gfx->PagingShadowMem);
-                    if (result == 0 && gfx->PagingShadowMem.cpu != NULL) gfx->PagingShadowAlloc = TRUE;
-                    else GuardLog("gfx: paging shadow allocation failed, result %d - node 1 stays inert this device start", result);
-                }
-                if (gfx->PagingShadowAlloc)
-                {
-                    gfx->PagingRing = &adev->sdma.instance[0].ring;
-                    gfx->PagingDevicePtr = adev;
-                    gfx->PagingReady = TRUE;
-                    GuardLog("gfx: paging node ready, SDMA0 ring at doorbell 0x%X, shadow %lu bytes",
-                             gfx->PagingRing->doorbell_index, BC250_GFX_PAGING_SHADOW_BYTES);
-                }
+                gfx->PagingRing = &adev->sdma.instance[0].ring;
+                gfx->PagingDevicePtr = adev;
+                gfx->PagingWindowReady = adev->gart.bo != NULL &&
+                    PagingWindowInit(adev->gmc.gart_start, adev->gmc.gart_size,
+                                     adev->gart.bo->gpu_addr, adev->gart.table_size, &gfx->PagingWindow);
+                gfx->PagingReady = TRUE;
+                GuardLog("gfx: paging node ready, SDMA0 doorbell 0x%X, per-buffer private commands",
+                         gfx->PagingRing->doorbell_index);
             }
             }
             break;
@@ -500,15 +777,123 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
         gfx->Sequence.MaxWrites = 0;
         adev->backend = previousBackend;
     }
+    if (Data->Op == BC250_GFX_OP_RUN && NT_SUCCESS(status) && gfx != NULL && !gfx->Failed &&
+        gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS) GfxAccessOpen(Device);
     if (gfx != NULL) Data->StagesDone = gfx->StagesDone;
     GuardLog("gfx: op %u to stage %u -> 0x%08X, result %d, %u writes, %u doorbells", Data->Op, Data->LastStage, status, result,
              Data->WriteCount, Data->DoorbellCount);
-    ExReleaseFastMutex(&Device->GartLock);
+    if (persistStartup) ExReleaseFastMutexUnsafe(&Device->GartLock);
+    else ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
 
     Data->Result = result;
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
+
+// Diagnostic commands and device startup share the same implementation.
+void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
+{
+    GfxExecute(Device,Data,0);
+}
+
+// Opt-in hardware control before WDDM publication, never alongside OS submissions.
+// Keep the external full-WDDM escape allow-list observational. A failure takes
+// the ordinary startup unwind, which owns all resources until engine retirement.
+static NTSTATUS SdmaVaStartupControl(BC250_DEVICE* Device);
+
+static NTSTATUS SdmaIbStartupControl(BC250_DEVICE* Device)
+{
+    BC250_ESCAPE_SDMACOPY control;
+    ULONG trial;
+    if (GuardReadSetting(L"EnableSdmaIbControl",0)==0 &&
+        GuardReadSetting(L"EnableSdmaVaControl",0)==0) return STATUS_SUCCESS;
+    if (!Device->FullWddm || Device->Started || Device->Wddm != NULL)
+        return STATUS_INVALID_DEVICE_STATE;
+    for (trial=0;trial<4;trial++) {
+        RtlZeroMemory(&control,sizeof(control));
+        control.Magic=BC250_ESCAPE_MAGIC;
+        control.Command=(trial==0 || trial==3) ? BC250_ESCAPE_RUN_SDMACOPY : BC250_ESCAPE_RUN_SDMAIB;
+        control.Bytes=trial<2 ? BC250_SDMACOPY_DEFAULT_BYTES : BC250_SDMACOPY_MAX_BYTES;
+        GuardLog("startup: SDMA control %lu command %lu bytes %lu begin",trial,control.Command,control.Bytes);
+        GuardLogKeep();
+        SdmaCopyEscape(Device,&control);
+        GuardLog("startup: SDMA control %lu status %lu NT 0x%08lX result %ld fence %lu/%lu compare %lu matched %lu",
+                 trial,control.Status,control.NtStatus,control.Result,control.LastSeq,control.LastValue,
+                 control.BytesCompared,control.Matched);
+        GuardLogKeep();
+        if (!NT_SUCCESS((NTSTATUS)control.NtStatus)) return (NTSTATUS)control.NtStatus;
+        if (control.Status!=BC250_ESCAPE_STATUS_DONE || control.Result!=0 ||
+            control.LastSeq==0 || control.LastValue!=control.LastSeq ||
+            control.BytesCompared!=control.Bytes || !control.Matched) return STATUS_IO_DEVICE_ERROR;
+    }
+    if (GuardReadSetting(L"EnableSdmaVaControl",0)!=0) {
+        NTSTATUS status;
+        GuardLog("startup: SDMA VMID2 translated control begin");
+        GuardLogKeep();
+        status=SdmaVaStartupControl(Device);
+        GuardLogKeep();
+        return status;
+    }
+    return STATUS_SUCCESS;
+}
+
+// PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
+// call. Keep detailed partial-progress output for the eventual startup unwind.
+NTSTATUS GfxInitializeHardware(BC250_DEVICE* Device, BC250_ESCAPE_GFX* Report)
+{
+    NTSTATUS status;
+    ULONG stage, first, cp;
+    BOOLEAN trace;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_GFX;
+    Report->Op=BC250_GFX_OP_RUN;
+    Report->LastStage=BC250_GFX_STAGE_INTERRUPTS;
+    if (!Device) status=STATUS_INVALID_PARAMETER;
+    else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) status=STATUS_INVALID_DEVICE_STATE;
+    else if (Device->GpuStopUnconfirmed) status=STATUS_DEVICE_HARDWARE_ERROR;
+    else {
+        trace=GuardReadSetting(L"KeepLog",0)!=0;
+        first=trace?1:BC250_GFX_STAGE_INTERRUPTS;
+        status=STATUS_SUCCESS;
+        // Startup owns the unpublished device. Incremental RUN already preserves
+        // setup and completed stages. Outer snapshots run outside GfxExecute's
+        // locks. Selected CP1/RLC boundaries keep PASSIVE_LEVEL and special APCs
+        // inside the same locks via the unsafe-fast-mutex path.
+        // In trace mode Report describes the last attempted
+        // stage; the persisted snapshots retain earlier detailed stage reports.
+        for (stage=first;stage<=BC250_GFX_STAGE_INTERRUPTS;stage++) {
+            Report->LastStage=stage;
+            if (trace) {
+                GuardLog("startup: entering GFX stage %lu",stage);
+                GuardLogKeep();
+            }
+            if (trace && stage == BC250_GFX_STAGE_CP) {
+                for (cp=BC250_CP_KIQ_INIT;cp<=BC250_CP_COMPUTE_TEST;cp++) {
+                    GuardLog("startup: entering CP step %lu",cp);
+                    GuardLogKeep();
+                    GfxExecute(Device,Report,cp);
+                    GuardLog("startup: CP step %lu returned 0x%08X result %ld",cp,Report->NtStatus,Report->Result);
+                    GuardLogKeep();
+                    if (!NT_SUCCESS((NTSTATUS)Report->NtStatus) || Report->Status!=BC250_ESCAPE_STATUS_DONE ||
+                        Report->Result!=0 || Report->FailedStage) break;
+                }
+            } else GfxExecute(Device,Report,0);
+            status=(NTSTATUS)Report->NtStatus;
+            if (NT_SUCCESS(status) && (Report->Status!=BC250_ESCAPE_STATUS_DONE || Report->Result!=0 ||
+                Report->FailedStage || Report->StagesDone<stage)) status=STATUS_IO_DEVICE_ERROR;
+            if (trace) GuardLogKeep();
+            if (!NT_SUCCESS(status)) break;
+        }
+    }
+    if (NT_SUCCESS(status)) status=SdmaIbStartupControl(Device);
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
 
 // ---- stage C: one indirect buffer on the gfx ring (ADR 0008) --------------------------------------------------------------
 //
@@ -517,12 +902,9 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
 // it by MMIO, bc250_gfx_submit_ib() writes PACKET3_INDIRECT_BUFFER and an interrupting RELEASE_MEM into the gfx ring
 // and rings the doorbell. What is here is the policy around them.
 //
-// One submission in flight, and it is a correctness requirement rather than a simplification. The shim's
-// amdgpu_ring_alloc() does not look at the read pointer (bc250_ring.c:26, the deviation is stated at the RingOwes
-// comment above), the gfx ring's align_mask rounds every allocation up to 256 dwords, and the ring holds 2048: eight
-// unanswered submissions would wrap it onto packets the CP has not read yet. So a submission is taken only when the
-// previous sequence number has arrived, and the fence slot in GTT memory is the whole of how that is decided - the
-// same rule the fence escape's owed slots follow, on one slot instead of ten.
+// GFX jobs now reserve aligned space against the CP read pointer. The completion
+// queue in wddm.c owns scheduler fences; this layer keeps a cumulative HW sequence.
+// VMID root changes still drain prior work because the flush is CPU MMIO.
 //
 // Nothing here waits for the GPU. GfxSubmitIb() returns as soon as the doorbell is rung; the completion is the
 // end-of-pipe interrupt, which ih.c's DPC turns into a GfxFenceArrived() call.
@@ -531,28 +913,51 @@ static BOOLEAN GfxSubmitArmed(_In_ const BC250_GFX* gfx)
 {
     // Stage 8 and not 6: the fence carries AMDGPU_FENCE_FLAG_INT, and without the interrupt sources of stage 8 the
     // completion would never be reported, only polled. Without the IH ring stage 8 cannot have run at all (GfxEscape).
-    return gfx != NULL && gfx->SubmitGate && gfx->SetUp && !gfx->Failed && gfx->SubmitFailed == 0 &&
+    return gfx != NULL && gfx->SubmitGate && gfx->SetUp && !gfx->PowerSuspended && !gfx->Failed && gfx->SubmitFailed == 0 &&
            gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS;
 }
 
-BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device)
+static BOOLEAN GfxSubmitReadyAccess(_In_ const BC250_DEVICE* Device)
 {
     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
 
     return GfxSubmitArmed(gfx) && gfx->SubmitInFlight == 0;
 }
 
-BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device)
+BOOLEAN GfxSubmitReady(_In_ const BC250_DEVICE* Device)
+{
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return FALSE;
+    }
+    result = GfxSubmitReadyAccess(Device);
+    GfxAccessRelease(Device);
+    return result;
+}
+
+static BOOLEAN GfxSubmitBusyAccess(_In_ const BC250_DEVICE* Device)
 {
     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
 
-    // Ready in every way except the one IB the ring is already holding. WddmSubmitUmd waits this
-    // out: retiring that submission's scheduler fence without running the IB would make dxgkrnl
-    // signal the UMD fence for work the GPU never saw.
+    // Outstanding GPU work. The UMD path may still enqueue into available ring
+    // and completion slots, or wait for capacity/root-switch retirement.
     return GfxSubmitArmed(gfx) && gfx->SubmitInFlight != 0;
 }
 
-void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device)
+{
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return FALSE;
+    }
+    result = GfxSubmitBusyAccess(Device);
+    GfxAccessRelease(Device);
+    return result;
+}
+
+static void GfxSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
 
@@ -565,18 +970,47 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
                  gfx->SubmitSeq, gfx->SubmitAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) : 0);
 }
 
-BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+void GfxSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    StartHealthFault(Device);
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return;
+    }
+    GfxSubmitFailAccess(Device);
+    GfxAccessRelease(Device);
+}
+
+static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 {
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
 
-    // One read of a GTT page the CP writes. No register, no lock, no allocation: everything a DISPATCH_LEVEL caller
-    // may not do is somewhere else. SubmitAdev is only ever non-NULL between a submission and the teardown that frees
+    // One read of a GTT page the CP writes. The outer lifetime reference protects
+    // the device and fence page against concurrent FINI or Stop. SubmitAdev is only ever non-NULL between a submission and the teardown that frees
     // the page, and pnp.c drains ih.c's DPCs before that teardown runs (see the field's comment).
     if (gfx == NULL || gfx->SubmitAdev == NULL || Seq == 0) return FALSE;
-    if ((ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT) != Seq) return FALSE;
-    // The sequence numbers only count up, so a slot holding Seq means that submission and every earlier one is done.
-    if (gfx->SubmitSeq == Seq) InterlockedExchange(&gfx->SubmitInFlight, 0);
+    {
+        ULONG observed = (ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT);
+        LONG pending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
+        if (!bc250_fence_reached(observed, Seq)) return FALSE;
+        // Store the outstanding sequence, not a boolean. An old DPC may not
+        // clear a newer producer's marker after observing an earlier fence.
+        if (pending && bc250_fence_reached(observed, (ULONG)pending))
+            (void)InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending);
+    }
     return TRUE;
+}
+
+BOOLEAN GfxFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+{
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return FALSE;
+    }
+    result = GfxFenceArrivedAccess(Device, Seq);
+    GfxAccessRelease(Device);
+    return result;
 }
 
 // With GartLock held, the gfx sequence installed as adev->backend and a GpuMem sequence open. GfxSubmitIb is this plus
@@ -585,11 +1019,14 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
                                ULONG Vmid, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes, _Out_ ULONG* Seq)
 {
     struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
-    ULONG seq;
+    ULONG seq, previousSeq;
+    LONG previousPending;
     u64 address;
     long result;
 
     *Seq = 0;
+    // VMID2 belongs to SDMA paging; graphics and IB_AT must not change its root.
+    if (Vmid == BC250_SDMA_PAGING_VMID) return STATUS_ACCESS_DENIED;
     if (Gfx->SubmitFailed) return STATUS_DEVICE_HARDWARE_ERROR;
     if (!Gfx->SubmitGate) return STATUS_ACCESS_DENIED;
     if (Gfx->Failed || !Gfx->SetUp || Gfx->StagesDone < BC250_GFX_STAGE_INTERRUPTS) return STATUS_INVALID_DEVICE_STATE;
@@ -597,9 +1034,15 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     // an odd length would otherwise become a shorter IB rather than an error.
     if (SizeBytes == 0 || (SizeBytes & 3) != 0 || Vmid >= RTL_NUMBER_OF(Gfx->VmidRoot)) return STATUS_INVALID_PARAMETER;
 
-    // One in flight. A late fence is taken here rather than held against the caller: GfxFenceArrived also clears the
-    // mark, so a submission whose interrupt was missed still unblocks the next one as soon as its value lands.
-    if (Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq)) return STATUS_DEVICE_BUSY;
+    // Queue only jobs sharing the current VMID1 root. A CPU MMIO root change
+    // must never redirect an earlier job still using that VMID. VMID0 diagnostics
+    // remain exclusive. MMIO invalidation stays until the leaf-PTE control passes.
+    if (Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq) &&
+        (Vmid != 1 || Gfx->SubmitVmid != 1 || Gfx->VmidRoot[Vmid] != RootPhysical)) return STATUS_DEVICE_BUSY;
+    // GFX10 writeback is a 32-bit dword pointer; use a full aligned slot for
+    // either frame. Do this before root writes or sequence publication.
+    if (!bc250_ring_has_space(ring, ring->funcs->align_mask + 1u)) return STATUS_DEVICE_BUSY;
+    ring->track_rptr = true;
 
     if (!Gfx->FencePage)
     {
@@ -626,9 +1069,11 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);
     if (seq == 0) seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);  // 0 means "nothing in flight" to GfxFenceArrived
     // Both set before the doorbell: the end-of-pipe interrupt can arrive inside bc250_gfx_submit_ib().
+    previousSeq = Gfx->SubmitSeq;
+    previousPending = InterlockedCompareExchange(&Gfx->SubmitInFlight, 0, 0);
     Gfx->SubmitSeq = seq;
     Gfx->SubmitAdev = Adev;
-    InterlockedExchange(&Gfx->SubmitInFlight, 1);
+    InterlockedExchange(&Gfx->SubmitInFlight, (LONG)seq);
 
     // The ring test (VMID 0) stays one IB and one fence. A UMD job gets the gfx
     // job frame. No memory-sync packet: BC2S leaves ib_flags 0, and upstream
@@ -643,12 +1088,19 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
     {
         // Nothing was committed: both emitters refuse before writing and bc250_gfx_submit_ib undoes the allocation.
-        InterlockedExchange(&Gfx->SubmitInFlight, 0);
-        Gfx->SubmitSeq = 0;
+        (void)InterlockedCompareExchange(&Gfx->SubmitInFlight, previousPending, (LONG)seq);
+        Gfx->SubmitSeq = previousSeq;
         GuardLog("gfx: IB 0x%llX x%lu dwords at VMID %lu refused, result %d", GpuAddress, SizeBytes / 4, Vmid, result);
         return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_INVALID_PARAMETER : Gfx->Sequence.Fault;
     }
 
+    Gfx->SubmitVmid = Vmid;
+    if (InterlockedIncrement(&Gfx->PipelineSamples) <= 16) {
+        ULONG observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
+        GuardLog("gfx: pipeline queued seq%lu prior%lu observed_after_doorbell%lu overlap%u",
+                 seq, previousSeq, observed,
+                 previousSeq != 0 && !bc250_fence_reached(observed, previousSeq));
+    }
     *Seq = seq;
     return STATUS_SUCCESS;
 }
@@ -873,7 +1325,7 @@ void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FENCE* Da
         if (NT_SUCCESS(status) && ibAt)
         {
             // Steps C4 and C6: the caller's buffer through the path wddm.c will use, with GfxSubmitIb's policy in
-            // full - the gate, stage 8, the VMID root and the one-in-flight rule - and then a bounded wait, which is
+            // full - the gate, stage 8, the VMID root and exclusive diagnostic rule - and then a bounded wait, which is
             // the one thing a DDI must not do. The lock and the sequence are already ours, so the inner call is the
             // one that runs; GfxSubmitIb itself would deadlock on GartLock here.
             ULONG seq = 0;
@@ -995,6 +1447,38 @@ static NTSTATUS SdmaCopyAllocateRegions(_Inout_ BC250_GFX* Gfx, _In_ struct amdg
     return STATUS_SUCCESS;
 }
 
+// The same AMD fill/copy emitters as the direct-ring control, in retained GTT.
+// Call only after the prior owed fence has arrived, before overwriting its IB.
+static NTSTATUS SdmaCopyBuildIb(BC250_GFX* Gfx, struct amdgpu_device* Adev, ULONG Bytes, ULONG* Dwords)
+{
+    u32* words;
+    unsigned int fillDw=0, copyDw=0, length, capacity;
+    int result;
+    *Dwords=0;
+    if (Gfx->SdmaCopyIb.size==0) {
+        result=bc250_shim_mem_alloc(Adev,BC250_MEM_GTT,4*PAGE_SIZE,PAGE_SIZE,&Gfx->SdmaCopyIb);
+        if (result!=0) return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    if (!Gfx->SdmaCopyIb.cpu || Gfx->SdmaCopyIb.size<PAGE_SIZE || (Gfx->SdmaCopyIb.mc & 31u)!=0)
+        return STATUS_INVALID_DEVICE_STATE;
+    words=(u32*)Gfx->SdmaCopyIb.cpu;
+    capacity=Gfx->SdmaCopyIb.size/sizeof(*words);
+    result=bc250_sdma_paging_fill(Adev,words,capacity,Gfx->SdmaCopySrc.mc,
+                                 BC250_SDMACOPY_PATTERN,Bytes,&fillDw);
+    if (result!=BC250_SDMA_PAGING_OK) return STATUS_INVALID_BUFFER_SIZE;
+    result=bc250_sdma_paging_copy(Adev,words+fillDw,capacity-fillDw,
+                                 Gfx->SdmaCopySrc.mc,Gfx->SdmaCopyDst.mc,Bytes,&copyDw);
+    if (result!=BC250_SDMA_PAGING_OK) return STATUS_INVALID_BUFFER_SIZE;
+    length=fillDw+copyDw;
+    // AMD sdma_v5_0_ring_pad_ib: pad payload to8DWORD, using ordinary NOPs.
+    if (((length+7u)&~7u)>capacity) return STATUS_INVALID_BUFFER_SIZE;
+    while (length & 7u) words[length++]=bc250_sdma_ring_funcs()->nop;
+    KeMemoryBarrier();
+    *Dwords=length;
+    GuardLog("gfx: sdmaib buffer 0x%llX length %lu DWORD VMID0 CSA0",Gfx->SdmaCopyIb.mc,*Dwords);
+    return STATUS_SUCCESS;
+}
+
 void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY* Data)
 {
     BC250_GFX* gfx;
@@ -1008,6 +1492,8 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
     u32 seq = 0;
     KIRQL sdmaIrql;
     long result = 0;
+    ULONG ibDwords = 0;
+    BOOLEAN indirect = Data->Command == BC250_ESCAPE_RUN_SDMAIB;
 
     Data->Version = BC250_KMD_VERSION;
     Data->Result = 0;
@@ -1065,6 +1551,7 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
             else { result = -16; status = STATUS_DEVICE_BUSY; }
         }
         if (NT_SUCCESS(status)) status = SdmaCopyAllocateRegions(gfx, adev, Device);
+        if (NT_SUCCESS(status) && indirect) status = SdmaCopyBuildIb(gfx, adev, bytes, &ibDwords);
 
         if (NT_SUCCESS(status))
         {
@@ -1086,7 +1573,9 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
                 // Sdma0RingLock: this escape always names BC250_FENCE_RING_SDMA0 (FenceRing() call above), the
                 // same physical ring node 1 submits to (design note section 4).
                 KeAcquireSpinLock(&gfx->Sdma0RingLock, &sdmaIrql);
-                result = bc250_sdma_copy_test(ring, gfx->SdmaCopySrc.mc, gfx->SdmaCopyDst.mc, bytes,
+                if (indirect)
+                    result = bc250_sdma_submit_ib(ring, gfx->SdmaCopyIb.mc, ibDwords, 0, 0, fenceAddr, seq, 0);
+                else result = bc250_sdma_copy_test(ring, gfx->SdmaCopySrc.mc, gfx->SdmaCopyDst.mc, bytes,
                                               BC250_SDMACOPY_PATTERN, fenceAddr, seq, 0);
                 KeReleaseSpinLock(&gfx->Sdma0RingLock, sdmaIrql);
                 if (result == 0 && NT_SUCCESS(gfx->Sequence.Fault))
@@ -1132,8 +1621,8 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
         (void)GpuMemEndSequence(Device, &vram, &gtt);
         adev->backend = previousBackend;
     }
-    GuardLog("gfx: sdmacopy %lu bytes -> 0x%08X, result %d, matched %lu, first mismatch at 0x%lX (got 0x%02lX want 0x%02lX), %lu us",
-             bytes, status, result, Data->Matched, Data->FirstMismatchOffset, Data->FirstMismatchGot, Data->FirstMismatchWant, Data->Microseconds);
+    GuardLog("gfx: %s %lu bytes -> 0x%08X, result %d, matched %lu, first mismatch at 0x%lX (got 0x%02lX want 0x%02lX), %lu us",
+             indirect ? "sdmaib" : "sdmacopy", bytes, status, result, Data->Matched, Data->FirstMismatchOffset, Data->FirstMismatchGot, Data->FirstMismatchWant, Data->Microseconds);
     ExReleaseFastMutex(&Device->GartLock);
 
     Data->Result = result;
@@ -1141,38 +1630,295 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
 
+// Private pre-publication control. All backing is retained by BC250_GFX until
+// engine retirement. VA deliberately differs from both GART MC and physical PA.
+// Linux amdgpu_sdma_get_csa_mc_addr uses64bytes per engine. Map a zeroed full
+// page for this SDMA0 CSA rather than assuming CSA0 is valid for nonzero VMID.
+
+// Pre-publication positive control: change BOTH PTE mappings on the GPU after
+// building the native copy, then execute the unchanged IB in VMID2. Backing
+// belongs to this startup owner through the real fence, including timeout.
+static NTSTATUS SdmaPteStartupControl(BC250_DEVICE* Device,BC250_GFX* gfx,
+    struct amdgpu_device* adev,struct amdgpu_ring* ring,u64* tables,u64 rootPhys)
+{
+    const u64 baseVa=0x40000000ull,dmaVa=0x40004000ull;
+    UCHAR* sourceA=(UCHAR*)gfx->SdmaCopySrc.cpu;
+    UCHAR* sourceB=(UCHAR*)gfx->SdmaVaData.cpu;
+    UCHAR* oldDestination=sourceB+PAGE_SIZE;
+    UCHAR* destination=(UCHAR*)gfx->SdmaCopyDst.cpu;
+    u64 sourcePhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaCopySrc.mc);
+    u64 destinationPhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaCopyDst.mc);
+    u64 systemPhys=(u64)MmGetPhysicalAddress(sourceB).QuadPart;
+    u64 marker=bc250_sdma_fence_addr(adev,BC250_PAGING_MARKER_SLOT);
+    u64 fence=bc250_sdma_fence_addr(adev,2);
+    unsigned trial,i,words,length,seq,arrived,waited;
+    u32 prelude[64];
+    NTSTATUS status=STATUS_SUCCESS;
+    KIRQL irql;
+    int result;
+    (void)Device;
+    if(gfx->SdmaCopyIb.size<4*PAGE_SIZE || !marker || !fence)return STATUS_INVALID_DEVICE_STATE;
+    for(i=0;i<4;i++) {
+        u64 physical=(u64)MmGetPhysicalAddress((UCHAR*)gfx->SdmaCopyIb.cpu+i*PAGE_SIZE).QuadPart;
+        WRITE_REGISTER_ULONG64(&tables[3*512+4+i],physical|bc250_pte_vm_flags(1,1,1,1));
+    }
+    for(trial=0;trial<3;trial++) {
+        struct bc250_sdma_virtual_ptes built;
+        u64 entries[2];
+        unsigned sourceOffset=trial==2?8u:0u,destinationOffset=trial==1?8u:0u;
+        for(i=0;i<PAGE_SIZE;i++) {
+            WRITE_REGISTER_UCHAR(sourceA+i,(UCHAR)(i^0x5Au));
+            sourceB[i]=(UCHAR)(i^0xC3u);
+            WRITE_REGISTER_UCHAR(destination+i,(UCHAR)((i*13u)^0x39u));
+        }
+        RtlFillMemory(oldDestination,PAGE_SIZE,0xEE);
+        // Old identities deliberately differ from the later GPU update.
+        WRITE_REGISTER_ULONG64(&tables[3*512],sourcePhys|bc250_pte_vm_flags(1,1,0,0));
+        WRITE_REGISTER_ULONG64(&tables[3*512+1],(systemPhys+PAGE_SIZE)|bc250_pte_vm_flags(1,1,1,1));
+        result=bc250_sdma_build_virtual_ptes(adev,gfx->SdmaCopyIb.cpu,gfx->SdmaCopyIb.size,
+            dmaVa,baseVa+sourceOffset,baseVa+PAGE_SIZE+destinationOffset,trial?511u:512u,&built);
+        if(result)return STATUS_INVALID_BUFFER_SIZE;
+        entries[0]=trial ? destinationPhys|bc250_pte_vm_flags(1,1,0,0) :
+            systemPhys|bc250_pte_vm_flags(1,1,1,1);
+        entries[1]=destinationPhys|bc250_pte_vm_flags(1,1,0,0);
+        words=0;
+        result=bc250_sdma_paging_update_ptes(adev,prelude,RTL_NUMBER_OF(prelude),
+            gfx->SdmaVaTables.mc+3*PAGE_SIZE,entries,2,marker,32u+trial,&words);
+        if(result)return STATUS_INVALID_BUFFER_SIZE;
+        KeMemoryBarrier();
+        seq=(ULONG)InterlockedIncrement(&gfx->FenceSeq);
+        length=words+BC250_SDMA_VM_FLUSH_DWORDS+7u+6u+bc250_sdma_fence_size(ring,0);
+        KeAcquireSpinLock(&gfx->Sdma0RingLock,&irql);
+        result=amdgpu_ring_alloc(ring,length);
+        if(!result) {
+            amdgpu_ring_write_multiple(ring,prelude,(int)words);
+            result=bc250_sdma_emit_vm_flush(ring,BC250_SDMA_PAGING_VMID,rootPhys);
+            if(!result)result=bc250_sdma_emit_ib(ring,dmaVa+built.ib_offset,built.ib_dwords,
+                BC250_SDMA_PAGING_VMID,dmaVa+built.csa_offset);
+            if(!result)result=bc250_sdma_emit_fence(ring,fence,seq,0);
+            if(!result)amdgpu_ring_commit(ring);
+            else amdgpu_ring_undo(ring);
+        }
+        KeReleaseSpinLock(&gfx->Sdma0RingLock,irql);
+        if(result || !NT_SUCCESS(gfx->Sequence.Fault))return STATUS_IO_DEVICE_ERROR;
+        for(waited=0;waited<BC250_FENCE_TIMEOUT_US;waited+=10) {
+            arrived=(ULONG)bc250_sdma_fence_read(adev,2);
+            if(arrived==seq)break;
+            KeStallExecutionProcessor(10);
+        }
+        if(arrived!=seq) {
+            gfx->RingOwes[BC250_FENCE_RING_SDMA0]=seq;gfx->RingOwesSlot[BC250_FENCE_RING_SDMA0]=2;
+            GuardLog("gfx: sdmapte trial%u fence%u/%u TIMEOUT",trial,seq,arrived);
+            return STATUS_IO_TIMEOUT;
+        }
+        KeMemoryBarrier();
+        for(i=0;i<PAGE_SIZE;i++) {
+            unsigned index=trial==1 && i>=8?i-8:trial==2 && i<PAGE_SIZE-8?i+8:i;
+            UCHAR want=trial ? (UCHAR)((index*13u)^0x39u) : (UCHAR)(i^0xC3u);
+            if(READ_REGISTER_UCHAR(destination+i)!=want || oldDestination[i]!=0xEE ||
+               READ_REGISTER_UCHAR(sourceA+i)!=(UCHAR)(i^0x5Au) || sourceB[i]!=(UCHAR)(i^0xC3u)) {
+                status=STATUS_DATA_ERROR;break;
+            }
+        }
+        GuardLog("gfx: sdmapte trial%u GPU-remap %s fence%u/%u compared%u status0x%08X",trial,
+            trial==0?"system-to-VRAM":trial==1?"alias-forward":"alias-backward",seq,arrived,i,status);
+        GuardLogKeep();
+        if(!NT_SUCCESS(status))return status;
+    }
+    return status;
+}
+
+static NTSTATUS SdmaVaStartupControl(BC250_DEVICE* Device)
+{
+    const u64 baseVa=0x40000000ULL;
+    BC250_GFX* gfx=(BC250_GFX*)Device->Gfx;
+    struct amdgpu_device* adev=NULL;
+    struct amdgpu_ring* ring;
+    void* previousBackend;
+    BOOLEAN enabled=FALSE;
+    NTSTATUS status;
+    u64 rootPhys,systemPhys,ibPhys,sourcePhys,fenceAddr;
+    u64* tables;
+    u32* ib;
+    UCHAR *sourceA,*sourceB,*dest;
+    ULONG i,trial,vram,gtt,seq=0,arrived=0,waited;
+    unsigned int fillDw,copyDw,length;
+    int result=0;
+    BOOLEAN runPteControl=(GuardReadSetting(L"EnableSdmaPteControl",0)==1);
+    KIRQL irql;
+    if (!Device->FullWddm || Device->Wddm || Device->Started || !gfx || !gfx->SdmaCopyIb.cpu)
+        return STATUS_INVALID_DEVICE_STATE;
+    ExAcquireFastMutex(&Device->GartLock);
+    status=GartDevice(Device,&adev,&enabled);
+    if (!NT_SUCCESS(status) || !enabled) {
+        ExReleaseFastMutex(&Device->GartLock);
+        return NT_SUCCESS(status)?STATUS_INVALID_DEVICE_STATE:status;
+    }
+    previousBackend=adev->backend;adev->backend=&gfx->Sequence;
+    SequenceBegin(&gfx->Sequence,Device,FALSE,NULL,0);GpuMemBeginSequence(Device,NULL,0);
+    if (adev->vm_manager.num_level!=3 || adev->vm_manager.block_size!=9 ||
+        gfx->RingOwes[BC250_FENCE_RING_SDMA0]!=0) {status=STATUS_INVALID_DEVICE_STATE;goto Done;}
+    if (!gfx->SdmaVaTables.size)
+        result=bc250_shim_mem_alloc(adev,BC250_MEM_VRAM,4*PAGE_SIZE,PAGE_SIZE,&gfx->SdmaVaTables);
+    if (!result && !gfx->SdmaVaData.size)
+        result=bc250_shim_mem_alloc(adev,BC250_MEM_GTT,3*PAGE_SIZE,PAGE_SIZE,&gfx->SdmaVaData);
+    if (result || !gfx->SdmaVaTables.cpu || !gfx->SdmaVaData.cpu) {status=STATUS_INSUFFICIENT_RESOURCES;goto Done;}
+    rootPhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaVaTables.mc);
+    sourcePhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaCopySrc.mc);
+    systemPhys=(u64)MmGetPhysicalAddress(gfx->SdmaVaData.cpu).QuadPart;
+    ibPhys=(u64)MmGetPhysicalAddress(gfx->SdmaCopyIb.cpu).QuadPart;
+    fenceAddr=bc250_sdma_fence_addr(adev,2);
+    if (!fenceAddr) {status=STATUS_INVALID_DEVICE_STATE;goto Done;}
+    tables=(u64*)gfx->SdmaVaTables.cpu;ib=(u32*)gfx->SdmaCopyIb.cpu;
+    sourceA=(UCHAR*)gfx->SdmaCopySrc.cpu;sourceB=(UCHAR*)gfx->SdmaVaData.cpu;dest=sourceB+PAGE_SIZE;
+    ring=&adev->sdma.instance[0].ring;
+    for(i=0;i<4*PAGE_SIZE/sizeof(u64);i++) WRITE_REGISTER_ULONG64(&tables[i],0);
+    // Established WDDM four-level/512-entry layout, physical PDEs in local VRAM.
+    for(i=0;i<3;i++) {
+        ULONG index=(ULONG)((baseVa>>(12+9*(3-i)))&511u);
+        WRITE_REGISTER_ULONG64(&tables[i*512+index],(rootPhys+(i+1)*PAGE_SIZE)|AMDGPU_PTE_VALID);
+    }
+    WRITE_REGISTER_ULONG64(&tables[3*512+1],(systemPhys+PAGE_SIZE)|bc250_pte_vm_flags(1,1,1,1));
+    WRITE_REGISTER_ULONG64(&tables[3*512+2],ibPhys|bc250_pte_vm_flags(1,1,1,1));
+    WRITE_REGISTER_ULONG64(&tables[3*512+3],(systemPhys+2*PAGE_SIZE)|bc250_pte_vm_flags(1,1,1,1));
+    RtlZeroMemory(sourceB+2*PAGE_SIZE,PAGE_SIZE);
+    for(i=0;i<PAGE_SIZE;i++) {WRITE_REGISTER_UCHAR(&sourceA[i],(UCHAR)(i^0x5Au));sourceB[i]=(UCHAR)(i^0xC3u);}
+    GuardLog("gfx: sdmava root PA0x%llX IB PA0x%llX system PA0x%llX source PA0x%llX VA0x%llX CSA0x%llX VMID%u",
+             rootPhys,ibPhys,systemPhys,sourcePhys,baseVa,baseVa+3*PAGE_SIZE,BC250_SDMA_PAGING_VMID);
+    for(trial=0;trial<2;trial++) {
+        UCHAR fill=(UCHAR)(trial?0x66u:0x33u);
+        // Remap the same source VA from local VRAM to a differently patterned
+        // system page. The first real fence has arrived before changing the PTE.
+        u64 sourcePte=trial ? systemPhys|bc250_pte_vm_flags(1,1,1,1) : sourcePhys|bc250_pte_vm_flags(1,1,0,0);
+        WRITE_REGISTER_ULONG64(&tables[3*512],sourcePte);
+        RtlFillMemory(dest,PAGE_SIZE,0xEE);
+        fillDw=copyDw=0;
+        result=bc250_sdma_paging_fill(adev,ib,PAGE_SIZE/4,baseVa+PAGE_SIZE,(u32)fill*0x01010101u,PAGE_SIZE,&fillDw);
+        if (!result) result=bc250_sdma_paging_copy(adev,ib+fillDw,PAGE_SIZE/4-fillDw,baseVa,
+                                                 baseVa+PAGE_SIZE,PAGE_SIZE/2,&copyDw);
+        if (result) {status=STATUS_INVALID_BUFFER_SIZE;break;}
+        length=fillDw+copyDw;while(length&7u) ib[length++]=ring->funcs->nop;
+        KeMemoryBarrier();
+        seq=(ULONG)InterlockedIncrement(&gfx->FenceSeq);
+        KeAcquireSpinLock(&gfx->Sdma0RingLock,&irql);
+        result=bc250_sdma_submit_vm_ib(ring,rootPhys,baseVa+2*PAGE_SIZE,length,BC250_SDMA_PAGING_VMID,
+                                      baseVa+3*PAGE_SIZE,fenceAddr,seq,0);
+        KeReleaseSpinLock(&gfx->Sdma0RingLock,irql);
+        if (result || !NT_SUCCESS(gfx->Sequence.Fault)) {status=STATUS_IO_DEVICE_ERROR;break;}
+        for(waited=0;waited<BC250_FENCE_TIMEOUT_US;waited+=10) {
+            arrived=(ULONG)bc250_sdma_fence_read(adev,2);
+            if (arrived==seq) break;
+            KeStallExecutionProcessor(10);
+        }
+        if (arrived!=seq) {
+            gfx->RingOwes[BC250_FENCE_RING_SDMA0]=seq;gfx->RingOwesSlot[BC250_FENCE_RING_SDMA0]=2;
+            status=STATUS_IO_TIMEOUT;
+            GuardLog("gfx: sdmava trial%lu fence%lu/%lu TIMEOUT",trial,seq,arrived);break;
+        }
+        KeMemoryBarrier();
+        for(i=0;i<PAGE_SIZE;i++) {
+            UCHAR want=i<PAGE_SIZE/2 ? (UCHAR)(i^(trial?0xC3u:0x5Au)) : fill;
+            UCHAR got=READ_REGISTER_UCHAR(&dest[i]);
+            if (got!=want) {
+                GuardLog("gfx: sdmava trial%lu mismatch offset%lu got%u want%u",trial,i,(ULONG)got,(ULONG)want);
+                status=STATUS_DATA_ERROR;break;
+            }
+        }
+        GuardLog("gfx: sdmava trial%lu source%s fence%lu/%lu compared%lu status0x%08X",trial,
+                 trial?"system-remap":"VRAM",seq,arrived,i,status);
+        if (!NT_SUCCESS(status)) break;
+    }
+    if(NT_SUCCESS(status) && runPteControl)
+        status=SdmaPteStartupControl(Device,gfx,adev,ring,tables,rootPhys);
+Done:
+    if (NT_SUCCESS(status)) status=gfx->Sequence.Fault;
+    GuardLog("gfx: sdmava end status0x%08X result%d fault0x%lX",status,result,gfx->Sequence.FaultOffset);
+    (void)GpuMemEndSequence(Device,&vram,&gtt);adev->backend=previousBackend;
+    ExReleaseFastMutex(&Device->GartLock);
+    return status;
+}
+
+
 // ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ---------------------------
 //
-// BuildPagingBuffer (PASSIVE_LEVEL, under GartLock, like GfxSubmitIb) turns one paging operation into SDMA
-// packets through the same emitters SdmaCopyEscape already proved (M95): GfxPagingBuild. SubmitCommand
-// (DISPATCH_LEVEL, no GartLock, no adev->backend) pushes the bytes GfxPagingBuild left in the shadow onto the
-// live SDMA0 ring: GfxSubmitPaging. The two meet only through Gfx->PagingShadowMem and Gfx->PagingRing/
-// PagingDevicePtr, both set up once (GfxEscape's RUN arm, below) and read without a lock at DISPATCH_LEVEL,
-// exactly as ih.c's DpcAdev is (design note section 4).
+// PASSIVE_LEVEL builder emits into OS-owned per-buffer nonpaged private records.
+// DISPATCH_LEVEL submit validates those records, then copies selected words into
+// the live SDMA ring. No command storage is shared across OS DMA buffers.
 
-BOOLEAN GfxPagingNodeGate(_In_ const BC250_DEVICE* Device)
+static BOOLEAN GfxPagingNodeGateAccess(_In_ const BC250_DEVICE* Device)
 {
     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
 
     return gfx != NULL && gfx->PagingGate;
 }
 
-ULONG GfxPagingShadowBytes(void)
+BOOLEAN GfxPagingNodeGate(_In_ const BC250_DEVICE* Device)
 {
-    return BC250_GFX_PAGING_SHADOW_BYTES;
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return FALSE;
+    }
+    result = GfxPagingNodeGateAccess(Device);
+    GfxAccessRelease(Device);
+    return result;
 }
 
-BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device)
+static BOOLEAN GfxPagingSubmitReadyAccess(_In_ const BC250_DEVICE* Device)
 {
     const BC250_GFX* gfx = (const BC250_GFX*)Device->Gfx;
 
     // The node-1 twin of GfxSubmitReady: gated, set up, not failed, nothing outstanding, and PagingReady - the
     // RUN escape has reached stage 8 with the gate open and captured a live ring to write to.
-    return gfx != NULL && gfx->PagingGate && gfx->SetUp && !gfx->Failed && gfx->PagingSubmitFailed == 0 &&
+    return gfx != NULL && gfx->PagingGate && gfx->SetUp && !gfx->PowerSuspended && !gfx->Failed && gfx->PagingSubmitFailed == 0 &&
            gfx->PagingSubmitInFlight == 0 && gfx->PagingReady;
 }
 
-void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
+BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device)
+{
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return FALSE;
+    }
+    result = GfxPagingSubmitReadyAccess(Device);
+    GfxAccessRelease(Device);
+    return result;
+}
+
+// Startup owns the unpublished device lifecycle; no diagnostic escape or stop
+// may run concurrently. Shared builder ownership protects the object while this
+// checks the resources used by both local and system-memory paging.
+BOOLEAN GfxStartupResources(BC250_DEVICE* Device, BOOLEAN Initialized)
+{
+    const BC250_GFX* gfx;
+    BOOLEAN ready = FALSE;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return FALSE;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(const BC250_GFX*)Device->Gfx;
+    if (!gfx || !gfx->SubmitGate || !gfx->PagingGate || gfx->Failed ||
+        gfx->SubmitFailed || gfx->PagingSubmitFailed ||
+        gfx->SubmitInFlight || gfx->PagingSubmitInFlight) goto Done;
+    if (!Initialized) {
+        ready=!gfx->SetUp && gfx->StagesDone==0 && gfx->PagingCpuBootstrap;
+        goto Done;
+    }
+    ready=!Device->GfxTlbBootstrap && GfxSubmitReadyAccess(Device) && GfxPagingSubmitReadyAccess(Device) &&
+        gfx->PagingWindowReady && gfx->PagingRing && gfx->PagingRing->funcs &&
+        gfx->PagingRing->max_dw && gfx->PagingDevicePtr &&
+        gfx->FencePage && gfx->SdmaFencePage &&
+        gfx->PagingCopyStaging.size>=PAGE_SIZE && gfx->PagingCopyStaging.mc &&
+        gfx->PagingDevicePtr->sdma.fence_mem.cpu &&
+        bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_FENCE_SLOT)!=0 &&
+        bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_MARKER_SLOT)!=0;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return ready;
+}
+
+static void GfxPagingSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
 
@@ -1186,11 +1932,22 @@ void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
                  gfx->PagingDevicePtr != NULL ? (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) : 0);
 }
 
-BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    StartHealthFault(Device);
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        return;
+    }
+    GfxPagingSubmitFailAccess(Device);
+    GfxAccessRelease(Device);
+}
+
+static BOOLEAN GfxPagingFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 {
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
 
-    // One read of a GTT page SDMA0 writes, no register, no lock, no allocation - the node-1 twin of
+    // One read of a GTT page SDMA0 writes, under the outer CPU lifetime reference - the node-1 twin of
     // GfxFenceArrived. PagingDevicePtr is only ever non-NULL between GfxEscape's capture and the teardown that
     // frees the fence page, and pnp.c drains ih.c's DPCs before that teardown runs, exactly as SubmitAdev's own
     // comment states.
@@ -1200,165 +1957,1253 @@ BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
     return TRUE;
 }
 
-// PASSIVE_LEVEL, exactly - not under GartLock (E24 run 001, docs/design/paging-node.md, "What run 001 hung
-// on"): a FAST_MUTEX raises IRQL to APC_LEVEL, and VidMmTranslate's own IRQL check refuses anything but exactly
-// PASSIVE_LEVEL (vidmm.c:238), APC_LEVEL included, so GartLock cannot be held across it - see
-// GfxPagingBuild/PagingBuildersActive for what serializes this caller instead. Verifies that [Va, Va+Bytes)
-// resolves to one physically contiguous run before GfxPagingBuild trusts Physical0 (the translation of Va
-// itself) for the whole range: VidMmTranslate resolves one 4 KB page at a time (bc250_pte_fields, PAGE_SHIFT),
-// and a GPU VA range backed by VidMm's own page tables has no reason to stay physically contiguous past the
-// first page - review 23 MUST-FIX: GfxPagingBuild used to translate only Va and hand the whole Bytes span to
-// bc250_sdma_paging_copy/fill as if it were, which corrupts memory the moment a multi-page TRANSFER_VIRTUAL/
-// FILL_VIRTUAL lands on a fragmented VRAM allocation. Answers FALSE (refuse to build, not build wrong) rather
-// than attempt to split one operation into several packets - out of scope for this cut, same as the
-// system-memory limit section 2 already states plainly instead of hiding.
-static BOOLEAN PagingRangeContiguous(ULONGLONG RootPhysical, ULONGLONG Va, ULONGLONG Physical0, ULONGLONG Bytes)
+BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 {
-    ULONGLONG boundary;
-
-    for (boundary = (Va & ~((ULONGLONG)PAGE_SIZE - 1)) + PAGE_SIZE; boundary < Va + Bytes; boundary += PAGE_SIZE)
+    BOOLEAN result;
+    if (GfxAccessAcquire(Device) == NULL)
     {
-        ULONGLONG physical = 0;
-        BOOLEAN system = FALSE;
-
-        if (!VidMmTranslate(RootPhysical, boundary, &physical, &system) || system) return FALSE;
-        if (physical != Physical0 + (boundary - Va)) return FALSE;
+        return FALSE;
     }
-    return TRUE;
+    result = GfxPagingFenceArrivedAccess(Device, Seq);
+    GfxAccessRelease(Device);
+    return result;
 }
 
-// PASSIVE_LEVEL, exactly - NOT under GartLock, and deliberately so (E24 run 001, docs/design/paging-node.md,
-// "What run 001 hung on"). wddm.c calls VidMmUpdatePageTable, right next to this arm in
-// Bc250WddmBuildPagingBuffer, the same way and with the same absence of GartLock - that much was already true
-// before stage D and is not new. What stage D added is a second thing this function reads with no lock:
-// PagingReady/PagingShadowMem, published by GfxEscape's RUN arm and cleared/freed by TearDown, both under
-// GartLock. Taking GartLock here to close that gap the obvious way does not work: ExAcquireFastMutex raises
-// IRQL to APC_LEVEL, and VidMmTranslate refuses anything but exactly PASSIVE_LEVEL (vidmm.c:238) - a
-// GartLock-held call into it would fail every single translation, silently, for as long as the lock was held.
-// PagingBuildersActive is the narrower thing that is actually possible: an interlocked count of calls that are
-// still touching PagingShadowMem, which TearDown waits to drain (bounded) before freeing it. It does not
-// serialize this function against a concurrent GfxEscape RUN the way GartLock would - two calls can genuinely
-// run at once - only against the one thing that is actually unsafe, PagingShadowMem disappearing mid-use.
-//
-// RootPhysical names the paging process's root (wddm.c resolves hSystemContext to it, design note section 2);
-// Fill selects DXGK_OPERATION_VIRTUAL_FILL (SrcVa/FillPattern) over DXGK_OPERATION_VIRTUAL_TRANSFER (SrcVa,
-// DstVa). Both virtual addresses are resolved to physical with VidMmTranslate before any packet is emitted: no
-// VMID is ever pointed at anything for this path (design note section 2). DmaBuffer/DmaBufferOffset/
-// DmaBufferFree describe dxgkrnl's own pDmaBuffer at the caller's DmaBufferWriteOffset, exactly as wddm.c will
-// pass them; this function writes the same bytes there and into Gfx->PagingShadowMem at the same offset, so
-// that GfxSubmitPaging can find them later without ever dereferencing pDmaBuffer's physical address.
-//
-// The packet itself comes from driver/shim/bc250_sdma_paging.c (ADR 0013), not from this function: that file
-// is the host-testable half (driver/shim/test/paging_packets.c checks it dword for dword against
-// bc250_sdma_emit_copy_linear()/emit_fill(), M95, plus the room check below), and this one supplies only what
-// that file cannot have - the MC addresses (paging_mc.c, from VidMmTranslate's system physical) and the
-// shadow buffer to write them into.
-//
-// DmaBuffer is pBuildPagingBuffer->pDmaBuffer as the DDI hands it over: "a virtual address to the first
-// available byte in the paging buffer", not the buffer's start. DmaBufferOffset is that same byte's distance
-// from the start (pBuildPagingBuffer->DmaBufferWriteOffset), which is what the shadow is indexed by and what
-// SubmitCommand will later name in DmaBufferSubmissionStartOffset. The caller - and only the caller - advances
-// pDmaBuffer past what this function wrote; leaving it where it was is how the DDI says "nothing was written",
-// and saying that by accident is what left four built fills unsubmitted in E24 run 005 (facts M108).
-NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
-                        ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
-                        ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
-                        _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+// Translation/emission adapters: local pages use direct MC addresses; system pages
+// use the reserved GART window with GPU-ordered mapping and cleanup. Hardware
+// validation of this new path remains separate from host packet/stream tests.
+// MDL PFNs describe OS system RAM for legacy physical paging. This adapter
+// borrows the MDL only during construction; the OS owns its pinning/lifetime.
+// ByteOffset is measured from PFN[FirstPage], not from TransferOffset and not
+// implicitly adjusted by MDL ByteOffset. The described byte interval is checked.
+BOOLEAN GfxPagingMdlAddress(_In_ PMDL Mdl, ULONG FirstPage, ULONGLONG ByteOffset,
+                           ULONG Bytes, _Out_ ULONGLONG* Address)
 {
-    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
-    ULONGLONG srcPhysical = 0, dstPhysical = 0, srcMc = 0, dstMc = 0;
-    BOOLEAN srcSystem = FALSE, dstSystem = FALSE;
-    unsigned int budget, written = 0;
-    u32* shadow;
-    int result;
-    NTSTATUS status = STATUS_SUCCESS;
+    ULONGLONG begin,end,start,pages;
+    if (Address==NULL) return FALSE;
+    *Address=0;
+    if (Mdl==NULL || sizeof(PFN_NUMBER)!=sizeof(PAGING_U64)) return FALSE;
+    begin=MmGetMdlByteOffset(Mdl);
+    if (begin>=PAGE_SIZE || MmGetMdlByteCount(Mdl)==0) return FALSE;
+    end=begin+(ULONGLONG)MmGetMdlByteCount(Mdl);
+    pages=(end+PAGE_SIZE-1)>>PAGE_SHIFT;
+    start=(ULONGLONG)FirstPage<<PAGE_SHIFT;
+    if (ByteOffset>MAXULONGLONG-start) return FALSE;
+    start+=ByteOffset;
+    if (!Bytes || start<begin || start>=end || Bytes>end-start) return FALSE;
+    return PagingPageListAddress((const PAGING_U64*)MmGetMdlPfnArray(Mdl),
+        (unsigned)pages,0,0,FirstPage,ByteOffset,Bytes,Address)!=0;
+}
 
-    *DwordsWritten = 0;
-    *Unsupported = BC250PagingSupported;
-    if (gfx == NULL || Bytes == 0 || Bytes > 0xFFFFFFFFu) return STATUS_INVALID_PARAMETER;
+typedef struct _BC250_PAGING_STREAM {
+    BC250_DEVICE* Device;
+    BC250_GFX* Gfx;
+    ULONGLONG Root;
+    BOOLEAN Fill;
+    ULONG Pattern;
+    ULONGLONG StagingMc;
+    ULONG CommandOffset;
+    unsigned* Payload;
+    BC250_WDDM_PAGING_UNSUPPORTED Unsupported;
+} BC250_PAGING_STREAM;
 
-    // PagingBuildersActive from here to Done: see this function's own header comment and the field's. Counted
-    // even for a call that turns out "not ready" below, so that TearDown's wait and this function's own read of
-    // PagingReady can never straddle a free of PagingShadowMem no matter how early that read happens to lose.
-    InterlockedIncrement(&gfx->PagingBuildersActive);
-
-    if (!gfx->PagingReady || gfx->PagingDevicePtr == NULL) { *Unsupported = BC250PagingNotReady; goto Done; }
-
-    // hSystemContext's root: RootPhysical is 0 when wddm.c found no BC250_WDDM_CONTEXT to resolve it against.
-    if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; goto Done; }
-
-    if (!VidMmTranslate(RootPhysical, DstVa, &dstPhysical, &dstSystem)) { *Unsupported = BC250PagingNoTranslation; goto Done; }
-    if (!Fill)
-    {
-        if (!VidMmTranslate(RootPhysical, SrcVa, &srcPhysical, &srcSystem)) { *Unsupported = BC250PagingNoTranslation; goto Done; }
+static int PagingResolve(void* Context, PAGING_U64 Va, unsigned Bytes, PAGING_U64* Mc)
+{
+    BC250_PAGING_STREAM* stream = (BC250_PAGING_STREAM*)Context;
+    ULONGLONG physical = 0;
+    BOOLEAN system = FALSE;
+    if (!VidMmTranslatePaging(stream->Root, Va, &physical, &system)) {
+        stream->Unsupported = BC250PagingNoTranslation; return 0;
     }
-    // Section 2's stated limit: no MC mapping exists for a page VidMm resolved to system memory unless this
-    // driver itself allocated it through bc250_shim_mem_alloc(BC250_MEM_GTT, ...). Answered inertly, not refused:
-    // dxgkrnl still gets STATUS_SUCCESS for an operation this cut does not build.
-    if (dstSystem || (!Fill && srcSystem)) { *Unsupported = BC250PagingSystemMemory; goto Done; }
-
-    // Review 23 MUST-FIX: one COPY_LINEAR/CONST_FILL packet covers [dstPhysical, dstPhysical+Bytes) (and, for a
-    // transfer, [srcPhysical, srcPhysical+Bytes)) as one physically linear run. dstPhysical/srcPhysical are only
-    // proven for the first page Va names; every further page this operation's Bytes reaches must be confirmed to
-    // continue that run before a packet is built, or a non-contiguous allocation silently corrupts memory instead
-    // of just answering slowly.
-    if (!PagingRangeContiguous(RootPhysical, DstVa, dstPhysical, Bytes) ||
-        (!Fill && !PagingRangeContiguous(RootPhysical, SrcVa, srcPhysical, Bytes)))
-    {
-        *Unsupported = BC250PagingNotContiguous;
-        goto Done;
+    if (system) {
+        ULONGLONG page=physical & ~(ULONGLONG)(PAGE_SIZE-1);
+        if (!stream->Gfx->PagingWindowReady || (page & ~AMDGPU_PTE_ADDR_MASK) != 0) {
+            stream->Unsupported = BC250PagingSystemMemory; return 0;
+        }
+        *Mc=physical | PAGING_SYSTEM_ADDRESS; return 1;
     }
-
-    // VidMmTranslate's number is a system physical address (vidmm.c, vram_base). The packet wants the MC
-    // address M95's sdmacopy used. 0.7.33 put the physical one in and SDMA0 page-faulted (facts M113).
-    if (!PagingPhysicalToMc(dstPhysical, Bytes, (ULONGLONG)Device->VramPhysical.QuadPart, Device->VramMcBase,
-                            Device->VramLength, &dstMc) ||
-        (!Fill && !PagingPhysicalToMc(srcPhysical, Bytes, (ULONGLONG)Device->VramPhysical.QuadPart,
-                                      Device->VramMcBase, Device->VramLength, &srcMc)))
-    {
-        *Unsupported = BC250PagingNoTranslation;
-        goto Done;
+    if (!PagingPhysicalToMc(physical, Bytes, (ULONGLONG)stream->Device->VramPhysical.QuadPart,
+                            stream->Device->VramMcBase, stream->Device->VramLength, Mc)) {
+        stream->Unsupported = BC250PagingNoTranslation; return 0;
     }
+    return 1;
+}
 
-    if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_SHADOW_BYTES) { status = STATUS_INVALID_PARAMETER; goto Done; }
+static int PagingEmit(void* Context, unsigned* Buffer, unsigned Capacity, PAGING_U64 Src,
+                      PAGING_U64 Dst, unsigned Bytes, unsigned* Written)
+{
+    BC250_PAGING_STREAM* stream = (BC250_PAGING_STREAM*)Context;
+    if ((Src | Dst) & PAGING_SYSTEM_ADDRESS) {
+        struct amdgpu_device* adev=stream->Gfx->PagingDevicePtr;
+        struct bc250_sdma_paging_mapping map;
+        u64 ptes[2]={0,0};
+        RtlZeroMemory(&map,sizeof(map));
+        map.table_mc=stream->Gfx->PagingWindow.table;
+        map.ptes=ptes; map.page_count=2;
+        map.scratch_mc=bc250_sdma_fence_addr(adev,BC250_PAGING_MARKER_SLOT);
+        if (map.scratch_mc==0) return BC250_SDMA_PAGING_EINVAL;
+        // Command position is unique within the OS buffer, including earlier build calls.
+        // Submit resets scratch only after the previous actual hardware fence.
+        map.first_sequence=1u+3u*(stream->CommandOffset/4u+(unsigned)(Buffer-stream->Payload));
+        map.src_mc=Src; map.dst_mc=Dst; map.bytes=Bytes;
+        map.fill=stream->Fill; map.pattern=stream->Pattern;map.staging_mc=stream->StagingMc;
+        if (Src & PAGING_SYSTEM_ADDRESS) {
+            u64 physical=Src & ~PAGING_SYSTEM_ADDRESS;
+            ptes[0]=bc250_gart_pte(physical & ~(u64)4095,bc250_gart_pte_flags(adev));
+            map.src_mc=stream->Gfx->PagingWindow.mc+(physical & 4095);
+        }
+        if (Dst & PAGING_SYSTEM_ADDRESS) {
+            u64 physical=Dst & ~PAGING_SYSTEM_ADDRESS;
+            ptes[1]=bc250_gart_pte(physical & ~(u64)4095,bc250_gart_pte_flags(adev));
+            map.dst_mc=stream->Gfx->PagingWindow.mc+PAGE_SIZE+(physical & 4095);
+        }
+        return bc250_sdma_paging_mapped_transfer(adev,Buffer,Capacity,&map,Written);
+    }
+    return stream->Fill ? bc250_sdma_paging_fill(stream->Gfx->PagingDevicePtr, Buffer, Capacity,
+                                               Dst, stream->Pattern, Bytes, Written)
+                        : bc250_sdma_paging_copy(stream->Gfx->PagingDevicePtr, Buffer, Capacity,
+                                               Src, Dst, Bytes, Written);
+}
 
-    // budget: the smaller of dxgkrnl's own remaining DmaBufferFree and the shadow's - bc250_sdma_paging_copy/
-    // fill's own room check (paging_packets.c's "insufficient buffer" cases) is what turns either one running
-    // out into BC250_SDMA_PAGING_INSUFFICIENT, exactly as the task asks (design note section 4a).
-    budget = (unsigned int)min((BC250_GFX_PAGING_SHADOW_BYTES - DmaBufferOffset) / 4u, DmaBufferFree / 4u);
-    shadow = (u32*)((PUCHAR)gfx->PagingShadowMem.cpu + DmaBufferOffset);
-    // PagingDevicePtr, the live adev, and not a local one: facts M104. The throwaway ring inside these two needs a
-    // non-NULL ring->adev, and struct amdgpu_device is 0x5B00 bytes - the version that put one on the stack died in
-    // nt!_chkstk (bugcheck 0x50) the first time VidMm actually called this path, on a kernel stack that dxgmms2's
-    // own eight frames had already eaten 0x12D0 of.
-    result = Fill ? bc250_sdma_paging_fill(gfx->PagingDevicePtr, shadow, budget, dstMc, FillPattern, (unsigned int)Bytes, &written)
-                  : bc250_sdma_paging_copy(gfx->PagingDevicePtr, shadow, budget, srcMc, dstMc, (unsigned int)Bytes, &written);
-    if (result == BC250_SDMA_PAGING_INSUFFICIENT) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
-    if (result != BC250_SDMA_PAGING_OK) { status = STATUS_INVALID_PARAMETER; goto Done; }
+typedef struct _BC250_PHYSICAL_STREAM {
+    BC250_PAGING_STREAM Common; // First member: PagingEmit uses the common state.
+    const BC250_PAGING_ENDPOINT* Source;
+    const BC250_PAGING_ENDPOINT* Destination;
+} BC250_PHYSICAL_STREAM;
 
-    // dxgkrnl's own buffer gets the same bytes. DmaBuffer is pBuildPagingBuffer->pDmaBuffer, which the DDI
-    // documents as "a virtual address to the first available byte in the paging buffer" - the byte
-    // DmaBufferOffset already counts from the start - so the copy goes there directly. Adding the offset a
-    // second time, which this did until M108 was diagnosed, wrote the packet one whole operation further into
-    // dxgkrnl's buffer than dxgkrnl believed; harmless only while every operation of a run started at offset 0.
-    // The shadow keeps the offset, because that is the coordinate SubmitCommand's
-    // DmaBufferSubmissionStartOffset speaks in (bytes from the start of the buffer).
-    RtlCopyMemory(DmaBuffer, shadow, (SIZE_T)written * 4u);
-    *DwordsWritten = (ULONG)written;
-    GuardLog("gfx: paging %s %llu bytes physical 0x%llX -> 0x%llX, mc 0x%llX -> 0x%llX, %u dwords at shadow offset 0x%lX",
-             Fill ? "fill" : "transfer", Bytes, srcPhysical, dstPhysical, srcMc, dstMc, written, DmaBufferOffset);
+static int PagingResolvePhysical(BC250_PHYSICAL_STREAM* Stream,
+    const BC250_PAGING_ENDPOINT* Endpoint, PAGING_U64 Address, unsigned Bytes, PAGING_U64* Mc)
+{
+    ULONGLONG offset,physical;
+    *Mc=0;
+    if (Endpoint==NULL) return 0;
+    if (Endpoint->Mdl!=NULL) offset=Address;
+    else {
+        if (Address<Endpoint->Address) return 0;
+        offset=Address-Endpoint->Address;
+    }
+    if (!Bytes || offset>=Endpoint->Length || Bytes>Endpoint->Length-offset) return 0;
+    if (Endpoint->Aperture) {
+        if (Endpoint->Mdl || !Stream->Common.Gfx->PagingWindowReady ||
+            !VidMmResolveAperture(Address,Bytes,&physical) ||
+            ((physical & ~(ULONGLONG)(PAGE_SIZE-1)) & ~AMDGPU_PTE_ADDR_MASK)!=0) return 0;
+        *Mc=physical | PAGING_SYSTEM_ADDRESS;
+    } else if (Endpoint->Mdl!=NULL) {
+        if (!Stream->Common.Gfx->PagingWindowReady ||
+            !GfxPagingMdlAddress(Endpoint->Mdl,Endpoint->FirstPage,offset,Bytes,&physical) ||
+            ((physical & ~(ULONGLONG)(PAGE_SIZE-1)) & ~AMDGPU_PTE_ADDR_MASK)!=0) return 0;
+        *Mc=physical | PAGING_SYSTEM_ADDRESS;
+    } else {
+        ULONGLONG base=Stream->Common.Device->VramMcBase;
+        ULONGLONG length=Stream->Common.Device->VramLength;
+        if (Address<base || Address-base>=length || Bytes>length-(Address-base) ||
+            (Address & PAGING_SYSTEM_ADDRESS)!=0) return 0;
+        *Mc=Address;
+    }
+    return 1;
+}
 
-Done:
-    InterlockedDecrement(&gfx->PagingBuildersActive);
+static int PagingResolveSource(void* Context, PAGING_U64 Address, unsigned Bytes, PAGING_U64* Mc)
+{
+    BC250_PHYSICAL_STREAM* stream=(BC250_PHYSICAL_STREAM*)Context;
+    return PagingResolvePhysical(stream,stream->Source,Address,Bytes,Mc);
+}
+
+static int PagingResolveDestination(void* Context, PAGING_U64 Address, unsigned Bytes, PAGING_U64* Mc)
+{
+    BC250_PHYSICAL_STREAM* stream=(BC250_PHYSICAL_STREAM*)Context;
+    return PagingResolvePhysical(stream,stream->Destination,Address,Bytes,Mc);
+}
+
+static int PagingSourceIdentity(void* Context,PAGING_U64 Address,unsigned Bytes,PAGING_U64* Physical)
+{
+    BC250_PHYSICAL_STREAM* stream=(BC250_PHYSICAL_STREAM*)Context;
+    PAGING_U64 mc;
+    if (!PagingResolveSource(Context,Address,Bytes,&mc)) return 0;
+    if (mc&PAGING_SYSTEM_ADDRESS) *Physical=mc&~PAGING_SYSTEM_ADDRESS;
+    else *Physical=mc-stream->Common.Device->VramMcBase+(ULONGLONG)stream->Common.Device->VramPhysical.QuadPart;
+    return 1;
+}
+static int PagingDestinationIdentity(void* Context,PAGING_U64 Address,unsigned Bytes,PAGING_U64* Physical)
+{
+    BC250_PHYSICAL_STREAM* stream=(BC250_PHYSICAL_STREAM*)Context;
+    PAGING_U64 mc;
+    if (!PagingResolveDestination(Context,Address,Bytes,&mc)) return 0;
+    if (mc&PAGING_SYSTEM_ADDRESS) *Physical=mc&~PAGING_SYSTEM_ADDRESS;
+    else *Physical=mc-stream->Common.Device->VramMcBase+(ULONGLONG)stream->Common.Device->VramPhysical.QuadPart;
+    return 1;
+}
+
+// Classification only. Workspace never reaches hardware and is released before
+// packets are built. Sorting physical spans avoids quadratic all-pairs PFN checks.
+NTSTATUS GfxPagingCheckDisjoint(BC250_DEVICE* Device,const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,BOOLEAN* Disjoint)
+{
+    BC250_PHYSICAL_STREAM stream;BC250_GFX* gfx;PAGING_INTERVAL* work;
+    ULONGLONG src=Source->Mdl?0:Source->Address,dst=Destination->Mdl?0:Destination->Address;
+    unsigned count=PagingIntervalCapacity(src,Bytes);int separate=0;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    *Disjoint=FALSE;
+    if (!count) return status;
+    work=(PAGING_INTERVAL*)ExAllocatePool2(POOL_FLAG_PAGED,(SIZE_T)count*sizeof(*work),BC250_GFX_TAG);
+    if (!work) return STATUS_INSUFFICIENT_RESOURCES;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if (gfx && gfx->PagingReady && gfx->PagingWindowReady) {
+        RtlZeroMemory(&stream,sizeof(stream));stream.Common.Device=Device;stream.Common.Gfx=gfx;
+        stream.Source=Source;stream.Destination=Destination;
+        if (PagingIntervalsDisjoint(&stream,PagingSourceIdentity,PagingDestinationIdentity,
+                src,dst,Bytes,work,count,&separate)) {status=STATUS_SUCCESS;*Disjoint=(BOOLEAN)separate;}
+    }
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    ExFreePoolWithTag(work,BC250_GFX_TAG);
     return status;
 }
 
-// DISPATCH_LEVEL, no GartLock, no sequence, no adev->backend (design note section 4b). Pushes
-// [ShadowOffset, ShadowOffset + ByteCount) of Gfx->PagingShadowMem onto the live SDMA0 ring with an
-// interrupting fence, then rings the doorbell through GpuMemDoorbellWrite - never through
-// amdgpu_ring_commit()/bc250_shim_wdoorbell64(), which need a backend this level does not have. One
-// submission in flight, exactly as GfxSubmitIb's SubmitIbLocked.
-NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG ByteCount, _Out_ ULONG* Seq)
+// Complete cycles of system-page permutations fit in each submission. Scratch is
+// driver-owned through engine retirement; no value must survive another paging
+// job. Equal in-page offsets use independent byte bands for partial ranges.
+static NTSTATUS PagingBuildPageGraphCore(BC250_DEVICE* Device,ULONGLONG Root,const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,PVOID Buffer,
+    ULONG Offset,ULONG Free,unsigned Resume,ULONG* Written,unsigned* NextResume)
+{
+    BC250_PHYSICAL_STREAM stream;
+    BC250_GFX* gfx;
+    PAGING_U64 *sources,*destinations,*physical;
+    PAGING_PAGE_IDENTITY* identities;
+    PAGING_PAGE_MOVE* moves;
+    unsigned *sourceIndex,*destinationIndex,*readers,*writer,*queue,*forward;
+    unsigned identityCount=0,bandCount=0,bandIndex=0,startOffset;
+    PAGING_PAGE_BAND bands[3];
+    ULONGLONG position=0;
+    unsigned char* storage=NULL;
+    unsigned pages,moveCapacity,moveCount=0,i,required=0,budget,maxBudget,used=0;
+    unsigned first=0,last=0,cycleSize=0,nextResume=Resume;
+    int batch;
+    ULONGLONG src,dst,scratchPhysical;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    int result;
+    *Written=0;*NextResume=Resume;
+    if(!Device || !Source || !Destination || !Buffer || !Bytes ||
+       (Offset&3) || Offset>BC250_GFX_PAGING_BUFFER_BYTES || Bytes/PAGE_SIZE>0x0aaaaaa9u ||
+       (!Root && (!(Source->Mdl || Source->Aperture) || !(Destination->Mdl || Destination->Aperture))))return status;
+    src=Source->Mdl?0:Source->Address;dst=Destination->Mdl?0:Destination->Address;
+    startOffset=(unsigned)(src&4095);
+    if(startOffset!=(dst&4095) || !PagingPageBands(startOffset,Bytes,bands,&bandCount))return status;
+    if(Root) {
+        if(Source->Mdl || Destination->Mdl || Source->Aperture || Destination->Aperture ||
+           Bytes>MAXULONGLONG-src || Bytes>MAXULONGLONG-dst)return status;
+    } else if(!GfxPagingEndpointValid(Device,Source,Bytes) || !GfxPagingEndpointValid(Device,Destination,Bytes))return status;
+    pages=(unsigned)((Bytes+startOffset+4095)/PAGE_SIZE);moveCapacity=pages*3;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if(!gfx || !gfx->PagingReady || !gfx->PagingRing ||
+       !gfx->PagingDevicePtr)goto Done;
+    RtlZeroMemory(&stream,sizeof(stream));stream.Common.Device=Device;stream.Common.Gfx=gfx;
+    stream.Common.Payload=(unsigned*)Buffer;stream.Common.CommandOffset=Offset;
+    stream.Source=Source;stream.Destination=Destination;stream.Common.Root=Root;
+    if(Root) {
+        PAGING_U64 sourceMc,destinationMc;
+        unsigned chunk=(unsigned)(PAGE_SIZE-startOffset);
+        if(chunk>Bytes)chunk=(unsigned)Bytes;
+        if(!PagingResolve(&stream.Common,src,chunk,&sourceMc) ||
+           !PagingResolve(&stream.Common,dst,chunk,&destinationMc))goto Done;
+        if(!(sourceMc&PAGING_SYSTEM_ADDRESS) || !(destinationMc&PAGING_SYSTEM_ADDRESS)) {
+            status=STATUS_NOT_SUPPORTED;goto Done;
+        }
+    }
+    if(!gfx->PagingWindowReady || gfx->PagingCopyStaging.size<PAGE_SIZE)goto Done;
+    if(gfx->PagingCopyStaging.mc<Device->VramMcBase ||
+       gfx->PagingCopyStaging.mc-Device->VramMcBase>MAXULONGLONG-(ULONGLONG)Device->VramPhysical.QuadPart)goto Done;
+    scratchPhysical=gfx->PagingCopyStaging.mc-Device->VramMcBase+(ULONGLONG)Device->VramPhysical.QuadPart;
+
+    // 128 bytes/page: captures, identity union, graph workspace and moves. All typed arrays stay aligned.
+    storage=ExAllocatePool2(POOL_FLAG_PAGED,(SIZE_T)pages*128,BC250_GFX_TAG);
+    if(!storage){status=STATUS_INSUFFICIENT_RESOURCES;goto Done;}
+    sources=(PAGING_U64*)storage;destinations=sources+pages;
+    identities=(PAGING_PAGE_IDENTITY*)(destinations+pages);
+    physical=(PAGING_U64*)(identities+pages*2);
+    sourceIndex=(unsigned*)(physical+pages*2);destinationIndex=sourceIndex+pages;
+    readers=destinationIndex+pages;writer=readers+pages*2;
+    queue=writer+pages*2;forward=queue+pages*2;
+    moves=(PAGING_PAGE_MOVE*)(forward+pages*2);
+    for(i=0;i<pages;i++) {
+        unsigned chunk=(unsigned)(PAGE_SIZE-((src+position)&4095));
+        if(chunk>Bytes-position)chunk=(unsigned)(Bytes-position);
+        if(Root) {
+            if(!PagingResolve(&stream.Common,src+position,chunk,sources+i) ||
+               !PagingResolve(&stream.Common,dst+position,chunk,destinations+i))goto Done;
+            // Only system/system graphs use this publication path. Local/table
+            // destinations also require ordered logical table-shadow commits.
+            // Classification finishes before any packet or progress is published.
+            if(!(sources[i]&PAGING_SYSTEM_ADDRESS) || !(destinations[i]&PAGING_SYSTEM_ADDRESS)) {
+                status=STATUS_NOT_SUPPORTED;goto Done;
+            }
+            sources[i]&=~PAGING_SYSTEM_ADDRESS;destinations[i]&=~PAGING_SYSTEM_ADDRESS;
+        } else if(!PagingSourceIdentity(&stream,src+position,chunk,sources+i) ||
+                  !PagingDestinationIdentity(&stream,dst+position,chunk,destinations+i))goto Done;
+        sources[i]&=~4095ull;destinations[i]&=~4095ull;
+        if(sources[i]==scratchPhysical || destinations[i]==scratchPhysical)goto Done;
+        position+=chunk;
+    }
+    if(Resume && Resume!=pages && !(Resume&PAGING_PERMUTATION_RESUME))goto Done;
+    if(Resume==pages){*NextResume=pages;status=STATUS_SUCCESS;goto Done;}
+    // Every action contains at least one system endpoint, using the same two-PTE
+    // transaction. Ask the real packet builder for its aligned cost without writes.
+    result=PagingEmit(&stream,(unsigned*)Buffer,0,sources[0]|PAGING_SYSTEM_ADDRESS,
+        gfx->PagingCopyStaging.mc,PAGE_SIZE,&required);
+    if(result!=BC250_SDMA_PAGING_INSUFFICIENT || !required)goto Done;
+    maxBudget=PagingStreamCapacity(BC250_GFX_PAGING_BUFFER_BYTES,0,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    if(maxBudget/required<3){status=Root?STATUS_INVALID_PARAMETER:STATUS_NOT_SUPPORTED;goto Done;}
+    // Physical identities are independent of the byte band. Normalize the full
+    // captured union once per callback; each band selects its logical edge span.
+    // This preserves physical ordering while avoiding repeated O(N log N) sorts
+    // during validation and emission. No endpoint or plan survives this callback.
+    if(!PagingPageGraphNormalize(sources,destinations,pages,identities,physical,
+         sourceIndex,destinationIndex,&identityCount))goto Done;
+    // Validate all bands before publishing any prefix. Separate bands touch
+    // disjoint byte offsets even when the same physical pages appear in each.
+    for(bandIndex=0;bandIndex<bandCount;bandIndex++) {
+        PAGING_PAGE_BAND* band=&bands[bandIndex];
+        if(!PagingPageGraphPlan(sourceIndex+band->FirstPage,destinationIndex+band->FirstPage,
+             (unsigned)band->PageCount,identityCount,
+             readers,writer,queue,forward,moves,moveCapacity,maxBudget/required,&moveCount))goto Done;
+    }
+    bandIndex=Resume&PAGING_PERMUTATION_RESUME ? (Resume>>PAGING_GRAPH_BAND_SHIFT)&3u : 0;
+    first=Resume&PAGING_PERMUTATION_RESUME ? Resume&PAGING_GRAPH_ACTION_MASK : 0;
+    if(bandIndex>=bandCount)goto Done;
+    budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    for(;bandIndex<bandCount;bandIndex++,first=0) {
+        PAGING_PAGE_BAND* band=&bands[bandIndex];
+        if(!PagingPageGraphPlan(sourceIndex+band->FirstPage,destinationIndex+band->FirstPage,
+             (unsigned)band->PageCount,identityCount,
+             readers,writer,queue,forward,moves,moveCapacity,maxBudget/required,&moveCount))goto Done;
+        if(first>moveCount || (first==moveCount && first))goto Done;
+        if(!moveCount)continue;
+        batch=PagingPermutationBatch(moves,moveCount,first,(budget-used)/required,&last,&cycleSize);
+        if(batch==PagingPermutationInvalid)goto Done;
+        for(i=first;i<last;i++) {
+            PAGING_U64 from=moves[i].source==PAGING_PERMUTATION_SCRATCH ? gfx->PagingCopyStaging.mc :
+                (physical[moves[i].source]+band->Offset)|PAGING_SYSTEM_ADDRESS;
+            PAGING_U64 to=moves[i].destination==PAGING_PERMUTATION_SCRATCH ? gfx->PagingCopyStaging.mc :
+                (physical[moves[i].destination]+band->Offset)|PAGING_SYSTEM_ADDRESS;
+            unsigned written=0;
+            // StagingMc remains zero; each SAVE/RESTORE group owns cycle scratch.
+            result=PagingEmit(&stream,(unsigned*)Buffer+used,budget-used,from,to,band->Bytes,&written);
+            if(result!=BC250_SDMA_PAGING_OK || !written || written>required)goto Done;
+            used+=written;
+        }
+        if(last<moveCount) {
+            nextResume=PAGING_PERMUTATION_RESUME|(bandIndex<<PAGING_GRAPH_BAND_SHIFT)|last;
+            *Written=used;*NextResume=used?nextResume:Resume;
+            status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;
+        }
+    }
+    *Written=used;*NextResume=pages;status=STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    if(storage)ExFreePoolWithTag(storage,BC250_GFX_TAG);return status;
+}
+
+NTSTATUS GfxPagingBuildPageGraph(BC250_DEVICE* Device,const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,PVOID Buffer,
+    ULONG Offset,ULONG Free,unsigned Resume,ULONG* Written,unsigned* NextResume)
+{
+    return PagingBuildPageGraphCore(Device,0,Source,Destination,Bytes,Buffer,Offset,Free,Resume,Written,NextResume);
+}
+
+NTSTATUS GfxPagingBuildVirtualPageGraph(BC250_DEVICE* Device,ULONGLONG Root,
+    ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes,PVOID Buffer,
+    ULONG Offset,ULONG Free,unsigned Resume,ULONG* Written,unsigned* NextResume)
+{
+    BC250_PAGING_ENDPOINT source={0},destination={0};
+    *Written=0;*NextResume=Resume;
+    if(!Root)return STATUS_INVALID_PARAMETER;
+    source.Address=Source;destination.Address=Destination;source.Length=destination.Length=Bytes;
+    return PagingBuildPageGraphCore(Device,Root,&source,&destination,Bytes,Buffer,Offset,Free,Resume,Written,NextResume);
+}
+
+// Exact caller-owned storage requirement, including unaligned endpoints. The
+// system paging context can reserve its documented VA bound before admission.
+SIZE_T GfxPagingCaptureStorageSize(ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes)
+{
+    SIZE_T work,capture;unsigned pages,sourceCount,destinationCount;
+    if(!Bytes || Bytes>MAXULONGLONG-Source || Bytes>MAXULONGLONG-Destination ||
+       Bytes/PAGE_SIZE>0x0aaaaaa9u)return 0;
+    sourceCount=(unsigned)((Bytes+(Source&4095)+4095)/4096);
+    destinationCount=(unsigned)((Bytes+(Destination&4095)+4095)/4096);
+    pages=sourceCount>destinationCount?sourceCount:destinationCount;
+    work=(SIZE_T)pages*(8*sizeof(unsigned)+3*sizeof(PAGING_PAGE_MOVE));
+    capture=(SIZE_T)pages*(2*sizeof(PAGING_U64)+2*sizeof(PAGING_PAGE_IDENTITY));
+    if(work<capture)work=capture;
+    return sizeof(PAGING_GRAPH_CAPTURE)+work+(SIZE_T)pages*(2*sizeof(PAGING_U64)+2*sizeof(unsigned)+4);
+}
+
+// Capture once, before any table-changing copy can be accepted. Later batches
+// use physical identities; neither the root nor an OS pointer is resolved again.
+NTSTATUS GfxPagingCaptureVirtualGraphInPlace(BC250_DEVICE* Device,ULONGLONG Root,
+    ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes,PVOID Storage,SIZE_T StorageBytes,
+    PAGING_GRAPH_CAPTURE** Capture)
+{
+    PAGING_GRAPH_CAPTURE* c=NULL;BC250_PHYSICAL_STREAM stream;
+    BC250_GFX* gfx;PAGING_PAGE_IDENTITY* identities;
+    PAGING_U64 *sources,*destinations;unsigned char *sourceSystem,*destinationSystem;
+    unsigned pages,i,j,offset=(unsigned)(Source&4095),query=0,required=0,capacity,moves=0;
+    unsigned sourceCount,destinationCount;
+    ULONGLONG position=0,scratchPhysical,probe=0;SIZE_T workBytes,captureBytes;int result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    *Capture=NULL;
+    captureBytes=GfxPagingCaptureStorageSize(Source,Destination,Bytes);
+    if(!Device || !Root || !captureBytes || !Storage || StorageBytes<captureBytes ||
+       ((SIZE_T)Storage&(sizeof(ULONGLONG)-1)))return status;
+    sourceCount=(unsigned)((Bytes+offset+4095)/4096);
+    destinationCount=(unsigned)((Bytes+(Destination&4095)+4095)/4096);
+    pages=sourceCount>destinationCount?sourceCount:destinationCount;
+    // Capture temporaries die after normalization. Reuse that storage for the
+    // planner arrays and cached moves; persistent identities remain disjoint.
+    workBytes=(SIZE_T)pages*(8*sizeof(unsigned)+3*sizeof(PAGING_PAGE_MOVE));
+    captureBytes=(SIZE_T)pages*(2*sizeof(PAGING_U64)+2*sizeof(PAGING_PAGE_IDENTITY));
+    if(workBytes<captureBytes)workBytes=captureBytes;
+    captureBytes=sizeof(*c)+workBytes+(SIZE_T)pages*(2*sizeof(PAGING_U64)+2*sizeof(unsigned)+4);
+    // Caller owns the storage on both success and failure. Reused storage must
+    // not carry old tokens, cursors, domain flags or planner state into a capture.
+    c=(PAGING_GRAPH_CAPTURE*)Storage;
+    RtlZeroMemory(c,captureBytes);
+    c->Linear=offset!=(Destination&4095);c->SourcePageCount=sourceCount;c->DestinationPageCount=destinationCount;
+    c->PageCount=pages;c->Owner.Root=Root;c->Owner.Source=Source;c->Owner.Destination=Destination;c->Owner.Bytes=Bytes;
+    sources=(PAGING_U64*)(c+1);destinations=sources+pages;
+    identities=(PAGING_PAGE_IDENTITY*)(destinations+pages);
+    c->Readers=(unsigned*)(c+1);c->Writer=c->Readers+pages*2;
+    c->Queue=c->Writer+pages*2;c->Forward=c->Queue+pages*2;c->Moves=(PAGING_PAGE_MOVE*)(c->Forward+pages*2);
+    c->Pages=(PAGING_U64*)((PUCHAR)(c+1)+workBytes);
+    c->SourceIndex=(unsigned*)(c->Pages+pages*2);c->DestinationIndex=c->SourceIndex+pages;
+    sourceSystem=(unsigned char*)(c->DestinationIndex+pages);destinationSystem=sourceSystem+pages;c->SystemPages=destinationSystem+pages;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if(!gfx || !gfx->PagingReady || !gfx->PagingRing || !gfx->PagingDevicePtr || gfx->PagingCopyStaging.size<PAGE_SIZE ||
+       gfx->PagingCopyStaging.mc<Device->VramMcBase ||
+       gfx->PagingCopyStaging.mc-Device->VramMcBase>MAXULONGLONG-(ULONGLONG)Device->VramPhysical.QuadPart)goto Done;
+    scratchPhysical=gfx->PagingCopyStaging.mc-Device->VramMcBase+(ULONGLONG)Device->VramPhysical.QuadPart;
+    c->ScratchMc=gfx->PagingCopyStaging.mc;c->VramMcBase=Device->VramMcBase;c->VramPhysical=(ULONGLONG)Device->VramPhysical.QuadPart;
+    RtlZeroMemory(&stream,sizeof(stream));stream.Common.Device=Device;stream.Common.Gfx=gfx;stream.Common.Root=Root;
+    stream.Common.Payload=&query;
+    for(j=0;j<2;j++) {
+        ULONGLONG address=j?Destination:Source;
+        PAGING_U64* addresses=j?destinations:sources;
+        unsigned char* systems=j?destinationSystem:sourceSystem;
+        unsigned count=j?destinationCount:sourceCount;
+        position=0;
+        for(i=0;i<count;i++) {
+            unsigned chunk=(unsigned)(4096-((address+position)&4095));
+            if(chunk>Bytes-position)chunk=(unsigned)(Bytes-position);
+            if(!PagingResolve(&stream.Common,address+position,chunk,addresses+i))goto Done;
+            systems[i]=(unsigned char)((addresses[i]&PAGING_SYSTEM_ADDRESS)!=0);
+            if(systems[i])probe=addresses[i]&~4095ull;
+            addresses[i]=systems[i]?addresses[i]&~PAGING_SYSTEM_ADDRESS:
+                addresses[i]-Device->VramMcBase+(ULONGLONG)Device->VramPhysical.QuadPart;
+            addresses[i]&=~4095ull;
+            if(addresses[i]==scratchPhysical)goto Done;
+            position+=chunk;
+        }
+        // Normalize accepts equal-length lists; padding aliases the final real
+        // page and is excluded from direction analysis and slice selection.
+        for(;i<pages;i++){addresses[i]=addresses[count-1];systems[i]=systems[count-1];}
+    }
+    if(!PagingPageGraphNormalize(sources,destinations,pages,identities,c->Pages,c->SourceIndex,c->DestinationIndex,&c->Identities))goto Done;
+    if(!c->Linear && !PagingPageBands(offset,Bytes,c->Bands,&c->BandCount))goto Done;
+    for(i=0;i<c->Identities;i++)c->SystemPages[i]=2;
+    for(i=0;i<pages;i++)for(j=0;j<2;j++) {
+        unsigned at=j?c->DestinationIndex[i]:c->SourceIndex[i];
+        unsigned char system=j?destinationSystem[i]:sourceSystem[i];
+        // A single physical identity must have a consistent access/cache domain.
+        // Supporting conflicting local/system views needs a proven alias policy.
+        if(c->SystemPages[at]!=2 && c->SystemPages[at]!=system){status=STATUS_NOT_SUPPORTED;goto Done;}
+        c->SystemPages[at]=system;
+    }
+    if(c->Linear) {
+        int backward=0;
+        // Readers and Writer are contiguous: together hold at least 2*Identities.
+        if(!PagingPageAliasDirection(c->SourceIndex,sourceCount,c->DestinationIndex,destinationCount,
+            c->Identities,c->Readers,offset,(unsigned)(Destination&4095),&backward)) {
+            status=STATUS_NOT_SUPPORTED;goto Done;
+        }
+        c->Backward=(unsigned)backward;
+        *Capture=c;c=NULL;status=STATUS_SUCCESS;goto Done;
+    }
+    if(!probe)probe=sources[0]-(ULONGLONG)Device->VramPhysical.QuadPart+Device->VramMcBase;
+    result=PagingEmit(&stream,&query,0,probe,gfx->PagingCopyStaging.mc,PAGE_SIZE,&required);
+    if(result!=BC250_SDMA_PAGING_INSUFFICIENT || !required)goto Done;
+    capacity=PagingStreamCapacity(BC250_GFX_PAGING_BUFFER_BYTES,0,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    c->RequiredDwords=required;c->MaxAtomicMoves=capacity/required;
+    if(c->MaxAtomicMoves<3){status=STATUS_NOT_SUPPORTED;goto Done;}
+    for(i=0;i<c->BandCount;i++) {
+        PAGING_PAGE_BAND* band=c->Bands+i;
+        if(!PagingPageGraphPlan(c->SourceIndex+band->FirstPage,c->DestinationIndex+band->FirstPage,
+            (unsigned)band->PageCount,c->Identities,c->Readers,c->Writer,c->Queue,c->Forward,
+            c->Moves,pages*3,c->MaxAtomicMoves,&moves))goto Done;
+        c->PlannedBand=i;c->MoveCount=moves;
+    }
+    *Capture=c;c=NULL;status=STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    return status;
+}
+
+// Transitional allocating adapter. Context reservation will call the in-place
+// core directly; the current DDI route still owns this allocation/failure policy.
+NTSTATUS GfxPagingCaptureVirtualGraph(BC250_DEVICE* Device,ULONGLONG Root,
+    ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes,PAGING_GRAPH_CAPTURE** Capture)
+{
+    SIZE_T bytes=GfxPagingCaptureStorageSize(Source,Destination,Bytes);
+    PVOID storage;NTSTATUS status;
+    *Capture=NULL;
+    if(!Device || !Root || !bytes)return STATUS_INVALID_PARAMETER;
+    storage=ExAllocatePool2(POOL_FLAG_PAGED,bytes,BC250_GFX_TAG);
+    if(!storage)return STATUS_INSUFFICIENT_RESOURCES;
+    status=GfxPagingCaptureVirtualGraphInPlace(Device,Root,Source,Destination,Bytes,storage,bytes,Capture);
+    if(NT_SUCCESS(status))(*Capture)->Owner.PoolTag=BC250_GFX_TAG;
+    else ExFreePoolWithTag(storage,BC250_GFX_TAG);
+    return status;
+}
+
+// Progress counts accepted bytes in traversal order, not a VA offset.
+BOOLEAN GfxPagingCapturedLinearSlice(const PAGING_GRAPH_CAPTURE* Capture,ULONGLONG Progress,
+    BC250_PAGING_COPY_SLICE* Slice,ULONGLONG* NextProgress)
+{
+    ULONGLONG position,source,destination,left;
+    unsigned count,room,si,di;
+    RtlZeroMemory(Slice,sizeof(*Slice));*NextProgress=Progress;
+    if(!Capture || !Capture->Linear || Progress>=Capture->Owner.Bytes)return FALSE;
+    left=Capture->Owner.Bytes-Progress;
+    position=Capture->Backward?left:Progress;
+    source=(Capture->Owner.Source&4095)+position;
+    destination=(Capture->Owner.Destination&4095)+position;
+    if(Capture->Backward) {
+        count=(unsigned)((source-1)&4095)+1;room=(unsigned)((destination-1)&4095)+1;
+    } else {count=4096-(unsigned)(source&4095);room=4096-(unsigned)(destination&4095);}
+    if(count>room)count=room;if(count>left)count=(unsigned)left;
+    if(Capture->Backward){source-=count;destination-=count;}
+    if(source/4096>=Capture->SourcePageCount || destination/4096>=Capture->DestinationPageCount)return FALSE;
+    si=Capture->SourceIndex[(unsigned)(source/4096)];di=Capture->DestinationIndex[(unsigned)(destination/4096)];
+    Slice->SourcePhysical=Capture->Pages[si]+(source&4095);
+    Slice->DestinationPhysical=Capture->Pages[di]+(destination&4095);
+    Slice->SourceSystem=Capture->SystemPages[si];Slice->DestinationSystem=Capture->SystemPages[di];
+    Slice->Bytes=count;*NextProgress=Progress+count;return TRUE;
+}
+
+NTSTATUS GfxPagingEmitCapturedLinear(BC250_DEVICE* Device,const PAGING_GRAPH_CAPTURE* Capture,
+    PVOID Buffer,ULONG Offset,ULONG Free,ULONG* Written,BC250_PAGING_COPY_SLICE* Slice,ULONGLONG* NextProgress)
+{
+    BC250_PHYSICAL_STREAM stream;BC250_GFX* gfx;BC250_PAGING_COPY_SLICE candidate;
+    ULONGLONG next,mc[2],pa[2];unsigned budget,written=0,i;int overlap,result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    *Written=0;RtlZeroMemory(Slice,sizeof(*Slice));*NextProgress=Capture?Capture->Progress:0;
+    if(!Device || !Buffer || (Offset&3) || Offset>BC250_GFX_PAGING_BUFFER_BYTES ||
+       !GfxPagingCapturedLinearSlice(Capture,Capture?Capture->Progress:0,&candidate,&next))return status;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if(!gfx || !gfx->PagingReady || !gfx->PagingRing || !gfx->PagingDevicePtr ||
+       gfx->PagingCopyStaging.size<PAGE_SIZE || gfx->PagingCopyStaging.mc!=Capture->ScratchMc ||
+       Device->VramMcBase!=Capture->VramMcBase || (ULONGLONG)Device->VramPhysical.QuadPart!=Capture->VramPhysical)goto Done;
+    pa[0]=candidate.SourcePhysical;pa[1]=candidate.DestinationPhysical;
+    for(i=0;i<2;i++) {
+        if(i?candidate.DestinationSystem:candidate.SourceSystem)mc[i]=pa[i]|PAGING_SYSTEM_ADDRESS;
+        else if(!PagingPhysicalToMc(pa[i],candidate.Bytes,Capture->VramPhysical,Capture->VramMcBase,Device->VramLength,mc+i))goto Done;
+    }
+    overlap=pa[0]<=pa[1]?pa[1]-pa[0]<candidate.Bytes:pa[0]-pa[1]<candidate.Bytes;
+    RtlZeroMemory(&stream,sizeof(stream));stream.Common.Device=Device;stream.Common.Gfx=gfx;
+    stream.Common.Payload=(unsigned*)Buffer;stream.Common.CommandOffset=Offset;
+    budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,gfx->PagingRing->max_dw,
+        gfx->PagingRing->funcs->align_mask,bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    if(overlap && !candidate.SourceSystem && !candidate.DestinationSystem) {
+        ULONGLONG marker=bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_MARKER_SLOT);
+        if(!marker)goto Done;
+        result=bc250_sdma_paging_copy_bytes(gfx->PagingDevicePtr,(u32*)Buffer,budget,mc[0],mc[1],candidate.Bytes,
+            gfx->PagingCopyStaging.mc,marker,1u+3u*(Offset/4u),&written);
+    } else {
+        if(overlap)stream.Common.StagingMc=gfx->PagingCopyStaging.mc;
+        result=PagingEmit(&stream,(unsigned*)Buffer,budget,mc[0],mc[1],candidate.Bytes,&written);
+    }
+    if(result==BC250_SDMA_PAGING_INSUFFICIENT){status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;}
+    if(result!=BC250_SDMA_PAGING_OK)goto Done;
+    *Written=written;*Slice=candidate;*NextProgress=next;status=STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();return status;
+}
+
+int GfxPagingPlanCapturedGraph(PAGING_GRAPH_CAPTURE* Capture,unsigned Band,unsigned Action,
+    unsigned MaxMoves,PAGING_GRAPH_BATCH* Batch,unsigned* NextBand,unsigned* NextAction)
+{
+    unsigned count=0,next=0,required=0;int result;
+    RtlZeroMemory(Batch,sizeof(*Batch));*NextBand=Band;*NextAction=Action;
+    if(!Capture || Band>Capture->BandCount || (Band==Capture->BandCount && Action))return PagingPermutationInvalid;
+    for(;Band<Capture->BandCount;Band++,Action=0) {
+        PAGING_PAGE_BAND* band=Capture->Bands+Band;
+        // A resumed batch uses the same immutable graph and atomic budget.
+        // Rebuild only when moving to a different byte band, never per DMA buffer.
+        if(Capture->PlannedBand!=Band) {
+            if(!PagingPageGraphPlan(Capture->SourceIndex+band->FirstPage,Capture->DestinationIndex+band->FirstPage,
+                (unsigned)band->PageCount,Capture->Identities,Capture->Readers,Capture->Writer,Capture->Queue,Capture->Forward,
+                Capture->Moves,Capture->PageCount*3,Capture->MaxAtomicMoves,&count))return PagingPermutationInvalid;
+            Capture->PlannedBand=Band;Capture->MoveCount=count;
+        }
+        count=Capture->MoveCount;
+        if(Action>count)return PagingPermutationInvalid;
+        if(!count)continue;
+        result=PagingPermutationBatch(Capture->Moves,count,Action,MaxMoves,&next,&required);
+        if(result==PagingPermutationInvalid || result==PagingPermutationNeedCycle)return result;
+        Batch->Pages=Capture->Pages;Batch->SystemPages=Capture->SystemPages;Batch->Identities=Capture->Identities;
+        Batch->Moves=Capture->Moves+Action;Batch->Count=next-Action;Batch->Offset=band->Offset;Batch->Bytes=band->Bytes;
+        *NextBand=next==count?Band+1:Band;*NextAction=next==count?0:next;
+        return *NextBand==Capture->BandCount?PagingPermutationDone:PagingPermutationMore;
+    }
+    *NextBand=Band;*NextAction=0;return PagingPermutationDone;
+}
+
+// Emit only from retained identities. Batch and proposed cursor become usable
+// together on success; publication, not construction, advances the owner cursor.
+NTSTATUS GfxPagingEmitCapturedGraph(BC250_DEVICE* Device,PAGING_GRAPH_CAPTURE* Capture,
+    unsigned Band,unsigned Action,PVOID Buffer,ULONG Offset,ULONG Free,ULONG* Written,
+    PAGING_GRAPH_BATCH* Batch,unsigned* NextBand,unsigned* NextAction)
+{
+    BC250_PHYSICAL_STREAM stream;BC250_GFX* gfx;
+    PAGING_GRAPH_BATCH batch;unsigned nextBand=Band,nextAction=Action;
+    unsigned budget,fresh,i,used=0;int result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    *Written=0;*NextBand=Band;*NextAction=Action;RtlZeroMemory(Batch,sizeof(*Batch));
+    if(!Device || !Capture || !Buffer || (Offset&3) || Offset>BC250_GFX_PAGING_BUFFER_BYTES || !Capture->RequiredDwords)return status;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if(!gfx || !gfx->PagingReady || !gfx->PagingRing || !gfx->PagingDevicePtr ||
+       gfx->PagingCopyStaging.size<PAGE_SIZE || gfx->PagingCopyStaging.mc!=Capture->ScratchMc ||
+       Device->VramMcBase!=Capture->VramMcBase || (ULONGLONG)Device->VramPhysical.QuadPart!=Capture->VramPhysical)goto Done;
+    fresh=PagingStreamCapacity(BC250_GFX_PAGING_BUFFER_BYTES,0,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    if(Capture->MaxAtomicMoves>fresh/Capture->RequiredDwords)goto Done;
+    budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    result=GfxPagingPlanCapturedGraph(Capture,Band,Action,budget/Capture->RequiredDwords,&batch,&nextBand,&nextAction);
+    if(result==PagingPermutationNeedCycle){status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;}
+    if(result!=PagingPermutationDone && result!=PagingPermutationMore)goto Done;
+    RtlZeroMemory(&stream,sizeof(stream));stream.Common.Device=Device;stream.Common.Gfx=gfx;
+    stream.Common.Payload=(unsigned*)Buffer;stream.Common.CommandOffset=Offset;
+    for(i=0;i<batch.Count;i++) {
+        unsigned ids[2]={batch.Moves[i].source,batch.Moves[i].destination};
+        PAGING_U64 mc[2];unsigned side,written=0;
+        for(side=0;side<2;side++) {
+            if(ids[side]==PAGING_PERMUTATION_SCRATCH)mc[side]=gfx->PagingCopyStaging.mc;
+            else if(batch.SystemPages[ids[side]]) {
+                if(!gfx->PagingWindowReady)goto Done;
+                mc[side]=(batch.Pages[ids[side]]+batch.Offset)|PAGING_SYSTEM_ADDRESS;
+            } else if(!PagingPhysicalToMc(batch.Pages[ids[side]]+batch.Offset,batch.Bytes,
+                Capture->VramPhysical,Capture->VramMcBase,Device->VramLength,&mc[side]))goto Done;
+        }
+        result=PagingEmit(&stream,(unsigned*)Buffer+used,budget-used,mc[0],mc[1],batch.Bytes,&written);
+        if(result!=BC250_SDMA_PAGING_OK || !written || written>Capture->RequiredDwords)goto Done;
+        used+=written;
+    }
+    *Written=used;*Batch=batch;*NextBand=nextBand;*NextAction=nextAction;status=STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    return status;
+}
+
+// Validate the complete requested interval before the first batch can escape.
+// O(1): PFN contents are still checked page by page under the OS MDL lifetime.
+BOOLEAN GfxPagingEndpointValid(const BC250_DEVICE* Device,
+    const BC250_PAGING_ENDPOINT* Endpoint, ULONGLONG Bytes)
+{
+    ULONGLONG start,end,begin;
+    if (!Endpoint || !Bytes || Bytes>Endpoint->Length) return FALSE;
+    if (Endpoint->Aperture) {
+        ULONGLONG base=Device->WddmAperture.mc,length=Device->WddmAperture.bytes;
+        return !Endpoint->Mdl && Endpoint->Address>=base && Endpoint->Address-base<length &&
+            Bytes<=length-(Endpoint->Address-base) && Bytes<=MAXULONGLONG-Endpoint->Address;
+    }
+    if (Endpoint->Mdl) {
+        begin=MmGetMdlByteOffset(Endpoint->Mdl);
+        if (sizeof(PFN_NUMBER)!=sizeof(PAGING_U64) ||
+            begin>=PAGE_SIZE || !MmGetMdlByteCount(Endpoint->Mdl)) return FALSE;
+        end=begin+(ULONGLONG)MmGetMdlByteCount(Endpoint->Mdl);
+        start=(ULONGLONG)Endpoint->FirstPage<<PAGE_SHIFT;
+        return start>=begin && start<end && Bytes<=end-start;
+    }
+    start=Endpoint->Address;
+    if (start<Device->VramMcBase || start-Device->VramMcBase>=Device->VramLength ||
+        Bytes>Device->VramLength-(start-Device->VramMcBase) ||
+        Bytes>MAXULONGLONG-start) return FALSE;
+    // The high bit is reserved for the internal system-page route marker.
+    return ((start | (start+Bytes-1)) & PAGING_SYSTEM_ADDRESS)==0;
+}
+
+// PASSIVE_LEVEL. Endpoint selection/segment bounds and external resume encoding
+// belong to the WDDM adapter. This builder never maps MDLs or takes ownership.
+NTSTATUS GfxPagingBuildPhysical(_Inout_ BC250_DEVICE* Device,
+    _In_opt_ const BC250_PAGING_ENDPOINT* Source, _In_ const BC250_PAGING_ENDPOINT* Destination,
+    BOOLEAN Fill, ULONGLONG Bytes, ULONG Pattern, _Inout_ PVOID DmaBuffer,
+    ULONG DmaBufferOffset, ULONG DmaBufferFree, ULONGLONG StartByte,
+    _Out_ ULONG* DwordsWritten, _Out_ ULONGLONG* NextByte)
+{
+    BC250_PHYSICAL_STREAM stream;
+    BC250_GFX* gfx;
+    unsigned budget,written=0;
+    PAGING_U64 next=StartByte,src=0,dst;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    int result;
+    *DwordsWritten=0; *NextByte=StartByte;
+    if (!DmaBuffer || !Destination || (!Fill && !Source) || !Bytes || StartByte>Bytes ||
+        !GfxPagingEndpointValid(Device,Destination,Bytes) ||
+        (!Fill && !GfxPagingEndpointValid(Device,Source,Bytes)) ||
+        (DmaBufferOffset & 3u)!=0 || DmaBufferOffset>BC250_GFX_PAGING_BUFFER_BYTES)
+        return status;
+    dst=Destination->Mdl ? 0 : Destination->Address;
+    if (!Fill) src=Source->Mdl ? 0 : Source->Address;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if (!gfx || !gfx->PagingReady || !gfx->PagingDevicePtr || !gfx->PagingRing) goto Done;
+    RtlZeroMemory(&stream,sizeof(stream));
+    stream.Common.Device=Device;stream.Common.Gfx=gfx;
+    stream.Common.Fill=Fill;stream.Common.Pattern=Pattern;
+    stream.Common.Payload=(unsigned*)DmaBuffer;stream.Common.CommandOffset=DmaBufferOffset;
+    stream.Source=Source;stream.Destination=Destination;
+    budget=PagingStreamCapacity(DmaBufferFree,DmaBufferOffset,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    result=PagingStreamBuildEndpoints64(&stream,PagingResolveSource,PagingResolveDestination,
+        PagingEmit,Fill,src,dst,Bytes,StartByte,(unsigned*)DmaBuffer,budget,&written,&next);
+    if (result!=PagingStreamDone && result!=PagingStreamMore) goto Done;
+    *DwordsWritten=written;*NextByte=next;
+    status=result==PagingStreamMore ? STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER : STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+// Capture the same identities used by this one-page packet transaction. No
+// shadow change occurs here; publication owns the later logical commit.
+static NTSTATUS PagingBuildCopyPageCore(BC250_DEVICE* Device, ULONGLONG Root, const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes, BOOLEAN ForceSnapshot,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice)
+{
+    BC250_PHYSICAL_STREAM stream;
+    BC250_PAGING_COPY_SLICE candidate;
+    BC250_GFX* gfx;
+    PAGING_U64 src,dst,srcMc,dstMc;
+    unsigned budget,written=0;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    int overlap,result;
+    *Written=0;RtlZeroMemory(Slice,sizeof(*Slice));
+    if (!Buffer || !Source || !Destination || !Bytes || Progress>MAXULONGLONG-Bytes ||
+        (Offset&3)!=0 || Offset>BC250_GFX_PAGING_BUFFER_BYTES) return status;
+    if (Root) {
+        if (Source->Mdl || Destination->Mdl ||
+            Source->Address>MAXULONGLONG-(Progress+Bytes) ||
+            Destination->Address>MAXULONGLONG-(Progress+Bytes)) return status;
+    } else if (!GfxPagingEndpointValid(Device,Source,Progress+Bytes) ||
+               !GfxPagingEndpointValid(Device,Destination,Progress+Bytes)) return status;
+    src=(Source->Mdl?0:Source->Address)+Progress;
+    dst=(Destination->Mdl?0:Destination->Address)+Progress;
+    if (Bytes>PAGE_SIZE-(src&(PAGE_SIZE-1)) || Bytes>PAGE_SIZE-(dst&(PAGE_SIZE-1))) return status;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if (!gfx || !gfx->PagingReady || !gfx->PagingRing || !gfx->PagingDevicePtr) goto Done;
+    RtlZeroMemory(&stream,sizeof(stream));RtlZeroMemory(&candidate,sizeof(candidate));
+    stream.Common.Device=Device;stream.Common.Gfx=gfx;stream.Common.Payload=(unsigned*)Buffer;
+    stream.Common.CommandOffset=Offset;stream.Source=Source;stream.Destination=Destination;
+    stream.Common.Root=Root;
+    if (Root) {
+        if (!PagingResolve(&stream.Common,src,Bytes,&srcMc) ||
+            !PagingResolve(&stream.Common,dst,Bytes,&dstMc)) goto Done;
+    } else if (!PagingResolveSource(&stream,src,Bytes,&srcMc) ||
+               !PagingResolveDestination(&stream,dst,Bytes,&dstMc)) goto Done;
+    candidate.SourceSystem=(srcMc&PAGING_SYSTEM_ADDRESS)!=0;
+    candidate.DestinationSystem=(dstMc&PAGING_SYSTEM_ADDRESS)!=0;
+    candidate.SourcePhysical=candidate.SourceSystem ? srcMc&~PAGING_SYSTEM_ADDRESS : srcMc-Device->VramMcBase;
+    candidate.DestinationPhysical=candidate.DestinationSystem ? dstMc&~PAGING_SYSTEM_ADDRESS : dstMc-Device->VramMcBase;
+    if (!candidate.SourceSystem) {
+        if (candidate.SourcePhysical>MAXULONGLONG-(ULONGLONG)Device->VramPhysical.QuadPart) goto Done;
+        candidate.SourcePhysical+=(ULONGLONG)Device->VramPhysical.QuadPart;
+    }
+    if (!candidate.DestinationSystem) {
+        if (candidate.DestinationPhysical>MAXULONGLONG-(ULONGLONG)Device->VramPhysical.QuadPart) goto Done;
+        candidate.DestinationPhysical+=(ULONGLONG)Device->VramPhysical.QuadPart;
+    }
+    overlap=candidate.SourcePhysical<=candidate.DestinationPhysical ?
+        candidate.DestinationPhysical-candidate.SourcePhysical<Bytes :
+        candidate.SourcePhysical-candidate.DestinationPhysical<Bytes;
+    // Preserve aliased system data while both GART mappings remain active.
+    if ((overlap || ForceSnapshot) && (candidate.SourceSystem || candidate.DestinationSystem)) {
+        if (gfx->PagingCopyStaging.size<PAGE_SIZE || !gfx->PagingCopyStaging.mc) goto Done;
+        stream.Common.StagingMc=gfx->PagingCopyStaging.mc;
+    }
+    budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,gfx->PagingRing->max_dw,
+        gfx->PagingRing->funcs->align_mask,bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    if ((overlap || ForceSnapshot) && !candidate.SourceSystem && !candidate.DestinationSystem) {
+        ULONGLONG marker=bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_MARKER_SLOT);
+        if (!marker || gfx->PagingCopyStaging.size<PAGE_SIZE) goto Done;
+        result=bc250_sdma_paging_copy_bytes(gfx->PagingDevicePtr,(u32*)Buffer,budget,srcMc,dstMc,Bytes,
+            gfx->PagingCopyStaging.mc,marker,1u+3u*(Offset/4u),&written);
+    } else result=PagingEmit(&stream,(unsigned*)Buffer,budget,srcMc,dstMc,Bytes,&written);
+    if (result==BC250_SDMA_PAGING_INSUFFICIENT) {status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;}
+    if (result!=BC250_SDMA_PAGING_OK) goto Done;
+    candidate.Bytes=Bytes;*Slice=candidate;*Written=written;status=STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+NTSTATUS GfxPagingBuildCopyPageEx(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes, BOOLEAN ForceSnapshot,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice)
+{
+    return PagingBuildCopyPageCore(Device,0,Source,Destination,Progress,Bytes,ForceSnapshot,
+        Buffer,Offset,Free,Written,Slice);
+}
+
+// Resolve both VAs under the same engine lifetime lock and return exactly the
+// identities encoded in the packet. Whole-transfer ordering belongs to the caller.
+NTSTATUS GfxPagingBuildVirtualCopyPage(BC250_DEVICE* Device, ULONGLONG Root,
+    ULONGLONG SourceVa, ULONGLONG DestinationVa, ULONG Bytes, BOOLEAN ForceSnapshot,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice)
+{
+    BC250_PAGING_ENDPOINT source,destination;
+    *Written=0;RtlZeroMemory(Slice,sizeof(*Slice));
+    if (!Root) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(&source,sizeof(source));RtlZeroMemory(&destination,sizeof(destination));
+    source.Address=SourceVa;destination.Address=DestinationVa;
+    return PagingBuildCopyPageCore(Device,Root,&source,&destination,0,Bytes,ForceSnapshot,
+        Buffer,Offset,Free,Written,Slice);
+}
+
+NTSTATUS GfxPagingBuildCopyPage(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice)
+{
+    return GfxPagingBuildCopyPageEx(Device,Source,Destination,Progress,Bytes,FALSE,
+        Buffer,Offset,Free,Written,Slice);
+}
+
+// Build in OS-owned aperture DMA memory. CSA is outside the executable IB.
+// A192-byte minimum span pays for the worst34DWORD root/TLB/IB ring expansion,
+// so the existing whole-DMA ring budget also bounds mixed native/direct work.
+NTSTATUS GfxPagingBuildNative(BC250_DEVICE* Device, BOOLEAN Fill, ULONGLONG Source,
+    ULONGLONG Destination, ULONGLONG Total, ULONG Pattern, PVOID Buffer,
+    ULONGLONG DmaBase, ULONG Offset, ULONG Free, ULONG Token, PAGING_NATIVE_RESULT* Built)
+{
+    BC250_GFX* gfx;
+    ULONGLONG progress,startVa,begin;
+    unsigned budget,minimum,capacity,used=0,next=Token;
+    u32* ib;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    if(!Built)return status;
+    RtlZeroMemory(Built,sizeof(*Built));Built->NextToken=Token;
+    if(!Device || !Buffer || !DmaBase || ((DmaBase|Offset)&3u) ||
+       DmaBase>MAXULONGLONG-Offset ||
+       !PagingStreamTokenDecode(Fill,Source,Destination,Total,Token,&progress))return status;
+    if(progress==Total)return STATUS_SUCCESS;
+    startVa=DmaBase+Offset;begin=progress;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if(!gfx || !gfx->PagingReady || !gfx->PagingDevicePtr || !gfx->PagingRing)goto Done;
+    budget=4u*PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,gfx->PagingRing->max_dw,
+        gfx->PagingRing->funcs->align_mask,bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    if(startVa>MAXULONGLONG-budget)goto Done;
+    minimum=192u+((0u-(ULONG)(startVa+192u))&31u);
+    if(budget<minimum){status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;}
+    Built->CsaOffset=(0u-(ULONG)startVa)&63u;
+    Built->IbOffset=Built->CsaOffset+PAGING_PRIVATE_CSA_BYTES;
+    capacity=((budget-Built->IbOffset)/4u)&~7u;
+    ib=(u32*)((UCHAR*)Buffer+Built->IbOffset);
+    RtlZeroMemory(Buffer,Built->IbOffset);
+    while(progress<Total) {
+        unsigned count=(unsigned)((Total-progress)>0x400000u ? 0x400000u : Total-progress);
+        unsigned written=0,token;
+        int result;
+        // A partial packet boundary must be representable by the stateless
+        // page-slice token. The final packet may finish inside a page.
+        if(count<Total-progress)count-=(unsigned)((Destination+progress+count)&4095u);
+        if(!count || !PagingStreamTokenEncode(Fill,Source,Destination,Total,progress+count,&token))goto Done;
+        result=Fill ? bc250_sdma_paging_fill(gfx->PagingDevicePtr,ib+used,capacity-used,
+                     Destination+progress,Pattern,count,&written) :
+                     bc250_sdma_paging_copy(gfx->PagingDevicePtr,ib+used,capacity-used,
+                     Source+progress,Destination+progress,count,&written);
+        if(result==BC250_SDMA_PAGING_INSUFFICIENT)break;
+        if(result!=BC250_SDMA_PAGING_OK)goto Done;
+        used+=written;progress+=count;next=token;
+    }
+    if(!used){status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;}
+    while(used&7u)ib[used++]=gfx->PagingRing->funcs->nop;
+    Built->IbDwords=used;Built->Bytes=Built->IbOffset+used*4u;
+    if(Built->Bytes<minimum) {
+        RtlZeroMemory((UCHAR*)Buffer+Built->Bytes,minimum-Built->Bytes);Built->Bytes=minimum;
+    }
+    Built->Moved=progress-begin;Built->NextToken=next;
+    status=progress==Total ? STATUS_SUCCESS : STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    return status;
+}
+
+// Resolve exactly one page slice and return the identity used by its packets.
+// The caller publishes its logical table effect before constructing another slice.
+NTSTATUS GfxPagingBuildFillPage(BC250_DEVICE* Device, ULONGLONG Root, ULONGLONG Va,
+    ULONG Bytes, ULONG Pattern, PVOID Buffer, ULONG Offset, ULONG Free,
+    ULONG* Written, ULONGLONG* Physical, BOOLEAN* System)
+{
+    BC250_PAGING_STREAM stream;
+    BC250_GFX* gfx;
+    PAGING_U64 mc;
+    unsigned budget,written=0;
+    int result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    *Written=0;*Physical=0;*System=FALSE;
+    if (!Root || !Buffer || !Bytes || Bytes>PAGE_SIZE-(Va&(PAGE_SIZE-1)) ||
+        ((Va|Bytes|Offset)&3)!=0 || Va>MAXULONGLONG-Bytes || Offset>BC250_GFX_PAGING_BUFFER_BYTES)
+        return status;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if (!gfx || !gfx->PagingReady || !gfx->PagingDevicePtr || !gfx->PagingRing) goto Done;
+    RtlZeroMemory(&stream,sizeof(stream));
+    stream.Device=Device;stream.Gfx=gfx;stream.Root=Root;stream.Fill=TRUE;stream.Pattern=Pattern;
+    stream.Payload=(unsigned*)Buffer;stream.CommandOffset=Offset;
+    if (!PagingResolve(&stream,Va,Bytes,&mc)) goto Done;
+    budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,gfx->PagingRing->max_dw,
+        gfx->PagingRing->funcs->align_mask,bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    result=PagingEmit(&stream,(unsigned*)Buffer,budget,0,mc,Bytes,&written);
+    if (result==BC250_SDMA_PAGING_INSUFFICIENT) { status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done; }
+    if (result!=BC250_SDMA_PAGING_OK) goto Done;
+    *System=(mc&PAGING_SYSTEM_ADDRESS)!=0;
+    *Physical=*System ? mc&~PAGING_SYSTEM_ADDRESS :
+        (ULONGLONG)Device->VramPhysical.QuadPart+(mc-Device->VramMcBase);
+    *Written=written;status=STATUS_SUCCESS;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+// Build one permanent aperture batch. OS MDLs describe page identities here,
+// including partial boundary pages; byte-copy interval rules do not apply.
+NTSTATUS GfxPagingBuildAperture(BC250_DEVICE* Device, const BC250_PAGING_APERTURE_OP* Operation,
+    ULONG StartPage, PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, ULONG* NextPage)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev;
+    PAGING_APERTURE live;
+    ULONGLONG mc,table,pages=0,physical,flags,marker;
+    u64 entries[256];
+    unsigned budget,count,i,written=0;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    int result;
+    *Written=0;*NextPage=StartPage;
+    if (!Device || !Operation || !Buffer || (Offset&3u) || Offset>BC250_GFX_PAGING_BUFFER_BYTES ||
+        !PagingApertureRange(&Device->WddmAperture,Operation->FirstPage,Operation->PageCount,&mc,&table) ||
+        StartPage>Operation->PageCount) return status;
+    if (Operation->Unmap) {
+        if ((Operation->DummyPhysical&~AMDGPU_PTE_ADDR_MASK)!=0) return status;
+    } else {
+        ULONGLONG begin,end;
+        if (!Operation->Mdl || sizeof(PFN_NUMBER)!=sizeof(PAGING_U64)) return status;
+        begin=MmGetMdlByteOffset(Operation->Mdl);
+        if (begin>=PAGE_SIZE || !MmGetMdlByteCount(Operation->Mdl)) return status;
+        end=begin+(ULONGLONG)MmGetMdlByteCount(Operation->Mdl);
+        pages=(end+PAGE_SIZE-1)>>PAGE_SHIFT;
+        if (Operation->MdlOffset>=pages || Operation->PageCount>pages-Operation->MdlOffset) return status;
+    }
+    if (StartPage==Operation->PageCount) return STATUS_SUCCESS;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if (!gfx || !gfx->PagingReady || !gfx->PagingRing || !gfx->PagingDevicePtr) {
+        status=STATUS_DEVICE_NOT_READY;goto Done;
+    }
+    adev=gfx->PagingDevicePtr;
+    if (!adev->gart.bo || !PagingApertureInit(adev->gmc.gart_start,adev->gmc.gart_size,
+            adev->gart.bo->gpu_addr,adev->gart.table_size,&live) ||
+        live.mc!=Device->WddmAperture.mc || live.table!=Device->WddmAperture.table ||
+        live.bytes!=Device->WddmAperture.bytes) goto Done;
+    budget=PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,gfx->PagingRing->max_dw,
+        gfx->PagingRing->funcs->align_mask,bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    budget &= ~gfx->PagingRing->funcs->align_mask;
+    if (budget<32u) {status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;goto Done;}
+    count=(budget-29u)/2u;
+    if (count>RTL_NUMBER_OF(entries)) count=RTL_NUMBER_OF(entries);
+    if (count>Operation->PageCount-StartPage) count=(unsigned)(Operation->PageCount-StartPage);
+    flags=bc250_gart_pte_flags(adev);
+    // Match amdgpu cached TT flags. Noncoherent map requests need no host snoop;
+    // dummy pages retain the cached-page default, independently of previous flags.
+    if (!Operation->Unmap && !Operation->CacheCoherent) flags &= ~AMDGPU_PTE_SNOOPED;
+    for (i=0;i<count;i++) {
+        if (Operation->Unmap) physical=Operation->DummyPhysical;
+        else if (!PagingPageListAddress((const PAGING_U64*)MmGetMdlPfnArray(Operation->Mdl),
+                (unsigned)pages,0,0,Operation->MdlOffset,
+                ((ULONGLONG)StartPage+i)*PAGE_SIZE,PAGE_SIZE,&physical) ||
+                 (physical&~AMDGPU_PTE_ADDR_MASK)!=0) goto Done;
+        entries[i]=bc250_gart_pte(physical,flags);
+    }
+    marker=bc250_sdma_fence_addr(adev,BC250_PAGING_MARKER_SLOT);
+    result=bc250_sdma_paging_set_aperture(adev,(u32*)Buffer,budget,table+(ULONGLONG)StartPage*8,
+        entries,count,marker,1u+3u*(Offset/4u),&written);
+    if (result==BC250_SDMA_PAGING_OK) {
+        *Written=written;*NextPage=StartPage+count;
+        status=*NextPage==Operation->PageCount?STATUS_SUCCESS:STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    } else if (result==BC250_SDMA_PAGING_INSUFFICIENT) status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    return status;
+}
+
+// PASSIVE_LEVEL. Resolve each page independently and emit into this call's
+// dxgkrnl-owned private payload. The caller copies emitted bytes to pDmaBuffer.
+// No global command shadow. The device lock protects pointer lookup and engine use.
+NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
+                        ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
+                        ULONG DmaBufferOffset, ULONG DmaBufferFree, ULONG StartByte,
+                        _Out_ ULONG* DwordsWritten, _Out_ ULONG* NextByte,
+                        _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+{
+    BC250_GFX* gfx;
+    BC250_PAGING_STREAM stream;
+    unsigned int budget, written = 0, next = StartByte;
+    u32* payload;
+    int result;
+    NTSTATUS status = STATUS_SUCCESS;
+    *DwordsWritten = 0; *NextByte = StartByte; *Unsupported = BC250PagingSupported;
+    if (DmaBuffer == NULL || Bytes == 0 || Bytes > 0xFFFFFFFFu || StartByte > Bytes)
+        return STATUS_INVALID_PARAMETER;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL) { status = STATUS_INVALID_PARAMETER; goto Done; }
+    if (!gfx->PagingReady || gfx->PagingDevicePtr == NULL) { *Unsupported = BC250PagingNotReady; goto Done; }
+    if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; goto Done; }
+    if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_BUFFER_BYTES) {
+        status = STATUS_INVALID_PARAMETER; goto Done;
+    }
+    // The 64KiB OS command buffer is larger than the live SDMA reservation. Bound
+    // accumulated packets too, reserving fence and amdgpu_ring_alloc alignment.
+    budget = PagingStreamCapacity(DmaBufferFree,DmaBufferOffset,BC250_GFX_PAGING_BUFFER_BYTES,
+                                  gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+                                  bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    payload = (u32*)DmaBuffer; // this call's dxgkrnl-owned private payload
+    stream.Device=Device; stream.Gfx=gfx; stream.Root=RootPhysical;
+    stream.CommandOffset=DmaBufferOffset; stream.Payload=payload;
+    stream.Fill=Fill; stream.Pattern=FillPattern;stream.StagingMc=0; stream.Unsupported=BC250PagingSupported;
+    result=PagingStreamBuild(&stream,PagingResolve,PagingEmit,Fill,SrcVa,DstVa,(unsigned)Bytes,
+                            StartByte,payload,budget,&written,&next);
+    if (result==PagingStreamAddress) { *Unsupported=stream.Unsupported; goto Done; }
+    if (result==PagingStreamInvalid) { status=STATUS_INVALID_PARAMETER; goto Done; }
+    // Publish only complete packets. On translation/emit failure no part of this
+    // batch is exposed to dxgkrnl. Earlier submitted batches need fault handling.
+    // Packet bytes already reside in this DMA buffer's private payload.
+    *DwordsWritten=written; *NextByte=next;
+    if (result==PagingStreamMore) status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+// Shared lifetime lock excludes the first RUN and teardown. CPU initialization
+// is allowed only before that first RUN, never merely because the ring is busy,
+// failed or not ready again. Later updates are ordered GPU work with entry-based
+// multipass progress (not command bytes). Scratch slot5 is reset at submission.
+NTSTATUS GfxPagingBuildUpdate(_Inout_ BC250_DEVICE* Device,
+                             _In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
+                             _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
+                             ULONG StartEntry, _Out_ ULONG* DwordsWritten, _Out_ ULONG* NextEntry,
+                             _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+{
+    BC250_GFX* gfx;
+    ULONGLONG entries[480], physical, mc; // keep fixed kernel frame below4096bytes
+    unsigned budget, count, written = 0;
+    u64 scratch;
+    int result;
+    NTSTATUS status = STATUS_SUCCESS;
+    *DwordsWritten = 0; *NextEntry = StartEntry; *Unsupported = BC250PagingSupported;
+    if (Update == NULL || Update->NumPageTableEntries == 0 || Update->NumPageTableEntries > 512 ||
+        StartEntry >= Update->NumPageTableEntries || DmaBuffer == NULL ||
+        (DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_BUFFER_BYTES)
+        return STATUS_INVALID_PARAMETER;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL) { *Unsupported = BC250PagingNotReady; status = STATUS_DEVICE_NOT_READY; goto Done; }
+    if (gfx->PagingCpuBootstrap) {
+        if (StartEntry != 0 || !VidMmEncodePageTable(Update,0,1,&physical,entries)) {
+            status = STATUS_INVALID_PARAMETER; goto Done;
+        }
+        status = VidMmUpdatePageTable(Update);
+        if (NT_SUCCESS(status)) *NextEntry = Update->NumPageTableEntries;
+        goto Done;
+    }
+    if (!gfx->PagingReady || gfx->PagingDevicePtr == NULL) {
+        *Unsupported = BC250PagingNotReady; status = STATUS_DEVICE_NOT_READY; goto Done;
+    }
+    budget = PagingStreamCapacity(DmaBufferFree,DmaBufferOffset,BC250_GFX_PAGING_BUFFER_BYTES,
+                                  gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+                                  bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    budget &= ~gfx->PagingRing->funcs->align_mask;
+    if (budget < 16) { status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; goto Done; }
+    count = (budget - 14u) / 2u;
+    if (count > RTL_NUMBER_OF(entries)) count = RTL_NUMBER_OF(entries);
+    if (count > Update->NumPageTableEntries - StartEntry) count = Update->NumPageTableEntries - StartEntry;
+    if (!VidMmEncodePageTable(Update,StartEntry,count,&physical,entries) ||
+        !PagingPhysicalToMc(physical,count*8u,(ULONGLONG)Device->VramPhysical.QuadPart,
+                            Device->VramMcBase,Device->VramLength,&mc)) {
+        status = STATUS_INVALID_PARAMETER; goto Done;
+    }
+    scratch = bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_MARKER_SLOT);
+    result = bc250_sdma_paging_update_ptes(gfx->PagingDevicePtr,(u32*)DmaBuffer,budget,mc,
+                                          entries,count,scratch,1u+3u*(DmaBufferOffset/4u),&written);
+    if (result == BC250_SDMA_PAGING_OK) {
+        *DwordsWritten = written; *NextEntry = StartEntry + count;
+        if (*NextEntry != Update->NumPageTableEntries) status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    } else if (result == BC250_SDMA_PAGING_INSUFFICIENT) status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    else status = STATUS_INVALID_PARAMETER;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+// One complete CopyPageTableEntries range. The DDI owns list/multipass progress
+// and logical publication. Both current page-table segments are local VRAM.
+NTSTATUS GfxPagingBuildCopyRange(_Inout_ BC250_DEVICE* Device, ULONGLONG Root,
+    _In_ const DXGK_BUILDPAGINGBUFFER_COPY_RANGE* Range, _Inout_ PVOID DmaBuffer,
+    ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
+    _Out_ ULONGLONG* SourcePhysical, _Out_ ULONGLONG* DestinationPhysical,
+    _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+{
+    BC250_GFX* gfx;
+    ULONGLONG source,destination,srcMc,dstMc;
+    BOOLEAN sourceSystem,destinationSystem;
+    unsigned budget,written=0,bytes;
+    int result;
+    NTSTATUS status=STATUS_SUCCESS;
+    *DwordsWritten=0;*SourcePhysical=0;*DestinationPhysical=0;*Unsupported=BC250PagingSupported;
+    if (Range==NULL || DmaBuffer==NULL || Root==0 || !Range->NumPageTableEntries ||
+        Range->SrcStartPteIndex>=512 || Range->DstStartPteIndex>=512 ||
+        Range->NumPageTableEntries>512-Range->SrcStartPteIndex ||
+        Range->NumPageTableEntries>512-Range->DstStartPteIndex ||
+        ((Range->SrcPageTableAddress|Range->DstPageTableAddress)&65535ull)!=0 ||
+        Range->SrcPageTableAddress>0xffffffffffffull-4095 ||
+        Range->DstPageTableAddress>0xffffffffffffull-4095 ||
+        (DmaBufferOffset&3u)!=0 || DmaBufferOffset>BC250_GFX_PAGING_BUFFER_BYTES)
+        return STATUS_INVALID_PARAMETER;
+    bytes=Range->NumPageTableEntries*8u;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if (gfx==NULL || !gfx->PagingReady || gfx->PagingDevicePtr==NULL ||
+        gfx->PagingRing==NULL || gfx->PagingCopyStaging.size<PAGE_SIZE) {
+        *Unsupported=BC250PagingNotReady;status=STATUS_DEVICE_NOT_READY;goto Done;
+    }
+    if (!VidMmTranslatePaging(Root,Range->SrcPageTableAddress+(ULONGLONG)Range->SrcStartPteIndex*8u,&source,&sourceSystem) ||
+        !VidMmTranslatePaging(Root,Range->DstPageTableAddress+(ULONGLONG)Range->DstStartPteIndex*8u,&destination,&destinationSystem)) {
+        *Unsupported=BC250PagingNoTranslation;status=STATUS_INVALID_PARAMETER;goto Done;
+    }
+    if (sourceSystem || destinationSystem) {
+        *Unsupported=BC250PagingSystemMemory;status=STATUS_INVALID_PARAMETER;goto Done;
+    }
+    if (!PagingPhysicalToMc(source,bytes,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramMcBase,Device->VramLength,&srcMc) ||
+        !PagingPhysicalToMc(destination,bytes,(ULONGLONG)Device->VramPhysical.QuadPart,Device->VramMcBase,Device->VramLength,&dstMc)) {
+        *Unsupported=BC250PagingNoTranslation;status=STATUS_INVALID_PARAMETER;goto Done;
+    }
+    budget=PagingStreamCapacity(DmaBufferFree,DmaBufferOffset,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    result=bc250_sdma_paging_copy_ptes(gfx->PagingDevicePtr,(u32*)DmaBuffer,budget,srcMc,dstMc,
+        Range->NumPageTableEntries,gfx->PagingCopyStaging.mc,
+        bc250_sdma_fence_addr(gfx->PagingDevicePtr,BC250_PAGING_MARKER_SLOT),
+        1u+3u*(DmaBufferOffset/4u),&written);
+    if (result==BC250_SDMA_PAGING_OK) {
+        *DwordsWritten=written;*SourcePhysical=source;*DestinationPhysical=destination;
+    } else if (result==BC250_SDMA_PAGING_INSUFFICIENT) status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    else status=STATUS_INVALID_PARAMETER;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+// PASSIVE_LEVEL. Invalidate the entire application VMID instead of a range.
+// WDDM currently binds every process to VMID1; every later root assignment also
+// invalidates it. Over-invalidation avoids capturing a mutable process binding
+// while this OS paging buffer waits for submission. The OS paging fence follows
+// the ACK poll, so dependent work cannot observe a reported-but-unexecuted flush.
+NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONG Vmid,
+                            _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
+                            _Out_ ULONG* DwordsWritten,
+                            _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+{
+    BC250_GFX* gfx;
+    unsigned budget, written = 0;
+    int result;
+    NTSTATUS status = STATUS_SUCCESS;
+    *DwordsWritten = 0; *Unsupported = BC250PagingSupported;
+    if (DmaBuffer == NULL || Vmid == 0 || Vmid >= 16 || (DmaBufferOffset & 3u) != 0 ||
+        DmaBufferOffset > BC250_GFX_PAGING_BUFFER_BYTES) return STATUS_INVALID_PARAMETER;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || !gfx->PagingReady || gfx->PagingDevicePtr == NULL) {
+        *Unsupported = BC250PagingNotReady;
+        status = STATUS_DEVICE_NOT_READY;
+        goto Done;
+    }
+    budget = PagingStreamCapacity(DmaBufferFree,DmaBufferOffset,BC250_GFX_PAGING_BUFFER_BYTES,
+                                  gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+                                  bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    result = bc250_sdma_paging_invalidate_vmid(gfx->PagingDevicePtr,(u32*)DmaBuffer,budget,Vmid,&written);
+    if (result == BC250_SDMA_PAGING_OK) *DwordsWritten = written;
+    else if (result == BC250_SDMA_PAGING_INSUFFICIENT) status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    else status = STATUS_INVALID_PARAMETER;
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
+// DISPATCH_LEVEL. Validate all private records before reserving/writing the ring.
+// Direct records copy words; native records emit root/TLB/IB for retained OS DMA
+// storage. One outer fence governs both. CPU private pointers are not retained.
+static int PagingCountRing(void* Context, const PAGING_PRIVATE_SPAN* Span)
+{
+    ULONG* count=(ULONG*)Context;
+    // Maximum INDIRECT padding is7DWORDs, followed by its6DWORD body.
+    ULONG words=Span->Kind==PAGING_PRIVATE_DIRECT ? Span->Dwords : BC250_SDMA_VM_FLUSH_DWORDS+7u+6u;
+    if(words>MAXULONG-*count)return 0;
+    *count+=words;
+    return 1;
+}
+
+static int PagingWriteRing(void* Context, const PAGING_PRIVATE_SPAN* Span)
+{
+    struct amdgpu_ring* ring=(struct amdgpu_ring*)Context;
+    if(Span->Kind==PAGING_PRIVATE_DIRECT) {
+        amdgpu_ring_write_multiple(ring,Span->Words,(int)Span->Dwords);
+        return 1;
+    }
+    return bc250_sdma_emit_vm_flush(ring,BC250_SDMA_PAGING_VMID,Span->RootPhysical)==0 &&
+           bc250_sdma_emit_ib(ring,Span->IbAddress,Span->Dwords,
+                             BC250_SDMA_PAGING_VMID,Span->CsaAddress)==0;
+}
+
+static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
+                          ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
 {
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
     struct amdgpu_ring* ring;
@@ -1370,15 +3215,14 @@ NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG
     *Seq = 0;
     if (gfx == NULL) return STATUS_DEVICE_NOT_READY;
     if (gfx->PagingSubmitFailed) return STATUS_DEVICE_HARDWARE_ERROR;
-    if (!GfxPagingSubmitReady(Device)) return STATUS_DEVICE_BUSY;
-    if (ByteCount == 0 || (ByteCount & 3) != 0 || (ShadowOffset & 3) != 0 ||
-        (ULONGLONG)ShadowOffset + ByteCount > BC250_GFX_PAGING_SHADOW_BYTES)
+    if (!GfxPagingSubmitReadyAccess(Device)) return STATUS_DEVICE_BUSY;
+    dwords=0;
+    if (!PagingPrivateVisitMixed(PrivateData,PrivateBytes,Start,ByteCount,VirtualAddress,PagingCountRing,&dwords))
         return STATUS_INVALID_PARAMETER;
 
     if (InterlockedCompareExchange(&gfx->PagingSubmitInFlight, 1, 0) != 0) return STATUS_DEVICE_BUSY;
 
     ring = gfx->PagingRing;
-    dwords = ByteCount / 4u;
     fenceAddr = bc250_sdma_fence_addr(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT);
     if (fenceAddr == 0)
     {
@@ -1397,15 +3241,21 @@ NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG
     result = amdgpu_ring_alloc(ring, count);
     if (result == 0)
     {
-        amdgpu_ring_write_multiple(ring, (const u32*)((PUCHAR)gfx->PagingShadowMem.cpu + ShadowOffset), (int)dwords);
-        result = bc250_sdma_emit_fence(ring, fenceAddr, seq, AMDGPU_FENCE_FLAG_INT);
+        // Previous paging work actually completed before the in-flight claim above.
+        // This slot is outside the temporary GART window and remains driver-owned.
+        *(volatile u32*)((char*)gfx->PagingDevicePtr->sdma.fence_mem.cpu +
+                         BC250_PAGING_MARKER_SLOT*8u)=0;
+        KeMemoryBarrier();
+        if (!PagingPrivateVisitMixed(PrivateData,PrivateBytes,Start,ByteCount,VirtualAddress,PagingWriteRing,ring))
+            result = -1;
+        else result = bc250_sdma_emit_fence(ring, fenceAddr, seq, AMDGPU_FENCE_FLAG_INT);
     }
     if (result != 0)
     {
         amdgpu_ring_undo(ring);
         KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
         InterlockedExchange(&gfx->PagingSubmitInFlight, 0);
-        GuardLog("gfx: paging submit of %lu dwords at shadow offset 0x%lX refused, result %d", dwords, ShadowOffset, result);
+        GuardLog("gfx: paging submit of %lu dwords at 0x%llX refused, result %d", dwords, Start, result);
         return STATUS_INVALID_PARAMETER;
     }
     // amdgpu_ring_commit(), minus the doorbell it would ring through adev->backend (bc250_ring.c:79-118): the
@@ -1421,8 +3271,22 @@ NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG
 
     gfx->PagingSubmitSeq = seq;
     *Seq = seq;
-    GuardLog("gfx: paging submit, %lu dwords at shadow offset 0x%lX, seq %lu", dwords, ShadowOffset, seq);
+    GuardLog("gfx: paging submit, %lu ring dwords reserved for buffer at 0x%llX, seq %lu", dwords, Start, seq);
     return STATUS_SUCCESS;
+}
+
+NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
+                          ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
+{
+    NTSTATUS result;
+    if (GfxAccessAcquire(Device) == NULL)
+    {
+        *Seq = 0;
+        return STATUS_DEVICE_NOT_READY;
+    }
+    result = GfxSubmitPagingAccess(Device, PrivateData, PrivateBytes, Start, ByteCount, VirtualAddress, Seq);
+    GfxAccessRelease(Device);
+    return result;
 }
 
 // With GartLock held. For gart.c and psp.c: a restore or an unload under a set-up GFX sequence is refused.
@@ -1466,6 +3330,131 @@ static BOOLEAN GfxPassesFault(_In_ BC250_SEQUENCE* Sequence, ULONG DwordIndex, U
     return Value == 0 && DwordIndex == BC250_REG_MMHUB_MMVM_INVALIDATE_ENG17_SEM / 4;
 }
 
+// Retained adapter power transaction. The coordinator has closed WDDM admission,
+// drained OS work and joined IH before suspend. It owns the adapter lifecycle
+// throughout both calls. Unlike PnP retirement, no owner mapping is invalidated
+// and no allocation, OS handle or completion history is released here.
+BOOLEAN GfxPowerIsSuspended(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx=(const BC250_GFX*)Device->Gfx;
+    // Caller owns GartLock. This is a cached halt verdict, not a fresh MMIO read.
+    return gfx && gfx->SetUp && gfx->PowerSuspended && !gfx->Failed;
+}
+
+static void GfxResetRetainedRing(struct amdgpu_ring* Ring)
+{
+    // All old packets completed before suspend; reset transport positions only.
+    // AMD gfx_v10_0_kcq_init_queue(in_suspend) clears the ring/write pointer.
+    // The shim rebuilds clean MQDs from the retained ring descriptors instead
+    // of copying Linux's MQD backup, which our software context does not own.
+    Ring->wptr=0;
+    Ring->wptr_old=0;
+    Ring->count_dw=0;
+    amdgpu_ring_clear_ring(Ring);
+}
+
+static NTSTATUS GfxPowerRetainedLocked(BC250_DEVICE* Device, BC250_GFX* Gfx,
+                                      struct amdgpu_device* Adev, BOOLEAN Resume)
+{
+    ULONG i,stage;
+    int result=0;
+    long undo=0;
+    BOOLEAN quiet;
+    if (!Gfx->SetUp || Gfx->Failed || Gfx->SubmitFailed || Gfx->PagingSubmitFailed ||
+        !NT_SUCCESS(Gfx->Sequence.Fault) || Gfx->StagesDone!=BC250_GFX_STAGE_INTERRUPTS)
+        return STATUS_INVALID_DEVICE_STATE;
+    if (!Resume && Gfx->PowerSuspended) return STATUS_SUCCESS;
+    if (Resume && !Gfx->PowerSuspended) return STATUS_INVALID_DEVICE_STATE;
+    if (Gfx->SubmitInFlight || Gfx->PagingSubmitInFlight) return STATUS_DEVICE_BUSY;
+    for (i=0;i<RTL_NUMBER_OF(Gfx->RingOwes);i++)
+        if (Gfx->RingOwes[i]) return STATUS_DEVICE_BUSY;
+    if (!Resume && (!Device->IhQuiet || Device->GfxTlbBootstrap)) return STATUS_DEVICE_NOT_READY;
+    if (Resume && (!PspIsLoaded(Device) || !IhIsActive(Device) || !Device->GfxTlbBootstrap ||
+                   !Gfx->FencePage || !Gfx->SdmaFencePage || !Gfx->PagingReady))
+        return STATUS_DEVICE_NOT_READY;
+
+    GfxAccessClose(Device);
+    SequenceBegin(&Gfx->Sequence,Device,FALSE,NULL,0);
+    GpuMemBeginSequence(Device,NULL,0);
+    if (!Resume) {
+        // Keep RLC until SDMA's existing reload reset completed. Crucially, do
+        // not call HaltForMappingRetirement: these GTT identities survive D0.
+        result=bc250_sdma_hw_fini(Adev);
+        undo=bc250_gfx_hw_fini_keep_rlc(Adev);
+        (void)bc250_nbio_enable_doorbell_selfring_aperture(Adev,false);
+        GrbmSelectDefault(Device);
+        quiet=result==0 && undo==0 && NT_SUCCESS(Gfx->Sequence.Fault) && EnginesHalted(Device);
+        if (quiet) {
+            result=bc250_sdma_reset_for_reload(Adev);
+            quiet=result==0 && NT_SUCCESS(Gfx->Sequence.Fault);
+        }
+        bc250_gfx_rlc_stop(Adev);
+        quiet=quiet && NT_SUCCESS(Gfx->Sequence.Fault);
+        Gfx->PowerSuspended=quiet;
+        if (!quiet) {
+            Gfx->Failed=TRUE;
+            Device->GpuStopUnconfirmed=TRUE;
+            return STATUS_IO_DEVICE_ERROR;
+        }
+        return STATUS_SUCCESS;
+    }
+
+    // Only transport WB pages are reset. OS/diagnostic fence pages, FenceSeq,
+    // SubmitSeq, PagingSubmitSeq and the WDDM completed fence history stay intact.
+    RtlZeroMemory(Adev->gfx.wb_mem.cpu,Adev->gfx.wb_mem.size);
+    RtlZeroMemory(Adev->sdma.wb_mem.cpu,Adev->sdma.wb_mem.size);
+    GfxResetRetainedRing(&Adev->gfx.kiq[0].ring);
+    for (i=0;i<Adev->gfx.num_compute_rings;i++) GfxResetRetainedRing(&Adev->gfx.compute_ring[i]);
+    for (i=0;i<Adev->gfx.num_gfx_rings;i++) GfxResetRetainedRing(&Adev->gfx.gfx_ring[i]);
+    for (i=0;i<(ULONG)Adev->sdma.num_instances;i++) GfxResetRetainedRing(&Adev->sdma.instance[i].ring);
+    RtlZeroMemory(Gfx->VmidRoot,sizeof(Gfx->VmidRoot)); // force VMID reprogramming on the next job
+    KeMemoryBarrier();
+    // From the first hardware write onward the prior halt verdict is invalid.
+    Gfx->PowerSuspended=FALSE;
+    for (stage=1;stage<=BC250_GFX_STAGE_INTERRUPTS;stage++) {
+        // RLC rewrites its private VRAM CSB; CP rebuilds VRAM MQDs at the same
+        // addresses. Ring/EOP/fence/diagnostic storage is retained nonpaged GTT.
+        // PagingCopyStaging is scratch and is filled before each copy operation.
+        result=RunEngineStage(Device,Adev,stage,NULL);
+        GuardLog("gfx: retained resume stage %lu result %d fault 0x%08X",stage,result,Gfx->Sequence.Fault);
+        if (result || !NT_SUCCESS(Gfx->Sequence.Fault)) break;
+    }
+    if (result || !NT_SUCCESS(Gfx->Sequence.Fault) || Device->GfxTlbBootstrap) {
+        Gfx->Failed=TRUE;
+        Device->GpuStopUnconfirmed=TRUE;
+        return STATUS_IO_DEVICE_ERROR;
+    }
+    GfxAccessOpen(Device);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS GfxSetPowerRetained(_Inout_ BC250_DEVICE* Device, BOOLEAN Resume)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev=NULL;
+    BOOLEAN enabled=FALSE;
+    NTSTATUS status;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    status=GartDevice(Device,&adev,&enabled);
+    if (NT_SUCCESS(status) && (!gfx || !enabled || !Device->MmioGfxEnabled || Device->GfxStopPrepared))
+        status=STATUS_DEVICE_NOT_READY;
+    if (NT_SUCCESS(status)) {
+        void* previousBackend=adev->backend;
+        adev->backend=&gfx->Sequence;
+        status=GfxPowerRetainedLocked(Device,gfx,adev,Resume);
+        adev->backend=previousBackend;
+    }
+    GuardLog("gfx: retained power resume %u status 0x%08X",(ULONG)Resume,status);
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+    return status;
+}
+
 // ---- start and stop -------------------------------------------------------------------------------------------------------
 
 NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
@@ -1473,6 +3462,8 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     BC250_GFX* gfx;
 
     Device->Gfx = NULL;
+    Device->GfxStopQuiet = TRUE;
+    Device->GfxStopPrepared = FALSE;
     if (!Device->MmioGfxEnabled || Device->Psp == NULL || Device->GpuMem == NULL) return STATUS_SUCCESS;
     gfx = (BC250_GFX*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*gfx), BC250_GFX_TAG);
     if (gfx == NULL) return STATUS_SUCCESS;         // never fails the start
@@ -1489,41 +3480,126 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     // this device start is decided here and nowhere else.
     //   EnablePagingNode  REG_DWORD  1 = node 1 (SDMA0, the paging node) exists in the table and may submit.
     //                                 Needs EnableGpuSubmit's own preconditions (EnableGfx, EnableIh at stage 8).
+    gfx->PagingCpuBootstrap = TRUE;
     gfx->PagingGate = (GuardReadSetting(L"EnablePagingNode", 0) == 1);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
     Device->Gfx = gfx;
+    GfxAccessOpen(Device);
     GuardLog("gfx: ready, GPU submission %s, paging node %s", gfx->SubmitGate ? "allowed" : "off",
              gfx->PagingGate ? "allowed" : "off");
     return STATUS_SUCCESS;
 }
 
-// Called first of the sequences' stops (pnp.c): engines halted while the PSP still has its ring and the GART is still
-// enabled, as in amdgpu's teardown order. Hands gpumem.c the verdict on whether GTT pages may go back to Windows.
+// PnP/unwind hardware phase. Keep the owner, ring mappings and GpuMem alive
+// through PSP and GART retirement. Manual diagnostic Fini remains combined.
+void GfxPrepareStop(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    BOOLEAN gartEnabled, quiet;
+    long undo = 0;
+
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+    ExAcquireFastMutex(&Device->GartLock);
+    GfxAccessClose(Device);
+    if (!Device->GfxStopPrepared) {
+        Device->GfxStopPrepared = TRUE;
+        quiet = Device->GfxStopQuiet;
+        gfx = (BC250_GFX*)Device->Gfx;
+        if (gfx != NULL && (gfx->StagesDone != 0 || gfx->SetUp)) {
+            quiet = FALSE;
+            if (NT_SUCCESS(GartDevice(Device, &adev, &gartEnabled))) {
+                void* previousBackend = adev->backend;
+                adev->backend = &gfx->Sequence;
+                SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+                GpuMemBeginSequence(Device, NULL, 0);
+                quiet = HaltForMappingRetirement(Device, gfx, adev, &undo) && undo == 0 && NT_SUCCESS(gfx->Sequence.Fault);
+                adev->backend = previousBackend;
+            }
+        }
+        quiet = quiet && !Device->GfxTlbBootstrap;
+        Device->GfxStopQuiet = quiet;
+        if (!quiet || !Device->IhQuiet) Device->GpuStopUnconfirmed = TRUE;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+}
+
+// Storage phase: all consumers and translation hardware have retired. GART's
+// owner and table still exist here; final firmware restore/destruction follows.
 void GfxStop(_Inout_ BC250_DEVICE* Device)
 {
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
-    BOOLEAN gartEnabled, quiet = TRUE;
-    long undo = 0;
+    BOOLEAN gartEnabled, quiet;
 
+    KeEnterCriticalRegion();
+    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
     ExAcquireFastMutex(&Device->GartLock);
+    GfxAccessClose(Device);
+    quiet = Device->GfxStopPrepared && Device->GfxStopQuiet && Device->IhQuiet &&
+            Device->PspStopQuiet && Device->GartStopPrepared && Device->GartStopQuiet;
     gfx = (BC250_GFX*)Device->Gfx;
-    Device->Gfx = NULL;
-    if (gfx != NULL && (gfx->StagesDone != 0 || gfx->SetUp))
-    {
-        quiet = FALSE;
-        if (NT_SUCCESS(GartDevice(Device, &adev, &gartEnabled)))
+    if (!quiet) {
+        Device->GpuStopUnconfirmed = TRUE;
+        GuardLog("gfx: retirement incomplete, retaining storage and owner");
+        goto Done;
+    }
+    if (gfx != NULL && (gfx->StagesDone != 0 || gfx->SetUp)) {
+        if (!NT_SUCCESS(GartDevice(Device, &adev, &gartEnabled))) {
+            Device->GfxStopQuiet = FALSE;
+            Device->GpuStopUnconfirmed = TRUE;
+            goto Done;
+        }
         {
             void* previousBackend = adev->backend;
-
             adev->backend = &gfx->Sequence;
             SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
             GpuMemBeginSequence(Device, NULL, 0);
-            quiet = Fini(Device, gfx, adev, &undo) && undo == 0;
+            ReleaseStoppedStorage(Device, gfx, adev, TRUE, 0);
             adev->backend = previousBackend;
         }
     }
-    GpuMemStop(Device, quiet && Device->IhQuiet);       // ih.c stopped before us and said whether its ring is off
-    ExReleaseFastMutex(&Device->GartLock);
+    if (!Device->GfxStopQuiet) Device->GpuStopUnconfirmed = TRUE;
+    GpuMemStop(Device, Device->GfxStopQuiet);
+    Device->Gfx = NULL;
     if (gfx != NULL) ExFreePoolWithTag(gfx, BC250_GFX_TAG);
+Done:
+    ExReleaseFastMutex(&Device->GartLock);
+    ExReleasePushLockExclusive(&Device->GfxPagingLock);
+    KeLeaveCriticalRegion();
+}
+
+// Retained OS DMA contains commands, staging and synchronization storage.
+// All addresses stay virtual; submission supplies the privileged root.
+NTSTATUS GfxPagingBuildVirtualPtes(BC250_DEVICE* Device, ULONGLONG Source,
+    ULONGLONG Destination, ULONG Entries, PVOID Buffer, ULONGLONG DmaBase,
+    ULONG Offset, ULONG Free, PAGING_NATIVE_RESULT* Built)
+{
+    BC250_GFX* gfx;
+    struct bc250_sdma_virtual_ptes layout;
+    unsigned budget;
+    int result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Built,sizeof(*Built));
+    if(!Device || !Buffer || !DmaBase || DmaBase>MAXULONGLONG-Offset)return status;
+    KeEnterCriticalRegion();ExAcquirePushLockShared(&Device->GfxPagingLock);
+    gfx=(BC250_GFX*)Device->Gfx;
+    if(!gfx || !gfx->PagingReady || !gfx->PagingRing || !gfx->PagingDevicePtr)goto Done;
+    budget=4u*PagingStreamCapacity(Free,Offset,BC250_GFX_PAGING_BUFFER_BYTES,
+        gfx->PagingRing->max_dw,gfx->PagingRing->funcs->align_mask,
+        bc250_sdma_fence_size(gfx->PagingRing,AMDGPU_FENCE_FLAG_INT));
+    result=bc250_sdma_build_virtual_ptes(gfx->PagingDevicePtr,Buffer,budget,DmaBase+Offset,
+        Source,Destination,Entries,&layout);
+    if(result==BC250_SDMA_PAGING_INSUFFICIENT)status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    else if(result==BC250_SDMA_PAGING_OK) {
+        Built->Bytes=layout.bytes;Built->IbOffset=layout.ib_offset;
+        Built->IbDwords=layout.ib_dwords;Built->CsaOffset=layout.csa_offset;
+        Built->Moved=(ULONGLONG)Entries*8u;status=STATUS_SUCCESS;
+    }
+Done:
+    ExReleasePushLockShared(&Device->GfxPagingLock);KeLeaveCriticalRegion();
+    return status;
 }

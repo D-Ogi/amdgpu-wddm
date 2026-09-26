@@ -58,8 +58,11 @@ typedef struct _BC250_IH {
     volatile LONG DpcAgain;             // a DPC that found the consumer busy asks it for another pass
     BC250_SEQUENCE Sequence;            // the escape's
     BC250_SEQUENCE DpcSequence;         // the DPC's: begun once per INIT, no list of writes, Dpc set
+    BC250_SEQUENCE EnableSequence;     // DIRQL-safe backend, no caller-owned storage
+    BC250_SEQUENCE_WRITE EnableWrite;   // final enable report copied out after synchronization
     struct amdgpu_device* DpcAdev;      // the DPC's own device, valid while Active
     BOOLEAN SetUp;                      // bc250_ih_setup has allocated
+    BOOLEAN PowerSuspended;             // retained ring backing, hardware disabled
     BOOLEAN Enabled;                    // navi10_ih_irq_init() ran on the hardware
     ULONG Rptr;                         // the DPC's alone
     // Written by the DPC, copied by the escape, both under StatsLock, which is held over memory only: never across a
@@ -200,6 +203,82 @@ void IhDpc(_Inout_ BC250_DEVICE* Device)
     }
 }
 
+// Caller holds GartLock, hardware preparation completed with delivery disabled.
+// The DPC copy and this context reside in nonpaged memory.
+typedef struct _BC250_IH_ENABLE_CONTEXT {
+    BC250_IH* Ih;
+    struct amdgpu_device* Adev;
+    long Result;
+    BOOLEAN Invoked;
+} BC250_IH_ENABLE_CONTEXT;
+
+static BOOLEAN IhEnableRoutine(PVOID Context)
+{
+    BC250_IH_ENABLE_CONTEXT* enable=(BC250_IH_ENABLE_CONTEXT*)Context;
+    enable->Invoked=TRUE;
+    // ISR cannot run concurrently with this transition. A DPC on another CPU
+    // may run once Active is set: its complete, prepared ring is already valid.
+    InterlockedExchange(&enable->Ih->Active,1);
+    enable->Result=bc250_ih_hw_enable(enable->Adev);
+    if (enable->Result!=0 || !NT_SUCCESS(enable->Ih->EnableSequence.Fault)) {
+        InterlockedExchange(&enable->Ih->Active,0);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static NTSTATUS IhPublishAndEnable(BC250_DEVICE* Device, BC250_IH* Ih,
+                                   struct amdgpu_device* Adev, long* Result)
+{
+    BC250_IH_ENABLE_CONTEXT enable;
+    BOOLEAN returned=FALSE;
+    NTSTATUS status;
+    KIRQL irql;
+    void* previousBackend=Adev->backend;
+    *Result=0;
+    if (!Device->Dxgk.DxgkCbSynchronizeExecution ||
+        !Device->Dxgk.DxgkCbQueueDpc || !Ih->DpcAdev)
+        return STATUS_DEVICE_NOT_READY;
+
+    *Ih->DpcAdev=*Adev;
+    Ih->DpcAdev->backend=&Ih->DpcSequence;
+    SequenceBegin(&Ih->DpcSequence,Device,FALSE,NULL,0);
+    Ih->Rptr=0;
+    KeAcquireSpinLock(&Ih->StatsLock,&irql);
+    RtlZeroMemory(&Ih->Stats,sizeof(Ih->Stats));
+    KeReleaseSpinLock(&Ih->StatsLock,irql);
+
+    // The escape's output may not be safe at DIRQL. Record into owned storage
+    // and copy after synchronization. Dpc suppresses RecordFault's GuardLog.
+    Ih->EnableSequence.Name="ih enable";
+    Ih->EnableSequence.Read=DpcRead;
+    Ih->EnableSequence.Write=DpcWrite;
+    Ih->EnableSequence.Dpc=TRUE;
+    SequenceBegin(&Ih->EnableSequence,Device,FALSE,&Ih->EnableWrite,1);
+    RtlZeroMemory(&enable,sizeof(enable));
+    enable.Ih=Ih;
+    enable.Adev=Adev;
+    Adev->backend=&Ih->EnableSequence;
+    status=Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle,
+        IhEnableRoutine,&enable,0,&returned);
+    Adev->backend=previousBackend;
+    *Result=enable.Result;
+
+    if (Ih->EnableSequence.WriteCount) {
+        if (Ih->Sequence.WriteCount<Ih->Sequence.MaxWrites)
+            Ih->Sequence.Writes[Ih->Sequence.WriteCount]=Ih->EnableWrite;
+        Ih->Sequence.WriteCount+=Ih->EnableSequence.WriteCount;
+    }
+    if (!NT_SUCCESS(Ih->EnableSequence.Fault)) {
+        Ih->Sequence.Fault=Ih->EnableSequence.Fault;
+        Ih->Sequence.FaultOffset=Ih->EnableSequence.FaultOffset;
+    }
+    if (!NT_SUCCESS(status)) return status;
+    if (!NT_SUCCESS(Ih->EnableSequence.Fault)) return Ih->EnableSequence.Fault;
+    if (!enable.Invoked || !returned || enable.Result!=0) return STATUS_IO_DEVICE_ERROR;
+    return STATUS_SUCCESS;
+}
+
 // ---- the escape ------------------------------------------------------------------------------------------------------
 
 // As gfx.c's: a PLAN answers a read of a register it has planned a write to with the planned value (IH_RB_CNTL is
@@ -239,27 +318,148 @@ static BOOLEAN RingReadsDisabled(_In_ const BC250_DEVICE* Device)
     return (cntl & BC250_IH_RB_ENABLE) == 0;
 }
 
-// With GartLock held and Adev->backend pointing at Ih->Sequence. No interrupt of ours after the first two lines; the
-// memory goes back only if the ring reads disabled (gpumem.c's rule).
-static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_IH* Ih, _In_ struct amdgpu_device* Adev)
-{
-    BOOLEAN quiet = TRUE;
+typedef struct _BC250_IH_CLOSE_CONTEXT {
+    BC250_IH* Ih;
+    BOOLEAN Invoked;
+} BC250_IH_CLOSE_CONTEXT;
 
-    InterlockedExchange(&Ih->Active, 0);
-    KeFlushQueuedDpcs();                // a DPC that saw Active set has finished when this returns
-    if (Ih->Enabled)
-    {
-        bc250_ih_hw_fini(Adev);
-        quiet = RingReadsDisabled(Device);
-    }
-    if (Ih->SetUp) bc250_ih_teardown(Adev);
-    GpuMemRelease(Device, &Ih->Sequence, quiet);
-    Ih->SetUp = FALSE;
-    if (quiet) Ih->Enabled = FALSE;
-    return quiet;
+static BOOLEAN IhCloseRoutine(PVOID Context)
+{
+    BC250_IH_CLOSE_CONTEXT* close=(BC250_IH_CLOSE_CONTEXT*)Context;
+    InterlockedExchange(&close->Ih->Active,0);
+    close->Invoked=TRUE;
+    return TRUE;
 }
 
-void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
+// GartLock held, <= APC_LEVEL. Synchronization joins any ISR which could have
+// observed Active and queued a DPC. Only then may flushing join its consumers.
+static BOOLEAN IhCloseInterruptAdmission(BC250_DEVICE* Device, BC250_IH* Ih)
+{
+    BC250_IH_CLOSE_CONTEXT close;
+    BOOLEAN returned=FALSE;
+    NTSTATUS status=STATUS_SUCCESS;
+    RtlZeroMemory(&close,sizeof(close));
+    close.Ih=Ih;
+    if (Ih->Active || Ih->SetUp || Ih->Enabled) {
+        if (!Device->Dxgk.DxgkCbSynchronizeExecution) status=STATUS_DEVICE_NOT_READY;
+        else status=Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle,
+            IhCloseRoutine,&close,0,&returned);
+        if (!NT_SUCCESS(status) || !returned || !close.Invoked) {
+            // Close new software work even when ISR exclusion is unavailable.
+            // This fallback does not authorize hardware teardown or freeing.
+            InterlockedExchange(&Ih->Active,0);
+            KeFlushQueuedDpcs();
+            Device->IhQuiet=FALSE;
+            Device->GpuStopUnconfirmed=TRUE;
+            return FALSE;
+        }
+    }
+    KeFlushQueuedDpcs();
+    return TRUE;
+}
+
+// With GartLock held and Adev->backend pointing at Ih->Sequence. Preserve the
+// complete ring description and backing unless CPU retirement and halt succeed.
+static BOOLEAN IhHaltRetained(BC250_DEVICE* Device, BC250_IH* Ih,
+                              struct amdgpu_device* Adev)
+{
+    BOOLEAN quiet=TRUE;
+    if (!IhCloseInterruptAdmission(Device,Ih)) return FALSE;
+    if (Ih->Enabled) {
+        bc250_ih_hw_fini(Adev);
+        quiet=NT_SUCCESS(Ih->Sequence.Fault) && RingReadsDisabled(Device);
+    }
+    Device->IhQuiet=quiet;
+    if (!quiet) {
+        Device->GpuStopUnconfirmed=TRUE;
+        return FALSE;
+    }
+    Ih->Enabled=FALSE;
+    return TRUE;
+}
+
+static BOOLEAN Fini(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_IH* Ih, _In_ struct amdgpu_device* Adev)
+{
+    if (!IhHaltRetained(Device,Ih,Adev)) return FALSE;
+    if (Ih->SetUp) bc250_ih_teardown(Adev);
+    GpuMemRelease(Device, &Ih->Sequence, TRUE);
+    Ih->SetUp=FALSE;
+    Ih->PowerSuspended=FALSE;
+    return TRUE;
+}
+
+// GartLock held, OS/private engine producers already quiesced. This is not
+// teardown: retained GTT backing and mapping identities must survive sleep.
+static NTSTATUS IhPowerRetainedLocked(BC250_DEVICE* Device, BC250_IH* Ih,
+                                     struct amdgpu_device* Adev, BOOLEAN Resume)
+{
+    NTSTATUS status;
+    long result;
+    if (!Ih->SetUp || Device->GpuStopUnconfirmed) return STATUS_DEVICE_NOT_READY;
+    if (!Resume) {
+        if (Ih->PowerSuspended) return STATUS_SUCCESS;
+        if (!IhHaltRetained(Device,Ih,Adev)) return STATUS_IO_DEVICE_ERROR;
+        Ih->PowerSuspended=TRUE;
+        return STATUS_SUCCESS;
+    }
+    if (!Ih->PowerSuspended || Ih->Enabled || Ih->Active || !Device->IhQuiet)
+        return STATUS_INVALID_DEVICE_STATE;
+    if (!Adev->irq.ih.ring || !Adev->irq.ih.wptr_cpu || !Adev->irq.ih.rptr_cpu)
+        return STATUS_DEVICE_NOT_READY;
+    // Reestablish disabled delivery first: pre-sleep quiet state alone cannot
+    // prove what firmware left in the controller after a power transition.
+    Ih->Enabled=TRUE; // from the first attempted hardware write, halt is required
+    Device->IhQuiet=FALSE;
+    result=bc250_ih_hw_prepare(Adev);
+    status=Ih->Sequence.Fault;
+    if (NT_SUCCESS(status) && result) status=STATUS_IO_DEVICE_ERROR;
+    if (NT_SUCCESS(status)) {
+        // Hardware RPTR/WPTR now start at zero with delivery disabled. Reset
+        // matching CPU slots before publishing the consumer; old ring bytes
+        // remain unreachable with empty pointers and no backing is freed.
+        *Adev->irq.ih.wptr_cpu=0;
+        *Adev->irq.ih.rptr_cpu=0;
+        Adev->irq.ih.rptr=0;
+        KeMemoryBarrier();
+        status=IhPublishAndEnable(Device,Ih,Adev,&result);
+    }
+    if (!NT_SUCCESS(status)) {
+        // Keep backing even on a failed restore; normal stop can retire it only
+        // after a separately successful halt. Never route through Fini here.
+        (void)IhHaltRetained(Device,Ih,Adev);
+        return status;
+    }
+    Ih->PowerSuspended=FALSE;
+    return STATUS_SUCCESS;
+}
+
+// PASSIVE/Level Three coordinator entry. Before resume the same GART owner and
+// mappings must already be reconstructed; GartInitializeHardware is destructive.
+NTSTATUS IhSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume)
+{
+    BC250_IH* ih;
+    struct amdgpu_device* adev=NULL;
+    BOOLEAN gartEnabled=FALSE;
+    NTSTATUS status;
+    void* previousBackend;
+    if (!Device || KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    ExAcquireFastMutex(&Device->GartLock);
+    ih=(BC250_IH*)Device->Ih;
+    if (!ih || !Device->MmioIhEnabled) {status=STATUS_DEVICE_NOT_READY;goto Done;}
+    status=GartDevice(Device,&adev,&gartEnabled);
+    if (!NT_SUCCESS(status)) goto Done;
+    if (!gartEnabled) {status=STATUS_DEVICE_NOT_READY;goto Done;}
+    previousBackend=adev->backend;
+    adev->backend=&ih->Sequence;
+    SequenceBegin(&ih->Sequence,Device,FALSE,NULL,0);
+    status=IhPowerRetainedLocked(Device,ih,adev,Resume);
+    adev->backend=previousBackend;
+Done:
+    ExReleaseFastMutex(&Device->GartLock);
+    return status;
+}
+
+static void IhExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
 {
     BC250_IH* ih;
     struct amdgpu_device* adev = NULL;
@@ -291,6 +491,8 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
     ih = (BC250_IH*)Device->Ih;
     if (Data->Op > BC250_IH_OP_STATE) status = STATUS_INVALID_PARAMETER;
     else if (Data->Op != BC250_IH_OP_STATE && (ih == NULL || !Device->MmioIhEnabled || Device->GpuMem == NULL)) status = STATUS_DEVICE_NOT_READY;
+    if (NT_SUCCESS(status) && Device->GpuStopUnconfirmed &&
+        (Data->Op==BC250_IH_OP_INIT || Data->Op==BC250_IH_OP_PLAN)) status=STATUS_DEVICE_HARDWARE_ERROR;
     if (NT_SUCCESS(status) && Data->Op != BC250_IH_OP_STATE) status = GartDevice(Device, &adev, &gartEnabled);
     if (NT_SUCCESS(status) && Data->Op != BC250_IH_OP_STATE)
     {
@@ -311,7 +513,7 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
             if (result != 0) { status = STATUS_INSUFFICIENT_RESOURCES; GpuMemRelease(Device, &ih->Sequence, TRUE); break; }
             ih->SetUp = TRUE;
             if (!plan) ih->Enabled = TRUE;          // from its first write on, the init has touched the hardware
-            result = bc250_ih_hw_init(adev);
+            result = plan ? bc250_ih_hw_init(adev) : bc250_ih_hw_prepare(adev);
             GuardLog("ih: init%s: rc %d, %u writes", plan ? " planned" : "", result, ih->Sequence.WriteCount);
             if (plan)
             {
@@ -322,16 +524,8 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
                 break;
             }
             if (result != 0 || !NT_SUCCESS(ih->Sequence.Fault)) { (void)Fini(Device, ih, adev); break; }
-            // The DPC's own device: everything the shim's three DPC functions read (register bases, the ring), and a
-            // backend nobody else uses.
-            *ih->DpcAdev = *adev;
-            ih->DpcAdev->backend = &ih->DpcSequence;
-            SequenceBegin(&ih->DpcSequence, Device, FALSE, NULL, 0);
-            ih->Rptr = 0;
-            KeAcquireSpinLock(&ih->StatsLock, &irql);
-            RtlZeroMemory(&ih->Stats, sizeof(ih->Stats));
-            KeReleaseSpinLock(&ih->StatsLock, irql);
-            InterlockedExchange(&ih->Active, 1);
+            status=IhPublishAndEnable(Device,ih,adev,&result);
+            if (!NT_SUCCESS(status)) (void)Fini(Device,ih,adev);
             break;
 
         case BC250_IH_OP_FINI:
@@ -398,6 +592,36 @@ void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
 }
 
+// Diagnostic commands and device startup share the same implementation.
+void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_IH* Data)
+{
+    IhExecute(Device,Data);
+}
+
+// PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
+// call. Keep detailed partial-progress output for the eventual startup unwind.
+NTSTATUS IhInitializeHardware(BC250_DEVICE* Device, BC250_ESCAPE_IH* Report)
+{
+    NTSTATUS status;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_IH;
+    Report->Op=BC250_IH_OP_INIT;
+    if (!Device) status=STATUS_INVALID_PARAMETER;
+    else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) status=STATUS_INVALID_DEVICE_STATE;
+    else if (Device->GpuStopUnconfirmed) status=STATUS_DEVICE_HARDWARE_ERROR;
+    else {
+        IhExecute(Device,Report);
+        status=(NTSTATUS)Report->NtStatus;
+        if (NT_SUCCESS(status) && (Report->Status!=BC250_ESCAPE_STATUS_DONE || Report->Result!=0 ||
+            !Report->Active)) status=STATUS_IO_DEVICE_ERROR;
+    }
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
+
 // With GartLock held. For gart.c: the ring lives behind the GART, a restore under it is refused.
 BOOLEAN IhIsActive(_In_ const BC250_DEVICE* Device)
 {
@@ -429,6 +653,7 @@ NTSTATUS IhStart(_Inout_ BC250_DEVICE* Device)
     InterlockedExchange(&ih->OurInterrupts, 0);
     InterlockedExchange(&ih->DpcCount, 0);
     ih->SetUp = FALSE;
+    ih->PowerSuspended = FALSE;
     ih->Enabled = FALSE;
     ih->Sequence.Name = "ih";
     ih->Sequence.Read = MmioIhRead;
@@ -457,8 +682,6 @@ void IhStop(_Inout_ BC250_DEVICE* Device)
     ih = (BC250_IH*)Device->Ih;
     if (ih != NULL)
     {
-        InterlockedExchange(&ih->Active, 0);
-        KeFlushQueuedDpcs();                // here and not only in Fini: no DPC is inside the ring when this returns, whatever follows
         if (ih->SetUp || ih->Enabled)
         {
             Device->IhQuiet = FALSE;
@@ -472,7 +695,12 @@ void IhStop(_Inout_ BC250_DEVICE* Device)
                 Device->IhQuiet = Fini(Device, ih, adev);
                 adev->backend = previousBackend;
             }
+            else {
+                (void)IhCloseInterruptAdmission(Device,ih);
+                Device->GpuStopUnconfirmed=TRUE;
+            }
         }
+        else (void)IhCloseInterruptAdmission(Device,ih);
     }
     ExReleaseFastMutex(&Device->GartLock);
 }

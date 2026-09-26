@@ -30,6 +30,7 @@
 #include "bc250kmd_escape.h"
 #include "bc250_gmc.h"
 #include "bc250_psp.h"
+#include "firmware_metadata.h"
 
 #define BC250_PSP_TAG 'pS2B'
 #define BC250_PSP_TOP_WINDOW     BC250_VRAM_PSP_BELOW       // the numbers themselves are in the reservation
@@ -50,12 +51,22 @@ typedef struct _BC250_PSP {
     BOOLEAN RingUp;                 // the PSP has been told about our ring
     BOOLEAN TmrUp;                  // the PSP has been told about our TMR
     BOOLEAN Loaded;                 // all eleven commands of a LOAD were accepted, and no unload since
+    BOOLEAN PowerSuspended;         // retained power transaction, distinct from final owner destruction
+    struct _BC250_PSP_FIRMWARE* Retained; // exact nonpaged prepared images, held through D1-D3
+    struct bc250_umd_firmware Firmware; // metadata from those exact staged file buffers
 } BC250_PSP;
 
 typedef struct _BC250_PSP_FILES {
     PUCHAR Data[BC250_FILE_COUNT];
     ULONG Size[BC250_FILE_COUNT];
 } BC250_PSP_FILES;
+
+typedef struct _BC250_PSP_FIRMWARE {
+    volatile LONG References;
+    BC250_PSP_FILES Files;
+    BC250_DEVICE* Owner;
+    ULONGLONG VramMcBase,VramLength;
+} BC250_PSP_FIRMWARE;
 
 // ---- firmware files, PASSIVE_LEVEL, before any lock is taken ------------------------------------------------------
 
@@ -97,7 +108,7 @@ static NTSTATUS ReadOneFile(_In_z_ const char* Name, _Outptr_ PUCHAR* Data, _Out
     if (NT_SUCCESS(status) && (info.EndOfFile.QuadPart <= 0 || info.EndOfFile.QuadPart > BC250_PSP_MAX_FILE)) status = STATUS_FILE_TOO_LARGE;
     if (NT_SUCCESS(status))
     {
-        buffer = (PUCHAR)ExAllocatePool2(POOL_FLAG_PAGED, (SIZE_T)info.EndOfFile.QuadPart, BC250_PSP_TAG);
+        buffer = (PUCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, (SIZE_T)info.EndOfFile.QuadPart, BC250_PSP_TAG);
         if (buffer == NULL) status = STATUS_INSUFFICIENT_RESOURCES;
     }
     if (NT_SUCCESS(status))
@@ -225,6 +236,96 @@ static NTSTATUS LayOut(_In_ const BC250_PSP_FILES* Files, _Inout_ BC250_ESCAPE_P
     return STATUS_SUCCESS;
 }
 
+// amdgpu firmware-info replies use ucode_version and ucode_feature_version
+// from the loaded image header (amdgpu_kms.c / amdgpu_rlc.c, Linux v6.18).
+// All supported image headers share that prefix. Locate validates its extent.
+static NTSTATUS ReadFirmwareMetadata(const BC250_PSP_FILES* Files, struct bc250_umd_firmware* Firmware)
+{
+    static const enum bc250_fw_id ids[] = {BC250_FW_CP_ME, BC250_FW_CP_PFP, BC250_FW_CP_CE,
+        BC250_FW_CP_MEC1, BC250_FW_CP_MEC2, BC250_FW_RLC_G, BC250_FW_SDMA0};
+    ULONG i;
+    unsigned int* pairs[][2] = {{&Firmware->me_version,&Firmware->me_feature},
+        {&Firmware->pfp_version,&Firmware->pfp_feature}, {&Firmware->ce_version,&Firmware->ce_feature},
+        {&Firmware->mec_version,&Firmware->mec_feature}, {&Firmware->mec2_version,&Firmware->mec2_feature},
+        {&Firmware->rlc_version,&Firmware->rlc_feature}, {&Firmware->sdma_version,&Firmware->sdma_feature}};
+    RtlZeroMemory(Firmware,sizeof(*Firmware));
+    for(i=0;i<RTL_NUMBER_OF(ids);i++) {
+        enum bc250_fw_file file=bc250_fw_file_of(ids[i]);
+        enum psp_gfx_fw_type type;
+        u32 offset,size;
+        const struct gfx_firmware_header_v1_0* header=(const struct gfx_firmware_header_v1_0*)Files->Data[file];
+        if(bc250_fw_locate(ids[i],Files->Data[file],Files->Size[file],&offset,&size,&type))
+            return STATUS_INVALID_IMAGE_FORMAT;
+        *pairs[i][0]=le32_to_cpu(header->header.ucode_version);
+        *pairs[i][1]=le32_to_cpu(header->ucode_feature_version);
+    }
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS PspReadFirmware(BC250_DEVICE* Device, struct bc250_umd_firmware* Firmware)
+{
+    BC250_PSP* psp;
+    NTSTATUS status=STATUS_DEVICE_NOT_READY;
+    RtlZeroMemory(Firmware,sizeof(*Firmware));
+    if(KeGetCurrentIrql()!=PASSIVE_LEVEL)return STATUS_INVALID_DEVICE_STATE;
+    ExAcquireFastMutex(&Device->GartLock);
+    psp=(BC250_PSP*)Device->Psp;
+    if(psp && (psp->Loaded || psp->PowerSuspended) && !Device->GpuStopUnconfirmed) {
+        *Firmware=psp->Firmware;
+        status=STATUS_SUCCESS;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    return status;
+}
+
+// Preflight owns the exact file buffers used by a later PSP load. Preparation
+// performs no hardware writes or GART setup; loading does not reopen these files.
+void PspReleaseFirmware(BC250_PSP_FIRMWARE* Firmware)
+{
+    if (!Firmware || InterlockedDecrement(&Firmware->References)!=0) return;
+    FreeFiles(&Firmware->Files);
+    ExFreePoolWithTag(Firmware,BC250_PSP_TAG);
+}
+
+NTSTATUS PspPrepareFirmware(BC250_DEVICE* Device, BC250_ESCAPE_PSP* Report,
+                           BC250_PSP_FIRMWARE** Firmware)
+{
+    BC250_PSP_FIRMWARE* prepared=NULL;
+    NTSTATUS status;
+    ULONG failed=0;
+    if (!Firmware) return STATUS_INVALID_PARAMETER;
+    *Firmware=NULL;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_PSP;
+    Report->Op=BC250_PSP_OP_LOAD;
+    if (!Device) status=STATUS_INVALID_PARAMETER;
+    else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) status=STATUS_INVALID_DEVICE_STATE;
+    else if (Device->GpuStopUnconfirmed) status=STATUS_DEVICE_HARDWARE_ERROR;
+    else if (!Device->Psp || !Device->MmioPspEnabled) status=STATUS_DEVICE_NOT_READY;
+    else status=CheckWindow(Device);
+    if (NT_SUCCESS(status)) {
+        prepared=(BC250_PSP_FIRMWARE*)ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*prepared),BC250_PSP_TAG);
+        if (!prepared) status=STATUS_INSUFFICIENT_RESOURCES;
+        else prepared->References=1;
+    }
+    if (NT_SUCCESS(status)) {
+        status=ReadFiles(&prepared->Files,&failed);
+        Report->Result=(long)failed;
+    }
+    if (NT_SUCCESS(status)) {
+        FillAddresses(Device,Report);
+        status=LayOut(&prepared->Files,Report,NULL);
+    }
+    if (NT_SUCCESS(status)) {
+        prepared->Owner=Device;prepared->VramMcBase=Device->VramMcBase;prepared->VramLength=Device->VramLength;
+        *Firmware=prepared;
+    } else PspReleaseFirmware(prepared);
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
 static ULONG Microseconds(LARGE_INTEGER From, LARGE_INTEGER Frequency)
 {
     LARGE_INTEGER now = KeQueryPerformanceCounter(NULL);
@@ -234,18 +335,22 @@ static ULONG Microseconds(LARGE_INTEGER From, LARGE_INTEGER Frequency)
 
 // DESTROY_TMR and ring stop, amdgpu's psp_hw_fini() order. Both are tried even if the first fails: a ring the PSP
 // still knows points at memory that the next owner of this GPU will want to use.
-static NTSTATUS Unload(_Inout_ BC250_PSP* Psp, _Out_ long* Result)
+static NTSTATUS UnloadHardware(_Inout_ BC250_PSP* Psp, _Out_ long* Result, BOOLEAN Retain)
 {
     int tmr = 0, ring = 0;
 
+    GfxTraceRlcState(Psp->Sequence.Device,"before-psp-unload");
     Psp->Loaded = FALSE;
+    if (!Retain) RtlZeroMemory(&Psp->Firmware,sizeof(Psp->Firmware));
     // DESTROY_TMR travels over the ring: without a ring the PSP knows, there is no way to send it (what is left is a reboot).
     if (Psp->TmrUp && !Psp->RingUp) tmr = -EINVAL;
     else if (Psp->TmrUp) { tmr = bc250_psp_tmr_unload(&Psp->Context); if (tmr == 0) Psp->TmrUp = FALSE; }
+    GfxTraceRlcState(Psp->Sequence.Device,"after-tmr-destroy");
     if (Psp->RingUp) { ring = bc250_psp_ring_stop(&Psp->Context); if (ring == 0) Psp->RingUp = FALSE; }
+    GfxTraceRlcState(Psp->Sequence.Device,"after-psp-ring-stop");
     *Result = (tmr != 0) ? tmr : ring;
     GuardLog("psp: unload: destroy TMR %d, ring stop %d", tmr, ring);
-    if (!Psp->TmrUp && !Psp->RingUp && Psp->Pages != NULL)
+    if (!Retain && !Psp->TmrUp && !Psp->RingUp && Psp->Pages != NULL)
     {
         MmUnmapIoSpace(Psp->Pages, BC250_PSP_PAGES_LENGTH);
         Psp->Pages = NULL;
@@ -256,9 +361,29 @@ static NTSTATUS Unload(_Inout_ BC250_PSP* Psp, _Out_ long* Result)
     return NT_SUCCESS(Psp->Sequence.Fault) ? ((tmr == 0 && ring == 0) ? STATUS_SUCCESS : STATUS_IO_DEVICE_ERROR) : Psp->Sequence.Fault;
 }
 
-void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
+static NTSTATUS Unload(_Inout_ BC250_PSP* Psp, _Out_ long* Result)
+{
+    Psp->PowerSuspended=FALSE;
+    return UnloadHardware(Psp,Result,FALSE);
+}
+
+// The immutable image buffers are shared with the caller's preparation object.
+// Reference changes occur under GartLock; release never performs file I/O.
+static void RetainPrepared(BC250_PSP* Psp, const BC250_PSP_FIRMWARE* Prepared)
+{
+    BC250_PSP_FIRMWARE* previous;
+    if (Psp->Retained==Prepared) return;
+    previous=Psp->Retained;
+    Psp->Retained=(BC250_PSP_FIRMWARE*)Prepared;
+    InterlockedIncrement(&Psp->Retained->References);
+    PspReleaseFirmware(previous);
+}
+
+static void PspExecutePrepared(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data,
+                               const BC250_PSP_FIRMWARE* Prepared)
 {
     BC250_PSP_FILES files;
+    struct bc250_umd_firmware firmware;
     BC250_PSP* psp;
     struct amdgpu_device* adev = NULL;
     void* previousBackend = NULL;
@@ -286,7 +411,12 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
     if (Data->Op > BC250_PSP_OP_UNLOAD) status = STATUS_INVALID_PARAMETER;
     if (NT_SUCCESS(status) && !Device->MmioPspEnabled) status = STATUS_DEVICE_NOT_READY;
     // Files first: file I/O needs PASSIVE_LEVEL, and the lock below raises to APC_LEVEL.
-    if (NT_SUCCESS(status) && Data->Op != BC250_PSP_OP_UNLOAD) status = ReadFiles(&files, &failedFile);
+    if (NT_SUCCESS(status) && Prepared) {
+        if (Data->Op!=BC250_PSP_OP_LOAD || Prepared->Owner!=Device ||
+            Prepared->VramMcBase!=Device->VramMcBase || Prepared->VramLength!=Device->VramLength)
+            status=STATUS_INVALID_DEVICE_STATE;
+        else files=Prepared->Files; // borrowed; caller releases after execution/unwind
+    } else if (NT_SUCCESS(status) && Data->Op != BC250_PSP_OP_UNLOAD) status = ReadFiles(&files, &failedFile);
     if (!NT_SUCCESS(status))
     {
         Data->Result = (long)failedFile;
@@ -333,10 +463,14 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
             RtlZeroMemory(staging, BC250_PSP_STAGING_LENGTH);
             status = LayOut(&files, Data, staging);
             if (!NT_SUCCESS(status)) break;
+            status = ReadFirmwareMetadata(&files,&firmware);
+            if (!NT_SUCCESS(status)) break;
             if (Setup(psp, adev, Data, psp->Pages) != 0) { status = STATUS_DEVICE_DATA_ERROR; break; }
 
             psp->RingUp = TRUE;                 // from the first write on, a ring stop is owed
+            if (Device->FullWddm) GfxTraceRlcState(Device,"before-psp-ring-create");
             result = bc250_psp_ring_create(&psp->Context);
+            if (Device->FullWddm) GfxTraceRlcState(Device,"after-psp-ring-create");
             if (result != 0 || !NT_SUCCESS(psp->Sequence.Fault)) break;
             for (i = 0; i < Data->CommandCount; i++)
             {
@@ -361,9 +495,13 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
                 Data->CommandsDone = i + 1;
                 GuardLog("psp: command %u (id %u, type %u, %u bytes): rc %d, status 0x%X, %u us, in TMR at 0x%llX", i + 1,
                          got->CommandId, got->FirmwareType, got->Size, got->Result, got->PspStatus, got->Microseconds, got->TmrAddress);
+                // M365: compare the state after each identified response. This
+                // adds safe reads/latency, not commands or a readiness verdict.
+                if (Device->FullWddm) GfxTraceRlcState(Device,"after-psp-command");
                 if (got->Result != 0) { result = got->Result; break; }
             }
             psp->Loaded = (result == 0 && Data->CommandsDone == Data->CommandCount && NT_SUCCESS(psp->Sequence.Fault));
+            if(psp->Loaded)psp->Firmware=firmware;
             break;
 
         case BC250_PSP_OP_UNLOAD:
@@ -371,6 +509,10 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
             if ((!psp->RingUp && !psp->TmrUp) || GfxIsActive(Device)) { status = STATUS_INVALID_DEVICE_STATE; break; }
             status = Unload(psp, &result);
             break;
+        }
+        if (Data->Op==BC250_PSP_OP_LOAD && psp->Loaded && Prepared && NT_SUCCESS(status)) {
+            RetainPrepared(psp,Prepared);
+            psp->PowerSuspended=FALSE;
         }
         if (NT_SUCCESS(status)) status = psp->Sequence.Fault;
         Data->FaultOffset = psp->Sequence.FaultOffset;
@@ -387,10 +529,132 @@ void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
 
     if (staging != NULL) MmUnmapIoSpace(staging, BC250_PSP_STAGING_LENGTH);
     if (planPages != NULL) ExFreePoolWithTag(planPages, BC250_PSP_TAG);
-    FreeFiles(&files);
+    if (!Prepared) FreeFiles(&files);
     Data->Result = result;
     Data->NtStatus = (unsigned long)status;
     Data->Status = (NT_SUCCESS(status) && result == 0) ? BC250_ESCAPE_STATUS_DONE : BC250_ESCAPE_STATUS_REFUSED;
+}
+
+static void PspExecute(BC250_DEVICE* Device, BC250_ESCAPE_PSP* Data)
+{
+    PspExecutePrepared(Device,Data,NULL);
+}
+
+// Diagnostic commands and device startup share the same implementation.
+void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_PSP* Data)
+{
+    PspExecute(Device,Data);
+}
+
+// PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
+// call. Keep detailed partial-progress output for the eventual startup unwind.
+NTSTATUS PspInitializeHardware(BC250_DEVICE* Device, BC250_ESCAPE_PSP* Report)
+{
+    NTSTATUS status;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_PSP;
+    Report->Op=BC250_PSP_OP_LOAD;
+    if (!Device) status=STATUS_INVALID_PARAMETER;
+    else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) status=STATUS_INVALID_DEVICE_STATE;
+    else if (Device->GpuStopUnconfirmed) status=STATUS_DEVICE_HARDWARE_ERROR;
+    else {
+        PspExecute(Device,Report);
+        status=(NTSTATUS)Report->NtStatus;
+        if (NT_SUCCESS(status) && (Report->Status!=BC250_ESCAPE_STATUS_DONE || Report->Result!=0 ||
+            (Report->State&(BC250_PSP_STATE_RING|BC250_PSP_STATE_TMR|BC250_PSP_STATE_GART))!=(BC250_PSP_STATE_RING|BC250_PSP_STATE_TMR|BC250_PSP_STATE_GART) || !Report->CommandCount || Report->CommandsDone!=Report->CommandCount)) status=STATUS_IO_DEVICE_ERROR;
+    }
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
+
+// Prepared owns file bytes; this call only borrows them. The coordinator must
+// retain and eventually release Prepared even if hardware loading fails.
+NTSTATUS PspInitializePrepared(BC250_DEVICE* Device, const BC250_PSP_FIRMWARE* Prepared,
+                              BC250_ESCAPE_PSP* Report)
+{
+    NTSTATUS status;
+    if (!Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_PSP;Report->Op=BC250_PSP_OP_LOAD;
+    if (!Device || !Prepared) status=STATUS_INVALID_PARAMETER;
+    else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) status=STATUS_INVALID_DEVICE_STATE;
+    else if (Device->GpuStopUnconfirmed) status=STATUS_DEVICE_HARDWARE_ERROR;
+    else {
+        PspExecutePrepared(Device,Report,Prepared);
+        status=(NTSTATUS)Report->NtStatus;
+        if (NT_SUCCESS(status) && (Report->Status!=BC250_ESCAPE_STATUS_DONE || Report->Result!=0 ||
+            (Report->State&(BC250_PSP_STATE_RING|BC250_PSP_STATE_TMR|BC250_PSP_STATE_GART))!=(BC250_PSP_STATE_RING|BC250_PSP_STATE_TMR|BC250_PSP_STATE_GART) || !Report->CommandCount ||
+            Report->CommandsDone!=Report->CommandCount)) status=STATUS_IO_DEVICE_ERROR;
+    }
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
+// PASSIVE, serialized with PnP/power by the coordinator. No storage is freed
+// during suspend and no file I/O is allowed during resume. GFX/SDMA consumers
+// must be suspended first; GART remains enabled until this call has finished.
+NTSTATUS PspSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume, BC250_ESCAPE_PSP* Report)
+{
+    BC250_PSP* psp;
+    BC250_PSP_FIRMWARE* prepared=NULL;
+    struct amdgpu_device* adev=NULL;
+    BOOLEAN enabled=FALSE;
+    NTSTATUS status=STATUS_DEVICE_NOT_READY;
+    long result=0;
+    if (!Device || !Report) return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Report,sizeof(*Report));
+    Report->Magic=BC250_ESCAPE_MAGIC;Report->Command=BC250_ESCAPE_RUN_PSP;
+    Report->Version=BC250_KMD_VERSION;
+    Report->Op=Resume ? BC250_PSP_OP_LOAD : BC250_PSP_OP_UNLOAD;
+    if (KeGetCurrentIrql()!=PASSIVE_LEVEL) {status=STATUS_INVALID_DEVICE_STATE;goto Done;}
+    ExAcquireFastMutex(&Device->GartLock);
+    psp=(BC250_PSP*)Device->Psp;
+    if (!psp || !psp->Retained || Device->GpuStopUnconfirmed || !Device->MmioPspEnabled) goto Unlock;
+    if (!GfxPowerIsSuspended(Device)) {status=STATUS_INVALID_DEVICE_STATE;goto Unlock;}
+    if (Resume) {
+        if (!psp->PowerSuspended || psp->RingUp || psp->TmrUp) {status=STATUS_INVALID_DEVICE_STATE;goto Unlock;}
+        prepared=psp->Retained;
+        InterlockedIncrement(&prepared->References);
+        status=STATUS_SUCCESS;
+    } else if (psp->PowerSuspended && !psp->RingUp && !psp->TmrUp) {
+        status=STATUS_SUCCESS;
+    } else {
+        status=GartDevice(Device,&adev,&enabled);
+        if (NT_SUCCESS(status) && !enabled) status=STATUS_INVALID_DEVICE_STATE;
+        if (NT_SUCCESS(status)) {
+            void* previous=adev->backend;
+            adev->backend=&psp->Sequence;
+            SequenceBegin(&psp->Sequence,Device,FALSE,Report->Writes,BC250_PSP_MAX_WRITES);
+            status=UnloadHardware(psp,&result,TRUE);
+            if (NT_SUCCESS(status)) psp->PowerSuspended=TRUE;
+            Report->Result=result;
+            Report->WriteCount=psp->Sequence.WriteCount;
+            Report->FaultOffset=psp->Sequence.FaultOffset;
+            psp->Sequence.Writes=NULL;psp->Sequence.MaxWrites=0;
+            adev->backend=previous;
+        }
+    }
+Unlock:
+    ExReleaseFastMutex(&Device->GartLock);
+    if (NT_SUCCESS(status) && prepared) {
+        status=PspInitializePrepared(Device,prepared,Report);
+        PspReleaseFirmware(prepared);
+    }
+Done:
+    Report->NtStatus=(unsigned long)status;
+    Report->Status=NT_SUCCESS(status)?BC250_ESCAPE_STATUS_DONE:BC250_ESCAPE_STATUS_REFUSED;
+    return status;
+}
+
+// Cached under GartLock. A suspended flag alone is not proof of hardware stop.
+BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device)
+{
+    const BC250_PSP* psp=(const BC250_PSP*)Device->Psp;
+    return psp && psp->PowerSuspended && !psp->RingUp && !psp->TmrUp;
 }
 
 // With GartLock held. For gfx.c: has this driver instance loaded the firmware?
@@ -408,6 +672,7 @@ NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device)
     BC250_PSP* psp;
 
     Device->Psp = NULL;
+    Device->PspStopQuiet = TRUE;
     if (!Device->MmioPspEnabled || !Device->MmioGartEnabled || !Device->VramEnabled || Device->Gart == NULL) return STATUS_SUCCESS;
     psp = (BC250_PSP*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*psp), BC250_PSP_TAG);
     if (psp == NULL) return STATUS_SUCCESS;         // never fails the start
@@ -431,7 +696,7 @@ void PspStop(_Inout_ BC250_DEVICE* Device)
     ExAcquireFastMutex(&Device->GartLock);
     psp = (BC250_PSP*)Device->Psp;
     Device->Psp = NULL;
-    if (psp != NULL && (psp->RingUp || psp->TmrUp) && NT_SUCCESS(GartDevice(Device, &adev, &gartEnabled)))
+    if (Device->GfxStopQuiet && psp != NULL && (psp->RingUp || psp->TmrUp) && NT_SUCCESS(GartDevice(Device, &adev, &gartEnabled)))
     {
         void* previousBackend = adev->backend;
 
@@ -442,11 +707,17 @@ void PspStop(_Inout_ BC250_DEVICE* Device)
     }
     ExReleaseFastMutex(&Device->GartLock);
     if (psp == NULL) return;
-    if (psp->RingUp || psp->TmrUp)
+    Device->PspStopQuiet=!(psp->RingUp || psp->TmrUp);
+    if (!Device->PspStopQuiet)
     {
-        // The PSP still holds addresses of ours. They are VRAM addresses, not pool: nothing to keep alive, but say so.
-        GuardLog("psp: stop with ring %u, TMR %u still known to the PSP", psp->RingUp, psp->TmrUp);
+        // Keep firmware state and its CPU views when a consumer could still run,
+        // or when PSP teardown itself failed. Do not dismantle GART afterwards.
+        Device->GpuStopUnconfirmed=TRUE;
+        GuardLog("psp: stop unconfirmed (gfx quiet %u, ring %u, TMR %u), retaining state",
+                 Device->GfxStopQuiet,psp->RingUp,psp->TmrUp);
+        return;
     }
     if (psp->Pages != NULL) MmUnmapIoSpace(psp->Pages, BC250_PSP_PAGES_LENGTH);
+    PspReleaseFirmware(psp->Retained);
     ExFreePoolWithTag(psp, BC250_PSP_TAG);
 }

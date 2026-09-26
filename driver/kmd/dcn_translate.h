@@ -21,10 +21,15 @@ int DcnTranslateCardAddress(unsigned long long CardAddress, unsigned long long M
 
 // The flip target's own rule, mirrored from dcn.c's AddressAllowed in plain integers so both the escape (which
 // also allows the firmware's own address, a rule this function does not know about) and the WDDM DDI path share
-// one range check: Physical must be 4 KiB aligned, and the whole fixed surface (SurfaceBytes) must fit between
+// one range check: Physical must be 4 KiB aligned, and the whole pitched surface (SurfaceBytes) must fit between
 // it and the top of [VramBase, VramBase + VramLength).
 int DcnAddressFits(unsigned long long Physical, unsigned long long VramBase, unsigned long long VramLength,
                    unsigned long long SurfaceBytes);
+
+// Linear 32-bit scanout geometry; pitch is in bytes, extent includes row padding.
+int DcnSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pitch,
+                    unsigned long long* Bytes);
+unsigned long DcnPrimaryPitch(unsigned long Width);
 
 #ifdef __cplusplus
 }

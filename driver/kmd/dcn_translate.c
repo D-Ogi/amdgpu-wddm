@@ -24,3 +24,18 @@ int DcnAddressFits(unsigned long long Physical, unsigned long long VramBase, uns
     if (Physical < VramBase || Physical >= vramTop) return 0;
     return SurfaceBytes <= vramTop - Physical;
 }
+
+unsigned long DcnPrimaryPitch(unsigned long Width)
+{
+    unsigned long long pixels=((unsigned long long)Width+63ull)&~63ull;
+    if (!Width || pixels>0xffffffffull/4ull) return 0;
+    return (unsigned long)(pixels*4ull);
+}
+int DcnSurfaceBytes(unsigned long Width,unsigned long Height,unsigned long Pitch,
+                    unsigned long long* Bytes)
+{
+    *Bytes=0;
+    if (!Width || !Height || !Pitch || (Pitch&3ul) || (unsigned long long)Width*4ull>Pitch) return 0;
+    *Bytes=(unsigned long long)Pitch*Height;
+    return 1;
+}

@@ -44,6 +44,11 @@
 #include <ntifs.h>        // superset of ntddk.h; the token checks of the escape need it
 #include <windef.h>
 #include <dispmprt.h>
+#include "paging_window.h"
+#include "paging_graph_batch.h"
+#include "paging_capture.h"
+#include "smu.h"
+#include "start_health.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
 
@@ -85,7 +90,19 @@ typedef enum _BC250_STAGE {
     StageStartFailed = 91,
 } BC250_STAGE;
 
+#define BC250_VISIBILITY_HISTORY_COUNT 16u
+typedef struct _BC250_VISIBILITY_EVENT {
+    ULONG Call, Source, Requested;
+    NTSTATUS Status;
+    ULONG SourceVisible, Blanked;
+    LONGLONG BeginQpc, EndQpc;
+} BC250_VISIBILITY_EVENT;
+
 typedef struct _BC250_DEVICE {
+    BC250_START_HEALTH_STATE StartHealth;
+    volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
+    DEVICE_POWER_STATE RetainedDownState;
+    POWER_ACTION RetainedDownAction;
     PDEVICE_OBJECT PhysicalDeviceObject;
     DXGKRNL_INTERFACE Dxgk;
     DXGK_START_INFO StartInfo;
@@ -96,14 +113,32 @@ typedef struct _BC250_DEVICE {
     BOOLEAN ModeActive;         // a commit has validated that the source surface is exactly the firmware's mode
     BOOLEAN PresentSeen;
     BOOLEAN CommitSeen;
+    // Retained normal-DDI diagnostics, independent of the wrapping guard log.
+    // Level Two visibility/commit/summary exclusion protects each last-request tuple.
+    volatile LONG VisibilityCalls;
+    ULONG VisibilityLastSource;
+    BOOLEAN VisibilityLastRequested;
+    NTSTATUS VisibilityLastStatus;
+    ULONG VisibilityTrueCalls, VisibilityFalseCalls, VisibilityFailures;
+    NTSTATUS VisibilityFirstTrueStatus, VisibilityLastTrueStatus;
+    BC250_VISIBILITY_EVENT VisibilityHistory[BC250_VISIBILITY_HISTORY_COUNT];
+    volatile LONG CommitPowerCalls;
+    BOOLEAN CommitLastPowerTransition, CommitLastPoweredOff;
 
     // The mode the firmware left. M3 offers exactly this one.
     DXGK_DISPLAY_INFORMATION Post;
+    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
+    BOOLEAN InheritedSignalValid;     // immutable from successful start until stop
     PVOID Framebuffer;                  // mapping of Post.PhysicAddress
     SIZE_T FramebufferLength;
+    BOOLEAN SystemDisplayReady;        // bugcheck CPU writes only after verified scanout restore
+    BOOLEAN PostDisplayStopAttempted;  // WddmStop restores before freeing scanout objects
+    NTSTATUS PostDisplayStopStatus;    // separate from the ordinary StopDevice completion result
+    ULONG FramebufferCacheProtect;     // actual successful POST mapping cache attribute
     D3DKMDT_VIDPN_PRESENT_PATH_ROTATION Rotation;
 
     // BAR5, NULL unless the EnableMmio gate was open at start (mmio.c).
+    BC250_SMU_OWNER Smu;               // initialized at AddDevice; online only after explicit writer handover
     volatile ULONG* Mmio;
     PHYSICAL_ADDRESS MmioPhysical;
     BOOLEAN MmioWriteEnabled;
@@ -117,10 +152,14 @@ typedef struct _BC250_DEVICE {
     // written; the address the most recent successful flip left HUBP0 at; and whether that address is still the
     // firmware's - which is what the stop path (pnp.c) asks before it calls DcnRestore.
     BOOLEAN DcnWriteEnabled;
+    volatile LONG DcnSurfaceSequence; // coherent address/pitch snapshot for CPU mapping
+    ULONG DcnFirmwarePitch;
+    ULONG DcnCurrentPitch;
     BOOLEAN DcnFirmwareKnown;
     ULONGLONG DcnFirmwareAddress;
     ULONGLONG DcnCurrentAddress;
     BOOLEAN DcnDiverged;
+    BOOLEAN DcnBlanked;                // this driver requested blank; restore must unblank
 
     // dcn.c's VidPn flip (0.7.24, ADR 0011 point 3 step 3): Device->DcnWriteEnabled && EnableVidPnFlip together
     // (mmio.c's MmioStart), i.e. EnableMmio && EnableDcnWrite && EnableVidPnFlip. Meaningful only under the full
@@ -135,9 +174,11 @@ typedef struct _BC250_DEVICE {
     volatile LONG DcnVsyncTicks;         // every VUPDATE_NO_LOCK event the ISR acknowledged, armed or not
     volatile LONG DcnVsyncRefused;       // MmioDcnRead/MmioDcnWrite failed inside the ISR (should not happen:
                                          // BAR5 stays mapped for the whole device start; counted, not assumed impossible)
-    volatile LONG DcnVsyncDeferred;      // a hardware tick postponed one DPC because the flip was still pending
+    volatile LONG DcnVsyncDeferred;      // completion observation deferred (may report the old buffer)
+    volatile LONG DcnVsyncOldBufferReports; // vblanks preserved with a distinct observed scanout
     volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
-    volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress targets the translation or the range check refused
+    volatile LONG DcnLockTimeouts;      // bounded OTG update-lock acknowledgement expired
+    volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress translation/range or programming refused
 
     // 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip is
     // live - a CPU mapping of whatever DcnCurrentAddress currently names, next to that field for the same
@@ -164,11 +205,24 @@ typedef struct _BC250_DEVICE {
     PVOID Gart;                         // gart.c, NULL unless the EnableGart gate was open at start
     PVOID Psp;                          // psp.c, NULL unless the EnablePsp gate was open at start
     PVOID GpuMem;                       // gpumem.c, NULL unless the EnableGfx gate was open at start
+    KSPIN_LOCK GfxAccessLock;           // protects DPC reader admission and reference count
+    KEVENT GfxAccessDrained;
+    ULONG GfxAccessUsers;
+    BOOLEAN GfxAccessClosed;
+    EX_PUSH_LOCK GfxPagingLock;         // builder shared, GfxEscape/Stop exclusive; acquired before GartLock
     PVOID Gfx;                          // gfx.c, the same
     PVOID Ih;                           // ih.c, NULL unless the EnableIh gate was open at start
     BOOLEAN FullWddm;                   // DriverEntry found EnableFullWddm open and gave dxgkrnl the full table
+    PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
+    BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation
+    BOOLEAN GartStopPrepared;
+    BOOLEAN GfxTlbBootstrap;            // unpublished startup owes GFX visibility before CP
+    BOOLEAN GartStopQuiet;              // contexts/caches disabled, owner retained for final cleanup
+    BOOLEAN GfxStopQuiet;               // stop verdict, not a runtime readiness flag
+    BOOLEAN PspStopQuiet;               // PSP has released ring/TMR at stop
+    BOOLEAN GpuStopUnconfirmed;         // sticky for this device object; prevents unsafe restart
     BOOLEAN IhQuiet;                    // ih.c's stop: the IH ring reads disabled (or never was enabled); for gpumem.c's stop
     volatile LONG InterruptCount;       // every call of the interrupt routine since start, ours or not
     volatile LONG LastMessageNumber;
@@ -177,6 +231,22 @@ typedef struct _BC250_DEVICE {
     FAST_MUTEX GartLock;                // serializes every bring-up sequence (gart.c, psp.c, gfx.c) and the stop;
                                         // initialized in AddDevice
 } BC250_DEVICE;
+
+void StartHealthInitialize(BC250_DEVICE* Device);
+void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full);
+void StartHealthReady(BC250_DEVICE* Device, BOOLEAN Ready);
+void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode);
+void StartHealthClose(BC250_DEVICE* Device);
+void StartHealthFault(BC250_DEVICE* Device);
+void StartHealthRemove(BC250_DEVICE* Device);
+void StartHealthEnter(BC250_DEVICE* Device);
+void StartHealthLeave(BC250_DEVICE* Device);
+void StartHealthDisplayLocked(BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Mode);
+void StartHealthVisibilityLocked(BC250_DEVICE* Device, BOOLEAN Visible);
+void StartHealthCompleted(BC250_DEVICE* Device, ULONG Sequence);
+void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, BOOLEAN Admin, ULONG EscapeFlags);
+NTSTATUS GuardConfirmStartDurable(void);
+
 
 // One run of a bring-up sequence through the shim: what adev->backend points at (sequence.c).
 typedef struct _BC250_ESCAPE_WRITE BC250_SEQUENCE_WRITE;
@@ -193,6 +263,8 @@ typedef struct _BC250_SEQUENCE {
 
     BC250_DEVICE* Device;               // set by SequenceBegin
     BOOLEAN Plan;
+    BOOLEAN TraceRlcRetirement;         // scoped passive GFX teardown diagnostics, never a quiet predicate
+    BOOLEAN TraceBootstrapTlb;          // only inside the PASSIVE-safe unpublished RLC stage scope
     NTSTATUS Fault;                     // first refused register access of the running sequence
     ULONG FaultOffset;
     ULONG WriteCount;
@@ -205,7 +277,7 @@ NTSTATUS GuardInit(_In_ PUNICODE_STRING RegistryPath);
 void GuardCleanup(void);
 void GuardStage(BC250_STAGE Stage);
 BC250_STAGE GuardLastStage(void);
-NTSTATUS GuardCheckAndCountStart(void);         // STATUS_SUCCESS, or a failure when the start budget is used up
+NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable); // full table needs a durably recorded start
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
@@ -255,14 +327,21 @@ NTSTATUS MmioDcnWriteEx(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Val
 struct _BC250_ESCAPE_IH;
 NTSTATUS IhStart(_Inout_ BC250_DEVICE* Device);
 void IhStop(_Inout_ BC250_DEVICE* Device);
+// PASSIVE retained power transition; same GART mappings required before resume.
+NTSTATUS IhSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
 void IhRemove(_Inout_ BC250_DEVICE* Device);
 BOOLEAN IhInterrupt(_Inout_ BC250_DEVICE* Device);
 void IhDpc(_Inout_ BC250_DEVICE* Device);
 BOOLEAN IhIsActive(_In_ const BC250_DEVICE* Device);
 void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_IH* Data);
+// PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
+NTSTATUS IhInitializeHardware(BC250_DEVICE* Device, struct _BC250_ESCAPE_IH* Report);
 
 // dcn.c (ADR 0011 point 3): a read-only dump, no gate of its own beyond BAR5 being mapped, no sequence, no
 // Device state - so, unlike gart.c/psp.c/gfx.c/ih.c, no Start/Stop and no GartLock.
+struct _BC250_ESCAPE_DCN_OBSERVE;
+void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DCN_OBSERVE* Data,
+    _In_ BOOLEAN Admin, _In_ ULONG EscapeFlags);
 struct _BC250_ESCAPE_DCN;
 void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DCN* Data);
 
@@ -282,7 +361,9 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 // The stop path's undo (pnp.c, ADR 0011 consequences): flips back to the firmware's address when Device->DcnDiverged
 // says the most recent flip left it somewhere else. A no-op, logged as one, when it does not - so pnp.c can call
 // it unconditionally rather than reach into dcn.c's state.
-void DcnStop(_Inout_ BC250_DEVICE* Device);
+NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
+NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
+NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
 
 // dcn.c (0.7.24, ADR 0011 point 3 step 3): SetVidPnSourceAddress's own path - the same M87 write sequence
 // DcnFlipEscape uses (step 2), never PollFlipPending's blocking poll (this may run above DISPATCH_LEVEL, per
@@ -292,10 +373,12 @@ void DcnStop(_Inout_ BC250_DEVICE* Device);
 // translated address for the caller's own log line. STATUS_DEVICE_NOT_READY with the gate closed,
 // STATUS_ACCESS_DENIED when the address does not translate inside the carve-out or fails the escape's own 4
 // KiB/range rule.
-NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, _Out_opt_ ULONGLONG* PhysicalOut);
-// The vsync DPC's own poll (wddm.c's WddmDcnVsync): a single, non-blocking read of
-// HUBPREQ0_DCSURF_FLIP_CONTROL's SURFACE_FLIP_PENDING bit, never PollFlipPending's busy-wait. <= DISPATCH_LEVEL.
-BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device);
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONGLONG AllocationBytes, _Out_opt_ ULONGLONG* PhysicalOut);
+// Non-blocking hardware observations: pending includes EARLIEST_INUSE mismatch.
+// Scanout returns the actual card address, independently of request publication.
+BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress);
+NTSTATUS DcnReadScanoutAddress(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* CardAddress);
+NTSTATUS DcnReadScanLine(_In_ const BC250_DEVICE* Device, _Out_ BOOLEAN* InBlank, _Out_ UINT* ScanLine);
 // The hardware vsync interrupt's own enable/ack (0.7.24, ADR 0011 point 3 step 3). DcnVsyncEnable is
 // wddm.c's WddmVSyncArm's hardware branch: a read-modify-write of OTG0_OTG_GLOBAL_SYNC_STATUS that sets or
 // clears VUPDATE_NO_LOCK_INT_EN and always acks whatever VUPDATE_NO_LOCK_EVENT_CLEAR finds pending, so neither
@@ -305,7 +388,7 @@ BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device);
 // MmioDcnWriteEx that acks it and queues the DPC. Neither takes a lock (mmio.c's MmioDcnRead/MmioDcnWriteEx
 // take none), which is what makes the second one legal at DIRQL - Quiet=TRUE is what keeps it fast (review 16
 // section 24: no DbgPrintEx from here on every vblank).
-NTSTATUS DcnVsyncEnable(_In_ const BC250_DEVICE* Device, BOOLEAN On);
+NTSTATUS DcnVsyncEnable(_Inout_ BC250_DEVICE* Device, BOOLEAN On);
 BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device);
 
 // 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip has
@@ -320,7 +403,7 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device);
 // DcnUnmapScanout tears the mapping down; called from WddmStop and, idempotently, from DcnStop
 // (docs/design/vidpn-flip.md section 8's stop order has WddmStop run first, so DcnStop's own call finds it
 // already NULL in the ordinary case).
-BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length);
+BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length, _Out_ ULONG* Pitch);
 void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device);
 
 // sequence.c
@@ -334,23 +417,48 @@ void VramStop(_Inout_ BC250_DEVICE* Device);
 void VramEscape(_In_ const BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_MEMORY* Data);
 // Where in VRAM the firmware's framebuffer is, if its address is inside one of the two views we know. Needs the
 // VRAM carve-out to have been identified (EnableVram); wddm.c carves its segment clear of the answer.
+PVOID VramMapCpuRange(_In_ const BC250_DEVICE* Device, PHYSICAL_ADDRESS Physical, SIZE_T Length, ULONG Access);
+ULONG VramMappingProtection(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, SIZE_T Length, ULONG Access);
 BOOLEAN VramFramebufferOffset(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset);
 
 // gart.c
 struct _BC250_ESCAPE_GART;
 NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device);
+void GartPrepareStop(_Inout_ BC250_DEVICE* Device);
 void GartStop(_Inout_ BC250_DEVICE* Device);
 void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GART* Data);
+// PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
+// Retained-power ownership predicates require GartLock; they do not touch MMIO.
+BOOLEAN GfxPowerIsSuspended(const BC250_DEVICE* Device);
+NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action);
+NTSTATUS GfxSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
+BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device);
+NTSTATUS GartSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
+NTSTATUS PspSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume, struct _BC250_ESCAPE_PSP* Report);
+NTSTATUS GartInitializeHardware(BC250_DEVICE* Device, struct _BC250_ESCAPE_GART* Report);
 struct amdgpu_device;
 // With GartLock held: the shim's device (register bases, VRAM window), set up if it was not yet, and whether the
 // GART sequence is enabled.
 NTSTATUS GartDevice(_In_ BC250_DEVICE* Device, _Outptr_ struct amdgpu_device** Adev, _Out_ BOOLEAN* Enabled);
+// PASSIVE_LEVEL: captures geometry under GartLock, no hardware enable or PTE write.
+NTSTATUS GartCaptureAperture(BC250_DEVICE* Device, PAGING_APERTURE* Aperture);
+
 
 // psp.c
 struct _BC250_ESCAPE_PSP;
 NTSTATUS PspStart(_Inout_ BC250_DEVICE* Device);
 void PspStop(_Inout_ BC250_DEVICE* Device);
 void PspEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_PSP* Data);
+// PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
+NTSTATUS PspInitializeHardware(BC250_DEVICE* Device, struct _BC250_ESCAPE_PSP* Report);
+struct _BC250_PSP_FIRMWARE;
+// PASSIVE_LEVEL; prepare has no hardware writes. Caller owns/release on every path.
+NTSTATUS PspPrepareFirmware(BC250_DEVICE* Device, struct _BC250_ESCAPE_PSP* Report,
+                           struct _BC250_PSP_FIRMWARE** Firmware);
+NTSTATUS PspInitializePrepared(BC250_DEVICE* Device, const struct _BC250_PSP_FIRMWARE* Firmware,
+                              struct _BC250_ESCAPE_PSP* Report);
+void PspReleaseFirmware(struct _BC250_PSP_FIRMWARE* Firmware);
+
 BOOLEAN PspIsLoaded(_In_ const BC250_DEVICE* Device);
 
 // gpumem.c: GPU-visible memory and doorbells for the sequences. All with GartLock held.
@@ -358,6 +466,12 @@ struct _BC250_ESCAPE_DOORBELL;
 NTSTATUS GpuMemStart(_Inout_ BC250_DEVICE* Device);
 void GpuMemStop(_Inout_ BC250_DEVICE* Device, BOOLEAN GpuQuiet);
 void GpuMemRelease(_Inout_ BC250_DEVICE* Device, _In_ const VOID* Owner, BOOLEAN GpuQuiet);
+// Retire current sequence GTT mappings after CP/SDMA drain, retaining backing.
+int GpuMemRetireGttMappings(struct amdgpu_device* Adev);
+// All consumers halted, GartLock held; rebuild private prefix only, no TLB flush.
+int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev);
+int GpuMemCompleteGfxBootstrap(struct amdgpu_device* Adev);
+NTSTATUS GfxBeginTranslationBootstrap(BC250_DEVICE* Device);
 ULONGLONG GpuMemDoorbellBase(_In_ const BC250_DEVICE* Device);
 void GpuMemBeginSequence(_Inout_ BC250_DEVICE* Device, _Out_writes_opt_(MaxDoorbells) struct _BC250_ESCAPE_DOORBELL* Doorbells,
                          ULONG MaxDoorbells);
@@ -366,9 +480,16 @@ ULONG GpuMemEndSequence(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* VramBytes, _O
 // gfx.c
 struct _BC250_ESCAPE_GFX;
 NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device);
+void GfxTraceRlcState(_In_ const BC250_DEVICE* Device, _In_ const char* Phase);
+NTSTATUS GfxPreparePspReload(_Inout_ BC250_DEVICE* Device);
+void GfxPrepareStop(_Inout_ BC250_DEVICE* Device);
 void GfxStop(_Inout_ BC250_DEVICE* Device);
 void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GFX* Data);
+// PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
+NTSTATUS GfxInitializeHardware(BC250_DEVICE* Device, struct _BC250_ESCAPE_GFX* Report);
 BOOLEAN GfxIsActive(_In_ const BC250_DEVICE* Device);
+// Unpublished, exclusively owned startup lifecycle; PASSIVE_LEVEL only.
+BOOLEAN GfxStartupResources(BC250_DEVICE* Device, BOOLEAN Initialized);
 struct _BC250_ESCAPE_FENCE;
 void GfxFenceEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_FENCE* Data);
 // ADR 0013: the SDMA copy/fill positive control, gated the same way the SDMA ring test is (EnableGfx and stage 7)
@@ -406,33 +527,124 @@ void GfxSubmitFail(_Inout_ BC250_DEVICE* Device);
 // narrowly, around their own ring push. VidMmTranslate returns a system physical address; paging_mc.c turns
 // that into the MC address the packet wants (the number M95 ran) before anything is emitted. No VMID is
 // pointed at anything for this path (design note section 2).
-//   GfxPagingBuild      PASSIVE_LEVEL (BuildPagingBuffer). Emits one operation's SDMA packets into both
-//                       pDmaBuffer (dxgkrnl's own copy, per the DDI contract) and a driver-owned shadow buffer at
-//                       the same offset, through the existing, measured bc250_sdma_emit_copy_linear/emit_fill
-//                       (M95), so that SubmitCommand can find the bytes later without dereferencing a physical
-//                       address at DISPATCH_LEVEL. Returns STATUS_SUCCESS (built), STATUS_GRAPHICS_INSUFFICIENT_
-//                       DMA_BUFFER (*MultipassOffset set, nothing written this call) or STATUS_SUCCESS with
-//                       *Written FALSE (an operation this cut does not build: see BC250_WDDM_PAGING_UNSUPPORTED).
+// GfxPagingBuild emits page-wise AMD packets into a caller-owned private payload.
+// It returns both command DWORD count and cumulative data-byte progress. A partial
+// prefix may accompany STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER.
 // Reasons a TRANSFER_VIRTUAL/FILL_VIRTUAL is not built, for the caller's own counters:
 typedef enum _BC250_WDDM_PAGING_UNSUPPORTED
 {
     BC250PagingSupported = 0,           // built; not a reason
-    BC250PagingNotReady,                // the gate is open but RUN has not yet reached stage 8: no shadow, no live ring
+    BC250PagingNotReady,                // the gate is open but RUN has not yet reached stage 8: no live ring
     BC250PagingNoRoot,                  // hSystemContext named no context with a recorded root
     BC250PagingNoTranslation,           // VidMmTranslate refused (not ready, or the address does not resolve)
     BC250PagingSystemMemory,            // resolved to system memory: no MC mapping for a dxgkrnl-owned page (note section 2)
-    BC250PagingNotContiguous,           // review 23 MUST-FIX: the operation spans pages that are not physically
-                                         // contiguous - refused rather than built wrong, see PagingRangeContiguous (gfx.c)
+    BC250PagingNotContiguous,           // historical counter retained; page-wise builder now splits these ranges
 } BC250_WDDM_PAGING_UNSUPPORTED;
+// Mdl != NULL selects OS PFNs; otherwise Address is already an MC address.
+// Length bounds bytes from this endpoint's start; FirstPage applies only to MDLs.
+typedef struct _BC250_PAGING_ENDPOINT {
+    PMDL Mdl;
+    ULONGLONG Address,Length;
+    ULONG FirstPage;
+    BOOLEAN Aperture; // Address is permanent aperture MC; resolve through planned physical pages.
+} BC250_PAGING_ENDPOINT;
+typedef struct _BC250_PAGING_COPY_SLICE {
+    ULONGLONG SourcePhysical,DestinationPhysical;
+    ULONG Bytes;
+    BOOLEAN SourceSystem,DestinationSystem;
+} BC250_PAGING_COPY_SLICE;
+NTSTATUS GfxPagingBuildCopyPageEx(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes, BOOLEAN ForceSnapshot,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice);
+NTSTATUS GfxPagingBuildVirtualCopyPage(BC250_DEVICE* Device, ULONGLONG Root,
+    ULONGLONG SourceVa, ULONGLONG DestinationVa, ULONG Bytes, BOOLEAN ForceSnapshot,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice);
+BOOLEAN VidMmResolveAperture(ULONGLONG Mc, ULONG Bytes, ULONGLONG* Physical);
+BOOLEAN VidMmApertureRangeValid(ULONGLONG Mc, ULONGLONG Bytes);
+NTSTATUS VidMmCommitPagingAperture(const DXGKARG_BUILDPAGINGBUFFER* Build, ULONG Start, ULONG Next);
+NTSTATUS VidMmCommitPagingTransfer(const BC250_PAGING_COPY_SLICE* Slice);
+NTSTATUS VidMmCommitPagingGraph(const PAGING_GRAPH_BATCH* Graph);
+NTSTATUS GfxPagingBuildCopyPage(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes,
+    PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice);
+NTSTATUS GfxPagingBuildPageGraph(BC250_DEVICE* Device,const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,PVOID Buffer,
+    ULONG Offset,ULONG Free,unsigned Resume,ULONG* Written,unsigned* NextResume);
+// STATUS_NOT_SUPPORTED classifies local/mixed endpoints before packet emission;
+// those need the table-shadow-aware virtual path. Other failures are not fallback.
+NTSTATUS GfxPagingBuildVirtualPageGraph(BC250_DEVICE* Device,ULONGLONG Root,
+    ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes,PVOID Buffer,
+    ULONG Offset,ULONG Free,unsigned Resume,ULONG* Written,unsigned* NextResume);
+SIZE_T GfxPagingCaptureStorageSize(ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes);
+// Does not allocate/free. Storage remains caller-owned even after failure;
+// caller must not reuse it until the capture is detached and its builders drain.
+NTSTATUS GfxPagingCaptureVirtualGraphInPlace(BC250_DEVICE* Device,ULONGLONG Root,
+    ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes,PVOID Storage,SIZE_T StorageBytes,
+    PAGING_GRAPH_CAPTURE** Capture);
+NTSTATUS GfxPagingCaptureVirtualGraph(BC250_DEVICE* Device,ULONGLONG Root,
+    ULONGLONG Source,ULONGLONG Destination,ULONGLONG Bytes,PAGING_GRAPH_CAPTURE** Capture);
+BOOLEAN GfxPagingCapturedLinearSlice(const PAGING_GRAPH_CAPTURE* Capture,ULONGLONG Progress,
+    BC250_PAGING_COPY_SLICE* Slice,ULONGLONG* NextProgress);
+NTSTATUS GfxPagingEmitCapturedLinear(BC250_DEVICE* Device,const PAGING_GRAPH_CAPTURE* Capture,
+    PVOID Buffer,ULONG Offset,ULONG Free,ULONG* Written,BC250_PAGING_COPY_SLICE* Slice,ULONGLONG* NextProgress);
+// Plan one band from immutable captured identities. Returns the batch selector's
+// Done/More/NeedCycle/Invalid, without advancing the caller-owned cursor.
+int GfxPagingPlanCapturedGraph(PAGING_GRAPH_CAPTURE* Capture,unsigned Band,unsigned Action,
+    unsigned MaxMoves,PAGING_GRAPH_BATCH* Batch,unsigned* NextBand,unsigned* NextAction);
+NTSTATUS GfxPagingEmitCapturedGraph(BC250_DEVICE* Device,PAGING_GRAPH_CAPTURE* Capture,
+    unsigned Band,unsigned Action,PVOID Buffer,ULONG Offset,ULONG Free,ULONG* Written,
+    PAGING_GRAPH_BATCH* Batch,unsigned* NextBand,unsigned* NextAction);
+NTSTATUS GfxPagingCheckDisjoint(BC250_DEVICE* Device,const BC250_PAGING_ENDPOINT* Source,
+    const BC250_PAGING_ENDPOINT* Destination,ULONGLONG Bytes,BOOLEAN* Disjoint);
+BOOLEAN GfxPagingEndpointValid(const BC250_DEVICE* Device,
+    const BC250_PAGING_ENDPOINT* Endpoint, ULONGLONG Bytes);
+BOOLEAN WddmPreparePhysicalTransfer(const BC250_DEVICE* Device,
+    const DXGKARG_BUILDPAGINGBUFFER* Build, BC250_PAGING_ENDPOINT* Source,
+    BC250_PAGING_ENDPOINT* Destination, ULONGLONG* Progress);
+typedef struct _BC250_PAGING_APERTURE_OP {
+    PMDL Mdl;
+    ULONGLONG FirstPage,PageCount,DummyPhysical;
+    ULONG MdlOffset;
+    BOOLEAN Unmap,CacheCoherent;
+} BC250_PAGING_APERTURE_OP;
+NTSTATUS GfxPagingBuildAperture(BC250_DEVICE* Device, const BC250_PAGING_APERTURE_OP* Operation,
+    ULONG StartPage, PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, ULONG* NextPage);
+struct PAGING_NATIVE_RESULT;
+NTSTATUS GfxPagingBuildNative(BC250_DEVICE* Device, BOOLEAN Fill, ULONGLONG Source,
+    ULONGLONG Destination, ULONGLONG Total, ULONG Pattern, PVOID Buffer,
+    ULONGLONG DmaBase, ULONG Offset, ULONG Free, ULONG Token, struct PAGING_NATIVE_RESULT* Built);
+NTSTATUS GfxPagingBuildFillPage(BC250_DEVICE* Device, ULONGLONG Root, ULONGLONG Va,
+    ULONG Bytes, ULONG Pattern, PVOID Buffer, ULONG Offset, ULONG Free,
+    ULONG* Written, ULONGLONG* Physical, BOOLEAN* System);
+NTSTATUS GfxPagingBuildPhysical(_Inout_ BC250_DEVICE* Device,
+    _In_opt_ const BC250_PAGING_ENDPOINT* Source, _In_ const BC250_PAGING_ENDPOINT* Destination,
+    BOOLEAN Fill, ULONGLONG Bytes, ULONG Pattern, _Inout_ PVOID DmaBuffer,
+    ULONG DmaBufferOffset, ULONG DmaBufferFree, ULONGLONG StartByte,
+    _Out_ ULONG* DwordsWritten, _Out_ ULONGLONG* NextByte);
+BOOLEAN GfxPagingMdlAddress(_In_ PMDL Mdl, ULONG FirstPage, ULONGLONG ByteOffset, ULONG Bytes, _Out_ ULONGLONG* Address);
 NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
                         ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
-                        ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
+                        ULONG DmaBufferOffset, ULONG DmaBufferFree, ULONG StartByte,
+                        _Out_ ULONG* DwordsWritten, _Out_ ULONG* NextByte,
                         _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
-//   GfxSubmitPaging     DISPATCH_LEVEL, no GartLock. Pushes [ShadowOffset, ShadowOffset + ByteCount) of the
-//                       shadow buffer GfxPagingBuild filled onto the live SDMA0 ring, with an interrupting fence,
-//                       and rings the doorbell. One submission in flight, exactly as GfxSubmitIb: while the
-//                       previous sequence has not arrived it answers STATUS_DEVICE_BUSY and writes nothing.
-NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, ULONG ShadowOffset, ULONG ByteCount, _Out_ ULONG* Seq);
+NTSTATUS GfxPagingBuildCopyRange(_Inout_ BC250_DEVICE* Device, ULONGLONG Root,
+    _In_ const DXGK_BUILDPAGINGBUFFER_COPY_RANGE* Range, _Inout_ PVOID DmaBuffer,
+    ULONG DmaBufferOffset, ULONG DmaBufferFree, _Out_ ULONG* DwordsWritten,
+    _Out_ ULONGLONG* SourcePhysical, _Out_ ULONGLONG* DestinationPhysical,
+    _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
+NTSTATUS GfxPagingBuildUpdate(_Inout_ BC250_DEVICE* Device,
+                             _In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
+                             _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
+                             ULONG StartEntry, _Out_ ULONG* DwordsWritten, _Out_ ULONG* NextEntry,
+                             _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
+NTSTATUS GfxPagingBuildFlush(_Inout_ BC250_DEVICE* Device, ULONG Vmid,
+                            _Inout_ PVOID DmaBuffer, ULONG DmaBufferOffset, ULONG DmaBufferFree,
+                            _Out_ ULONG* DwordsWritten,
+                            _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported);
+// GfxSubmitPaging copies an exact validated range from OS-owned private records
+// into the ring at DISPATCH_LEVEL. It never retains those CPU pointers.
+NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
+                          ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq);
 //   GfxPagingFenceArrived, GfxPagingSubmitReady, GfxPagingSubmitFail: node 1's own answers to GfxFenceArrived/
 //   GfxSubmitReady/GfxSubmitFail above, same contracts, independent state (node 0 failing does not fail node 1
 //   and vice versa - the two nodes fail on their own hardware).
@@ -443,11 +655,6 @@ void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device);
 // gate wddm.c's caps and CreateContext consult to decide whether node 1 exists. FALSE whenever Device->Gfx is
 // NULL (EnableGfx closed), same as every other gfx.c answer.
 BOOLEAN GfxPagingNodeGate(_In_ const BC250_DEVICE* Device);
-// The shadow buffer's total size, i.e. the largest [DmaBufferOffset, DmaBufferOffset+DmaSize) BuildPagingBuffer
-// may address - wddm.c uses it to size DXGK_QUERYSEGMENTOUT4.PagingBufferSize consistently with what
-// GfxSubmitPaging can actually read back.
-ULONG GfxPagingShadowBytes(void);
-
 // gpumem.c: one doorbell write reached directly from Device, with no amdgpu_device/backend involved - what
 // GfxSubmitPaging needs at DISPATCH_LEVEL, where bc250_shim_wdoorbell64's adev->backend dependency (gpumem.c,
 // MemOf()) cannot be used (docs/design/paging-node.md section 4). Same store bc250_shim_wdoorbell64 makes,
@@ -487,20 +694,27 @@ DXGKDDI_PRESENTDISPLAYONLY Bc250PresentDisplayOnly;
 DXGKDDI_SYSTEM_DISPLAY_ENABLE Bc250SystemDisplayEnable;
 DXGKDDI_SYSTEM_DISPLAY_WRITE Bc250SystemDisplayWrite;
 
+NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DisplayMapFramebuffer(_Inout_ BC250_DEVICE* Device);
 void DisplayLogFramebufferSample(_In_ BC250_DEVICE* Device);
 void DisplayUnmapFramebuffer(_Inout_ BC250_DEVICE* Device);
 
 // wddm.c (M7 stage A, ADR 0008). Everything here is inert while the EnableFullWddm gate is closed.
+BOOLEAN WddmFullTableSelected(void);            // pure getter, never consumes a gate
 BOOLEAN WddmGateOpen(void);                     // EnableFullWddm, read once in DriverEntry
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
-void WddmStart(_Inout_ BC250_DEVICE* Device);       // never fails the start, like every other bring-up file
+NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
+// PASSIVE/Level Three, software-owner retention only. Not wired to power DDIs
+// until the separate hardware suspend/restore coordinator is implemented.
+NTSTATUS WddmSuspendRetained(_Inout_ BC250_DEVICE* Device);
+NTSTATUS WddmResumeRetained(_Inout_ BC250_DEVICE* Device);
 void WddmDpc(_Inout_ BC250_DEVICE* Device);
 // ADR 0011 point 3 step 3 (0.7.24): the hardware vsync's own DPC-side report - CRTC_VSYNC once per DPC run that
-// found at least one VUPDATE_NO_LOCK event acknowledged (Device->DcnVsyncAcked), deferred one tick if the flip
-// is still pending (dcn.c's DcnFlipPending). A no-op with Device->VidPnFlipEnabled closed. See pnp.c's
+// found at least one VUPDATE_NO_LOCK event acknowledged (Device->DcnVsyncAcked).
+// A pending flip reports the distinct scanned buffer when the generation is stable;
+// ambiguous observations remain deferred rather than retiring an unlatched flip. A no-op with Device->VidPnFlipEnabled closed. See pnp.c's
 // Bc250DpcRoutine and docs/design/vidpn-flip.md.
 void WddmDcnVsync(_Inout_ BC250_DEVICE* Device);
 void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet in flight finished? <= DISPATCH_LEVEL
@@ -508,9 +722,19 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet i
 // Bc250DpcRoutine and docs/design/paging-node.md section 5.
 void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device);
 // vidmm.c: VidMm's page tables (ADR 0008 stage B). EnableGpuVa 0 = plan and log, 1 = write the entries.
-void VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
+NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId,
+                          ULONGLONG TableOffset, ULONGLONG TableLength, ULONG TableSegmentId);
+NTSTATUS VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);
 void VidMmStop(void);
-void VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
+BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update,
+                            ULONG Start, ULONG Count, _Out_ ULONGLONG* Physical,
+                            _Out_writes_(Count) ULONGLONG* Entries);
+NTSTATUS VidMmCommitPagingFill(ULONGLONG Physical, ULONGLONG Bytes, ULONG Pattern);
+NTSTATUS VidMmCommitPagingCopy(ULONGLONG Source, ULONGLONG Destination, ULONG Count);
+NTSTATUS VidMmCommitPagingUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG Start, ULONG Count);
+BOOLEAN VidMmTranslatePagingAccess(ULONGLONG RootPhysical, ULONGLONG Va, BOOLEAN Write, _Out_ ULONGLONG* Physical, _Out_ BOOLEAN* System);
+BOOLEAN VidMmTranslatePaging(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Physical, _Out_ BOOLEAN* System);
+NTSTATUS VidMmUpdatePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update);
 void VidMmSetRootPageTable(_In_ const DXGKARG_SETROOTPAGETABLE* Root);
 BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULONGLONG* Physical);
 BOOLEAN VidMmTranslate(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ ULONGLONG* Physical, _Out_ BOOLEAN* System);
@@ -527,3 +751,8 @@ void VidMmSummary(void);
 void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter tables into the log ring; does nothing
                                                     // when the gate is closed, so the escape can call it either way
 void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG* Flips);    // 0/0 when closed
+
+BOOLEAN VidMmPagingRootTracked(ULONGLONG Root);
+NTSTATUS GfxPagingBuildVirtualPtes(BC250_DEVICE* Device, ULONGLONG Source,
+    ULONGLONG Destination, ULONG Entries, PVOID Buffer, ULONGLONG DmaBase,
+    ULONG Offset, ULONG Free, struct PAGING_NATIVE_RESULT* Built);

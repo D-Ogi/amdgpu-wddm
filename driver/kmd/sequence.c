@@ -15,6 +15,8 @@ void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BO
 {
     Sequence->Device = Device;
     Sequence->Plan = Plan;
+    Sequence->TraceRlcRetirement = FALSE;
+    Sequence->TraceBootstrapTlb = FALSE;
     Sequence->Fault = STATUS_SUCCESS;
     Sequence->FaultOffset = 0;
     Sequence->WriteCount = 0;
