@@ -1,0 +1,6 @@
+[1/1] pass: 1 |
+[1/1] pass: 1  
+
+             
+Thank you for running Piglit!
+Results have been written to C:\BC250\m12\piglit-gpu001\results

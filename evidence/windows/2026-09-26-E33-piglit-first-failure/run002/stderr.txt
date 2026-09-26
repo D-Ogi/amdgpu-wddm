@@ -1,0 +1,7 @@
+wflinfo utility not found.
+wflinfo utility not found.
+wflinfo utility not found.
+wflinfo utility not found.
+wflinfo utility not found.
+wflinfo utility not found.
+Aborting Piglit execution: fast_color_clear@fcc-front-buffer-distraction: fail

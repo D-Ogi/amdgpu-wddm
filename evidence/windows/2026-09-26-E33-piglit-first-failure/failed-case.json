@@ -1,0 +1,24 @@
+{
+  "__type__": "TestResult",
+  "command": "C:\\BC250\\m12\\piglit-full001\\piglit\\bin\\fcc-front-buffer-distraction -auto",
+  "environment": "PIGLIT_SOURCE_DIR=\"C:\\BC250\\m12\\piglit-full001\\piglit\" PIGLIT_PLATFORM=\"wgl\"",
+  "err": "radv_wddm2_winsys_create\nOpenAdapterFromLuid 0x0 0x8cf3\nphys adapter = 0 device = 13fe rev 0\nnode 0 (type: 1) = BC-250 GFX, flags = 0\nnode 1 (type: 6) = BC-250 SDMA0, flags = 0\nbc250: caps blob, device 0x13fe family 79 gfx 12\nradv_wddm2_winsys_create\nallocation handle=0x40000f40\nallocation handle=0x40000fc0\nallocation handle=0x40001040\nbc250: gfx preamble inlined (no gfx_init IB)\nallocation handle=0x40001100\nallocation handle=0x40001180\nallocation handle=0x40001200\nallocation handle=0x40001280\nallocation handle=0x40001300\nallocation handle=0x40001380\nallocation handle=0x40001400\nallocation handle=0x40001480\nallocation handle=0x40001500\nallocation handle=0x40001580\nallocation handle=0x40001600\nallocation handle=0x40001680\nallocation handle=0x40001700\nallocation handle=0x40001780\nallocation handle=0x40001800\nallocation handle=0x40001880\nallocation handle=0x40001900\nallocation handle=0x40001980\nallocation handle=0x40001a00\nallocation handle=0x40001a80\nallocation handle=0x40001b00\nallocation handle=0x40001b80\nallocation handle=0x40001c00\nallocation handle=0x40001c80\nallocation handle=0x40001d00\nbc250: progress before submit previous=0 observed=0 waits=0 signals=1\nallocation handle=0x40001d80\nbc250: gather capacity=4096 bytes required=896 ibs=2\nallocation handle=0x40001e00\nallocation handle=0x40001e80\nallocation handle=0x40001f00\nallocation handle=0x40001f80\nallocation handle=0x40002000\nallocation handle=0x40002080\nallocation handle=0x40002100\nallocation handle=0x40002180\nallocation handle=0x800001c0\nallocation handle=0x40002200\nallocation handle=0x800002c0\nallocation handle=0x40002280\nallocation handle=0x40002300\nallocation handle=0x40002380\nallocation handle=0x800004c0\nallocation handle=0x40002400\nallocation handle=0x40002480\nallocation handle=0x40002500\nallocation handle=0x40002580\nallocation handle=0x40002600\nallocation handle=0x40002680\nAssertion failed: !\"kopper_acquire: updated timeout after failure has become unreasonable large\", file ../mesa-current-src/src/gallium/drivers/zink/zink_kopper.c, line 630\n",
+  "out": "",
+  "result": "fail",
+  "returncode": 3221226505,
+  "subtests": {
+    "__type__": "Subtests"
+  },
+  "time": {
+    "start": 1790413394.2337224,
+    "end": 1790413395.7447033,
+    "__type__": "TimeAttribute"
+  },
+  "exception": null,
+  "traceback": null,
+  "dmesg": "",
+  "images": null,
+  "pid": [
+    9952
+  ]
+}
