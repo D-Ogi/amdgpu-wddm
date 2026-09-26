@@ -36,3 +36,14 @@ D3DKMTOpenResourceFromNtHandle; ref/Vulkan-Docs/chapters/memory.adoc, Win32 hand
 ownership. Architecture review: ref/m13-notes/zink-behind-d3d10umd.md, section 6.4.
 
 Shared probe result: run006 passes all stages and 4096 pixels; see [M532 evidence](../../evidence/windows/2026-09-26-E34-shared-import/RESULT.md).
+
+## Native D3D shader into imported memory
+
+Hypothesis: the same shared LB7A surface can be a Zink memory-object render target
+for native D3D, retaining exact clear and shader output. The isolated probe passes
+an app-owned NT handle to the custom UMD; this is not runtime back-buffer sharing.
+Run the M531 D3D clear/triangle checks, then Lock2 the original KMT allocation and
+require 4096 exact red pixels. Use the M532 ICD during the bounded process, restore
+the previous ICD in finally, and preserve logs. Failure stops this experiment.
+
+Native shared result: run002 passes both D3D and original-allocation pixel checks; see [M533 evidence](../../evidence/windows/2026-09-26-E34-native-shared/RESULT.md).

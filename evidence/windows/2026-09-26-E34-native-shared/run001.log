@@ -1,0 +1,169 @@
+exit=7
+CreateDXGIFactory1(IID_PPV_ARGS(&factory)): 00000000
+a->GetDesc1(&d): 00000000
+adapter vendor=1002 device=13fe software=0
+a->GetDesc1(&d): 00000000
+adapter vendor=1414 device=008c software=1
+D3DKMTOpenAdapterFromLuid(&oa): 00000000
+D3DKMTCreateDevice(&cd): 00000000
+create resource=1 shared=1 nt=1 nonsecure=1
+D3DKMTCreateAllocation2(&ca): 00000000
+D3DKMTShareObjects(1,&ca.hResource,&attrs,SHARED_ALLOCATION_ALL_ACCESS,&shared): 00000000
+D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_SOFTWARE,umd,0,&level,1,D3D11_SDK_VERSION,&dev,nullptr,&ctx): 00000000
+module bc250d3d_zink.dll: C:\BC250\m13\native-shared001\bc250d3d_zink.dll
+module vulkan-1.dll: C:\Windows\SYSTEM32\vulkan-1.dll
+module vulkan_radeon.dll: C:\BC250\m10\wsi-final\vulkan_radeon.dll
+dev->CreateTexture2D(&d,nullptr,&target): 00000000
+dev->CreateTexture2D(&d,nullptr,&copy): 00000000
+dev->CreateRenderTargetView(target.Get(),nullptr,&view): 00000000
+map=00000000
+expected RGBA=0,0,255,255 mismatches=0/4096
+dev->CreateVertexShader(g_VS,sizeof(g_VS),nullptr,&vs): 00000000
+dev->CreatePixelShader(g_PS,sizeof(g_PS),nullptr,&ps): 00000000
+dev->CreateInputLayout(layout,2,g_VS,sizeof(g_VS),&il): 00000000
+dev->CreateBuffer(&bd,&init,&vb): 00000000
+dev->CreateRasterizerState(&rs,&raster): 00000000
+before raster
+after raster
+before viewport
+after viewport
+before vs
+after vs
+before ps
+after ps
+before rt
+after rt
+before draw
+after draw
+map=00000000
+expected RGBA=255,0,0,255 mismatches=0/4096
+D3DKMTLock2(&lock): 00000000
+original WDDM shader red mismatches=4096/4096
+D3DKMTUnlock2(&unlock): 00000000
+
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8999
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001100
+allocation handle=0x40001180
+allocation handle=0x40001200
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 2
+BC250 D3D device stage 3
+allocation handle=0x40001400
+allocation handle=0x40001480
+allocation handle=0x40001500
+allocation handle=0x40001580
+allocation handle=0x40001600
+allocation handle=0x40001680
+allocation handle=0x40001700
+allocation handle=0x40001780
+allocation handle=0x40001800
+allocation handle=0x40001880
+allocation handle=0x40001900
+allocation handle=0x40001980
+allocation handle=0x40001a00
+allocation handle=0x40001a80
+allocation handle=0x40001b00
+allocation handle=0x40001b80
+allocation handle=0x40001c00
+allocation handle=0x40001c80
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0x40001d40
+allocation handle=0x40001dc0
+allocation handle=0x40001e40
+allocation handle=0x40001ec0
+allocation handle=0x40001f40
+allocation handle=0x40001fc0
+allocation handle=0x40002040
+allocation handle=0x400020c0
+bc250: progress before submit previous=0 observed=0 waits=0 signals=1
+allocation handle=0x40002140
+bc250: gather capacity=4096 bytes required=3936 ibs=4
+allocation handle=0x400021c0
+allocation handle=0x40002240
+allocation handle=0x400022c0
+allocation handle=0x40002340
+D3D resolve begin
+D3D resolve part 1 before
+D3D resolve part 0 before
+D3D resolve part 0 after
+D3D resolve part 1 after
+D3D resolve part 2 before
+D3D resolve part 2 after
+D3D resolve done
+allocation handle=0x400023c0
+allocation handle=0x80000380
+allocation handle=0x40002440
+allocation handle=0x80000480
+allocation handle=0x400024c0
+allocation handle=0x40002540
+allocation handle=0x400025c0
+allocation handle=0x80000680
+allocation handle=0x40002640
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+D3D destroy stage 8
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\native-shared001\\native-control.exe",
+        "Hash":  "FD8DC4B0ECBD159B637D681453B6ED466C9193CE873550683829105043D951F9"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\native-shared001\\bc250d3d_zink.dll",
+        "Hash":  "8B24FB90F06732DE9731CB90698D0435332930344D2CDD0CC767AB6B899BEBA0"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798
+
