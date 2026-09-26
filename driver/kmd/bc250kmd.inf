@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/22/2026,0.7.48.0
+DriverVer   = 09/26/2026,0.7.152.0
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -65,7 +65,7 @@ bc250kmd.sys
 ; value naming bc250umd.dll would point a 32-bit process at a file that is not in SysWOW64 - which makes "the
 ; runtime never asked for a 32-bit driver" and "the runtime asked and the load failed" the same observation, and
 ; telling those two apart is the entire purpose of the second run. A missing value is the honest statement that
-; there is no 32-bit driver. (The nearby reference INF ref\keshas-driver\inf\amdbc250_dream.inf line 114 points
+; there is no 32-bit driver. (The nearby reference INF ref\keshas-driver__WARN-AGENTS-md-is-not-facts\inf\amdbc250_dream.inf line 114 points
 ; its Wow value at its 64-bit DLL; that is the mistake being avoided here, not a precedent.) If a 32-bit consumer
 ; ever has to be measured: build the stub a second time for x86 - which first needs the x86 SDK libraries, not
 ; currently unpacked under toolchain\nuget - copy it into SysWOW64, whose dirid is 16425 and not 10, and add the
@@ -130,8 +130,9 @@ HKR, Parameters, EnableGpuSubmit,   0x00010001, 0
 HKR, Parameters, EnablePagingNode,  0x00010001, 0
 HKR, Parameters, EnablePresentBlit, 0x00010001, 0
 ; The log ring into a file under C:\BC250\kmdlog at every device stop (guard.c GuardLogKeep). A synchronous file
-; write in a PnP stop, so closed unless an experiment expects dxgkrnl to end the start and unload the driver.
-HKR, Parameters, KeepLog,           0x00010001, 0
+; write in a PnP stop, so disabled by default. Preserve an explicitly enabled capture across
+; an upgrade: AddReg may run before the old driver stops. DWORD | NOCLOBBER affects only logging.
+HKR, Parameters, KeepLog,           0x00010003, 0
 
 [Strings]
 Provider   = "BC-250 lab (D-Ogi)"
