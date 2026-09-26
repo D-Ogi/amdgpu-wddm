@@ -1,0 +1,5 @@
+{
+  "sha256": "C05EA10332C94E9B5557317F379C5ED2ABC02B401139A2F388784EF438E92CF8",
+  "scope": "diagnostic only, abort after scratch descriptor construction before submit",
+  "base_icd": "8B5EC055501CD042F723F9EBC9FC29787A6173C61937A739DD7C4C520DBD2AA6"
+}

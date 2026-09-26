@@ -1,0 +1,5 @@
+Probe color at (0,0)
+  Expected: 0 255 0
+  Observed: 0 0 0
+Test failure on line 57
+PIGLIT: {"result": "fail" }
