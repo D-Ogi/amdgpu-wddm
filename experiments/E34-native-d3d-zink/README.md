@@ -91,3 +91,22 @@ procedure; keep DWM on the CPU UMD. A pass proves screen lifetime isolation, not
 separate kernel devices, hosted callbacks or GPU desktop composition.
 
 Controls measured in [M535](../../evidence/windows/2026-09-26-E34-runtime-controls/RESULT.md). Shared handle retrieval works; hosted runtime rendering remains open.
+
+### Per-device Vulkan instance control
+
+Repeat the M535 two-device pixel/lifetime control after assigning each native
+Win32 Zink screen its own VkInstance. Confirm distinct instance handles and their
+destruction in the log. This is a prerequisite for per-device callback payloads,
+not evidence that RADV already uses those callbacks. Preserve CPU DWM.
+
+### Hosted paging bootstrap
+
+Pass a versioned private descriptor to a directly loaded candidate RADV instance
+from the native CreateDevice entry. Enumerate the physical adapter; RADV must
+create/destroy its paging queue via that device's runtime callbacks, with no
+CreateDevice/DestroyDevice thunk for the hosted instance. Record matching runtime
+identity, callback HRESULTs and queue handles. The bootstrap forbids Vulkan
+logical-device creation until allocation/submit/sync dispatch exists. It is
+enumeration only; subsequent pixel controls still use standalone Vulkan.
+
+Hosted paging result: [M536](../../evidence/windows/2026-09-26-E34-hosted-bootstrap/RESULT.md). Both callback pairs pass; hosted rendering and G0 remain open.

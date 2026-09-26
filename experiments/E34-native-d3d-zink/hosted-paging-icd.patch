@@ -1,0 +1,243 @@
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -1463,6 +1463,11 @@
+    VkResult result;
+    struct radv_device *device;
+ 
++   /* Bootstrap contract has no allocation/submission dispatch yet. Do not
++    * let any rendering path interpret a runtime token as a KMT device. */
++   if (instance->bc250_host.dispatch)
++      return VK_ERROR_FEATURE_NOT_PRESENT;
++
+    bool overallocation_disallowed = false;
+ 
+    vk_foreach_struct_const (sType, ext, pCreateInfo->pNext) {
+--- a/src/amd/vulkan/radv_instance.c
++++ b/src/amd/vulkan/radv_instance.c
+@@ -273,6 +273,20 @@
+       return vk_error(NULL, result);
+    }
+ 
++   for (const VkBaseInStructure *ext = pCreateInfo->pNext; ext; ext = ext->pNext) {
++      if ((uint32_t)ext->sType == BC250_HOST_STYPE) {
++         const struct bc250_host *host = (const void *)ext;
++         if (host->version != BC250_HOST_VERSION || host->size != sizeof(*host) ||
++             !host->identity || !host->dispatch || !host->adapter_luid) {
++            vk_instance_finish(&instance->vk);
++            vk_free(pAllocator, instance);
++            return VK_ERROR_INITIALIZATION_FAILED;
++         }
++         instance->bc250_host = *host;
++         instance->bc250_host.pNext = NULL;
++      }
++   }
++
+    vk_instance_add_driver_trace_modes(&instance->vk, trace_options);
+ 
+    simple_mtx_init(&instance->shader_dump_mtx, mtx_plain);
+--- a/src/amd/vulkan/radv_instance.h
++++ b/src/amd/vulkan/radv_instance.h
+@@ -12,6 +12,7 @@
+ #define RADV_INSTANCE_H
+ 
+ #include "util/bitset.h"
++#include "util/bc250_host_bootstrap.h"
+ #include "util/macros.h"
+ #include "util/simple_mtx.h"
+ #include "radv_radeon_winsys.h"
+@@ -165,6 +166,7 @@
+ 
+ struct radv_instance {
+    struct vk_instance vk;
++   struct bc250_host bc250_host;
+ 
+    VkAllocationCallbacks alloc;
+ 
+--- a/src/amd/vulkan/radv_physical_device.c
++++ b/src/amd/vulkan/radv_physical_device.c
+@@ -2744,7 +2744,8 @@
+       goto fail;
+    }
+    pdev->wddm2_adapter = *wddm2_adapter;
+-   result = radv_wddm2_winsys_create(wddm2_adapter, instance->debug_flags, &pdev->ws);
++   result = radv_wddm2_winsys_create(wddm2_adapter, instance->debug_flags,
++                                     instance->bc250_host.dispatch ? &instance->bc250_host : NULL, &pdev->ws);
+    if (result != VK_SUCCESS)
+       goto fail;
+    pdev->info = *pdev->ws->query_info(pdev->ws);
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -639,7 +639,7 @@
+ 
+    simple_mtx_lock(&winsys_creation_mutex);
+    if (!--ws->refcount) {
+-      _mesa_hash_table_remove_key(winsyses, (void *) 1);
++      _mesa_hash_table_remove_key(winsyses, ws->cache_key);
+ 
+       /* Clean the hashtable up if empty, though there is no
+        * empty function. */
+@@ -661,13 +661,19 @@
+    D3DDDI_DESTROYPAGINGQUEUE destroy_paging_queue = {
+       .hPagingQueue = ws->paging_queue_h,
+    };
+-   status = WDDM2_DISPATCH(DestroyPagingQueue(&destroy_paging_queue));
++   if (ws->host.dispatch) {
++      struct bc250_host_paging paging = { .queue = ws->paging_queue_h };
++      status = ws->host.dispatch(ws->host.userdata, BC250_HOST_DESTROY_PAGING, &paging);
++      fprintf(stderr, "BC250 hosted paging destroy identity=%p queue=%x status=%08x\n", ws->host.identity, paging.queue, status);
++   } else {
++      status = WDDM2_DISPATCH(DestroyPagingQueue(&destroy_paging_queue));
++   }
+    assert(NT_SUCCESS(status));
+ 
+    D3DKMT_DESTROYDEVICE destroy_device = {
+       .hDevice = ws->device_h,
+    };
+-   status = WDDM2_DISPATCH(DestroyDevice(&destroy_device));
++   status = ws->host.dispatch ? STATUS_SUCCESS : WDDM2_DISPATCH(DestroyDevice(&destroy_device));
+    assert(NT_SUCCESS(status));
+ 
+    D3DKMT_CLOSEADAPTER close_adapter = {
+@@ -734,13 +740,16 @@
+ 
+ VkResult
+ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+-                         const BITSET_WORD *debug_flags, struct radeon_winsys **winsys)
++                         const BITSET_WORD *debug_flags, const struct bc250_host *host, struct radeon_winsys **winsys)
+ {
+    VkResult result = VK_SUCCESS;
+    struct radv_wddm2_winsys *ws = NULL;
+    NTSTATUS status;
+    fprintf(stderr, "radv_wddm2_winsys_create\n");
+ 
++   const void *key = host ? host->identity : (void *)1;
++   if (host && memcmp(&host->adapter_luid, &adapter_info->adapter_luid, sizeof(uint64_t)))
++      return VK_ERROR_INCOMPATIBLE_DRIVER;
+    /* We have to keep this lock till insertion. */
+    simple_mtx_lock(&winsys_creation_mutex);
+    if (!winsyses)
+@@ -751,7 +760,7 @@
+       goto fail;
+    }
+ 
+-   struct hash_entry *entry = _mesa_hash_table_search(winsyses, (void *) 1);
++   struct hash_entry *entry = _mesa_hash_table_search(winsyses, key);
+    if (entry) {
+       ws = (struct radv_wddm2_winsys *)entry->data;
+       ++ws->refcount;
+@@ -770,6 +779,8 @@
+    }
+ 
+    ws->refcount = 1;
++   ws->cache_key = key;
++   if (host) ws->host = *host;
+    ws->adapter_luid = adapter_info->adapter_luid;
+    ws->chain_ib = !(BITSET_TEST(debug_flags, RADV_DEBUG_NO_IB_CHAINING));
+    ws->debug_all_bos = !!(BITSET_TEST(debug_flags, RADV_DEBUG_ALL_BOS));
+@@ -826,7 +837,7 @@
+    D3DKMT_CREATEDEVICE create_device = {
+       .hAdapter = ws->adapter_h,
+    };
+-   status = WDDM2_DISPATCH(CreateDevice(&create_device));
++   status = host ? STATUS_SUCCESS : WDDM2_DISPATCH(CreateDevice(&create_device));
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "Couldn't create device for adapter %i\n", ws->adapter_h);
+       result = VK_ERROR_INITIALIZATION_FAILED;
+@@ -842,7 +853,15 @@
+    D3DKMT_CREATEPAGINGQUEUE create_paging_queue = {
+       .hDevice = ws->device_h,
+    };
+-   status = WDDM2_DISPATCH(CreatePagingQueue(&create_paging_queue));
++   if (host) {
++      struct bc250_host_paging paging = {0};
++      status = host->dispatch(host->userdata, BC250_HOST_CREATE_PAGING, &paging);
++      create_paging_queue.hPagingQueue = paging.queue;
++      create_paging_queue.hSyncObject = paging.sync;
++      fprintf(stderr, "BC250 hosted paging create identity=%p queue=%x status=%08x\n", host->identity, paging.queue, status);
++   } else {
++      status = WDDM2_DISPATCH(CreatePagingQueue(&create_paging_queue));
++   }
+    if (!NT_SUCCESS(status)) {
+       fprintf(stderr, "Couldn't create paging queue\n");
+       result = VK_ERROR_INITIALIZATION_FAILED;
+@@ -876,7 +895,7 @@
+    ws->sync_types[1] = &ws->sync_binary_type.sync;
+    ws->sync_types[2] = NULL;
+ 
+-   _mesa_hash_table_insert(winsyses, (void *) 1, ws);
++   _mesa_hash_table_insert(winsyses, key, ws);
+    simple_mtx_unlock(&winsys_creation_mutex);
+ 
+    *winsys = &ws->base;
+@@ -884,7 +903,7 @@
+    return result;
+ 
+ error_create_device:
+-   status = WDDM2_DISPATCH(DestroyDevice(&destroy_device));
++   status = ws->host.dispatch ? STATUS_SUCCESS : WDDM2_DISPATCH(DestroyDevice(&destroy_device));
+    assert(NT_SUCCESS(status));
+ 
+ error_open_adapter:
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+@@ -29,6 +29,7 @@
+ #define RADV_WDDM2_WINSYS_H
+ 
+ #include "util/list.h"
++#include "util/bc250_host_bootstrap.h"
+ #include "util/simple_mtx.h"
+ #include "util/vma.h"
+ #include "vk_wddm2_dispatch_table.h"
+@@ -44,6 +45,8 @@
+    struct radeon_winsys base;
+ 
+    uint32_t refcount;
++   const void *cache_key;
++   struct bc250_host host;
+ 
+    struct radeon_info gpu_info;
+ 
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h
+@@ -31,10 +31,11 @@
+ #include <vulkan/vulkan_core.h>
+ #include "util/bitset.h"
+ 
++struct bc250_host;
+ struct radeon_winsys;
+ struct vk_dx_adapter_info;
+ 
+ VkResult radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+-                                  const BITSET_WORD *debug_flags, struct radeon_winsys **winsys);
++                                  const BITSET_WORD *debug_flags, const struct bc250_host *host, struct radeon_winsys **winsys);
+ 
+ #endif /* RADV_WDDM2_WINSYS_PUBLIC_H */
+--- /dev/null
++++ b/src/util/bc250_host_bootstrap.h
+@@ -0,0 +1,26 @@
++/* SPDX-License-Identifier: MIT
++ * Private BC250 bootstrap contract, not a registered Vulkan extension.
++ * Both endpoints are built together against the same WDK and x64 ABI.
++ * Version 1 supports adapter enumeration/paging only, never rendering.
++ */
++#ifndef BC250_HOST_BOOTSTRAP_H
++#define BC250_HOST_BOOTSTRAP_H
++#include <stdint.h>
++#define BC250_HOST_STYPE 0x42434831u
++#define BC250_HOST_VERSION 1u
++#define BC250_HOST_CREATE_PAGING 1u
++#define BC250_HOST_DESTROY_PAGING 2u
++struct bc250_host_paging {
++   uint32_t queue, sync;
++   void *cpu_address;
++};
++struct bc250_host {
++   uint32_t sType;
++   const void *pNext;
++   uint32_t version, size;
++   uint64_t adapter_luid;
++   void *identity;
++   void *userdata;
++   int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
++};
++#endif

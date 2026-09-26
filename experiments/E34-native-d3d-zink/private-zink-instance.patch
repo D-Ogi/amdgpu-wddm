@@ -1,0 +1,131 @@
+--- a/src/gallium/drivers/zink/zink_screen.c
++++ b/src/gallium/drivers/zink/zink_screen.c
+@@ -1717,10 +1717,19 @@
+       simple_mtx_unlock(&device_lock);
+    }
+ 
+-   simple_mtx_lock(&instance_lock);
+-   if (screen->instance && --instance_refcount == 0)
+-      VKSCR(DestroyInstance)(instance, NULL);
+-   simple_mtx_unlock(&instance_lock);
++   if (screen->owned_instance) {
++      if (screen->instance) {
++         fprintf(stderr, "BC250 destroy private Vulkan instance=%p\n", (void *)screen->instance);
++         PFN_vkDestroyInstance destroy = (PFN_vkDestroyInstance)
++            screen->vk_GetInstanceProcAddr(screen->instance, "vkDestroyInstance");
++         destroy(screen->instance, NULL);
++      }
++   } else {
++      simple_mtx_lock(&instance_lock);
++      if (screen->instance && --instance_refcount == 0)
++         VKSCR(DestroyInstance)(instance, NULL);
++      simple_mtx_unlock(&instance_lock);
++   }
+ 
+    util_idalloc_mt_fini(&screen->buffer_ids);
+ 
+@@ -3449,7 +3458,7 @@
+ }
+ 
+ static struct zink_screen *
+-zink_internal_create_screen(const struct pipe_screen_config *config, int64_t dev_major, int64_t dev_minor, uint64_t adapter_luid)
++zink_internal_create_screen(const struct pipe_screen_config *config, int64_t dev_major, int64_t dev_minor, uint64_t adapter_luid, bool owned_instance)
+ {
+    if (os_get_option("ZINK_USE_LAVAPIPE")) {
+       mesa_loge("ZINK_USE_LAVAPIPE is obsolete. Use LIBGL_ALWAYS_SOFTWARE\n");
+@@ -3465,6 +3474,7 @@
+ 
+    screen->driver_name_is_inferred = config && config->driver_name_is_inferred;
+    screen->drm_fd = -1;
++   screen->owned_instance = owned_instance;
+ 
+    glsl_type_singleton_init_or_ref();
+    zink_debug = debug_get_option_zink_debug();
+@@ -3506,22 +3516,35 @@
+       screen->driconf.zink_shader_object_enable = driQueryOptionb(config->options, "zink_shader_object_enable");
+    }
+ 
+-   simple_mtx_lock(&instance_lock);
+-   if (++instance_refcount == 1) {
+-      instance_info.loader_version = zink_get_loader_version(screen);
+-      instance_info.no_device_select = zink_picks_device(dev_major, adapter_luid);
+-      instance = zink_create_instance(screen, &instance_info);
+-   }
+-   if (!instance) {
+-      /* We don't decrement instance_refcount here. This prevents us from trying
+-       * to create another instance on subsequent calls.
+-       */
++   if (screen->owned_instance) {
++      struct zink_instance_info *info = rzalloc(screen, struct zink_instance_info);
++      if (!info)
++         goto fail;
++      info->loader_version = zink_get_loader_version(screen);
++      info->no_device_select = zink_picks_device(dev_major, adapter_luid);
++      screen->instance_info = info;
++      screen->instance = zink_create_instance(screen, info);
++      if (!screen->instance)
++         goto fail;
++      fprintf(stderr, "BC250 private Vulkan instance=%p screen=%p\n", (void *)screen->instance, (void *)screen);
++   } else {
++      simple_mtx_lock(&instance_lock);
++      if (++instance_refcount == 1) {
++         instance_info.loader_version = zink_get_loader_version(screen);
++         instance_info.no_device_select = zink_picks_device(dev_major, adapter_luid);
++         instance = zink_create_instance(screen, &instance_info);
++      }
++      if (!instance) {
++         /* We don't decrement instance_refcount here. This prevents us from trying
++          * to create another instance on subsequent calls.
++          */
++         simple_mtx_unlock(&instance_lock);
++         goto fail;
++      }
++      screen->instance = instance;
++      screen->instance_info = &instance_info;
+       simple_mtx_unlock(&instance_lock);
+-      goto fail;
+-   }
+-   screen->instance = instance;
+-   screen->instance_info = &instance_info;
+-   simple_mtx_unlock(&instance_lock);
++   }
+ 
+    if (zink_debug & ZINK_DEBUG_VALIDATION) {
+       if (!screen->instance_info->have_layer_KHRONOS_validation &&
+@@ -3934,7 +3957,7 @@
+ struct pipe_screen *
+ zink_create_screen(struct sw_winsys *winsys, const struct pipe_screen_config *config)
+ {
+-   struct zink_screen *ret = zink_internal_create_screen(config, -1, -1, 0);
++   struct zink_screen *ret = zink_internal_create_screen(config, -1, -1, 0, false);
+    if (ret) {
+       ret->drm_fd = -1;
+    }
+@@ -3986,7 +4009,7 @@
+    if (zink_render_rdev(fd, &dev_major, &dev_minor))
+       return NULL;
+ 
+-   ret = zink_internal_create_screen(config, dev_major, dev_minor, 0);
++   ret = zink_internal_create_screen(config, dev_major, dev_minor, 0, false);
+    if (!ret)
+       return NULL;
+ 
+@@ -4021,7 +4044,7 @@
+ struct pipe_screen *
+ zink_win32_create_screen(uint64_t adapter_luid)
+ {
+-   struct zink_screen *ret = zink_internal_create_screen(NULL, -1, -1, adapter_luid);
++   struct zink_screen *ret = zink_internal_create_screen(NULL, -1, -1, adapter_luid, true);
+    return ret ? &ret->base : NULL;
+ }
+ 
+--- a/src/gallium/drivers/zink/zink_types.h
++++ b/src/gallium/drivers/zink/zink_types.h
+@@ -1454,6 +1454,7 @@
+    uint64_t mapped_vram;
+ 
+    VkInstance instance;
++   bool owned_instance; /* Native D3D devices must not share callback ownership. */
+    const struct zink_instance_info *instance_info;
+ 
+    struct hash_table *debug_mem_sizes;

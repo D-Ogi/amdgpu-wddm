@@ -1,0 +1,138 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -44,11 +44,37 @@
+ 
+ #include "Debug.h"
+ 
++#include "util/bc250_host_bootstrap.h"
+ #include "util/u_sampler.h"
+ #include "util/u_framebuffer.h"
+ 
+ 
+ extern "C" struct pipe_screen *d3d10_create_screen(void);
++
++
++struct Bc250HostProbeState { Device *device; DWORD thread; };
++static int32_t Bc250HostDispatch(void *userdata, uint32_t operation, void *argument)
++{
++   auto *state = (Bc250HostProbeState *)userdata;
++   if (GetCurrentThreadId() != state->thread) return (int32_t)0xc000000d;
++   auto *device = state->device;
++   auto *paging = (bc250_host_paging *)argument;
++   HRESULT hr = E_NOTIMPL;
++   if (operation == BC250_HOST_CREATE_PAGING) {
++      D3DDDICB_CREATEPAGINGQUEUE create = {};
++      hr = device->KTCallbacks.pfnCreatePagingQueueCb(device->hDevice, &create);
++      paging->queue = create.hPagingQueue;
++      paging->sync = create.hSyncObject;
++      paging->cpu_address = create.FenceValueCPUVirtualAddress;
++   } else if (operation == BC250_HOST_DESTROY_PAGING) {
++      D3DDDI_DESTROYPAGINGQUEUE destroy = {};
++      destroy.hPagingQueue = paging->queue;
++      hr = device->KTCallbacks.pfnDestroyPagingQueueCb(device->hDevice, &destroy);
++   }
++   fprintf(stderr, "BC250 hosted callback op=%u runtime=%p hr=%08lx\n", operation, device->hDevice, hr);
++   return SUCCEEDED(hr) ? 0 : (int32_t)0xc0000001;
++}
++extern "C" bool d3d10_hosted_bootstrap(struct bc250_host *host);
+ 
+ static void APIENTRY DestroyDevice(D3D10DDI_HDEVICE hDevice);
+ static void APIENTRY RelocateDeviceFuncs(D3D10DDI_HDEVICE hDevice,
+@@ -162,6 +188,14 @@
+    // Adapter screen remains capability-only for this prototype. Rendering
+    // screens belong to one runtime device so future hosted callbacks cannot
+    // accidentally be inherited from a different D3D device.
++   if (GetEnvironmentVariableA("BC250_HOSTED_ICD", NULL, 0)) {
++      Bc250HostProbeState state = {pDevice, GetCurrentThreadId()};
++      bc250_host host = {};
++      host.sType = BC250_HOST_STYPE; host.version = BC250_HOST_VERSION;
++      host.size = sizeof(host); host.identity = pDevice->hDevice;
++      host.userdata = &state; host.dispatch = Bc250HostDispatch;
++      if (!d3d10_hosted_bootstrap(&host)) return E_FAIL;
++   }
+    pDevice->owned_screen = d3d10_create_screen();
+    if (!pDevice->owned_screen) return E_OUTOFMEMORY;
+    struct pipe_screen *screen = pDevice->owned_screen;
+--- a/src/gallium/targets/d3d10umd/d3d10_gdi.c
++++ b/src/gallium/targets/d3d10umd/d3d10_gdi.c
+@@ -32,6 +32,11 @@
+  * The bounded test supplies it from DXGI enumeration of the BC250 adapter.
+  */
+ #include <stdint.h>
++#include <stdio.h>
++#include <vulkan/vulkan_core.h>
++#include "util/u_dl.h"
++#include "util/os_misc.h"
++#include "util/bc250_host_bootstrap.h"
+ #include <stdlib.h>
+ #include <errno.h>
+ #include "util/u_debug.h"
+@@ -58,3 +63,39 @@
+    debug_printf("BC250 D3D renderer: %s\n", screen->get_name(screen));
+    return debug_screen_wrap(screen);
+ }
++
++/* Enumeration-only hosted bootstrap. Keep its module until instance teardown. */
++bool
++d3d10_hosted_bootstrap(struct bc250_host *host)
++{
++   const char *luid = os_get_option("BC250_D3D_ZINK_LUID");
++   if (!luid) return false;
++   host->adapter_luid = strtoull(luid, NULL, 16);
++   const char *path = os_get_option("BC250_HOSTED_ICD");
++   if (!path) return false;
++   struct util_dl_library *lib = util_dl_open(path);
++   if (!lib) return false;
++   PFN_vkGetInstanceProcAddr gipa = (PFN_vkGetInstanceProcAddr)
++      util_dl_get_proc_address(lib, "vk_icdGetInstanceProcAddr");
++   if (!gipa) { util_dl_close(lib); return false; }
++   PFN_vkCreateInstance create = (PFN_vkCreateInstance)gipa(NULL, "vkCreateInstance");
++   VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
++      .pApplicationName = "BC250 hosted bootstrap", .apiVersion = VK_API_VERSION_1_3 };
++   VkInstanceCreateInfo ci = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
++      .pNext = host, .pApplicationInfo = &app };
++   VkInstance instance = VK_NULL_HANDLE;
++   VkResult result = create(&ci, NULL, &instance);
++   fprintf(stderr, "BC250 hosted instance result=%d runtime=%p\n", result, host->identity);
++   bool ok = false;
++   if (result == VK_SUCCESS) {
++      PFN_vkEnumeratePhysicalDevices enumerate = (PFN_vkEnumeratePhysicalDevices)gipa(instance, "vkEnumeratePhysicalDevices");
++      PFN_vkDestroyInstance destroy = (PFN_vkDestroyInstance)gipa(instance, "vkDestroyInstance");
++      uint32_t count = 0;
++      result = enumerate(instance, &count, NULL);
++      fprintf(stderr, "BC250 hosted enumerate result=%d devices=%u\n", result, count);
++      ok = result == VK_SUCCESS && count == 1;
++      destroy(instance, NULL);
++   }
++   util_dl_close(lib);
++   return ok;
++}
+--- /dev/null
++++ b/src/util/bc250_host_bootstrap.h
+@@ -0,0 +1,26 @@
++/* SPDX-License-Identifier: MIT
++ * Private BC250 bootstrap contract, not a registered Vulkan extension.
++ * Both endpoints are built together against the same WDK and x64 ABI.
++ * Version 1 supports adapter enumeration/paging only, never rendering.
++ */
++#ifndef BC250_HOST_BOOTSTRAP_H
++#define BC250_HOST_BOOTSTRAP_H
++#include <stdint.h>
++#define BC250_HOST_STYPE 0x42434831u
++#define BC250_HOST_VERSION 1u
++#define BC250_HOST_CREATE_PAGING 1u
++#define BC250_HOST_DESTROY_PAGING 2u
++struct bc250_host_paging {
++   uint32_t queue, sync;
++   void *cpu_address;
++};
++struct bc250_host {
++   uint32_t sType;
++   const void *pNext;
++   uint32_t version, size;
++   uint64_t adapter_luid;
++   void *identity;
++   void *userdata;
++   int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
++};
++#endif
