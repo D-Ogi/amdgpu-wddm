@@ -31,3 +31,22 @@ do not establish G0. No KMD changes in this candidate.
 
 Results: [M559](../../../evidence/windows/2026-09-27-E34-audit-controls/RESULT.md).
 Both positive controls pass; next apply the diagnostics to bounded DWM.
+## Bounded DWM009 composition and audit probe
+
+Candidate UMD897A38A7/ICD3508416F, router and control hashes in its manifest.
+Extend DWM008 with the M559 validated counters. Two small GDI-only topmost windows
+(red background and half-alpha blue overlap) plus a16x16 changing marker provide
+a composition stimulus without a GPU-rendered client. The control exits after75s.
+
+Take a baseline primary dump with CPU DWM, then trace DxgKrnl while routing only
+one DWM PID to hosted Zink. Six5-second samples retain process/module identities.
+KMD summaries at the first/last sample bound a steady interval; primary and screen
+captures occur after that interval. Compare interior ROIs against CPU composition.
+Capture output remains private until cropped or reduced to nonidentifying metrics.
+
+Main finally restores libraries and DWM. Independent60-second watchdog restores
+them even if the runner fails; enable-file lifetime and single-PID claim prevent
+repeated GPU DWM crash loops. Verify hash checks and STOP/temp before launch.
+A failed oracle, loss, timeout or unexplained CPU-copy counter increase rejects
+G0 acceptance; preserve artifacts and return to CPU baseline. ETW submissions
+alone do not establish execution or completion attribution.
