@@ -1,0 +1,7 @@
+{
+  "018_019_identical": true,
+  "fragment_sha256": "d2e9f49da87f8e6798c9d205184dcea6546b8469b44ac87c8a9be8e8938d8e57",
+  "load_scratch_instructions": 2,
+  "store_scratch_instructions": 2,
+  "017_private_array_eliminated": true
+}

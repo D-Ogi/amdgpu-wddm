@@ -1,0 +1,8 @@
+﻿{
+    "version_override":  false,
+    "boot":  "2026-09-26T11:44:10.5000000+02:00",
+    "manifest_sha256":  "9D4A0A91001FE52BBF928823FC2FFB47C83B889B2FE09BEF6178839447F78B1F",
+    "command":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package019\\bounded-array.shader_test -auto -fbo",
+    "gallium":  "zink",
+    "package":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package019"
+}

@@ -1,0 +1,120 @@
+shader: MESA_SHADER_FRAGMENT
+source_blake3: {0x5445e883, 0x8b271855, 0xffe7c0cc, 0xbde3d2cb, 0x3925202e, 0x504ab056, 0x4a579a29, 0xb629b017}
+name: 
+num_ubos: 1
+outputs_written: 4-11
+system_values_read: 0x00000000'00000000'00000005'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_float: 0x20
+bit_sizes_int: 0x21
+separate_shader: true
+known_interpolation_qualifiers: true
+flrp_lowered: true
+io_lowered: true
+origin_upper_left: true
+uniforms: 52
+scratch: 8192
+decl_var ubo INTERP_MODE_NONE none block[1] #0 (~0, 0, 4)
+decl_var push_const INTERP_MODE_NONE none block #1
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:   // preds:
+    1      %0 = @load_helper_invocation
+    32     %1 = load_const (0x00000001)
+    32     %2 = load_const (0x00000800 = 2048)
+    32     %3 = load_const (0x00000000 = 0.000000)
+    32     %4 = load_const (0x00000002)
+                // succs: b1
+    loop {
+        block b1:   // preds: b0 b4
+        32     %5 = phi b0: %3 (0x0), b4: %7
+        32     %6 = ishl %5, %4 (0x2)
+                    @store_scratch (%3 (0x0), %6) (align_mul=4, align_offset=0, wrmask=x)
+        32     %7 = iadd %5, %1 (0x1)
+        1      %8 = ige %7, %2 (0x800)
+                    // succs: b2 b3
+        if %8 {
+            block b2:// preds: b1
+            break
+            // succs: b5
+        } else {
+            block b3:  // preds: b1, succs: b4
+        }
+        block b4:  // preds: b3, succs: b1
+    }
+    block b5:   // preds: b2
+    32     %9 = @load_scalar_arg_amd (base=1, arg_num_lsb_zero=2)
+    64    %10 = pack_64_2x32_split %9, %1 (0x1)
+    32x4  %11 = @load_global_amd (%10, %3 (0x0)) (base=64, access=readonly|reorderable|smem-amd, align_mul=4, align_offset=0)
+    32    %12 = load_const (0x000007ff = 2047)
+    32    %13 = @load_ubo (%11, %3 (0x0)) (access=speculatable|smem-amd, align_mul=1073741824, align_offset=0, range_base=0, range=4)
+    32    %14 = imin %13, %12 (0x7ff)
+    32    %15 = ishl %14, %4 (0x2)
+    32    %16 = @load_scratch (%15) (access=none, align_mul=4, align_offset=0)
+    1     %17 = ine %16, %1 (0x1)
+                // succs: b6 b7
+    if %17 {
+        block b6:// preds: b5
+        @store_scratch (%1 (0x1), %15) (align_mul=4, align_offset=0, wrmask=x)
+        // succs: b8
+    } else {
+        block b7:  // preds: b5, succs: b8
+    }
+    block b8:   // preds: b6 b7
+    32    %18 = @load_scratch (%15) (access=none, align_mul=4, align_offset=0)
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+    32    %19 = i2f32 %18
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+    32    %20 = @load_scalar_arg_amd (base=3)
+    32    %21 = @load_vector_arg_amd (base=20)
+    1     %22 = inot %0
+    32    %23 = b2i32 %22
+    32    %24 = load_const (0x0000001a = 26)
+    1     %25 = bitnz %20, %24 (0x1a)
+    32    %26 = bcsel %25, %21, %23
+    32    %27 = load_const (0x3f800000 = 1.000000)
+    32    %28 = bit_count %26
+    32    %29 = u2f32 %28
+    32    %30 = load_const (0x3e800000 = 0.250000)
+    32    %31 = fmul %29, %30 (0.250000)
+    32    %32 = load_const (0x00000004)
+    1     %33 = bitnz %20, %32 (0x4)
+    32    %34 = bcsel %33, %31, %27 (0x3f800000)
+                @store_output (%34, %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                @store_output (%19, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                @store_output (%27 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                // succs: b9
+    block b9:
+}
+
+After RA:

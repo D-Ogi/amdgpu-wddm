@@ -1,0 +1,23 @@
+{
+  "diagnostic_only": true,
+  "array_elements": 64,
+  "loop_iterations": 2,
+  "files": [
+    {
+      "name": "bounded-array.shader_test",
+      "sha256": "98278d2abf4a4bb4fe489b13f13633d2d5a60faf95eaefcc539d0eefae7dc391"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "d18e2372010f50202bba556250b69dddb166bc527c9d4e1324d6d01c8e71dcad"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "shader_runner.exe",
+      "sha256": "91bb45101ffd6cf3079b9687b6e6ffdfce2c1520e600c410315ed959f9b53ee9"
+    }
+  ]
+}
