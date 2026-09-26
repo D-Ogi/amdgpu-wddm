@@ -1,0 +1,22 @@
+exit=3
+CreateDXGIFactory1(IID_PPV_ARGS(&f)): 00000000
+a->GetDesc1(&d): 00000000
+a->GetDesc1(&d): 00000000
+D3DKMTOpenAdapterFromLuid(&oa): 00000000
+D3DKMTCreateDevice(&cd): 00000000
+create resource=1 shared=1 nt=1 nonsecure=1
+D3DKMTCreateAllocation2(&ca): 00000000
+D3DKMTShareObjects(1,&ca.hResource,nullptr,GENERIC_ALL,&shared): c000000d
+
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\shared-import001\\shared-import.exe",
+        "Hash":  "DD89F979326A6C81E4DD41EB36266BE95EEFF31B6F09E5C943246A3F7012B360"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\shared-import001\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+

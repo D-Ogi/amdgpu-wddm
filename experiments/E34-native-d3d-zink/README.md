@@ -11,3 +11,28 @@ Expected: both reads match all pixels, device removal is S_OK and the process ex
 Outstanding: primary allocations currently use the CPU import contract. Native GPU sharing and synchronization must be implemented before any DWM deployment. The explicit environment LUID is a prototype selection mechanism, not the final runtime adapter contract.
 
 Result: run011 passes clear and shader-draw readback plus clean destruction. See [evidence](../../evidence/windows/2026-09-26-E34-native-d3d-zink/RESULT.md).
+
+## Native shared allocation probe
+
+Hypothesis: a shared linear LB7A allocation created on one WDDM device can be
+imported by the candidate RADV on its own device, cleared by the GPU and read
+through the original allocation with 4096 exact blue pixels.
+
+Procedure: use scratch/m13/shared-import/probe.cpp and its bounded runner on the
+existing Windows boot. Create one 64x64 RGBA allocation with E26R shared policy,
+CreateShared and NtSecuritySharing; export through D3DKMTShareObjects using
+OBJECT_ATTRIBUTES and SHARED_ALLOCATION_ALL_ACCESS. Load only the app-local
+candidate ICD, match the adapter LUID, import OPAQUE_WIN32 with LB7A metadata,
+clear, wait up to five seconds for the fence and read through D3DKMTLock2.
+The process timeout is 45 seconds. Do not change system registration.
+
+Expected: allocation, export, import, submission and destruction succeed; all
+pixels match and the caller retains ownership of its NT handle. Any failing
+stage terminates this probe. This does not establish runtime-owned back-buffer
+sharing, asynchronous inter-device synchronization or DWM presentation.
+
+Contract references: local ref/ddi-display/d3dkmthk.md, D3DKMTShareObjects and
+D3DKMTOpenResourceFromNtHandle; ref/Vulkan-Docs/chapters/memory.adoc, Win32 handle
+ownership. Architecture review: ref/m13-notes/zink-behind-d3d10umd.md, section 6.4.
+
+Shared probe result: run006 passes all stages and 4096 pixels; see [M532 evidence](../../evidence/windows/2026-09-26-E34-shared-import/RESULT.md).

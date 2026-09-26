@@ -1,0 +1,144 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -864,16 +864,24 @@
+       goto error_alloc;
+    }
+ 
+-   /* Allocate buffer for private driver data */
+-   void *pdata = calloc(1, query_info.TotalPrivateDriverDataSize + query_info.PrivateRuntimeDataSize +
+-                           query_info.NumAllocations * sizeof(D3DDDI_OPENALLOCATIONINFO2));
++   /* One allocation is the native D3D linear-surface sharing contract.
++    * Resource, runtime and per-allocation private data are distinct buffers
++    * (WDK D3DKMT_QUERYRESOURCEINFOFROMNTHANDLE/OPENRESOURCEFROMNTHANDLE).
++    */
++   if (query_info.NumAllocations != 1) {
++      result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
++      goto error_alloc;
++   }
++   size_t pdata_size = (size_t)query_info.TotalPrivateDriverDataSize +
++                       query_info.ResourcePrivateDriverDataSize + query_info.PrivateRuntimeDataSize;
++   void *pdata = calloc(1, MAX2(pdata_size, 1));
++   D3DDDI_OPENALLOCATIONINFO2 alloc_info[1] = {0};
+    if (!pdata) {
+       result = VK_ERROR_OUT_OF_HOST_MEMORY;
+       goto error_alloc;
+    }
+    void *res_pdata = (uint8_t *)pdata + query_info.TotalPrivateDriverDataSize;
+    void *runtime_data = (uint8_t *)res_pdata + query_info.ResourcePrivateDriverDataSize;
+-   D3DDDI_OPENALLOCATIONINFO2 *alloc_info = (D3DDDI_OPENALLOCATIONINFO2 *)((uint8_t *)res_pdata + query_info.PrivateRuntimeDataSize);
+ 
+    D3DKMT_OPENRESOURCEFROMNTHANDLE open_resource = {
+       .hDevice = ws->device_h,
+@@ -893,16 +901,46 @@
+       goto error_import;
+    }
+ 
+-   struct alloc_entry *entry = (struct alloc_entry *)((uint8_t *) pdata + sizeof(struct alloc_header));
+-   struct alloc_surf *surf = (struct alloc_surf *)((uint8_t *)entry + sizeof(struct alloc_entry));
+-
++   bo->resource_handle = open_resource.hResource;
+    bo->base.obj_id = bo->base.handle = alloc_info[0].hAllocation;
+-   bo->base.size = entry->bo_info.phys_size;
+-
+-   bo->md.u.gfx9.swizzle_mode = surf->swizzle_mode;
+-   bo->md.metadata_type = RADEON_METADATA_TYPE_KMW;
+-   bo->md.kmw.pitch_bytes = surf->width;
+-   bo->md.kmw.surf_size = surf->slice_size;
++
++   if (ws->bc250) {
++      /* KMD's LB7A v1 surface ABI, not the proprietary AMD allocation ABI. */
++      struct bc250_linear_surface {
++         uint32_t magic, version, width, height, pitch, format;
++         uint64_t size;
++      } surface;
++      _Static_assert(sizeof(surface) == 32, "LB7A v1 ABI");
++      if (!alloc_info[0].pPrivateDriverData ||
++          alloc_info[0].PrivateDriverDataSize < sizeof(surface)) {
++         result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
++         goto error_import;
++      }
++      memcpy(&surface, alloc_info[0].pPrivateDriverData, sizeof(surface));
++      if (surface.magic != 0x4137424c || surface.version != 1 ||
++          !surface.width || !surface.height || surface.width > 8192 || surface.height > 8192 ||
++          surface.pitch < (uint64_t)surface.width * 4 || (surface.pitch & 15) ||
++          surface.size < (uint64_t)surface.pitch * surface.height ||
++          surface.size > UINT64_MAX - 4095 ||
++          (surface.format != D3DDDIFMT_A8R8G8B8 && surface.format != D3DDDIFMT_X8R8G8B8 &&
++           surface.format != D3DDDIFMT_A8B8G8R8)) {
++         result = VK_ERROR_INVALID_EXTERNAL_HANDLE;
++         goto error_import;
++      }
++      bo->base.size = align64(surface.size, 4096); /* KMD ROUND_TO_PAGES(Size) */
++      bo->md.u.gfx9.swizzle_mode = 0; /* radv_patch_surface_from_metadata: linear */
++      bo->md.metadata_type = RADEON_METADATA_TYPE_KMW;
++      bo->md.kmw.pitch_bytes = surface.pitch;
++      bo->md.kmw.surf_size = surface.size;
++   } else {
++      struct alloc_entry *entry = (struct alloc_entry *)((uint8_t *)pdata + sizeof(struct alloc_header));
++      struct alloc_surf *surf = (struct alloc_surf *)((uint8_t *)entry + sizeof(struct alloc_entry));
++      bo->base.size = entry->bo_info.phys_size;
++      bo->md.u.gfx9.swizzle_mode = surf->swizzle_mode;
++      bo->md.metadata_type = RADEON_METADATA_TYPE_KMW;
++      bo->md.kmw.pitch_bytes = surf->width;
++      bo->md.kmw.surf_size = surf->slice_size;
++   }
+ 
+    /* Map the opened allocation into GPU virtual address space */
+    D3DDDI_MAPGPUVIRTUALADDRESS map = {
+@@ -966,15 +1004,14 @@
+       WDDM2_DISPATCH(FreeGpuVirtualAddress(&unmap));
+    }
+ error_import:
+-   {
++   if (bo->resource_handle) {
+       const D3DKMT_DESTROYALLOCATION2 destroy = {
+          .hDevice = ws->device_h,
+-         .phAllocationList = &bo->base.handle,
+-         .AllocationCount = 1,
++         .hResource = bo->resource_handle,
+       };
+       WDDM2_DISPATCH(DestroyAllocation2(&destroy));
+-      free(pdata);
+-   }
++   }
++   free(pdata);
+ error_alloc:
+    FREE(bo);
+    return result;
+@@ -1137,8 +1174,9 @@
+    if (!bo->base.is_virtual) {
+       const D3DKMT_DESTROYALLOCATION2 destroy = {
+          .hDevice = ws->device_h,
+-         .phAllocationList = &bo->base.handle,
+-         .AllocationCount = 1,
++         .hResource = bo->resource_handle,
++         .phAllocationList = bo->resource_handle ? NULL : &bo->base.handle,
++         .AllocationCount = bo->resource_handle ? 0 : 1,
+       };
+       status = WDDM2_DISPATCH(DestroyAllocation2(&destroy));
+       //assert(NT_SUCCESS(status));
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
+@@ -54,6 +54,7 @@
+ 
+    void *map;
+    uint32_t handle;
++   uint32_t resource_handle; /* nonzero for an opened shared WDDM resource */
+ 
+    struct radeon_bo_metadata md;
+ };
+--- a/src/amd/vulkan/radv_device_memory.c
++++ b/src/amd/vulkan/radv_device_memory.c
+@@ -189,9 +189,10 @@
+          result = radv_bo_from_handle(device, win32_import_info->handle, priority, mem, NULL);
+          if (result != VK_SUCCESS) {
+             goto fail;
+-         } else {
+-            CloseHandle(win32_import_info->handle);
+          }
++         /* Vulkan Win32 import retains the payload, not ownership of the NT
++          * handle. The importing application remains responsible for closing it.
++          */
+          mem->import_handle_type = win32_import_info->handleType;
+       }
+    } else if (host_ptr_info) {

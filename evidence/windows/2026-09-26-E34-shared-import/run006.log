@@ -1,0 +1,66 @@
+exit=0
+CreateDXGIFactory1(IID_PPV_ARGS(&f)): 00000000
+a->GetDesc1(&d): 00000000
+a->GetDesc1(&d): 00000000
+D3DKMTOpenAdapterFromLuid(&oa): 00000000
+D3DKMTCreateDevice(&cd): 00000000
+create resource=1 shared=1 nt=1 nonsecure=1
+D3DKMTCreateAllocation2(&ca): 00000000
+D3DKMTShareObjects(1,&ca.hResource,&attrs,SHARED_ALLOCATION_ALL_ACCESS,&shared): 00000000
+D3DKMTQueryResourceInfoFromNtHandle(&qi): 00000000
+private sizes: allocation=32 resource=16 runtime=0 allocations=1
+create(&ici,nullptr,&instance): 0
+vkEnumeratePhysicalDevices(instance,&count,nullptr): 0
+vkEnumeratePhysicalDevices(instance,&count,pds.data()): 0
+GPU: AMD BC-250 (RADV GFX1013)
+vkCreateDevice(pd,&dci,nullptr,&device): 0
+vkCreateImage(device,&imageci,nullptr,&image): 0
+image bytes=16384 alignment=256 types=7ad
+vkAllocateMemory(device,&mai,nullptr,&memory): 0
+NT handle ownership retained
+vkBindImageMemory(device,image,memory,0): 0
+vkCreateCommandPool(device,&pci,nullptr,&pool): 0
+vkAllocateCommandBuffers(device,&cbi,&cmd): 0
+vkBeginCommandBuffer(cmd,&begin): 0
+vkEndCommandBuffer(cmd): 0
+vkCreateFence(device,&fci,nullptr,&fence): 0
+vkQueueSubmit(queue,1,&submit,fence): 0
+vkWaitForFences(device,1,&fence,VK_TRUE,5000000000ull): 0
+D3DKMTLock2(&lock): 00000000
+original WDDM allocation blue mismatches=0/4096
+D3DKMTUnlock2(&unlock): 00000000
+D3DKMTDestroyAllocation2(&da): 00000000
+D3DKMTDestroyDevice(&dd): 00000000
+D3DKMTCloseAdapter(&close): 00000000
+PASS shared WDDM surface written by Vulkan GPU
+
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8999
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000480
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40000580
+allocation handle=0x40000600
+allocation handle=0x40000680
+allocation handle=0x40000740
+allocation handle=0x400007c0
+allocation handle=0x40000840
+bc250: progress before submit previous=0 observed=0 waits=0 signals=1
+allocation handle=0x400008c0
+bc250: gather capacity=4096 bytes required=2112 ibs=2
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\shared-import001\\shared-import.exe",
+        "Hash":  "CDC5AF8FBB77F62693F917499B256F987394E836DAF8DADF790E43D54E841B00"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\shared-import001\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+

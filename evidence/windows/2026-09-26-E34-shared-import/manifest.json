@@ -1,0 +1,11 @@
+{
+  "probe_sha256": "cdc5af8fbb77f62693f917499b256f987394e836daf8dadf790e43d54e841b00",
+  "icd_sha256": "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E",
+  "candidate_source": "scratch/m12/mesa-current-src, existing M12 WDDM2 port plus incremental radv-lb7a-import.patch",
+  "modified_source_sha256": {
+    "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c": "3615a2379a39ae1eb7269b9e6c9238e958fe540d3a36093bb7eda97d7b8beee3",
+    "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h": "cc4043974a8a31972c7e0014d82f77c82c6801482d856f852c70c854cb5a7c5c",
+    "src/amd/vulkan/radv_device_memory.c": "4000796fcb5eb5f817db2e7b89c5ee6f06fb8f232876eafd9baa0433cbc5b5cd"
+  },
+  "scope": "one 64x64 shared aperture allocation; CPU fence wait before original-device readback"
+}
