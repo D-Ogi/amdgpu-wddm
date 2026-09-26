@@ -1,0 +1,3 @@
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/gallium/drivers/radeonsi/si_texture.c:700:       (sscreen->debug_flags & DBG(EXPORT_MODIFIER)))
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/gallium/drivers/radeonsi/si_pipe.h:172:   DBG_EXPORT_MODIFIER,
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/gallium/drivers/radeonsi/si_pipe.c:81:   {"export_modifier", DBG(EXPORT_MODIFIER), "Export real modifier instead of DRM_FORMAT_MOD_INVALID"},

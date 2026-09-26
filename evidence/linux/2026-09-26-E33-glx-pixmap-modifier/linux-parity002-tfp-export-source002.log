@@ -1,0 +1,100 @@
+                                  enum pipe_resource_param param, unsigned handle_usage,
+                                  uint64_t *value)
+{
+   while (plane && resource->next && !si_texture_is_aux_plane(resource->next)) {
+      --plane;
+      resource = resource->next;
+   }
+
+   struct si_screen *sscreen = (struct si_screen *)screen;
+   struct si_texture *tex = (struct si_texture *)resource;
+   struct winsys_handle whandle;
+
+   /* Compute texture modifier when needed.
+    * This allows to return the correct values for the PIPE_RESOURCE_PARAM_NPLANES and
+    * PIPE_RESOURCE_PARAM_MODIFIER queries.
+    */
+   if ((param == PIPE_RESOURCE_PARAM_NPLANES || param == PIPE_RESOURCE_PARAM_MODIFIER) &&
+       resource->target != PIPE_BUFFER &&
+       (sscreen->debug_flags & DBG(EXPORT_MODIFIER)))
+         ac_compute_surface_modifier(&sscreen->info, &tex->surface, resource->nr_samples);
+
+   switch (param) {
+   case PIPE_RESOURCE_PARAM_NPLANES:
+      if (resource->target == PIPE_BUFFER)
+         *value = 1;
+      else if (tex->num_planes > 1)
+         *value = tex->num_planes;
+            si_texture_discard_cmask(sscreen, tex);
+      }
+
+      /* Set metadata. */
+      if ((!res->b.is_shared || update_metadata) && whandle->offset == 0)
+         si_set_tex_bo_metadata(sscreen, tex);
+
+      if (sscreen->info.gfx_level >= GFX9) {
+         slice_size = tex->surface.u.gfx9.surf_slice_size;
+      } else {
+         slice_size = (uint64_t)tex->surface.u.legacy.level[0].slice_size_dw * 4;
+      }
+
+      modifier = tex->surface.modifier;
+   } else {
+      tc_buffer_disable_cpu_storage(&res->b.b);
+
+      /* Buffer exports are for the OpenCL interop. */
+      /* Move a suballocated buffer into a non-suballocated allocation. */
+      if (sscreen->ws->buffer_is_suballocated(res->buf) ||
+          sscreen->ws->buffer_has_vm_always_valid(res->buf)) {
+         assert(!res->b.is_shared);
+
+         /* Allocate a new buffer with PIPE_BIND_SHARED. */
+         if (!si_reallocate_buffer_change_flags(sctx, &res->b.b, res->b.b.usage,
+                                                res->b.b.bind | PIPE_BIND_SHARED)) {
+            if (!ctx)
+         uint64_t offset = base + j * (uint64_t)row_pitch;
+         if (!ctx->ws->buffer_commit(ctx->ws, res->buf, offset, size, commit))
+            return false;
+      }
+   }
+
+   return true;
+}
+
+static void si_query_dmabuf_modifiers(struct pipe_screen *screen,
+                                      enum pipe_format format,
+                                      int max,
+                                      uint64_t *modifiers,
+                                      unsigned int *external_only,
+                                      int *count)
+{
+   struct si_screen *sscreen = (struct si_screen *)screen;
+
+   unsigned ac_mod_count = max;
+   ac_get_supported_modifiers(&sscreen->info, &(struct ac_modifier_options) {
+         .dcc = !(sscreen->debug_flags & (DBG(NO_DCC) | DBG(NO_EXPORTED_DCC))),
+         /* Do not support DCC with retiling yet. This needs explicit
+          * resource flushes, but the app has no way to promise doing
+          * flushes with modifiers. */
+         .dcc_retile = !(sscreen->debug_flags & DBG(NO_DCC)),
+      }, format, &ac_mod_count,  max ? modifiers : NULL);
+   if (max && external_only) {
+      for (unsigned i = 0; i < ac_mod_count; ++i)
+         external_only[i] = util_format_is_yuv(format);
+   }
+   *count = ac_mod_count;
+}
+
+static bool
+si_is_dmabuf_modifier_supported(struct pipe_screen *screen,
+                               uint64_t modifier,
+                               enum pipe_format format,
+                               bool *external_only)
+{
+   int allowed_mod_count;
+   si_query_dmabuf_modifiers(screen, format, 0, NULL, NULL, &allowed_mod_count);
+
+   uint64_t *allowed_modifiers = (uint64_t *)calloc(allowed_mod_count, sizeof(uint64_t));
+   if (!allowed_modifiers)
+      return false;
+

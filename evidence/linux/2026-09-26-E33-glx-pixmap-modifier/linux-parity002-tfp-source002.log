@@ -1,0 +1,142 @@
+/** kopper_get_pixmap_buffer
+ *
+ * Get the DRM object for a pixmap from the X server and
+ * wrap that with a struct dri_image structure using createImageFromDmaBufs
+ */
+static struct pipe_resource *
+kopper_get_pixmap_buffer(struct dri_drawable *drawable,
+                         enum pipe_format pf)
+{
+   xcb_drawable_t                       pixmap;
+   int                                  width;
+   int                                  height;
+   uint32_t fourcc = pipe_format_to_fourcc(pf);
+   struct kopper_loader_info *info = &drawable->info;
+   assert(info->bos.sType == VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR);
+   VkXcbSurfaceCreateInfoKHR *xcb = (VkXcbSurfaceCreateInfoKHR *)&info->bos;
+   xcb_connection_t *conn = xcb->connection;
+   pixmap = xcb->window;
+
+   if (drawable->image)
+      return drawable->image->texture;
+
+   /* FIXME: probably broken for OBS studio?
+    * see dri3_get_pixmap_buffer()
+    */
+   struct dri_screen *screen = drawable->screen;
+
+#ifndef GLX_USE_APPLEGL
+   drawable->image = loader_dri3_get_pixmap_buffer(conn, pixmap, screen,
+                                                   fourcc, drawable->screen->has_multibuffer, &width, &height, drawable);
+#else
+   drawable->image = NULL;
+#endif
+   if (!drawable->image)
+      return NULL;
+
+   drawable->w = width;
+   drawable->h = height;
+
+   return drawable->image->texture;
+}
+1903:loader_dri3_get_pixmap_buffer(xcb_connection_t *conn, xcb_drawable_t pixmap, struct dri_screen *screen,
+1904-                              unsigned fourcc, bool multiplanes_available,
+1905-                              int *width, int *height, void *loader_data)
+1906-{
+1907-   struct dri_image *image;
+1908-   if (multiplanes_available) {
+1909-      xcb_dri3_buffers_from_pixmap_cookie_t bps_cookie;
+1910-      xcb_dri3_buffers_from_pixmap_reply_t *bps_reply;
+1911-
+1912-      bps_cookie = xcb_dri3_buffers_from_pixmap(conn, pixmap);
+1913-      bps_reply = xcb_dri3_buffers_from_pixmap_reply(conn, bps_cookie,
+1914-                                                     NULL);
+1915-      if (!bps_reply)
+1916-         return NULL;
+1917-      image = loader_dri3_create_image_from_buffers(conn, bps_reply, fourcc,
+1918-                                                    screen, loader_data);
+1919-      *width = bps_reply->width;
+1920-      *height = bps_reply->height;
+1921-      free(bps_reply);
+1922-   } else {
+1923-      xcb_dri3_buffer_from_pixmap_cookie_t bp_cookie;
+1924-      xcb_dri3_buffer_from_pixmap_reply_t *bp_reply;
+1925-
+1926-      bp_cookie = xcb_dri3_buffer_from_pixmap(conn, pixmap);
+1927-      bp_reply = xcb_dri3_buffer_from_pixmap_reply(conn, bp_cookie, NULL);
+1928-      if (!bp_reply)
+1929-         return NULL;
+1930-
+1931-      image = loader_dri3_create_image(conn, bp_reply, fourcc, screen,
+1932-                                               loader_data);
+1933-      *width = bp_reply->width;
+1934-      *height = bp_reply->height;
+1935-      free(bp_reply);
+1936-   }
+1937-   return image;
+1938-}
+1939-
+1940-/** dri3_get_pixmap_buffer
+1941- *
+1942- * Get the DRM object for a pixmap from the X server and
+1943- * wrap that with a struct dri_image structure using createImageFromDmaBufs
+1944- */
+1945-static struct loader_dri3_buffer *
+1946-dri3_get_pixmap_buffer(struct dri_drawable *driDrawable, unsigned int fourcc,
+1947-                       enum loader_dri3_buffer_type buffer_type,
+1948-                       struct loader_dri3_drawable *draw)
+1949-{
+1950-   int                                  buf_id = loader_dri3_pixmap_buf_id(buffer_type);
+1951-   struct loader_dri3_buffer            *buffer = draw->buffers[buf_id];
+1952-   xcb_drawable_t                       pixmap;
+1953-   xcb_void_cookie_t                    cookie;
+1954-   xcb_sync_fence_t                     sync_fence;
+1955-   struct xshmfence                     *shm_fence;
+1956-   int                                  width;
+1957-   int                                  height;
+1958-   int                                  fence_fd;
+1959-   struct dri_screen                          *cur_screen;
+1960-
+1961-   if (buffer)
+1962-      return buffer;
+1963-
+1964-   pixmap = draw->drawable;
+1965-
+1966-   buffer = calloc(1, sizeof *buffer);
+1967-   if (!buffer)
+1968-      goto no_buffer;
+1969-
+1970-   fence_fd = xshmfence_alloc_shm();
+1971-   if (fence_fd < 0)
+1972-      goto no_fence;
+1973-   shm_fence = xshmfence_map_shm(fence_fd);
+1974-   if (shm_fence == NULL) {
+1975-      close (fence_fd);
+1976-      goto no_fence;
+1977-   }
+1978-
+1979-   /* Get the currently-bound screen or revert to using the drawable's screen if
+1980-    * no contexts are currently bound. The latter case is at least necessary for
+1981-    * obs-studio, when using Window Capture (Xcomposite) as a Source.
+1982-    */
+1983-   cur_screen = draw->vtable->get_dri_screen();
+1984-   if (!cur_screen) {
+1985-       cur_screen = draw->dri_screen_render_gpu;
+1986-   }
+1987-
+1988-   cookie = xcb_dri3_fence_from_fd_checked(draw->conn,
+1989-                                           pixmap,
+1990-                                           (sync_fence = xcb_generate_id(draw->conn)),
+1991-                                           false,
+1992-                                           fence_fd);
+1993-   if (!check_xcb_error(cookie, "xcb_dri3_fence_from_fd"))
+1994-      goto no_image;
+1995-
+1996-   buffer->image = loader_dri3_get_pixmap_buffer(draw->conn, pixmap, cur_screen, fourcc,
+1997-                                                 draw->multiplanes_available, &width, &height, buffer);
+1998-
+1999-   if (!buffer->image)
+2000-      goto no_image;
+2001-
+2002-   buffer->pixmap = pixmap;
+2003-   buffer->own_pixmap = false;
