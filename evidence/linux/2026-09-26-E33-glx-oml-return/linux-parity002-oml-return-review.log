@@ -1,0 +1,50 @@
+556:driswSwapBuffers(__GLXDRIdrawable * pdraw,
+557-                 int64_t target_msc, int64_t divisor, int64_t remainder,
+558-                 Bool flush)
+559-{
+560-   struct drisw_screen *psc = (struct drisw_screen *) pdraw->psc;
+561-
+562-   (void) target_msc;
+563-   (void) divisor;
+564-   (void) remainder;
+565-
+566-   if (psc->kopper)
+567-       return kopperSwapBuffers(pdraw->dri_drawable, flush ? __DRI2_FLUSH_CONTEXT : 0);
+568-
+569-   if (flush) {
+570-      CALL_Flush(GET_DISPATCH(), ());
+571-   }
+572-
+573-   driSwapBuffers(pdraw->dri_drawable);
+574-
+575-   return 0;
+576-}
+577-
+578-static void
+579-drisw_copy_sub_buffer(__GLXDRIdrawable * pdraw,
+580-                      int x, int y, int width, int height, Bool flush)
+581-{
+582-   if (flush) {
+583-      CALL_Flush(GET_DISPATCH(), ());
+584-   }
+585-
+586-   driswCopySubBuffer(pdraw->dri_drawable, x, y, width, height);
+587-}
+588-
+589-static int
+590-driswKopperSetSwapInterval(__GLXDRIdrawable *pdraw, int interval)
+591-{
+592-   struct drisw_drawable *pdp = (struct drisw_drawable *) pdraw;
+593-   struct drisw_screen *psc = (struct drisw_screen *) pdp->base.psc;
+594-
+595-   if (!dri_valid_swap_interval(psc->base.frontend_screen, interval))
+596-      return GLX_BAD_VALUE;
+597-
+598-   kopperSetSwapInterval(pdp->base.dri_drawable, interval);
+599-   pdp->swapInterval = interval;
+600-
+601-   return 0;
+0
+Testing with swap interval 0
+PIGLIT: {"result": "pass" }
+ATTENTION: default value of option keep_native_window_glx_drawable overridden by environment.

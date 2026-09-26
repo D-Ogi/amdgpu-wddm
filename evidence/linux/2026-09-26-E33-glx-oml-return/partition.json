@@ -1,0 +1,45 @@
+{
+  "total": 45159,
+  "previous": 1078,
+  "remaining": 44081,
+  "reviewed_outcomes_retained": {
+    "glx@glx-fbconfig-sanity": {
+      "result": "warn",
+      "subtests": {}
+    },
+    "glx@glx-multi-window-single-context": {
+      "result": "fail",
+      "subtests": {}
+    },
+    "glx@glx_arb_sync_control@swapbuffersmsc-divisor-zero": {
+      "result": "fail",
+      "subtests": {}
+    },
+    "glx@glx_arb_sync_control@swapbuffersmsc-return": {
+      "result": "fail",
+      "subtests": {}
+    }
+  },
+  "previous_sha256": "136059a7c8a678bedd10aa92f9d9d1151b5e2f658cebb88eacaba9e100d0372e",
+  "input_segments": [
+    {
+      "path": "scratch\\m12\\linux-full013-results.tar",
+      "sha256": "136059a7c8a678bedd10aa92f9d9d1151b5e2f658cebb88eacaba9e100d0372e"
+    },
+    {
+      "path": "scratch\\m12\\linux-full014-results.tar",
+      "sha256": "5131e7a9fb9d1fab2736edf3c56ccf8a41e8c9848ed90fc7098a630fb9434be1"
+    },
+    {
+      "path": "scratch\\m12\\linux-full015-results.tar",
+      "sha256": "49b4412ff0dc3236e848ac12eacb35696b45642ce44d754b352f7d448ac5547c"
+    },
+    {
+      "path": "scratch\\m12\\linux-full016-results.tar",
+      "sha256": "4ed7766b38c8a8b1ca953e918ddef5533f95165414959df00acb188ea1a469c5"
+    }
+  ],
+  "inventory_sha256": "b2bc95470c263f1d6f327334b01b7d5014fbd01cbd1da0756f5dc35051d13bcb",
+  "complete": false,
+  "earlier_results_required": true
+}

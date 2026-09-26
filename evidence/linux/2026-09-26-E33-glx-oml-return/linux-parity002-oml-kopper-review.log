@@ -1,0 +1,107 @@
+523:kopperSwapBuffersWithDamage(struct dri_drawable *drawable, uint32_t flush_flags, int nrects, const int *rects)
+524-{
+525-   struct dri_context *ctx = dri_get_current();
+526-   struct pipe_resource *ptex;
+527-
+528-   if (!ctx)
+529-      return 0;
+530-
+531-   ptex = drawable->textures[ST_ATTACHMENT_BACK_LEFT];
+532-   if (!ptex)
+533-      return 0;
+534-
+535-   /* ensure invalidation is applied before renderpass ends */
+536-   if (flush_flags & __DRI2_FLUSH_INVALIDATE_ANCILLARY)
+537-      _mesa_glthread_invalidate_zsbuf(ctx->st->ctx);
+538-
+539-   drawable->texture_stamp = drawable->lastStamp - 1;
+540-
+541-   dri_flush(ctx, drawable,
+542-             __DRI2_FLUSH_DRAWABLE | flush_flags,
+543-             __DRI2_THROTTLE_SWAPBUFFER);
+544-
+545-   struct pipe_box stack_boxes[64];
+546-   if (nrects > ARRAY_SIZE(stack_boxes))
+547-      nrects = 0;
+548-   if (nrects) {
+549-      for (unsigned int i = 0; i < nrects; i++) {
+550-         const int *rect = &rects[i * 4];
+551-
+552-         u_box_2d(rect[0], rect[1], rect[2], rect[3], &stack_boxes[i]);
+553-      }
+554-   }
+555-
+556-   kopper_copy_to_front(ctx->st->pipe, drawable, ptex, nrects, stack_boxes);
+557-   if (drawable->is_window && !zink_kopper_check(ptex))
+558-      return -1;
+559-   if (!drawable->textures[ST_ATTACHMENT_FRONT_LEFT]) {
+560-      return 0;
+561-   }
+562-
+563-   /* have to manually swap the pointers here to make frontbuffer readback work */
+564-   drawable->textures[ST_ATTACHMENT_BACK_LEFT] = drawable->textures[ST_ATTACHMENT_FRONT_LEFT];
+565-   drawable->textures[ST_ATTACHMENT_FRONT_LEFT] = ptex;
+566-
+567-   return 0;
+568-}
+569-
+570-int64_t
+571:kopperSwapBuffers(struct dri_drawable *dPriv, uint32_t flush_flags)
+572-{
+573-   return kopperSwapBuffersWithDamage(dPriv, flush_flags, 0, NULL);
+574-}
+575-
+576-static void
+577-kopper_swap_buffers_with_damage(struct dri_drawable *drawable, int nrects, const int *rects)
+578-{
+579-
+580-   kopperSwapBuffersWithDamage(drawable, 0, nrects, rects);
+581-}
+582-
+583-static void
+584-kopper_swap_buffers(struct dri_drawable *drawable)
+585-{
+586-   kopper_swap_buffers_with_damage(drawable, 0, NULL);
+587-}
+588-
+589-void
+590-kopperSetSwapInterval(struct dri_drawable *drawable, int interval)
+591-{
+592-   struct dri_screen *screen = drawable->screen;
+593-   struct pipe_resource *ptex = drawable->textures[ST_ATTACHMENT_BACK_LEFT] ?
+594-                                drawable->textures[ST_ATTACHMENT_BACK_LEFT] :
+595-                                drawable->textures[ST_ATTACHMENT_FRONT_LEFT];
+596-
+597-   drawable->info.initial_swap_interval = interval;
+598-   /* can't set swap interval on non-windows */
+599-   if (!drawable->window_valid)
+600-      return;
+601-   /* the conditional is because we can be called before buffer allocation.  If
+602-    * we're before allocation, then the initial_swap_interval will be used when
+603-    * the swapchain is eventually created.
+604-    */
+605-   if (ptex) {
+606-      struct pipe_screen *pscreen = kopper_get_zink_screen(screen->base.screen);
+607-      zink_kopper_set_swap_interval(pscreen, ptex, interval);
+608-   }
+609-}
+610-
+611-int
+612-kopperQueryBufferAge(struct dri_drawable *drawable)
+613-{
+614-   struct dri_context *ctx = dri_get_current();
+615-   struct pipe_resource *ptex = drawable->textures[ST_ATTACHMENT_BACK_LEFT] ?
+616-                                drawable->textures[ST_ATTACHMENT_BACK_LEFT] :
+617-                                drawable->textures[ST_ATTACHMENT_FRONT_LEFT];
+618-
+619-   /* can't get buffer age from non-window swapchain */
+620-   if (!drawable->window_valid)
+621-      return 0;
+622-
+623-   /* Wait for glthread to finish because we can't use pipe_context from
+624-    * multiple threads.
+625-    */
+626-   _mesa_glthread_finish(ctx->st->ctx);
+627-
+628-   return zink_kopper_query_buffer_age(ctx->st->pipe, ptex);
+629-}
