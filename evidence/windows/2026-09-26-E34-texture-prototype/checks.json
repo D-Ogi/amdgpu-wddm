@@ -1,0 +1,44 @@
+{
+  "036": {
+    "exit": 124,
+    "pixel_lines": []
+  },
+  "037": {
+    "exit": -1073741819,
+    "pixel_lines": []
+  },
+  "038": {
+    "exit": -1073741819,
+    "pixel_lines": []
+  },
+  "039": {
+    "exit": 0,
+    "pixel_lines": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=0/4096"
+    ]
+  },
+  "040": {
+    "exit": 6,
+    "pixel_lines": [
+      "channel=0 mismatches=4096/4096"
+    ]
+  },
+  "041": {
+    "exit": 0,
+    "pixel_lines": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=0/4096"
+    ]
+  },
+  "042": {
+    "exit": 0,
+    "pixel_lines": [
+      "channel=0 mismatches=0/4096",
+      "channel=2 mismatches=0/4096",
+      "channel=1 mismatches=0/4096"
+    ]
+  }
+}
