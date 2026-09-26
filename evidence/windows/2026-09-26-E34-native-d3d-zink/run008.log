@@ -1,0 +1,148 @@
+exit=-1073741819
+CreateDXGIFactory1(IID_PPV_ARGS(&factory)): 00000000
+a->GetDesc1(&d): 00000000
+adapter vendor=1002 device=13fe software=0
+a->GetDesc1(&d): 00000000
+adapter vendor=1414 device=008c software=1
+D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_SOFTWARE,umd,0,&level,1,D3D11_SDK_VERSION,&dev,nullptr,&ctx): 00000000
+module bc250d3d_zink.dll: C:\BC250\m13\native-zink001\bc250d3d_zink.dll
+module vulkan-1.dll: C:\Windows\SYSTEM32\vulkan-1.dll
+module vulkan_radeon.dll: C:\BC250\m10\wsi-final\vulkan_radeon.dll
+dev->CreateTexture2D(&d,nullptr,&target): 00000000
+dev->CreateTexture2D(&d,nullptr,&copy): 00000000
+dev->CreateRenderTargetView(target.Get(),nullptr,&view): 00000000
+map=00000000
+expected RGBA=0,0,255,255 mismatches=0/4096
+dev->CreateVertexShader(g_VS,sizeof(g_VS),nullptr,&vs): 00000000
+dev->CreatePixelShader(g_PS,sizeof(g_PS),nullptr,&ps): 00000000
+dev->CreateInputLayout(layout,2,g_VS,sizeof(g_VS),&il): 00000000
+dev->CreateBuffer(&bd,&init,&vb): 00000000
+dev->CreateRasterizerState(&rs,&raster): 00000000
+before raster
+after raster
+before viewport
+after viewport
+before vs
+after vs
+before ps
+after ps
+before rt
+after rt
+before draw
+after draw
+map=00000000
+expected RGBA=255,0,0,255 mismatches=0/4096
+dev->GetDeviceRemovedReason(): 00000000
+PASS native D3D clear and shader draw readback
+
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8999
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000fc0
+allocation handle=0x40001040
+allocation handle=0x400010c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 2
+BC250 D3D device stage 3
+allocation handle=0x400012c0
+allocation handle=0x40001340
+allocation handle=0x400013c0
+allocation handle=0x40001440
+allocation handle=0x400014c0
+allocation handle=0x40001540
+allocation handle=0x400015c0
+allocation handle=0x40001640
+allocation handle=0x400016c0
+allocation handle=0x40001740
+allocation handle=0x400017c0
+allocation handle=0x40001840
+allocation handle=0x400018c0
+allocation handle=0x40001940
+allocation handle=0x400019c0
+allocation handle=0x40001a40
+allocation handle=0x40001ac0
+allocation handle=0x40001b40
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0x40001c00
+allocation handle=0x40001c80
+allocation handle=0x40001d00
+allocation handle=0x40001d80
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+allocation handle=0x40001f80
+bc250: progress before submit previous=0 observed=0 waits=0 signals=1
+allocation handle=0x40002000
+allocation handle=0x40002080
+allocation handle=0x40002100
+allocation handle=0x40002180
+allocation handle=0x40002200
+D3D resolve begin
+D3D resolve part 1 before
+D3D resolve part 0 before
+D3D resolve part 0 after
+D3D resolve part 1 after
+D3D resolve part 2 before
+D3D resolve part 2 after
+D3D resolve done
+allocation handle=0x40002280
+allocation handle=0x800002c0
+allocation handle=0x40002300
+allocation handle=0x800003c0
+allocation handle=0x40002380
+allocation handle=0x40002400
+allocation handle=0x40002480
+allocation handle=0x800005c0
+allocation handle=0x40002500
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\native-zink001\\native-control.exe",
+        "Hash":  "D3827CDCCD6C71B140CA4717889897D96FA2E015C314A238C48FA4A83ABD1D19"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\native-zink001\\bc250d3d_zink.dll",
+        "Hash":  "12CC0CBA5A88C89F9CD795A0EB575E4AADCAA4E6C981B0609F4388EF9DE0F290"
+    }
+]
+

@@ -1,0 +1,15 @@
+{
+  "umd": {
+    "sha256": "0d1c4c347d913c9ef977bbdefb78f27ca0db84a65583bb8211f3d0eea4563ca2",
+    "bytes": 15074304
+  },
+  "control": {
+    "sha256": "d3827cdccd6c71b140ca4717889897d96fa2e015c314a238c48fa4a83abd1d19",
+    "bytes": 164352
+  },
+  "patch": {
+    "sha256": "264e094a48eb1d488b5db59b6d2f78c76247eb02256eac1504118e7b192c3afc",
+    "bytes": 58047
+  },
+  "mesa_base": "05e6c9622e135ac2aeaf56ec70222642627e2162"
+}

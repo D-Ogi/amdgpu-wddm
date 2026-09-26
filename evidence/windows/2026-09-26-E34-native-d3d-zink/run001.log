@@ -1,0 +1,28 @@
+exit=
+CreateDXGIFactory1(IID_PPV_ARGS(&factory)): 00000000
+a->GetDesc1(&d): 00000000
+adapter vendor=1002 device=13fe software=0
+a->GetDesc1(&d): 00000000
+adapter vendor=1414 device=008c software=1
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8999
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000fc0
+allocation handle=0x40001040
+allocation handle=0x400010c0
+bc250: gfx preamble inlined (no gfx_init IB)
+[
+    {
+        "Path":  "C:\\BC250\\m13\\native-zink001\\native-control.exe",
+        "Hash":  "626C4ED29DEF6EDC4B6C9BAA906481345CC9ABC950FF393776884998B9A23E33"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\native-zink001\\bc250d3d_zink.dll",
+        "Hash":  "949FBA9A36DEEC96CB4555E0B48B17CF9C6075F0F7F0D9C2C6B03383E513B069"
+    }
+]
+

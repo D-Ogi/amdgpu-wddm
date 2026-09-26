@@ -1,0 +1,64 @@
+exit=-1073741819
+CreateDXGIFactory1(IID_PPV_ARGS(&factory)): 00000000
+a->GetDesc1(&d): 00000000
+adapter vendor=1002 device=13fe software=0
+a->GetDesc1(&d): 00000000
+adapter vendor=1414 device=008c software=1
+
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8999
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000fc0
+allocation handle=0x40001040
+allocation handle=0x400010c0
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\native-zink001\\native-control.exe",
+        "Hash":  "626C4ED29DEF6EDC4B6C9BAA906481345CC9ABC950FF393776884998B9A23E33"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\native-zink001\\bc250d3d_zink.dll",
+        "Hash":  "604B5331FF9FB492FE8CFC3572466AC52D2A28851E0B8DDE62AF25E168217E0E"
+    }
+]
+

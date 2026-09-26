@@ -1,0 +1,134 @@
+[
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Adapter.cpp",
+    "sha256": "c028df8adf012d16e59c134af225f252d99fc59fd14b9499e9e865970bf5a385"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\D3DKMT.cpp",
+    "sha256": "5af6aa16e82313840919cabf1b4a60e28de72c9b17635c507af282af11ca8783"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Debug.cpp",
+    "sha256": "e3dfc4e20a50a62d2ed326c6677e40a4611d77c63b92e7b69b33cac7f472382d"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Debug.h",
+    "sha256": "89c3cc0c42bd7ab1912fbb03b1b019e4de9a47df295c8069dd61fc38f856e72f"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Device.cpp",
+    "sha256": "f3b4e15641caf25fddd0818de52ee9198ca3028a67b2c7f7d08517589d66e360"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Device.h",
+    "sha256": "5c89fadcb40271d0e64bbaad8c5c34006f273a63582715605e7b674e2b7faca6"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Draw.cpp",
+    "sha256": "5a9072d0446eae6b306cc7907f3d41987dad4f8bb81a2870b946a36a9aa7951f"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Draw.h",
+    "sha256": "431d47a8dd0e0ac4f181961338c0da5ee853766428be1f1522095d0d3f3ff89d"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\DriverIncludes.h",
+    "sha256": "a6d5c8ba3f064230ef02655c5f22121ed22b10d341e1aae9581231c67fccdca4"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\DxgiFns.cpp",
+    "sha256": "667237d257e06fbc6a527df9bcd83761d8618748239dc6d322afc08ad16d5614"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\DxgiFns.h",
+    "sha256": "19278391c46304bbd60bc944c298d4430aaf9477c695c096a5ec37bd56567ca5"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Format.cpp",
+    "sha256": "03c86a4112103ffb1bc531317e5f9d160b95c09f947e10a53e69c935df2b2be3"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Format.h",
+    "sha256": "c3cedfa6b345b742ba250ff20b443246dea0ae36efd4376d8f3abda2fd156fd5"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\InputAssembly.cpp",
+    "sha256": "e69463725bbfd9ac538b125ad6a14e10192ddb688cd863850499feba3bea38ee"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\InputAssembly.h",
+    "sha256": "aebb9740ebe15eb40ee5304fc7b07593293382234208e34b1f6c88ad2cd6c5be"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\meson.build",
+    "sha256": "a32dce5176efd174b7c44c2c68f2099bf84f6b47901ecc9be911a173a771b49e"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\OutputMerger.cpp",
+    "sha256": "c7a5866583310298e8d3d4c73a5a9af5b22aff020ab801faf09269b10c7dcdd1"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\OutputMerger.h",
+    "sha256": "1700395366eaa2f17a67a69a737b5818398ccc0ba80e355c02ec6d98e46fbeb5"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Query.cpp",
+    "sha256": "05b00a45072682234e09d9d5f7e36dc01bd1adbaccfb38eb8c04dc2c21493748"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Query.h",
+    "sha256": "7ad68168166f584ca5dcef07503c2299fbffb0a0b8cc677fd0abbb1207f6f18a"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Rasterizer.cpp",
+    "sha256": "dd859e45be1b7ec9f0e98b42a29c9cb5c42b299ea304b22845fcc1a3d66c62fa"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Rasterizer.h",
+    "sha256": "6532fb008d2a560bb133d8ffb62ef363872a27972eb5158109bd357657b81734"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\README.md",
+    "sha256": "e90328f40a8ab2e21fe27eca69e77c4091bae0e28e08ab1e15f59ef66c7937a7"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Resource.cpp",
+    "sha256": "59365525ac1d32ff5904511a610ee72a1d6c2da9545b8c10a0a6abc9835e94f0"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Resource.h",
+    "sha256": "d3494428e6079fa91c9d450ba49632d018841149629e1a99f2193238972e4efa"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Shader.cpp",
+    "sha256": "b768856e653f25762ab642c1c82ea93f21fd4726013ecf85c456dbbeff8bafb0"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\Shader.h",
+    "sha256": "8a3c2f580f75aa58c61c348f4d237fedd7166a3dddd150c5fa397f0f844d8a87"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\ShaderDump.cpp",
+    "sha256": "88a9ae368aa967b7c11c41a55de160182691c48659fd7a4c2f72db7010d5bfc8"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\ShaderDump.h",
+    "sha256": "986a0e9ce544d6d9519c4017c89f4b090cf1760ebbd6f043dd08a25579f5f636"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\ShaderParse.c",
+    "sha256": "d4949a67cd104d2c005e3f66c9083cc7a06ec3c952e916fb43862ab1de85b83f"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\ShaderParse.h",
+    "sha256": "17f7cd5bdd3abee77dfd505657e9758d7861a8583d2df792d76cf660c40d5c58"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\ShaderTGSI.c",
+    "sha256": "a4a3fa0225cf17eb47e45a063c67a63d8c25a45f079d89bf67062136e5a6ba25"
+  },
+  {
+    "path": "src\\gallium\\frontends\\d3d10umd\\State.h",
+    "sha256": "29f305946b61fea46da8ed41540878ede95c02c7c71b9c76db205ec9e841c75f"
+  }
+]
