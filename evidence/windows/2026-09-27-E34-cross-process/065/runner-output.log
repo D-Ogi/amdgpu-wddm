@@ -1,0 +1,17 @@
+pid=3884 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+pid=11964 UMD=C:\BC250\m11\resource-close\bc250d3d.dll
+parent progress=100 generations=1 checked_pixels=204800
+parent progress=200 generations=2 checked_pixels=449600
+parent progress=300 generations=3 checked_pixels=737600
+parent progress=400 generations=4 checked_pixels=1019200
+parent progress=500 generations=5 checked_pixels=1345600
+parent progress=600 generations=6 checked_pixels=1576000
+parent progress=700 generations=7 checked_pixels=1806400
+parent progress=800 generations=8 checked_pixels=2078400
+parent progress=900 generations=9 checked_pixels=2395200
+parent progress=1000 generations=10 checked_pixels=2702400
+child PASS checked_pixels=2702400
+PASS iterations=1000 generations=10 parent_pixels=2702400 child_pixels=2702400 distinct_pids=11964,3884
+
+
+
