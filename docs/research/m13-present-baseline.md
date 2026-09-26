@@ -4,8 +4,9 @@ Current checkpoint: M406-M412,2026-09-24. The owner prioritized visible display
 before further M9 acceptance work. [Evidence and limits](../../evidence/windows/2026-09-24-E26-desktop-resume/mesa-main/RESULT.md).
 
 Later steps (KMD 0.7.130.1 after M420, the E34 native D3D measurements M531-M534) are
-indexed in workspace `STATE.md` and [facts.md](../facts.md); the M13 route discussion is
-in workspace `agent-discussion/ROADMAP.md`. This note keeps the CPU-renderer baseline.
+indexed in workspace `STATE.md` and [facts.md](../facts.md); the M13 route under
+implementation is in [ADR 0017](../adr/0017-graphics-stack-direction-after-m12.md). This
+note keeps the CPU-renderer baseline.
 
 ## What changed
 

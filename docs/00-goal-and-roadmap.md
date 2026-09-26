@@ -120,25 +120,22 @@ including M12.1 sparse resources, then validate the OpenGL/OpenCL layers and
 Direct3D translators against that foundation. System-wide ICD promotion must
 identify and validate the actual installed candidate.
 
-## Working roadmap and route discussion (2026-09-26)
+## Direction after M12 (2026-09-26)
 
-The route for M13 and the shape of what follows it are being worked out in the
-workspace, outside this repository: `agent-discussion/ROADMAP.md`, revision R0002
-(SHA-256 prefix `5ec277fa`), a review draft that both participating agents agreed
-to on 2026-09-26 under `agent-discussion/CONSENSUS.md`. Its inputs were two root
-proposals, `PROPOSAL-graphics-stack.md` and
-`ARCHITECTURE-PROPOSAL-2026-09-26.md`, kept unchanged as history. The
-draft proposes: one hardware implementation (our KMD, RADV/ACO, WDDM integration);
-a hosted ICD, one Vulkan device per D3D runtime device, driven through the
-runtime's callbacks; DXVK as the engine behind a system D3D11 DDI (proposed M14);
-a native D3D12 DDI with vkd3d-proton as the default engine after a bounded spike
-(proposed M15); OpenGL through Zink/WGL and OpenCL through clvk (ADR 0016). The
-`d3d10umd`/Zink work of E34 (facts M531-M534) stays as M13's bring-up control.
+[ADR 0017](adr/0017-graphics-stack-direction-after-m12.md) records the accepted
+direction and the owner's decisions of 2026-09-26: one hardware implementation
+(our KMD, RADV/ACO, WDDM integration); a hosted ICD as M13's route, one Vulkan
+device per D3D runtime device driven through the runtime's callbacks, with the
+`d3d10umd`/Zink build as the bring-up control and native path (facts M531-M541);
+DXVK as the engine behind a system D3D11 DDI (proposed M14, bounded at 5 % of the
+per-application path); a native D3D12 DDI with vkd3d-proton as the default engine
+after a bounded spike (proposed M15, FL 12_0 Must, FL 12_1 Should); OpenGL through
+Zink/WGL and OpenCL through clvk (ADR 0016); no relicensing.
 
 Nothing above changes a criterion in this file. The M13 row's list of routes and
-ADR 0009's candidate list are what was known on 2026-09-21; the working roadmap is
-where the route is argued now, and it enters this file only through an ADR written
-by a named integrator once the owner's decisions are recorded
-(`agent-discussion/decisions/`). M14 and M15 are proposed numbers, not milestones
-of this file. Deployment state stays in workspace `STATE.md`, verified results in
-`facts.md`.
+ADR 0009's candidate list are what was known on 2026-09-21; ADR 0017 amends them.
+M14 and M15 are proposed numbers, not milestones of this file; they enter the
+table only with exit criteria, by a later amendment. Deployment state stays in
+workspace `STATE.md`, verified results in `facts.md`. The direction is worked out
+in the owner's working notes outside this repository; only accepted content and
+the owner's decisions enter here, through ADRs.
