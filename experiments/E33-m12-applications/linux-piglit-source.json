@@ -1,0 +1,13 @@
+{
+  "commit": "0cc014230c0701d7a61bf240009ddd0711462d4e",
+  "archive": "source.tar.gz",
+  "sha256": "28d3409197400081c6d950e17a65192b75565677e9be634d74b4b2722de572c0",
+  "bytes": 24846884,
+  "verified_blobs": 10035,
+  "git_modes": {
+    "100644": 10001,
+    "100755": 34
+  },
+  "verification": "all archived blobs and executable/symlink modes match Git tree",
+  "runtime_status": "not built or executed"
+}
