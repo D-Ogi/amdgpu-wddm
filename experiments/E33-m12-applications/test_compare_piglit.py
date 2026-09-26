@@ -42,7 +42,7 @@ class CompareTests(unittest.TestCase):
             p=Path(folder);r={'a':row('pass')}
             (p/'result.json.bz2').write_bytes(bz2.compress(json.dumps({'tests':r}).encode()))
             with tarfile.open(p/'partial.tar','w') as t:
-                data=json.dumps(r).encode();m=tarfile.TarInfo('./tests/0.json');m.size=len(data);t.addfile(m,io.BytesIO(data))
+                data=json.dumps(r).encode();m=tarfile.TarInfo('./results/tests/0.json');m.size=len(data);t.addfile(m,io.BytesIO(data))
             self.assertEqual(read_results(p/'result.json.bz2'),read_results(p/'partial.tar'))
             with tarfile.open(p/'partial.tar','a') as t:
                 data=json.dumps(r).encode();m=tarfile.TarInfo('./tests/1.json');m.size=len(data);t.addfile(m,io.BytesIO(data))

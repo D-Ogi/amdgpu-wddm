@@ -46,13 +46,41 @@ class LinuxHealth:
         self.last = time.monotonic()
 
 
+def literal_names(text):
+    names = text.splitlines()
+    if not names or any(not name or name != name.strip() for name in names) or len(names) != len(set(names)):
+        raise ValueError("Invalid exact-case remainder")
+    return names
+
+
 def main():
     from framework.test.base import Test
-    from framework.programs.run import run
+    import framework.programs.run as program
+    import framework.profile as profile
+    # Upstream --test-list treats inline '#' as a comment, but real piglit
+    # names contain it (e.g. shared-#column_major). Preserve exact names.
+    resume_path = os.environ.get("BC250_PIGLIT_RESUME_LIST")
+    if resume_path:
+        names = literal_names(Path(resume_path).read_text())
+        original_load = profile.load_test_profile
+        first_load = True
+        def load_selected(*args, **kwargs):
+            nonlocal first_load
+            select = first_load
+            first_load = False
+            loaded = original_load(*args, **kwargs)
+            if select:
+                loaded.forced_test_list = names.copy()
+            return loaded
+        profile.load_test_profile = load_selected
+        original_metadata = program._create_metadata
+        def selected_metadata(args, name, forced):
+            return original_metadata(args, name, names)
+        program._create_metadata = selected_metadata
     gate = guard.CaseGate(os.environ["BC250_PIGLIT_EVENTS"], LinuxHealth())
     Test.execute = gate.wrap(Test.execute)
     try:
-        run(["-1", "-j", "1", "--timeout", "45", "-p", "glx"] + sys.argv[1:])
+        program.run(["-1", "-j", "1", "--timeout", "45", "-p", "glx"] + sys.argv[1:])
     finally:
         gate.record({"event": "runner_end", "executed": gate.executed, "stop_reason": gate.reason})
     return 1 if gate.reason else 0

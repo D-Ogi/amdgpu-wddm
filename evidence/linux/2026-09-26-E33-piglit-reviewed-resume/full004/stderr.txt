@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "/work/parity002/piglit-linux-guard.py", line 62, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/work/parity002/piglit-linux-guard.py", line 55, in main
+    run(["-1", "-j", "1", "--timeout", "45", "-p", "glx"] + sys.argv[1:])
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/piglit/lib/piglit/framework/exceptions.py", line 49, in _inner
+    return func(*args, **kwargs)
+  File "/opt/piglit/lib/piglit/framework/programs/run.py", line 394, in run
+    profile.run(profiles, args.log_level, backend, args.concurrency, args.jobs)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 652, in run
+    profiles = [(p, p.itertests()) for p in profiles]
+                    ~~~~~~~~~~~^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 472, in itertests
+    opts[n] = alltests[n]
+              ~~~~~~~~^^^
+KeyError: 'spec@arb_uniform_buffer_object@execution@shared-'

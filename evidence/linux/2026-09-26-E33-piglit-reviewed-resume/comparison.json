@@ -1,0 +1,8 @@
+{
+  "all_zink_warnings_also_native": true,
+  "zink_configurations": 48,
+  "native_configurations": 64,
+  "zink_result": "warn",
+  "native_result": "warn",
+  "native_exit": 0
+}

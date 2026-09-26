@@ -1,0 +1,15 @@
+{
+  "total": 45159,
+  "previous": 1003,
+  "remaining": 44156,
+  "reviewed_outcomes_retained": {
+    "glx@glx-fbconfig-sanity": {
+      "result": "warn",
+      "subtests": {}
+    }
+  },
+  "previous_sha256": "878929f16b704866528cf47d3a1ba6b3d75f24a269232e7592197230068dc910",
+  "inventory_sha256": "b2bc95470c263f1d6f327334b01b7d5014fbd01cbd1da0756f5dc35051d13bcb",
+  "complete": false,
+  "earlier_results_required": true
+}

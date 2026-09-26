@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "/work/parity002/piglit-linux-guard.py", line 85, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/work/parity002/piglit-linux-guard.py", line 78, in main
+    program.run(["-1", "-j", "1", "--timeout", "45", "-p", "glx"] + sys.argv[1:])
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/piglit/lib/piglit/framework/exceptions.py", line 49, in _inner
+    return func(*args, **kwargs)
+  File "/opt/piglit/lib/piglit/framework/programs/run.py", line 394, in run
+    profile.run(profiles, args.log_level, backend, args.concurrency, args.jobs)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 652, in run
+    profiles = [(p, p.itertests()) for p in profiles]
+                    ~~~~~~~~~~~^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 466, in itertests
+    alltests = dict(self._itertests())
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 461, in _itertests
+    for k, v in self.filters.run(_iter()):
+                ~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 309, in run
+    for k, v in sorted(iterable):
+                ~~~~~~^^^^^^^^^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 458, in _iter
+    for k, v in p.itertests():
+                ~~~~~~~~~~~^^
+  File "/opt/piglit/lib/piglit/framework/profile.py", line 413, in itertests
+    opts[n] = alltests[n]
+              ~~~~~~~~^^^
+KeyError: 'shaders@glsl-predication-on-large-array'

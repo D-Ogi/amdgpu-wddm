@@ -49,7 +49,7 @@ def read_results(path):
     if path.suffix == '.tar':
         with tarfile.open(path, 'r') as archive:
             for member in archive:
-                name = member.name.removeprefix('./')
+                name = member.name.removeprefix('./').removeprefix('results/')
                 if name.startswith('tests/') and name.endswith('.json'):
                     if not member.isfile():
                         raise ValueError('Non-file test archive entry')

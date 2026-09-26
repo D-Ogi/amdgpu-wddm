@@ -1,0 +1,3 @@
+/opt/bc250/lib/libvulkan_radeon.so: OK
+/opt/bc250/lib/libgallium-26.3.0-devel.so: OK
+/work/parity002/piglit-guard.py: OK
