@@ -6,10 +6,10 @@
 #include "../paging_mc.h"
 #include "../dcn_translate.h"
 
-static int g_failures;
+static int g_failures, g_checks;
 
 #define CHECK(cond) \
-    do { if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
+    do { g_checks++; if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
 
 static void RoundTrip(unsigned long long mc, unsigned long long mcBase, unsigned long long vramBase,
                       unsigned long long vramLength, unsigned long long bytes)
@@ -22,11 +22,9 @@ static void RoundTrip(unsigned long long mc, unsigned long long mcBase, unsigned
     CHECK(back == mc);
 }
 
-int main(void)
+static void Geometry(unsigned long long mcBase, unsigned long long vramBase,
+                     unsigned long long vramLength)
 {
-    const unsigned long long mcBase = 0xF400000000ull;
-    const unsigned long long vramBase = 0x270000000ull;
-    const unsigned long long vramLength = 0x200000000ull;   // 8 GB, the shape of M31, not its measurement
     unsigned long long mc = 0xDEADBEEFull;
 
     // 1-3. Byte 0, a page inside, and the last byte of the window all come back as the MC they started from.
@@ -54,7 +52,17 @@ int main(void)
     CHECK(PagingPhysicalToMc(vramBase + 0x1004ull, 4, vramBase, mcBase, vramLength, &mc));
     CHECK(mc == mcBase + 0x1004ull);
 
-    if (g_failures == 0) { printf("paging_mc_test: all cases passed\n"); return 0; }
-    fprintf(stderr, "paging_mc_test: %d case(s) failed\n", g_failures);
-    return 1;
+    // A whole page above the old 8 GiB ceiling must remain addressable.
+    if (vramLength > (8ull << 30))
+        RoundTrip(mcBase + (8ull << 30), mcBase, vramBase, vramLength, 4096);
+}
+
+int main(void)
+{
+    // Synthetic windows: varying both origins prevents the old base from becoming an assumption.
+    Geometry(0xF400000000ull, 0x270000000ull, 8ull << 30);
+    Geometry(0xE800000000ull, 0x670000000ull, 12ull << 30);
+    Geometry(0xDC00000000ull, 0x1270000000ull, 16ull << 30);
+    printf("paging_mc_test: 3 synthetic geometries, %d checks, %d failed\n", g_checks, g_failures);
+    return g_failures ? 1 : 0;
 }

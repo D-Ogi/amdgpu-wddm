@@ -9,7 +9,9 @@
 param(
     [string]$Out = 'P:\BC-250\scratch\umdblob',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    [string]$ProducerRoot = '',
+    [switch]$OmitCacheIntent
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,12 +45,21 @@ $incUser = @("/I$kmd", "/I$contract", "/I$contract\third_party", "/I$contract\ua
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$($msvc.FullName)\include")
 
+$testSource=Join-Path $here 'umd_blob_test.c'
+if ($OmitCacheIntent -and -not $ProducerRoot) { throw 'Mutation requires -ProducerRoot' }
+if ($ProducerRoot) {
+    $testSource=Join-Path $Out 'umd-producer-test.c'
+    $extractArgs=@($repo,$ProducerRoot,$testSource)
+    if ($OmitCacheIntent) { $extractArgs+='--omit-cache-intent' }
+    & python (Join-Path $here 'generate_umd_producer_test.py') @extractArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Producer extraction failed' }
+}
 Write-Host 'compile and link (host, contract header, /Zp8)'
 # C4201: nameless unions in the imported amdgpu UAPI, the same warning the contract harness and the
 # driver build both silence. C4127: the constant comparisons that pin the reader's numbers to the header.
-Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/wd4127', '/Od', '/Zi', '/Zp8') + $incUser +
+Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/std:c11', '/W4', '/WX', '/wd4201', '/wd4127', '/Od', '/Zi', '/Zp8') + $incUser +
     @("/Fo$obj\", "/Fd$obj\cl.pdb", "/Fe$Out\umd_blob_test.exe") +
-    @((Join-Path $kmd 'umd_blob.c'), (Join-Path $here 'umd_blob_test.c')) +
+    @((Join-Path $kmd 'umd_blob.c'), $testSource) +
     @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
 
 Write-Host 'run'

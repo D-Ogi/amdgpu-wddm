@@ -37,6 +37,9 @@ static void CheckContract(void)
     CHECK(offsetof(struct bc250_umd_alloc_private, phys_alignment) == 24);
     CHECK(offsetof(struct bc250_umd_alloc_private, preferred_heap) == 32);
     CHECK(offsetof(struct bc250_umd_alloc_private, requested_va) == 48);
+    CHECK(offsetof(struct bc250_umd_alloc_private, gem_flags) == 40);
+    CHECK(UMD_BLOB_GEM_GTT_USWC == AMDGPU_GEM_CREATE_CPU_GTT_USWC);
+    CHECK(UMD_BLOB_GEM_NO_CPU_ACCESS == AMDGPU_GEM_CREATE_NO_CPU_ACCESS);
     CHECK(offsetof(struct bc250_umd_context_private, ip_type) == 16);
     CHECK(offsetof(struct bc250_umd_context_private, ip_instance) == 20);
     CHECK(offsetof(struct bc250_umd_context_private, ring) == 24);
@@ -122,6 +125,32 @@ int main(void)
     FillAlloc(&alloc, AMDGPU_GEM_DOMAIN_GTT);
     CHECK(UmdBlobParseAlloc(&alloc, sizeof(alloc), &av) == UMD_BLOB_OK);
     CHECK(av.heap == UMD_BLOB_HEAP_GTT && av.exact_va == 0 && av.requested_va == 0);
+
+    // Preserve the wire flags at every alignment; cache policy follows UAPI
+    // intent, not unrelated allocation flags or truncated upper GEM bits.
+    {
+        unsigned heap,flags,offset;
+        unsigned char wire[sizeof(alloc)+8];
+        for(heap=0;heap<2;heap++)for(flags=0;flags<256;flags++)for(offset=0;offset<8;offset++) {
+            int cached;
+            FillAlloc(&alloc,heap?AMDGPU_GEM_DOMAIN_VRAM:AMDGPU_GEM_DOMAIN_GTT);
+            alloc.version=BC250_UMD_ALLOC_VERSION_CACHE_POLICY;
+            alloc.gem_flags=(1ull<<48)|flags;
+            memcpy(wire+offset,&alloc,sizeof(alloc));
+            CHECK(UmdBlobParseAlloc(wire+offset,sizeof(alloc),&av)==UMD_BLOB_OK);
+            CHECK(av.gem_flags==alloc.gem_flags);
+            cached=!heap && !(flags&(AMDGPU_GEM_CREATE_NO_CPU_ACCESS|AMDGPU_GEM_CREATE_CPU_GTT_USWC));
+            CHECK(av.cache_policy_valid && UmdBlobAllocCpuCached(&av)==cached);
+            alloc.version=BC250_UMD_ALLOC_VERSION;
+            memcpy(wire+offset,&alloc,sizeof(alloc));
+            CHECK(UmdBlobParseAlloc(wire+offset,sizeof(alloc),&av)==UMD_BLOB_OK);
+            CHECK(!av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
+        }
+        CHECK(UmdBlobParseAlloc(wire,sizeof(alloc)-1,&av)==UMD_BLOB_TOO_SMALL);
+        CHECK(!av.gem_flags && !av.cache_policy_valid && !UmdBlobAllocCpuCached(&av));
+        CHECK(!UmdBlobAllocCpuCached(NULL));
+        printf("cache policy:4096 heap/flag/alignment cases passed if final verdict passes\n");
+    }
 
     // 3-7. Heaps and flags this milestone does not implement, and a size of zero.
     FillAlloc(&alloc, AMDGPU_GEM_DOMAIN_GDS);

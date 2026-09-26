@@ -19,6 +19,8 @@ int main(void)
     const struct bc250_umd_private* baked = (const struct bc250_umd_private*)umd_caps_blob;
 
     CHECK(size == UMD_CAPS_BYTES);
+    CHECK(sizeof(struct bc250_umd_firmware)==64);
+    CHECK(offsetof(struct bc250_umd_private,firmware)==UMD_CAPS_FIRMWARE_OFFSET);
     CHECK(sizeof(struct bc250_umd_private) == UMD_CAPS_BYTES);
     CHECK(live != NULL);
     CHECK(memcmp(live, umd_caps_blob, UMD_CAPS_BYTES) == 0);
