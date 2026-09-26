@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "name": "fcc-front-buffer-distraction.exe",
+      "sha256": "fb6d0f23313258fe09ced04166664c7982acad2d93782dbb0482432ddb8b503a"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "75ca5d605272c759dac4ecd2b5a241348a819fd88d875857dacf1874a9232644"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "wflinfo.exe",
+      "sha256": "0a4b0290471d51a1c6127a63827cc121267ff0db57821b308031f7f2cc6be01e"
+    }
+  ]
+}

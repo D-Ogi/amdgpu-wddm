@@ -1,0 +1,8 @@
+﻿{
+    "version_override":  false,
+    "boot":  "2026-09-25T22:51:07.5000000+02:00",
+    "manifest_sha256":  "1551530E950CD1525BE2800B8EC594C2B9BC1EF4F3463E609FB4CAD6AFA7706D",
+    "command":  "-auto",
+    "gallium":  "zink",
+    "package":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package012"
+}

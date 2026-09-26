@@ -1,0 +1,10 @@
+{
+  "base": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "patch_sha256": "7392fcfd0670f7b9fc949db0201bb1df2404d08ee3443098b3a42b9335eaa114",
+  "patched_source_sha256": "0383b11ec8a0b75742875ad0d2eefdb7884635bf1188b5217c19620e2c62c096",
+  "final_dll_sha256": "1ec5e9b466fc706ffdccb03440c6994141d583fea58327d9d96edfba64bd7a01",
+  "additional_patch": "zink-wgl-zero-client.patch",
+  "replay": "exact after LF normalization",
+  "spec_revision": "01aaacd99480487bf63830959513c5ca8ceb996d",
+  "spec_section": "swapchain-acquire-forward-progress"
+}

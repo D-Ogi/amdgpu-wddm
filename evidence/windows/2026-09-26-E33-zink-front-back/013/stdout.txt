@@ -1,0 +1,12 @@
+renderer=zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV)) version=4.6 (Core Profile) Mesa 26.3.0-devel (git-05e6c9622e)
+stage=0 size=320x240 readback=MATCH swap=OK
+stage=1 size=0x0 readback=zero-area skipped swap=OK
+stage=2 size=1x1 readback=MATCH swap=OK
+stage=3 size=640x360 readback=MATCH swap=OK
+stage=4 size=0x0 readback=zero-area skipped swap=OK
+stage=5 size=640x360 readback=MATCH swap=OK
+stage=6 size=1x1 readback=MATCH swap=OK
+stage=7 size=0x0 readback=zero-area skipped swap=OK
+stage=8 size=1x1 readback=MATCH swap=OK
+stage=9 size=320x240 readback=MATCH swap=OK
+PASS zero/nonzero same-window readback

@@ -1,0 +1,7 @@
+{
+    "sha256":  "1EC5E9B466FC706FFDCCB03440C6994141D583FEA58327D9D96EDFBA64BD7A01",
+    "previous":  "DFC11A1421C4DDDB95AB348B1CCFACAC2FD8459E1E80E0F81D4D4C89DB239D24",
+    "utc":  "2026-09-26T09:14:54.6046350Z",
+    "base_manifest":  "C:\\BC250\\m12\\piglit-full001-manifest.json",
+    "file":  "piglit/bin/libgallium_wgl.dll"
+}

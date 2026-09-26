@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "name": "fcc-blit-between-clears.exe",
+      "sha256": "bd012029d58715b5612f2075a28966fc13c215336e8931a6a123470e1a7f60b1"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "1ec5e9b466fc706ffdccb03440c6994141d583fea58327d9d96edfba64bd7a01"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "wflinfo.exe",
+      "sha256": "0a4b0290471d51a1c6127a63827cc121267ff0db57821b308031f7f2cc6be01e"
+    }
+  ]
+}

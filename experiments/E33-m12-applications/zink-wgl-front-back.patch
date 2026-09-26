@@ -1,0 +1,48 @@
+diff --git a/src/gallium/drivers/zink/zink_kopper.c b/src/gallium/drivers/zink/zink_kopper.c
+index 60eb9ef2cc0..5d64844e5bc 100644
+--- a/src/gallium/drivers/zink/zink_kopper.c
++++ b/src/gallium/drivers/zink/zink_kopper.c
+@@ -313,6 +313,13 @@ kopper_CreateSwapchain(struct zink_screen *screen, struct kopper_displaytarget *
+    }
+    cswap->scci.presentMode = cdt->present_mode;
+    cswap->scci.minImageCount = cdt->caps.minImageCount;
++   /* WGL can render/read the front and back buffers before either is
++    * presented. Reserve a second independently acquirable image where the
++    * surface allows it; requesting only the minimum can yield one image. */
++   if (cdt->type == KOPPER_WIN32 &&
++       (!cdt->caps.maxImageCount || cdt->caps.maxImageCount > cdt->caps.minImageCount))
++      cswap->scci.minImageCount++;
++
+    cswap->scci.preTransform = cdt->caps.currentTransform;
+    if (cdt->formats[1])
+       cswap->scci.pNext = &cdt->format_list;
+@@ -378,7 +385,8 @@ kopper_CreateSwapchain(struct zink_screen *screen, struct kopper_displaytarget *
+ }
+ 
+ static VkResult
+-kopper_GetSwapchainImages(struct zink_screen *screen, struct kopper_swapchain *cswap)
++kopper_GetSwapchainImages(struct zink_screen *screen, struct kopper_swapchain *cswap,
++                          unsigned surface_min_images)
+ {
+    VkResult error = VKSCR(GetSwapchainImagesKHR)(screen->dev, cswap->swapchain, &cswap->num_images, NULL);
+    zink_screen_handle_vkresult(screen, error);
+@@ -399,7 +407,9 @@ kopper_GetSwapchainImages(struct zink_screen *screen, struct kopper_swapchain *c
+          _mesa_set_init(&cswap->images[i].surface_cache, NULL, NULL, equals_surface_key);
+       }
+    }
+-   cswap->max_acquires = cswap->num_images - cswap->scci.minImageCount + 1;
++   /* Vulkan forward progress uses the surface minimum, not our requested
++    * image count, which may deliberately be larger. */
++   cswap->max_acquires = cswap->num_images - surface_min_images + 1;
+    return error;
+ }
+ 
+@@ -431,7 +441,7 @@ update_swapchain(struct zink_screen *screen, struct kopper_displaytarget *cdt, u
+       cdt->old_swapchain = cdt->swapchain;
+    cdt->swapchain = cswap;
+ 
+-   return kopper_GetSwapchainImages(screen, cdt->swapchain);
++   return kopper_GetSwapchainImages(screen, cdt->swapchain, cdt->caps.minImageCount);
+ }
+ 
+ struct kopper_displaytarget *
