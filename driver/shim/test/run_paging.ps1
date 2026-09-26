@@ -2,8 +2,9 @@
 # bc250_sdma_paging.c write exactly what bc250_sdma_emit_copy_linear()/emit_fill() would for a
 # TRANSFER_VIRTUAL/FILL_VIRTUAL operation, and does the room check answer
 # BC250_SDMA_PAGING_INSUFFICIENT - writing nothing - when the buffer is too small. Host-side only:
-# nothing here touches the lab machine, and nothing here calls VidMmTranslate() or any DXGK type -
-# that half is driver/kmd code with no host harness (design note section 4a).
+# nothing here touches the lab. -KmdRouting extracts actual KMD builders, page
+# walkers and publication with field-level WDK models. -OmitLogicalCommit is a
+# deliberately failing control, never a candidate driver modification.
 #
 #   pwsh driver\shim\test\run_paging.ps1
 #   pwsh driver\shim\test\run_paging.ps1 -Out P:\BC-250\scratch\build\paging -Verbose250
@@ -16,10 +17,19 @@ param(
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250,
-    [switch]$VirtualPtes
+    [switch]$KmdRouting,
+    [switch]$OmitApertureCommit,
+    [switch]$RepeatMdlSourcePage,
+    [switch]$OmitLogicalCommit,
+    [switch]$BreakCycleRestore,
+    [switch]$ForceGraphReplan,
+    [switch]$ForceForwardAlias,
+    [switch]$SingleCaptureReservation,
+    [switch]$OmitNativeWritePermission
 )
 
 $ErrorActionPreference = 'Stop'
+if (($OmitNativeWritePermission -or $OmitLogicalCommit -or $RepeatMdlSourcePage -or $BreakCycleRestore -or $ForceGraphReplan -or $ForceForwardAlias -or $SingleCaptureReservation) -and -not $KmdRouting) { throw 'Mutation requires -KmdRouting' }
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = Resolve-Path (Join-Path $here '..\..\..')
 $shim = Join-Path $repo 'driver\shim'
@@ -57,12 +67,29 @@ $packetSources = @('bc250_sdma_paging.c', 'bc250_sdma_copy.c', 'bc250_sdma.c', '
 $plainSources = @('bc250_nbio.c', 'shim.c') | ForEach-Object { Join-Path $shim $_ }
 $testSources = @((Join-Path $shim 'test\paging_packets.c'))
 
-if ($VirtualPtes) {
-    $packetSources += Join-Path $shim 'bc250_sdma_virtual_ptes.c'
-    $testSources = @(Join-Path $shim 'test\virtual_pte_copy.c')
+if ($KmdRouting) {
+    $plainSources += Join-Path $repo 'driver\kmd\paging_pt_shadow.c'
+    $plainSources += Join-Path $repo 'driver\kmd\paging_private.c'
+    $plainSources += Join-Path $repo 'driver\kmd\paging_aperture_state.c'
+    $plainSources += Join-Path $repo 'driver\kmd\paging_intervals.c'
+    $plainSources += Join-Path $repo 'driver\kmd\paging_permutation.c'
+    $plainSources += Join-Path $repo 'driver\kmd\paging_capture.c'
+    $generated = Join-Path $Out 'paging-route.c'
+    $generatorArgs=@($repo,$generated)
+    if ($OmitNativeWritePermission) { $generatorArgs+='--omit-native-write-permission' }
+    if ($OmitLogicalCommit) { $generatorArgs+='--omit-logical-commit' }
+    if ($OmitApertureCommit) { $generatorArgs+='--omit-aperture-commit' }
+    if ($RepeatMdlSourcePage) { $generatorArgs+='--repeat-mdl-source-page' }
+    if ($BreakCycleRestore) { $generatorArgs+='--break-cycle-restore' }
+    if ($ForceGraphReplan) { $generatorArgs+='--force-graph-replan' }
+    if ($ForceForwardAlias) { $generatorArgs+='--force-forward-alias' }
+    if ($SingleCaptureReservation) { $generatorArgs+='--single-capture-reservation' }
+    & python (Join-Path $repo 'experiments\E27-m9-inference\generate-paging-route-test.py') @generatorArgs
+    if ($LASTEXITCODE -ne 0) { throw 'route extraction failed' }
+    $testSources = @($generated, (Join-Path $repo 'driver\kmd\paging_mc.c'), (Join-Path $repo 'driver\kmd\paging_window.c'), (Join-Path $repo 'driver\kmd\paging_stream.c'))
+    $packetSources += @((Join-Path $shim 'bc250_gart.c'), (Join-Path $shim 'bc250_pte.c'))
 }
-
-$incUser = @("/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
+$incUser = @("/I$repo\driver\kmd","/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 

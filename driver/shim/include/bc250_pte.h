@@ -186,6 +186,13 @@ struct bc250_pte_context {
 
 	/* An upper bound on a system memory address, for the same reason. 0 means do not check. */
 	u64 system_limit;
+
+	/* Optional dedicated local page-table storage. A zero size disables it.
+	 * Both directory pointers and paging-process leaf mappings may name it.
+	 * Segment enumeration, ownership and cache policy belong to the KMD. */
+	u32 table_segment;
+	u64 table_base;
+	u64 table_size;
 };
 
 /* Every field of an AMD entry, for the inverse direction. */

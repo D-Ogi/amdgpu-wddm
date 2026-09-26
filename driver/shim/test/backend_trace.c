@@ -515,9 +515,14 @@ void bc250_shim_wreg(struct amdgpu_device *adev, unsigned int dword_index, unsig
 
 /* Nothing to wait for: the replayed registers change only when the code under test writes them,
  * so a delay could only make the poll loops slower, never change their outcome. */
+static backend_delay_hook g_delay_hook;
+void backend_set_delay_hook(backend_delay_hook hook)
+{
+	g_delay_hook = hook;
+}
 void bc250_shim_udelay(unsigned int usec)
 {
-	(void)usec;
+	if (g_delay_hook) g_delay_hook(usec);
 }
 
 void bc250_shim_log(int level, void *dev, const char *fmt, ...)

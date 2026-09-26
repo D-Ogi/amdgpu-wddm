@@ -8,7 +8,7 @@
  *   python tools/trace/extract_phase.py <evidence>/amdgpu-events.txt \
  *          --match "MP0\.MP0_SMN_C2PMSG_(6|7)" --reads --until 0.309
  * The firmware directory holds linux-firmware's amdgpu/cyan_skillfish2_*.bin (kept outside the
- * repository, P:\BC-250\ref\linux-firmware\amdgpu, see PROVENANCE.txt there).
+ * repository, P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu, see PROVENANCE.txt there).
  *
  * What is real and what is a model:
  *   - Register reads start from unit A's firmware state (the two pre-driver sweeps of E03).
@@ -417,6 +417,53 @@ static const char *reg_name(u32 off)
 	return buf;
 }
 
+/* Synthetic headers, no firmware bytes. The real v2.0 blob is also exercised
+ * by the complete ten-image replay below. */
+static int check_rlc_headers(void)
+{
+	struct {
+		struct rlc_firmware_header_v2_0 header;
+		u32 payload[4];
+	} file;
+	static const u16 unsupported[][2] = { {1, 0}, {2, 1}, {2, 2}, {2, 4}, {3, 0} };
+	u32 offset = 0, size = 0;
+	enum psp_gfx_fw_type type;
+	unsigned int i, failures = 0;
+	int rc;
+
+	memset(&file, 0, sizeof(file));
+	file.header.header.size_bytes = sizeof(file);
+	file.header.header.header_size_bytes = sizeof(file.header);
+	file.header.header.header_version_major = 2;
+	file.header.header.header_version_minor = 0;
+	file.header.header.ucode_array_offset_bytes = sizeof(file.header);
+	file.header.header.ucode_size_bytes = sizeof(file.payload);
+	rc = bc250_fw_locate(BC250_FW_RLC_G, (const u8 *)&file, sizeof(file), &offset, &size, &type);
+	if (rc || offset != sizeof(file.header) || size != sizeof(file.payload) || type != GFX_FW_TYPE_RLC_G) {
+		printf("FAIL: synthetic RLC v2.0 payload location/type\n");
+		failures++;
+	}
+	for (i = 0; i < sizeof(unsupported) / sizeof(unsupported[0]); i++) {
+		file.header.header.header_version_major = unsupported[i][0];
+		file.header.header.header_version_minor = unsupported[i][1];
+		rc = bc250_fw_locate(BC250_FW_RLC_G, (const u8 *)&file, sizeof(file), &offset, &size, &type);
+		if (rc != -EINVAL) {
+			printf("FAIL: unsupported RLC v%u.%u accepted\n", unsupported[i][0], unsupported[i][1]);
+			failures++;
+		}
+	}
+	file.header.header.header_version_major = 2;
+	file.header.header.header_version_minor = 0;
+	file.header.header.header_size_bytes = sizeof(struct common_firmware_header);
+	rc = bc250_fw_locate(BC250_FW_RLC_G, (const u8 *)&file, sizeof(file), &offset, &size, &type);
+	if (rc != -EINVAL) {
+		printf("FAIL: incomplete RLC v2.0 header accepted\n");
+		failures++;
+	}
+	printf("RLC header controls: 7 checks, %u failures\n", failures);
+	return (int)failures;
+}
+
 int main(int argc, char **argv)
 {
 	static const u32 expect_type[BC250_FW_COUNT] = {
@@ -531,6 +578,8 @@ int main(int argc, char **argv)
 		printf("FAIL: MEC image and jump table do not add up\n");
 		failures++;
 	}
+
+	failures += check_rlc_headers();
 
 	/* ---- 3: control runs that must fail ---------------------------------------------------------- */
 	printf("\n== control: a PSP that never writes the fence\n");

@@ -65,6 +65,17 @@ void bc250_gmc_gart_disable(struct amdgpu_device *adev);
  * Returns 0, or BC250_ETIME if the semaphore could not be taken or the acknowledge never came. The
  * MMHUB semaphore is released on every path that took it, timeout included. */
 int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32 flush_type);
+/* Optional synchronous observation, caller serialized; callback must not mutate
+ * hardware or reenter the flush. Value is the existing write/read sample. */
+typedef void (*bc250_tlb_observer)(struct amdgpu_device *adev, const char *phase, u32 value);
+/* Configuration only: both hub enables and fault defaults, no TLB flush.
+ * Caller must retain pending translation state and complete both hub flushes
+ * before consumers can use new mappings. Not a replacement for full enable. */
+int bc250_gmc_gart_configure_observed(struct amdgpu_device *adev, bc250_tlb_observer observer);
+int bc250_gmc_gart_enable_observed(struct amdgpu_device *adev, bc250_tlb_observer observer);
+int bc250_gmc_flush_gpu_tlb_observed(struct amdgpu_device *adev, u32 vmid, u32 vmhub,
+				   u32 flush_type, bc250_tlb_observer observer);
+
 
 /*
  * Point one VMID's page directory at pd_phys and invalidate that VMID (ADR 0008 stage C).

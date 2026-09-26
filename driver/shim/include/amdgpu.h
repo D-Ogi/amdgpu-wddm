@@ -531,6 +531,8 @@ struct amdgpu_ring {
 	u32		doorbell_index;
 
 	u64		rptr_gpu_addr;  /* writeback slot the CP reports the read pointer in */
+	volatile u32	*rptr_cpu_addr; /* GFX10 reports a 32-bit dword read pointer */
+	bool		track_rptr;     /* opt-in GFX job capacity check, not bring-up/SDMA */
 	u64		wptr_gpu_addr;  /* writeback slot the CP polls for the write pointer */
 	void		*wptr_cpu_addr;
 
@@ -852,6 +854,7 @@ u64 amdgpu_gmc_pd_addr(struct amdgpu_bo *bo);
  * management nor a scheduler, so those hooks do not exist.
  * ------------------------------------------------------------------------------------------- */
 int  amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw);
+int  bc250_ring_has_space(const struct amdgpu_ring *ring, unsigned int ndw);
 void amdgpu_ring_commit(struct amdgpu_ring *ring);
 void amdgpu_ring_undo(struct amdgpu_ring *ring);
 void amdgpu_ring_insert_nop(struct amdgpu_ring *ring, uint32_t count);

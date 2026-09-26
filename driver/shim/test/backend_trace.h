@@ -135,6 +135,10 @@ void backend_set_write_hook(backend_write_hook hook);
 typedef int (*backend_read_hook)(u32 byte_offset, u32 *value);
 void backend_set_read_hook(backend_read_hook hook);
 
+/* Observe requested delays without sleeping in a host model. */
+typedef void (*backend_delay_hook)(unsigned int usec);
+void backend_set_delay_hook(backend_delay_hook hook);
+
 /* Load the read values of a trace extract taken with `--reads`, so that the first read of a register
  * in the replayed window returns what unit A's hardware returned at that moment rather than what the
  * pre-driver sweep saw. Later reads come from the run's own writes, as they do on hardware.

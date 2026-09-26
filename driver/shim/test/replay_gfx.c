@@ -104,6 +104,7 @@
 #include "backend_trace.h"
 #include "bc250_gart.h"
 #include "bc250_gfx.h"
+#include "../generated/rlc_cg_flags.h"
 #include "bc250_gmc.h"
 #include "bc250_irq.h"
 #include "bc250_nbio.h"
@@ -906,7 +907,27 @@ static unsigned int check_rerun(struct amdgpu_device *adev, unsigned int first_w
 
 	backend_touched_start();
 	r_sdma = bc250_sdma_hw_fini(adev);
-	r = bc250_gfx_hw_fini(adev);
+	{
+		const u32 rlc = SOC15_REG_OFFSET(GC, 0, mmRLC_CNTL);
+		u32 before = RREG32(rlc);
+		void *csb = adev->gfx.rlc.cs_ptr;
+		u64 csb_mc = adev->gfx.rlc.clear_state_mem.mc;
+		r = bc250_gfx_hw_fini_keep_rlc(adev);
+		if (!(before & RLC_CNTL__RLC_ENABLE_F32_MASK) || RREG32(rlc) != before ||
+		    csb == NULL || adev->gfx.rlc.cs_ptr != csb || adev->gfx.rlc.clear_state_mem.mc != csb_mc)
+			bad++;
+		/* Existing halt checker also requires RLC off, so use it below
+		 * after the explicit final phase. Verify CP/SDMA here independently. */
+		if ((RREG32_SOC15(GC,0,mmCP_ME_CNTL) & (CP_ME_CNTL__ME_HALT_MASK | CP_ME_CNTL__PFP_HALT_MASK | CP_ME_CNTL__CE_HALT_MASK)) !=
+		    (CP_ME_CNTL__ME_HALT_MASK | CP_ME_CNTL__PFP_HALT_MASK | CP_ME_CNTL__CE_HALT_MASK)) bad++;
+		if ((RREG32_SOC15(GC,0,mmCP_MEC_CNTL) & (CP_MEC_CNTL__MEC_ME1_HALT_MASK | CP_MEC_CNTL__MEC_ME2_HALT_MASK)) !=
+		    (CP_MEC_CNTL__MEC_ME1_HALT_MASK | CP_MEC_CNTL__MEC_ME2_HALT_MASK)) bad++;
+		if (!(RREG32_SOC15(GC,0,mmSDMA0_F32_CNTL) & SDMA0_F32_CNTL__HALT_MASK) ||
+		    !(RREG32_SOC15(GC,0,mmSDMA1_F32_CNTL) & SDMA1_F32_CNTL__HALT_MASK)) bad++;
+		bc250_gfx_rlc_stop(adev);
+		if (RREG32(rlc) & RLC_CNTL__RLC_ENABLE_F32_MASK) bad++;
+		printf("  split CP/RLC stop: %u failures before storage destruction\n",bad);
+	}
 	backend_touched_stop();
 
 	/* Nothing has submitted on the SDMA rings in this arm, so both engines are where the bring-up
@@ -2556,6 +2577,39 @@ static void register_rings(struct amdgpu_device *adev)
 	}
 }
 
+/* Opt-in CP1 tracing still passes the complete Linux write-trace oracle. */
+static int trace_cp1;
+static unsigned int checkpoint_count, checkpoint_bad;
+static void check_checkpoint(const char *phase)
+{
+	static const char *expected[] = {
+		"scheduler", "scheduler-read", "scheduler-write", "scheduler-done", "clear-mqd", "select-queue", "build-mqd",
+		"disable-wptr-poll", "read-active", "program-hqd", "activate-hqd",
+		"restore-selection", "complete"
+	};
+	if (checkpoint_count >= sizeof(expected) / sizeof(expected[0]) ||
+	    strcmp(phase, expected[checkpoint_count]) != 0)
+		checkpoint_bad++;
+	checkpoint_count++;
+}
+
+static int traced_hw_init(struct amdgpu_device *adev)
+{
+	bool remapped = false;
+	unsigned int step;
+	int rc;
+	checkpoint_count = checkpoint_bad = 0;
+	rc = bc250_gfx_init_golden_registers(adev);
+	if (!rc) rc = bc250_gfx_grbm_cam_probe(adev, &remapped);
+	if (!rc) rc = bc250_gfx_constants_init(adev);
+	if (!rc) rc = bc250_gfx_rlc_resume(adev);
+	for (step = BC250_CP_KIQ_INIT; !rc && step <= BC250_CP_COMPUTE_TEST; step++)
+		rc = bc250_gfx_cp_resume_step_traced(adev, step, check_checkpoint);
+	printf("  CP1 checkpoints: %u, ordering errors: %u\n", checkpoint_count, checkpoint_bad);
+	if (checkpoint_count != 13 || checkpoint_bad) return BC250_EIO;
+	return rc;
+}
+
 static void run_one(const char *title, const struct run_opts *opt, struct amdgpu_device *adev,
 		    struct result *res, int verbose)
 {
@@ -2636,7 +2690,8 @@ static void run_one(const char *title, const struct run_opts *opt, struct amdgpu
 	/* The setup reads registers and allocates; the record starts at the first write of the
 	 * bring-up, which is the first entry of the golden table. */
 	backend_reset_writes();
-	res->gfx_rc = res->sdma_setup_rc ? res->sdma_setup_rc : bc250_gfx_hw_init(adev);
+	res->gfx_rc = res->sdma_setup_rc ? res->sdma_setup_rc :
+		(trace_cp1 ? traced_hw_init(adev) : bc250_gfx_hw_init(adev));
 	res->sdma_rc = res->gfx_rc ? res->gfx_rc : bc250_sdma_hw_init(adev);
 
 	res->doorbells = backend_doorbell_count();
@@ -3093,13 +3148,495 @@ static unsigned int write_dumps(const char *dir, struct amdgpu_device *adev)
  * main
  * ------------------------------------------------------------------------------------------- */
 
+/* Isolated register model for M349. Clearing busy on reset is a model
+ * assumption, deliberately disabled in the stuck control; not hardware proof. */
+static u32 reload_reset_offset, reload_busy_offset;
+static char reload_accesses[16];
+static unsigned int reload_access_count;
+static int reload_clear_busy;
+static void reload_access(char kind)
+{
+	if (reload_access_count < sizeof(reload_accesses)-1)
+		reload_accesses[reload_access_count++] = kind;
+	reload_accesses[reload_access_count] = 0;
+}
+static int reload_read_hook(u32 offset, u32 *value)
+{
+	(void)value;
+	if (offset == reload_reset_offset) reload_access('R');
+	return 0;
+}
+static void reload_reset_hook(u32 offset, u32 value)
+{
+	if (offset == reload_reset_offset) reload_access('W');
+	if (reload_clear_busy && offset == reload_reset_offset && !(value & GRBM_SOFT_RESET__SOFT_RESET_RLC_MASK))
+		backend_poke(reload_busy_offset, 0);
+}
+static unsigned int check_rlc_reload_reset(struct amdgpu_device *adev)
+{
+	const u32 me_halt = CP_ME_CNTL__ME_HALT_MASK | CP_ME_CNTL__PFP_HALT_MASK | CP_ME_CNTL__CE_HALT_MASK;
+	const u32 mec_halt = CP_MEC_CNTL__MEC_ME1_HALT_MASK | CP_MEC_CNTL__MEC_ME2_HALT_MASK;
+	const u32 me_bits[] = {CP_ME_CNTL__ME_HALT_MASK, CP_ME_CNTL__PFP_HALT_MASK, CP_ME_CNTL__CE_HALT_MASK};
+	const u32 mec_bits[] = {CP_MEC_CNTL__MEC_ME1_HALT_MASK, CP_MEC_CNTL__MEC_ME2_HALT_MASK};
+	const u32 preserved = GRBM_SOFT_RESET__SOFT_RESET_CP_MASK;
+	unsigned int k, variant, bad = 0;
+	reload_reset_offset = SOC15_REG_OFFSET(GC, 0, mmGRBM_SOFT_RESET) * 4;
+	reload_busy_offset = SOC15_REG_OFFSET(GC, 0, mmGRBM_STATUS2) * 4;
+	backend_set_read_hook(reload_read_hook);
+	for (variant = 0; variant < 2; variant++)
+	for (k = 0; k < 11; k++) {
+		int result, expected = k < 2 ? 0 : k < 9 ? BC250_EBUSY : k == 9 ? 1 : BC250_ETIME;
+		unsigned int writes;
+		backend_set_write_hook(reload_reset_hook);
+		reload_clear_busy = k != 10;
+		reload_access_count = 0;
+		reload_accesses[0] = 0;
+		backend_poke(SOC15_REG_OFFSET(GC, 0, mmRLC_CNTL)*4, k == 1 ? RLC_CNTL__RLC_ENABLE_F32_MASK : 0);
+		backend_poke(reload_busy_offset, k == 0 ? 0 : GRBM_STATUS2__RLC_BUSY_MASK);
+		backend_poke(SOC15_REG_OFFSET(GC, 0, mmCP_ME_CNTL)*4, me_halt & ~(k >= 2 && k < 5 ? me_bits[k-2] : 0));
+		backend_poke(SOC15_REG_OFFSET(GC, 0, mmCP_MEC_CNTL)*4, mec_halt & ~(k >= 5 && k < 7 ? mec_bits[k-5] : 0));
+		backend_poke(SOC15_REG_OFFSET(GC, 0, mmSDMA0_F32_CNTL)*4, k == 7 ? 0 : SDMA0_F32_CNTL__HALT_MASK);
+		backend_poke(SOC15_REG_OFFSET(GC, 0, mmSDMA1_F32_CNTL)*4, k == 8 ? 0 : SDMA1_F32_CNTL__HALT_MASK);
+		backend_poke(reload_reset_offset,preserved);
+		backend_reset_writes();
+		result = variant ? bc250_gfx_rlc_reload_reset_readback(adev) : bc250_gfx_rlc_reload_reset(adev);
+		if (strcmp(reload_accesses, k < 9 ? "" : variant ? "RWRWR" : "RWRW") != 0) bad++;
+		writes = backend_write_count();
+		if (result != expected || writes != (k < 9 ? 0u : 2u)) bad++;
+		if (k >= 9 && writes == 2) {
+			const struct bc250_reg_write *w = backend_writes();
+			if (w[0].byte_offset != reload_reset_offset || w[1].byte_offset != reload_reset_offset ||
+			    w[0].value != (preserved | GRBM_SOFT_RESET__SOFT_RESET_RLC_MASK) ||
+			    w[1].value != preserved) bad++;
+		}
+	}
+	backend_set_write_hook(NULL);
+	backend_set_read_hook(NULL);
+	printf("  RLC reload reset: 22 scenarios, %u failures (both access orders checked; busy-clear is modeled)\n",bad);
+	return bad;
+}
+
+/* M355: compare original accesses with and without the observer. */
+static u32 tlb_test_req, tlb_test_ack, tlb_test_sem;
+static int tlb_test_stuck;
+static unsigned int tlb_test_reads, tlb_test_writes, tlb_test_events, tlb_test_bad;
+static u64 tlb_test_hash;
+static void tlb_test_access(u32 offset, u32 value, u32 kind)
+{
+	tlb_test_hash = (tlb_test_hash * 1099511628211ULL) ^ offset;
+	tlb_test_hash = (tlb_test_hash * 1099511628211ULL) ^ value ^ kind;
+}
+static int tlb_test_read(u32 offset, u32 *value)
+{
+	if (offset != tlb_test_req && offset != tlb_test_ack && offset != tlb_test_sem) return 0;
+	*value = offset == tlb_test_sem ? 1 : offset == tlb_test_ack ? (tlb_test_stuck ? 0 : 1) : 0;
+	tlb_test_reads++;
+	tlb_test_access(offset,*value,1);
+	return 1;
+}
+static void tlb_test_write(u32 offset, u32 value)
+{
+	tlb_test_writes++;
+	tlb_test_access(offset,value,2);
+}
+static void tlb_test_observe(struct amdgpu_device *adev, const char *phase, u32 value)
+{
+	(void)adev;
+	if (!strcmp(phase,"after-invalidate-request")) {
+		if (tlb_test_events != 0 || tlb_test_writes != 1) tlb_test_bad++;
+	} else if (!strcmp(phase,"after-invalidate-request-read")) {
+		if (tlb_test_events != 1 || value != 0) tlb_test_bad++;
+	} else if (!strcmp(phase,"after-invalidate-ack")) {
+		if (value != (tlb_test_stuck ? 0u : 1u)) tlb_test_bad++;
+	} else tlb_test_bad++;
+	tlb_test_events++;
+}
+static unsigned int check_tlb_observation(struct amdgpu_device *adev)
+{
+	unsigned int hubid, stuck, variant, bad = 0;
+	u32 saved_timeout = adev->usec_timeout;
+	adev->usec_timeout = 3;
+	backend_set_read_hook(tlb_test_read);
+	backend_set_write_hook(tlb_test_write);
+	for (hubid=0; hubid<2; hubid++) for (stuck=0; stuck<2; stuck++) {
+		u32 vmhub = hubid ? AMDGPU_MMHUB0(0) : AMDGPU_GFXHUB(0);
+		struct amdgpu_vmhub *hub = &adev->vmhub[vmhub];
+		u64 baseline = 0;
+		tlb_test_req = (hub->vm_inv_eng0_req + hub->eng_distance*17)*4;
+		tlb_test_ack = (hub->vm_inv_eng0_ack + hub->eng_distance*17)*4;
+		tlb_test_sem = (hub->vm_inv_eng0_sem + hub->eng_distance*17)*4;
+		tlb_test_stuck = (int)stuck;
+		for (variant=0; variant<2; variant++) {
+			int result;
+			tlb_test_hash=0; tlb_test_reads=0; tlb_test_writes=0; tlb_test_events=0; tlb_test_bad=0;
+			backend_reset_writes();
+			result = variant ? bc250_gmc_flush_gpu_tlb_observed(adev,0,vmhub,0,tlb_test_observe) :
+				bc250_gmc_flush_gpu_tlb(adev,0,vmhub,0);
+			if (result != (stuck ? BC250_ETIME : 0) || tlb_test_bad) bad++;
+			if (tlb_test_reads != (stuck ? 4u : 2u) || tlb_test_writes != (hubid ? 2u : 1u)) bad++;
+			if (variant) {
+				if (tlb_test_hash != baseline || tlb_test_events != (hubid ? 2u : 3u)) bad++;
+			} else { baseline=tlb_test_hash; if (tlb_test_events) bad++; }
+			if (hubid) {
+				const struct bc250_reg_write *w=backend_writes();
+				if (backend_write_count()!=2 || w[1].byte_offset!=tlb_test_sem || w[1].value!=0) bad++;
+			}
+		}
+	}
+	adev->usec_timeout=saved_timeout;
+	backend_set_read_hook(NULL); backend_set_write_hook(NULL);
+	printf("  TLB observation: 8 scenarios, %u failures (identical traced/untraced register accesses)\n",bad);
+	return bad;
+}
+
+/* M363: extraction must preserve the complete enable's register traffic.
+ * This is a local ordering model, not proof that delayed visibility works on GPU. */
+static u32 phase_req[2], phase_ack[2], phase_sem[2];
+static unsigned int phase_reads, phase_requests, phase_events, phase_bad;
+static int phase_read(u32 offset, u32 *value)
+{
+ unsigned int i;
+ for (i=0;i<2;i++) {
+  if (offset==phase_ack[i] || offset==phase_sem[i] || offset==phase_req[i]) {
+   phase_reads++;
+   *value = offset==phase_req[i] ? 0 : 1;
+   return 1;
+  }
+ }
+ return 0;
+}
+static void phase_write(u32 offset, u32 value)
+{
+ (void)value;
+ if (offset==phase_req[0] || offset==phase_req[1]) phase_requests++;
+}
+static void phase_observe(struct amdgpu_device *adev, const char *phase, u32 value)
+{
+ static const char *expected[]={"startup-after-gfxhub-enable", "startup-after-mmhub-enable",
+  "startup-after-fault-defaults"};
+ (void)adev;
+ if (phase_events>=3 || strcmp(phase,expected[phase_events]) || value!=0) phase_bad++;
+ phase_events++;
+}
+static unsigned int check_gart_phase_extraction(void)
+{
+ struct amdgpu_device model;
+ struct amdgpu_bo bo;
+ struct bc250_gmc_inputs in;
+ struct bc250_reg_write baseline[1024];
+ unsigned int variant,i,count=0,bad=0;
+ for (variant=0;variant<2;variant++) {
+  memset(&model,0,sizeof(model));memset(&bo,0,sizeof(bo));memset(&in,0,sizeof(in));
+  backend_set_read_hook(NULL);backend_set_write_hook(NULL);
+  backend_reset_state();backend_reset_writes();
+  in.gart_table_mc=UNITA_GART_TABLE_MC;
+  in.dummy_page_dma=(u64)UNITA_TRACED_FAULT_DEFAULT_ADDR_LO32<<12;
+  in.noretry=true;
+  if (bc250_gmc_setup(&model,&in,&bo)!=0) return 1;
+  in.mem_scratch_mc=((u64)UNITA_TRACED_SYS_APERTURE_DEFAULT_LSB<<12)
+    -model.vm_manager.vram_base_offset+model.gmc.vram_start;
+  if (bc250_gmc_setup(&model,&in,&bo)!=0) return 1;
+  for(i=0;i<2;i++) {
+   struct amdgpu_vmhub *hub=&model.vmhub[i ? AMDGPU_MMHUB0(0) : AMDGPU_GFXHUB(0)];
+   phase_req[i]=(hub->vm_inv_eng0_req+hub->eng_distance*17)*4;
+   phase_ack[i]=(hub->vm_inv_eng0_ack+hub->eng_distance*17)*4;
+   phase_sem[i]=(hub->vm_inv_eng0_sem+hub->eng_distance*17)*4;
+  }
+  phase_reads=phase_requests=phase_events=phase_bad=0;
+  backend_set_read_hook(phase_read);backend_set_write_hook(phase_write);
+  if (!variant) {
+   if(bc250_gmc_gart_enable(&model)!=0) bad++;
+   count=backend_write_count();
+   if(count>sizeof(baseline)/sizeof(baseline[0])) {bad++;break;}
+   memcpy(baseline,backend_writes(),count*sizeof(baseline[0]));
+  } else {
+   if(bc250_gmc_gart_configure_observed(&model,phase_observe)!=0) bad++;
+   if(phase_reads || phase_requests || phase_bad || phase_events!=3) bad++;
+   if(bc250_gmc_flush_gpu_tlb(&model,0,AMDGPU_MMHUB0(0),0)!=0) bad++;
+   if(bc250_gmc_flush_gpu_tlb(&model,0,AMDGPU_GFXHUB(0),0)!=0) bad++;
+   if(count!=backend_write_count()) bad++;
+   else for(i=0;i<count;i++) {
+    const struct bc250_reg_write *actual=&backend_writes()[i];
+    if(actual->byte_offset!=baseline[i].byte_offset || actual->value!=baseline[i].value) bad++;
+   }
+  }
+  if(phase_requests!=2 || phase_reads!=4) bad++;
+ }
+ backend_set_read_hook(NULL);backend_set_write_hook(NULL);
+ printf("  GART phase extraction: 2 paths, %u writes compared, %u failures\n",count,bad);
+ return bad;
+}
+
+/* M369: real AMD-derived queue preparation against two-instance hardware
+ * models. No RLC safe-mode or physical DMA completion is modeled here. */
+static u32 sq_reg[6], sq_seed[6];
+static unsigned int sq_mode, sq_freeze_reads;
+static int sq_read(u32 offset, u32 *value)
+{
+ unsigned int i;
+ for(i=0;i<6;i++) if(offset==sq_reg[i]) {
+  *value=sq_seed[i];
+  if(i==2) {sq_freeze_reads++;if(sq_mode==0)*value|=SDMA0_FREEZE__FROZEN_MASK;}
+  if(i==5)*value=sq_mode==1?0x3FF:0;
+  return 1;
+ }
+ return 0;
+}
+static unsigned int check_sdma_quiescence(struct amdgpu_device *adev)
+{
+ unsigned int instance,mode,i,bad=0;
+ u32 timeout=adev->usec_timeout;
+ u32 names[]={mmSDMA0_GFX_RB_CNTL,mmSDMA0_GFX_IB_CNTL,mmSDMA0_FREEZE,
+  mmSDMA0_F32_CNTL,mmSDMA0_CNTL,mmSDMA0_STATUS1_REG};
+ adev->usec_timeout=3;
+ for(instance=0;instance<2;instance++) for(mode=0;mode<3;mode++) {
+  const struct bc250_reg_write *w;
+  u32 expected[5];int result;
+  for(i=0;i<6;i++) {sq_reg[i]=bc250_sdma_reg_offset(adev,instance,names[i])*4;sq_seed[i]=0xA5000000u;}
+  sq_seed[0]|=SDMA0_GFX_RB_CNTL__RB_ENABLE_MASK;
+  sq_seed[1]|=SDMA0_GFX_IB_CNTL__IB_ENABLE_MASK;
+  sq_seed[4]|=SDMA0_CNTL__UTC_L1_ENABLE_MASK;
+  sq_mode=mode;sq_freeze_reads=0;
+  backend_set_read_hook(sq_read);backend_reset_writes();
+  result=bc250_sdma_quiesce_instance(adev,instance);
+  if(result!=(mode==2?BC250_ETIME:0))bad++;
+  if(sq_freeze_reads!=(mode==0?2u:4u))bad++;
+  if(backend_write_count()!=(mode==2?3u:5u)){bad++;continue;}
+  expected[0]=sq_seed[0]&~SDMA0_GFX_RB_CNTL__RB_ENABLE_MASK;
+  expected[1]=sq_seed[1]&~SDMA0_GFX_IB_CNTL__IB_ENABLE_MASK;
+  expected[2]=sq_seed[2]|SDMA0_FREEZE__FREEZE_MASK|(mode==0?SDMA0_FREEZE__FROZEN_MASK:0);
+  expected[3]=sq_seed[3]|SDMA0_F32_CNTL__HALT_MASK;
+  expected[4]=sq_seed[4]&~SDMA0_CNTL__UTC_L1_ENABLE_MASK;
+  w=backend_writes();
+  for(i=0;i<backend_write_count();i++)if(w[i].byte_offset!=sq_reg[i]||w[i].value!=expected[i])bad++;
+  if(mode!=2){
+   sq_seed[2]|=SDMA0_FREEZE__FREEZE_MASK;
+   backend_reset_writes();
+   if(bc250_sdma_unfreeze_instance(adev,instance)!=0)bad++;
+   w=backend_writes();
+   if(backend_write_count()!=1||w[0].byte_offset!=sq_reg[2]||
+      w[0].value!=(expected[2]&~SDMA0_FREEZE__FREEZE_MASK))bad++;
+  }
+ }
+ backend_reset_writes();
+ if(bc250_sdma_quiesce_instance(adev,2)!=BC250_EINVAL||backend_write_count()!=0)bad++;
+ backend_set_read_hook(NULL);adev->usec_timeout=timeout;
+ printf("  SDMA quiescence: 6 scenarios, %u failures (freeze/idle/order/unfreeze)\n",bad);
+ return bad;
+}
+
+/* M370: composite scope uses modeled ACK and persistent register state. */
+static u32 qs_control,qs_safe,qs_regs[2][6],qs_values[2][6];
+static unsigned int qs_mode,qs_requested,qs_acked,qs_exits,qs_bad,qs_writes;
+static int qs_read(u32 off,u32 *v)
+{
+ unsigned i,j;
+ if(off==qs_control){*v=qs_mode==3?0:RLC_CNTL__RLC_ENABLE_F32_MASK;return 1;}
+ if(off==qs_safe){*v=qs_mode==1?RLC_SAFE_MODE__CMD_MASK:0;if(qs_mode!=1)qs_acked=1;return 1;}
+ for(i=0;i<2;i++)for(j=0;j<6;j++)if(off==qs_regs[i][j]){
+  *v=qs_values[i][j];
+  if(j==2 && qs_mode!=2 && (*v&SDMA0_FREEZE__FREEZE_MASK))*v|=SDMA0_FREEZE__FROZEN_MASK;
+  return 1;
+ }
+ return 0;
+}
+static void qs_write(u32 off,u32 value)
+{
+ unsigned i,j;
+ if(off==qs_safe){
+  if(value==(RLC_SAFE_MODE__CMD_MASK|(1u<<RLC_SAFE_MODE__MESSAGE__SHIFT)))qs_requested++;
+  else if(value==RLC_SAFE_MODE__CMD_MASK){if(qs_requested!=1)qs_bad++;qs_exits++;}
+  else qs_bad++;
+  return;
+ }
+ for(i=0;i<2;i++)for(j=0;j<6;j++)if(off==qs_regs[i][j]){
+  if(!qs_acked||qs_exits)qs_bad++;
+  qs_values[i][j]=value;qs_writes++;return;
+ }
+ qs_bad++;
+}
+static unsigned int check_sdma_reload_scope(struct amdgpu_device *adev)
+{
+ unsigned mode,i,j,bad=0;u32 timeout=adev->usec_timeout;u64 saved_cg=adev->cg_flags;
+ u32 names[]={mmSDMA0_GFX_RB_CNTL,mmSDMA0_GFX_IB_CNTL,mmSDMA0_FREEZE,
+  mmSDMA0_F32_CNTL,mmSDMA0_CNTL,mmSDMA0_STATUS1_REG};
+ qs_control=SOC15_REG_OFFSET(GC,0,mmRLC_CNTL)*4;qs_safe=SOC15_REG_OFFSET(GC,0,mmRLC_SAFE_MODE)*4;
+ adev->usec_timeout=3;adev->cg_flags=AMD_CG_SUPPORT_GFX_MGCG;
+ for(mode=0;mode<4;mode++){
+  int rc;qs_mode=mode;qs_requested=qs_acked=qs_exits=qs_bad=qs_writes=0;
+  for(i=0;i<2;i++)for(j=0;j<6;j++){
+   qs_regs[i][j]=bc250_sdma_reg_offset(adev,i,names[j])*4;qs_values[i][j]=0;
+  }
+  for(i=0;i<2;i++){
+   qs_values[i][3]=SDMA0_F32_CNTL__HALT_MASK;
+   qs_values[i][4]=SDMA0_CNTL__UTC_L1_ENABLE_MASK;
+  }
+  backend_set_read_hook(qs_read);backend_set_write_hook(qs_write);backend_reset_writes();
+  rc=bc250_sdma_quiesce_for_reload(adev);
+  if(rc!=(mode==0?0:mode==3?BC250_EBUSY:BC250_ETIME)||qs_bad)bad++;
+  if(qs_requested!=(mode==3?0u:1u)||qs_exits!=(mode==3?0u:1u))bad++;
+  if(mode==0){
+   if(qs_writes!=12)bad++;
+   for(i=0;i<2;i++)if((qs_values[i][2]&SDMA0_FREEZE__FREEZE_MASK)||
+    !(qs_values[i][3]&SDMA0_F32_CNTL__HALT_MASK)||
+    (qs_values[i][4]&SDMA0_CNTL__UTC_L1_ENABLE_MASK))bad++;
+  }else if(mode!=2 && qs_writes)bad++;
+ }
+ backend_set_read_hook(NULL);backend_set_write_hook(NULL);adev->usec_timeout=timeout;adev->cg_flags=saved_cg;
+ printf("  SDMA reload scope: 4 scenarios, %u failures (ACK before SDMA, paired exit, halted unfreeze)\n",bad);
+ return bad;
+}
+
+
+/* M372: access-order model, not an emulation of an effective engine reset. */
+static u32 sr_offset, sr_value, sr_extra;
+static unsigned sr_reads, sr_bad, sr_len;
+static char sr_order[16];
+static void sr_event(char c)
+{
+ if(sr_len<sizeof(sr_order)-1)sr_order[sr_len++]=c;else sr_bad++;
+ sr_order[sr_len]=0;
+}
+static int sr_read(u32 off,u32 *value)
+{
+ sr_event('R');if(off!=sr_offset)sr_bad++;
+ if(++sr_reads==2)sr_value|=sr_extra;
+ *value=sr_value;return 1;
+}
+static void sr_write(u32 off,u32 value)
+{
+ sr_event('W');if(off!=sr_offset)sr_bad++;
+ sr_value=value;
+}
+static void sr_delay(unsigned usec)
+{
+ sr_event('D');if(usec!=50)sr_bad++;
+}
+static unsigned check_sdma_engine_reset(struct amdgpu_device *adev)
+{
+ const u32 masks[]={GRBM_SOFT_RESET__SOFT_RESET_SDMA0_MASK,
+  GRBM_SOFT_RESET__SOFT_RESET_SDMA1_MASK};
+ unsigned instance,variant,bad=0;
+ sr_offset=SOC15_REG_OFFSET(GC,0,mmGRBM_SOFT_RESET)*4;
+ backend_set_read_hook(sr_read);backend_set_write_hook(sr_write);backend_set_delay_hook(sr_delay);
+ for(instance=0;instance<2;instance++)for(variant=0;variant<3;variant++){
+  const u32 initial=variant?GRBM_SOFT_RESET__SOFT_RESET_CP_MASK:0;
+  const struct bc250_reg_write *w;
+  int rc;
+  sr_value=initial;sr_extra=variant==2?GRBM_SOFT_RESET__SOFT_RESET_RLC_MASK:0;
+  sr_reads=sr_bad=sr_len=0;sr_order[0]=0;backend_reset_writes();
+  rc=bc250_sdma_soft_reset_instance(adev,instance);w=backend_writes();
+  if(rc||sr_bad||strcmp(sr_order,"RWRDWR")||backend_write_count()!=2)bad++;
+  else if(w[0].byte_offset!=sr_offset||w[1].byte_offset!=sr_offset||
+   w[0].value!=(initial|masks[instance])||w[1].value!=(initial|sr_extra)||
+   sr_value!=(initial|sr_extra))bad++;
+ }
+ sr_reads=sr_bad=sr_len=0;sr_order[0]=0;backend_reset_writes();
+ if(bc250_sdma_soft_reset_instance(adev,2)!=BC250_EINVAL||
+    bc250_sdma_soft_reset_instance(NULL,0)!=BC250_EINVAL||sr_len||backend_write_count())bad++;
+ backend_set_read_hook(NULL);backend_set_write_hook(NULL);backend_set_delay_hook(NULL);
+ printf("  SDMA engine reset: 6 sequences + bounds, %u failures (RWRDWR, 50us, instance masks, readback preservation)\n",bad);
+ return bad;
+}
+
+
+/* M373: reset deliberately destroys the prior halt/queue/cache state. */
+static unsigned rr_mode,rr_entries,rr_exits,rr_ack,rr_bad,rr_resets,rr_delays,rr_gated;
+static u32 rr_reset;
+static int rr_read(u32 off,u32 *v)
+{
+ unsigned i,j;
+ if(off==qs_control){*v=RLC_CNTL__RLC_ENABLE_F32_MASK;return 1;}
+ if(off==qs_safe){
+  unsigned blocked=(rr_mode==1&&rr_entries==1)||(rr_mode==2&&rr_entries==2);
+  *v=blocked?RLC_SAFE_MODE__CMD_MASK:0;rr_ack=!blocked;return 1;
+ }
+ if(off==sr_offset){*v=rr_reset;return 1;}
+ for(i=0;i<2;i++)for(j=0;j<6;j++)if(off==qs_regs[i][j]){
+  *v=qs_values[i][j];
+  if(j==2 && !(rr_mode==3&&rr_entries==2) && (*v&SDMA0_FREEZE__FREEZE_MASK))
+   *v|=SDMA0_FREEZE__FROZEN_MASK;
+  return 1;
+ }
+ rr_bad++;*v=0;return 1;
+}
+static void rr_write(u32 off,u32 value)
+{
+ unsigned i,j;
+ if(off==qs_safe){
+  if(value==(RLC_SAFE_MODE__CMD_MASK|(1u<<RLC_SAFE_MODE__MESSAGE__SHIFT))){
+   if(rr_entries!=rr_exits)rr_bad++;
+   rr_entries++;rr_ack=0;
+  }else if(value==RLC_SAFE_MODE__CMD_MASK){
+   if(rr_entries!=rr_exits+1)rr_bad++;
+   rr_exits++;rr_ack=0;
+  }else rr_bad++;
+  return;
+ }
+ if(off==sr_offset){
+  const u32 masks[]={GRBM_SOFT_RESET__SOFT_RESET_SDMA0_MASK,GRBM_SOFT_RESET__SOFT_RESET_SDMA1_MASK};
+  if(rr_gated?(rr_entries!=1||rr_exits!=1):(rr_entries||rr_exits))rr_bad++;
+  for(i=0;i<2;i++)if((rr_reset&masks[i])&&!(value&masks[i])){
+   /* Model changed reset defaults, not a claim about unit A reset values. */
+   qs_values[i][0]=SDMA0_GFX_RB_CNTL__RB_ENABLE_MASK;
+   qs_values[i][1]=SDMA0_GFX_IB_CNTL__IB_ENABLE_MASK;
+   qs_values[i][2]=0;qs_values[i][3]=0;
+   qs_values[i][4]=SDMA0_CNTL__UTC_L1_ENABLE_MASK;
+   rr_resets++;
+  }
+  rr_reset=value;return;
+ }
+ for(i=0;i<2;i++)for(j=0;j<6;j++)if(off==qs_regs[i][j]){
+  if(rr_gated?(!rr_ack||rr_entries!=rr_exits+1):(rr_entries||rr_exits))rr_bad++;
+  qs_values[i][j]=value;return;
+ }
+ rr_bad++;
+}
+static void rr_delay(unsigned usec)
+{
+ if(usec==50){if(rr_gated?(rr_entries!=1||rr_exits!=1):(rr_entries||rr_exits))rr_bad++;rr_delays++;}
+}
+static unsigned check_sdma_reset_reload(struct amdgpu_device *adev)
+{
+ unsigned mode,i,j,bad=0;u32 timeout=adev->usec_timeout;u64 saved_cg=adev->cg_flags;
+ u32 names[]={mmSDMA0_GFX_RB_CNTL,mmSDMA0_GFX_IB_CNTL,mmSDMA0_FREEZE,
+  mmSDMA0_F32_CNTL,mmSDMA0_CNTL,mmSDMA0_STATUS1_REG};
+ adev->usec_timeout=3;
+ for(mode=0;mode<8;mode++){
+  int rc;
+  adev->cg_flags=mode==4?0:mode==5?AMD_CG_SUPPORT_GFX_MGLS:
+   mode==6?AMD_CG_SUPPORT_GFX_CGCG:mode==7?AMD_CG_SUPPORT_GFX_3D_CGCG:AMD_CG_SUPPORT_GFX_MGCG;
+  rr_gated=(mode!=4 && mode!=5);
+  rr_mode=mode;rr_entries=rr_exits=rr_ack=rr_bad=rr_resets=rr_delays=0;rr_reset=0;
+  for(i=0;i<2;i++)for(j=0;j<6;j++){
+   qs_regs[i][j]=bc250_sdma_reg_offset(adev,i,names[j])*4;qs_values[i][j]=0;
+  }
+  for(i=0;i<2;i++)qs_values[i][3]=SDMA0_F32_CNTL__HALT_MASK;
+  backend_set_read_hook(rr_read);backend_set_write_hook(rr_write);backend_set_delay_hook(rr_delay);
+  backend_reset_writes();rc=bc250_sdma_reset_for_reload(adev);
+  if(rc!=((mode>=1 && mode<=3)?BC250_ETIME:0)||rr_bad)bad++;
+  if(rr_entries!=(!rr_gated?0u:mode==1?1u:2u)||rr_exits!=rr_entries||
+   rr_resets!=(mode==1?0u:2u)||rr_delays!=rr_resets)bad++;
+  if(mode==0 || mode>=4)for(i=0;i<2;i++)if(
+   (qs_values[i][0]&SDMA0_GFX_RB_CNTL__RB_ENABLE_MASK)||
+   (qs_values[i][1]&SDMA0_GFX_IB_CNTL__IB_ENABLE_MASK)||
+   (qs_values[i][2]&SDMA0_FREEZE__FREEZE_MASK)||
+   !(qs_values[i][3]&SDMA0_F32_CNTL__HALT_MASK)||
+   (qs_values[i][4]&SDMA0_CNTL__UTC_L1_ENABLE_MASK))bad++;
+ }
+ backend_set_read_hook(NULL);backend_set_write_hook(NULL);backend_set_delay_hook(NULL);
+ adev->usec_timeout=timeout;adev->cg_flags=saved_cg;
+ printf("  SDMA reset reload: 8 scenarios, %u failures (clock-gating policy, separate scopes, disturbed post-reset state)\n",bad);
+ return bad;
+}
+
 int main(int argc, char **argv)
 {
 	struct amdgpu_device adev;
 	struct result derived, ctl_async, ctl_gfxoff, ctl_nostub, ctl_perring;
 	struct run_opts opt;
 	unsigned int i, stray = 0, gart_bad = 0, mqd_bad = 0, rerun_bad = 0, unclean_bad = 0;
-	unsigned int stuck_bad = 0, sdma_ptr_bad = 0, stagec_bad = 0;
+	unsigned int stuck_bad = 0, sdma_ptr_bad = 0, stagec_bad = 0, reload_bad = 0;
 	int verbose = 0, exact, controls_fail;
 	const char *sweep1, *sweep2, *trace, *trace_irq, *dumpdir = NULL, *ringsdir = NULL;
 	const char *winsweep = NULL;
@@ -3115,7 +3652,9 @@ int main(int argc, char **argv)
 	trace = argv[3];
 	trace_irq = argv[4];
 	for (i = 5; i < (unsigned int)argc; i++) {
-		if (strcmp(argv[i], "-v") == 0)
+		if (strcmp(argv[i], "--cp1-checkpoints") == 0)
+			trace_cp1 = 1;
+		else if (strcmp(argv[i], "-v") == 0)
 			verbose = 1;
 		else if (strcmp(argv[i], "--dump") == 0 && i + 1 < (unsigned int)argc)
 			dumpdir = argv[++i];
@@ -3287,6 +3826,13 @@ int main(int argc, char **argv)
 			(ctl_perring.irq.mismatches != 0 ||
 			 ctl_perring.irq.produced != g_trace_irq_count);
 
+	reload_bad = check_rlc_reload_reset(&adev);
+	reload_bad += check_tlb_observation(&adev);
+	reload_bad += check_gart_phase_extraction();
+	reload_bad += check_sdma_quiescence(&adev);
+	reload_bad += check_sdma_reload_scope(&adev);
+	reload_bad += check_sdma_engine_reset(&adev);
+	reload_bad += check_sdma_reset_reload(&adev);
 	printf("\n  verdict: ");
 	if (derived.irq_rc != 0)
 		printf("INCONCLUSIVE - the bring-up returned %d\n", derived.irq_rc);
@@ -3345,5 +3891,5 @@ int main(int argc, char **argv)
 		derived.stub_rejects == 0 && stray == 0 &&
 		derived.stage0_bad == 0 && gart_bad == 0 && mqd_bad == 0 && rerun_bad == 0 &&
 		stuck_bad == 0 && unclean_bad == 0 && sdma_ptr_bad == 0 && stagec_bad == 0 &&
-		controls_fail) ? 0 : 1;
+		controls_fail && reload_bad == 0) ? 0 : 1;
 }

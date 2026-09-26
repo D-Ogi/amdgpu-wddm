@@ -78,6 +78,12 @@ void bc250_ih_teardown(struct amdgpu_device *adev);
  * GART must be up: the ring is GTT memory, so the IH block walks M4's page table to reach it.
  * adev->dummy_page_addr must be set - nbio_v2_3_ih_control() points the dummy read at it. */
 int  bc250_ih_hw_init(struct amdgpu_device *adev);
+/* Split form, same writes/order as hw_init. Prepare leaves delivery disabled.
+ * Enable requires successful prepare and exclusive ownership of the ring.
+ * Enable performs one register RMW, no allocation/wait. At DIRQL its backend
+ * must also be nonpaged/nonblocking; CPU state publication is the OS's job. */
+int  bc250_ih_hw_prepare(struct amdgpu_device *adev);
+int  bc250_ih_hw_enable(struct amdgpu_device *adev);
 
 /* navi10_ih_irq_disable(). Leaves the ring allocated, so hw_init can run again. */
 void bc250_ih_hw_fini(struct amdgpu_device *adev);

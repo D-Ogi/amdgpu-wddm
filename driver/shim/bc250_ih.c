@@ -140,7 +140,7 @@ static void bc250_ih_enable_ring(struct amdgpu_device *adev)
 }
 
 /* navi10_ih.c:317 navi10_ih_irq_init(), in its order. */
-int bc250_ih_hw_init(struct amdgpu_device *adev)
+static int bc250_ih_validate(struct amdgpu_device *adev)
 {
 	struct amdgpu_ih_ring *ih;
 
@@ -154,6 +154,19 @@ int bc250_ih_hw_init(struct amdgpu_device *adev)
 	if (adev->dummy_page_addr == 0)
 		return BC250_EINVAL;      /* nbio_v2_3_ih_control() would point the dummy read at 0 */
 
+	return 0;
+}
+
+/* Same upstream register order, stopping before the final enable. The OS can
+ * publish its interrupt consumer while hardware delivery remains disabled. */
+int bc250_ih_hw_prepare(struct amdgpu_device *adev)
+{
+	struct amdgpu_ih_ring *ih;
+	int result = bc250_ih_validate(adev);
+	if (result != 0)
+		return result;
+	ih = &adev->irq.ih;
+
 	/* Disable first, as upstream does: the block may be live from an earlier bring-up. */
 	bc250_ih_toggle_interrupts(adev, false);
 
@@ -165,9 +178,26 @@ int bc250_ih_hw_init(struct amdgpu_device *adev)
 
 	/* pci_set_master() is upstream's next line and is not ours; see the header. */
 
-	bc250_ih_toggle_interrupts(adev, true);
-
 	return 0;
+}
+
+/* Only the final upstream read-modify-write. The caller must have prepared
+ * this ring, excluded other writers and installed its interrupt consumer.
+ * A DIRQL caller must supply a nonblocking, nonpaged register backend. */
+int bc250_ih_hw_enable(struct amdgpu_device *adev)
+{
+	int result = bc250_ih_validate(adev);
+	if (result != 0)
+		return result;
+	bc250_ih_toggle_interrupts(adev, true);
+	return 0;
+}
+
+/* Preserve the existing all-in-one diagnostic/replay API. */
+int bc250_ih_hw_init(struct amdgpu_device *adev)
+{
+	int result = bc250_ih_hw_prepare(adev);
+	return result != 0 ? result : bc250_ih_hw_enable(adev);
 }
 
 /* navi10_ih.c:386 navi10_ih_irq_disable(). The 1 ms is upstream's "wait and acknowledge irq"; it

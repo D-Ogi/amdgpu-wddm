@@ -15,6 +15,7 @@
 #include "bc250_gfx.h"
 #include "bc250_irq.h"	/* the three fault sources, turned off by bc250_gfx_hw_fini() */
 #include "bc250_gmc.h"
+#include "generated/rlc_cg_flags.h"
 #include "nv.h"
 
 /* Our own file, so register offsets come through the SOC15 macros over AMD's headers. No address,
@@ -558,6 +559,104 @@ static void bc250_rlc_stop(struct amdgpu_device *adev)
 	WREG32_SOC15(GC, 0, mmRLC_CNTL, tmp);
 }
 
+/* PROVENANCE: gfx_v10_0_set/unset_safe_mode default (GC10.1), AMD MIT.
+ * amdgpu_rlc.c gates requests on the GFX clock-gating flags (M389/M390).
+ * Cyan Skillfish has cg_flags=0: no safe-mode command is needed.
+ * Unlike upstream's void entry, require ACK before declaring entry complete.
+ * A request that times out still requires a paired exit attempt. */
+int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested)
+{
+ u32 i, control;
+ if (!requested) return BC250_EINVAL;
+ *requested=false;
+ if (!adev || !adev->usec_timeout) return BC250_EINVAL;
+ if (!(adev->cg_flags & (AMD_CG_SUPPORT_GFX_CGCG |
+      AMD_CG_SUPPORT_GFX_MGCG | AMD_CG_SUPPORT_GFX_3D_CGCG))) return 0;
+ control=RREG32_SOC15(GC,0,mmRLC_CNTL);
+ if (!REG_GET_FIELD(control,RLC_CNTL,RLC_ENABLE_F32)) return BC250_EBUSY;
+ *requested=true;
+ WREG32_SOC15(GC,0,mmRLC_SAFE_MODE,
+  RLC_SAFE_MODE__CMD_MASK | (1u << RLC_SAFE_MODE__MESSAGE__SHIFT));
+ for(i=0;i<adev->usec_timeout;i++) {
+  if (!REG_GET_FIELD(RREG32_SOC15(GC,0,mmRLC_SAFE_MODE),RLC_SAFE_MODE,CMD)) return 0;
+  bc250_shim_udelay(1);
+ }
+ return BC250_ETIME;
+}
+void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested)
+{
+ if (adev && requested) WREG32_SOC15(GC,0,mmRLC_SAFE_MODE,RLC_SAFE_MODE__CMD_MASK);
+}
+
+/* PROVENANCE: Linux amdgpu gfx_v10_0_rlc_reset, AMD MIT. This callback is
+ * not part of ordinary resume; the opt-in reload experiment below owns its use. */
+static void bc250_rlc_reset(struct amdgpu_device *adev)
+{
+	WREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 1);
+	bc250_shim_udelay(50);
+	WREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 0);
+	bc250_shim_udelay(50);
+}
+
+/* PROVENANCE: gfx_v10_0_soft_reset assertion/deassertion sequence, AMD MIT.
+ * M352 experiment: caller already checked halts; restrict the mask to RLC.
+ * Keep post-write reads before the delays. Log only after reset is released. */
+static void bc250_rlc_reset_readback(struct amdgpu_device *adev)
+{
+	u32 initial, asserted, released, tmp;
+	const u32 mask = GRBM_SOFT_RESET__SOFT_RESET_RLC_MASK;
+	initial = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+	tmp = initial | mask;
+	WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+	tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+	asserted = tmp;
+	bc250_shim_udelay(50);
+	tmp &= ~mask;
+	WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+	released = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+	bc250_shim_udelay(50);
+	dev_info(adev->dev, "RLC reset readback: initial %08x asserted %08x released %08x\n",
+		 initial, asserted, released);
+}
+
+/* Declared addition, M349: diagnostic reload guard, not an idle/DMA verdict.
+ * Caller owns an unpublished startup and serializes the register sequence.
+ * 0 = not selected; 1 = reset performed and busy cleared; negative = refused.
+ * Neither result proves that the following PSP reload will succeed. */
+static int bc250_rlc_reload_reset(struct amdgpu_device *adev, bool readback)
+{
+	u32 control, status, me, mec, sdma0, sdma1;
+	const u32 me_halt = CP_ME_CNTL__ME_HALT_MASK | CP_ME_CNTL__PFP_HALT_MASK | CP_ME_CNTL__CE_HALT_MASK;
+	const u32 mec_halt = CP_MEC_CNTL__MEC_ME1_HALT_MASK | CP_MEC_CNTL__MEC_ME2_HALT_MASK;
+	if (adev == NULL) return BC250_EINVAL;
+	control = RREG32_SOC15(GC, 0, mmRLC_CNTL);
+	status = RREG32_SOC15(GC, 0, mmGRBM_STATUS2);
+	if (REG_GET_FIELD(control, RLC_CNTL, RLC_ENABLE_F32) || !REG_GET_FIELD(status, GRBM_STATUS2, RLC_BUSY))
+		return 0;
+	me = RREG32_SOC15(GC, 0, mmCP_ME_CNTL);
+	mec = RREG32_SOC15(GC, 0, mmCP_MEC_CNTL);
+	sdma0 = RREG32_SOC15(GC, 0, mmSDMA0_F32_CNTL);
+	sdma1 = RREG32_SOC15(GC, 0, mmSDMA1_F32_CNTL);
+	dev_info(adev->dev, "RLC reload reset preflight: ME %08x MEC %08x SDMA %08x %08x\n",me,mec,sdma0,sdma1);
+	if ((me & me_halt) != me_halt || (mec & mec_halt) != mec_halt ||
+	    !(sdma0 & SDMA0_F32_CNTL__HALT_MASK) || !(sdma1 & SDMA1_F32_CNTL__HALT_MASK))
+		return BC250_EBUSY;
+	if (readback) bc250_rlc_reset_readback(adev);
+	else bc250_rlc_reset(adev);
+	status = RREG32_SOC15(GC, 0, mmGRBM_STATUS2);
+	return REG_GET_FIELD(status, GRBM_STATUS2, RLC_BUSY) ? BC250_ETIME : 1;
+}
+
+int bc250_gfx_rlc_reload_reset(struct amdgpu_device *adev)
+{
+	return bc250_rlc_reload_reset(adev, false);
+}
+
+int bc250_gfx_rlc_reload_reset_readback(struct amdgpu_device *adev)
+{
+	return bc250_rlc_reload_reset(adev, true);
+}
+
 /* gfx_v10_0.c:5484 gfx_v10_0_rlc_smu_handshake_cntl() */
 static void bc250_rlc_smu_handshake_cntl(struct amdgpu_device *adev, bool enable)
 {
@@ -871,15 +970,20 @@ static void bc250_gfx_mqd_init(struct amdgpu_device *adev, struct v10_gfx_mqd *m
 /* gfx_v10_0.c:6714 gfx_v10_0_kiq_setting(), default branch. One write, with 0x80 already set:
  * the trace has exactly one RLC_CP_SCHEDULERS write, 0x58504840 -> 0x585048C8, which is
  * (me 2 << 5) | (pipe 1 << 3) | queue 0 | 0x80. */
-static void bc250_kiq_setting(struct amdgpu_ring *ring)
+static void bc250_kiq_checkpoint(bc250_gfx_checkpoint_fn checkpoint, const char *phase);
+static void bc250_kiq_setting(struct amdgpu_ring *ring, bc250_gfx_checkpoint_fn checkpoint)
 {
 	struct amdgpu_device *adev = ring->adev;
 	uint32_t tmp;
 
+	/* Diagnostic callbacks bracket the original AMD accesses; no extra MMIO. */
+	bc250_kiq_checkpoint(checkpoint, "scheduler-read");
 	tmp = RREG32_SOC15(GC, 0, mmRLC_CP_SCHEDULERS);
 	tmp &= 0xffffff00;
 	tmp |= (ring->me << 5) | (ring->pipe << 3) | (ring->queue);
+	bc250_kiq_checkpoint(checkpoint, "scheduler-write");
 	WREG32_SOC15(GC, 0, mmRLC_CP_SCHEDULERS, tmp | 0x80);
+	bc250_kiq_checkpoint(checkpoint, "scheduler-done");
 }
 
 /* gfx_v10_0.c:6601 gfx_v10_0_cp_compute_enable(), defined below; the recovery branch of
@@ -888,12 +992,19 @@ static void bc250_cp_compute_enable(struct amdgpu_device *adev, bool enable);
 
 /* gfx_v10_0.c:7021 gfx_v10_0_kiq_init_register(). The SR-IOV "inactivate the queue" write at the
  * top is not taken. */
-static int bc250_kiq_init_register(struct amdgpu_ring *ring)
+static void bc250_kiq_checkpoint(bc250_gfx_checkpoint_fn checkpoint, const char *phase)
+{
+	if (checkpoint)
+		checkpoint(phase);
+}
+
+static int bc250_kiq_init_register(struct amdgpu_ring *ring, bc250_gfx_checkpoint_fn checkpoint)
 {
 	struct amdgpu_device *adev = ring->adev;
 	struct v10_compute_mqd *mqd = (struct v10_compute_mqd *)ring->mqd_ptr;
 	u32 j;
 
+	bc250_kiq_checkpoint(checkpoint, "disable-wptr-poll");
 	/* disable wptr polling */
 	WREG32_FIELD15(GC, 0, CP_PQ_WPTR_POLL_CNTL, EN, 0);
 
@@ -964,6 +1075,7 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 	 *    dequeued and ring->wptr is 0, so 0 is the only consistent value, and the MQD is corrected
 	 *    with the register so the two agree.
 	 */
+	bc250_kiq_checkpoint(checkpoint, "read-active");
 	if (RREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE) & 1) {
 		/* Either engine halted counts as halted, and the restore below halts both. That is
 		 * asymmetric only in appearance: bc250_cp_compute_enable() is upstream's own
@@ -975,6 +1087,7 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 				    CP_MEC_CNTL__MEC_ME2_HALT_MASK)) != 0;
 		bool timed_out;
 
+		bc250_kiq_checkpoint(checkpoint, "active-queue-recovery");
 		if (mec_halted) {
 			u32 cntl;
 
@@ -1026,6 +1139,7 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 			return BC250_ETIME;
 	}
 
+	bc250_kiq_checkpoint(checkpoint, "program-hqd");
 	/* disable doorbells */
 	WREG32_SOC15(GC, 0, mmCP_HQD_PQ_DOORBELL_CONTROL, 0);
 
@@ -1077,6 +1191,7 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 
 	WREG32_SOC15(GC, 0, mmCP_HQD_PERSISTENT_STATE, mqd->cp_hqd_persistent_state);
 
+	bc250_kiq_checkpoint(checkpoint, "activate-hqd");
 	/* activate the queue */
 	WREG32_SOC15(GC, 0, mmCP_HQD_ACTIVE, mqd->cp_hqd_active);
 
@@ -1087,24 +1202,30 @@ static int bc250_kiq_init_register(struct amdgpu_ring *ring)
 }
 
 /* gfx_v10_0.c:7130 gfx_v10_0_kiq_init_queue(), cold-boot arm (not in reset, not SR-IOV). */
-static int bc250_kiq_init_queue(struct amdgpu_ring *ring)
+static int bc250_kiq_init_queue(struct amdgpu_ring *ring, bc250_gfx_checkpoint_fn checkpoint)
 {
 	struct amdgpu_device *adev = ring->adev;
 	struct amdgpu_mqd_prop prop;
 	int r;
 
-	bc250_kiq_setting(ring);
+	bc250_kiq_checkpoint(checkpoint, "scheduler");
+	bc250_kiq_setting(ring, checkpoint);
 
+	bc250_kiq_checkpoint(checkpoint, "clear-mqd");
 	memset(ring->mqd_ptr, 0, sizeof(struct v10_compute_mqd));
+	bc250_kiq_checkpoint(checkpoint, "select-queue");
 	nv_grbm_select(adev, ring->me, ring->pipe, ring->queue, 0);
 
 	/* amdgpu_ring.c amdgpu_ring_init_mqd(): reset the write pointer, then build the MQD. */
+	bc250_kiq_checkpoint(checkpoint, "build-mqd");
 	bc250_ring_to_mqd_prop(adev, ring, &prop);
 	ring->wptr = 0;
 	bc250_compute_mqd_init(adev, (struct v10_compute_mqd *)ring->mqd_ptr, &prop);
 
-	r = bc250_kiq_init_register(ring);
+	r = bc250_kiq_init_register(ring, checkpoint);
+	bc250_kiq_checkpoint(checkpoint, "restore-selection");
 	nv_grbm_select(adev, 0, 0, 0, 0);
+	bc250_kiq_checkpoint(checkpoint, "complete");
 
 	return r;
 }
@@ -1970,54 +2091,107 @@ static int bc250_cp_gfx_start(struct amdgpu_device *adev)
  * Left out, with reasons: gfx_v10_0_enable_gui_idle_interrupt() runs only when the part is not an
  * APU, and this one is; the two microcode loaders are DIRECT only; gfx_v10_0_cp_gfx_resume() is the
  * !async_gfx_ring path. */
-int bc250_gfx_cp_resume(struct amdgpu_device *adev)
+/* The caller owns sequencing and serialization. Splitting at these boundaries
+ * permits the Windows startup owner to persist progress at PASSIVE_LEVEL after
+ * releasing its locks. No register, queue or packet sequence is duplicated. */
+int bc250_gfx_cp_resume_step_traced(struct amdgpu_device *adev, unsigned int step,
+                                  bc250_gfx_checkpoint_fn checkpoint)
 {
 	u32 i;
 	int r;
 
 	if (adev == NULL || adev->usec_timeout == 0)
-		return BC250_EINVAL;      /* the three polls below; see bc250_gfx_setup() */
+		return BC250_EINVAL;
+	switch (step) {
+	case BC250_CP_KIQ_INIT:
+		/* gfx_v10_0_kiq_resume() -> gfx_v10_0_kiq_init_queue() */
+		dev_info(adev->dev, "CP resume kiq-init begin\n");
+		r = bc250_kiq_init_queue(&adev->gfx.kiq[0].ring, checkpoint);
+		dev_info(adev->dev, "CP resume kiq-init end result=%d\n", r);
+		if (r)
+			return r;
+		return 0;
+	case BC250_CP_COMPUTE_INIT:
+		/* gfx_v10_0_kcq_resume() */
+		dev_info(adev->dev, "CP resume compute-unhalt begin\n");
+		bc250_cp_compute_enable(adev, true);
+		dev_info(adev->dev, "CP resume compute-unhalt end\n");
+		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+			dev_info(adev->dev, "CP resume kcq-init ring=%u begin\n", i);
+			r = bc250_kcq_init_queue(&adev->gfx.compute_ring[i]);
+			dev_info(adev->dev, "CP resume kcq-init ring=%u end result=%d\n", i, r);
+			if (r)
+				return r;
+		}
+		return 0;
+	case BC250_CP_KCQ_ENABLE:
+		dev_info(adev->dev, "CP resume kcq-enable begin\n");
+		r = bc250_enable_kcq(adev);
+		dev_info(adev->dev, "CP resume kcq-enable end result=%d\n", r);
+		if (r)
+			return r;
+		return 0;
+	case BC250_CP_GFX_QUEUE_INIT:
+		/* gfx_v10_0_cp_async_gfx_ring_resume() */
+		for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
+			dev_info(adev->dev, "CP resume kgq-init ring=%u begin\n", i);
+			r = bc250_kgq_init_queue(&adev->gfx.gfx_ring[i], adev->gfx.async_gfx_ring);
+			dev_info(adev->dev, "CP resume kgq-init ring=%u end result=%d\n", i, r);
+			if (r)
+				return r;
+		}
+		return 0;
+	case BC250_CP_KGQ_ENABLE:
+		dev_info(adev->dev, "CP resume kgq-enable begin\n");
+		r = bc250_enable_kgq(adev);
+		dev_info(adev->dev, "CP resume kgq-enable end result=%d\n", r);
+		if (r)
+			return r;
+		return 0;
+	case BC250_CP_GFX_START:
+		dev_info(adev->dev, "CP resume gfx-start begin\n");
+		r = bc250_cp_gfx_start(adev);
+		dev_info(adev->dev, "CP resume gfx-start end result=%d\n", r);
+		if (r)
+			return r;
+		return 0;
+	case BC250_CP_GFX_TEST:
+		for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
+			dev_info(adev->dev, "CP resume gfx-test ring=%u begin\n", i);
+			r = bc250_gfx_ring_test(&adev->gfx.gfx_ring[i]);
+			dev_info(adev->dev, "CP resume gfx-test ring=%u end result=%d\n", i, r);
+			if (r)
+				return r;
+		}
+		return 0;
+	case BC250_CP_COMPUTE_TEST:
+		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+			dev_info(adev->dev, "CP resume compute-test ring=%u begin\n", i);
+			r = bc250_gfx_ring_test(&adev->gfx.compute_ring[i]);
+			dev_info(adev->dev, "CP resume compute-test ring=%u end result=%d\n", i, r);
+			if (r)
+				return r;
+		}
+		return 0;
+	default:
+		return BC250_EINVAL;
+	}
+}
 
-	/* gfx_v10_0_kiq_resume() -> gfx_v10_0_kiq_init_queue() */
-	r = bc250_kiq_init_queue(&adev->gfx.kiq[0].ring);
-	if (r)
-		return r;
+int bc250_gfx_cp_resume_step(struct amdgpu_device *adev, unsigned int step)
+{
+	return bc250_gfx_cp_resume_step_traced(adev, step, NULL);
+}
 
-	/* gfx_v10_0_kcq_resume() */
-	bc250_cp_compute_enable(adev, true);
-	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
-		r = bc250_kcq_init_queue(&adev->gfx.compute_ring[i]);
+int bc250_gfx_cp_resume(struct amdgpu_device *adev)
+{
+	unsigned int step;
+	int r;
+	for (step = BC250_CP_KIQ_INIT; step <= BC250_CP_COMPUTE_TEST; step++) {
+		r = bc250_gfx_cp_resume_step(adev, step);
 		if (r)
 			return r;
 	}
-	r = bc250_enable_kcq(adev);
-	if (r)
-		return r;
-
-	/* gfx_v10_0_cp_async_gfx_ring_resume() */
-	for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
-		r = bc250_kgq_init_queue(&adev->gfx.gfx_ring[i], adev->gfx.async_gfx_ring);
-		if (r)
-			return r;
-	}
-	r = bc250_enable_kgq(adev);
-	if (r)
-		return r;
-	r = bc250_cp_gfx_start(adev);
-	if (r)
-		return r;
-
-	for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
-		r = bc250_gfx_ring_test(&adev->gfx.gfx_ring[i]);
-		if (r)
-			return r;
-	}
-	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
-		r = bc250_gfx_ring_test(&adev->gfx.compute_ring[i]);
-		if (r)
-			return r;
-	}
-
 	return 0;
 }
 
@@ -2208,6 +2382,7 @@ int bc250_gfx_setup(struct amdgpu_device *adev, const struct bc250_gfx_inputs *i
 				r_i = &adev->gfx.gfx_ring[i - 1 - adev->gfx.num_compute_rings];
 
 			r_i->rptr_gpu_addr = mc + slot * BC250_WB_SLOT_BYTES;
+			r_i->rptr_cpu_addr = cpu ? (volatile u32 *)(cpu + slot * BC250_WB_SLOT_BYTES) : NULL;
 			slot++;
 			r_i->wptr_gpu_addr = mc + slot * BC250_WB_SLOT_BYTES;
 			r_i->wptr_cpu_addr = cpu ? cpu + slot * BC250_WB_SLOT_BYTES : NULL;
@@ -2463,10 +2638,11 @@ static void bc250_kcq_clear_pointers(struct amdgpu_device *adev)
 /*
  * gfx_v10_0.c:7529 gfx_v10_0_hw_fini(), in its order.
  *
- * This exists to make the bring-up re-runnable without reloading firmware, which matters on Windows
- * for a reason Linux does not have: a second PSP load in one boot leaves the RLC disabled and busy
- * (facts M35, E10). So the undo has to put the CP, the queues and the RLC back to a state the same
- * hw_init can start from, using only registers and the KIQ.
+ * This exists to make the bring-up re-runnable without reloading firmware. A second PSP load in
+ * the E10 Windows experiment left RLC disabled and busy (M35); E13 also observed Linux reload
+ * failure (M55). Generic Linux retirement has a conditional RLC stop in SMU cleanup (M333),
+ * but that is not a successful reload reference. The register/KIQ undo below does not prove
+ * that PSP firmware can safely be reloaded afterwards (M330-M332).
  *
  * What it does, and what each step is for:
  *
@@ -2479,11 +2655,11 @@ static void bc250_kcq_clear_pointers(struct amdgpu_device *adev)
  *   2b. the KIQ's own HQD dequeued while the MEC still runs, which is not upstream's and is the one
  *      step without which a second bring-up meets a live fetcher. See bc250_kiq_dequeue() above;
  *   3. the CP and the MEC halted;
- *   4. the RLC stopped. This is NOT in upstream's hw_fini, and it is here deliberately: upstream
- *      leaves the RLC running because its next hw_init calls rlc_resume(), which stops it first.
- *      Ours does too, so for a plain re-run this is redundant - but the kmd also needs a way to
- *      stop the RLC before asking the PSP to load firmware again, and that is the one case where
- *      nothing else would stop it. bc250_gfx_rlc_stop() is exposed for exactly that.
+ *   4. the RLC stopped. Upstream GFX hw_fini does not do this here; the generic SMU
+ *      cleanup can call the RLC stop callback (witnessed on unit A in E28/M334).
+ *      The kmd has no corresponding SMU teardown layer, so it stops RLC here before
+ *      PSP retirement. Clearing enable alone does not prove safe firmware reload;
+ *      E28 also failed to reload under Linux after its witnessed stop.
  *
  * Errors are reported but do not stop the teardown: a half-undone GPU is worse than a fully
  * undone one, and every step after a failure is still worth attempting. The return value is the
@@ -2491,7 +2667,7 @@ static void bc250_kcq_clear_pointers(struct amdgpu_device *adev)
  * pages and surfaces it - and 0 when the whole undo ran. It is deliberately not a reason for the
  * caller to do anything differently: there is nothing left to try.
  */
-int bc250_gfx_hw_fini(struct amdgpu_device *adev)
+static int bc250_gfx_hw_fini_impl(struct amdgpu_device *adev, bool stop_rlc)
 {
 	int first = 0;
 	int r;
@@ -2532,8 +2708,21 @@ int bc250_gfx_hw_fini(struct amdgpu_device *adev)
 	bc250_cp_compute_enable(adev, false);
 	(void)bc250_cp_gfx_enable(adev, false);
 
-	bc250_rlc_stop(adev);
+	if (stop_rlc) bc250_rlc_stop(adev);
 	return first;
+}
+
+int bc250_gfx_hw_fini(struct amdgpu_device *adev)
+{
+	return bc250_gfx_hw_fini_impl(adev, true);
+}
+
+/* M357: phase extraction for a future owner-scoped GTT retirement. Caller
+ * must retain every buffer and firmware object, then explicitly stop RLC
+ * before PSP unload/storage destruction. This alone is not a quiet verdict. */
+int bc250_gfx_hw_fini_keep_rlc(struct amdgpu_device *adev)
+{
+	return bc250_gfx_hw_fini_impl(adev, false);
 }
 
 /* The RLC stop on its own, for the one caller that needs it without the rest: the kmd, before

@@ -76,7 +76,7 @@ u64 bc250_pte_vm_flags(int writeable, int executable, int system, int snooped)
 static int bc250_pte_address(const struct bc250_pte_context *ctx, u64 dxgk_address,
 			     u64 dxgk_flags, u64 *phys, int *system)
 {
-	u64 offset;
+	u64 offset, local_base, local_size;
 	u32 segment;
 
 	/* Question 1 of the header: what the units are. Under BC250_PTE_ADDR_BYTES the header's
@@ -95,6 +95,18 @@ static int bc250_pte_address(const struct bc250_pte_context *ctx, u64 dxgk_addre
 
 	segment = (u32)((dxgk_flags & BC250_DXGK_PTE_SEGMENT_MASK) >> BC250_DXGK_PTE_SEGMENT_SHIFT);
 
+	/* A configured second local segment must be unambiguous and page aligned.
+	 * Do not silently reinterpret system/application addresses on bad layout. */
+	if (ctx->table_size && (ctx->table_segment > 31u ||
+	    ctx->table_segment == ctx->system_segment || ctx->table_segment == ctx->vram_segment ||
+	    ((ctx->table_base | ctx->table_size) & BC250_PTE_4K_MASK) != 0 ||
+	    ctx->table_size - 1 > ~ctx->table_base))
+		return BC250_EINVAL;
+	if (ctx->table_size && ctx->vram_size &&
+	    ((ctx->table_base <= ctx->vram_base && ctx->vram_base-ctx->table_base < ctx->table_size) ||
+	     (ctx->vram_base <= ctx->table_base && ctx->table_base-ctx->vram_base < ctx->vram_size)))
+		return BC250_EINVAL;
+
 	if (segment == ctx->system_segment) {
 		/* A system-memory entry carries a host physical address directly. There is no DMA
 		 * remapping on this device to turn it into something else: fact M47, the firmware
@@ -107,22 +119,21 @@ static int bc250_pte_address(const struct bc250_pte_context *ctx, u64 dxgk_addre
 		return 0;
 	}
 
-	if (segment == ctx->vram_segment && ctx->vram_size != 0) {
-		/* A VRAM entry carries an offset into the segment, which becomes an address the page
-		 * table walker understands by adding the segment's base - the same quantity amdgpu
-		 * keeps as vm_manager.vram_base_offset, sets from the gfxhub's frame buffer offset
-		 * (gmc_v10_0.c:681-686) and carries into a mapping as `vram_base`
-		 * (amdgpu_vm.c:1326). */
-		if (offset >= ctx->vram_size)
-			return BC250_EINVAL;
-		if (offset > ~ctx->vram_base)
-			return BC250_EINVAL;            /* base + offset would wrap */
-		*phys = ctx->vram_base + offset;
-		*system = 0;
-		return 0;
+	local_base = ctx->vram_base;
+	local_size = ctx->vram_size;
+	if (ctx->table_size && segment == ctx->table_segment) {
+		local_base = ctx->table_base;
+		local_size = ctx->table_size;
+	} else if (segment != ctx->vram_segment) {
+		return BC250_EINVAL;
 	}
-
-	return BC250_EINVAL;
+	/* Each local segment has its own offset origin. Use physical addresses,
+	 * not MC addresses, for both directory pointers and leaf mappings. */
+	if (!local_size || offset >= local_size || offset > ~local_base)
+		return BC250_EINVAL;
+	*phys = local_base + offset;
+	*system = 0;
+	return 0;
 }
 
 static void bc250_pte_set_prt(u64 *flags)

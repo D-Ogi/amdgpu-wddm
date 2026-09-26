@@ -650,6 +650,49 @@ static void check_controls(void)
 	}
 }
 
+static void check_table_segment(void)
+{
+	struct bc250_pte_context ctx=vm_ctx();
+	struct bc250_pte_fields decoded;
+	u64 entry,flags=BC250_DXGK_PTE_VALID | (3ull<<BC250_DXGK_PTE_SEGMENT_SHIFT);
+	unsigned units,kind,page;
+	if (bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)
+		fail("disabled table segment must refuse its ID");
+	ctx.table_segment=3;ctx.table_base=VRAM_BASE+VRAM_SIZE;ctx.table_size=512ull*4096;
+	for(units=0;units<2;units++) for(kind=0;kind<2;kind++) for(page=0;page<512;page++) {
+		u64 address=units?page:(u64)page*4096;
+		ctx.units=(enum bc250_pte_addr_units)units;
+		if (bc250_pte_from_dxgk(&ctx,(enum bc250_pte_kind)kind,flags,address,&entry)!=0) {
+			fail("dedicated table segment accepts bounded page");continue;
+		}
+		bc250_pte_decode(entry,(enum bc250_pte_kind)kind,&decoded);
+		if (!decoded.valid || decoded.system || decoded.address!=ctx.table_base+(u64)page*4096)
+			fail("dedicated table offset resolves independent physical origin");
+	}
+	ctx.units=BC250_PTE_ADDR_BYTES;
+	if (bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,ctx.table_size,&entry)==0 || entry)
+		fail("dedicated table segment end refuses with zero output");
+	if (bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,BC250_DXGK_PTE_VALID | ((u64)VRAM_SEGMENT<<BC250_DXGK_PTE_SEGMENT_SHIFT),4096,&entry)!=0)
+		fail("application local segment remains usable");
+	bc250_pte_decode(entry,BC250_PTE_LEAF,&decoded);
+	if(decoded.address!=VRAM_BASE+4096)fail("application segment retains its origin");
+	ctx.table_segment=SYS_SEGMENT;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("table/system ID collision refused");
+	ctx.table_segment=VRAM_SEGMENT;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("table/application ID collision refused");
+	ctx.table_segment=32;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("unrepresentable table ID refused");
+	ctx.table_segment=3;ctx.table_base=VRAM_BASE;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("overlapping local segments refused");
+	ctx.table_base=VRAM_BASE+VRAM_SIZE;ctx.table_base++;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("unaligned table base refused");
+	ctx.table_base--;ctx.table_size--;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("unaligned table extent refused");
+	ctx.table_size=8192;ctx.table_base=~0ull-4095;
+	if(bc250_pte_from_dxgk(&ctx,BC250_PTE_LEAF,flags,0,&entry)==0)fail("table extent wrap refused");
+	printf("  dedicated table segment:2048 address/unit/kind combinations plus boundary controls\n");
+}
+
 int main(int argc, char **argv)
 {
 	g_verbose = argc > 1 && strcmp(argv[1], "-v") == 0;
@@ -666,6 +709,7 @@ int main(int argc, char **argv)
 	check_bad();
 	check_decode();
 	check_controls();
+	check_table_segment();
 
 	printf("\n%s (%d failures)\n", g_failures == 0 ? "PASS" : "FAIL", g_failures);
 	return g_failures == 0 ? 0 : 1;

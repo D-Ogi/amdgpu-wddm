@@ -35,6 +35,8 @@
 #include "bc250_sdma.h"
 #include "bc250_gmc.h"                    /* BC250_EINVAL */
 #include "bc250_gfx.h"                    /* BC250_ENOMEM, pulled in the same way bc250_sdma.c pulls it */
+#include "gc/gc_10_1_0_offset.h"
+#include "gc/gc_10_1_0_sh_mask.h"
 #include "navi10_sdma_pkt_open.h"         /* the same imported header bc250_sdma_copy.c builds against */
 
 /* ---------------------------------------------------------------------------------------------
@@ -137,6 +139,16 @@ void bc250_shim_log(int level, void *dev, const char *fmt, ...)
 	va_end(ap);
 }
 
+/* Packet controls never enter RLC reset lifecycle code. */
+int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested)
+{
+    (void)adev; (void)requested; abort();
+}
+void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested)
+{
+    (void)adev; (void)requested; abort();
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Expectations
  * ------------------------------------------------------------------------------------------- */
@@ -197,6 +209,108 @@ static void ring_init(struct amdgpu_ring *ring, struct amdgpu_device *adev, cons
 	ring->use_doorbell = 1;
 	ring->doorbell_index = 0x200;
 	ring->me = 0;
+}
+
+#include "sdma-ib-reference.h"
+
+#include "sdma-vm-reference.h"
+
+static void case_virtual_indirect_buffers(void)
+{
+    static u32 actual[TEST_RING_DWORDS], expected[TEST_RING_DWORDS];
+    static const struct amdgpu_vmhub_funcs vm_funcs={NULL,reference_invalidate_req};
+    struct amdgpu_device adev;
+    struct amdgpu_ring ring,oracle;
+    struct amdgpu_vmhub *hub;
+    unsigned int pos,vmid,variant;
+    printf("\n-- VM INDIRECT: executable AMD root/TLB/IB reference --\n");
+    memset(&adev,0,sizeof(adev));
+    hub=&adev.vmhub[AMDGPU_GFXHUB(0)];
+    hub->ctx0_ptb_addr_lo32=mmGCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32;
+    hub->ctx0_ptb_addr_hi32=mmGCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32;
+    hub->ctx_addr_distance=mmGCVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32-mmGCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32;
+    hub->vm_inv_eng0_req=mmGCVM_INVALIDATE_ENG0_REQ;
+    hub->vm_inv_eng0_ack=mmGCVM_INVALIDATE_ENG0_ACK;
+    hub->vmhub_funcs=&vm_funcs;
+    // Register fields above use AMD's relative offsets; this host oracle never writes MMIO.
+    for(pos=0;pos<32;pos++) for(vmid=1;vmid<16;vmid++) for(variant=0;variant<2;variant++) {
+        struct amdgpu_job job={vmid};
+        struct amdgpu_ib ib={0x40002000ULL,16};
+        u64 root=variant ? 0x0000001234567000ULL : 0x0000000034567000ULL;
+        u64 start=pos<16 ? pos : pos<24 ? TEST_RING_DWORDS-8u+pos-16u : 0x100000000ULL+pos-24u;
+        unsigned int before;
+        memset(actual,0xcc,sizeof(actual));memset(expected,0xcc,sizeof(expected));
+        ring_init(&ring,&adev,&g_sdma_funcs,actual);ring_init(&oracle,&adev,&g_sdma_funcs,expected);
+        ring.wptr=oracle.wptr=start;
+        check(amdgpu_ring_alloc(&oracle,64)==0,"reference root/IB reservation fits");
+        (void)reference_vm_flush(&oracle,vmid,root|AMDGPU_PTE_VALID);
+        check(oracle.wptr-start==BC250_SDMA_VM_FLUSH_DWORDS,"AMD root/flush is21DWORD");
+        reference_csa=0x40003000ULL;
+        reference_sdma_emit_ib(&oracle,&job,&ib,0);
+        check(bc250_sdma_emit_fence(&oracle,0x0000006789000000ULL,97,AMDGPU_FENCE_FLAG_INT)==0,"reference outer fence");
+        amdgpu_ring_commit(&oracle);
+        before=g_doorbell_count;
+        check(bc250_sdma_submit_vm_ib(&ring,root,ib.gpu_addr,ib.length_dw,vmid,reference_csa,
+                                     0x0000006789000000ULL,97,AMDGPU_FENCE_FLAG_INT)==0,"virtual IB submit succeeds");
+        check(ring.wptr==oracle.wptr && memcmp(actual,expected,sizeof(actual))==0,"AMD root then invalidate then IB then outer fence");
+        check(ring.count_dw>=0,"VM submission reservation covers padding");
+        check(g_doorbell_count==before+1 && g_doorbell_value==ring.wptr*4u,"one byte-valued VM submission doorbell");
+    }
+}
+
+static void case_indirect_buffers(void)
+{
+    static u32 actual[TEST_RING_DWORDS], expected[TEST_RING_DWORDS];
+    static const u32 lengths[] = {1u, 8u, 1024u, SDMA_PKT_INDIRECT_IB_SIZE_ib_size_mask};
+    struct amdgpu_device adev;
+    struct amdgpu_ring ring, oracle;
+    unsigned int pos, vmid, variant;
+    printf("\n-- INDIRECT: executable AMD reference, VMIDs, wrap, submit fence --\n");
+    memset(&adev, 0, sizeof(adev));
+    for (pos = 0; pos < 32; pos++) for (vmid = 0; vmid < 16; vmid++)
+    for (variant = 0; variant < 4; variant++) {
+        struct amdgpu_job job = {vmid};
+        struct amdgpu_ib ib = {0x0000001234560020ULL, lengths[variant]};
+        u64 start = pos < 16 ? pos : pos < 24 ? TEST_RING_DWORDS - 8u + pos - 16u :
+                                               0x100000000ULL + pos - 24u;
+        unsigned int count, before;
+        reference_csa = (variant & 1u) ? 0x0000005678000000ULL : 0;
+        memset(actual, 0xcc, sizeof(actual)); memset(expected, 0xcc, sizeof(expected));
+        ring_init(&ring, &adev, &g_sdma_funcs, actual);
+        ring_init(&oracle, &adev, &g_sdma_funcs, expected);
+        ring.wptr = oracle.wptr = start;
+        count = bc250_sdma_ib_size(&ring);
+        reference_sdma_emit_ib(&oracle, &job, &ib, 0);
+        check(bc250_sdma_emit_ib(&ring, ib.gpu_addr, ib.length_dw, vmid, reference_csa) == 0,
+              "valid indirect buffer emits");
+        check(ring.wptr == oracle.wptr && ring.wptr - start == count && !(ring.wptr & 7u),
+              "reference size and eight-word end alignment");
+        check(memcmp(actual, expected, sizeof(actual)) == 0, "all packet words match imported AMD function");
+        memset(actual, 0xcc, sizeof(actual)); memset(expected, 0xcc, sizeof(expected));
+        ring.wptr = oracle.wptr = start;
+        check(amdgpu_ring_alloc(&oracle, count + bc250_sdma_fence_size(&oracle, AMDGPU_FENCE_FLAG_INT)) == 0,
+              "oracle reservation fits");
+        reference_sdma_emit_ib(&oracle, &job, &ib, 0);
+        check(bc250_sdma_emit_fence(&oracle, 0x0000006789000000ULL, 73, AMDGPU_FENCE_FLAG_INT) == 0,
+              "oracle outer fence emits");
+        amdgpu_ring_commit(&oracle);
+        before = g_doorbell_count;
+        check(bc250_sdma_submit_ib(&ring, ib.gpu_addr, ib.length_dw, vmid, reference_csa,
+                                 0x0000006789000000ULL, 73, AMDGPU_FENCE_FLAG_INT) == 0,
+              "indirect submission commits");
+        check(ring.wptr == oracle.wptr && memcmp(actual, expected, sizeof(actual)) == 0,
+              "submission preserves IB then fence then commit padding");
+        check(ring.count_dw >= 0, "reservation covers final commit padding from every tested start");
+        check(g_doorbell_count == before + 1 && g_doorbell_value == ring.wptr * 4u,
+              "one byte-valued doorbell publication");
+    }
+    ring_init(&ring, &adev, &g_sdma_funcs, actual);
+    memset(actual, 0xcc, sizeof(actual)); memcpy(expected, actual, sizeof(actual));
+    check(bc250_sdma_emit_ib(&ring, 33, 8, 2, 0) == BC250_EINVAL, "unaligned IB is not rounded down");
+    check(bc250_sdma_emit_ib(&ring, 32, 8, 16, 0) == BC250_EINVAL, "VMID is not truncated");
+    check(bc250_sdma_emit_ib(&ring, 32, SDMA_PKT_INDIRECT_IB_SIZE_ib_size_mask + 1u, 2, 0) == BC250_EINVAL,
+          "IB size is not truncated");
+    check(ring.wptr == 0 && memcmp(actual, expected, sizeof(actual)) == 0, "refused packet publishes no bytes");
 }
 
 /* bc250_sdma_copy.c keeps copy_max_bytes/fill_max_bytes as its own file-local constants (both
@@ -468,6 +582,8 @@ int main(int argc, char **argv)
 	case_fill_split();
 	case_refusals();
 	case_copy_test();
+	case_indirect_buffers();
+	case_virtual_indirect_buffers();
 
 	printf("\n== verdict ==\n");
 	printf("  %u checks, %u failures\n", g_checks, g_failures);

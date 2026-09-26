@@ -312,7 +312,7 @@ static void bc250_sdma_ctx_switch_enable(struct amdgpu_device *adev, bool enable
  * The write pointer of an SDMA ring counts bytes, not dwords, which is where the `<< 2` comes from;
  * bc250_ring.c keeps the dword convention of the CP rings and says so.
  * ------------------------------------------------------------------------------------------- */
-static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i)
+static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, bool reset_transport)
 {
 	struct amdgpu_ring *ring;
 	u32 rb_cntl, ib_cntl;
@@ -355,7 +355,8 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i)
 	 * predicting an adoption it cannot carry out. The corollary is that a PLAN can never exercise
 	 * the adoption arm at all - the only thing that does is the host replay's
 	 * check_sdma_pointers() (driver/shim/test/replay_gfx.c). */
-	hw_wptr = (u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR)) |
+	/* Recovery discards transport; never use the E15 startup adoption policy. */
+	hw_wptr = reset_transport ? 0 : (u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR)) |
 		  ((u64)RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,
 								 mmSDMA0_GFX_RB_WPTR_HI)) << 32);
 	if (hw_wptr != 0) {
@@ -545,7 +546,7 @@ int bc250_sdma_start(struct amdgpu_device *adev)
 	bc250_sdma_ctx_switch_enable(adev, true);
 
 	for (i = 0; i < adev->sdma.num_instances; i++) {
-		r = bc250_sdma_gfx_resume_instance(adev, i);
+		r = bc250_sdma_gfx_resume_instance(adev, i, false);
 		if (r)
 			return r;
 	}
@@ -565,8 +566,286 @@ int bc250_sdma_hw_init(struct amdgpu_device *adev)
 	return bc250_sdma_start(adev);
 }
 
+/* PROVENANCE: Linux amdgpu v6.18 sdma_v5_0_stop_queue, AMD MIT.
+ * Register body adapted mechanically. RLC safe-mode scope belongs to the
+ * caller, as do serialization, retained backing, unfreeze and ring restore.
+ * Bounds are checked before touching registers; timeout uses the shim's
+ * BC250_ETIME code. The composite reload helper owns the paired RLC scope. */
+static void bc250_sdma_stop_selected_rings(struct amdgpu_device *adev, uint32_t inst_mask)
+{
+	u32 rb_cntl, ib_cntl;
+	int i;
+
+	for (i = 0; i < adev->sdma.num_instances; i++) if (inst_mask & (1u << i)) {
+		rb_cntl = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, i, mmSDMA0_GFX_RB_CNTL));
+		rb_cntl = REG_SET_FIELD(rb_cntl, SDMA0_GFX_RB_CNTL, RB_ENABLE, 0);
+		WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, i, mmSDMA0_GFX_RB_CNTL), rb_cntl);
+		ib_cntl = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, i, mmSDMA0_GFX_IB_CNTL));
+		ib_cntl = REG_SET_FIELD(ib_cntl, SDMA0_GFX_IB_CNTL, IB_ENABLE, 0);
+		WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, i, mmSDMA0_GFX_IB_CNTL), ib_cntl);
+	}
+}
+
+/* AMD sdma_v5_0_soft_reset_engine, mechanically extracted (M372).
+ * Return 0 means the register sequence ran; it does not prove reset completion.
+ * Caller retains all backing and owns queue quiescence/restoration. */
+int bc250_sdma_soft_reset_instance(struct amdgpu_device *adev, u32 instance_id)
+{
+	u32 grbm_soft_reset;
+	u32 tmp;
+
+	/* [shim] Fixed two-instance device; reject before shifting or MMIO. */
+	if (!adev || instance_id >= (u32)adev->sdma.num_instances || instance_id >= 2)
+		return BC250_EINVAL;
+
+	grbm_soft_reset = REG_SET_FIELD(0,
+					GRBM_SOFT_RESET, SOFT_RESET_SDMA0,
+					1);
+	grbm_soft_reset <<= instance_id;
+
+	tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+	tmp |= grbm_soft_reset;
+	WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+	tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+	/* M373: observe existing readbacks without adding MMIO. */
+	dev_info(adev->dev, "SDMA%u reset asserted readback 0x%08x\n", instance_id, tmp);
+
+	bc250_shim_udelay(50);
+
+	tmp &= ~grbm_soft_reset;
+	WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+	tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+	dev_info(adev->dev, "SDMA%u reset released readback 0x%08x\n", instance_id, tmp);
+	return 0;
+}
+
+int bc250_sdma_quiesce_instance(struct amdgpu_device *adev, u32 instance)
+{
+	u32 f32_cntl, freeze, cntl, stat1_reg;
+	int i, r = 0;
+	u32 j;
+
+	if (!adev || instance >= (u32)adev->sdma.num_instances || instance >= 2 || !adev->usec_timeout)
+		return BC250_EINVAL;
+
+	i = (int)instance;
+	/* Caller owns the enclosing RLC safe-mode scope. */
+
+	/* stop queue */
+	bc250_sdma_stop_selected_rings(adev, 1 << i);
+
+	/* engine stop SDMA1_F32_CNTL.HALT to 1 and SDMAx_FREEZE freeze bit to 1 */
+	freeze = RREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_FREEZE));
+	freeze = REG_SET_FIELD(freeze, SDMA0_FREEZE, FREEZE, 1);
+	WREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_FREEZE), freeze);
+
+	for (j = 0; j < adev->usec_timeout; j++) {
+		freeze = RREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_FREEZE));
+		if (REG_GET_FIELD(freeze, SDMA0_FREEZE, FROZEN) & 1)
+			break;
+		bc250_shim_udelay(1);
+	}
+
+	/* check sdma copy engine all idle if frozen not received*/
+	if (j == adev->usec_timeout) {
+		stat1_reg = RREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_STATUS1_REG));
+		if ((stat1_reg & 0x3FF) != 0x3FF) {
+			dev_err(adev->dev, "cannot soft reset as sdma not idle\n");
+			r = BC250_ETIME;
+			goto err0;
+		}
+	}
+
+	f32_cntl = RREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_F32_CNTL));
+	f32_cntl = REG_SET_FIELD(f32_cntl, SDMA0_F32_CNTL, HALT, 1);
+	WREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_F32_CNTL), f32_cntl);
+
+	cntl = RREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_CNTL));
+	cntl = REG_SET_FIELD(cntl, SDMA0_CNTL, UTC_L1_ENABLE, 0);
+	WREG32(bc250_sdma_reg_offset(adev, i, mmSDMA0_CNTL), cntl);
+err0:
+	/* Safe-mode exit remains the caller's responsibility on both paths. */
+	return r;
+}
+
+/* sdma_v5_0_restore_queue: unfreeze fragment only. Caller must still
+ * reprogram/restore the ring and translation visibility before admission. */
+int bc250_sdma_unfreeze_instance(struct amdgpu_device *adev, u32 instance)
+{
+ u32 freeze;
+ if (!adev || instance >= (u32)adev->sdma.num_instances || instance >= 2)
+  return BC250_EINVAL;
+ freeze=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_FREEZE));
+ freeze=REG_SET_FIELD(freeze,SDMA0_FREEZE,FREEZE,0);
+ WREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_FREEZE),freeze);
+ return 0;
+}
+
+/* M370: compose AMD queue-quiescence with a paired RLC scope. Caller has
+ * already halted CP/SDMA and owns all backing. Unfreeze while engines remain
+ * halted and UTC/rings disabled, so FREEZE need not survive PSP firmware load.
+ * This composition is a Windows lifecycle policy, not an upstream reset call. */
+int bc250_sdma_quiesce_for_reload(struct amdgpu_device *adev)
+{
+ bool requested=false;
+ u32 i, control, rb, ib, freeze;
+ int result;
+ if (!adev || adev->sdma.num_instances!=2) return BC250_EINVAL;
+ result=bc250_gfx_rlc_safe_enter(adev,&requested);
+ if (result) goto Done;
+ for(i=0;i<2;i++) {
+  result=bc250_sdma_quiesce_instance(adev,i);
+  if(result) goto Done;
+ }
+ for(i=0;i<2;i++) {
+  result=bc250_sdma_unfreeze_instance(adev,i);
+  if(result) goto Done;
+  control=RREG32(bc250_sdma_reg_offset(adev,i,mmSDMA0_F32_CNTL));
+  rb=RREG32(bc250_sdma_reg_offset(adev,i,mmSDMA0_GFX_RB_CNTL));
+  ib=RREG32(bc250_sdma_reg_offset(adev,i,mmSDMA0_GFX_IB_CNTL));
+  freeze=RREG32(bc250_sdma_reg_offset(adev,i,mmSDMA0_FREEZE));
+  if (!REG_GET_FIELD(control,SDMA0_F32_CNTL,HALT) ||
+      REG_GET_FIELD(rb,SDMA0_GFX_RB_CNTL,RB_ENABLE) ||
+      REG_GET_FIELD(ib,SDMA0_GFX_IB_CNTL,IB_ENABLE) ||
+      REG_GET_FIELD(freeze,SDMA0_FREEZE,FREEZE)) { result=BC250_EIO;goto Done; }
+  control=RREG32(bc250_sdma_reg_offset(adev,i,mmSDMA0_CNTL));
+  if(REG_GET_FIELD(control,SDMA0_CNTL,UTC_L1_ENABLE)) { result=BC250_EIO;goto Done; }
+ }
+Done:
+ bc250_gfx_rlc_safe_exit(adev,requested);
+ return result;
+}
+
+/* M373: Windows stop/reload composition. The reset remains between the
+ * source's two safe-mode scopes. All backing is retained by the caller.
+ * Unlike live Linux queue restoration, re-quiesce after reset and verify the
+ * halted/queue-off/cache-off state before unfreezing and retiring mappings. */
+int bc250_sdma_reset_for_reload(struct amdgpu_device *adev)
+{
+ bool requested=false;
+ u32 i;
+ int result;
+ if (!adev || adev->sdma.num_instances!=2) return BC250_EINVAL;
+ result=bc250_gfx_rlc_safe_enter(adev,&requested);
+ if (!result) {
+  for(i=0;i<2;i++) {
+   result=bc250_sdma_quiesce_instance(adev,i);
+   if(result) break;
+  }
+ }
+ bc250_gfx_rlc_safe_exit(adev,requested);
+ dev_info(adev->dev,"SDMA pre-reset quiescence result %d\n",result);
+ if(result) return result;
+ for(i=0;i<2;i++) {
+  result=bc250_sdma_soft_reset_instance(adev,i);
+  if(result) return result;
+ }
+ result=bc250_sdma_quiesce_for_reload(adev);
+ dev_info(adev->dev,"SDMA post-reset quiescence result %d\n",result);
+ return result;
+}
+
+/* Single-instance transport recovery, composed from AMD sdma_v5_0 stop/reset/
+ * restore. The September 2026 reset series describes clearing obsolete ring/WB
+ * contents before restart. No scheduler replay or fence completion occurs here.
+ * [shim] Re-quiesce after reset as reset_for_reload does, before changing memory,
+ * instead of assuming reset defaults. Keep firmware and the other engine live. */
+int bc250_sdma_reset_retained_instance(struct amdgpu_device *adev, u32 instance,
+                                     struct bc250_sdma_reset_receipt *receipt)
+{
+ struct amdgpu_ring *ring;
+ volatile u64 *rptr_cpu;
+ u64 rptr_offset,wptr_offset;
+ u32 rb,ib,control,halt,freeze;
+ bool requested=false;
+ int result;
+ if (!receipt) return BC250_EINVAL;
+ memset(receipt,0,sizeof(*receipt));
+ receipt->instance=instance;
+ if (!adev || instance>=2 || instance>=(u32)adev->sdma.num_instances ||
+     !adev->usec_timeout) return BC250_EINVAL;
+ ring=&adev->sdma.instance[instance].ring;
+ if (ring->adev!=adev || ring->me!=instance || ring->funcs!=&bc250_ring_funcs_sdma ||
+     !ring->ring || ring->ring_size!=BC250_SDMA_RING_SIZE ||
+     ring->buf_mask!=BC250_SDMA_RING_SIZE/sizeof(u32)-1u ||
+     !adev->sdma.wb_mem.cpu || !ring->wptr_cpu_addr ||
+     ring->rptr_gpu_addr<adev->sdma.wb_mem.mc || ring->wptr_gpu_addr<adev->sdma.wb_mem.mc)
+  return BC250_EINVAL;
+ rptr_offset=ring->rptr_gpu_addr-adev->sdma.wb_mem.mc;
+ wptr_offset=ring->wptr_gpu_addr-adev->sdma.wb_mem.mc;
+ /* Only the two WB slots assigned by setup belong to this engine. */
+ if (rptr_offset!=(u64)instance*2u*BC250_SDMA_WB_SLOT_BYTES ||
+     wptr_offset!=rptr_offset+BC250_SDMA_WB_SLOT_BYTES ||
+     wptr_offset+sizeof(u64)>adev->sdma.wb_mem.size ||
+     ring->wptr_cpu_addr!=(char*)adev->sdma.wb_mem.cpu+(size_t)wptr_offset)
+  return BC250_EINVAL;
+ rptr_cpu=(volatile u64*)((char*)adev->sdma.wb_mem.cpu+(size_t)rptr_offset);
+ receipt->previous_wptr=ring->wptr;
+ receipt->stage=BC250_SDMA_RESET_STOP;
+ result=bc250_gfx_rlc_safe_enter(adev,&requested);
+ if (!result) result=bc250_sdma_quiesce_instance(adev,instance);
+ bc250_gfx_rlc_safe_exit(adev,requested);
+ if (result) return result;
+ receipt->stage=BC250_SDMA_RESET_PULSE;
+ result=bc250_sdma_soft_reset_instance(adev,instance);
+ if (result) return result;
+ receipt->stage=BC250_SDMA_RESET_CLEAR;
+ requested=false;
+ result=bc250_gfx_rlc_safe_enter(adev,&requested);
+ if (result) goto Done;
+ result=bc250_sdma_quiesce_instance(adev,instance);
+ if (result) goto Done;
+ rb=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_RB_CNTL));
+ ib=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_IB_CNTL));
+ control=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_CNTL));
+ halt=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_F32_CNTL));
+ if (rb==~0u || ib==~0u || control==~0u || halt==~0u ||
+     REG_GET_FIELD(rb,SDMA0_GFX_RB_CNTL,RB_ENABLE) ||
+     REG_GET_FIELD(ib,SDMA0_GFX_IB_CNTL,IB_ENABLE) ||
+     REG_GET_FIELD(control,SDMA0_CNTL,UTC_L1_ENABLE) ||
+     !REG_GET_FIELD(halt,SDMA0_F32_CNTL,HALT)) {result=BC250_EIO;goto Done;}
+ amdgpu_ring_clear_ring(ring);
+ ring->wptr=0;
+ ring->wptr_old=0;
+ ring->count_dw=0;
+ *rptr_cpu=0;
+ *(volatile u64*)ring->wptr_cpu_addr=0;
+ /* Backend MMIO stores must order CPU ring/WB writes before queue enable.
+  * The KMD uses WRITE_REGISTER_ULONG, not a no-fence accessor. */
+ receipt->stage=BC250_SDMA_RESET_RESTORE;
+ result=bc250_sdma_unfreeze_instance(adev,instance);
+ if (!result) result=bc250_sdma_gfx_resume_instance(adev,(int)instance,true);
+Done:
+ bc250_gfx_rlc_safe_exit(adev,requested);
+ if (result) return result;
+ receipt->stage=BC250_SDMA_RESET_VERIFY;
+ receipt->rptr=(u64)RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_RB_RPTR)) |
+  ((u64)RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_RB_RPTR_HI))<<32);
+ receipt->wptr=(u64)RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_RB_WPTR)) |
+  ((u64)RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_RB_WPTR_HI))<<32);
+ rb=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_RB_CNTL));
+ ib=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_GFX_IB_CNTL));
+ control=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_CNTL));
+ halt=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_F32_CNTL));
+ freeze=RREG32(bc250_sdma_reg_offset(adev,instance,mmSDMA0_FREEZE));
+ if (receipt->rptr || receipt->wptr || *rptr_cpu || *(volatile u64*)ring->wptr_cpu_addr ||
+     rb==~0u || ib==~0u || control==~0u || halt==~0u || freeze==~0u ||
+     !REG_GET_FIELD(rb,SDMA0_GFX_RB_CNTL,RB_ENABLE) ||
+     !REG_GET_FIELD(ib,SDMA0_GFX_IB_CNTL,IB_ENABLE) ||
+     !REG_GET_FIELD(control,SDMA0_CNTL,UTC_L1_ENABLE) ||
+     REG_GET_FIELD(halt,SDMA0_F32_CNTL,HALT) ||
+     REG_GET_FIELD(freeze,SDMA0_FREEZE,FREEZE)) return BC250_EIO;
+ receipt->stage=BC250_SDMA_RESET_PROGRAMMED;
+ return 0;
+}
+
 /* sdma_v5_0.c:1480 sdma_v5_0_hw_fini(), with sdma_v5_0_gfx_stop() (sdma_v5_0.c:563) written out
  * where sdma_v5_0_enable(adev, false) would call it. sdma_v5_0_rlc_stop() is an upstream stub.
+ * [shim] Iterate actual instances here. The v6.18 reference computes an instance
+ * bitmask and then passes 1 << inst_mask to gfx_stop; with two instances that
+ * selects bit 3 instead of engines 0 and 1 (M368 source review). Do not copy
+ * that shift into our bounded loop. This is ordinary fini, not AMD's separate
+ * stop_queue freeze/UTC_L1-disable preparation for an engine reset.
  *
  * [shim] and a verdict, which upstream has no use for and this driver does. The halt sequence is
  * unchanged and still runs to the end whatever it finds; what is added is four reads per engine
@@ -861,6 +1140,149 @@ int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigne
 
 	amdgpu_ring_commit(ring);
 	return 0;
+}
+
+/* AMD sdma_v5_0_ring_emit_ib, with admission checks instead of silently
+ * rounding an IB address or truncating a VMID. CSA comes from the caller's
+ * preemption policy; it must be valid in the submitted context when required. */
+unsigned int bc250_sdma_ib_size(const struct amdgpu_ring *ring)
+{
+    if (!ring || !ring->funcs || ring->funcs->type != AMDGPU_RING_TYPE_SDMA)
+        return 0;
+    return ((2u - lower_32_bits(ring->wptr)) & 7u) + 6u;
+}
+
+static int bc250_sdma_ib_valid(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid)
+{
+    return bc250_sdma_ib_size(ring) != 0 && ring->ring && !(gpu_addr & 31u) &&
+           length_dw && length_dw <= SDMA_PKT_INDIRECT_IB_SIZE_ib_size_mask &&
+           vmid <= SDMA_PKT_INDIRECT_HEADER_vmid_mask;
+}
+
+int bc250_sdma_emit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw,
+                       u32 vmid, u64 csa_addr)
+{
+    unsigned int padding;
+    if (!bc250_sdma_ib_valid(ring, gpu_addr, length_dw, vmid))
+        return BC250_EINVAL;
+    padding = bc250_sdma_ib_size(ring) - 6u;
+    amdgpu_ring_insert_nop(ring, padding);
+    amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_INDIRECT) |
+                           SDMA_PKT_INDIRECT_HEADER_VMID(vmid));
+    amdgpu_ring_write(ring, lower_32_bits(gpu_addr));
+    amdgpu_ring_write(ring, upper_32_bits(gpu_addr));
+    amdgpu_ring_write(ring, length_dw);
+    amdgpu_ring_write(ring, lower_32_bits(csa_addr));
+    amdgpu_ring_write(ring, upper_32_bits(csa_addr));
+    return 0;
+}
+
+int bc250_sdma_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw,
+                         u32 vmid, u64 csa_addr, u64 fence_addr, u64 seq,
+                         unsigned int flags)
+{
+    unsigned int ndw;
+    int result;
+    if (!bc250_sdma_ib_valid(ring, gpu_addr, length_dw, vmid) || (fence_addr & 3u))
+        return BC250_EINVAL;
+    ndw = bc250_sdma_ib_size(ring) + bc250_sdma_fence_size(ring, flags);
+    ndw += (0u - lower_32_bits(ring->wptr + ndw)) & ring->funcs->align_mask;
+    result = amdgpu_ring_alloc(ring, ndw);
+    if (result)
+        return result;
+    result = bc250_sdma_emit_ib(ring, gpu_addr, length_dw, vmid, csa_addr);
+    if (!result)
+        result = bc250_sdma_emit_fence(ring, fence_addr, seq, flags);
+    if (result) {
+        amdgpu_ring_undo(ring);
+        return result;
+    }
+    amdgpu_ring_commit(ring);
+    return 0;
+}
+
+/* PROVENANCE: Linux v6.18 amdgpu, MIT, reference/sdma_v5_0.c register
+ * emitters and reference/gmc_v10_0.c:gmc_v10_0_emit_flush_gpu_tlb.
+ * Adaptation: GFXHUB, SDMA0 invalidate engine0 only (CPU uses17); no semaphore
+ * on this hub. Caller owns the nonzero VMID and root until actual completion. */
+static void bc250_sdma_vm_wreg(struct amdgpu_ring *ring,
+				     uint32_t reg, uint32_t val)
+{
+	amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_SRBM_WRITE) |
+			  SDMA_PKT_SRBM_WRITE_HEADER_BYTE_EN(0xf));
+	amdgpu_ring_write(ring, reg);
+	amdgpu_ring_write(ring, val);
+}
+
+static void bc250_sdma_vm_reg_wait(struct amdgpu_ring *ring, uint32_t reg,
+					 uint32_t val, uint32_t mask)
+{
+	amdgpu_ring_write(ring, SDMA_PKT_HEADER_OP(SDMA_OP_POLL_REGMEM) |
+			  SDMA_PKT_POLL_REGMEM_HEADER_HDP_FLUSH(0) |
+			  SDMA_PKT_POLL_REGMEM_HEADER_FUNC(3)); /* equal */
+	amdgpu_ring_write(ring, reg << 2);
+	amdgpu_ring_write(ring, 0);
+	amdgpu_ring_write(ring, val); /* reference */
+	amdgpu_ring_write(ring, mask); /* mask */
+	amdgpu_ring_write(ring, SDMA_PKT_POLL_REGMEM_DW5_RETRY_COUNT(0xfff) |
+			  SDMA_PKT_POLL_REGMEM_DW5_INTERVAL(10));
+}
+
+static void bc250_sdma_vm_reg_write_reg_wait(struct amdgpu_ring *ring,
+						   uint32_t reg0, uint32_t reg1,
+						   uint32_t ref, uint32_t mask)
+{
+	bc250_sdma_vm_wreg(ring, reg0, ref);
+	/* wait for a cycle to reset vm_inv_eng*_ack */
+	bc250_sdma_vm_reg_wait(ring, reg0, 0, 0);
+	bc250_sdma_vm_reg_wait(ring, reg1, mask, mask);
+}
+
+int bc250_sdma_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys)
+{
+    const struct amdgpu_vmhub *hub;
+    u64 lo, hi;
+    u32 request;
+    if (!ring || !ring->adev || !ring->ring || !ring->funcs ||
+        ring->funcs->type!=AMDGPU_RING_TYPE_SDMA || ring->me!=0 ||
+        vmid==0 || vmid>=AMDGPU_NUM_VMID || (root_phys & (AMDGPU_GPU_PAGE_SIZE-1)))
+        return BC250_EINVAL;
+    hub=&ring->adev->vmhub[AMDGPU_GFXHUB(0)];
+    if (!hub->vmhub_funcs || !hub->vmhub_funcs->get_invalidate_req || !hub->ctx_addr_distance)
+        return BC250_EINVAL;
+    lo=(u64)hub->ctx0_ptb_addr_lo32+(u64)hub->ctx_addr_distance*vmid;
+    hi=(u64)hub->ctx0_ptb_addr_hi32+(u64)hub->ctx_addr_distance*vmid;
+    if (lo>SDMA_PKT_SRBM_WRITE_ADDR_addr_mask || hi>SDMA_PKT_SRBM_WRITE_ADDR_addr_mask ||
+        hub->vm_inv_eng0_req>SDMA_PKT_SRBM_WRITE_ADDR_addr_mask || hub->vm_inv_eng0_ack>(~0u>>2))
+        return BC250_EINVAL;
+    // amdgpu_gmc_pd_addr / existing bc250_gmc_set_vmid_pd: local root plus VALID.
+    root_phys|=AMDGPU_PTE_VALID;
+    request=hub->vmhub_funcs->get_invalidate_req(vmid,0);
+    bc250_sdma_vm_wreg(ring,(u32)lo,lower_32_bits(root_phys));
+    bc250_sdma_vm_wreg(ring,(u32)hi,upper_32_bits(root_phys));
+    bc250_sdma_vm_reg_write_reg_wait(ring,hub->vm_inv_eng0_req,hub->vm_inv_eng0_ack,request,1u<<vmid);
+    return 0;
+}
+
+int bc250_sdma_submit_vm_ib(struct amdgpu_ring *ring, u64 root_phys, u64 gpu_addr, u32 length_dw,
+                            u32 vmid, u64 csa_addr, u64 fence_addr, u64 seq, unsigned int flags)
+{
+    // Reserve root LO/HI writes (6), invalidate write+two polls (15), IB and fence.
+    unsigned int ndw=BC250_SDMA_VM_FLUSH_DWORDS;
+    int result;
+    if (!bc250_sdma_ib_valid(ring,gpu_addr,length_dw,vmid) || (fence_addr & 3u))
+        return BC250_EINVAL;
+    ndw+=((2u-lower_32_bits(ring->wptr+ndw))&7u)+6u;
+    ndw+=bc250_sdma_fence_size(ring,flags);
+    ndw+=(0u-lower_32_bits(ring->wptr+ndw))&ring->funcs->align_mask;
+    result=amdgpu_ring_alloc(ring,ndw);
+    if (result) return result;
+    result=bc250_sdma_emit_vm_flush(ring,vmid,root_phys);
+    if (!result) result=bc250_sdma_emit_ib(ring,gpu_addr,length_dw,vmid,csa_addr);
+    if (!result) result=bc250_sdma_emit_fence(ring,fence_addr,seq,flags);
+    if (result) {amdgpu_ring_undo(ring);return result;}
+    amdgpu_ring_commit(ring);
+    return 0;
 }
 
 /* ---------------------------------------------------------------------------------------------

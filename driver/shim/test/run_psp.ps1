@@ -2,7 +2,7 @@
 # with the WDK kernel flags the miniport uses. Host-side only: nothing here touches the lab machine.
 #
 #   pwsh driver\shim\test\run_psp.ps1
-#   pwsh driver\shim\test\run_psp.ps1 -Firmware P:\BC-250\ref\linux-firmware\amdgpu -Verbose250
+#   pwsh driver\shim\test\run_psp.ps1 -Firmware P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu -Verbose250
 #
 # Everything is written under -Out (default P:\BC-250\scratch\m5psp), never into the repository and
 # never onto drive C:. The firmware files are linux-firmware's amdgpu/cyan_skillfish2_*.bin; they
@@ -10,7 +10,7 @@
 
 param(
     [string]$Out = 'P:\BC-250\scratch\m5psp',
-    [string]$Firmware = 'P:\BC-250\ref\linux-firmware\amdgpu',
+    [string]$Firmware = 'P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250

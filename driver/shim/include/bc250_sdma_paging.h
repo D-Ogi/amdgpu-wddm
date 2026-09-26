@@ -40,12 +40,90 @@ enum
  * buffer[0], never at an internal offset; the caller advances its own pointer by *DwordsWritten.
  * buffer_dwords: how much room is there. An operation is answered whole or not at all: on
  * BC250_SDMA_PAGING_INSUFFICIENT nothing is written and *DwordsWritten carries the (SDMA-aligned)
- * dword count the operation needs, for the caller's MultipassOffset arithmetic - this function does
- * not compute MultipassOffset itself, since that is DmaBufferWriteOffset plus a driver-chosen unit
- * (bytes), not a dword count. */
+ * dword count the operation needs. These single-range emitters do not compute MultipassOffset:
+ * the page-wise caller tracks cumulative DATA bytes separately from the COMMAND byte offset
+ * DmaBufferWriteOffset. Adding these two coordinate spaces would lose transfer progress. */
 int bc250_sdma_paging_copy(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
                            u64 src_mc, u64 dst_mc, unsigned int bytes, unsigned int *dwords_written);
 int bc250_sdma_paging_fill(struct amdgpu_device *adev, u32 *buffer, unsigned int buffer_dwords,
                            u64 dst_mc, u32 pattern, unsigned int bytes, unsigned int *dwords_written);
+
+/* Explicit page-entry values for scattered system pages or zero entries for unmap.
+ * table_mc is an aligned GPU MC address of the destination table, not a CPU pointer.
+ * Pure command construction. Caller owns mapping lifetime and GPU TLB ordering. */
+int bc250_sdma_paging_write_ptes(struct amdgpu_device *adev, u32 *buffer,
+                                unsigned int buffer_dwords, u64 table_mc,
+                                const u64 *ptes, unsigned int count,
+                                unsigned int *dwords_written);
+
+/* Explicit PTE writes followed by a noninterrupting fence/memory-poll barrier.
+ * Does not invalidate TLBs. Caller orders a later flush and OS completion, owns
+ * the destination table and retained scratch, and supplies a fresh marker.
+ * No partial output on insufficient room; split large updates at caller level. */
+int bc250_sdma_paging_update_ptes(struct amdgpu_device *adev, u32 *buffer,
+                                 unsigned int buffer_dwords, u64 table_mc,
+                                 const u64 *ptes, unsigned int count,
+                                 u64 scratch_mc, u32 sequence,
+                                 unsigned int *dwords_written);
+
+/* GFXHUB only, VMID0..15. Uses the same reserved SDMA0 invalidate engine.
+ * Does not choose a process/VMID, change a root, or synchronize other engines.
+ * Caller must keep the target VMID binding valid through execution/completion. */
+int bc250_sdma_paging_invalidate_vmid(struct amdgpu_device *adev, u32 *buffer,
+                                     unsigned int buffer_dwords, unsigned int vmid,
+                                     unsigned int *dwords_written);
+/* VMID0 GART invalidate on GFXHUB engine0, reserved for SDMA0 paging.
+ * Uses initialized AMD hub offsets/request encoder. No root change or CPU MMIO.
+ * Submit only within an ordered PTE-write/copy/unmap sequence, not independently. */
+int bc250_sdma_paging_invalidate_gart(struct amdgpu_device *adev, u32 *buffer,
+                                     unsigned int buffer_dwords, unsigned int *dwords_written);
+
+/* Permanent aperture update: explicit PTEs, ordered write/barrier/GART flush.
+ * No zero-PTE unmap assumption: caller repeats the OS DummyPage encoding.
+ * Caller owns page lifetime, cache flags, disjoint marker and fresh sequence.
+ * Reserves the complete transaction before output; no submission or completion. */
+int bc250_sdma_paging_set_aperture(struct amdgpu_device *adev, u32 *buffer,
+                                  unsigned int buffer_dwords, u64 table_mc,
+                                  const u64 *ptes, unsigned int count,
+                                  u64 scratch_mc, u32 sequence,
+                                  unsigned int *dwords_written);
+
+struct bc250_sdma_paging_mapping {
+    u64 table_mc;             /* caller-reserved contiguous PTE slots */
+    const u64 *ptes;          /* arbitrary page values, not CPU pointers on GPU */
+    unsigned int page_count;
+    u64 scratch_mc;           /* retained marker slot, outside mapping window */
+    u32 first_sequence;       /* three values, or four with staging; no wrap */
+    u64 src_mc, dst_mc;       /* caller-resolved MC/window addresses */
+    unsigned int bytes;
+    unsigned int fill;
+    u32 pattern;
+    u64 staging_mc;           /* optional disjoint4KiB private page, copy only */
+};
+/* All-or-nothing map/sync/invalidate/copy/sync/unmap/sync/invalidate construction.
+ * Caller owns window bounds, page pinning, scratch freshness and final OS fence.
+ * No hardware submission, OS completion or resource reservation is performed here. */
+int bc250_sdma_paging_mapped_transfer(struct amdgpu_device *adev, u32 *buffer,
+                                 unsigned int buffer_dwords,
+                                 const struct bc250_sdma_paging_mapping *map,
+                                 unsigned int *dwords_written);
+
+/* Byte-range variant:1..4096 bytes, no PTE alignment requirement. Same staging,
+ * marker lifetime and atomic reservation rules as the PTE wrapper below.
+ * Snapshot semantics cover this slice only, not overlapping multi-slice transfers. */
+int bc250_sdma_paging_copy_bytes(struct amdgpu_device *adev, u32 *buffer,
+                              unsigned int buffer_dwords, u64 src_mc, u64 dst_mc,
+                              unsigned int bytes, u64 staging_mc, u64 marker_mc,
+                              u32 first_sequence, unsigned int *dwords_written);
+
+/* PTE copy with snapshot semantics, including overlapping source/destination.
+ * Caller reserves a disjoint4KiB staging page and a separate4-byte marker slot
+ * until real GPU completion. Two copies and two barriers are reserved atomically.
+ * Addresses are resolved MC addresses, not the DXGK virtual copy-range fields.
+ * No page mapping, resource allocation, TLB invalidation or submission here. */
+int bc250_sdma_paging_copy_ptes(struct amdgpu_device *adev, u32 *buffer,
+                              unsigned int buffer_dwords, u64 src_mc, u64 dst_mc,
+                              unsigned int entries, u64 staging_mc, u64 marker_mc,
+                              u32 first_sequence, unsigned int *dwords_written);
 
 #endif /* BC250_SDMA_PAGING_H */

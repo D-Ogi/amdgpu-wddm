@@ -13,6 +13,24 @@
  */
 #include "amdgpu.h"
 
+/* GFX job capacity, separate from bring-up and SDMA. GFX10's get_rptr_gfx
+ * reads the low 32 bits of the CP writeback slot (gfx_v10_0.c:8541).
+ * Keep one dword empty so equal modulo pointers mean empty, never full.
+ * In a 2048-dword ring with 256-dword alignment this admits seven slots.
+ * Returning busy does not mutate the ring. The PASSIVE submit caller owns
+ * waiting and its timeout; never spin at DIRQL or overwrite unread packets. */
+int bc250_ring_has_space(const struct amdgpu_ring *ring, unsigned int ndw)
+{
+	u32 used, available;
+	if (!ring->rptr_cpu_addr || ndw > ring->max_dw ||
+	    ndw > (~0u - ring->funcs->align_mask)) return 0;
+	ndw = (ndw + ring->funcs->align_mask) & ~ring->funcs->align_mask;
+	if (ndw > ring->max_dw) return 0;
+	used = ((u32)ring->wptr - *ring->rptr_cpu_addr) & ring->buf_mask;
+	available = ring->buf_mask - used;
+	return ndw <= available;
+}
+
 /* amdgpu_ring.c:81 amdgpu_ring_alloc().
  *
  * Deviations: upstream WARN_ON_ONCE()s an oversized request and returns -ENOMEM; the shim returns
@@ -20,6 +38,7 @@
  * ring->funcs->begin_use, because there is no power management to wake. */
 int amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw)
 {
+	if (ndw > (~0u - ring->funcs->align_mask)) return -1;
 	/* Align requested size with padding so unlock_commit can pad safely */
 	ndw = (ndw + ring->funcs->align_mask) & ~ring->funcs->align_mask;
 
@@ -28,6 +47,8 @@ int amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw)
 			"ring alloc of %u dwords exceeds max_dw %u\n", ndw, ring->max_dw);
 		return -1;
 	}
+
+	if (ring->track_rptr && !bc250_ring_has_space(ring, ndw)) return -16;
 
 	ring->count_dw = (int)ndw;
 	ring->wptr_old = ring->wptr;

@@ -92,7 +92,30 @@ int bc250_gfx_init_golden_registers(struct amdgpu_device *adev);
 int bc250_gfx_grbm_cam_probe(struct amdgpu_device *adev, bool *already_remapped);
 int bc250_gfx_constants_init(struct amdgpu_device *adev);
 int bc250_gfx_rlc_resume(struct amdgpu_device *adev);
+/* Opt-in unpublished reload experiment: 0 skipped, 1 reset, negative refused. */
+int bc250_gfx_rlc_reload_reset(struct amdgpu_device *adev);
+/* Same guard, explicit AMD post-write reset reads (M352 experiment). */
+int bc250_gfx_rlc_reload_reset_readback(struct amdgpu_device *adev);
 int bc250_gfx_cp_resume(struct amdgpu_device *adev);
+/* Ordered init-only boundaries; caller must stop on failure and retain ownership. */
+enum bc250_cp_step {
+	BC250_CP_KIQ_INIT = 1,
+	BC250_CP_COMPUTE_INIT,
+	BC250_CP_KCQ_ENABLE,
+	BC250_CP_GFX_QUEUE_INIT,
+	BC250_CP_KGQ_ENABLE,
+	BC250_CP_GFX_START,
+	BC250_CP_GFX_TEST,
+	BC250_CP_COMPUTE_TEST,
+};
+int bc250_gfx_cp_resume_step(struct amdgpu_device *adev, unsigned int step);
+/* Optional synchronous diagnostics. Callback must not reenter the GPU or change
+ * its selection/state; caller retains serialization for the entire step. */
+typedef void (*bc250_gfx_checkpoint_fn)(const char *phase);
+int bc250_gfx_cp_resume_step_traced(struct amdgpu_device *adev, unsigned int step,
+                                  bc250_gfx_checkpoint_fn checkpoint);
+
+
 
 /*
  * The undo, in gfx_v10_0_hw_fini()'s order: the three fault interrupts off, UNMAP_QUEUES through
@@ -111,6 +134,8 @@ int bc250_gfx_cp_resume(struct amdgpu_device *adev);
  * for why they are here.
  */
 int bc250_gfx_hw_fini(struct amdgpu_device *adev);
+/* CP-only phase; retain RLC buffers/firmware until explicit RLC stop. */
+int bc250_gfx_hw_fini_keep_rlc(struct amdgpu_device *adev);
 
 /* Stop the RLC and nothing else. For the kmd, before a second PSP firmware load in one boot. */
 void bc250_gfx_rlc_stop(struct amdgpu_device *adev);
@@ -231,5 +256,11 @@ void bc250_gfx_ib_page_free(struct amdgpu_device *adev);
 u64  bc250_gfx_ib_addr(const struct amdgpu_device *adev);
 int  bc250_gfx_ib_ring_test_build(struct amdgpu_device *adev, u32 *length_dw);
 int  bc250_gfx_ib_ring_test_result(struct amdgpu_device *adev);
+
+/* GC10.1 safe-mode scope when GFX clock gating requires it.
+ * Zero/unrelated cg_flags succeed without a request; failed entry may set requested.
+ * Caller serializes, pairs exit even on failure, and checks backend faults. */
+int bc250_gfx_rlc_safe_enter(struct amdgpu_device *adev, bool *requested);
+void bc250_gfx_rlc_safe_exit(struct amdgpu_device *adev, bool requested);
 
 #endif /* BC250_GFX_H */

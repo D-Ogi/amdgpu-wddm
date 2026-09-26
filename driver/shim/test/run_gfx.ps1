@@ -13,6 +13,7 @@ param(
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250,
+    [switch]$Cp1Checkpoints,
     [switch]$SkipTrace
 )
 
@@ -138,6 +139,7 @@ $argv = @((Join-Path $evid 'sweep-before-run1-GC-complete-then-hang.log'),
           $traceFile, $traceIrq, '--dump', $dumps, '--rings', (Join-Path $evid 'rings'),
           '--windows-sweep', (Join-Path $repo 'evidence\windows\2026-09-21-E10-run-001\sweep-GC-loaded-111010.log'))
 if ($Verbose250) { $argv += '-v' }
+if ($Cp1Checkpoints) { $argv += '--cp1-checkpoints' }
 & "$Out\replay_gfx.exe" @argv
 $code = $LASTEXITCODE
 Write-Host ''

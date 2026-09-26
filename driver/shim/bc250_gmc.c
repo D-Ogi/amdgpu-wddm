@@ -149,12 +149,13 @@ int bc250_gmc_setup(struct amdgpu_device *adev, const struct bc250_gmc_inputs *i
  * Deviation from Linux: upstream holds adev->gmc.invalidate_lock across this. The shim has no
  * locks yet; the miniport has to serialize calls itself until it does.
  */
-int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32 flush_type)
+int bc250_gmc_flush_gpu_tlb_observed(struct amdgpu_device *adev, u32 vmid, u32 vmhub,
+				   u32 flush_type, bc250_tlb_observer observer)
 {
 	struct amdgpu_vmhub *hub;
 	bool use_semaphore;
 	bool semaphore_taken = false;
-	u32 inv_req, sem, req, ack;
+	u32 inv_req, sem, req, ack, sample = 0;
 	unsigned int i;
 	int r = 0;
 
@@ -192,16 +193,22 @@ int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32
 	}
 
 	WREG32(req, inv_req);
+	if (observer) observer(adev, "after-invalidate-request", inv_req);
 
 	if (vmhub == AMDGPU_GFXHUB(0) &&
 	    amdgpu_ip_version(adev, GC_HWIP, 0) < IP_VERSION(10, 3, 0))
-		RREG32(req);
+	{
+		sample = RREG32(req);
+		if (observer) observer(adev, "after-invalidate-request-read", sample);
+	}
 
 	for (i = 0; i < adev->usec_timeout; i++) {
-		if (RREG32(ack) & (1u << vmid))
+		sample = RREG32(ack);
+		if (sample & (1u << vmid))
 			break;
 		bc250_shim_udelay(1);
 	}
+	if (observer) observer(adev, "after-invalidate-ack", sample);
 	if (i >= adev->usec_timeout) {
 		dev_err(adev->dev, "Timeout waiting for VM flush hub: %d!\n", (int)vmhub);
 		if (r == 0)
@@ -214,6 +221,11 @@ int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32
 		WREG32(sem, 0);
 
 	return r;
+}
+
+int bc250_gmc_flush_gpu_tlb(struct amdgpu_device *adev, u32 vmid, u32 vmhub, u32 flush_type)
+{
+	return bc250_gmc_flush_gpu_tlb_observed(adev, vmid, vmhub, flush_type, NULL);
 }
 
 /*
@@ -268,7 +280,7 @@ int bc250_gmc_set_vmid_pd(struct amdgpu_device *adev, u32 vmid, u64 pd_phys, u32
  * gmc_v10_0_gart_enable(). adev->in_s0ix is false: this is a cold start, not a resume.
  * amdgpu_gtt_mgr_recover() and the DRM_INFO at the end touch no register.
  */
-int bc250_gmc_gart_enable(struct amdgpu_device *adev)
+int bc250_gmc_gart_configure_observed(struct amdgpu_device *adev, bc250_tlb_observer observer)
 {
 	int r;
 
@@ -276,10 +288,12 @@ int bc250_gmc_gart_enable(struct amdgpu_device *adev)
 		return BC250_EINVAL;
 
 	r = adev->gfxhub.funcs->gart_enable(adev);
+	if (observer) observer(adev,"startup-after-gfxhub-enable",(u32)r);
 	if (r)
 		return r;
 
 	r = adev->mmhub.funcs->gart_enable(adev);
+	if (observer) observer(adev,"startup-after-mmhub-enable",(u32)r);
 	if (r)
 		return r;
 
@@ -292,15 +306,33 @@ int bc250_gmc_gart_enable(struct amdgpu_device *adev)
 	 * stopping the engine. */
 	adev->gfxhub.funcs->set_fault_enable_default(adev, true);
 	adev->mmhub.funcs->set_fault_enable_default(adev, true);
+	if (observer) observer(adev,"startup-after-fault-defaults",0);
+	return 0;
+}
+
+/* Keep the established complete enable contract. Configuration alone is not
+ * translation readiness; a staged caller must complete the required flushes
+ * before admitting consumers. No KMD caller uses configuration alone yet. */
+int bc250_gmc_gart_enable_observed(struct amdgpu_device *adev, bc250_tlb_observer observer)
+{
+	int r = bc250_gmc_gart_configure_observed(adev, observer);
+	if (r) return r;
 
 	/* Upstream calls these two for their side effect and ignores the result; a flush timeout is
 	 * not a reason to fail the bring-up, and on unit A amdgpu did time out here (the pre-driver
 	 * sweep had taken the MMHUB semaphore, facts M25) and went on to a working GPU. The code is
 	 * logged by bc250_gmc_flush_gpu_tlb itself; a caller that wants it calls that directly. */
-	(void)bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_MMHUB0(0), 0);
-	(void)bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_GFXHUB(0), 0);
+	r = bc250_gmc_flush_gpu_tlb(adev, 0, AMDGPU_MMHUB0(0), 0);
+	if (observer) observer(adev,"startup-after-mmhub-flush",(u32)r);
+	r = bc250_gmc_flush_gpu_tlb_observed(adev, 0, AMDGPU_GFXHUB(0), 0, observer);
+	if (observer) observer(adev,"startup-after-gfxhub-flush",(u32)r);
 
 	return 0;
+}
+
+int bc250_gmc_gart_enable(struct amdgpu_device *adev)
+{
+	return bc250_gmc_gart_enable_observed(adev,NULL);
 }
 
 /* gmc_v10_0_gart_disable(), with adev->in_s0ix false. */

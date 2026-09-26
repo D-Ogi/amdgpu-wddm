@@ -1674,6 +1674,43 @@ int main(int argc, char **argv)
 		}
 	}
 
+    /* Compare split startup against the independent Linux trace, not only
+     * against the compatibility wrapper that shares its implementation. */
+    {
+        u32 cntl;
+        int found;
+        unsigned int before, wi;
+        struct result split;
+        const struct bc250_reg_write *writes;
+        bc250_ih_teardown(&adev);
+        if (prepare(&adev, &opt) != 0) return 2;
+        memset(&split, 0, sizeof(split));
+        split.hw_init_rc = bc250_ih_hw_prepare(&adev);
+        before = backend_write_count();
+        cntl = shim_wrote(adev.irq.ih.ih_regs.ih_rb_cntl * 4u, &found);
+        if (split.hw_init_rc != 0 || !found || adev.irq.ih.enabled ||
+            (cntl & (IH_RB_CNTL__RB_ENABLE_MASK | IH_RB_CNTL__ENABLE_INTR_MASK)) ||
+            before + 1u != g_trace_count)
+            failures++;
+        writes = backend_writes();
+        for (wi = 0; wi < before; wi++) {
+            if (writes[wi].byte_offset == adev.irq.ih.ih_regs.ih_rb_cntl * 4u &&
+                (writes[wi].value & (IH_RB_CNTL__RB_ENABLE_MASK | IH_RB_CNTL__ENABLE_INTR_MASK)))
+                failures++;
+        }
+        if (bc250_ih_hw_enable(NULL) != BC250_EINVAL || backend_write_count() != before)
+            failures++;
+        split.hw_init_rc = bc250_ih_hw_enable(&adev);
+        compare_window(&split, 0);
+        split.address_failures = check_addresses(&adev, 0);
+        if (split.hw_init_rc != 0 || !adev.irq.ih.enabled ||
+            split.produced != g_trace_count || split.mismatches || split.address_failures ||
+            backend_write_count() != before + 1u)
+            failures++;
+        printf("  split prepare/enable: %u + 1 writes, %u trace mismatches, %u address failures\n",
+               before, split.mismatches, split.address_failures);
+    }
+
 	decode_bad = test_decode(&adev);
 	if (decode_bad)
 		failures++;

@@ -61,6 +61,50 @@ int bc250_sdma_start(struct amdgpu_device *adev);
  */
 int bc250_sdma_hw_fini(struct amdgpu_device *adev);
 
+/* AMD stop_queue register body, not a complete reset/lifetime operation.
+ * Caller serializes, owns any required RLC safe-mode entry/exit, and retains
+ * all backing. Success leaves FREEZE set, F32 halted and UTC_L1 disabled.
+ * Failure may also leave FREEZE set. Caller must pair unfreeze with proper
+ * ring/translation restoration before admitting work. */
+/* AMD per-engine reset register sequence only; caller composes the lifecycle.
+ * Requires quiesced queues, serialized admission and retained mappings/backing.
+ * Reestablish halt/queue/cache state or restore rings before subsequent use.
+ * Success is not independent hardware reset/readiness proof. */
+int bc250_sdma_soft_reset_instance(struct amdgpu_device *adev, u32 instance_id);
+int bc250_sdma_quiesce_instance(struct amdgpu_device *adev, u32 instance);
+int bc250_sdma_unfreeze_instance(struct amdgpu_device *adev, u32 instance);
+/* Caller owns halted engines/backing; does not reset or reload firmware. */
+int bc250_sdma_quiesce_for_reload(struct amdgpu_device *adev);
+/* Quiesce/scope exit, per-engine reset, then a second quiescence/unfreeze scope.
+ * Caller retains all backing and serializes admission through retirement. */
+int bc250_sdma_reset_for_reload(struct amdgpu_device *adev);
+enum bc250_sdma_reset_stage {
+ BC250_SDMA_RESET_NONE, BC250_SDMA_RESET_STOP, BC250_SDMA_RESET_PULSE,
+ BC250_SDMA_RESET_CLEAR, BC250_SDMA_RESET_RESTORE, BC250_SDMA_RESET_VERIFY,
+ BC250_SDMA_RESET_PROGRAMMED
+};
+struct bc250_sdma_reset_receipt {
+ u32 instance;
+ u32 stage;
+ u64 previous_wptr; /* software dwords, diagnostic only; never adopted/replayed */
+ u64 rptr;          /* final hardware bytes */
+ u64 wptr;
+};
+/* Caller excludes CPU submitters/readers for this instance and retains ring,
+ * WB, fences, firmware and translation throughout, including on failure.
+ * Backend MMIO stores must order prior CPU stores before queue enable.
+ * Discards selected transport; caller owns OS job/fence accounting. No
+ * allocation, completion, replay, firmware reload or other-engine operation.
+ * Do not invoke with a PLAN backend: ring/WB are changed.
+ * Return 0 means sequence and empty-pointer readbacks passed, NOT execution of
+ * a fresh job. A separate content/fence oracle is required before admission.
+ * Failure can leave hardware partially configured; retain all backing and keep
+ * admission closed. This primitive alone does not implement Windows TDR. */
+int bc250_sdma_reset_retained_instance(struct amdgpu_device *adev, u32 instance,
+                                     struct bc250_sdma_reset_receipt *receipt);
+
+
+
 /* [amdgpu] sdma_v5_0.c:218 sdma_v5_0_get_reg_offset(): the register window of one SDMA instance.
  * Exposed because bc250_irq.c needs it for SDMA0_CNTL, and two copies of an address calculation is
  * how the two drift apart. */
@@ -101,6 +145,23 @@ int bc250_sdma_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned 
 /* [shim] the alloc, the emit and the commit together, which is what a caller actually wants. On a
  * refusal from the emitter the reservation is undone and the ring is left as it was. */
 int bc250_sdma_signal_fence(struct amdgpu_ring *ring, u64 addr, u64 seq, unsigned int flags);
+
+/* sdma_v5_0_ring_emit_ib: includes position-dependent padding so the six-word
+ * packet ends on an eight-DWORD boundary. Caller owns the IB/CSA mappings and
+ * VMID setup until the actual outer fence, including after a timeout. */
+// GFXHUB/SDMA0 engine0, nonzero VMID, local VRAM root. Does not commit or wait on CPU.
+#define BC250_SDMA_VM_FLUSH_DWORDS 21u
+#define BC250_SDMA_PAGING_VMID 2u
+int bc250_sdma_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys);
+int bc250_sdma_submit_vm_ib(struct amdgpu_ring *ring, u64 root_phys, u64 gpu_addr, u32 length_dw,
+                            u32 vmid, u64 csa_addr, u64 fence_addr, u64 seq, unsigned int flags);
+
+unsigned int bc250_sdma_ib_size(const struct amdgpu_ring *ring);
+int bc250_sdma_emit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw,
+                       u32 vmid, u64 csa_addr);
+int bc250_sdma_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw,
+                         u32 vmid, u64 csa_addr, u64 fence_addr, u64 seq,
+                         unsigned int flags);
 
 /* The scratch and fence page. Not allocated by bc250_sdma_setup(); whoever wants a fence or a ring
  * test allocates it, and frees it before bc250_sdma_teardown(). Idempotent. */

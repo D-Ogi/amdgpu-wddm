@@ -84,6 +84,18 @@ int bc250_fw_locate(enum bc250_fw_id id, const u8 *file, u32 file_size,
 	    array_offset > file_size || ucode_size == 0 || ucode_size > file_size - array_offset)
 		return -EINVAL;
 
+	/* Only cyan_skillfish2's v2.0 RLC_G layout is implemented here. Unlike
+	 * amdgpu_gfx_rlc_init_microcode(), this loader does not enumerate the
+	 * restore-list/IRAM/DRAM images introduced by later minor versions.
+	 * Refuse those layouts during preparation instead of silently loading
+	 * just their common-header RLC_G payload.
+	 */
+	if (id == BC250_FW_RLC_G &&
+	    (le16_to_cpu(header->header_version_major) != 2 ||
+	     le16_to_cpu(header->header_version_minor) != 0 ||
+	     le32_to_cpu(header->header_size_bytes) < sizeof(struct rlc_firmware_header_v2_0)))
+		return -EINVAL;
+
 	*type = g_fw[id].type;
 	switch (id) {
 	case BC250_FW_CP_MEC1:

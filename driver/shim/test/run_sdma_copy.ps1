@@ -14,7 +14,9 @@ param(
     [string]$Out = 'P:\BC-250\scratch\build\sdma-copy',
     [string]$Kits = 'P:\BC-250\toolchain\nuget',
     [string]$KitVersion = '10.0.26100.0',
-    [switch]$Verbose250
+    [switch]$Verbose250,
+    [switch]$ForceIbVmidZero,
+    [switch]$OmitVmFlush
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,10 +55,32 @@ $packetWarn = @('/wd4245')
 $packetSources = @('bc250_sdma_copy.c', 'bc250_sdma.c', 'bc250_ring.c') | ForEach-Object { Join-Path $shim $_ }
 # shim.c: the amdgpu_sriov_* stubs soc15_common.h's register macros name in the branch this part
 # never takes.
+if ($ForceIbVmidZero) {
+    $mutated = Join-Path $Out 'bc250_sdma.c'
+    $original = Get-Content (Join-Path $shim 'bc250_sdma.c') -Raw
+    $pattern = 'SDMA_PKT_INDIRECT_HEADER_VMID(vmid)'
+    if (-not $original.Contains($pattern)) { throw 'IB mutation anchor missing' }
+    [IO.File]::WriteAllText($mutated, $original.Replace($pattern, 'SDMA_PKT_INDIRECT_HEADER_VMID(0)'))
+    $packetSources = $packetSources | ForEach-Object { if ($_ -eq (Join-Path $shim 'bc250_sdma.c')) { $mutated } else { $_ } }
+}
+& python (Join-Path $here 'generate-sdma-ib-reference.py') (Join-Path $imports 'reference\sdma_v5_0.c') (Join-Path $Out 'sdma-ib-reference.h')
+if ($LASTEXITCODE -ne 0) { throw 'Reference extraction failed' }
+& python (Join-Path $here 'generate-sdma-vm-reference.py') $imports (Join-Path $Out 'sdma-vm-reference.h')
+if ($LASTEXITCODE -ne 0) { throw 'VM reference extraction failed' }
+if ($OmitVmFlush) {
+    if ($ForceIbVmidZero) { throw 'Select one mutation at a time' }
+    $mutated=Join-Path $Out 'bc250_sdma.c'
+    $original=[IO.File]::ReadAllText((Join-Path $shim 'bc250_sdma.c'))
+    $pattern='result=bc250_sdma_emit_vm_flush(ring,vmid,root_phys);'
+    if (!$original.Contains($pattern)) { throw 'VM flush mutation anchor absent' }
+    [IO.File]::WriteAllText($mutated,$original.Replace($pattern,'(void)root_phys; result=0;'))
+    $packetSources=$packetSources | ForEach-Object {if ($_ -eq (Join-Path $shim 'bc250_sdma.c')) {$mutated} else {$_}}
+}
+
 $plainSources = @('bc250_nbio.c', 'shim.c') | ForEach-Object { Join-Path $shim $_ }
 $testSources = @((Join-Path $shim 'test\sdma_copy_packets.c'))
 
-$incUser = @("/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
+$incUser = @("/I$Out", "/I$shim\include", "/I$shim", "/I$imports", "/I$amdhdr",
     "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared",
     "/I$($msvc.FullName)\include")
 
