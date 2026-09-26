@@ -147,3 +147,24 @@ allocation release, require completed render/Present work, reset Zink batches,
 and check sole resource/object references. Borrowed BO CPU mapping is rejected.
 M546 run031 records this regression; loss-time cleanup and broad sharing remain
 open. This adds teardown waits, not per-frame CPU presentation copies.
+
+## Bounded hosted DWM probe
+
+Candidate016 lifetime regression passes M546. A dedicated temporary router
+selects hosted Zink only for dwm.exe, within a30-second enable window and at most
+one process (exclusive claim file). Other processes use an immutable CPU UMD
+copy. Set adapter LUID from a successful KMD info query, never a hardcoded value.
+No KMD update. Build router with warnings as errors and parse runner scripts.
+
+Before replacing files, verify baseline/candidate hashes, owner STOP and thermal
+state; start and verify an independent30-second rollback task. The main runner
+restarts DWM, samples process/module identities and screen images for about12
+seconds, then restores both libraries and restarts DWM to the CPU baseline.
+Its finally and the independent task share a restoration mutex. Preserve logs
+on failure. An immediate DWM crash must use CPU fallback on subsequent starts.
+
+Hypothesis: DWM can create a persistent hosted rendering device and compose a
+visible desktop. Require correct image plus GPU execution/completion attributable
+to DWM; mere module loading is insufficient. This first probe does not certify
+no-copy G0. Record failures and use them to drive the next implementation step.
+Runner and router sources stay with the resulting evidence before promotion.
