@@ -1,0 +1,17 @@
+[
+  {
+    "path": "src/gallium/drivers/zink/zink_context.c",
+    "before_lf_sha256": "b0ae09f3de50b3130c123d4f38a9048e3594044b737afa4346939f5a70818a1d",
+    "after_lf_sha256": "bb3d011b2b3835117bab48e28e9607837595b93802aaa71417c514ae01eb1d09"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_descriptors.c",
+    "before_lf_sha256": "abefdc27ee61c527dc100fd11d989cf135d8f12d188bc0ca76b8a03ddf477233",
+    "after_lf_sha256": "80f54a81bc3c2f7afba768775308c42d00e7a43aaca5375de667a7aafa61e4f4"
+  },
+  {
+    "path": "src/gallium/drivers/zink/nir_to_spirv/nir_to_spirv.c",
+    "before_lf_sha256": "55e4452edf861ec3d83c09bee31e2b231e2e119577e6ea6c95df5559a5c2b2d5",
+    "after_lf_sha256": "f67ca004206ba410ab906a6fd2bfd48258989724131fcd230adb5416d15d9db1"
+  }
+]
