@@ -1,0 +1,17 @@
+{
+  "upstream_case": "spec@!opengl 1.0@gl-1.0-beginend-coverage",
+  "files": [
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "1daf0b6025592d53a3599fe068ccf8eb5675e97563d900830b3cd8aa8db0c858"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "gl-1.0-beginend-coverage.exe",
+      "sha256": "ee59ff260ffac61b6bf62dd7535ed5c0b55e30badc0605d8d6819c80b4fdf7fb"
+    }
+  ]
+}

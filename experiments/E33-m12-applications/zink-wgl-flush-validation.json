@@ -1,0 +1,13 @@
+{
+  "upstream": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "license": "MIT",
+  "patch_sha256": "5115ba42cd908515428bdb4a9b23e6d5254de140dff6df706bfc5d5a21a42bc3",
+  "libgallium_sha256": "1DAF0B6025592D53A3599FE068CCF8EB5675E97563D900830B3CD8AA8DB0C858",
+  "base_libgallium": "D18E2372010F50202BBA556250B69DDDB166BC527C9D4E1324D6D01C8E71DCAD",
+  "required_prior_patches": [
+    "zink-wgl-zero-client.patch",
+    "zink-wgl-front-back.patch",
+    "zink-pbo-teardown.patch"
+  ],
+  "scope": "Restore Flush validation for opengl32 replacement contexts only; system ICD branch unchanged"
+}

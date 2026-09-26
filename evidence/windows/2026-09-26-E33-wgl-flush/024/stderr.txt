@@ -1,0 +1,710 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8988
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+radv_wddm2_winsys_create
+allocation handle=0x40000f40
+allocation handle=0x40000fc0
+allocation handle=0x40001040
+bc250: gfx preamble inlined (no gfx_init IB)
+allocation handle=0x40001100
+allocation handle=0x40001180
+allocation handle=0x40001200
+allocation handle=0x40001280
+allocation handle=0x40001300
+allocation handle=0x40001380
+allocation handle=0x40001400
+allocation handle=0x40001480
+allocation handle=0x40001500
+allocation handle=0x40001580
+allocation handle=0x40001600
+allocation handle=0x40001680
+allocation handle=0x40001700
+allocation handle=0x40001780
+allocation handle=0x40001800
+allocation handle=0x40001880
+allocation handle=0x40001900
+allocation handle=0x40001980
+allocation handle=0x40001a00
+allocation handle=0x40001a80
+allocation handle=0x40001b00
+allocation handle=0x40001b80
+allocation handle=0x40001c00
+allocation handle=0x40001c80
+allocation handle=0x40001d00
+bc250: progress before submit previous=0 observed=0 waits=0 signals=1
+allocation handle=0x40001d80
+bc250: gather capacity=4096 bytes required=896 ibs=2
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+allocation handle=0x40001f80
+allocation handle=0x40002000
+allocation handle=0x40002080
+allocation handle=0x40002100
+allocation handle=0x40002180
+allocation handle=0x800001c0
+allocation handle=0x40002200
+allocation handle=0x800002c0
+allocation handle=0x40002280
+allocation handle=0x40002300
+allocation handle=0x40002380
+allocation handle=0x800004c0
+allocation handle=0x40002400
+allocation handle=0x40002480
+allocation handle=0x40002500
+allocation handle=0x40002580
+allocation handle=0x40002600
+allocation handle=0x40002680
+allocation handle=0x40002700
+allocation handle=0x40002780
+allocation handle=0x40002800
+allocation handle=0x40002880
+allocation handle=0x80000a40
+allocation handle=0x80000ac0
+allocation handle=0x40002900
+allocation handle=0x40002980
+allocation handle=0x40002a00
+allocation handle=0x40002a80
+allocation handle=0x80000b40
+allocation handle=0x80000bc0
+allocation handle=0x40002b00
+allocation handle=0x40002c00
+allocation handle=0x40002c80
+allocation handle=0x40002d00
+allocation handle=0x40002d80
+allocation handle=0x40002e00
+allocation handle=0x40002e80
+allocation handle=0x40002f00
+allocation handle=0x40002f80
+allocation handle=0x40003000
+allocation handle=0x40003080
+allocation handle=0x40003100
+allocation handle=0x40003180
+allocation handle=0x40003200
+allocation handle=0x40003280
+Mesa: error: GL_INVALID_OPERATION in glAlphaFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glAlphaFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBlendFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBlendFuncSeparate(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBitmap(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+allocation handle=0x40003300
+allocation handle=0x40003380
+Mesa: error: GL_INVALID_OPERATION in glCallList -> glBitmap inside Begin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClear(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClear(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearAccum(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearAccum(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearColor(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearColor(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearDepth(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearDepth(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearIndex(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearIndex(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearStencil(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClearStencil(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClipPlane(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glClipPlane(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glColorMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glColorMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glColorMaterial(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glColorMaterial(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glCopyPixels(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glCopyPixels(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glCullFace(invalid call)
+allocation handle=0x40003400
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glCullFace(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDepthFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDepthFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDepthMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDepthMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDepthRange(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDepthRange(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDisable(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDisable(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDrawArrays(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glDrawBuffer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDrawBuffer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDrawElements(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glDrawPixels(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glDrawPixels(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glEnable(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glEnable(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glFrontFace(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glFrontFace(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glFrustum(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glFrustum(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glHint(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glHint(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glIndexMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glIndexMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLighti(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightiv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModelf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModelfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModelfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModelfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModeli(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModelfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModeliv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLightModelfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLineStipple(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLineStipple(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLineWidth(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLineWidth(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glListBase(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glListBase(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLoadIdentity(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLoadIdentity(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLoadMatrixd(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLoadMatrixf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLoadMatrixf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLoadMatrixf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLogicOp(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glLogicOp(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glMatrixMode(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glMatrixMode(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glMultMatrixd(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glMultMatrixf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glMultMatrixf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glMultMatrixf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glOrtho(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glOrtho(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRotated(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRotatef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRotatef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRotatef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glScaled(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glScalef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glScalef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glScalef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glShadeModel(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glShadeModel(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTranslated(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTranslatef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTranslatef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTranslatef(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelMapfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelMapfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelMapuiv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelMapfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelMapusv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelMapfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelTransferf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelTransferf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelTransferi(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelTransferf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelZoom(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPixelZoom(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPointSize(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPointSize(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPushAttrib(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPushAttrib(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPushMatrix(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPushMatrix(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPolygonStipple(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glPolygonStipple(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2d(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2dv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2fv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2i(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2iv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2s(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos2sv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3d(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3dv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3fv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3i(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3iv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3s(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos3sv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRasterPos4f(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glReadBuffer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glReadBuffer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glRectd(invalid call)
+Mesa: error: GL_INVALID_OPERATION in Recursive glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in Recursive glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in Recursive glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRectdv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRectf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRectfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRecti(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRectiv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRects(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glRectsv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glEnd
+Mesa: error: GL_INVALID_OPERATION in glScissor(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glScissor(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glStencilFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glStencilFunc(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glStencilMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glStencilMask(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glStencilOp(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glStencilOp(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvi(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnviv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexEnvfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGend(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGendv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGeni(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGeniv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexImage1D(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexImage1D(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexImage2D(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexImage2D(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameterf(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameteri(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameteriv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glTexParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glViewport(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glViewport(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glAccum(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glAccum(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glBegin
+Mesa: error: GL_INVALID_OPERATION in Recursive glBegin
+Mesa: error: GL_INVALID_OPERATION in draw operation inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in Recursive glBegin
+Mesa: error: GL_INVALID_OPERATION in Recursive glBegin
+Mesa: error: GL_INVALID_OPERATION in glColorPointer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glDeleteLists(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glDisableClientState(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEdgeFlagPointer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEnableClientState(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glIndexPointer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glNewList(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glNormalPointer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGenLists(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetBooleanv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetClipPlane(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetDoublev(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetError(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetFloatv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetIntegerv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetLightfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetLightiv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetMaterialfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetMaterialiv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetPolygonStipple(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetString(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetPixelMapfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetPixelMapuiv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetPixelMapusv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetPointerv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexEnvfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexEnviv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexGendv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexGenfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexGeniv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexImage(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexLevelParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexLevelParameteriv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexParameterfv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glGetTexParameteriv(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glFinish(invalid call)
+Mesa: error: GL_INVALID_OPERATION in Inside glBegin/glEnd
+Mesa: error: GL_INVALID_OPERATION in glInterleavedArrays(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glIsEnabled(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glIsList(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glPixelStoref(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glPixelStorei(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glPushClientAttrib(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glReadPixels(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glRenderMode(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glTexCoordPointer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glVertexPointer(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEndList(invalid call)
+Mesa: error: GL_INVALID_OPERATION in glEndList() called inside glBegin/End
+Mesa: error: GL_INVALID_OPERATION in glEndList
+allocation handle=0x40003480
+allocation handle=0x40003500
+allocation handle=0x40003580
+bc250: gather capacity=32768 bytes required=30720 ibs=4
+allocation handle=0x40003600

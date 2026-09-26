@@ -1,0 +1,17 @@
+{
+  "upstream_case": "spec@!opengl 1.0@primitive-restart",
+  "files": [
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "1daf0b6025592d53a3599fe068ccf8eb5675e97563d900830b3cd8aa8db0c858"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "primitive-restart.exe",
+      "sha256": "e327444425cf649d29a0e1e9670cce813f5f6171ca7173a5c681ab06d9e15bb3"
+    }
+  ]
+}

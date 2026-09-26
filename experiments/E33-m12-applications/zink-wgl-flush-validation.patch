@@ -1,0 +1,29 @@
+--- a/src/gallium/frontends/wgl/stw_context.c
++++ b/src/gallium/frontends/wgl/stw_context.c
+@@ -52,6 +52,7 @@
+ #include "stw_tls.h"
+ 
+ #include "main/context.h"
++#include "glapi/glapi/gen/dispatch.h"
+ 
+ struct stw_context *
+ stw_current_context(void)
+@@ -249,6 +250,18 @@
+          fscreen, &attribs, &ctx_err, shareCtx ? shareCtx->st : NULL);
+    if (ctx->st == NULL)
+       goto no_st_ctx;
++
++   /* Mesa's opengl32 replacement resolves procedures without the implicit
++    * glFlush used by the system opengl32 ICD loader. Keep that loader's
++    * compatibility workaround only for ICD contexts; direct calls in a
++    * Begin/End block must still raise GL_INVALID_OPERATION. */
++   if (!stw_dev->callbacks.pfnGetDhglrc) {
++      struct gl_dispatch *dispatch = &ctx->st->ctx->Dispatch;
++      if (dispatch->BeginEnd)
++         SET_Flush(dispatch->BeginEnd, GET_Flush(dispatch->OutsideBeginEnd));
++      if (dispatch->HWSelectModeBeginEnd)
++         SET_Flush(dispatch->HWSelectModeBeginEnd, GET_Flush(dispatch->OutsideBeginEnd));
++   }
+ 
+    ctx->st->frontend_context = (void *) ctx;
+ 

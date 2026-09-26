@@ -1,0 +1,1726 @@
+PIGLIT: {"enumerate subtests": ["glArrayElement", "glCallList", "glCallLists", "glColor3b", "glColor3bv", "glColor3d", "glColor3dv", "glColor3f", "glColor3fv", "glColor3i", "glColor3iv", "glColor3s", "glColor3sv", "glColor3ub", "glColor3ubv", "glColor3ui", "glColor3uiv", "glColor3us", "glColor3usv", "glColor4b", "glColor4bv", "glColor4d", "glColor4dv", "glColor4f", "glColor4fv", "glColor4i", "glColor4iv", "glColor4s", "glColor4sv", "glColor4ub", "glColor4ubv", "glColor4ui", "glColor4uiv", "glColor4us", "glColor4usv", "glEdgeFlag", "glEdgeFlagv", "glIndexd", "glIndexdv", "glIndexf", "glIndexfv", "glIndexi", "glIndexiv", "glIndexs", "glIndexsv", "glIndexub", "glIndexubv", "glMaterialf", "glMaterialfv", "glMateriali", "glMaterialiv", "glNormal3d", "glNormal3dv", "glNormal3f", "glNormal3fv", "glNormal3i", "glNormal3iv", "glNormal3s", "glNormal3sv", "glTexCoord1d", "glTexCoord1dv", "glTexCoord1f", "glTexCoord1fv", "glTexCoord1i", "glTexCoord1iv", "glTexCoord1s", "glTexCoord1sv", "glTexCoord2d", "glTexCoord2dv", "glTexCoord2f", "glTexCoord2fv", "glTexCoord2i", "glTexCoord2iv", "glTexCoord2s", "glTexCoord2sv", "glTexCoord3d", "glTexCoord3dv", "glTexCoord3f", "glTexCoord3fv", "glTexCoord3i", "glTexCoord3iv", "glTexCoord3s", "glTexCoord3sv", "glTexCoord4d", "glTexCoord4dv", "glTexCoord4f", "glTexCoord4fv", "glTexCoord4i", "glTexCoord4iv", "glTexCoord4s", "glTexCoord4sv", "glVertex2d", "glVertex2dv", "glVertex2f", "glVertex2fv", "glVertex2i", "glVertex2iv", "glVertex2s", "glVertex2sv", "glVertex3d", "glVertex3dv", "glVertex3f", "glVertex3fv", "glVertex3i", "glVertex3iv", "glVertex3s", "glVertex3sv", "glVertex4d", "glVertex4dv", "glVertex4f", "glVertex4fv", "glVertex4i", "glVertex4iv", "glVertex4s", "glVertex4sv", "glAlphaFunc", "glBlendFunc", "glBitmap", "glClear", "glClearAccum", "glClearColor", "glClearDepth", "glClearIndex", "glClearStencil", "glClipPlane", "glColorMask", "glColorMaterial", "glCopyPixels", "glCullFace", "glDepthFunc", "glDepthMask", "glDepthRange", "glDisable", "glDrawArrays", "glDrawBuffer", "glDrawElements", "glDrawPixels", "glEnable", "glFrontFace", "glFrustum", "glHint", "glIndexMask", "glLightf", "glLightfv", "glLighti", "glLightiv", "glLightModelf", "glLightModelfv", "glLightModeli", "glLightModeliv", "glLineStipple", "glLineWidth", "glListBase", "glLoadIdentity", "glLoadMatrixd", "glLoadMatrixf", "glLogicOp", "glMatrixMode", "glMultMatrixd", "glMultMatrixf", "glOrtho", "glRotated", "glRotatef", "glScaled", "glScalef", "glShadeModel", "glTranslated", "glTranslatef", "glPixelMapfv", "glPixelMapuiv", "glPixelMapusv", "glPixelTransferf", "glPixelTransferi", "glPixelZoom", "glPointSize", "glPushAttrib", "glPushMatrix", "glPolygonStipple", "glRasterPos2d", "glRasterPos2dv", "glRasterPos2f", "glRasterPos2fv", "glRasterPos2i", "glRasterPos2iv", "glRasterPos2s", "glRasterPos2sv", "glRasterPos3d", "glRasterPos3dv", "glRasterPos3f", "glRasterPos3fv", "glRasterPos3i", "glRasterPos3iv", "glRasterPos3s", "glRasterPos3sv", "glReadBuffer", "glRectd", "glRectdv", "glRectf", "glRectfv", "glRecti", "glRectiv", "glRects", "glRectsv", "glScissor", "glStencilFunc", "glStencilMask", "glStencilOp", "glTexEnvf", "glTexEnvfv", "glTexEnvi", "glTexEnviv", "glTexGend", "glTexGendv", "glTexGenf", "glTexGenfv", "glTexGeni", "glTexGeniv", "glTexImage1D", "glTexImage2D", "glTexParameterf", "glTexParameterfv", "glTexParameteri", "glTexParameteriv", "glViewport", "glAccum", "glBegin", "glColorPointer", "glDeleteLists", "glDisableClientState", "glEdgeFlagPointer", "glEnableClientState", "glIndexPointer", "glNewList", "glNormalPointer", "glGenLists", "glGetBooleanv", "glGetClipPlane", "glGetDoublev", "glGetError", "glGetFloatv", "glGetIntegerv", "glGetLightfv", "glGetLightiv", "glGetMaterialfv", "glGetMaterialiv", "glGetPolygonStipple", "glGetString", "glGetPixelMapfv", "glGetPixelMapuiv", "glGetPixelMapusv", "glGetPointerv", "glGetTexEnvfv", "glGetTexEnviv", "glGetTexGendv", "glGetTexGenfv", "glGetTexGeniv", "glGetTexImage", "glGetTexLevelParameterfv", "glGetTexLevelParameteriv", "glGetTexParameterfv", "glGetTexParameteriv", "glFinish", "glFlush", "glInterleavedArrays", "glIsEnabled", "glIsList", "glPixelStoref", "glPixelStorei", "glPushClientAttrib", "glReadPixels", "glRenderMode", "glTexCoordPointer", "glVertexPointer", "glEndList"]}
+testing glArrayElement()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glArrayElement" : "pass"}}
+testing glCallList()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glCallList" : "pass"}}
+testing glCallLists()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glCallLists" : "pass"}}
+testing glColor3b()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3b" : "pass"}}
+testing glColor3bv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3bv" : "pass"}}
+testing glColor3d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3d" : "pass"}}
+testing glColor3dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3dv" : "pass"}}
+testing glColor3f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3f" : "pass"}}
+testing glColor3fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3fv" : "pass"}}
+testing glColor3i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3i" : "pass"}}
+testing glColor3iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3iv" : "pass"}}
+testing glColor3s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3s" : "pass"}}
+testing glColor3sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3sv" : "pass"}}
+testing glColor3ub()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3ub" : "pass"}}
+testing glColor3ubv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3ubv" : "pass"}}
+testing glColor3ui()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3ui" : "pass"}}
+testing glColor3uiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3uiv" : "pass"}}
+testing glColor3us()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3us" : "pass"}}
+testing glColor3usv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor3usv" : "pass"}}
+testing glColor4b()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4b" : "pass"}}
+testing glColor4bv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4bv" : "pass"}}
+testing glColor4d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4d" : "pass"}}
+testing glColor4dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4dv" : "pass"}}
+testing glColor4f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4f" : "pass"}}
+testing glColor4fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4fv" : "pass"}}
+testing glColor4i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4i" : "pass"}}
+testing glColor4iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4iv" : "pass"}}
+testing glColor4s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4s" : "pass"}}
+testing glColor4sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4sv" : "pass"}}
+testing glColor4ub()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4ub" : "pass"}}
+testing glColor4ubv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4ubv" : "pass"}}
+testing glColor4ui()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4ui" : "pass"}}
+testing glColor4uiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4uiv" : "pass"}}
+testing glColor4us()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4us" : "pass"}}
+testing glColor4usv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColor4usv" : "pass"}}
+testing glEdgeFlag()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glEdgeFlag" : "pass"}}
+testing glEdgeFlagv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glEdgeFlagv" : "pass"}}
+testing glIndexd()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexd" : "pass"}}
+testing glIndexdv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexdv" : "pass"}}
+testing glIndexf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexf" : "pass"}}
+testing glIndexfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexfv" : "pass"}}
+testing glIndexi()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexi" : "pass"}}
+testing glIndexiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexiv" : "pass"}}
+testing glIndexs()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexs" : "pass"}}
+testing glIndexsv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexsv" : "pass"}}
+testing glIndexub()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexub" : "pass"}}
+testing glIndexubv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexubv" : "pass"}}
+testing glMaterialf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMaterialf" : "pass"}}
+testing glMaterialfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMaterialfv" : "pass"}}
+testing glMateriali()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMateriali" : "pass"}}
+testing glMaterialiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMaterialiv" : "pass"}}
+testing glNormal3d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3d" : "pass"}}
+testing glNormal3dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3dv" : "pass"}}
+testing glNormal3f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3f" : "pass"}}
+testing glNormal3fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3fv" : "pass"}}
+testing glNormal3i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3i" : "pass"}}
+testing glNormal3iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3iv" : "pass"}}
+testing glNormal3s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3s" : "pass"}}
+testing glNormal3sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glNormal3sv" : "pass"}}
+testing glTexCoord1d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1d" : "pass"}}
+testing glTexCoord1dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1dv" : "pass"}}
+testing glTexCoord1f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1f" : "pass"}}
+testing glTexCoord1fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1fv" : "pass"}}
+testing glTexCoord1i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1i" : "pass"}}
+testing glTexCoord1iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1iv" : "pass"}}
+testing glTexCoord1s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1s" : "pass"}}
+testing glTexCoord1sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord1sv" : "pass"}}
+testing glTexCoord2d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2d" : "pass"}}
+testing glTexCoord2dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2dv" : "pass"}}
+testing glTexCoord2f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2f" : "pass"}}
+testing glTexCoord2fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2fv" : "pass"}}
+testing glTexCoord2i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2i" : "pass"}}
+testing glTexCoord2iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2iv" : "pass"}}
+testing glTexCoord2s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2s" : "pass"}}
+testing glTexCoord2sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord2sv" : "pass"}}
+testing glTexCoord3d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3d" : "pass"}}
+testing glTexCoord3dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3dv" : "pass"}}
+testing glTexCoord3f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3f" : "pass"}}
+testing glTexCoord3fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3fv" : "pass"}}
+testing glTexCoord3i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3i" : "pass"}}
+testing glTexCoord3iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3iv" : "pass"}}
+testing glTexCoord3s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3s" : "pass"}}
+testing glTexCoord3sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord3sv" : "pass"}}
+testing glTexCoord4d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4d" : "pass"}}
+testing glTexCoord4dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4dv" : "pass"}}
+testing glTexCoord4f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4f" : "pass"}}
+testing glTexCoord4fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4fv" : "pass"}}
+testing glTexCoord4i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4i" : "pass"}}
+testing glTexCoord4iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4iv" : "pass"}}
+testing glTexCoord4s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4s" : "pass"}}
+testing glTexCoord4sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexCoord4sv" : "pass"}}
+testing glVertex2d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2d" : "pass"}}
+testing glVertex2dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2dv" : "pass"}}
+testing glVertex2f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2f" : "pass"}}
+testing glVertex2fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2fv" : "pass"}}
+testing glVertex2i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2i" : "pass"}}
+testing glVertex2iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2iv" : "pass"}}
+testing glVertex2s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2s" : "pass"}}
+testing glVertex2sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex2sv" : "pass"}}
+testing glVertex3d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3d" : "pass"}}
+testing glVertex3dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3dv" : "pass"}}
+testing glVertex3f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3f" : "pass"}}
+testing glVertex3fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3fv" : "pass"}}
+testing glVertex3i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3i" : "pass"}}
+testing glVertex3iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3iv" : "pass"}}
+testing glVertex3s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3s" : "pass"}}
+testing glVertex3sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex3sv" : "pass"}}
+testing glVertex4d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4d" : "pass"}}
+testing glVertex4dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4dv" : "pass"}}
+testing glVertex4f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4f" : "pass"}}
+testing glVertex4fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4fv" : "pass"}}
+testing glVertex4i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4i" : "pass"}}
+testing glVertex4iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4iv" : "pass"}}
+testing glVertex4s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4s" : "pass"}}
+testing glVertex4sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glVertex4sv" : "pass"}}
+testing glAlphaFunc()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glAlphaFunc" : "pass"}}
+testing glBlendFunc()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glBlendFunc" : "pass"}}
+testing glBitmap()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glBitmap" : "pass"}}
+testing glClear()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClear" : "pass"}}
+testing glClearAccum()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClearAccum" : "pass"}}
+testing glClearColor()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClearColor" : "pass"}}
+testing glClearDepth()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClearDepth" : "pass"}}
+testing glClearIndex()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClearIndex" : "pass"}}
+testing glClearStencil()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClearStencil" : "pass"}}
+testing glClipPlane()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glClipPlane" : "pass"}}
+testing glColorMask()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColorMask" : "pass"}}
+testing glColorMaterial()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glColorMaterial" : "pass"}}
+testing glCopyPixels()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glCopyPixels" : "pass"}}
+testing glCullFace()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glCullFace" : "pass"}}
+testing glDepthFunc()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDepthFunc" : "pass"}}
+testing glDepthMask()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDepthMask" : "pass"}}
+testing glDepthRange()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDepthRange" : "pass"}}
+testing glDisable()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDisable" : "pass"}}
+testing glDrawArrays()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDrawArrays" : "pass"}}
+testing glDrawBuffer()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDrawBuffer" : "pass"}}
+testing glDrawElements()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDrawElements" : "pass"}}
+testing glDrawPixels()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glDrawPixels" : "pass"}}
+testing glEnable()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glEnable" : "pass"}}
+testing glFrontFace()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glFrontFace" : "pass"}}
+testing glFrustum()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glFrustum" : "pass"}}
+testing glHint()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glHint" : "pass"}}
+testing glIndexMask()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glIndexMask" : "pass"}}
+testing glLightf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightf" : "pass"}}
+testing glLightfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightfv" : "pass"}}
+testing glLighti()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLighti" : "pass"}}
+testing glLightiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightiv" : "pass"}}
+testing glLightModelf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightModelf" : "pass"}}
+testing glLightModelfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightModelfv" : "pass"}}
+testing glLightModeli()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightModeli" : "pass"}}
+testing glLightModeliv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLightModeliv" : "pass"}}
+testing glLineStipple()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLineStipple" : "pass"}}
+testing glLineWidth()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLineWidth" : "pass"}}
+testing glListBase()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glListBase" : "pass"}}
+testing glLoadIdentity()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLoadIdentity" : "pass"}}
+testing glLoadMatrixd()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLoadMatrixd" : "pass"}}
+testing glLoadMatrixf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLoadMatrixf" : "pass"}}
+testing glLogicOp()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glLogicOp" : "pass"}}
+testing glMatrixMode()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMatrixMode" : "pass"}}
+testing glMultMatrixd()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMultMatrixd" : "pass"}}
+testing glMultMatrixf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glMultMatrixf" : "pass"}}
+testing glOrtho()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glOrtho" : "pass"}}
+testing glRotated()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRotated" : "pass"}}
+testing glRotatef()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRotatef" : "pass"}}
+testing glScaled()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glScaled" : "pass"}}
+testing glScalef()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glScalef" : "pass"}}
+testing glShadeModel()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glShadeModel" : "pass"}}
+testing glTranslated()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTranslated" : "pass"}}
+testing glTranslatef()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTranslatef" : "pass"}}
+testing glPixelMapfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPixelMapfv" : "pass"}}
+testing glPixelMapuiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPixelMapuiv" : "pass"}}
+testing glPixelMapusv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPixelMapusv" : "pass"}}
+testing glPixelTransferf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPixelTransferf" : "pass"}}
+testing glPixelTransferi()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPixelTransferi" : "pass"}}
+testing glPixelZoom()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPixelZoom" : "pass"}}
+testing glPointSize()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPointSize" : "pass"}}
+testing glPushAttrib()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPushAttrib" : "pass"}}
+testing glPushMatrix()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPushMatrix" : "pass"}}
+testing glPolygonStipple()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glPolygonStipple" : "pass"}}
+testing glRasterPos2d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2d" : "pass"}}
+testing glRasterPos2dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2dv" : "pass"}}
+testing glRasterPos2f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2f" : "pass"}}
+testing glRasterPos2fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2fv" : "pass"}}
+testing glRasterPos2i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2i" : "pass"}}
+testing glRasterPos2iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2iv" : "pass"}}
+testing glRasterPos2s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2s" : "pass"}}
+testing glRasterPos2sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos2sv" : "pass"}}
+testing glRasterPos3d()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3d" : "pass"}}
+testing glRasterPos3dv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3dv" : "pass"}}
+testing glRasterPos3f()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3f" : "pass"}}
+testing glRasterPos3fv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3fv" : "pass"}}
+testing glRasterPos3i()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3i" : "pass"}}
+testing glRasterPos3iv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3iv" : "pass"}}
+testing glRasterPos3s()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3s" : "pass"}}
+testing glRasterPos3sv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRasterPos3sv" : "pass"}}
+testing glReadBuffer()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glReadBuffer" : "pass"}}
+testing glRectd()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRectd" : "pass"}}
+testing glRectdv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRectdv" : "pass"}}
+testing glRectf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRectf" : "pass"}}
+testing glRectfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRectfv" : "pass"}}
+testing glRecti()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRecti" : "pass"}}
+testing glRectiv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRectiv" : "pass"}}
+testing glRects()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRects" : "pass"}}
+testing glRectsv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glRectsv" : "pass"}}
+testing glScissor()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glScissor" : "pass"}}
+testing glStencilFunc()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glStencilFunc" : "pass"}}
+testing glStencilMask()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glStencilMask" : "pass"}}
+testing glStencilOp()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glStencilOp" : "pass"}}
+testing glTexEnvf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexEnvf" : "pass"}}
+testing glTexEnvfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexEnvfv" : "pass"}}
+testing glTexEnvi()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexEnvi" : "pass"}}
+testing glTexEnviv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexEnviv" : "pass"}}
+testing glTexGend()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexGend" : "pass"}}
+testing glTexGendv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexGendv" : "pass"}}
+testing glTexGenf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexGenf" : "pass"}}
+testing glTexGenfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexGenfv" : "pass"}}
+testing glTexGeni()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexGeni" : "pass"}}
+testing glTexGeniv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexGeniv" : "pass"}}
+testing glTexImage1D()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexImage1D" : "pass"}}
+testing glTexImage2D()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexImage2D" : "pass"}}
+testing glTexParameterf()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexParameterf" : "pass"}}
+testing glTexParameterfv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexParameterfv" : "pass"}}
+testing glTexParameteri()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexParameteri" : "pass"}}
+testing glTexParameteriv()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glTexParameteriv" : "pass"}}
+testing glViewport()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+  Testing glNewList(GL_COMPILE_AND_EXEC) with Begin/End inside and the command after End
+PIGLIT: {"subtest": {"glViewport" : "pass"}}
+testing glAccum()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+PIGLIT: {"subtest": {"glAccum" : "pass"}}
+testing glBegin()
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE) with begin/end inside
+  Testing glCallList() inside begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+PIGLIT: {"subtest": {"glBegin" : "pass"}}
+testing glColorPointer()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glColorPointer" : "pass"}}
+testing glDeleteLists()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glDeleteLists" : "pass"}}
+testing glDisableClientState()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glDisableClientState" : "pass"}}
+testing glEdgeFlagPointer()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glEdgeFlagPointer" : "pass"}}
+testing glEnableClientState()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glEnableClientState" : "pass"}}
+testing glIndexPointer()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glIndexPointer" : "pass"}}
+testing glNewList()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glNewList" : "pass"}}
+testing glNormalPointer()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glNormalPointer" : "pass"}}
+testing glGenLists()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGenLists" : "pass"}}
+testing glGetBooleanv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetBooleanv" : "pass"}}
+testing glGetClipPlane()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetClipPlane" : "pass"}}
+testing glGetDoublev()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetDoublev" : "pass"}}
+testing glGetError()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetError" : "pass"}}
+testing glGetFloatv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetFloatv" : "pass"}}
+testing glGetIntegerv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetIntegerv" : "pass"}}
+testing glGetLightfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetLightfv" : "pass"}}
+testing glGetLightiv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetLightiv" : "pass"}}
+testing glGetMaterialfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetMaterialfv" : "pass"}}
+testing glGetMaterialiv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetMaterialiv" : "pass"}}
+testing glGetPolygonStipple()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetPolygonStipple" : "pass"}}
+testing glGetString()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetString" : "pass"}}
+testing glGetPixelMapfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetPixelMapfv" : "pass"}}
+testing glGetPixelMapuiv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetPixelMapuiv" : "pass"}}
+testing glGetPixelMapusv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetPixelMapusv" : "pass"}}
+testing glGetPointerv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetPointerv" : "pass"}}
+testing glGetTexEnvfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexEnvfv" : "pass"}}
+testing glGetTexEnviv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexEnviv" : "pass"}}
+testing glGetTexGendv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexGendv" : "pass"}}
+testing glGetTexGenfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexGenfv" : "pass"}}
+testing glGetTexGeniv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexGeniv" : "pass"}}
+testing glGetTexImage()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexImage" : "pass"}}
+testing glGetTexLevelParameterfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexLevelParameterfv" : "pass"}}
+testing glGetTexLevelParameteriv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexLevelParameteriv" : "pass"}}
+testing glGetTexParameterfv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexParameterfv" : "pass"}}
+testing glGetTexParameteriv()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glGetTexParameteriv" : "pass"}}
+testing glFinish()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glFinish" : "pass"}}
+testing glFlush()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glFlush" : "pass"}}
+testing glInterleavedArrays()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glInterleavedArrays" : "pass"}}
+testing glIsEnabled()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glIsEnabled" : "pass"}}
+testing glIsList()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glIsList" : "pass"}}
+testing glPixelStoref()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glPixelStoref" : "pass"}}
+testing glPixelStorei()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glPixelStorei" : "pass"}}
+testing glPushClientAttrib()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glPushClientAttrib" : "pass"}}
+testing glReadPixels()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glReadPixels" : "pass"}}
+testing glRenderMode()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glRenderMode" : "pass"}}
+testing glTexCoordPointer()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glTexCoordPointer" : "pass"}}
+testing glVertexPointer()
+  Testing within begin/end
+PIGLIT: {"subtest": {"glVertexPointer" : "pass"}}
+  Testing within begin/end
+  Testing glNewList(GL_COMPILE_AND_EXEC) with begin/end inside
+PIGLIT: {"subtest": {"glEndList" : "pass"}}
+PIGLIT: {"result": "pass" }

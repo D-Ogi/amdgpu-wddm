@@ -1,0 +1,8 @@
+﻿{
+    "version_override":  false,
+    "boot":  "2026-09-26T12:51:25.5000000+02:00",
+    "manifest_sha256":  "5C91FA3DFFC9B06263C76CE096F5C99A2F0A52B9868A519DF6D2188BC371E267",
+    "command":  "DISABLE_VBO -auto -fbo",
+    "gallium":  "zink",
+    "package":  "C:\\BC250\\m12\\zink-stage001\\zink-control-package025"
+}
