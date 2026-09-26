@@ -1,0 +1,21 @@
+--- a/src/amd/vulkan/radv_queue.c
++++ b/src/amd/vulkan/radv_queue.c
+@@ -1019,6 +1019,18 @@
+ 
+       radv_fill_shader_rings(device, map, scratch_bo, needs->esgs_ring_size, esgs_ring_bo, needs->gsvs_ring_size,
+                              gsvs_ring_bo, tess_rings_bo, task_rings_bo, mesh_scratch_ring_bo, ge_rings_bo);
++
++      if (scratch_bo && getenv("BC250_SCRATCH_TRACE")) {
++         uint32_t tmpring_size = 0;
++         ac_get_scratch_tmpring_size(&pdev->info, needs->scratch_waves,
++                                    needs->scratch_size_per_wave, &tmpring_size);
++         fprintf(stderr, "BC250_SCRATCH_TRACE bytes=%u wave_bytes=%u waves=%u max_waves=%u cu=%u va=%llx descriptor_va=%llx desc0=%08x desc1=%08x tmpring=%08x continue_submit=1\n",
++                 scratch_size, needs->scratch_size_per_wave, needs->scratch_waves,
++                 pdev->info.max_scratch_waves, pdev->info.num_cu,
++                 (unsigned long long)radv_buffer_get_va(scratch_bo),
++                 (unsigned long long)radv_buffer_get_va(descriptor_bo), map[0], map[1], tmpring_size);
++         fflush(stderr);
++      }
+ 
+       ws->buffer_unmap(ws, descriptor_bo, false);
+    }

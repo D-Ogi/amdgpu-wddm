@@ -1,0 +1,10 @@
+linux_date=2026-09-26T12:31:18Z
+linux_uptime=1099.03
+build_state
+live=11300
+/work/src/piglit/tests/shaders/shader_runner.c: In function 'process_test_script':
+/work/src/piglit/tests/shaders/shader_runner.c:1868:37: note: 'list' was declared here
+ 1868 |         struct specialization_list *list;
+      |                                     ^~~~
+At top level:
+cc1: note: unrecognized command-line option '-Wno-implicit-const-int-float-conversion' may have been intended to silence earlier diagnostics

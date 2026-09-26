@@ -1,0 +1,7 @@
+{
+  "linux_fragment_sha256": "2b2a11c36b85008c365a9e2f9e34e5e96afb4f636fb4e9854cdf17f404635990",
+  "windows_fragment_sha256": "d7639f7cb7eda16b64e5daec440c9d0d27e4af1107ad9031d71723f2d66195ce",
+  "identical": false,
+  "linux_scratch_loads": 2,
+  "linux_scratch_stores": 2
+}

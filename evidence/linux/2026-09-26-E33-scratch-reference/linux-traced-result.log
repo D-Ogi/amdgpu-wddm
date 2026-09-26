@@ -1,0 +1,3 @@
+traced_exit=0
+PIGLIT: {"result": "pass" }
+BC250_SCRATCH_TRACE bytes=403439616 wave_bytes=525312 waves=768 max_waves=768 cu=24 va=ffff800100e00000 descriptor_va=ffff800100102000 desc0=00e00000 desc1=80008001 tmpring=00201300 continue_submit=1

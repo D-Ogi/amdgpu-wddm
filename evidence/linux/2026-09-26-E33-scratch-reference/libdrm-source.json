@@ -1,0 +1,10 @@
+{
+  "source": "https://gitlab.freedesktop.org/mesa/drm",
+  "tag": "libdrm-2.4.133",
+  "commit": "cb4669afe87470752643f46c81bddb45b0db48e4",
+  "license": "MIT",
+  "archive": "libdrm-2.4.133.tar.gz",
+  "bytes": 593690,
+  "sha256": "935fbc2efc1356686470e536038e5b4fc7b0f76ae179c831e2f9ba4b2ea24ce6",
+  "status": "source_packaged_not_built_or_run"
+}

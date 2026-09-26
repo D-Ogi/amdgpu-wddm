@@ -1,0 +1,18 @@
+{
+  "source": "https://gitlab.freedesktop.org/mesa/mesa",
+  "license": "MIT; bundled components retain their licenses",
+  "commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "archive": "mesa-05e6c9622e135ac2aeaf56ec70222642627e2162-lf2.tar.gz",
+  "sha256": "be9a15b5fd34ab3a2448e8fe0022901d439f198cbd30e5024775981b18737137",
+  "bytes": 135195688,
+  "members": 13773,
+  "status": "source_packaged_not_built_or_run",
+  "working_tree_changes_included": false,
+  "checked_files": {
+    "meson.build": "1ab29c108e2281e55494882e643d2e7be18d26d7d469dfe7d44f0b08bdfa4a1d",
+    "meson.options": "6d588c94fa68f54754937586009ca894db2d1a48f697fb77d2fd7aaee7e0e569",
+    "src/amd/vulkan/radv_formats.c": "8240f0723bfb8e79f2e33de4eaddac0783fc2e035587568006d593bfb819367b",
+    "src/amd/vulkan/winsys/amdgpu/radv_amdgpu_winsys.c": "0fd89a7163bc56dbc7b4b22605aa9eacc8acc4ac1e80944c436038f4210ae76c"
+  },
+  "purpose": "Same upstream Mesa revision for Linux RADV and Zink comparison; no Windows WDDM patch applied"
+}

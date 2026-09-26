@@ -1,0 +1,557 @@
+     19071:	find library=libc.so.6 [0]; searching
+     19071:	 search path=/opt/bc250/lib/glibc-hwcaps/x86-64-v3:/opt/bc250/lib/glibc-hwcaps/x86-64-v2:/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19071:	  trying file=/opt/bc250/lib/glibc-hwcaps/x86-64-v3/libc.so.6
+     19071:	  trying file=/opt/bc250/lib/glibc-hwcaps/x86-64-v2/libc.so.6
+     19071:	  trying file=/opt/bc250/lib/libc.so.6
+     19071:	 search cache=/etc/ld.so.cache
+     19071:	  trying file=/lib/x86_64-linux-gnu/libc.so.6
+     19071:	
+     19071:	
+     19071:	calling init: /lib64/ld-linux-x86-64.so.2
+     19071:	
+     19071:	
+     19071:	calling init: /lib/x86_64-linux-gnu/libc.so.6
+     19071:	
+     19071:	
+     19071:	initialize program: timeout
+     19071:	
+     19071:	
+     19071:	transferring control: timeout
+     19071:	
+     19072:	find library=libpiglitutil_gl.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib/glibc-hwcaps/x86-64-v3:/opt/bc250/lib/glibc-hwcaps/x86-64-v2:/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/glibc-hwcaps/x86-64-v3/libpiglitutil_gl.so.0
+     19072:	  trying file=/opt/bc250/lib/glibc-hwcaps/x86-64-v2/libpiglitutil_gl.so.0
+     19072:	  trying file=/opt/bc250/lib/libpiglitutil_gl.so.0
+     19072:	 search path=/work/build/piglit/lib/glibc-hwcaps/x86-64-v3:/work/build/piglit/lib/glibc-hwcaps/x86-64-v2:/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/glibc-hwcaps/x86-64-v3/libpiglitutil_gl.so.0
+     19072:	  trying file=/work/build/piglit/lib/glibc-hwcaps/x86-64-v2/libpiglitutil_gl.so.0
+     19072:	  trying file=/work/build/piglit/lib/libpiglitutil_gl.so.0
+     19072:	
+     19072:	find library=libpiglitutil.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libpiglitutil.so.0
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libpiglitutil.so.0
+     19072:	
+     19072:	find library=libc.so.6 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libc.so.6
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libc.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libc.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libc.so.6
+     19072:	  trying file=libc.so.6
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libc.so.6
+     19072:	
+     19072:	find library=libpng16.so.16 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libpng16.so.16
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libpng16.so.16
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libpng16.so.16
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libpng16.so.16
+     19072:	  trying file=libpng16.so.16
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libpng16.so.16
+     19072:	
+     19072:	find library=libgbm.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libgbm.so.1
+     19072:	
+     19072:	find library=libwaffle-1.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libwaffle-1.so.0
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libwaffle-1.so.0
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libwaffle-1.so.0
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libwaffle-1.so.0
+     19072:	  trying file=libwaffle-1.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libwaffle-1.so.0
+     19072:	
+     19072:	find library=libGL.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libGL.so.1
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libGL.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libGL.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libGL.so.1
+     19072:	  trying file=libGL.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libGL.so.1
+     19072:	
+     19072:	find library=libdrm.so.2 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libdrm.so.2
+     19072:	
+     19072:	find library=libxcb.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb.so.1
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libxcb.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libxcb.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libxcb.so.1
+     19072:	  trying file=libxcb.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb.so.1
+     19072:	
+     19072:	find library=libxcb-dri2.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-dri2.so.0
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libxcb-dri2.so.0
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libxcb-dri2.so.0
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libxcb-dri2.so.0
+     19072:	  trying file=libxcb-dri2.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-dri2.so.0
+     19072:	
+     19072:	find library=libX11.so.6 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libX11.so.6
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libX11.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libX11.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libX11.so.6
+     19072:	  trying file=libX11.so.6
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libX11.so.6
+     19072:	
+     19072:	find library=libstdc++.so.6 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libstdc++.so.6
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libstdc++.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libstdc++.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libstdc++.so.6
+     19072:	  trying file=libstdc++.so.6
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libstdc++.so.6
+     19072:	
+     19072:	find library=libm.so.6 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libm.so.6
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libm.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libm.so.6
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libm.so.6
+     19072:	  trying file=libm.so.6
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libm.so.6
+     19072:	
+     19072:	find library=libgcc_s.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libgcc_s.so.1
+     19072:	 search path=/work/build/piglit/lib:glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=/work/build/piglit/lib/libgcc_s.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libgcc_s.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libgcc_s.so.1
+     19072:	  trying file=libgcc_s.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libgcc_s.so.1
+     19072:	
+     19072:	find library=libEGL.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libEGL.so.1
+     19072:	 search path=glibc-hwcaps/x86-64-v3:glibc-hwcaps/x86-64-v2:		(RUNPATH from file /work/build/piglit/bin/shader_runner)
+     19072:	  trying file=glibc-hwcaps/x86-64-v3/libEGL.so.1
+     19072:	  trying file=glibc-hwcaps/x86-64-v2/libEGL.so.1
+     19072:	  trying file=libEGL.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libEGL.so.1
+     19072:	
+     19072:	find library=libz.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libz.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libz.so.1
+     19072:	
+     19072:	find library=libexpat.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libexpat.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libexpat.so.1
+     19072:	
+     19072:	find library=libX11-xcb.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libX11-xcb.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libX11-xcb.so.1
+     19072:	
+     19072:	find library=libGLdispatch.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libGLdispatch.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libGLdispatch.so.0
+     19072:	
+     19072:	find library=libGLX.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libGLX.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libGLX.so.0
+     19072:	
+     19072:	find library=libXau.so.6 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libXau.so.6
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libXau.so.6
+     19072:	
+     19072:	find library=libXdmcp.so.6 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libXdmcp.so.6
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libXdmcp.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib64/ld-linux-x86-64.so.2
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libc.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libXdmcp.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libXau.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libGLdispatch.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libX11.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libGLX.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libX11-xcb.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libexpat.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libz.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libEGL.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libgcc_s.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libm.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libstdc++.so.6
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-dri2.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /opt/bc250/lib/libdrm.so.2
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libGL.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libwaffle-1.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /opt/bc250/lib/libgbm.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libpng16.so.16
+     19072:	
+     19072:	
+     19072:	calling init: /work/build/piglit/lib/libpiglitutil.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /work/build/piglit/lib/libpiglitutil_gl.so.0
+     19072:	
+     19072:	
+     19072:	initialize program: /work/build/piglit/bin/shader_runner
+     19072:	
+     19072:	
+     19072:	transferring control: /work/build/piglit/bin/shader_runner
+     19072:	
+     19072:	find library=libEGL_mesa.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libEGL_mesa.so.0
+     19072:	
+     19072:	find library=libgallium-26.3.0-devel.so [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libgallium-26.3.0-devel.so
+     19072:	
+     19072:	find library=libxcb-randr.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-randr.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-randr.so.0
+     19072:	
+     19072:	find library=libxcb-xfixes.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-xfixes.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-xfixes.so.0
+     19072:	
+     19072:	find library=libxcb-shm.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-shm.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-shm.so.0
+     19072:	
+     19072:	find library=libxcb-dri3.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-dri3.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-dri3.so.0
+     19072:	
+     19072:	find library=libxcb-present.so.0 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-present.so.0
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-present.so.0
+     19072:	
+     19072:	find library=libzstd.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libzstd.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libzstd.so.1
+     19072:	
+     19072:	find library=libxcb-sync.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-sync.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-sync.so.1
+     19072:	
+     19072:	find library=libxshmfence.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxshmfence.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxshmfence.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxshmfence.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-sync.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libzstd.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-present.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-dri3.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-shm.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-xfixes.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-randr.so.0
+     19072:	
+     19072:	
+     19072:	calling init: /opt/bc250/lib/libgallium-26.3.0-devel.so
+     19072:	
+     19072:	
+     19072:	calling init: /opt/bc250/lib/libEGL_mesa.so.0
+     19072:	
+     19072:	find library=libvulkan.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libvulkan.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libvulkan.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libvulkan.so.1
+     19072:	
+     19072:	find library=libdrm_amdgpu.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libdrm_amdgpu.so.1
+     19072:	
+     19072:	find library=libelf.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libelf.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libelf.so.1
+     19072:	
+     19072:	find library=libxcb-keysyms.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libxcb-keysyms.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libxcb-keysyms.so.1
+     19072:	
+     19072:	find library=libdisplay-info.so.2 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libdisplay-info.so.2
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libdisplay-info.so.2
+     19072:	
+     19072:	find library=libudev.so.1 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libudev.so.1
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libudev.so.1
+     19072:	
+     19072:	find library=libcap.so.2 [0]; searching
+     19072:	 search path=/opt/bc250/lib		(LD_LIBRARY_PATH)
+     19072:	  trying file=/opt/bc250/lib/libcap.so.2
+     19072:	 search cache=/etc/ld.so.cache
+     19072:	  trying file=/lib/x86_64-linux-gnu/libcap.so.2
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libcap.so.2
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libudev.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libdisplay-info.so.2
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libxcb-keysyms.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /lib/x86_64-linux-gnu/libelf.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /opt/bc250/lib/libdrm_amdgpu.so.1
+     19072:	
+     19072:	
+     19072:	calling init: /opt/bc250/lib/libvulkan_radeon.so
+     19072:	
+     19072:	
+     19072:	calling fini: /opt/bc250/lib/libvulkan_radeon.so [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /opt/bc250/lib/libdrm_amdgpu.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libelf.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-keysyms.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libdisplay-info.so.2 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libudev.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libcap.so.2 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libvulkan.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini:  [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /work/build/piglit/lib/libpiglitutil_gl.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /work/build/piglit/lib/libpiglitutil.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libpng16.so.16 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libwaffle-1.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libGL.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-dri2.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libEGL.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libGLX.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libGLdispatch.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /opt/bc250/lib/libEGL_mesa.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libX11.so.6 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libX11-xcb.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /opt/bc250/lib/libgbm.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /opt/bc250/lib/libgallium-26.3.0-devel.so [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libstdc++.so.6 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libgcc_s.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libm.so.6 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libz.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libexpat.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /opt/bc250/lib/libdrm.so.2 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-randr.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-xfixes.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-shm.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-dri3.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-present.so.0 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libzstd.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb-sync.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxcb.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libXdmcp.so.6 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libXau.so.6 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libxshmfence.so.1 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib/x86_64-linux-gnu/libc.so.6 [0]
+     19072:	
+     19072:	
+     19072:	calling fini: /lib64/ld-linux-x86-64.so.2 [0]
+     19072:	

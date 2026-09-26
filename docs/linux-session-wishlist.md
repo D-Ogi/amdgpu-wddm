@@ -49,3 +49,14 @@ warm, what ran before), secrets and serials redacted before commit.
 | L21 | The **firmware's** DMU state, read before amdgpu is loaded, by a read-only raw BAR5 sweep, and the same set read back through amdgpu's own accessor: which `HUBP`/`OTG` instance the UEFI GOP pipe lights, and whether the surface address matches the framebuffer address the driver already holds | E13's DTN log describes only amdgpu's own mode set; Windows inherits the firmware's pipe, which is a different layout (M86) | 2026-09-22  | Done: facts M85 (address encoding, positive control against M31), M86 (firmware lights HUBP0 alone, single-pipe, against amdgpu's ODM split). `evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt`, `dmupost.txt`, `dmu/` |
 | L23 | Whether the DC surface address registers hold a byte address or a shifted one | The encoding has to be proven before `SetVidPnSourceAddress` computes one, not assumed from the shape of two dwords | 2026-09-22  | Done: facts M85 - system physical byte address (the firmware's `0x270000000` is the VRAM carve-out base of M31 exactly; amdgpu's flip addresses are consistent with the same base). `evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt`, `dmupost.txt` |
 | L24 | The display interrupts on the IH ring: which `client_id`/`src_id` DCN 2.0.1 raises for a vblank and for a HUBP flip completion, the vector payload, how many vectors one flip costs | M40 has no display vector at all; ADR 0010 point 3 wants a real vertical-sync interrupt for games | 2026-09-22  | Done, and not what was expected: facts M88 - this kernel uses `OTG0_IHC_V_UPDATE_NO_LOCK` (client 4, src `0x57`), one per frame; neither candidate from L24 (`0x4F`, `0x3C`) is ever enabled, which is now wishlist row L28. `evidence/linux/2026-09-22-E21-linux-reference-4/flip/` |
+
+
+### 2026-09-26 - L37 scratch reference (M510)
+
+Same-unit Mesa05e6c962 RADV/ACO and Zink built and tested: bounded2048-element
+scratch shader and unchanged piglit large-array test pass the pixel oracle.
+CPU-captured scratch sizing matches Windows, GPU VA range differs. NIR is not
+byte-identical; address prefix and ordering differ. See facts M510 and
+`evidence/linux/2026-09-26-E33-scratch-reference/`. L37 remains open for full
+piglit/CTS/OpenCL/application performance and presentation comparisons; this
+surfaceless EGL control is not WSI parity or a Windows root-cause proof.

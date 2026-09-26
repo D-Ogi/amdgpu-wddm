@@ -1,0 +1,6 @@
+upstream_exit=0
+PIGLIT: {"result": "pass" }
+gpu_MHz=1000 voltage_mV=818 temperature_mC=64000
+4f48578924d64b1c39418977f01749fecc7c288f239381c15419231d635dce26  /mnt/bc250-build/root/work/controls/bounded-array.shader_test
+98278d2abf4a4bb4fe489b13f13633d2d5a60faf95eaefcc539d0eefae7dc391  /mnt/bc250-build/root/work/controls/eliminated-array.shader_test
+afdb8f292627432c84601114cc38f4fca28e9151281d22526a978ba0e81dc431  /mnt/bc250-build/root/work/controls/upstream-large-array.shader_test

@@ -1,0 +1,7 @@
+preload_temperature_mC=63850
+preload_temperature_mC=84000
+module_sha256=5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4
+load_begin=2026-09-26T12:28:44Z
+load_end=2026-09-26T12:28:48Z
+clock_Hz=1000000000 voltage_mV=818 temp_mC=71000
+first_load_clock_control_complete

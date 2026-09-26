@@ -1,0 +1,915 @@
+shader: MESA_SHADER_VERTEX
+source_blake3: {0x4a71cfdd, 0xa0c6cb0a, 0xfcefe1fe, 0x7a200327, 0xf95bed86, 0x94877335, 0x1fb5d68b, 0xf74d636b}
+name: 
+inputs_read: 15
+outputs_written: 0
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x20
+separate_shader: true
+flrp_lowered: true
+io_lowered: true
+uniforms: 52
+decl_var push_const INTERP_MODE_NONE none block #0
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:  // preds:
+    32    %0 = @load_vector_arg_amd (base=23, arg_upper_bound_u32_amd=255)
+    32x4  %1 = @load_vector_arg_amd (base=26)
+    32x2  %2 = vec2 %1.x, %1.y
+    32    %3 = load_const (0x00000014 = 20)
+    32    %4 = imul %0, %3 (0x14)
+               @store_shared2_amd (%2, %4) (access=none, offset0=4, offset1=5, st64=0)
+    32x2  %5 = vec2 %1.z, %1.w
+               @store_shared2_amd (%5, %4) (access=none, offset0=6, offset1=7, st64=0)
+               // succs: b1
+    block b1:
+}
+
+After RA:
+ACO shader stage: SW (VS), HW (HULL_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, branch, */
+	 s2: %7:s[0-1],  s1: %8:s[2],  s1: %9:s[3],  s1: %10:s[4],  s1: %11:s[5],  s1: %12:s[6],  s1: %13:s[7],  s2: %14:s[8-9],  s1: %15:s[10],  s1: %16:s[11],  s1: %17:s[12],  s1: %18:s[13],  s1: %19:s[14],  s1: %20:s[15],  s1: %21:s[16],  s1: %22:s[17],  s1: %23:s[18],  s1: %24:s[19],  s1: %25:s[20],  s1: %26:s[21],  v1: %27:v[0],  v1: %28:v[1],  v1: %29:v[2],  v1: %30:v[3],  v1: %31:v[4],  v1: %32:v[5],  v4: %33:v[6-9] = p_startpgm
+	 s2: %35:s[6-7],  s1: %34:scc = p_init_scratch %7:s[0-1], %11:s[5]
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	 s1: %42:s[6] = s_pack_ll_b32_b16 0, %9:s[3]
+	 s2: %44:s[6-7],  s1: %43:scc = s_bfe_u64 -1, %42:s[6]
+	p_logical_end
+	 s2: %0:exec = p_parallelcopy %44:s[6-7]
+	p_cbranch_z %0:exec BB2, BB1
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	p_logical_start
+	 v1: %45:v[6],  v1: %46:v[7],  v1: %47:v[8],  v1: %48:v[9] = p_split_vector %33:v[6-9]
+	 v1: (nuw)%5:v[3] = v_mul_u32_u24 20, (is16bit)%30:v[3]
+	ds_write2_b32 %5:v[3], %45:v[6], %46:v[7] offset0:4 offset1:5 storage:shared
+	ds_write2_b32 %5:v[3], %47:v[8], %48:v[9] offset0:6 offset1:7 storage:shared
+	p_logical_end
+	p_branch BB3
+BB2
+/* logical preds: / linear preds: BB0, / kind: uniform, */
+	p_branch BB3
+BB3
+/* logical preds: / linear preds: BB1, BB2, / kind: invert, */
+	 s2: %0:exec,  s1: %50:scc = s_andn2_b64 -1, %0:exec
+	p_cbranch_z %0:exec BB5, BB4
+BB4
+/* logical preds: BB0, / linear preds: BB3, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB6
+BB5
+/* logical preds: / linear preds: BB3, / kind: uniform, */
+	p_branch BB6
+BB6
+/* logical preds: BB1, BB4, / linear preds: BB4, BB5, / kind: uniform, top-level, merge, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	 s2: %49:s[6-7] = p_create_vector %26:s[21], 0xffff8000
+	p_jump_to_epilog %49:s[6-7], %7:s[0-1], %8:s[2], %9:s[3], %10:s[4], %11:s[5], %19:s[14], %20:s[15], %21:s[16], %22:s[17], %23:s[18], %24:s[19], %25:s[20], %27:v[0], %28:v[1]
+	p_logical_end
+
+Vertex Shader as LS
+disasm:
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (VS), HW (HULL_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, branch, */
+	 s1: %42:s[6] = s_pack_ll_b32_b16 0, %9:s[3]
+	 s2: %0:exec,  s1: %43:scc = s_bfe_u64 -1, %42:s[6]
+	s_cbranch_execz block:BB6
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	 v1: (nuw)%5:v[3] = v_mul_u32_u24 20, (is16bit)%30:v[3]
+	s_waitcnt vmcnt(0)
+	ds_write2_b32 %5:v[3], %45:v[6], %46:v[7] offset0:4 offset1:5 storage:shared
+	ds_write2_b32 %5:v[3], %47:v[8], %48:v[9] offset0:6 offset1:7 storage:shared
+BB6
+/* logical preds: BB1, BB0, / linear preds: BB1, BB0, / kind: uniform, top-level, merge, */
+	s_waitcnt_depctr vm_vsrc(0)
+	 s2: %0:exec = s_mov_b64 -1
+	 s1: %0:s[6] = s_mov_b32 %26:s[21]
+	 s1: %0:s[7] = s_movk_i32 imm:-32768
+	s_waitcnt vmcnt(0)
+	s_waitcnt_vscnt %0:null imm:0
+	s_setpc_b64 %49:s[6-7]
+
+
+shader: MESA_SHADER_VERTEX
+source_blake3: {0x4a71cfdd, 0xa0c6cb0a, 0xfcefe1fe, 0x7a200327, 0xf95bed86, 0x94877335, 0x1fb5d68b, 0xf74d636b}
+name: 
+inputs_read: 15
+outputs_written: 0
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x20
+separate_shader: true
+flrp_lowered: true
+io_lowered: true
+uniforms: 52
+decl_var push_const INTERP_MODE_NONE none block #0
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:   // preds:
+    32x4   %0 = @load_vector_arg_amd (base=31)
+    32     %1 = @load_scalar_arg_wg_div_amd (base=2)
+    64     %2 = load_const (0xffffffffffffffff = -nan = -1 = 18446744073709551615)
+    32     %3 = load_const (0x00000004)
+    32     %4 = load_const (0x00000018 = 24)
+    32     %5 = ubfe %1, %4 (0x18), %3 (0x4)
+    32     %6 = load_const (0x00000006)
+    32     %7 = ishl %5, %6 (0x6)
+    32     %8 = @mbcnt_amd (%2 (0xffffffffffffffff), %7)
+    32x2   %9 = vec2 %0.x, %0.y
+    32    %10 = load_const (0x00000014 = 20)
+    32    %11 = imul %8, %10 (0x14)
+                @store_shared2_amd (%9, %11) (access=none, offset0=0, offset1=1, st64=0)
+    32x2  %12 = vec2 %0.z, %0.w
+                @store_shared2_amd (%12, %11) (access=none, offset0=2, offset1=3, st64=0)
+                // succs: b1
+    block b1:
+}
+
+After RA:
+ACO shader stage: SW (VS), HW (LEGACY_GEOMETRY_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, branch, */
+	 s2: %14:s[0-1],  s1: %15:s[2],  s1: %16:s[3],  s1: %17:s[4],  s1: %18:s[5],  s1: %19:s[6],  s1: %20:s[7],  s2: %21:s[8-9],  s1: %22:s[10],  s1: %23:s[11],  s1: %24:s[12],  s1: %25:s[13],  s1: %26:s[14],  s1: %27:s[15],  s1: %28:s[16],  s1: %29:s[17],  s1: %30:s[18],  s1: %31:s[19],  s1: %32:s[20],  s1: %33:s[21],  s1: %34:s[22],  s1: %35:s[23],  v1: %36:v[0],  v1: %37:v[1],  v1: %38:v[2],  v1: %39:v[3],  v1: %40:v[4],  v1: %41:v[5],  v1: %42:v[6],  v1: %43:v[7],  v1: %44:v[8],  v4: %45:v[9-12] = p_startpgm
+	 s2: %47:s[6-7],  s1: %46:scc = p_init_scratch %14:s[0-1], %18:s[5]
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	 s1: %54:s[6] = s_pack_ll_b32_b16 0, %16:s[3]
+	 s2: %56:s[6-7],  s1: %55:scc = s_bfe_u64 -1, %54:s[6]
+	p_logical_end
+	 s2: %0:exec = p_parallelcopy %56:s[6-7]
+	p_cbranch_z %0:exec BB2, BB1
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	p_logical_start
+	 v1: %57:v[9],  v1: %58:v[10],  v1: %59:v[11],  v1: %60:v[12] = p_split_vector %45:v[9-12]
+	 s1: %6:s[6],  s1: %61:scc = s_bfe_u32 %16:s[3], 0x40018
+	 s1: %8:s[6],  s1: %62:scc = s_lshl_b32 (is16bit)%6:s[6], 6
+	 v1: %66:v[5] = v_mbcnt_lo_u32_b32 -1, %8:s[6]
+	 v1: %9:v[5] = v_mbcnt_hi_u32_b32_e64 -1, %66:v[5]
+	 v1: (nuw)%12:v[5] = v_mul_u32_u24 20, (is16bit)%9:v[5]
+	ds_write2_b32 %12:v[5], %57:v[9], %58:v[10] offset1:1 storage:shared
+	ds_write2_b32 %12:v[5], %59:v[11], %60:v[12] offset0:2 offset1:3 storage:shared
+	p_logical_end
+	p_branch BB3
+BB2
+/* logical preds: / linear preds: BB0, / kind: uniform, */
+	p_branch BB3
+BB3
+/* logical preds: / linear preds: BB1, BB2, / kind: invert, */
+	 s2: %0:exec,  s1: %68:scc = s_andn2_b64 -1, %0:exec
+	p_cbranch_z %0:exec BB5, BB4
+BB4
+/* logical preds: BB0, / linear preds: BB3, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB6
+BB5
+/* logical preds: / linear preds: BB3, / kind: uniform, */
+	p_branch BB6
+BB6
+/* logical preds: BB1, BB4, / linear preds: BB4, BB5, / kind: uniform, top-level, merge, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	 s2: %67:s[6-7] = p_create_vector %35:s[23], 0xffff8000
+	p_jump_to_epilog %67:s[6-7], %14:s[0-1], %15:s[2], %16:s[3], %17:s[4], %18:s[5], %26:s[14], %27:s[15], %28:s[16], %29:s[17], %30:s[18], %31:s[19], %32:s[20], %33:s[21], %34:s[22], %36:v[0], %37:v[1], %38:v[2], %39:v[3], %40:v[4]
+	p_logical_end
+
+Vertex Shader as ES
+disasm:
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (VS), HW (LEGACY_GEOMETRY_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, branch, */
+	 s1: %54:s[6] = s_pack_ll_b32_b16 0, %16:s[3]
+	 s2: %0:exec,  s1: %55:scc = s_bfe_u64 -1, %54:s[6]
+	s_cbranch_execz block:BB6
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	 s1: %6:s[6],  s1: %61:scc = s_bfe_u32 %16:s[3], 0x40018
+	 s1: %8:s[6],  s1: %62:scc = s_lshl_b32 (is16bit)%6:s[6], 6
+	 v1: %66:v[5] = v_mbcnt_lo_u32_b32 -1, %8:s[6]
+	 v1: %9:v[5] = v_mbcnt_hi_u32_b32_e64 -1, %66:v[5]
+	 v1: (nuw)%12:v[5] = v_mul_u32_u24 20, (is16bit)%9:v[5]
+	s_waitcnt vmcnt(0)
+	ds_write2_b32 %12:v[5], %57:v[9], %58:v[10] offset1:1 storage:shared
+	ds_write2_b32 %12:v[5], %59:v[11], %60:v[12] offset0:2 offset1:3 storage:shared
+BB6
+/* logical preds: BB1, BB0, / linear preds: BB1, BB0, / kind: uniform, top-level, merge, */
+	s_waitcnt_depctr vm_vsrc(0)
+	 s2: %0:exec = s_mov_b64 -1
+	 s1: %0:s[6] = s_mov_b32 %35:s[23]
+	 s1: %0:s[7] = s_movk_i32 imm:-32768
+	s_waitcnt vmcnt(0)
+	s_waitcnt_vscnt %0:null imm:0
+	s_setpc_b64 %67:s[6-7]
+
+
+shader: MESA_SHADER_VERTEX
+source_blake3: {0x4a71cfdd, 0xa0c6cb0a, 0xfcefe1fe, 0x7a200327, 0xf95bed86, 0x94877335, 0x1fb5d68b, 0xf74d636b}
+name: 
+inputs_read: 15
+outputs_written: 0,21
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x20
+separate_shader: true
+flrp_lowered: true
+io_lowered: true
+uniforms: 52
+decl_var push_const INTERP_MODE_NONE none block #0
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:   // preds:
+    32     %0 = @load_vector_arg_amd (base=14)
+    32     %1 = @load_scalar_arg_amd (base=13)
+    32     %2 = load_const (0x00000001)
+    32     %3 = load_const (0x00000003)
+    32     %4 = load_const (0x00000006)
+    32     %5 = ubfe %1, %4 (0x6), %3 (0x3)
+    1      %6 = bitnz %5, %2 (0x1)
+                // succs: b1 b5
+    if %6 {
+        block b1:   // preds: b0
+        1      %7 = @elect
+                    // succs: b2 b3
+        if %7 {
+            block b2:   // preds: b1
+            32     %8 = @load_scalar_arg_wg_div_amd (base=2)
+            32     %9 = load_const (0x00000100 = 0.000000 = 256)
+            32    %10 = load_const (0x00000008 = 0.000000)
+            32    %11 = extract_u8 %8, %2 (0x1)
+            32    %12 = @gds_atomic_add_amd (%11, %10 (0x8), %9 (0x100)) (base=0)
+                        // succs: b4
+        } else {
+            block b3:  // preds: b1, succs: b4
+        }
+        block b4:  // preds: b2 b3, succs: b6
+    } else {
+        block b5:  // preds: b0, succs: b6
+    }
+    block b6:   // preds: b4 b5
+    32    %13 = @load_scalar_arg_wg_div_amd (base=2)
+    32    %14 = load_const (0x00000018 = 24)
+    32    %15 = load_const (0x00000004)
+    32    %16 = ubfe %13, %14 (0x18), %15 (0x4)
+    32    %17 = load_const (0x00000000)
+    32    %18 = load_const (0x00000009)
+    1     %19 = ieq %16, %17 (0x0)
+                // succs: b7 b8
+    if %19 {
+        block b7:   // preds: b6
+        32    %20 = @load_scalar_arg_amd (base=1)
+        32    %21 = load_const (0x00000016 = 22)
+        32    %22 = ubfe %20, %21 (0x16), %18 (0x9)
+        32    %23 = load_const (0x0000000c = 12)
+        32    %24 = ishl %22, %23 (0xc)
+        32    %25 = ubfe %20, %23 (0xc), %18 (0x9)
+        32    %26 = ior %24, %25
+                    @sendmsg_amd (%26) (base=9)
+                    // succs: b9
+    } else {
+        block b8:  // preds: b6, succs: b9
+    }
+    block b9:   // preds: b7 b8
+    1     %27 = @is_subgroup_invocation_lt_amd (%13) (base=8)
+    32    %28 = load_const (0x00000002)
+                // succs: b10 b11
+    if %27 {
+        block b10:  // preds: b9
+        32    %29 = undefined
+        32x4  %30 = vec4 %0, %29, %29, %29
+        32    %31 = load_const (0x000001ff = 511)
+        32    %32 = iand %0, %31 (0x1ff)
+        32    %33 = load_const (0x0000000a = 10)
+        32    %34 = ubfe %0, %33 (0xa), %18 (0x9)
+        32    %35 = load_const (0x00000014 = 20)
+        32    %36 = ubfe %0, %35 (0x14), %18 (0x9)
+                    @export_amd (%30) (target=20, enabled_channels=1, flags=2)
+        32    %37 = ubfe %1, %3 (0x3), %3 (0x3)
+        1     %38 = ilt %37, %28 (0x2)
+        32    %39 = bcsel %38, %34, %36
+        1     %40 = ilt %37, %2 (0x1)
+        32    %41 = bcsel %40, %32, %39
+        32    %42 = @load_vector_arg_amd (base=16)
+        32    %43 = ishl %41, %28 (0x2)
+                    @store_shared (%42, %43) (base=0, access=none, wrmask=x, align_mul=4, align_offset=0)
+                    // succs: b12
+    } else {
+        block b11:  // preds: b9, succs: b12
+    }
+    block b12:  // preds: b10 b11
+                @barrier (execution_scope=WORKGROUP, memory_scope=WORKGROUP, mem_semantics=ACQ|REL, mem_modes=shared)
+    1     %44 = @is_subgroup_invocation_lt_amd (%13) (base=0)
+                // succs: b13 b14
+    if %44 {
+        block b13:  // preds: b12
+        32x4  %45 = @load_vector_arg_amd (base=23)
+        64    %46 = load_const (0xffffffffffffffff = -nan = -1 = 18446744073709551615)
+        32    %47 = ishl %16, %4 (0x6)
+        32    %48 = @mbcnt_amd (%46 (0xffffffffffffffff), %47)
+        32    %49 = ishl %48, %28 (0x2)
+        32    %50 = @load_shared (%49) (base=0, access=none, align_mul=4, align_offset=0)
+        32    %51 = undefined
+        32    %52 = undefined
+        32    %53 = undefined
+                    @export_amd (%45) (target=12, enabled_channels=15, flags=6)
+        32x4  %54 = vec4 %50, %53, %52, %51
+                    @export_amd (%54) (target=32, enabled_channels=1, flags=0)
+                    // succs: b15
+    } else {
+        block b14:  // preds: b12, succs: b15
+    }
+    block b15:  // preds: b13 b14, succs: b16
+    block b16:
+}
+
+After RA:
+ACO shader stage: SW (VS), HW (NEXT_GEN_GEOMETRY_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	 s2: %56:s[0-1],  s1: %57:s[2],  s1: %58:s[3],  s1: %59:s[4],  s1: %60:s[5],  s1: %61:s[6],  s1: %62:s[7],  s2: %63:s[8-9],  s1: %64:s[10],  s1: %65:s[11],  s1: %66:s[12],  s1: %67:s[13],  s1: %68:s[14],  s1: %69:s[15],  v1: %70:v[0],  v1: %71:v[1],  v1: %72:v[2],  v1: %73:v[3],  v1: %74:v[4],  v1: %75:v[5],  v1: %76:v[6],  v1: %77:v[7],  v1: %78:v[8],  v4: %79:v[9-12] = p_startpgm
+	 s2: %81:s[0-1],  s1: %80:scc = p_init_scratch %56:s[0-1], %60:s[5]
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	s_barrier
+	 s1: %6:s[0],  s1: %88:scc = s_bfe_u32 %69:s[15], 0x30006
+	 s1: %89:scc = s_bitcmp1_b32 %6:s[0], 1
+	p_logical_end
+	p_cbranch_z %89:scc BB8, BB1
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: branch, */
+	p_logical_start
+	 s2: %8:s[0-1] = p_parallelcopy 1
+	p_logical_end
+	 s2: %0:exec = p_parallelcopy %8:s[0-1]
+	p_cbranch_z %0:exec BB3, BB2
+BB2
+/* logical preds: BB1, / linear preds: BB1, / kind: uniform, */
+	p_logical_start
+	 s1: %12:s[0],  s1: %92:scc = p_extract %58:s[3], 1, 8, 0
+	 s1: %93:m0 = p_parallelcopy 0x100
+	 v1: %94:v[1] = p_parallelcopy %12:s[0]
+	 v1: %95:v[3] = p_parallelcopy 8
+	ds_add_u32 %95:v[3], %94:v[1], %93:m0 gds
+	p_logical_end
+	p_branch BB4
+BB3
+/* logical preds: / linear preds: BB1, / kind: uniform, */
+	p_branch BB4
+BB4
+/* logical preds: / linear preds: BB2, BB3, / kind: invert, */
+	 s2: %0:exec,  s1: %125:scc = s_andn2_b64 -1, %0:exec
+	p_cbranch_z %0:exec BB6, BB5
+BB5
+/* logical preds: BB1, / linear preds: BB4, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB7
+BB6
+/* logical preds: / linear preds: BB4, / kind: uniform, */
+	p_branch BB7
+BB7
+/* logical preds: BB2, BB5, / linear preds: BB5, BB6, / kind: uniform, merge, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	p_logical_end
+	p_branch BB9
+BB8
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB9
+BB9
+/* logical preds: BB7, BB8, / linear preds: BB7, BB8, / kind: uniform, top-level, */
+	p_logical_start
+	 s1: %17:s[0],  s1: %96:scc = s_bfe_u32 %58:s[3], 0x40018
+	 s1: %97:scc = s_cmp_eq_i32 %17:s[0], 0
+	p_logical_end
+	p_cbranch_z %97:scc BB11, BB10
+BB10
+/* logical preds: BB9, / linear preds: BB9, / kind: uniform, */
+	p_logical_start
+	 s1: %23:s[1],  s1: %100:scc = s_bfe_u32 %57:s[2], 0x90016
+	 s1: %25:s[1],  s1: %101:scc = s_lshl_b32 (is16bit)%23:s[1], 12
+	 s1: %26:s[2],  s1: %102:scc = s_bfe_u32 %57:s[2], 0x9000c
+	 s1: %27:m0,  s1: %103:scc = s_or_b32 %25:s[1], %26:s[2]
+	s_sendmsg %27:m0 sendmsg(gs_alloc_req)
+	p_logical_end
+	p_branch BB12
+BB11
+/* logical preds: BB9, / linear preds: BB9, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB12
+BB12
+/* logical preds: BB10, BB11, / linear preds: BB10, BB11, / kind: top-level, branch, */
+	p_logical_start
+	 s1: %105:s[1],  s1: %104:scc = s_lshl_b32 %58:s[3], 8
+	 s2: %107:s[4-5],  s1: %106:scc = s_bfe_u64 -1, %105:s[1]
+	p_logical_end
+	 s2: %0:exec = p_parallelcopy %107:s[4-5]
+	p_cbranch_z %0:exec BB14, BB13
+BB13
+/* logical preds: BB12, / linear preds: BB12, / kind: uniform, */
+	p_logical_start
+	 v1: %33:v[1] = v_and_b32 0x1ff, %70:v[0]
+	 v1: %35:v[3] = v_bfe_u32 %70:v[0], 10, 9
+	 v1: %37:v[4] = v_bfe_u32 %70:v[0], 20, 9
+	exp %70:v[0],  v1: undef,  v1: undef,  v1: undef en:r*** done prim
+	 s1: %38:s[15],  s1: %110:scc = s_bfe_u32 %69:s[15], 0x30003
+	 s1: %111:scc = s_cmp_lt_i32 %38:s[15], 2
+	 s2: %39:vcc = s_cselect_b64 -1, 0, %111:scc
+	 v1: %40:v[4] = v_cndmask_b32 %37:v[4], %35:v[3], %39:vcc
+	 s1: %112:scc = s_cmp_lt_i32 %38:s[15], 1
+	 s2: %41:vcc = s_cselect_b64 -1, 0, %112:scc
+	 v1: %42:v[4] = v_cndmask_b32 %40:v[4], %33:v[1], %41:vcc
+	 v1: %44:v[4] = v_lshlrev_b32 2, (is16bit)%42:v[4]
+	ds_write_b32 %44:v[4], %72:v[2] storage:shared
+	p_logical_end
+	p_branch BB15
+BB14
+/* logical preds: / linear preds: BB12, / kind: uniform, */
+	p_branch BB15
+BB15
+/* logical preds: / linear preds: BB13, BB14, / kind: invert, */
+	 s2: %0:exec,  s1: %126:scc = s_andn2_b64 -1, %0:exec
+	p_cbranch_z %0:exec BB17, BB16
+BB16
+/* logical preds: BB12, / linear preds: BB15, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB18
+BB17
+/* logical preds: / linear preds: BB15, / kind: uniform, */
+	p_branch BB18
+BB18
+/* logical preds: BB13, BB16, / linear preds: BB16, BB17, / kind: top-level, branch, merge, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	p_barrier storage:shared semantics:acquire,release scope:workgroup exec_scope:workgroup
+	 s1: %113:s[3] = s_pack_ll_b32_b16 0, %58:s[3]
+	 s2: %115:s[2-3],  s1: %114:scc = s_bfe_u64 -1, %113:s[3]
+	p_logical_end
+	 s2: %0:exec = p_parallelcopy %115:s[2-3]
+	p_cbranch_z %0:exec BB20, BB19
+BB19
+/* logical preds: BB18, / linear preds: BB18, / kind: uniform, export_end, */
+	p_logical_start
+	 v1: %116:v[9],  v1: %117:v[10],  v1: %118:v[11],  v1: %119:v[12] = p_split_vector %79:v[9-12]
+	 s1: %48:s[0],  s1: %120:scc = s_lshl_b32 (is16bit)%17:s[0], 6
+	 v1: %124:v[0] = v_mbcnt_lo_u32_b32 -1, %48:s[0]
+	 v1: %49:v[0] = v_mbcnt_hi_u32_b32_e64 -1, %124:v[0]
+	 v1: %50:v[0] = v_lshlrev_b32 2, (is16bit)%49:v[0]
+	 v1: %51:v[0] = ds_read_b32 %50:v[0] storage:shared
+	exp %116:v[9], %117:v[10], %118:v[11], %119:v[12] vm pos0
+	exp %51:v[0],  v1: undef,  v1: undef,  v1: undef en:r*** param0
+	p_logical_end
+	p_branch BB21
+BB20
+/* logical preds: / linear preds: BB18, / kind: uniform, */
+	p_branch BB21
+BB21
+/* logical preds: / linear preds: BB19, BB20, / kind: invert, */
+	 s2: %0:exec,  s1: %127:scc = s_andn2_b64 -1, %0:exec
+	p_cbranch_z %0:exec BB23, BB22
+BB22
+/* logical preds: BB18, / linear preds: BB21, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB24
+BB23
+/* logical preds: / linear preds: BB21, / kind: uniform, */
+	p_branch BB24
+BB24
+/* logical preds: BB19, BB22, / linear preds: BB22, BB23, / kind: uniform, top-level, merge, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	p_logical_end
+	s_endpgm
+
+Vertex Shader as ESGS
+disasm:
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (VS), HW (NEXT_GEN_GEOMETRY_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	s_barrier
+	 s1: %6:s[0],  s1: %88:scc = s_bfe_u32 %69:s[15], 0x30006
+	 s1: %89:scc = s_bitcmp1_b32 %6:s[0], 1
+	s_cbranch_scc0 block:BB9
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: branch, */
+	 s2: %0:exec = s_mov_b64 1
+BB2
+/* logical preds: BB1, / linear preds: BB1, / kind: uniform, */
+	 s1: %12:s[0],  s1: %92:scc = s_bfe_u32 %58:s[3], 0x80008
+	 s1: %0:m0 = s_movk_i32 imm:256
+	 v1: %0:v[3] = v_mov_b32 8
+	 v1: %0:v[1] = v_mov_b32 %12:s[0]
+	ds_add_u32 %95:v[3], %94:v[1], %93:m0 gds
+BB9
+/* logical preds: BB0, BB2, BB1, / linear preds: BB0, BB2, / kind: uniform, top-level, */
+	 s1: %17:s[0],  s1: %96:scc = s_bfe_u32 %58:s[3], 0x40018
+	s_cbranch_scc1 block:BB12
+BB10
+/* logical preds: BB9, / linear preds: BB9, / kind: uniform, */
+	 s1: %23:s[1],  s1: %100:scc = s_bfe_u32 %57:s[2], 0x90016
+	 s1: %25:s[1],  s1: %101:scc = s_lshl_b32 (is16bit)%23:s[1], 12
+	 s1: %26:s[2],  s1: %102:scc = s_bfe_u32 %57:s[2], 0x9000c
+	s_waitcnt expcnt(0)
+	s_waitcnt_depctr vm_vsrc(0)
+	 s1: %27:m0,  s1: %103:scc = s_or_b32 %25:s[1], %26:s[2]
+	s_sendmsg %27:m0 sendmsg(gs_alloc_req)
+BB12
+/* logical preds: BB10, BB9, / linear preds: BB10, BB9, / kind: top-level, branch, */
+	 s1: %105:s[1],  s1: %104:scc = s_lshl_b32 %58:s[3], 8
+	s_waitcnt expcnt(0)
+	s_waitcnt_depctr vm_vsrc(0)
+	 s2: %0:exec,  s1: %106:scc = s_bfe_u64 -1, %105:s[1]
+	s_cbranch_execz block:BB18
+BB13
+/* logical preds: BB12, / linear preds: BB12, / kind: uniform, */
+	 v1: %33:v[1] = v_and_b32 0x1ff, %70:v[0]
+	 v1: %35:v[3] = v_bfe_u32 %70:v[0], 10, 9
+	 v1: %37:v[4] = v_bfe_u32 %70:v[0], 20, 9
+	exp %70:v[0],  v1: undef,  v1: undef,  v1: undef en:r*** done prim
+	 s1: %38:s[15],  s1: %110:scc = s_bfe_u32 %69:s[15], 0x30003
+	 s1: %111:scc = s_cmp_lt_i32 %38:s[15], 2
+	 s2: %39:vcc = s_cselect_b64 -1, 0, %111:scc
+	 s1: %112:scc = s_cmp_lt_i32 %38:s[15], 1
+	 v1: %40:v[4] = v_cndmask_b32 %37:v[4], %35:v[3], %39:vcc
+	 s2: %41:vcc = s_cselect_b64 -1, 0, %112:scc
+	 v1: %42:v[4] = v_cndmask_b32 %40:v[4], %33:v[1], %41:vcc
+	 v1: %44:v[4] = v_lshlrev_b32 2, (is16bit)%42:v[4]
+	ds_write_b32 %44:v[4], %72:v[2] storage:shared
+BB18
+/* logical preds: BB13, BB12, / linear preds: BB13, BB12, / kind: top-level, branch, merge, */
+	s_waitcnt_depctr vm_vsrc(0)
+	s_barrier
+	 s1: %113:s[3] = s_pack_ll_b32_b16 0, %58:s[3]
+	s_waitcnt expcnt(0)
+	 s2: %0:exec,  s1: %114:scc = s_bfe_u64 -1, %113:s[3]
+	s_cbranch_execz block:BB24
+BB19
+/* logical preds: BB18, / linear preds: BB18, / kind: uniform, export_end, */
+	 s1: %48:s[0],  s1: %120:scc = s_lshl_b32 (is16bit)%17:s[0], 6
+	 v1: %124:v[0] = v_mbcnt_lo_u32_b32 -1, %48:s[0]
+	 v1: %49:v[0] = v_mbcnt_hi_u32_b32_e64 -1, %124:v[0]
+	 v1: %50:v[0] = v_lshlrev_b32 2, (is16bit)%49:v[0]
+	 v1: %51:v[0] = ds_read_b32 %50:v[0] storage:shared
+	s_waitcnt lgkmcnt(0) vmcnt(0)
+	exp %116:v[9], %117:v[10], %118:v[11], %119:v[12] done vm pos0
+	exp %51:v[0],  v1: undef,  v1: undef,  v1: undef en:r*** param0
+BB24
+/* logical preds: BB19, BB18, / linear preds: BB19, BB18, / kind: uniform, top-level, merge, */
+	s_endpgm
+
+
+shader: MESA_SHADER_FRAGMENT
+source_blake3: {0x5445e883, 0x8b271855, 0xffe7c0cc, 0xbde3d2cb, 0x3925202e, 0x504ab056, 0x4a579a29, 0xb629b017}
+name: 
+num_ubos: 1
+outputs_written: 4-11
+system_values_read: 0x00000000'00000000'00000005'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_float: 0x20
+bit_sizes_int: 0x21
+separate_shader: true
+known_interpolation_qualifiers: true
+flrp_lowered: true
+io_lowered: true
+origin_upper_left: true
+uniforms: 52
+scratch: 8192
+decl_var ubo INTERP_MODE_NONE none block[1] #0 (~0, 0, 4)
+decl_var push_const INTERP_MODE_NONE none block #1
+decl_function main () (entrypoint)
+
+impl main {
+    block b0:   // preds:
+    1      %0 = @load_helper_invocation
+    32     %1 = load_const (0x00000001)
+    32     %2 = load_const (0x00000800 = 2048)
+    32     %3 = load_const (0x00000000 = 0.000000)
+    32     %4 = load_const (0x00000002)
+                // succs: b1
+    loop {
+        block b1:   // preds: b0 b4
+        32     %5 = phi b0: %3 (0x0), b4: %7
+        32     %6 = ishl %5, %4 (0x2)
+                    @store_scratch (%3 (0x0), %6) (align_mul=4, align_offset=0, wrmask=x)
+        32     %7 = iadd %5, %1 (0x1)
+        1      %8 = ige %7, %2 (0x800)
+                    // succs: b2 b3
+        if %8 {
+            block b2:// preds: b1
+            break
+            // succs: b5
+        } else {
+            block b3:  // preds: b1, succs: b4
+        }
+        block b4:  // preds: b3, succs: b1
+    }
+    block b5:   // preds: b2
+    32     %9 = @load_scalar_arg_amd (base=1, arg_num_lsb_zero=2)
+    32    %10 = load_const (0xffff8000 = -32768 = 4294934528)
+    64    %11 = pack_64_2x32_split %9, %10 (0xffff8000)
+    32x4  %12 = @load_global_amd (%11, %3 (0x0)) (base=64, access=readonly|reorderable|smem-amd, align_mul=4, align_offset=0)
+    32    %13 = load_const (0x000007ff = 2047)
+    32    %14 = @load_ubo (%12, %3 (0x0)) (access=speculatable|smem-amd, align_mul=1073741824, align_offset=0, range_base=0, range=4)
+    32    %15 = imin %14, %13 (0x7ff)
+    32    %16 = ishl %15, %4 (0x2)
+    32    %17 = @load_scratch (%16) (access=none, align_mul=4, align_offset=0)
+    1     %18 = ine %17, %1 (0x1)
+                // succs: b6 b7
+    if %18 {
+        block b6:// preds: b5
+        @store_scratch (%1 (0x1), %16) (align_mul=4, align_offset=0, wrmask=x)
+        // succs: b8
+    } else {
+        block b7:  // preds: b5, succs: b8
+    }
+    block b8:   // preds: b6 b7
+    32    %19 = @load_scratch (%16) (access=none, align_mul=4, align_offset=0)
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+    32    %20 = i2f32 %19
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+    32    %21 = @load_vector_arg_amd (base=20)
+    32    %22 = @load_scalar_arg_amd (base=3)
+    1     %23 = inot %0
+    32    %24 = b2i32 %23
+    32    %25 = load_const (0x0000001a = 26)
+    1     %26 = bitnz %22, %25 (0x1a)
+    32    %27 = bcsel %26, %21, %24
+    32    %28 = load_const (0x3f800000 = 1.000000)
+    32    %29 = bit_count %27
+    32    %30 = u2f32 %29
+    32    %31 = load_const (0x3e800000 = 0.250000)
+    32    %32 = fmul %30, %31 (0.250000)
+    32    %33 = load_const (0x00000004)
+    1     %34 = bitnz %22, %33 (0x4)
+    32    %35 = bcsel %34, %32, %28 (0x3f800000)
+                @store_output (%35, %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA0 slots=1, xfb())  // gl_FragData[0]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA1 slots=1, xfb())  // gl_FragData[1]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA2 slots=1, xfb())  // gl_FragData[2]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA3 slots=1, xfb())  // gl_FragData[3]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA4 slots=1, xfb())  // gl_FragData[4]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA5 slots=1, xfb())  // gl_FragData[5]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA6 slots=1, xfb())  // gl_FragData[6]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=0, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                @store_output (%20, %3 (0x0)) (base=0, range=0, wrmask=x, component=1, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                @store_output (%3 (0.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=2, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                @store_output (%28 (1.000000), %3 (0x0)) (base=0, range=0, wrmask=x, component=3, src_type=float32, io location=FRAG_RESULT_DATA7 slots=1, xfb())  // gl_FragData[7]
+                // succs: b9
+    block b9:
+}
+
+After RA:
+ACO shader stage: SW (FS), HW (PIXEL_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, loop-preheader, */
+	 s2: %37:s[0-1],  s1: %38:s[2],  s1: %39:s[3],  s1: %40:s[4],  s1: %41:s[5],  s1: %42:s[6],  v1: %43:v[0],  v1: %44:v[1] = p_startpgm
+	 s2: %46:s[0-1],  s1: %45:scc = p_init_scratch %37:s[0-1], %42:s[6]
+	p_logical_start
+	p_logical_end
+	p_branch BB1
+BB1
+/* logical preds: BB0, BB3, / linear preds: BB0, BB3, / kind: uniform, loop-header, */
+	 s1: %6:s[0] = p_linear_phi 0, %8:s[0]
+	p_logical_start
+	 s1: %7:s[1],  s1: %47:scc = s_lshl_b32 %6:s[0], 2
+	 v1: %48:v[0] = p_parallelcopy 0
+	scratch_store_dword  v1: undef, %7:s[1], %48:v[0] storage:scratch semantics:private
+	 s1: %8:s[0],  s1: %49:scc = s_add_u32 %6:s[0], 1
+	 s1: %50:scc = s_cmpk_ge_i32 %8:s[0] imm:2048
+	p_logical_end
+	p_cbranch_z %50:scc BB3, BB2
+BB2
+/* logical preds: BB1, / linear preds: BB1, / kind: uniform, break, */
+	p_logical_start
+	p_logical_end
+	p_branch BB4
+BB3
+/* logical preds: BB1, / linear preds: BB1, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB1
+BB4
+/* logical preds: BB2, / linear preds: BB2, / kind: top-level, loop-exit, branch, */
+	p_logical_start
+	 s1: %92:s[0] = p_parallelcopy %39:s[3]
+	 s2: %12:s[2-3] = p_create_vector %38:s[2], 0xffff8000
+	 s4: %13:s[8-11] = s_load_dwordx4 %12:s[2-3], 64 storage:buffer semantics:private,reorder
+	 s1: %15:s[1] = s_buffer_load_dword %13:s[8-11], 0
+	 s1: %16:s[1],  s1: %57:scc = s_min_i32 %15:s[1], 0x7ff
+	 s1: %17:s[1],  s1: %58:scc = s_lshl_b32 %16:s[1], 2
+	 v1: %18:v[0] = scratch_load_dword  v1: undef, %17:s[1] storage:scratch semantics:private
+	 s2: %19:vcc = v_cmp_lg_i32 1, %18:v[0]
+	p_logical_end
+	 s2: %90:s[2-3],  s1: %89:scc,  s2: %0:exec = s_and_saveexec_b64 %19:vcc, %0:exec
+	p_cbranch_z %0:exec BB6, BB5
+BB5
+/* logical preds: BB4, / linear preds: BB4, / kind: uniform, */
+	p_logical_start
+	 v1: %59:v[0] = p_parallelcopy 1
+	scratch_store_dword  v1: undef, %17:s[1], %59:v[0] storage:scratch semantics:private
+	p_logical_end
+	p_branch BB7
+BB6
+/* logical preds: / linear preds: BB4, / kind: uniform, */
+	p_branch BB7
+BB7
+/* logical preds: / linear preds: BB5, BB6, / kind: invert, */
+	 s2: %0:exec,  s1: %91:scc = s_andn2_b64 %90:s[2-3], %0:exec
+	p_cbranch_z %0:exec BB9, BB8
+BB8
+/* logical preds: BB4, / linear preds: BB7, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB10
+BB9
+/* logical preds: / linear preds: BB7, / kind: uniform, */
+	p_branch BB10
+BB10
+/* logical preds: BB5, BB8, / linear preds: BB8, BB9, / kind: uniform, top-level, merge, */
+	 s2: %0:exec = p_parallelcopy %90:s[2-3]
+	p_logical_start
+	 v1: %20:v[0] = scratch_load_dword  v1: undef, %17:s[1] storage:scratch semantics:private
+	 v1: %60:v[2] = p_parallelcopy 0
+	 s2: %24:s[2-3],  s1: %62:scc = s_not_b64 0
+	 v1: %25:v[3] = v_cndmask_b32 0, 1, %24:s[2-3]
+	 s1: %63:scc = s_bitcmp1_b32 %40:s[4], 26
+	 s2: %27:vcc = s_cselect_b64 -1, 0, %63:scc
+	 v1: %28:v[3] = v_cndmask_b32 %25:v[3], %44:v[1], %27:vcc
+	 v1: %30:v[3] = v_bcnt_u32_b32 %28:v[3], 0
+	 v1: %31:v[3] = v_cvt_f32_u32 %30:v[3]
+	 v1: %33:v[3] = v_mul_f32 0x3e800000, %31:v[3]
+	 s1: %64:scc = s_bitcmp1_b32 %40:s[4], 4
+	 s2: %35:vcc = s_cselect_b64 -1, 0, %64:scc
+	 v1: %65:v[7] = p_parallelcopy 1.0
+	 v1: %36:v[3] = v_cndmask_b32 1.0, %33:v[3], %35:vcc
+	 s2: %87:s[0-1] = p_create_vector %92:s[0], 0xffff8000
+	 v1: %21:v[1] = v_cvt_f32_i32 %20:v[0]
+	p_parallelcopy
+	    v1: %93:v[0] = %60:v[2]
+	    v1: %94:v[4] = %60:v[2]
+	    v1: %95:v[5] = %21:v[1]
+	    v1: %96:v[6] = %60:v[2]
+	    v1: %97:v[8] = %60:v[2]
+	    v1: %98:v[9] = %21:v[1]
+	    v1: %99:v[10] = %60:v[2]
+	    v1: %100:v[11] = %65:v[7]
+	    v1: %101:v[12] = %60:v[2]
+	    v1: %102:v[13] = %21:v[1]
+	    v1: %103:v[14] = %60:v[2]
+	    v1: %104:v[15] = %65:v[7]
+	    v1: %105:v[16] = %60:v[2]
+	    v1: %106:v[17] = %21:v[1]
+	    v1: %107:v[18] = %60:v[2]
+	    v1: %108:v[19] = %65:v[7]
+	    v1: %109:v[20] = %60:v[2]
+	    v1: %110:v[21] = %21:v[1]
+	    v1: %111:v[22] = %60:v[2]
+	    v1: %112:v[23] = %65:v[7]
+	    v1: %113:v[24] = %60:v[2]
+	    v1: %114:v[25] = %21:v[1]
+	    v1: %115:v[26] = %60:v[2]
+	    v1: %116:v[27] = %65:v[7]
+	    v1: %117:v[28] = %60:v[2]
+	    v1: %118:v[29] = %21:v[1]
+	    v1: %119:v[30] = %60:v[2]
+	    v1: %120:v[31] = %65:v[7]
+	p_jump_to_epilog %87:s[0-1], %93:v[0], %21:v[1], %60:v[2], %36:v[3], %94:v[4], %95:v[5], %96:v[6], %65:v[7], %97:v[8], %98:v[9], %99:v[10], %100:v[11], %101:v[12], %102:v[13], %103:v[14], %104:v[15], %105:v[16], %106:v[17], %107:v[18], %108:v[19], %109:v[20], %110:v[21], %111:v[22], %112:v[23], %113:v[24], %114:v[25], %115:v[26], %116:v[27], %117:v[28], %118:v[29], %119:v[30], %120:v[31]
+	p_logical_end
+
+Pixel Shader
+disasm:
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (FS), HW (PIXEL_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, loop-preheader, */
+	 s2: %46:s[0-1] = s_load_dwordx2 %37:s[0-1], 0
+	s_waitcnt lgkmcnt(0)
+	 s1: %0:s[0],  s1: %0:scc = s_add_u32 %0:s[0], %42:s[6]
+	 s1: %0:s[1],  s1: %0:scc = s_addc_u32 %0:s[1], 0x7fff0000, %0:scc
+	s_setreg_b32 %0:s[0] imm:-2028
+	s_setreg_b32 %0:s[1] imm:-2027
+	 s1: %0:s[0] = s_mov_b32 0
+BB1
+/* logical preds: BB0, BB1, / linear preds: BB0, BB1, / kind: uniform, loop-header, */
+	 v1: %0:v[0] = v_mov_b32 0
+	 s1: %7:s[1],  s1: %47:scc = s_lshl_b32 %6:s[0], 2
+	scratch_store_dword  v1: undef, %7:s[1], %48:v[0] storage:scratch semantics:private
+	 s1: %8:s[0],  s1: %49:scc = s_add_u32 %6:s[0], 1
+	 s1: %50:scc = s_cmpk_ge_i32 %8:s[0] imm:2048
+	s_cbranch_scc0 block:BB1
+BB4
+/* logical preds: BB1, / linear preds: BB1, / kind: top-level, loop-exit, branch, */
+	 s1: %0:s[0] = s_mov_b32 %39:s[3]
+	 s1: %0:s[3] = s_movk_i32 imm:-32768
+	 s4: %13:s[8-11] = s_load_dwordx4 %12:s[2-3], 64 storage:buffer semantics:private,reorder
+	s_waitcnt lgkmcnt(0)
+	s_waitcnt_depctr vm_vsrc(0)
+	 s1: %15:s[1] = s_buffer_load_dword %13:s[8-11], 0
+	s_waitcnt lgkmcnt(0)
+	 s1: %16:s[1],  s1: %57:scc = s_min_i32 %15:s[1], 0x7ff
+	 s1: %17:s[1],  s1: %58:scc = s_lshl_b32 %16:s[1], 2
+	 v1: %18:v[0] = scratch_load_dword  v1: undef, %17:s[1] storage:scratch semantics:private
+	 s2: %0:s[2-3] = s_mov_b64 %0:exec
+	s_waitcnt vmcnt(0)
+	s_waitcnt_depctr sa_sdst(0)
+	 s2: %0:exec = v_cmpx_lg_i32 1, %18:v[0]
+	s_cbranch_execz block:BB10
+BB5
+/* logical preds: BB4, / linear preds: BB4, / kind: uniform, */
+	 v1: %0:v[0] = v_mov_b32 1
+	scratch_store_dword  v1: undef, %17:s[1], %59:v[0] storage:scratch semantics:private
+BB10
+/* logical preds: BB5, BB4, / linear preds: BB5, BB4, / kind: uniform, top-level, merge, */
+	s_waitcnt_depctr vm_vsrc(0)
+	 s2: %0:exec = s_mov_b64 %90:s[2-3]
+	 v1: %20:v[0] = scratch_load_dword  v1: undef, %17:s[1] storage:scratch semantics:private
+	 s2: %24:s[2-3],  s1: %62:scc = s_not_b64 0
+	 s1: %63:scc = s_bitcmp1_b32 %40:s[4], 26
+	s_waitcnt_depctr vm_vsrc(0)
+	 s1: %0:s[1] = s_movk_i32 imm:-32768
+	 v1: %0:v[2] = v_mov_b32 0
+	 v1: %0:v[7] = v_mov_b32 1.0
+	 v1: %25:v[3] = v_cndmask_b32 0, 1, %24:s[2-3]
+	 s2: %27:vcc = s_cselect_b64 -1, 0, %63:scc
+	 s1: %64:scc = s_bitcmp1_b32 %40:s[4], 4
+	 v1: %0:v[4] = v_mov_b32 %60:v[2]
+	 v1: %0:v[12] = v_mov_b32 %60:v[2]
+	 v1: %0:v[8] = v_mov_b32 %60:v[2]
+	 v1: %0:v[16] = v_mov_b32 %60:v[2]
+	 v1: %0:v[15] = v_mov_b32 %65:v[7]
+	 v1: %0:v[11] = v_mov_b32 %65:v[7]
+	 v1: %28:v[3] = v_cndmask_b32 %25:v[3], %44:v[1], %27:vcc
+	 s2: %35:vcc = s_cselect_b64 -1, 0, %64:scc
+	 v1: %0:v[19] = v_mov_b32 %65:v[7]
+	 v1: %0:v[20] = v_mov_b32 %60:v[2]
+	 v1: %0:v[23] = v_mov_b32 %65:v[7]
+	 v1: %0:v[24] = v_mov_b32 %60:v[2]
+	 v1: %0:v[27] = v_mov_b32 %65:v[7]
+	 v1: %0:v[28] = v_mov_b32 %60:v[2]
+	 v1: %0:v[31] = v_mov_b32 %65:v[7]
+	 v1: %30:v[3] = v_bcnt_u32_b32 %28:v[3], 0
+	 v1: %31:v[3] = v_cvt_f32_u32 %30:v[3]
+	 v1: %33:v[3] = v_mul_f32 0x3e800000, %31:v[3]
+	 v1: %36:v[3] = v_cndmask_b32 1.0, %33:v[3], %35:vcc
+	s_waitcnt vmcnt(0)
+	 v1: %21:v[1] = v_cvt_f32_i32 %20:v[0]
+	 v1: %0:v[0] = v_mov_b32 %60:v[2]
+	 v2: %0:v[9-10] = v_lshrrev_b64 0, %0:v[1-2]
+	 v2: %0:v[17-18] = v_lshrrev_b64 0, %0:v[1-2]
+	 v2: %0:v[5-6] = v_lshrrev_b64 0, %0:v[1-2]
+	 v2: %0:v[13-14] = v_lshrrev_b64 0, %0:v[1-2]
+	 v2: %0:v[21-22] = v_lshrrev_b64 0, %0:v[1-2]
+	 v2: %0:v[25-26] = v_lshrrev_b64 0, %0:v[1-2]
+	 v2: %0:v[29-30] = v_lshrrev_b64 0, %0:v[1-2]
+	s_waitcnt_vscnt %0:null imm:0
+	s_setpc_b64 %87:s[0-1]
+
+
