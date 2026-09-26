@@ -1,0 +1,6 @@
+{
+  "src/gallium/frontends/d3d10umd/DxgiFns.cpp": {
+    "before_lf_sha256": "649dc715b5901de0f7d3c577216a5fd6c4690024d73aa298090364782fde8c52",
+    "after_lf_sha256": "b20de5ec3aaffe307557fcfb16744d99fb243d81d92a6e7c34b3f3c4952aa0ed"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "073": {
+    "before": {
+      "objects created/destroyed:": "892546  24601.923 wddm summary: objects created/destroyed: dev 362/348 ctx 603/591 proc 173/165 alloc 6328/7687, 195 alive",
+      "allocations opened/closed:": "892547  24601.923 wddm summary: allocations opened/closed: 6952/6875 calls",
+      "node 0 hardware:": "892549  24601.923 wddm summary: node 0 hardware: 184139 submitted, 184006 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "894504  24608.576 wddm summary: objects created/destroyed: dev 366/352 ctx 611/599 proc 175/167 alloc 6438/7806, 195 alive",
+      "allocations opened/closed:": "894505  24608.576 wddm summary: allocations opened/closed: 7063/6986 calls",
+      "node 0 hardware:": "894507  24608.576 wddm summary: node 0 hardware: 184739 submitted, 184606 completed, 0 timeouts, 0 refused"
+    }
+  },
+  "074": {
+    "before": {
+      "objects created/destroyed:": "899352  24843.843 wddm summary: objects created/destroyed: dev 366/352 ctx 611/599 proc 175/167 alloc 6438/7806, 195 alive",
+      "allocations opened/closed:": "899353  24843.843 wddm summary: allocations opened/closed: 7063/6986 calls",
+      "node 0 hardware:": "899355  24843.843 wddm summary: node 0 hardware: 184739 submitted, 184606 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "912437  24858.796 wddm summary: objects created/destroyed: dev 370/356 ctx 619/607 proc 177/169 alloc 6556/7936, 195 alive",
+      "allocations opened/closed:": "912438  24858.796 wddm summary: allocations opened/closed: 7191/7114 calls",
+      "node 0 hardware:": "912440  24858.796 wddm summary: node 0 hardware: 190739 submitted, 190606 completed, 0 timeouts, 0 refused"
+    }
+  },
+  "075": {
+    "before": {
+      "objects created/destroyed:": "913952  24930.895 wddm summary: objects created/destroyed: dev 370/356 ctx 619/607 proc 177/169 alloc 6556/7936, 195 alive",
+      "allocations opened/closed:": "913953  24930.895 wddm summary: allocations opened/closed: 7191/7114 calls",
+      "node 0 hardware:": "913955  24930.895 wddm summary: node 0 hardware: 190739 submitted, 190606 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "915083  24949.011 wddm summary: objects created/destroyed: dev 372/358 ctx 623/611 proc 178/170 alloc 6624/8010, 195 alive",
+      "allocations opened/closed:": "915084  24949.011 wddm summary: allocations opened/closed: 7261/7184 calls",
+      "node 0 hardware:": "915086  24949.011 wddm summary: node 0 hardware: 190862 submitted, 190729 completed, 0 timeouts, 0 refused"
+    }
+  }
+}

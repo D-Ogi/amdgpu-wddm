@@ -1,0 +1,14 @@
+CPU UMD file restored
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798
+DWM before=84 after=84
+
+process: Exception calling "Kill" with "0" argument(s): "No process is associated with this 
+object."
+At C:\BC250\tmp\run071.ps1:109 char:27
++  if($restoreErrors.Count){throw ($restoreErrors -join '; ')}
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (process: Except...h this object.":String) [], Ru 
+   ntimeException
+    + FullyQualifiedErrorId : process: Exception calling "Kill" with "0" argument(s): "No process 
+    is associated with this object."
+ 
