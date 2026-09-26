@@ -1,0 +1,347 @@
+--- a/src/gallium/drivers/zink/zink_batch.c
++++ b/src/gallium/drivers/zink/zink_batch.c
+@@ -898,9 +898,10 @@
+ 
+    set_foreach(&bs->dmabuf_exports, entry) {
+       struct zink_resource *res = (void*)entry->key;
++      VkImageLayout release_layout=res->obj->bc250_runtime ? VK_IMAGE_LAYOUT_GENERAL : res->layout;
+       if (screen->info.have_KHR_synchronization2) {
+          VkImageMemoryBarrier2 imb;
+-         zink_resource_image_barrier2_init(&imb, res, res->layout, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
++         zink_resource_image_barrier2_init(&imb, res, release_layout, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+          imb.srcQueueFamilyIndex = screen->gfx_queue;
+          imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+          VkDependencyInfo dep = {
+@@ -917,7 +918,7 @@
+          VKCTX(CmdPipelineBarrier2)(bs->cmdbuf, &dep);
+       } else {
+          VkImageMemoryBarrier imb;
+-         zink_resource_image_barrier_init(&imb, res, res->layout, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
++         zink_resource_image_barrier_init(&imb, res, release_layout, 0, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+          imb.srcQueueFamilyIndex = screen->gfx_queue;
+          imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT;
+          VKCTX(CmdPipelineBarrier)(
+@@ -930,6 +931,7 @@
+             1, &imb
+          );
+       }
++      res->layout = release_layout;
+       res->queue = VK_QUEUE_FAMILY_FOREIGN_EXT;
+ 
+       /* We just transitioned to VK_QUEUE_FAMILY_FOREIGN_EXT.  We'll need a
+@@ -942,6 +944,7 @@
+       }
+ 
+       for (; res; res = zink_resource(res->base.b.next)) {
++         if (res->obj->bc250_runtime) continue;
+          VkSemaphore sem = zink_create_exportable_semaphore(screen);
+          if (sem) {
+             util_dynarray_append(&ctx->bs->signal_semaphores, sem);
+--- a/src/gallium/drivers/zink/zink_context.c
++++ b/src/gallium/drivers/zink/zink_context.c
+@@ -4793,7 +4793,7 @@
+          zink_resource_reference(&ctx->needs_present, res);
+       }
+       ctx->swapchain = res;
+-   } else if (res->dmabuf)
++   } else if (res->dmabuf && !res->obj->bc250_runtime)
+       res->queue = VK_QUEUE_FAMILY_FOREIGN_EXT;
+ }
+ 
+--- a/src/gallium/drivers/zink/zink_resource.c
++++ b/src/gallium/drivers/zink/zink_resource.c
+@@ -1112,6 +1112,7 @@
+    if (alloc_info->whandle && alloc_info->whandle->bc250_identity) {
+       if (!screen->bc250_host.dispatch || alloc_info->whandle->bc250_identity!=screen->bc250_host.identity)
+          return roc_fail_and_cleanup_object;
++      obj->bc250_runtime=true;
+       host_import.sType=BC250_HOST_IMPORT_STYPE;
+       host_import.pNext=mai.pNext;
+       host_import.identity=alloc_info->whandle->bc250_identity;
+--- a/src/gallium/drivers/zink/zink_resource.h
++++ b/src/gallium/drivers/zink/zink_resource.h
+@@ -183,7 +183,7 @@
+          VkSemaphore acquire = zink_kopper_acquire_submit(zink_screen(bs->ctx->base.screen), res);
+          if (acquire)
+             util_dynarray_append(&bs->acquires, acquire);
+-      } else if (res->obj->exportable) {
++      } else if (res->obj->exportable || res->obj->bc250_runtime) {
+          struct pipe_resource *pres = NULL;
+          bool found = false;
+          simple_mtx_lock(&bs->exportable_lock);
+--- a/src/gallium/drivers/zink/zink_types.h
++++ b/src/gallium/drivers/zink/zink_types.h
+@@ -1233,6 +1233,7 @@
+    bool render_target;
+    bool is_buffer;
+    bool exportable;
++   bool bc250_runtime;
+    bool exportable_dmabuf;
+ 
+    /* TODO: this should be a union */
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -78,6 +78,10 @@
+    DWORD thread;
+    HANDLE contexts[16];
+    unsigned calls[64];
++   bc250_host_progress progress[16];
++   bool submission_failed;
++   D3DKMT_HANDLE present_sync;
++   UINT64 present_value, present_waited[16];
+ };
+ 
+ static HANDLE Bc250HostContext(Bc250HostProbeState *s, UINT token)
+@@ -92,6 +96,14 @@
+    if (!argument) return E_INVALIDARG;
+ #define HOST_CALL(name, arg) (cb.pfn##name##Cb ? cb.pfn##name##Cb(rt, arg) : E_NOTIMPL)
+    switch (op) {
++   case BC250_HOST_PUBLISH_PROGRESS: {
++      auto *a=(bc250_host_progress *)argument;
++      if (!Bc250HostContext(s,a->context) || !a->sync || !a->value) return E_INVALIDARG;
++      auto &old=s->progress[a->context-1];
++      if (old.sync && (old.sync!=a->sync || old.value>=a->value)) return E_INVALIDARG;
++      old=*a;
++      return S_OK;
++   }
+    case BC250_HOST_CREATE_PAGING: {
+       auto *a = (bc250_host_paging *)argument;
+       D3DDDICB_CREATEPAGINGQUEUE b = {};
+@@ -157,7 +169,7 @@
+       b.NodeOrdinal=a->NodeOrdinal; b.EngineAffinity=a->EngineAffinity; b.Flags=a->Flags;
+       b.pPrivateDriverData=a->pPrivateDriverData; b.PrivateDriverDataSize=a->PrivateDriverDataSize;
+       HRESULT hr=HOST_CALL(CreateContextVirtual, &b);
+-      if (SUCCEEDED(hr)) { s->contexts[slot]=b.hContext; a->hContext=slot+1; }
++      if (SUCCEEDED(hr)) { s->contexts[slot]=b.hContext; s->present_waited[slot]=0; a->hContext=slot+1; }
+       return hr;
+    }
+    case BC250_HOST_DestroyContext: {
+@@ -166,7 +178,10 @@
+       b.hContext=Bc250HostContext(s,a->hContext);
+       if (!b.hContext) return E_INVALIDARG;
+       HRESULT hr=HOST_CALL(DestroyContext, &b);
+-      if (SUCCEEDED(hr)) s->contexts[a->hContext-1]=NULL;
++      if (SUCCEEDED(hr)) {
++         s->contexts[a->hContext-1]=NULL;
++         s->progress[a->hContext-1]={};
++      }
+       return hr;
+    }
+    case BC250_HOST_CreateSynchronizationObject2: {
+@@ -180,7 +195,9 @@
+    case BC250_HOST_DestroySynchronizationObject: {
+       D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT b = {};
+       b.hSyncObject=((D3DKMT_DESTROYSYNCHRONIZATIONOBJECT *)argument)->hSyncObject;
+-      return HOST_CALL(DestroySynchronizationObject, &b);
++      HRESULT hr=HOST_CALL(DestroySynchronizationObject, &b);
++      if (SUCCEEDED(hr)) for (auto &p:s->progress) if (p.sync==b.hSyncObject) p={};
++      return hr;
+    }
+    case BC250_HOST_WaitForSynchronizationObjectFromCpu: {
+       auto *a=(D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *)argument;
+@@ -225,6 +242,16 @@
+       b.BroadcastContextCount=a->BroadcastContextCount;
+       for (UINT i=0;i<a->BroadcastContextCount;++i) {
+          b.BroadcastContext[i]=Bc250HostContext(s,a->BroadcastContext[i]); if (!b.BroadcastContext[i]) return E_INVALIDARG;
++         UINT token=a->BroadcastContext[i];
++         if (s->present_value>s->present_waited[token-1]) {
++            D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait={};
++            wait.hContext=b.BroadcastContext[i]; wait.ObjectCount=1;
++            wait.ObjectHandleArray=&s->present_sync; wait.MonitoredFenceValueArray=&s->present_value;
++            HRESULT hr=HOST_CALL(WaitForSynchronizationObjectFromGpu, &wait);
++            if (s->present_value<=3 || FAILED(hr)) fprintf(stderr,"BC250 render waits Present value=%llu hr=%08lx\n",(unsigned long long)s->present_value,hr);
++            if (FAILED(hr)) return hr;
++            s->present_waited[token-1]=s->present_value;
++         }
+       }
+       b.NumPrimaries=a->NumPrimaries;
+       for (UINT i=0;i<a->NumPrimaries;++i) b.WrittenPrimaries[i]=a->WrittenPrimaries[i];
+@@ -243,10 +270,80 @@
+       return (int32_t)0xc000000d;
+    }
+    HRESULT hr=Bc250HostOperation(s,operation,argument);
++   if (FAILED(hr) && (operation==BC250_HOST_SubmitCommand || operation==BC250_HOST_SignalSynchronizationObjectFromGpu2 || operation==BC250_HOST_PUBLISH_PROGRESS))
++      s->submission_failed=true;
+    unsigned count=operation<64 ? ++s->calls[operation] : 0;
+    if (count<=2 || (FAILED(hr) && hr!=E_PENDING)) fprintf(stderr,"BC250 hosted op=%u count=%u hr=%08lx\n",operation,count,hr);
+    if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
+    return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb : (int32_t)0xc0000001;
++}
++
++HRESULT Bc250QueuePresentWait(Device *device)
++{
++   auto *s=(Bc250HostProbeState *)device->hosted_state;
++   if (!s || Bc250RuntimeDevice!=device || !device->hContext) return E_INVALIDARG;
++   if (s->submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
++   if (!device->KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb ||
++       !device->KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb ||
++       !device->KTCallbacks.pfnCreateSynchronizationObject2Cb) return E_NOTIMPL;
++   if (!s->present_sync) {
++      D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 create={};
++      create.Info.Type=D3DDDI_MONITORED_FENCE;
++      create.Info.MonitoredFence.EngineAffinity=1;
++      HRESULT hr=device->KTCallbacks.pfnCreateSynchronizationObject2Cb(device->hDevice,&create);
++      if (FAILED(hr)) return hr;
++      s->present_sync=create.hSyncObject;
++   }
++   D3DKMT_HANDLE objects[16]={};
++   UINT64 values[16]={};
++   UINT count=0;
++   for (const auto &p:s->progress) {
++      if (!p.sync) continue;
++      if (!Bc250HostContext(s,p.context)) return E_FAIL;
++      objects[count]=p.sync; values[count]=p.value; ++count;
++   }
++   D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait={};
++   wait.hContext=device->hContext; wait.ObjectCount=count;
++   wait.ObjectHandleArray=objects; wait.MonitoredFenceValueArray=values;
++   HRESULT hr=count ? device->KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb(device->hDevice,&wait) : S_OK;
++   if (device->profilePresents<3 || FAILED(hr)) {
++      fprintf(stderr,"BC250 Present GPU wait count=%u hr=%08lx cpu_render_wait=0\n",count,hr);
++      for (UINT i=0;i<count;++i) fprintf(stderr,"BC250 Present fence=%x value=%llu\n",objects[i],(unsigned long long)values[i]);
++   }
++   return hr;
++}
++
++HRESULT Bc250SignalPresent(Device *device)
++{
++   auto *s=(Bc250HostProbeState *)device->hosted_state;
++   if (!s || Bc250RuntimeDevice!=device || !s->present_sync) return E_INVALIDARG;
++   UINT64 value=s->present_value+1;
++   if (!value) return E_FAIL;
++   D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal={};
++   signal.ObjectCount=1; signal.ObjectHandleArray=&s->present_sync;
++   signal.BroadcastContextCount=1; signal.BroadcastContextArray=&device->hContext;
++   signal.MonitoredFenceValueArray=&value;
++   HRESULT hr=device->KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb(device->hDevice,&signal);
++   if (SUCCEEDED(hr)) s->present_value=value;
++   else s->submission_failed=true;
++   if (value<=3 || FAILED(hr)) fprintf(stderr,"BC250 Present signals value=%llu hr=%08lx\n",(unsigned long long)value,hr);
++   return hr;
++}
++
++HRESULT Bc250WaitPresentIdle(Device *device)
++{
++   auto *s=(Bc250HostProbeState *)device->hosted_state;
++   if (!s || !s->present_value) return S_OK;
++   if (Bc250RuntimeDevice!=device || !device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_INVALIDARG;
++   HANDLE event=CreateEventW(NULL,FALSE,FALSE,NULL);
++   if (!event) return HRESULT_FROM_WIN32(GetLastError());
++   D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait={};
++   wait.ObjectCount=1; wait.ObjectHandleArray=&s->present_sync; wait.FenceValueArray=&s->present_value;
++   wait.hAsyncEvent=event;
++   HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
++   if (SUCCEEDED(hr) && WaitForSingleObject(event,10000)!=WAIT_OBJECT_0) hr=DXGI_ERROR_DEVICE_HUNG;
++   CloseHandle(event);
++   return hr;
+ }
+ 
+ extern "C" bool d3d10_hosted_bootstrap(struct bc250_host *host);
+@@ -646,6 +743,16 @@
+       pDevice->owned_screen->destroy(pDevice->owned_screen);
+       pDevice->owned_screen = NULL;
+    }
++   auto *hosted=(Bc250HostProbeState *)pDevice->hosted_state;
++   if (hosted && hosted->present_sync) {
++      HRESULT hr=Bc250WaitPresentIdle(pDevice);
++      if (FAILED(hr)) { SetError(hDevice,hr); return; }
++      D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT destroy={};
++      destroy.hSyncObject=hosted->present_sync;
++      hr=pDevice->KTCallbacks.pfnDestroySynchronizationObjectCb(pDevice->hDevice,&destroy);
++      if (FAILED(hr)) { SetError(hDevice,hr); return; }
++      hosted->present_sync=0;
++   }
+    if (pDevice->hContext) {
+       D3DDDICB_DESTROYCONTEXT destroy = {};
+       destroy.hContext = pDevice->hContext;
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -223,18 +223,25 @@
+        resource->format != PIPE_FORMAT_R8G8B8X8_UNORM) return E_NOTIMPL;
+    HRESULT allocated = Bc250EnsureSurface(device, pSrcResource);
+    if (FAILED(allocated)) return allocated;
+-   // llvmpipe flush queues CPU raster work. Publish the scanout allocation
+-   // only after its render fence completes; a CPU barrier alone cannot wait.
+    LARGE_INTEGER renderStart, renderEnd;
+    QueryPerformanceCounter(&renderStart);
+-   pipe_fence_handle *renderFence = NULL;
+-   device->pipe->flush(device->pipe, &renderFence, 0);
+-   bool rendered = !renderFence || device->pipe->screen->fence_finish(
+-      device->pipe->screen, device->pipe, renderFence, OS_TIMEOUT_INFINITE);
+-   device->pipe->screen->fence_reference(device->pipe->screen, &renderFence, NULL);
++   if (device->hosted_state) {
++      device->pipe->flush(device->pipe, NULL, 0);
++      if (device->pipe->get_device_reset_status &&
++          device->pipe->get_device_reset_status(device->pipe)!=PIPE_NO_RESET)
++         return DXGI_ERROR_DEVICE_REMOVED;
++      HRESULT ordered=Bc250QueuePresentWait(device);
++      if (FAILED(ordered)) return ordered;
++   } else {
++      pipe_fence_handle *renderFence = NULL;
++      device->pipe->flush(device->pipe, &renderFence, 0);
++      bool rendered = !renderFence || device->pipe->screen->fence_finish(
++         device->pipe->screen, device->pipe, renderFence, OS_TIMEOUT_INFINITE);
++      device->pipe->screen->fence_reference(device->pipe->screen, &renderFence, NULL);
++      if (!rendered) return E_FAIL;
++      MemoryBarrier();
++   }
+    QueryPerformanceCounter(&renderEnd);
+-   if (!rendered) return E_FAIL;
+-   MemoryBarrier();
+    HRESULT hr;
+    DXGIDDICB_PRESENT present = {};
+    present.hSrcAllocation = pSrcResource->allocation;
+@@ -251,6 +258,7 @@
+    LARGE_INTEGER presentStart, presentEnd, frequency;
+    QueryPerformanceCounter(&presentStart);
+    hr = device->pDXGIBaseCallbacks->pfnPresentCb(device->hDevice, &present);
++   if (device->hosted_state && SUCCEEDED(hr)) hr=Bc250SignalPresent(device);
+    QueryPerformanceCounter(&presentEnd);QueryPerformanceFrequency(&frequency);
+    if(++device->profilePresents<=120 || device->profilePresents%60==0)
+       DebugPrintf("BC250 Perf frame %u gap_ms %.3f draws %llu draw_ms %.3f max_draw_ms %.3f present_ms %.3f render_wait_ms %.3f\n",
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -542,6 +542,8 @@
+       bool done=!fence || pipe->screen->fence_finish(pipe->screen,pipe,fence,10000000000ull);
+       pipe->screen->fence_reference(pipe->screen,&fence,NULL);
+       if (!done) { SetError(hDevice,DXGI_ERROR_DEVICE_HUNG); return; }
++      HRESULT idle=Bc250WaitPresentIdle(CastDevice(hDevice));
++      if (FAILED(idle)) { SetError(hDevice,idle); return; }
+       pipe_resource_reference(&pResource->resource,NULL);
+    }
+    if (pResource->allocation) {
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -187,6 +187,9 @@
+ 
+ 
+ HRESULT Bc250EnsureSurface(Device *device, Resource *resource);
++HRESULT Bc250QueuePresentWait(Device *device);
++HRESULT Bc250SignalPresent(Device *device);
++HRESULT Bc250WaitPresentIdle(Device *device);
+ 
+ static inline Resource *
+ CastResource(D3D10DDI_HRESOURCE hResource)
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -7,7 +7,7 @@
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 3u
++#define BC250_HOST_VERSION 4u
+ #define BC250_HOST_IMPORT_STYPE 0x42434832u
+ struct bc250_host_import {
+    uint32_t sType;
+@@ -18,6 +18,11 @@
+ };
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
++#define BC250_HOST_PUBLISH_PROGRESS 3u
++struct bc250_host_progress {
++   uint32_t context, sync;
++   uint64_t value;
++};
+ struct bc250_host_paging {
+    uint32_t queue, sync;
+    void *cpu_address;

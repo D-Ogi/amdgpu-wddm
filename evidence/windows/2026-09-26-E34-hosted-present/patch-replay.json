@@ -1,0 +1,5 @@
+{
+  "scope": "Present incremental patch only, before snapshots verified and normalized to LF; not a clean full-stack build",
+  "files": 12,
+  "all_output_byte_hashes_match": true
+}

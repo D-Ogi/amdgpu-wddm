@@ -72,3 +72,39 @@ before/after manifest. It excludes borrowed BOs from RADV destruction-time Evict
 UMD residency ownership is unchanged. Re-run the unchanged shared-color control
 with all three pixel checks and successful independent baseline restoration.
 M542 records run019 and the scoped build gates; Present remains a separate gate.
+
+## GPU ordering before native Present
+
+Hypothesis: each hosted RADV queue can publish its accepted GPU progress signal
+through private ABI 4; UMD can enqueue waits for all active queue witnesses into
+the runtime Present context without a CPU render-fence wait. Runtime imports
+receive a Zink batch-end release barrier to GENERAL and FOREIGN, and no exported
+Vulkan semaphore. Later use reacquires through Zink's existing image barriers.
+
+Build both DLLs and pass fast gates. First rerun the unchanged shared-color
+control (run020). Then run runtime-present-control in the interactive lab session:
+320x240 native BGRA window, 120 Presents at 100 ms intervals, red/blue/green
+phases and an end-only staging readback. Capture composed window pixels during
+presentation. Require Present success, GPU-wait witnesses, exact final pixels,
+successful teardown and hash-checked baseline restoration. A black window,
+failed callback, reset, timeout or mismatch rejects the candidate. Record DWM
+identity; it remains the CPU control for this client test. No G0 inference.
+
+Reference: WDK 10.0.26100 D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU and
+pfnWaitForSynchronizationObjectFromGpuCb, workspace ref/ddi-display/d3dumddi.md.
+
+Ordering refinement for run026: keep the runtime Present context distinct from
+the RADV graphics context. After PresentCb, signal a UMD-owned monitored fence;
+before subsequent SubmitCommand callbacks, enqueue waits for its latest value
+in each render context (once per value/context). Resource teardown waits for
+Present completion with a 10-second asynchronous CPU-wait deadline. CPU waits
+are teardown-only. Direct Present in the RADV context was rejected in run025;
+its failure is retained, not counted as acceptance. A three-capture requirement
+is evaluated after process output is preserved, so early failure cannot hide
+the original exit/error. Candidate014 is the bidirectional version.
+
+Apply present-icd.patch and present-umd.patch after borrowed-residency.patch.
+For exact replay normalize the verified input to LF and use git with
+core.autocrlf=false. present-manifest.json binds original and LF input hashes
+and final byte hashes. M543 records run026, candidate014, and the unsuccessful
+intermediate controls. The full project patch stack still needs a clean build.

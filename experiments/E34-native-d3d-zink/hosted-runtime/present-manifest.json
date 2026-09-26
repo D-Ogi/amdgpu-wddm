@@ -1,0 +1,86 @@
+[
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c",
+    "before_sha256": "dffa2a6f320e3c814a2ad2130b447320e3e98ba06c724d0b94327de9b29050fe",
+    "before_lf_sha256": "be183ab50bf887f897fd7b4ed230b0689020558a8681c903d0c45ecdc7103879",
+    "after_sha256": "9c710c25468c6a1323713ebd2dab0702628362db6c462398f12736cd28bdf72f"
+  },
+  {
+    "component": "icd",
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "34766554fec6159cefea14a88e273a33140b064512627de46730c9ed9e7891c9",
+    "before_lf_sha256": "135c01beb6eca4ff64be474d210246aa4ed9e6aa6d90da562e7d222f98959717",
+    "after_sha256": "6e3966559519c0d037afba688ee7453ccfc08b6f1aac34c70a82a2ae1a319f94"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_batch.c",
+    "before_sha256": "ba87b372941f4ea3dd5613fdf5e9dc8a1e1b850f207f7841572dde4270f60000",
+    "before_lf_sha256": "ab26f4a46cd9d837c1a81ccae98f5d3cd971f939d6d6e1e0545d26d9c37e9963",
+    "after_sha256": "e9898effabeac8ea36434861832e16b49d1d65fd02acc1920d1127051a7102f3"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_context.c",
+    "before_sha256": "a5f4f51d8261452bfa83cd4d4f9f728805381c0926885e5f393ca3b5d8633d02",
+    "before_lf_sha256": "9c3008e45574d17724b7622bdd308151bdd18fb2217725b734f411e88712a305",
+    "after_sha256": "b0ae09f3de50b3130c123d4f38a9048e3594044b737afa4346939f5a70818a1d"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_resource.c",
+    "before_sha256": "506b1dd336e122f547b9c5f83a1e14d9d3c8b02e539d842786e89508814f094b",
+    "before_lf_sha256": "0507605d9dbbccfe4587a8c5207d039e6a931aea50da79580e1dbe87cf18f1f7",
+    "after_sha256": "ca16200ea77dacc9a3c6ee2e17ed34ba4228a3f1b6d5dff9094d0533c2b2f807"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_resource.h",
+    "before_sha256": "49c3db70e2a047b7c74984fe4f4c7e870ac21cc2c5827a92b573f3ef605b7b5a",
+    "before_lf_sha256": "4f1126ab6360df5809aaf43d79c2daa742d5c142e9e96274a63a207190243e15",
+    "after_sha256": "2db1679653b3d84b6a989246378217b2e944052e9a4c8c816668afafd2677d48"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/drivers/zink/zink_types.h",
+    "before_sha256": "48d18578f940f057fd4b4a1890d70e070027f6c9e1ce43223342202cca95dc4f",
+    "before_lf_sha256": "bc85bd149257e3796d768a208e813e03baa3a5b7e8b3f5d5e10b9c5b3abeb5f6",
+    "after_sha256": "4287e28e69806223d7a69083c0d2968366bb01d1e66fe1c7633544cf52ceada7"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_sha256": "22cb5ddc5ab67d043ee4206ded5378d374b9efd70cbc7065dd5548e08451312b",
+    "before_lf_sha256": "a7a6ecd5572aba9c7712e5dea8a7d3089af80b0ff6f6372884a065b2f785420c",
+    "after_sha256": "12adb04aa0fb15e9d7c2269f3028060e0d2df589697421b86fb98101b2642b05"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/DxgiFns.cpp",
+    "before_sha256": "dea0a67b62fba249548eadd4a7b5a4230293e5bd93df0ef54694feb417279408",
+    "before_lf_sha256": "7ddbb4cd8615aee019d1fb6ad08ba46b84ed49f4696e6af4fd96c81da8a03fc1",
+    "after_sha256": "c15e23be6d84af69b3a001a8c5dac32d5bd71084eb61ba89492dc30d4bdf5654"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/Resource.cpp",
+    "before_sha256": "d2e00c8b299c74efa041495cd7b12896fa8abb803dce4aeff42fc765f9c10f96",
+    "before_lf_sha256": "e41d1f7a01d5c468ec835bcf6ea27df99e43925354dc1837b1b7ca0ce9a1d269",
+    "after_sha256": "5fe69a2f8efa052ea489aba82a3431ba75c1138f6a807d86fa432fdead07c91b"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/State.h",
+    "before_sha256": "5bb8574b049e4835921fd513af541c60c66c72b18154b6906f8ddde558eb4330",
+    "before_lf_sha256": "c0775310ca8f9993ed708e4df1c0cb6309174adfa7b282bd975301b7f640977c",
+    "after_sha256": "c020b95adf91f8b1d567cf6f82a92d723d0a6b3ce958297bc336d140beda38cf"
+  },
+  {
+    "component": "umd",
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "34766554fec6159cefea14a88e273a33140b064512627de46730c9ed9e7891c9",
+    "before_lf_sha256": "135c01beb6eca4ff64be474d210246aa4ed9e6aa6d90da562e7d222f98959717",
+    "after_sha256": "6e3966559519c0d037afba688ee7453ccfc08b6f1aac34c70a82a2ae1a319f94"
+  }
+]
