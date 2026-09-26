@@ -1,0 +1,14 @@
+[
+  {
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_raw_sha256": "7143d60e501e3fd7318e1da828f0c879c42d6709f79c02de9ea6d83ed3dfc90b",
+    "before_lf_sha256": "7143d60e501e3fd7318e1da828f0c879c42d6709f79c02de9ea6d83ed3dfc90b",
+    "after_sha256": "64fae6297caef7b888a87b4b76d5911a652b7966b3eb50ef63d992f2422527a6"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Shader.cpp",
+    "before_raw_sha256": "b768856e653f25762ab642c1c82ea93f21fd4726013ecf85c456dbbeff8bafb0",
+    "before_lf_sha256": "21958bc2d3086afa978d52b26ee7d20785b633ac22769ea01c44622296682b3e",
+    "after_sha256": "02bae74a308b2e3cb2b208f07537801a2d467c828b6bbac41ac7d59a8d38be7c"
+  }
+]
