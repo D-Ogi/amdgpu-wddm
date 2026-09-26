@@ -1,0 +1,7 @@
+matching_media=1
+usb_bus_verified=true size_bytes=64160400896
+efi/boot/bootx64.efi_sha256=840e9a73f25507362e2a06cc8234fb51bef8bd536122275194270c4fa7552f6c
+boot/grub/grub.cfg_sha256=380176a8f3aa952ba4cd2fb001f3b365a460be6f986cf5679b680ab4c70e68b6
+return_identity_preflight_passed
+windows_fallback_restored
+return_request_utc=2026-09-26T12:47:22Z

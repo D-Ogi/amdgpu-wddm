@@ -1,0 +1,5 @@
+uptime=1939.05
+upper_state=State:	S (sleeping)
+Pid:	19301
+[  947.856490] amdgpu 0000:01:00.0: amdgpu: Trusted Memory Zone (TMZ) feature disabled as experimental (default)
+[ 1908.257796] amdgpu 0000:01:00.0: amdgpu: ring gfx_0.0.0 timeout, signaled seq=16, emitted seq=17

@@ -1,0 +1,11 @@
+upper_live=19301
+	 s2: %46:s[0-1] = s_load_dwordx2 %37:s[0-1], 0
+	s_waitcnt lgkmcnt(0)
+	 s1: %0:s[0],  s1: %0:scc = s_add_u32 %0:s[0], %42:s[6]
+	 s1: %0:s[1],  s1: %0:scc = s_addc_u32 %0:s[1], 0x80000000, %0:scc
+	s_setreg_b32 %0:s[0] imm:-2028
+	s_setreg_b32 %0:s[1] imm:-2027
+	 s1: %0:s[0] = s_mov_b32 0
+BB1
+/* logical preds: BB0, BB1, / linear preds: BB0, BB1, / kind: uniform, loop-header, */
+	 v1: %0:v[0] = v_mov_b32 0

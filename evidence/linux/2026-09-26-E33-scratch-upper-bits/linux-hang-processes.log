@@ -1,0 +1,7 @@
+pid=17589 comm=Xorg State:	S (sleeping)
+do_epoll_wait
+pid=19303 comm=timeout State:	S (sleeping)
+sigsuspend.isra.0
+pid=19304 comm=shader_runner State:	Z (zombie)
+0
+filesystem_sync_complete

@@ -1,0 +1,3 @@
+wrapper_exit=137
+xorg_remaining=no
+umount: /mnt/bc250-build/root/dev: target is busy.

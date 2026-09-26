@@ -1,0 +1,8 @@
+ninja: Entering directory `/work/build/mesa'
+[1/10] Generating src/git_sha1.h with a custom command
+[2/5] Compiling C object src/amd/vulkan/libvulkan_radeon.so.p/radv_queue.c.o
+[3/5] Compiling C++ object src/amd/compiler/libaco.a.p/aco_lower_to_hw_instr.cpp.o
+[4/5] Linking static target src/amd/compiler/libaco.a
+[5/5] Linking target src/amd/vulkan/libvulkan_radeon.so
+6ffdc1f7ce447db90566ff72d6fe4e5c34e87c288902b256af3d55bc6e02a002  /mnt/bc250-build/root/opt/bc250/lib/libvulkan_radeon.so
+upper_pid=19301

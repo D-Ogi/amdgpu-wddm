@@ -1,0 +1,14 @@
+--- a/src/amd/compiler/aco_lower_to_hw_instr.cpp
++++ b/src/amd/compiler/aco_lower_to_hw_instr.cpp
+@@ -2270,7 +2270,10 @@
+    /* Since we know what the high 16 bits of scratch_hi is, we can set all the high 16
+     * bits in the same instruction that we add the carry.
+     */
+-   Operand hi_add = Operand::c32(0xffff0000 - S_008F04_SWIZZLE_ENABLE_GFX6(1));
++   /* Diagnostic: compare zero-extended GFX10 scratch VAs with the Linux
++    * high-half convention. LLVM PAL also strips descriptor bits above bit47. */
++   const uint32_t scratch_upper = bld.program->gfx_level >= GFX10 ? 0 : 0xffff0000;
++   Operand hi_add = Operand::c32(scratch_upper - S_008F04_SWIZZLE_ENABLE_GFX6(1));
+    Operand scratch_addr_lo(scratch_addr.physReg(), s1);
+    Operand scratch_addr_hi(scratch_addr_lo.physReg().advance(4), s1);
+ 
