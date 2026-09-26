@@ -1,0 +1,18 @@
+[
+  {
+    "patch": "ddi-trace-initial.patch",
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_raw_sha256": "9f314bf03c52a65ee6d58e76902bdbb82aa905a02187501597b9a9109c4681cf",
+    "before_lf_sha256": "9f314bf03c52a65ee6d58e76902bdbb82aa905a02187501597b9a9109c4681cf",
+    "after_raw_sha256": "25c3f3c83f18e7dc50a0372c95c176f13e20c2694e69af2eb6fab2965b77d77f",
+    "after_lf_sha256": "25c3f3c83f18e7dc50a0372c95c176f13e20c2694e69af2eb6fab2965b77d77f"
+  },
+  {
+    "patch": "ddi-trace-limit.patch",
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_raw_sha256": "25c3f3c83f18e7dc50a0372c95c176f13e20c2694e69af2eb6fab2965b77d77f",
+    "before_lf_sha256": "25c3f3c83f18e7dc50a0372c95c176f13e20c2694e69af2eb6fab2965b77d77f",
+    "after_raw_sha256": "7143d60e501e3fd7318e1da828f0c879c42d6709f79c02de9ea6d83ed3dfc90b",
+    "after_lf_sha256": "7143d60e501e3fd7318e1da828f0c879c42d6709f79c02de9ea6d83ed3dfc90b"
+  }
+]

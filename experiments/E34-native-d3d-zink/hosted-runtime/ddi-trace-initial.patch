@@ -1,0 +1,39 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -64,11 +64,28 @@
+ 
+ static Device *Bc250EntryDevice(D3D10DDI_HDEVICE h) { return CastDevice(h); }
+ template <typename A> static Device *Bc250EntryDevice(A *a) { return CastDevice(a->hDevice); }
++static LONG Bc250TraceCount;
++struct Bc250DdiTrace {
++   LONG sequence;
++   explicit Bc250DdiTrace(const char *name) : sequence(0) {
++      if (GetEnvironmentVariableA("BC250_HOST_TRACE_DDI",NULL,0)) {
++         LONG n=InterlockedIncrement(&Bc250TraceCount);
++         if (n<=2048) {
++            sequence=n;
++            fprintf(stderr,"BC250 DDI begin seq=%ld tid=%lu name=%s\n",sequence,GetCurrentThreadId(),name);
++         }
++      }
++   }
++   ~Bc250DdiTrace() {
++      if (sequence) fprintf(stderr,"BC250 DDI end seq=%ld tid=%lu\n",sequence,GetCurrentThreadId());
++   }
++};
+ template <auto F> struct Bc250Entry;
+ template <typename R, typename A, typename... Rest, R (APIENTRY *F)(A, Rest...)>
+ struct Bc250Entry<F> {
+    static R APIENTRY Call(A a, Rest... rest) {
+       Bc250RuntimeScope scope(Bc250EntryDevice(a));
++      Bc250DdiTrace trace(__FUNCSIG__);
+       return F(a, rest...);
+    }
+ };
+@@ -316,6 +333,7 @@
+       fprintf(stderr,"BC250 hosted wrong-thread op=%u\n",operation);
+       return (int32_t)0xc000000d;
+    }
++   if (operation<64 && s->calls[operation]<2 && GetEnvironmentVariableA("BC250_HOST_TRACE_DDI",NULL,0)) fprintf(stderr,"BC250 callback begin op=%u tid=%lu\n",operation,GetCurrentThreadId());
+    HRESULT hr=Bc250HostOperation(s,operation,argument);
+    if (Bc250DeviceLostResult(hr)) {
+       Bc250HostLost(s);

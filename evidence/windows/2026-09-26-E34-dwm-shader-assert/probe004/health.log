@@ -1,0 +1,23 @@
+{
+    "modules":  [
+                    {
+                        "sha256":  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+                        "name":  "bc250d3d.dll"
+                    }
+                ],
+    "pid":  9108
+}
+{
+    "stop":  false
+}
+[
+    {
+        "Hash":  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA"
+    },
+    {
+        "Hash":  "9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798"
+    }
+]
+{
+    "State":  3
+}

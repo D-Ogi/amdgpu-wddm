@@ -1,0 +1,18 @@
+{
+  "threads-11000.dmp": {
+    "bytes": 524779,
+    "sha256": "a9a5d9ca0c145cd8fac7989254513291d8eee18ac130ced5b76bfef0e0e8fa83"
+  },
+  "bc250d3d_zink.pdb": {
+    "bytes": 29208576,
+    "sha256": "b53b4be773066a073c23d37ad585ac12cb3e0c42739ac09e32e552fb877c1a6d"
+  },
+  "stacks.log": {
+    "bytes": 41201,
+    "sha256": "f13dc4151d507d2ae7edb245ac816ca5d2d45bc6820581b26301b9a2ae80e289"
+  },
+  "tgsi-fields.log": {
+    "bytes": 4501,
+    "sha256": "9a172cb191aa5540a2dd484b17ffe4529b94462f0d4cbb07f0569e8db8211eac"
+  }
+}

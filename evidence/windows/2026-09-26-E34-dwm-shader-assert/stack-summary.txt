@@ -1,0 +1,12 @@
+Private dump: DWM compositor thread, probe007, process11000, uptime21s.
+Function-only stack summary; raw addresses/memory and dump remain private.
+NtUserWaitMessage -> modal MessageBox -> CRT assertion reporting
+-> ttn_src_for_file_and_index -> ttn_get_src -> ttn_emit_instruction
+-> ttn_parse_tgsi -> ttn_compile_init -> tgsi_to_nir
+-> zink_create_gfx_shader_state -> util_live_shader_cache_get
+-> zink_create_cached_shader_state -> CreatePixelShader
+-> native D3D runtime -> dwmcore CD3DDevice::GenerateShaders.
+Assert site source line748: UNREACHABLE("bad src file").
+Decoded current instruction: Opcode0x91 (TGSI_OPCODE_SAMPLE), NumDstRegs1,
+NumSrcRegs3. Decoded source register: File10 (TGSI_FILE_SAMPLER_VIEW), Index0.
+PDB matched candidateB2B0CB27; private artifact hashes accompany this summary.

@@ -1,0 +1,23 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -67,8 +67,8 @@
+ static LONG Bc250TraceCount;
+ struct Bc250DdiTrace {
+    LONG sequence;
+-   explicit Bc250DdiTrace(const char *name) : sequence(0) {
+-      if (GetEnvironmentVariableA("BC250_HOST_TRACE_DDI",NULL,0)) {
++   explicit Bc250DdiTrace(const char *name, bool selected) : sequence(0) {
++      if (selected && GetEnvironmentVariableA("BC250_HOST_TRACE_DDI",NULL,0)) {
+          LONG n=InterlockedIncrement(&Bc250TraceCount);
+          if (n<=2048) {
+             sequence=n;
+@@ -85,7 +85,8 @@
+ struct Bc250Entry<F> {
+    static R APIENTRY Call(A a, Rest... rest) {
+       Bc250RuntimeScope scope(Bc250EntryDevice(a));
+-      Bc250DdiTrace trace(__FUNCSIG__);
++      static LONG entryCount;
++      Bc250DdiTrace trace(__FUNCSIG__,InterlockedIncrement(&entryCount)<=8);
+       return F(a, rest...);
+    }
+ };

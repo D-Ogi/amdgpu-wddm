@@ -1,0 +1,26 @@
+{
+    "modules":  [
+                    {
+                        "path":  "C:\\BC250\\m13\\dwm-hosted005\\bc250d3d_zink.dll",
+                        "sha256":  "B2B0CB27AA752941C0F2745C1BF498F228CA663F6FCEA78ACB8D77F34985DD45",
+                        "name":  "bc250d3d_zink.dll"
+                    },
+                    {
+                        "path":  "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+                        "sha256":  "EF88DCF0D64063691A19DBCBC10E631561DD03C8B3FE51EB1EF5F449EE1B5D0A",
+                        "name":  "bc250d3d.dll"
+                    },
+                    {
+                        "path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+                        "sha256":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E",
+                        "name":  "vulkan_radeon.dll"
+                    },
+                    {
+                        "path":  "C:\\BC250\\m13\\dwm-hosted005\\vulkan_radeon.dll",
+                        "sha256":  "3508416F7FB6367BC7345970C22603E03DA963A01F4B5C0A1DF1AAAC2D90CF71",
+                        "name":  "vulkan_radeon.dll"
+                    }
+                ],
+    "utc":  "2026-09-26T20:48:54.8829717Z",
+    "pid":  8496
+}
