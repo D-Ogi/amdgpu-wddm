@@ -1,0 +1,1 @@
+Aborting Piglit execution: spec@!opengl 1.1@line-smooth-stipple: fail
