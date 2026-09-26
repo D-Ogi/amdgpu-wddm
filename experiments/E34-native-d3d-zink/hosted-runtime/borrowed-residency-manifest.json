@@ -1,0 +1,8 @@
+[
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c",
+    "before_sha256": "248cc07b980cc55733a7e756b9d04de7f2db8caab0c4fe358ed7b903dac41cb4",
+    "after_sha256": "c1b849d5ac3ceea867d7ae3387f22c8d43dea9660a7ef0bd9cf6ee6e9dac9f67"
+  }
+]

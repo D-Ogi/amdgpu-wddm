@@ -64,3 +64,11 @@ three exact 4096-pixel colors including the surviving device. The import uses
 explicit linear layout and the runtime surface pitch. Teardown waits for GPU
 completion before releasing the imported Gallium resource and runtime allocation.
 This control does not exercise Present or DWM.
+
+## Borrowed residency correction
+
+Apply borrowed-residency.patch after the runtime-import patches, checking its
+before/after manifest. It excludes borrowed BOs from RADV destruction-time Evict;
+UMD residency ownership is unchanged. Re-run the unchanged shared-color control
+with all three pixel checks and successful independent baseline restoration.
+M542 records run019 and the scoped build gates; Present remains a separate gate.
