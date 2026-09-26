@@ -1,0 +1,10 @@
+UnconfirmedStarts = 0
+confirm_exit=0
+
+
+EnableFullWddm       : 0
+EnableRlcReloadReset : 0
+UnconfirmedStarts    : 0
+LastStage            : 61
+
+

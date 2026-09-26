@@ -1,0 +1,6 @@
+unlocked.c
+FAIL: serialized CPU snapshots, concurrent readers, writer/stop exclusion, post-stop/IRQL refusal (9 violations)
+reader-unlocked.c
+FAIL: serialized CPU snapshots, concurrent readers, writer/stop exclusion, post-stop/IRQL refusal (5 violations)
+after.c
+PASS: serialized CPU snapshots, concurrent readers, writer/stop exclusion, post-stop/IRQL refusal (0 violations)

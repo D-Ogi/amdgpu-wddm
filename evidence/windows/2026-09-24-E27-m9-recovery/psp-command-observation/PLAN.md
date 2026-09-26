@@ -1,0 +1,4 @@
+# PSP command boundary observation
+
+M365 bounds warm RLCbusy to PSPinitialization despite noinitialhostGFXflush. Add read-only RLC CNTL/STATUS2 snapshots before/afterPSPringcreate and after each existing completed command. Existing command log immediately identifies id/type/index; snapshot must follow before nextcommand. FullWDDM only; no command reordering,skip,reset orchangedfence/responsechecks. Measurements addreadlatency.
+Build116 andcheckpackage; runPSP shim positive tests againstlocalfirmware. Source-review localLinux PSP resume/autoload path; do not infer a working reset from source alone. Hardwaretrial later:firstcontrol/content,stop,onewarmstart,thenrecoverpersistentlogs. ExistingafterPSP/IH checkpoints persist command snapshots if PSP completes; a hanginsidePSP before persistence can still leave an incomplete record.

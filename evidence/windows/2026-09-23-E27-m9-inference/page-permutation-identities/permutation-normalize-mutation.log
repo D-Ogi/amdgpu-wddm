@@ -1,0 +1,4 @@
+truncate-identity.c
+paging_permutation_test.c
+Generowanie kodu...
+page permutations: 1 cases, 46233 snapshot-oracle failures

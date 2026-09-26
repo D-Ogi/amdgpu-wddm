@@ -1,0 +1,29 @@
+2026-09-23 M236: startup coordinator, host/source evidence only
+Base HEAD: bed764da5192be7132d646be0e6331c1edeb30fd
+Dirty source snapshots included. No lab access/deployment/reboot/USB change.
+
+GpuStartupInitialize requires an unpublished, exclusively owned device lifecycle
+and caller-allocated NONPAGED aggregate report. It checks gates, callbacks,
+subsystem objects, MSI, cold GFX state and aperture geometry before preparing
+firmware. GART -> prepared PSP -> IH -> GFX; attempts recorded before calls.
+Rechecks aperture geometry and actual paging resource presence before Ready.
+Report includes detailed subsystem output. Never publishes Device.Wddm.
+Failed hardware attempts stop IH/GFX/PSP/GART, preserving the original failure
+and the stop quarantine verdict; firmware released on every exit.
+
+Actual coordinator and GFX readiness predicates extracted into host controls.
+291 checks pass. Removing IH stop fails11; removing readiness fails3.
+Stop-chain regression1676 passes (historical pre-fix control fails889 as expected).
+Firmware ownership regression32 passes.
+Hardware subsystem APIs, locks, geometry and fence addresses modeled in new test.
+Real stop implementation tested separately; no actual GPU halt evidence here.
+Successful compile/sign:
+scratch/build/startup-coordinator-dev/package-umd
+SYS SHA25685DA7A17A1F3A82505F29DD2C8AB0D48EBB182142CCC1713198E026C891B91B3
+Retains0.7.93.1 development-only, NOT DEPLOYED; official0793 unchanged.
+
+Not connected to WddmStart. Requires interrupt/callback ordering review and
+lifecycle exclusion before integration. GFX allocates engine resources during
+its existing sequence; this is not an all-engine-allocation-before-writes claim.
+Readiness is structural after existing stage controls, not live paging proof.
+Cross-Remove/Add quarantine/reset, diagnostic admission and M9 audit gaps remain.

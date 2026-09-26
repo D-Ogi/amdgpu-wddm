@@ -1,0 +1,1134 @@
+{
+  "criterion": "frame >=14 and exactly two draws; includes later samples, not a matched animation benchmark",
+  "n": 107,
+  "median_draw_plus_wait_ms": 4.502000000000001,
+  "min_ms": 0.117,
+  "max_ms": 5.676,
+  "frames": [
+    {
+      "frame": 1.0,
+      "gap_ms": 0.0,
+      "draws": 0.0,
+      "draw_ms": 0.0,
+      "max_draw_ms": 0.0,
+      "present_ms": 0.237,
+      "render_wait_ms": 0.006
+    },
+    {
+      "frame": 2.0,
+      "gap_ms": 2419.371,
+      "draws": 40.0,
+      "draw_ms": 1775.103,
+      "max_draw_ms": 327.041,
+      "present_ms": 0.136,
+      "render_wait_ms": 2.183
+    },
+    {
+      "frame": 3.0,
+      "gap_ms": 83.178,
+      "draws": 1.0,
+      "draw_ms": 0.095,
+      "max_draw_ms": 0.095,
+      "present_ms": 0.138,
+      "render_wait_ms": 0.006
+    },
+    {
+      "frame": 4.0,
+      "gap_ms": 168.372,
+      "draws": 30.0,
+      "draw_ms": 2.8,
+      "max_draw_ms": 0.295,
+      "present_ms": 0.129,
+      "render_wait_ms": 6.325
+    },
+    {
+      "frame": 5.0,
+      "gap_ms": 325.584,
+      "draws": 31.0,
+      "draw_ms": 96.849,
+      "max_draw_ms": 94.071,
+      "present_ms": 0.197,
+      "render_wait_ms": 17.814
+    },
+    {
+      "frame": 6.0,
+      "gap_ms": 185.438,
+      "draws": 31.0,
+      "draw_ms": 2.665,
+      "max_draw_ms": 0.327,
+      "present_ms": 0.193,
+      "render_wait_ms": 19.962
+    },
+    {
+      "frame": 7.0,
+      "gap_ms": 3728.941,
+      "draws": 39.0,
+      "draw_ms": 2945.133,
+      "max_draw_ms": 818.825,
+      "present_ms": 0.055,
+      "render_wait_ms": 0.006
+    },
+    {
+      "frame": 8.0,
+      "gap_ms": 292.982,
+      "draws": 41.0,
+      "draw_ms": 5.145,
+      "max_draw_ms": 0.661,
+      "present_ms": 0.052,
+      "render_wait_ms": 34.307
+    },
+    {
+      "frame": 9.0,
+      "gap_ms": 236.095,
+      "draws": 35.0,
+      "draw_ms": 3.94,
+      "max_draw_ms": 0.499,
+      "present_ms": 0.057,
+      "render_wait_ms": 50.499
+    },
+    {
+      "frame": 10.0,
+      "gap_ms": 770.797,
+      "draws": 41.0,
+      "draw_ms": 475.43,
+      "max_draw_ms": 472.249,
+      "present_ms": 0.058,
+      "render_wait_ms": 35.944
+    },
+    {
+      "frame": 11.0,
+      "gap_ms": 212.969,
+      "draws": 35.0,
+      "draw_ms": 2.385,
+      "max_draw_ms": 0.239,
+      "present_ms": 0.058,
+      "render_wait_ms": 45.514
+    },
+    {
+      "frame": 12.0,
+      "gap_ms": 133.604,
+      "draws": 2.0,
+      "draw_ms": 0.177,
+      "max_draw_ms": 0.136,
+      "present_ms": 0.054,
+      "render_wait_ms": 0.004
+    },
+    {
+      "frame": 13.0,
+      "gap_ms": 463.254,
+      "draws": 2.0,
+      "draw_ms": 0.139,
+      "max_draw_ms": 0.095,
+      "present_ms": 0.053,
+      "render_wait_ms": 0.002
+    },
+    {
+      "frame": 14.0,
+      "gap_ms": 961.137,
+      "draws": 2.0,
+      "draw_ms": 0.117,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.238
+    },
+    {
+      "frame": 15.0,
+      "gap_ms": 501.121,
+      "draws": 2.0,
+      "draw_ms": 0.12,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.058,
+      "render_wait_ms": 5.053
+    },
+    {
+      "frame": 16.0,
+      "gap_ms": 504.223,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.052,
+      "render_wait_ms": 3.988
+    },
+    {
+      "frame": 17.0,
+      "gap_ms": 501.974,
+      "draws": 2.0,
+      "draw_ms": 0.126,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.091,
+      "render_wait_ms": 4.258
+    },
+    {
+      "frame": 18.0,
+      "gap_ms": 998.874,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.05,
+      "render_wait_ms": 5.25
+    },
+    {
+      "frame": 19.0,
+      "gap_ms": 504.095,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.053,
+      "render_wait_ms": 4.143
+    },
+    {
+      "frame": 20.0,
+      "gap_ms": 1004.32,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.131
+    },
+    {
+      "frame": 21.0,
+      "gap_ms": 500.86,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.054,
+      "render_wait_ms": 5.201
+    },
+    {
+      "frame": 22.0,
+      "gap_ms": 502.513,
+      "draws": 2.0,
+      "draw_ms": 0.13,
+      "max_draw_ms": 0.1,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.119
+    },
+    {
+      "frame": 23.0,
+      "gap_ms": 1002.771,
+      "draws": 2.0,
+      "draw_ms": 0.118,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.048,
+      "render_wait_ms": 4.164
+    },
+    {
+      "frame": 24.0,
+      "gap_ms": 501.099,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.048,
+      "render_wait_ms": 5.13
+    },
+    {
+      "frame": 25.0,
+      "gap_ms": 501.155,
+      "draws": 2.0,
+      "draw_ms": 0.124,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.113
+    },
+    {
+      "frame": 26.0,
+      "gap_ms": 495.57,
+      "draws": 2.0,
+      "draw_ms": 0.117,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.049,
+      "render_wait_ms": 4.23
+    },
+    {
+      "frame": 27.0,
+      "gap_ms": 507.902,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.955
+    },
+    {
+      "frame": 28.0,
+      "gap_ms": 499.507,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.061
+    },
+    {
+      "frame": 29.0,
+      "gap_ms": 1003.876,
+      "draws": 2.0,
+      "draw_ms": 0.122,
+      "max_draw_ms": 0.088,
+      "present_ms": 0.063,
+      "render_wait_ms": 4.227
+    },
+    {
+      "frame": 30.0,
+      "gap_ms": 997.5,
+      "draws": 2.0,
+      "draw_ms": 0.127,
+      "max_draw_ms": 0.089,
+      "present_ms": 0.052,
+      "render_wait_ms": 5.15
+    },
+    {
+      "frame": 31.0,
+      "gap_ms": 1006.281,
+      "draws": 2.0,
+      "draw_ms": 0.125,
+      "max_draw_ms": 0.092,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.211
+    },
+    {
+      "frame": 32.0,
+      "gap_ms": 996.861,
+      "draws": 2.0,
+      "draw_ms": 0.154,
+      "max_draw_ms": 0.096,
+      "present_ms": 0.055,
+      "render_wait_ms": 4.042
+    },
+    {
+      "frame": 33.0,
+      "gap_ms": 506.863,
+      "draws": 2.0,
+      "draw_ms": 0.119,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.052,
+      "render_wait_ms": 5.148
+    },
+    {
+      "frame": 34.0,
+      "gap_ms": 499.194,
+      "draws": 2.0,
+      "draw_ms": 0.121,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.143
+    },
+    {
+      "frame": 35.0,
+      "gap_ms": 1003.168,
+      "draws": 2.0,
+      "draw_ms": 0.118,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.053,
+      "render_wait_ms": 4.194
+    },
+    {
+      "frame": 36.0,
+      "gap_ms": 1004.48,
+      "draws": 2.0,
+      "draw_ms": 0.134,
+      "max_draw_ms": 0.099,
+      "present_ms": 0.052,
+      "render_wait_ms": 5.025
+    },
+    {
+      "frame": 37.0,
+      "gap_ms": 998.941,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.048,
+      "render_wait_ms": 4.16
+    },
+    {
+      "frame": 38.0,
+      "gap_ms": 1002.856,
+      "draws": 2.0,
+      "draw_ms": 0.119,
+      "max_draw_ms": 0.09,
+      "present_ms": 0.051,
+      "render_wait_ms": 4.189
+    },
+    {
+      "frame": 39.0,
+      "gap_ms": 501.227,
+      "draws": 2.0,
+      "draw_ms": 0.118,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.049,
+      "render_wait_ms": 5.209
+    },
+    {
+      "frame": 40.0,
+      "gap_ms": 499.999,
+      "draws": 2.0,
+      "draw_ms": 0.122,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.05,
+      "render_wait_ms": 4.104
+    },
+    {
+      "frame": 41.0,
+      "gap_ms": 1002.241,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.057,
+      "render_wait_ms": 3.93
+    },
+    {
+      "frame": 42.0,
+      "gap_ms": 1000.049,
+      "draws": 2.0,
+      "draw_ms": 0.136,
+      "max_draw_ms": 0.09,
+      "present_ms": 0.051,
+      "render_wait_ms": 5.197
+    },
+    {
+      "frame": 43.0,
+      "gap_ms": 994.016,
+      "draws": 2.0,
+      "draw_ms": 0.145,
+      "max_draw_ms": 0.088,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.08
+    },
+    {
+      "frame": 44.0,
+      "gap_ms": 506.601,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.05,
+      "render_wait_ms": 4.163
+    },
+    {
+      "frame": 45.0,
+      "gap_ms": 501.438,
+      "draws": 2.0,
+      "draw_ms": 0.118,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.053,
+      "render_wait_ms": 5.239
+    },
+    {
+      "frame": 46.0,
+      "gap_ms": 493.809,
+      "draws": 2.0,
+      "draw_ms": 0.144,
+      "max_draw_ms": 0.093,
+      "present_ms": 0.056,
+      "render_wait_ms": 4.201
+    },
+    {
+      "frame": 47.0,
+      "gap_ms": 505.565,
+      "draws": 2.0,
+      "draw_ms": 0.112,
+      "max_draw_ms": 0.081,
+      "present_ms": 0.048,
+      "render_wait_ms": 4.103
+    },
+    {
+      "frame": 48.0,
+      "gap_ms": 1002.822,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.048,
+      "render_wait_ms": 5.11
+    },
+    {
+      "frame": 49.0,
+      "gap_ms": 1500.981,
+      "draws": 2.0,
+      "draw_ms": 0.142,
+      "max_draw_ms": 0.091,
+      "present_ms": 0.054,
+      "render_wait_ms": 4.056
+    },
+    {
+      "frame": 50.0,
+      "gap_ms": 499.478,
+      "draws": 2.0,
+      "draw_ms": 0.138,
+      "max_draw_ms": 0.09,
+      "present_ms": 0.053,
+      "render_wait_ms": 3.95
+    },
+    {
+      "frame": 51.0,
+      "gap_ms": 500.748,
+      "draws": 2.0,
+      "draw_ms": 0.113,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.058,
+      "render_wait_ms": 5.005
+    },
+    {
+      "frame": 52.0,
+      "gap_ms": 994.502,
+      "draws": 2.0,
+      "draw_ms": 0.122,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.055,
+      "render_wait_ms": 4.317
+    },
+    {
+      "frame": 53.0,
+      "gap_ms": 500.347,
+      "draws": 2.0,
+      "draw_ms": 0.143,
+      "max_draw_ms": 0.091,
+      "present_ms": 0.057,
+      "render_wait_ms": 3.984
+    },
+    {
+      "frame": 54.0,
+      "gap_ms": 1510.408,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.055,
+      "render_wait_ms": 4.939
+    },
+    {
+      "frame": 55.0,
+      "gap_ms": 499.867,
+      "draws": 2.0,
+      "draw_ms": 0.137,
+      "max_draw_ms": 0.091,
+      "present_ms": 0.055,
+      "render_wait_ms": 3.882
+    },
+    {
+      "frame": 56.0,
+      "gap_ms": 1499.28,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.051,
+      "render_wait_ms": 3.954
+    },
+    {
+      "frame": 57.0,
+      "gap_ms": 501.124,
+      "draws": 2.0,
+      "draw_ms": 0.112,
+      "max_draw_ms": 0.082,
+      "present_ms": 0.049,
+      "render_wait_ms": 4.824
+    },
+    {
+      "frame": 58.0,
+      "gap_ms": 494.425,
+      "draws": 2.0,
+      "draw_ms": 0.155,
+      "max_draw_ms": 0.098,
+      "present_ms": 0.053,
+      "render_wait_ms": 3.981
+    },
+    {
+      "frame": 59.0,
+      "gap_ms": 505.441,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.052,
+      "render_wait_ms": 4.157
+    },
+    {
+      "frame": 60.0,
+      "gap_ms": 500.997,
+      "draws": 2.0,
+      "draw_ms": 0.14,
+      "max_draw_ms": 0.092,
+      "present_ms": 0.053,
+      "render_wait_ms": 4.972
+    },
+    {
+      "frame": 61.0,
+      "gap_ms": 498.761,
+      "draws": 2.0,
+      "draw_ms": 0.113,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.048,
+      "render_wait_ms": 4.069
+    },
+    {
+      "frame": 62.0,
+      "gap_ms": 1503.202,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.051,
+      "render_wait_ms": 4.078
+    },
+    {
+      "frame": 63.0,
+      "gap_ms": 501.294,
+      "draws": 2.0,
+      "draw_ms": 0.125,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.057,
+      "render_wait_ms": 4.824
+    },
+    {
+      "frame": 64.0,
+      "gap_ms": 499.488,
+      "draws": 2.0,
+      "draw_ms": 0.138,
+      "max_draw_ms": 0.093,
+      "present_ms": 0.05,
+      "render_wait_ms": 4.131
+    },
+    {
+      "frame": 65.0,
+      "gap_ms": 1000.359,
+      "draws": 2.0,
+      "draw_ms": 0.113,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.05,
+      "render_wait_ms": 4.131
+    },
+    {
+      "frame": 66.0,
+      "gap_ms": 500.862,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.055,
+      "render_wait_ms": 5.136
+    },
+    {
+      "frame": 67.0,
+      "gap_ms": 1501.02,
+      "draws": 2.0,
+      "draw_ms": 0.113,
+      "max_draw_ms": 0.081,
+      "present_ms": 0.053,
+      "render_wait_ms": 4.06
+    },
+    {
+      "frame": 68.0,
+      "gap_ms": 499.877,
+      "draws": 2.0,
+      "draw_ms": 0.112,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.047,
+      "render_wait_ms": 4.122
+    },
+    {
+      "frame": 69.0,
+      "gap_ms": 1503.739,
+      "draws": 2.0,
+      "draw_ms": 0.145,
+      "max_draw_ms": 0.091,
+      "present_ms": 0.067,
+      "render_wait_ms": 5.292
+    },
+    {
+      "frame": 70.0,
+      "gap_ms": 626.088,
+      "draws": 33.0,
+      "draw_ms": 3.846,
+      "max_draw_ms": 0.324,
+      "present_ms": 0.052,
+      "render_wait_ms": 0.003
+    },
+    {
+      "frame": 71.0,
+      "gap_ms": 55.317,
+      "draws": 7.0,
+      "draw_ms": 0.487,
+      "max_draw_ms": 0.121,
+      "present_ms": 0.053,
+      "render_wait_ms": 0.001
+    },
+    {
+      "frame": 72.0,
+      "gap_ms": 315.396,
+      "draws": 2.0,
+      "draw_ms": 0.122,
+      "max_draw_ms": 0.09,
+      "present_ms": 0.047,
+      "render_wait_ms": 0.002
+    },
+    {
+      "frame": 73.0,
+      "gap_ms": 499.869,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.051,
+      "render_wait_ms": 0.002
+    },
+    {
+      "frame": 74.0,
+      "gap_ms": 1000.79,
+      "draws": 2.0,
+      "draw_ms": 0.135,
+      "max_draw_ms": 0.092,
+      "present_ms": 0.051,
+      "render_wait_ms": 4.163
+    },
+    {
+      "frame": 75.0,
+      "gap_ms": 1504.88,
+      "draws": 2.0,
+      "draw_ms": 0.117,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.05,
+      "render_wait_ms": 5.18
+    },
+    {
+      "frame": 76.0,
+      "gap_ms": 496.862,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.054,
+      "render_wait_ms": 3.891
+    },
+    {
+      "frame": 77.0,
+      "gap_ms": 500.837,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.048,
+      "render_wait_ms": 4.168
+    },
+    {
+      "frame": 78.0,
+      "gap_ms": 1001.873,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.051,
+      "render_wait_ms": 5.151
+    },
+    {
+      "frame": 79.0,
+      "gap_ms": 493.383,
+      "draws": 2.0,
+      "draw_ms": 0.125,
+      "max_draw_ms": 0.093,
+      "present_ms": 0.051,
+      "render_wait_ms": 4.176
+    },
+    {
+      "frame": 80.0,
+      "gap_ms": 1509.309,
+      "draws": 2.0,
+      "draw_ms": 0.118,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.049,
+      "render_wait_ms": 4.137
+    },
+    {
+      "frame": 81.0,
+      "gap_ms": 500.117,
+      "draws": 2.0,
+      "draw_ms": 0.119,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.055,
+      "render_wait_ms": 5.185
+    },
+    {
+      "frame": 82.0,
+      "gap_ms": 1502.342,
+      "draws": 2.0,
+      "draw_ms": 0.154,
+      "max_draw_ms": 0.1,
+      "present_ms": 0.056,
+      "render_wait_ms": 4.399
+    },
+    {
+      "frame": 83.0,
+      "gap_ms": 500.885,
+      "draws": 2.0,
+      "draw_ms": 0.116,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.053,
+      "render_wait_ms": 3.693
+    },
+    {
+      "frame": 84.0,
+      "gap_ms": 496.325,
+      "draws": 2.0,
+      "draw_ms": 0.152,
+      "max_draw_ms": 0.094,
+      "present_ms": 0.051,
+      "render_wait_ms": 5.524
+    },
+    {
+      "frame": 85.0,
+      "gap_ms": 1000.785,
+      "draws": 2.0,
+      "draw_ms": 0.122,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.066,
+      "render_wait_ms": 4.361
+    },
+    {
+      "frame": 86.0,
+      "gap_ms": 504.635,
+      "draws": 2.0,
+      "draw_ms": 0.14,
+      "max_draw_ms": 0.092,
+      "present_ms": 0.069,
+      "render_wait_ms": 4.738
+    },
+    {
+      "frame": 87.0,
+      "gap_ms": 1501.773,
+      "draws": 2.0,
+      "draw_ms": 0.147,
+      "max_draw_ms": 0.092,
+      "present_ms": 0.097,
+      "render_wait_ms": 5.188
+    },
+    {
+      "frame": 88.0,
+      "gap_ms": 493.233,
+      "draws": 2.0,
+      "draw_ms": 0.138,
+      "max_draw_ms": 0.089,
+      "present_ms": 0.056,
+      "render_wait_ms": 4.442
+    },
+    {
+      "frame": 89.0,
+      "gap_ms": 499.072,
+      "draws": 2.0,
+      "draw_ms": 0.139,
+      "max_draw_ms": 0.093,
+      "present_ms": 0.057,
+      "render_wait_ms": 3.938
+    },
+    {
+      "frame": 90.0,
+      "gap_ms": 1010.027,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.052,
+      "render_wait_ms": 5.187
+    },
+    {
+      "frame": 91.0,
+      "gap_ms": 502.602,
+      "draws": 2.0,
+      "draw_ms": 0.114,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.057,
+      "render_wait_ms": 4.866
+    },
+    {
+      "frame": 92.0,
+      "gap_ms": 484.659,
+      "draws": 2.0,
+      "draw_ms": 0.105,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.06,
+      "render_wait_ms": 4.341
+    },
+    {
+      "frame": 93.0,
+      "gap_ms": 1004.056,
+      "draws": 2.0,
+      "draw_ms": 0.107,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.057,
+      "render_wait_ms": 5.343
+    },
+    {
+      "frame": 94.0,
+      "gap_ms": 501.591,
+      "draws": 2.0,
+      "draw_ms": 0.105,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.06,
+      "render_wait_ms": 4.397
+    },
+    {
+      "frame": 95.0,
+      "gap_ms": 500.424,
+      "draws": 2.0,
+      "draw_ms": 0.106,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.059,
+      "render_wait_ms": 4.369
+    },
+    {
+      "frame": 96.0,
+      "gap_ms": 1494.208,
+      "draws": 2.0,
+      "draw_ms": 0.105,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.055,
+      "render_wait_ms": 5.455
+    },
+    {
+      "frame": 97.0,
+      "gap_ms": 492.866,
+      "draws": 2.0,
+      "draw_ms": 0.106,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.059,
+      "render_wait_ms": 4.421
+    },
+    {
+      "frame": 98.0,
+      "gap_ms": 1001.0,
+      "draws": 2.0,
+      "draw_ms": 0.103,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.058,
+      "render_wait_ms": 4.466
+    },
+    {
+      "frame": 99.0,
+      "gap_ms": 501.204,
+      "draws": 2.0,
+      "draw_ms": 0.108,
+      "max_draw_ms": 0.088,
+      "present_ms": 0.058,
+      "render_wait_ms": 5.416
+    },
+    {
+      "frame": 100.0,
+      "gap_ms": 499.936,
+      "draws": 2.0,
+      "draw_ms": 0.11,
+      "max_draw_ms": 0.089,
+      "present_ms": 0.057,
+      "render_wait_ms": 4.384
+    },
+    {
+      "frame": 101.0,
+      "gap_ms": 1507.361,
+      "draws": 2.0,
+      "draw_ms": 0.115,
+      "max_draw_ms": 0.095,
+      "present_ms": 0.059,
+      "render_wait_ms": 4.435
+    },
+    {
+      "frame": 102.0,
+      "gap_ms": 494.446,
+      "draws": 2.0,
+      "draw_ms": 0.103,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.06,
+      "render_wait_ms": 5.409
+    },
+    {
+      "frame": 103.0,
+      "gap_ms": 500.098,
+      "draws": 2.0,
+      "draw_ms": 0.106,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.055,
+      "render_wait_ms": 4.542
+    },
+    {
+      "frame": 104.0,
+      "gap_ms": 500.892,
+      "draws": 2.0,
+      "draw_ms": 0.109,
+      "max_draw_ms": 0.088,
+      "present_ms": 0.055,
+      "render_wait_ms": 4.507
+    },
+    {
+      "frame": 105.0,
+      "gap_ms": 501.263,
+      "draws": 2.0,
+      "draw_ms": 0.109,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.054,
+      "render_wait_ms": 5.433
+    },
+    {
+      "frame": 106.0,
+      "gap_ms": 499.178,
+      "draws": 2.0,
+      "draw_ms": 0.11,
+      "max_draw_ms": 0.089,
+      "present_ms": 0.064,
+      "render_wait_ms": 4.392
+    },
+    {
+      "frame": 107.0,
+      "gap_ms": 1507.214,
+      "draws": 2.0,
+      "draw_ms": 0.099,
+      "max_draw_ms": 0.08,
+      "present_ms": 0.058,
+      "render_wait_ms": 4.226
+    },
+    {
+      "frame": 108.0,
+      "gap_ms": 489.474,
+      "draws": 2.0,
+      "draw_ms": 0.104,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.059,
+      "render_wait_ms": 5.478
+    },
+    {
+      "frame": 109.0,
+      "gap_ms": 1512.557,
+      "draws": 2.0,
+      "draw_ms": 0.108,
+      "max_draw_ms": 0.088,
+      "present_ms": 0.059,
+      "render_wait_ms": 4.493
+    },
+    {
+      "frame": 110.0,
+      "gap_ms": 491.544,
+      "draws": 2.0,
+      "draw_ms": 0.099,
+      "max_draw_ms": 0.08,
+      "present_ms": 0.06,
+      "render_wait_ms": 4.413
+    },
+    {
+      "frame": 111.0,
+      "gap_ms": 504.25,
+      "draws": 2.0,
+      "draw_ms": 0.106,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.052,
+      "render_wait_ms": 5.347
+    },
+    {
+      "frame": 112.0,
+      "gap_ms": 999.535,
+      "draws": 2.0,
+      "draw_ms": 0.108,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.065,
+      "render_wait_ms": 4.356
+    },
+    {
+      "frame": 113.0,
+      "gap_ms": 1001.197,
+      "draws": 2.0,
+      "draw_ms": 0.102,
+      "max_draw_ms": 0.082,
+      "present_ms": 0.057,
+      "render_wait_ms": 4.469
+    },
+    {
+      "frame": 114.0,
+      "gap_ms": 1002.292,
+      "draws": 2.0,
+      "draw_ms": 0.106,
+      "max_draw_ms": 0.086,
+      "present_ms": 0.058,
+      "render_wait_ms": 5.405
+    },
+    {
+      "frame": 115.0,
+      "gap_ms": 999.379,
+      "draws": 2.0,
+      "draw_ms": 0.104,
+      "max_draw_ms": 0.084,
+      "present_ms": 0.055,
+      "render_wait_ms": 4.382
+    },
+    {
+      "frame": 116.0,
+      "gap_ms": 500.733,
+      "draws": 2.0,
+      "draw_ms": 0.109,
+      "max_draw_ms": 0.087,
+      "present_ms": 0.06,
+      "render_wait_ms": 4.539
+    },
+    {
+      "frame": 117.0,
+      "gap_ms": 501.096,
+      "draws": 2.0,
+      "draw_ms": 0.112,
+      "max_draw_ms": 0.091,
+      "present_ms": 0.056,
+      "render_wait_ms": 5.392
+    },
+    {
+      "frame": 118.0,
+      "gap_ms": 999.97,
+      "draws": 2.0,
+      "draw_ms": 0.104,
+      "max_draw_ms": 0.083,
+      "present_ms": 0.063,
+      "render_wait_ms": 4.552
+    },
+    {
+      "frame": 119.0,
+      "gap_ms": 1000.989,
+      "draws": 2.0,
+      "draw_ms": 0.101,
+      "max_draw_ms": 0.081,
+      "present_ms": 0.053,
+      "render_wait_ms": 4.51
+    },
+    {
+      "frame": 120.0,
+      "gap_ms": 1002.19,
+      "draws": 2.0,
+      "draw_ms": 0.105,
+      "max_draw_ms": 0.085,
+      "present_ms": 0.053,
+      "render_wait_ms": 5.41
+    },
+    {
+      "frame": 180.0,
+      "gap_ms": 68.986,
+      "draws": 33.0,
+      "draw_ms": 0.846,
+      "max_draw_ms": 0.1,
+      "present_ms": 0.045,
+      "render_wait_ms": 0.001
+    },
+    {
+      "frame": 240.0,
+      "gap_ms": 150.054,
+      "draws": 35.0,
+      "draw_ms": 1.009,
+      "max_draw_ms": 0.104,
+      "present_ms": 0.078,
+      "render_wait_ms": 21.601
+    },
+    {
+      "frame": 300.0,
+      "gap_ms": 29.946,
+      "draws": 39.0,
+      "draw_ms": 1.151,
+      "max_draw_ms": 0.104,
+      "present_ms": 0.067,
+      "render_wait_ms": 18.287
+    },
+    {
+      "frame": 360.0,
+      "gap_ms": 507.48,
+      "draws": 2.0,
+      "draw_ms": 0.113,
+      "max_draw_ms": 0.09,
+      "present_ms": 0.057,
+      "render_wait_ms": 5.483
+    },
+    {
+      "frame": 420.0,
+      "gap_ms": 1007.977,
+      "draws": 2.0,
+      "draw_ms": 0.136,
+      "max_draw_ms": 0.108,
+      "present_ms": 0.099,
+      "render_wait_ms": 5.507
+    }
+  ]
+}

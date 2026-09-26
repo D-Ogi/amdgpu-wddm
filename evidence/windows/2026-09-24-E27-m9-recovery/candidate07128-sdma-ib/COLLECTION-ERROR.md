@@ -1,0 +1,1 @@
+Collection aborted while encoding m8.err with the host default CP1250. The partial files are retained unchanged. Complete UTF8 collection of the same hardware trial is in ../candidate07128-sdma-ib-complete; no hardware rerun occurred.

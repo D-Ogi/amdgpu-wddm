@@ -1,0 +1,7 @@
+kernel=6.18.52-0-lts
+module_sha256=5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4
+module_vermagic=6.18.52-0-lts SMP preempt mod_unload modversions 
+module_srcversion=lockup_timeout=10000
+gpu_recovery=1
+debug_mask=0
+timeout_policy_mismatch

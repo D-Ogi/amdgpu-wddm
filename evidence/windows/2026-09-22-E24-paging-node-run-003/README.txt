@@ -1,4 +1,4 @@
-E24 run 003, 2026-09-22 10:57-11:01: bc250kmd 0.7.25 (5dcf020) on unit A, owner at the monitor, FIRST bring-up of
+E24 run 003, 2026-09-22 10:57-11:01: bc250kmd 0.7.25 (3910bed) on unit A, owner at the monitor, FIRST bring-up of
 a fresh boot (10:53:53), with the freshness guard (scratch/tmp/bringup_guard.ps1) refusing otherwise.
 
 One run answering both open questions, cheap answers first: the full table with `-GpuVa 1 -Engines 1 -GpuSubmit 1

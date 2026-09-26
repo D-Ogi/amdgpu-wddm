@@ -1,0 +1,18 @@
+{
+  "llvm23-desktop.bmp": {
+    "sha256": "b88b24c5989bc8dd69addfe9419019cc9b2a2ac36316ed6cb1344d4d2cd6efa1",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 0
+  },
+  "llvm23-control0.bmp": {
+    "sha256": "d912d50b8ffd4985bf4226d5f5615bc598a2812cc9acd12b91016306cd73c5a9",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 275148
+  }
+}

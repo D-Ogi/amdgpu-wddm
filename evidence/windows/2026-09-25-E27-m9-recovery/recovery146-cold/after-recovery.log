@@ -1,0 +1,21 @@
+now=2026-09-25T03:29:32.9987203+02:00
+boot=2026-09-25T03:27:10.5000000+02:00
+login_helpers_stopped_and_tasks_removed
+
+ProcessName   Id StartTime           
+-----------   -- ---------           
+bc250mon    4268 9/25/2026 3:28:14 AM
+dwm         1548 9/25/2026 3:28:12 AM
+
+
+health abi=1 version=0x00070092 flags=15 generation=591743209 epoch=5 completed=254 age_ms=610 ready_ms=82252
+light_cpu_samples
+{"Name":"_Total","PercentProcessorTime":0,"PercentDPCTime":0,"PercentInterruptTime":0,"InterruptsPersec":2527}
+{"Name":"_Total","PercentProcessorTime":2,"PercentDPCTime":0,"PercentInterruptTime":0,"InterruptsPersec":2301}
+{"Name":"_Total","PercentProcessorTime":0,"PercentDPCTime":0,"PercentInterruptTime":0,"InterruptsPersec":2300}
+{"Name":"_Total","PercentProcessorTime":1,"PercentDPCTime":0,"PercentInterruptTime":0,"InterruptsPersec":1700}
+{"Name":"_Total","PercentProcessorTime":1,"PercentDPCTime":0,"PercentInterruptTime":1,"InterruptsPersec":4065}
+{"Name":"_Total","PercentProcessorTime":8,"PercentDPCTime":0,"PercentInterruptTime":0,"InterruptsPersec":2224}
+health abi=1 version=0x00070092 flags=15 generation=591743209 epoch=5 completed=265 age_ms=170 ready_ms=90817
+after_recovery_complete
+

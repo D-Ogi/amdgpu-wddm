@@ -1,0 +1,9 @@
+# M265: explicit Vulkan memory-type visibility matrix
+
+2026-09-23, unit A, unchanged installed full-WDDM0.7.98.1 and quiet ICD4E05F1DF627CD6D9D64FE7F1ADDA29673D5B3B96B3750A08034A7EE88460C9EA. No driver installation/reboot/reinitialization. Base bed764da5192be7132d646be0e6331c1edeb30fd, with uncommitted source snapshots. Revised probe96381FCF0C6CC95F24872BD74ECD4F66F96CD98AD12A629D34D7B285036740DB builds/help passes. See M264 for unchanged E14 support source.
+
+Explicitly requested types2(heap0,flags0x6),3(heap1,flags0x7),5(heap0,flags0xe). All three buffers in each process log and match the requested type. Each type runs positive16rounds, stale-input control, positive16round repeat. All native exits0/1/0;96positive rounds in total. Same16 expected hashes per positive process; all output bytes match. All three stale controls retain round0 GPU hash and disagree with round1 expected hash. Host validator verifies types/heaps/flags, output rows, hashes, ICD witnesses and before/after counters.
+
+GFX30541->30643 (+102), SDMA689344->697338 (+7994), all completed, zero timeouts/refusals/noTDR. Query1000MHz/VID116(request820mV); temperature70.8..71.9C. Limited interactive scheduled task removed; no GPU job remains.
+
+Important scope limitation: HOST_CACHED is a Vulkan advertised/requested property, not measured CPU PAT state. Source inspection shows BC2A carries gem_flags, but UmdBlob allocation view currently omits that field and WddmCpuVisibleAllocationFlags sets Cached=0 for UMD allocations. Therefore passing type5 does not prove a write-back Windows mapping or correct propagation of RADV cache intent. This is a concrete policy gap for the next implementation, not measured cache corruption. M264 selector already prefers DEVICE_LOCAL; it did not simply select the first compatible type. No eviction-plus-shader, table-pointer cache attribute, arbitrary alias or legacy aperture acceptance is claimed. M259-M262 remain undeployed.

@@ -1,0 +1,25 @@
+{
+  "candidate": "0.7.109.1",
+  "sys_sha256": "551B0BE13C4DA83AA8B9C3BA283F9320969607D9D541D3A6182E275CB145A019",
+  "wdk_build_exit": 0,
+  "stop_chain": {
+    "checks": 3620,
+    "failures": 0
+  },
+  "negative_control": {
+    "checks": 3340,
+    "failures": 1768,
+    "expected_exit": 1
+  },
+  "startup_coordinator": {
+    "checks": 319,
+    "failures": 0
+  },
+  "packagecheck": {
+    "checks": 25,
+    "errors": 0,
+    "warnings": 0
+  },
+  "deployed": false,
+  "scope": "Actual-source stop/coordinator tests with mocked hardware and allocation backends. Counts observed in tool output; not hardware retirement proof."
+}

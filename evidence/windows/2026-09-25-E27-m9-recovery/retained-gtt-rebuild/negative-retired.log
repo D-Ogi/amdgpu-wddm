@@ -1,0 +1,5 @@
+retained_gtt_actual.c
+FAIL 95: GpuMemRebuildRetainedGtt(&a)==0 && memory.TlbDirty && binds==3 && unbinds==1 && barriers==1
+FAIL 96: !memcmp(table,expected,sizeof(table))
+FAIL 98: !memcmp(table,expected,sizeof(table))
+Retained GTT rebuild: 36 checks, 3 failures

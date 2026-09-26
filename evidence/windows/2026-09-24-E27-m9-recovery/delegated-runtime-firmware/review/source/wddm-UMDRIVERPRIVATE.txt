@@ -1,0 +1,20 @@
+#include "firmware_metadata.h"
+
+    case DXGKQAITYPE_UMDRIVERPRIVATE:
+    {
+        struct bc250_umd_firmware firmware;
+        ULONG smuVersion;
+        // Keep the measured hardware template, replacing its historical
+        // firmware replies with this session's successful load/start snapshot.
+        // Both helpers only copy caches; no file or mailbox I/O in this DDI.
+        if (QueryAdapterInfo->pOutputData == NULL) { status = STATUS_INVALID_PARAMETER; break; }
+        if (QueryAdapterInfo->OutputDataSize < UMD_CAPS_BYTES) { status = STATUS_BUFFER_TOO_SMALL; break; }
+        status=PspReadFirmware(device,&firmware);
+        if(!NT_SUCCESS(status))break;
+        status=SmuReadFirmwareVersion(&device->Smu,&smuVersion);
+        if(!NT_SUCCESS(status))break;
+        firmware.smc_version=smuVersion;
+        RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
+        RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
+        break;
+    }

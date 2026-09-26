@@ -1,0 +1,89 @@
+
+Hash                                                            
+----                                                            
+0627D56A08ACEC6138938E6E11B456E6C1CDA7EE406BD5396CBCD8BBFBC6F6CA
+{
+    "name":  "graphics",
+    "title":  "Active graphics pipeline",
+    "order":  12,
+    "rows":  [
+                 [
+                     "DWM",
+                     "PID 8364, since 12:46:44",
+                     "Info"
+                 ],
+                 [
+                     "D3D UMD",
+                     "bc250d3d / profile-umd",
+                     "Info"
+                 ],
+                 [
+                     "Build hash",
+                     "E1976C425405",
+                     "Info"
+                 ],
+                 [
+                     "Renderer",
+                     "Mesa softpipe",
+                     "Info"
+                 ],
+                 [
+                     "Draws",
+                     "CPU software rendering",
+                     "Warn"
+                 ],
+                 [
+                     "Shaders",
+                     "TGSI interpreter; no LLVM/JIT",
+                     "Info"
+                 ],
+                 [
+                     "UMD build",
+                     "rotation + frame profile",
+                     "Info"
+                 ],
+                 [
+                     "KMD module",
+                     "bc250kmd 0x0007007F",
+                     "Info"
+                 ],
+                 [
+                     "KMD table",
+                     "full WDDM",
+                     "Info"
+                 ],
+                 [
+                     "Scanout",
+                     "DCN flip + hardware VSync",
+                     "Info"
+                 ],
+                 [
+                     "HW flips",
+                     "1200",
+                     "Info"
+                 ],
+                 [
+                     "Window Blt",
+                     "CPU copy enabled; 3 blits",
+                     "Info"
+                 ],
+                 [
+                     "GPU compute",
+                     "0/0 fences completed",
+                     "Info"
+                 ],
+                 [
+                     "Paging",
+                     "SDMA 1472/1472",
+                     "Info"
+                 ],
+                 [
+                     "Sampled",
+                     "13:04:20 (5 s poll)",
+                     "Info"
+                 ]
+             ]
+}
+BOOT=2026-09-24T11:44:14
+
+

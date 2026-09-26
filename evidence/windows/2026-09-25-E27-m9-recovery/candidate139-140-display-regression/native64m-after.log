@@ -1,0 +1,1203 @@
+log          234719 lines since this driver load, 233695 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.000 stage 20
+     3      0.125 stage 30
+     4      0.125 stage 31
+     5      0.125 stage 32
+     6      0.125 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.125 stage 33
+     8      0.125 stage 34
+     9      0.125 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.125 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    11      0.125 smu: native owner start status 0x00000000
+    12      0.125 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    13      0.125 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    14      0.125 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    15      0.125 gart: ready, dummy page at 0x26FFFA000
+    16      0.125 psp: ready
+    17      0.125 gpumem: ready, doorbells at 0xD0000000
+    18      0.125 gfx: ready, GPU submission allowed, paging node allowed
+    19      0.125 ih: ready
+    20      0.125 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    21      0.140 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    22      0.140 startup: entering interrupt connection
+    23      0.140 startup: entering firmware preparation
+    24      0.140 startup: entering native clock preparation
+    25      0.156 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 66375mc staged 0
+    26      0.156 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    27      0.156 gfx: unpublished translation bootstrap entered with engines halted
+    28      0.156 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    29      0.156 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    30      0.156 startup: entering GART initialization
+    31      0.171 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    32      0.171 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.171 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.171 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    35      0.171 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.171 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    37      0.171 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    38      0.171 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.171 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    40      0.171 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    41      0.171 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.171 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    43      0.171 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    44      0.171 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.171 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    46      0.171 startup: entering PSP initialization
+    47      0.218 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    48      0.218 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    49      0.250 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    50      0.250 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    51      0.250 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    52      0.250 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 241 us, in TMR at 0x0
+    53      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    54      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.250 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1908 us, in TMR at 0x0
+    56      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.250 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1889 us, in TMR at 0x0
+    59      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    60      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.250 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF842000
+    62      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.265 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF883000
+    65      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    66      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.265 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF8C4000
+    68      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    69      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.265 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5962 us, in TMR at 0xF5FF800000
+    71      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    72      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.265 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    74      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    75      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.281 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5967 us, in TMR at 0xF5FF800000
+    77      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    78      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.281 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 134 us, in TMR at 0x0
+    80      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.281 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    83      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    85      0.281 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    86      0.281 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    87      0.281 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    88      0.281 startup: entering IH initialization
+    89      0.281 ih: init: rc 0, 18 writes
+    90      0.281 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    91      0.281 startup: entering GFX initialization
+    92      0.281 startup: entering GFX stage 1
+    93      0.281 gfx: RLC startup policy pp_gfxoff 0
+    94      0.281 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    95      0.281 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    96      0.296 startup: entering GFX stage 2
+    97      0.296 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    98      0.296 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    99      0.296 startup: entering GFX stage 3
+   100      0.296 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+   101      0.296 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   102      0.296 startup: entering GFX stage 4
+   103      0.296 gfx: stage 4 (constants): rc 0, 157 writes so far, 59 us
+   104      0.296 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   105      0.296 startup: entering GFX stage 5
+   106      0.312 startup: RLC boundary acquire-paging-lock
+   107      0.312 startup: RLC boundary acquire-gart-lock
+   108      0.312 startup: RLC boundary locks-acquired
+   109      0.312 startup: RLC boundary before-rlc-resume
+   110      0.312 startup: RLC boundary after-rlc-resume
+   111      0.312 startup: RLC boundary before-gfx-visibility
+   112      0.312 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   113      0.328 startup: visibility observer returned after-invalidate-request
+   114      0.328 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   115      0.328 startup: visibility observer returned after-invalidate-request-read
+   116      0.328 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   117      0.328 startup: visibility observer returned after-invalidate-ack
+   118      0.328 startup: visibility GFX returned 0, entering MMHUB
+   119      0.328 startup: visibility MMHUB returned 0
+   120      0.328 gpumem: startup GFX translations committed after RLC, before CP
+   121      0.343 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   122      0.343 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   123      0.343 startup: visibility publication observer returned
+   124      0.343 startup: RLC boundary after-gfx-visibility
+   125      0.343 gfx: stage 5 (RLC): rc 0, 11 writes so far, 29198 us
+   126      0.343 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   127      0.343 startup: entering GFX stage 6
+   128      0.343 startup: entering CP step 1
+   129      0.343 startup: CP1 checkpoint acquire-paging-lock
+   130      0.343 startup: CP1 checkpoint acquire-gart-lock
+   131      0.359 startup: CP1 checkpoint locks-acquired
+   132      0.359 amdgpu[0]: CP resume kiq-init begin
+
+   133      0.359 startup: CP1 checkpoint scheduler
+   134      0.359 startup: CP1 checkpoint scheduler-read
+   135      0.359 startup: CP1 checkpoint scheduler-write
+   136      0.359 startup: CP1 checkpoint scheduler-done
+   137      0.359 startup: CP1 checkpoint clear-mqd
+   138      0.359 startup: CP1 checkpoint select-queue
+   139      0.359 startup: CP1 checkpoint build-mqd
+   140      0.375 startup: CP1 checkpoint disable-wptr-poll
+   141      0.375 startup: CP1 checkpoint read-active
+   142      0.375 startup: CP1 checkpoint program-hqd
+   143      0.375 startup: CP1 checkpoint activate-hqd
+   144      0.375 startup: CP1 checkpoint restore-selection
+   145      0.375 startup: CP1 checkpoint complete
+   146      0.375 amdgpu[0]: CP resume kiq-init end result=0
+
+   147      0.375 gfx: CP step 1: rc 0, 27 writes, 27764 us
+   148      0.375 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   149      0.375 startup: CP step 1 returned 0x00000000 result 0
+   150      0.390 startup: entering CP step 2
+   151      0.390 amdgpu[0]: CP resume compute-unhalt begin
+
+   152      0.390 amdgpu[0]: CP resume compute-unhalt end
+
+   153      0.390 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   154      0.390 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   155      0.390 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   156      0.390 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   157      0.390 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   158      0.390 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   159      0.390 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   160      0.390 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   161      0.390 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   162      0.390 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   163      0.390 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   164      0.390 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   165      0.390 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   166      0.390 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   167      0.390 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   168      0.390 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   169      0.390 gfx: CP step 2: rc 0, 17 writes, 336 us
+   170      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   171      0.390 startup: CP step 2 returned 0x00000000 result 0
+   172      0.390 startup: entering CP step 3
+   173      0.390 amdgpu[0]: CP resume kcq-enable begin
+
+   174      0.390 amdgpu[0]: CP resume kcq-enable end result=0
+
+   175      0.390 gfx: CP step 3: rc 0, 1 writes, 59 us
+   176      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   177      0.390 startup: CP step 3 returned 0x00000000 result 0
+   178      0.390 startup: entering CP step 4
+   179      0.390 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   180      0.390 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   181      0.390 gfx: CP step 4: rc 0, 4 writes, 36 us
+   182      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   183      0.390 startup: CP step 4 returned 0x00000000 result 0
+   184      0.406 startup: entering CP step 5
+   185      0.406 amdgpu[0]: CP resume kgq-enable begin
+
+   186      0.406 amdgpu[0]: CP resume kgq-enable end result=0
+
+   187      0.406 gfx: CP step 5: rc 0, 1 writes, 29 us
+   188      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   189      0.406 startup: CP step 5 returned 0x00000000 result 0
+   190      0.406 startup: entering CP step 6
+   191      0.406 amdgpu[0]: CP resume gfx-start begin
+
+   192      0.406 amdgpu[0]: CP resume gfx-start end result=0
+
+   193      0.406 gfx: CP step 6: rc 0, 3 writes, 27 us
+   194      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   195      0.406 startup: CP step 6 returned 0x00000000 result 0
+   196      0.406 startup: entering CP step 7
+   197      0.406 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   198      0.406 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   199      0.406 gfx: CP step 7: rc 0, 1 writes, 21 us
+   200      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   201      0.406 startup: CP step 7 returned 0x00000000 result 0
+   202      0.421 startup: entering CP step 8
+   203      0.421 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   204      0.421 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   205      0.421 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   206      0.421 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   207      0.421 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   208      0.421 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   209      0.421 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   210      0.421 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   211      0.421 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   212      0.421 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   213      0.421 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   214      0.421 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   215      0.421 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   216      0.421 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   217      0.421 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   218      0.421 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   219      0.421 gfx: CP step 8: rc 0, 8 writes, 164 us
+   220      0.421 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   221      0.421 startup: CP step 8 returned 0x00000000 result 0
+   222      0.421 startup: entering GFX stage 7
+   223      0.421 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 126 us
+   224      0.421 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   225      0.421 startup: entering GFX stage 8
+   226      0.437 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   227      0.437 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   228      0.437 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   229      0.437 startup: SDMA control 0 command 16 bytes 4096 begin
+   230      0.437 gfx: sdmacopy 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   231      0.437 startup: SDMA control 0 status 0 NT 0x00000000 result 0 fence 1/1 compare 4096 matched 1
+   232      0.437 startup: SDMA control 1 command 18 bytes 4096 begin
+   233      0.437 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   234      0.453 gfx: sdmaib 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   235      0.453 startup: SDMA control 1 status 0 NT 0x00000000 result 0 fence 2/2 compare 4096 matched 1
+   236      0.453 startup: SDMA control 2 command 18 bytes 65536 begin
+   237      0.453 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   238      0.468 gfx: sdmaib 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   239      0.468 startup: SDMA control 2 status 0 NT 0x00000000 result 0 fence 3/3 compare 65536 matched 1
+   240      0.484 startup: SDMA control 3 command 16 bytes 65536 begin
+   241      0.500 gfx: sdmacopy 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   242      0.500 startup: SDMA control 3 status 0 NT 0x00000000 result 0 fence 4/4 compare 65536 matched 1
+   243      0.500 startup: SDMA VMID2 translated control begin
+   244      0.500 gfx: sdmava root PA0x46E02C000 IB PA0x26FF94000 system PA0x26FF91000 source PA0x46E00C000 VA0x40000000 CSA0x40003000 VMID2
+   245      0.515 gfx: sdmava trial0 sourceVRAM fence5/5 compared4096 status0x00000000
+   246      0.515 gfx: sdmava trial1 sourcesystem-remap fence6/6 compared4096 status0x00000000
+   247      0.515 gfx: sdmava end status0x00000000 result0 fault0x0
+   248      0.515 startup: both engines ready
+   249      0.515 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   250      0.515 wddm: GPU initialized before adapter admission
+   251      0.515 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   252      0.515 stage 35
+   253      0.515 stage 39
+   254      0.515 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   255      0.515 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+233951    187.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229847
+233952    187.672 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 229848
+233953    187.672 gfx: paging submit, 652 ring dwords reserved for buffer at 0x410000, seq 229849
+233954    187.672 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A30, seq 229850
+233955    187.672 gfx: paging submit, 700 ring dwords reserved for buffer at 0x400000, seq 229851
+233956    187.672 gfx: paging submit, 304 ring dwords reserved for buffer at 0x400AF0, seq 229852
+233957    187.672 gfx: paging submit, 748 ring dwords reserved for buffer at 0x410000, seq 229853
+233958    187.672 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BB0, seq 229854
+233959    187.672 gfx: paging submit, 849 ring dwords reserved for buffer at 0x400000, seq 229855
+233960    187.688 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D44, seq 229856
+233961    187.688 gfx: paging submit, 727 ring dwords reserved for buffer at 0x410000, seq 229857
+233962    187.688 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B5C, seq 229858
+233963    187.688 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229859
+233964    187.688 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229860
+233965    187.688 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229861
+233966    187.688 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229862
+233967    187.688 gfx: paging submit, 385 ring dwords reserved for buffer at 0x400000, seq 229863
+233968    187.688 gfx: paging submit, 608 ring dwords reserved for buffer at 0x400640, seq 229864
+233969    187.688 gfx: paging submit, 264 ring dwords reserved for buffer at 0x410000, seq 229865
+233970    187.688 gfx: paging submit, 752 ring dwords reserved for buffer at 0x410420, seq 229866
+233971    187.688 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 229867
+233972    187.688 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 229868
+233973    187.688 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229869
+233974    187.688 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229870
+233975    187.688 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 229871
+233976    187.688 gfx: paging submit, 300 ring dwords reserved for buffer at 0x410000, seq 229872
+233977    187.688 gfx: paging submit, 704 ring dwords reserved for buffer at 0x4104B0, seq 229873
+233978    187.688 gfx: paging submit, 348 ring dwords reserved for buffer at 0x400000, seq 229874
+233979    187.688 gfx: paging submit, 656 ring dwords reserved for buffer at 0x400570, seq 229875
+233980    187.688 gfx: paging submit, 396 ring dwords reserved for buffer at 0x410000, seq 229876
+233981    187.688 gfx: paging submit, 614 ring dwords reserved for buffer at 0x410630, seq 229877
+233982    187.688 gfx: paging submit, 489 ring dwords reserved for buffer at 0x400000, seq 229878
+233983    187.703 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4007A4, seq 229879
+233984    187.703 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400EF8, seq 229880
+233985    187.703 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229881
+233986    187.703 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 229882
+233987    187.703 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 229883
+233988    187.703 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 229884
+233989    187.703 gfx: paging submit, 655 ring dwords reserved for buffer at 0x410000, seq 229885
+233990    187.703 gfx: paging submit, 336 ring dwords reserved for buffer at 0x410A80, seq 229886
+233991    187.703 gfx: paging submit, 132 ring dwords reserved for buffer at 0x400000, seq 229887
+233992    187.703 gfx: paging submit, 880 ring dwords reserved for buffer at 0x400210, seq 229888
+233993    187.703 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229889
+233994    187.703 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229890
+233995    187.703 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229891
+233996    187.703 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229892
+233997    187.703 gfx: paging submit, 797 ring dwords reserved for buffer at 0x410000, seq 229893
+233998    187.703 gfx: paging submit, 208 ring dwords reserved for buffer at 0x410C74, seq 229894
+233999    187.703 gfx: paging submit, 844 ring dwords reserved for buffer at 0x400000, seq 229895
+234000    187.703 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D30, seq 229896
+234001    187.703 gfx: paging submit, 892 ring dwords reserved for buffer at 0x410000, seq 229897
+234002    187.703 gfx: paging submit, 114 ring dwords reserved for buffer at 0x410DF0, seq 229898
+234003    187.703 gfx: paging submit, 989 ring dwords reserved for buffer at 0x400000, seq 229899
+234004    187.719 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400F74, seq 229900
+234005    187.719 gfx: paging submit, 63 ring dwords reserved for buffer at 0x410000, seq 229901
+234006    187.719 gfx: paging submit, 944 ring dwords reserved for buffer at 0x4100FC, seq 229902
+234007    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229903
+234008    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229904
+234009    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229905
+234010    187.719 gfx: paging submit, 719 ring dwords reserved for buffer at 0x410000, seq 229906
+234011    187.719 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410B80, seq 229907
+234012    187.719 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C48, seq 229908
+234013    187.719 gfx: paging submit, 828 ring dwords reserved for buffer at 0x400000, seq 229909
+234014    187.719 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF0, seq 229910
+234015    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229911
+234016    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229912
+234017    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229913
+234018    187.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229914
+234019    187.719 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 229915
+234020    187.719 gfx: paging submit, 541 ring dwords reserved for buffer at 0x400000, seq 229916
+234021    187.719 gfx: paging submit, 464 ring dwords reserved for buffer at 0x400874, seq 229917
+234022    187.719 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 229918
+234023    187.719 gfx: paging submit, 416 ring dwords reserved for buffer at 0x410930, seq 229919
+234024    187.719 gfx: paging submit, 636 ring dwords reserved for buffer at 0x400000, seq 229920
+234025    187.719 gfx: paging submit, 368 ring dwords reserved for buffer at 0x4009F0, seq 229921
+234026    187.719 gfx: paging submit, 737 ring dwords reserved for buffer at 0x410000, seq 229922
+234027    187.750 gfx: paging submit, 272 ring dwords reserved for buffer at 0x410B84, seq 229923
+234028    187.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229924
+234029    187.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229925
+234030    187.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229926
+234031    187.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229927
+234032    187.750 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 229928
+234033    187.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229929
+234034    187.750 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 229930
+234035    187.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229931
+234036    187.750 gfx: paging submit, 993 ring dwords reserved for buffer at 0x400000, seq 229932
+234037    187.750 gfx: paging submit, 34 ring dwords reserved for buffer at 0x410000, seq 229933
+234038    187.766 gfx: paging submit, 969 ring dwords reserved for buffer at 0x4100C0, seq 229934
+234039    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229935
+234040    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229936
+234041    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229937
+234042    187.766 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 229938
+234043    187.766 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 229939
+234044    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229940
+234045    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229941
+234046    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229942
+234047    187.766 gfx: paging submit, 371 ring dwords reserved for buffer at 0x400000, seq 229943
+234048    187.766 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4005CC, seq 229944
+234049    187.766 gfx: paging submit, 624 ring dwords reserved for buffer at 0x400608, seq 229945
+234050    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229946
+234051    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229947
+234052    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229948
+234053    187.766 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 229949
+234054    187.766 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 229950
+234055    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229951
+234056    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229952
+234057    187.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229953
+234058    187.766 gfx: paging submit, 645 ring dwords reserved for buffer at 0x410000, seq 229954
+234059    187.782 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A60, seq 229955
+234060    187.782 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229956
+234061    187.782 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229957
+234062    187.782 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229958
+234063    187.782 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229959
+234064    187.782 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 229960
+234065    187.782 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229961
+234066    187.782 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229962
+234067    187.782 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 229963
+234068    187.782 gfx: paging submit, 929 ring dwords reserved for buffer at 0x400000, seq 229964
+234069    187.782 gfx: paging submit, 50 ring dwords reserved for buffer at 0x400E84, seq 229965
+234070    187.782 gfx: paging submit, 32 ring dwords reserved for buffer at 0x400F4C, seq 229966
+234071    187.782 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 229967
+234072    187.782 gfx: paging submit, 60 ring dwords reserved for buffer at 0x400000, seq 229968
+234073    187.782 gfx: paging submit, 944 ring dwords reserved for buffer at 0x4000F0, seq 229969
+234074    187.782 gfx: paging submit, 108 ring dwords reserved for buffer at 0x410000, seq 229970
+234075    187.782 gfx: paging submit, 896 ring dwords reserved for buffer at 0x4101B0, seq 229971
+234076    187.782 gfx: paging submit, 156 ring dwords reserved for buffer at 0x400000, seq 229972
+234077    187.782 gfx: paging submit, 848 ring dwords reserved for buffer at 0x400270, seq 229973
+234078    187.782 gfx: paging submit, 204 ring dwords reserved for buffer at 0x410000, seq 229974
+234079    187.782 gfx: paging submit, 814 ring dwords reserved for buffer at 0x410330, seq 229975
+234080    187.782 gfx: paging submit, 291 ring dwords reserved for buffer at 0x400000, seq 229976
+234081    187.797 gfx: paging submit, 89 ring dwords reserved for buffer at 0x40048C, seq 229977
+234082    187.797 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4005F0, seq 229978
+234083    187.797 gfx: paging submit, 469 ring dwords reserved for buffer at 0x40062C, seq 229979
+234084    187.797 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400D80, seq 229980
+234085    187.797 gfx: paging submit, 128 ring dwords reserved for buffer at 0x400DBC, seq 229981
+234086    187.797 gfx: paging submit, 521 ring dwords reserved for buffer at 0x410000, seq 229982
+234087    187.797 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410824, seq 229983
+234088    187.797 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410860, seq 229984
+234089    187.797 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4108FC, seq 229985
+234090    187.797 gfx: paging submit, 253 ring dwords reserved for buffer at 0x410938, seq 229986
+234091    187.797 gfx: paging submit, 160 ring dwords reserved for buffer at 0x410D2C, seq 229987
+234092    187.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229988
+234093    187.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229989
+234094    187.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229990
+234095    187.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 229991
+234096    187.797 gfx: paging submit, 513 ring dwords reserved for buffer at 0x400000, seq 229992
+234097    187.797 gfx: paging submit, 238 ring dwords reserved for buffer at 0x400840, seq 229993
+234098    187.797 gfx: paging submit, 240 ring dwords reserved for buffer at 0x400BF8, seq 229994
+234099    187.797 gfx: paging submit, 812 ring dwords reserved for buffer at 0x410000, seq 229995
+234100    187.797 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CB0, seq 229996
+234101    187.797 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 229997
+234102    187.797 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 229998
+234103    187.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 229999
+234104    187.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230000
+234105    187.797 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 230001
+234106    187.797 gfx: paging submit, 860 ring dwords reserved for buffer at 0x410000, seq 230002
+234107    187.797 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D70, seq 230003
+234108    187.797 gfx: paging submit, 908 ring dwords reserved for buffer at 0x400000, seq 230004
+234109    187.797 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E30, seq 230005
+234110    187.797 gfx: paging submit, 956 ring dwords reserved for buffer at 0x410000, seq 230006
+234111    187.797 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410EF0, seq 230007
+234112    187.797 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 230008
+234113    187.797 gfx: paging submit, 55 ring dwords reserved for buffer at 0x410000, seq 230009
+234114    187.813 gfx: paging submit, 873 ring dwords reserved for buffer at 0x4100DC, seq 230010
+234115    187.813 gfx: paging submit, 80 ring dwords reserved for buffer at 0x410E80, seq 230011
+234116    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230012
+234117    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230013
+234118    187.813 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230014
+234119    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230015
+234120    187.813 gfx: paging submit, 623 ring dwords reserved for buffer at 0x400000, seq 230016
+234121    187.813 gfx: paging submit, 368 ring dwords reserved for buffer at 0x400A00, seq 230017
+234122    187.813 gfx: paging submit, 504 ring dwords reserved for buffer at 0x410000, seq 230018
+234123    187.813 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4107E0, seq 230019
+234124    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230020
+234125    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230021
+234126    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230022
+234127    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230023
+234128    187.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230024
+234129    187.813 gfx: paging submit, 175 ring dwords reserved for buffer at 0x410000, seq 230025
+234130    187.813 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4102BC, seq 230026
+234131    187.813 gfx: paging submit, 220 ring dwords reserved for buffer at 0x400000, seq 230027
+234132    187.813 gfx: paging submit, 784 ring dwords reserved for buffer at 0x400370, seq 230028
+234133    187.813 gfx: paging submit, 268 ring dwords reserved for buffer at 0x410000, seq 230029
+234134    187.813 gfx: paging submit, 742 ring dwords reserved for buffer at 0x410430, seq 230030
+234135    187.813 gfx: paging submit, 361 ring dwords reserved for buffer at 0x400000, seq 230031
+234136    187.829 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4005A4, seq 230032
+234137    187.829 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF8, seq 230033
+234138    187.829 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230034
+234139    187.829 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230035
+234140    187.829 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230036
+234141    187.829 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230037
+234142    187.829 gfx: paging submit, 497 ring dwords reserved for buffer at 0x410000, seq 230038
+234143    187.829 gfx: paging submit, 454 ring dwords reserved for buffer at 0x410800, seq 230039
+234144    187.829 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410F18, seq 230040
+234145    187.829 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230041
+234146    187.829 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230042
+234147    187.829 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 230043
+234148    187.829 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230044
+234149    187.829 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230045
+234150    187.829 gfx: paging submit, 669 ring dwords reserved for buffer at 0x410000, seq 230046
+234151    187.829 gfx: paging submit, 336 ring dwords reserved for buffer at 0x410A74, seq 230047
+234152    187.829 gfx: paging submit, 716 ring dwords reserved for buffer at 0x400000, seq 230048
+234153    187.829 gfx: paging submit, 288 ring dwords reserved for buffer at 0x400B30, seq 230049
+234154    187.829 gfx: paging submit, 764 ring dwords reserved for buffer at 0x410000, seq 230050
+234155    187.829 gfx: paging submit, 242 ring dwords reserved for buffer at 0x410BF0, seq 230051
+234156    187.829 gfx: paging submit, 861 ring dwords reserved for buffer at 0x400000, seq 230052
+234157    187.844 gfx: paging submit, 65 ring dwords reserved for buffer at 0x400D74, seq 230053
+234158    187.844 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E78, seq 230054
+234159    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230055
+234160    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230056
+234161    187.844 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230057
+234162    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230058
+234163    187.844 gfx: paging submit, 623 ring dwords reserved for buffer at 0x410000, seq 230059
+234164    187.844 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410A00, seq 230060
+234165    187.844 gfx: paging submit, 320 ring dwords reserved for buffer at 0x410AC8, seq 230061
+234166    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230062
+234167    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230063
+234168    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230064
+234169    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230065
+234170    187.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230066
+234171    187.844 gfx: paging submit, 367 ring dwords reserved for buffer at 0x410000, seq 230067
+234172    187.844 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4105BC, seq 230068
+234173    187.844 gfx: paging submit, 412 ring dwords reserved for buffer at 0x400000, seq 230069
+234174    187.844 gfx: paging submit, 592 ring dwords reserved for buffer at 0x400670, seq 230070
+234175    187.844 gfx: paging submit, 460 ring dwords reserved for buffer at 0x410000, seq 230071
+234176    187.844 gfx: paging submit, 544 ring dwords reserved for buffer at 0x410730, seq 230072
+234177    187.844 gfx: paging submit, 508 ring dwords reserved for buffer at 0x400000, seq 230073
+234178    187.844 gfx: paging submit, 496 ring dwords reserved for buffer at 0x4007F0, seq 230074
+234179    187.844 gfx: paging submit, 609 ring dwords reserved for buffer at 0x410000, seq 230075
+234180    187.875 gfx: paging submit, 400 ring dwords reserved for buffer at 0x410984, seq 230076
+234181    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230077
+234182    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230078
+234183    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230079
+234184    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230080
+234185    187.875 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 230081
+234186    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230082
+234187    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230083
+234188    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230084
+234189    187.875 gfx: paging submit, 869 ring dwords reserved for buffer at 0x400000, seq 230085
+234190    187.875 gfx: paging submit, 121 ring dwords reserved for buffer at 0x400DE0, seq 230086
+234191    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230087
+234192    187.875 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230088
+234193    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230089
+234194    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230090
+234195    187.875 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 230091
+234196    187.875 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 230092
+234197    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230093
+234198    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230094
+234199    187.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230095
+234200    187.875 gfx: paging submit, 259 ring dwords reserved for buffer at 0x400000, seq 230096
+234201    187.875 gfx: paging submit, 15 ring dwords reserved for buffer at 0x40040C, seq 230097
+234202    187.891 gfx: paging submit, 736 ring dwords reserved for buffer at 0x400448, seq 230098
+234203    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230099
+234204    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230100
+234205    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230101
+234206    187.891 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 230102
+234207    187.891 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 230103
+234208    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230104
+234209    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230105
+234210    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230106
+234211    187.891 gfx: paging submit, 533 ring dwords reserved for buffer at 0x410000, seq 230107
+234212    187.891 gfx: paging submit, 464 ring dwords reserved for buffer at 0x4108A0, seq 230108
+234213    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230109
+234214    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230110
+234215    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230111
+234216    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230112
+234217    187.891 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 230113
+234218    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230114
+234219    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230115
+234220    187.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230116
+234221    187.891 gfx: paging submit, 787 ring dwords reserved for buffer at 0x400000, seq 230117
+234222    187.891 gfx: paging submit, 50 ring dwords reserved for buffer at 0x400C4C, seq 230118
+234223    187.891 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400D14, seq 230119
+234224    187.891 gfx: paging submit, 876 ring dwords reserved for buffer at 0x410000, seq 230120
+234225    187.891 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB0, seq 230121
+234226    187.891 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 230122
+234227    187.891 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E70, seq 230123
+234228    187.891 gfx: paging submit, 972 ring dwords reserved for buffer at 0x410000, seq 230124
+234229    187.891 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F30, seq 230125
+234230    187.891 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230126
+234231    187.891 gfx: paging submit, 60 ring dwords reserved for buffer at 0x410000, seq 230127
+234232    187.907 gfx: paging submit, 958 ring dwords reserved for buffer at 0x4100F0, seq 230128
+234233    187.907 gfx: paging submit, 147 ring dwords reserved for buffer at 0x400000, seq 230129
+234234    187.907 gfx: paging submit, 89 ring dwords reserved for buffer at 0x40024C, seq 230130
+234235    187.907 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4003B0, seq 230131
+234236    187.907 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4003EC, seq 230132
+234237    187.907 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400B40, seq 230133
+234238    187.907 gfx: paging submit, 272 ring dwords reserved for buffer at 0x400B7C, seq 230134
+234239    187.907 gfx: paging submit, 377 ring dwords reserved for buffer at 0x410000, seq 230135
+234240    187.907 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4105E4, seq 230136
+234241    187.907 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410620, seq 230137
+234242    187.907 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4106BC, seq 230138
+234243    187.907 gfx: paging submit, 253 ring dwords reserved for buffer at 0x4106F8, seq 230139
+234244    187.907 gfx: paging submit, 304 ring dwords reserved for buffer at 0x410AEC, seq 230140
+234245    187.907 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230141
+234246    187.907 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230142
+234247    187.907 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230143
+234248    187.907 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230144
+234249    187.922 gfx: paging submit, 369 ring dwords reserved for buffer at 0x400000, seq 230145
+234250    187.922 gfx: paging submit, 238 ring dwords reserved for buffer at 0x400600, seq 230146
+234251    187.922 gfx: paging submit, 384 ring dwords reserved for buffer at 0x4009B8, seq 230147
+234252    187.922 gfx: paging submit, 668 ring dwords reserved for buffer at 0x410000, seq 230148
+234253    187.922 gfx: paging submit, 336 ring dwords reserved for buffer at 0x410A70, seq 230149
+234254    187.922 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 230150
+234255    187.922 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230151
+234256    187.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230152
+234257    187.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230153
+234258    187.922 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 230154
+234259    187.922 gfx: paging submit, 716 ring dwords reserved for buffer at 0x410000, seq 230155
+234260    187.922 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B30, seq 230156
+234261    187.922 gfx: paging submit, 764 ring dwords reserved for buffer at 0x400000, seq 230157
+234262    187.922 gfx: paging submit, 240 ring dwords reserved for buffer at 0x400BF0, seq 230158
+234263    187.922 gfx: paging submit, 812 ring dwords reserved for buffer at 0x410000, seq 230159
+234264    187.922 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CB0, seq 230160
+234265    187.922 gfx: paging submit, 913 ring dwords reserved for buffer at 0x400000, seq 230161
+234266    187.938 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E44, seq 230162
+234267    187.938 gfx: paging submit, 791 ring dwords reserved for buffer at 0x410000, seq 230163
+234268    187.938 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C5C, seq 230164
+234269    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230165
+234270    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230166
+234271    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230167
+234272    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230168
+234273    187.938 gfx: paging submit, 449 ring dwords reserved for buffer at 0x400000, seq 230169
+234274    187.938 gfx: paging submit, 544 ring dwords reserved for buffer at 0x400740, seq 230170
+234275    187.938 gfx: paging submit, 328 ring dwords reserved for buffer at 0x410000, seq 230171
+234276    187.938 gfx: paging submit, 688 ring dwords reserved for buffer at 0x410520, seq 230172
+234277    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230173
+234278    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230174
+234279    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230175
+234280    187.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230176
+234281    187.938 gfx: paging submit, 989 ring dwords reserved for buffer at 0x400000, seq 230177
+234282    187.938 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400F74, seq 230178
+234283    187.938 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230179
+234284    187.938 gfx: paging submit, 76 ring dwords reserved for buffer at 0x400000, seq 230180
+234285    187.938 gfx: paging submit, 928 ring dwords reserved for buffer at 0x400130, seq 230181
+234286    187.938 gfx: paging submit, 124 ring dwords reserved for buffer at 0x410000, seq 230182
+234287    187.938 gfx: paging submit, 886 ring dwords reserved for buffer at 0x4101F0, seq 230183
+234288    187.938 gfx: paging submit, 217 ring dwords reserved for buffer at 0x400000, seq 230184
+234289    187.954 gfx: paging submit, 469 ring dwords reserved for buffer at 0x400364, seq 230185
+234290    187.954 gfx: paging submit, 320 ring dwords reserved for buffer at 0x400AB8, seq 230186
+234291    187.954 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230187
+234292    187.954 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230188
+234293    187.954 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230189
+234294    187.954 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230190
+234295    187.954 gfx: paging submit, 353 ring dwords reserved for buffer at 0x410000, seq 230191
+234296    187.954 gfx: paging submit, 454 ring dwords reserved for buffer at 0x4105C0, seq 230192
+234297    187.954 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CD8, seq 230193
+234298    187.954 gfx: paging submit, 860 ring dwords reserved for buffer at 0x400000, seq 230194
+234299    187.954 gfx: paging submit, 144 ring dwords reserved for buffer at 0x400D70, seq 230195
+234300    187.954 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230196
+234301    187.954 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230197
+234302    187.954 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230198
+234303    187.954 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230199
+234304    187.954 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 230200
+234305    187.954 gfx: paging submit, 908 ring dwords reserved for buffer at 0x400000, seq 230201
+234306    187.954 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E30, seq 230202
+234307    187.954 gfx: paging submit, 956 ring dwords reserved for buffer at 0x410000, seq 230203
+234308    187.954 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410EF0, seq 230204
+234309    187.954 gfx: paging submit, 990 ring dwords reserved for buffer at 0x400000, seq 230205
+234310    187.954 gfx: paging submit, 79 ring dwords reserved for buffer at 0x410000, seq 230206
+234311    187.969 gfx: paging submit, 65 ring dwords reserved for buffer at 0x41013C, seq 230207
+234312    187.969 gfx: paging submit, 864 ring dwords reserved for buffer at 0x410240, seq 230208
+234313    187.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230209
+234314    187.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230210
+234315    187.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230211
+234316    187.969 gfx: paging submit, 799 ring dwords reserved for buffer at 0x410000, seq 230212
+234317    187.969 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410CC0, seq 230213
+234318    187.969 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D88, seq 230214
+234319    187.969 gfx: paging submit, 908 ring dwords reserved for buffer at 0x400000, seq 230215
+234320    187.969 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E30, seq 230216
+234321    187.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230217
+234322    187.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230218
+234323    187.969 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230219
+234324    187.969 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 230220
+234325    187.969 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230221
+234326    187.969 gfx: paging submit, 621 ring dwords reserved for buffer at 0x400000, seq 230222
+234327    187.969 gfx: paging submit, 384 ring dwords reserved for buffer at 0x4009B4, seq 230223
+234328    187.969 gfx: paging submit, 668 ring dwords reserved for buffer at 0x410000, seq 230224
+234329    187.969 gfx: paging submit, 336 ring dwords reserved for buffer at 0x410A70, seq 230225
+234330    187.969 gfx: paging submit, 716 ring dwords reserved for buffer at 0x400000, seq 230226
+234331    187.969 gfx: paging submit, 288 ring dwords reserved for buffer at 0x400B30, seq 230227
+234332    187.969 gfx: paging submit, 817 ring dwords reserved for buffer at 0x410000, seq 230228
+234333    188.000 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CC4, seq 230229
+234334    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230230
+234335    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230231
+234336    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230232
+234337    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230233
+234338    188.000 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 230234
+234339    188.000 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230235
+234340    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230236
+234341    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230237
+234342    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230238
+234343    188.000 gfx: paging submit, 117 ring dwords reserved for buffer at 0x410000, seq 230239
+234344    188.000 gfx: paging submit, 873 ring dwords reserved for buffer at 0x410220, seq 230240
+234345    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230241
+234346    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230242
+234347    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230243
+234348    188.000 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 230244
+234349    188.000 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 230245
+234350    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230246
+234351    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230247
+234352    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230248
+234353    188.000 gfx: paging submit, 467 ring dwords reserved for buffer at 0x400000, seq 230249
+234354    188.000 gfx: paging submit, 15 ring dwords reserved for buffer at 0x40074C, seq 230250
+234355    188.000 gfx: paging submit, 528 ring dwords reserved for buffer at 0x400788, seq 230251
+234356    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230252
+234357    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230253
+234358    188.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230254
+234359    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230255
+234360    188.016 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 230256
+234361    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230257
+234362    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230258
+234363    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230259
+234364    188.016 gfx: paging submit, 741 ring dwords reserved for buffer at 0x410000, seq 230260
+234365    188.016 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BE0, seq 230261
+234366    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230262
+234367    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230263
+234368    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230264
+234369    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230265
+234370    188.016 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 230266
+234371    188.016 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230267
+234372    188.016 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 230268
+234373    188.016 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230269
+234374    188.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230270
+234375    188.016 gfx: paging submit, 35 ring dwords reserved for buffer at 0x410000, seq 230271
+234376    188.016 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41008C, seq 230272
+234377    188.016 gfx: paging submit, 928 ring dwords reserved for buffer at 0x410154, seq 230273
+234378    188.016 gfx: paging submit, 124 ring dwords reserved for buffer at 0x400000, seq 230274
+234379    188.016 gfx: paging submit, 880 ring dwords reserved for buffer at 0x4001F0, seq 230275
+234380    188.016 gfx: paging submit, 172 ring dwords reserved for buffer at 0x410000, seq 230276
+234381    188.016 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4102B0, seq 230277
+234382    188.016 gfx: paging submit, 220 ring dwords reserved for buffer at 0x400000, seq 230278
+234383    188.016 gfx: paging submit, 784 ring dwords reserved for buffer at 0x400370, seq 230279
+234384    188.016 gfx: paging submit, 268 ring dwords reserved for buffer at 0x410000, seq 230280
+234385    188.016 gfx: paging submit, 750 ring dwords reserved for buffer at 0x410430, seq 230281
+234386    188.016 gfx: paging submit, 355 ring dwords reserved for buffer at 0x400000, seq 230282
+234387    188.032 gfx: paging submit, 89 ring dwords reserved for buffer at 0x40058C, seq 230283
+234388    188.032 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4006F0, seq 230284
+234389    188.032 gfx: paging submit, 469 ring dwords reserved for buffer at 0x40072C, seq 230285
+234390    188.032 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400E80, seq 230286
+234391    188.032 gfx: paging submit, 64 ring dwords reserved for buffer at 0x400EBC, seq 230287
+234392    188.032 gfx: paging submit, 585 ring dwords reserved for buffer at 0x410000, seq 230288
+234393    188.032 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410924, seq 230289
+234394    188.032 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410960, seq 230290
+234395    188.032 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4109FC, seq 230291
+234396    188.032 gfx: paging submit, 253 ring dwords reserved for buffer at 0x410A38, seq 230292
+234397    188.032 gfx: paging submit, 96 ring dwords reserved for buffer at 0x410E2C, seq 230293
+234398    188.032 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230294
+234399    188.032 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230295
+234400    188.032 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230296
+234401    188.032 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 230297
+234402    188.032 gfx: paging submit, 609 ring dwords reserved for buffer at 0x400000, seq 230298
+234403    188.032 gfx: paging submit, 238 ring dwords reserved for buffer at 0x4009C0, seq 230299
+234404    188.032 gfx: paging submit, 144 ring dwords reserved for buffer at 0x400D78, seq 230300
+234405    188.032 gfx: paging submit, 908 ring dwords reserved for buffer at 0x410000, seq 230301
+234406    188.032 gfx: paging submit, 96 ring dwords reserved for buffer at 0x410E30, seq 230302
+234407    188.032 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 230303
+234408    188.032 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230304
+234409    188.032 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230305
+234410    188.032 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230306
+234411    188.032 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 230307
+234412    188.032 gfx: paging submit, 956 ring dwords reserved for buffer at 0x410000, seq 230308
+234413    188.032 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410EF0, seq 230309
+234414    188.032 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230310
+234415    188.032 gfx: paging submit, 44 ring dwords reserved for buffer at 0x410000, seq 230311
+234416    188.032 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4100B0, seq 230312
+234417    188.032 gfx: paging submit, 92 ring dwords reserved for buffer at 0x400000, seq 230313
+234418    188.032 gfx: paging submit, 922 ring dwords reserved for buffer at 0x400170, seq 230314
+234419    188.032 gfx: paging submit, 183 ring dwords reserved for buffer at 0x410000, seq 230315
+234420    188.047 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4102DC, seq 230316
+234421    188.047 gfx: paging submit, 55 ring dwords reserved for buffer at 0x400000, seq 230317
+234422    188.047 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4000DC, seq 230318
+234423    188.047 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 230319
+234424    188.047 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 230320
+234425    188.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230321
+234426    188.047 gfx: paging submit, 703 ring dwords reserved for buffer at 0x400000, seq 230322
+234427    188.047 gfx: paging submit, 288 ring dwords reserved for buffer at 0x400B40, seq 230323
+234428    188.047 gfx: paging submit, 584 ring dwords reserved for buffer at 0x410000, seq 230324
+234429    188.047 gfx: paging submit, 432 ring dwords reserved for buffer at 0x410920, seq 230325
+234430    188.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230326
+234431    188.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230327
+234432    188.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230328
+234433    188.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230329
+234434    188.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230330
+234435    188.047 gfx: paging submit, 255 ring dwords reserved for buffer at 0x410000, seq 230331
+234436    188.047 gfx: paging submit, 752 ring dwords reserved for buffer at 0x4103FC, seq 230332
+234437    188.047 gfx: paging submit, 300 ring dwords reserved for buffer at 0x400000, seq 230333
+234438    188.047 gfx: paging submit, 704 ring dwords reserved for buffer at 0x4004B0, seq 230334
+234439    188.047 gfx: paging submit, 348 ring dwords reserved for buffer at 0x410000, seq 230335
+234440    188.047 gfx: paging submit, 662 ring dwords reserved for buffer at 0x410570, seq 230336
+234441    188.047 gfx: paging submit, 441 ring dwords reserved for buffer at 0x400000, seq 230337
+234442    188.063 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4006E4, seq 230338
+234443    188.063 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E38, seq 230339
+234444    188.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230340
+234445    188.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230341
+234446    188.063 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230342
+234447    188.063 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 230343
+234448    188.063 gfx: paging submit, 609 ring dwords reserved for buffer at 0x410000, seq 230344
+234449    188.063 gfx: paging submit, 384 ring dwords reserved for buffer at 0x4109C0, seq 230345
+234450    188.063 gfx: paging submit, 84 ring dwords reserved for buffer at 0x400000, seq 230346
+234451    188.063 gfx: paging submit, 928 ring dwords reserved for buffer at 0x400150, seq 230347
+234452    188.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230348
+234453    188.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230349
+234454    188.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230350
+234455    188.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230351
+234456    188.063 gfx: paging submit, 749 ring dwords reserved for buffer at 0x410000, seq 230352
+234457    188.063 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BB4, seq 230353
+234458    188.063 gfx: paging submit, 796 ring dwords reserved for buffer at 0x400000, seq 230354
+234459    188.063 gfx: paging submit, 208 ring dwords reserved for buffer at 0x400C70, seq 230355
+234460    188.063 gfx: paging submit, 844 ring dwords reserved for buffer at 0x410000, seq 230356
+234461    188.063 gfx: paging submit, 162 ring dwords reserved for buffer at 0x410D30, seq 230357
+234462    188.063 gfx: paging submit, 941 ring dwords reserved for buffer at 0x400000, seq 230358
+234463    188.079 gfx: paging submit, 65 ring dwords reserved for buffer at 0x400EB4, seq 230359
+234464    188.079 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230360
+234465    188.079 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230361
+234466    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230362
+234467    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230363
+234468    188.079 gfx: paging submit, 687 ring dwords reserved for buffer at 0x410000, seq 230364
+234469    188.079 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410B00, seq 230365
+234470    188.079 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BC8, seq 230366
+234471    188.079 gfx: paging submit, 796 ring dwords reserved for buffer at 0x400000, seq 230367
+234472    188.079 gfx: paging submit, 208 ring dwords reserved for buffer at 0x400C70, seq 230368
+234473    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230369
+234474    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230370
+234475    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230371
+234476    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230372
+234477    188.079 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230373
+234478    188.079 gfx: paging submit, 479 ring dwords reserved for buffer at 0x400000, seq 230374
+234479    188.079 gfx: paging submit, 528 ring dwords reserved for buffer at 0x40077C, seq 230375
+234480    188.079 gfx: paging submit, 524 ring dwords reserved for buffer at 0x410000, seq 230376
+234481    188.079 gfx: paging submit, 480 ring dwords reserved for buffer at 0x410830, seq 230377
+234482    188.079 gfx: paging submit, 572 ring dwords reserved for buffer at 0x400000, seq 230378
+234483    188.079 gfx: paging submit, 432 ring dwords reserved for buffer at 0x4008F0, seq 230379
+234484    188.079 gfx: paging submit, 673 ring dwords reserved for buffer at 0x410000, seq 230380
+234485    188.110 gfx: paging submit, 336 ring dwords reserved for buffer at 0x410A84, seq 230381
+234486    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230382
+234487    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230383
+234488    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230384
+234489    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230385
+234490    188.110 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 230386
+234491    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230387
+234492    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230388
+234493    188.110 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230389
+234494    188.110 gfx: paging submit, 963 ring dwords reserved for buffer at 0x400000, seq 230390
+234495    188.110 gfx: paging submit, 32 ring dwords reserved for buffer at 0x400F60, seq 230391
+234496    188.110 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230392
+234497    188.110 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230393
+234498    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230394
+234499    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230395
+234500    188.110 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 230396
+234501    188.110 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 230397
+234502    188.110 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230398
+234503    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230399
+234504    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230400
+234505    188.125 gfx: paging submit, 275 ring dwords reserved for buffer at 0x400000, seq 230401
+234506    188.125 gfx: paging submit, 71 ring dwords reserved for buffer at 0x410000, seq 230402
+234507    188.125 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41011C, seq 230403
+234508    188.125 gfx: paging submit, 928 ring dwords reserved for buffer at 0x410158, seq 230404
+234509    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230405
+234510    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230406
+234511    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230407
+234512    188.125 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230408
+234513    188.125 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 230409
+234514    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230410
+234515    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230411
+234516    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230412
+234517    188.125 gfx: paging submit, 341 ring dwords reserved for buffer at 0x400000, seq 230413
+234518    188.125 gfx: paging submit, 656 ring dwords reserved for buffer at 0x4005A0, seq 230414
+234519    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230415
+234520    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230416
+234521    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230417
+234522    188.125 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 230418
+234523    188.125 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 230419
+234524    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230420
+234525    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230421
+234526    188.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230422
+234527    188.125 gfx: paging submit, 595 ring dwords reserved for buffer at 0x410000, seq 230423
+234528    188.125 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41094C, seq 230424
+234529    188.125 gfx: paging submit, 368 ring dwords reserved for buffer at 0x410A14, seq 230425
+234530    188.125 gfx: paging submit, 684 ring dwords reserved for buffer at 0x400000, seq 230426
+234531    188.141 gfx: paging submit, 320 ring dwords reserved for buffer at 0x400AB0, seq 230427
+234532    188.141 gfx: paging submit, 732 ring dwords reserved for buffer at 0x410000, seq 230428
+234533    188.141 gfx: paging submit, 272 ring dwords reserved for buffer at 0x410B70, seq 230429
+234534    188.141 gfx: paging submit, 780 ring dwords reserved for buffer at 0x400000, seq 230430
+234535    188.141 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C30, seq 230431
+234536    188.141 gfx: paging submit, 828 ring dwords reserved for buffer at 0x410000, seq 230432
+234537    188.141 gfx: paging submit, 176 ring dwords reserved for buffer at 0x410CF0, seq 230433
+234538    188.141 gfx: paging submit, 929 ring dwords reserved for buffer at 0x400000, seq 230434
+234539    188.141 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 15
+
+234540    188.141 gfx: paging submit, 74 ring dwords reserved for buffer at 0x400E84, seq 230435
+234541    188.141 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410000, seq 230436
+234542    188.141 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41003C, seq 230437
+234543    188.141 gfx: paging submit, 469 ring dwords reserved for buffer at 0x410078, seq 230438
+234544    188.141 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4107CC, seq 230439
+234545    188.141 gfx: paging submit, 496 ring dwords reserved for buffer at 0x410808, seq 230440
+234546    188.141 gfx: paging submit, 153 ring dwords reserved for buffer at 0x400000, seq 230441
+234547    188.141 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400264, seq 230442
+234548    188.141 gfx: paging submit, 39 ring dwords reserved for buffer at 0x4002A0, seq 230443
+234549    188.141 gfx: paging submit, 15 ring dwords reserved for buffer at 0x40033C, seq 230444
+234550    188.141 gfx: paging submit, 253 ring dwords reserved for buffer at 0x400378, seq 230445
+234551    188.141 gfx: paging submit, 528 ring dwords reserved for buffer at 0x40076C, seq 230446
+234552    188.141 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230447
+234553    188.141 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230448
+234554    188.141 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230449
+234555    188.157 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230450
+234556    188.157 gfx: paging submit, 145 ring dwords reserved for buffer at 0x410000, seq 230451
+234557    188.157 gfx: paging submit, 238 ring dwords reserved for buffer at 0x410280, seq 230452
+234558    188.157 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410638, seq 230453
+234559    188.157 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230454
+234560    188.157 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230455
+234561    188.157 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230456
+234562    188.157 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230457
+234563    188.157 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230458
+234564    188.157 gfx: paging submit, 79 ring dwords reserved for buffer at 0x410000, seq 230459
+234565    188.157 gfx: paging submit, 928 ring dwords reserved for buffer at 0x41013C, seq 230460
+234566    188.157 gfx: paging submit, 124 ring dwords reserved for buffer at 0x400000, seq 230461
+234567    188.157 gfx: paging submit, 880 ring dwords reserved for buffer at 0x4001F0, seq 230462
+234568    188.157 gfx: paging submit, 172 ring dwords reserved for buffer at 0x410000, seq 230463
+234569    188.157 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4102B0, seq 230464
+234570    188.157 gfx: paging submit, 220 ring dwords reserved for buffer at 0x400000, seq 230465
+234571    188.157 gfx: paging submit, 784 ring dwords reserved for buffer at 0x400370, seq 230466
+234572    188.157 gfx: paging submit, 321 ring dwords reserved for buffer at 0x410000, seq 230467
+234573    188.172 gfx: paging submit, 688 ring dwords reserved for buffer at 0x410504, seq 230468
+234574    188.172 gfx: paging submit, 199 ring dwords reserved for buffer at 0x400000, seq 230469
+234575    188.172 gfx: paging submit, 816 ring dwords reserved for buffer at 0x40031C, seq 230470
+234576    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230471
+234577    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230472
+234578    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230473
+234579    188.172 gfx: paging submit, 847 ring dwords reserved for buffer at 0x400000, seq 230474
+234580    188.172 gfx: paging submit, 144 ring dwords reserved for buffer at 0x400D80, seq 230475
+234581    188.172 gfx: paging submit, 728 ring dwords reserved for buffer at 0x410000, seq 230476
+234582    188.172 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B60, seq 230477
+234583    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230478
+234584    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230479
+234585    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230480
+234586    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230481
+234587    188.172 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230482
+234588    188.172 gfx: paging submit, 399 ring dwords reserved for buffer at 0x410000, seq 230483
+234589    188.172 gfx: paging submit, 608 ring dwords reserved for buffer at 0x41063C, seq 230484
+234590    188.172 gfx: paging submit, 444 ring dwords reserved for buffer at 0x400000, seq 230485
+234591    188.172 gfx: paging submit, 560 ring dwords reserved for buffer at 0x4006F0, seq 230486
+234592    188.172 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 230487
+234593    188.172 gfx: paging submit, 518 ring dwords reserved for buffer at 0x4107B0, seq 230488
+234594    188.172 gfx: paging submit, 585 ring dwords reserved for buffer at 0x400000, seq 230489
+234595    188.188 gfx: paging submit, 432 ring dwords reserved for buffer at 0x400924, seq 230490
+234596    188.188 gfx: paging submit, 51 ring dwords reserved for buffer at 0x410000, seq 230491
+234597    188.188 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4100CC, seq 230492
+234598    188.188 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 230493
+234599    188.188 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230494
+234600    188.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230495
+234601    188.188 gfx: paging submit, 703 ring dwords reserved for buffer at 0x410000, seq 230496
+234602    188.188 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B40, seq 230497
+234603    188.188 gfx: paging submit, 180 ring dwords reserved for buffer at 0x400000, seq 230498
+234604    188.188 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002D0, seq 230499
+234605    188.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230500
+234606    188.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230501
+234607    188.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230502
+234608    188.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230503
+234609    188.188 gfx: paging submit, 845 ring dwords reserved for buffer at 0x410000, seq 230504
+234610    188.188 gfx: paging submit, 160 ring dwords reserved for buffer at 0x410D34, seq 230505
+234611    188.188 gfx: paging submit, 892 ring dwords reserved for buffer at 0x400000, seq 230506
+234612    188.188 gfx: paging submit, 112 ring dwords reserved for buffer at 0x400DF0, seq 230507
+234613    188.188 gfx: paging submit, 940 ring dwords reserved for buffer at 0x410000, seq 230508
+234614    188.188 gfx: paging submit, 66 ring dwords reserved for buffer at 0x410EB0, seq 230509
+234615    188.188 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230510
+234616    188.188 gfx: paging submit, 77 ring dwords reserved for buffer at 0x410000, seq 230511
+234617    188.203 gfx: paging submit, 65 ring dwords reserved for buffer at 0x410134, seq 230512
+234618    188.203 gfx: paging submit, 864 ring dwords reserved for buffer at 0x410238, seq 230513
+234619    188.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230514
+234620    188.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230515
+234621    188.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230516
+234622    188.203 gfx: paging submit, 799 ring dwords reserved for buffer at 0x410000, seq 230517
+234623    188.203 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410CC0, seq 230518
+234624    188.203 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D88, seq 230519
+234625    188.203 gfx: paging submit, 908 ring dwords reserved for buffer at 0x400000, seq 230520
+234626    188.203 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E30, seq 230521
+234627    188.203 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 230522
+234628    188.203 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230523
+234629    188.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230524
+234630    188.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230525
+234631    188.203 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 230526
+234632    188.203 gfx: paging submit, 956 ring dwords reserved for buffer at 0x400000, seq 230527
+234633    188.203 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400EF0, seq 230528
+234634    188.203 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 230529
+234635    188.203 gfx: paging submit, 44 ring dwords reserved for buffer at 0x400000, seq 230530
+234636    188.203 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4000B0, seq 230531
+234637    188.203 gfx: paging submit, 92 ring dwords reserved for buffer at 0x410000, seq 230532
+234638    188.203 gfx: paging submit, 926 ring dwords reserved for buffer at 0x410170, seq 230533
+234639    188.203 gfx: paging submit, 179 ring dwords reserved for buffer at 0x400000, seq 230534
+234640    188.203 wddm summary: ---- DDI calls: name, count, first log line ----
+234641    188.203 wddm summary: QueryAdapterInfo                   13  first at 256
+234642    188.203 wddm summary: GetNodeMetadata                     2  first at 264
+234643    188.203 wddm summary: CreateDevice                        9  first at 271
+234644    188.203 wddm summary: DestroyDevice                       2  first at 422
+234645    188.203 wddm summary: CreateContext                       7  first at 274
+234646    188.203 wddm summary: DestroyContext                      2  first at 421
+234647    188.203 wddm summary: CreateProcess                       6  first at 270
+234648    188.203 wddm summary: DestroyProcess                      2  first at 423
+234649    188.203 wddm summary: SetRootPageTable                    2  first at 297
+234650    188.203 wddm summary: CreateAllocation                 5998  first at 342
+234651    188.203 wddm summary: DestroyAllocation                5992  first at 542
+234652    188.203 wddm summary: DescribeAllocation               1499  first at 371
+234653    188.203 wddm summary: GetStandardAllocationDriverData      4  first at 340
+234654    188.203 wddm summary: OpenAllocation                   6000  first at 344
+234655    188.203 wddm summary: CloseAllocation                  5992  first at 541
+234656    188.203 wddm summary: BuildPagingBuffer              415634  first at 276
+234657    188.203 wddm summary: SubmitCommandVirtual           230528  first at 319
+234658    188.203 wddm summary: SetVidPnSourceAddress               1  first at 402
+234659    188.203 wddm summary: ControlInterrupt                    7  first at 406
+234660    188.203 wddm summary: GetScanLine                      1024  first at 136091
+234661    188.203 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+234662    188.203 wddm summary: adapter info type   1       1  first at 256
+234663    188.203 wddm summary: adapter info type  15       1  first at 257
+234664    188.203 wddm summary: adapter info type  47       1  first at 258
+234665    188.203 wddm summary: adapter info type  13       1  first at 259
+234666    188.203 wddm summary: adapter info type  14       4  first at 260
+234667    188.203 wddm summary: adapter info type  11       2  first at 267
+234668    188.203 wddm summary: adapter info type  10       1  first at 269
+234669    188.203 wddm summary: adapter info type  16       1  first at 269
+234670    188.203 wddm summary: adapter info type   0       1  first at 136091
+234671    188.203 wddm summary: capture plans reserved 0 heap 0
+234672    188.203 wddm summary: capture context peaks plans 0 reserved-bytes 0
+234673    188.203 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+234674    188.203 wddm summary: paging operation  11  356659  first at 276
+234675    188.203 wddm summary: paging operation  12   49700  first at 332
+234676    188.203 wddm summary: paging operation   9    6063  first at 352
+234677    188.203 wddm summary: paging operation   2       3  first at 537
+234678    188.203 wddm summary: paging operation   8    3209  first at 557
+234679    188.203 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 5998/5992, 6020 alive
+234680    188.203 wddm summary: allocations opened/closed: 6000/5992 calls
+234681    188.203 wddm summary: submissions 0 physical + 230528 virtual, 0 preemptions, last completed fence 230272
+234682    188.203 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+234683    188.203 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+234684    188.203 wddm profile: umd calls 256, elapsed ticks 136982, QPC frequency 10000000
+234685    188.203 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+234686    188.203 wddm summary: node 1 (paging, open): 230272 hardware submitted, 230272 completed, 0 timeouts, 0 refused
+234687    188.203 wddm: paging OS-private queue admissions=230272 (no submit allocation)
+234688    188.203 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 230272, 0 private-buffer refusals
+234689    188.203 wddm summary: paging DMA VA nonzero 414605 zero 1029, mapping observations 8
+234690    188.203 wddm summary: native DMA transfers 3085 fills 5994 bytes 83449200640
+234691    188.203 wddm summary: native DMA exact disjoint checks 2248
+234692    188.203 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1700CE000 CPU_PA0x1700CE000
+234693    188.203 wddm summary: BuildPagingBuffer: 3085 transfers, 5994 fills, 83449200640 bytes, 157213 insufficient-buffer
+234694    188.203 wddm summary: aperture map batches 0, unmap batches 0
+234695    188.203 wddm summary: paging TLB invalidations 49445, PTE update batches 352440
+234696    188.203 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+234697    188.203 wddm summary: presents 0, flips 1 of 1 address calls (0 arrived above DISPATCH_LEVEL)
+234698    188.203 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+234699    188.203 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+234700    188.203 wddm summary: widest blit 0 rows
+234701    188.203 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+234702    188.203 wddm summary: vsync enabled, 0 ticks, 11226 reported to dxgkrnl
+234703    188.203 wddm summary: dcn lock acknowledgement timeouts 0
+234704    188.203 wddm summary: vidpn flip open: 1 hardware flips, 0 refused, 1 hardware vsyncs armed 11241 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+234705    188.203 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+234706    188.203 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+234707    188.203 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+234708    188.203 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+234709    188.203 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+234710    188.203 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+234711    188.203 vidmm summary: PTE encoding level 0 segment 0 coherent 2 noncoherent 13668868 snoop mismatches 0
+234712    188.203 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 74663056 snoop mismatches 0
+234713    188.203 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+234714    188.203 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 69828 snoop mismatches 0
+234715    188.203 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 24 snoop mismatches 0
+234716    188.203 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 23 snoop mismatches 0
+234717    188.203 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+234718    188.203 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+234719    188.235 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002CC, seq 230535
+234720    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230536
+234721    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230537
+234722    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230538
+234723    188.235 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 230539
+234724    188.235 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 230540
+234725    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230541
+234726    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230542
+234727    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230543
+234728    188.235 gfx: paging submit, 437 ring dwords reserved for buffer at 0x410000, seq 230544
+234729    188.235 gfx: paging submit, 553 ring dwords reserved for buffer at 0x410720, seq 230545
+234730    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230546
+234731    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230547
+234732    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230548
+234733    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230549
+234734    188.235 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 230550
+234735    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230551
+234736    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230552
+234737    188.235 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230553
+234738    188.235 gfx: paging submit, 787 ring dwords reserved for buffer at 0x400000, seq 230554
+234739    188.235 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400C4C, seq 230555
+234740    188.250 gfx: paging submit, 208 ring dwords reserved for buffer at 0x400C88, seq 230556
+234741    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230557
+234742    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230558
+234743    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230559
+234744    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230560
+234745    188.250 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 230561
+234746    188.250 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230562
+234747    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230563
+234748    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230564
+234749    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230565
+234750    188.250 gfx: paging submit, 101 ring dwords reserved for buffer at 0x400000, seq 230566
+234751    188.250 gfx: paging submit, 896 ring dwords reserved for buffer at 0x4001E0, seq 230567
+234752    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230568
+234753    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230569
+234754    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230570
+234755    188.250 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 230571
+234756    188.250 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 230572
+234757    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230573
+234758    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230574
+234759    188.250 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230575
+234760    188.250 gfx: paging submit, 355 ring dwords reserved for buffer at 0x410000, seq 230576
+234761    188.250 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41058C, seq 230577
+234762    188.250 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410654, seq 230578
+234763    188.250 gfx: paging submit, 444 ring dwords reserved for buffer at 0x400000, seq 230579
+234764    188.250 gfx: paging submit, 560 ring dwords reserved for buffer at 0x4006F0, seq 230580
+234765    188.250 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 230581
+234766    188.250 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4107B0, seq 230582
+234767    188.250 gfx: paging submit, 540 ring dwords reserved for buffer at 0x400000, seq 230583
+234768    188.250 gfx: paging submit, 464 ring dwords reserved for buffer at 0x400870, seq 230584
+234769    188.250 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 230585
+234770    188.250 gfx: paging submit, 416 ring dwords reserved for buffer at 0x410930, seq 230586
+234771    188.250 gfx: paging submit, 689 ring dwords reserved for buffer at 0x400000, seq 230587
+234772    188.282 gfx: paging submit, 89 ring dwords reserved for buffer at 0x400AC4, seq 230588
+234773    188.282 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400C28, seq 230589
+234774    188.282 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C64, seq 230590
+234775    188.282 gfx: paging submit, 259 ring dwords reserved for buffer at 0x410000, seq 230591
+234776    188.282 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41040C, seq 230592
+234777    188.282 gfx: paging submit, 635 ring dwords reserved for buffer at 0x410448, seq 230593
+234778    188.282 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410E34, seq 230594
+234779    188.282 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410E70, seq 230595
+234780    188.282 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410F0C, seq 230596
+234781    188.282 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F48, seq 230597
+234782    188.282 gfx: paging submit, 235 ring dwords reserved for buffer at 0x400000, seq 230598
+234783    188.282 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4003AC, seq 230599
+234784    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230600
+234785    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230601
+234786    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230602
+234787    188.282 gfx: paging submit, 895 ring dwords reserved for buffer at 0x400000, seq 230603
+234788    188.282 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E40, seq 230604
+234789    188.282 gfx: paging submit, 156 ring dwords reserved for buffer at 0x410000, seq 230605
+234790    188.282 gfx: paging submit, 848 ring dwords reserved for buffer at 0x410270, seq 230606
+234791    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230607
+234792    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230608
+234793    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230609
+234794    188.282 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230610
+234795    188.282 gfx: paging submit, 829 ring dwords reserved for buffer at 0x400000, seq 230611
+234796    188.282 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF4, seq 230612
+234797    188.282 gfx: paging submit, 876 ring dwords reserved for buffer at 0x410000, seq 230613
+234798    188.282 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB0, seq 230614
+234799    188.282 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 230615
+234800    188.282 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E70, seq 230616
+234801    188.282 gfx: paging submit, 972 ring dwords reserved for buffer at 0x410000, seq 230617
+234802    188.282 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F30, seq 230618
+234803    188.282 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 230619
+234804    188.282 gfx: paging submit, 71 ring dwords reserved for buffer at 0x410000, seq 230620
+234805    188.297 gfx: paging submit, 873 ring dwords reserved for buffer at 0x41011C, seq 230621
+234806    188.297 gfx: paging submit, 64 ring dwords reserved for buffer at 0x410EC0, seq 230622
+234807    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230623
+234808    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230624
+234809    188.297 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230625
+234810    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230626
+234811    188.297 gfx: paging submit, 639 ring dwords reserved for buffer at 0x400000, seq 230627
+234812    188.297 gfx: paging submit, 352 ring dwords reserved for buffer at 0x400A40, seq 230628
+234813    188.297 gfx: paging submit, 520 ring dwords reserved for buffer at 0x410000, seq 230629
+234814    188.297 gfx: paging submit, 496 ring dwords reserved for buffer at 0x410820, seq 230630
+234815    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230631
+234816    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230632
+234817    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230633
+234818    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230634
+234819    188.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230635
+234820    188.297 gfx: paging submit, 191 ring dwords reserved for buffer at 0x410000, seq 230636
+234821    188.297 gfx: paging submit, 816 ring dwords reserved for buffer at 0x4102FC, seq 230637
+234822    188.297 gfx: paging submit, 236 ring dwords reserved for buffer at 0x400000, seq 230638
+234823    188.297 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4003B0, seq 230639
+234824    188.297 gfx: paging submit, 284 ring dwords reserved for buffer at 0x410000, seq 230640
+234825    188.297 gfx: paging submit, 726 ring dwords reserved for buffer at 0x410470, seq 230641
+234826    188.297 gfx: paging submit, 377 ring dwords reserved for buffer at 0x400000, seq 230642
+234827    188.313 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4005E4, seq 230643
+234828    188.313 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D38, seq 230644
+234829    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230645
+234830    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230646
+234831    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230647
+234832    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230648
+234833    188.313 gfx: paging submit, 513 ring dwords reserved for buffer at 0x410000, seq 230649
+234834    188.313 gfx: paging submit, 454 ring dwords reserved for buffer at 0x410840, seq 230650
+234835    188.313 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F58, seq 230651
+234836    188.313 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 230652
+234837    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230653
+234838    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230654
+234839    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 230655
+234840    188.313 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 230656
+234841    188.313 gfx: paging submit, 685 ring dwords reserved for buffer at 0x410000, seq 230657
+234842    188.313 gfx: paging submit, 320 ring dwords reserved for buffer at 0x410AB4, seq 230658
+234843    188.313 gfx: paging submit, 732 ring dwords reserved for buffer at 0x400000, seq 230659
+234844    188.313 gfx: paging submit, 272 ring dwords reserved for buffer at 0x400B70, seq 230660
+234845    188.313 gfx: paging submit, 780 ring dwords reserved for buffer at 0x410000, seq 230661
+234846    188.313 gfx: paging submit, 226 ring dwords reserved for buffer at 0x410C30, seq 230662
+234847    188.313 gfx: paging submit, 877 ring dwords reserved for buffer at 0x400000, seq 230663
+             1153 lines printed

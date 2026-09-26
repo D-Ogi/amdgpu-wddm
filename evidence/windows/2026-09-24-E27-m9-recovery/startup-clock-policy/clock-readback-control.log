@@ -1,0 +1,10 @@
+AMD clock constants and complete function match pinned source
+clock-readback-mutated.c
+clock_test.c
+Generowanie kodu...
+clock-readback-mutated.c
+FAIL line49: bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_MISMATCH
+FAIL line49: !r.ready&&b.end_count==1&&!b.held
+FAIL line49: bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_MISMATCH
+FAIL line49: !r.ready&&b.end_count==1&&!b.held
+clock policy: 190 checks, 4 failures

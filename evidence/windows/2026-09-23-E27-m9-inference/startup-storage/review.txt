@@ -1,0 +1,17 @@
+2026-09-23 unit A
+Candidate0795.1 installed oem69.inf without Windows reboot.
+All firmware hashes matched local upstream, clock1000MHz/VID116 and66.6C.
+Full startup reached GART/PSP/IH and all8GFX stages, attempted/completed0xF.
+Final readiness refused STATUS_DEVICE_NOT_READY; unwind completed quarantine0.
+Source inspection: GfxStartupResources demanded FencePage and diagnostic IbPage.
+Normal RUN allocated neither; FencePage was lazy on first submit, IbPage diagnostic-only.
+Correction: allocate GFX completion page after SetUp before engine stages for real submit-gated RUN.
+Keep diagnostic IB optional: OS jobs supply their own IB storage.
+Existing teardown owns allocated fence page. PLAN does not allocate the real fence page.
+319 coordinator checks pass with diagnostic IB absent in normal successful fixture.
+This host test mocks initialization and does not prove real allocation; WDK build passes.
+Signed0796.1 SYS84CDF89DA6624070B279511B5701B5317E0D85ABAD71F888928E31109AE785E4.
+Installed oem70.inf closed gates PnP OK sameboot12:36:57.
+Trial0796 PnP enable returned success12:47:20, then SSH unavailable before post-start state.
+Do not infer full readiness or cause of hang. Pending reset/recovery and persisted snapshots.
+PCI instance suffixes redacted, no other changes to logs.

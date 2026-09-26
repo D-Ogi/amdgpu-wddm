@@ -1,0 +1,11 @@
+Extracted actual WddmStop and both PnP stop callbacks
+post_display_stop_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 65: model.joined && model.restores==1
+FAIL 64: model.objects==0 && model.vidmm==0
+FAIL 65: model.joined && model.restores==1
+FAIL 64: model.objects==0 && model.vidmm==0
+FAIL 65: model.joined && model.restores==1
+FAIL 64: model.objects==0 && model.vidmm==0
+post display stop: 70 checks, 6 failures

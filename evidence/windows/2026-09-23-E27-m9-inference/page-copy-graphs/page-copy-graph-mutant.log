@@ -1,0 +1,6 @@
+graph-mutant.c
+paging_permutation_test.c
+Generowanie kodu...
+page copy graphs: 280391, budgets 3..8, cumulative failures 7366164
+1GiB page identities: 262144, normalization CPU seconds 0.015000
+page permutations: 46233 cases, 7366164 snapshot-oracle failures

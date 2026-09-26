@@ -1,0 +1,11 @@
+AMD clock constants and complete function match pinned source
+bc250_clock.c
+clock_test.c
+Generowanie kodu...
+bc250_clock.c
+P:\bc-250\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\km\crt\crtdefs.h(67): fatal error C1083: Nie można otworzyć pliku dołącz: 'specstrings.h': No such file or directory
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_clock.ps1:19
+Line |
+  19 |  if($LASTEXITCODE -ne 0){throw 'Kernel compile failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Kernel compile failed

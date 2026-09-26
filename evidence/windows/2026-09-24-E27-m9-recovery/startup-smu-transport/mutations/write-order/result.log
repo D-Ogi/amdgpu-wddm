@@ -1,0 +1,102 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_test.c
+Generowanie kodu...
+bc250_smu.c
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 62: m->phase==0 && value==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+FAIL line 66: m->phase==2 && m->response==0
+FAIL line 68: m->argument==parameters[m->messages%4]
+FAIL line 59: !m->pending
+FAIL line 64: m->phase==1 && m->response==0
+SMU integrated clock: 607 checks, 94 failures

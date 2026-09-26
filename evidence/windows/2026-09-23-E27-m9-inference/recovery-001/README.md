@@ -1,0 +1,7 @@
+# Recovery after the first M9 GPU attempt
+
+UnitA boot2026-09-23T01:57:26, inspected02:09. User confirmed unresponsive black screen before physical reset. The interrupted tiny-gpu-001 directory contains only gate.txt and temperature.txt; no gart/psp/ih/gfx/fence or llama output. The separate E19 gate log reaches successful device disable/enable and state collection, ending with event counts including one Display4101 event. No later stages are persisted. Thus this run provides no inference result; failure was observed during the gate transition/state phase, before the script could perform its explicit engine bring-up.
+
+The previous compute session stop log records24 submitted/completed hardware jobs, zero timeouts, and teardown through stage79. This does not prove teardown/re-entry correctness. Root cause of the subsequent unresponsive system remains unestablished. EnableFullWddm0 in the gate log is expected for the one-shot registry setting (WddmFullRequested consumes it); it is not by itself proof the full table failed to load.
+
+After reset, runtime engine/MMIO gates were still open despite display-only mode. Closed registry settings, restarted the device in display-only and DWM, then verified all reported gates closed and UnconfirmedStarts0 at02:11:07. No GPU work performed after this boot in the recovery procedure. Raw interrupted-directory tar remains in scratch/m9/recovery-01.

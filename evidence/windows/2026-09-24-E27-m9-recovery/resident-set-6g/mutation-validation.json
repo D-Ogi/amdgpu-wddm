@@ -1,0 +1,5 @@
+{
+  "mutation": "one intermediate allocation reports shared despite aggregate GPU PASS",
+  "exit": 1,
+  "rejected": true
+}

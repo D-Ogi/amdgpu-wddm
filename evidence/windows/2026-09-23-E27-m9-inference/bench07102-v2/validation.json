@@ -1,0 +1,36 @@
+{
+  "stories15M": {
+    "checks": {
+      "native_exit": true,
+      "cases": true,
+      "settings": true,
+      "loader": true,
+      "actual_submit": true
+    },
+    "tokens_per_second": [
+      36012.205752,
+      652.405536
+    ],
+    "stddev": [
+      14862.687881,
+      36.293503
+    ]
+  },
+  "tinyllama": {
+    "checks": {
+      "native_exit": true,
+      "cases": true,
+      "settings": true,
+      "loader": true,
+      "actual_submit": true
+    },
+    "tokens_per_second": [
+      1082.32279,
+      115.061026
+    ],
+    "stddev": [
+      31.673333,
+      6.572937
+    ]
+  }
+}

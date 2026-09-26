@@ -1,0 +1,37 @@
+{
+  "source": "evidence\\linux\\2026-09-24-E28-wddm-reentry\\linux-unload-trace.log",
+  "source_sha256": "117aa20c8881f226431ac494d55a7ea24e3da44dda9b85af4aee28c05d55565b",
+  "writes": [
+    {
+      "line": 3188,
+      "time": "292.497932",
+      "register": "mmGCVM_CONTEXT0_CNTL",
+      "value": "0x00555401"
+    },
+    {
+      "line": 3269,
+      "time": "292.500195",
+      "register": "mmRLC_CNTL",
+      "value": "0x00000000"
+    },
+    {
+      "line": 3278,
+      "time": "292.524654",
+      "register": "mmGCVM_CONTEXT0_CNTL",
+      "value": "0x00000000"
+    },
+    {
+      "line": 3295,
+      "time": "292.524683",
+      "register": "mmGCMC_VM_MX_L1_TLB_CNTL",
+      "value": "0x00001d18"
+    },
+    {
+      "line": 3297,
+      "time": "292.524685",
+      "register": "mmGCVM_L2_CNTL",
+      "value": "0x00080e00"
+    }
+  ],
+  "scope": "Selected observed events only; no absence claim about lost or untraced MMIO."
+}

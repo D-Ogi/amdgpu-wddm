@@ -1,0 +1,22 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+ninja: Entering directory `P:\bc-250\scratch\mesa-d3d-build'
+[1/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Debug.cpp.obj
+[2/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Format.cpp.obj
+[3/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Query.cpp.obj
+[4/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Draw.cpp.obj
+[5/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Adapter.cpp.obj
+[6/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Device.cpp.obj
+[7/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Rasterizer.cpp.obj
+[8/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/OutputMerger.cpp.obj
+[9/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Shader.cpp.obj
+[10/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/InputAssembly.cpp.obj
+[11/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Resource.cpp.obj
+[12/14] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[13/14] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[14/14] Linking target src/gallium/targets/d3d10umd/bc250d3d.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d.exp
+

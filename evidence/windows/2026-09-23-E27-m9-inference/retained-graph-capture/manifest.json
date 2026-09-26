@@ -1,0 +1,16 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; retained capture builder/planner not DDI-wired; no deployment",
+  "sys_sha256": "C34D354E9A157C9C887E40E37E87F5C3A34D6E4FDD894F7D7B65954F88B84410",
+  "sha256": {
+    "driver/kmd/gfx.c": "708eaf0cfc09372763c70b63eafbf1d38217594590b3ed18f6a901f7323373db",
+    "driver/kmd/bc250kmd.h": "e14e95ed9f08e2b6e4469286395238ac26354df1d54640ee3e0ad99f3a5e124e",
+    "driver/kmd/paging_capture.h": "ed7d1745e45bdbc3e49f3ad4a94735b822f62374a64e5096799f0d2ec59146ce",
+    "driver/kmd/wddm.c": "9861856aee15cdee6ab398be1d7568e099b097cee789306dce8dec5b6ae010b1",
+    "driver/shim/test/run_paging.ps1": "74afbced477ee901ddc762768a86976968970ce546fdb36f4251e736753410ca",
+    "experiments/E27-m9-inference/paging-route-test-prefix.c": "9120779fb511c2b1931bfaaf73bd60bf5bcd65aaec682b6d4601eb3de6d64728",
+    "experiments/E27-m9-inference/paging-route-test-suffix.c": "361a41757cfab769a10649527831959bcdf1a96fdcde9f2748ed2570888f4419",
+    "experiments/E27-m9-inference/generate-paging-route-test.py": "a60159a6685d1b7fdcdf75f443f7adda32263815717b0398a6665bf744a9a518"
+  },
+  "routing_exit": 0
+}

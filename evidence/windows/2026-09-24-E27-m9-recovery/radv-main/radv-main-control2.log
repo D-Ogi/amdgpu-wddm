@@ -1,0 +1,87 @@
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+installed_sha256=476858800F28A5C103E43FECCC8595C6042BA2479EE18FCFCC3D9FD313953E90
+input_file=llama-completion.exe sha256=181C8E6F1E18E90A8228D98BCBB0A611A8F74B8721E47B74F97B87AF7614F856
+input_file=stories15M-q4_0.gguf sha256=66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739
+input_file=tinyllama-1.1b-chat-v1.0.Q4_0.gguf sha256=DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556
+boot_before=2026-09-24T11:44:14
+icd_hash=749EDF6195161A3E601AFFE508A94E1657971D0846E97BE3380B412E2265B31A
+14:37:11 Tctl 66.9 C (raw 73FB0FEF)
+14:37:14 Tctl 66.9 C (raw 73FB0FEF)
+14:37:17 Tctl 66.9 C (raw 73FB0FEF)
+14:37:21 Tctl 66.9 C (raw 73FB0FEF)
+14:37:24 Tctl 67.0 C (raw 741B0FEF)
+14:37:27 Tctl 67.0 C (raw 741B0FEF)
+14:37:31 Tctl 67.0 C (raw 741B0FEF)
+14:37:34 Tctl 67.0 C (raw 741B0FEF)
+14:37:38 Tctl 67.1 C (raw 743B0FEF)
+14:37:41 Tctl 67.1 C (raw 743B0FEF)
+14:37:45 Tctl 67.1 C (raw 743B0FEF)
+14:37:49 Tctl 67.1 C (raw 743B0FEF)
+14:37:52 Tctl 67.1 C (raw 743B0FEF)
+14:37:55 Tctl 67.1 C (raw 743B0FEF)
+14:37:59 Tctl 67.1 C (raw 743B0FEF)
+14:38:02 Tctl 67.1 C (raw 743B0FEF)
+14:38:06 Tctl 67.1 C (raw 743B0FEF)
+14:38:09 Tctl 67.1 C (raw 743B0FEF)
+14:38:13 Tctl 67.1 C (raw 743B0FEF)
+14:38:16 Tctl 67.1 C (raw 743B0FEF)
+14:38:20 Tctl 67.1 C (raw 743B0FEF)
+14:38:23 Tctl 67.1 C (raw 743B0FEF)
+14:38:27 Tctl 67.1 C (raw 743B0FEF)
+14:38:31 Tctl 67.1 C (raw 743B0FEF)
+14:38:34 Tctl 67.2 C (raw 745B0FEF)
+14:38:38 Tctl 67.2 C (raw 745B0FEF)
+14:38:41 Tctl 67.2 C (raw 745B0FEF)
+14:38:45 Tctl 67.2 C (raw 745B0FEF)
+14:38:48 Tctl 67.2 C (raw 745B0FEF)
+14:38:52 Tctl 67.2 C (raw 745B0FEF)
+14:38:55 Tctl 67.2 C (raw 745B0FEF)
+14:38:59 Tctl 67.2 C (raw 745B0FEF)
+14:39:02 Tctl 67.2 C (raw 745B0FEF)
+14:39:06 Tctl 67.4 C (raw 747B0FEF)
+14:39:09 Tctl 67.4 C (raw 747B0FEF)
+14:39:13 Tctl 67.4 C (raw 747B0FEF)
+14:39:16 Tctl 67.4 C (raw 747B0FEF)
+14:39:19 Tctl 67.4 C (raw 747B0FEF)
+14:39:23 Tctl 67.4 C (raw 747B0FEF)
+14:39:26 Tctl 67.4 C (raw 747B0FEF)
+14:39:30 Tctl 67.4 C (raw 747B0FEF)
+14:39:33 Tctl 67.4 C (raw 747B0FEF)
+14:39:36 Tctl 67.4 C (raw 747B0FEF)
+14:39:40 Tctl 67.4 C (raw 747B0FEF)
+14:39:43 Tctl 67.4 C (raw 747B0FEF)
+14:39:46 Tctl 67.4 C (raw 747B0FEF)
+14:39:50 Tctl 67.4 C (raw 747B0FEF)
+14:39:53 Tctl 67.4 C (raw 747B0FEF)
+14:39:57 Tctl 67.4 C (raw 747B0FEF)
+14:40:00 Tctl 67.4 C (raw 747B0FEF)
+14:40:03 Tctl 67.4 C (raw 747B0FEF)
+14:40:07 Tctl 67.4 C (raw 747B0FEF)
+14:40:10 Tctl 67.4 C (raw 747B0FEF)
+14:40:14 Tctl 67.4 C (raw 747B0FEF)
+14:40:17 Tctl 67.4 C (raw 747B0FEF)
+14:40:20 Tctl 67.4 C (raw 747B0FEF)
+14:40:24 Tctl 67.4 C (raw 747B0FEF)
+14:40:27 Tctl 67.4 C (raw 747B0FEF)
+14:40:31 Tctl 67.4 C (raw 747B0FEF)
+14:40:34 Tctl 67.4 C (raw 747B0FEF)
+14:40:37 Tctl 67.4 C (raw 747B0FEF)
+14:40:41 Tctl 67.4 C (raw 747B0FEF)
+14:40:44 Tctl 67.4 C (raw 747B0FEF)
+14:40:47 Tctl 67.4 C (raw 747B0FEF)
+14:40:51 Tctl 67.4 C (raw 747B0FEF)
+14:40:54 Tctl 67.4 C (raw 747B0FEF)
+14:40:58 Tctl 67.4 C (raw 747B0FEF)
+14:41:01 Tctl 67.5 C (raw 749B0FEF)
+task_state=Running
+worker_exit=1
+m8 exit=-1
+Failed m8
+At C:\BC250\tmp\radv-main-control2.ps1:58 char:18
++  if($exit -ne 0){throw "Failed $name"}
++                  ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Failed m8:String) [], RuntimeException
+    + FullyQualifiedErrorId : Failed m8
+ 

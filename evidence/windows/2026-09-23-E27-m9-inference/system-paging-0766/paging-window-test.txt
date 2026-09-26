@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS: disjoint driver/paging aperture, exact bounds, short aperture/table, alignment and48bit overflow
+compile-check (kernel flags, same source, no link)
+
+paging_window_test.exe exit code 0

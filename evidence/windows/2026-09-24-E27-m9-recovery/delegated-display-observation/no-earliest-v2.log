@@ -1,0 +1,5 @@
+Extracted DCN observation helpers and hardware GetScanLine DDI
+dcn_observation_actual.c
+FAIL 188: DcnFlipPending(&d,observed-0x100000)
+FAIL 188: DcnFlipPending(&d,observed-0x100000)
+DCN observation: 6726 checks, 2 failures

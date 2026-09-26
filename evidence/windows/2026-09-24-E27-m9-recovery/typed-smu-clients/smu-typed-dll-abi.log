@@ -1,0 +1,1 @@
+Built DLL export and two pre-lookup argument checks passed; no adapter or hardware access. Managed layout checked separately:80 bytes,18 field offsets match C.

@@ -1,4 +1,4 @@
-E24 run 002, 2026-09-22 10:36-10:47: bc250kmd 0.7.24 (85fbf5c) on unit A, owner at the monitor. The control run
+E24 run 002, 2026-09-22 10:36-10:47: bc250kmd 0.7.24 (f14c11c) on unit A, owner at the monitor. The control run
 for run 001: the same bring-up with the paging node gate CLOSED, and one escape call per stage so that the console
 names the stage that dies.
 

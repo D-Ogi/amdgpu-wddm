@@ -1,0 +1,96 @@
+[
+  {
+    "name": "gtt64k",
+    "bytes": 65536,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "65536",
+        "1"
+      ],
+      [
+        "65536",
+        "2"
+      ],
+      [
+        "65536",
+        "3"
+      ],
+      [
+        "65536",
+        "4"
+      ]
+    ],
+    "departure_status": [
+      "2",
+      "2",
+      "2"
+    ],
+    "cumulative_gfx": [
+      "30251",
+      "30251",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "547771",
+      "547771",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "0",
+      "0",
+      "0"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  },
+  {
+    "name": "gtt64m",
+    "bytes": 67108864,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "67108864",
+        "64"
+      ],
+      [
+        "67108864",
+        "128"
+      ],
+      [
+        "67108864",
+        "192"
+      ],
+      [
+        "67108864",
+        "256"
+      ]
+    ],
+    "departure_status": [
+      "3",
+      "3",
+      "3"
+    ],
+    "cumulative_gfx": [
+      "30507",
+      "30507",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "550298",
+      "550298",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "0",
+      "0",
+      "0"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  }
+]

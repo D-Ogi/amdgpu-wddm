@@ -1,0 +1,4 @@
+paging-intervals-test.c
+paging_intervals.c
+Generowanie kodu...
+PASS 5000 independent overlap-oracle cases;1GiB spans,524288resolver calls,0.011s

@@ -1,0 +1,5 @@
+.reload /f bc250kmd.sys
+dd bc250kmd!g_LogNext L3
+.writemem P:\bc-250\scratch\m9\0797-kernel-ring.bin bc250kmd!g_Log L0x2a000
+!analyze -v
+q

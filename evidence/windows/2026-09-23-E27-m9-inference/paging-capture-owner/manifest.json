@@ -1,0 +1,11 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; builders do not attach captures yet; no deployment",
+  "sys_sha256": "04392D2F24D7E1CB8EABA8FB26C3888C271570AC9B76479E9298D83A2FEB74D6",
+  "sha256": {
+    "driver/kmd/paging_capture.c": "ac9f64cafc29af7d4e8bd59a834533c37db57677a1d2fd1e064e56823ae0e7d7",
+    "driver/kmd/paging_capture.h": "483e436be3f1ec5c0c41a25ea7e3104e0bd84f6d0ad1bcd3a260503cae645eff",
+    "driver/kmd/test/paging_capture_test.c": "64c5f85f7667847b796e50912185d8b0148fa5d72459be4bda7ab983a5b847a6",
+    "driver/kmd/wddm.c": "30018aa8b991078bd23d16a88e96b1de299230d2837c8f8dc402959ab15c71c0"
+  }
+}

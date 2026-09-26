@@ -1,0 +1,18 @@
+{
+  "mesa-main-desktop.bmp": {
+    "sha256": "a8fe1c5de171accda960a41d86b6a3931d4aef48daf99614ed6aaef7afd57d30",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 0
+  },
+  "mesa-main-control0.bmp": {
+    "sha256": "94961e64a275d1aba59b15b47408db2d9618e1331c884bcacb33bc697e640783",
+    "size": [
+      1920,
+      1200
+    ],
+    "pure_green_pixels": 275148
+  }
+}

@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 464 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x016960  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x015930  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x029CD0  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x034EE0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\owned-graph-route-dev-kmd\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\owned-graph-route-dev-kmd\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\owned-graph-route-dev-kmd\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7655  bc250kmd.inf
+   324496  bc250kmd.sys
+  DD4FF8E2073E398DFC27195FC2B820E64E7060BBF4FF8E9B54BDFAD5D677F180  package\bc250kmd.sys

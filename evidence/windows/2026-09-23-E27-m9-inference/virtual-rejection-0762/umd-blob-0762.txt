@@ -1,0 +1,7 @@
+compile and link (host, contract header, /Zp8)
+  Generowanie kodu...
+run
+umd_blob_test: all cases passed
+compile-check (kernel flags, reader only, no contract header, no link)
+
+umd_blob_test.exe exit code 0

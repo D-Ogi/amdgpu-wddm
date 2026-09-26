@@ -1,0 +1,517 @@
+probe_hash=E9566E495A4FB5BB0F37B8A2583AB10F573D0F9ECEE2B84D94E264242529E9C3
+driver_version=0.7.119.1
+installed_sha256=4374CB20857D0CA5D09D8EFCF61F5D35718633D568571EF41FE717900E15236E
+boot_before=2026-09-24T08:30:00
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+08:38:31 Tctl 70.9 C (raw 77FB0FEF)
+client_started=client-a pid=8080 time=2026-09-24T08:38:31.9255026+02:00
+client_started=client-b pid=9580 time=2026-09-24T08:38:31.9475215+02:00
+overlapping_live_launchers=2
+08:38:33 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:38:33.9672544+02:00
+  2703     31.555 wddm summary: DestroyDevice                      11  first at 539
+  2705     31.555 wddm summary: DestroyContext                     11  first at 527
+  2729     31.555 wddm summary: capture plans reserved 0 heap 0
+  2738     31.555 wddm summary: node 0 hardware: 86 submitted, 86 completed, 0 timeouts, 0 refused
+  2742     31.555 wddm summary: node 1 (paging, open): 1347 hardware submitted, 1347 completed, 0 timeouts, 0 refused
+  2755     31.555 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:36 Tctl 70.9 C (raw 77FB0FEF)
+observation_time=2026-09-24T08:38:36.0430354+02:00
+08:38:38 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:38:38.5992299+02:00
+ 10220     36.171 wddm summary: DestroyDevice                      14  first at 539
+ 10222     36.171 wddm summary: DestroyContext                     14  first at 527
+ 10247     36.171 wddm summary: capture plans reserved 4 heap 0
+ 10257     36.171 wddm summary: node 0 hardware: 222 submitted, 222 completed, 0 timeouts, 0 refused
+ 10261     36.171 wddm summary: node 1 (paging, open): 8159 hardware submitted, 8159 completed, 0 timeouts, 0 refused
+ 10274     36.171 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:40 Tctl 70.8 C (raw 77DB0FEF)
+observation_time=2026-09-24T08:38:40.6569950+02:00
+ 17213     38.525 wddm summary: DestroyDevice                      15  first at 539
+ 17215     38.525 wddm summary: DestroyContext                     15  first at 527
+ 17240     38.525 wddm summary: capture plans reserved 8 heap 0
+ 17250     38.525 wddm summary: node 0 hardware: 257 submitted, 257 completed, 0 timeouts, 0 refused
+ 17254     38.525 wddm summary: node 1 (paging, open): 14821 hardware submitted, 14821 completed, 0 timeouts, 0 refused
+ 17267     38.525 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:42 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:38:42.9950022+02:00
+ 17213     38.525 wddm summary: DestroyDevice                      15  first at 539
+ 17215     38.525 wddm summary: DestroyContext                     15  first at 527
+ 17240     38.525 wddm summary: capture plans reserved 8 heap 0
+ 17250     38.525 wddm summary: node 0 hardware: 257 submitted, 257 completed, 0 timeouts, 0 refused
+ 17254     38.525 wddm summary: node 1 (paging, open): 14821 hardware submitted, 14821 completed, 0 timeouts, 0 refused
+ 17267     38.525 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 17569     40.565 wddm summary: DestroyDevice                      16  first at 539
+ 17571     40.565 wddm summary: DestroyContext                     16  first at 527
+ 17596     40.565 wddm summary: capture plans reserved 8 heap 0
+ 17606     40.565 wddm summary: node 0 hardware: 350 submitted, 350 completed, 0 timeouts, 0 refused
+ 17610     40.565 wddm summary: node 1 (paging, open): 14896 hardware submitted, 14896 completed, 0 timeouts, 0 refused
+ 17623     40.565 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:45 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:38:45.0347518+02:00
+ 24662     42.923 wddm summary: DestroyDevice                      18  first at 539
+ 24664     42.923 wddm summary: DestroyContext                     18  first at 527
+ 24689     42.923 wddm summary: capture plans reserved 12 heap 0
+ 24699     42.923 wddm summary: node 0 hardware: 386 submitted, 386 completed, 0 timeouts, 0 refused
+ 24703     42.923 wddm summary: node 1 (paging, open): 21633 hardware submitted, 21633 completed, 0 timeouts, 0 refused
+ 24716     42.923 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:47 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:38:47.4007835+02:00
+ 24662     42.923 wddm summary: DestroyDevice                      18  first at 539
+ 24664     42.923 wddm summary: DestroyContext                     18  first at 527
+ 24689     42.923 wddm summary: capture plans reserved 12 heap 0
+ 24699     42.923 wddm summary: node 0 hardware: 386 submitted, 386 completed, 0 timeouts, 0 refused
+ 24703     42.923 wddm summary: node 1 (paging, open): 21633 hardware submitted, 21633 completed, 0 timeouts, 0 refused
+ 24716     42.923 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 24929     44.973 wddm summary: DestroyDevice                      18  first at 539
+ 24931     44.973 wddm summary: DestroyContext                     18  first at 527
+ 24956     44.973 wddm summary: capture plans reserved 12 heap 0
+ 24966     44.973 wddm summary: node 0 hardware: 486 submitted, 486 completed, 0 timeouts, 0 refused
+ 24970     44.973 wddm summary: node 1 (paging, open): 21633 hardware submitted, 21633 completed, 0 timeouts, 0 refused
+ 24983     44.973 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:49 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:38:49.4465619+02:00
+ 24929     44.973 wddm summary: DestroyDevice                      18  first at 539
+ 24931     44.973 wddm summary: DestroyContext                     18  first at 527
+ 24956     44.973 wddm summary: capture plans reserved 12 heap 0
+ 24966     44.973 wddm summary: node 0 hardware: 486 submitted, 486 completed, 0 timeouts, 0 refused
+ 24970     44.973 wddm summary: node 1 (paging, open): 21633 hardware submitted, 21633 completed, 0 timeouts, 0 refused
+ 24983     44.973 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 25168     47.016 wddm summary: DestroyDevice                      21  first at 539
+ 25170     47.016 wddm summary: DestroyContext                     21  first at 527
+ 25195     47.016 wddm summary: capture plans reserved 12 heap 0
+ 25205     47.016 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25209     47.016 wddm summary: node 1 (paging, open): 21725 hardware submitted, 21725 completed, 0 timeouts, 0 refused
+ 25222     47.016 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+client_finished=client-a exit=0
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+client_finished=client-b exit=0
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+boot_after=2026-09-24T08:30:00
+concurrent_run_complete
+begin_post_completion_observation
+08:38:51 Tctl 71.4 C (raw 787B0FEF)
+observation_time=2026-09-24T08:38:51.5763656+02:00
+ 25235     47.054 wddm summary: DestroyDevice                      21  first at 539
+ 25237     47.054 wddm summary: DestroyContext                     21  first at 527
+ 25262     47.054 wddm summary: capture plans reserved 12 heap 0
+ 25272     47.054 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25276     47.054 wddm summary: node 1 (paging, open): 21725 hardware submitted, 21725 completed, 0 timeouts, 0 refused
+ 25289     47.054 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 25406     49.148 wddm summary: DestroyDevice                      22  first at 539
+ 25408     49.148 wddm summary: DestroyContext                     22  first at 527
+ 25433     49.148 wddm summary: capture plans reserved 12 heap 0
+ 25443     49.148 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25447     49.148 wddm summary: node 1 (paging, open): 21802 hardware submitted, 21802 completed, 0 timeouts, 0 refused
+ 25460     49.148 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:53 Tctl 71.4 C (raw 787B0FEF)
+observation_time=2026-09-24T08:38:53.6321303+02:00
+ 25406     49.148 wddm summary: DestroyDevice                      22  first at 539
+ 25408     49.148 wddm summary: DestroyContext                     22  first at 527
+ 25433     49.148 wddm summary: capture plans reserved 12 heap 0
+ 25443     49.148 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25447     49.148 wddm summary: node 1 (paging, open): 21802 hardware submitted, 21802 completed, 0 timeouts, 0 refused
+ 25460     49.148 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 25674     51.212 wddm summary: DestroyDevice                      24  first at 539
+ 25676     51.212 wddm summary: DestroyContext                     24  first at 527
+ 25701     51.212 wddm summary: capture plans reserved 12 heap 0
+ 25711     51.212 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25715     51.212 wddm summary: node 1 (paging, open): 21953 hardware submitted, 21953 completed, 0 timeouts, 0 refused
+ 25728     51.212 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:55 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:38:55.6878949+02:00
+ 25674     51.212 wddm summary: DestroyDevice                      24  first at 539
+ 25676     51.212 wddm summary: DestroyContext                     24  first at 527
+ 25701     51.212 wddm summary: capture plans reserved 12 heap 0
+ 25711     51.212 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25715     51.212 wddm summary: node 1 (paging, open): 21953 hardware submitted, 21953 completed, 0 timeouts, 0 refused
+ 25728     51.212 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 25830     53.266 wddm summary: DestroyDevice                      24  first at 539
+ 25832     53.266 wddm summary: DestroyContext                     24  first at 527
+ 25857     53.268 wddm summary: capture plans reserved 12 heap 0
+ 25867     53.268 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25871     53.268 wddm summary: node 1 (paging, open): 22018 hardware submitted, 22018 completed, 0 timeouts, 0 refused
+ 25884     53.268 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:57 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:38:57.7436812+02:00
+ 25830     53.266 wddm summary: DestroyDevice                      24  first at 539
+ 25832     53.266 wddm summary: DestroyContext                     24  first at 527
+ 25857     53.268 wddm summary: capture plans reserved 12 heap 0
+ 25867     53.268 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 25871     53.268 wddm summary: node 1 (paging, open): 22018 hardware submitted, 22018 completed, 0 timeouts, 0 refused
+ 25884     53.268 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 26004     55.313 wddm summary: DestroyDevice                      26  first at 539
+ 26006     55.313 wddm summary: DestroyContext                     26  first at 527
+ 26031     55.313 wddm summary: capture plans reserved 12 heap 0
+ 26041     55.313 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26045     55.313 wddm summary: node 1 (paging, open): 22099 hardware submitted, 22099 completed, 0 timeouts, 0 refused
+ 26058     55.313 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:38:59 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:38:59.7834105+02:00
+ 26004     55.313 wddm summary: DestroyDevice                      26  first at 539
+ 26006     55.313 wddm summary: DestroyContext                     26  first at 527
+ 26031     55.313 wddm summary: capture plans reserved 12 heap 0
+ 26041     55.313 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26045     55.313 wddm summary: node 1 (paging, open): 22099 hardware submitted, 22099 completed, 0 timeouts, 0 refused
+ 26058     55.313 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 26174     57.355 wddm summary: DestroyDevice                      27  first at 539
+ 26176     57.355 wddm summary: DestroyContext                     27  first at 527
+ 26201     57.355 wddm summary: capture plans reserved 12 heap 0
+ 26211     57.355 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26215     57.355 wddm summary: node 1 (paging, open): 22177 hardware submitted, 22177 completed, 0 timeouts, 0 refused
+ 26228     57.355 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:01 Tctl 71.5 C (raw 789B0FEF)
+observation_time=2026-09-24T08:39:01.8271635+02:00
+ 26174     57.355 wddm summary: DestroyDevice                      27  first at 539
+ 26176     57.355 wddm summary: DestroyContext                     27  first at 527
+ 26201     57.355 wddm summary: capture plans reserved 12 heap 0
+ 26211     57.355 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26215     57.355 wddm summary: node 1 (paging, open): 22177 hardware submitted, 22177 completed, 0 timeouts, 0 refused
+ 26228     57.355 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 26341     59.399 wddm summary: DestroyDevice                      28  first at 539
+ 26343     59.399 wddm summary: DestroyContext                     28  first at 527
+ 26368     59.399 wddm summary: capture plans reserved 12 heap 0
+ 26378     59.399 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26382     59.399 wddm summary: node 1 (paging, open): 22251 hardware submitted, 22251 completed, 0 timeouts, 0 refused
+ 26395     59.399 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:03 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:03.8749208+02:00
+ 26341     59.399 wddm summary: DestroyDevice                      28  first at 539
+ 26343     59.399 wddm summary: DestroyContext                     28  first at 527
+ 26368     59.399 wddm summary: capture plans reserved 12 heap 0
+ 26378     59.399 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26382     59.399 wddm summary: node 1 (paging, open): 22251 hardware submitted, 22251 completed, 0 timeouts, 0 refused
+ 26395     59.399 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 26509     61.513 wddm summary: DestroyDevice                      29  first at 539
+ 26511     61.513 wddm summary: DestroyContext                     29  first at 527
+ 26536     61.513 wddm summary: capture plans reserved 12 heap 0
+ 26546     61.513 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26550     61.513 wddm summary: node 1 (paging, open): 22327 hardware submitted, 22327 completed, 0 timeouts, 0 refused
+ 26563     61.513 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:05 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:39:05.9927371+02:00
+ 26509     61.513 wddm summary: DestroyDevice                      29  first at 539
+ 26511     61.513 wddm summary: DestroyContext                     29  first at 527
+ 26536     61.513 wddm summary: capture plans reserved 12 heap 0
+ 26546     61.513 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26550     61.513 wddm summary: node 1 (paging, open): 22327 hardware submitted, 22327 completed, 0 timeouts, 0 refused
+ 26563     61.513 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 26576     63.565 wddm summary: DestroyDevice                      29  first at 539
+ 26578     63.565 wddm summary: DestroyContext                     29  first at 527
+ 26603     63.565 wddm summary: capture plans reserved 12 heap 0
+ 26613     63.565 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26617     63.565 wddm summary: node 1 (paging, open): 22327 hardware submitted, 22327 completed, 0 timeouts, 0 refused
+ 26630     63.565 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:08 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:39:08.0405155+02:00
+ 26576     63.565 wddm summary: DestroyDevice                      29  first at 539
+ 26578     63.565 wddm summary: DestroyContext                     29  first at 527
+ 26603     63.565 wddm summary: capture plans reserved 12 heap 0
+ 26613     63.565 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26617     63.565 wddm summary: node 1 (paging, open): 22327 hardware submitted, 22327 completed, 0 timeouts, 0 refused
+ 26630     63.565 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 26840     65.610 wddm summary: DestroyDevice                      31  first at 539
+ 26842     65.610 wddm summary: DestroyContext                     31  first at 527
+ 26867     65.610 wddm summary: capture plans reserved 12 heap 0
+ 26877     65.610 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26881     65.610 wddm summary: node 1 (paging, open): 22472 hardware submitted, 22472 completed, 0 timeouts, 0 refused
+ 26894     65.610 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:10 Tctl 70.9 C (raw 77FB0FEF)
+observation_time=2026-09-24T08:39:10.0802447+02:00
+ 26840     65.610 wddm summary: DestroyDevice                      31  first at 539
+ 26842     65.610 wddm summary: DestroyContext                     31  first at 527
+ 26867     65.610 wddm summary: capture plans reserved 12 heap 0
+ 26877     65.610 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 26881     65.610 wddm summary: node 1 (paging, open): 22472 hardware submitted, 22472 completed, 0 timeouts, 0 refused
+ 26894     65.610 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 27111     67.660 wddm summary: DestroyDevice                      33  first at 539
+ 27113     67.660 wddm summary: DestroyContext                     33  first at 527
+ 27138     67.660 wddm summary: capture plans reserved 12 heap 0
+ 27148     67.660 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27152     67.660 wddm summary: node 1 (paging, open): 22624 hardware submitted, 22624 completed, 0 timeouts, 0 refused
+ 27165     67.660 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:12 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:39:12.1940588+02:00
+ 27111     67.660 wddm summary: DestroyDevice                      33  first at 539
+ 27113     67.660 wddm summary: DestroyContext                     33  first at 527
+ 27138     67.660 wddm summary: capture plans reserved 12 heap 0
+ 27148     67.660 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27152     67.660 wddm summary: node 1 (paging, open): 22624 hardware submitted, 22624 completed, 0 timeouts, 0 refused
+ 27165     67.660 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 27178     69.766 wddm summary: DestroyDevice                      33  first at 539
+ 27180     69.766 wddm summary: DestroyContext                     33  first at 527
+ 27205     69.766 wddm summary: capture plans reserved 12 heap 0
+ 27215     69.766 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27219     69.766 wddm summary: node 1 (paging, open): 22624 hardware submitted, 22624 completed, 0 timeouts, 0 refused
+ 27232     69.766 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:14 Tctl 71.2 C (raw 785B0FEF)
+observation_time=2026-09-24T08:39:14.2338092+02:00
+ 27178     69.766 wddm summary: DestroyDevice                      33  first at 539
+ 27180     69.766 wddm summary: DestroyContext                     33  first at 527
+ 27205     69.766 wddm summary: capture plans reserved 12 heap 0
+ 27215     69.766 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27219     69.766 wddm summary: node 1 (paging, open): 22624 hardware submitted, 22624 completed, 0 timeouts, 0 refused
+ 27232     69.766 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 27443     71.806 wddm summary: DestroyDevice                      35  first at 539
+ 27445     71.806 wddm summary: DestroyContext                     35  first at 527
+ 27470     71.806 wddm summary: capture plans reserved 12 heap 0
+ 27480     71.806 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27484     71.806 wddm summary: node 1 (paging, open): 22772 hardware submitted, 22772 completed, 0 timeouts, 0 refused
+ 27497     71.806 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:16 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:16.3196000+02:00
+ 27443     71.806 wddm summary: DestroyDevice                      35  first at 539
+ 27445     71.806 wddm summary: DestroyContext                     35  first at 527
+ 27470     71.806 wddm summary: capture plans reserved 12 heap 0
+ 27480     71.806 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27484     71.806 wddm summary: node 1 (paging, open): 22772 hardware submitted, 22772 completed, 0 timeouts, 0 refused
+ 27497     71.806 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 27612     73.893 wddm summary: DestroyDevice                      36  first at 539
+ 27614     73.893 wddm summary: DestroyContext                     36  first at 527
+ 27639     73.893 wddm summary: capture plans reserved 12 heap 0
+ 27649     73.893 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27653     73.893 wddm summary: node 1 (paging, open): 22849 hardware submitted, 22849 completed, 0 timeouts, 0 refused
+ 27666     73.893 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:18 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:39:18.3693934+02:00
+ 27612     73.893 wddm summary: DestroyDevice                      36  first at 539
+ 27614     73.893 wddm summary: DestroyContext                     36  first at 527
+ 27639     73.893 wddm summary: capture plans reserved 12 heap 0
+ 27649     73.893 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27653     73.893 wddm summary: node 1 (paging, open): 22849 hardware submitted, 22849 completed, 0 timeouts, 0 refused
+ 27666     73.893 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 27679     75.939 wddm summary: DestroyDevice                      36  first at 539
+ 27681     75.939 wddm summary: DestroyContext                     36  first at 527
+ 27706     75.939 wddm summary: capture plans reserved 12 heap 0
+ 27716     75.939 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27720     75.939 wddm summary: node 1 (paging, open): 22849 hardware submitted, 22849 completed, 0 timeouts, 0 refused
+ 27733     75.939 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:20 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:20.4051056+02:00
+ 27679     75.939 wddm summary: DestroyDevice                      36  first at 539
+ 27681     75.939 wddm summary: DestroyContext                     36  first at 527
+ 27706     75.939 wddm summary: capture plans reserved 12 heap 0
+ 27716     75.939 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27720     75.939 wddm summary: node 1 (paging, open): 22849 hardware submitted, 22849 completed, 0 timeouts, 0 refused
+ 27733     75.939 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 27948     77.977 wddm summary: DestroyDevice                      38  first at 539
+ 27950     77.977 wddm summary: DestroyContext                     38  first at 527
+ 27975     77.977 wddm summary: capture plans reserved 12 heap 0
+ 27985     77.977 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27989     77.977 wddm summary: node 1 (paging, open): 23000 hardware submitted, 23000 completed, 0 timeouts, 0 refused
+ 28002     77.977 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:22 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:22.4468577+02:00
+ 27948     77.977 wddm summary: DestroyDevice                      38  first at 539
+ 27950     77.977 wddm summary: DestroyContext                     38  first at 527
+ 27975     77.977 wddm summary: capture plans reserved 12 heap 0
+ 27985     77.977 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 27989     77.977 wddm summary: node 1 (paging, open): 23000 hardware submitted, 23000 completed, 0 timeouts, 0 refused
+ 28002     77.977 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 28213     80.017 wddm summary: DestroyDevice                      40  first at 539
+ 28215     80.017 wddm summary: DestroyContext                     40  first at 527
+ 28240     80.017 wddm summary: capture plans reserved 12 heap 0
+ 28250     80.017 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28254     80.017 wddm summary: node 1 (paging, open): 23145 hardware submitted, 23145 completed, 0 timeouts, 0 refused
+ 28267     80.017 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:24 Tctl 70.8 C (raw 77DB0FEF)
+observation_time=2026-09-24T08:39:24.4866066+02:00
+ 28213     80.017 wddm summary: DestroyDevice                      40  first at 539
+ 28215     80.017 wddm summary: DestroyContext                     40  first at 527
+ 28240     80.017 wddm summary: capture plans reserved 12 heap 0
+ 28250     80.017 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28254     80.017 wddm summary: node 1 (paging, open): 23145 hardware submitted, 23145 completed, 0 timeouts, 0 refused
+ 28267     80.017 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 28280     82.058 wddm summary: DestroyDevice                      40  first at 539
+ 28282     82.058 wddm summary: DestroyContext                     40  first at 527
+ 28307     82.058 wddm summary: capture plans reserved 12 heap 0
+ 28317     82.058 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28321     82.058 wddm summary: node 1 (paging, open): 23145 hardware submitted, 23145 completed, 0 timeouts, 0 refused
+ 28334     82.058 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:26 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:39:26.5323642+02:00
+ 28280     82.058 wddm summary: DestroyDevice                      40  first at 539
+ 28282     82.058 wddm summary: DestroyContext                     40  first at 527
+ 28307     82.058 wddm summary: capture plans reserved 12 heap 0
+ 28317     82.058 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28321     82.058 wddm summary: node 1 (paging, open): 23145 hardware submitted, 23145 completed, 0 timeouts, 0 refused
+ 28334     82.058 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 28449     84.104 wddm summary: DestroyDevice                      41  first at 539
+ 28451     84.104 wddm summary: DestroyContext                     41  first at 527
+ 28476     84.104 wddm summary: capture plans reserved 12 heap 0
+ 28486     84.104 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28490     84.104 wddm summary: node 1 (paging, open): 23222 hardware submitted, 23222 completed, 0 timeouts, 0 refused
+ 28503     84.104 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:28 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:28.5781191+02:00
+ 28449     84.104 wddm summary: DestroyDevice                      41  first at 539
+ 28451     84.104 wddm summary: DestroyContext                     41  first at 527
+ 28476     84.104 wddm summary: capture plans reserved 12 heap 0
+ 28486     84.104 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28490     84.104 wddm summary: node 1 (paging, open): 23222 hardware submitted, 23222 completed, 0 timeouts, 0 refused
+ 28503     84.104 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 28715     86.148 wddm summary: DestroyDevice                      43  first at 539
+ 28717     86.148 wddm summary: DestroyContext                     43  first at 527
+ 28742     86.148 wddm summary: capture plans reserved 12 heap 0
+ 28752     86.148 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28756     86.148 wddm summary: node 1 (paging, open): 23367 hardware submitted, 23367 completed, 0 timeouts, 0 refused
+ 28769     86.148 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:30 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:30.6198719+02:00
+ 28715     86.148 wddm summary: DestroyDevice                      43  first at 539
+ 28717     86.148 wddm summary: DestroyContext                     43  first at 527
+ 28742     86.148 wddm summary: capture plans reserved 12 heap 0
+ 28752     86.148 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 28756     86.148 wddm summary: node 1 (paging, open): 23367 hardware submitted, 23367 completed, 0 timeouts, 0 refused
+ 28769     86.148 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 28982     88.194 wddm summary: DestroyDevice                      45  first at 539
+ 28984     88.194 wddm summary: DestroyContext                     45  first at 527
+ 29009     88.194 wddm summary: capture plans reserved 12 heap 0
+ 29019     88.194 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29023     88.194 wddm summary: node 1 (paging, open): 23515 hardware submitted, 23515 completed, 0 timeouts, 0 refused
+ 29036     88.196 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:32 Tctl 70.8 C (raw 77DB0FEF)
+observation_time=2026-09-24T08:39:32.6816405+02:00
+ 28982     88.194 wddm summary: DestroyDevice                      45  first at 539
+ 28984     88.194 wddm summary: DestroyContext                     45  first at 527
+ 29009     88.194 wddm summary: capture plans reserved 12 heap 0
+ 29019     88.194 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29023     88.194 wddm summary: node 1 (paging, open): 23515 hardware submitted, 23515 completed, 0 timeouts, 0 refused
+ 29036     88.196 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29049     90.253 wddm summary: DestroyDevice                      45  first at 539
+ 29051     90.253 wddm summary: DestroyContext                     45  first at 527
+ 29076     90.253 wddm summary: capture plans reserved 12 heap 0
+ 29086     90.253 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29090     90.253 wddm summary: node 1 (paging, open): 23515 hardware submitted, 23515 completed, 0 timeouts, 0 refused
+ 29103     90.253 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:34 Tctl 70.9 C (raw 77FB0FEF)
+observation_time=2026-09-24T08:39:34.7253947+02:00
+ 29049     90.253 wddm summary: DestroyDevice                      45  first at 539
+ 29051     90.253 wddm summary: DestroyContext                     45  first at 527
+ 29076     90.253 wddm summary: capture plans reserved 12 heap 0
+ 29086     90.253 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29090     90.253 wddm summary: node 1 (paging, open): 23515 hardware submitted, 23515 completed, 0 timeouts, 0 refused
+ 29103     90.253 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29218     92.295 wddm summary: DestroyDevice                      46  first at 539
+ 29220     92.295 wddm summary: DestroyContext                     46  first at 527
+ 29245     92.295 wddm summary: capture plans reserved 12 heap 0
+ 29255     92.295 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29259     92.295 wddm summary: node 1 (paging, open): 23592 hardware submitted, 23592 completed, 0 timeouts, 0 refused
+ 29272     92.295 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:36 Tctl 70.9 C (raw 77FB0FEF)
+observation_time=2026-09-24T08:39:36.7671462+02:00
+ 29218     92.295 wddm summary: DestroyDevice                      46  first at 539
+ 29220     92.295 wddm summary: DestroyContext                     46  first at 527
+ 29245     92.295 wddm summary: capture plans reserved 12 heap 0
+ 29255     92.295 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29259     92.295 wddm summary: node 1 (paging, open): 23592 hardware submitted, 23592 completed, 0 timeouts, 0 refused
+ 29272     92.295 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29385     94.339 wddm summary: DestroyDevice                      47  first at 539
+ 29387     94.339 wddm summary: DestroyContext                     47  first at 527
+ 29412     94.339 wddm summary: capture plans reserved 12 heap 0
+ 29422     94.339 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29426     94.339 wddm summary: node 1 (paging, open): 23666 hardware submitted, 23666 completed, 0 timeouts, 0 refused
+ 29439     94.339 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:38 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:39:38.8088975+02:00
+ 29385     94.339 wddm summary: DestroyDevice                      47  first at 539
+ 29387     94.339 wddm summary: DestroyContext                     47  first at 527
+ 29412     94.339 wddm summary: capture plans reserved 12 heap 0
+ 29422     94.339 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29426     94.339 wddm summary: node 1 (paging, open): 23666 hardware submitted, 23666 completed, 0 timeouts, 0 refused
+ 29439     94.339 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29555     96.381 wddm summary: DestroyDevice                      48  first at 539
+ 29557     96.381 wddm summary: DestroyContext                     48  first at 527
+ 29582     96.381 wddm summary: capture plans reserved 12 heap 0
+ 29592     96.381 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29596     96.381 wddm summary: node 1 (paging, open): 23744 hardware submitted, 23744 completed, 0 timeouts, 0 refused
+ 29609     96.381 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:40 Tctl 70.6 C (raw 77BB0FEF)
+observation_time=2026-09-24T08:39:40.8546549+02:00
+ 29555     96.381 wddm summary: DestroyDevice                      48  first at 539
+ 29557     96.381 wddm summary: DestroyContext                     48  first at 527
+ 29582     96.381 wddm summary: capture plans reserved 12 heap 0
+ 29592     96.381 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29596     96.381 wddm summary: node 1 (paging, open): 23744 hardware submitted, 23744 completed, 0 timeouts, 0 refused
+ 29609     96.381 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29721     98.432 wddm summary: DestroyDevice                      49  first at 539
+ 29723     98.432 wddm summary: DestroyContext                     49  first at 527
+ 29748     98.432 wddm summary: capture plans reserved 12 heap 0
+ 29758     98.432 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29762     98.432 wddm summary: node 1 (paging, open): 23818 hardware submitted, 23818 completed, 0 timeouts, 0 refused
+ 29775     98.432 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:42 Tctl 70.8 C (raw 77DB0FEF)
+observation_time=2026-09-24T08:39:42.9304352+02:00
+ 29721     98.432 wddm summary: DestroyDevice                      49  first at 539
+ 29723     98.432 wddm summary: DestroyContext                     49  first at 527
+ 29748     98.432 wddm summary: capture plans reserved 12 heap 0
+ 29758     98.432 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29762     98.432 wddm summary: node 1 (paging, open): 23818 hardware submitted, 23818 completed, 0 timeouts, 0 refused
+ 29775     98.432 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29788    100.502 wddm summary: DestroyDevice                      49  first at 539
+ 29790    100.502 wddm summary: DestroyContext                     49  first at 527
+ 29815    100.502 wddm summary: capture plans reserved 12 heap 0
+ 29825    100.502 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29829    100.502 wddm summary: node 1 (paging, open): 23818 hardware submitted, 23818 completed, 0 timeouts, 0 refused
+ 29842    100.502 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:44 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:39:44.9761911+02:00
+ 29788    100.502 wddm summary: DestroyDevice                      49  first at 539
+ 29790    100.502 wddm summary: DestroyContext                     49  first at 527
+ 29815    100.502 wddm summary: capture plans reserved 12 heap 0
+ 29825    100.502 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 29829    100.502 wddm summary: node 1 (paging, open): 23818 hardware submitted, 23818 completed, 0 timeouts, 0 refused
+ 29842    100.502 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 29959    102.548 wddm summary: DestroyDevice                      50  first at 539
+ 29961    102.548 wddm summary: DestroyContext                     50  first at 527
+ 29986    102.548 wddm summary: capture plans reserved 12 heap 0
+ 29996    102.548 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30000    102.548 wddm summary: node 1 (paging, open): 23895 hardware submitted, 23895 completed, 0 timeouts, 0 refused
+ 30013    102.548 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:47 Tctl 71.1 C (raw 783B0FEF)
+observation_time=2026-09-24T08:39:47.0199718+02:00
+ 29959    102.548 wddm summary: DestroyDevice                      50  first at 539
+ 29961    102.548 wddm summary: DestroyContext                     50  first at 527
+ 29986    102.548 wddm summary: capture plans reserved 12 heap 0
+ 29996    102.548 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30000    102.548 wddm summary: node 1 (paging, open): 23895 hardware submitted, 23895 completed, 0 timeouts, 0 refused
+ 30013    102.548 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 30126    104.590 wddm summary: DestroyDevice                      51  first at 539
+ 30128    104.590 wddm summary: DestroyContext                     51  first at 527
+ 30153    104.590 wddm summary: capture plans reserved 12 heap 0
+ 30163    104.590 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30167    104.590 wddm summary: node 1 (paging, open): 23970 hardware submitted, 23970 completed, 0 timeouts, 0 refused
+ 30180    104.590 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:49 Tctl 71.0 C (raw 781B0FEF)
+observation_time=2026-09-24T08:39:49.0596960+02:00
+ 30126    104.590 wddm summary: DestroyDevice                      51  first at 539
+ 30128    104.590 wddm summary: DestroyContext                     51  first at 527
+ 30153    104.590 wddm summary: capture plans reserved 12 heap 0
+ 30163    104.590 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30167    104.590 wddm summary: node 1 (paging, open): 23970 hardware submitted, 23970 completed, 0 timeouts, 0 refused
+ 30180    104.590 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 30294    106.632 wddm summary: DestroyDevice                      52  first at 539
+ 30296    106.632 wddm summary: DestroyContext                     52  first at 527
+ 30321    106.632 wddm summary: capture plans reserved 12 heap 0
+ 30331    106.632 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30335    106.632 wddm summary: node 1 (paging, open): 24046 hardware submitted, 24046 completed, 0 timeouts, 0 refused
+ 30348    106.632 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+08:39:51 Tctl 70.8 C (raw 77DB0FEF)
+observation_time=2026-09-24T08:39:51.1054506+02:00
+ 30294    106.632 wddm summary: DestroyDevice                      52  first at 539
+ 30296    106.632 wddm summary: DestroyContext                     52  first at 527
+ 30321    106.632 wddm summary: capture plans reserved 12 heap 0
+ 30331    106.632 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30335    106.632 wddm summary: node 1 (paging, open): 24046 hardware submitted, 24046 completed, 0 timeouts, 0 refused
+ 30348    106.632 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 30361    108.677 wddm summary: DestroyDevice                      52  first at 539
+ 30363    108.677 wddm summary: DestroyContext                     52  first at 527
+ 30388    108.677 wddm summary: capture plans reserved 12 heap 0
+ 30398    108.677 wddm summary: node 0 hardware: 512 submitted, 512 completed, 0 timeouts, 0 refused
+ 30402    108.677 wddm summary: node 1 (paging, open): 24046 hardware submitted, 24046 completed, 0 timeouts, 0 refused
+ 30415    108.677 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+post_completion_observation_passed

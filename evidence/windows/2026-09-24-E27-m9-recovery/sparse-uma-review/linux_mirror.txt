@@ -1,0 +1,48 @@
+static uint64_t
+radv_amdgpu_virtual_bo_get_low_addr(struct radv_amdgpu_winsys *ws, struct radv_amdgpu_winsys_bo *bo)
+{
+   return bo->base.va & ~(1ull << ws->info.address_prt_wa_control_bit);
+}
+
+static int
+radv_amdgpu_virtual_bo_bind_low_null_prt(struct radv_amdgpu_winsys *ws, struct radv_amdgpu_winsys_bo *bo,
+                                         uint64_t bo_offset, uint64_t bo_size, uint32_t ops)
+{
+   const uint64_t low_va = radv_amdgpu_virtual_bo_get_low_addr(ws, bo);
+   uint64_t offset = 0;
+
+   assert(util_is_aligned(bo_offset, 4096) && util_is_aligned(bo_size, 4096));
+
+   while (bo_size > 0) {
+      const uint64_t chunk_size = MIN2(bo_size, ws->null_prt_bug.bo->size);
+      int r;
+
+      r = radv_amdgpu_bo_va_op(ws, radv_amdgpu_winsys_bo(ws->null_prt_bug.bo)->bo_handle, 0, chunk_size,
+                               low_va + bo_offset + offset, 0, 0, ops);
+      if (r)
+         return r;
+
+      offset += chunk_size;
+      bo_size -= chunk_size;
+   }
+
+   return 0;
+}
+
+static int
+radv_amdgpu_virtual_bo_init_mapping(struct radv_amdgpu_winsys *ws, struct radv_amdgpu_winsys_bo *bo, uint64_t size)
+{
+   int r;
+
+   r = radv_amdgpu_bo_va_op(ws, 0, 0, size, bo->base.va, 0, AMDGPU_VM_PAGE_PRT, AMDGPU_VA_OP_MAP);
+   if (r)
+      return r;
+
+   if (bo->emulate_sparse_residency) {
+      /* Bind the "LOW" address space to the zero-initialized BO when it's allocated to emulate
+       * residency.
+       */
+      r = radv_amdgpu_virtual_bo_bind_low_null_prt(ws, bo, 0, size, AMDGPU_VA_OP_MAP);
+   }
+
+   return r;

@@ -1,0 +1,15 @@
+{
+  "current_stop_chain": {
+    "checks": 1700,
+    "failures": 0
+  },
+  "historical_negative_control": {
+    "checks": 1676,
+    "failures": 889,
+    "expected_exit": 1
+  },
+  "wdk26100_build_exit": 0,
+  "local_sys_sha256": "1F4B491071309747DB01C1FCAE8F0B427584BB3D8C5EFDBCD298728C5ACF03D9",
+  "deployed": false,
+  "scope": "Actual extracted functions with mocked device/MMIO/memory backends. Checks include 24 new between-phase ownership/verdict observations. Test result counts observed in tool output."
+}

@@ -1,0 +1,156 @@
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+
+
+Algorithm : SHA256
+Hash      : E9566E495A4FB5BB0F37B8A2583AB10F573D0F9ECEE2B84D94E264242529E9C3
+Path      : C:\BC250\m9\gpu-residency0798-v4\gpu-residency-probe.exe
+
+
+
+14:03:13 Tctl 71.4 C (raw 787B0FEF)
+14:03:15 Tctl 71.4 C (raw 787B0FEF)
+14:03:17 Tctl 71.4 C (raw 787B0FEF)
+14:03:19 Tctl 71.1 C (raw 783B0FEF)
+14:03:21 Tctl 71.1 C (raw 783B0FEF)
+14:03:23 Tctl 71.2 C (raw 785B0FEF)
+14:03:25 Tctl 71.4 C (raw 787B0FEF)
+14:03:27 Tctl 71.4 C (raw 787B0FEF)
+14:03:29 Tctl 71.4 C (raw 787B0FEF)
+14:03:31 Tctl 71.5 C (raw 789B0FEF)
+14:03:33 Tctl 71.4 C (raw 787B0FEF)
+14:03:35 Tctl 71.4 C (raw 787B0FEF)
+14:03:37 Tctl 71.4 C (raw 787B0FEF)
+14:03:39 Tctl 71.1 C (raw 783B0FEF)
+14:03:41 Tctl 71.1 C (raw 783B0FEF)
+14:03:43 Tctl 71.1 C (raw 783B0FEF)
+14:03:45 Tctl 70.8 C (raw 77DB0FEF)
+14:03:47 Tctl 70.4 C (raw 777B0FEF)
+14:03:49 Tctl 70.4 C (raw 777B0FEF)
+14:03:51 Tctl 70.6 C (raw 77BB0FEF)
+14:03:53 Tctl 70.8 C (raw 77DB0FEF)
+14:03:55 Tctl 70.9 C (raw 77FB0FEF)
+14:03:57 Tctl 70.6 C (raw 77BB0FEF)
+14:03:59 Tctl 70.4 C (raw 777B0FEF)
+14:04:01 Tctl 70.0 C (raw 771B0FEF)
+14:04:03 Tctl 70.4 C (raw 777B0FEF)
+14:04:05 Tctl 70.4 C (raw 777B0FEF)
+14:04:07 Tctl 70.0 C (raw 771B0FEF)
+14:04:09 Tctl 69.6 C (raw 76BB0FEF)
+14:04:11 Tctl 70.0 C (raw 771B0FEF)
+14:04:13 Tctl 70.1 C (raw 773B0FEF)
+14:04:15 Tctl 70.4 C (raw 777B0FEF)
+14:04:17 Tctl 70.5 C (raw 779B0FEF)
+14:04:19 Tctl 70.1 C (raw 773B0FEF)
+14:04:21 Tctl 70.4 C (raw 777B0FEF)
+14:04:23 Tctl 70.5 C (raw 779B0FEF)
+14:04:25 Tctl 70.6 C (raw 77BB0FEF)
+14:04:27 Tctl 70.9 C (raw 77FB0FEF)
+14:04:29 Tctl 70.6 C (raw 77BB0FEF)
+14:04:31 Tctl 70.9 C (raw 77FB0FEF)
+14:04:33 Tctl 71.0 C (raw 781B0FEF)
+14:04:35 Tctl 71.0 C (raw 781B0FEF)
+14:04:37 Tctl 70.6 C (raw 77BB0FEF)
+14:04:39 Tctl 70.8 C (raw 77DB0FEF)
+14:04:41 Tctl 70.9 C (raw 77FB0FEF)
+14:04:43 Tctl 71.0 C (raw 781B0FEF)
+14:04:45 Tctl 71.2 C (raw 785B0FEF)
+14:04:47 Tctl 71.2 C (raw 785B0FEF)
+14:04:49 Tctl 71.2 C (raw 785B0FEF)
+14:04:51 Tctl 71.4 C (raw 787B0FEF)
+14:04:53 Tctl 71.4 C (raw 787B0FEF)
+14:04:55 Tctl 71.0 C (raw 781B0FEF)
+14:04:57 Tctl 70.5 C (raw 779B0FEF)
+14:04:59 Tctl 70.1 C (raw 773B0FEF)
+14:05:01 Tctl 70.6 C (raw 77BB0FEF)
+14:05:03 Tctl 70.1 C (raw 773B0FEF)
+14:05:05 Tctl 69.9 C (raw 76FB0FEF)
+14:05:07 Tctl 70.1 C (raw 773B0FEF)
+14:05:09 Tctl 70.1 C (raw 773B0FEF)
+14:05:11 Tctl 70.0 C (raw 771B0FEF)
+14:05:13 Tctl 70.2 C (raw 775B0FEF)
+14:05:15 Tctl 70.5 C (raw 779B0FEF)
+14:05:17 Tctl 70.8 C (raw 77DB0FEF)
+14:05:19 Tctl 71.1 C (raw 783B0FEF)
+14:05:21 Tctl 71.0 C (raw 781B0FEF)
+14:05:23 Tctl 70.8 C (raw 77DB0FEF)
+14:05:26 Tctl 70.9 C (raw 77FB0FEF)
+14:05:28 Tctl 70.9 C (raw 77FB0FEF)
+14:05:30 Tctl 71.1 C (raw 783B0FEF)
+14:05:32 Tctl 71.2 C (raw 785B0FEF)
+14:05:34 Tctl 71.1 C (raw 783B0FEF)
+14:05:36 Tctl 70.9 C (raw 77FB0FEF)
+14:05:38 Tctl 71.0 C (raw 781B0FEF)
+14:05:40 Tctl 71.0 C (raw 781B0FEF)
+14:05:42 Tctl 71.1 C (raw 783B0FEF)
+14:05:44 Tctl 71.1 C (raw 783B0FEF)
+14:05:46 Tctl 71.1 C (raw 783B0FEF)
+14:05:48 Tctl 71.2 C (raw 785B0FEF)
+14:05:50 Tctl 71.2 C (raw 785B0FEF)
+14:05:52 Tctl 70.8 C (raw 77DB0FEF)
+14:05:54 Tctl 70.4 C (raw 777B0FEF)
+14:05:56 Tctl 70.0 C (raw 771B0FEF)
+14:05:58 Tctl 70.1 C (raw 773B0FEF)
+14:06:00 Tctl 70.2 C (raw 775B0FEF)
+14:06:02 Tctl 69.9 C (raw 76FB0FEF)
+14:06:04 Tctl 69.5 C (raw 769B0FEF)
+14:06:06 Tctl 69.9 C (raw 76FB0FEF)
+14:06:08 Tctl 70.0 C (raw 771B0FEF)
+14:06:10 Tctl 70.2 C (raw 775B0FEF)
+14:06:12 Tctl 70.2 C (raw 775B0FEF)
+14:06:14 Tctl 70.1 C (raw 773B0FEF)
+14:06:16 Tctl 70.4 C (raw 777B0FEF)
+14:06:18 Tctl 70.5 C (raw 779B0FEF)
+14:06:20 Tctl 70.8 C (raw 77DB0FEF)
+14:06:22 Tctl 70.9 C (raw 77FB0FEF)
+14:06:24 Tctl 71.0 C (raw 781B0FEF)
+14:06:26 Tctl 70.9 C (raw 77FB0FEF)
+14:06:28 Tctl 70.8 C (raw 77DB0FEF)
+14:06:30 Tctl 70.9 C (raw 77FB0FEF)
+14:06:32 Tctl 71.0 C (raw 781B0FEF)
+14:06:34 Tctl 71.1 C (raw 783B0FEF)
+14:06:36 Tctl 71.1 C (raw 783B0FEF)
+14:06:38 Tctl 71.2 C (raw 785B0FEF)
+14:06:40 Tctl 71.4 C (raw 787B0FEF)
+14:06:42 Tctl 71.4 C (raw 787B0FEF)
+14:06:44 Tctl 71.0 C (raw 781B0FEF)
+14:06:46 Tctl 71.0 C (raw 781B0FEF)
+14:06:48 Tctl 71.1 C (raw 783B0FEF)
+14:06:50 Tctl 71.1 C (raw 783B0FEF)
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 4095 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000002234E460000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000002234E460000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000002234E450000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 4096
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 4096 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000002234E460000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=1073741824 all_words_match=1 fence=4096
+CYCLE 3 PASS
+D3DKMTFreeGpuVirtualAddress [gpu-readback] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-readback] 0x00000000  STATUS_SUCCESS
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [gpu-ib] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-ib]  0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+gpu_probe_exit=0 

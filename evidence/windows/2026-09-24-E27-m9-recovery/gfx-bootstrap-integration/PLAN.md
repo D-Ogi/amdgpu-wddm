@@ -1,0 +1,5 @@
+# Staged GFX translation bootstrap
+
+Hypothesis: retaining MMHUB visibility while delaying GFXHUB invalidation until RLC starts avoids the M362 warm busy transition without admitting stale GFX translations.
+Implement device-owned GfxTlbBootstrap only for unpublished automatic startup with CP/MEC/SDMA initially halted. GART configure+MMflush; PSP/IH order unchanged; early allocation flushes MM only and retain dirty state. Complete both hub flushes after successful RLCstage5, before any CPstage6, clearing bootstrap only on success. Admission and bound backing release require no pending bootstrap; incomplete bootstrap retains stop ownership. Ordinary diagnostic enable/flush behavior remains complete.
+Validate actual-source successful multi-bind bootstrap and RLC/flush/CP order, readiness and backing barriers; existing stop/start/GTT tests and WDK/package. No hardware until local validation and new version. Hardware requires fresh-control and one warm content test with logs and recovery available.

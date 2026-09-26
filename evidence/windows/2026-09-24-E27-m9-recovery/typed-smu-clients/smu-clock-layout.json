@@ -1,0 +1,1 @@
+{"size":80,"Magic":0,"Command":4,"Status":8,"Version":12,"NtStatus":16,"AbiVersion":20,"Op":24,"RequestedMHz":28,"RequestedMv":32,"ObservedMHz":36,"ObservedVid":40,"TemperatureMc":44,"InitialMHz":48,"InitialVid":52,"ExpectedVid":56,"VoltageStaged":60,"Ready":64,"Reserved":68}

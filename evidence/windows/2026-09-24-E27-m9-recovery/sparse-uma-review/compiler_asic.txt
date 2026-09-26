@@ -1,0 +1,13 @@
+   out->has_cs_regalloc_hang_bug = info->gfx_level == GFX6 ||
+                                   info->family == CHIP_BONAIRE ||
+                                   info->family == CHIP_KABINI;
+
+   /* On GFX6-8, SMEM loads on a NULL PRT page return garbage instead of zero.
+    * On GFX10-12, SMEM loads on a NULL PRT page throws a VM fault and hangs the GPU.
+    *
+    * Only GFX9 works as expected.
+    */
+   out->has_smem_with_null_prt_bug = info->gfx_level <= GFX12 && info->gfx_level != GFX9 && info->family != CHIP_GFX1156;
+
+   if (compat_mode && info->family == CHIP_REMBRANDT) {
+      out->has_ngg_passthru_no_msg = false;

@@ -1,0 +1,365 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+-- The C compiler identification is MSVC 19.44.35221.0
+-- The CXX compiler identification is MSVC 19.44.35221.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMAKE_BUILD_TYPE=Release
+-- Found Git: C:/Program Files/Git/cmd/git.exe (found version "2.27.0.windows.1") 
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+-- The ASM compiler identification is MSVC
+-- Found assembler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Failed
+-- Looking for pthread_create in pthreads
+-- Looking for pthread_create in pthreads - not found
+-- Looking for pthread_create in pthread
+-- Looking for pthread_create in pthread - not found
+-- Found Threads: TRUE  
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: AMD64
+-- CMAKE_GENERATOR_PLATFORM: 
+-- GGML_SYSTEM_ARCH: x86
+-- Including CPU backend
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: /arch:AVX2 GGML_AVX2;GGML_FMA;GGML_F16C;__BMI2__;GGML_BMI2
+-- ggml version: 0.14.0
+-- ggml commit:  unknown
+CMake Warning at common/CMakeLists.txt:33 (message):
+  Git repository not found; to enable automatic generation of build info,
+  make sure Git is installed and the project is a Git repository.
+
+
+-- Could NOT find OpenSSL, try to set the path to OpenSSL root folder in the system variable OPENSSL_ROOT_DIR (missing: OPENSSL_CRYPTO_LIBRARY) (found version "3.0.7")
+CMake Warning at vendor/cpp-httplib/CMakeLists.txt:152 (message):
+  OpenSSL not found, HTTPS support disabled
+
+
+-- Generating embedded license file for target: llama-app
+-- Configuring done
+-- Generating done
+-- Build files have been written to: P:/BC-250/scratch/m9/build-cpu-tests
+[1/232] Building C object ggml\src\CMakeFiles\ggml-base.dir\ggml-alloc.c.obj
+[2/232] Building CXX object ggml\src\CMakeFiles\ggml-base.dir\ggml.cpp.obj
+[3/232] Building CXX object ggml\src\CMakeFiles\ggml-base.dir\ggml-threading.cpp.obj
+[4/232] Building C object ggml\src\CMakeFiles\ggml-base.dir\ggml.c.obj
+[5/232] Building CXX object ggml\src\CMakeFiles\ggml-base.dir\ggml-backend.cpp.obj
+[6/232] Building CXX object ggml\src\CMakeFiles\ggml-base.dir\ggml-opt.cpp.obj
+[7/232] Building C object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\ggml-cpu.c.obj
+[8/232] Building C object ggml\src\CMakeFiles\ggml-base.dir\ggml-quants.c.obj
+[9/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\hbm.cpp.obj
+[10/232] Building CXX object ggml\src\CMakeFiles\ggml.dir\ggml-backend-dl.cpp.obj
+[11/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\traits.cpp.obj
+[12/232] Building C object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\quants.c.obj
+[13/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\ggml-cpu.cpp.obj
+[14/232] Building CXX object ggml\src\CMakeFiles\ggml-base.dir\ggml-backend-meta.cpp.obj
+[15/232] Building CXX object ggml\src\CMakeFiles\ggml-base.dir\gguf.cpp.obj
+[16/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\amx\amx.cpp.obj
+[17/232] Building CXX object ggml\src\CMakeFiles\ggml.dir\ggml-backend-reg.cpp.obj
+[18/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\amx\mmq.cpp.obj
+[19/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\binary-ops.cpp.obj
+[20/232] Linking CXX shared library bin\ggml-base.dll
+[21/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\vec.cpp.obj
+[22/232] Building C object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\arch\x86\quants.c.obj
+[23/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\unary-ops.cpp.obj
+[24/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\repack.cpp.obj
+[25/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu-feats.dir\ggml-cpu\arch\x86\cpu-feats.cpp.obj
+cl : Wiersz polecenia warning D9002 : ignorowanie nieznanej opcji „-fno-lto”
+[26/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\llamafile\sgemm.cpp.obj
+[27/232] Building CXX object src\CMakeFiles\llama.dir\llama.cpp.obj
+[28/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\arch\x86\repack.cpp.obj
+[29/232] Building CXX object src\CMakeFiles\llama.dir\llama-cparams.cpp.obj
+[30/232] Building CXX object ggml\src\CMakeFiles\ggml-cpu.dir\ggml-cpu\ops.cpp.obj
+[31/232] Building CXX object src\CMakeFiles\llama.dir\llama-arch.cpp.obj
+[32/232] Linking CXX shared module bin\ggml-cpu.dll
+[33/232] Building CXX object src\CMakeFiles\llama.dir\llama-hparams.cpp.obj
+[34/232] Building CXX object src\CMakeFiles\llama.dir\llama-batch.cpp.obj
+[35/232] Linking CXX shared library bin\ggml.dll
+[36/232] Building CXX object src\CMakeFiles\llama.dir\llama-adapter.cpp.obj
+[37/232] Building CXX object src\CMakeFiles\llama.dir\llama-io.cpp.obj
+[38/232] Building CXX object src\CMakeFiles\llama.dir\llama-impl.cpp.obj
+[39/232] Building CXX object src\CMakeFiles\llama.dir\llama-context.cpp.obj
+[40/232] Building CXX object src\CMakeFiles\llama.dir\llama-chat.cpp.obj
+[41/232] Building CXX object src\CMakeFiles\llama.dir\llama-graph.cpp.obj
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\memory(3630): warning C4244: "argument": konwersja z "const int64_t" do "uint32_t", możliwa utrata danych
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\memory(3630): note: kontekst tworzenia wystąpienia szablonu (najpierw najstarszy) to
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-graph.cpp(1924): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „std::unique_ptr<llm_graph_input_out_ids,std::default_delete<llm_graph_input_out_ids>> std::make_unique<llm_graph_input_out_ids,const llama_hparams&,const llama_cparams&,const int64_t&,0>(const llama_hparams &,const llama_cparams &,const int64_t &)” funkcji szablon
+[42/232] Building CXX object src\CMakeFiles\llama.dir\llama-kv-cache-iswa.cpp.obj
+[43/232] Building CXX object src\CMakeFiles\llama.dir\llama-memory.cpp.obj
+[44/232] Building CXX object src\CMakeFiles\llama.dir\llama-kv-cache-dsa.cpp.obj
+[45/232] Building CXX object src\CMakeFiles\llama.dir\llama-grammar.cpp.obj
+[46/232] Building CXX object src\CMakeFiles\llama.dir\llama-memory-hybrid.cpp.obj
+[47/232] Building CXX object src\CMakeFiles\llama.dir\llama-memory-hybrid-iswa.cpp.obj
+[48/232] Building CXX object src\CMakeFiles\llama.dir\llama-mmap.cpp.obj
+[49/232] Building CXX object src\CMakeFiles\llama.dir\llama-memory-recurrent.cpp.obj
+[50/232] Building CXX object src\CMakeFiles\llama.dir\llama-model-saver.cpp.obj
+[51/232] Building CXX object src\CMakeFiles\llama.dir\llama-kv-cache.cpp.obj
+[52/232] Building CXX object src\CMakeFiles\llama.dir\models\afmoe.cpp.obj
+[53/232] Building CXX object src\CMakeFiles\llama.dir\llama-model-loader.cpp.obj
+[54/232] Building CXX object src\CMakeFiles\llama.dir\llama-sampler.cpp.obj
+[55/232] Building CXX object src\CMakeFiles\llama.dir\models\apertus.cpp.obj
+[56/232] Building CXX object src\CMakeFiles\llama.dir\models\arcee.cpp.obj
+[57/232] Building CXX object src\CMakeFiles\llama.dir\models\arctic.cpp.obj
+[58/232] Building CXX object src\CMakeFiles\llama.dir\llama-quant.cpp.obj
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\type_traits(1680): warning C4244: "argument": konwersja z "unsigned __int64" do "int", możliwa utrata danych
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\type_traits(1680): note: kontekst tworzenia wystąpienia szablonu (najpierw najstarszy) to
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-quant.cpp(276): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „std::thread &std::vector<std::thread,std::allocator<std::thread>>::emplace_back<llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>&,ggml_type&,uint8_t*,float*,size_t&>(llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974> &,ggml_type &,uint8_t *&&,float *&&,size_t &)” funkcji szablon
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-quant.cpp(276): note: zobacz pierwsze odwołanie do elementu „std::vector<std::thread,std::allocator<std::thread>>::emplace_back” w „llama_tensor_dequantize_impl”
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(924): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „_Ty &std::vector<_Ty,std::allocator<_Ty>>::_Emplace_one_at_back<llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>&,ggml_type&,unsigned char*,float*,size_t&>(llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974> &,ggml_type &,unsigned char *&&,float *&&,size_t &)” funkcji szablon
+        with
+        [
+            _Ty=std::thread
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(845): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „_Ty &std::vector<_Ty,std::allocator<_Ty>>::_Emplace_back_with_unused_capacity<llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>&,ggml_type&,unsigned char*,float*,size_t&>(llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974> &,ggml_type &,unsigned char *&&,float *&&,size_t &)” funkcji szablon
+        with
+        [
+            _Ty=std::thread
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\vector(863): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „void std::_Default_allocator_traits<_Alloc>::construct<_Ty,llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>&,ggml_type&,unsigned char*,float*,size_t&>(_Alloc &,_Objty *const ,llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974> &,ggml_type &,unsigned char *&&,float *&&,size_t &)” funkcji szablon
+        with
+        [
+            _Alloc=std::allocator<std::thread>,
+            _Ty=std::thread,
+            _Objty=std::thread
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xmemory(732): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „std::thread::thread<llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>&,ggml_type&,_T,float*,size_t&,0>(_Fn,ggml_type &,_T &&,float *&&,size_t &)” funkcji szablon
+        with
+        [
+            _T=uint8_t *,
+            _Fn=llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974> &
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\thread(93): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „void std::thread::_Start<llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>&,ggml_type&,_Ty,float*,size_t&>(_Fn,ggml_type &,_Ty &&,float *&&,size_t &)” funkcji szablon
+        with
+        [
+            _Ty=uint8_t *,
+            _Fn=llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974> &
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\thread(76): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „unsigned int (__cdecl *std::thread::_Get_invoke<std::thread::_Start::_Tuple,0,1,2,3,4>(std::integer_sequence<size_t,0,1,2,3,4>) noexcept)(void *) noexcept” funkcji szablon
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\thread(67): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „unsigned int std::thread::_Invoke<_Tuple,0,1,2,3,4>(void *) noexcept” funkcji szablon
+        with
+        [
+            _Tuple=std::thread::_Start::_Tuple
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\thread(60): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „void std::invoke<llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>,ggml_type,uint8_t*,_Ty*,unsigned __int64>(_Callable &&,_Ty1 &&,uint8_t *&&,_Ty *&&,unsigned __int64 &&) noexcept(false)” funkcji szablon
+        with
+        [
+            _Ty=float,
+            _Callable=llama_tensor_dequantize_impl::<lambda_5517b5a3de8587785dfcbbd00ca4d974>,
+            _Ty1=ggml_type
+        ]
+[59/232] Building CXX object src\CMakeFiles\llama.dir\models\arwkv7.cpp.obj
+[60/232] Building CXX object src\CMakeFiles\llama.dir\llama-vocab.cpp.obj
+[61/232] Building CXX object src\CMakeFiles\llama.dir\models\bailingmoe.cpp.obj
+[62/232] Building CXX object src\CMakeFiles\llama.dir\models\baichuan.cpp.obj
+[63/232] Building CXX object src\CMakeFiles\llama.dir\models\bailingmoe2.cpp.obj
+[64/232] Building CXX object src\CMakeFiles\llama.dir\llama-model.cpp.obj
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\utility(274): warning C4244: "inicjowanie": konwersja z "_Ty" do "_Ty2", możliwa utrata danych
+        with
+        [
+            _Ty=int64_t
+        ]
+        and
+        [
+            _Ty2=uint32_t
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\utility(274): note: kontekst tworzenia wystąpienia szablonu (najpierw najstarszy) to
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-model.cpp(516): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „std::pair<int64_t,uint32_t>::pair<const int64_t&,int64_t,0>(_Other1,_Other2 &&) noexcept” funkcji szablon
+        with
+        [
+            _Other1=const int64_t &,
+            _Other2=int64_t
+        ]
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-model.cpp(516): note: zobacz pierwsze odwołanie do elementu „std::pair<int64_t,uint32_t>::pair” w „llama_meta_device_get_split_state::<lambda_e96ed74543eb883dd0a92ba986d192ad>::operator ()”
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\utility(274): warning C4244: "inicjowanie": konwersja z "const int64_t" do "_Ty2", możliwa utrata danych
+        with
+        [
+            _Ty2=uint32_t
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\utility(274): note: kontekst tworzenia wystąpienia szablonu (najpierw najstarszy) to
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-model.cpp(519): note: zobacz odwołanie do kompilowanego tworzenia wystąpienia „std::pair<int64_t,uint32_t>::pair<const int64_t&,const int64_t&,0>(_Other1,_Other2) noexcept” funkcji szablon
+        with
+        [
+            _Other1=const int64_t &,
+            _Other2=const int64_t &
+        ]
+P:\BC-250\scratch\m9\llama.cpp-b9564\src\llama-model.cpp(519): note: zobacz pierwsze odwołanie do elementu „std::pair<int64_t,uint32_t>::pair” w „llama_meta_device_get_split_state::<lambda_e96ed74543eb883dd0a92ba986d192ad>::operator ()”
+[65/232] Building CXX object src\CMakeFiles\llama.dir\unicode.cpp.obj
+[66/232] Building CXX object src\CMakeFiles\llama.dir\models\bert.cpp.obj
+[67/232] Building CXX object src\CMakeFiles\llama.dir\models\bitnet.cpp.obj
+[68/232] Building CXX object src\CMakeFiles\llama.dir\models\bloom.cpp.obj
+[69/232] Building CXX object src\CMakeFiles\llama.dir\models\chameleon.cpp.obj
+[70/232] Building CXX object src\CMakeFiles\llama.dir\models\chatglm.cpp.obj
+[71/232] Building CXX object src\CMakeFiles\llama.dir\models\codeshell.cpp.obj
+[72/232] Building CXX object src\CMakeFiles\llama.dir\models\cogvlm.cpp.obj
+[73/232] Building CXX object src\CMakeFiles\llama.dir\models\cohere2.cpp.obj
+[74/232] Building CXX object src\CMakeFiles\llama.dir\models\command-r.cpp.obj
+[75/232] Building CXX object src\CMakeFiles\llama.dir\models\dbrx.cpp.obj
+[76/232] Building CXX object src\CMakeFiles\llama.dir\models\deci.cpp.obj
+[77/232] Building CXX object src\CMakeFiles\llama.dir\models\deepseek.cpp.obj
+[78/232] Building CXX object src\CMakeFiles\llama.dir\models\deepseek2ocr.cpp.obj
+[79/232] Building CXX object src\CMakeFiles\llama.dir\models\deepseek2.cpp.obj
+[80/232] Building CXX object src\CMakeFiles\llama.dir\models\delta-net-base.cpp.obj
+[81/232] Building CXX object src\CMakeFiles\llama.dir\models\deepseek32.cpp.obj
+[82/232] Building CXX object src\CMakeFiles\llama.dir\models\dream.cpp.obj
+[83/232] Building CXX object src\CMakeFiles\llama.dir\models\ernie4-5.cpp.obj
+[84/232] Building CXX object src\CMakeFiles\llama.dir\models\dots1.cpp.obj
+[85/232] Building CXX object src\CMakeFiles\llama.dir\models\eurobert.cpp.obj
+[86/232] Building CXX object src\CMakeFiles\llama.dir\models\ernie4-5-moe.cpp.obj
+[87/232] Building CXX object src\CMakeFiles\llama.dir\models\exaone-moe.cpp.obj
+[88/232] Building CXX object src\CMakeFiles\llama.dir\models\exaone.cpp.obj
+[89/232] Building CXX object src\CMakeFiles\llama.dir\models\falcon.cpp.obj
+[90/232] Building CXX object src\CMakeFiles\llama.dir\models\exaone4.cpp.obj
+[91/232] Building CXX object src\CMakeFiles\llama.dir\models\falcon-h1.cpp.obj
+[92/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma-embedding.cpp.obj
+[93/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma.cpp.obj
+[94/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma2.cpp.obj
+[95/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma3.cpp.obj
+[96/232] Building CXX object src\CMakeFiles\llama.dir\models\glm-dsa.cpp.obj
+[97/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma4-assistant.cpp.obj
+[98/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma3n.cpp.obj
+[99/232] Building CXX object src\CMakeFiles\llama.dir\models\glm4-moe.cpp.obj
+[100/232] Building CXX object src\CMakeFiles\llama.dir\models\gemma4.cpp.obj
+[101/232] Building CXX object src\CMakeFiles\llama.dir\models\glm4.cpp.obj
+[102/232] Building CXX object src\CMakeFiles\llama.dir\models\gpt2.cpp.obj
+[103/232] Building CXX object src\CMakeFiles\llama.dir\models\gptneox.cpp.obj
+[104/232] Building CXX object src\CMakeFiles\llama.dir\models\granite-moe.cpp.obj
+[105/232] Building CXX object src\CMakeFiles\llama.dir\models\granite-hybrid.cpp.obj
+[106/232] Building CXX object src\CMakeFiles\llama.dir\models\grok.cpp.obj
+[107/232] Building CXX object src\CMakeFiles\llama.dir\models\granite.cpp.obj
+[108/232] Building CXX object src\CMakeFiles\llama.dir\models\grovemoe.cpp.obj
+[109/232] Building CXX object src\CMakeFiles\llama.dir\models\hunyuan-dense.cpp.obj
+[110/232] Building CXX object src\CMakeFiles\llama.dir\models\hunyuan-moe.cpp.obj
+[111/232] Building CXX object src\CMakeFiles\llama.dir\models\internlm2.cpp.obj
+[112/232] Building CXX object src\CMakeFiles\llama.dir\models\hunyuan-vl.cpp.obj
+[113/232] Building CXX object src\CMakeFiles\llama.dir\models\jais.cpp.obj
+[114/232] Building CXX object src\CMakeFiles\llama.dir\models\jais2.cpp.obj
+[115/232] Building CXX object src\CMakeFiles\llama.dir\models\jina-bert-v2.cpp.obj
+[116/232] Building CXX object src\CMakeFiles\llama.dir\models\jamba.cpp.obj
+[117/232] Building CXX object src\CMakeFiles\llama.dir\models\jina-bert-v3.cpp.obj
+[118/232] Building CXX object src\CMakeFiles\llama.dir\models\kimi-linear.cpp.obj
+[119/232] Building CXX object src\CMakeFiles\llama.dir\models\lfm2.cpp.obj
+[120/232] Building CXX object src\CMakeFiles\llama.dir\models\lfm2moe.cpp.obj
+[121/232] Building CXX object src\CMakeFiles\llama.dir\models\llada-moe.cpp.obj
+[122/232] Building CXX object src\CMakeFiles\llama.dir\models\llama-embed.cpp.obj
+[123/232] Building CXX object src\CMakeFiles\llama.dir\models\llada.cpp.obj
+[124/232] Building CXX object src\CMakeFiles\llama.dir\models\llama.cpp.obj
+[125/232] Building CXX object src\CMakeFiles\llama.dir\models\llama4.cpp.obj
+[126/232] Building CXX object src\CMakeFiles\llama.dir\models\mamba-base.cpp.obj
+[127/232] Building CXX object src\CMakeFiles\llama.dir\models\maincoder.cpp.obj
+[128/232] Building CXX object src\CMakeFiles\llama.dir\models\mamba.cpp.obj
+[129/232] Building CXX object src\CMakeFiles\llama.dir\models\mamba2.cpp.obj
+[130/232] Building CXX object src\CMakeFiles\llama.dir\models\mellum.cpp.obj
+[131/232] Building CXX object src\CMakeFiles\llama.dir\models\mimo2.cpp.obj
+[132/232] Building CXX object src\CMakeFiles\llama.dir\models\minicpm.cpp.obj
+[133/232] Building CXX object src\CMakeFiles\llama.dir\models\minimax-m2.cpp.obj
+[134/232] Building CXX object src\CMakeFiles\llama.dir\models\minicpm3.cpp.obj
+[135/232] Building CXX object src\CMakeFiles\llama.dir\models\mistral3.cpp.obj
+[136/232] Building CXX object src\CMakeFiles\llama.dir\models\mistral4.cpp.obj
+[137/232] Building CXX object src\CMakeFiles\llama.dir\models\modern-bert.cpp.obj
+[138/232] Building CXX object src\CMakeFiles\llama.dir\models\mpt.cpp.obj
+[139/232] Building CXX object src\CMakeFiles\llama.dir\models\nemotron-h-moe.cpp.obj
+[140/232] Building CXX object src\CMakeFiles\llama.dir\models\nemotron-h.cpp.obj
+[141/232] Building CXX object src\CMakeFiles\llama.dir\models\nemotron.cpp.obj
+[142/232] Building CXX object src\CMakeFiles\llama.dir\models\neo-bert.cpp.obj
+[143/232] Building CXX object src\CMakeFiles\llama.dir\models\nomic-bert-moe.cpp.obj
+[144/232] Building CXX object src\CMakeFiles\llama.dir\models\nomic-bert.cpp.obj
+[145/232] Building CXX object src\CMakeFiles\llama.dir\models\olmo.cpp.obj
+[146/232] Building CXX object src\CMakeFiles\llama.dir\models\olmo2.cpp.obj
+[147/232] Building CXX object src\CMakeFiles\llama.dir\models\openai-moe.cpp.obj
+[148/232] Building CXX object src\CMakeFiles\llama.dir\models\olmoe.cpp.obj
+[149/232] Building CXX object src\CMakeFiles\llama.dir\models\openelm.cpp.obj
+[150/232] Building CXX object src\CMakeFiles\llama.dir\models\orion.cpp.obj
+[151/232] Building CXX object src\CMakeFiles\llama.dir\models\paddleocr.cpp.obj
+[152/232] Building CXX object src\CMakeFiles\llama.dir\models\pangu-embed.cpp.obj
+[153/232] Building CXX object src\CMakeFiles\llama.dir\models\phimoe.cpp.obj
+[154/232] Building CXX object src\CMakeFiles\llama.dir\models\phi2.cpp.obj
+[155/232] Building CXX object src\CMakeFiles\llama.dir\models\phi3.cpp.obj
+[156/232] Building CXX object src\CMakeFiles\llama.dir\models\plamo.cpp.obj
+[157/232] Building CXX object src\CMakeFiles\llama.dir\models\plamo2.cpp.obj
+[158/232] Building CXX object src\CMakeFiles\llama.dir\models\plamo3.cpp.obj
+[159/232] Building CXX object src\CMakeFiles\llama.dir\models\plm.cpp.obj
+[160/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen.cpp.obj
+[161/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen2.cpp.obj
+[162/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen2moe.cpp.obj
+[163/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen2vl.cpp.obj
+[164/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen3.cpp.obj
+[165/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen35.cpp.obj
+[166/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen3moe.cpp.obj
+[167/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen3next.cpp.obj
+[168/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen35moe.cpp.obj
+[169/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen3vl.cpp.obj
+[170/232] Building CXX object src\CMakeFiles\llama.dir\models\qwen3vlmoe.cpp.obj
+[171/232] Building CXX object src\CMakeFiles\llama.dir\models\refact.cpp.obj
+[172/232] Building CXX object src\CMakeFiles\llama.dir\models\rnd1.cpp.obj
+[173/232] Building CXX object src\CMakeFiles\llama.dir\models\rwkv6-base.cpp.obj
+[174/232] Building CXX object src\CMakeFiles\llama.dir\models\rwkv6qwen2.cpp.obj
+[175/232] Building CXX object src\CMakeFiles\llama.dir\models\rwkv6.cpp.obj
+[176/232] Building CXX object src\CMakeFiles\llama.dir\models\rwkv7-base.cpp.obj
+[177/232] Building CXX object src\CMakeFiles\llama.dir\models\rwkv7.cpp.obj
+[178/232] Building CXX object src\CMakeFiles\llama.dir\models\seed-oss.cpp.obj
+[179/232] Building CXX object src\CMakeFiles\llama.dir\models\smallthinker.cpp.obj
+[180/232] Building CXX object src\CMakeFiles\llama.dir\models\smollm3.cpp.obj
+[181/232] Building CXX object src\CMakeFiles\llama.dir\models\starcoder.cpp.obj
+[182/232] Building CXX object src\CMakeFiles\llama.dir\models\starcoder2.cpp.obj
+[183/232] Building CXX object src\CMakeFiles\llama.dir\models\stablelm.cpp.obj
+[184/232] Building CXX object src\CMakeFiles\llama.dir\models\step35.cpp.obj
+[185/232] Building CXX object src\CMakeFiles\llama.dir\models\t5.cpp.obj
+[186/232] Building CXX object common\CMakeFiles\llama-common-base.dir\build-info.cpp.obj
+[187/232] Linking CXX static library common\llama-common-base.lib
+[188/232] Building CXX object src\CMakeFiles\llama.dir\models\t5encoder.cpp.obj
+[189/232] Building CXX object src\CMakeFiles\llama.dir\models\xverse.cpp.obj
+[190/232] Building CXX object src\CMakeFiles\llama.dir\models\wavtokenizer-dec.cpp.obj
+[191/232] Building CXX object src\CMakeFiles\llama.dir\models\talkie.cpp.obj
+[192/232] Building CXX object src\CMakeFiles\llama.dir\unicode-data.cpp.obj
+[193/232] Linking CXX shared library bin\llama.dll
+[194/232] Building CXX object common\CMakeFiles\llama-common.dir\common.cpp.obj
+[195/232] Building CXX object common\CMakeFiles\llama-common.dir\chat-auto-parser-helpers.cpp.obj
+[196/232] Building CXX object common\CMakeFiles\llama-common.dir\console.cpp.obj
+[197/232] Building CXX object common\CMakeFiles\llama-common.dir\chat-auto-parser-generator.cpp.obj
+[198/232] Building CXX object common\CMakeFiles\llama-common.dir\debug.cpp.obj
+[199/232] Building CXX object common\CMakeFiles\llama-common.dir\chat-peg-parser.cpp.obj
+[200/232] Building CXX object common\CMakeFiles\llama-common.dir\imatrix-loader.cpp.obj
+[201/232] Building CXX object common\CMakeFiles\llama-common.dir\fit.cpp.obj
+[202/232] Building CXX object common\CMakeFiles\llama-common.dir\chat-diff-analyzer.cpp.obj
+[203/232] Building CXX object common\CMakeFiles\llama-common.dir\llguidance.cpp.obj
+[204/232] Building CXX object common\CMakeFiles\llama-common.dir\chat.cpp.obj
+[205/232] Building CXX object common\CMakeFiles\llama-common.dir\log.cpp.obj
+[206/232] Building CXX object common\CMakeFiles\llama-common.dir\ngram-cache.cpp.obj
+[207/232] Building CXX object common\CMakeFiles\llama-common.dir\ngram-mod.cpp.obj
+[208/232] Building CXX object common\CMakeFiles\llama-common.dir\ngram-map.cpp.obj
+[209/232] Building CXX object common\CMakeFiles\llama-common.dir\hf-cache.cpp.obj
+[210/232] Building CXX object common\CMakeFiles\llama-common.dir\json-partial.cpp.obj
+[211/232] Building CXX object common\CMakeFiles\llama-common.dir\reasoning-budget.cpp.obj
+[212/232] Building CXX object common\CMakeFiles\llama-common.dir\sampling.cpp.obj
+[213/232] Building CXX object common\CMakeFiles\llama-common.dir\regex-partial.cpp.obj
+[214/232] Building CXX object common\CMakeFiles\llama-common.dir\unicode.cpp.obj
+[215/232] Building CXX object common\CMakeFiles\llama-common.dir\download.cpp.obj
+[216/232] Building CXX object common\CMakeFiles\llama-common.dir\speculative.cpp.obj
+[217/232] Building CXX object common\CMakeFiles\llama-common.dir\preset.cpp.obj
+[218/232] Building CXX object common\CMakeFiles\llama-common.dir\json-schema-to-grammar.cpp.obj
+[219/232] Building CXX object common\CMakeFiles\llama-common.dir\jinja\lexer.cpp.obj
+[220/232] Building CXX object common\CMakeFiles\llama-common.dir\jinja\string.cpp.obj
+[221/232] Building CXX object common\CMakeFiles\llama-common.dir\jinja\runtime.cpp.obj
+[222/232] Building CXX object common\CMakeFiles\llama-common.dir\jinja\parser.cpp.obj
+[223/232] Building CXX object tests\CMakeFiles\test-backend-ops.dir\get-model.cpp.obj
+[224/232] Building CXX object common\CMakeFiles\llama-common.dir\peg-parser.cpp.obj
+[225/232] Building CXX object common\CMakeFiles\llama-common.dir\jinja\caps.cpp.obj
+[226/232] Building CXX object common\CMakeFiles\llama-common.dir\jinja\value.cpp.obj
+[227/232] Building CXX object tests\CMakeFiles\test-backend-ops.dir\test-backend-ops.cpp.obj
+[228/232] Building CXX object vendor\cpp-httplib\CMakeFiles\cpp-httplib.dir\httplib.cpp.obj
+[229/232] Linking CXX static library vendor\cpp-httplib\cpp-httplib.lib
+[230/232] Building CXX object common\CMakeFiles\llama-common.dir\arg.cpp.obj
+[231/232] Linking CXX shared library bin\llama-common.dll
+[232/232] Linking CXX executable bin\test-backend-ops.exe

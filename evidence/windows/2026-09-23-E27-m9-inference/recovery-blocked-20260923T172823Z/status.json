@@ -1,0 +1,15 @@
+{
+  "utc": "20260923T172823Z",
+  "tcp22_routes": [
+    false,
+    false
+  ],
+  "latest_owner_screen": "black, backlight on; no mouse response",
+  "ac_recovery_requested": true,
+  "ac_recovery_confirmed": false,
+  "persistent_startup_logs_recovered": false,
+  "hardware_mutation": false,
+  "next_action": "After owner recovery, acquire persisted07101logs with candidate07101-recover-v2.ps1 before new startup or deployment.",
+  "goal_complete": false,
+  "remaining_scope": "See docs/research/m9-acceptance-status.md; source and hardware gates remain open."
+}

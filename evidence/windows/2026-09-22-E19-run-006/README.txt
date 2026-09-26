@@ -1,5 +1,5 @@
 E19 run 006, 2026-09-22 01:43 to 01:47: H4, the content of a WDDM command buffer executed at VMID 1. bc250kmd 0.7.13
-(commit ab8f864, .sys sha256 prefix 9692e1996355551d), kmtprobe with --scratch (commit 214efa5), boot 01:40:28 (a
+(commit 898706c, .sys sha256 prefix 9692e1996355551d), kmtprobe with --scratch (commit 636b1e7), boot 01:40:28 (a
 fresh boot, not started by this session: the warm restart issued at about 01:27 never came up, compare facts M21).
 Full table, EnableGpuVa = EnableGpuSubmit = 1, engine gates open. run-006-console.txt is the driving script's output
 (scratch\tmp\e19_run6.sh); the other files are the target's own logs of the same steps.

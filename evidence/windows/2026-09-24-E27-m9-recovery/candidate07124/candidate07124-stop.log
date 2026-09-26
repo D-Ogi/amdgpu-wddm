@@ -1,0 +1,77 @@
+boot_before=2026-09-24T11:01:13
+
+
+EnableMmio           : 1
+EnableMmioWrite      : 0
+EnableVram           : 1
+EnableVramWrite      : 1
+EnableGart           : 1
+EnablePsp            : 1
+EnableGfx            : 1
+EnableIh             : 1
+EnableFullWddm       : 0
+EnableGpuVa          : 1
+EnableGpuSubmit      : 1
+EnablePresentBlit    : 0
+EnableDcnWrite       : 0
+EnablePagingNode     : 1
+EnableVidPnFlip      : 0
+EnableRlcReloadReset : 0
+LastStage            : 50
+StageHistory         : 10 20 30 31 32 33 34 35 39 50 
+UnconfirmedStarts    : 0
+
+
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+11:15:34 Tctl 71.0 C (raw 781B0FEF)
+
+closed_gates_verified
+pnp_restart_begin=2026-09-24T11:15:34.3053533+02:00
+Microsoft PnP Utility
+
+Restarting device:         PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\[instance-redacted]
+Device restarted successfully.
+
+pnputil_exit=0
+
+
+Status  : OK
+Problem : CM_PROB_NONE
+
+
+
+
+
+EnableMmio           : 0
+EnableMmioWrite      : 0
+EnableVram           : 0
+EnableVramWrite      : 0
+EnableGart           : 0
+EnablePsp            : 0
+EnableGfx            : 0
+EnableIh             : 0
+EnableFullWddm       : 0
+EnableGpuVa          : 0
+EnableGpuSubmit      : 0
+EnablePresentBlit    : 0
+EnableDcnWrite       : 0
+EnablePagingNode     : 0
+EnableVidPnFlip      : 0
+EnableRlcReloadReset : 0
+LastStage            : 20
+StageHistory         : 10 20 
+UnconfirmedStarts    : 0
+
+
+
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE among the 2 present:
+  ROOT\BasicRender  (Microsoft Basic Render Driver)
+  ROOT\BasicDisplay  (Microsoft Basic Display Driver)
+info_exit=1
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE
+log_exit=1
+boot_after=2026-09-24T11:01:13
+recovery_finished

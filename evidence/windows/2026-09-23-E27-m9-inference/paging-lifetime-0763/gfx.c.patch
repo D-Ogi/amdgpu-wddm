@@ -1,0 +1,160 @@
+--- before/gfx.c
++++ after/gfx.c
+@@ -94,11 +94,6 @@
+ // tests', 2/3 are SdmaCopyEscape's and GfxFenceEscape's SDMA arm's - one past what the escapes use.
+ #define BC250_PAGING_FENCE_SLOT 4u
+ #define BC250_PAGING_POLL_US 500000ul       // node 1's own watchdog budget, same shape as BC250_SUBMIT_POLL_US
+-// E24 run 001 (docs/design/paging-node.md, "What run 001 hung on"): the bounded wait TearDown gives a
+-// GfxPagingBuild() call that is still using engine state when a FINI or a stop tears it down. Same shape
+-// as WddmStop's own wait for a hardware submission (BC250_WDDM_SUBMIT_TIMEOUT_MS): there is no GPU reset on
+-// this part (facts M53), so a wait here is bounded and logged loudly on timeout, never infinite.
+-#define BC250_GFX_PAGING_DRAIN_TIMEOUT_MS 200ul
+ // OS command-buffer capacity; live-ring reservation further limits each batch.
+ #define BC250_GFX_PAGING_BUFFER_BYTES 0x10000ul
+ 
+@@ -145,7 +140,7 @@
+     // ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ----
+     BOOLEAN PagingGate;                   // EnablePagingNode, read once at GfxStart
+     // GfxEscape's RUN arm has captured PagingRing/PagingDevicePtr. Read with no lock by
+-    // GfxPagingBuild (PASSIVE_LEVEL, BuildPagingBuffer - see PagingBuildersActive below, this field's own
++    // GfxPagingBuild (PASSIVE_LEVEL, BuildPagingBuffer - under GfxPagingLock, this field's own
+     // publish/clear stays under GartLock) and by the DISPATCH_LEVEL trio (GfxSubmitPaging/GfxPagingFenceArrived/
+     // GfxPagingSubmitReady), the ih.c DpcAdev shape.
+     BOOLEAN PagingReady;
+@@ -154,15 +149,10 @@
+     struct amdgpu_device* PagingDevicePtr; // the same adev; GfxPagingFenceArrived reads bc250_sdma_fence_read through it,
+                                            // with no lock, the same shape as SubmitAdev above
+     KSPIN_LOCK Sdma0RingLock;             // every direct writer of the live SDMA0 ring takes this narrowly (section 4)
+-    // E24 run 001 (docs/design/paging-node.md, "What run 001 hung on"): GfxPagingBuild (BuildPagingBuffer,
+-    // PASSIVE_LEVEL) cannot serialize against TearDown through Device->GartLock the way every other reader of
+-    // gfx.c's PASSIVE_LEVEL state does - GartLock is a FAST_MUTEX, ExAcquireFastMutex raises IRQL to APC_LEVEL,
+-    // and VidMmTranslate refuses anything but exactly PASSIVE_LEVEL (vidmm.c:238), so holding GartLock across a
+-    // translation makes every translation fail rather than serialize it. This counter is what stands in for the
+-    // lock: incremented for the duration of every GfxPagingBuild call that got past the PagingReady check,
+-    // decremented on every exit; TearDown waits for it to reach 0 before releasing engine state, bounded by
+-    // BC250_GFX_PAGING_DRAIN_TIMEOUT_MS.
+-    volatile LONG PagingBuildersActive;
++    // Device->GfxPagingLock protects PASSIVE_LEVEL builders against all engine
++    // setup/teardown and the lifetime of this object. Unlike GartLock it preserves
++    // PASSIVE_LEVEL while VidMmTranslate maps page tables. Lock order: this lock
++    // first, GartLock second; builders never acquire GartLock.
+     volatile LONG PagingSubmitFailed;     // sticky, like SubmitFailed, but independent: node 1 fails on its own hardware
+     volatile LONG PagingSubmitInFlight;   // one in flight, like SubmitInFlight
+     ULONG PagingSubmitSeq;
+@@ -240,11 +230,9 @@
+ {
+     if (!Gfx->SetUp) return;
+     Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
+-    // Same reasoning, first among the paging fields: GfxPagingFenceArrived and GfxSubmitReady's node-1 twin read
+-    // PagingReady/PagingDevicePtr/PagingRing with no lock (design note section 4). A stage-7-and-back-to-8 re-run
+-    // must never let a DISPATCH_LEVEL caller find a stale ring or adev pointer here. GfxPagingBuild (PASSIVE_LEVEL)
+-    // is the third no-lock reader of PagingReady, and its engine-state access is what the wait below, on
+-    // PagingBuildersActive, is for - setting PagingReady FALSE here is what stops it from starting a new one.
++    // The caller holds GfxPagingLock exclusively before touching engine state.
++    // All admitted builders have exited and no new builder can enter. The DPC
++    // readers require their separate interrupt/timer rundown; this lock is passive.
+     Gfx->PagingReady = FALSE;
+     Gfx->PagingRing = NULL;
+     Gfx->PagingDevicePtr = NULL;
+@@ -255,25 +243,6 @@
+     {
+         bc250_sdma_copy_regions_free(Adev, &Gfx->SdmaCopySrc, &Gfx->SdmaCopyDst);
+         Gfx->SdmaCopyRegions = FALSE;
+-    }
+-    // Drain builders before releasing the engine state they consult.
+-    {
+-        // PagingReady is already FALSE (above), so no new GfxPagingBuild call can start using engine state;
+-        // this is the bounded wait for one that had already passed that check on another CPU - BuildPagingBuffer
+-        // cannot serialize through GartLock here, see PagingBuildersActive's own comment - to finish touching it
+-        // before it is freed out from under that call (E24 run 001, docs/design/paging-node.md). PASSIVE_LEVEL:
+-        // both of TearDown's callers (Fini, from the FINI escape or GfxStop) are. Timing out and freeing anyway,
+-        // loudly, is the same choice WddmStop already makes for a hardware submission that does not finish in
+-        // time - there is no GPU reset on this part (facts M53), so waiting forever is not on offer either.
+-        LARGE_INTEGER tick;
+-        ULONG waited;
+-
+-        tick.QuadPart = -10000ll * 10;
+-        for (waited = 0; waited < BC250_GFX_PAGING_DRAIN_TIMEOUT_MS && Gfx->PagingBuildersActive != 0; waited += 10)
+-            KeDelayExecutionThread(KernelMode, FALSE, &tick);
+-        if (waited != 0)
+-            GuardLog("gfx: paging teardown waited %lu ms for %ld builder(s) using engine state%s", waited,
+-                     Gfx->PagingBuildersActive, Gfx->PagingBuildersActive != 0 ? " - STILL ACTIVE, freeing anyway" : "");
+     }
+     RtlZeroMemory(Gfx->RingOwes, sizeof(Gfx->RingOwes));          // the rings go with the pages
+     RtlZeroMemory(Gfx->RingOwesSlot, sizeof(Gfx->RingOwesSlot));
+@@ -379,6 +348,8 @@
+     RtlZeroMemory(Data->Writes, sizeof(Data->Writes));
+     KeQueryPerformanceCounter(&frequency);
+ 
++    KeEnterCriticalRegion();
++    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+     ExAcquireFastMutex(&Device->GartLock);
+     gfx = (BC250_GFX*)Device->Gfx;
+     if (Data->Op > BC250_GFX_OP_STATE) status = STATUS_INVALID_PARAMETER;
+@@ -489,6 +460,8 @@
+     GuardLog("gfx: op %u to stage %u -> 0x%08X, result %d, %u writes, %u doorbells", Data->Op, Data->LastStage, status, result,
+              Data->WriteCount, Data->DoorbellCount);
+     ExReleaseFastMutex(&Device->GartLock);
++    ExReleasePushLockExclusive(&Device->GfxPagingLock);
++    KeLeaveCriticalRegion();
+ 
+     Data->Result = result;
+     Data->NtStatus = (unsigned long)status;
+@@ -1216,23 +1189,26 @@
+ 
+ // PASSIVE_LEVEL. Resolve each page independently and emit into this call's
+ // dxgkrnl-owned private payload. The caller copies emitted bytes to pDmaBuffer.
+-// No global command shadow. PagingBuildersActive protects engine-state access.
++// No global command shadow. The device lock protects pointer lookup and engine use.
+ NTSTATUS GfxPagingBuild(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, BOOLEAN Fill, ULONGLONG SrcVa,
+                         ULONGLONG DstVa, ULONGLONG Bytes, ULONG FillPattern, _Inout_ PVOID DmaBuffer,
+                         ULONG DmaBufferOffset, ULONG DmaBufferFree, ULONG StartByte,
+                         _Out_ ULONG* DwordsWritten, _Out_ ULONG* NextByte,
+                         _Out_ BC250_WDDM_PAGING_UNSUPPORTED* Unsupported)
+ {
+-    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
++    BC250_GFX* gfx;
+     BC250_PAGING_STREAM stream;
+     unsigned int budget, written = 0, next = StartByte;
+     u32* payload;
+     int result;
+     NTSTATUS status = STATUS_SUCCESS;
+     *DwordsWritten = 0; *NextByte = StartByte; *Unsupported = BC250PagingSupported;
+-    if (gfx == NULL || DmaBuffer == NULL || Bytes == 0 || Bytes > 0xFFFFFFFFu || StartByte > Bytes)
++    if (DmaBuffer == NULL || Bytes == 0 || Bytes > 0xFFFFFFFFu || StartByte > Bytes)
+         return STATUS_INVALID_PARAMETER;
+-    InterlockedIncrement(&gfx->PagingBuildersActive);
++    KeEnterCriticalRegion();
++    ExAcquirePushLockShared(&Device->GfxPagingLock);
++    gfx = (BC250_GFX*)Device->Gfx;
++    if (gfx == NULL) { status = STATUS_INVALID_PARAMETER; goto Done; }
+     if (!gfx->PagingReady || gfx->PagingDevicePtr == NULL) { *Unsupported = BC250PagingNotReady; goto Done; }
+     if (RootPhysical == 0) { *Unsupported = BC250PagingNoRoot; goto Done; }
+     if ((DmaBufferOffset & 3u) != 0 || DmaBufferOffset > BC250_GFX_PAGING_BUFFER_BYTES) {
+@@ -1256,7 +1232,8 @@
+     *DwordsWritten=written; *NextByte=next;
+     if (result==PagingStreamMore) status=STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+ Done:
+-    InterlockedDecrement(&gfx->PagingBuildersActive);
++    ExReleasePushLockShared(&Device->GfxPagingLock);
++    KeLeaveCriticalRegion();
+     return status;
+ }
+ 
+@@ -1416,6 +1393,8 @@
+     BOOLEAN gartEnabled, quiet = TRUE;
+     long undo = 0;
+ 
++    KeEnterCriticalRegion();
++    ExAcquirePushLockExclusive(&Device->GfxPagingLock);
+     ExAcquireFastMutex(&Device->GartLock);
+     gfx = (BC250_GFX*)Device->Gfx;
+     Device->Gfx = NULL;
+@@ -1436,4 +1415,6 @@
+     GpuMemStop(Device, quiet && Device->IhQuiet);       // ih.c stopped before us and said whether its ring is off
+     ExReleaseFastMutex(&Device->GartLock);
+     if (gfx != NULL) ExFreePoolWithTag(gfx, BC250_GFX_TAG);
+-}
++    ExReleasePushLockExclusive(&Device->GfxPagingLock);
++    KeLeaveCriticalRegion();
++}

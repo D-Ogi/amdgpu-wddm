@@ -1,0 +1,8 @@
+{
+  "driver/kmd/gfx.c": "669d5ee38738a791ae9826b34a84181fe69bbd93c13255832298d5bccfe457db",
+  "driver/shim/bc250_gfx.c": "f23ba5a9bf5145badd1dff226b1996f6c4d60ebeee0200430fbd35d32a5aa78c",
+  "driver/shim/include/bc250_gfx.h": "941edf279aac010e60861cfe29611325067296bdcd47dadcd56dd7b3006a0d2c",
+  "driver/shim/test/replay_gfx.c": "69373fae25747a5b92c8daf1283182e41103a5158bca855a31c6c9e5520fac9d",
+  "driver/shim/test/run_gfx.ps1": "c0b88d01b6540abe92da88b6934a1b125c7571df16e0aa3918bf9e7a6a510ee2",
+  "development_sys": "5f1da123ee9ca396a6ef2b52938369375b4af2af041004fdf01e5b8039338352"
+}

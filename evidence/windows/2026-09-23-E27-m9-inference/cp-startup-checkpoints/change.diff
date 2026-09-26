@@ -1,0 +1,369 @@
+--- driver/kmd/gfx.c before
++++ driver/kmd/gfx.c
+@@ -119,7 +119,8 @@
+     // synchronous poll does, and a timeout would break that. A ring that owes a fence takes no new submission.
+     ULONG RingOwes[BC250_FENCE_RING_SDMA0 + 2];
+     ULONG RingOwesSlot[BC250_FENCE_RING_SDMA0 + 2];
+-    ULONG StagesDone;               // last stage that ran on the hardware in this driver instance
++    ULONG StagesDone;               // last stage attempted on hardware in this driver instance
++    ULONG CpStepDone;               // completed startup CP checkpoint, under GartLock
+     // ---- stage C: one indirect buffer at a time on the gfx ring (ADR 0008) ----
+     BOOLEAN SubmitGate;             // EnableGpuSubmit, read once at GfxStart
+     BOOLEAN IbPage;                 // bc250_gfx_ib_page_alloc has allocated
+@@ -408,11 +409,11 @@
+     // bring-up's recovery branch (bc250_kiq_init_register), not a second undo on a halted MEC.
+     Device->GfxStopQuiet=quiet && *Undo==0 && NT_SUCCESS(Gfx->Sequence.Fault);
+     GpuMemRelease(Device, &Gfx->Sequence, Device->GfxStopQuiet);
+-    if (quiet) { Gfx->StagesDone = 0; Gfx->Failed = FALSE; }
++    if (quiet) { Gfx->StagesDone = 0; Gfx->CpStepDone = 0; Gfx->Failed = FALSE; }
+     return quiet;
+ }
+ 
+-static void GfxExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
++static void GfxExecute(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data, ULONG CpStep)
+ {
+     BC250_GFX* gfx;
+     struct amdgpu_device* adev = NULL;
+@@ -445,6 +446,15 @@
+     if (Data->Op > BC250_GFX_OP_STATE) status = STATUS_INVALID_PARAMETER;
+     else if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+     else if (Data->Op <= BC250_GFX_OP_RUN && (Data->LastStage == 0 || Data->LastStage > BC250_GFX_STAGE_COUNT)) status = STATUS_INVALID_PARAMETER;
++    // CpStep is internal to unpublished StartDevice, never supplied by an escape.
++    if (NT_SUCCESS(status) && !CpStep && Data->Op == BC250_GFX_OP_RUN &&
++        gfx->CpStepDone != 0 && gfx->CpStepDone < BC250_CP_COMPUTE_TEST)
++        status = STATUS_INVALID_DEVICE_STATE;
++    if (NT_SUCCESS(status) && CpStep &&
++        (Data->Op != BC250_GFX_OP_RUN || Data->LastStage != BC250_GFX_STAGE_CP ||
++         CpStep > BC250_CP_COMPUTE_TEST || CpStep != gfx->CpStepDone + 1 ||
++         gfx->StagesDone != (ULONG)(CpStep == BC250_CP_KIQ_INIT ? BC250_GFX_STAGE_CP - 1 : BC250_GFX_STAGE_CP)))
++        status = STATUS_INVALID_DEVICE_STATE;
+     if (NT_SUCCESS(status)) status = GartDevice(Device, &adev, &gartEnabled);
+     if (NT_SUCCESS(status) && Data->Op != BC250_GFX_OP_STATE)
+     {
+@@ -459,7 +469,7 @@
+         case BC250_GFX_OP_RUN:
+             // A plan is about hardware this driver instance has not touched; a run needs what amdgpu had at this point.
+             // Interrupt sources only behind an enabled IH ring (amdgpu's order: navi10_ih_irq_init at 0.25 s, the sources at 1.56 s).
+-            if (plan ? (gfx->StagesDone != 0 || gfx->SetUp) : (!gartEnabled || !PspIsLoaded(Device) || gfx->Failed || Data->LastStage <= gfx->StagesDone ||
++            if (plan ? (gfx->StagesDone != 0 || gfx->SetUp) : (!gartEnabled || !PspIsLoaded(Device) || gfx->Failed || (!CpStep && Data->LastStage <= gfx->StagesDone) ||
+                                                               (Data->LastStage >= BC250_GFX_STAGE_INTERRUPTS && !IhIsActive(Device))))
+             {
+                 status = STATUS_INVALID_DEVICE_STATE;
+@@ -475,7 +485,7 @@
+                 if (result!=0) { status=STATUS_INSUFFICIENT_RESOURCES; break; }
+                 gfx->FencePage=TRUE;
+             }
+-            first = plan ? 1 : gfx->StagesDone + 1;
++            first = CpStep ? BC250_GFX_STAGE_CP : (plan ? 1 : gfx->StagesDone + 1);
+             for (stage = first; stage <= Data->LastStage; stage++)
+             {
+                 BC250_ESCAPE_GFX_STAGE* got = &Data->Stages[Data->StageCount++];
+@@ -484,10 +494,13 @@
+                 got->FirstWrite = gfx->Sequence.WriteCount;
+                 start = KeQueryPerformanceCounter(NULL);
+                 if (!plan) gfx->StagesDone = stage;         // from its first write on, the stage has touched the hardware
+-                got->Result = g_Stages[stage].Run(adev);
++                got->Result = CpStep ? bc250_gfx_cp_resume_step(adev, CpStep) : g_Stages[stage].Run(adev);
++                if (CpStep && got->Result == 0 && NT_SUCCESS(gfx->Sequence.Fault)) gfx->CpStepDone = CpStep;
+                 got->Microseconds = Microseconds(start, frequency);
+-                GuardLog("gfx: stage %u (%s)%s: rc %d, %u writes so far, %u us", stage, g_Stages[stage].Name, plan ? " planned" : "",
+-                         got->Result, gfx->Sequence.WriteCount, got->Microseconds);
++                if (CpStep) GuardLog("gfx: CP step %lu: rc %d, %u writes, %u us", CpStep,
++                                    got->Result, gfx->Sequence.WriteCount, got->Microseconds);
++                else GuardLog("gfx: stage %u (%s)%s: rc %d, %u writes so far, %u us", stage, g_Stages[stage].Name, plan ? " planned" : "",
++                              got->Result, gfx->Sequence.WriteCount, got->Microseconds);
+                 if (got->Result != 0 || !NT_SUCCESS(gfx->Sequence.Fault))
+                 {
+                     result = got->Result;
+@@ -574,7 +587,7 @@
+ // Diagnostic commands and device startup share the same implementation.
+ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
+ {
+-    GfxExecute(Device,Data);
++    GfxExecute(Device,Data,0);
+ }
+ 
+ // PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
+@@ -582,7 +595,7 @@
+ NTSTATUS GfxInitializeHardware(BC250_DEVICE* Device, BC250_ESCAPE_GFX* Report)
+ {
+     NTSTATUS status;
+-    ULONG stage, first;
++    ULONG stage, first, cp;
+     BOOLEAN trace;
+     if (!Report) return STATUS_INVALID_PARAMETER;
+     RtlZeroMemory(Report,sizeof(*Report));
+@@ -606,7 +619,17 @@
+                 GuardLog("startup: entering GFX stage %lu",stage);
+                 GuardLogKeep();
+             }
+-            GfxExecute(Device,Report);
++            if (trace && stage == BC250_GFX_STAGE_CP) {
++                for (cp=BC250_CP_KIQ_INIT;cp<=BC250_CP_COMPUTE_TEST;cp++) {
++                    GuardLog("startup: entering CP step %lu",cp);
++                    GuardLogKeep();
++                    GfxExecute(Device,Report,cp);
++                    GuardLog("startup: CP step %lu returned 0x%08X result %ld",cp,Report->NtStatus,Report->Result);
++                    GuardLogKeep();
++                    if (!NT_SUCCESS((NTSTATUS)Report->NtStatus) || Report->Status!=BC250_ESCAPE_STATUS_DONE ||
++                        Report->Result!=0 || Report->FailedStage) break;
++                }
++            } else GfxExecute(Device,Report,0);
+             status=(NTSTATUS)Report->NtStatus;
+             if (NT_SUCCESS(status) && (Report->Status!=BC250_ESCAPE_STATUS_DONE || Report->Result!=0 ||
+                 Report->FailedStage || Report->StagesDone<stage)) status=STATUS_IO_DEVICE_ERROR;
+--- driver/shim/bc250_gfx.c before
++++ driver/shim/bc250_gfx.c
+@@ -1970,74 +1970,101 @@
+  * Left out, with reasons: gfx_v10_0_enable_gui_idle_interrupt() runs only when the part is not an
+  * APU, and this one is; the two microcode loaders are DIRECT only; gfx_v10_0_cp_gfx_resume() is the
+  * !async_gfx_ring path. */
+-int bc250_gfx_cp_resume(struct amdgpu_device *adev)
++/* The caller owns sequencing and serialization. Splitting at these boundaries
++ * permits the Windows startup owner to persist progress at PASSIVE_LEVEL after
++ * releasing its locks. No register, queue or packet sequence is duplicated. */
++int bc250_gfx_cp_resume_step(struct amdgpu_device *adev, unsigned int step)
+ {
+ 	u32 i;
+ 	int r;
+ 
+ 	if (adev == NULL || adev->usec_timeout == 0)
+-		return BC250_EINVAL;      /* the three polls below; see bc250_gfx_setup() */
+-
+-	/* Init-only breadcrumbs: pair entry with result so a stalled stage 6 can be
+-	 * narrowed without extra MMIO reads or enabling per-submit diagnostics. */
+-	/* gfx_v10_0_kiq_resume() -> gfx_v10_0_kiq_init_queue() */
+-	dev_info(adev->dev, "CP resume kiq-init begin\n");
+-	r = bc250_kiq_init_queue(&adev->gfx.kiq[0].ring);
+-	dev_info(adev->dev, "CP resume kiq-init end result=%d\n", r);
+-	if (r)
+-		return r;
+-
+-	/* gfx_v10_0_kcq_resume() */
+-	dev_info(adev->dev, "CP resume compute-unhalt begin\n");
+-	bc250_cp_compute_enable(adev, true);
+-	dev_info(adev->dev, "CP resume compute-unhalt end\n");
+-	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+-		dev_info(adev->dev, "CP resume kcq-init ring=%u begin\n", i);
+-		r = bc250_kcq_init_queue(&adev->gfx.compute_ring[i]);
+-		dev_info(adev->dev, "CP resume kcq-init ring=%u end result=%d\n", i, r);
++		return BC250_EINVAL;
++	switch (step) {
++	case BC250_CP_KIQ_INIT:
++		/* gfx_v10_0_kiq_resume() -> gfx_v10_0_kiq_init_queue() */
++		dev_info(adev->dev, "CP resume kiq-init begin\n");
++		r = bc250_kiq_init_queue(&adev->gfx.kiq[0].ring);
++		dev_info(adev->dev, "CP resume kiq-init end result=%d\n", r);
+ 		if (r)
+ 			return r;
+-	}
+-	dev_info(adev->dev, "CP resume kcq-enable begin\n");
+-	r = bc250_enable_kcq(adev);
+-	dev_info(adev->dev, "CP resume kcq-enable end result=%d\n", r);
+-	if (r)
+-		return r;
+-
+-	/* gfx_v10_0_cp_async_gfx_ring_resume() */
+-	for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
+-		dev_info(adev->dev, "CP resume kgq-init ring=%u begin\n", i);
+-		r = bc250_kgq_init_queue(&adev->gfx.gfx_ring[i], adev->gfx.async_gfx_ring);
+-		dev_info(adev->dev, "CP resume kgq-init ring=%u end result=%d\n", i, r);
++		return 0;
++	case BC250_CP_COMPUTE_INIT:
++		/* gfx_v10_0_kcq_resume() */
++		dev_info(adev->dev, "CP resume compute-unhalt begin\n");
++		bc250_cp_compute_enable(adev, true);
++		dev_info(adev->dev, "CP resume compute-unhalt end\n");
++		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
++			dev_info(adev->dev, "CP resume kcq-init ring=%u begin\n", i);
++			r = bc250_kcq_init_queue(&adev->gfx.compute_ring[i]);
++			dev_info(adev->dev, "CP resume kcq-init ring=%u end result=%d\n", i, r);
++			if (r)
++				return r;
++		}
++		return 0;
++	case BC250_CP_KCQ_ENABLE:
++		dev_info(adev->dev, "CP resume kcq-enable begin\n");
++		r = bc250_enable_kcq(adev);
++		dev_info(adev->dev, "CP resume kcq-enable end result=%d\n", r);
+ 		if (r)
+ 			return r;
+-	}
+-	dev_info(adev->dev, "CP resume kgq-enable begin\n");
+-	r = bc250_enable_kgq(adev);
+-	dev_info(adev->dev, "CP resume kgq-enable end result=%d\n", r);
+-	if (r)
+-		return r;
+-	dev_info(adev->dev, "CP resume gfx-start begin\n");
+-	r = bc250_cp_gfx_start(adev);
+-	dev_info(adev->dev, "CP resume gfx-start end result=%d\n", r);
+-	if (r)
+-		return r;
+-
+-	for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
+-		dev_info(adev->dev, "CP resume gfx-test ring=%u begin\n", i);
+-		r = bc250_gfx_ring_test(&adev->gfx.gfx_ring[i]);
+-		dev_info(adev->dev, "CP resume gfx-test ring=%u end result=%d\n", i, r);
++		return 0;
++	case BC250_CP_GFX_QUEUE_INIT:
++		/* gfx_v10_0_cp_async_gfx_ring_resume() */
++		for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
++			dev_info(adev->dev, "CP resume kgq-init ring=%u begin\n", i);
++			r = bc250_kgq_init_queue(&adev->gfx.gfx_ring[i], adev->gfx.async_gfx_ring);
++			dev_info(adev->dev, "CP resume kgq-init ring=%u end result=%d\n", i, r);
++			if (r)
++				return r;
++		}
++		return 0;
++	case BC250_CP_KGQ_ENABLE:
++		dev_info(adev->dev, "CP resume kgq-enable begin\n");
++		r = bc250_enable_kgq(adev);
++		dev_info(adev->dev, "CP resume kgq-enable end result=%d\n", r);
+ 		if (r)
+ 			return r;
+-	}
+-	for (i = 0; i < adev->gfx.num_compute_rings; i++) {
+-		dev_info(adev->dev, "CP resume compute-test ring=%u begin\n", i);
+-		r = bc250_gfx_ring_test(&adev->gfx.compute_ring[i]);
+-		dev_info(adev->dev, "CP resume compute-test ring=%u end result=%d\n", i, r);
++		return 0;
++	case BC250_CP_GFX_START:
++		dev_info(adev->dev, "CP resume gfx-start begin\n");
++		r = bc250_cp_gfx_start(adev);
++		dev_info(adev->dev, "CP resume gfx-start end result=%d\n", r);
+ 		if (r)
+ 			return r;
+-	}
+-
++		return 0;
++	case BC250_CP_GFX_TEST:
++		for (i = 0; i < adev->gfx.num_gfx_rings; i++) {
++			dev_info(adev->dev, "CP resume gfx-test ring=%u begin\n", i);
++			r = bc250_gfx_ring_test(&adev->gfx.gfx_ring[i]);
++			dev_info(adev->dev, "CP resume gfx-test ring=%u end result=%d\n", i, r);
++			if (r)
++				return r;
++		}
++		return 0;
++	case BC250_CP_COMPUTE_TEST:
++		for (i = 0; i < adev->gfx.num_compute_rings; i++) {
++			dev_info(adev->dev, "CP resume compute-test ring=%u begin\n", i);
++			r = bc250_gfx_ring_test(&adev->gfx.compute_ring[i]);
++			dev_info(adev->dev, "CP resume compute-test ring=%u end result=%d\n", i, r);
++			if (r)
++				return r;
++		}
++		return 0;
++	default:
++		return BC250_EINVAL;
++	}
++}
++
++int bc250_gfx_cp_resume(struct amdgpu_device *adev)
++{
++	unsigned int step;
++	int r;
++	for (step = BC250_CP_KIQ_INIT; step <= BC250_CP_COMPUTE_TEST; step++) {
++		r = bc250_gfx_cp_resume_step(adev, step);
++		if (r)
++			return r;
++	}
+ 	return 0;
+ }
+ 
+--- driver/shim/include/bc250_gfx.h before
++++ driver/shim/include/bc250_gfx.h
+@@ -93,6 +93,19 @@
+ int bc250_gfx_constants_init(struct amdgpu_device *adev);
+ int bc250_gfx_rlc_resume(struct amdgpu_device *adev);
+ int bc250_gfx_cp_resume(struct amdgpu_device *adev);
++/* Ordered init-only boundaries; caller must stop on failure and retain ownership. */
++enum bc250_cp_step {
++	BC250_CP_KIQ_INIT = 1,
++	BC250_CP_COMPUTE_INIT,
++	BC250_CP_KCQ_ENABLE,
++	BC250_CP_GFX_QUEUE_INIT,
++	BC250_CP_KGQ_ENABLE,
++	BC250_CP_GFX_START,
++	BC250_CP_GFX_TEST,
++	BC250_CP_COMPUTE_TEST,
++};
++int bc250_gfx_cp_resume_step(struct amdgpu_device *adev, unsigned int step);
++
+ 
+ /*
+  * The undo, in gfx_v10_0_hw_fini()'s order: the three fault interrupts off, UNMAP_QUEUES through
+--- driver/kmd/test/generate_cp_startup_test.py before
++++ driver/kmd/test/generate_cp_startup_test.py
+@@ -0,0 +1,71 @@
++"""Extract the real startup coordinator; exercise CP checkpoints without hardware."""
++from pathlib import Path
++import sys
++repo = Path(__file__).resolve().parents[3]
++source = (repo / "driver/kmd/gfx.c").read_text()
++a = source.index("NTSTATUS GfxInitializeHardware(")
++b = source.index("\n}\n", a) + 3
++header = (repo / "driver/shim/include/bc250_gfx.h").read_text()
++e = header.index("enum bc250_cp_step {")
++f = header.index("};", e) + 2
++prefix = r'''#include <stdio.h>
++#include <string.h>
++#include <stdint.h>
++typedef int32_t NTSTATUS;
++typedef unsigned long ULONG;
++typedef int BOOLEAN;
++#define PASSIVE_LEVEL 0
++#define STATUS_SUCCESS 0
++#define STATUS_INVALID_PARAMETER (-1)
++#define STATUS_INVALID_DEVICE_STATE (-2)
++#define STATUS_DEVICE_HARDWARE_ERROR (-3)
++#define STATUS_IO_DEVICE_ERROR (-4)
++#define NT_SUCCESS(s) ((NTSTATUS)(s)>=0)
++#define RtlZeroMemory(p,n) memset(p,0,n)
++#define BC250_ESCAPE_MAGIC 1
++#define BC250_ESCAPE_RUN_GFX 2
++#define BC250_GFX_OP_RUN 1
++#define BC250_ESCAPE_STATUS_DONE 0
++#define BC250_ESCAPE_STATUS_REFUSED 1
++#define BC250_GFX_STAGE_CP 6
++#define BC250_GFX_STAGE_INTERRUPTS 8
++typedef struct {int GpuStopUnconfirmed;} BC250_DEVICE;
++typedef struct {ULONG Magic,Command,Op,LastStage,NtStatus,Status,FailedStage,StagesDone;long Result;} BC250_ESCAPE_GFX;
++static int capture,failed,mode,bad,calls,keeps;
++static ULONG seen[32],last_cp;
++static int KeGetCurrentIrql(void) {return 0;}
++static ULONG GuardReadSetting(const void *name,ULONG value) {(void)name;(void)value;return (ULONG)capture;}
++#define GuardLog(...) ((void)0)
++static void GuardLogKeep(void) {keeps++;}
++static void GfxExecute(BC250_DEVICE *d,BC250_ESCAPE_GFX *r,ULONG cp) {
++ (void)d;
++ seen[calls++]=r->LastStage*100+cp;
++ r->NtStatus=0;r->Result=0;r->FailedStage=0;r->Status=0;r->StagesDone=r->LastStage;
++ if(cp) {
++  if(cp!=last_cp+1)bad++;
++  last_cp=cp;
++  if((int)cp==failed) {
++   if(mode==0)r->NtStatus=(ULONG)STATUS_IO_DEVICE_ERROR;
++   else {r->Result=-62;r->Status=BC250_ESCAPE_STATUS_REFUSED;r->FailedStage=6;}
++  }
++ }
++}
++'''
++suffix = r'''
++int main(void) {
++ BC250_DEVICE d={0};BC250_ESCAPE_GFX r;int m,k;NTSTATUS status;
++ for(m=0;m<2;m++)for(k=0;k<=8;k++) {
++  capture=1;failed=k;mode=m;calls=keeps=0;last_cp=0;
++  status=GfxInitializeHardware(&d,&r);
++  if(k==0) {
++   if(status!=0||calls!=15||last_cp!=8||seen[13]!=700||seen[14]!=800||keeps!=32)bad++;
++  } else if(status>=0||calls!=5+k||last_cp!=(ULONG)k||seen[calls-1]!=600+(ULONG)k||r.LastStage!=6)bad++;
++ }
++ capture=0;failed=0;calls=keeps=0;last_cp=0;
++ status=GfxInitializeHardware(&d,&r);
++ if(status!=0||calls!=1||seen[0]!=800||keeps!=0)bad++;
++ printf("CP startup coordinator: 19 scenarios, %d failures\n",bad);
++ return bad?1:0;
++}
++'''
++Path(sys.argv[1]).write_text(prefix + header[e:f] + "\n" + source[a:b] + suffix)

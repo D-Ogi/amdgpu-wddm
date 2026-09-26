@@ -1,0 +1,41 @@
+fbdump       rows 0..63 of 1200, address 0x2708D0000
+fbdump       rows 64..127 of 1200, address 0x270948000
+fbdump       rows 128..191 of 1200, address 0x2709C0000
+fbdump       rows 192..255 of 1200, address 0x270A38000
+fbdump       rows 256..319 of 1200, address 0x270AB0000
+fbdump       rows 320..383 of 1200, address 0x270B28000
+fbdump       rows 384..447 of 1200, address 0x270BA0000
+fbdump       rows 448..511 of 1200, address 0x270C18000
+fbdump       rows 512..575 of 1200, address 0x270C90000
+fbdump       rows 576..639 of 1200, address 0x270D08000
+fbdump       rows 640..703 of 1200, address 0x270D80000
+fbdump       rows 704..767 of 1200, address 0x270DF8000
+fbdump       rows 768..831 of 1200, address 0x270E70000
+fbdump       rows 832..895 of 1200, address 0x270EE8000
+fbdump       rows 896..959 of 1200, address 0x270F60000
+fbdump       rows 960..1023 of 1200, address 0x270FD8000
+fbdump       rows 1024..1087 of 1200, address 0x271050000
+fbdump       rows 1088..1151 of 1200, address 0x2710C8000
+fbdump       rows 1152..1199 of 1200, address 0x271140000
+wrote C:\BC250\m9\candidate07139\before-dwm-recovery.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+
+
+Id           : 2040
+StartTime    : 9/24/2026 9:15:56 PM
+CPU          : 661.8125
+WorkingSet64 : 129826816
+
+
+
+restart_dwm=2026-09-24T23:49:39
+
+
+Id           : 9596
+StartTime    : 9/24/2026 11:49:39 PM
+CPU          : 5.609375
+WorkingSet64 : 86482944
+
+
+
+recovery_check=2026-09-24T23:49:47
+boot=2026-09-24T21:14:48

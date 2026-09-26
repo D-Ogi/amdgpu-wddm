@@ -1,0 +1,9 @@
+{
+  "bc250_sdma_paging.c": "f0e011811c8a36c873b42b0b2d851ef0e9fd308d626d3297230adaf68df4d7ea",
+  "bc250_sdma_paging.h": "a1a244fad08fc3fbd7ba2d241bb6cb6f8520d41c90015c216c24a7165e42f578",
+  "build-mapped-copy-dev.txt": "52419415128ff6c7e61430ae3fed13620bd0f08832e3f8d3dfae5aeb07453e44",
+  "mapped-copy-test.txt": "883cf6ca1f8792663fd09013f7c3eb8682e7cf7eb2a8dac28946c0b90d06946f",
+  "paging_packets.c": "aa8e7162c73382686a8fba096eb3eeb590eea67064fe98cc74fabb0857876b4d",
+  "README.md": "17b1084ffc46260f6813e1ff63c53308ac39750905f6dcee6715358b46442ef4",
+  "run_paging.ps1": "e7ba050279b7b8077f782a75d7b884e8379f3c7f7c21cb0c909569ba13774cf3"
+}

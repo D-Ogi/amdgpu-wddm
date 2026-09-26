@@ -1,0 +1,11 @@
+{
+  "driver/shim/bc250_gfx.c": "e1da7eafc4d1b2926e77ed0a7d1bb783d7a07f89f30da1dedd0631187cb7d682",
+  "driver/shim/include/bc250_gfx.h": "6ffacacd96136a1b38674405500f658951f00503e72b3ebafb6945d65fb279ae",
+  "driver/kmd/gfx.c": "02a0dfb49edbb23a2745e84f648cb79a2fbe87a6fb6551ec37e18cbab748cb68",
+  "driver/kmd/startup.c": "876614d33c4c55106236f41b4a4e65db7b1fe74da140feac47714d7e2b042e6e",
+  "driver/kmd/sequence.c": "6a3d93cde2d32f8ca66221244a92ab0792fbfe0f41d0b2139739beeb97c90dd0",
+  "driver/kmd/gen_regs.py": "8c1c878d8da3d65727818f82ab1e73e59843eb05a9ea8d86d2d1b929ebdca53c",
+  "driver/kmd/regs.generated.h": "193cb1d8012873a04f92927859e3964e8e99adb910be23100647e3649bbdca5f",
+  "driver/shim/test/replay_gfx.c": "a258560e56694fe73192c21c250f60652378aaa5378a231514f0be8e995fa675",
+  "experiments/E27-m9-inference/startup-coordinator-test-mocks.c": "5c0242ca647511b89be5de02b0599e3bc47f20e39a37206fd8d2614e54c7d84b"
+}

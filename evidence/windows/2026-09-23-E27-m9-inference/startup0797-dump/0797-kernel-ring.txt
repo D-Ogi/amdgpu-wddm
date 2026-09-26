@@ -1,0 +1,285 @@
+     0     0.002 stage 10
+     1     0.002 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2     0.002 stage 20
+     3     0.070 stage 30
+     4     0.072 stage 31
+     5     0.072 stage 32
+     6     0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7     0.072 stage 33
+     8     0.072 stage 34
+     9     0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10     0.074 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11     0.074 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12     0.074 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13     0.074 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14     0.074 gart: ready, dummy page at 0x26FFFA000
+    15     0.074 psp: ready
+    16     0.074 gpumem: ready, doorbells at 0xD0000000
+    17     0.074 gfx: ready, GPU submission allowed, paging node allowed
+    18     0.074 ih: ready
+    19     0.074 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20     0.076 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21     0.076 startup: entering interrupt connection
+    22     0.078 startup: entering firmware preparation
+    23     0.082 startup: entering GART initialization
+    24     0.094 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25     0.094 startup: entering PSP initialization
+    26     0.164 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27     0.164 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 263 us, in TMR at 0x0
+    28     0.166 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1898 us, in TMR at 0x0
+    29     0.168 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    30     0.174 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5921 us, in TMR at 0xF5FF842000
+    31     0.178 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5914 us, in TMR at 0xF5FF883000
+    32     0.184 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5906 us, in TMR at 0xF5FF8C4000
+    33     0.190 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34     0.190 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35     0.196 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5957 us, in TMR at 0xF5FF800000
+    36     0.198 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37     0.198 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1738 us, in TMR at 0x0
+    38     0.198 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39     0.198 startup: entering IH initialization
+    40     0.202 ih: init: rc 0, 20 writes
+    41     0.202 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42     0.202 startup: entering GFX initialization
+    43     0.204 startup: entering GFX stage 1
+    44     0.208 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45     0.208 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46     0.210 startup: entering GFX stage 2
+    47     0.212 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 24 us
+    48     0.212 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49     0.212 startup: entering GFX stage 3
+    50     0.214 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+    51     0.214 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52     0.214 startup: entering GFX stage 4
+    53     0.216 gfx: stage 4 (constants): rc 0, 157 writes so far, 91 us
+    54     0.216 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55     0.216 startup: entering GFX stage 5
+    56     0.218 gfx: stage 5 (RLC): rc 0, 8 writes so far, 132 us
+    57     0.218 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58     0.220 startup: entering GFX stage 6
+    59     0.220 amdgpu[0]: CP resume kiq-init begin
+
+    60     0.220 amdgpu[0]: CP resume kiq-init end result=0
+
+    61     0.220 amdgpu[0]: CP resume compute-unhalt begin
+
+    62     0.220 amdgpu[0]: CP resume compute-unhalt end
+
+    63     0.220 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    64     0.220 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    65     0.220 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    66     0.220 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    67     0.220 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    68     0.220 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    69     0.220 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    70     0.220 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    71     0.220 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    72     0.220 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    73     0.220 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    74     0.220 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    75     0.220 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    76     0.220 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    77     0.220 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    78     0.220 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    79     0.220 amdgpu[0]: CP resume kcq-enable begin
+
+    80     0.220 amdgpu[0]: CP resume kcq-enable end result=0
+
+    81     0.220 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    82     0.220 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    83     0.220 amdgpu[0]: CP resume kgq-enable begin
+
+    84     0.220 amdgpu[0]: CP resume kgq-enable end result=0
+
+    85     0.220 amdgpu[0]: CP resume gfx-start begin
+
+    86     0.220 amdgpu[0]: CP resume gfx-start end result=0
+
+    87     0.220 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+    88     0.220 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+    89     0.220 amdgpu[0]: CP resume compute-test ring=0 begin
+
+    90     0.220 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+    91     0.220 amdgpu[0]: CP resume compute-test ring=1 begin
+
+    92     0.220 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+    93     0.220 amdgpu[0]: CP resume compute-test ring=2 begin
+
+    94     0.220 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+    95     0.220 amdgpu[0]: CP resume compute-test ring=3 begin
+
+    96     0.220 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+    97     0.220 amdgpu[0]: CP resume compute-test ring=4 begin
+
+    98     0.220 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+    99     0.220 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   100     0.220 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   101     0.220 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   102     0.220 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   103     0.220 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   104     0.220 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   105     0.220 gfx: stage 6 (CP): rc 0, 62 writes so far, 436 us
+   106     0.220 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+   107     0.222 startup: entering GFX stage 7
+   108     0.224 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 96 us
+   109     0.224 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   110     0.224 startup: entering GFX stage 8
+   111     0.224 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 22 us
+   112     0.224 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   113     0.224 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   114     0.226 startup: both engines ready
+   115     0.226 startup: attempted 0xF completed 0xF status 0x00000000 ready 1 unwind 0 quarantine 0
+   116     0.226 wddm: GPU initialized before adapter admission
+   117     0.226 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   118     0.228 stage 35
+   119     0.228 stage 39
+   120     0.228 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   121     0.228 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   122     0.228 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   123     0.228 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   124     0.228 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   125     0.228 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   126     0.228 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   127     0.228 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   128     0.228 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   129     0.228 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   130     0.228 wddm: GetNodeMetadata node 0 adapter 0
+   131     0.228 wddm: GetNodeMetadata node 1 adapter 0
+   132     0.228 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   133     0.228 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+   134     0.228 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   135     0.228 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   136     0.230 wddm: CreateProcess flags 0x00000001 pasids 1
+   137     0.230 wddm: CreateDevice flags 0x00000001 pasid 0
+   138     0.230 wddm: CreateDevice flags 0x00000001 pasid 0
+   139     0.230 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   140     0.230 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   141     0.230 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   142     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   143     0.230 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   144     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   145     0.230 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   146     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   147     0.230 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   148     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   149     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   150     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   151     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   152     0.230 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   153     0.262 wddm: SetRootPageTable segment 3 offset 0x0, 512 entries
+   154     0.262 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+   155     0.262 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+   156     0.262 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+   157     0.262 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+   158     0.264 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+   159     0.264 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+   160     0.264 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+   161     0.264 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+   162     0.264 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+   163     0.264 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+   164     0.264 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+   165     0.264 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+   166     0.264 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+   167     0.264 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+   168     0.264 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+   169     0.264 wddm: CreateProcess flags 0x00000002 pasids 1
+   170     0.264 wddm: CreateDevice flags 0x00000002 pasid 0
+   171     0.264 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   172     0.264 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   173     0.264 wddm: SubmitCommandVirtual fence 1 node 1 flags 0x00000001 va 0x0 size 4024
+   174     0.264 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 1
+   175     0.264 wddm: fence 1 on the SDMA0 ring: sequence 1, private start 0x0, 4024 bytes
+   176     0.264 wddm: paging hardware fence arrived, reporting fence 1
+   177     0.264 wddm: SubmitCommandVirtual fence 2 node 1 flags 0x00000001 va 0x0 size 4072
+   178     0.264 gfx: paging submit, 1018 dwords from private buffer at 0x0, seq 2
+   179     0.264 wddm: fence 2 on the SDMA0 ring: sequence 2, private start 0x0, 4072 bytes
+   180     0.264 wddm: paging hardware fence arrived, reporting fence 2
+   181     0.264 wddm: SubmitCommandVirtual fence 3 node 1 flags 0x00000001 va 0x0 size 4016
+   182     0.264 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 3
+   183     0.264 wddm: fence 3 on the SDMA0 ring: sequence 3, private start 0x0, 4016 bytes
+   184     0.264 wddm: paging hardware fence arrived, reporting fence 3
+   185     0.264 wddm: SubmitCommandVirtual fence 4 node 1 flags 0x00000001 va 0x0 size 4016
+   186     0.264 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 4
+   187     0.264 wddm: fence 4 on the SDMA0 ring: sequence 4, private start 0x0, 4016 bytes
+   188     0.264 wddm: BuildPagingBuffer operation 12 segment 0, 64720 bytes free, pass offset 0
+   189     0.264 wddm: paging hardware fence arrived, reporting fence 4
+   190     0.264 wddm: SubmitCommandVirtual fence 5 node 1 flags 0x00000001 va 0x0 size 876
+   191     0.264 gfx: paging submit, 219 dwords from private buffer at 0x0, seq 5
+   192     0.264 wddm: fence 5 on the SDMA0 ring: sequence 5, private start 0x0, 876 bytes
+   193     0.264 wddm: paging hardware fence arrived, reporting fence 5
+   194     0.266 wddm: BuildPagingBuffer operation 12 segment 0, 64596 bytes free, pass offset 0
+   195     0.266 wddm: SubmitCommandVirtual fence 6 node 1 flags 0x00000001 va 0x36C size 124
+   196     0.266 gfx: paging submit, 31 dwords from private buffer at 0x36C, seq 6
+   197     0.266 wddm: fence 6 on the SDMA0 ring: sequence 6, private start 0x36C, 124 bytes
+   198     0.266 wddm: paging hardware fence arrived, reporting fence 6
+   199     0.266 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   200     0.266 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   201     0.266 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   202     0.266 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   203     0.266 wddm: OpenAllocation [0] handle 0x40000F40 private 32 bytes -> FFFFAD84D61E87C0 (GetHandleData said 0000000000000000)
+   204     0.266 wddm: OpenAllocation 1 allocations flags 0x00000001
+   205     0.266 wddm: SubmitCommandVirtual fence 7 node 1 flags 0x00000001 va 0x3E8 size 3072
+   206     0.266 gfx: paging submit, 768 dwords from private buffer at 0x3E8, seq 7
+   207     0.266 wddm: fence 7 on the SDMA0 ring: sequence 7, private start 0x3E8, 3072 bytes
+   208     0.266 wddm: paging hardware fence arrived, reporting fence 7
+   209     0.266 wddm: SubmitCommandVirtual fence 8 node 1 flags 0x00000001 va 0x0 size 4016
+   210     0.266 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 8
+   211     0.266 wddm: fence 8 on the SDMA0 ring: sequence 8, private start 0x0, 4016 bytes
+   212     0.266 wddm: paging hardware fence arrived, reporting fence 8
+   213     0.266 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 9
+   214     0.266 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 10
+   215     0.266 wddm: BuildPagingBuffer operation 12 segment 0, 62152 bytes free, pass offset 0
+   216     0.266 wddm: BuildPagingBuffer operation 9 segment 0, 62092 bytes free, pass offset 0
+   217     0.266 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 12
+
+   218     0.266 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 29
+   219     0.266 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 11
+   220     0.266 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   221     0.266 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 230
+   222     0.266 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 12
+   223     0.266 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   224     0.266 wddm: paging ring refused 0x80000011 (fence 13, private start 0x0, 4020 bytes): dispatch failed
+   225     0.266 gfx: paging submission path failed, no further ring writes this device start (seq 12 in flight, slot 0xB)
+   226     0.266 wddm: fence 13 node 1 NOT dispatched; node closed, no completion, recovery required
+   227     0.266 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 431
+   228     0.266 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   229     0.266 wddm: paging ring refused 0xC0000483 (fence 14, private start 0x0, 4020 bytes): dispatch failed
+   230     3.268 wddm: QueryDependentEngineGroup node 1 engine 0
+   231     3.268 wddm: PreemptCommand fence 1 node 1
+   232     3.268 wddm: preemption queued fence 1 node 1 hardware pending 0 active submits 0
+   233     3.298 wddm: *** ResetEngine node 1 engine 0: refused, this part has no engine reset ***

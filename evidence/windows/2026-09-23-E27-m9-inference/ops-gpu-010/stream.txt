@@ -1,0 +1,14 @@
+GATE_BEGIN 2026-09-23T03:34:39
+RESTORE_BEGIN 2026-09-23T03:35:03
+time 2026-09-23T03:35:21  phase confirm m9-restored
+UnconfirmedStarts = 0
+ForEach-Object : You cannot call a method on a null-valued expression.
+At C:\BC250\tmp\e19_target.ps1:82 char:98
++ ... " + ($dwm | ForEach-Object { $_.StartTime.ToString('HH:mm:ss') }) -jo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [ForEach-Object], RuntimeException
+    + FullyQualifiedErrorId : InvokeMethodOnNull,Microsoft.PowerShell.Commands.ForEachObjectComma 
+   nd
+ 
+
+ssh_exit=1

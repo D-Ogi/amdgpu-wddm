@@ -1,0 +1,1073 @@
+log          10135 lines since this driver load, 9111 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.000 stage 20
+     3      0.078 stage 30
+     4      0.078 stage 31
+     5      0.078 stage 32
+     6      0.078 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.078 stage 33
+     8      0.078 stage 34
+     9      0.078 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.078 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    11      0.078 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.078 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.078 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.078 gart: ready, dummy page at 0x26FFFA000
+    15      0.078 psp: ready
+    16      0.078 gpumem: ready, doorbells at 0xD0000000
+    17      0.078 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.078 ih: ready
+    19      0.078 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.093 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.093 startup: entering interrupt connection
+    22      0.093 startup: entering firmware preparation
+    23      0.101 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    24      0.101 gfx: unpublished translation bootstrap entered with engines halted
+    25      0.101 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    26      0.101 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    27      0.101 startup: entering GART initialization
+    28      0.121 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    29      0.121 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.121 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    31      0.122 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    32      0.122 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.122 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.122 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    35      0.122 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.122 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    37      0.122 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    38      0.122 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.122 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    40      0.122 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    41      0.122 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.122 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    43      0.122 startup: entering PSP initialization
+    44      0.168 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.168 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    46      0.199 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    47      0.199 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    48      0.199 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    49      0.199 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 253 us, in TMR at 0x0
+    50      0.199 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.199 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    52      0.199 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1906 us, in TMR at 0x0
+    53      0.199 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    54      0.199 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.199 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1958 us, in TMR at 0x0
+    56      0.199 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    57      0.199 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.199 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5880 us, in TMR at 0xF5FF842000
+    59      0.199 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    60      0.199 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.215 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5875 us, in TMR at 0xF5FF883000
+    62      0.215 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    63      0.215 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.215 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5908 us, in TMR at 0xF5FF8C4000
+    65      0.215 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    66      0.215 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.215 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6004 us, in TMR at 0xF5FF800000
+    68      0.215 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    69      0.215 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.215 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    71      0.215 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    72      0.215 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.230 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    74      0.230 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    75      0.230 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.230 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    77      0.230 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    78      0.230 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.230 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1686 us, in TMR at 0x0
+    80      0.230 gfx: RLC after-psp-command CNTL 0x00000001 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.230 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.230 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    83      0.230 gfx: RLC after-psp CNTL 0x00000001 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.230 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    85      0.230 startup: entering IH initialization
+    86      0.230 ih: init: rc 0, 18 writes
+    87      0.230 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    88      0.230 startup: entering GFX initialization
+    89      0.230 startup: entering GFX stage 1
+    90      0.230 gfx: RLC startup policy pp_gfxoff 0
+    91      0.230 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 1 us
+    92      0.230 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    93      0.230 startup: entering GFX stage 2
+    94      0.246 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    95      0.246 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    96      0.246 startup: entering GFX stage 3
+    97      0.246 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+    98      0.246 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    99      0.246 startup: entering GFX stage 4
+   100      0.246 gfx: stage 4 (constants): rc 0, 157 writes so far, 58 us
+   101      0.246 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   102      0.246 startup: entering GFX stage 5
+   103      0.246 startup: RLC boundary acquire-paging-lock
+   104      0.246 startup: RLC boundary acquire-gart-lock
+   105      0.246 startup: RLC boundary locks-acquired
+   106      0.246 startup: RLC boundary before-rlc-resume
+   107      0.246 startup: RLC boundary after-rlc-resume
+   108      0.246 startup: RLC boundary before-gfx-visibility
+   109      0.246 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   110      0.246 startup: visibility observer returned after-invalidate-request
+   111      0.246 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   112      0.246 startup: visibility observer returned after-invalidate-request-read
+   113      0.246 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   114      0.262 startup: visibility observer returned after-invalidate-ack
+   115      0.262 startup: visibility GFX returned 0, entering MMHUB
+   116      0.262 startup: visibility MMHUB returned 0
+   117      0.262 gpumem: startup GFX translations committed after RLC, before CP
+   118      0.262 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   119      0.262 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   120      0.262 startup: visibility publication observer returned
+   121      0.262 startup: RLC boundary after-gfx-visibility
+   122      0.262 gfx: stage 5 (RLC): rc 0, 12 writes so far, 13029 us
+   123      0.262 gfx: op 1 to stage 5 -> 0x00000000, result 0, 12 writes, 0 doorbells
+   124      0.262 startup: entering GFX stage 6
+   125      0.262 startup: entering CP step 1
+   126      0.262 startup: CP1 checkpoint acquire-paging-lock
+   127      0.262 startup: CP1 checkpoint acquire-gart-lock
+   128      0.262 startup: CP1 checkpoint locks-acquired
+   129      0.262 amdgpu[0]: CP resume kiq-init begin
+
+   130      0.262 startup: CP1 checkpoint scheduler
+   131      0.262 startup: CP1 checkpoint scheduler-read
+   132      0.262 startup: CP1 checkpoint scheduler-write
+   133      0.262 startup: CP1 checkpoint scheduler-done
+   134      0.262 startup: CP1 checkpoint clear-mqd
+   135      0.262 startup: CP1 checkpoint select-queue
+   136      0.277 startup: CP1 checkpoint build-mqd
+   137      0.277 startup: CP1 checkpoint disable-wptr-poll
+   138      0.277 startup: CP1 checkpoint read-active
+   139      0.277 startup: CP1 checkpoint program-hqd
+   140      0.277 startup: CP1 checkpoint activate-hqd
+   141      0.277 startup: CP1 checkpoint restore-selection
+   142      0.277 startup: CP1 checkpoint complete
+   143      0.277 amdgpu[0]: CP resume kiq-init end result=0
+
+   144      0.277 gfx: CP step 1: rc 0, 27 writes, 11517 us
+   145      0.277 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   146      0.277 startup: CP step 1 returned 0x00000000 result 0
+   147      0.277 startup: entering CP step 2
+   148      0.277 amdgpu[0]: CP resume compute-unhalt begin
+
+   149      0.277 amdgpu[0]: CP resume compute-unhalt end
+
+   150      0.277 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   151      0.277 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   152      0.277 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   153      0.277 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   154      0.277 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   155      0.277 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   156      0.277 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   157      0.277 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   158      0.277 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   159      0.277 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   160      0.277 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   161      0.277 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   162      0.277 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   163      0.277 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   164      0.277 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   165      0.277 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   166      0.277 gfx: CP step 2: rc 0, 17 writes, 231 us
+   167      0.277 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   168      0.277 startup: CP step 2 returned 0x00000000 result 0
+   169      0.277 startup: entering CP step 3
+   170      0.277 amdgpu[0]: CP resume kcq-enable begin
+
+   171      0.277 amdgpu[0]: CP resume kcq-enable end result=0
+
+   172      0.277 gfx: CP step 3: rc 0, 1 writes, 45 us
+   173      0.277 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   174      0.277 startup: CP step 3 returned 0x00000000 result 0
+   175      0.277 startup: entering CP step 4
+   176      0.277 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   177      0.277 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   178      0.277 gfx: CP step 4: rc 0, 4 writes, 22 us
+   179      0.277 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   180      0.277 startup: CP step 4 returned 0x00000000 result 0
+   181      0.277 startup: entering CP step 5
+   182      0.277 amdgpu[0]: CP resume kgq-enable begin
+
+   183      0.277 amdgpu[0]: CP resume kgq-enable end result=0
+
+   184      0.277 gfx: CP step 5: rc 0, 1 writes, 17 us
+   185      0.277 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   186      0.277 startup: CP step 5 returned 0x00000000 result 0
+   187      0.277 startup: entering CP step 6
+   188      0.293 amdgpu[0]: CP resume gfx-start begin
+
+   189      0.293 amdgpu[0]: CP resume gfx-start end result=0
+
+   190      0.293 gfx: CP step 6: rc 0, 3 writes, 20 us
+   191      0.293 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   192      0.293 startup: CP step 6 returned 0x00000000 result 0
+   193      0.293 startup: entering CP step 7
+   194      0.293 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   195      0.293 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   196      0.293 gfx: CP step 7: rc 0, 1 writes, 10 us
+   197      0.293 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   198      0.293 startup: CP step 7 returned 0x00000000 result 0
+   199      0.293 startup: entering CP step 8
+   200      0.293 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   201      0.293 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   202      0.293 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   203      0.293 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   204      0.293 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   205      0.293 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   206      0.293 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   207      0.293 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   208      0.293 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   209      0.293 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   210      0.293 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   211      0.293 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   212      0.293 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   213      0.293 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   214      0.293 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   215      0.293 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   216      0.293 gfx: CP step 8: rc 0, 8 writes, 62 us
+   217      0.293 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   218      0.293 startup: CP step 8 returned 0x00000000 result 0
+   219      0.293 startup: entering GFX stage 7
+   220      0.293 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 87 us
+   221      0.293 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   222      0.293 startup: entering GFX stage 8
+   223      0.293 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 22 us
+   224      0.293 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   225      0.293 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   226      0.293 startup: SDMA control 0 command 16 bytes 4096 begin
+   227      0.293 gfx: sdmacopy 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 11 us
+   228      0.293 startup: SDMA control 0 status 0 NT 0x00000000 result 0 fence 1/1 compare 4096 matched 1
+   229      0.293 startup: SDMA control 1 command 18 bytes 4096 begin
+   230      0.293 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   231      0.309 gfx: sdmaib 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 11 us
+   232      0.309 startup: SDMA control 1 status 0 NT 0x00000000 result 0 fence 2/2 compare 4096 matched 1
+   233      0.309 startup: SDMA control 2 command 18 bytes 65536 begin
+   234      0.309 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   235      0.324 gfx: sdmaib 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 11 us
+   236      0.324 startup: SDMA control 2 status 0 NT 0x00000000 result 0 fence 3/3 compare 65536 matched 1
+   237      0.324 startup: SDMA control 3 command 16 bytes 65536 begin
+   238      0.355 gfx: sdmacopy 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   239      0.355 startup: SDMA control 3 status 0 NT 0x00000000 result 0 fence 4/4 compare 65536 matched 1
+   240      0.355 startup: SDMA VMID2 translated control begin
+   241      0.355 gfx: sdmava root PA0x46E02C000 IB PA0x26FF95000 system PA0x26FF92000 source PA0x46E00C000 VA0x40000000 CSA0x40003000 VMID2
+   242      0.355 gfx: sdmava trial0 sourceVRAM fence5/5 compared4096 status0x00000000
+   243      0.355 gfx: sdmava trial1 sourcesystem-remap fence6/6 compared4096 status0x00000000
+   244      0.355 gfx: sdmava end status0x00000000 result0 fault0x0
+   245      0.355 startup: both engines ready
+   246      0.355 startup: attempted 0xF completed 0xF status 0x00000000 ready 1 unwind 0 quarantine 0
+   247      0.355 wddm: GPU initialized before adapter admission
+   248      0.355 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   249      0.355 stage 35
+   250      0.355 stage 39
+   251      0.355 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   252      0.355 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   253      0.355 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   254      0.355 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   255      0.355 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+  9367    429.108 wddm summary: paging operation   9      12  first at 349
+  9368    429.108 wddm summary: paging operation   2       3  first at 534
+  9369    429.108 wddm summary: paging operation   8       8  first at 555
+  9370    429.108 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9371    429.108 wddm summary: allocations opened/closed: 18/11 calls
+  9372    429.108 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9373    429.108 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9374    429.108 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9375    429.108 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9376    429.108 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9377    429.108 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9378    429.108 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9379    429.108 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9380    429.108 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9381    429.108 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9382    429.108 wddm summary: native DMA exact disjoint checks 8
+  9383    429.108 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9384    429.108 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9385    429.108 wddm summary: aperture map batches 0, unmap batches 0
+  9386    429.108 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9387    429.108 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9388    429.108 wddm summary: presents 635, flips 636 of 638 address calls (635 arrived above DISPATCH_LEVEL)
+  9389    429.108 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9390    429.108 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9391    429.108 wddm summary: widest blit 0 rows
+  9392    429.108 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9393    429.108 wddm summary: vsync enabled, 0 ticks, 25679 reported to dxgkrnl
+  9394    429.108 wddm summary: dcn lock acknowledgement timeouts 0
+  9395    429.108 wddm summary: vidpn flip open: 636 hardware flips, 0 refused, 1 hardware vsyncs armed 25693 acked 0 refused 1 deferred (flip still pending)
+  9396    429.108 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9397    429.108 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9398    429.108 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9399    429.108 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9400    429.108 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9401    429.108 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9402    429.108 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9403    429.108 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9404    429.108 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9405    434.172 wddm summary: ---- DDI calls: name, count, first log line ----
+  9406    434.172 wddm summary: QueryAdapterInfo                   12  first at 253
+  9407    434.172 wddm summary: GetNodeMetadata                     2  first at 261
+  9408    434.172 wddm summary: CreateDevice                        9  first at 268
+  9409    434.172 wddm summary: DestroyDevice                       2  first at 418
+  9410    434.172 wddm summary: CreateContext                       7  first at 271
+  9411    434.172 wddm summary: DestroyContext                      2  first at 417
+  9412    434.172 wddm summary: CreateProcess                       6  first at 267
+  9413    434.172 wddm summary: DestroyProcess                      2  first at 419
+  9414    434.172 wddm summary: SetRootPageTable                    2  first at 294
+  9415    434.172 wddm summary: CreateAllocation                   16  first at 339
+  9416    434.172 wddm summary: DestroyAllocation                  11  first at 539
+  9417    434.172 wddm summary: DescribeAllocation                648  first at 368
+  9418    434.172 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9419    434.172 wddm summary: OpenAllocation                     18  first at 341
+  9420    434.172 wddm summary: CloseAllocation                    11  first at 538
+  9421    434.172 wddm summary: BuildPagingBuffer                4241  first at 273
+  9422    434.172 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9423    434.172 wddm summary: Present                           643  first at 674
+  9424    434.172 wddm summary: SetVidPnSourceAddress             646  first at 399
+  9425    434.172 wddm summary: ControlInterrupt                    5  first at 404
+  9426    434.172 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9427    434.172 wddm summary: adapter info type   1       1  first at 253
+  9428    434.172 wddm summary: adapter info type  15       1  first at 254
+  9429    434.172 wddm summary: adapter info type  47       1  first at 255
+  9430    434.172 wddm summary: adapter info type  13       1  first at 256
+  9431    434.172 wddm summary: adapter info type  14       4  first at 257
+  9432    434.172 wddm summary: adapter info type  11       2  first at 264
+  9433    434.172 wddm summary: adapter info type  10       1  first at 266
+  9434    434.172 wddm summary: adapter info type  16       1  first at 266
+  9435    434.172 wddm summary: capture plans reserved 0 heap 0
+  9436    434.172 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9437    434.172 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9438    434.172 wddm summary: paging operation  11    4106  first at 273
+  9439    434.172 wddm summary: paging operation  12     112  first at 330
+  9440    434.172 wddm summary: paging operation   9      12  first at 349
+  9441    434.172 wddm summary: paging operation   2       3  first at 534
+  9442    434.172 wddm summary: paging operation   8       8  first at 555
+  9443    434.172 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9444    434.172 wddm summary: allocations opened/closed: 18/11 calls
+  9445    434.172 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9446    434.172 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9447    434.172 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9448    434.172 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9449    434.172 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9450    434.172 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9451    434.172 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9452    434.172 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9453    434.172 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9454    434.172 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9455    434.172 wddm summary: native DMA exact disjoint checks 8
+  9456    434.172 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9457    434.172 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9458    434.172 wddm summary: aperture map batches 0, unmap batches 0
+  9459    434.172 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9460    434.172 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9461    434.172 wddm summary: presents 643, flips 644 of 646 address calls (643 arrived above DISPATCH_LEVEL)
+  9462    434.172 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9463    434.172 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9464    434.172 wddm summary: widest blit 0 rows
+  9465    434.172 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9466    434.172 wddm summary: vsync enabled, 0 ticks, 25982 reported to dxgkrnl
+  9467    434.172 wddm summary: dcn lock acknowledgement timeouts 0
+  9468    434.172 wddm summary: vidpn flip open: 644 hardware flips, 0 refused, 1 hardware vsyncs armed 25997 acked 0 refused 2 deferred (flip still pending)
+  9469    434.172 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9470    434.172 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9471    434.172 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9472    434.172 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9473    434.172 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9474    434.172 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9475    434.172 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9476    434.172 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9477    434.172 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9478    439.236 wddm summary: ---- DDI calls: name, count, first log line ----
+  9479    439.236 wddm summary: QueryAdapterInfo                   12  first at 253
+  9480    439.236 wddm summary: GetNodeMetadata                     2  first at 261
+  9481    439.236 wddm summary: CreateDevice                        9  first at 268
+  9482    439.236 wddm summary: DestroyDevice                       2  first at 418
+  9483    439.236 wddm summary: CreateContext                       7  first at 271
+  9484    439.236 wddm summary: DestroyContext                      2  first at 417
+  9485    439.236 wddm summary: CreateProcess                       6  first at 267
+  9486    439.236 wddm summary: DestroyProcess                      2  first at 419
+  9487    439.236 wddm summary: SetRootPageTable                    2  first at 294
+  9488    439.236 wddm summary: CreateAllocation                   16  first at 339
+  9489    439.236 wddm summary: DestroyAllocation                  11  first at 539
+  9490    439.236 wddm summary: DescribeAllocation                655  first at 368
+  9491    439.236 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9492    439.236 wddm summary: OpenAllocation                     18  first at 341
+  9493    439.236 wddm summary: CloseAllocation                    11  first at 538
+  9494    439.236 wddm summary: BuildPagingBuffer                4241  first at 273
+  9495    439.236 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9496    439.236 wddm summary: Present                           650  first at 674
+  9497    439.236 wddm summary: SetVidPnSourceAddress             653  first at 399
+  9498    439.236 wddm summary: ControlInterrupt                    5  first at 404
+  9499    439.236 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9500    439.236 wddm summary: adapter info type   1       1  first at 253
+  9501    439.236 wddm summary: adapter info type  15       1  first at 254
+  9502    439.236 wddm summary: adapter info type  47       1  first at 255
+  9503    439.236 wddm summary: adapter info type  13       1  first at 256
+  9504    439.236 wddm summary: adapter info type  14       4  first at 257
+  9505    439.236 wddm summary: adapter info type  11       2  first at 264
+  9506    439.236 wddm summary: adapter info type  10       1  first at 266
+  9507    439.236 wddm summary: adapter info type  16       1  first at 266
+  9508    439.236 wddm summary: capture plans reserved 0 heap 0
+  9509    439.236 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9510    439.236 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9511    439.236 wddm summary: paging operation  11    4106  first at 273
+  9512    439.236 wddm summary: paging operation  12     112  first at 330
+  9513    439.236 wddm summary: paging operation   9      12  first at 349
+  9514    439.236 wddm summary: paging operation   2       3  first at 534
+  9515    439.236 wddm summary: paging operation   8       8  first at 555
+  9516    439.236 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9517    439.236 wddm summary: allocations opened/closed: 18/11 calls
+  9518    439.236 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9519    439.236 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9520    439.236 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9521    439.236 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9522    439.236 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9523    439.236 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9524    439.236 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9525    439.236 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9526    439.236 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9527    439.236 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9528    439.236 wddm summary: native DMA exact disjoint checks 8
+  9529    439.236 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9530    439.236 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9531    439.236 wddm summary: aperture map batches 0, unmap batches 0
+  9532    439.236 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9533    439.236 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9534    439.236 wddm summary: presents 650, flips 651 of 653 address calls (650 arrived above DISPATCH_LEVEL)
+  9535    439.236 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9536    439.236 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9537    439.236 wddm summary: widest blit 0 rows
+  9538    439.236 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9539    439.236 wddm summary: vsync enabled, 0 ticks, 26286 reported to dxgkrnl
+  9540    439.236 wddm summary: dcn lock acknowledgement timeouts 0
+  9541    439.236 wddm summary: vidpn flip open: 651 hardware flips, 0 refused, 1 hardware vsyncs armed 26301 acked 0 refused 2 deferred (flip still pending)
+  9542    439.236 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9543    439.236 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9544    439.236 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9545    439.236 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9546    439.236 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9547    439.236 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9548    439.236 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9549    439.236 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9550    439.236 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9551    444.299 wddm summary: ---- DDI calls: name, count, first log line ----
+  9552    444.299 wddm summary: QueryAdapterInfo                   12  first at 253
+  9553    444.299 wddm summary: GetNodeMetadata                     2  first at 261
+  9554    444.299 wddm summary: CreateDevice                        9  first at 268
+  9555    444.299 wddm summary: DestroyDevice                       2  first at 418
+  9556    444.299 wddm summary: CreateContext                       7  first at 271
+  9557    444.299 wddm summary: DestroyContext                      2  first at 417
+  9558    444.299 wddm summary: CreateProcess                       6  first at 267
+  9559    444.299 wddm summary: DestroyProcess                      2  first at 419
+  9560    444.299 wddm summary: SetRootPageTable                    2  first at 294
+  9561    444.299 wddm summary: CreateAllocation                   16  first at 339
+  9562    444.299 wddm summary: DestroyAllocation                  11  first at 539
+  9563    444.299 wddm summary: DescribeAllocation                665  first at 368
+  9564    444.299 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9565    444.299 wddm summary: OpenAllocation                     18  first at 341
+  9566    444.299 wddm summary: CloseAllocation                    11  first at 538
+  9567    444.299 wddm summary: BuildPagingBuffer                4241  first at 273
+  9568    444.299 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9569    444.299 wddm summary: Present                           660  first at 674
+  9570    444.299 wddm summary: SetVidPnSourceAddress             663  first at 399
+  9571    444.299 wddm summary: ControlInterrupt                    5  first at 404
+  9572    444.299 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9573    444.299 wddm summary: adapter info type   1       1  first at 253
+  9574    444.299 wddm summary: adapter info type  15       1  first at 254
+  9575    444.299 wddm summary: adapter info type  47       1  first at 255
+  9576    444.299 wddm summary: adapter info type  13       1  first at 256
+  9577    444.299 wddm summary: adapter info type  14       4  first at 257
+  9578    444.299 wddm summary: adapter info type  11       2  first at 264
+  9579    444.299 wddm summary: adapter info type  10       1  first at 266
+  9580    444.299 wddm summary: adapter info type  16       1  first at 266
+  9581    444.299 wddm summary: capture plans reserved 0 heap 0
+  9582    444.299 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9583    444.299 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9584    444.299 wddm summary: paging operation  11    4106  first at 273
+  9585    444.299 wddm summary: paging operation  12     112  first at 330
+  9586    444.299 wddm summary: paging operation   9      12  first at 349
+  9587    444.299 wddm summary: paging operation   2       3  first at 534
+  9588    444.299 wddm summary: paging operation   8       8  first at 555
+  9589    444.299 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9590    444.299 wddm summary: allocations opened/closed: 18/11 calls
+  9591    444.299 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9592    444.299 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9593    444.299 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9594    444.299 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9595    444.299 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9596    444.299 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9597    444.299 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9598    444.299 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9599    444.299 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9600    444.299 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9601    444.299 wddm summary: native DMA exact disjoint checks 8
+  9602    444.299 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9603    444.299 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9604    444.299 wddm summary: aperture map batches 0, unmap batches 0
+  9605    444.299 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9606    444.299 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9607    444.299 wddm summary: presents 660, flips 661 of 663 address calls (660 arrived above DISPATCH_LEVEL)
+  9608    444.299 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9609    444.299 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9610    444.299 wddm summary: widest blit 0 rows
+  9611    444.299 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9612    444.299 wddm summary: vsync enabled, 0 ticks, 26589 reported to dxgkrnl
+  9613    444.299 wddm summary: dcn lock acknowledgement timeouts 0
+  9614    444.299 wddm summary: vidpn flip open: 661 hardware flips, 0 refused, 1 hardware vsyncs armed 26604 acked 0 refused 2 deferred (flip still pending)
+  9615    444.299 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9616    444.299 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9617    444.299 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9618    444.299 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9619    444.299 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9620    444.299 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9621    444.299 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9622    444.299 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9623    444.299 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9624    449.364 wddm summary: ---- DDI calls: name, count, first log line ----
+  9625    449.364 wddm summary: QueryAdapterInfo                   12  first at 253
+  9626    449.364 wddm summary: GetNodeMetadata                     2  first at 261
+  9627    449.364 wddm summary: CreateDevice                        9  first at 268
+  9628    449.364 wddm summary: DestroyDevice                       2  first at 418
+  9629    449.364 wddm summary: CreateContext                       7  first at 271
+  9630    449.364 wddm summary: DestroyContext                      2  first at 417
+  9631    449.364 wddm summary: CreateProcess                       6  first at 267
+  9632    449.364 wddm summary: DestroyProcess                      2  first at 419
+  9633    449.364 wddm summary: SetRootPageTable                    2  first at 294
+  9634    449.364 wddm summary: CreateAllocation                   16  first at 339
+  9635    449.364 wddm summary: DestroyAllocation                  11  first at 539
+  9636    449.364 wddm summary: DescribeAllocation                673  first at 368
+  9637    449.364 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9638    449.364 wddm summary: OpenAllocation                     18  first at 341
+  9639    449.364 wddm summary: CloseAllocation                    11  first at 538
+  9640    449.364 wddm summary: BuildPagingBuffer                4241  first at 273
+  9641    449.364 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9642    449.364 wddm summary: Present                           668  first at 674
+  9643    449.364 wddm summary: SetVidPnSourceAddress             671  first at 399
+  9644    449.364 wddm summary: ControlInterrupt                    5  first at 404
+  9645    449.364 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9646    449.364 wddm summary: adapter info type   1       1  first at 253
+  9647    449.364 wddm summary: adapter info type  15       1  first at 254
+  9648    449.364 wddm summary: adapter info type  47       1  first at 255
+  9649    449.364 wddm summary: adapter info type  13       1  first at 256
+  9650    449.364 wddm summary: adapter info type  14       4  first at 257
+  9651    449.364 wddm summary: adapter info type  11       2  first at 264
+  9652    449.364 wddm summary: adapter info type  10       1  first at 266
+  9653    449.364 wddm summary: adapter info type  16       1  first at 266
+  9654    449.364 wddm summary: capture plans reserved 0 heap 0
+  9655    449.364 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9656    449.364 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9657    449.364 wddm summary: paging operation  11    4106  first at 273
+  9658    449.364 wddm summary: paging operation  12     112  first at 330
+  9659    449.364 wddm summary: paging operation   9      12  first at 349
+  9660    449.364 wddm summary: paging operation   2       3  first at 534
+  9661    449.364 wddm summary: paging operation   8       8  first at 555
+  9662    449.364 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9663    449.364 wddm summary: allocations opened/closed: 18/11 calls
+  9664    449.364 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9665    449.364 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9666    449.364 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9667    449.364 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9668    449.364 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9669    449.364 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9670    449.364 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9671    449.364 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9672    449.364 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9673    449.364 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9674    449.364 wddm summary: native DMA exact disjoint checks 8
+  9675    449.364 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9676    449.364 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9677    449.364 wddm summary: aperture map batches 0, unmap batches 0
+  9678    449.364 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9679    449.364 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9680    449.364 wddm summary: presents 668, flips 669 of 671 address calls (668 arrived above DISPATCH_LEVEL)
+  9681    449.364 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9682    449.364 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9683    449.364 wddm summary: widest blit 0 rows
+  9684    449.364 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9685    449.364 wddm summary: vsync enabled, 0 ticks, 26893 reported to dxgkrnl
+  9686    449.364 wddm summary: dcn lock acknowledgement timeouts 0
+  9687    449.364 wddm summary: vidpn flip open: 669 hardware flips, 0 refused, 1 hardware vsyncs armed 26908 acked 0 refused 2 deferred (flip still pending)
+  9688    449.364 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9689    449.364 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9690    449.364 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9691    449.364 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9692    449.364 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9693    449.364 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9694    449.364 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9695    449.364 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9696    449.364 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9697    454.427 wddm summary: ---- DDI calls: name, count, first log line ----
+  9698    454.427 wddm summary: QueryAdapterInfo                   12  first at 253
+  9699    454.427 wddm summary: GetNodeMetadata                     2  first at 261
+  9700    454.427 wddm summary: CreateDevice                        9  first at 268
+  9701    454.427 wddm summary: DestroyDevice                       2  first at 418
+  9702    454.427 wddm summary: CreateContext                       7  first at 271
+  9703    454.427 wddm summary: DestroyContext                      2  first at 417
+  9704    454.427 wddm summary: CreateProcess                       6  first at 267
+  9705    454.427 wddm summary: DestroyProcess                      2  first at 419
+  9706    454.427 wddm summary: SetRootPageTable                    2  first at 294
+  9707    454.427 wddm summary: CreateAllocation                   16  first at 339
+  9708    454.427 wddm summary: DestroyAllocation                  11  first at 539
+  9709    454.427 wddm summary: DescribeAllocation                681  first at 368
+  9710    454.427 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9711    454.427 wddm summary: OpenAllocation                     18  first at 341
+  9712    454.427 wddm summary: CloseAllocation                    11  first at 538
+  9713    454.427 wddm summary: BuildPagingBuffer                4241  first at 273
+  9714    454.427 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9715    454.427 wddm summary: Present                           676  first at 674
+  9716    454.427 wddm summary: SetVidPnSourceAddress             679  first at 399
+  9717    454.427 wddm summary: ControlInterrupt                    5  first at 404
+  9718    454.427 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9719    454.427 wddm summary: adapter info type   1       1  first at 253
+  9720    454.427 wddm summary: adapter info type  15       1  first at 254
+  9721    454.427 wddm summary: adapter info type  47       1  first at 255
+  9722    454.427 wddm summary: adapter info type  13       1  first at 256
+  9723    454.427 wddm summary: adapter info type  14       4  first at 257
+  9724    454.427 wddm summary: adapter info type  11       2  first at 264
+  9725    454.427 wddm summary: adapter info type  10       1  first at 266
+  9726    454.427 wddm summary: adapter info type  16       1  first at 266
+  9727    454.427 wddm summary: capture plans reserved 0 heap 0
+  9728    454.427 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9729    454.427 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9730    454.427 wddm summary: paging operation  11    4106  first at 273
+  9731    454.427 wddm summary: paging operation  12     112  first at 330
+  9732    454.427 wddm summary: paging operation   9      12  first at 349
+  9733    454.427 wddm summary: paging operation   2       3  first at 534
+  9734    454.427 wddm summary: paging operation   8       8  first at 555
+  9735    454.427 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9736    454.427 wddm summary: allocations opened/closed: 18/11 calls
+  9737    454.427 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9738    454.427 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9739    454.427 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9740    454.427 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9741    454.427 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9742    454.427 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9743    454.427 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9744    454.427 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9745    454.427 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9746    454.427 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9747    454.427 wddm summary: native DMA exact disjoint checks 8
+  9748    454.427 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9749    454.427 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9750    454.427 wddm summary: aperture map batches 0, unmap batches 0
+  9751    454.427 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9752    454.427 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9753    454.427 wddm summary: presents 676, flips 677 of 679 address calls (676 arrived above DISPATCH_LEVEL)
+  9754    454.427 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9755    454.427 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9756    454.427 wddm summary: widest blit 0 rows
+  9757    454.427 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9758    454.427 wddm summary: vsync enabled, 0 ticks, 27196 reported to dxgkrnl
+  9759    454.427 wddm summary: dcn lock acknowledgement timeouts 0
+  9760    454.427 wddm summary: vidpn flip open: 677 hardware flips, 0 refused, 1 hardware vsyncs armed 27211 acked 0 refused 2 deferred (flip still pending)
+  9761    454.427 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9762    454.427 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9763    454.427 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9764    454.427 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9765    454.427 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9766    454.427 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9767    454.427 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9768    454.427 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9769    454.427 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9770    459.490 wddm summary: ---- DDI calls: name, count, first log line ----
+  9771    459.490 wddm summary: QueryAdapterInfo                   12  first at 253
+  9772    459.490 wddm summary: GetNodeMetadata                     2  first at 261
+  9773    459.490 wddm summary: CreateDevice                        9  first at 268
+  9774    459.490 wddm summary: DestroyDevice                       2  first at 418
+  9775    459.490 wddm summary: CreateContext                       7  first at 271
+  9776    459.490 wddm summary: DestroyContext                      2  first at 417
+  9777    459.490 wddm summary: CreateProcess                       6  first at 267
+  9778    459.490 wddm summary: DestroyProcess                      2  first at 419
+  9779    459.490 wddm summary: SetRootPageTable                    2  first at 294
+  9780    459.490 wddm summary: CreateAllocation                   16  first at 339
+  9781    459.490 wddm summary: DestroyAllocation                  11  first at 539
+  9782    459.490 wddm summary: DescribeAllocation                688  first at 368
+  9783    459.490 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9784    459.490 wddm summary: OpenAllocation                     18  first at 341
+  9785    459.490 wddm summary: CloseAllocation                    11  first at 538
+  9786    459.490 wddm summary: BuildPagingBuffer                4241  first at 273
+  9787    459.490 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9788    459.490 wddm summary: Present                           683  first at 674
+  9789    459.490 wddm summary: SetVidPnSourceAddress             686  first at 399
+  9790    459.490 wddm summary: ControlInterrupt                    5  first at 404
+  9791    459.490 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9792    459.490 wddm summary: adapter info type   1       1  first at 253
+  9793    459.490 wddm summary: adapter info type  15       1  first at 254
+  9794    459.490 wddm summary: adapter info type  47       1  first at 255
+  9795    459.490 wddm summary: adapter info type  13       1  first at 256
+  9796    459.490 wddm summary: adapter info type  14       4  first at 257
+  9797    459.490 wddm summary: adapter info type  11       2  first at 264
+  9798    459.490 wddm summary: adapter info type  10       1  first at 266
+  9799    459.490 wddm summary: adapter info type  16       1  first at 266
+  9800    459.490 wddm summary: capture plans reserved 0 heap 0
+  9801    459.490 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9802    459.490 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9803    459.490 wddm summary: paging operation  11    4106  first at 273
+  9804    459.490 wddm summary: paging operation  12     112  first at 330
+  9805    459.490 wddm summary: paging operation   9      12  first at 349
+  9806    459.490 wddm summary: paging operation   2       3  first at 534
+  9807    459.490 wddm summary: paging operation   8       8  first at 555
+  9808    459.490 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9809    459.490 wddm summary: allocations opened/closed: 18/11 calls
+  9810    459.490 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9811    459.490 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9812    459.490 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9813    459.490 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9814    459.490 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9815    459.490 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9816    459.490 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9817    459.490 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9818    459.490 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9819    459.490 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9820    459.490 wddm summary: native DMA exact disjoint checks 8
+  9821    459.490 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9822    459.490 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9823    459.490 wddm summary: aperture map batches 0, unmap batches 0
+  9824    459.490 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9825    459.490 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9826    459.490 wddm summary: presents 683, flips 684 of 686 address calls (683 arrived above DISPATCH_LEVEL)
+  9827    459.490 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9828    459.490 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9829    459.490 wddm summary: widest blit 0 rows
+  9830    459.490 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9831    459.490 wddm summary: vsync enabled, 0 ticks, 27500 reported to dxgkrnl
+  9832    459.490 wddm summary: dcn lock acknowledgement timeouts 0
+  9833    459.490 wddm summary: vidpn flip open: 684 hardware flips, 0 refused, 1 hardware vsyncs armed 27515 acked 0 refused 2 deferred (flip still pending)
+  9834    459.490 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9835    459.490 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9836    459.490 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9837    459.490 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9838    459.490 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9839    459.490 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9840    459.490 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9841    459.490 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9842    459.490 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9843    464.553 wddm summary: ---- DDI calls: name, count, first log line ----
+  9844    464.553 wddm summary: QueryAdapterInfo                   12  first at 253
+  9845    464.553 wddm summary: GetNodeMetadata                     2  first at 261
+  9846    464.553 wddm summary: CreateDevice                        9  first at 268
+  9847    464.553 wddm summary: DestroyDevice                       2  first at 418
+  9848    464.553 wddm summary: CreateContext                       7  first at 271
+  9849    464.553 wddm summary: DestroyContext                      2  first at 417
+  9850    464.553 wddm summary: CreateProcess                       6  first at 267
+  9851    464.553 wddm summary: DestroyProcess                      2  first at 419
+  9852    464.553 wddm summary: SetRootPageTable                    2  first at 294
+  9853    464.553 wddm summary: CreateAllocation                   16  first at 339
+  9854    464.553 wddm summary: DestroyAllocation                  11  first at 539
+  9855    464.553 wddm summary: DescribeAllocation                696  first at 368
+  9856    464.553 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9857    464.553 wddm summary: OpenAllocation                     18  first at 341
+  9858    464.553 wddm summary: CloseAllocation                    11  first at 538
+  9859    464.553 wddm summary: BuildPagingBuffer                4241  first at 273
+  9860    464.553 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9861    464.553 wddm summary: Present                           691  first at 674
+  9862    464.553 wddm summary: SetVidPnSourceAddress             694  first at 399
+  9863    464.553 wddm summary: ControlInterrupt                    5  first at 404
+  9864    464.553 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9865    464.553 wddm summary: adapter info type   1       1  first at 253
+  9866    464.553 wddm summary: adapter info type  15       1  first at 254
+  9867    464.553 wddm summary: adapter info type  47       1  first at 255
+  9868    464.553 wddm summary: adapter info type  13       1  first at 256
+  9869    464.553 wddm summary: adapter info type  14       4  first at 257
+  9870    464.553 wddm summary: adapter info type  11       2  first at 264
+  9871    464.553 wddm summary: adapter info type  10       1  first at 266
+  9872    464.553 wddm summary: adapter info type  16       1  first at 266
+  9873    464.553 wddm summary: capture plans reserved 0 heap 0
+  9874    464.553 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9875    464.553 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9876    464.553 wddm summary: paging operation  11    4106  first at 273
+  9877    464.553 wddm summary: paging operation  12     112  first at 330
+  9878    464.553 wddm summary: paging operation   9      12  first at 349
+  9879    464.553 wddm summary: paging operation   2       3  first at 534
+  9880    464.553 wddm summary: paging operation   8       8  first at 555
+  9881    464.553 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9882    464.553 wddm summary: allocations opened/closed: 18/11 calls
+  9883    464.553 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9884    464.553 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9885    464.553 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9886    464.553 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9887    464.553 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9888    464.553 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9889    464.553 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9890    464.553 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9891    464.553 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9892    464.553 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9893    464.553 wddm summary: native DMA exact disjoint checks 8
+  9894    464.553 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9895    464.553 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9896    464.553 wddm summary: aperture map batches 0, unmap batches 0
+  9897    464.553 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9898    464.553 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9899    464.553 wddm summary: presents 691, flips 692 of 694 address calls (691 arrived above DISPATCH_LEVEL)
+  9900    464.553 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9901    464.553 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9902    464.553 wddm summary: widest blit 0 rows
+  9903    464.553 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9904    464.553 wddm summary: vsync enabled, 0 ticks, 27803 reported to dxgkrnl
+  9905    464.553 wddm summary: dcn lock acknowledgement timeouts 0
+  9906    464.553 wddm summary: vidpn flip open: 692 hardware flips, 0 refused, 1 hardware vsyncs armed 27818 acked 0 refused 2 deferred (flip still pending)
+  9907    464.553 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9908    464.553 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9909    464.553 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9910    464.553 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9911    464.553 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9912    464.553 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9913    464.553 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9914    464.553 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9915    464.553 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9916    469.616 wddm summary: ---- DDI calls: name, count, first log line ----
+  9917    469.616 wddm summary: QueryAdapterInfo                   12  first at 253
+  9918    469.616 wddm summary: GetNodeMetadata                     2  first at 261
+  9919    469.616 wddm summary: CreateDevice                        9  first at 268
+  9920    469.616 wddm summary: DestroyDevice                       2  first at 418
+  9921    469.616 wddm summary: CreateContext                       7  first at 271
+  9922    469.616 wddm summary: DestroyContext                      2  first at 417
+  9923    469.616 wddm summary: CreateProcess                       6  first at 267
+  9924    469.616 wddm summary: DestroyProcess                      2  first at 419
+  9925    469.616 wddm summary: SetRootPageTable                    2  first at 294
+  9926    469.616 wddm summary: CreateAllocation                   16  first at 339
+  9927    469.616 wddm summary: DestroyAllocation                  11  first at 539
+  9928    469.616 wddm summary: DescribeAllocation                703  first at 368
+  9929    469.616 wddm summary: GetStandardAllocationDriverData      4  first at 337
+  9930    469.616 wddm summary: OpenAllocation                     18  first at 341
+  9931    469.616 wddm summary: CloseAllocation                    11  first at 538
+  9932    469.616 wddm summary: BuildPagingBuffer                4241  first at 273
+  9933    469.616 wddm summary: SubmitCommandVirtual             2124  first at 317
+  9934    469.616 wddm summary: Present                           698  first at 674
+  9935    469.616 wddm summary: SetVidPnSourceAddress             701  first at 399
+  9936    469.616 wddm summary: ControlInterrupt                    5  first at 404
+  9937    469.616 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  9938    469.616 wddm summary: adapter info type   1       1  first at 253
+  9939    469.616 wddm summary: adapter info type  15       1  first at 254
+  9940    469.616 wddm summary: adapter info type  47       1  first at 255
+  9941    469.616 wddm summary: adapter info type  13       1  first at 256
+  9942    469.616 wddm summary: adapter info type  14       4  first at 257
+  9943    469.616 wddm summary: adapter info type  11       2  first at 264
+  9944    469.616 wddm summary: adapter info type  10       1  first at 266
+  9945    469.616 wddm summary: adapter info type  16       1  first at 266
+  9946    469.616 wddm summary: capture plans reserved 0 heap 0
+  9947    469.616 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  9948    469.616 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  9949    469.616 wddm summary: paging operation  11    4106  first at 273
+  9950    469.616 wddm summary: paging operation  12     112  first at 330
+  9951    469.616 wddm summary: paging operation   9      12  first at 349
+  9952    469.616 wddm summary: paging operation   2       3  first at 534
+  9953    469.616 wddm summary: paging operation   8       8  first at 555
+  9954    469.616 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+  9955    469.616 wddm summary: allocations opened/closed: 18/11 calls
+  9956    469.616 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+  9957    469.616 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+  9958    469.616 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+  9959    469.616 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+  9960    469.616 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+  9961    469.616 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+  9962    469.616 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+  9963    469.616 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+  9964    469.616 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+  9965    469.616 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+  9966    469.616 wddm summary: native DMA exact disjoint checks 8
+  9967    469.616 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+  9968    469.616 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+  9969    469.616 wddm summary: aperture map batches 0, unmap batches 0
+  9970    469.616 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+  9971    469.616 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  9972    469.616 wddm summary: presents 698, flips 699 of 701 address calls (698 arrived above DISPATCH_LEVEL)
+  9973    469.616 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  9974    469.616 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+  9975    469.616 wddm summary: widest blit 0 rows
+  9976    469.616 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  9977    469.616 wddm summary: vsync enabled, 0 ticks, 28107 reported to dxgkrnl
+  9978    469.616 wddm summary: dcn lock acknowledgement timeouts 0
+  9979    469.616 wddm summary: vidpn flip open: 699 hardware flips, 0 refused, 1 hardware vsyncs armed 28122 acked 0 refused 2 deferred (flip still pending)
+  9980    469.616 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9981    469.616 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  9982    469.616 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+  9983    469.616 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+  9984    469.616 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+  9985    469.616 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+  9986    469.616 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+  9987    469.616 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+  9988    469.616 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+  9989    474.681 wddm summary: ---- DDI calls: name, count, first log line ----
+  9990    474.681 wddm summary: QueryAdapterInfo                   12  first at 253
+  9991    474.681 wddm summary: GetNodeMetadata                     2  first at 261
+  9992    474.681 wddm summary: CreateDevice                        9  first at 268
+  9993    474.681 wddm summary: DestroyDevice                       2  first at 418
+  9994    474.681 wddm summary: CreateContext                       7  first at 271
+  9995    474.681 wddm summary: DestroyContext                      2  first at 417
+  9996    474.681 wddm summary: CreateProcess                       6  first at 267
+  9997    474.681 wddm summary: DestroyProcess                      2  first at 419
+  9998    474.681 wddm summary: SetRootPageTable                    2  first at 294
+  9999    474.681 wddm summary: CreateAllocation                   16  first at 339
+ 10000    474.681 wddm summary: DestroyAllocation                  11  first at 539
+ 10001    474.681 wddm summary: DescribeAllocation                711  first at 368
+ 10002    474.681 wddm summary: GetStandardAllocationDriverData      4  first at 337
+ 10003    474.681 wddm summary: OpenAllocation                     18  first at 341
+ 10004    474.681 wddm summary: CloseAllocation                    11  first at 538
+ 10005    474.681 wddm summary: BuildPagingBuffer                4241  first at 273
+ 10006    474.681 wddm summary: SubmitCommandVirtual             2124  first at 317
+ 10007    474.681 wddm summary: Present                           706  first at 674
+ 10008    474.681 wddm summary: SetVidPnSourceAddress             709  first at 399
+ 10009    474.681 wddm summary: ControlInterrupt                    5  first at 404
+ 10010    474.681 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 10011    474.681 wddm summary: adapter info type   1       1  first at 253
+ 10012    474.681 wddm summary: adapter info type  15       1  first at 254
+ 10013    474.681 wddm summary: adapter info type  47       1  first at 255
+ 10014    474.681 wddm summary: adapter info type  13       1  first at 256
+ 10015    474.681 wddm summary: adapter info type  14       4  first at 257
+ 10016    474.681 wddm summary: adapter info type  11       2  first at 264
+ 10017    474.681 wddm summary: adapter info type  10       1  first at 266
+ 10018    474.681 wddm summary: adapter info type  16       1  first at 266
+ 10019    474.681 wddm summary: capture plans reserved 0 heap 0
+ 10020    474.681 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 10021    474.681 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 10022    474.681 wddm summary: paging operation  11    4106  first at 273
+ 10023    474.681 wddm summary: paging operation  12     112  first at 330
+ 10024    474.681 wddm summary: paging operation   9      12  first at 349
+ 10025    474.681 wddm summary: paging operation   2       3  first at 534
+ 10026    474.681 wddm summary: paging operation   8       8  first at 555
+ 10027    474.681 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+ 10028    474.681 wddm summary: allocations opened/closed: 18/11 calls
+ 10029    474.681 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+ 10030    474.681 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+ 10031    474.681 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+ 10032    474.681 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+ 10033    474.681 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 10034    474.681 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+ 10035    474.681 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+ 10036    474.681 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+ 10037    474.681 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+ 10038    474.681 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+ 10039    474.681 wddm summary: native DMA exact disjoint checks 8
+ 10040    474.681 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+ 10041    474.681 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+ 10042    474.681 wddm summary: aperture map batches 0, unmap batches 0
+ 10043    474.681 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+ 10044    474.681 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 10045    474.681 wddm summary: presents 706, flips 707 of 709 address calls (706 arrived above DISPATCH_LEVEL)
+ 10046    474.681 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 10047    474.681 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 10048    474.681 wddm summary: widest blit 0 rows
+ 10049    474.681 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 10050    474.681 wddm summary: vsync enabled, 0 ticks, 28410 reported to dxgkrnl
+ 10051    474.681 wddm summary: dcn lock acknowledgement timeouts 0
+ 10052    474.681 wddm summary: vidpn flip open: 707 hardware flips, 0 refused, 1 hardware vsyncs armed 28425 acked 0 refused 2 deferred (flip still pending)
+ 10053    474.681 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 10054    474.681 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 10055    474.681 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 10056    474.681 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 10057    474.681 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 10058    474.681 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 10059    474.681 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+ 10060    474.681 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 10061    474.681 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+ 10062    478.572 wddm summary: ---- DDI calls: name, count, first log line ----
+ 10063    478.572 wddm summary: QueryAdapterInfo                   12  first at 253
+ 10064    478.572 wddm summary: GetNodeMetadata                     2  first at 261
+ 10065    478.572 wddm summary: CreateDevice                        9  first at 268
+ 10066    478.572 wddm summary: DestroyDevice                       2  first at 418
+ 10067    478.572 wddm summary: CreateContext                       7  first at 271
+ 10068    478.572 wddm summary: DestroyContext                      2  first at 417
+ 10069    478.572 wddm summary: CreateProcess                       6  first at 267
+ 10070    478.572 wddm summary: DestroyProcess                      2  first at 419
+ 10071    478.572 wddm summary: SetRootPageTable                    2  first at 294
+ 10072    478.572 wddm summary: CreateAllocation                   16  first at 339
+ 10073    478.572 wddm summary: DestroyAllocation                  11  first at 539
+ 10074    478.572 wddm summary: DescribeAllocation                716  first at 368
+ 10075    478.572 wddm summary: GetStandardAllocationDriverData      4  first at 337
+ 10076    478.572 wddm summary: OpenAllocation                     18  first at 341
+ 10077    478.572 wddm summary: CloseAllocation                    11  first at 538
+ 10078    478.572 wddm summary: BuildPagingBuffer                4241  first at 273
+ 10079    478.572 wddm summary: SubmitCommandVirtual             2124  first at 317
+ 10080    478.572 wddm summary: Present                           711  first at 674
+ 10081    478.572 wddm summary: SetVidPnSourceAddress             714  first at 399
+ 10082    478.572 wddm summary: ControlInterrupt                    5  first at 404
+ 10083    478.572 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 10084    478.572 wddm summary: adapter info type   1       1  first at 253
+ 10085    478.572 wddm summary: adapter info type  15       1  first at 254
+ 10086    478.572 wddm summary: adapter info type  47       1  first at 255
+ 10087    478.572 wddm summary: adapter info type  13       1  first at 256
+ 10088    478.572 wddm summary: adapter info type  14       4  first at 257
+ 10089    478.572 wddm summary: adapter info type  11       2  first at 264
+ 10090    478.572 wddm summary: adapter info type  10       1  first at 266
+ 10091    478.572 wddm summary: adapter info type  16       1  first at 266
+ 10092    478.572 wddm summary: capture plans reserved 0 heap 0
+ 10093    478.572 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 10094    478.572 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 10095    478.572 wddm summary: paging operation  11    4106  first at 273
+ 10096    478.572 wddm summary: paging operation  12     112  first at 330
+ 10097    478.572 wddm summary: paging operation   9      12  first at 349
+ 10098    478.572 wddm summary: paging operation   2       3  first at 534
+ 10099    478.572 wddm summary: paging operation   8       8  first at 555
+ 10100    478.572 wddm summary: objects created/destroyed: dev 9/2 ctx 7/2 proc 6/2 alloc 16/11, 36 alive
+ 10101    478.572 wddm summary: allocations opened/closed: 18/11 calls
+ 10102    478.572 wddm summary: submissions 0 physical + 2124 virtual, 0 preemptions, last completed fence 1868
+ 10103    478.572 wddm summary: node 0 hardware: 256 submitted, 256 completed, 0 timeouts, 0 refused
+ 10104    478.572 wddm summary: umd: 6 allocs (0 refused), 1 contexts, 256 submits on the ring, 0 not run
+ 10105    478.572 wddm profile: umd calls 256, elapsed ticks 84448, QPC frequency 10000000
+ 10106    478.572 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 10107    478.572 wddm summary: node 1 (paging, open): 1868 hardware submitted, 1868 completed, 0 timeouts, 0 refused
+ 10108    478.572 wddm: paging OS-private queue admissions=1868 (no submit allocation)
+ 10109    478.572 wddm summary: SubmitCommandVirtual by node: 0: 256, 1: 1868, 0 private-buffer refusals
+ 10110    478.572 wddm summary: paging DMA VA nonzero 3212 zero 1029, mapping observations 8
+ 10111    478.572 wddm summary: native DMA transfers 8 fills 12 bytes 763248640
+ 10112    478.572 wddm summary: native DMA exact disjoint checks 8
+ 10113    478.572 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x1B692F000 CPU_PA0x1B692F000
+ 10114    478.572 wddm summary: BuildPagingBuffer: 8 transfers, 12 fills, 763248640 bytes, 1511 insufficient-buffer
+ 10115    478.572 wddm summary: aperture map batches 0, unmap batches 0
+ 10116    478.572 wddm summary: paging TLB invalidations 112, PTE update batches 3071
+ 10117    478.572 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 10118    478.572 wddm summary: presents 711, flips 712 of 714 address calls (711 arrived above DISPATCH_LEVEL)
+ 10119    478.572 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 10120    478.572 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 10121    478.572 wddm summary: widest blit 0 rows
+ 10122    478.572 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 10123    478.572 wddm summary: vsync enabled, 0 ticks, 28644 reported to dxgkrnl
+ 10124    478.572 wddm summary: dcn lock acknowledgement timeouts 0
+ 10125    478.572 wddm summary: vidpn flip open: 712 hardware flips, 0 refused, 1 hardware vsyncs armed 28659 acked 0 refused 2 deferred (flip still pending)
+ 10126    478.572 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 10127    478.572 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 10128    478.572 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 10129    478.572 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 10130    478.572 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 10131    478.572 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 10132    478.572 vidmm summary: system leaf encoding coherent 2 noncoherent 213836 snoop mismatches 0
+ 10133    478.572 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 10134    478.572 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 2 roots
+             1024 lines printed

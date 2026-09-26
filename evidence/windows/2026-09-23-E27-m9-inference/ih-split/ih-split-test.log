@@ -1,0 +1,86 @@
+compile (user mode, host replay test)
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+compile (kernel flags, same shim sources, no link)
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+extract the reference trace 0.2520 to 0.2540
+run
+backend_mem: the words at 0x281000 are not bufferclear_cs_shader_gfx10
+trace window: 15 writes, 3 offsets seeded with their traced read values
+
+== navi10_ih_irq_init, replayed ==
+  bc250_ih_hw_init                    : 0
+  writes produced / window            : 15 / 15
+  mismatches                          : 0
+  address exceptions (offset only)    : 4
+  address registers wrong             : 0
+  reads with no recorded value        : 0
+
+== hw_fini, then hw_init again on the same adev ==
+  the disable writes 3 registers
+  the second bc250_ih_hw_init returns 0 and writes 15 registers
+  split prepare/enable: 14 + 1 writes, 0 trace mismatches, 0 address failures
+
+== the decode ==
+  all thirteen fields of one vector round-trip: yes
+  gfx / compute / KIQ / SDMA1 routed apart : yes
+  the last entry wraps to 0               : yes
+
+== the write and read pointers ==
+  three vectors pending, read from memory, no register touched: yes
+  an overflow is acknowledged with a two-write pulse   : yes
+  on overflow the caller picks rptr up from adev    : yes
+  set_rptr: write-back slot then doorbell, no MMIO   : yes
+  it is a 32-bit doorbell at 0x2F0, not 64            : yes
+  registers the trio touched                : 2
+    0x04490 OSSSYS.IH_RB_WPTR    read only
+    0x04480 OSSSYS.IH_RB_CNTL    read and written
+    0x0448C OSSSYS.IH_RB_RPTR     written, doorbell off only
+  a zeroed adev with only irq.ih copied works       : yes
+
+== the SDMA engines: a ring test, a fence, and its trap ==
+  sdma0: ring test, fence and trap all as unit A emits them  : yes
+  sdma1: ring test, fence and trap all as unit A emits them  : yes
+  the same fence without _INT raises nothing            : yes
+  a fence on an unaligned address is refused            : yes
+
+== a fence, and the interrupt it raises ==
+  gfx, compute 3 and the KIQ each land a value and one vector : yes
+  the same fence without _INT raises nothing            : yes
+  a misaligned fence and a 64-bit KIQ fence are refused : yes
+
+== a compute dispatch: 64 threads a workgroup, 16 bytes a thread ==
+  shader at 0x281000 (36 bytes), destination at 0x282000 (16384 bytes)
+  all 82 dwords equal libdrm's own sequence          : yes
+
+  the 72 dwords, to diff against dispatch.py --dry:
+  c0037602 00000204 00000000 00000000 00000000 c0017602 00000218 00000000
+  c0017602 0000022a 00000000 c0067602 00000222 00000000 00000000 00000000
+  00000000 00000000 00000000 c0017900 0000007b 00000020 c0029b02 30000216
+  ffffffff ffffffff c0029b02 30000219 ffffffff ffffffff c0027602 0000020c
+  00002810 00000000 c0017602 00000212 000c0041 c0017602 00000213 00000090
+  c0017602 00000207 00000040 c0017602 00000208 00000001 c0017602 00000209
+  00000001 c0017602 00000228 00000000 c0047602 00000240 00282000 00100000
+  00000040 1104bfac c0047602 00000244 22222222 22222222 22222222 22222222
+  c0017602 00000215 00000000 c0031502 00000001 00000001 00000001 00000001
+
+  one workgroup wrote its 1024 bytes and nothing else : yes
+  the fence behind it landed and raised one vector    : yes
+  16 workgroups fill the whole 0x4000 bytes           : yes
+  0 groups, 17 groups and the gfx ring are refused    : yes
+  one wrong dword is found, at its own offset         : yes
+  with no CP, nothing is written and check() fails    : yes
+  (the stub's complaint on stderr below belongs to this control)
+  a shader that is not libdrm's is refused            : yes
+
+== controls, each of which must FAIL ==
+  MSI off                          : fails, as it should (2 mismatches)
+  the self-clearing bit not modelled: fails, as it should (1 mismatches)
+
+EXACT MATCH over 15 writes (4 address exceptions); the decode, the pointers, the fence and a compute dispatch that is libdrm's own dword for dword all check out, and both controls fail as they should
+
+replay_ih.exe exit code 0

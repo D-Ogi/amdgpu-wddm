@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 468 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x016AC0  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x015A90  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x02A7D0  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x035CB0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\kiq-checkpoints-kmd\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\kiq-checkpoints-kmd\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\kiq-checkpoints-kmd\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7655  bc250kmd.inf
+   329616  bc250kmd.sys
+  5F1DA123EE9CA396A6EF2B52938369375B4AF2AF041004FDF01E5B8039338352  package\bc250kmd.sys

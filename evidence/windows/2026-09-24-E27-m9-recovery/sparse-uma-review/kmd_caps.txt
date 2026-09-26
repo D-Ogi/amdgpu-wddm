@@ -1,0 +1,17 @@
+{
+    DXGK_GPUMMUCAPS* caps = (DXGK_GPUMMUCAPS*)Query->pOutputData;
+
+    if (Query->OutputDataSize < sizeof(*caps) || caps == NULL) return STATUS_BUFFER_TOO_SMALL;
+    RtlZeroMemory(caps, Query->OutputDataSize);
+    // Page directories live in a local memory segment, where CPU_VIRTUAL is documented as not allowed.
+    // bc250_pte_from_dxgk preserves CacheCoherent as AMDGPU_PTE_SNOOPED for
+    // system pages. Advertise this when requesting cached GTT backing store.
+    caps->CacheCoherentMemorySupported = 1;
+    caps->PageTableUpdateMode = DXGK_PAGETABLEUPDATE_GPU_PHYSICAL;
+    caps->VirtualAddressBitCount = BC250_WDDM_VA_BITS;
+    caps->PageTableLevelCount = BC250_WDDM_LEVEL_COUNT;
+    caps->LeafPageTableSizeFor64KPagesInBytes = 0;      // stage A declares no 64 KB pages on the segment
+    return STATUS_SUCCESS;
+}
+
+// Every level of the page table has the same shape here, so the answer does not depend on which end LevelIndex

@@ -1,0 +1,4 @@
+unlocked.c
+FAIL: serialized CPU snapshots, stop joins update, post-stop refusal (4 violations)
+after.c
+PASS: serialized CPU snapshots, stop joins update, post-stop refusal (0 violations)

@@ -1,0 +1,6 @@
+command=['bc250rd_cli.exe', 'clock', '1000', '820'] expected=0 exit=0
+clock verified: 1000 MHz, VID 116 (request 820 mV), backend=kmd-smu
+command=['bc250rd_cli.exe', 'clock-check', '1000', '820'] expected=0 exit=0
+clock verified: 1000 MHz, VID 116 (request 820 mV), backend=kmd-smu
+command=['bc250rd_cli.exe', 'clock', '2000', '1129'] expected=2 exit=1
+KMD clock failed: 0xC000000D

@@ -1,0 +1,38 @@
+[
+  {
+    "file": "driver/kmd/wddm.c",
+    "sha256": "c39f948e9aa5a89af5531366ce3d512cd51394e3f349da36d93532b9c3aa42f0"
+  },
+  {
+    "file": "driver/kmd/dcn.c",
+    "sha256": "e122799045c140e701f0a4191c211773792af11049aae9c517f31bdaa286ac2d"
+  },
+  {
+    "file": "driver/kmd/bc250kmd.h",
+    "sha256": "082d2976d8e73c062e1f67ff7ce2b6ee00f07767d290932c0ec021b3552be98c"
+  },
+  {
+    "file": "driver/kmd/gen_regs.py",
+    "sha256": "88247168e3834780be1965af7af6aec9c84a98acc434590165b2a1779ccc4c4a"
+  },
+  {
+    "file": "driver/kmd/regs.generated.h",
+    "sha256": "328f6672c9770c327566ce33a1fc6879f67188703592371f3e2de0abd2f10e3b"
+  },
+  {
+    "file": "driver/kmd/test/vidpn_flip_test.c",
+    "sha256": "eeac400807ca218a56b3942d72f8b14ea5af723db71e7bb6662cd6d189fd14d3"
+  },
+  {
+    "file": "driver/kmd/test/dcn_observation_test.c",
+    "sha256": "d62812b73b09546035e7d6ae379b5a8c7f6d8c3f57ae5cf62e8bffc356576231"
+  },
+  {
+    "file": "driver/kmd/test/generate_dcn_observation_test.py",
+    "sha256": "8d7e38b5668823b15194a1566a977e7c029dda54ee4259da25098cd083d7b4b2"
+  },
+  {
+    "file": "driver/kmd/test/run_dcn_observation.ps1",
+    "sha256": "b5013b816c8b51be2951a4609ca2bf6b4621014499d8f822ae08d0bdf8ec8b8a"
+  }
+]

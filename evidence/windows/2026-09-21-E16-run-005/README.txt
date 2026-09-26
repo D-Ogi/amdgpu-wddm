@@ -1,4 +1,4 @@
-E16 run 005 and 005c, 2026-09-21: bc250kmd 0.7.5 (commit d576e75) as the UMD stub package 0.7.5.1
+E16 run 005 and 005c, 2026-09-21: bc250kmd 0.7.5 (commit 2095acd) as the UMD stub package 0.7.5.1
 ================================================================================================
 
 Package frozen before the run: package-manifest.txt (tools/packagecheck, PASS, 25 checks with --load).

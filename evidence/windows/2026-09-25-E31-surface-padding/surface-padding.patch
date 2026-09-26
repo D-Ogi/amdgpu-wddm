@@ -1,0 +1,104 @@
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -167,6 +167,8 @@
+    HANDLE hRTResource;
+    D3DKMT_HANDLE allocation;
+    UINT64 gpuVa, gpuBytes;
++   UINT surfacePitch;
++   UINT64 surfaceBytes;
+    BOOL presentReady;
+    void *cpuMapping;
+    BOOL primary, shared;
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -81,7 +81,15 @@
+    }
+    struct SurfacePrivate { UINT magic, version, width, height, pitch, format; UINT64 size; };
+    static_assert(sizeof(SurfacePrivate) == 32, "LB7A ABI");
+-   SurfacePrivate data = {0x4137424c, 1, width, height, width*4, format, UINT64(width)*height*4};
++   const UINT pitchAlignment = resource->primary ? 256u : 64u;
++   const UINT pitch = resource->allocation ? resource->surfacePitch :
++      (width * 4 + pitchAlignment - 1) & ~(pitchAlignment - 1);
++   const UINT64 bytes = resource->allocation ? resource->surfaceBytes :
++      UINT64(pitch) * ((height + 3u) & ~3u);
++   if ((pitch & 15u) || pitch < ((width + 3u) & ~3u) * 4 ||
++       bytes < UINT64(pitch) * ((height + 3u) & ~3u))
++      return E_INVALIDARG;
++   SurfacePrivate data = {0x4137424c, 1, width, height, pitch, format, bytes};
+    HRESULT hr;
+    if (!resource->allocation) {
+       D3DDDI_ALLOCATIONINFO2 info = {};
+@@ -105,6 +113,8 @@
+       DebugPrintf("BC250 Allocate %08lx format %u primary %u handle %x resource %x\n", hr, format, resource->primary, info.hAllocation, allocate.hKMResource);
+       if (FAILED(hr)) return hr;
+       resource->allocation = info.hAllocation;
++      resource->surfacePitch = pitch;
++      resource->surfaceBytes = bytes;
+    }
+    resource->gpuBytes = (data.size + 4095) & ~UINT64(4095);
+    D3DDDI_MAPGPUVIRTUALADDRESS map = {};
+@@ -135,7 +145,7 @@
+    resource->cpuMapping = lock.pData;
+    struct winsys_handle handle = {};
+    handle.type = WINSYS_HANDLE_TYPE_USER_MEMORY;
+-   handle.user_memory = lock.pData; handle.stride = width * 4;
++   handle.user_memory = lock.pData; handle.stride = data.pitch;
+    handle.size = data.size;
+    struct pipe_resource desc = *resource->resource;
+    desc.bind |= PIPE_BIND_DISPLAY_TARGET | PIPE_BIND_SHARED;
+@@ -377,6 +387,8 @@
+       r->allocation = next.allocation;
+       r->gpuVa = next.gpuVa;
+       r->gpuBytes = next.gpuBytes;
++      r->surfacePitch = next.surfacePitch;
++      r->surfaceBytes = next.surfaceBytes;
+       r->cpuMapping = next.cpuMapping;
+       r->presentReady = next.presentReady;
+       // hRTResource and the logical resource/view descriptors stay in place.
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -440,8 +440,9 @@
+    SurfacePrivate data;
+    memcpy(&data, info->pPrivateDriverData, sizeof(data));
+    if (data.magic != 0x4137424c || data.version != 1 || !data.width || !data.height ||
+-       data.width > 8192 || data.height > 8192 || data.pitch != data.width * 4 ||
+-       data.size < UINT64(data.pitch) * data.height) { SetError(hDevice, E_INVALIDARG); return; }
++       data.width > 8192 || data.height > 8192 || (data.pitch & 15u) ||
++       data.pitch < ((data.width + 3u) & ~3u) * 4 ||
++       data.size < UINT64(data.pitch) * ((data.height + 3u) & ~3u)) { SetError(hDevice, E_INVALIDARG); return; }
+    DXGI_FORMAT format;
+    switch (data.format) {
+    case D3DDDIFMT_A8R8G8B8: format = DXGI_FORMAT_B8G8R8A8_UNORM; break;
+@@ -463,6 +464,8 @@
+    Resource *resource = CastResource(hResource);
+    if (!resource->resource) return;
+    resource->allocation = info->hAllocation;
++   resource->surfacePitch = data.pitch;
++   resource->surfaceBytes = data.size;
+    HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), resource);
+    DebugPrintf("BC250 OpenResource %08lx handle %x\n", hr, resource->allocation);
+    SetError(hDevice, hr);
+--- a/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
++++ b/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
+@@ -226,8 +226,10 @@
+        templet->last_level || templet->array_size != 1 || templet->depth0 != 1)
+       return NULL;
+    unsigned cpp = util_format_get_blocksize(templet->format);
+-   if (!cpp || whandle->stride < (uint64_t)templet->width0 * cpp ||
+-       whandle->size < (uint64_t)whandle->stride * templet->height0)
++   if (!cpp || (whandle->stride & 15u) ||
++       ((uintptr_t)whandle->user_memory & 15u) ||
++       whandle->stride < (uint64_t)align(templet->width0, 4) * cpp ||
++       whandle->size < (uint64_t)whandle->stride * align(templet->height0, 4))
+       return NULL;
+    struct sw_displaytarget *dt = gdi_sw_displaytarget_create(winsys, templet->bind,
+        templet->format, templet->width0, templet->height0, 64, NULL, stride);
+@@ -237,7 +239,7 @@
+    gdt->data = whandle->user_memory;
+    gdt->external_memory = true;
+    gdt->stride = whandle->stride;
+-   gdt->size = whandle->stride * templet->height0;
++   gdt->size = whandle->stride * align(templet->height0, 4);
+    gdt->bmi.bV5Width = whandle->stride / cpp;
+    *stride = whandle->stride;
+    return dt;

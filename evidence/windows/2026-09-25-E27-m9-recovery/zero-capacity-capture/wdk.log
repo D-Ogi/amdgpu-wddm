@@ -1,0 +1,19 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 568 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x01B8D0  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x01A490  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x034A60  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x041BD0  WddmSubmitUmdImpl
+Unsigned build only; no catalog, certificate access or signing.
+
+Algorithm : SHA256
+Hash      : 88988C7F3D45D15518B34B4900AA9ECC06179ECC9EA49D3CF1D5C2E3FA0FBDC6
+Path      : P:\bc-250\scratch\build\paging-zero-capacity-dev\package\bc250kmd.sys
+

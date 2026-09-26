@@ -1,0 +1,39 @@
+compile (user mode, host test)
+  Generowanie kodu...
+  Generowanie kodu...
+link
+compile (kernel flags, same sources, no link)
+  Generowanie kodu...
+  Generowanie kodu...
+extract the reference trace
+run
+layout: rb frame 64 bytes, command buffer 1024 bytes, response at +864: as psp_gfx_if.h says
+
+== run with a PSP that answers
+setup 0, ring create 0, tmr 0, images loaded 10 of 10, ring stop 0, unknown reads 0
+mailbox accesses: 28 produced before the ring stop, 28 in the trace
+register protocol: EXACT MATCH, reads included (0 differences)
+ring stop: 2 accesses: W MP0_SMN_C2PMSG_64 00030000 R MP0_SMN_C2PMSG_64 80030000
+commands the PSP model received: 11, model complaints: 0
+  [ 1] cmd 0x05 SETUP_TMR  MC 0xF5FF800000 size 0x400000 flags 0x2 physical 0x46F800000
+  [ 2] cmd 0x06 LOAD_IP_FW SDMA0      type  9  MC 0xF5FFC00000   33536 bytes
+  [ 3] cmd 0x06 LOAD_IP_FW SDMA1      type 10  MC 0xF5FFC09000   33536 bytes
+  [ 4] cmd 0x06 LOAD_IP_FW CP_CE      type  3  MC 0xF5FFC12000  263040 bytes
+  [ 5] cmd 0x06 LOAD_IP_FW CP_PFP     type  2  MC 0xF5FFC53000  263168 bytes
+  [ 6] cmd 0x06 LOAD_IP_FW CP_ME      type  1  MC 0xF5FFC94000  263168 bytes
+  [ 7] cmd 0x06 LOAD_IP_FW CP_MEC1    type  4  MC 0xF5FFCD5000  267440 bytes
+  [ 8] cmd 0x06 LOAD_IP_FW CP_MEC1_JT type  5  MC 0xF5FFD17000     896 bytes
+  [ 9] cmd 0x06 LOAD_IP_FW CP_MEC2    type  4  MC 0xF5FFD18000  267440 bytes
+  [10] cmd 0x06 LOAD_IP_FW CP_MEC2_JT type  6  MC 0xF5FFD5A000     896 bytes
+  [11] cmd 0x06 LOAD_IP_FW RLC_G      type  8  MC 0xF5FFD5B000   25088 bytes
+staging area used: 0x162000 of 0x200000 bytes
+
+== control: a PSP that never writes the fence
+tmr -62, images loaded 0, commands the model saw 1
+
+== control: a PSP that refuses the fourth command
+tmr 0, images loaded 2, commands the model saw 4, rc of the refused one -22
+
+PASS
+
+replay_psp.exe exit code 0

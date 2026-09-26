@@ -1,0 +1,12 @@
+Extracted publication and vsync functions from P:\bc-250\bc250-win\driver\kmd\wddm.c
+vidpn_flip_actual.c
+P:\bc-250\scratch\m9\bd007-009\publication\vidpn_flip_actual.c(208): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\bd007-009\publication\vidpn_flip_actual.c(208): warning C4459: deklaracja „scanned” powoduje ukrycie deklaracji globalnej
+P:\bc-250\scratch\m9\bd007-009\publication\vidpn_flip_actual.c(61): note: zobacz deklarację „scanned”
+dcn_translate.c
+Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\kmd\test\run_vidpn_flip.ps1:15
+Line |
+  15 |  if($LASTEXITCODE -ne 0){throw 'Host build failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Host build failed

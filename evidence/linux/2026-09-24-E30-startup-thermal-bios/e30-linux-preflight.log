@@ -1,0 +1,16 @@
+utc=2026-09-24T21:06:14Z
+kernel=6.18.52-0-lts
+alpine=3.24.2
+boot_epoch=1790283937
+amdgpu_loaded=false
+/usr/bin/python3
+/sbin/modprobe
+{"sensor": "k10temp", "channel": "temp1_input", "millidegrees": 69500}
+diagnostic_media=/media/usb
+boot/grub/grub.cfg_sha256=380176a8f3aa952ba4cd2fb001f3b365a460be6f986cf5679b680ab4c70e68b6
+efi/boot/bootx64.efi_sha256=840e9a73f25507362e2a06cc8234fb51bef8bd536122275194270c4fa7552f6c
+gpu=0000:01:00.0 driver_bound=False
+bar5_resource=0x00000000fe800000 0x00000000fe87ffff 0x0000000000040200
+efivars_available=True
+AmdSetup_available=True
+e30_preflight_complete

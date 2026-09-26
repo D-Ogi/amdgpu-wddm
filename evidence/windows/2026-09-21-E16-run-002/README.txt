@@ -4,7 +4,7 @@ of the target's file that belongs to this run; eventlog-dxgkrnl-pnp.txt is a rea
 the run, filtered to the DxgKrnl channels and to lines naming our device. Nothing was redacted: no MAC, serial,
 UUID or SSID occurs in these files.
 
-Build: bc250kmd 0.7.3.0 (commit 82d39fb, clean worktree, bc250kmd.sys sha256 b6b942122e21152c...), plain package
+Build: bc250kmd 0.7.3.0 (commit 83ce7bf, clean worktree, bc250kmd.sys sha256 b6b942122e21152c...), plain package
 (no UserModeDriverName). The table and every answer are those of 0.7.2; what is new is the trail (GuardLogKeep).
 
 What happened, in order (local time = UTC + 2, file):

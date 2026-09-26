@@ -1,0 +1,17 @@
+
+
+StageHistory      : 10 20 30 31 32 33 34 91 
+LastStage         : 91
+UnconfirmedStarts : 1
+EnableFullWddm    : 0
+
+
+
+
+KeyName                           Data
+-------                           ----
+DEVPKEY_Device_ProblemStatus         0
+DEVPKEY_Device_DriverVersion 0.7.140.1
+DEVPKEY_Device_ProblemCode          43
+
+

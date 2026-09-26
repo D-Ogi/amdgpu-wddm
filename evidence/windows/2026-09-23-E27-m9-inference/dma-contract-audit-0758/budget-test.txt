@@ -1,0 +1,4 @@
+before.c
+paging budget: FAIL (3 failures)
+after.c
+paging budget: PASS (0 failures)

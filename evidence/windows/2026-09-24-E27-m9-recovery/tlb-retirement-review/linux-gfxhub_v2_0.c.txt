@@ -1,0 +1,25 @@
+ref/linux-src/drivers/gpu/drm/amd/amdgpu/gfxhub_v2_0.c
+361: static void gfxhub_v2_0_gart_disable(struct amdgpu_device *adev)
+362: {
+363: 	struct amdgpu_vmhub *hub = &adev->vmhub[AMDGPU_GFXHUB(0)];
+364: 	u32 tmp;
+365: 	u32 i;
+366: 
+367: 	/* Disable all tables */
+368: 	for (i = 0; i < 16; i++)
+369: 		WREG32_SOC15_OFFSET(GC, 0, mmGCVM_CONTEXT0_CNTL,
+370: 				    i * hub->ctx_distance, 0);
+371: 
+372: 	/* Setup TLB control */
+373: 	tmp = RREG32_SOC15(GC, 0, mmGCMC_VM_MX_L1_TLB_CNTL);
+374: 	tmp = REG_SET_FIELD(tmp, GCMC_VM_MX_L1_TLB_CNTL, ENABLE_L1_TLB, 0);
+375: 	tmp = REG_SET_FIELD(tmp, GCMC_VM_MX_L1_TLB_CNTL,
+376: 			    ENABLE_ADVANCED_DRIVER_MODEL, 0);
+377: 	WREG32_SOC15(GC, 0, mmGCMC_VM_MX_L1_TLB_CNTL, tmp);
+378: 
+379: 	if (!amdgpu_sriov_vf(adev)) {
+380: 		/* Setup L2 cache */
+381: 		WREG32_FIELD15(GC, 0, GCVM_L2_CNTL, ENABLE_L2_CACHE, 0);
+382: 		WREG32_SOC15(GC, 0, mmGCVM_L2_CNTL3, 0);
+383: 	}
+384: }

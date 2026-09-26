@@ -1,0 +1,36 @@
+2026-09-23T17:25:08
+2026-09-23T15:39:09
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+Status FriendlyName                                  
+------ ------------                                  
+OK     BC-250 GPU (bc250kmd, display-only, lab build)
+
+
+
+['C:\\BC250\\m9\\candidate07101\\package-umd']
+candidate_sha256=5E3ACB0F3959263730A3E17DE694C696ECA6FE2EEDB79DBB4E7896D65BF3518B
+boot_before=2026-09-23T15:39:09
+17:25:12 Tctl 70.1 C (raw 773B0FEF)
+
+guard recovery: logs secured, all hardware gates verified closed
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem75.inf
+Driver package installed on device: <redacted-device-instance>
+
+Total driver packages:  1
+Added driver packages:  1
+pnputil_exit=0
+device_status=OK
+driver_version=0.7.101.1
+installed_sha256=5E3ACB0F3959263730A3E17DE694C696ECA6FE2EEDB79DBB4E7896D65BF3518B
+closed_gates_verified
+boot_after=2026-09-23T15:39:09
+dwm_processes=1
+display_only_install_passed
+

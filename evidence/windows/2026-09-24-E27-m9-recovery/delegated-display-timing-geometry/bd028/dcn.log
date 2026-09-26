@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+dcn_translate_test: 4 synthetic geometries, 78 checks, 0 failed
+compile-check (kernel flags, same source, no link)
+
+dcn_translate_test.exe exit code 0

@@ -1,0 +1,26 @@
+M242 2026-09-23. Correction of M241 clock-path assumption.
+apply-clock.ps1 invokes bc250rd_cli, which opens separate Bc250Rd device and
+uses DeviceIoControl IOCTL_BC250RD_SMU_MSG, not miniport D3DKMTEscape.
+M241 claim that FullWddm guard blocks this task was incorrect. Current design/
+audit/experiment prose corrected; historical immutable evidence retained.
+Do not introduce a duplicate uncoordinated SMU mailbox owner in KMD.
+
+Fresh read-only lab health: same boot04:20:42; bc250rd Running/Auto,
+bc250kmd Running/Manual. Clock task result0; last run04:21:21, log success
+04:21:57 after4tries. No current SMU query, temperature or GPU writes, no reboot.
+No hash output at guessed System32 path, so no new installed-version claim.
+Last known deployed driver remains M188. Boot/task times do not prove miniport
+initialization ordering or current clock state.
+
+CLI adds CheckClock: query frequencyMHz and encodedVID, exact compare.
+clock verifies after requests; clock-check queries only. E04 evidence
+02-set-1000MHz-820mV.log establishes1000 and116 reply units.
+10 extracted-check scenarios pass, omitted-comparison mutation fails2.
+Tests model SMU replies/transport, not complete CLI or hardware.
+bc250rd build passes; driver code unchanged.
+CLI SHA256A056C897F9515BE08ADEE41C55F34B67CAE521922B9A2E2F9D2105A95879739D
+scratch/build/bc250rd-clock-check/bc250rd_cli.exe not deployed.
+
+Next startup-aware lab procedure applies/verifies clocks before controlled
+device start. Cold boot needs actual ordering or pre-start verification;
+scheduled task may run after device startup. Remaining M9 gates unchanged.

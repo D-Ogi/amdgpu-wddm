@@ -1,0 +1,11 @@
+Extracted actual DCN restore and bugcheck display callbacks
+post_display_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 283: model.scanned==d.DcnFirmwareAddress && model.elapsed==300 && !d.DcnDiverged
+FAIL 292: model.scanned==d.DcnFirmwareAddress && model.writes!=0
+FAIL 295: Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_IO_TIMEOUT
+FAIL 296: !d.SystemDisplayReady && d.DcnDiverged && width==0 && height==0 && fmt==D3DDDIFMT_UNKNOWN
+FAIL 297: model.elapsed==50000 && model.scanned!=d.DcnFirmwareAddress
+FAIL 298: fb[0]==0
+post display restore: 51 checks, 6 failures

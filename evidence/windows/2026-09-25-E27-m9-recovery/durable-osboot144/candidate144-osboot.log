@@ -1,0 +1,5 @@
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66625 ready=1
+UnconfirmedStarts = 0
+policy=2 persistent full table; strict per-start durability required
+boot_before=2026-09-24T21:14:48
+os_restart_requested=2026-09-25T00:52:41

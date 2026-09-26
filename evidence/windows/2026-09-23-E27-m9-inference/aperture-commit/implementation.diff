@@ -1,0 +1,126 @@
+--- before/vidmm.c
++++ after/vidmm.c
+@@ -19,6 +19,7 @@
+ #include "bc250kmd.h"
+ #include "bc250_pte.h"
+ #include "paging_pt_shadow.h"
++#include "paging_aperture_state.h"
+ 
+ #define BC250_VIDMM_SHADOW_TAG 'sV2B'
+ // WDDM2 system paging process VA is fixed at1GiB (MS System Paging Process).
+@@ -31,6 +32,7 @@
+ #define BC250_VIDMM_SEGMENT_IDS 32u         // DXGK_PTE.Segment is five bits wide
+ 
+ typedef struct _BC250_VIDMM {
++    PAGING_APERTURE_STATE Aperture;
+     PAGING_PT_SHADOW Shadow;             // logical construction state, pinned paging tables only
+     EX_PUSH_LOCK CpuUpdateLock;             // serializes the embedded CPU snapshot
+     ULONGLONG CpuEntries[BC250_VIDMM_PTES]; // no allocation in BuildPagingBuffer
+@@ -142,6 +144,15 @@
+             return STATUS_INSUFFICIENT_RESOURCES;
+         }
+     }
++    if (g_VidMm.Write && Device->WddmAperture.bytes) {
++        unsigned pages=(unsigned)(PAGING_APERTURE_BYTES/PAGE_SIZE);
++        ULONGLONG* storage=(ULONGLONG*)ExAllocatePool2(POOL_FLAG_PAGED,
++            (SIZE_T)pages*sizeof(ULONGLONG),BC250_VIDMM_SHADOW_TAG);
++        if (!storage) return STATUS_INSUFFICIENT_RESOURCES;
++        if (!PagingApertureStateInit(&g_VidMm.Aperture,&Device->WddmAperture,storage,pages)) {
++            ExFreePoolWithTag(storage,BC250_VIDMM_SHADOW_TAG);return STATUS_INVALID_PARAMETER;
++        }
++    }
+     g_VidMm.Ready = TRUE;
+     GuardLog("vidmm: table segment %u at physical 0x%llX + 0x%llX, host memory below 0x%llX, updates are %s", TableSegmentId,
+              g_VidMm.SegmentPhysical, TableLength, g_VidMm.Pte.system_limit, g_VidMm.Write ? "WRITTEN" : "planned only (EnableGpuVa closed)");
+@@ -164,12 +175,58 @@
+         MmUnmapIoSpace(g_VidMm.SegmentMapping,(SIZE_T)g_VidMm.SegmentLength);
+         g_VidMm.SegmentMapping = NULL;
+     }
++    if (g_VidMm.Aperture.entries!=NULL) {
++        ExFreePoolWithTag(g_VidMm.Aperture.entries,BC250_VIDMM_SHADOW_TAG);
++        RtlZeroMemory(&g_VidMm.Aperture,sizeof(g_VidMm.Aperture));
++    }
+     if (g_VidMm.Shadow.Slots!=NULL) {
+         ExFreePoolWithTag(g_VidMm.Shadow.Slots,BC250_VIDMM_SHADOW_TAG);
+         RtlZeroMemory(&g_VidMm.Shadow,sizeof(g_VidMm.Shadow));
+     }
+     ExReleasePushLockExclusive(&g_VidMm.CpuUpdateLock);
+     KeLeaveCriticalRegion();
++}
++
++// Called only after DMA/private capacity has been accepted, before publication.
++// Copy page identities under the same lock as other logical paging state. The
++// MDL is OS-owned for this callback; no pointer is retained beyond it.
++NTSTATUS VidMmCommitPagingAperture(const DXGKARG_BUILDPAGINGBUFFER* Build, ULONG Start, ULONG Next)
++{
++    ULONGLONG first,total,span,begin,pages[PAGING_APERTURE_BATCH_PAGES];
++    ULONG count,i;
++    PMDL mdl=NULL;
++    BOOLEAN unmap;
++    NTSTATUS status=STATUS_INVALID_PARAMETER;
++    if (!Build || Next<=Start || Next-Start>PAGING_APERTURE_BATCH_PAGES) return status;
++    count=Next-Start;unmap=Build->Operation==DXGK_OPERATION_UNMAP_APERTURE_SEGMENT;
++    if (unmap) {
++        first=Build->UnmapApertureSegment.OffsetInPages;
++        total=Build->UnmapApertureSegment.NumberOfPages;
++    } else if (Build->Operation==DXGK_OPERATION_MAP_APERTURE_SEGMENT) {
++        first=Build->MapApertureSegment.OffsetInPages;
++        total=Build->MapApertureSegment.NumberOfPages;
++        mdl=Build->MapApertureSegment.pMdl;
++        if (!mdl || !MmGetMdlByteCount(mdl)) return status;
++        begin=MmGetMdlByteOffset(mdl);
++        if (begin>=PAGE_SIZE) return status;
++        span=(begin+(ULONGLONG)MmGetMdlByteCount(mdl)+PAGE_SIZE-1)>>PAGE_SHIFT;
++        if (Build->MapApertureSegment.MdlOffset>span ||
++            Next>span-Build->MapApertureSegment.MdlOffset) return status;
++        for (i=0;i<count;i++) {
++            ULONGLONG pfn=MmGetMdlPfnArray(mdl)[Build->MapApertureSegment.MdlOffset+Start+i];
++            if (pfn>(MAXULONGLONG>>PAGE_SHIFT)) return status;
++            pages[i]=pfn<<PAGE_SHIFT;
++        }
++    } else return status;
++    if (Next>total || first>=PAGING_APERTURE_BYTES/PAGE_SIZE ||
++        Next>PAGING_APERTURE_BYTES/PAGE_SIZE-first) return status;
++    KeEnterCriticalRegion();ExAcquirePushLockExclusive(&g_VidMm.CpuUpdateLock);
++    if (!g_VidMm.Ready || !g_VidMm.Write) status=STATUS_DEVICE_NOT_READY;
++    else if (unmap ? PagingApertureStateUnmap(&g_VidMm.Aperture,(unsigned)(first+Start),count) :
++             PagingApertureStateMap(&g_VidMm.Aperture,(unsigned)(first+Start),count,pages,~4095ull))
++        status=STATUS_SUCCESS;
++    ExReleasePushLockExclusive(&g_VidMm.CpuUpdateLock);KeLeaveCriticalRegion();
++    return status;
+ }
+ 
+ // PASSIVE_LEVEL. Immediate CPU_VIRTUAL initialization, or the serialized
+--- before/wddm.c
++++ after/wddm.c
+@@ -2507,6 +2507,11 @@
+         status=VidMmCommitPagingTransfer(Transfer);
+         if (!NT_SUCCESS(status)) { record[0]=0;return status; }
+     }
++    if (Build->Operation==DXGK_OPERATION_MAP_APERTURE_SEGMENT ||
++        Build->Operation==DXGK_OPERATION_UNMAP_APERTURE_SEGMENT) {
++        status=VidMmCommitPagingAperture(Build,Start,Next);
++        if (!NT_SUCCESS(status)) {record[0]=0;return status;}
++    }
+     RtlCopyMemory(Build->pDmaBuffer,(PUCHAR)record+PAGING_PRIVATE_HEADER_BYTES,Written*4u);
+     Build->pDmaBufferPrivateData=(PUCHAR)record+PAGING_PRIVATE_HEADER_BYTES+Written*4u;
+     Build->DmaBufferPrivateDataSize-=PAGING_PRIVATE_HEADER_BYTES+Written*4u;
+@@ -2762,7 +2767,7 @@
+     status=GfxPagingBuildAperture(Device,&operation,Build->MultipassOffset,
+         (PUCHAR)record+PAGING_PRIVATE_HEADER_BYTES,Build->DmaBufferWriteOffset,capacity,&written,&next);
+     if (written) {
+-        publish=WddmPublishPagingRecord(Build,written,FALSE,0,0);
++        publish=WddmPublishPagingRecord(Build,written,FALSE,Build->MultipassOffset,next);
+         if (!NT_SUCCESS(publish)) return publish;
+         Build->MultipassOffset=next;
+     }
+--- before/bc250kmd.h
++++ after/bc250kmd.h
+@@ -471,6 +471,7 @@
+ NTSTATUS GfxPagingBuildVirtualCopyPage(BC250_DEVICE* Device, ULONGLONG Root,
+     ULONGLONG SourceVa, ULONGLONG DestinationVa, ULONG Bytes, BOOLEAN ForceSnapshot,
+     PVOID Buffer, ULONG Offset, ULONG Free, ULONG* Written, BC250_PAGING_COPY_SLICE* Slice);
++NTSTATUS VidMmCommitPagingAperture(const DXGKARG_BUILDPAGINGBUFFER* Build, ULONG Start, ULONG Next);
+ NTSTATUS VidMmCommitPagingTransfer(const BC250_PAGING_COPY_SLICE* Slice);
+ NTSTATUS GfxPagingBuildCopyPage(BC250_DEVICE* Device, const BC250_PAGING_ENDPOINT* Source,
+     const BC250_PAGING_ENDPOINT* Destination, ULONGLONG Progress, ULONG Bytes,

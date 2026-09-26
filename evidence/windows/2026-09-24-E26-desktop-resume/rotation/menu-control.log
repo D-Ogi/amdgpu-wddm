@@ -1,0 +1,54 @@
+fbdump       rows 0..63 of 1200, address 0x27232E000
+fbdump       rows 64..127 of 1200, address 0x2723A6000
+fbdump       rows 128..191 of 1200, address 0x27241E000
+fbdump       rows 192..255 of 1200, address 0x272496000
+fbdump       rows 256..319 of 1200, address 0x27250E000
+fbdump       rows 320..383 of 1200, address 0x272586000
+fbdump       rows 384..447 of 1200, address 0x2725FE000
+fbdump       rows 448..511 of 1200, address 0x272676000
+fbdump       rows 512..575 of 1200, address 0x2726EE000
+fbdump       rows 576..639 of 1200, address 0x272766000
+fbdump       rows 640..703 of 1200, address 0x2727DE000
+fbdump       rows 704..767 of 1200, address 0x272856000
+fbdump       rows 768..831 of 1200, address 0x2728CE000
+fbdump       rows 832..895 of 1200, address 0x272946000
+fbdump       rows 896..959 of 1200, address 0x2729BE000
+fbdump       rows 960..1023 of 1200, address 0x272A36000
+fbdump       rows 1024..1087 of 1200, address 0x272AAE000
+fbdump       rows 1088..1151 of 1200, address 0x272B26000
+fbdump       rows 1152..1199 of 1200, address 0x272B9E000
+wrote C:\BC250\m13\menu-control\menu.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+
+
+LastTaskResult : 0
+
+
+
+menu_keys_complete
+fbdump       rows 0..63 of 1200, address 0x2708D0000
+fbdump       rows 64..127 of 1200, address 0x270948000
+fbdump       rows 128..191 of 1200, address 0x2709C0000
+fbdump       rows 192..255 of 1200, address 0x270A38000
+fbdump       rows 256..319 of 1200, address 0x270AB0000
+fbdump       rows 320..383 of 1200, address 0x270B28000
+fbdump       rows 384..447 of 1200, address 0x270BA0000
+fbdump       rows 448..511 of 1200, address 0x270C18000
+fbdump       rows 512..575 of 1200, address 0x270C90000
+fbdump       rows 576..639 of 1200, address 0x270D08000
+fbdump       rows 640..703 of 1200, address 0x270D80000
+fbdump       rows 704..767 of 1200, address 0x270DF8000
+fbdump       rows 768..831 of 1200, address 0x270E70000
+fbdump       rows 832..895 of 1200, address 0x270EE8000
+fbdump       rows 896..959 of 1200, address 0x270F60000
+fbdump       rows 960..1023 of 1200, address 0x270FD8000
+fbdump       rows 1024..1087 of 1200, address 0x271050000
+fbdump       rows 1088..1151 of 1200, address 0x2710C8000
+fbdump       rows 1152..1199 of 1200, address 0x271140000
+wrote C:\BC250\m13\menu-control\closed.bmp: 1920x1200, 7680 bytes/row, 9216000 bytes total
+
+   Id StartTime                   CPU Responding
+   -- ---------                   --- ----------
+11512 9/24/2026 12:32:51 PM 251.78125       True
+
+
+menu_control_complete

@@ -1,0 +1,49 @@
+[
+  {
+    "name": "vram1g",
+    "bytes": 1073741824,
+    "cycles": 3,
+    "gpu_readbacks": [
+      [
+        "1073741824",
+        "1024"
+      ],
+      [
+        "1073741824",
+        "2048"
+      ],
+      [
+        "1073741824",
+        "3072"
+      ],
+      [
+        "1073741824",
+        "4096"
+      ]
+    ],
+    "departure_status": [
+      "3",
+      "3",
+      "3"
+    ],
+    "cumulative_gfx": [
+      "4100",
+      "4100",
+      "0",
+      "0"
+    ],
+    "cumulative_sdma": [
+      "170416",
+      "170416",
+      "0",
+      "0"
+    ],
+    "bulk_resident_ms": [
+      "6343",
+      "6266",
+      "6282"
+    ],
+    "physical_endpoints_verified": false,
+    "shader_cache_policy_verified": false
+  }
+]

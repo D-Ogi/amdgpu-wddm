@@ -1,0 +1,23 @@
+
+
+Id         : 11216
+CPU        : 149.015625
+StartTime  : 9/24/2026 5:16:33 PM
+Responding : True
+
+
+
+GPU_READBACK bytes=1073741824 all_words_match=1 fence=1024
+BULK_RESIDENT bytes=1073741824 elapsed_ms=2328 success=1
+GPU_READBACK bytes=1073741824 all_words_match=1 fence=2048
+CYCLE 1 PASS
+BULK_RESIDENT bytes=1073741824 elapsed_ms=1562 success=1
+GPU_READBACK bytes=1073741824 all_words_match=1 fence=3072
+CYCLE 2 PASS
+BULK_RESIDENT bytes=1073741824 elapsed_ms=1469 success=1
+    asking the context to signal the monitored fence to 3155
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 3155 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001CEFA200000

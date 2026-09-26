@@ -1,0 +1,17 @@
+{
+  "amdgpu_ctx.c": "eec114e55c4cdff29326c3c37e014c2a375a90b10466ecde4526e919cafdd63d",
+  "amdgpu_fence.c": "7beb6bf374d019a41338107eec81401215f4c03840e8a4b09372ee3bb43aad9e",
+  "amdgpu_rlc.c": "32a5c62305d6e45b01c9ebf0df6bad2fb2b68eafe9764365aaf077cf341267fe",
+  "decoded-reset.csv": "cfae02a795f98a7b75246dad72bab7ea4f6e872a6aa131d3f5d8be798df55040",
+  "e29-engine-inspect.log": "9d95078bc7949fe5e65c21c0d22c917276d4f309bab70a264cde3d1b3e1d7f48",
+  "e29-sdma1-control.log": "5fb14ab412dc7e9a433bdafe64952698242eb71a0f113121bdf6a14b1f3b9e8d",
+  "e29-sdma1-control.sh": "8597b8dda1a1d4b8d7ea6daf40d9c534dbf6eb8ae79cb811c6c9a94c205a13df",
+  "nv-source.json": "172fcdc0e61a5a8ed1b7eae0ad81b9fb89408e12109901befc577bd42d19bc63",
+  "nv.c": "fdff09b468cf5c99a2a24f87a966ab274cb874d7ea14ca710732080a5870b0c6",
+  "PLAN.md": "29c0a1cfa876f397d9565dd33d1aa421c3b3aefaf9f3d041a997723906fb3423",
+  "sources.json": "9fdbcae76d56e2ebe9e9bf0cb137a060c9dfedd2465ccff86f3a55f7801b9230",
+  "validation.json": "6514b8e140e848018a5fe3f55fdcf9b3987cf001167d52b04f010ec4e8da74fd",
+  "windows-gfx.c": "56f618bc9a58b1fff8682d7b8b11cf157ec0ff312fe2cddd4e81d72dba9f0f4f",
+  "windows-gmc.c": "1b7713d685efd7ec48cd0e7fb55e2fb33e9a18a5e2355709648624cbc435f8c4",
+  "windows-sdma.c": "657f09d19a76d9cefe601e6e00c3fcaf9a648d06464193c83586d123ec795e44"
+}

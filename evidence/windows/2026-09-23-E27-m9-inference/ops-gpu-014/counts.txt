@@ -1,0 +1,1028 @@
+log          159269 lines since this driver load, 158245 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.000 stage 20
+     3      0.070 stage 30
+     4      0.070 stage 31
+     5      0.072 stage 32
+     6      0.072 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.072 stage 33
+     8      0.072 stage 34
+     9      0.072 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.072 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.072 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.072 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.072 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.072 gart: ready, dummy page at 0x26FFFA000
+    15      0.072 psp: ready
+    16      0.072 gpumem: ready, doorbells at 0xD0000000
+    17      0.072 gfx: ready, GPU submission allowed, paging node off
+    18      0.072 ih: ready
+    19      0.072 wddm: full table started, VRAM identified
+    20      0.072 vidmm: segment 1 at physical 0x2708CA000 + 0x1FD736000, host memory below 0x270000000, updates are WRITTEN
+    21      0.072 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+    22      0.072 stage 35
+    23      0.074 stage 39
+    24      0.074 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+    25      0.074 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+    26      0.074 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+    27      0.074 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+    28      0.074 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+    29      0.074 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+    30      0.074 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    31      0.074 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    32      0.074 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    33      0.074 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+    34      0.074 wddm: GetNodeMetadata node 0 adapter 0
+    35      0.074 wddm: QUERYSEGMENT4 pass 1: 2 segment(s)
+    36      0.074 wddm: QUERYSEGMENT4 pass 2: 2 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+    37      0.074 wddm: segment 1 flags 0x00080404 gpu 0xF4008CA000 cpu 0x2708CA000 size 0x1FD736000
+    38      0.074 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+    39      0.076 wddm: CreateProcess flags 0x00000001 pasids 1
+    40      0.076 wddm: CreateDevice flags 0x00000001 pasid 0
+    41      0.076 wddm: CreateDevice flags 0x00000001 pasid 0
+    42      0.076 wddm: CreateContext node 0 engine 0x1 flags 0x00000005 private 0
+    43      0.076 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    44      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    45      0.076 vidmm: level 0 cpu table 0xFFFFCD80374F7000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    46      0.076 vidmm:   -> first entry 0x0 (written)
+    47      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    48      0.076 vidmm: level 0 cpu table 0xFFFFCD80374F8000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    49      0.076 vidmm:   -> first entry 0x0 (written)
+    50      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    51      0.076 vidmm: level 0 cpu table 0xFFFFCD80374F9000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    52      0.076 vidmm:   -> first entry 0x0 (written)
+    53      0.076 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+    54      0.076 vidmm: level 0 cpu table 0xFFFFCD80374FA000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    55      0.076 vidmm:   -> first entry 0x0 (written)
+    56      0.076 vidmm: level 0 cpu table 0xFFFFCD80374FB000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    57      0.076 vidmm:   -> first entry 0x0 (written)
+    58      0.076 vidmm: level 0 cpu table 0xFFFFCD80374FC000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    59      0.076 vidmm:   -> first entry 0x0 (written)
+    60      0.076 vidmm: level 0 cpu table 0xFFFFCD80374FD000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    61      0.076 vidmm:   -> first entry 0x0 (written)
+    62      0.076 vidmm: level 0 cpu table 0xFFFFCD80374FE000 start 0 count 512 flags 0x3 first raw 0x0 / 0x0
+    63      0.076 vidmm:   -> first entry 0x0 (written)
+    64      0.106 vidmm: first valid entry of segment 1: level 1 raw 0x21 / 0x3 -> 0x2708CD001 rc 0
+    65      0.108 wddm: SetRootPageTable segment 1 offset 0x0, 512 entries
+    66      0.108 vidmm: root page table 1:0x0 = physical 0x2708CA000, 512 entries (the VMID is pointed at it by the first packet)
+    67      0.108 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+    68      0.108 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+    69      0.108 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+    70      0.111 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+    71      0.111 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+    72      0.111 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+    73      0.111 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+    74      0.111 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+    75      0.111 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+    76      0.111 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+    77      0.111 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+    78      0.111 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+    79      0.111 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+    80      0.111 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+    81      0.112 wddm: CreateProcess flags 0x00000002 pasids 1
+    82      0.112 wddm: CreateDevice flags 0x00000002 pasid 0
+    83      0.112 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+    84      0.112 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+    85      0.112 vidmm: level 0 table 1: 0x1FD732000 start 0 count 16 flags 0x3 first raw 0x0 / 0x0
+    86      0.112 vidmm:   -> first entry 0x0 (written)
+    87      0.112 vidmm: level 0 table 1: 0x1FD732000 start 17 count 495 flags 0x3 first raw 0x0 / 0x0
+    88      0.112 vidmm:   -> first entry 0x0 (written)
+    89      0.112 vidmm: level 0 table 1: 0x1FD732000 start 16 count 1 flags 0x2 first raw 0x1 / 0x1F9CF6
+    90      0.112 vidmm: first valid entry of segment 0: level 0 raw 0x1 / 0x1F9CF6 -> 0x1F9CF6073 rc 0
+    91      0.112 vidmm:   -> first entry 0x1F9CF6073 (written)
+    92      0.112 vidmm: level 1 table 1: 0x1FD733000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD732
+    93      0.112 vidmm:   -> first entry 0x46DFFC001 (written)
+    94      0.112 vidmm: level 2 table 1: 0x1FD734000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD733
+    95      0.112 vidmm:   -> first entry 0x46DFFD001 (written)
+    96      0.112 vidmm: level 3 table 1: 0x1FD735000 start 0 count 512 flags 0x2 first raw 0x21 / 0x1FD734
+    97      0.113 vidmm:   -> first entry 0x46DFFE001 (written)
+    98      0.113 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+    99      0.113 vidmm: level 0 table 1: 0x1FD732000 start 17 count 1 flags 0x0 first raw 0x1 / 0x1F9C00
+   100      0.113 vidmm:   -> first entry 0x1F9C00073 (written)
+   101      0.113 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   102      0.113 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   103      0.113 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   104      0.113 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   105      0.113 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   106      0.113 wddm: OpenAllocation [0] handle 0x40000AC0 private 32 bytes -> FFFFA98C399EBA70 (GetHandleData said 0000000000000000)
+   107      0.113 wddm: OpenAllocation 1 allocations flags 0x00000001
+   108      0.113 vidmm: level 0 table 1: 0x4000 start 0 count 512 flags 0x0 first raw 0x21 / 0x204
+   109      0.113 vidmm:   -> first entry 0x270ACE071 (written)
+   110      0.113 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   111      0.113 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   112      0.114 wddm: BuildPagingBuffer operation 12 segment 0, 65536 bytes free, pass offset 0
+   113      0.114 wddm: DescribeAllocation 1920x1200 format 21
+   114      0.114 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   115      0.114 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   116      0.114 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   117      0.114 wddm: OpenAllocation [0] handle 0x40000B40 private 32 bytes -> FFFFA98C399EBDD0 (GetHandleData said 0000000000000000)
+   118      0.114 wddm: OpenAllocation 1 allocations flags 0x00000001
+   119      0.115 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 0
+   120      0.116 stage 50
+   121      0.116 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   122      0.116 wddm: DescribeAllocation 1920x1200 format 21
+   123      0.116 wddm: SetVidPnSourceAddress segment 1 address 0xF400ACE000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   124      0.116 wddm: software vsync on, 16 ms period, target 2424833
+   125      0.116 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   126      0.116 wddm: DescribeAllocation 1920x1200 format 21
+   127      0.339 wddm: ControlInterrupt type 3 on -> 0x00000000
+   128      0.341 wddm: ControlInterrupt type 3 off -> 0x00000000
+   129      0.348 wddm: ControlInterrupt type 3 on -> 0x00000000
+   130      0.356 wddm: ControlInterrupt type 3 off -> 0x00000000
+   131      0.356 wddm: ControlInterrupt type 3 on -> 0x00000000
+   132      0.372 wddm: ControlInterrupt type 3 off -> 0x00000000
+   133      0.372 wddm: ControlInterrupt type 3 on -> 0x00000000
+   134      0.388 wddm: ControlInterrupt type 3 off -> 0x00000000
+   135      2.833 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   136      2.833 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C33C02050/2184, driver data 0
+   137      2.833 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   138      2.833 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   139      2.833 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   140      2.833 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   141      2.833 wddm: SetRootPageTable segment 1 offset 0x1FD735000, 512 entries
+   142      2.833 vidmm: root page table 1:0x1FD735000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   143      2.833 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   144      2.833 wddm: present without valid software packet completed without GPU dispatch
+   145      2.853 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   146      2.853 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C36EEB050/2184, driver data 0
+   147      2.853 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   148      2.853 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   149      2.853 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   150      2.853 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   151      2.853 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 0
+   152      2.853 wddm: present without valid software packet completed without GPU dispatch
+   153      2.869 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   154      2.869 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C33C02050/2184, driver data 0
+   155      2.869 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   156      2.869 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   157      2.869 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   158      2.869 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   159      2.869 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 0
+   160      2.869 wddm: present without valid software packet completed without GPU dispatch
+   161      5.553 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   162      5.553 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C36EEB050/2184, driver data 0
+   163      5.553 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   164      5.553 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   165      5.553 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   166      5.553 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   167      5.553 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 0
+   168      5.553 wddm: present without valid software packet completed without GPU dispatch
+   169      5.585 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   170      5.585 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C33C02050/2184, driver data 0
+   171      5.585 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   172      5.585 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   173      5.585 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   174      5.585 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   175      5.585 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 0
+   176      5.585 wddm: present without valid software packet completed without GPU dispatch
+   177      8.095 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   178      8.095 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C36EEB050/2184, driver data 0
+   179      8.095 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   180      8.095 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   181      8.095 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   182      8.095 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   183      8.095 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 0
+   184      8.095 wddm: present without valid software packet completed without GPU dispatch
+   185      8.119 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   186      8.119 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C33C02050/2184, driver data 0
+   187      8.119 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   188      8.119 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   189      8.119 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   190      8.119 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   191      8.119 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 0
+   192      8.119 wddm: present without valid software packet completed without GPU dispatch
+   193      8.135 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   194      8.135 wddm: Present list FFFFA3060D378BB0 (context list 256), private FFFFA98C36EEB050/2184, driver data 0
+   195      8.135 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   196      8.135 wddm: Present list q4-7  FFFFA98C399EBDD0 00000000008DC000 0000000000000000 0000000000000000
+   197      8.135 wddm: Present list q8-11 FFFFA98C399EBA70 0000000000012000 0000000000000000 0000000000000000
+   198      8.135 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   199      8.135 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 0
+   200      8.135 wddm: present without valid software packet completed without GPU dispatch
+   201     10.745 wddm: present without valid software packet completed without GPU dispatch
+   202     10.769 wddm: present without valid software packet completed without GPU dispatch
+   203     10.785 wddm: present without valid software packet completed without GPU dispatch
+   204     11.242 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+   205     11.426 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+   206     11.426 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 250 us, in TMR at 0x0
+   207     11.428 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1915 us, in TMR at 0x0
+   208     11.430 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1887 us, in TMR at 0x0
+   209     11.436 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF842000
+   210     11.440 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5905 us, in TMR at 0xF5FF883000
+   211     11.446 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5916 us, in TMR at 0xF5FF8C4000
+   212     11.452 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   213     11.452 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   214     11.458 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   215     11.458 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   216     11.460 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1737 us, in TMR at 0x0
+   217     11.460 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   218     11.490 ih: init: rc 0, 21 writes
+   219     11.490 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   220     11.522 gfx: stage 1 (doorbell aperture): rc 0, 70 writes so far, 1 us
+   221     11.522 gfx: op 1 to stage 1 -> 0x00000000, result 0, 70 writes, 0 doorbells
+   222     11.550 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+   223     11.550 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+   224     11.576 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 4 us
+   225     11.576 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   226     11.602 gfx: stage 4 (constants): rc 0, 157 writes so far, 62 us
+   227     11.602 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   228     11.632 gfx: stage 5 (RLC): rc 0, 8 writes so far, 134 us
+   229     11.632 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+   230     11.658 gfx: stage 6 (CP): rc 0, 62 writes so far, 343 us
+   231     11.658 gfx: op 1 to stage 6 -> 0x00000000, result 0, 62 writes, 14 doorbells
+   232     11.686 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 95 us
+   233     11.686 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   234     11.714 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   235     11.714 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   236     11.740 gfx: IB 0x564000 x3 dwords at VMID 0: fetched 1, fence 0x1/0x1, result 0
+   237     11.740 gfx: fence ring 0 x1 int 4 -> 0x00000000, result 0, 1 completed, last 0x1/0x1, 32 us
+   238     13.980 wddm: present without valid software packet completed without GPU dispatch
+   239     14.002 wddm: present without valid software packet completed without GPU dispatch
+   240     14.018 wddm: present without valid software packet completed without GPU dispatch
+   241     14.266 wddm summary: ---- DDI calls: name, count, first log line ----
+   242     14.266 wddm summary: QueryAdapterInfo                   12  first at 26
+   243     14.266 wddm summary: GetNodeMetadata                     1  first at 34
+   244     14.266 wddm summary: CreateDevice                        3  first at 40
+   245     14.266 wddm summary: CreateContext                       2  first at 42
+   246     14.266 wddm summary: CreateProcess                       2  first at 39
+   247     14.266 wddm summary: SetRootPageTable                    2  first at 65
+   248     14.266 wddm summary: CreateAllocation                    2  first at 105
+   249     14.266 wddm summary: DescribeAllocation                  3  first at 113
+   250     14.266 wddm summary: GetStandardAllocationDriverData      4  first at 103
+   251     14.266 wddm summary: OpenAllocation                      2  first at 107
+   252     14.266 wddm summary: BuildPagingBuffer                1079  first at 44
+   253     14.266 wddm summary: SubmitCommandVirtual               14  first at 143
+   254     14.266 wddm summary: Present                            14  first at 135
+   255     14.266 wddm summary: SetVidPnSourceAddress               1  first at 123
+158501     45.253 wddm: umd ib +208 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900 0070F514
+158502     45.253 wddm: umd ib +216 23000000 00029000 00000001 00000C2B 00000000 00000000 C0053C00 00000013
+158503     45.255 wddm: umd ib +224 00029000 00000001 00000C2B FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF
+158504     45.255 wddm: umd ib +232 01FFFFFF 00000000 00000000 0000000A 00010080 C0037600 00000207 00400040
+158505     45.255 wddm: shader 0x100040000 lo 01000400 hi 00000000 -> phys 0x29580A000 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158506     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158507     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158508     45.255 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158509     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158510     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158511     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158512     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158513     45.255 wddm: umd ib +176 C0043700 40100500 00009000 00000001 00000000 00000000 C0004600 0000002E
+158514     45.255 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00009000
+158515     45.255 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00009000 00000001
+158516     45.255 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158517     45.255 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28841000 00000002 27780000
+158518     45.255 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+158519     45.255 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158520     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158521     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158522     45.255 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158523     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158524     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158525     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158526     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158527     45.255 wddm: umd ib +176 C0043700 40100500 0000D000 00000001 00000000 00000000 C0004600 0000002E
+158528     45.255 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0000D000
+158529     45.255 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 0000D000 00000001
+158530     45.255 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158531     45.255 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28842000 00000002 27780200
+158532     45.255 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+158533     45.255 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158534     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158535     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158536     45.255 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158537     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158538     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158539     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158540     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158541     45.255 wddm: umd ib +176 C0043700 40100500 00011000 00000001 00000000 00000000 C0004600 0000002E
+158542     45.255 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00011000
+158543     45.255 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00011000 00000001
+158544     45.255 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158545     45.255 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28843000 00000002 27780600
+158546     45.255 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+158547     45.255 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158548     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158549     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158550     45.255 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158551     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158552     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158553     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158554     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158555     45.255 wddm: umd ib +176 C0043700 40100500 00015000 00000001 00000000 00000000 C0004600 0000002E
+158556     45.255 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00015000
+158557     45.255 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00015000 00000001
+158558     45.255 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158559     45.255 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28844000 00000002 27780A00
+158560     45.255 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+158561     45.255 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158562     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158563     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158564     45.255 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158565     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158566     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158567     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158568     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158569     45.255 wddm: umd ib +176 C0043700 40100500 00019000 00000001 00000000 00000000 C0004600 0000002E
+158570     45.255 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00019000
+158571     45.255 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00019000 00000001
+158572     45.255 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158573     45.255 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28854000 00000002 27790A00
+158574     45.255 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+158575     45.255 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158576     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158577     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158578     45.255 wddm: umd ib 0x223BEC000 3648 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158579     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158580     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158581     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158582     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158583     45.255 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+158584     45.255 wddm: umd ib +184 00000000 00000000 28980000 00000002 00000400 C0004200 00000000 C0027600
+158585     45.255 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0004 0002039C C0017600
+158586     45.255 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+158587     45.255 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0087600 00000244 00000800
+158588     45.255 wddm: umd ib +216 00000800 00000800 00000800 00000800 00000001 00000001 00000001 C0017600
+158589     45.255 wddm: umd ib +224 00000243 00029008 C0004600 0000002E C0004600 0000002C C0004600 00000407
+158590     45.255 wddm: umd ib +232 C0064900 0070F514 23000000 00029000 00000001 00000C2C 00000000 00000000
+158591     45.255 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x29580A200 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158592     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158593     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158594     45.255 wddm: umd ib 0x223BEC000 4864 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158595     45.255 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158596     45.255 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158597     45.255 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158598     45.255 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158599     45.255 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+158600     45.255 wddm: umd ib +184 01000563 00000000 C0027600 00000212 602C0004 00000398 C0017600 00000228
+158601     45.255 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200 00000001
+158602     45.255 wddm: umd ib +200 00000001 C0017600 00000242 0002D900 C0087600 00000244 00001600 00001600
+158603     45.255 wddm: umd ib +208 00001600 00000002 00001600 00001600 00001600 00000001 C0017600 00000243
+158604     45.255 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+158605     45.255 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000010A0 00000000 00000000 C0053C00
+158606     45.255 wddm: umd ib +232 00000013 0003A000 00000001 000010A0 FFFFFFFF 00000004 C0065800 00000000
+158607     45.255 wddm: shader 0x100056300 lo 01000563 hi 00000000 -> phys 0x295820300 vram leaf 0x295820071 dram 00000000 00000000 00000000 00000000
+158608     45.255 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158609     45.255 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158610     45.257 wddm: umd ib 0x223BEC000 10528 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158611     45.257 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158612     45.257 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158613     45.257 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158614     45.257 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158615     45.257 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+158616     45.257 wddm: umd ib +184 01000402 00000000 C0027600 00000212 402C0004 0002039C C0017600 00000228
+158617     45.257 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200 00000001
+158618     45.257 wddm: umd ib +200 00000001 C0017600 00000242 0002E500 C0087600 00000244 00000800 00000800
+158619     45.257 wddm: umd ib +208 00000800 00000800 00000800 00000001 00000001 00000001 C0017600 00000243
+158620     45.257 wddm: umd ib +216 00080008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+158621     45.257 wddm: umd ib +224 0070F514 23000000 00080000 00000001 00002554 00000000 00000000 C0053C00
+158622     45.257 wddm: umd ib +232 00000013 00080000 00000001 00002554 FFFFFFFF 00000004 C0065800 00000000
+158623     45.257 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x29580A200 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158624     45.257 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158625     45.257 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158626     45.257 wddm: umd ib 0x223BEC000 18400 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158627     45.257 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158628     45.257 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158629     45.257 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158630     45.257 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158631     45.257 wddm: umd ib +176 C0043700 40100500 00091000 00000001 00000000 00000000 C0027600 0000020C
+158632     45.257 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158633     45.257 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158634     45.257 wddm: umd ib +200 00000001 C0017600 00000242 00030240 C00B7600 00000243 00000800 00001600
+158635     45.257 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158636     45.257 wddm: umd ib +216 00000001 C0027600 0000024E 00091008 00000001 C0031502 00000B00 00000001
+158637     45.257 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+158638     45.257 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+158639     45.257 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158640     45.257 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158641     45.257 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158642     45.259 wddm: umd ib 0x223BEC000 18400 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158643     45.259 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158644     45.259 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158645     45.259 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158646     45.259 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158647     45.259 wddm: umd ib +176 C0043700 40100500 00095000 00000001 00000000 00000000 C0027600 0000020C
+158648     45.259 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158649     45.259 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158650     45.259 wddm: umd ib +200 00000001 C0017600 00000242 000336C0 C00B7600 00000243 00000800 00001600
+158651     45.259 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158652     45.259 wddm: umd ib +216 00000001 C0027600 0000024E 00095008 00000001 C0031502 00000B00 00000001
+158653     45.259 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+158654     45.259 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+158655     45.259 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158656     45.259 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158657     45.259 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158658     45.261 wddm: umd ib 0x223BEC000 11040 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158659     45.261 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158660     45.261 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158661     45.261 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158662     45.261 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158663     45.261 wddm: umd ib +176 C0043700 40100500 00099000 00000001 00000000 00000000 C0027600 0000020C
+158664     45.261 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158665     45.261 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158666     45.261 wddm: umd ib +200 00000001 C0017600 00000242 00036B40 C00B7600 00000243 00000800 00001600
+158667     45.261 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158668     45.261 wddm: umd ib +216 00000001 C0027600 0000024E 00099008 00000001 C0031502 00000B00 00000001
+158669     45.261 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+158670     45.261 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+158671     45.261 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158672     45.261 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158673     45.261 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158674     45.261 wddm: umd ib 0x223BEC000 17408 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158675     45.261 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158676     45.261 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158677     45.261 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158678     45.261 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158679     45.261 wddm: umd ib +176 C0043700 40100500 0009D000 00000001 00000000 00000000 C0027600 0000020C
+158680     45.261 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158681     45.261 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158682     45.261 wddm: umd ib +200 00000001 C0017600 00000242 00038A00 C00B7600 00000243 00000800 00001600
+158683     45.261 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158684     45.261 wddm: umd ib +216 00000001 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+158685     45.261 wddm: umd ib +224 0070F514 23000000 0009D000 00000001 0000417D 00000000 00000000 C0053C00
+158686     45.261 wddm: umd ib +232 00000013 0009D000 00000001 0000417D FFFFFFFF 00000004 C0065800 00000000
+158687     45.261 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158688     45.261 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158689     45.261 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158690     45.263 wddm: umd ib 0x223BEC000 1024 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158691     45.263 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158692     45.263 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158693     45.263 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158694     45.263 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158695     45.263 wddm: umd ib +176 C0043700 40100500 000A1000 00000001 00000000 00000000 C0027600 0000020C
+158696     45.263 wddm: umd ib +184 01000400 00000000 C0027600 00000212 602C0001 0000008E C0017600 00000228
+158697     45.263 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158698     45.263 wddm: umd ib +200 00000001 C0057600 00000242 27780000 00000002 270E0000 00000002 0001F3F0
+158699     45.263 wddm: umd ib +208 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900 0070F514
+158700     45.263 wddm: umd ib +216 23000000 000A1000 00000001 0000017E 00000000 00000000 C0053C00 00000013
+158701     45.263 wddm: umd ib +224 000A1000 00000001 0000017E FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF
+158702     45.263 wddm: umd ib +232 01FFFFFF 00000000 00000000 0000000A 00010080 C0037600 00000207 00400040
+158703     45.263 wddm: shader 0x100040000 lo 01000400 hi 00000000 -> phys 0x29580A000 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158704     45.263 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158705     45.263 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158706     45.265 wddm: umd ib 0x223BEC000 1024 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158707     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158708     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158709     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158710     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158711     45.265 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0027600 0000020C
+158712     45.265 wddm: umd ib +184 01000400 00000000 C0027600 00000212 602C0001 0000008E C0017600 00000228
+158713     45.265 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158714     45.265 wddm: umd ib +200 00000001 C0057600 00000242 28855000 00000002 27680000 00000002 00001FF0
+158715     45.265 wddm: umd ib +208 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900 0070F514
+158716     45.265 wddm: umd ib +216 23000000 00029000 00000001 00000C33 00000000 00000000 C0053C00 00000013
+158717     45.265 wddm: umd ib +224 00029000 00000001 00000C33 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF
+158718     45.265 wddm: umd ib +232 01FFFFFF 00000000 00000000 0000000A 00010080 C0037600 00000207 00400040
+158719     45.265 wddm: shader 0x100040000 lo 01000400 hi 00000000 -> phys 0x29580A000 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158720     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158721     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158722     45.265 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158723     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158724     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158725     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158726     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158727     45.265 wddm: umd ib +176 C0043700 40100500 0001D000 00000001 00000000 00000000 C0004600 0000002E
+158728     45.265 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0001D000
+158729     45.265 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 0001D000 00000001
+158730     45.265 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158731     45.265 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28841000 00000002 27780000
+158732     45.265 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+158733     45.265 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158734     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158735     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158736     45.265 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158737     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158738     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158739     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158740     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158741     45.265 wddm: umd ib +176 C0043700 40100500 00021000 00000001 00000000 00000000 C0004600 0000002E
+158742     45.265 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00021000
+158743     45.265 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00021000 00000001
+158744     45.265 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158745     45.265 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28842000 00000002 27780200
+158746     45.265 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+158747     45.265 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158748     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158749     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158750     45.265 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158751     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158752     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158753     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158754     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158755     45.265 wddm: umd ib +176 C0043700 40100500 00025000 00000001 00000000 00000000 C0004600 0000002E
+158756     45.265 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00025000
+158757     45.265 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00025000 00000001
+158758     45.265 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158759     45.265 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28843000 00000002 27780600
+158760     45.265 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+158761     45.265 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158762     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158763     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158764     45.265 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158765     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158766     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158767     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158768     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158769     45.265 wddm: umd ib +176 C0043700 40100500 00001000 00000001 00000000 00000000 C0004600 0000002E
+158770     45.265 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00001000
+158771     45.265 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00001000 00000001
+158772     45.265 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158773     45.265 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28844000 00000002 27780A00
+158774     45.265 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+158775     45.265 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158776     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158777     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158778     45.265 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158779     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158780     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158781     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158782     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158783     45.265 wddm: umd ib +176 C0043700 40100500 00005000 00000001 00000000 00000000 C0004600 0000002E
+158784     45.265 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00005000
+158785     45.265 wddm: umd ib +192 00000001 000000D6 00000000 00000000 C0053C00 00000013 00005000 00000001
+158786     45.265 wddm: umd ib +200 000000D6 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158787     45.265 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28854000 00000002 27790A00
+158788     45.265 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+158789     45.265 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158790     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158791     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158792     45.265 wddm: umd ib 0x223BEC000 3648 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158793     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158794     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158795     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158796     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158797     45.265 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+158798     45.265 wddm: umd ib +184 00000000 00000000 28980000 00000002 00000400 C0004200 00000000 C0027600
+158799     45.265 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0004 0002039C C0017600
+158800     45.265 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+158801     45.265 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0087600 00000244 00000800
+158802     45.265 wddm: umd ib +216 00000800 00000800 00000800 00000800 00000001 00000001 00000001 C0017600
+158803     45.265 wddm: umd ib +224 00000243 00029008 C0004600 0000002E C0004600 0000002C C0004600 00000407
+158804     45.265 wddm: umd ib +232 C0064900 0070F514 23000000 00029000 00000001 00000C34 00000000 00000000
+158805     45.265 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x29580A200 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158806     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158807     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158808     45.265 wddm: umd ib 0x223BEC000 4864 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158809     45.265 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158810     45.265 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158811     45.265 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158812     45.265 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158813     45.265 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+158814     45.265 wddm: umd ib +184 01000563 00000000 C0027600 00000212 602C0004 00000398 C0017600 00000228
+158815     45.265 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200 00000001
+158816     45.265 wddm: umd ib +200 00000001 C0017600 00000242 0002D900 C0087600 00000244 00001600 00001600
+158817     45.265 wddm: umd ib +208 00001600 00000002 00001600 00001600 00001600 00000001 C0017600 00000243
+158818     45.265 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+158819     45.265 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000010AB 00000000 00000000 C0053C00
+158820     45.265 wddm: umd ib +232 00000013 0003A000 00000001 000010AB FFFFFFFF 00000004 C0065800 00000000
+158821     45.265 wddm: shader 0x100056300 lo 01000563 hi 00000000 -> phys 0x295820300 vram leaf 0x295820071 dram 00000000 00000000 00000000 00000000
+158822     45.265 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158823     45.265 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158824     45.267 wddm: umd ib 0x223BEC000 10528 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158825     45.267 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158826     45.267 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158827     45.267 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158828     45.267 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158829     45.267 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+158830     45.267 wddm: umd ib +184 01000402 00000000 C0027600 00000212 402C0004 0002039C C0017600 00000228
+158831     45.267 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200 00000001
+158832     45.267 wddm: umd ib +200 00000001 C0017600 00000242 0002E500 C0087600 00000244 00000800 00000800
+158833     45.267 wddm: umd ib +208 00000800 00000800 00000800 00000001 00000001 00000001 C0017600 00000243
+158834     45.267 wddm: umd ib +216 00080008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+158835     45.267 wddm: umd ib +224 0070F514 23000000 00080000 00000001 0000256D 00000000 00000000 C0053C00
+158836     45.267 wddm: umd ib +232 00000013 00080000 00000001 0000256D FFFFFFFF 00000004 C0065800 00000000
+158837     45.267 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x29580A200 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158838     45.267 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158839     45.267 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158840     45.267 wddm: umd ib 0x223BEC000 18400 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158841     45.267 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158842     45.267 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158843     45.267 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158844     45.267 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158845     45.267 wddm: umd ib +176 C0043700 40100500 00091000 00000001 00000000 00000000 C0027600 0000020C
+158846     45.267 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158847     45.267 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158848     45.267 wddm: umd ib +200 00000001 C0017600 00000242 00030240 C00B7600 00000243 00000800 00001600
+158849     45.267 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158850     45.267 wddm: umd ib +216 00000001 C0027600 0000024E 00091008 00000001 C0031502 00000B00 00000001
+158851     45.267 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+158852     45.267 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+158853     45.267 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158854     45.267 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158855     45.267 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158856     45.269 wddm: umd ib 0x223BEC000 18400 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158857     45.269 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158858     45.269 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158859     45.269 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158860     45.269 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158861     45.269 wddm: umd ib +176 C0043700 40100500 00095000 00000001 00000000 00000000 C0027600 0000020C
+158862     45.269 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158863     45.269 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158864     45.269 wddm: umd ib +200 00000001 C0017600 00000242 000336C0 C00B7600 00000243 00000800 00001600
+158865     45.269 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158866     45.269 wddm: umd ib +216 00000001 C0027600 0000024E 00095008 00000001 C0031502 00000B00 00000001
+158867     45.269 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+158868     45.269 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+158869     45.269 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158870     45.269 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158871     45.269 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158872     45.271 wddm: umd ib 0x223BEC000 11040 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158873     45.271 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158874     45.271 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158875     45.271 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158876     45.271 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158877     45.271 wddm: umd ib +176 C0043700 40100500 00099000 00000001 00000000 00000000 C0027600 0000020C
+158878     45.271 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158879     45.271 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158880     45.271 wddm: umd ib +200 00000001 C0017600 00000242 00036B40 C00B7600 00000243 00000800 00001600
+158881     45.271 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158882     45.271 wddm: umd ib +216 00000001 C0027600 0000024E 00099008 00000001 C0031502 00000B00 00000001
+158883     45.271 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+158884     45.271 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+158885     45.271 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158886     45.271 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158887     45.271 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158888     45.271 wddm: umd ib 0x223BEC000 17408 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158889     45.271 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158890     45.271 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158891     45.271 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158892     45.271 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158893     45.271 wddm: umd ib +176 C0043700 40100500 0009D000 00000001 00000000 00000000 C0027600 0000020C
+158894     45.271 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+158895     45.271 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158896     45.271 wddm: umd ib +200 00000001 C0017600 00000242 00038A00 C00B7600 00000243 00000800 00001600
+158897     45.273 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+158898     45.273 wddm: umd ib +216 00000001 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+158899     45.273 wddm: umd ib +224 0070F514 23000000 0009D000 00000001 000041A9 00000000 00000000 C0053C00
+158900     45.273 wddm: umd ib +232 00000013 0009D000 00000001 000041A9 FFFFFFFF 00000004 C0065800 00000000
+158901     45.273 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+158902     45.273 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158903     45.273 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158904     45.273 wddm: umd ib 0x223BEC000 1024 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158905     45.273 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158906     45.273 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158907     45.273 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158908     45.273 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158909     45.273 wddm: umd ib +176 C0043700 40100500 000A1000 00000001 00000000 00000000 C0027600 0000020C
+158910     45.273 wddm: umd ib +184 01000400 00000000 C0027600 00000212 602C0001 0000008E C0017600 00000228
+158911     45.273 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158912     45.273 wddm: umd ib +200 00000001 C0057600 00000242 27780000 00000002 270E0000 00000002 0001F3F0
+158913     45.273 wddm: umd ib +208 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900 0070F514
+158914     45.273 wddm: umd ib +216 23000000 000A1000 00000001 0000017F 00000000 00000000 C0053C00 00000013
+158915     45.273 wddm: umd ib +224 000A1000 00000001 0000017F FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF
+158916     45.273 wddm: umd ib +232 01FFFFFF 00000000 00000000 0000000A 00010080 C0037600 00000207 00400040
+158917     45.273 wddm: shader 0x100040000 lo 01000400 hi 00000000 -> phys 0x29580A000 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158918     45.273 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158919     45.273 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158920     45.275 wddm: umd ib 0x223BEC000 1024 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158921     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158922     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158923     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158924     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158925     45.275 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0027600 0000020C
+158926     45.275 wddm: umd ib +184 01000400 00000000 C0027600 00000212 602C0001 0000008E C0017600 00000228
+158927     45.275 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+158928     45.275 wddm: umd ib +200 00000001 C0057600 00000242 28855000 00000002 27680000 00000002 00001FF0
+158929     45.275 wddm: umd ib +208 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900 0070F514
+158930     45.275 wddm: umd ib +216 23000000 00029000 00000001 00000C3B 00000000 00000000 C0053C00 00000013
+158931     45.275 wddm: umd ib +224 00029000 00000001 00000C3B FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF
+158932     45.275 wddm: umd ib +232 01FFFFFF 00000000 00000000 0000000A 00010080 C0037600 00000207 00400040
+158933     45.275 wddm: shader 0x100040000 lo 01000400 hi 00000000 -> phys 0x29580A000 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+158934     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158935     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158936     45.275 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158937     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158938     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158939     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158940     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158941     45.275 wddm: umd ib +176 C0043700 40100500 00009000 00000001 00000000 00000000 C0004600 0000002E
+158942     45.275 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00009000
+158943     45.275 wddm: umd ib +192 00000001 000000D7 00000000 00000000 C0053C00 00000013 00009000 00000001
+158944     45.275 wddm: umd ib +200 000000D7 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158945     45.275 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28841000 00000002 27780000
+158946     45.275 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+158947     45.275 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158948     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158949     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158950     45.275 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158951     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158952     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158953     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158954     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158955     45.275 wddm: umd ib +176 C0043700 40100500 0000D000 00000001 00000000 00000000 C0004600 0000002E
+158956     45.275 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 0000D000
+158957     45.275 wddm: umd ib +192 00000001 000000D7 00000000 00000000 C0053C00 00000013 0000D000 00000001
+158958     45.275 wddm: umd ib +200 000000D7 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158959     45.275 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28842000 00000002 27780200
+158960     45.275 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+158961     45.275 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158962     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158963     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158964     45.275 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158965     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158966     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158967     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158968     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158969     45.275 wddm: umd ib +176 C0043700 40100500 00011000 00000001 00000000 00000000 C0004600 0000002E
+158970     45.275 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00011000
+158971     45.275 wddm: umd ib +192 00000001 000000D7 00000000 00000000 C0053C00 00000013 00011000 00000001
+158972     45.275 wddm: umd ib +200 000000D7 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158973     45.275 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28843000 00000002 27780600
+158974     45.275 wddm: umd ib +216 00000002 40000008 C0055000 80000000 00000000 00000000 00000000 00000000
+158975     45.275 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158976     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158977     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158978     45.275 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158979     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158980     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158981     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158982     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158983     45.275 wddm: umd ib +176 C0043700 40100500 00015000 00000001 00000000 00000000 C0004600 0000002E
+158984     45.275 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00015000
+158985     45.275 wddm: umd ib +192 00000001 000000D7 00000000 00000000 C0053C00 00000013 00015000 00000001
+158986     45.275 wddm: umd ib +200 000000D7 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+158987     45.275 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28844000 00000002 27780A00
+158988     45.275 wddm: umd ib +216 00000002 40000200 C0055000 80000000 00000000 00000000 00000000 00000000
+158989     45.275 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+158990     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+158991     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+158992     45.275 wddm: umd ib 0x223BEC000 928 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+158993     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+158994     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+158995     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+158996     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+158997     45.275 wddm: umd ib +176 C0043700 40100500 00019000 00000001 00000000 00000000 C0004600 0000002E
+158998     45.275 wddm: umd ib +184 C0004600 0000002C C0004600 00000407 C0064900 0070F514 23000000 00019000
+158999     45.275 wddm: umd ib +192 00000001 000000D7 00000000 00000000 C0053C00 00000013 00019000 00000001
+159000     45.275 wddm: umd ib +200 000000D7 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF 01FFFFFF 00000000
+159001     45.275 wddm: umd ib +208 00000000 0000000A 00010080 C0055000 60300000 28854000 00000002 27790A00
+159002     45.275 wddm: umd ib +216 00000002 40000004 C0055000 80000000 00000000 00000000 00000000 00000000
+159003     45.275 wddm: umd ib +224 00000000 C0004200 00000000 C0031000 00000004 C0065800 00000000 FFFFFFFF
+159004     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159005     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159006     45.275 wddm: umd ib 0x223BEC000 3648 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159007     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159008     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159009     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159010     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159011     45.275 wddm: umd ib +176 C0043700 40100500 00029000 00000001 00000000 00000000 C0055000 C0300000
+159012     45.275 wddm: umd ib +184 00000000 00000000 28980000 00000002 00000400 C0004200 00000000 C0027600
+159013     45.275 wddm: umd ib +192 0000020C 01000402 00000000 C0027600 00000212 402C0004 0002039C C0017600
+159014     45.275 wddm: umd ib +200 00000228 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200
+159015     45.275 wddm: umd ib +208 00000001 00000001 C0017600 00000242 0002D000 C0087600 00000244 00000800
+159016     45.275 wddm: umd ib +216 00000800 00000800 00000800 00000800 00000001 00000001 00000001 C0017600
+159017     45.275 wddm: umd ib +224 00000243 00029008 C0004600 0000002E C0004600 0000002C C0004600 00000407
+159018     45.275 wddm: umd ib +232 C0064900 0070F514 23000000 00029000 00000001 00000C3C 00000000 00000000
+159019     45.275 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x29580A200 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+159020     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159021     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159022     45.275 wddm: umd ib 0x223BEC000 4864 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159023     45.275 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159024     45.275 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159025     45.275 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159026     45.275 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159027     45.275 wddm: umd ib +176 C0043700 40100500 0003A000 00000001 00000000 00000000 C0027600 0000020C
+159028     45.275 wddm: umd ib +184 01000563 00000000 C0027600 00000212 602C0004 00000398 C0017600 00000228
+159029     45.275 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200 00000001
+159030     45.275 wddm: umd ib +200 00000001 C0017600 00000242 0002D900 C0087600 00000244 00001600 00001600
+159031     45.275 wddm: umd ib +208 00001600 00000002 00001600 00001600 00001600 00000001 C0017600 00000243
+159032     45.275 wddm: umd ib +216 0003A008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+159033     45.275 wddm: umd ib +224 0070F514 23000000 0003A000 00000001 000010B6 00000000 00000000 C0053C00
+159034     45.275 wddm: umd ib +232 00000013 0003A000 00000001 000010B6 FFFFFFFF 00000004 C0065800 00000000
+159035     45.275 wddm: shader 0x100056300 lo 01000563 hi 00000000 -> phys 0x295820300 vram leaf 0x295820071 dram 00000000 00000000 00000000 00000000
+159036     45.275 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159037     45.275 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159038     45.277 wddm: umd ib 0x223BEC000 10528 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159039     45.277 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159040     45.277 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159041     45.277 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159042     45.277 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159043     45.277 wddm: umd ib +176 C0043700 40100500 00080000 00000001 00000000 00000000 C0027600 0000020C
+159044     45.277 wddm: umd ib +184 01000402 00000000 C0027600 00000212 402C0004 0002039C C0017600 00000228
+159045     45.277 wddm: umd ib +192 00000000 C0017600 00000215 00400000 C0037600 00000207 00000200 00000001
+159046     45.277 wddm: umd ib +200 00000001 C0017600 00000242 0002E500 C0087600 00000244 00000800 00000800
+159047     45.277 wddm: umd ib +208 00000800 00000800 00000800 00000001 00000001 00000001 C0017600 00000243
+159048     45.277 wddm: umd ib +216 00080008 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+159049     45.277 wddm: umd ib +224 0070F514 23000000 00080000 00000001 00002586 00000000 00000000 C0053C00
+159050     45.277 wddm: umd ib +232 00000013 00080000 00000001 00002586 FFFFFFFF 00000004 C0065800 00000000
+159051     45.277 wddm: shader 0x100040200 lo 01000402 hi 00000000 -> phys 0x29580A200 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+159052     45.277 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159053     45.277 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159054     45.277 wddm: umd ib 0x223BEC000 18400 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159055     45.277 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159056     45.277 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159057     45.277 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159058     45.277 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159059     45.277 wddm: umd ib +176 C0043700 40100500 00091000 00000001 00000000 00000000 C0027600 0000020C
+159060     45.277 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+159061     45.277 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+159062     45.277 wddm: umd ib +200 00000001 C0017600 00000242 00030240 C00B7600 00000243 00000800 00001600
+159063     45.277 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+159064     45.277 wddm: umd ib +216 00000001 C0027600 0000024E 00091008 00000001 C0031502 00000B00 00000001
+159065     45.277 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+159066     45.277 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+159067     45.277 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+159068     45.277 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159069     45.277 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159070     45.279 wddm: umd ib 0x223BEC000 18400 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159071     45.279 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159072     45.279 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159073     45.279 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159074     45.279 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159075     45.279 wddm: umd ib +176 C0043700 40100500 00095000 00000001 00000000 00000000 C0027600 0000020C
+159076     45.279 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+159077     45.279 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+159078     45.279 wddm: umd ib +200 00000001 C0017600 00000242 000336C0 C00B7600 00000243 00000800 00001600
+159079     45.279 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+159080     45.279 wddm: umd ib +216 00000001 C0027600 0000024E 00095008 00000001 C0031502 00000B00 00000001
+159081     45.279 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+159082     45.279 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+159083     45.279 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+159084     45.279 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159085     45.279 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159086     45.281 wddm: umd ib 0x223BEC000 11040 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159087     45.281 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159088     45.281 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159089     45.281 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159090     45.281 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159091     45.281 wddm: umd ib +176 C0043700 40100500 00099000 00000001 00000000 00000000 C0027600 0000020C
+159092     45.281 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+159093     45.281 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+159094     45.281 wddm: umd ib +200 00000001 C0017600 00000242 00036B40 C00B7600 00000243 00000800 00001600
+159095     45.281 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+159096     45.281 wddm: umd ib +216 00000001 C0027600 0000024E 00099008 00000001 C0031502 00000B00 00000001
+159097     45.281 wddm: umd ib +224 00000001 00002045 C0055000 60200000 00057700 00000001 00057700 00000001
+159098     45.281 wddm: umd ib +232 80002780 C0027600 0000020C 01000563 00000000 C0027600 00000212 602C0004
+159099     45.281 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+159100     45.281 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159101     45.281 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159102     45.281 wddm: umd ib 0x223BEC000 17408 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159103     45.281 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159104     45.281 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159105     45.281 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159106     45.281 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159107     45.281 wddm: umd ib +176 C0043700 40100500 0009D000 00000001 00000000 00000000 C0027600 0000020C
+159108     45.281 wddm: umd ib +184 01000577 00000000 C0027600 00000212 602C0008 000003A0 C0017600 00000228
+159109     45.281 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+159110     45.281 wddm: umd ib +200 00000001 C0017600 00000242 00038A00 C00B7600 00000243 00000800 00001600
+159111     45.281 wddm: umd ib +208 00B00000 00000800 00001600 00000000 00000000 00000001 00000001 00000001
+159112     45.281 wddm: umd ib +216 00000001 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900
+159113     45.281 wddm: umd ib +224 0070F514 23000000 0009D000 00000001 000041D5 00000000 00000000 C0053C00
+159114     45.281 wddm: umd ib +232 00000013 0009D000 00000001 000041D5 FFFFFFFF 00000004 C0065800 00000000
+159115     45.281 wddm: shader 0x100057700 lo 01000577 hi 00000000 -> phys 0x295821700 vram leaf 0x295821071 dram 00000000 00000000 00000000 00000000
+159116     45.281 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159117     45.281 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159118     45.283 wddm: umd ib 0x223BEC000 1024 bytes -> phys 0x25E468000 system leaf 0x25E468073 dram C0012800 80000000 80000000 C0001200
+159119     45.283 wddm: umd ib +32 C0017600 00000101 0000FFFF C0047600 000000B2 00000000 00000000 00000000
+159120     45.283 wddm: umd ib +56 C0016900 0000000E 00000002 C0036900 0000001F 00150055 00000000 00000000
+159121     45.283 wddm: umd ib +158 C0037600 00000204 00000000 00000000 00000000 C0065800 00000000 FFFFFFFF
+159122     45.283 wddm: umd ib +166 01FFFFFF 00000000 00000000 0000000A 0000C3B1 C0004600 00000019 C0011000
+159123     45.283 wddm: umd ib +176 C0043700 40100500 000A1000 00000001 00000000 00000000 C0027600 0000020C
+159124     45.283 wddm: umd ib +184 01000400 00000000 C0027600 00000212 602C0001 0000008E C0017600 00000228
+159125     45.283 wddm: umd ib +192 00000000 C0017600 00000215 01000000 C0037600 00000207 00000040 00000001
+159126     45.283 wddm: umd ib +200 00000001 C0057600 00000242 27780000 00000002 270E0000 00000002 0001F3F0
+159127     45.283 wddm: umd ib +208 C0004600 0000002E C0004600 0000002C C0004600 00000407 C0064900 0070F514
+159128     45.283 wddm: umd ib +216 23000000 000A1000 00000001 00000180 00000000 00000000 C0053C00 00000013
+159129     45.283 wddm: umd ib +224 000A1000 00000001 00000180 FFFFFFFF 00000004 C0065800 00000000 FFFFFFFF
+159130     45.283 wddm: umd ib +232 01FFFFFF 00000000 00000000 0000000A 00010080 C0037600 00000207 00400040
+159131     45.283 wddm: shader 0x100040000 lo 01000400 hi 00000000 -> phys 0x29580A000 vram leaf 0x29580A071 dram 00000000 00000000 00000000 00000000
+159132     45.283 gfx: VMID 1 root 0x46DFF3000 flush -> 0
+159133     45.283 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+159134     45.551 wddm: BuildPagingBuffer operation 2 segment 0, 65536 bytes free, pass offset 0
+159135     45.551 wddm: DestroyContext
+159136     45.551 wddm: DestroyDevice
+159137     45.551 wddm: DestroyProcess
+159138     46.130 wddm: present without valid software packet completed without GPU dispatch
+159139     46.152 wddm: present without valid software packet completed without GPU dispatch
+159140     46.168 wddm: present without valid software packet completed without GPU dispatch
+159141     46.718 wddm summary: ---- DDI calls: name, count, first log line ----
+159142     46.718 wddm summary: QueryAdapterInfo                   15  first at 26
+159143     46.718 wddm summary: GetNodeMetadata                     1  first at 34
+159144     46.718 wddm summary: CreateDevice                        6  first at 40
+159145     46.718 wddm summary: DestroyDevice                       3  first at 1124
+159146     46.718 wddm summary: CreateContext                       5  first at 42
+159147     46.718 wddm summary: DestroyContext                      3  first at 1123
+159148     46.718 wddm summary: CreateProcess                       5  first at 39
+159149     46.718 wddm summary: DestroyProcess                      3  first at 1125
+159150     46.718 wddm summary: SetRootPageTable                    5  first at 65
+159151     46.718 wddm summary: CreateAllocation                  191  first at 105
+159152     46.718 wddm summary: DestroyAllocation                 324  first at 445
+159153     46.718 wddm summary: DescribeAllocation                  3  first at 113
+159154     46.718 wddm summary: GetStandardAllocationDriverData      4  first at 103
+159155     46.718 wddm summary: OpenAllocation                    191  first at 107
+159156     46.718 wddm summary: CloseAllocation                   189  first at 444
+159157     46.718 wddm summary: BuildPagingBuffer                6219  first at 44
+159158     46.718 wddm summary: SubmitCommandVirtual            10429  first at 143
+159159     46.718 wddm summary: PreemptCommand                    123  first at 75256
+159160     46.718 wddm summary: Present                            40  first at 135
+159161     46.718 wddm summary: SetVidPnSourceAddress               1  first at 123
+159162     46.718 wddm summary: ControlInterrupt                 1200  first at 127
+159163     46.718 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+159164     46.718 wddm summary: adapter info type   1       1  first at 26
+159165     46.718 wddm summary: adapter info type  15       1  first at 27
+159166     46.718 wddm summary: adapter info type  47       1  first at 28
+159167     46.718 wddm summary: adapter info type  13       1  first at 29
+159168     46.718 wddm summary: adapter info type  14       4  first at 30
+159169     46.718 wddm summary: adapter info type  11       2  first at 36
+159170     46.718 wddm summary: adapter info type  10       1  first at 38
+159171     46.718 wddm summary: adapter info type  16       1  first at 38
+159172     46.718 wddm summary: adapter info type   0       3  first at 351
+159173     46.718 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+159174     46.718 wddm summary: paging operation  11    5063  first at 44
+159175     46.718 wddm summary: paging operation  12    1018  first at 98
+159176     46.718 wddm summary: paging operation   9      71  first at 111
+159177     46.718 wddm summary: paging operation   8      65  first at 443
+159178     46.718 wddm summary: paging operation   2       2  first at 72254
+159179     46.718 wddm summary: objects created/destroyed: dev 6/3 ctx 5/3 proc 5/3 alloc 191/324, 13 alive
+159180     46.718 wddm summary: allocations opened/closed: 191/189 calls
+159181     46.718 wddm summary: submissions 0 physical + 10429 virtual, 123 preemptions, last completed fence 10429
+159182     46.718 wddm summary: node 0 hardware: 10389 submitted, 10389 completed, 0 timeouts, 0 refused
+159183     46.718 wddm summary: umd: 189 allocs (0 refused), 3 contexts, 10389 submits on the ring, 0 not run
+159184     46.718 wddm summary: node 1 (paging, closed): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+159185     46.718 wddm summary: SubmitCommandVirtual by node: 0: 10429, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+159186     46.718 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+159187     46.718 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+159188     46.718 wddm summary: presents 40, flips 1 of 1 address calls (0 arrived above DISPATCH_LEVEL)
+159189     46.718 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+159190     46.718 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+159191     46.718 wddm summary: widest blit 0 rows
+159192     46.718 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+159193     46.718 wddm summary: vsync not enabled by ControlInterrupt, 2912 ticks, 610 reported to dxgkrnl
+159194     46.718 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+159195     46.718 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+159196     46.718 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+159197     46.718 vidmm summary: level 0: 4947 calls, 1824316 entries, 880753 valid
+159198     46.718 vidmm summary: level 1: 88 calls, 6778 entries, 984 valid
+159199     46.718 vidmm summary: level 2: 20 calls, 2575 entries, 12 valid
+159200     46.718 vidmm summary: level 3: 8 calls, 2563 entries, 5 valid
+159201     46.718 vidmm summary: segment 0 named by 233562 valid entries
+159202     46.718 vidmm summary: segment 1 named by 648192 valid entries
+159203     46.718 vidmm summary: 1028 cpu-virtual calls, 4035 gpu-physical calls
+159204     46.718 vidmm summary: 1836232 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 5 roots
+159205     47.469 wddm summary: ---- DDI calls: name, count, first log line ----
+159206     47.469 wddm summary: QueryAdapterInfo                   15  first at 26
+159207     47.469 wddm summary: GetNodeMetadata                     1  first at 34
+159208     47.469 wddm summary: CreateDevice                        6  first at 40
+159209     47.469 wddm summary: DestroyDevice                       3  first at 1124
+159210     47.469 wddm summary: CreateContext                       5  first at 42
+159211     47.469 wddm summary: DestroyContext                      3  first at 1123
+159212     47.469 wddm summary: CreateProcess                       5  first at 39
+159213     47.469 wddm summary: DestroyProcess                      3  first at 1125
+159214     47.469 wddm summary: SetRootPageTable                    5  first at 65
+159215     47.469 wddm summary: CreateAllocation                  191  first at 105
+159216     47.469 wddm summary: DestroyAllocation                 324  first at 445
+159217     47.469 wddm summary: DescribeAllocation                  3  first at 113
+159218     47.469 wddm summary: GetStandardAllocationDriverData      4  first at 103
+159219     47.469 wddm summary: OpenAllocation                    191  first at 107
+159220     47.469 wddm summary: CloseAllocation                   189  first at 444
+159221     47.469 wddm summary: BuildPagingBuffer                6219  first at 44
+159222     47.469 wddm summary: SubmitCommandVirtual            10429  first at 143
+159223     47.469 wddm summary: PreemptCommand                    123  first at 75256
+159224     47.469 wddm summary: Present                            40  first at 135
+159225     47.469 wddm summary: SetVidPnSourceAddress               1  first at 123
+159226     47.469 wddm summary: ControlInterrupt                 1200  first at 127
+159227     47.469 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+159228     47.471 wddm summary: adapter info type   1       1  first at 26
+159229     47.471 wddm summary: adapter info type  15       1  first at 27
+159230     47.471 wddm summary: adapter info type  47       1  first at 28
+159231     47.471 wddm summary: adapter info type  13       1  first at 29
+159232     47.471 wddm summary: adapter info type  14       4  first at 30
+159233     47.471 wddm summary: adapter info type  11       2  first at 36
+159234     47.471 wddm summary: adapter info type  10       1  first at 38
+159235     47.471 wddm summary: adapter info type  16       1  first at 38
+159236     47.471 wddm summary: adapter info type   0       3  first at 351
+159237     47.471 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+159238     47.471 wddm summary: paging operation  11    5063  first at 44
+159239     47.471 wddm summary: paging operation  12    1018  first at 98
+159240     47.471 wddm summary: paging operation   9      71  first at 111
+159241     47.471 wddm summary: paging operation   8      65  first at 443
+159242     47.471 wddm summary: paging operation   2       2  first at 72254
+159243     47.471 wddm summary: objects created/destroyed: dev 6/3 ctx 5/3 proc 5/3 alloc 191/324, 13 alive
+159244     47.471 wddm summary: allocations opened/closed: 191/189 calls
+159245     47.471 wddm summary: submissions 0 physical + 10429 virtual, 123 preemptions, last completed fence 10429
+159246     47.471 wddm summary: node 0 hardware: 10389 submitted, 10389 completed, 0 timeouts, 0 refused
+159247     47.471 wddm summary: umd: 189 allocs (0 refused), 3 contexts, 10389 submits on the ring, 0 not run
+159248     47.471 wddm summary: node 1 (paging, closed): 0 hardware submitted, 0 completed, 0 timeouts, 0 refused
+159249     47.471 wddm summary: SubmitCommandVirtual by node: 0: 10429, 1: 0 (0 named no buffer, 0 clamped), shadow holds buffer 0x0 to 0x0
+159250     47.471 wddm summary: paging buffer switches with packets still live: 0 (0 means one buffer at a time, which is what the single shadow assumes)
+159251     47.471 wddm summary: BuildPagingBuffer: 0 transfers, 0 fills, 0 bytes, 0 insufficient-buffer, unsupported (not ready/no root/no translation/system memory/not contiguo
+159252     47.471 wddm summary: presents 40, flips 1 of 1 address calls (0 arrived above DISPATCH_LEVEL)
+159253     47.471 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+159254     47.471 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+159255     47.471 wddm summary: widest blit 0 rows
+159256     47.471 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+159257     47.471 wddm summary: vsync not enabled by ControlInterrupt, 2959 ticks, 610 reported to dxgkrnl
+159258     47.471 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+159259     47.471 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+159260     47.471 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+159261     47.471 vidmm summary: level 0: 4947 calls, 1824316 entries, 880753 valid
+159262     47.471 vidmm summary: level 1: 88 calls, 6778 entries, 984 valid
+159263     47.471 vidmm summary: level 2: 20 calls, 2575 entries, 12 valid
+159264     47.471 vidmm summary: level 3: 8 calls, 2563 entries, 5 valid
+159265     47.471 vidmm summary: segment 0 named by 233562 valid entries
+159266     47.471 vidmm summary: segment 1 named by 648192 valid entries
+159267     47.471 vidmm summary: 1028 cpu-virtual calls, 4035 gpu-physical calls
+159268     47.471 vidmm summary: 1836232 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 5 roots
+             1024 lines printed
+

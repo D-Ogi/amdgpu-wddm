@@ -1,0 +1,57 @@
+{
+  "name": "vulkan",
+  "title": "Vulkan inventory (cached)",
+  "order": 13,
+  "rows": [
+    [
+      "Capture",
+      "09-24 21:22:41 UTC; 13m 21s ago",
+      "Info"
+    ],
+    [
+      "Partial capture",
+      "vulkaninfo timed out; no subsequent Vulkan workload permitted; System ICD observed; requested override ignored",
+      "Warn"
+    ],
+    [
+      "Device / API",
+      "AMD BC-250 (RADV GFX1013) / 1.4.348 (4211036)",
+      "Info"
+    ],
+    [
+      "Driver",
+      "radv 26.1.99 (109056099); Mesa 26.2.0-devel (git-801c9763c6)",
+      "Info"
+    ],
+    [
+      "ICD observed",
+      "C:\\BC250\\m8\\vulkan_radeon.dll",
+      "Info"
+    ],
+    [
+      "Ext / layers",
+      "16 instance, 211 device; 0 layers",
+      "Info"
+    ],
+    [
+      "Formats",
+      "?/? supported; storage ?, color ?",
+      "Info"
+    ],
+    [
+      "Advertised",
+      "timeline:yes BDA:yes FP16:yes sparse:yes (? = not captured)",
+      "Info"
+    ],
+    [
+      "Full report",
+      "inventory-20260924-01/vulkan-inventory.txt",
+      "Info"
+    ],
+    [
+      "Scope",
+      "ICD declarations; not a rendering test",
+      "Info"
+    ]
+  ]
+}

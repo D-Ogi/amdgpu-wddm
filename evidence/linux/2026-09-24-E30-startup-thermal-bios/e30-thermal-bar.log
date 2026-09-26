@@ -1,0 +1,17 @@
+read_only_bar5_mapped=true
+{"register": "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE", "byte_offset": 14220, "raw": 8192}
+{"register": "mmGB_ADDR_CONFIG", "byte_offset": 39160, "raw": 68}
+{"register": "mmGRBM_STATUS", "byte_offset": 32784, "raw": 12328}
+{"sample": 0, "monotonic_ns": 142978121041, "utc_epoch": 1790284080.720052, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 1, "monotonic_ns": 143478440459, "utc_epoch": 1790284081.2203655, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 2, "monotonic_ns": 143978749889, "utc_epoch": 1790284081.7206748, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 3, "monotonic_ns": 144479090086, "utc_epoch": 1790284082.2210152, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 4, "monotonic_ns": 144979412036, "utc_epoch": 1790284082.721337, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 5, "monotonic_ns": 145479731062, "utc_epoch": 1790284083.221656, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 6, "monotonic_ns": 145980077373, "utc_epoch": 1790284083.7220025, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 7, "monotonic_ns": 146480420796, "utc_epoch": 1790284084.222346, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 8, "monotonic_ns": 146980721729, "utc_epoch": 1790284084.7226465, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 9, "monotonic_ns": 147481056908, "utc_epoch": 1790284085.222982, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 10, "monotonic_ns": 147981363744, "utc_epoch": 1790284085.7232885, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+{"sample": 11, "monotonic_ns": 148481687388, "utc_epoch": 1790284086.2236123, "smn_k10temp_before_mc": 70375, "bar_thm_raw": 2004553711, "bar_thm_decoded_mc": 70375, "smn_k10temp_after_mc": 70375}
+thermal_comparison_complete

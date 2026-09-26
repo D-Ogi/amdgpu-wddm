@@ -1,0 +1,38 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 514 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x019A80  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x018640  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x02FBC0  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x03C5B0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\bc250kmd-07135\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bc250kmd-07135\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bc250kmd-07135\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7684  bc250kmd.inf
+   364432  bc250kmd.sys
+umd package
+P:\BC-250\bc250-win\driver\kmd\build.ps1 : Cannot bind parameter 'Encoding'. Cannot convert value "utf8NoBOM" to type "Microsoft.PowerShell.Commands.FileSystemCmdletProviderEncoding". Error: "Unable to match the iden
+tifier name utf8NoBOM to a valid enumerator name. Specify one of the following enumerator names and try again:
+Unknown, String, Unicode, Byte, BigEndianUnicode, UTF8, UTF7, UTF32, Ascii, Default, Oem, BigEndianUTF32"
+    + CategoryInfo          : InvalidArgument: (:) [build.ps1], ParameterBindingException
+    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,build.ps1
+ 

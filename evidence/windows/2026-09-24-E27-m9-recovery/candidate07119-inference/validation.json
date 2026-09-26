@@ -1,0 +1,59 @@
+{
+  "m8": {
+    "exit": 0
+  },
+  "stories15M": {
+    "reference_match": true,
+    "reference_source": "evidence\\linux\\2026-09-21-E14-vulkan-compute-reference\\llama\\stories15M-ngl99.out",
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+    "offload": [
+      "7",
+      "7"
+    ]
+  },
+  "tinyllama": {
+    "reference_match": true,
+    "reference_source": "evidence\\linux\\2026-09-21-E14-vulkan-compute-reference\\llama\\tinyllama-ngl99.out",
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518",
+    "offload": [
+      "23",
+      "23"
+    ]
+  },
+  "before": {
+    "gfx": [
+      "546",
+      "546",
+      "0",
+      "0"
+    ],
+    "paging": [
+      "49925",
+      "49925",
+      "0",
+      "0"
+    ],
+    "capture": [
+      "32",
+      "0"
+    ]
+  },
+  "after": {
+    "gfx": [
+      "2900",
+      "2900",
+      "0",
+      "0"
+    ],
+    "paging": [
+      "73573",
+      "73573",
+      "0",
+      "0"
+    ],
+    "capture": [
+      "76",
+      "0"
+    ]
+  }
+}

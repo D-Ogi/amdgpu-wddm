@@ -1,0 +1,15 @@
+gpu-residency-gate-test.c
+RESUME_ID phase=ready pid=32056 adapter=0000000B device=0000000C context=0000000D paging_queue=0000000E paging_fence=0000000F fence=00000010 data=00000015 data_va=0000000000100000 command=00000016 command_va=0000000000200000 readback=00000017 readback_va=0000000000300000 sequence=64
+RESUME_GATE READY pid=32056 timeout_ms=5000
+RESUME_GATE RELEASED pid=32056 elapsed_ms=0
+RESUME_ID phase=released pid=32056 adapter=0000000B device=0000000C context=0000000D paging_queue=0000000E paging_fence=0000000F fence=00000010 data=00000015 data_va=0000000000100000 command=00000016 command_va=0000000000200000 readback=00000017 readback_va=0000000000300000 sequence=64
+RESUME_GATE FAIL stale release path
+RESUME_ID phase=ready pid=32056 adapter=0000000B device=0000000C context=0000000D paging_queue=0000000E paging_fence=0000000F fence=00000010 data=00000015 data_va=0000000000100000 command=00000016 command_va=0000000000200000 readback=00000017 readback_va=0000000000300000 sequence=64
+RESUME_GATE FAIL create ready error=80
+RESUME_ID phase=ready pid=32056 adapter=0000000B device=0000000C context=0000000D paging_queue=0000000E paging_fence=0000000F fence=00000010 data=00000015 data_va=0000000000100000 command=00000016 command_va=0000000000200000 readback=00000017 readback_va=0000000000300000 sequence=64
+RESUME_GATE READY pid=32056 timeout_ms=100
+RESUME_GATE TIMEOUT pid=32056 timeout_ms=100
+RESUME_ID phase=ready pid=32056 adapter=0000000B device=0000000C context=0000000D paging_queue=0000000E paging_fence=0000000F fence=00000010 data=00000015 data_va=0000000000100000 command=00000016 command_va=0000000000200000 readback=00000017 readback_va=0000000000300000 sequence=64
+RESUME_GATE READY pid=32056 timeout_ms=5000
+RESUME_GATE FAIL release PID mismatch
+resume gate actual-source: 30 checks, 0 failures; no GPU calls

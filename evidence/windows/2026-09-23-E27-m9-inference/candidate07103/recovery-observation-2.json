@@ -1,0 +1,20 @@
+{
+  "utc": "2026-09-23T19:14:57.754634+00:00",
+  "routes": [
+    {
+      "route": 0,
+      "tcp22": false
+    },
+    {
+      "route": 1,
+      "tcp22": false
+    },
+    {
+      "route": 2,
+      "tcp22": false
+    }
+  ],
+  "original_session": 21191,
+  "last_poll": "live, no new output",
+  "recovery_script": "prepared, not executed"
+}

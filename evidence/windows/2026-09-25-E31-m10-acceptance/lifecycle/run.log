@@ -1,0 +1,33 @@
+health abi=1 version=0x00070093 flags=15 generation=29846309707 epoch=5 completed=8686 age_ms=370 ready_ms=4020441
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67125 ready=1
+
+native_exit=0 
+LIFECYCLE size kind=0 width=640 height=480
+LIFECYCLE resize frame=32
+LIFECYCLE size kind=0 width=433 height=277
+LIFECYCLE minimize frame=64
+LIFECYCLE size kind=1 width=0 height=0
+LIFECYCLE restore
+LIFECYCLE size kind=0 width=433 height=277
+LIFECYCLE resize frame=96
+LIFECYCLE size kind=0 width=640 height=480
+allocation handle=0x800007c0
+allocation handle=0x80000840
+allocation handle=0x800008c0
+allocation handle=0x80000980
+allocation handle=0x40002740
+allocation handle=0x400027c0
+allocation handle=0x40002840
+allocation handle=0x400028c0
+allocation handle=0x40002940
+allocation handle=0x400029c0
+allocation handle=0x40002a40
+allocation handle=0x40002ac0
+allocation handle=0x40002b40
+allocation handle=0x40002bc0
+allocation handle=0x40002c40
+allocation handle=0x40002cc0
+allocation handle=0x40002e00
+[Vulkan Loader] DEBUG | LAYER:  Unloading layer library C:\BC250\m10\vvl\VkLayer_khronos_validation.dll
+health abi=1 version=0x00070093 flags=15 generation=29846309707 epoch=5 completed=8842 age_ms=386 ready_ms=4028948
+baseline_terminal

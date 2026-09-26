@@ -1,0 +1,14 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; batch helper not wired into WDDM publication; no deployment",
+  "sys_sha256": "0F0DCA26DB87BD50B7EE61AFDB5A583E383665707FD92DC61DDD7794B0407F0C",
+  "sha256": {
+    "driver/kmd/paging_pt_shadow.c": "659c454661f43830b633d3316b8b74e1feffd129d000cbffa51e5595efff4c36",
+    "driver/kmd/paging_pt_shadow.h": "b7bae52a5350ae6811002c9959b1d3d5ad22e58e3b8cb081f1024fe404889d8f",
+    "driver/kmd/test/paging_pt_shadow_test.c": "c1f63d541a9f9f9860f99d743331870a4d187da45c15eaf917ec7fd979c5a7ff",
+    "driver/kmd/test/run_paging_pt_shadow.ps1": "709fadb79b9b41001787a6efea2571294e35322be70b2df66cb2ea7d1f4114b9"
+  },
+  "host_exit": 0,
+  "routing_exit": 0,
+  "mutant_exit": 1
+}

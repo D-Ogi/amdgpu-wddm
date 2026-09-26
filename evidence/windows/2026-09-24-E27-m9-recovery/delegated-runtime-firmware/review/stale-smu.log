@@ -1,0 +1,9 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+Generowanie kodu...
+FAIL line 100: SmuReadFirmwareVersion(&owner,&version)==STATUS_SUCCESS && version==0x00580701u
+FAIL line 139: SmuReadFirmwareVersion(&owner,&version)==STATUS_SUCCESS && version==0x00580701u && calls==before+2
+SMU native owner: 30773 checks, 2 failures

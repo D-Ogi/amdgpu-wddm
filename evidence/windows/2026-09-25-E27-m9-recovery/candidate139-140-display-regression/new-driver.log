@@ -1,0 +1,1347 @@
+log          8493 lines since this driver load, 7469 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.000 stage 20
+     3      0.125 stage 30
+     4      0.125 stage 31
+     5      0.125 stage 32
+     6      0.125 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.125 stage 33
+     8      0.125 stage 34
+     9      0.125 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.125 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    11      0.125 smu: native owner start status 0x00000000
+    12      0.125 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    13      0.125 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    14      0.125 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    15      0.125 gart: ready, dummy page at 0x26FFFA000
+    16      0.125 psp: ready
+    17      0.125 gpumem: ready, doorbells at 0xD0000000
+    18      0.125 gfx: ready, GPU submission allowed, paging node allowed
+    19      0.125 ih: ready
+    20      0.125 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    21      0.140 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    22      0.140 startup: entering interrupt connection
+    23      0.140 startup: entering firmware preparation
+    24      0.140 startup: entering native clock preparation
+    25      0.156 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 66375mc staged 0
+    26      0.156 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    27      0.156 gfx: unpublished translation bootstrap entered with engines halted
+    28      0.156 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    29      0.156 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    30      0.156 startup: entering GART initialization
+    31      0.171 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    32      0.171 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.171 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.171 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    35      0.171 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.171 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    37      0.171 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    38      0.171 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.171 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    40      0.171 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    41      0.171 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.171 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    43      0.171 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    44      0.171 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.171 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    46      0.171 startup: entering PSP initialization
+    47      0.218 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    48      0.218 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    49      0.250 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    50      0.250 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    51      0.250 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    52      0.250 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 241 us, in TMR at 0x0
+    53      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    54      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.250 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1908 us, in TMR at 0x0
+    56      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.250 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1889 us, in TMR at 0x0
+    59      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    60      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.250 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF842000
+    62      0.250 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.250 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.265 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF883000
+    65      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    66      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.265 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF8C4000
+    68      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    69      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.265 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5962 us, in TMR at 0xF5FF800000
+    71      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    72      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.265 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    74      0.265 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    75      0.265 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.281 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5967 us, in TMR at 0xF5FF800000
+    77      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    78      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.281 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 134 us, in TMR at 0x0
+    80      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.281 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    83      0.281 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.281 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    85      0.281 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    86      0.281 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    87      0.281 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    88      0.281 startup: entering IH initialization
+    89      0.281 ih: init: rc 0, 18 writes
+    90      0.281 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    91      0.281 startup: entering GFX initialization
+    92      0.281 startup: entering GFX stage 1
+    93      0.281 gfx: RLC startup policy pp_gfxoff 0
+    94      0.281 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    95      0.281 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    96      0.296 startup: entering GFX stage 2
+    97      0.296 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    98      0.296 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    99      0.296 startup: entering GFX stage 3
+   100      0.296 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+   101      0.296 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   102      0.296 startup: entering GFX stage 4
+   103      0.296 gfx: stage 4 (constants): rc 0, 157 writes so far, 59 us
+   104      0.296 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   105      0.296 startup: entering GFX stage 5
+   106      0.312 startup: RLC boundary acquire-paging-lock
+   107      0.312 startup: RLC boundary acquire-gart-lock
+   108      0.312 startup: RLC boundary locks-acquired
+   109      0.312 startup: RLC boundary before-rlc-resume
+   110      0.312 startup: RLC boundary after-rlc-resume
+   111      0.312 startup: RLC boundary before-gfx-visibility
+   112      0.312 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   113      0.328 startup: visibility observer returned after-invalidate-request
+   114      0.328 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   115      0.328 startup: visibility observer returned after-invalidate-request-read
+   116      0.328 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   117      0.328 startup: visibility observer returned after-invalidate-ack
+   118      0.328 startup: visibility GFX returned 0, entering MMHUB
+   119      0.328 startup: visibility MMHUB returned 0
+   120      0.328 gpumem: startup GFX translations committed after RLC, before CP
+   121      0.343 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   122      0.343 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   123      0.343 startup: visibility publication observer returned
+   124      0.343 startup: RLC boundary after-gfx-visibility
+   125      0.343 gfx: stage 5 (RLC): rc 0, 11 writes so far, 29198 us
+   126      0.343 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   127      0.343 startup: entering GFX stage 6
+   128      0.343 startup: entering CP step 1
+   129      0.343 startup: CP1 checkpoint acquire-paging-lock
+   130      0.343 startup: CP1 checkpoint acquire-gart-lock
+   131      0.359 startup: CP1 checkpoint locks-acquired
+   132      0.359 amdgpu[0]: CP resume kiq-init begin
+
+   133      0.359 startup: CP1 checkpoint scheduler
+   134      0.359 startup: CP1 checkpoint scheduler-read
+   135      0.359 startup: CP1 checkpoint scheduler-write
+   136      0.359 startup: CP1 checkpoint scheduler-done
+   137      0.359 startup: CP1 checkpoint clear-mqd
+   138      0.359 startup: CP1 checkpoint select-queue
+   139      0.359 startup: CP1 checkpoint build-mqd
+   140      0.375 startup: CP1 checkpoint disable-wptr-poll
+   141      0.375 startup: CP1 checkpoint read-active
+   142      0.375 startup: CP1 checkpoint program-hqd
+   143      0.375 startup: CP1 checkpoint activate-hqd
+   144      0.375 startup: CP1 checkpoint restore-selection
+   145      0.375 startup: CP1 checkpoint complete
+   146      0.375 amdgpu[0]: CP resume kiq-init end result=0
+
+   147      0.375 gfx: CP step 1: rc 0, 27 writes, 27764 us
+   148      0.375 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   149      0.375 startup: CP step 1 returned 0x00000000 result 0
+   150      0.390 startup: entering CP step 2
+   151      0.390 amdgpu[0]: CP resume compute-unhalt begin
+
+   152      0.390 amdgpu[0]: CP resume compute-unhalt end
+
+   153      0.390 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   154      0.390 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   155      0.390 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   156      0.390 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   157      0.390 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   158      0.390 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   159      0.390 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   160      0.390 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   161      0.390 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   162      0.390 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   163      0.390 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   164      0.390 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   165      0.390 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   166      0.390 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   167      0.390 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   168      0.390 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   169      0.390 gfx: CP step 2: rc 0, 17 writes, 336 us
+   170      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   171      0.390 startup: CP step 2 returned 0x00000000 result 0
+   172      0.390 startup: entering CP step 3
+   173      0.390 amdgpu[0]: CP resume kcq-enable begin
+
+   174      0.390 amdgpu[0]: CP resume kcq-enable end result=0
+
+   175      0.390 gfx: CP step 3: rc 0, 1 writes, 59 us
+   176      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   177      0.390 startup: CP step 3 returned 0x00000000 result 0
+   178      0.390 startup: entering CP step 4
+   179      0.390 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   180      0.390 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   181      0.390 gfx: CP step 4: rc 0, 4 writes, 36 us
+   182      0.390 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   183      0.390 startup: CP step 4 returned 0x00000000 result 0
+   184      0.406 startup: entering CP step 5
+   185      0.406 amdgpu[0]: CP resume kgq-enable begin
+
+   186      0.406 amdgpu[0]: CP resume kgq-enable end result=0
+
+   187      0.406 gfx: CP step 5: rc 0, 1 writes, 29 us
+   188      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   189      0.406 startup: CP step 5 returned 0x00000000 result 0
+   190      0.406 startup: entering CP step 6
+   191      0.406 amdgpu[0]: CP resume gfx-start begin
+
+   192      0.406 amdgpu[0]: CP resume gfx-start end result=0
+
+   193      0.406 gfx: CP step 6: rc 0, 3 writes, 27 us
+   194      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   195      0.406 startup: CP step 6 returned 0x00000000 result 0
+   196      0.406 startup: entering CP step 7
+   197      0.406 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   198      0.406 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   199      0.406 gfx: CP step 7: rc 0, 1 writes, 21 us
+   200      0.406 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   201      0.406 startup: CP step 7 returned 0x00000000 result 0
+   202      0.421 startup: entering CP step 8
+   203      0.421 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   204      0.421 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   205      0.421 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   206      0.421 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   207      0.421 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   208      0.421 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   209      0.421 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   210      0.421 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   211      0.421 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   212      0.421 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   213      0.421 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   214      0.421 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   215      0.421 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   216      0.421 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   217      0.421 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   218      0.421 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   219      0.421 gfx: CP step 8: rc 0, 8 writes, 164 us
+   220      0.421 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   221      0.421 startup: CP step 8 returned 0x00000000 result 0
+   222      0.421 startup: entering GFX stage 7
+   223      0.421 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 126 us
+   224      0.421 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   225      0.421 startup: entering GFX stage 8
+   226      0.437 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   227      0.437 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   228      0.437 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   229      0.437 startup: SDMA control 0 command 16 bytes 4096 begin
+   230      0.437 gfx: sdmacopy 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   231      0.437 startup: SDMA control 0 status 0 NT 0x00000000 result 0 fence 1/1 compare 4096 matched 1
+   232      0.437 startup: SDMA control 1 command 18 bytes 4096 begin
+   233      0.437 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   234      0.453 gfx: sdmaib 4096 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   235      0.453 startup: SDMA control 1 status 0 NT 0x00000000 result 0 fence 2/2 compare 4096 matched 1
+   236      0.453 startup: SDMA control 2 command 18 bytes 65536 begin
+   237      0.453 gfx: sdmaib buffer 0x564000 length 16 DWORD VMID0 CSA0
+   238      0.468 gfx: sdmaib 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   239      0.468 startup: SDMA control 2 status 0 NT 0x00000000 result 0 fence 3/3 compare 65536 matched 1
+   240      0.484 startup: SDMA control 3 command 16 bytes 65536 begin
+   241      0.500 gfx: sdmacopy 65536 bytes -> 0x00000000, result 0, matched 1, first mismatch at 0x0 (got 0x00 want 0x00), 12 us
+   242      0.500 startup: SDMA control 3 status 0 NT 0x00000000 result 0 fence 4/4 compare 65536 matched 1
+   243      0.500 startup: SDMA VMID2 translated control begin
+   244      0.500 gfx: sdmava root PA0x46E02C000 IB PA0x26FF94000 system PA0x26FF91000 source PA0x46E00C000 VA0x40000000 CSA0x40003000 VMID2
+   245      0.515 gfx: sdmava trial0 sourceVRAM fence5/5 compared4096 status0x00000000
+   246      0.515 gfx: sdmava trial1 sourcesystem-remap fence6/6 compared4096 status0x00000000
+   247      0.515 gfx: sdmava end status0x00000000 result0 fault0x0
+   248      0.515 startup: both engines ready
+   249      0.515 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   250      0.515 wddm: GPU initialized before adapter admission
+   251      0.515 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   252      0.515 stage 35
+   253      0.515 stage 39
+   254      0.515 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   255      0.515 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+  7758      7.453 gfx: paging submit, 844 ring dwords reserved for buffer at 0x410000, seq 7165
+  7759      7.453 gfx: paging submit, 160 ring dwords reserved for buffer at 0x410D30, seq 7166
+  7760      7.453 gfx: paging submit, 945 ring dwords reserved for buffer at 0x400000, seq 7167
+  7761      7.469 gfx: paging submit, 64 ring dwords reserved for buffer at 0x400EC4, seq 7168
+  7762      7.469 gfx: paging submit, 823 ring dwords reserved for buffer at 0x410000, seq 7169
+  7763      7.469 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CDC, seq 7170
+  7764      7.469 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7171
+  7765      7.469 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7172
+  7766      7.469 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7173
+  7767      7.469 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7174
+  7768      7.469 gfx: paging submit, 481 ring dwords reserved for buffer at 0x400000, seq 7175
+  7769      7.469 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4007C0, seq 7176
+  7770      7.469 gfx: paging submit, 360 ring dwords reserved for buffer at 0x410000, seq 7177
+  7771      7.469 gfx: paging submit, 656 ring dwords reserved for buffer at 0x4105A0, seq 7178
+  7772      7.469 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7179
+  7773      7.469 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7180
+  7774      7.469 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7181
+  7775      7.469 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7182
+  7776      7.469 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 7183
+  7777      7.469 gfx: paging submit, 396 ring dwords reserved for buffer at 0x410000, seq 7184
+  7778      7.469 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410630, seq 7185
+  7779      7.469 gfx: paging submit, 444 ring dwords reserved for buffer at 0x400000, seq 7186
+  7780      7.469 gfx: paging submit, 560 ring dwords reserved for buffer at 0x4006F0, seq 7187
+  7781      7.469 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 7188
+  7782      7.469 gfx: paging submit, 518 ring dwords reserved for buffer at 0x4107B0, seq 7189
+  7783      7.469 gfx: paging submit, 585 ring dwords reserved for buffer at 0x400000, seq 7190
+  7784      7.484 gfx: paging submit, 432 ring dwords reserved for buffer at 0x400924, seq 7191
+  7785      7.484 gfx: paging submit, 51 ring dwords reserved for buffer at 0x410000, seq 7192
+  7786      7.484 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4100CC, seq 7193
+  7787      7.484 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x400000, seq 7194
+  7788      7.484 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7195
+  7789      7.484 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7196
+  7790      7.484 gfx: paging submit, 703 ring dwords reserved for buffer at 0x410000, seq 7197
+  7791      7.484 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B40, seq 7198
+  7792      7.484 gfx: paging submit, 180 ring dwords reserved for buffer at 0x400000, seq 7199
+  7793      7.484 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002D0, seq 7200
+  7794      7.484 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7201
+  7795      7.484 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7202
+  7796      7.484 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7203
+  7797      7.484 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7204
+  7798      7.484 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 7205
+  7799      7.484 gfx: paging submit, 220 ring dwords reserved for buffer at 0x400000, seq 7206
+  7800      7.484 gfx: paging submit, 784 ring dwords reserved for buffer at 0x400370, seq 7207
+  7801      7.484 gfx: paging submit, 268 ring dwords reserved for buffer at 0x410000, seq 7208
+  7802      7.484 gfx: paging submit, 736 ring dwords reserved for buffer at 0x410430, seq 7209
+  7803      7.484 gfx: paging submit, 316 ring dwords reserved for buffer at 0x400000, seq 7210
+  7804      7.484 gfx: paging submit, 690 ring dwords reserved for buffer at 0x4004F0, seq 7211
+  7805      7.500 gfx: paging submit, 413 ring dwords reserved for buffer at 0x410000, seq 7212
+  7806      7.516 gfx: paging submit, 65 ring dwords reserved for buffer at 0x410674, seq 7213
+  7807      7.516 gfx: paging submit, 528 ring dwords reserved for buffer at 0x410778, seq 7214
+  7808      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7215
+  7809      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7216
+  7810      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7217
+  7811      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7218
+  7812      7.516 gfx: paging submit, 145 ring dwords reserved for buffer at 0x400000, seq 7219
+  7813      7.516 gfx: paging submit, 50 ring dwords reserved for buffer at 0x400280, seq 7220
+  7814      7.516 gfx: paging submit, 800 ring dwords reserved for buffer at 0x400348, seq 7221
+  7815      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7222
+  7816      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7223
+  7817      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7224
+  7818      7.516 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7225
+  7819      7.516 gfx: paging submit, 877 ring dwords reserved for buffer at 0x410000, seq 7226
+  7820      7.516 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB4, seq 7227
+  7821      7.516 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 7228
+  7822      7.516 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E70, seq 7229
+  7823      7.516 gfx: paging submit, 972 ring dwords reserved for buffer at 0x410000, seq 7230
+  7824      7.516 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F30, seq 7231
+  7825      7.516 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7232
+  7826      7.516 gfx: paging submit, 60 ring dwords reserved for buffer at 0x410000, seq 7233
+  7827      7.516 gfx: paging submit, 958 ring dwords reserved for buffer at 0x4100F0, seq 7234
+  7828      7.516 gfx: paging submit, 147 ring dwords reserved for buffer at 0x400000, seq 7235
+  7829      7.547 gfx: paging submit, 864 ring dwords reserved for buffer at 0x40024C, seq 7236
+  7830      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7237
+  7831      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7238
+  7832      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7239
+  7833      7.547 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7240
+  7834      7.547 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7241
+  7835      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7242
+  7836      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7243
+  7837      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7244
+  7838      7.547 gfx: paging submit, 405 ring dwords reserved for buffer at 0x410000, seq 7245
+  7839      7.547 gfx: paging submit, 585 ring dwords reserved for buffer at 0x4106A0, seq 7246
+  7840      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7247
+  7841      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7248
+  7842      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7249
+  7843      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7250
+  7844      7.547 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 7251
+  7845      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7252
+  7846      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7253
+  7847      7.547 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7254
+  7848      7.547 gfx: paging submit, 755 ring dwords reserved for buffer at 0x400000, seq 7255
+  7849      7.547 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400BCC, seq 7256
+  7850      7.562 gfx: paging submit, 240 ring dwords reserved for buffer at 0x400C08, seq 7257
+  7851      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7258
+  7852      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7259
+  7853      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7260
+  7854      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7261
+  7855      7.562 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 7262
+  7856      7.562 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7263
+  7857      7.562 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 7264
+  7858      7.562 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7265
+  7859      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7266
+  7860      7.562 gfx: paging submit, 69 ring dwords reserved for buffer at 0x400000, seq 7267
+  7861      7.562 gfx: paging submit, 928 ring dwords reserved for buffer at 0x400160, seq 7268
+  7862      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7269
+  7863      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7270
+  7864      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7271
+  7865      7.562 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 7272
+  7866      7.562 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7273
+  7867      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7274
+  7868      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7275
+  7869      7.562 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7276
+  7870      7.562 gfx: paging submit, 323 ring dwords reserved for buffer at 0x410000, seq 7277
+  7871      7.562 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41050C, seq 7278
+  7872      7.562 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4105D4, seq 7279
+  7873      7.562 gfx: paging submit, 412 ring dwords reserved for buffer at 0x400000, seq 7280
+  7874      7.562 gfx: paging submit, 592 ring dwords reserved for buffer at 0x400670, seq 7281
+  7875      7.562 gfx: paging submit, 460 ring dwords reserved for buffer at 0x410000, seq 7282
+  7876      7.562 gfx: paging submit, 544 ring dwords reserved for buffer at 0x410730, seq 7283
+  7877      7.562 gfx: paging submit, 508 ring dwords reserved for buffer at 0x400000, seq 7284
+  7878      7.562 gfx: paging submit, 496 ring dwords reserved for buffer at 0x4007F0, seq 7285
+  7879      7.562 gfx: paging submit, 556 ring dwords reserved for buffer at 0x410000, seq 7286
+  7880      7.562 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4108B0, seq 7287
+  7881      7.562 gfx: paging submit, 657 ring dwords reserved for buffer at 0x400000, seq 7288
+  7882      7.578 gfx: paging submit, 89 ring dwords reserved for buffer at 0x400A44, seq 7289
+  7883      7.578 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400BA8, seq 7290
+  7884      7.578 gfx: paging submit, 254 ring dwords reserved for buffer at 0x400BE4, seq 7291
+  7885      7.578 gfx: paging submit, 229 ring dwords reserved for buffer at 0x410000, seq 7292
+  7886      7.578 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410394, seq 7293
+  7887      7.578 gfx: paging submit, 635 ring dwords reserved for buffer at 0x4103D0, seq 7294
+  7888      7.578 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410DBC, seq 7295
+  7889      7.578 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410DF8, seq 7296
+  7890      7.578 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410E94, seq 7297
+  7891      7.594 gfx: paging submit, 64 ring dwords reserved for buffer at 0x410ED0, seq 7298
+  7892      7.594 gfx: paging submit, 203 ring dwords reserved for buffer at 0x400000, seq 7299
+  7893      7.594 gfx: paging submit, 800 ring dwords reserved for buffer at 0x40032C, seq 7300
+  7894      7.594 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7301
+  7895      7.594 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7302
+  7896      7.594 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7303
+  7897      7.594 gfx: paging submit, 863 ring dwords reserved for buffer at 0x400000, seq 7304
+  7898      7.594 gfx: paging submit, 128 ring dwords reserved for buffer at 0x400DC0, seq 7305
+  7899      7.594 gfx: paging submit, 124 ring dwords reserved for buffer at 0x410000, seq 7306
+  7900      7.594 gfx: paging submit, 880 ring dwords reserved for buffer at 0x4101F0, seq 7307
+  7901      7.594 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7308
+  7902      7.594 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7309
+  7903      7.594 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7310
+  7904      7.594 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7311
+  7905      7.594 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 7312
+  7906      7.594 gfx: paging submit, 172 ring dwords reserved for buffer at 0x410000, seq 7313
+  7907      7.594 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4102B0, seq 7314
+  7908      7.594 gfx: paging submit, 220 ring dwords reserved for buffer at 0x400000, seq 7315
+  7909      7.594 gfx: paging submit, 784 ring dwords reserved for buffer at 0x400370, seq 7316
+  7910      7.594 gfx: paging submit, 268 ring dwords reserved for buffer at 0x410000, seq 7317
+  7911      7.594 gfx: paging submit, 736 ring dwords reserved for buffer at 0x410430, seq 7318
+  7912      7.594 gfx: paging submit, 316 ring dwords reserved for buffer at 0x400000, seq 7319
+  7913      7.594 gfx: paging submit, 688 ring dwords reserved for buffer at 0x4004F0, seq 7320
+  7914      7.594 gfx: paging submit, 417 ring dwords reserved for buffer at 0x410000, seq 7321
+  7915      7.609 gfx: paging submit, 592 ring dwords reserved for buffer at 0x410684, seq 7322
+  7916      7.609 gfx: paging submit, 295 ring dwords reserved for buffer at 0x400000, seq 7323
+  7917      7.609 gfx: paging submit, 720 ring dwords reserved for buffer at 0x40049C, seq 7324
+  7918      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7325
+  7919      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7326
+  7920      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7327
+  7921      7.609 gfx: paging submit, 943 ring dwords reserved for buffer at 0x400000, seq 7328
+  7922      7.609 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400F00, seq 7329
+  7923      7.609 gfx: paging submit, 824 ring dwords reserved for buffer at 0x410000, seq 7330
+  7924      7.609 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CE0, seq 7331
+  7925      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7332
+  7926      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7333
+  7927      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7334
+  7928      7.609 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7335
+  7929      7.609 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7336
+  7930      7.609 gfx: paging submit, 525 ring dwords reserved for buffer at 0x410000, seq 7337
+  7931      7.609 gfx: paging submit, 480 ring dwords reserved for buffer at 0x410834, seq 7338
+  7932      7.609 gfx: paging submit, 572 ring dwords reserved for buffer at 0x400000, seq 7339
+  7933      7.609 gfx: paging submit, 432 ring dwords reserved for buffer at 0x4008F0, seq 7340
+  7934      7.609 gfx: paging submit, 620 ring dwords reserved for buffer at 0x410000, seq 7341
+  7935      7.609 gfx: paging submit, 384 ring dwords reserved for buffer at 0x4109B0, seq 7342
+  7936      7.609 gfx: paging submit, 719 ring dwords reserved for buffer at 0x400000, seq 7343
+  7937      7.625 gfx: paging submit, 288 ring dwords reserved for buffer at 0x400B3C, seq 7344
+  7938      7.625 gfx: paging submit, 195 ring dwords reserved for buffer at 0x410000, seq 7345
+  7939      7.625 gfx: paging submit, 816 ring dwords reserved for buffer at 0x41030C, seq 7346
+  7940      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7347
+  7941      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7348
+  7942      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7349
+  7943      7.625 gfx: paging submit, 847 ring dwords reserved for buffer at 0x410000, seq 7350
+  7944      7.625 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D80, seq 7351
+  7945      7.625 gfx: paging submit, 324 ring dwords reserved for buffer at 0x400000, seq 7352
+  7946      7.625 gfx: paging submit, 688 ring dwords reserved for buffer at 0x400510, seq 7353
+  7947      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7354
+  7948      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7355
+  7949      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7356
+  7950      7.625 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7357
+  7951      7.625 gfx: paging submit, 989 ring dwords reserved for buffer at 0x410000, seq 7358
+  7952      7.625 gfx: paging submit, 16 ring dwords reserved for buffer at 0x410F74, seq 7359
+  7953      7.625 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7360
+  7954      7.625 gfx: paging submit, 76 ring dwords reserved for buffer at 0x410000, seq 7361
+  7955      7.625 gfx: paging submit, 928 ring dwords reserved for buffer at 0x410130, seq 7362
+  7956      7.625 gfx: paging submit, 124 ring dwords reserved for buffer at 0x400000, seq 7363
+  7957      7.625 gfx: paging submit, 882 ring dwords reserved for buffer at 0x4001F0, seq 7364
+  7958      7.625 gfx: paging submit, 221 ring dwords reserved for buffer at 0x410000, seq 7365
+  7959      7.641 gfx: paging submit, 65 ring dwords reserved for buffer at 0x410374, seq 7366
+  7960      7.641 gfx: paging submit, 720 ring dwords reserved for buffer at 0x410478, seq 7367
+  7961      7.641 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7368
+  7962      7.641 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7369
+  7963      7.641 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7370
+  7964      7.641 gfx: paging submit, 943 ring dwords reserved for buffer at 0x410000, seq 7371
+  7965      7.641 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410F00, seq 7372
+  7966      7.641 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400000, seq 7373
+  7967      7.641 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400040, seq 7374
+  7968      7.641 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7375
+  7969      7.641 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7376
+  7970      7.641 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7377
+  7971      7.641 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7378
+  7972      7.641 gfx: paging submit, 701 ring dwords reserved for buffer at 0x410000, seq 7379
+  7973      7.641 gfx: paging submit, 304 ring dwords reserved for buffer at 0x410AF4, seq 7380
+  7974      7.641 gfx: paging submit, 748 ring dwords reserved for buffer at 0x400000, seq 7381
+  7975      7.641 gfx: paging submit, 256 ring dwords reserved for buffer at 0x400BB0, seq 7382
+  7976      7.641 gfx: paging submit, 796 ring dwords reserved for buffer at 0x410000, seq 7383
+  7977      7.641 gfx: paging submit, 208 ring dwords reserved for buffer at 0x410C70, seq 7384
+  7978      7.641 gfx: paging submit, 844 ring dwords reserved for buffer at 0x400000, seq 7385
+  7979      7.641 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D30, seq 7386
+  7980      7.641 gfx: paging submit, 945 ring dwords reserved for buffer at 0x410000, seq 7387
+  7981      7.656 gfx: paging submit, 64 ring dwords reserved for buffer at 0x410EC4, seq 7388
+  7982      7.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7389
+  7983      7.656 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7390
+  7984      7.672 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7391
+  7985      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7392
+  7986      7.672 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7393
+  7987      7.672 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7394
+  7988      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7395
+  7989      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7396
+  7990      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7397
+  7991      7.672 gfx: paging submit, 245 ring dwords reserved for buffer at 0x410000, seq 7398
+  7992      7.672 gfx: paging submit, 745 ring dwords reserved for buffer at 0x410420, seq 7399
+  7993      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7400
+  7994      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7401
+  7995      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7402
+  7996      7.672 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 7403
+  7997      7.672 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 7404
+  7998      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7405
+  7999      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7406
+  8000      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7407
+  8001      7.672 gfx: paging submit, 595 ring dwords reserved for buffer at 0x400000, seq 7408
+  8002      7.672 gfx: paging submit, 15 ring dwords reserved for buffer at 0x40094C, seq 7409
+  8003      7.672 gfx: paging submit, 400 ring dwords reserved for buffer at 0x400988, seq 7410
+  8004      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7411
+  8005      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7412
+  8006      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7413
+  8007      7.672 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7414
+  8008      7.687 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 7415
+  8009      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7416
+  8010      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7417
+  8011      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7418
+  8012      7.687 gfx: paging submit, 869 ring dwords reserved for buffer at 0x410000, seq 7419
+  8013      7.687 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DE0, seq 7420
+  8014      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7421
+  8015      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7422
+  8016      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7423
+  8017      7.687 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7424
+  8018      7.687 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 7425
+  8019      7.687 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7426
+  8020      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7427
+  8021      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7428
+  8022      7.687 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7429
+  8023      7.687 gfx: paging submit, 163 ring dwords reserved for buffer at 0x410000, seq 7430
+  8024      7.687 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41028C, seq 7431
+  8025      7.687 gfx: paging submit, 800 ring dwords reserved for buffer at 0x410354, seq 7432
+  8026      7.687 gfx: paging submit, 252 ring dwords reserved for buffer at 0x400000, seq 7433
+  8027      7.687 gfx: paging submit, 752 ring dwords reserved for buffer at 0x4003F0, seq 7434
+  8028      7.687 gfx: paging submit, 300 ring dwords reserved for buffer at 0x410000, seq 7435
+  8029      7.687 gfx: paging submit, 704 ring dwords reserved for buffer at 0x4104B0, seq 7436
+  8030      7.687 gfx: paging submit, 348 ring dwords reserved for buffer at 0x400000, seq 7437
+  8031      7.687 gfx: paging submit, 656 ring dwords reserved for buffer at 0x400570, seq 7438
+  8032      7.687 gfx: paging submit, 396 ring dwords reserved for buffer at 0x410000, seq 7439
+  8033      7.687 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410630, seq 7440
+  8034      7.687 gfx: paging submit, 497 ring dwords reserved for buffer at 0x400000, seq 7441
+  8035      7.703 gfx: paging submit, 89 ring dwords reserved for buffer at 0x4007C4, seq 7442
+  8036      7.703 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400928, seq 7443
+  8037      7.703 gfx: paging submit, 414 ring dwords reserved for buffer at 0x400964, seq 7444
+  8038      7.703 gfx: paging submit, 69 ring dwords reserved for buffer at 0x410000, seq 7445
+  8039      7.703 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410114, seq 7446
+  8040      7.719 gfx: paging submit, 635 ring dwords reserved for buffer at 0x410150, seq 7447
+  8041      7.719 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410B3C, seq 7448
+  8042      7.719 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410B78, seq 7449
+  8043      7.719 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410C14, seq 7450
+  8044      7.719 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C50, seq 7451
+  8045      7.719 gfx: paging submit, 43 ring dwords reserved for buffer at 0x400000, seq 7452
+  8046      7.719 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4000AC, seq 7453
+  8047      7.719 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 7454
+  8048      7.719 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7455
+  8049      7.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7456
+  8050      7.719 gfx: paging submit, 703 ring dwords reserved for buffer at 0x400000, seq 7457
+  8051      7.719 gfx: paging submit, 238 ring dwords reserved for buffer at 0x400B40, seq 7458
+  8052      7.719 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400EF8, seq 7459
+  8053      7.719 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7460
+  8054      7.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7461
+  8055      7.719 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 7462
+  8056      7.719 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7463
+  8057      7.719 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7464
+  8058      7.719 gfx: paging submit, 669 ring dwords reserved for buffer at 0x400000, seq 7465
+  8059      7.719 gfx: paging submit, 336 ring dwords reserved for buffer at 0x400A74, seq 7466
+  8060      7.719 gfx: paging submit, 716 ring dwords reserved for buffer at 0x410000, seq 7467
+  8061      7.719 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B30, seq 7468
+  8062      7.719 gfx: paging submit, 764 ring dwords reserved for buffer at 0x400000, seq 7469
+  8063      7.719 gfx: paging submit, 240 ring dwords reserved for buffer at 0x400BF0, seq 7470
+  8064      7.719 gfx: paging submit, 812 ring dwords reserved for buffer at 0x410000, seq 7471
+  8065      7.719 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CB0, seq 7472
+  8066      7.719 gfx: paging submit, 913 ring dwords reserved for buffer at 0x400000, seq 7473
+  8067      7.734 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E44, seq 7474
+  8068      7.734 gfx: paging submit, 791 ring dwords reserved for buffer at 0x410000, seq 7475
+  8069      7.734 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C5C, seq 7476
+  8070      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7477
+  8071      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7478
+  8072      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7479
+  8073      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7480
+  8074      7.734 gfx: paging submit, 449 ring dwords reserved for buffer at 0x400000, seq 7481
+  8075      7.734 gfx: paging submit, 544 ring dwords reserved for buffer at 0x400740, seq 7482
+  8076      7.734 gfx: paging submit, 328 ring dwords reserved for buffer at 0x410000, seq 7483
+  8077      7.734 gfx: paging submit, 688 ring dwords reserved for buffer at 0x410520, seq 7484
+  8078      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7485
+  8079      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7486
+  8080      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7487
+  8081      7.734 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7488
+  8082      7.734 gfx: paging submit, 989 ring dwords reserved for buffer at 0x400000, seq 7489
+  8083      7.734 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400F74, seq 7490
+  8084      7.734 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7491
+  8085      7.734 gfx: paging submit, 76 ring dwords reserved for buffer at 0x400000, seq 7492
+  8086      7.734 gfx: paging submit, 928 ring dwords reserved for buffer at 0x400130, seq 7493
+  8087      7.734 gfx: paging submit, 124 ring dwords reserved for buffer at 0x410000, seq 7494
+  8088      7.734 gfx: paging submit, 886 ring dwords reserved for buffer at 0x4101F0, seq 7495
+  8089      7.734 gfx: paging submit, 217 ring dwords reserved for buffer at 0x400000, seq 7496
+  8090      7.750 gfx: paging submit, 469 ring dwords reserved for buffer at 0x400364, seq 7497
+  8091      7.750 gfx: paging submit, 320 ring dwords reserved for buffer at 0x400AB8, seq 7498
+  8092      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7499
+  8093      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7500
+  8094      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7501
+  8095      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7502
+  8096      7.750 gfx: paging submit, 353 ring dwords reserved for buffer at 0x410000, seq 7503
+  8097      7.750 gfx: paging submit, 454 ring dwords reserved for buffer at 0x4105C0, seq 7504
+  8098      7.750 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CD8, seq 7505
+  8099      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7506
+  8100      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7507
+  8101      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7508
+  8102      7.750 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7509
+  8103      7.750 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7510
+  8104      7.750 gfx: paging submit, 525 ring dwords reserved for buffer at 0x410000, seq 7511
+  8105      7.750 gfx: paging submit, 480 ring dwords reserved for buffer at 0x410834, seq 7512
+  8106      7.750 gfx: paging submit, 572 ring dwords reserved for buffer at 0x400000, seq 7513
+  8107      7.750 gfx: paging submit, 432 ring dwords reserved for buffer at 0x4008F0, seq 7514
+  8108      7.750 gfx: paging submit, 620 ring dwords reserved for buffer at 0x410000, seq 7515
+  8109      7.750 gfx: paging submit, 386 ring dwords reserved for buffer at 0x4109B0, seq 7516
+  8110      7.750 gfx: paging submit, 717 ring dwords reserved for buffer at 0x400000, seq 7517
+  8111      7.766 gfx: paging submit, 65 ring dwords reserved for buffer at 0x400B34, seq 7518
+  8112      7.766 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C38, seq 7519
+  8113      7.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7520
+  8114      7.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7521
+  8115      7.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7522
+  8116      7.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7523
+  8117      7.766 gfx: paging submit, 449 ring dwords reserved for buffer at 0x410000, seq 7524
+  8118      7.766 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410740, seq 7525
+  8119      7.766 gfx: paging submit, 496 ring dwords reserved for buffer at 0x410808, seq 7526
+  8120      7.766 gfx: paging submit, 556 ring dwords reserved for buffer at 0x400000, seq 7527
+  8121      7.766 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4008B0, seq 7528
+  8122      7.766 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7529
+  8123      7.766 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7530
+  8124      7.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7531
+  8125      7.766 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7532
+  8126      7.766 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 7533
+  8127      7.766 gfx: paging submit, 604 ring dwords reserved for buffer at 0x400000, seq 7534
+  8128      7.766 gfx: paging submit, 400 ring dwords reserved for buffer at 0x400970, seq 7535
+  8129      7.766 gfx: paging submit, 652 ring dwords reserved for buffer at 0x410000, seq 7536
+  8130      7.766 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A30, seq 7537
+  8131      7.766 gfx: paging submit, 700 ring dwords reserved for buffer at 0x400000, seq 7538
+  8132      7.766 gfx: paging submit, 304 ring dwords reserved for buffer at 0x400AF0, seq 7539
+  8133      7.766 gfx: paging submit, 801 ring dwords reserved for buffer at 0x410000, seq 7540
+  8134      7.797 gfx: paging submit, 208 ring dwords reserved for buffer at 0x410C84, seq 7541
+  8135      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7542
+  8136      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7543
+  8137      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7544
+  8138      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7545
+  8139      7.797 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 7546
+  8140      7.797 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7547
+  8141      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7548
+  8142      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7549
+  8143      7.797 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7550
+  8144      7.797 gfx: paging submit, 101 ring dwords reserved for buffer at 0x410000, seq 7551
+  8145      7.813 gfx: paging submit, 889 ring dwords reserved for buffer at 0x4101E0, seq 7552
+  8146      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7553
+  8147      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7554
+  8148      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7555
+  8149      7.813 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 7556
+  8150      7.813 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 7557
+  8151      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7558
+  8152      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7559
+  8153      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7560
+  8154      7.813 gfx: paging submit, 451 ring dwords reserved for buffer at 0x400000, seq 7561
+  8155      7.813 gfx: paging submit, 15 ring dwords reserved for buffer at 0x40070C, seq 7562
+  8156      7.813 gfx: paging submit, 544 ring dwords reserved for buffer at 0x400748, seq 7563
+  8157      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7564
+  8158      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7565
+  8159      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7566
+  8160      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7567
+  8161      7.813 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 7568
+  8162      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7569
+  8163      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7570
+  8164      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7571
+  8165      7.813 gfx: paging submit, 725 ring dwords reserved for buffer at 0x410000, seq 7572
+  8166      7.813 gfx: paging submit, 272 ring dwords reserved for buffer at 0x410BA0, seq 7573
+  8167      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7574
+  8168      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7575
+  8169      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7576
+  8170      7.813 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7577
+  8171      7.828 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 7578
+  8172      7.828 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7579
+  8173      7.828 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7580
+  8174      7.828 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7581
+  8175      7.828 gfx: paging submit, 1009 ring dwords reserved for buffer at 0x400000, seq 7582
+  8176      7.828 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410000, seq 7583
+  8177      7.828 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4100C8, seq 7584
+  8178      7.828 gfx: paging submit, 92 ring dwords reserved for buffer at 0x400000, seq 7585
+  8179      7.828 gfx: paging submit, 912 ring dwords reserved for buffer at 0x400170, seq 7586
+  8180      7.828 gfx: paging submit, 140 ring dwords reserved for buffer at 0x410000, seq 7587
+  8181      7.828 gfx: paging submit, 864 ring dwords reserved for buffer at 0x410230, seq 7588
+  8182      7.828 gfx: paging submit, 188 ring dwords reserved for buffer at 0x400000, seq 7589
+  8183      7.828 gfx: paging submit, 816 ring dwords reserved for buffer at 0x4002F0, seq 7590
+  8184      7.828 gfx: paging submit, 236 ring dwords reserved for buffer at 0x410000, seq 7591
+  8185      7.828 gfx: paging submit, 782 ring dwords reserved for buffer at 0x4103B0, seq 7592
+  8186      7.828 gfx: paging submit, 323 ring dwords reserved for buffer at 0x400000, seq 7593
+  8187      7.828 gfx: paging submit, 89 ring dwords reserved for buffer at 0x40050C, seq 7594
+  8188      7.828 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400670, seq 7595
+  8189      7.828 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4006AC, seq 7596
+  8190      7.828 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400E00, seq 7597
+  8191      7.828 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E3C, seq 7598
+  8192      7.828 gfx: paging submit, 553 ring dwords reserved for buffer at 0x410000, seq 7599
+  8193      7.828 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4108A4, seq 7600
+  8194      7.828 gfx: paging submit, 39 ring dwords reserved for buffer at 0x4108E0, seq 7601
+  8195      7.828 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41097C, seq 7602
+  8196      7.828 gfx: paging submit, 253 ring dwords reserved for buffer at 0x4109B8, seq 7603
+  8197      7.828 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DAC, seq 7604
+  8198      7.828 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7605
+  8199      7.828 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7606
+  8200      7.828 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7607
+  8201      7.828 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7608
+  8202      7.844 gfx: paging submit, 575 ring dwords reserved for buffer at 0x400000, seq 7609
+  8203      7.844 gfx: paging submit, 238 ring dwords reserved for buffer at 0x400940, seq 7610
+  8204      7.844 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF8, seq 7611
+  8205      7.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7612
+  8206      7.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7613
+  8207      7.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7614
+  8208      7.844 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7615
+  8209      7.844 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7616
+  8210      7.844 gfx: paging submit, 541 ring dwords reserved for buffer at 0x400000, seq 7617
+  8211      7.844 gfx: paging submit, 464 ring dwords reserved for buffer at 0x400874, seq 7618
+  8212      7.844 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 7619
+  8213      7.844 gfx: paging submit, 416 ring dwords reserved for buffer at 0x410930, seq 7620
+  8214      7.844 gfx: paging submit, 636 ring dwords reserved for buffer at 0x400000, seq 7621
+  8215      7.844 gfx: paging submit, 368 ring dwords reserved for buffer at 0x4009F0, seq 7622
+  8216      7.844 gfx: paging submit, 684 ring dwords reserved for buffer at 0x410000, seq 7623
+  8217      7.844 gfx: paging submit, 320 ring dwords reserved for buffer at 0x410AB0, seq 7624
+  8218      7.844 gfx: paging submit, 785 ring dwords reserved for buffer at 0x400000, seq 7625
+  8219      7.859 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C44, seq 7626
+  8220      7.859 gfx: paging submit, 663 ring dwords reserved for buffer at 0x410000, seq 7627
+  8221      7.859 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A5C, seq 7628
+  8222      7.859 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7629
+  8223      7.859 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7630
+  8224      7.859 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7631
+  8225      7.859 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7632
+  8226      7.859 gfx: paging submit, 321 ring dwords reserved for buffer at 0x400000, seq 7633
+  8227      7.859 gfx: paging submit, 672 ring dwords reserved for buffer at 0x400540, seq 7634
+  8228      7.859 gfx: paging submit, 200 ring dwords reserved for buffer at 0x410000, seq 7635
+  8229      7.859 gfx: paging submit, 816 ring dwords reserved for buffer at 0x410320, seq 7636
+  8230      7.859 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7637
+  8231      7.859 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7638
+  8232      7.859 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7639
+  8233      7.859 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7640
+  8234      7.859 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 7641
+  8235      7.859 gfx: paging submit, 236 ring dwords reserved for buffer at 0x410000, seq 7642
+  8236      7.859 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4103B0, seq 7643
+  8237      7.859 gfx: paging submit, 284 ring dwords reserved for buffer at 0x400000, seq 7644
+  8238      7.859 gfx: paging submit, 720 ring dwords reserved for buffer at 0x400470, seq 7645
+  8239      7.859 gfx: paging submit, 332 ring dwords reserved for buffer at 0x410000, seq 7646
+  8240      7.859 gfx: paging submit, 678 ring dwords reserved for buffer at 0x410530, seq 7647
+  8241      7.859 gfx: paging submit, 425 ring dwords reserved for buffer at 0x400000, seq 7648
+  8242      7.875 gfx: paging submit, 469 ring dwords reserved for buffer at 0x4006A4, seq 7649
+  8243      7.875 gfx: paging submit, 112 ring dwords reserved for buffer at 0x400DF8, seq 7650
+  8244      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7651
+  8245      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7652
+  8246      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7653
+  8247      7.875 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7654
+  8248      7.875 gfx: paging submit, 591 ring dwords reserved for buffer at 0x410000, seq 7655
+  8249      7.875 gfx: paging submit, 400 ring dwords reserved for buffer at 0x410980, seq 7656
+  8250      7.875 gfx: paging submit, 68 ring dwords reserved for buffer at 0x400000, seq 7657
+  8251      7.875 gfx: paging submit, 944 ring dwords reserved for buffer at 0x400110, seq 7658
+  8252      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7659
+  8253      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7660
+  8254      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7661
+  8255      7.875 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7662
+  8256      7.875 gfx: paging submit, 733 ring dwords reserved for buffer at 0x410000, seq 7663
+  8257      7.875 gfx: paging submit, 272 ring dwords reserved for buffer at 0x410B74, seq 7664
+  8258      7.875 gfx: paging submit, 780 ring dwords reserved for buffer at 0x400000, seq 7665
+  8259      7.875 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C30, seq 7666
+  8260      7.875 gfx: paging submit, 828 ring dwords reserved for buffer at 0x410000, seq 7667
+  8261      7.875 gfx: paging submit, 178 ring dwords reserved for buffer at 0x410CF0, seq 7668
+  8262      7.875 gfx: paging submit, 925 ring dwords reserved for buffer at 0x400000, seq 7669
+  8263      7.891 gfx: paging submit, 65 ring dwords reserved for buffer at 0x400E74, seq 7670
+  8264      7.891 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400F78, seq 7671
+  8265      7.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7672
+  8266      7.891 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7673
+  8267      7.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7674
+  8268      7.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7675
+  8269      7.891 gfx: paging submit, 687 ring dwords reserved for buffer at 0x410000, seq 7676
+  8270      7.891 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410B00, seq 7677
+  8271      7.891 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BC8, seq 7678
+  8272      7.891 gfx: paging submit, 796 ring dwords reserved for buffer at 0x400000, seq 7679
+  8273      7.891 gfx: paging submit, 208 ring dwords reserved for buffer at 0x400C70, seq 7680
+  8274      7.891 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7681
+  8275      7.891 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7682
+  8276      7.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7683
+  8277      7.891 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7684
+  8278      7.891 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 7685
+  8279      7.891 gfx: paging submit, 844 ring dwords reserved for buffer at 0x400000, seq 7686
+  8280      7.891 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D30, seq 7687
+  8281      7.891 gfx: paging submit, 892 ring dwords reserved for buffer at 0x410000, seq 7688
+  8282      7.891 gfx: paging submit, 112 ring dwords reserved for buffer at 0x410DF0, seq 7689
+  8283      7.891 gfx: paging submit, 940 ring dwords reserved for buffer at 0x400000, seq 7690
+  8284      7.891 gfx: paging submit, 64 ring dwords reserved for buffer at 0x400EB0, seq 7691
+  8285      7.891 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 7692
+  8286      7.891 gfx: paging submit, 37 ring dwords reserved for buffer at 0x400000, seq 7693
+  8287      7.922 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400094, seq 7694
+  8288      7.922 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7695
+  8289      7.922 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7696
+  8290      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7697
+  8291      7.922 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7698
+  8292      7.922 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7699
+  8293      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7700
+  8294      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7701
+  8295      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7702
+  8296      7.922 gfx: paging submit, 309 ring dwords reserved for buffer at 0x410000, seq 7703
+  8297      7.922 gfx: paging submit, 681 ring dwords reserved for buffer at 0x410520, seq 7704
+  8298      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7705
+  8299      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7706
+  8300      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7707
+  8301      7.922 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7708
+  8302      7.922 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 7709
+  8303      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7710
+  8304      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7711
+  8305      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7712
+  8306      7.938 gfx: paging submit, 659 ring dwords reserved for buffer at 0x400000, seq 7713
+  8307      7.938 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400A4C, seq 7714
+  8308      7.938 gfx: paging submit, 336 ring dwords reserved for buffer at 0x400A88, seq 7715
+  8309      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7716
+  8310      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7717
+  8311      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7718
+  8312      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7719
+  8313      7.938 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 7720
+  8314      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7721
+  8315      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7722
+  8316      7.938 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7723
+  8317      7.938 gfx: paging submit, 963 ring dwords reserved for buffer at 0x410000, seq 7724
+  8318      7.938 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F60, seq 7725
+  8319      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7726
+  8320      7.938 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7727
+  8321      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7728
+  8322      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7729
+  8323      7.938 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 7730
+  8324      7.938 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7731
+  8325      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7732
+  8326      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7733
+  8327      7.938 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7734
+  8328      7.938 gfx: paging submit, 259 ring dwords reserved for buffer at 0x410000, seq 7735
+  8329      7.938 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41040C, seq 7736
+  8330      7.938 gfx: paging submit, 704 ring dwords reserved for buffer at 0x4104D4, seq 7737
+  8331      7.953 gfx: paging submit, 348 ring dwords reserved for buffer at 0x400000, seq 7738
+  8332      7.953 gfx: paging submit, 656 ring dwords reserved for buffer at 0x400570, seq 7739
+  8333      7.953 gfx: paging submit, 396 ring dwords reserved for buffer at 0x410000, seq 7740
+  8334      7.953 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410630, seq 7741
+  8335      7.953 gfx: paging submit, 444 ring dwords reserved for buffer at 0x400000, seq 7742
+  8336      7.953 gfx: paging submit, 560 ring dwords reserved for buffer at 0x4006F0, seq 7743
+  8337      7.953 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 7744
+  8338      7.953 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4107B0, seq 7745
+  8339      7.953 gfx: paging submit, 593 ring dwords reserved for buffer at 0x400000, seq 7746
+  8340      7.953 gfx: paging submit, 89 ring dwords reserved for buffer at 0x400944, seq 7747
+  8341      7.953 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400AA8, seq 7748
+  8342      7.953 gfx: paging submit, 318 ring dwords reserved for buffer at 0x400AE4, seq 7749
+  8343      7.953 gfx: paging submit, 165 ring dwords reserved for buffer at 0x410000, seq 7750
+  8344      7.953 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410294, seq 7751
+  8345      7.969 gfx: paging submit, 635 ring dwords reserved for buffer at 0x4102D0, seq 7752
+  8346      7.969 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410CBC, seq 7753
+  8347      7.969 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410CF8, seq 7754
+  8348      7.969 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410D94, seq 7755
+  8349      7.969 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DD0, seq 7756
+  8350      7.969 gfx: paging submit, 139 ring dwords reserved for buffer at 0x400000, seq 7757
+  8351      7.969 gfx: paging submit, 864 ring dwords reserved for buffer at 0x40022C, seq 7758
+  8352      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7759
+  8353      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7760
+  8354      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7761
+  8355      7.969 gfx: paging submit, 799 ring dwords reserved for buffer at 0x400000, seq 7762
+  8356      7.969 gfx: paging submit, 192 ring dwords reserved for buffer at 0x400CC0, seq 7763
+  8357      7.969 gfx: paging submit, 60 ring dwords reserved for buffer at 0x410000, seq 7764
+  8358      7.969 gfx: paging submit, 944 ring dwords reserved for buffer at 0x4100F0, seq 7765
+  8359      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7766
+  8360      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7767
+  8361      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7768
+  8362      7.969 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7769
+  8363      7.969 gfx: paging submit, 733 ring dwords reserved for buffer at 0x400000, seq 7770
+  8364      7.969 gfx: paging submit, 272 ring dwords reserved for buffer at 0x400B74, seq 7771
+  8365      7.969 gfx: paging submit, 780 ring dwords reserved for buffer at 0x410000, seq 7772
+  8366      7.969 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C30, seq 7773
+  8367      7.969 gfx: paging submit, 828 ring dwords reserved for buffer at 0x400000, seq 7774
+  8368      7.969 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF0, seq 7775
+  8369      7.969 gfx: paging submit, 876 ring dwords reserved for buffer at 0x410000, seq 7776
+  8370      7.969 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB0, seq 7777
+  8371      7.969 gfx: paging submit, 977 ring dwords reserved for buffer at 0x400000, seq 7778
+  8372      7.984 gfx: paging submit, 32 ring dwords reserved for buffer at 0x400F44, seq 7779
+  8373      7.984 gfx: paging submit, 855 ring dwords reserved for buffer at 0x410000, seq 7780
+  8374      7.984 gfx: paging submit, 160 ring dwords reserved for buffer at 0x410D5C, seq 7781
+  8375      7.984 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7782
+  8376      7.984 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7783
+  8377      7.984 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7784
+  8378      7.984 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7785
+  8379      7.984 gfx: paging submit, 513 ring dwords reserved for buffer at 0x400000, seq 7786
+  8380      7.984 gfx: paging submit, 480 ring dwords reserved for buffer at 0x400840, seq 7787
+  8381      7.984 gfx: paging submit, 392 ring dwords reserved for buffer at 0x410000, seq 7788
+  8382      7.984 gfx: paging submit, 624 ring dwords reserved for buffer at 0x410620, seq 7789
+  8383      7.984 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7790
+  8384      7.984 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7791
+  8385      7.984 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7792
+  8386      7.984 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7793
+  8387      7.984 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 7794
+  8388      7.984 gfx: paging submit, 428 ring dwords reserved for buffer at 0x410000, seq 7795
+  8389      7.984 gfx: paging submit, 576 ring dwords reserved for buffer at 0x4106B0, seq 7796
+  8390      7.984 gfx: paging submit, 476 ring dwords reserved for buffer at 0x400000, seq 7797
+  8391      7.984 gfx: paging submit, 528 ring dwords reserved for buffer at 0x400770, seq 7798
+  8392      7.984 gfx: paging submit, 524 ring dwords reserved for buffer at 0x410000, seq 7799
+  8393      7.984 gfx: paging submit, 486 ring dwords reserved for buffer at 0x410830, seq 7800
+  8394      7.984 gfx: paging submit, 617 ring dwords reserved for buffer at 0x400000, seq 7801
+  8395      8.000 gfx: paging submit, 400 ring dwords reserved for buffer at 0x4009A4, seq 7802
+  8396      8.000 gfx: paging submit, 83 ring dwords reserved for buffer at 0x410000, seq 7803
+  8397      8.000 gfx: paging submit, 928 ring dwords reserved for buffer at 0x41014C, seq 7804
+  8398      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7805
+  8399      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7806
+  8400      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7807
+  8401      8.000 gfx: paging submit, 735 ring dwords reserved for buffer at 0x410000, seq 7808
+  8402      8.000 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BC0, seq 7809
+  8403      8.000 gfx: paging submit, 212 ring dwords reserved for buffer at 0x400000, seq 7810
+  8404      8.000 gfx: paging submit, 800 ring dwords reserved for buffer at 0x400350, seq 7811
+  8405      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7812
+  8406      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7813
+  8407      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7814
+  8408      8.000 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7815
+  8409      8.000 gfx: paging submit, 877 ring dwords reserved for buffer at 0x410000, seq 7816
+  8410      8.000 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB4, seq 7817
+  8411      8.000 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 7818
+  8412      8.000 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E70, seq 7819
+  8413      8.000 gfx: paging submit, 972 ring dwords reserved for buffer at 0x410000, seq 7820
+  8414      8.000 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F30, seq 7821
+  8415      8.000 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7822
+  8416      8.000 gfx: paging submit, 79 ring dwords reserved for buffer at 0x410000, seq 7823
+  8417      8.016 gfx: paging submit, 65 ring dwords reserved for buffer at 0x41013C, seq 7824
+  8418      8.016 gfx: paging submit, 864 ring dwords reserved for buffer at 0x410240, seq 7825
+  8419      8.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7826
+  8420      8.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7827
+  8421      8.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7828
+  8422      8.016 gfx: paging submit, 799 ring dwords reserved for buffer at 0x410000, seq 7829
+  8423      8.016 gfx: paging submit, 50 ring dwords reserved for buffer at 0x410CC0, seq 7830
+  8424      8.016 gfx: paging submit, 144 ring dwords reserved for buffer at 0x410D88, seq 7831
+  8425      8.016 gfx: paging submit, 908 ring dwords reserved for buffer at 0x400000, seq 7832
+  8426      8.016 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E30, seq 7833
+  8427      8.016 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 7834
+  8428      8.016 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7835
+  8429      8.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7836
+  8430      8.016 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7837
+  8431      8.016 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 7838
+  8432      8.016 gfx: paging submit, 956 ring dwords reserved for buffer at 0x400000, seq 7839
+  8433      8.016 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400EF0, seq 7840
+  8434      8.016 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7841
+  8435      8.016 gfx: paging submit, 44 ring dwords reserved for buffer at 0x400000, seq 7842
+  8436      8.016 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4000B0, seq 7843
+  8437      8.016 gfx: paging submit, 92 ring dwords reserved for buffer at 0x410000, seq 7844
+  8438      8.016 gfx: paging submit, 926 ring dwords reserved for buffer at 0x410170, seq 7845
+  8439      8.016 gfx: paging submit, 179 ring dwords reserved for buffer at 0x400000, seq 7846
+  8440      8.031 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002CC, seq 7847
+  8441      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7848
+  8442      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7849
+  8443      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7850
+  8444      8.047 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7851
+  8445      8.047 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7852
+  8446      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7853
+  8447      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7854
+  8448      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7855
+  8449      8.047 gfx: paging submit, 437 ring dwords reserved for buffer at 0x410000, seq 7856
+  8450      8.047 gfx: paging submit, 553 ring dwords reserved for buffer at 0x410720, seq 7857
+  8451      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7858
+  8452      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7859
+  8453      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7860
+  8454      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7861
+  8455      8.047 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 7862
+  8456      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7863
+  8457      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7864
+  8458      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7865
+  8459      8.047 gfx: paging submit, 787 ring dwords reserved for buffer at 0x400000, seq 7866
+  8460      8.047 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400C4C, seq 7867
+  8461      8.047 gfx: paging submit, 208 ring dwords reserved for buffer at 0x400C88, seq 7868
+  8462      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7869
+  8463      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7870
+  8464      8.047 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7871
+  8465      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7872
+  8466      8.063 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 7873
+  8467      8.063 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7874
+  8468      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7875
+  8469      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7876
+  8470      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7877
+  8471      8.063 gfx: paging submit, 101 ring dwords reserved for buffer at 0x400000, seq 7878
+  8472      8.063 gfx: paging submit, 896 ring dwords reserved for buffer at 0x4001E0, seq 7879
+  8473      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7880
+  8474      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7881
+  8475      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7882
+  8476      8.063 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 7883
+  8477      8.063 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 7884
+  8478      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7885
+  8479      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7886
+  8480      8.063 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7887
+  8481      8.063 gfx: paging submit, 355 ring dwords reserved for buffer at 0x410000, seq 7888
+  8482      8.063 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41058C, seq 7889
+  8483      8.063 gfx: paging submit, 608 ring dwords reserved for buffer at 0x410654, seq 7890
+  8484      8.063 gfx: paging submit, 444 ring dwords reserved for buffer at 0x400000, seq 7891
+  8485      8.063 gfx: paging submit, 560 ring dwords reserved for buffer at 0x4006F0, seq 7892
+  8486      8.063 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 7893
+  8487      8.063 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4107B0, seq 7894
+  8488      8.063 gfx: paging submit, 540 ring dwords reserved for buffer at 0x400000, seq 7895
+  8489      8.063 gfx: paging submit, 464 ring dwords reserved for buffer at 0x400870, seq 7896
+  8490      8.063 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 7897
+  8491      8.063 gfx: paging submit, 416 ring dwords reserved for buffer at 0x410930, seq 7898
+  8492      8.063 gfx: paging submit, 689 ring dwords reserved for buffer at 0x400000, seq 7899
+  8493      8.078 gfx: paging submit, 89 ring dwords reserved for buffer at 0x400AC4, seq 7900
+  8494      8.078 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400C28, seq 7901
+  8495      8.078 gfx: paging submit, 224 ring dwords reserved for buffer at 0x400C64, seq 7902
+  8496      8.078 gfx: paging submit, 259 ring dwords reserved for buffer at 0x410000, seq 7903
+  8497      8.078 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41040C, seq 7904
+  8498      8.078 gfx: paging submit, 635 ring dwords reserved for buffer at 0x410448, seq 7905
+  8499      8.078 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410E34, seq 7906
+  8500      8.078 gfx: paging submit, 39 ring dwords reserved for buffer at 0x410E70, seq 7907
+  8501      8.078 gfx: paging submit, 15 ring dwords reserved for buffer at 0x410F0C, seq 7908
+  8502      8.094 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F48, seq 7909
+  8503      8.094 gfx: paging submit, 235 ring dwords reserved for buffer at 0x400000, seq 7910
+  8504      8.094 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4003AC, seq 7911
+  8505      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7912
+  8506      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7913
+  8507      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7914
+  8508      8.094 gfx: paging submit, 895 ring dwords reserved for buffer at 0x400000, seq 7915
+  8509      8.094 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E40, seq 7916
+  8510      8.094 gfx: paging submit, 156 ring dwords reserved for buffer at 0x410000, seq 7917
+  8511      8.094 gfx: paging submit, 848 ring dwords reserved for buffer at 0x410270, seq 7918
+  8512      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7919
+  8513      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7920
+  8514      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7921
+  8515      8.094 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7922
+  8516      8.094 gfx: paging submit, 829 ring dwords reserved for buffer at 0x400000, seq 7923
+  8517      8.094 gfx: paging submit, 176 ring dwords reserved for buffer at 0x400CF4, seq 7924
+  8518      8.094 gfx: paging submit, 876 ring dwords reserved for buffer at 0x410000, seq 7925
+  8519      8.094 gfx: paging submit, 128 ring dwords reserved for buffer at 0x410DB0, seq 7926
+  8520      8.094 gfx: paging submit, 924 ring dwords reserved for buffer at 0x400000, seq 7927
+  8521      8.094 gfx: paging submit, 80 ring dwords reserved for buffer at 0x400E70, seq 7928
+  8522      8.094 gfx: paging submit, 972 ring dwords reserved for buffer at 0x410000, seq 7929
+  8523      8.094 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F30, seq 7930
+  8524      8.094 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 7931
+  8525      8.094 gfx: paging submit, 71 ring dwords reserved for buffer at 0x410000, seq 7932
+  8526      8.109 gfx: paging submit, 873 ring dwords reserved for buffer at 0x41011C, seq 7933
+  8527      8.109 gfx: paging submit, 64 ring dwords reserved for buffer at 0x410EC0, seq 7934
+  8528      8.109 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7935
+  8529      8.109 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7936
+  8530      8.109 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7937
+  8531      8.109 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7938
+  8532      8.109 gfx: paging submit, 639 ring dwords reserved for buffer at 0x400000, seq 7939
+  8533      8.109 gfx: paging submit, 352 ring dwords reserved for buffer at 0x400A40, seq 7940
+  8534      8.109 gfx: paging submit, 520 ring dwords reserved for buffer at 0x410000, seq 7941
+  8535      8.109 gfx: paging submit, 496 ring dwords reserved for buffer at 0x410820, seq 7942
+  8536      8.109 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 7943
+  8537      8.109 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 7944
+  8538      8.109 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7945
+  8539      8.109 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7946
+  8540      8.109 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 7947
+  8541      8.109 gfx: paging submit, 556 ring dwords reserved for buffer at 0x410000, seq 7948
+  8542      8.109 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4108B0, seq 7949
+  8543      8.109 gfx: paging submit, 604 ring dwords reserved for buffer at 0x400000, seq 7950
+  8544      8.109 gfx: paging submit, 400 ring dwords reserved for buffer at 0x400970, seq 7951
+  8545      8.109 gfx: paging submit, 652 ring dwords reserved for buffer at 0x410000, seq 7952
+  8546      8.109 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A30, seq 7953
+  8547      8.109 gfx: paging submit, 751 ring dwords reserved for buffer at 0x400000, seq 7954
+  8548      8.125 gfx: paging submit, 256 ring dwords reserved for buffer at 0x400BBC, seq 7955
+  8549      8.125 gfx: paging submit, 227 ring dwords reserved for buffer at 0x410000, seq 7956
+  8550      8.125 gfx: paging submit, 784 ring dwords reserved for buffer at 0x41038C, seq 7957
+  8551      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7958
+  8552      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7959
+  8553      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7960
+  8554      8.125 gfx: paging submit, 879 ring dwords reserved for buffer at 0x410000, seq 7961
+  8555      8.125 gfx: paging submit, 112 ring dwords reserved for buffer at 0x410E00, seq 7962
+  8556      8.125 gfx: paging submit, 356 ring dwords reserved for buffer at 0x400000, seq 7963
+  8557      8.125 gfx: paging submit, 656 ring dwords reserved for buffer at 0x400590, seq 7964
+  8558      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7965
+  8559      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7966
+  8560      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7967
+  8561      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7968
+  8562      8.125 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7969
+  8563      8.125 gfx: paging submit, 31 ring dwords reserved for buffer at 0x400000, seq 7970
+  8564      8.125 gfx: paging submit, 974 ring dwords reserved for buffer at 0x40007C, seq 7971
+  8565      8.125 gfx: paging submit, 78 ring dwords reserved for buffer at 0x410000, seq 7972
+  8566      8.125 gfx: paging submit, 928 ring dwords reserved for buffer at 0x410138, seq 7973
+  8567      8.125 gfx: paging submit, 124 ring dwords reserved for buffer at 0x400000, seq 7974
+  8568      8.125 gfx: paging submit, 882 ring dwords reserved for buffer at 0x4001F0, seq 7975
+  8569      8.125 gfx: paging submit, 221 ring dwords reserved for buffer at 0x410000, seq 7976
+  8570      8.141 gfx: paging submit, 65 ring dwords reserved for buffer at 0x410374, seq 7977
+  8571      8.141 gfx: paging submit, 720 ring dwords reserved for buffer at 0x410478, seq 7978
+  8572      8.141 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7979
+  8573      8.141 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7980
+  8574      8.141 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7981
+  8575      8.156 gfx: paging submit, 943 ring dwords reserved for buffer at 0x410000, seq 7982
+  8576      8.156 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410F00, seq 7983
+  8577      8.156 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400000, seq 7984
+  8578      8.156 gfx: paging submit, 990 ring dwords reserved for buffer at 0x400040, seq 7985
+  8579      8.156 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7986
+  8580      8.156 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 7987
+  8581      8.156 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 7988
+  8582      8.156 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 7989
+  8583      8.156 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 7990
+  8584      8.156 gfx: paging submit, 78 ring dwords reserved for buffer at 0x400000, seq 7991
+  8585      8.156 gfx: paging submit, 928 ring dwords reserved for buffer at 0x400138, seq 7992
+  8586      8.156 gfx: paging submit, 124 ring dwords reserved for buffer at 0x410000, seq 7993
+  8587      8.156 gfx: paging submit, 880 ring dwords reserved for buffer at 0x4101F0, seq 7994
+  8588      8.156 gfx: paging submit, 172 ring dwords reserved for buffer at 0x400000, seq 7995
+  8589      8.156 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002B0, seq 7996
+  8590      8.156 gfx: paging submit, 220 ring dwords reserved for buffer at 0x410000, seq 7997
+  8591      8.156 gfx: paging submit, 798 ring dwords reserved for buffer at 0x410370, seq 7998
+  8592      8.156 gfx: paging submit, 307 ring dwords reserved for buffer at 0x400000, seq 7999
+  8593      8.188 gfx: paging submit, 704 ring dwords reserved for buffer at 0x4004CC, seq 8000
+  8594      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8001
+  8595      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8002
+  8596      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8003
+  8597      8.188 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 8004
+  8598      8.188 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 8005
+  8599      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8006
+  8600      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8007
+  8601      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8008
+  8602      8.188 gfx: paging submit, 565 ring dwords reserved for buffer at 0x410000, seq 8009
+  8603      8.188 gfx: paging submit, 425 ring dwords reserved for buffer at 0x410920, seq 8010
+  8604      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8011
+  8605      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8012
+  8606      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8013
+  8607      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8014
+  8608      8.188 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x400000, seq 8015
+  8609      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8016
+  8610      8.188 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8017
+  8611      8.188 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 8018
+  8612      8.188 gfx: paging submit, 945 ring dwords reserved for buffer at 0x400000, seq 8019
+  8613      8.188 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400EC4, seq 8020
+  8614      8.203 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400F00, seq 8021
+  8615      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8022
+  8616      8.203 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 8023
+  8617      8.203 gfx: paging submit, 1002 ring dwords reserved for buffer at 0x410000, seq 8024
+  8618      8.203 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 8025
+  8619      8.203 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 8026
+  8620      8.203 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 8027
+  8621      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8028
+  8622      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8029
+  8623      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8030
+  8624      8.203 gfx: paging submit, 261 ring dwords reserved for buffer at 0x400000, seq 8031
+  8625      8.203 gfx: paging submit, 736 ring dwords reserved for buffer at 0x400460, seq 8032
+  8626      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8033
+  8627      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8034
+  8628      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8035
+  8629      8.203 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 8036
+  8630      8.203 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 8037
+  8631      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8038
+  8632      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8039
+  8633      8.203 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8040
+  8634      8.203 gfx: paging submit, 515 ring dwords reserved for buffer at 0x410000, seq 8041
+  8635      8.203 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41080C, seq 8042
+  8636      8.203 gfx: paging submit, 448 ring dwords reserved for buffer at 0x4108D4, seq 8043
+  8637      8.203 gfx: paging submit, 604 ring dwords reserved for buffer at 0x400000, seq 8044
+  8638      8.203 gfx: paging submit, 400 ring dwords reserved for buffer at 0x400970, seq 8045
+  8639      8.203 gfx: paging submit, 652 ring dwords reserved for buffer at 0x410000, seq 8046
+  8640      8.203 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A30, seq 8047
+  8641      8.203 gfx: paging submit, 700 ring dwords reserved for buffer at 0x400000, seq 8048
+  8642      8.203 gfx: paging submit, 304 ring dwords reserved for buffer at 0x400AF0, seq 8049
+  8643      8.203 gfx: paging submit, 748 ring dwords reserved for buffer at 0x410000, seq 8050
+  8644      8.203 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BB0, seq 8051
+  8645      8.203 gfx: paging submit, 849 ring dwords reserved for buffer at 0x400000, seq 8052
+  8646      8.234 gfx: paging submit, 89 ring dwords reserved for buffer at 0x400D44, seq 8053
+  8647      8.234 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400EA8, seq 8054
+  8648      8.234 gfx: paging submit, 64 ring dwords reserved for buffer at 0x400EE4, seq 8055
+  8649      8.234 gfx: paging submit, 419 ring dwords reserved for buffer at 0x410000, seq 8056
+  8650      8.234 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41068C, seq 8057
+  8651      8.234 gfx: paging submit, 576 ring dwords reserved for buffer at 0x4106C8, seq 8058
+  8652      8.234 gfx: paging submit, 73 ring dwords reserved for buffer at 0x400000, seq 8059
+  8653      8.234 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400124, seq 8060
+  8654      8.234 gfx: paging submit, 39 ring dwords reserved for buffer at 0x400160, seq 8061
+  8655      8.234 gfx: paging submit, 15 ring dwords reserved for buffer at 0x4001FC, seq 8062
+  8656      8.234 gfx: paging submit, 253 ring dwords reserved for buffer at 0x400238, seq 8063
+  8657      8.234 gfx: paging submit, 608 ring dwords reserved for buffer at 0x40062C, seq 8064
+  8658      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8065
+  8659      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8066
+  8660      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8067
+  8661      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8068
+  8662      8.234 gfx: paging submit, 65 ring dwords reserved for buffer at 0x410000, seq 8069
+  8663      8.234 gfx: paging submit, 238 ring dwords reserved for buffer at 0x410140, seq 8070
+  8664      8.234 gfx: paging submit, 688 ring dwords reserved for buffer at 0x4104F8, seq 8071
+  8665      8.234 gfx: paging submit, 364 ring dwords reserved for buffer at 0x400000, seq 8072
+  8666      8.234 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4005B0, seq 8073
+  8667      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8074
+  8668      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8075
+  8669      8.234 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8076
+  8670      8.234 gfx: paging submit, 989 ring dwords reserved for buffer at 0x400000, seq 8077
+  8671      8.234 gfx: paging submit, 16 ring dwords reserved for buffer at 0x400F74, seq 8078
+  8672      8.234 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 8079
+  8673      8.250 gfx: paging submit, 76 ring dwords reserved for buffer at 0x400000, seq 8080
+  8674      8.250 gfx: paging submit, 928 ring dwords reserved for buffer at 0x400130, seq 8081
+  8675      8.250 gfx: paging submit, 124 ring dwords reserved for buffer at 0x410000, seq 8082
+  8676      8.250 gfx: paging submit, 880 ring dwords reserved for buffer at 0x4101F0, seq 8083
+  8677      8.250 gfx: paging submit, 172 ring dwords reserved for buffer at 0x400000, seq 8084
+  8678      8.250 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002B0, seq 8085
+  8679      8.250 gfx: paging submit, 273 ring dwords reserved for buffer at 0x410000, seq 8086
+  8680      8.266 gfx: paging submit, 736 ring dwords reserved for buffer at 0x410444, seq 8087
+  8681      8.266 gfx: paging submit, 151 ring dwords reserved for buffer at 0x400000, seq 8088
+  8682      8.266 gfx: paging submit, 864 ring dwords reserved for buffer at 0x40025C, seq 8089
+  8683      8.266 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8090
+  8684      8.266 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8091
+  8685      8.266 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8092
+  8686      8.266 gfx: paging submit, 799 ring dwords reserved for buffer at 0x400000, seq 8093
+  8687      8.266 gfx: paging submit, 192 ring dwords reserved for buffer at 0x400CC0, seq 8094
+  8688      8.266 gfx: paging submit, 680 ring dwords reserved for buffer at 0x410000, seq 8095
+  8689      8.266 gfx: paging submit, 336 ring dwords reserved for buffer at 0x410AA0, seq 8096
+  8690      8.266 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 8097
+  8691      8.266 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 8098
+  8692      8.266 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8099
+  8693      8.266 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8100
+  8694      8.266 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 8101
+  8695      8.266 gfx: paging submit, 716 ring dwords reserved for buffer at 0x410000, seq 8102
+  8696      8.266 gfx: paging submit, 288 ring dwords reserved for buffer at 0x410B30, seq 8103
+  8697      8.266 gfx: paging submit, 764 ring dwords reserved for buffer at 0x400000, seq 8104
+  8698      8.266 gfx: paging submit, 240 ring dwords reserved for buffer at 0x400BF0, seq 8105
+  8699      8.266 gfx: paging submit, 812 ring dwords reserved for buffer at 0x410000, seq 8106
+  8700      8.266 gfx: paging submit, 192 ring dwords reserved for buffer at 0x410CB0, seq 8107
+  8701      8.266 gfx: paging submit, 911 ring dwords reserved for buffer at 0x400000, seq 8108
+  8702      8.281 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E3C, seq 8109
+  8703      8.281 gfx: paging submit, 387 ring dwords reserved for buffer at 0x410000, seq 8110
+  8704      8.281 gfx: paging submit, 624 ring dwords reserved for buffer at 0x41060C, seq 8111
+  8705      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8112
+  8706      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8113
+  8707      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8114
+  8708      8.281 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x410000, seq 8115
+  8709      8.281 gfx: paging submit, 34 ring dwords reserved for buffer at 0x400000, seq 8116
+  8710      8.281 gfx: paging submit, 454 ring dwords reserved for buffer at 0x4000C0, seq 8117
+  8711      8.281 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4007D8, seq 8118
+  8712      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8119
+  8713      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8120
+  8714      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8121
+  8715      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8122
+  8716      8.281 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8123
+  8717      8.281 gfx: paging submit, 175 ring dwords reserved for buffer at 0x400000, seq 8124
+  8718      8.281 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002BC, seq 8125
+  8719      8.281 gfx: paging submit, 220 ring dwords reserved for buffer at 0x410000, seq 8126
+  8720      8.281 gfx: paging submit, 784 ring dwords reserved for buffer at 0x410370, seq 8127
+  8721      8.281 gfx: paging submit, 268 ring dwords reserved for buffer at 0x400000, seq 8128
+  8722      8.281 gfx: paging submit, 738 ring dwords reserved for buffer at 0x400430, seq 8129
+  8723      8.281 gfx: paging submit, 365 ring dwords reserved for buffer at 0x410000, seq 8130
+  8724      8.297 gfx: paging submit, 65 ring dwords reserved for buffer at 0x4105B4, seq 8131
+  8725      8.297 gfx: paging submit, 576 ring dwords reserved for buffer at 0x4106B8, seq 8132
+  8726      8.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8133
+  8727      8.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8134
+  8728      8.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8135
+  8729      8.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8136
+  8730      8.297 gfx: paging submit, 97 ring dwords reserved for buffer at 0x400000, seq 8137
+  8731      8.297 gfx: paging submit, 50 ring dwords reserved for buffer at 0x4001C0, seq 8138
+  8732      8.297 gfx: paging submit, 848 ring dwords reserved for buffer at 0x400288, seq 8139
+  8733      8.297 gfx: paging submit, 204 ring dwords reserved for buffer at 0x410000, seq 8140
+  8734      8.297 gfx: paging submit, 800 ring dwords reserved for buffer at 0x410330, seq 8141
+  8735      8.297 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 8142
+  8736      8.297 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 8143
+  8737      8.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8144
+  8738      8.297 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8145
+  8739      8.297 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 8146
+  8740      8.297 gfx: paging submit, 252 ring dwords reserved for buffer at 0x410000, seq 8147
+  8741      8.297 gfx: paging submit, 752 ring dwords reserved for buffer at 0x4103F0, seq 8148
+  8742      8.297 gfx: paging submit, 300 ring dwords reserved for buffer at 0x400000, seq 8149
+  8743      8.297 gfx: paging submit, 704 ring dwords reserved for buffer at 0x4004B0, seq 8150
+  8744      8.297 gfx: paging submit, 348 ring dwords reserved for buffer at 0x410000, seq 8151
+  8745      8.297 gfx: paging submit, 656 ring dwords reserved for buffer at 0x410570, seq 8152
+  8746      8.297 gfx: paging submit, 449 ring dwords reserved for buffer at 0x400000, seq 8153
+  8747      8.344 gfx: paging submit, 560 ring dwords reserved for buffer at 0x400704, seq 8154
+  8748      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8155
+  8749      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8156
+  8750      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8157
+  8751      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8158
+  8752      8.344 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x410000, seq 8159
+  8753      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8160
+  8754      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8161
+  8755      8.344 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8162
+  8756      8.344 gfx: paging submit, 709 ring dwords reserved for buffer at 0x410000, seq 8163
+  8757      8.359 gfx: paging submit, 281 ring dwords reserved for buffer at 0x410B60, seq 8164
+  8758      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8165
+  8759      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8166
+  8760      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8167
+  8761      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8168
+  8762      8.359 gfx: paging submit, 1007 ring dwords reserved for buffer at 0x400000, seq 8169
+  8763      8.359 gfx: paging submit, 998 ring dwords reserved for buffer at 0x410000, seq 8170
+  8764      8.359 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 8171
+  8765      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8172
+  8766      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8173
+  8767      8.359 gfx: paging submit, 83 ring dwords reserved for buffer at 0x410000, seq 8174
+  8768      8.359 gfx: paging submit, 15 ring dwords reserved for buffer at 0x41014C, seq 8175
+  8769      8.359 gfx: paging submit, 912 ring dwords reserved for buffer at 0x410188, seq 8176
+  8770      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8177
+  8771      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8178
+  8772      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8179
+  8773      8.359 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 8180
+  8774      8.359 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x400000, seq 8181
+  8775      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8182
+  8776      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8183
+  8777      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8184
+  8778      8.359 gfx: paging submit, 357 ring dwords reserved for buffer at 0x400000, seq 8185
+  8779      8.359 gfx: paging submit, 640 ring dwords reserved for buffer at 0x4005E0, seq 8186
+  8780      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8187
+  8781      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8188
+  8782      8.359 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8189
+  8783      8.375 gfx: paging submit, 1005 ring dwords reserved for buffer at 0x400000, seq 8190
+  8784      8.375 gfx: paging submit, 1016 ring dwords reserved for buffer at 0x410000, seq 8191
+  8785      8.375 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8192
+  8786      8.375 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 8193
+  8787      8.375 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8194
+  8788      8.375 gfx: paging submit, 611 ring dwords reserved for buffer at 0x410000, seq 8195
+  8789      8.375 gfx: paging submit, 50 ring dwords reserved for buffer at 0x41098C, seq 8196
+  8790      8.375 gfx: paging submit, 352 ring dwords reserved for buffer at 0x410A54, seq 8197
+  8791      8.375 gfx: paging submit, 700 ring dwords reserved for buffer at 0x400000, seq 8198
+  8792      8.375 gfx: paging submit, 304 ring dwords reserved for buffer at 0x400AF0, seq 8199
+  8793      8.375 gfx: paging submit, 748 ring dwords reserved for buffer at 0x410000, seq 8200
+  8794      8.375 gfx: paging submit, 256 ring dwords reserved for buffer at 0x410BB0, seq 8201
+  8795      8.375 gfx: paging submit, 796 ring dwords reserved for buffer at 0x400000, seq 8202
+  8796      8.375 gfx: paging submit, 208 ring dwords reserved for buffer at 0x400C70, seq 8203
+  8797      8.375 gfx: paging submit, 844 ring dwords reserved for buffer at 0x410000, seq 8204
+  8798      8.375 gfx: paging submit, 160 ring dwords reserved for buffer at 0x410D30, seq 8205
+  8799      8.375 gfx: paging submit, 945 ring dwords reserved for buffer at 0x400000, seq 8206
+             1298 lines printed

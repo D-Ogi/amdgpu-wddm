@@ -1,0 +1,3 @@
+frame,start_qpc,present_return_qpc,qpc_frequency,result,dwm_hr,refresh_count,vblank_qpc,refresh_period_qpc
+1,57425363736,57425598183,10000000,0,0,2,57425869289,166763
+2,57443928154,57444200136,10000000,0,0,3,57444385150,166805

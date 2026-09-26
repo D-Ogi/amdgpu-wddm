@@ -1,0 +1,11 @@
+{
+  "after.c": "942b2b7765a848ba5173b5d7b227bbf56fbe4c2ec60d38c95db6ed562170754e",
+  "before.c": "d644c71623cf642f8e77057c8a76985ed19efcc3948d504c211e2c4f83650694",
+  "build.log": "8953b6e2ece14db3091bbf2d5389cabb60f04bcc9a90373faa76a8af83edce65",
+  "host-validation.json": "6cbd48427ba846454c2897425ce472e54da727324d733969fdf1450a8ed5e827",
+  "RESULT.md": "1e20ac66ce4fd13fe07d06a4ab611bec07d1b3ae2d7c957f8c2740807b18b299",
+  "source\\driver\\kmd\\gfx.c": "585b71053c62d654f2a0912bf6d971caf5e2f7c61c457a25f4c228108797a59e",
+  "source\\experiments\\E27-m9-inference\\generate-stop-chain-test.py": "bf526226e7f054aba89746a55f4d730613245e83b73aa7133910d5871a8922da",
+  "source\\experiments\\E27-m9-inference\\stop-chain-test-prefix.c": "b22a9b9fb08bc19c095b1180d77686e2ca29942ce2c92c8a095a02ddadc6dca3",
+  "source\\experiments\\E27-m9-inference\\stop-chain-test-suffix.c": "2523b3eeb6506f0170501fad747c07f4fd54310595e0bf06206015ffeca34e4a"
+}

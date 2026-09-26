@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 440 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x0166F0  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x015730  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x026510  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x0308D0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\aperture-commit-dev\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\aperture-commit-dev\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\aperture-commit-dev\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7572  bc250kmd.inf
+   305040  bc250kmd.sys
+  5E13110A5FC45A1A59244314D59D0367D5D44E227A74745D07F930115EBCB56A  package\bc250kmd.sys

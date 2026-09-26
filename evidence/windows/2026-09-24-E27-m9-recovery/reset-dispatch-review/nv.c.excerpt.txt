@@ -1,0 +1,105 @@
+Source: drivers/gpu/drm/amd/amdgpu/nv.c
+442: static enum amd_reset_method
+443: nv_asic_reset_method(struct amdgpu_device *adev)
+444: {
+445: 	if (amdgpu_reset_method == AMD_RESET_METHOD_MODE1 ||
+446: 	    amdgpu_reset_method == AMD_RESET_METHOD_MODE2 ||
+447: 	    amdgpu_reset_method == AMD_RESET_METHOD_BACO ||
+448: 	    amdgpu_reset_method == AMD_RESET_METHOD_PCI)
+449: 		return amdgpu_reset_method;
+450: 
+451: 	if (amdgpu_reset_method != -1)
+452: 		dev_warn(adev->dev, "Specified reset method:%d isn't supported, using AUTO instead.\n",
+453: 				  amdgpu_reset_method);
+454: 
+455: 	switch (amdgpu_ip_version(adev, MP1_HWIP, 0)) {
+456: 	case IP_VERSION(11, 5, 0):
+457: 	case IP_VERSION(11, 5, 2):
+458: 	case IP_VERSION(13, 0, 1):
+459: 	case IP_VERSION(13, 0, 3):
+460: 	case IP_VERSION(13, 0, 5):
+461: 	case IP_VERSION(13, 0, 8):
+462: 		return AMD_RESET_METHOD_MODE2;
+463: 	case IP_VERSION(11, 0, 7):
+464: 	case IP_VERSION(11, 0, 11):
+465: 	case IP_VERSION(11, 0, 12):
+466: 	case IP_VERSION(11, 0, 13):
+467: 		return AMD_RESET_METHOD_MODE1;
+468: 	default:
+469: 		if (amdgpu_dpm_is_baco_supported(adev))
+470: 			return AMD_RESET_METHOD_BACO;
+471: 		else
+472: 			return AMD_RESET_METHOD_MODE1;
+473: 	}
+474: }
+475: 
+476: static int nv_asic_reset(struct amdgpu_device *adev)
+477: {
+478: 	int ret = 0;
+479: 
+480: 	switch (nv_asic_reset_method(adev)) {
+481: 	case AMD_RESET_METHOD_PCI:
+482: 		dev_info(adev->dev, "PCI reset\n");
+483: 		ret = amdgpu_device_pci_reset(adev);
+484: 		break;
+485: 	case AMD_RESET_METHOD_BACO:
+486: 		dev_info(adev->dev, "BACO reset\n");
+487: 		ret = amdgpu_dpm_baco_reset(adev);
+488: 		break;
+489: 	case AMD_RESET_METHOD_MODE2:
+490: 		dev_info(adev->dev, "MODE2 reset\n");
+491: 		ret = nv_asic_mode2_reset(adev);
+492: 		break;
+493: 	default:
+494: 		dev_info(adev->dev, "MODE1 reset\n");
+495: 		ret = amdgpu_device_mode1_reset(adev);
+496: 		break;
+497: 	}
+498: 
+499: 	return ret;
+537: static bool nv_need_full_reset(struct amdgpu_device *adev)
+538: {
+539: 	return true;
+540: }
+618: static const struct amdgpu_asic_funcs nv_asic_funcs = {
+619: 	.read_disabled_bios = &nv_read_disabled_bios,
+620: 	.read_bios_from_rom = &amdgpu_soc15_read_bios_from_rom,
+621: 	.read_register = &nv_read_register,
+622: 	.reset = &nv_asic_reset,
+623: 	.reset_method = &nv_asic_reset_method,
+624: 	.get_xclk = &nv_get_xclk,
+625: 	.set_uvd_clocks = &nv_set_uvd_clocks,
+626: 	.set_vce_clocks = &nv_set_vce_clocks,
+627: 	.get_config_memsize = &nv_get_config_memsize,
+628: 	.init_doorbell_index = &nv_init_doorbell_index,
+629: 	.need_full_reset = &nv_need_full_reset,
+630: 	.need_reset_on_init = &nv_need_reset_on_init,
+631: 	.get_pcie_replay_count = &amdgpu_nbio_get_pcie_replay_count,
+632: 	.supports_baco = &amdgpu_dpm_is_baco_supported,
+633: 	.pre_asic_init = &nv_pre_asic_init,
+634: 	.update_umd_stable_pstate = &nv_update_umd_stable_pstate,
+635: 	.query_video_codecs = &nv_query_video_codecs,
+636: };
+637: 
+638: static int nv_common_early_init(struct amdgpu_ip_block *ip_block)
+639: {
+640: 	struct amdgpu_device *adev = ip_block->adev;
+641: 
+642: 	adev->nbio.funcs->set_reg_remap(adev);
+643: 	adev->smc_rreg = NULL;
+644: 	adev->smc_wreg = NULL;
+645: 	adev->pcie_rreg = &amdgpu_device_indirect_rreg;
+646: 	adev->pcie_wreg = &amdgpu_device_indirect_wreg;
+647: 	adev->pcie_rreg64 = &amdgpu_device_indirect_rreg64;
+648: 	adev->pcie_wreg64 = &amdgpu_device_indirect_wreg64;
+649: 	adev->pciep_rreg = amdgpu_device_pcie_port_rreg;
+650: 	adev->pciep_wreg = amdgpu_device_pcie_port_wreg;
+651: 
+652: 	/* TODO: will add them during VCN v2 implementation */
+653: 	adev->uvd_ctx_rreg = NULL;
+654: 	adev->uvd_ctx_wreg = NULL;
+655: 
+656: 	adev->didt_rreg = &nv_didt_rreg;
+657: 	adev->didt_wreg = &nv_didt_wreg;
+658: 
+659: 	adev->asic_funcs = &nv_asic_funcs;

@@ -1,0 +1,21 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+dcn_translate_test: 4 synthetic geometries, 78 checks, 14 failed
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:42: DcnTranslateCardAddress(mcBase + vramLength - 0x1000ull, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:51: DcnTranslateCardAddress(mcBase + vramLength - surfaceBytes, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:52: physical == vramBase + vramLength - surfaceBytes
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:53: DcnAddressFits(physical, vramBase, vramLength, surfaceBytes)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:55: DcnTranslateCardAddress(mcBase + (8ull << 30), mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:56: physical == vramBase + (8ull << 30)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:57: DcnAddressFits(physical, vramBase, vramLength, surfaceBytes)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:42: DcnTranslateCardAddress(mcBase + vramLength - 0x1000ull, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:51: DcnTranslateCardAddress(mcBase + vramLength - surfaceBytes, mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:52: physical == vramBase + vramLength - surfaceBytes
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:53: DcnAddressFits(physical, vramBase, vramLength, surfaceBytes)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:55: DcnTranslateCardAddress(mcBase + (8ull << 30), mcBase, vramBase, vramLength, &physical)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:56: physical == vramBase + (8ull << 30)
+FAIL P:\BC-250\scratch\m9\bd028\negative\driver\kmd\test\dcn_translate_test.c:57: DcnAddressFits(physical, vramBase, vramLength, surfaceBytes)
+compile-check (kernel flags, same source, no link)
+
+dcn_translate_test.exe exit code 1

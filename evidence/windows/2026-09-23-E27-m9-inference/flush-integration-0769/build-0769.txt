@@ -1,0 +1,48 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 378 functions with unwind data, largest fixed frame 1240 bytes
+  warn    1240 bytes  rva 0x029260  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\bc250kmd-0769\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bc250kmd-0769\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bc250kmd-0769\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7572  bc250kmd.inf
+   272272  bc250kmd.sys
+umd package
+  bc250kmd.inf generated: 9 lines enabled, 1 commented out, DriverVer = 09/23/2026,0.7.69.1
+  .........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\bc250kmd-0769\package-umd\bc250kmd.cat
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bc250kmd-0769\package-umd\bc250kmd.cat
+umd package: P:\bc-250\scratch\build\bc250kmd-0769\package-umd
+      792  bc250-lab-test.cer
+     2839  bc250kmd.cat
+     7520  bc250kmd.inf
+   272272  bc250kmd.sys
+     4096  bc250umd.dll
+  3295E344093A2D8E98D12D59BBA1D304A807730665A5BC946B54249CF93F527D  package\bc250kmd.sys
+  3295E344093A2D8E98D12D59BBA1D304A807730665A5BC946B54249CF93F527D  package-umd\bc250kmd.sys

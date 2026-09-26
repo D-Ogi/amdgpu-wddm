@@ -1,0 +1,1 @@
+5355 readable, 2 writable: SCRATCH_REG0=0x30100, SCRATCH_REG1=0x30104; 287 in the Gart sequence, 5 in the Psp sequence, 288 in the Gfx sequence, 17 in the Ih sequence, 75 in the DCN dump, 7 in the DCN flip's write list

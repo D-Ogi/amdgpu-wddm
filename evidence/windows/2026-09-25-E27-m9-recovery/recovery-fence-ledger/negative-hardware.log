@@ -1,0 +1,7 @@
+test.c
+paging_private.c
+Generowanie kodu...
+FAIL GPU121 is distinct from deferred notification122
+FAIL ring refusal never invents execution but preserves OS ownership
+FAIL old hardware epoch cannot retire or probe new owner
+1199 checks, 3 failures

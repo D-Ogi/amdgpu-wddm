@@ -1,0 +1,5 @@
+# M378 - Shader visibility after eviction on119
+
+Continue initialized119 session from M377, boot08:30:00; no device restart or install. Verify exactSYS4374CB20857D0CA5D09D8EFCF61F5D35718633D568571EF41FE717900E15236E and actual loaded FULL WDDM0x00070077. STOP absent,1000MHz/820mV,temp<85C. Unchanged probe038010EB... and instrumentedICDEA70D440... from prior105 controls. Run Limited interactive scheduled task hidden on lab: type3 positive16 correct iterations, eviction variant16 correct iterations with3 witnessed departures/restores, stale-input negative1completed/1mismatch and1departure/restore. Native exit+loader/progress witnesses mandatory. Collect all raw outputs and before/after hardware/TDR/capture counters before interpretation. Deadline observation is not task termination; inspect handle before retry. No new warm/1GiB trial, no routine stop/reboot; retain initialized session on success.
+
+Success establishes the tested shader visibility path, not exact CPU mapping cache attributes, physical PFN ownership or complete cache-alias conformance. Goal remains open.

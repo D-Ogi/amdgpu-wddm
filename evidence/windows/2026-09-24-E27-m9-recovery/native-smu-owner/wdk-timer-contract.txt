@@ -1,0 +1,8 @@
+WDK 10.0.26100.0 km/wdm.h
+SHA256 c6a2a650c9799791accc407800861f672aea75ff0f1f60e2d3bf62d836275732
+KeQueryInterruptTimePrecise (
+    _Out_ PULONG64 QpcTimeStamp
+    );
+#endif
+
+#if (NTDDI_VERSION >= N

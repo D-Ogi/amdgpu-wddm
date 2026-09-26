@@ -1,0 +1,52 @@
+kernel=6.18.52-0-lts
+module_sha256=5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4
+module_vermagic=6.18.52-0-lts SMP preempt mod_unload modversions 
+module_srcversion=lockup_timeout=10000
+gpu_recovery=1
+debug_mask=0
+timeout_policy_from_successful_load_argv_and_source_parser
+sdma_reset_mask=queue full 
+registered_probes=20
+bc250_m9_reset:soc15_asic_reset_return
+bc250_m9_reset:soc15_asic_reset_enter
+bc250_m9_reset:amdgpu_device_gpu_recover_return
+bc250_m9_reset:amdgpu_device_gpu_recover_enter
+bc250_m9_reset:amdgpu_ring_reset_helper_end_return
+bc250_m9_reset:amdgpu_ring_reset_helper_end_enter
+bc250_m9_reset:sdma_v5_0_restore_queue_return
+bc250_m9_reset:sdma_v5_0_restore_queue_enter
+bc250_m9_reset:sdma_v5_0_soft_reset_engine_return
+bc250_m9_reset:sdma_v5_0_soft_reset_engine_enter
+bc250_m9_reset:sdma_v5_0_stop_queue_return
+bc250_m9_reset:sdma_v5_0_stop_queue_enter
+bc250_m9_reset:amdgpu_sdma_reset_engine_return
+bc250_m9_reset:amdgpu_sdma_reset_engine_enter
+bc250_m9_reset:sdma_v5_0_reset_queue_return
+bc250_m9_reset:sdma_v5_0_reset_queue_enter
+bc250_m9_reset:amdgpu_ring_soft_recovery_return
+bc250_m9_reset:amdgpu_ring_soft_recovery_enter
+bc250_m9_reset:amdgpu_job_timedout_return
+bc250_m9_reset:amdgpu_job_timedout_enter
+amdgpu:amdgpu_device_wreg
+amdgpu:amdgpu_device_rreg
+  amdgpu_job_timedout_enter                                  0               0
+  amdgpu_job_timedout_return                                 0               0
+  amdgpu_ring_soft_recovery_enter                            0               0
+  amdgpu_ring_soft_recovery_return                           0               0
+  sdma_v5_0_reset_queue_enter                                0               0
+  sdma_v5_0_reset_queue_return                               0               0
+  amdgpu_sdma_reset_engine_enter                             0               0
+  amdgpu_sdma_reset_engine_return                            0               0
+  sdma_v5_0_stop_queue_enter                                 0               0
+  sdma_v5_0_stop_queue_return                                0               0
+  sdma_v5_0_soft_reset_engine_enter                          0               0
+  sdma_v5_0_soft_reset_engine_return                         0               0
+  sdma_v5_0_restore_queue_enter                              0               0
+  sdma_v5_0_restore_queue_return                             0               0
+  amdgpu_ring_reset_helper_end_enter                         0               0
+  amdgpu_ring_reset_helper_end_return                        0               0
+  amdgpu_device_gpu_recover_enter                            0               0
+  amdgpu_device_gpu_recover_return                           0               0
+  soc15_asic_reset_enter                                     0               0
+  soc15_asic_reset_return                                    0               0
+trace_ready_but_disabled

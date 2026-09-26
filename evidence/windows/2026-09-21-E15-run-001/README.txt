@@ -1,4 +1,4 @@
-E15 run 001, 2026-09-21, unit A, Windows 11 Pro, bc250kmd 0.6.2.0 (source state: commit 745b67b, built from a clean
+E15 run 001, 2026-09-21, unit A, Windows 11 Pro, bc250kmd 0.6.2.0 (source state: commit cdcd608, built from a clean
 worktree of that commit), witness bc250rd. No kernel debugger session. Driven over SSH with
 experiments/E15-compute-dispatch/e15_target.ps1. File name suffix is the target's local time. Firmware as in E10.
 comparison.txt is experiments/E12-interrupts/compare.py (irq, rerun) over the logs named in it. Nothing here was edited

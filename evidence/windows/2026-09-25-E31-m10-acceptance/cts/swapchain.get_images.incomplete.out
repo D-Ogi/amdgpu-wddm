@@ -1,0 +1,16 @@
+Writing test log into C:\BC250\m10\cts-smoke-06\swapchain.get_images.incomplete.qpa
+Warning: WGL not supported: Failed to load WGL extension functions
+dEQP Core 93bca01861b0e3ef3c387027a9791e6d065f900c (0x93bca018) starting..
+  target implementation = 'Default'
+
+Test case 'dEQP-VK.wsi.win32.swapchain.get_images.incomplete'..
+  Pass (Get swapchain images tests succeeded)
+
+DONE!
+
+Test run totals:
+  Passed:        1/1 (100.0%)
+  Failed:        0/1 (0.0%)
+  Not supported: 0/1 (0.0%)
+  Warnings:      0/1 (0.0%)
+  Waived:        0/1 (0.0%)

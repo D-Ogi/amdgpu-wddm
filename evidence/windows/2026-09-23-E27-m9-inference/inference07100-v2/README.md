@@ -1,0 +1,5 @@
+# Candidate07100 cache-intent v2 runtime, unit A, 2026-09-23
+
+Same healthy device session as M271/M272, no reinitialization or reboot. KMD0.7.100.1, isolated ICD6B589A8686DF6FFBB2BE447845222A3607E7E162B89923FA5976FCD9FD412754 selected by Limited interactive task with actual loader and submission witnesses. Task completed and was removed. Final boot15:39:09 unchanged,deviceOK,1000MHz/VID116,70.8C. GlobalquietICD unchanged. Text decoded toUTF8; private adapter instance suffixes redacted only.
+
+Eight Vulkan operations (--runs3) report zero mismatches; stories15M96tokens and TinyLlama64tokens exactly match immutable E14 Linux ngl99 stdout with CRLF normalized. All three native exits0; full offload7/7 and23/23. Independent local reference comparison recorded in validation JSON. Before/afterGFX204->2558 andpaging24397->47606, all complete,zero timeouts/refusals/noTDR. Temperature70.9..72.0C. This is functional acceptance of these workloads, not eviction+shader, arbitrary aliases, CPU PAT or warm reentry proof.

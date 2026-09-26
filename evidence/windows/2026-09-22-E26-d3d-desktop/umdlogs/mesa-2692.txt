@@ -1,0 +1,9 @@
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CloseAdapter
+CloseAdapter

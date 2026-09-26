@@ -1,0 +1,36 @@
+packagecheck 1.0  P:\BC-250\scratch\build\bc250kmd-07112\package-umd
+  DriverVer 09/24/2026,0.7.112.1, model full, service bc250kmd
+
+[files]
+  note  FIL001  bc250-lab-test.cer is in the package but not named by the INF (known extra)
+
+[user-mode driver]
+  note  UMD015  no UserModeDriverNameWow: deliberate, the stub is 64-bit only (bc250kmd.inf explains why a Wow value pointing at the 64-bit DLL would be worse)
+
+[binaries]
+  note  PE010  bc250kmd.sys linked 2026-09-24 04:02:30 UTC
+  note  PE013  bc250kmd.sys has no version resource
+  note  PE014  bc250kmd.sys debug id B0F118EA-2942-4310-8F5D-E2BF3CC77CF3 age 1
+  note  PE009  bc250umd.dll has no embedded signature; it is catalog-signed only, which is how driver\kmd\build.ps1 builds it
+  note  PE010  bc250umd.dll linked 2026-09-21 16:21:29 UTC
+  note  PE013  bc250umd.dll has no version resource
+
+[BUILDINFO.json]
+  note  BLD002  no BUILDINFO.json: this package cannot be tied to a commit
+
+[catalog]
+  note  CAT009  bc250kmd.inf is a member of bc250kmd.cat; the chain ends in an untrusted root, which is what a test certificate does on this PC
+  note  CAT009  bc250kmd.sys is a member of bc250kmd.cat; the chain ends in an untrusted root, which is what a test certificate does on this PC
+  note  CAT009  bc250umd.dll is a member of bc250kmd.cat; the chain ends in an untrusted root, which is what a test certificate does on this PC
+
+[kit tools]
+  note  IVF005  infverif: WARNING(1199) in P:\BC-250\scratch\build\bc250kmd-07112\package-umd\bc250kmd.inf, line 0: The syntax 'DIRID 13 (CopyFiles)' was introduced in OS version 10.0.16299, but DDInstall sections utilizing the syntax will install on earlier OS versions. Those DDInstall sections should be restricted to only install on 10.0.16299 or higher using a TargetOSVersion decoration.
+
+[contents]
+         792  6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd  bc250-lab-test.cer
+        2839  2dc58507dc30a939ef6283b645495bdbd597884686af7b766c482fb7fb72ea79  bc250kmd.cat
+        7603  f91cd5577c549956bc99b8e4a9e25ff9d992fb15428ba2f4985a7373c16a576f  bc250kmd.inf
+      338320  af32e5583d317dfb4daff8ee32101bca58ff62c32329fe36f65843c3f6c35d01  bc250kmd.sys
+        4096  d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661  bc250umd.dll
+
+PASS: 0 error(s), 0 warning(s), 13 note(s), 25 check(s) passed

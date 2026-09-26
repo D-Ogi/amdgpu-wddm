@@ -1,0 +1,21 @@
+candidate_sha256=84CDF89DA6624070B279511B5701B5317E0D85ABAD71F888928E31109AE785E4
+boot_before=2026-09-23T12:36:57
+12:46:17 Tctl 66.6 C (raw 73BB0FEF)
+
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem70.inf
+Driver package installed on device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\<instance-redacted>
+
+Total driver packages:  1
+Added driver packages:  1
+pnputil_exit=0
+device_status=OK
+driver_version=0.7.96.1
+installed_sha256=84CDF89DA6624070B279511B5701B5317E0D85ABAD71F888928E31109AE785E4
+closed_gates_verified
+boot_after=2026-09-23T12:36:57
+dwm_processes=1
+display_only_install_passed

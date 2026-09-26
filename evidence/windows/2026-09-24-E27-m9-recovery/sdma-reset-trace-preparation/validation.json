@@ -1,0 +1,7 @@
+{
+  "probe_definitions": 20,
+  "real_function_bodies_found": 10,
+  "macro_probe_excluded": true,
+  "shell_syntax": "Git Bash -n passed for both scripts",
+  "hardware_execution": false
+}

@@ -1,0 +1,23 @@
+before.c
+FAIL mask=1 GFX result includes halt, undo and sequence fault
+FAIL mask=1 PSP verdict preserves failed ring/TMR teardown
+FAIL mask=1 GART restore requires every consumer retired
+FAIL mask=1 dummy and GART owner survive failed restore or consumer
+FAIL mask=1 PSP views and owner survive uncertain teardown
+FAIL mask=1 uncertain stop latches device-object quarantine
+FAIL mask=1 second stop cannot erase failed-stop verdicts
+FAIL mask=2 GFX result includes halt, undo and sequence fault
+FAIL mask=2 PSP unload never follows unconfirmed GFX stop
+FAIL mask=2 PSP verdict preserves failed ring/TMR teardown
+FAIL mask=2 GART restore requires every consumer retired
+FAIL mask=2 dummy and GART owner survive failed restore or consumer
+FAIL mask=2 PSP views and owner survive uncertain teardown
+FAIL mask=2 uncertain stop latches device-object quarantine
+FAIL mask=2 second stop cannot erase failed-stop verdicts
+FAIL mask=3 GFX result includes halt, undo and sequence fault
+FAIL mask=3 PSP verdict preserves failed ring/TMR teardown
+FAIL mask=3 GART restore requires every consumer retired
+FAIL mask=3 dummy and GART owner survive failed restore or consumer
+1676 checks, 889 failures
+after.c
+1676 checks, 0 failures

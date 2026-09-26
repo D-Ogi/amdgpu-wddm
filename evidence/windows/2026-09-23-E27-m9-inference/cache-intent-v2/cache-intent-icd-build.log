@@ -1,0 +1,6 @@
+ninja: Entering directory `P:\bc-250\scratch\mesa-wddm2-build'
+[1/6] Generating src/git_sha1.h with a custom command
+[2/3] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/winsys_wddm2_radv_wddm2_bo.c.obj
+[3/3] Linking target src/amd/vulkan/vulkan_radeon.dll
+   Trwa tworzenie biblioteki src\amd\vulkan\vulkan_radeon.lib i obiektu src\amd\vulkan\vulkan_radeon.exp
+

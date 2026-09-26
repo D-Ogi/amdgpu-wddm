@@ -1,0 +1,65 @@
+AMD clock constants and complete function match pinned source
+skip-voltage-stage.c
+clock_test.c
+Generowanie kodu...
+skip-voltage-stage.c
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line43: r.initial_mhz==old_mhz && r.initial_vid==old_vid && r.voltage_staged==staged
+FAIL line44: r.messages_attempted==at+4 && r.messages_completed==at+4
+FAIL line48: b.msg[2]==PPSMC_MSG_ForceGfxVid && b.param[2]==b.target_vid
+FAIL line49: b.msg[3]==PPSMC_MSG_GetGfxVid && !b.param[3] && r.staged_vid==b.target_vid
+FAIL line51: b.msg[at]==PPSMC_MSG_RequestGfxclk && b.param[at]==mhz
+FAIL line52: b.msg[at+1]==PPSMC_MSG_ForceGfxVid && b.param[at+1]==b.target_vid
+FAIL line53: b.msg[at+2]==PPSMC_MSG_GetGfxFrequency && b.msg[at+3]==PPSMC_MSG_GetGfxVid
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line43: r.initial_mhz==old_mhz && r.initial_vid==old_vid && r.voltage_staged==staged
+FAIL line44: r.messages_attempted==at+4 && r.messages_completed==at+4
+FAIL line48: b.msg[2]==PPSMC_MSG_ForceGfxVid && b.param[2]==b.target_vid
+FAIL line49: b.msg[3]==PPSMC_MSG_GetGfxVid && !b.param[3] && r.staged_vid==b.target_vid
+FAIL line51: b.msg[at]==PPSMC_MSG_RequestGfxclk && b.param[at]==mhz
+FAIL line52: b.msg[at+1]==PPSMC_MSG_ForceGfxVid && b.param[at+1]==b.target_vid
+FAIL line53: b.msg[at+2]==PPSMC_MSG_GetGfxFrequency && b.msg[at+3]==PPSMC_MSG_GetGfxVid
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line43: r.initial_mhz==old_mhz && r.initial_vid==old_vid && r.voltage_staged==staged
+FAIL line44: r.messages_attempted==at+4 && r.messages_completed==at+4
+FAIL line48: b.msg[2]==PPSMC_MSG_ForceGfxVid && b.param[2]==b.target_vid
+FAIL line49: b.msg[3]==PPSMC_MSG_GetGfxVid && !b.param[3] && r.staged_vid==b.target_vid
+FAIL line51: b.msg[at]==PPSMC_MSG_RequestGfxclk && b.param[at]==mhz
+FAIL line52: b.msg[at+1]==PPSMC_MSG_ForceGfxVid && b.param[at+1]==b.target_vid
+FAIL line53: b.msg[at+2]==PPSMC_MSG_GetGfxFrequency && b.msg[at+3]==PPSMC_MSG_GetGfxVid
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line71: b.mhz==1000
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line68: bc250_clock_prepare(&c,b.target_mhz,path?900:820,&r)==-74
+FAIL line68: !r.ready
+FAIL line69: r.messages_attempted==step && r.messages_completed==step-1
+FAIL line70: b.count==step && b.end_count==1 && !b.held
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line68: bc250_clock_prepare(&c,b.target_mhz,path?900:820,&r)==-74
+FAIL line68: !r.ready
+FAIL line69: r.messages_attempted==step && r.messages_completed==step-1
+FAIL line70: b.count==step && b.end_count==1 && !b.held
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line77: bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_MISMATCH
+FAIL line77: !r.ready && b.end_count==1 && !b.held
+FAIL line78: b.mhz==1000 && b.count==4
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line77: bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_MISMATCH
+FAIL line77: !r.ready && b.end_count==1 && !b.held
+FAIL line20: b->vid<=b->target_vid
+FAIL line21: b->voltage_reads_after_force>0
+FAIL line77: bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_MISMATCH
+FAIL line77: !r.ready && b.end_count==1 && !b.held
+clock policy: 609 checks, 59 failures

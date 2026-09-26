@@ -1,0 +1,11 @@
+test.c
+P:\bc-250\scratch\build\bd018\test.c(13): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\build\bd018\test.c(13): warning C4005: "_In_": ponowna definicja makra
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include\sal.h(305): note: zobacz poprzednią definicję „_In_”
+P:\bc-250\scratch\build\bd018\test.c(14): warning C4005: "_Out_": ponowna definicja makra
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include\sal.h(342): note: zobacz poprzednią definicję „_Out_”
+Exception: P:\BC-250\bc250-win\driver\kmd\test\run_display_timing.ps1:22
+Line |
+  22 |  if($LASTEXITCODE -ne 0){throw 'host build failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | host build failed

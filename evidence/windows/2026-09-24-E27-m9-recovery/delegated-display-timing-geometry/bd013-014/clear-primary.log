@@ -1,0 +1,27 @@
+Extracted actual visibility, synchronized enable/ISR and visibility DDI
+display_visibility_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 295: !d.SourceVisible && d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+FAIL 297: (model.blank&0x40000000u)!=0 && model.dbuf==0x80000000u
+FAIL 298: memcmp(fb,before,sizeof(fb))==0
+FAIL 303: memcmp(fb,before,sizeof(fb))==0
+FAIL 295: !d.SourceVisible && d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+FAIL 297: (model.blank&0x40000000u)!=0 && model.dbuf==0x80000000u
+FAIL 298: memcmp(fb,before,sizeof(fb))==0
+FAIL 303: memcmp(fb,before,sizeof(fb))==0
+FAIL 295: !d.SourceVisible && d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+FAIL 297: (model.blank&0x40000000u)!=0 && model.dbuf==0x80000000u
+FAIL 298: memcmp(fb,before,sizeof(fb))==0
+FAIL 303: memcmp(fb,before,sizeof(fb))==0
+FAIL 295: !d.SourceVisible && d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+FAIL 297: (model.blank&0x40000000u)!=0 && model.dbuf==0x80000000u
+FAIL 298: memcmp(fb,before,sizeof(fb))==0
+FAIL 303: memcmp(fb,before,sizeof(fb))==0
+FAIL 295: !d.SourceVisible && d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+FAIL 297: (model.blank&0x40000000u)!=0 && model.dbuf==0x80000000u
+FAIL 298: memcmp(fb,before,sizeof(fb))==0
+FAIL 303: memcmp(fb,before,sizeof(fb))==0
+FAIL 306: Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_DEVICE_NOT_READY
+FAIL 307: d.SourceVisible && !d.DcnBlanked && memcmp(fb,before,sizeof(fb))==0
+display visibility/sync: 93 checks, 22 failures

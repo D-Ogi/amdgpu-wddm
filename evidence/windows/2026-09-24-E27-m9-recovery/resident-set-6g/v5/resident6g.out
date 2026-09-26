@@ -1,0 +1,32 @@
+GPU_RESIDENCY bytes=6442450944 heap=4 mode=resident-only bulk_timeout_ms=420000
+D3DKMTEnumAdapters2 (count)        0x00000000  STATUS_SUCCESS
+    34 adapter(s)
+D3DKMTEnumAdapters2                0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:00272EBD  NumOfSources 0
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "C:\BC250\m13\mesa-main-umd\bc250d3d.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008A58  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+D3DKMTOpenAdapterFromLuid          0x00000000  STATUS_SUCCESS
+    hAdapter 0x40000080 for LUID 00000000:00272EBD
+QueryAdapterInfo GPUMMU_CAPS       0x00000000  STATUS_SUCCESS
+    VirtualAddressBitCount 48, flags 0x00000004 (ReadOnly 0, NoExecute 0, CacheCoherent 1)
+QueryAdapterInfo NODEMETADATA 0    0x00000000  STATUS_SUCCESS
+    node 0: EngineType 1 "BC-250 GFX" GpuMmu 1 IoMmu 0 flags 0x00000000
+QueryAdapterInfo DRIVERVERSION     0x00000000  STATUS_SUCCESS
+    KMT_DRIVERVERSION 2000 (2000 = WDDM 2.0)
+QueryAdapterInfo WDDM_2_0_CAPS     0x00000000  STATUS_SUCCESS
+    WDDM_2_0_CAPS 0x00000003 (GpuMmuSupported 1, IoMmuSupported 0)
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 0000027930180000, current value 7000
+CreateAllocation2 BC2A [preserved] 0xC000000D  STATUS_INVALID_PARAMETER
+BULK_CREATE name=preserved bytes=6442450944 elapsed_ms=0 success=0
+-- teardown
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENT_SET_RESULT FAIL bytes=6442450944 samples=0 snapshots_only=1
+GPU_RESIDENCY_RESULT FAIL; physical relocation requires paging trace

@@ -1,0 +1,266 @@
+PROVENANCE: Linux amdgpu (AMD MIT); local Linux6.18.0 reference, not the exact E28 Alpine6.18.52 binary.
+
+680:  */
+681: 
+682: /* Check if hw access should be skipped because of hotplug or device error */
+683: bool amdgpu_device_skip_hw_access(struct amdgpu_device *adev)
+684: {
+685: 	if (adev->no_hw_access)
+686: 		return true;
+687: 
+688: #ifdef CONFIG_LOCKDEP
+689: 	/*
+690: 	 * This is a bit complicated to understand, so worth a comment. What we assert
+691: 	 * here is that the GPU reset is not running on another thread in parallel.
+692: 	 *
+693: 	 * For this we trylock the read side of the reset semaphore, if that succeeds
+694: 	 * we know that the reset is not running in parallel.
+695: 	 *
+696: 	 * If the trylock fails we assert that we are either already holding the read
+697: 	 * side of the lock or are the reset thread itself and hold the write side of
+698: 	 * the lock.
+699: 	 */
+700: 	if (in_task()) {
+701: 		if (down_read_trylock(&adev->reset_domain->sem))
+702: 			up_read(&adev->reset_domain->sem);
+703: 		else
+704: 			lockdep_assert_held(&adev->reset_domain->sem);
+705: 	}
+706: #endif
+707: 	return false;
+708: }
+709: 
+710: /**
+711:  * amdgpu_device_rreg - read a memory mapped IO or indirect register
+712:  *
+713:  * @adev: amdgpu_device pointer
+714:  * @reg: dword aligned register offset
+715:  * @acc_flags: access flags which require special behavior
+716:  *
+717:  * Returns the 32 bit value from the offset specified.
+718:  */
+719: uint32_t amdgpu_device_rreg(struct amdgpu_device *adev,
+720: 			    uint32_t reg, uint32_t acc_flags)
+721: {
+722: 	uint32_t ret;
+723: 
+724: 	if (amdgpu_device_skip_hw_access(adev))
+725: 		return 0;
+726: 
+727: 	if ((reg * 4) < adev->rmmio_size) {
+728: 		if (!(acc_flags & AMDGPU_REGS_NO_KIQ) &&
+729: 		    amdgpu_sriov_runtime(adev) &&
+730: 		    down_read_trylock(&adev->reset_domain->sem)) {
+731: 			ret = amdgpu_kiq_rreg(adev, reg, 0);
+732: 			up_read(&adev->reset_domain->sem);
+733: 		} else {
+734: 			ret = readl(((void __iomem *)adev->rmmio) + (reg * 4));
+735: 		}
+736: 	} else {
+737: 		ret = adev->pcie_rreg(adev, reg * 4);
+738: 	}
+739: 
+740: 	trace_amdgpu_device_rreg(adev->pdev->device, reg, ret);
+741: 
+742: 	return ret;
+
+847: void amdgpu_device_wreg(struct amdgpu_device *adev,
+848: 			uint32_t reg, uint32_t v,
+849: 			uint32_t acc_flags)
+850: {
+851: 	if (amdgpu_device_skip_hw_access(adev))
+852: 		return;
+853: 
+854: 	if ((reg * 4) < adev->rmmio_size) {
+855: 		if (!(acc_flags & AMDGPU_REGS_NO_KIQ) &&
+856: 		    amdgpu_sriov_runtime(adev) &&
+857: 		    down_read_trylock(&adev->reset_domain->sem)) {
+858: 			amdgpu_kiq_wreg(adev, reg, v, 0);
+859: 			up_read(&adev->reset_domain->sem);
+860: 		} else {
+861: 			writel(v, ((void __iomem *)adev->rmmio) + (reg * 4));
+862: 		}
+863: 	} else {
+864: 		adev->pcie_wreg(adev, reg * 4, v);
+865: 	}
+866: 
+867: 	trace_amdgpu_device_wreg(adev->pdev->device, reg, v);
+868: }
+869: 
+
+3617: static int amdgpu_device_ip_fini_early(struct amdgpu_device *adev)
+3618: {
+3619: 	int i, r;
+3620: 
+3621: 	for (i = 0; i < adev->num_ip_blocks; i++) {
+3622: 		if (!adev->ip_blocks[i].version->funcs->early_fini)
+3623: 			continue;
+3624: 
+3625: 		r = adev->ip_blocks[i].version->funcs->early_fini(&adev->ip_blocks[i]);
+3626: 		if (r) {
+3627: 			dev_dbg(adev->dev,
+3628: 				"early_fini of IP block <%s> failed %d\n",
+3629: 				adev->ip_blocks[i].version->funcs->name, r);
+3630: 		}
+3631: 	}
+3632: 
+3633: 	amdgpu_device_set_pg_state(adev, AMD_PG_STATE_UNGATE);
+3634: 	amdgpu_device_set_cg_state(adev, AMD_CG_STATE_UNGATE);
+3635: 
+3636: 	amdgpu_amdkfd_suspend(adev, true);
+3637: 	amdgpu_userq_suspend(adev);
+3638: 
+3639: 	/* Workaround for ASICs need to disable SMC first */
+3640: 	amdgpu_device_smu_fini_early(adev);
+3641: 
+3642: 	for (i = adev->num_ip_blocks - 1; i >= 0; i--) {
+3643: 		if (!adev->ip_blocks[i].status.hw)
+3644: 			continue;
+3645: 
+3646: 		amdgpu_ip_block_hw_fini(&adev->ip_blocks[i]);
+3647: 	}
+3648: 
+3649: 	if (amdgpu_sriov_vf(adev)) {
+3650: 		if (amdgpu_virt_release_full_gpu(adev, false))
+3651: 			dev_err(adev->dev,
+3652: 				"failed to release exclusive mode on fini\n");
+3653: 	}
+3654: 
+3655: 	return 0;
+3656: }
+3657: 
+
+3669: static int amdgpu_device_ip_fini(struct amdgpu_device *adev)
+3670: {
+3671: 	int i, r;
+3672: 
+3673: 	amdgpu_cper_fini(adev);
+3674: 
+3675: 	if (amdgpu_sriov_vf(adev) && adev->virt.ras_init_done)
+3676: 		amdgpu_virt_release_ras_err_handler_data(adev);
+3677: 
+3678: 	if (adev->gmc.xgmi.num_physical_nodes > 1)
+3679: 		amdgpu_xgmi_remove_device(adev);
+3680: 
+3681: 	amdgpu_amdkfd_device_fini_sw(adev);
+3682: 
+3683: 	for (i = adev->num_ip_blocks - 1; i >= 0; i--) {
+3684: 		if (!adev->ip_blocks[i].status.sw)
+3685: 			continue;
+3686: 
+3687: 		if (adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_GMC) {
+3688: 			amdgpu_ucode_free_bo(adev);
+3689: 			amdgpu_free_static_csa(&adev->virt.csa_obj);
+3690: 			amdgpu_device_wb_fini(adev);
+3691: 			amdgpu_device_mem_scratch_fini(adev);
+3692: 			amdgpu_ib_pool_fini(adev);
+3693: 			amdgpu_seq64_fini(adev);
+3694: 			amdgpu_doorbell_fini(adev);
+3695: 		}
+3696: 		if (adev->ip_blocks[i].version->funcs->sw_fini) {
+3697: 			r = adev->ip_blocks[i].version->funcs->sw_fini(&adev->ip_blocks[i]);
+3698: 			/* XXX handle errors */
+3699: 			if (r) {
+3700: 				dev_dbg(adev->dev,
+3701: 					"sw_fini of IP block <%s> failed %d\n",
+3702: 					adev->ip_blocks[i].version->funcs->name,
+3703: 					r);
+3704: 			}
+3705: 		}
+3706: 		adev->ip_blocks[i].status.sw = false;
+3707: 		adev->ip_blocks[i].status.valid = false;
+3708: 	}
+3709: 
+3710: 	for (i = adev->num_ip_blocks - 1; i >= 0; i--) {
+3711: 		if (!adev->ip_blocks[i].status.late_initialized)
+3712: 			continue;
+3713: 		if (adev->ip_blocks[i].version->funcs->late_fini)
+3714: 			adev->ip_blocks[i].version->funcs->late_fini(&adev->ip_blocks[i]);
+3715: 		adev->ip_blocks[i].status.late_initialized = false;
+3716: 	}
+3717: 
+3718: 	amdgpu_ras_fini(adev);
+3719: 	amdgpu_uid_fini(adev);
+3720: 
+3721: 	return 0;
+3722: }
+3723: 
+3724: /**
+3725:  * amdgpu_device_delayed_init_work_handler - work handler for IB tests
+3726:  *
+3727:  * @work: work_struct.
+3728:  */
+3729: static void amdgpu_device_delayed_init_work_handler(struct work_struct *work)
+3730: {
+3731: 	struct amdgpu_device *adev =
+3732: 		container_of(work, struct amdgpu_device, delayed_init_work.work);
+3733: 	int r;
+3734: 
+
+4945: void amdgpu_device_fini_hw(struct amdgpu_device *adev)
+4946: {
+4947: 	dev_info(adev->dev, "amdgpu: finishing device.\n");
+4948: 	flush_delayed_work(&adev->delayed_init_work);
+4949: 
+4950: 	if (adev->mman.initialized)
+4951: 		drain_workqueue(adev->mman.bdev.wq);
+4952: 	adev->shutdown = true;
+4953: 
+4954: 	unregister_pm_notifier(&adev->pm_nb);
+4955: 
+4956: 	/* make sure IB test finished before entering exclusive mode
+4957: 	 * to avoid preemption on IB test
+4958: 	 */
+4959: 	if (amdgpu_sriov_vf(adev)) {
+4960: 		amdgpu_virt_request_full_gpu(adev, false);
+4961: 		amdgpu_virt_fini_data_exchange(adev);
+4962: 	}
+4963: 
+4964: 	/* disable all interrupts */
+4965: 	amdgpu_irq_disable_all(adev);
+4966: 	if (adev->mode_info.mode_config_initialized) {
+4967: 		if (!drm_drv_uses_atomic_modeset(adev_to_drm(adev)))
+4968: 			drm_helper_force_disable_all(adev_to_drm(adev));
+4969: 		else
+4970: 			drm_atomic_helper_shutdown(adev_to_drm(adev));
+4971: 	}
+4972: 	amdgpu_fence_driver_hw_fini(adev);
+4973: 
+4974: 	if (adev->pm.sysfs_initialized)
+4975: 		amdgpu_pm_sysfs_fini(adev);
+4976: 	if (adev->ucode_sysfs_en)
+4977: 		amdgpu_ucode_sysfs_fini(adev);
+4978: 	amdgpu_device_attr_sysfs_fini(adev);
+4979: 	amdgpu_fru_sysfs_fini(adev);
+4980: 
+4981: 	amdgpu_reg_state_sysfs_fini(adev);
+4982: 	amdgpu_xcp_sysfs_fini(adev);
+4983: 
+4984: 	/* disable ras feature must before hw fini */
+4985: 	amdgpu_ras_pre_fini(adev);
+4986: 
+4987: 	amdgpu_ttm_set_buffer_funcs_status(adev, false);
+4988: 
+4989: 	amdgpu_device_ip_fini_early(adev);
+4990: 
+4991: 	amdgpu_irq_fini_hw(adev);
+4992: 
+4993: 	if (adev->mman.initialized)
+4994: 		ttm_device_clear_dma_mappings(&adev->mman.bdev);
+4995: 
+4996: 	amdgpu_gart_dummy_page_fini(adev);
+4997: 
+4998: 	if (drm_dev_is_unplugged(adev_to_drm(adev)))
+4999: 		amdgpu_device_unmap_mmio(adev);
+5000: 
+5001: }
+5002: 
+5003: void amdgpu_device_fini_sw(struct amdgpu_device *adev)
+5004: {
+5005: 	int i, idx;
+5006: 	bool px;
+5007: 
+5008: 	amdgpu_device_ip_fini(adev);
+5009: 	amdgpu_fence_driver_sw_fini(adev);
+5010: 	amdgpu_ucode_release(&adev->firmware.gpu_info_fw);
+5011: 	adev->accel_working = false;

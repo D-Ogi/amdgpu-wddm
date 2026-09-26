@@ -1,0 +1,12 @@
+{"State":3}
+START dEQP-VK.wsi.win32.swapchain.destroy.old_swapchain 2026-09-25T07:27:50.7842714+02:00
+PASS dEQP-VK.wsi.win32.swapchain.destroy.old_swapchain 2026-09-25T07:27:51.8712049+02:00
+START dEQP-VK.wsi.win32.swapchain.destroy.old_swapchain_acquired_image 2026-09-25T07:27:51.8732069+02:00
+PASS dEQP-VK.wsi.win32.swapchain.destroy.old_swapchain_acquired_image 2026-09-25T07:27:53.1743642+02:00
+START dEQP-VK.wsi.win32.swapchain.destroy.retired_swapchain_present 2026-09-25T07:27:53.1963439+02:00
+PASS dEQP-VK.wsi.win32.swapchain.destroy.retired_swapchain_present 2026-09-25T07:27:54.2832986+02:00
+START dEQP-VK.wsi.win32.swapchain.render.basic 2026-09-25T07:27:54.2852800+02:00
+PASS dEQP-VK.wsi.win32.swapchain.render.basic 2026-09-25T07:28:05.9633153+02:00
+PASS
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="2"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Get-ScheduledTask BC250-M10-CtsSmoke04 | Select-Object State | ConvertTo-Json -Compress</AV><AI>1710166281</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>1/1 completed</SD></PR></MS></Obj><Obj S="progress" RefId="3"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>

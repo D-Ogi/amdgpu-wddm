@@ -1,0 +1,9 @@
+Get-ScheduledTask : No MSFT_ScheduledTask objects found with property 'TaskName' equal to 
+'BC250-M9-Native131Control'.  Verify the value of the property and retry.
+At C:\BC250\tmp\native131-observe.ps1:2 char:1
++ Get-ScheduledTask BC250-M9-Native131Control | Select-Object State
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (BC250-M9-Native131Control:String) [Get-ScheduledTa 
+   sk], CimJobException
+    + FullyQualifiedErrorId : CmdletizationQuery_NotFound_TaskName,Get-ScheduledTask
+ 

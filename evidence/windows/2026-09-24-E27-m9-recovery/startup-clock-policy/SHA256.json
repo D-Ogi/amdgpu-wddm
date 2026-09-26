@@ -1,0 +1,23 @@
+{
+  "clock-policy-v2.log": "e48cdc0f64ade53b192ea5e8578e4b3be7754dabb01539883a616e197d540bd6",
+  "clock-policy-v3.log": "5e16ec6369dfecfa58d3ef13acd864429e98e2f356db4b669e5f2897b36a9bd8",
+  "clock-policy-v4.log": "524ee7f7d911168b623b96cebeaf84e582bc5614096f1a85c6a4840639c19f5d",
+  "clock-policy.log": "311a7d32724517cb58e42fb710ce7e217369a6daa68ebbb6d2a2a95fec651e30",
+  "clock-readback-control-v2.log": "66139ee8e76d3984a1ec9e838cd1a815961e9a2f4d0de92ac5cd96725cffc805",
+  "clock-readback-control.log": "468f2869ed06e7c48cfdd978bc8df139f681be20f94de54273c07ba8eed98da6",
+  "clock-readback-mutated.c": "f81675957263bde1c7a85c53b48040b815e7e24eb3b1358ca21c65c8cd7b9d19",
+  "clock-unlock-control-v2.log": "e547a690745b3a3cc7c22efa26bb084da58bfd5c8b269f67786c475e9fd7ae9d",
+  "clock-unlock-control.log": "d2b5d1b4e4b32b7b2afcbe1b88edc9d9452972695fd59581d70b5e9ca4eb956f",
+  "clock-unlock-mutated.c": "8e1d38a9f72ca52bf533af53d2bf1ef8e380626c90d865be43821968542333a4",
+  "RESULT.md": "18800ee903b99e31242d4e31874cb19d6b7e71f61a01c0281aa4c9ef5ec3c489",
+  "validation.json": "266625128b43d02627eede75369d62dafe336d8e60d2816bf51520572cd739f6",
+  "source/driver/amdgpu-import/cyan_skillfish_clock.inc": "159e245073b39c7d88262f44ede46dbfbb5a1f759e06f322bb0a6bd39c79fd35",
+  "source/driver/amdgpu-import/smu_v11_8_ppsmc.h": "68910092a81c6ec8faf26a3cf865a7d823caf0f9a01c87fac96e5ea562ee247f",
+  "source/driver/shim/bc250_clock.c": "060a5f15bdd153916714dc3fb3b59fa272b2b2164cef6e9102dfe7b6cc8165f9",
+  "source/driver/shim/include/bc250_clock.h": "650646bb1f26643fc100729a1c5c48798dda3ad28b90e3a7c5c36f941bd1b1d8",
+  "source/driver/shim/test/clock_test.c": "bba9bf0372e5d86614e4328a3c03320b988b04f91ac8d976620feec1dba154da",
+  "source/driver/shim/test/extract_clock.py": "932e9c05bf310223d85ebdb8b7d1c5b13ff70a22710dc3a4b695fcef9d429734",
+  "source/driver/shim/test/run_clock.ps1": "6365872ad2c10339fe196494f5049861fa7c02b343fc379e3da133aa8a2f9aba",
+  "source/driver/amdgpu-import/reference/cyan_skillfish_ppt.c": "6f14558d686cc4e45350a1f3b50dbb9726abd6fbff7d6d0da42180fe84e800da",
+  "source/docs/design/startup-clock-ownership.md": "bf58e827b109ae306697ef4a294969a529dbb1dd3f55d93206ecf1671eb31316"
+}

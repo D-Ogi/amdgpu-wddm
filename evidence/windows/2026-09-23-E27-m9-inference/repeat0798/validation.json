@@ -1,0 +1,74 @@
+[
+  {
+    "name": "stories15M-1",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  {
+    "name": "stories15M-2",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  {
+    "name": "stories15M-3",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  {
+    "name": "stories15M-4",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  {
+    "name": "tinyllama-1",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  {
+    "name": "tinyllama-2",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  {
+    "name": "tinyllama-3",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  {
+    "name": "tinyllama-4",
+    "exit": 0,
+    "reference_match": true,
+    "quiet_loader": true,
+    "progress": true,
+    "full_offload": true,
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  }
+]

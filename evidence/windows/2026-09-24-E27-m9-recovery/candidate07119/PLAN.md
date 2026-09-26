@@ -1,0 +1,5 @@
+# Candidate119 prepared capture arena hardware validation
+
+Hypothesis: the shared reservation preserves real GPU paging content for sequential and concurrent clients without heap captures on the tested workload. Candidate0.7.119.1, SYS4374CB20857D0CA5D09D8EFCF61F5D35718633D568571EF41FE717900E15236E; M375 host/source evidence. Verify unit A boot08:06:02 has not initialized full GPU, gatesclosed, STOP absent,1000MHz/820mV,temp<85C. Install display-only without reboot; first full startup then unchanged64KiB probe. Preserve and validate before1GiB full-content3cycles and two concurrently launched64MiB clients in the SAME initialized device session. Collect raw before/after counters and every byte-oracle output. Concurrent launch does not prove same-system-context callback interleaving or simultaneous arena spans; do not overclaim.
+
+No warm retry, no routine stop/reboot. On passing workloads leave full driver initialized for subsequent M9 work, confirm guard and report actual gates/state. On failure preserve logs and recover only as required. All outputs exclusive. Broader DMA/cache/PFN/alias/demand-bound/performance and warm startup requirements remain open.

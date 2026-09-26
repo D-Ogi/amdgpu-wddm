@@ -1,0 +1,15 @@
+{
+  "snapshots": 16,
+  "stable_timing_tuples": 16,
+  "latch_match_pending_clear": 16,
+  "reference_hz": 600000000,
+  "pixel_hz": 154000000,
+  "decoded_refresh_hz": 59.95017128620368,
+  "frames": 1076,
+  "interval_seconds_min": 17.9466974,
+  "interval_seconds_max": 17.946874,
+  "counter_rate_hz": 59.95502581835588,
+  "frame_quantization_error": 0.08712324820930917,
+  "decoder_output": "decode status 0, reads 22\nactive 1920x1200 total 2080x1235 pixel 154000000 Hz hsync 154000000/2080 Hz vsync 154000000/2568800 Hz (59.950171286)\n",
+  "limitations": "Observation idles graphics scheduling; stable scanned buffer only, not a pending-flip stress test."
+}

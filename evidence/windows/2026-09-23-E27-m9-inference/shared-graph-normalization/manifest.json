@@ -1,0 +1,10 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "working_tree": "dirty; no commit or deployment",
+  "source_sha256": {
+    "driver/kmd/gfx.c": "633f5db86684c1825f851c341587868f931d32ab5613cf1b24a89e2dba729335",
+    "driver/kmd/paging_permutation.c": "73d20629c28f8ec075c6d68727363086fc7eeadf0c1c288d8fae6bd9b52c4821",
+    "driver/kmd/test/paging_graph_normalize_bench.c": "b8a8b24af1dbffaf10b9fec240af3283534a4c1b724fef5a47549c947d33a9bf"
+  },
+  "sys_sha256": "9AAD070D193D975F041DD71BAD8EE249E098C5A2B6E74D72091AF99E77296E84"
+}

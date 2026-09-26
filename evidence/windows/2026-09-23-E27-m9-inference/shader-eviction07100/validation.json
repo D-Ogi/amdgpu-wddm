@@ -1,0 +1,26 @@
+{
+  "type3-positive": {
+    "exit": 0,
+    "rounds": 16,
+    "evicted_residencies": [],
+    "restored": 0
+  },
+  "type3-evict": {
+    "exit": 0,
+    "rounds": 16,
+    "evicted_residencies": [
+      "2",
+      "2",
+      "2"
+    ],
+    "restored": 3
+  },
+  "type3-stale": {
+    "exit": 1,
+    "rounds": 2,
+    "evicted_residencies": [
+      "2"
+    ],
+    "restored": 1
+  }
+}

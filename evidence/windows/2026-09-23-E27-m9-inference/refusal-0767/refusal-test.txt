@@ -1,0 +1,3 @@
+after.c
+PASS: both watchdogs keep pending work, emit no fake completion, block later software fences, accept only actual late arrival, and preserve normal completion
+PASS: refusals retain outstanding work, block software retirement, preserve actual predecessor fence, and unverified reset fails without changing pending fences

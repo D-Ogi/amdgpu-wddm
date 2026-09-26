@@ -1,0 +1,63 @@
+{
+  "first_phase_observations": {
+    "before-psp": {
+      "control": "00000000",
+      "status2": "00000008"
+    },
+    "after-psp": {
+      "control": "00000001",
+      "status2": "01004008"
+    },
+    "after-stop": {
+      "control": "00000000",
+      "status2": "00000008"
+    },
+    "before-gfx-teardown": {
+      "control": "00000000",
+      "status2": "00000008"
+    },
+    "before-retire-unbind": {
+      "control": "00000000",
+      "status2": "00000008"
+    },
+    "after-retire-unbind": {
+      "control": "00000000",
+      "status2": "00000008"
+    },
+    "after-retire-gfxhub-flush": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "after-retire-mmhub-flush": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "before-gfx-memory-release": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "after-gfx-memory-release": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "before-psp-unload": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "after-tmr-destroy": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "after-psp-ring-stop": {
+      "control": "00000000",
+      "status2": "01000008"
+    },
+    "after-gart-stop": {
+      "control": "00000000",
+      "status2": "01000008"
+    }
+  },
+  "all_read_status_success": true,
+  "gtt_retirement_count": 25,
+  "stop_stage79": true
+}

@@ -1,0 +1,14 @@
+
+   Id      CPU StartTime            Responding
+   --      --- ---------            ----------
+11216 82.40625 9/24/2026 5:16:33 PM       True
+                                              
+                                              
+    asking the context to signal the monitored fence to 1747
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1747 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001CEFA200000
+
+

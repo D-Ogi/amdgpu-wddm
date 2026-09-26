@@ -1,6 +1,6 @@
-fbdump runs 001-003, 2026-09-22 ~06:30, bc250kmd 0.7.22 (b197b2b, clean worktree build, .sys sha256 prefix
+fbdump runs 001-003, 2026-09-22 ~06:30, bc250kmd 0.7.22 (4c233e3, clean worktree build, .sys sha256 prefix
 9d137aa9dc44fec8) display-only on unit A, owner absent. The scanout dump escape reads HUBP0's surface address from the
-DCN registers and copies the scanned-out surface in 64-row bands (commit 71a5752).
+DCN registers and copies the scanned-out surface in 64-row bands (commit e13546e).
 run 001 (not kept separately): EnableMmio alone -> refused "band not inside VRAM or the firmware framebuffer" (the POST
   framebuffer Windows hands the driver is the BAR alias, the DCN address is the system physical 0x270000000; the
   carve-out range is known only with EnableVram).

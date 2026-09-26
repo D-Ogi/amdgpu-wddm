@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+112471 checks, 0 failures: PASS
+compile-check (kernel flags, same source, no link)
+
+paging_pt_shadow_test.exe exit code 0

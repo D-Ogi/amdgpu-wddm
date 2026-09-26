@@ -1,0 +1,9 @@
+{
+  "driver/shim/bc250_gmc.c": "998e00daf885610806582f625d71ef2a2faabde0504e180562cfabbdc6aa7392",
+  "driver/shim/include/bc250_gmc.h": "b0f113724e276f173dc0811b9aed6393e604bae0c01218b7b00e95fb298f72f8",
+  "driver/kmd/gart.c": "fb96d09d56dafba9ae267c18556b843e81816fc8e85f4da3d22dc0d19abcf0eb",
+  "driver/kmd/startup.c": "fecaa0f79eb9993a459d5d600a43ce93617ab16d3c61b7d10efb1db9ffd6703b",
+  "driver/kmd/psp.c": "10bdb18babb54457a83ca1ad38f78e51555bb51cd558dd12540ff1bfffdfa23e",
+  "driver/shim/bc250_psp.c": "4c2874a5df1d144fe0ef299718ba3325191247154c7147bbe53fb550451e88dc",
+  "driver/amdgpu-import/psp_v11_0_8.c": "a89117eb6066a668f23980936d77fa781873759befdf6a2aff21f1fc2fcae52f"
+}

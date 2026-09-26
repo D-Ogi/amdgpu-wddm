@@ -1,0 +1,23 @@
+{
+    "UnconfirmedStarts":  0,
+    "EnableFullWddm":  2
+}
+health abi=1 version=0x00070092 flags=7 generation=34815300295 epoch=13 completed=36 age_ms=29341 ready_ms=261772
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67250 ready=1
+             1024 lines printed
+
+TaskName                    State
+--------                    -----
+BC250-M9-Resume146Hibernate Ready
+BC250-M9-Resume146Probe     Ready
+
+
+
+ProcessName   Id StartTime           
+-----------   -- ---------           
+bc250mon    4384 9/25/2026 1:59:44 AM
+dwm         1736 9/25/2026 1:59:43 AM
+LogonUI     2756 9/25/2026 3:01:36 AM
+
+
+collected

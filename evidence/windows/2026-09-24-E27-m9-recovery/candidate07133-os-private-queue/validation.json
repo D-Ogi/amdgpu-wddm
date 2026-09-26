@@ -1,0 +1,97 @@
+{
+  "sys_sha256": "37A52F95CD90726D909FBF273D55B9336D766E2997668BA713B8ADC45BCF4A87",
+  "builder_checks": 907971,
+  "builder_failures": 0,
+  "queue_checks": 711,
+  "queue_failures": 0,
+  "late_release_mutation_failures": 123,
+  "shader_hashes": [
+    "0x7018cdd513a22325",
+    "0x7018cdd513a22325",
+    "0xbc33291b528dfab4",
+    "0x3ee3408930ca6e61",
+    "0x24396beb3a1a7367",
+    "0x24396beb3a1a7367",
+    "0x0eb467ee3ae0f043",
+    "0xe9fc02f21706317a"
+  ],
+  "stories15M": {
+    "full_reference_match": true,
+    "layers": 7,
+    "reference_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  "tinyllama": {
+    "full_reference_match": true,
+    "layers": 23,
+    "reference_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  },
+  "residency_readbacks": [
+    [
+      "1073741824",
+      "1024"
+    ],
+    [
+      "1073741824",
+      "2048"
+    ],
+    [
+      "1073741824",
+      "3072"
+    ],
+    [
+      "1073741824",
+      "4096"
+    ]
+  ],
+  "gfx": [
+    6706,
+    6706,
+    0,
+    0
+  ],
+  "sdma": [
+    30673,
+    30673,
+    0,
+    0
+  ],
+  "native_transfers_fills_bytes": [
+    98,
+    92,
+    13118906368
+  ],
+  "final_time": "2026-09-24T18:16:21",
+  "capture_reserved_heap": [
+    0,
+    0
+  ],
+  "native_exits": "all zero; worker, eight shaders, both models,64MiB/1GiB residency",
+  "exact_disjoint_checks": 50,
+  "restore_ms": [
+    1766,
+    1609,
+    1578
+  ],
+  "previous132_restore_ms": [
+    2328,
+    1562,
+    1469
+  ],
+  "os_dwm_retained": true,
+  "queue_admissions": 30673,
+  "large_before_native": [
+    65,
+    71,
+    2381488128
+  ],
+  "large_after_native": [
+    98,
+    92,
+    13118906368
+  ],
+  "large_native_delta": [
+    33,
+    21,
+    10737418240
+  ]
+}

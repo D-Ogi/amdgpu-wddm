@@ -1,0 +1,9 @@
+{
+  "driver/kmd/pnp.c": "67cbe42b2ef8e3c8982cf98dde5d6cbf7d687db553728f1e0e1af567a0009aaf",
+  "driver/kmd/wddm.c": "93fb707a289ea64082c19800a3cbbebb8b88aa0a97948984ede854ab5b01f881",
+  "driver/kmd/gart.c": "8dc02c9175d5b6e11b9086eea291f2ec795102a8fb242515bc7a6a1853ddef99",
+  "driver/kmd/psp.c": "fdd2c9dace1b14a2a3cffd6428a73ace8867f0581dd684d2d4c0a3c3e484d1aa",
+  "driver/kmd/gfx.c": "59b07f77f56ae178a6f04d3001ff2025fd0f80f6b987460d127cad5f597f0292",
+  "experiments/E27-m9-inference/ops-gpu-016.ps1": "c60c1363cb05907c3236c244bb3b7dc6f8e6436bcd6ab636fdd665d0d3a2b16b",
+  "evidence/windows/2026-09-21-E16-run-009/README.txt": "44efbac13fefe9ead307e259a7d5a4940571476ea71a7f7e30eead31d7ed1eab"
+}

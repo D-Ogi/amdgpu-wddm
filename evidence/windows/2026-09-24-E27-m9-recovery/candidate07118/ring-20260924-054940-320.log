@@ -1,0 +1,27 @@
+bc250kmd 0x00070075 log snapshot: 26 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 0
+     2      0.002 stage 20
+     3     30.930 stage 30
+     4     30.932 stage 31
+     5     30.932 stage 32
+     6     30.932 post display 1920x1200 pitch 7680 format 22 target 4294967295
+     7     30.932 stage 33
+     8     30.932 stage 34
+     9     30.932 interrupt resource 1: message, vector 0x51, flags 0x3
+    10     30.934 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11     30.934 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12     30.934 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13     30.934 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14     30.934 gart: ready, dummy page at 0x26FFFA000
+    15     30.934 psp: ready
+    16     30.934 gpumem: ready, doorbells at 0xD0000000
+    17     30.934 gfx: ready, GPU submission allowed, paging node allowed
+    18     30.934 ih: ready
+    19     30.934 stage 35
+    20     30.934 stage 39
+    21     31.002 stage 50
+    22     31.006 stage 60
+    23     31.008 stage 61
+    24    104.810 stage 70
+    25    104.810 stage 79

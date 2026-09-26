@@ -1,0 +1,19 @@
+{
+  "candidate07106-control-stop.log": "fdd8f4246ebcb4ff85ba5c84b276ad9c8b4c08a379b3dcc0255b9abb0dfa0f38",
+  "candidate07106-control.log": "8e81f8660a6225fe444b5ccc7d1d6c228a10623ee76a03efc363915ca36d1746",
+  "candidate07106-control.ps1": "d7a5ada7cf680a9fb8756408798e6301a31ba813df06ab6869b679a9ad873c7c",
+  "candidate07106-read-state.log": "f128b650a5f40aeaee38b7b668b9965fff1f8df8fbbd7f426d5be7b853d51e64",
+  "candidate07106-read-state.ps1": "bb346e40077b6e44e399ec52e55e6be103636ec0aa375633b30092f37e6f3766",
+  "gpu-residency07106-control.log": "761da398a5ae99d601f860ad47edf53392347d739a29b22a2514dd5f2f246be6",
+  "gpu-residency07106-control.ps1": "87c4bed8cfd5316366a12cbdb49c51adbaf937d986ee8dcb4d5ca9374ce59429",
+  "PLAN.md": "dde48e973698054ea5e41c921d8931fa4bcf1ff937d9c6ed3adb3eb4b61c91d4",
+  "RESULT.md": "bd60e2ee990ccd3f81a408d2d1ef19c372e0f83a8e2d5d6b9956a982ec0ac39f",
+  "ring-20260924-022225-276.log": "f275a7faa687cfaace29b25598952d08d45e192dec4979aa6941a95098e849e5",
+  "ring-20260924-022331-575.log": "341464f90743dda1cad38119cdafb45f16f4d2f2679cdd54b42941c8d7ee6137",
+  "validation.json": "d497d103ea745dde3fa6756a48a197e2fa42b2ca0f0396e53397e50dee67939a",
+  "vram64k-after.log": "863db42f74efb09fb03e6ae7505196282297dbc8cb6a3dece320d5bf3823a95f",
+  "vram64k-before.log": "2c9a0bff3fa1d748e3db062356647242baba50b1bcff386ceeef0928ef75ca97",
+  "vram64k.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "vram64k.exit": "9aca8dfce962538fb8131d73f84cada05e4dc79f5a0d3612c511b1150f3e33e2",
+  "vram64k.out": "a87a8354b1431d45b1e8833178a6de9abb4c7cfd58f4b2ec47bf4707e7df21c7"
+}

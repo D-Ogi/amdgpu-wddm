@@ -1,0 +1,19 @@
+{
+  "header_sha256": "cba20414ecf02e91bafdcfbff7d4ba686326f0bdaf236d1a883364f08410c167",
+  "observations": [
+    {
+      "phase": "before-psp",
+      "control": "0x00000000",
+      "status2": "0x01000008",
+      "rlc_busy_mask": "0x1000000",
+      "rlc_busy_set": true
+    },
+    {
+      "phase": "after-psp",
+      "control": "0x00000000",
+      "status2": "0x01000008",
+      "rlc_busy_mask": "0x1000000",
+      "rlc_busy_set": true
+    }
+  ]
+}

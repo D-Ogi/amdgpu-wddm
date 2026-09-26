@@ -1,0 +1,24 @@
+Extracted actual visibility, synchronized enable/ISR and visibility DDI
+display_visibility_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 63: model.irq
+FAIL 75: model.irq
+FAIL 46: model.irq
+FAIL 277: d.DcnVsyncArmed==1 && model.sync_calls==1 && (model.sync&other)==other
+FAIL 63: model.irq
+FAIL 75: model.irq
+FAIL 46: model.irq
+FAIL 63: model.irq
+FAIL 75: model.irq
+FAIL 46: model.irq
+FAIL 63: model.irq
+FAIL 75: model.irq
+FAIL 46: model.irq
+FAIL 287: DcnVsyncEnable(&d,FALSE)==STATUS_UNSUCCESSFUL
+FAIL 287: model.writes==writes && d.DcnVsyncArmed==1
+FAIL 296: model.arms==arms && d.DcnVsyncArmed==1
+FAIL 63: model.irq
+FAIL 75: model.irq
+FAIL 46: model.irq
+display visibility/sync: 115 checks, 19 failures

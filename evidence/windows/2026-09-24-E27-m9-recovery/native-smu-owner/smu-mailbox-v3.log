@@ -1,0 +1,8 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_test.c
+Generowanie kodu...
+bc250_smu.c
+SMU integrated clock: 607 checks, 0 failures

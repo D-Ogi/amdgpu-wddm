@@ -1,0 +1,46 @@
+  ..
+  ----------------------------------------------------------------------
+  Ran 2 tests in 0.005s
+  System.Management.Automation.RemoteException
+  OK
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\../../../driver/kmd/bc250kmd_escape.h(84): error C2059: błąd składniowy: „stała”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2059: błąd składniowy: „stała”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2143: błąd składniowy: brakuje „)” przed „*”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2143: błąd składniowy: brakuje „{” przed „*”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): warning C4142: „ULONG”: nieszkodliwa ponowna definicja typu
+  P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\shared\minwindef.h(51): note: zobacz deklarację „ULONG”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2370: „ULONG”: zmiana definicji; różne klasy magazynu
+  P:\bc-250\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0\shared\minwindef.h(51): note: zobacz deklarację „ULONG”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „bytes”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): warning C4218: użyto niestandardowego rozszerzenia: należy określić co najmniej klasę magazynu lub typ
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2059: błąd składniowy: „)”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): warning C4431: brak specyfikatora typu - założono, że int. Uwaga: C nie obsługuje już domyślnie typu int
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): error C2054: oczekiwano "(" postępuj zgodnie z "bytes"
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(333): error C2146: błąd składniowy: brakuje „;” przed identyfikatorem „data”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(342): warning C4013: niezdefiniowany "Bc250ClockControl"; przy założeniu, że extern zwraca int
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(345): error C2224: po lewej ".AbiVersion" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(345): error C2224: po lewej ".ObservedMHz" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(345): error C2224: po lewej ".ObservedVid" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(345): error C2224: po lewej ".TemperatureMc" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(345): error C2224: po lewej ".Ready" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(344): warning C4473: „printf”: przekazano niewystarczającą liczbę argumentów dla ciągu formatowania
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(344): note: symbole zastępcze i ich parametry oczekują 5 argumentów ze zmienną liczbą argumentów, ale podano następującą liczbę zmiennych argumentów: 0
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(344): note: brakujący argument 1 o zmiennej liczbie parametrów jest wymagany w ciągu formatu „%lu”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(348): error C2224: po lewej ".InitialMHz" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(348): error C2224: po lewej ".InitialVid" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(348): error C2224: po lewej ".ExpectedVid" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(348): error C2224: po lewej ".VoltageStaged" musi być typ struct/union
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(347): warning C4473: „printf”: przekazano niewystarczającą liczbę argumentów dla ciągu formatowania
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(347): note: symbole zastępcze i ich parametry oczekują 6 argumentów ze zmienną liczbą argumentów, ale podano następującą liczbę zmiennych argumentów: 2
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(347): note: brakujący argument 3 o zmiennej liczbie parametrów jest wymagany w ciągu formatu „%lu”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(354): warning C4459: deklaracja „data” powoduje ukrycie deklaracji globalnej
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): note: zobacz deklarację „data”
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(388): warning C4459: deklaracja „data” powoduje ukrycie deklaracji globalnej
+  P:\BC-250\bc250-win\tools\win\bc250kmd_cli\bc250kmd_cli.c(314): note: zobacz deklarację „data”
+Exception: P:\BC-250\bc250-win\tools\win\bc250kmd_cli\build.ps1:39
+Line |
+  39 |  if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
+     |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl failed (2)

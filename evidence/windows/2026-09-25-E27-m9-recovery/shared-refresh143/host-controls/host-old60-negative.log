@@ -1,0 +1,5 @@
+test.c
+FAIL 131: description.RefreshRate.Numerator==s.VSyncFreq.Numerator && description.RefreshRate.Denominator==s.VSyncFreq.Denominator
+FAIL 133: (ULONGLONG)description.RefreshRate.Numerator*1000u != (ULONGLONG)60000u*description.RefreshRate.Denominator
+FAIL 139: Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS && reads==before && description.RefreshRate.Numerator==s.VSyncFreq.Numerator && description.RefreshRate.Denominator==s.VSyncFreq.Denominator
+inherited timing: 205 checks, 3 failures

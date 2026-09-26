@@ -1,0 +1,82 @@
+Opened log file 'C:\BC250\m9\radv-main-control2\stacks.txt'
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 0
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+*** wait with pending attach
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*
+Symbol search path is: srv*
+Executable search path is: 
+WARNING: Process 1868 is not attached as a debuggee
+         The process can be examined but debug events will not be received
+...................................
+Loading unloaded module list
+.
+Unable to add extension DLL: ntsdexts
+Unable to add extension DLL: uext
+Unable to add extension DLL: exts
+(74c.13c): Wake debugger - code 80000007 (first chance)
+win32u!NtUserWaitMessage+0x14:
+00007ffc`e5a31644 c3              ret
+0:000> cdb: Reading initial command '~* kb; lm m vulkan_radeon; qd'
+
+.  0  Id: 74c.13c Suspend: 1 Teb: 000000af`03c0d000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007ffc`e684170e     : 00000000`00000000 00000000`00000000 00000000`00000001 00000000`00000001 : win32u!NtUserWaitMessage+0x14
+00007ffc`e684157c     : 00005b5d`00000000 00000000`00000000 00007ffc`e68bba30 00000000`00000000 : USER32!DialogBoxIndirectParamAorW+0x37e
+00007ffc`e68bdc36     : 00000000`00010007 000000af`03efaae9 000000af`03efad20 0000023e`be7417e8 : USER32!DialogBoxIndirectParamAorW+0x1ec
+00007ffc`e68bc599     : 000000af`00007f01 00000000`00000000 000000af`00012012 00007ffc`000002f1 : USER32!SoftModalMessageBox+0x826
+00007ffc`e68bd378     : 00007ffc`00000047 00000000`00000800 00007ffc`e507c830 00000000`0000000e : USER32!DrawStateW+0x25d9
+00007ffc`e68bd3fe     : 00000000`00000047 00007ffc`00000047 00007ffc`00000003 00007ffc`e501bc28 : USER32!MessageBoxTimeoutW+0x198
+00007ffc`e501b7dd     : 00007ffc`e50794d8 00000000`00000040 ffffffff`ffffffff 00007ffc`e501bc99 : USER32!MessageBoxW+0x4e
+00007ffc`e501db56     : 00000000`00000003 00007ffc`e507c830 00000000`00012012 000000af`03efaf00 : ucrtbase!_threadid+0xecd
+00007ffc`e50205ef     : 00000000`00000067 00007ffc`739e07c5 00007ffc`741c4170 0000023e`be7260e0 : ucrtbase!setmbcp+0x286
+00007ffc`739e07c5     : 00007ffc`74314e26 0000023e`be72ef38 00007ffc`74314e26 0000023e`c4273250 : ucrtbase!get_wpgmptr+0xe3f
+00007ffc`739e17a4     : 0000023e`c4273250 0000023e`be73f660 00000000`00000000 00000000`00000000 : vulkan_radeon!vk_icdNegotiateLoaderICDInterfaceVersion+0x6af75
+00007ffc`739e046f     : 00000000`00000000 000000af`03efb600 00000000`fffffff7 0000023e`be6f4e18 : vulkan_radeon!vk_icdNegotiateLoaderICDInterfaceVersion+0x6bf54
+00007ffc`737c38f0     : 00000000`00000000 00007ffc`74c50b00 000000af`03efb600 00000000`00000000 : vulkan_radeon!vk_icdNegotiateLoaderICDInterfaceVersion+0x6ac1f
+00007ffc`737cbb57     : 000000af`03efc978 000000af`03efc978 000000af`03efc910 000000af`03efc978 : vulkan_radeon!vk_icdGetInstanceProcAddr+0x59250
+00007ffc`737cbeb0     : 00000000`00000000 000000af`03efee48 000000af`03efc940 0000023e`be703b50 : vulkan_radeon!vk_icdGetInstanceProcAddr+0x614b7
+00007ffc`737cc1d2     : 00000000`00000000 0000023e`c4233d90 0000023e`be6e4150 0000023e`be703b50 : vulkan_radeon!vk_icdGetInstanceProcAddr+0x61810
+00007ffc`737cb399     : 000000af`03eff4f0 00000000`00000001 00000000`00000004 00000000`00000d74 : vulkan_radeon!vk_icdGetInstanceProcAddr+0x61b32
+00007ffc`c49376a7     : 0000023e`be6e4150 00000000`00000000 000000af`00000000 000000af`03efee30 : vulkan_radeon!vk_icdGetInstanceProcAddr+0x60cf9
+*** WARNING: Unable to verify checksum for C:\BC250\m8\vkcompute.exe
+00007ff7`58674692     : 00000000`00000004 000000af`03eff4d8 00007ff7`58690868 0000023e`be65d5f2 : vulkan_1!vkResetEvent+0x560b7
+00007ff7`58672218     : 00000000`00000000 0000023e`c4282260 00000000`e6a28384 0000023e`c0310000 : vkcompute+0x4692
+00007ff7`586741c6     : 000000af`03eff740 00000000`00000004 00007ff7`5868f578 00007ff7`5868f5a8 : vkcompute+0x2218
+00007ff7`58676078     : 0000023e`be65d5b0 00007ff7`586760f1 00000000`00000000 00000000`00000000 : vkcompute+0x41c6
+00007ffc`e5d6259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : vkcompute+0x6078
+00007ffc`e7e4af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : KERNEL32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+
+   1  Id: 74c.300 Suspend: 1 Teb: 000000af`03c15000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007ffc`e7e258ae     : 0000023e`be650c50 0000023e`be650c50 00000000`00000001 0000023e`be650c50 : ntdll!NtWaitForWorkViaWorkerFactory+0x14
+00007ffc`e5d6259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlClearThreadWorkOnBehalfTicket+0x35e
+00007ffc`e7e4af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : KERNEL32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+start             end                 module name
+quit:

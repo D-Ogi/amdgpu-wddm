@@ -1,0 +1,6 @@
+test.c
+test.c(39): error C2143: błąd składniowy: brakuje „)” przed „sizeof”
+test.c(39): error C2143: błąd składniowy: brakuje „{” przed „sizeof”
+test.c(39): error C2059: błąd składniowy: „sizeof”
+paging_private.c
+Generowanie kodu...

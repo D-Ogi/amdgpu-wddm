@@ -1,0 +1,47 @@
+[
+  {
+    "time": "2026-09-23T00:59:04.463066400+01:59",
+    "pid": "940",
+    "data": {
+      "AgentID": "NULL",
+      "EventType": "  262146",
+      "PartitionId": "4294967295",
+      "EventDescription": "0 != ShadowSurfaceData.Pitch",
+      "EventData1": "1103",
+      "EventData2": "0",
+      "EventData3": "0",
+      "EventData4": "0",
+      "EventData5": "0"
+    }
+  },
+  {
+    "time": "2026-09-23T00:59:15.992278400+01:59",
+    "pid": "1992",
+    "data": {
+      "AgentID": "NULL",
+      "EventType": "  262146",
+      "PartitionId": "4294967295",
+      "EventDescription": "0 != ShadowSurfaceData.Pitch",
+      "EventData1": "1103",
+      "EventData2": "0",
+      "EventData3": "0",
+      "EventData4": "0",
+      "EventData5": "0"
+    }
+  },
+  {
+    "time": "2026-09-23T00:59:20.066679300+01:59",
+    "pid": "10408",
+    "data": {
+      "AgentID": "NULL",
+      "EventType": "  262146",
+      "PartitionId": "4294967295",
+      "EventDescription": "0 != StagingSurfaceData.Pitch",
+      "EventData1": "11478",
+      "EventData2": "0",
+      "EventData3": "0",
+      "EventData4": "0",
+      "EventData5": "0"
+    }
+  }
+]

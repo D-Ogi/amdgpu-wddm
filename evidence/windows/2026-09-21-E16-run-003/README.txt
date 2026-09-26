@@ -3,10 +3,10 @@ Files are copied from C:\BC250\e16\out, C:\BC250\e16-umd\out (the install) and C
 budget-reset.txt is the one line of the target's file that belongs to this run. Nothing was redacted: no MAC, serial,
 UUID or SSID occurs in these files.
 
-Build: the bc250kmd 0.7.3 binary of run 002 (commit 82d39fb, bc250kmd.sys sha256 b6b942122e21152c...), this time as
+Build: the bc250kmd 0.7.3 binary of run 002 (commit 83ce7bf, bc250kmd.sys sha256 b6b942122e21152c...), this time as
 the run 2 package of the same clean build: DriverVer 0.7.3.1, UserModeDriverName = bc250umd.dll (three times),
 bc250umd.dll (the stub of driver/umd-stub) installed. The ONE difference from run 002 is the package.
-Hypotheses H7 and H8 were written into the experiment's README before the run (commit fbae104).
+Hypotheses H7 and H8 were written into the experiment's README before the run (commit 34fe7fe).
 
 What happened, in order (local time = UTC + 2, file):
 

@@ -1,0 +1,22 @@
+
+
+Id        : 10856
+CPU       : 94.921875
+StartTime : 9/24/2026 11:58:19 AM
+
+
+
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1190000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1180000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 1959
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1959 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1190000

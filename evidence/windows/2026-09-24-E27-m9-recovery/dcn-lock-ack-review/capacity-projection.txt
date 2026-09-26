@@ -1,0 +1,5 @@
+Source projection only; not a hardware measurement.
+Current layout policy: WddmMemoryLayout; firmware FB assumed at offset 0, pitch 7680, height 1200.
+Top reservation: BC250_VRAM_TOP_RESERVED = 32 MiB; page tables: floor(available / 32, 64 KiB).
+carveout=8 GiB framebuffer=9240576 tables=267059200 app=8280080384 bytes (7.71142578 GiB)
+carveout=12 GiB framebuffer=9240576 tables=401276928 app=12440829952 bytes (11.58642578 GiB)

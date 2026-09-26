@@ -1,0 +1,7 @@
+{
+  "driver/shim/bc250_sdma.c": "6c1a12f6eb1b3ba8e65c53baab518ef5ca0573d1145cdfaf4ee6fd45fbdbd912",
+  "driver/shim/include/bc250_sdma.h": "d1c79bfb0df17a07f93e24bbb19426c834ff95e88c84f94c096dd845cf981e71",
+  "driver/shim/test/replay_gfx.c": "53827ac3caa0da4c73bc5787bfee5d7280e1d03a0876379ae85040bc713f2d7d",
+  "driver/shim/test/backend_trace.c": "09570e7168e32415aa7b474aa07d61e126c139639961d737f28fc9e440c15167",
+  "driver/shim/test/backend_trace.h": "069d5552ae83824e99f47535fb6abaaa4185d234fec32852503619a9b3e23eab"
+}

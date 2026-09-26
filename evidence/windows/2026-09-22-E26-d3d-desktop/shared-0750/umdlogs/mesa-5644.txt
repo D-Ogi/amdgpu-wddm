@@ -1,0 +1,3105 @@
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CloseAdapter
+CloseAdapter
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateBlendState
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateSampler
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateRasterizerState
+CreateDepthStencilState
+CreateDepthStencilState
+CreateDepthStencilState
+CreateDepthStencilState
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+SoSetTargets
+SetRenderTargets
+SetViewports
+SetScissorRects
+SetPredication
+IaSetTopology
+SetRasterizerState
+CalcPrivateResourceSize
+CreateResource
+CreatePixelShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreateVertexShader
+CreatePixelShader
+CreatePixelShader
+CreatePixelShader
+CreatePixelShader
+CreatePixelShader
+CreatePixelShader
+CreateElementLayout
+CreateElementLayout
+CreateElementLayout
+CreateElementLayout
+CreateElementLayout
+CreateElementLayout
+CreateElementLayout
+CreateElementLayout
+CreateVertexShader
+CreateElementLayout
+CalcPrivateResourceSize
+CreateResource
+SoSetTargets
+SetRenderTargets
+IaSetTopology
+SetRasterizerState
+SetViewports
+SetScissorRects
+SetPredication
+IaSetInputLayout
+IaSetVertexBuffers
+VsSetShader
+SetRasterizerState
+SetDepthStencilState
+IaSetTopology
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CalcPrivateResourceSize
+CreateResource
+CreateRenderTargetView
+CreateShaderResourceView
+CreateRenderTargetView
+SoSetTargets
+SetRenderTargets
+IaSetTopology
+IaSetInputLayout
+IaSetVertexBuffers
+VsSetShader
+SetRasterizerState
+SetViewports
+SetScissorRects
+SetDepthStencilState
+SetPredication
+PsSetSamplers
+VsSetShaderResources
+PsSetShaderResources
+IaSetVertexBuffers
+SetRenderTargets
+VsSetConstantBuffers
+PsSetConstantBuffers
+PsSetShaderResources
+VsSetConstantBuffers
+PsSetConstantBuffers
+PsSetShaderResources
+SetRasterizerState
+PsSetShaderResources
+SetRenderTargets
+SetScissorRects
+SetViewports
+ClearRenderTargetView
+SetRenderTargets
+Flush
+DestroyRenderTargetView
+DestroyShaderResourceView
+DestroyRenderTargetView
+DestroyResource
+Flush
+Flush
+Flush
+Flush
+SoSetTargets
+SetRenderTargets
+VsSetConstantBuffers
+PsSetConstantBuffers
+SetRasterizerState
+SetViewports
+SetScissorRects
+SetPredication
+CalcPrivateResourceSize
+CreateResource
+BC250 CreatePagingQueue 00000000
+BC250 Allocate 00000000 format 21 primary 0 handle 40001a80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001b00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001b80 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40001c00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001c80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001d00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001d80 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40001e00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001e80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001f00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001f80 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002000 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002080 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800000c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002100 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002180 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002200 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002280 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002300 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002380 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002400 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800004c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 400024c0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002540 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 400025c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002640 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 400026c0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002740 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 400027c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002840 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 400028c0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002940 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 400029c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002a40 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002ac0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002b40 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002bc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002c40 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002cc0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002d40 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002dc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002e40 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002ec0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40002f40 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002fc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800010c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003080 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003100 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003180 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003200 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003280 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003300 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003380 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003400 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003480 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003500 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003580 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003600 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003680 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003700 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80001840 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800018c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003780 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003800 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003880 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003900 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003980 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003a00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003a80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003b00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80001d00 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 80001e00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003b80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003c00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80001f00 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 80002000 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003c80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003d00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00000c0 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 80002180 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003d80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003e00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002280 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40003f00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00004c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002540 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40003f80 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004000 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002640 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002740 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004080 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004100 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002840 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002940 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004180 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004200 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002a40 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002b40 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004280 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004300 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002c40 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002d40 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004380 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004400 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002e40 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002f40 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004480 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004500 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00010c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003100 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004580 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004600 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003200 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003300 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004680 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004700 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003400 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003500 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004780 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004800 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+CalcPrivateResourceSize
+CreateResource
+CreateRenderTargetView
+CreateShaderResourceView
+CreateRenderTargetView
+SoSetTargets
+SetRenderTargets
+VsSetConstantBuffers
+PsSetConstantBuffers
+SetRasterizerState
+SetViewports
+SetScissorRects
+SetPredication
+PsSetShaderResources
+SetScissorRects
+PsSetShaderResources
+SetRenderTargets
+SetScissorRects
+SetViewports
+ClearRenderTargetView
+SetRenderTargets
+Flush
+SoSetTargets
+SetRenderTargets
+VsSetConstantBuffers
+PsSetConstantBuffers
+SetRasterizerState
+SetViewports
+SetScissorRects
+SetPredication
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003600 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003700 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004880 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004900 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00018c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003800 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004980 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004a00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003900 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003a00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004a80 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004b00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004b80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004c00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003b00 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle c0001e00 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004c80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004d00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003c00 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle c0002000 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004d80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004e00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003d00 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle c0002180 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004e80 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004f00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40004f80 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40004fc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003e00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80003f00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005040 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400050c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0002540 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004000 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005140 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400051c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0002740 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004100 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005240 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400052c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0002940 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004200 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005340 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400053c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0002b40 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004300 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005440 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400054c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0002d40 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004400 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005540 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400055c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0002f40 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004500 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005640 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400056c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003100 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004600 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005740 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400057c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003300 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004700 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005840 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400058c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003500 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004800 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005940 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400059c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003700 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004900 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005a40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40005ac0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003800 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004a00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005b40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40005bc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003a00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004b00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005c40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40005cc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004c00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40001e00 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005d40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40005dc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004d00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002000 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005e40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40005ec0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004e00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40002180 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40005f40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40005fc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004f00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80004fc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006040 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400060c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0003f00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800050c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006140 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400061c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004000 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800051c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006240 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400062c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004100 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800052c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006340 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400063c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004200 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800053c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006440 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400064c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004300 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800054c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006540 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400065c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004400 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800055c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006640 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400066c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004500 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800056c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006740 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400067c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004600 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800057c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006840 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400068c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004700 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800058c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006940 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400069c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004800 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800059c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006a40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40006ac0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004900 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80005ac0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006b40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40006bc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004a00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80005bc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006c40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40006cc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004b00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80005cc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006d40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40006dc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80001e00 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80005dc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006e40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40006ec0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002000 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80005ec0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40006f40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40006fc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80002180 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80005fc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007040 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400070c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0004fc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800060c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007140 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400071c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00050c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800061c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007240 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400072c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00051c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800062c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007340 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400073c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00052c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800063c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007440 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400074c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00053c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800064c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007540 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400075c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00054c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800065c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007640 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400076c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00055c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800066c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007740 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400077c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00056c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800067c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007840 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400078c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00057c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800068c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007940 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400079c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00058c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800069c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007a40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40007ac0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00059c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80006ac0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007b40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40007bc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0005ac0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80006bc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007c40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40007cc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0005bc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80006cc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007d40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40007dc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0005cc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80006dc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007e40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40007ec0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0005dc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80006ec0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40007f40 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 40007fc0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0005ec0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 80006fc0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40008040 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400080c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c0005fc0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800070c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40008140 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400081c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00060c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800071c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40008240 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400082c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00061c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800072c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40008340 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400083c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle c00062c0 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 800073c0 resource 0
+BC250 MapGpuVa 8000000a va 8da000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 0 handle 40008440 resource 0
+BC250 MapGpuVa 8000000a va 11a4000
+BC250 MakeResident 8000000a
+CalcPrivateResourceSize
+CreateResource
+BC250 Allocate 00000000 format 21 primary 1 handle 400084c0 resource 0
+BC250 MapGpuVa 8000000a va 1a6e000
+BC250 MakeResident 8000000a
+BC250 SetDisplayMode 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+DestroyResource
+BC250 Deallocate 00000000
+Flush
+Flush
+DestroyRenderTargetView
+DestroyShaderResourceView
+DestroyResource
+DestroyShader
+DestroyResource
+DestroyRasterizerState
+DestroyRasterizerState
+DestroyRasterizerState
+DestroyRasterizerState
+DestroyRasterizerState
+DestroyRasterizerState
+DestroyRasterizerState
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroySampler
+DestroyBlendState
+DestroyBlendState
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyRenderTargetView
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyResource
+DestroyRasterizerState
+SetRenderTargets
+SetPredication
+Flush
+SetRenderTargets
+SetPredication
+Flush
+Flush
+DestroyDepthStencilState
+DestroyDepthStencilState
+DestroyDepthStencilState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyBlendState
+DestroyElementLayout
+DestroyElementLayout
+DestroyElementLayout
+DestroyElementLayout
+DestroyElementLayout
+DestroyElementLayout
+DestroyElementLayout
+DestroyElementLayout
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+DestroyShader
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+SetRenderTargets
+DestroyRasterizerState
+DestroyDepthStencilState
+DestroyBlendState
+DestroySampler
+DestroyRasterizerState
+DestroyShader
+DestroyResource
+DestroyElementLayout
+DestroyDepthStencilState
+DestroyDevice
+CloseAdapter

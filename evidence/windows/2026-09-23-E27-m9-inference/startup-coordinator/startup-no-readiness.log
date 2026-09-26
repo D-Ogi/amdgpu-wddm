@@ -1,0 +1,5 @@
+test.c
+FAIL no admission without system paging window
+FAIL stage success not readiness
+FAIL readiness failure unwind
+291 checks, 3 failures

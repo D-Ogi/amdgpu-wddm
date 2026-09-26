@@ -1,0 +1,12 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+ninja: Entering directory `P:\bc-250\scratch\mesa-main-llvm23-build'
+[1/6] Generating src/git_sha1.h with a custom command
+[2/4] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/Debug.cpp.obj
+[3/4] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[4/4] Linking target src/gallium/targets/d3d10umd/bc250d3d.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d.exp
+

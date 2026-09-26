@@ -1,0 +1,17 @@
+M215 partial PTE knowledge, 2026-09-23.
+Dirty worktree over base-commit.txt; changed source snapshots included.
+Procedure in E27 README written before execution.
+Shadow suite112471/0 (41472 new), kernel-flags compile pass; routing9082/0.
+Full WDK build/sign0784 pass; package scratch/build/bc250kmd-0784/package-umd.
+SYS SHA2563849C8F2401E3DF8A53EACD28E9F8A682049F528D2810F408529D15CD47897D0.
+NOT DEPLOYED. No lab access/reset/USB changes/private-data redaction.
+Known bitmap changes8->16 uint64 words, +64 bytes per registered-table slot.
+Apply marks both halves, Read requires both, Fill accumulates per-DWORD knowledge,
+Copy propagates two-bit state and defined backing storage with memmove semantics.
+A first half-write initializes backing word with zero for storage safety, but marks
+only its written half; unknown placeholder bytes are never exposed as known data.
+Tests: both write orders at512 PTE positions; copy overlap both directions, self and
+disjoint ranges with all4 known states and independent snapshot oracle; completing
+missing halves verifies partial values survived copying. Existing fill/full-PTE,
+publication and routing regressions pass. Host model, not GPU/OS acceptance.
+Virtual Fill/other table-write publication and broader M9 gaps remain open.

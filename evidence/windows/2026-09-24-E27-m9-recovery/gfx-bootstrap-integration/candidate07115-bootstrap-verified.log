@@ -1,0 +1,3 @@
+test.c
+test.c(79): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+test.c(79): warning C4100: „value”: parametr, do którego nie ma odniesienia

@@ -1,0 +1,3 @@
+# Native-file comparison after M319
+
+Hypothesis: restoring M257 direct native file output permits the unchanged1GiB probe to complete within its300s deadline, unlike M319 pipe capture. Same installed07102 session and probe hash; no timeout increase, GPU restart or reboot.64KiB positive control first; only after independent validation run1GiB once. Three residency cycles and four full byte-oracle GPU readbacks required. Preserve exits, driver counters and all prior failed output. A successful sequential comparison supports a harness effect but does not independently isolate all scheduling/run-order effects.

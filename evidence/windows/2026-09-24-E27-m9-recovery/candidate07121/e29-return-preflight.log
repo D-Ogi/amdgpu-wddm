@@ -1,0 +1,6 @@
+matching_media=1
+usb_bus_verified=true size_bytes=64160400896
+efi/boot/bootx64.efi_sha256=840e9a73f25507362e2a06cc8234fb51bef8bd536122275194270c4fa7552f6c
+Traceback (most recent call last):
+  File "<stdin>", line 18, in <module>
+AssertionError

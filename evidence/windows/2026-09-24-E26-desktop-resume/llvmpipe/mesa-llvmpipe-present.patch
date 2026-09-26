@@ -1,0 +1,73 @@
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -172,7 +172,17 @@
+        resource->format != PIPE_FORMAT_R8G8B8X8_UNORM) return E_NOTIMPL;
+    HRESULT allocated = Bc250EnsureSurface(device, pSrcResource);
+    if (FAILED(allocated)) return allocated;
+-   device->pipe->flush(device->pipe, NULL, 0);
++   // llvmpipe flush queues CPU raster work. Publish the scanout allocation
++   // only after its render fence completes; a CPU barrier alone cannot wait.
++   LARGE_INTEGER renderStart, renderEnd;
++   QueryPerformanceCounter(&renderStart);
++   pipe_fence_handle *renderFence = NULL;
++   device->pipe->flush(device->pipe, &renderFence, 0);
++   bool rendered = !renderFence || device->pipe->screen->fence_finish(
++      device->pipe->screen, device->pipe, renderFence, OS_TIMEOUT_INFINITE);
++   device->pipe->screen->fence_reference(device->pipe->screen, &renderFence, NULL);
++   QueryPerformanceCounter(&renderEnd);
++   if (!rendered) return E_FAIL;
+    MemoryBarrier();
+    HRESULT hr;
+    DXGIDDICB_PRESENT present = {};
+@@ -192,12 +202,13 @@
+    hr = device->pDXGIBaseCallbacks->pfnPresentCb(device->hDevice, &present);
+    QueryPerformanceCounter(&presentEnd);QueryPerformanceFrequency(&frequency);
+    if(++device->profilePresents<=120 || device->profilePresents%60==0)
+-      DebugPrintf("BC250 Perf frame %u gap_ms %.3f draws %llu draw_ms %.3f max_draw_ms %.3f present_ms %.3f\n",
++      DebugPrintf("BC250 Perf frame %u gap_ms %.3f draws %llu draw_ms %.3f max_draw_ms %.3f present_ms %.3f render_wait_ms %.3f\n",
+        device->profilePresents,
+        device->profileLastPresent?1000.0*(presentEnd.QuadPart-device->profileLastPresent)/frequency.QuadPart:0.0,
+        device->profileDrawCalls,1000.0*device->profileDrawTicks/frequency.QuadPart,
+        1000.0*device->profileDrawMax/frequency.QuadPart,
+-       1000.0*(presentEnd.QuadPart-presentStart.QuadPart)/frequency.QuadPart);
++       1000.0*(presentEnd.QuadPart-presentStart.QuadPart)/frequency.QuadPart,
++       1000.0*(renderEnd.QuadPart-renderStart.QuadPart)/frequency.QuadPart);
+    device->profileLastPresent=presentEnd.QuadPart;
+    device->profileDrawTicks=device->profileDrawMax=device->profileDrawCalls=0;
+ 
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -143,6 +143,7 @@
+    pDevice->hContext = context.hContext;
+ 
+    struct pipe_screen *screen = pAdapter->screen;
++   DebugPrintf("BC250 Renderer: %s\n", screen->get_name(screen));
+    struct pipe_context *pipe = screen->context_create(screen, NULL, 0);
+    pDevice->pipe = pipe;
+    pDevice->cso = cso_create_context(pipe, CSO_NO_VBUF);
+--- a/src/gallium/targets/d3d10umd/d3d10_gdi.c
++++ b/src/gallium/targets/d3d10umd/d3d10_gdi.c
+@@ -83,9 +83,13 @@
+    (void)driver;
+ #endif
+ 
++#ifndef GALLIUM_LLVMPIPE
+    if (screen == NULL) {
+       screen = softpipe_create_screen( winsys );
+    }
++#endif
++   // This diagnostic llvmpipe build must not silently fall back to softpipe:
++   // the comparison and the module manifest identify a single renderer.
+ 
+    if (screen == NULL)
+       goto no_screen;
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -41,6 +41,7 @@
+ 
+ #include "util/format/u_format.h"
+ #include "util/u_inlines.h"
++#include "util/os_time.h"
+ #include "frontend/winsys_handle.h"
+ 
+ 

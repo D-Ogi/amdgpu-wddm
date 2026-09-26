@@ -1,0 +1,2013 @@
+firmware=cyan_skillfish2_me.bin bytes=263424 sha256=D4ED4D968DE0D7720F7C8215D42FDAE727BF99CDF43CEE6F8F864DC2584B17E2
+firmware=cyan_skillfish2_mec2.bin bytes=268592 sha256=B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4
+firmware=cyan_skillfish2_sdma1.bin bytes=33792 sha256=BD1C0B0F6A6A4F17EDE034F2C844B6553FC444E08915C7BB500C09FDE59D6255
+firmware=cyan_skillfish2_pfp.bin bytes=263424 sha256=50E56DC1913571FF589425D2B059BDDFC5E8A2B4BC22D3EB78CAC75D1E0479A1
+firmware=cyan_skillfish2_ce.bin bytes=263296 sha256=5946EFBF7E46CCFE7E9F965DA56C35B1187469D1C1A49C8A9EFF433EB3AB4723
+firmware=cyan_skillfish2_mec.bin bytes=268592 sha256=B1C1F843A8FAAA2DE537D6BA05052A3776B5A1B73F8A3C3F5ED9D568489776A4
+firmware=cyan_skillfish2_sdma.bin bytes=33792 sha256=15D0D3626DA7F2513F03B13BB7E02EEEECCAB276276AE27D0B6067B5F25E9E95
+firmware=cyan_skillfish2_rlc.bin bytes=25344 sha256=20ACEFDB6128A36275F4382425A109A7C9927F6053EAB685BB51164FF1D18CFB
+driver_version=0.7.100.1
+boot_before=2026-09-23T15:39:09
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+15:59:48 Tctl 67.0 C (raw 741B0FEF)
+
+
+
+EnableMmio        : 1
+EnableMmioWrite   : 0
+EnableVram        : 1
+EnableVramWrite   : 1
+EnableGart        : 1
+EnablePsp         : 1
+EnableGfx         : 1
+EnableIh          : 1
+EnableFullWddm    : 1
+EnableGpuVa       : 1
+EnableGpuSubmit   : 1
+EnablePresentBlit : 0
+EnableDcnWrite    : 0
+EnablePagingNode  : 1
+EnableVidPnFlip   : 0
+UnconfirmedStarts : 1
+KeepLog           : 1
+
+
+
+disable_begin=2026-09-23T15:59:49
+Microsoft PnP Utility
+
+Disabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\INSTANCE_REDACTED
+Device disabled successfully.
+
+enable_begin=2026-09-23T15:59:53
+Microsoft PnP Utility
+
+Enabling device:          PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\INSTANCE_REDACTED
+Device enabled successfully.
+
+
+
+Status  : OK
+Problem : CM_PROB_NONE
+
+
+
+
+
+EnableFullWddm    : 0
+LastStage         : 50
+StageHistory      : 10 20 30 31 32 33 34 35 39 50 
+UnconfirmedStarts : 2
+
+
+
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#INSTANCE_REDACTED#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-002B3037
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070064 (milestone 7 revision 100)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 0, flips 4 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+log          828 lines since this driver load, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.008 stage 10
+     1      0.008 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.008 stage 20
+     3      0.078 stage 30
+     4      0.080 stage 31
+     5      0.080 stage 32
+     6      0.080 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.080 stage 33
+     8      0.082 stage 34
+     9      0.082 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.082 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.082 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.082 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.082 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.082 gart: ready, dummy page at 0x26FFFA000
+    15      0.082 psp: ready
+    16      0.082 gpumem: ready, doorbells at 0xD0000000
+    17      0.082 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.082 ih: ready
+    19      0.084 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.084 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.084 startup: entering interrupt connection
+    22      0.086 startup: entering firmware preparation
+    23      0.090 startup: entering GART initialization
+    24      0.102 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.102 startup: entering PSP initialization
+    26      0.172 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.172 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 262 us, in TMR at 0x0
+    28      0.174 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1956 us, in TMR at 0x0
+    29      0.176 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1935 us, in TMR at 0x0
+    30      0.182 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5883 us, in TMR at 0xF5FF842000
+    31      0.188 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5917 us, in TMR at 0xF5FF883000
+    32      0.192 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF8C4000
+    33      0.198 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.200 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.204 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    36      0.206 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.206 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1736 us, in TMR at 0x0
+    38      0.206 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.206 startup: entering IH initialization
+    40      0.208 ih: init: rc 0, 20 writes
+    41      0.208 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.208 startup: entering GFX initialization
+    43      0.210 startup: entering GFX stage 1
+    44      0.214 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.214 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.216 startup: entering GFX stage 2
+    47      0.216 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    48      0.216 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.218 startup: entering GFX stage 3
+    50      0.220 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+    51      0.220 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.220 startup: entering GFX stage 4
+    53      0.222 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+    54      0.222 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.222 startup: entering GFX stage 5
+    56      0.224 gfx: stage 5 (RLC): rc 0, 8 writes so far, 133 us
+    57      0.224 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.226 startup: entering GFX stage 6
+    59      0.226 startup: entering CP step 1
+    60      0.228 amdgpu[0]: CP resume kiq-init begin
+
+    61      0.228 amdgpu[0]: CP resume kiq-init end result=0
+
+    62      0.228 gfx: CP step 1: rc 0, 27 writes, 40 us
+    63      0.228 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+    64      0.228 startup: CP step 1 returned 0x00000000 result 0
+    65      0.230 startup: entering CP step 2
+    66      0.230 amdgpu[0]: CP resume compute-unhalt begin
+
+    67      0.230 amdgpu[0]: CP resume compute-unhalt end
+
+    68      0.230 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    69      0.230 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    70      0.230 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    71      0.230 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    72      0.230 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    73      0.230 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    74      0.230 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    75      0.230 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    76      0.230 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    77      0.230 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    78      0.230 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    79      0.230 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    80      0.230 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    81      0.230 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    82      0.230 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    83      0.230 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    84      0.230 gfx: CP step 2: rc 0, 17 writes, 236 us
+    85      0.230 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+    86      0.230 startup: CP step 2 returned 0x00000000 result 0
+    87      0.232 startup: entering CP step 3
+    88      0.234 amdgpu[0]: CP resume kcq-enable begin
+
+    89      0.234 amdgpu[0]: CP resume kcq-enable end result=0
+
+    90      0.234 gfx: CP step 3: rc 0, 1 writes, 50 us
+    91      0.234 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+    92      0.234 startup: CP step 3 returned 0x00000000 result 0
+    93      0.234 startup: entering CP step 4
+    94      0.236 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    95      0.236 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    96      0.236 gfx: CP step 4: rc 0, 4 writes, 28 us
+    97      0.236 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+    98      0.236 startup: CP step 4 returned 0x00000000 result 0
+    99      0.236 startup: entering CP step 5
+   100      0.238 amdgpu[0]: CP resume kgq-enable begin
+
+   101      0.238 amdgpu[0]: CP resume kgq-enable end result=0
+
+   102      0.238 gfx: CP step 5: rc 0, 1 writes, 22 us
+   103      0.238 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   104      0.238 startup: CP step 5 returned 0x00000000 result 0
+   105      0.240 startup: entering CP step 6
+   106      0.240 amdgpu[0]: CP resume gfx-start begin
+
+   107      0.240 amdgpu[0]: CP resume gfx-start end result=0
+
+   108      0.240 gfx: CP step 6: rc 0, 3 writes, 25 us
+   109      0.240 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   110      0.240 startup: CP step 6 returned 0x00000000 result 0
+   111      0.242 startup: entering CP step 7
+   112      0.244 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   113      0.244 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   114      0.244 gfx: CP step 7: rc 0, 1 writes, 14 us
+   115      0.244 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   116      0.244 startup: CP step 7 returned 0x00000000 result 0
+   117      0.244 startup: entering CP step 8
+   118      0.246 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   119      0.246 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   120      0.246 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   121      0.246 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   122      0.246 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   123      0.246 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   124      0.246 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   125      0.246 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   126      0.246 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   127      0.246 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   128      0.246 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   129      0.246 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   130      0.246 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   131      0.246 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   132      0.246 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   133      0.246 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   134      0.246 gfx: CP step 8: rc 0, 8 writes, 69 us
+   135      0.246 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   136      0.246 startup: CP step 8 returned 0x00000000 result 0
+   137      0.248 startup: entering GFX stage 7
+   138      0.250 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 114 us
+   139      0.250 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   140      0.252 startup: entering GFX stage 8
+   141      0.252 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   142      0.252 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   143      0.252 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   144      0.254 startup: both engines ready
+   145      0.256 startup: attempted 0xF completed 0xF status 0x00000000 ready 1 unwind 0 quarantine 0
+   146      0.256 wddm: GPU initialized before adapter admission
+   147      0.256 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   148      0.256 stage 35
+   149      0.256 stage 39
+   150      0.256 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   151      0.256 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   152      0.256 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   153      0.256 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   154      0.256 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   155      0.256 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   156      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   157      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   158      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   159      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   160      0.256 wddm: GetNodeMetadata node 0 adapter 0
+   161      0.256 wddm: GetNodeMetadata node 1 adapter 0
+   162      0.258 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   163      0.258 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+   164      0.258 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   165      0.258 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   166      0.258 wddm: CreateProcess flags 0x00000001 pasids 1
+   167      0.258 wddm: CreateDevice flags 0x00000001 pasid 0
+   168      0.258 wddm: CreateDevice flags 0x00000001 pasid 0
+   169      0.258 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   170      0.258 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   171      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   172      0.258 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   173      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   174      0.258 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   175      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   176      0.258 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   177      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   178      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   179      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   180      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   181      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   182      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   183      0.290 wddm: SetRootPageTable segment 3 offset 0x0, 512 entries
+   184      0.290 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+   185      0.290 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+   186      0.290 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+   187      0.290 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+   188      0.292 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+   189      0.292 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+   190      0.292 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+   191      0.292 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+   192      0.292 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+   193      0.292 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+   194      0.292 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+   195      0.292 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+   196      0.292 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+   197      0.292 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+   198      0.292 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+   199      0.294 wddm: CreateProcess flags 0x00000002 pasids 1
+   200      0.294 wddm: CreateDevice flags 0x00000002 pasid 0
+   201      0.294 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   202      0.294 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   203      0.294 wddm: SubmitCommandVirtual fence 1 node 1 flags 0x00000001 va 0x0 size 4024
+   204      0.294 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 1
+   205      0.294 wddm: SubmitCommandVirtual fence 2 node 1 flags 0x00000001 va 0x0 size 4072
+   206      0.294 gfx: paging submit, 1018 dwords from private buffer at 0x0, seq 2
+   207      0.294 wddm: SubmitCommandVirtual fence 3 node 1 flags 0x00000001 va 0x0 size 4016
+   208      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 3
+   209      0.294 wddm: SubmitCommandVirtual fence 4 node 1 flags 0x00000001 va 0x0 size 4016
+   210      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 4
+   211      0.294 wddm: BuildPagingBuffer operation 12 segment 0, 64720 bytes free, pass offset 0
+   212      0.294 wddm: SubmitCommandVirtual fence 5 node 1 flags 0x00000001 va 0x0 size 876
+   213      0.294 gfx: paging submit, 219 dwords from private buffer at 0x0, seq 5
+   214      0.294 wddm: BuildPagingBuffer operation 12 segment 0, 64596 bytes free, pass offset 0
+   215      0.294 wddm: SubmitCommandVirtual fence 6 node 1 flags 0x00000001 va 0x36C size 124
+   216      0.294 gfx: paging submit, 31 dwords from private buffer at 0x36C, seq 6
+   217      0.294 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   218      0.294 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   219      0.294 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   220      0.294 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   221      0.294 wddm: OpenAllocation [0] handle 0x40001040 private 32 bytes -> FFFFD209671E8830 (GetHandleData said 0000000000000000)
+   222      0.294 wddm: OpenAllocation 1 allocations flags 0x00000001
+   223      0.294 wddm: SubmitCommandVirtual fence 7 node 1 flags 0x00000001 va 0x3E8 size 3072
+   224      0.294 gfx: paging submit, 768 dwords from private buffer at 0x3E8, seq 7
+   225      0.294 wddm: SubmitCommandVirtual fence 8 node 1 flags 0x00000001 va 0x0 size 4016
+   226      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 8
+   227      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 9
+   228      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 10
+   229      0.294 wddm: BuildPagingBuffer operation 12 segment 0, 62152 bytes free, pass offset 0
+   230      0.294 wddm: BuildPagingBuffer operation 9 segment 0, 62092 bytes free, pass offset 0
+   231      0.294 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 12
+
+   232      0.294 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 29
+   233      0.294 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 11
+   234      0.294 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   235      0.294 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 230
+   236      0.294 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 12
+   237      0.294 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   238      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 13
+   239      0.296 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 431
+   240      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   241      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 14
+   242      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   243      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 15
+   244      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   245      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 16
+   246      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   247      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 17
+   248      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   249      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 18
+   250      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   251      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 19
+   252      0.298 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   253      0.298 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 20
+   254      0.298 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   255      0.298 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 21
+   256      0.298 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   257      0.298 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 22
+   258      0.298 gfx: paging submit, 50 dwords from private buffer at 0x0, seq 23
+   259      0.298 gfx: paging submit, 960 dwords from private buffer at 0xC8, seq 24
+   260      0.298 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 25
+   261      0.298 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 26
+   262      0.298 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 27
+   263      0.298 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 28
+   264      0.298 wddm: BuildPagingBuffer operation 12 segment 0, 62984 bytes free, pass offset 0
+   265      0.298 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 29
+   266      0.298 gfx: paging submit, 56 dwords from private buffer at 0x0, seq 30
+   267      0.298 gfx: paging submit, 960 dwords from private buffer at 0xE0, seq 31
+   268      0.298 gfx: paging submit, 92 dwords from private buffer at 0x0, seq 32
+   269      0.298 gfx: paging submit, 912 dwords from private buffer at 0x170, seq 33
+   270      0.298 gfx: paging submit, 140 dwords from private buffer at 0x0, seq 34
+   271      0.298 gfx: paging submit, 864 dwords from private buffer at 0x230, seq 35
+   272      0.298 gfx: paging submit, 188 dwords from private buffer at 0x0, seq 36
+   273      0.298 gfx: paging submit, 822 dwords from private buffer at 0x2F0, seq 37
+   274      0.298 gfx: paging submit, 281 dwords from private buffer at 0x0, seq 38
+   275      0.298 wddm: DescribeAllocation 1920x1200 format 21
+   276      0.300 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   277      0.300 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   278      0.300 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   279      0.300 wddm: OpenAllocation [0] handle 0x400010C0 private 32 bytes -> FFFFD209671E84D0 (GetHandleData said 0000000000000000)
+   280      0.300 wddm: OpenAllocation 1 allocations flags 0x00000001
+   281      0.300 gfx: paging submit, 736 dwords from private buffer at 0x464, seq 39
+   282      0.300 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 40
+   283      0.300 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 41
+   284      0.300 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 42
+   285      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 15
+
+   286      0.300 gfx: paging submit, 1003 dwords from private buffer at 0x0, seq 43
+   287      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   288      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 44
+   289      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   290      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 45
+   291      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   292      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 46
+   293      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   294      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 47
+   295      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   296      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 48
+   297      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   298      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 49
+   299      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   300      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 50
+   301      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   302      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 51
+   303      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   304      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 52
+   305      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   306      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 53
+   307      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   308      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 54
+   309      0.302 gfx: paging submit, 85 dwords from private buffer at 0x0, seq 55
+   310      0.302 gfx: paging submit, 918 dwords from private buffer at 0x154, seq 56
+   311      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 57
+   312      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 58
+   313      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 59
+   314      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 60
+   315      0.304 gfx: paging submit, 319 dwords from private buffer at 0x0, seq 61
+   316      0.304 gfx: paging submit, 688 dwords from private buffer at 0x4FC, seq 62
+   317      0.304 gfx: paging submit, 364 dwords from private buffer at 0x0, seq 63
+   318      0.304 gfx: paging submit, 640 dwords from private buffer at 0x5B0, seq 64
+   319      0.304 gfx: paging submit, 412 dwords from private buffer at 0x0, seq 65
+   320      0.304 gfx: paging submit, 592 dwords from private buffer at 0x670, seq 66
+   321      0.304 gfx: paging submit, 460 dwords from private buffer at 0x0, seq 67
+   322      0.304 gfx: paging submit, 546 dwords from private buffer at 0x730, seq 68
+   323      0.304 gfx: paging submit, 557 dwords from private buffer at 0x0, seq 69
+   324      0.304 stage 50
+   325      0.304 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   326      0.304 wddm: DescribeAllocation 1920x1200 format 21
+   327      0.304 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   328      0.304 wddm: software vsync on, 16 ms period, target 2424833
+   329      0.304 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   330      0.304 wddm: DescribeAllocation 1920x1200 format 21
+   331      0.528 wddm: ControlInterrupt type 3 on -> 0x00000000
+   332      0.544 wddm: ControlInterrupt type 3 off -> 0x00000000
+   333      0.544 wddm: ControlInterrupt type 3 on -> 0x00000000
+   334      0.560 wddm: ControlInterrupt type 3 off -> 0x00000000
+   335      0.560 wddm: ControlInterrupt type 3 on -> 0x00000000
+   336      0.576 wddm: ControlInterrupt type 3 off -> 0x00000000
+   337      0.576 wddm: ControlInterrupt type 3 on -> 0x00000000
+   338      0.592 wddm: ControlInterrupt type 3 off -> 0x00000000
+   339      3.479 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   340      3.479 wddm: Present list FFFFFC8016E6EBB0 (context list 256), private FFFFD20964917010/2184, driver data 0
+   341      3.479 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   342      3.479 wddm: Present list q4-7  FFFFD209671E84D0 00000000008DC000 0000000000000000 0000000000000000
+   343      3.479 wddm: Present list q8-11 FFFFD209671E8830 0000000000012000 0000000000000000 0000000000000000
+   344      3.479 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   345      3.479 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   346      3.479 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   347      3.479 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   348      3.479 wddm: malformed virtual present rejected
+   349      3.507 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   350      3.507 wddm: Present list FFFFFC8016E6EBB0 (context list 256), private FFFFD2095CB55010/2184, driver data 0
+   351      3.507 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   352      3.507 wddm: Present list q4-7  FFFFD209671E84D0 00000000008DC000 0000000000000000 0000000000000000
+   353      3.507 wddm: Present list q8-11 FFFFD209671E8830 0000000000012000 0000000000000000 0000000000000000
+   354      3.507 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   355      3.509 wddm: CreateDevice flags 0x00000002 pasid 0
+   356      3.509 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   357      3.509 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   358      3.509 gfx: paging submit, 31 dwords from private buffer at 0x8B4, seq 70
+   359      3.509 gfx: paging submit, 31 dwords from private buffer at 0x930, seq 71
+   360      3.511 wddm: software vsync off after 200 ticks
+   361      3.511 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   362      3.511 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   363      3.511 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   364      3.511 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   365      3.511 wddm: OpenAllocation [0] handle 0x400011C0 private 32 bytes -> FFFFD20965F98210 (GetHandleData said 0000000000000000)
+   366      3.511 wddm: OpenAllocation 1 allocations flags 0x00000001
+   367      3.511 gfx: paging submit, 384 dwords from private buffer at 0x9AC, seq 72
+   368      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 73
+   369      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 74
+   370      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 75
+   371      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 76
+   372      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   373      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 77
+   374      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   375      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 78
+   376      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   377      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 79
+   378      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   379      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 80
+   380      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   381      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 81
+   382      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   383      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 82
+   384      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   385      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 83
+   386      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   387      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 84
+   388      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   389      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 85
+   390      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   391      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 86
+   392      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   393      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 87
+   394      3.515 gfx: paging submit, 450 dwords from private buffer at 0x0, seq 88
+   395      3.515 gfx: paging submit, 558 dwords from private buffer at 0x708, seq 89
+   396      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 90
+   397      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 91
+   398      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 92
+   399      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 93
+   400      3.515 gfx: paging submit, 271 dwords from private buffer at 0x0, seq 94
+   401      3.515 gfx: paging submit, 736 dwords from private buffer at 0x43C, seq 95
+   402      3.515 gfx: paging submit, 316 dwords from private buffer at 0x0, seq 96
+   403      3.515 gfx: paging submit, 688 dwords from private buffer at 0x4F0, seq 97
+   404      3.515 gfx: paging submit, 364 dwords from private buffer at 0x0, seq 98
+   405      3.515 gfx: paging submit, 640 dwords from private buffer at 0x5B0, seq 99
+   406      3.515 gfx: paging submit, 412 dwords from private buffer at 0x0, seq 100
+   407      3.515 gfx: paging submit, 592 dwords from private buffer at 0x670, seq 101
+   408      3.515 gfx: paging submit, 460 dwords from private buffer at 0x0, seq 102
+   409      3.515 gfx: paging submit, 544 dwords from private buffer at 0x730, seq 103
+   410      3.515 gfx: paging submit, 561 dwords from private buffer at 0x0, seq 104
+   411      3.515 wddm: DescribeAllocation 1920x1200 format 21
+   412      3.515 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   413      3.515 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   414      3.515 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   415      3.515 wddm: OpenAllocation [0] handle 0x40001240 private 32 bytes -> FFFFD20965F97D00 (GetHandleData said 0000000000000000)
+   416      3.515 wddm: OpenAllocation 1 allocations flags 0x00000001
+   417      3.515 gfx: paging submit, 448 dwords from private buffer at 0x8C4, seq 105
+   418      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 106
+   419      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 107
+   420      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 108
+   421      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 109
+   422      3.515 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 12
+
+   423      3.515 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 110
+   424      3.515 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   425      3.515 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 111
+   426      3.515 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   427      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 112
+   428      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   429      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 113
+   430      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   431      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 114
+   432      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   433      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 115
+   434      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   435      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 116
+   436      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   437      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 117
+   438      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   439      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 118
+   440      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   441      3.519 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 119
+   442      3.519 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   443      3.519 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 120
+   444      3.519 gfx: paging submit, 385 dwords from private buffer at 0x0, seq 121
+   445      3.519 gfx: paging submit, 624 dwords from private buffer at 0x604, seq 122
+   446      3.519 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 123
+   447      3.519 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 124
+   448      3.519 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 125
+   449      3.519 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 126
+   450      3.519 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 127
+   451      3.519 gfx: paging submit, 200 dwords from private buffer at 0x0, seq 128
+   452      3.519 gfx: paging submit, 816 dwords from private buffer at 0x320, seq 129
+   453      3.519 gfx: paging submit, 236 dwords from private buffer at 0x0, seq 130
+   454      3.519 gfx: paging submit, 768 dwords from private buffer at 0x3B0, seq 131
+   455      3.519 gfx: paging submit, 284 dwords from private buffer at 0x0, seq 132
+   456      3.519 gfx: paging submit, 720 dwords from private buffer at 0x470, seq 133
+   457      3.519 gfx: paging submit, 332 dwords from private buffer at 0x0, seq 134
+   458      3.519 gfx: paging submit, 678 dwords from private buffer at 0x530, seq 135
+   459      3.519 gfx: paging submit, 425 dwords from private buffer at 0x0, seq 136
+   460      3.519 wddm: display CommitVidPn call 2 detail 0x0 -> 0x00000000
+   461      3.519 wddm: DescribeAllocation 1920x1200 format 21
+   462      3.519 wddm: SetVidPnSourceAddress segment 1 address 0xF401A64000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   463      3.519 wddm: software vsync on, 16 ms period, target 2424833
+   464      3.519 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   465      3.519 wddm: DescribeAllocation 1920x1200 format 21
+   466      3.521 gfx: paging submit, 31 dwords from private buffer at 0x6A4, seq 137
+   467      3.521 gfx: paging submit, 31 dwords from private buffer at 0x720, seq 138
+   468      3.521 wddm: DestroyContext
+   469      3.521 gfx: paging submit, 528 dwords from private buffer at 0x79C, seq 139
+   470      3.521 gfx: paging submit, 977 dwords from private buffer at 0x0, seq 140
+   471      3.521 gfx: paging submit, 15 dwords from private buffer at 0xF44, seq 141
+   472      3.521 wddm: CloseAllocation 1 allocations
+   473      3.521 wddm: DestroyAllocation 1 allocations
+   474      3.521 wddm: BuildPagingBuffer operation 2 segment 0, 61568 bytes free, pass offset 0
+   475      3.521 gfx: paging submit, 16 dwords from private buffer at 0xF80, seq 142
+   476      3.521 gfx: paging submit, 37 dwords from private buffer at 0x0, seq 143
+   477      3.521 gfx: paging submit, 15 dwords from private buffer at 0x94, seq 144
+   478      3.521 wddm: CloseAllocation 1 allocations
+   479      3.521 wddm: DestroyAllocation 1 allocations
+   480      3.521 wddm: DestroyDevice
+   481      3.541 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   482      3.541 wddm: Present list FFFFFC8015B5CBB0 (context list 256), private FFFFD20964694660/2184, driver data 0
+   483      3.541 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   484      3.541 wddm: Present list q4-7  FFFFD20965F97D00 0000000001A72000 0000000000000000 0000000000000000
+   485      3.541 wddm: Present list q8-11 FFFFD20965F98210 00000000011A8000 0000000000000000 0000000000000000
+   486      3.541 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11A7000
+   487      3.541 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   488      3.541 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   489      3.541 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x11A7000 size 0
+   490      3.541 wddm: malformed virtual present rejected
+   491      6.215 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   492      6.215 wddm: Present list FFFFFC8015B5CBB0 (context list 256), private FFFFD2095F1686A0/2184, driver data 0
+   493      6.215 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   494      6.215 wddm: Present list q4-7  FFFFD20965F97D00 0000000001A72000 0000000000000000 0000000000000000
+   495      6.215 wddm: Present list q8-11 FFFFD20965F98210 00000000011A8000 0000000000000000 0000000000000000
+   496      6.215 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11A6000
+   497      6.241 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   498      6.241 wddm: Present list FFFFFC8015B5CBB0 (context list 256), private FFFFD20964694660/2184, driver data 0
+   499      6.241 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   500      6.241 wddm: Present list q4-7  FFFFD20965F97D00 0000000001A72000 0000000000000000 0000000000000000
+   501      6.241 wddm: Present list q8-11 FFFFD20965F98210 00000000011A8000 0000000000000000 0000000000000000
+   502      6.241 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11A7000
+   503      6.241 wddm: CreateDevice flags 0x00000002 pasid 0
+   504      6.241 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   505      6.241 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   506      6.241 gfx: paging submit, 31 dwords from private buffer at 0xD0, seq 145
+   507      6.241 gfx: paging submit, 926 dwords from private buffer at 0x14C, seq 146
+   508      6.241 gfx: paging submit, 185 dwords from private buffer at 0x0, seq 147
+   509      6.243 wddm: software vsync off after 370 ticks
+   510      6.243 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   511      6.243 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   512      6.243 wddm: OpenAllocation [0] handle 0x40001340 private 32 bytes -> FFFFD20963CECE10 (GetHandleData said 0000000000000000)
+   513      6.243 wddm: OpenAllocation 1 allocations flags 0x00000001
+   514      6.243 gfx: paging submit, 832 dwords from private buffer at 0x2E4, seq 148
+   515      6.243 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 149
+   516      6.243 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 150
+   517      6.245 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 151
+   518      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 11
+
+   519      6.245 gfx: paging submit, 1007 dwords from private buffer at 0x0, seq 152
+   520      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   521      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 153
+   522      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   523      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 154
+   524      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   525      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 155
+   526      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   527      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 156
+   528      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   529      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 157
+   530      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   531      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 158
+   532      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   533      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 159
+   534      6.247 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   535      6.247 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 160
+   536      6.247 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   537      6.247 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 161
+   538      6.247 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   539      6.247 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 162
+   540      6.247 gfx: paging submit, 990 dwords from private buffer at 0x0, seq 163
+   541      6.247 gfx: paging submit, 16 dwords from private buffer at 0xF78, seq 164
+   542      6.247 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 165
+   543      6.247 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 166
+   544      6.247 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 167
+   545      6.247 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 168
+   546      6.247 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 169
+   547      6.247 gfx: paging submit, 402 dwords from private buffer at 0x0, seq 170
+   548      6.247 gfx: paging submit, 608 dwords from private buffer at 0x648, seq 171
+   549      6.247 gfx: paging submit, 444 dwords from private buffer at 0x0, seq 172
+   550      6.249 gfx: paging submit, 560 dwords from private buffer at 0x6F0, seq 173
+   551      6.249 gfx: paging submit, 492 dwords from private buffer at 0x0, seq 174
+   552      6.249 gfx: paging submit, 512 dwords from private buffer at 0x7B0, seq 175
+   553      6.249 gfx: paging submit, 540 dwords from private buffer at 0x0, seq 176
+   554      6.249 gfx: paging submit, 464 dwords from private buffer at 0x870, seq 177
+   555      6.249 gfx: paging submit, 588 dwords from private buffer at 0x0, seq 178
+   556      6.249 gfx: paging submit, 416 dwords from private buffer at 0x930, seq 179
+   557      6.249 gfx: paging submit, 689 dwords from private buffer at 0x0, seq 180
+   558      6.249 wddm: DescribeAllocation 1920x1200 format 21
+   559      6.249 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   560      6.249 wddm: OpenAllocation [0] handle 0x400013C0 private 32 bytes -> FFFFD20963CECB40 (GetHandleData said 0000000000000000)
+   561      6.249 wddm: OpenAllocation 1 allocations flags 0x00000001
+   562      6.249 gfx: paging submit, 320 dwords from private buffer at 0xAC4, seq 181
+   563      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 182
+   564      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 183
+   565      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 184
+   566      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 185
+   567      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+   568      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 186
+   569      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   570      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 187
+   571      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   572      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 188
+   573      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   574      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 189
+   575      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   576      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 190
+   577      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   578      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 191
+   579      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   580      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 192
+   581      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   582      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 193
+   583      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   584      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 194
+   585      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   586      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 195
+   587      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   588      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 196
+   589      6.251 gfx: paging submit, 515 dwords from private buffer at 0x0, seq 197
+   590      6.253 gfx: paging submit, 496 dwords from private buffer at 0x80C, seq 198
+   591      6.253 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 199
+   592      6.253 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 200
+   593      6.253 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 201
+   594      6.253 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202
+   595      6.253 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 203
+   596      6.253 gfx: paging submit, 522 dwords from private buffer at 0x0, seq 204
+   597      6.253 gfx: paging submit, 496 dwords from private buffer at 0x828, seq 205
+   598      6.253 gfx: paging submit, 556 dwords from private buffer at 0x0, seq 206
+   599      6.253 gfx: paging submit, 448 dwords from private buffer at 0x8B0, seq 207
+   600      6.253 gfx: paging submit, 604 dwords from private buffer at 0x0, seq 208
+   601      6.253 gfx: paging submit, 400 dwords from private buffer at 0x970, seq 209
+   602      6.253 gfx: paging submit, 652 dwords from private buffer at 0x0, seq 210
+   603      6.253 gfx: paging submit, 352 dwords from private buffer at 0xA30, seq 211
+   604      6.253 gfx: paging submit, 751 dwords from private buffer at 0x0, seq 212
+   605      6.253 wddm: display CommitVidPn call 3 detail 0x0 -> 0x00000000
+   606      6.253 wddm: DescribeAllocation 1920x1200 format 21
+   607      6.253 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   608      6.253 wddm: software vsync on, 16 ms period, target 2424833
+   609      6.253 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   610      6.253 gfx: paging submit, 31 dwords from private buffer at 0xBBC, seq 213
+   611      6.253 gfx: paging submit, 31 dwords from private buffer at 0xC38, seq 214
+   612      6.253 wddm: DestroyContext
+   613      6.253 gfx: paging submit, 192 dwords from private buffer at 0xCB4, seq 215
+   614      6.255 gfx: paging submit, 1016 dwords from private buffer at 0x0, seq 216
+   615      6.255 gfx: paging submit, 311 dwords from private buffer at 0x0, seq 217
+   616      6.255 gfx: paging submit, 15 dwords from private buffer at 0x4DC, seq 218
+   617      6.255 wddm: CloseAllocation 1 allocations
+   618      6.255 wddm: DestroyAllocation 1 allocations
+   619      6.255 wddm: BuildPagingBuffer operation 2 segment 0, 64232 bytes free, pass offset 0
+   620      6.255 gfx: paging submit, 41 dwords from private buffer at 0x518, seq 219
+   621      6.255 gfx: paging submit, 15 dwords from private buffer at 0x5BC, seq 220
+   622      6.255 wddm: CloseAllocation 1 allocations
+   623      6.255 wddm: DestroyAllocation 1 allocations
+   624      6.255 wddm: DestroyDevice
+   625      6.273 wddm: Present flags 0x00000001 source 0 dest 0, 4 sub-rectangles, 4096 DMA bytes free
+   626      6.273 wddm: Present list FFFFFC8016C6EBB0 (context list 256), private FFFFD20964E59010/2184, driver data 0
+   627      6.273 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   628      6.273 wddm: Present list q4-7  FFFFD20963CECB40 0000000000011000 0000000000000000 0000000000000000
+   629      6.273 wddm: Present list q8-11 FFFFD20963CECE10 000000000233D000 0000000000000000 0000000000000000
+   630      6.273 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   631      6.273 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   632      6.273 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   633      6.273 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x10000 size 0
+   634      6.273 wddm: malformed virtual present rejected
+   635      6.273 wddm: Present flags 0x00000001 source 0 dest 0, 2 sub-rectangles, 4096 DMA bytes free
+   636      6.273 wddm: Present list FFFFFC8016C6EBB0 (context list 256), private FFFFD20965153010/2184, driver data 0
+   637      6.273 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   638      6.273 wddm: Present list q4-7  FFFFD20963CECB40 0000000000011000 0000000000000000 0000000000000000
+   639      6.273 wddm: Present list q8-11 FFFFD20963CECE10 000000000233D000 0000000000000000 0000000000000000
+   640      6.273 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x233C000
+   641      6.289 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   642      6.289 wddm: Present list FFFFFC8016C6EBB0 (context list 256), private FFFFD20964E59010/2184, driver data 0
+   643      6.289 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   644      6.289 wddm: Present list q4-7  FFFFD20963CECB40 0000000000011000 0000000000000000 0000000000000000
+   645      6.289 wddm: Present list q8-11 FFFFD20963CECE10 000000000233D000 0000000000000000 0000000000000000
+   646      6.289 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   647      6.289 wddm: CreateDevice flags 0x00000002 pasid 0
+   648      6.289 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   649      6.289 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   650      6.289 gfx: paging submit, 31 dwords from private buffer at 0x5F8, seq 221
+   651      6.289 gfx: paging submit, 31 dwords from private buffer at 0x674, seq 222
+   652      6.291 wddm: software vsync off after 372 ticks
+   653      6.291 wddm: display SetVidPnSourceVisibility call 6 detail 0x0 -> 0x00000000
+   654      6.291 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   655      6.291 wddm: OpenAllocation [0] handle 0x400014C0 private 32 bytes -> FFFFD209671E8CB0 (GetHandleData said 0000000000000000)
+   656      6.291 wddm: OpenAllocation 1 allocations flags 0x00000001
+   657      6.293 gfx: paging submit, 560 dwords from private buffer at 0x6F0, seq 223
+   658      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 224
+   659      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 225
+   660      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 226
+   661      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 227
+   662      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+   663      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 228
+   664      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   665      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 229
+   666      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   667      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 230
+   668      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   669      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 231
+   670      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   671      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 232
+   672      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   673      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 233
+   674      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   675      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 234
+   676      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   677      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 235
+   678      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   679      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 236
+   680      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   681      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 237
+   682      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   683      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 238
+   684      6.297 gfx: paging submit, 275 dwords from private buffer at 0x0, seq 239
+   685      6.297 gfx: paging submit, 736 dwords from private buffer at 0x44C, seq 240
+   686      6.297 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 241
+   687      6.297 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 242
+   688      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 243
+   689      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 244
+   690      6.297 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 245
+   691      6.297 gfx: paging submit, 300 dwords from private buffer at 0x0, seq 246
+   692      6.297 gfx: paging submit, 704 dwords from private buffer at 0x4B0, seq 247
+   693      6.297 gfx: paging submit, 348 dwords from private buffer at 0x0, seq 248
+   694      6.297 gfx: paging submit, 656 dwords from private buffer at 0x570, seq 249
+   695      6.297 gfx: paging submit, 396 dwords from private buffer at 0x0, seq 250
+   696      6.297 gfx: paging submit, 608 dwords from private buffer at 0x630, seq 251
+   697      6.297 gfx: paging submit, 444 dwords from private buffer at 0x0, seq 252
+   698      6.297 gfx: paging submit, 560 dwords from private buffer at 0x6F0, seq 253
+   699      6.297 gfx: paging submit, 543 dwords from private buffer at 0x0, seq 254
+   700      6.297 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   701      6.297 wddm: OpenAllocation [0] handle 0x40001540 private 32 bytes -> FFFFD209671E8440 (GetHandleData said 0000000000000000)
+   702      6.297 wddm: OpenAllocation 1 allocations flags 0x00000001
+   703      6.297 gfx: paging submit, 464 dwords from private buffer at 0x87C, seq 255
+   704      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 256
+   705      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 257
+   706      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 258
+   707      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 259
+   708      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   709      6.297 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 260
+   710      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   711      6.297 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 261
+   712      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   713      6.297 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 262
+   714      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   715      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 263
+   716      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   717      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 264
+   718      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   719      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 265
+   720      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   721      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 266
+   722      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   723      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 267
+   724      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   725      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 268
+   726      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   727      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 269
+   728      6.301 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   729      6.301 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 270
+   730      6.301 gfx: paging submit, 370 dwords from private buffer at 0x0, seq 271
+   731      6.301 gfx: paging submit, 646 dwords from private buffer at 0x5C8, seq 272
+   732      6.301 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 273
+   733      6.301 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 274
+   734      6.301 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 275
+   735      6.301 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 276
+   736      6.301 gfx: paging submit, 621 dwords from private buffer at 0x0, seq 277
+   737      6.301 gfx: paging submit, 384 dwords from private buffer at 0x9B4, seq 278
+   738      6.301 gfx: paging submit, 668 dwords from private buffer at 0x0, seq 279
+   739      6.301 gfx: paging submit, 336 dwords from private buffer at 0xA70, seq 280
+   740      6.301 gfx: paging submit, 716 dwords from private buffer at 0x0, seq 281
+   741      6.301 gfx: paging submit, 288 dwords from private buffer at 0xB30, seq 282
+   742      6.301 gfx: paging submit, 764 dwords from private buffer at 0x0, seq 283
+   743      6.301 gfx: paging submit, 242 dwords from private buffer at 0xBF0, seq 284
+   744      6.301 gfx: paging submit, 861 dwords from private buffer at 0x0, seq 285
+   745      6.301 wddm: display CommitVidPn call 4 detail 0x0 -> 0x00000000
+   746      6.301 wddm: SetVidPnSourceAddress segment 1 address 0xF401A64000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   747      6.301 wddm: software vsync on, 16 ms period, target 2424833
+   748      6.301 gfx: paging submit, 31 dwords from private buffer at 0xD74, seq 286
+   749      6.303 gfx: paging submit, 31 dwords from private buffer at 0xDF0, seq 287
+   750      6.303 wddm: DestroyContext
+   751      6.303 gfx: paging submit, 80 dwords from private buffer at 0xE6C, seq 288
+   752      6.303 gfx: paging submit, 423 dwords from private buffer at 0x0, seq 289
+   753      6.303 gfx: paging submit, 15 dwords from private buffer at 0x69C, seq 290
+   754      6.303 wddm: CloseAllocation 1 allocations
+   755      6.303 wddm: DestroyAllocation 1 allocations
+   756      6.303 wddm: BuildPagingBuffer operation 2 segment 0, 63784 bytes free, pass offset 0
+   757      6.303 gfx: paging submit, 67 dwords from private buffer at 0x6D8, seq 291
+   758      6.303 gfx: paging submit, 15 dwords from private buffer at 0x7E4, seq 292
+   759      6.303 wddm: CloseAllocation 1 allocations
+   760      6.303 wddm: DestroyAllocation 1 allocations
+   761      6.303 wddm: DestroyDevice
+   762      6.323 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   763      6.323 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x8DB000 size 0
+   764      6.323 wddm: malformed virtual present rejected
+   765      8.157 wddm summary: ---- DDI calls: name, count, first log line ----
+   766      8.157 wddm summary: QueryAdapterInfo                   12  first at 152
+   767      8.157 wddm summary: GetNodeMetadata                     2  first at 160
+   768      8.157 wddm summary: CreateDevice                        6  first at 167
+   769      8.157 wddm summary: DestroyDevice                       3  first at 480
+   770      8.157 wddm summary: CreateContext                       5  first at 169
+   771      8.157 wddm summary: DestroyContext                      3  first at 468
+   772      8.157 wddm summary: CreateProcess                       2  first at 166
+   773      8.157 wddm summary: SetRootPageTable                    5  first at 183
+   774      8.157 wddm summary: CreateAllocation                    8  first at 220
+   775      8.157 wddm summary: DestroyAllocation                   6  first at 473
+   776      8.157 wddm summary: DescribeAllocation                 12  first at 275
+   777      8.157 wddm summary: GetStandardAllocationDriverData     16  first at 218
+   778      8.157 wddm summary: OpenAllocation                      8  first at 222
+   779      8.157 wddm summary: CloseAllocation                     6  first at 472
+   780      8.157 wddm summary: BuildPagingBuffer                1477  first at 171
+   781      8.157 wddm summary: SubmitCommandVirtual              296  first at 203
+   782      8.157 wddm summary: Present                             9  first at 339
+   783      8.157 wddm summary: SetVidPnSourceAddress               4  first at 327
+   784      8.157 wddm summary: ControlInterrupt                  146  first at 331
+   785      8.157 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   786      8.157 wddm summary: adapter info type   1       1  first at 152
+   787      8.157 wddm summary: adapter info type  15       1  first at 153
+   788      8.157 wddm summary: adapter info type  47       1  first at 154
+   789      8.157 wddm summary: adapter info type  13       1  first at 155
+   790      8.157 wddm summary: adapter info type  14       4  first at 156
+   791      8.157 wddm summary: adapter info type  11       2  first at 163
+   792      8.157 wddm summary: adapter info type  10       1  first at 165
+   793      8.157 wddm summary: adapter info type  16       1  first at 165
+   794      8.157 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   795      8.157 wddm summary: paging operation  11    1326  first at 171
+   796      8.157 wddm summary: paging operation  12      50  first at 211
+   797      8.157 wddm summary: paging operation   9      98  first at 230
+   798      8.157 wddm summary: paging operation   2       3  first at 474
+   799      8.157 wddm summary: objects created/destroyed: dev 6/3 ctx 5/3 proc 2/0 alloc 8/6, 13 alive
+   800      8.157 wddm summary: allocations opened/closed: 8/6 calls
+   801      8.157 wddm summary: submissions 0 physical + 296 virtual, 0 preemptions, last completed fence 4
+   802      8.157 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   803      8.157 wddm summary: umd: 0 allocs (0 refused), 0 contexts, 0 submits on the ring, 0 not run
+   804      8.157 wddm profile: umd calls 0, elapsed ticks 0, QPC frequency 10000000
+   805      8.157 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+   806      8.157 wddm summary: node 1 (paging, open): 292 hardware submitted, 292 completed, 0 timeouts, 0 refused
+   807      8.157 wddm summary: SubmitCommandVirtual by node: 0: 4, 1: 292, 0 private-buffer refusals
+   808      8.157 wddm summary: BuildPagingBuffer: 0 transfers, 98 fills, 73728000 bytes, 216 insufficient-buffer
+   809      8.157 wddm summary: aperture map batches 0, unmap batches 0
+   810      8.157 wddm summary: paging TLB invalidations 50, PTE update batches 293
+   811      8.157 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+   812      8.157 wddm summary: presents 9, flips 4 of 4 address calls (0 arrived above DISPATCH_LEVEL)
+   813      8.157 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+   814      8.157 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+   815      8.157 wddm summary: widest blit 0 rows
+   816      8.157 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+   817      8.157 wddm summary: vsync not enabled by ControlInterrupt, 487 ticks, 73 reported to dxgkrnl
+   818      8.157 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+   819      8.157 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   820      8.157 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   821      8.157 vidmm summary: level 0: 1024 calls, 262656 entries, 512 valid
+   822      8.157 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+   823      8.157 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+   824      8.157 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+   825      8.157 vidmm summary: system leaf encoding coherent 0 noncoherent 16 snoop mismatches 0
+   826      8.157 vidmm summary: 1028 cpu-virtual calls, 0 gpu-physical calls
+   827      8.157 vidmm summary: 264704 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 5 roots
+             828 lines printed
+log          828 lines since this driver load, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.008 stage 10
+     1      0.008 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.008 stage 20
+     3      0.078 stage 30
+     4      0.080 stage 31
+     5      0.080 stage 32
+     6      0.080 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.080 stage 33
+     8      0.082 stage 34
+     9      0.082 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.082 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.082 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.082 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.082 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.082 gart: ready, dummy page at 0x26FFFA000
+    15      0.082 psp: ready
+    16      0.082 gpumem: ready, doorbells at 0xD0000000
+    17      0.082 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.082 ih: ready
+    19      0.084 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.084 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.084 startup: entering interrupt connection
+    22      0.086 startup: entering firmware preparation
+    23      0.090 startup: entering GART initialization
+    24      0.102 gart: op 1 -> 0x00000000 (-), result 0, 285 writes, fault offset 0x00000
+    25      0.102 startup: entering PSP initialization
+    26      0.172 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    27      0.172 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 262 us, in TMR at 0x0
+    28      0.174 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1956 us, in TMR at 0x0
+    29      0.176 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1935 us, in TMR at 0x0
+    30      0.182 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5883 us, in TMR at 0xF5FF842000
+    31      0.188 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5917 us, in TMR at 0xF5FF883000
+    32      0.192 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF8C4000
+    33      0.198 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    34      0.200 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    35      0.204 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+    36      0.206 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    37      0.206 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1736 us, in TMR at 0x0
+    38      0.206 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    39      0.206 startup: entering IH initialization
+    40      0.208 ih: init: rc 0, 20 writes
+    41      0.208 ih: op 1 -> 0x00000000, result 0, 21 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    42      0.208 startup: entering GFX initialization
+    43      0.210 startup: entering GFX stage 1
+    44      0.214 gfx: stage 1 (doorbell aperture): rc 0, 73 writes so far, 1 us
+    45      0.214 gfx: op 1 to stage 1 -> 0x00000000, result 0, 73 writes, 0 doorbells
+    46      0.216 startup: entering GFX stage 2
+    47      0.216 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    48      0.216 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    49      0.218 startup: entering GFX stage 3
+    50      0.220 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+    51      0.220 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    52      0.220 startup: entering GFX stage 4
+    53      0.222 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+    54      0.222 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+    55      0.222 startup: entering GFX stage 5
+    56      0.224 gfx: stage 5 (RLC): rc 0, 8 writes so far, 133 us
+    57      0.224 gfx: op 1 to stage 5 -> 0x00000000, result 0, 8 writes, 0 doorbells
+    58      0.226 startup: entering GFX stage 6
+    59      0.226 startup: entering CP step 1
+    60      0.228 amdgpu[0]: CP resume kiq-init begin
+
+    61      0.228 amdgpu[0]: CP resume kiq-init end result=0
+
+    62      0.228 gfx: CP step 1: rc 0, 27 writes, 40 us
+    63      0.228 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+    64      0.228 startup: CP step 1 returned 0x00000000 result 0
+    65      0.230 startup: entering CP step 2
+    66      0.230 amdgpu[0]: CP resume compute-unhalt begin
+
+    67      0.230 amdgpu[0]: CP resume compute-unhalt end
+
+    68      0.230 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+    69      0.230 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+    70      0.230 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+    71      0.230 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+    72      0.230 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+    73      0.230 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+    74      0.230 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+    75      0.230 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+    76      0.230 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+    77      0.230 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+    78      0.230 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+    79      0.230 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+    80      0.230 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+    81      0.230 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+    82      0.230 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+    83      0.230 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+    84      0.230 gfx: CP step 2: rc 0, 17 writes, 236 us
+    85      0.230 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+    86      0.230 startup: CP step 2 returned 0x00000000 result 0
+    87      0.232 startup: entering CP step 3
+    88      0.234 amdgpu[0]: CP resume kcq-enable begin
+
+    89      0.234 amdgpu[0]: CP resume kcq-enable end result=0
+
+    90      0.234 gfx: CP step 3: rc 0, 1 writes, 50 us
+    91      0.234 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+    92      0.234 startup: CP step 3 returned 0x00000000 result 0
+    93      0.234 startup: entering CP step 4
+    94      0.236 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+    95      0.236 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+    96      0.236 gfx: CP step 4: rc 0, 4 writes, 28 us
+    97      0.236 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+    98      0.236 startup: CP step 4 returned 0x00000000 result 0
+    99      0.236 startup: entering CP step 5
+   100      0.238 amdgpu[0]: CP resume kgq-enable begin
+
+   101      0.238 amdgpu[0]: CP resume kgq-enable end result=0
+
+   102      0.238 gfx: CP step 5: rc 0, 1 writes, 22 us
+   103      0.238 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   104      0.238 startup: CP step 5 returned 0x00000000 result 0
+   105      0.240 startup: entering CP step 6
+   106      0.240 amdgpu[0]: CP resume gfx-start begin
+
+   107      0.240 amdgpu[0]: CP resume gfx-start end result=0
+
+   108      0.240 gfx: CP step 6: rc 0, 3 writes, 25 us
+   109      0.240 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   110      0.240 startup: CP step 6 returned 0x00000000 result 0
+   111      0.242 startup: entering CP step 7
+   112      0.244 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   113      0.244 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   114      0.244 gfx: CP step 7: rc 0, 1 writes, 14 us
+   115      0.244 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   116      0.244 startup: CP step 7 returned 0x00000000 result 0
+   117      0.244 startup: entering CP step 8
+   118      0.246 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   119      0.246 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   120      0.246 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   121      0.246 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   122      0.246 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   123      0.246 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   124      0.246 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   125      0.246 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   126      0.246 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   127      0.246 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   128      0.246 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   129      0.246 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   130      0.246 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   131      0.246 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   132      0.246 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   133      0.246 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   134      0.246 gfx: CP step 8: rc 0, 8 writes, 69 us
+   135      0.246 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   136      0.246 startup: CP step 8 returned 0x00000000 result 0
+   137      0.248 startup: entering GFX stage 7
+   138      0.250 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 114 us
+   139      0.250 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   140      0.252 startup: entering GFX stage 8
+   141      0.252 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 24 us
+   142      0.252 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   143      0.252 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   144      0.254 startup: both engines ready
+   145      0.256 startup: attempted 0xF completed 0xF status 0x00000000 ready 1 unwind 0 quarantine 0
+   146      0.256 wddm: GPU initialized before adapter admission
+   147      0.256 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   148      0.256 stage 35
+   149      0.256 stage 39
+   150      0.256 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   151      0.256 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   152      0.256 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   153      0.256 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   154      0.256 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   155      0.256 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   156      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   157      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   158      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   159      0.256 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   160      0.256 wddm: GetNodeMetadata node 0 adapter 0
+   161      0.256 wddm: GetNodeMetadata node 1 adapter 0
+   162      0.258 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   163      0.258 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+   164      0.258 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   165      0.258 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   166      0.258 wddm: CreateProcess flags 0x00000001 pasids 1
+   167      0.258 wddm: CreateDevice flags 0x00000001 pasid 0
+   168      0.258 wddm: CreateDevice flags 0x00000001 pasid 0
+   169      0.258 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   170      0.258 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   171      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   172      0.258 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   173      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   174      0.258 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   175      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   176      0.258 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   177      0.258 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   178      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   179      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   180      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   181      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   182      0.260 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+   183      0.290 wddm: SetRootPageTable segment 3 offset 0x0, 512 entries
+   184      0.290 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+   185      0.290 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+   186      0.290 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+   187      0.290 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+   188      0.292 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+   189      0.292 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+   190      0.292 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+   191      0.292 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+   192      0.292 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+   193      0.292 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+   194      0.292 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+   195      0.292 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+   196      0.292 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+   197      0.292 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+   198      0.292 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+   199      0.294 wddm: CreateProcess flags 0x00000002 pasids 1
+   200      0.294 wddm: CreateDevice flags 0x00000002 pasid 0
+   201      0.294 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   202      0.294 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   203      0.294 wddm: SubmitCommandVirtual fence 1 node 1 flags 0x00000001 va 0x0 size 4024
+   204      0.294 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 1
+   205      0.294 wddm: SubmitCommandVirtual fence 2 node 1 flags 0x00000001 va 0x0 size 4072
+   206      0.294 gfx: paging submit, 1018 dwords from private buffer at 0x0, seq 2
+   207      0.294 wddm: SubmitCommandVirtual fence 3 node 1 flags 0x00000001 va 0x0 size 4016
+   208      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 3
+   209      0.294 wddm: SubmitCommandVirtual fence 4 node 1 flags 0x00000001 va 0x0 size 4016
+   210      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 4
+   211      0.294 wddm: BuildPagingBuffer operation 12 segment 0, 64720 bytes free, pass offset 0
+   212      0.294 wddm: SubmitCommandVirtual fence 5 node 1 flags 0x00000001 va 0x0 size 876
+   213      0.294 gfx: paging submit, 219 dwords from private buffer at 0x0, seq 5
+   214      0.294 wddm: BuildPagingBuffer operation 12 segment 0, 64596 bytes free, pass offset 0
+   215      0.294 wddm: SubmitCommandVirtual fence 6 node 1 flags 0x00000001 va 0x36C size 124
+   216      0.294 gfx: paging submit, 31 dwords from private buffer at 0x36C, seq 6
+   217      0.294 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+   218      0.294 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   219      0.294 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   220      0.294 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   221      0.294 wddm: OpenAllocation [0] handle 0x40001040 private 32 bytes -> FFFFD209671E8830 (GetHandleData said 0000000000000000)
+   222      0.294 wddm: OpenAllocation 1 allocations flags 0x00000001
+   223      0.294 wddm: SubmitCommandVirtual fence 7 node 1 flags 0x00000001 va 0x3E8 size 3072
+   224      0.294 gfx: paging submit, 768 dwords from private buffer at 0x3E8, seq 7
+   225      0.294 wddm: SubmitCommandVirtual fence 8 node 1 flags 0x00000001 va 0x0 size 4016
+   226      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 8
+   227      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 9
+   228      0.294 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 10
+   229      0.294 wddm: BuildPagingBuffer operation 12 segment 0, 62152 bytes free, pass offset 0
+   230      0.294 wddm: BuildPagingBuffer operation 9 segment 0, 62092 bytes free, pass offset 0
+   231      0.294 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 12
+
+   232      0.294 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 29
+   233      0.294 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 11
+   234      0.294 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   235      0.294 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 230
+   236      0.294 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 12
+   237      0.294 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   238      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 13
+   239      0.296 wddm: BuildPagingBuffer operation 9 segment 0, 65536 bytes free, pass offset 431
+   240      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   241      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 14
+   242      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   243      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 15
+   244      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   245      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 16
+   246      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   247      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 17
+   248      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   249      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 18
+   250      0.296 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   251      0.296 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 19
+   252      0.298 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   253      0.298 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 20
+   254      0.298 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   255      0.298 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 21
+   256      0.298 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   257      0.298 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 22
+   258      0.298 gfx: paging submit, 50 dwords from private buffer at 0x0, seq 23
+   259      0.298 gfx: paging submit, 960 dwords from private buffer at 0xC8, seq 24
+   260      0.298 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 25
+   261      0.298 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 26
+   262      0.298 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 27
+   263      0.298 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 28
+   264      0.298 wddm: BuildPagingBuffer operation 12 segment 0, 62984 bytes free, pass offset 0
+   265      0.298 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 29
+   266      0.298 gfx: paging submit, 56 dwords from private buffer at 0x0, seq 30
+   267      0.298 gfx: paging submit, 960 dwords from private buffer at 0xE0, seq 31
+   268      0.298 gfx: paging submit, 92 dwords from private buffer at 0x0, seq 32
+   269      0.298 gfx: paging submit, 912 dwords from private buffer at 0x170, seq 33
+   270      0.298 gfx: paging submit, 140 dwords from private buffer at 0x0, seq 34
+   271      0.298 gfx: paging submit, 864 dwords from private buffer at 0x230, seq 35
+   272      0.298 gfx: paging submit, 188 dwords from private buffer at 0x0, seq 36
+   273      0.298 gfx: paging submit, 822 dwords from private buffer at 0x2F0, seq 37
+   274      0.298 gfx: paging submit, 281 dwords from private buffer at 0x0, seq 38
+   275      0.298 wddm: DescribeAllocation 1920x1200 format 21
+   276      0.300 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   277      0.300 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   278      0.300 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   279      0.300 wddm: OpenAllocation [0] handle 0x400010C0 private 32 bytes -> FFFFD209671E84D0 (GetHandleData said 0000000000000000)
+   280      0.300 wddm: OpenAllocation 1 allocations flags 0x00000001
+   281      0.300 gfx: paging submit, 736 dwords from private buffer at 0x464, seq 39
+   282      0.300 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 40
+   283      0.300 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 41
+   284      0.300 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 42
+   285      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 15
+
+   286      0.300 gfx: paging submit, 1003 dwords from private buffer at 0x0, seq 43
+   287      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   288      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 44
+   289      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   290      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 45
+   291      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   292      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 46
+   293      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   294      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 47
+   295      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   296      0.300 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 48
+   297      0.300 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   298      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 49
+   299      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   300      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 50
+   301      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   302      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 51
+   303      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   304      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 52
+   305      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   306      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 53
+   307      0.302 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   308      0.302 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 54
+   309      0.302 gfx: paging submit, 85 dwords from private buffer at 0x0, seq 55
+   310      0.302 gfx: paging submit, 918 dwords from private buffer at 0x154, seq 56
+   311      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 57
+   312      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 58
+   313      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 59
+   314      0.304 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 60
+   315      0.304 gfx: paging submit, 319 dwords from private buffer at 0x0, seq 61
+   316      0.304 gfx: paging submit, 688 dwords from private buffer at 0x4FC, seq 62
+   317      0.304 gfx: paging submit, 364 dwords from private buffer at 0x0, seq 63
+   318      0.304 gfx: paging submit, 640 dwords from private buffer at 0x5B0, seq 64
+   319      0.304 gfx: paging submit, 412 dwords from private buffer at 0x0, seq 65
+   320      0.304 gfx: paging submit, 592 dwords from private buffer at 0x670, seq 66
+   321      0.304 gfx: paging submit, 460 dwords from private buffer at 0x0, seq 67
+   322      0.304 gfx: paging submit, 546 dwords from private buffer at 0x730, seq 68
+   323      0.304 gfx: paging submit, 557 dwords from private buffer at 0x0, seq 69
+   324      0.304 stage 50
+   325      0.304 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+   326      0.304 wddm: DescribeAllocation 1920x1200 format 21
+   327      0.304 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   328      0.304 wddm: software vsync on, 16 ms period, target 2424833
+   329      0.304 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   330      0.304 wddm: DescribeAllocation 1920x1200 format 21
+   331      0.528 wddm: ControlInterrupt type 3 on -> 0x00000000
+   332      0.544 wddm: ControlInterrupt type 3 off -> 0x00000000
+   333      0.544 wddm: ControlInterrupt type 3 on -> 0x00000000
+   334      0.560 wddm: ControlInterrupt type 3 off -> 0x00000000
+   335      0.560 wddm: ControlInterrupt type 3 on -> 0x00000000
+   336      0.576 wddm: ControlInterrupt type 3 off -> 0x00000000
+   337      0.576 wddm: ControlInterrupt type 3 on -> 0x00000000
+   338      0.592 wddm: ControlInterrupt type 3 off -> 0x00000000
+   339      3.479 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   340      3.479 wddm: Present list FFFFFC8016E6EBB0 (context list 256), private FFFFD20964917010/2184, driver data 0
+   341      3.479 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   342      3.479 wddm: Present list q4-7  FFFFD209671E84D0 00000000008DC000 0000000000000000 0000000000000000
+   343      3.479 wddm: Present list q8-11 FFFFD209671E8830 0000000000012000 0000000000000000 0000000000000000
+   344      3.479 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11000
+   345      3.479 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   346      3.479 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   347      3.479 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 0
+   348      3.479 wddm: malformed virtual present rejected
+   349      3.507 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   350      3.507 wddm: Present list FFFFFC8016E6EBB0 (context list 256), private FFFFD2095CB55010/2184, driver data 0
+   351      3.507 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   352      3.507 wddm: Present list q4-7  FFFFD209671E84D0 00000000008DC000 0000000000000000 0000000000000000
+   353      3.507 wddm: Present list q8-11 FFFFD209671E8830 0000000000012000 0000000000000000 0000000000000000
+   354      3.507 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   355      3.509 wddm: CreateDevice flags 0x00000002 pasid 0
+   356      3.509 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   357      3.509 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   358      3.509 gfx: paging submit, 31 dwords from private buffer at 0x8B4, seq 70
+   359      3.509 gfx: paging submit, 31 dwords from private buffer at 0x930, seq 71
+   360      3.511 wddm: software vsync off after 200 ticks
+   361      3.511 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   362      3.511 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   363      3.511 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+   364      3.511 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   365      3.511 wddm: OpenAllocation [0] handle 0x400011C0 private 32 bytes -> FFFFD20965F98210 (GetHandleData said 0000000000000000)
+   366      3.511 wddm: OpenAllocation 1 allocations flags 0x00000001
+   367      3.511 gfx: paging submit, 384 dwords from private buffer at 0x9AC, seq 72
+   368      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 73
+   369      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 74
+   370      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 75
+   371      3.511 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 76
+   372      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   373      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 77
+   374      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   375      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 78
+   376      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   377      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 79
+   378      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   379      3.511 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 80
+   380      3.511 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   381      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 81
+   382      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   383      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 82
+   384      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   385      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 83
+   386      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   387      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 84
+   388      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   389      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 85
+   390      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   391      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 86
+   392      3.513 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   393      3.513 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 87
+   394      3.515 gfx: paging submit, 450 dwords from private buffer at 0x0, seq 88
+   395      3.515 gfx: paging submit, 558 dwords from private buffer at 0x708, seq 89
+   396      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 90
+   397      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 91
+   398      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 92
+   399      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 93
+   400      3.515 gfx: paging submit, 271 dwords from private buffer at 0x0, seq 94
+   401      3.515 gfx: paging submit, 736 dwords from private buffer at 0x43C, seq 95
+   402      3.515 gfx: paging submit, 316 dwords from private buffer at 0x0, seq 96
+   403      3.515 gfx: paging submit, 688 dwords from private buffer at 0x4F0, seq 97
+   404      3.515 gfx: paging submit, 364 dwords from private buffer at 0x0, seq 98
+   405      3.515 gfx: paging submit, 640 dwords from private buffer at 0x5B0, seq 99
+   406      3.515 gfx: paging submit, 412 dwords from private buffer at 0x0, seq 100
+   407      3.515 gfx: paging submit, 592 dwords from private buffer at 0x670, seq 101
+   408      3.515 gfx: paging submit, 460 dwords from private buffer at 0x0, seq 102
+   409      3.515 gfx: paging submit, 544 dwords from private buffer at 0x730, seq 103
+   410      3.515 gfx: paging submit, 561 dwords from private buffer at 0x0, seq 104
+   411      3.515 wddm: DescribeAllocation 1920x1200 format 21
+   412      3.515 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   413      3.515 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+   414      3.515 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   415      3.515 wddm: OpenAllocation [0] handle 0x40001240 private 32 bytes -> FFFFD20965F97D00 (GetHandleData said 0000000000000000)
+   416      3.515 wddm: OpenAllocation 1 allocations flags 0x00000001
+   417      3.515 gfx: paging submit, 448 dwords from private buffer at 0x8C4, seq 105
+   418      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 106
+   419      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 107
+   420      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 108
+   421      3.515 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 109
+   422      3.515 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 12
+
+   423      3.515 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 110
+   424      3.515 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   425      3.515 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 111
+   426      3.515 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   427      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 112
+   428      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   429      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 113
+   430      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   431      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 114
+   432      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   433      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 115
+   434      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   435      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 116
+   436      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   437      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 117
+   438      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   439      3.517 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 118
+   440      3.517 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   441      3.519 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 119
+   442      3.519 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   443      3.519 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 120
+   444      3.519 gfx: paging submit, 385 dwords from private buffer at 0x0, seq 121
+   445      3.519 gfx: paging submit, 624 dwords from private buffer at 0x604, seq 122
+   446      3.519 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 123
+   447      3.519 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 124
+   448      3.519 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 125
+   449      3.519 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 126
+   450      3.519 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 127
+   451      3.519 gfx: paging submit, 200 dwords from private buffer at 0x0, seq 128
+   452      3.519 gfx: paging submit, 816 dwords from private buffer at 0x320, seq 129
+   453      3.519 gfx: paging submit, 236 dwords from private buffer at 0x0, seq 130
+   454      3.519 gfx: paging submit, 768 dwords from private buffer at 0x3B0, seq 131
+   455      3.519 gfx: paging submit, 284 dwords from private buffer at 0x0, seq 132
+   456      3.519 gfx: paging submit, 720 dwords from private buffer at 0x470, seq 133
+   457      3.519 gfx: paging submit, 332 dwords from private buffer at 0x0, seq 134
+   458      3.519 gfx: paging submit, 678 dwords from private buffer at 0x530, seq 135
+   459      3.519 gfx: paging submit, 425 dwords from private buffer at 0x0, seq 136
+   460      3.519 wddm: display CommitVidPn call 2 detail 0x0 -> 0x00000000
+   461      3.519 wddm: DescribeAllocation 1920x1200 format 21
+   462      3.519 wddm: SetVidPnSourceAddress segment 1 address 0xF401A64000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   463      3.519 wddm: software vsync on, 16 ms period, target 2424833
+   464      3.519 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   465      3.519 wddm: DescribeAllocation 1920x1200 format 21
+   466      3.521 gfx: paging submit, 31 dwords from private buffer at 0x6A4, seq 137
+   467      3.521 gfx: paging submit, 31 dwords from private buffer at 0x720, seq 138
+   468      3.521 wddm: DestroyContext
+   469      3.521 gfx: paging submit, 528 dwords from private buffer at 0x79C, seq 139
+   470      3.521 gfx: paging submit, 977 dwords from private buffer at 0x0, seq 140
+   471      3.521 gfx: paging submit, 15 dwords from private buffer at 0xF44, seq 141
+   472      3.521 wddm: CloseAllocation 1 allocations
+   473      3.521 wddm: DestroyAllocation 1 allocations
+   474      3.521 wddm: BuildPagingBuffer operation 2 segment 0, 61568 bytes free, pass offset 0
+   475      3.521 gfx: paging submit, 16 dwords from private buffer at 0xF80, seq 142
+   476      3.521 gfx: paging submit, 37 dwords from private buffer at 0x0, seq 143
+   477      3.521 gfx: paging submit, 15 dwords from private buffer at 0x94, seq 144
+   478      3.521 wddm: CloseAllocation 1 allocations
+   479      3.521 wddm: DestroyAllocation 1 allocations
+   480      3.521 wddm: DestroyDevice
+   481      3.541 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   482      3.541 wddm: Present list FFFFFC8015B5CBB0 (context list 256), private FFFFD20964694660/2184, driver data 0
+   483      3.541 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   484      3.541 wddm: Present list q4-7  FFFFD20965F97D00 0000000001A72000 0000000000000000 0000000000000000
+   485      3.541 wddm: Present list q8-11 FFFFD20965F98210 00000000011A8000 0000000000000000 0000000000000000
+   486      3.541 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11A7000
+   487      3.541 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   488      3.541 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   489      3.541 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x11A7000 size 0
+   490      3.541 wddm: malformed virtual present rejected
+   491      6.215 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+   492      6.215 wddm: Present list FFFFFC8015B5CBB0 (context list 256), private FFFFD2095F1686A0/2184, driver data 0
+   493      6.215 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   494      6.215 wddm: Present list q4-7  FFFFD20965F97D00 0000000001A72000 0000000000000000 0000000000000000
+   495      6.215 wddm: Present list q8-11 FFFFD20965F98210 00000000011A8000 0000000000000000 0000000000000000
+   496      6.215 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11A6000
+   497      6.241 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   498      6.241 wddm: Present list FFFFFC8015B5CBB0 (context list 256), private FFFFD20964694660/2184, driver data 0
+   499      6.241 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   500      6.241 wddm: Present list q4-7  FFFFD20965F97D00 0000000001A72000 0000000000000000 0000000000000000
+   501      6.241 wddm: Present list q8-11 FFFFD20965F98210 00000000011A8000 0000000000000000 0000000000000000
+   502      6.241 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x11A7000
+   503      6.241 wddm: CreateDevice flags 0x00000002 pasid 0
+   504      6.241 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   505      6.241 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   506      6.241 gfx: paging submit, 31 dwords from private buffer at 0xD0, seq 145
+   507      6.241 gfx: paging submit, 926 dwords from private buffer at 0x14C, seq 146
+   508      6.241 gfx: paging submit, 185 dwords from private buffer at 0x0, seq 147
+   509      6.243 wddm: software vsync off after 370 ticks
+   510      6.243 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   511      6.243 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   512      6.243 wddm: OpenAllocation [0] handle 0x40001340 private 32 bytes -> FFFFD20963CECE10 (GetHandleData said 0000000000000000)
+   513      6.243 wddm: OpenAllocation 1 allocations flags 0x00000001
+   514      6.243 gfx: paging submit, 832 dwords from private buffer at 0x2E4, seq 148
+   515      6.243 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 149
+   516      6.243 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 150
+   517      6.245 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 151
+   518      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 11
+
+   519      6.245 gfx: paging submit, 1007 dwords from private buffer at 0x0, seq 152
+   520      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   521      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 153
+   522      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   523      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 154
+   524      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   525      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 155
+   526      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   527      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 156
+   528      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   529      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 157
+   530      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   531      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 158
+   532      6.245 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   533      6.245 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 159
+   534      6.247 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   535      6.247 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 160
+   536      6.247 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   537      6.247 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 161
+   538      6.247 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   539      6.247 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 162
+   540      6.247 gfx: paging submit, 990 dwords from private buffer at 0x0, seq 163
+   541      6.247 gfx: paging submit, 16 dwords from private buffer at 0xF78, seq 164
+   542      6.247 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 165
+   543      6.247 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 166
+   544      6.247 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 167
+   545      6.247 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 168
+   546      6.247 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 169
+   547      6.247 gfx: paging submit, 402 dwords from private buffer at 0x0, seq 170
+   548      6.247 gfx: paging submit, 608 dwords from private buffer at 0x648, seq 171
+   549      6.247 gfx: paging submit, 444 dwords from private buffer at 0x0, seq 172
+   550      6.249 gfx: paging submit, 560 dwords from private buffer at 0x6F0, seq 173
+   551      6.249 gfx: paging submit, 492 dwords from private buffer at 0x0, seq 174
+   552      6.249 gfx: paging submit, 512 dwords from private buffer at 0x7B0, seq 175
+   553      6.249 gfx: paging submit, 540 dwords from private buffer at 0x0, seq 176
+   554      6.249 gfx: paging submit, 464 dwords from private buffer at 0x870, seq 177
+   555      6.249 gfx: paging submit, 588 dwords from private buffer at 0x0, seq 178
+   556      6.249 gfx: paging submit, 416 dwords from private buffer at 0x930, seq 179
+   557      6.249 gfx: paging submit, 689 dwords from private buffer at 0x0, seq 180
+   558      6.249 wddm: DescribeAllocation 1920x1200 format 21
+   559      6.249 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   560      6.249 wddm: OpenAllocation [0] handle 0x400013C0 private 32 bytes -> FFFFD20963CECB40 (GetHandleData said 0000000000000000)
+   561      6.249 wddm: OpenAllocation 1 allocations flags 0x00000001
+   562      6.249 gfx: paging submit, 320 dwords from private buffer at 0xAC4, seq 181
+   563      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 182
+   564      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 183
+   565      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 184
+   566      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 185
+   567      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+   568      6.249 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 186
+   569      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   570      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 187
+   571      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   572      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 188
+   573      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   574      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 189
+   575      6.249 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   576      6.249 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 190
+   577      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   578      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 191
+   579      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   580      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 192
+   581      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   582      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 193
+   583      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   584      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 194
+   585      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   586      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 195
+   587      6.251 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   588      6.251 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 196
+   589      6.251 gfx: paging submit, 515 dwords from private buffer at 0x0, seq 197
+   590      6.253 gfx: paging submit, 496 dwords from private buffer at 0x80C, seq 198
+   591      6.253 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 199
+   592      6.253 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 200
+   593      6.253 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 201
+   594      6.253 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202
+   595      6.253 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 203
+   596      6.253 gfx: paging submit, 522 dwords from private buffer at 0x0, seq 204
+   597      6.253 gfx: paging submit, 496 dwords from private buffer at 0x828, seq 205
+   598      6.253 gfx: paging submit, 556 dwords from private buffer at 0x0, seq 206
+   599      6.253 gfx: paging submit, 448 dwords from private buffer at 0x8B0, seq 207
+   600      6.253 gfx: paging submit, 604 dwords from private buffer at 0x0, seq 208
+   601      6.253 gfx: paging submit, 400 dwords from private buffer at 0x970, seq 209
+   602      6.253 gfx: paging submit, 652 dwords from private buffer at 0x0, seq 210
+   603      6.253 gfx: paging submit, 352 dwords from private buffer at 0xA30, seq 211
+   604      6.253 gfx: paging submit, 751 dwords from private buffer at 0x0, seq 212
+   605      6.253 wddm: display CommitVidPn call 3 detail 0x0 -> 0x00000000
+   606      6.253 wddm: DescribeAllocation 1920x1200 format 21
+   607      6.253 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   608      6.253 wddm: software vsync on, 16 ms period, target 2424833
+   609      6.253 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   610      6.253 gfx: paging submit, 31 dwords from private buffer at 0xBBC, seq 213
+   611      6.253 gfx: paging submit, 31 dwords from private buffer at 0xC38, seq 214
+   612      6.253 wddm: DestroyContext
+   613      6.253 gfx: paging submit, 192 dwords from private buffer at 0xCB4, seq 215
+   614      6.255 gfx: paging submit, 1016 dwords from private buffer at 0x0, seq 216
+   615      6.255 gfx: paging submit, 311 dwords from private buffer at 0x0, seq 217
+   616      6.255 gfx: paging submit, 15 dwords from private buffer at 0x4DC, seq 218
+   617      6.255 wddm: CloseAllocation 1 allocations
+   618      6.255 wddm: DestroyAllocation 1 allocations
+   619      6.255 wddm: BuildPagingBuffer operation 2 segment 0, 64232 bytes free, pass offset 0
+   620      6.255 gfx: paging submit, 41 dwords from private buffer at 0x518, seq 219
+   621      6.255 gfx: paging submit, 15 dwords from private buffer at 0x5BC, seq 220
+   622      6.255 wddm: CloseAllocation 1 allocations
+   623      6.255 wddm: DestroyAllocation 1 allocations
+   624      6.255 wddm: DestroyDevice
+   625      6.273 wddm: Present flags 0x00000001 source 0 dest 0, 4 sub-rectangles, 4096 DMA bytes free
+   626      6.273 wddm: Present list FFFFFC8016C6EBB0 (context list 256), private FFFFD20964E59010/2184, driver data 0
+   627      6.273 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   628      6.273 wddm: Present list q4-7  FFFFD20963CECB40 0000000000011000 0000000000000000 0000000000000000
+   629      6.273 wddm: Present list q8-11 FFFFD20963CECE10 000000000233D000 0000000000000000 0000000000000000
+   630      6.273 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   631      6.273 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   632      6.273 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+   633      6.273 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x10000 size 0
+   634      6.273 wddm: malformed virtual present rejected
+   635      6.273 wddm: Present flags 0x00000001 source 0 dest 0, 2 sub-rectangles, 4096 DMA bytes free
+   636      6.273 wddm: Present list FFFFFC8016C6EBB0 (context list 256), private FFFFD20965153010/2184, driver data 0
+   637      6.273 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   638      6.273 wddm: Present list q4-7  FFFFD20963CECB40 0000000000011000 0000000000000000 0000000000000000
+   639      6.273 wddm: Present list q8-11 FFFFD20963CECE10 000000000233D000 0000000000000000 0000000000000000
+   640      6.273 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x233C000
+   641      6.289 wddm: Present flags 0x00000001 source 0 dest 0, 3 sub-rectangles, 4096 DMA bytes free
+   642      6.289 wddm: Present list FFFFFC8016C6EBB0 (context list 256), private FFFFD20964E59010/2184, driver data 0
+   643      6.289 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+   644      6.289 wddm: Present list q4-7  FFFFD20963CECB40 0000000000011000 0000000000000000 0000000000000000
+   645      6.289 wddm: Present list q8-11 FFFFD20963CECE10 000000000233D000 0000000000000000 0000000000000000
+   646      6.289 wddm: Present dst (0,0)-(1920,1200) src (0,0)-(1920,1200) va 0x10000
+   647      6.289 wddm: CreateDevice flags 0x00000002 pasid 0
+   648      6.289 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   649      6.289 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   650      6.289 gfx: paging submit, 31 dwords from private buffer at 0x5F8, seq 221
+   651      6.289 gfx: paging submit, 31 dwords from private buffer at 0x674, seq 222
+   652      6.291 wddm: software vsync off after 372 ticks
+   653      6.291 wddm: display SetVidPnSourceVisibility call 6 detail 0x0 -> 0x00000000
+   654      6.291 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   655      6.291 wddm: OpenAllocation [0] handle 0x400014C0 private 32 bytes -> FFFFD209671E8CB0 (GetHandleData said 0000000000000000)
+   656      6.291 wddm: OpenAllocation 1 allocations flags 0x00000001
+   657      6.293 gfx: paging submit, 560 dwords from private buffer at 0x6F0, seq 223
+   658      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 224
+   659      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 225
+   660      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 226
+   661      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 227
+   662      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+   663      6.293 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 228
+   664      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   665      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 229
+   666      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   667      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 230
+   668      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   669      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 231
+   670      6.293 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   671      6.293 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 232
+   672      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   673      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 233
+   674      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   675      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 234
+   676      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   677      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 235
+   678      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   679      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 236
+   680      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   681      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 237
+   682      6.295 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   683      6.295 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 238
+   684      6.297 gfx: paging submit, 275 dwords from private buffer at 0x0, seq 239
+   685      6.297 gfx: paging submit, 736 dwords from private buffer at 0x44C, seq 240
+   686      6.297 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 241
+   687      6.297 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 242
+   688      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 243
+   689      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 244
+   690      6.297 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 245
+   691      6.297 gfx: paging submit, 300 dwords from private buffer at 0x0, seq 246
+   692      6.297 gfx: paging submit, 704 dwords from private buffer at 0x4B0, seq 247
+   693      6.297 gfx: paging submit, 348 dwords from private buffer at 0x0, seq 248
+   694      6.297 gfx: paging submit, 656 dwords from private buffer at 0x570, seq 249
+   695      6.297 gfx: paging submit, 396 dwords from private buffer at 0x0, seq 250
+   696      6.297 gfx: paging submit, 608 dwords from private buffer at 0x630, seq 251
+   697      6.297 gfx: paging submit, 444 dwords from private buffer at 0x0, seq 252
+   698      6.297 gfx: paging submit, 560 dwords from private buffer at 0x6F0, seq 253
+   699      6.297 gfx: paging submit, 543 dwords from private buffer at 0x0, seq 254
+   700      6.297 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+   701      6.297 wddm: OpenAllocation [0] handle 0x40001540 private 32 bytes -> FFFFD209671E8440 (GetHandleData said 0000000000000000)
+   702      6.297 wddm: OpenAllocation 1 allocations flags 0x00000001
+   703      6.297 gfx: paging submit, 464 dwords from private buffer at 0x87C, seq 255
+   704      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 256
+   705      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 257
+   706      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 258
+   707      6.297 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 259
+   708      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   709      6.297 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 260
+   710      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   711      6.297 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 261
+   712      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   713      6.297 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 262
+   714      6.297 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   715      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 263
+   716      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   717      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 264
+   718      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   719      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 265
+   720      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   721      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 266
+   722      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   723      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 267
+   724      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   725      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 268
+   726      6.299 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   727      6.299 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 269
+   728      6.301 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+   729      6.301 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 270
+   730      6.301 gfx: paging submit, 370 dwords from private buffer at 0x0, seq 271
+   731      6.301 gfx: paging submit, 646 dwords from private buffer at 0x5C8, seq 272
+   732      6.301 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 273
+   733      6.301 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 274
+   734      6.301 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 275
+   735      6.301 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 276
+   736      6.301 gfx: paging submit, 621 dwords from private buffer at 0x0, seq 277
+   737      6.301 gfx: paging submit, 384 dwords from private buffer at 0x9B4, seq 278
+   738      6.301 gfx: paging submit, 668 dwords from private buffer at 0x0, seq 279
+   739      6.301 gfx: paging submit, 336 dwords from private buffer at 0xA70, seq 280
+   740      6.301 gfx: paging submit, 716 dwords from private buffer at 0x0, seq 281
+   741      6.301 gfx: paging submit, 288 dwords from private buffer at 0xB30, seq 282
+   742      6.301 gfx: paging submit, 764 dwords from private buffer at 0x0, seq 283
+   743      6.301 gfx: paging submit, 242 dwords from private buffer at 0xBF0, seq 284
+   744      6.301 gfx: paging submit, 861 dwords from private buffer at 0x0, seq 285
+   745      6.301 wddm: display CommitVidPn call 4 detail 0x0 -> 0x00000000
+   746      6.301 wddm: SetVidPnSourceAddress segment 1 address 0xF401A64000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+   747      6.301 wddm: software vsync on, 16 ms period, target 2424833
+   748      6.301 gfx: paging submit, 31 dwords from private buffer at 0xD74, seq 286
+   749      6.303 gfx: paging submit, 31 dwords from private buffer at 0xDF0, seq 287
+   750      6.303 wddm: DestroyContext
+   751      6.303 gfx: paging submit, 80 dwords from private buffer at 0xE6C, seq 288
+   752      6.303 gfx: paging submit, 423 dwords from private buffer at 0x0, seq 289
+   753      6.303 gfx: paging submit, 15 dwords from private buffer at 0x69C, seq 290
+   754      6.303 wddm: CloseAllocation 1 allocations
+   755      6.303 wddm: DestroyAllocation 1 allocations
+   756      6.303 wddm: BuildPagingBuffer operation 2 segment 0, 63784 bytes free, pass offset 0
+   757      6.303 gfx: paging submit, 67 dwords from private buffer at 0x6D8, seq 291
+   758      6.303 gfx: paging submit, 15 dwords from private buffer at 0x7E4, seq 292
+   759      6.303 wddm: CloseAllocation 1 allocations
+   760      6.303 wddm: DestroyAllocation 1 allocations
+   761      6.303 wddm: DestroyDevice
+   762      6.323 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+   763      6.323 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x8DB000 size 0
+   764      6.323 wddm: malformed virtual present rejected
+   765      8.157 wddm summary: ---- DDI calls: name, count, first log line ----
+   766      8.157 wddm summary: QueryAdapterInfo                   12  first at 152
+   767      8.157 wddm summary: GetNodeMetadata                     2  first at 160
+   768      8.157 wddm summary: CreateDevice                        6  first at 167
+   769      8.157 wddm summary: DestroyDevice                       3  first at 480
+   770      8.157 wddm summary: CreateContext                       5  first at 169
+   771      8.157 wddm summary: DestroyContext                      3  first at 468
+   772      8.157 wddm summary: CreateProcess                       2  first at 166
+   773      8.157 wddm summary: SetRootPageTable                    5  first at 183
+   774      8.157 wddm summary: CreateAllocation                    8  first at 220
+   775      8.157 wddm summary: DestroyAllocation                   6  first at 473
+   776      8.157 wddm summary: DescribeAllocation                 12  first at 275
+   777      8.157 wddm summary: GetStandardAllocationDriverData     16  first at 218
+   778      8.157 wddm summary: OpenAllocation                      8  first at 222
+   779      8.157 wddm summary: CloseAllocation                     6  first at 472
+   780      8.157 wddm summary: BuildPagingBuffer                1477  first at 171
+   781      8.157 wddm summary: SubmitCommandVirtual              296  first at 203
+   782      8.157 wddm summary: Present                             9  first at 339
+   783      8.157 wddm summary: SetVidPnSourceAddress               4  first at 327
+   784      8.157 wddm summary: ControlInterrupt                  146  first at 331
+   785      8.157 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+   786      8.157 wddm summary: adapter info type   1       1  first at 152
+   787      8.157 wddm summary: adapter info type  15       1  first at 153
+   788      8.157 wddm summary: adapter info type  47       1  first at 154
+   789      8.157 wddm summary: adapter info type  13       1  first at 155
+   790      8.157 wddm summary: adapter info type  14       4  first at 156
+   791      8.157 wddm summary: adapter info type  11       2  first at 163
+   792      8.157 wddm summary: adapter info type  10       1  first at 165
+   793      8.157 wddm summary: adapter info type  16       1  first at 165
+   794      8.157 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+   795      8.157 wddm summary: paging operation  11    1326  first at 171
+   796      8.157 wddm summary: paging operation  12      50  first at 211
+   797      8.157 wddm summary: paging operation   9      98  first at 230
+   798      8.157 wddm summary: paging operation   2       3  first at 474
+   799      8.157 wddm summary: objects created/destroyed: dev 6/3 ctx 5/3 proc 2/0 alloc 8/6, 13 alive
+   800      8.157 wddm summary: allocations opened/closed: 8/6 calls
+   801      8.157 wddm summary: submissions 0 physical + 296 virtual, 0 preemptions, last completed fence 4
+   802      8.157 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   803      8.157 wddm summary: umd: 0 allocs (0 refused), 0 contexts, 0 submits on the ring, 0 not run
+   804      8.157 wddm profile: umd calls 0, elapsed ticks 0, QPC frequency 10000000
+   805      8.157 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+   806      8.157 wddm summary: node 1 (paging, open): 292 hardware submitted, 292 completed, 0 timeouts, 0 refused
+   807      8.157 wddm summary: SubmitCommandVirtual by node: 0: 4, 1: 292, 0 private-buffer refusals
+   808      8.157 wddm summary: BuildPagingBuffer: 0 transfers, 98 fills, 73728000 bytes, 216 insufficient-buffer
+   809      8.157 wddm summary: aperture map batches 0, unmap batches 0
+   810      8.157 wddm summary: paging TLB invalidations 50, PTE update batches 293
+   811      8.157 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+   812      8.157 wddm summary: presents 9, flips 4 of 4 address calls (0 arrived above DISPATCH_LEVEL)
+   813      8.157 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+   814      8.157 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+   815      8.157 wddm summary: widest blit 0 rows
+   816      8.157 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+   817      8.157 wddm summary: vsync not enabled by ControlInterrupt, 487 ticks, 73 reported to dxgkrnl
+   818      8.157 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+   819      8.157 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+   820      8.157 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+   821      8.157 vidmm summary: level 0: 1024 calls, 262656 entries, 512 valid
+   822      8.157 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+   823      8.157 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+   824      8.157 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+   825      8.157 vidmm summary: system leaf encoding coherent 0 noncoherent 16 snoop mismatches 0
+   826      8.157 vidmm summary: 1028 cpu-virtual calls, 0 gpu-physical calls
+   827      8.157 vidmm summary: 264704 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 5 roots
+             828 lines printed
+boot_after=2026-09-23T15:39:09
+trial_finished

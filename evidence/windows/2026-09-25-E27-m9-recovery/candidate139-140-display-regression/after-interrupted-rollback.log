@@ -1,0 +1,11 @@
+current_version=0.7.136.1
+problem=43
+no display adapter with hardware id PCI\VEN_1002&DEV_13FE among the 2 present:
+  ROOT\BasicRender  (Microsoft Basic Render Driver)
+  ROOT\BasicDisplay  (Microsoft Basic Display Driver)
+
+  Id StartTime            
+  -- ---------            
+9596 9/24/2026 11:49:39 PM
+
+

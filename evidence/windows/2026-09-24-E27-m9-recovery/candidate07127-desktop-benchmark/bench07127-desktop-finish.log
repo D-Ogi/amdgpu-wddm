@@ -1,0 +1,25 @@
+stories15M exit=0
+tinyllama exit=0
+UnconfirmedStarts = 0
+
+  Id StartTime                CPU Responding
+  -- ---------                --- ----------
+4448 9/24/2026 1:58:18 PM 149.625       True
+
+
+
+EnableFullWddm UnconfirmedStarts
+-------------- -----------------
+             0                 0
+
+
+
+
+LastRunTime    : 9/24/2026 2:08:08 PM
+LastTaskResult : 3221225786
+
+
+
+boot_after=2026-09-24T11:44:14
+final_time=2026-09-24T14:11:18
+benchmark_collected_without_rerun

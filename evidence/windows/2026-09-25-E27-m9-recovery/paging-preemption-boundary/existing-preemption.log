@@ -1,0 +1,2 @@
+after.c
+PASS: six preemption controls; rejection ordering on both nodes, watchdog/late fence, active submit, publication race, high-bit initial fence, no regression, wrap

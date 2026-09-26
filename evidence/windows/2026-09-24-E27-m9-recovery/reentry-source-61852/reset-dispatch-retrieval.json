@@ -1,0 +1,22 @@
+[
+  {
+    "file": "amdgpu_job.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_job.c",
+    "sha256": "244a861bccfc6beb0c7cb4b7e4f4c9899f81e1368c6ec4054633d71ecd1ff4c2"
+  },
+  {
+    "file": "amdgpu_ring.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_ring.c",
+    "sha256": "32af0ac0a2f043c7cb7b5594270279ade457ea74ccf463babec6dd4c7e84c6b1"
+  },
+  {
+    "file": "amdgpu.h",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu.h",
+    "sha256": "4e74a2496e74ac620f7e0b19c1b24c21f5d5a832bb72797b2cb5c4487087cb51"
+  },
+  {
+    "file": "amdgpu_drv.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c",
+    "sha256": "0018f6bfd9667d07f2777f2bd324bdb661f9dab500930c7a7ed461f13e7cb3f5"
+  }
+]

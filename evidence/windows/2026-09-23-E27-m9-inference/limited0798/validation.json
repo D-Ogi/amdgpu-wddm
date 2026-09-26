@@ -1,0 +1,12 @@
+{
+  "stories15M": {
+    "layers": "7",
+    "linux_match": true,
+    "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  },
+  "tinyllama": {
+    "layers": "23",
+    "linux_match": true,
+    "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518"
+  }
+}

@@ -1,0 +1,5 @@
+# Hidden DWM shader assertion, 2026-09-23
+
+KMD0.7.56.1, early-context UMD SHA25671EBDCA3CF8E9F3790BC7AF1CB03E320B9BBBA485257EEAD777B3EE21E9C5A47. MiniDumpWriteDump on lab DWM9564 succeeds. Prior sleeping-process positive control yields NtDelayExecution/SleepEx. No debugger attaches to DWM. Offline CDB shows compositor thread in a CRT assertion message box from exec_instruction, source line5380. Stack dialog text identifies LoopStackTop < TGSI_EXEC_MAX_LOOP_NESTING (32). The dump does not include the stack counter memory; its exact value is unknown. Raw process dumps remain outside the repository.
+
+Local D3D10-token translator/interpreter test reproduces increasing loop/condition depth with zero branch targets in three shaders; stopped at31 to avoid the assertion. After translator label fix, seven cases terminate with balanced stacks. This establishes the translator defect, but by itself does not prove that it is the only cause of DWM failure. Hardware test follows separately. Test source and patch: experiments/E26-wddm-desktop/tgsi-branch-test.c and mesa-branch-labels.patch.

@@ -1,0 +1,4 @@
+candidate125.c
+FAIL mask=1 full WDDM must not restore firmware translation state
+FAIL mask=1 repeat stop preserves final hardware state without duplicate release
+3644 checks, 2 failures

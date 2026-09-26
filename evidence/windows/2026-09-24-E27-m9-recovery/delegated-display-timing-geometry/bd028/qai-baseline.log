@@ -1,0 +1,7 @@
+compile (driver\kmd\wddm.c, unmodified, plus the bridge)
+  P:\BC-250\bc250-win\driver\kmd\wddm.c(12): fatal error C1083: Nie można otworzyć pliku dołącz: 'bc250_gfx.h': No such file or directory
+  P:\BC-250\bc250-win\tools\wddm_contract_check\host\qai_bridge.c(569): error C2371: "VidMmStart": zmiana definicji; różne typy podstawowe
+  P:\BC-250\bc250-win\driver\kmd\bc250kmd.h(665): note: zobacz deklarację „VidMmStart”
+  P:\BC-250\bc250-win\tools\wddm_contract_check\host\qai_bridge.c(580): error C2371: "VidMmUpdatePageTable": zmiana definicji; różne typy podstawowe
+  P:\BC-250\bc250-win\driver\kmd\bc250kmd.h(675): note: zobacz deklarację „VidMmUpdatePageTable”
+  Generowanie kodu...

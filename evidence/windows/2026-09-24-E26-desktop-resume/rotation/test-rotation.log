@@ -1,0 +1,9 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+rotation-test.cpp
+2/3 buffer identity, stable runtime handles, retained RTV/SRV and bound views: failures=0
+rotation-negative.cpp
+2/3 buffer identity, stable runtime handles, retained RTV/SRV and bound views: failures=18

@@ -1,0 +1,50 @@
+
+  Id StartTime             CPU
+  -- ---------             ---
+4448 9/24/2026 1:58:18 PM 1159
+
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+boot_before=2026-09-24T11:44:14
+driver_version=0.7.127.1
+14:47:14 Tctl 67.0 C (raw 741B0FEF)
+installed_sha256=476858800F28A5C103E43FECCC8595C6042BA2479EE18FCFCC3D9FD313953E90
+input_file=llama-bench.exe sha256=333741E180F23CF016A618CA633402448E44BDFBB0BB078870671B2C40CBCAB8
+input_file=stories15M-q4_0.gguf sha256=66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739
+input_file=tinyllama-1.1b-chat-v1.0.Q4_0.gguf sha256=DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556
+icd_hash=6B589A8686DF6FFBB2BE447845222A3607E7E162B89923FA5976FCD9FD412754
+14:47:20 Tctl 67.0 C (raw 741B0FEF)
+14:47:23 Tctl 66.9 C (raw 73FB0FEF)
+14:47:27 Tctl 66.9 C (raw 73FB0FEF)
+14:47:30 Tctl 68.4 C (raw 757B0FEF)
+14:47:33 Tctl 68.9 C (raw 75FB0FEF)
+14:47:36 Tctl 68.8 C (raw 75DB0FEF)
+14:47:40 Tctl 68.6 C (raw 75BB0FEF)
+task_state=Ready
+worker_exit=0
+stories15M exit=0
+
+n_prompt n_gen avg_ts stddev_ts
+-------- ----- ------ ---------
+                               
+
+
+tinyllama exit=0
+
+n_prompt n_gen avg_ts stddev_ts
+-------- ----- ------ ---------
+                               
+
+
+limited_run_complete
+boot_after=2026-09-24T11:44:14
+UnconfirmedStarts = 0
+
+  Id StartTime            Responding
+  -- ---------            ----------
+4448 9/24/2026 1:58:18 PM       True
+
+
+final_time=2026-09-24T14:47:42

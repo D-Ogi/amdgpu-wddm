@@ -1,0 +1,106 @@
+{
+  "soc15_common.h": {
+    "sha256": "cd4df2dcb34a61d17d88a6dbc87e4e6f5ebf1b4041e04c9998f55e17a5a92ae4",
+    "source_lines": [
+      [
+        38,
+        49
+      ],
+      [
+        143,
+        150
+      ]
+    ]
+  },
+  "amdgpu.h": {
+    "sha256": "72963bc3074437e42a0081501a9d74c6daf730c1531a49868d1036db71e6c288",
+    "source_lines": [
+      [
+        1439,
+        1445
+      ]
+    ]
+  },
+  "amdgpu_device.c": {
+    "sha256": "b41793be1d7e8a8b87dbc44d3e7644f82c9d19d3d02a8e19258033e462e87172",
+    "source_lines": [
+      [
+        680,
+        742
+      ],
+      [
+        847,
+        869
+      ],
+      [
+        3617,
+        3657
+      ],
+      [
+        3669,
+        3734
+      ],
+      [
+        4945,
+        5011
+      ]
+    ]
+  },
+  "amdgpu_drv.c": {
+    "sha256": "a4e6fc46b78e8a0812949726a6ef00097f32c6d2434a86381d78c3a07f8c4f7d",
+    "source_lines": [
+      [
+        2519,
+        2551
+      ]
+    ]
+  },
+  "amdgpu_gart.c": {
+    "sha256": "2f0086f4c2d60049d4691d7aeb14b17ee92bd79ca5861b5a2b3855ef76c0b651",
+    "source_lines": [
+      [
+        301,
+        334
+      ],
+      [
+        403,
+        420
+      ]
+    ]
+  },
+  "gmc_v10_0.c": {
+    "sha256": "69327db125dce89ed32d65f662f1d089ea4cf41aabdd89a0eaa03ece3f9dffc7",
+    "source_lines": [
+      [
+        251,
+        327
+      ],
+      [
+        1016,
+        1041
+      ]
+    ]
+  },
+  "gfxhub_v2_0.c": {
+    "sha256": "55a041f7f30bc54c8f0a8f9671d74936cabbab5332566c416cceffdddecdc104",
+    "source_lines": [
+      [
+        361,
+        386
+      ]
+    ]
+  },
+  "gfx_v10_0.c": {
+    "sha256": "41b4e75728f3ad25f69c179536f8b7ae30118026315216d5fd891f445a6a7e99",
+    "source_lines": [
+      [
+        5475,
+        5482
+      ],
+      [
+        7635,
+        7688
+      ]
+    ]
+  }
+}

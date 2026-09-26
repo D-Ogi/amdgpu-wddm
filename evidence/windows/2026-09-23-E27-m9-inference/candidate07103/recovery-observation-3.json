@@ -1,0 +1,24 @@
+{
+  "utc": "2026-09-23T19:15:56.236919+00:00",
+  "routes": [
+    {
+      "route": 0,
+      "tcp22": false
+    },
+    {
+      "route": 1,
+      "tcp22": false
+    },
+    {
+      "route": 2,
+      "tcp22": false
+    }
+  ],
+  "session": 21191,
+  "original_log_tail": [
+    "",
+    "Enabling device:          PCI\\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\\4&19caf403&0&0041",
+    "Device enabled successfully.",
+    ""
+  ]
+}

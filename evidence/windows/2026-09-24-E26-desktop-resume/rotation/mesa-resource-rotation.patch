@@ -1,0 +1,237 @@
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -64,8 +64,13 @@
+ struct Query;
+ struct ElementLayout;
+ 
++struct RenderTargetView;
++struct ShaderResourceView;
++
+ struct Device
+ {
++   RenderTargetView *renderTargetViews;
++   ShaderResourceView *shaderResourceViews;
+    struct pipe_context *pipe;
+ 
+    struct cso_context *cso;
+@@ -219,6 +224,7 @@
+ 
+ struct RenderTargetView
+ {
++   RenderTargetView *next;
+    struct pipe_surface surface;
+    D3D10DDI_HRTRENDERTARGETVIEW hRTRenderTargetView;
+ };
+@@ -374,6 +380,7 @@
+ 
+ struct ShaderResourceView
+ {
++   ShaderResourceView *next;
+    struct pipe_sampler_view *handle;
+ };
+ 
+--- a/src/gallium/frontends/d3d10umd/OutputMerger.cpp
++++ b/src/gallium/frontends/d3d10umd/OutputMerger.cpp
+@@ -130,6 +130,9 @@
+    }
+ 
+    pRTView->surface = desc;
++   Device *device = CastDevice(hDevice);
++   pRTView->next = device->renderTargetViews;
++   device->renderTargetViews = pRTView;
+ }
+ 
+ 
+@@ -153,6 +156,9 @@
+ 
+    RenderTargetView *pRTView = CastRenderTargetView(hRenderTargetView);
+ 
++   RenderTargetView **link = &CastDevice(hDevice)->renderTargetViews;
++   while (*link && *link != pRTView) link = &(*link)->next;
++   if (*link) *link = pRTView->next;
+    pipe_resource_reference(&pRTView->surface.texture, NULL);
+ }
+ 
+--- a/src/gallium/frontends/d3d10umd/Shader.cpp
++++ b/src/gallium/frontends/d3d10umd/Shader.cpp
+@@ -1251,6 +1251,9 @@
+    }
+ 
+    pSRView->handle = pipe->create_sampler_view(pipe, resource, &desc);
++   Device *device = CastDevice(hDevice);
++   pSRView->next = device->shaderResourceViews;
++   device->shaderResourceViews = pSRView;
+ }
+ 
+ 
+@@ -1333,6 +1336,9 @@
+    }
+ 
+    pSRView->handle = pipe->create_sampler_view(pipe, resource, &desc);
++   Device *device = CastDevice(hDevice);
++   pSRView->next = device->shaderResourceViews;
++   device->shaderResourceViews = pSRView;
+ }
+ 
+ 
+@@ -1360,6 +1366,9 @@
+    Device *pDevice = CastDevice(hDevice);
+    struct pipe_context *pipe = pDevice->pipe;
+ 
++   ShaderResourceView **link = &pDevice->shaderResourceViews;
++   while (*link && *link != pSRView) link = &(*link)->next;
++   if (*link) *link = pSRView->next;
+    pipe->sampler_view_release(pipe, pSRView->handle);
+    pSRView->handle = NULL;
+ }
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <stdio.h>
++#include <vector>
+ 
+ #include "DxgiFns.h"
+ #include "Format.h"
+@@ -301,72 +302,75 @@
+  */
+ 
+ HRESULT APIENTRY
+-_RotateResourceIdentities( DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *RotateResourceIdentities )
+-{
+-   LOG_ENTRYPOINT();
+-
+-   if (RotateResourceIdentities->Resources <= 1) {
+-      return S_OK;
+-   }
+-
+-   struct pipe_context *pipe = CastPipeDevice(RotateResourceIdentities->hDevice);
+-   struct pipe_screen *screen = pipe->screen;
+-
+-   struct pipe_resource *resource0 = CastPipeResource(RotateResourceIdentities->pResources[0]);
+-
+-   assert(resource0);
+-   LOG_UNSUPPORTED(resource0->last_level);
+-
+-   /*
+-    * XXX: Copying is not very efficient, but it is much simpler than the
+-    * alternative of recreating all views.
+-    */
+-
+-   struct pipe_resource *temp_resource;
+-   temp_resource = screen->resource_create(screen, resource0);
+-   assert(temp_resource);
+-   if (!temp_resource) {
+-      return E_OUTOFMEMORY;
+-   }
+-
+-   struct pipe_box src_box;
+-   src_box.x = 0;
+-   src_box.y = 0;
+-   src_box.z = 0;
+-   src_box.width  = resource0->width0;
+-   src_box.height = resource0->height0;
+-   src_box.depth  = resource0->depth0;
+-
+-   for (UINT i = 0; i < RotateResourceIdentities->Resources + 1; ++i) {
+-      struct pipe_resource *src_resource;
+-      struct pipe_resource *dst_resource;
+-
+-      if (i < RotateResourceIdentities->Resources) {
+-         src_resource = CastPipeResource(RotateResourceIdentities->pResources[i]);
+-      } else {
+-         src_resource = temp_resource;
++_RotateResourceIdentities(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args)
++{
++   LOG_ENTRYPOINT();
++   if (args->Resources <= 1) return S_OK;
++   Device *device = CastDevice(args->hDevice);
++   pipe_context *pipe = device->pipe;
++   // Microsoft DXGI_BASE_FUNCTIONS: rotate kernel identities, preserve RT
++   // handles. Copying pixels writes into a buffer still scanned by DCN.
++   std::vector<Resource> before(args->Resources);
++   for (UINT i = 0; i < args->Resources; ++i) {
++      Resource *r = CastResource(args->pResources[i]);
++      if (!r || !r->presentReady || !r->resource ||
++          r->resource->target != PIPE_TEXTURE_2D || r->resource->last_level ||
++          (r->resource->bind & PIPE_BIND_DEPTH_STENCIL)) return E_NOTIMPL;
++      before[i] = *r;
++   }
++   auto rotated = [&](pipe_resource *resource) -> pipe_resource * {
++      for (UINT i = 0; i < args->Resources; ++i)
++         if (resource == before[i].resource)
++            return before[(i + 1) % args->Resources].resource;
++      return resource;
++   };
++   pipe->flush(pipe, NULL, 0);
++   // Prepare sampler views before publishing any changed resource identity.
++   struct ViewChange { ShaderResourceView *view; pipe_sampler_view *next; };
++   std::vector<ViewChange> changes;
++   for (ShaderResourceView *v = device->shaderResourceViews; v; v = v->next) {
++      if (!v->handle || rotated(v->handle->texture) == v->handle->texture) continue;
++      pipe_sampler_view *next = pipe->create_sampler_view(pipe,
++         rotated(v->handle->texture), v->handle);
++      if (!next) {
++         for (auto &c : changes) pipe->sampler_view_release(pipe, c.next);
++         return E_OUTOFMEMORY;
+       }
+-
+-      if (i > 0) {
+-         dst_resource = CastPipeResource(RotateResourceIdentities->pResources[i - 1]);
+-      } else {
+-         dst_resource = temp_resource;
+-      }
+-
+-      assert(dst_resource);
+-      assert(src_resource);
+-
+-      pipe->resource_copy_region(pipe,
+-                                 dst_resource,
+-                                 0, // dst_level
+-                                 0, 0, 0, // dst_x,y,z
+-                                 src_resource,
+-                                 0, // src_level
+-                                 &src_box);
+-   }
+-
+-   pipe_resource_reference(&temp_resource, NULL);
+-
++      changes.push_back({v, next});
++   }
++   for (UINT i = 0; i < args->Resources; ++i) {
++      Resource *r = CastResource(args->pResources[i]);
++      const Resource &next = before[(i + 1) % args->Resources];
++      r->resource = next.resource;
++      r->allocation = next.allocation;
++      r->gpuVa = next.gpuVa;
++      r->gpuBytes = next.gpuBytes;
++      r->cpuMapping = next.cpuMapping;
++      r->presentReady = next.presentReady;
++      // hRTResource and the logical resource/view descriptors stay in place.
++      DebugPrintf("BC250 Rotate slot %u kernel %x -> %x va %llx\n",
++                  i, before[i].allocation, r->allocation, r->gpuVa);
++   }
++   for (RenderTargetView *v = device->renderTargetViews; v; v = v->next)
++      pipe_resource_reference(&v->surface.texture, rotated(v->surface.texture));
++   for (UINT i = 0; i < device->fb.nr_cbufs; ++i)
++      pipe_resource_reference(&device->fb.cbufs[i].texture,
++                              rotated(device->fb.cbufs[i].texture));
++   // A cached bound framebuffer and bound samplers also retain old storage.
++   pipe->set_framebuffer_state(pipe, &device->fb);
++   for (auto &c : changes) {
++      pipe_sampler_view *old = c.view->handle;
++      for (UINT sh = 0; sh < MESA_SHADER_STAGES; ++sh)
++         for (UINT i = 0; i < PIPE_MAX_SHADER_SAMPLER_VIEWS; ++i)
++            if (device->sampler_views[sh][i] == old)
++               device->sampler_views[sh][i] = c.next;
++      c.view->handle = c.next;
++      pipe->sampler_view_release(pipe, old);
++   }
++   if (!changes.empty())
++      for (auto sh : {MESA_SHADER_VERTEX, MESA_SHADER_FRAGMENT, MESA_SHADER_GEOMETRY})
++         pipe->set_sampler_views(pipe, sh, 0, PIPE_MAX_SHADER_SAMPLER_VIEWS,
++                                 0, device->sampler_views[sh]);
+    return S_OK;
+ }
+ 

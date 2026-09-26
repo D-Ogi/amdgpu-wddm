@@ -1,0 +1,17 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; production DDI builders still pass NULL graph; no deployment",
+  "sys_sha256": "7458008D66D28CE652839315776E5C3285EB5D7489660BF23737990511ED582F",
+  "sha256": {
+    "driver/kmd/paging_graph_batch.h": "802bcac29a211a2f0228977aff3b9822e7a74a0bf94eae8e1a0aca489402980c",
+    "driver/kmd/bc250kmd.h": "31c30a459e331d6b91f4fe3bc86328211788af0bfbc5126376b92b686b48b3c8",
+    "driver/kmd/vidmm.c": "08a6d0b5de84657d1eb8728510311fb986696feb73bf963d9972b2cb5c3c52eb",
+    "driver/kmd/wddm.c": "eee2518d44974a899b72268c9b4ed6734e10642bb377381c5985ac93964f1574",
+    "experiments/E27-m9-inference/paging-route-test-prefix.c": "058509d15820fc58cfac4436e7fd101a5f824e1dd39bd3d1e177cf79a2074d98",
+    "experiments/E27-m9-inference/paging-route-test-suffix.c": "f391c0b5e0d27d10d1fb691658df4dabff1eeb35049493e089bc8dda00c6a551",
+    "experiments/E27-m9-inference/generate-paging-route-test.py": "b029f71608a16d21cb8561e2c602aff95e07511eefe1cbff5d41454ac259b70c"
+  },
+  "routing_exit": 0,
+  "focused_exit": 0,
+  "omit_commit_focused_exit": 1
+}

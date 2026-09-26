@@ -1,0 +1,26 @@
+### Struct fields
+
+#### Field ReadOnlyMemorySupported
+
+When set to 1, the driver supports read-only protection on memory pages.
+
+#### Field NoExecuteMemorySupported
+
+When set to 1, the driver supports *no execute* protection on memory pages.
+
+#### Field ZeroInPteSupported
+
+When set to 1, the GPU supports the *Zero DXGK_PTE* flag. This applies to all page table levels.
+
+#### Field ExplicitPageTableInvalidation
+
+Indicates that all entries of a page table or page directory should be put into an invalid state explicitly, through **UpdatePageTable** before being freed. By default the video memory manager may free a page table, which contain previously valid entries, if these entries are no longer needed (ex. freeing a large GPU virtual address range resulting in the destruction of underlying page tables).
+
+> [!NOTE]
+> This flags is typically used by a software driver that needs to emulate page table and need to keep track of information on a per page table entry basis and require a clear init/deinit pair for all page table entry updates.
+
+#### Field CacheCoherentMemorySupported
+
+Indicates that the driver supports the *CacheCoherent* bits in the page table entry and can do I/O coherent transfer to system memory.
+
+#### Field PageTableUpdateRequireAddressSpaceIdle

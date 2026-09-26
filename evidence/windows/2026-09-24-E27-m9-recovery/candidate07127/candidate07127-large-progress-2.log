@@ -1,0 +1,58 @@
+
+
+Id        : 10856
+CPU       : 186.046875
+StartTime : 9/24/2026 11:58:19 AM
+
+
+
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1190000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1180000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 3830
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 3830 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1190000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F7C1190000
+D3DKMTU
+nlock2 [
+gpu-read
+back]       0x0
+0000000  STATUS
+_SUCCES
+S
+D3DKMTLock2
+ [gpu-ib
+]       
+        0x00000000  STATUS_SUCCESS
+    locked at CPU 
+VA 000001F7C1180000
+D3DKMTUnlock2 [gpu-ib]    
+         0x00000000  STATUS_
+SUCCESS
+Submit GPU readback                0x
+00000000  STATUS_S
+UCCESS
+    asking the context to
+ signal the monitored
+ fence to 3831
+D3DKMTSignalSynchroniz
+ationObjectFromGpu 0x00000000  S
+TATUS_SUCCESS
+D3DKMTWaitForSynchronization
+ObjectFromCpu 0x0000000
+0  STATUS_SUCCESS
+    the monitored fence reached 3831 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  
+STATUS_SUCCESS
+    locked at CPU VA 000001F7C119
+0000

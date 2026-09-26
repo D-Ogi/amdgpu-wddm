@@ -1,0 +1,17 @@
+M221 staged byte-copy packets, 2026-09-23.
+Dirty worktree over base-commit.txt; changed sources included. Procedure in E27 README
+written before implementation/testing. Existing PTE helper now validates8-byte alignment
+and1..512 entries, forwarding to common byte helper with1..4096 bytes. Same two AMD
+copies/two marker-poll barriers,48-DWORD reservation/34 emitted DWORDs, private4KiB
+stage and marker alias checks. No opcode reimplementation.
+11521 routing/packet checks pass (2349 new). Independent memmove oracle compared
+against two decoded disjoint memcpy operations over modeled memory for unaligned,
+overlapping and self-copy ranges. All48 undersized capacities preserve buffer.
+Existing PTE/marker/alias/overflow controls pass; byte-specific boundary controls added.
+Full WDK dev build/sign passes, retains0787. scratch/build/staged-bytes-dev
+DO NOT DEPLOY; official0787 unchanged. SYS SHA256
+7B572B78E1B2C60F0F2680BA41C0B19948ED7689C26EF5131B72EA205BB76FD4
+No live GPU/barrier timing or cross-slice memmove claim. Byte helper not wired to
+physical Transfer DDI, no new captured-address adapter this turn. GART mapping and
+private-stage retirement remain existing hardware/lifetime validation obligations.
+No lab access/reboot/USB changes/private-data redaction.

@@ -1,0 +1,18 @@
+[
+  {
+    "model": "stories260K",
+    "raw_equal": false,
+    "lf_equal": true,
+    "raw_sha256": "c724e4957a9f1c635907c144158dcc3d35016f0879453c0de1b86f759fcc7c82",
+    "lf_sha256": "404328f9fe8ec44577ee22e67b4f3af9d05256b40548c950d5d150f6f3916bcf",
+    "linux_sha256": "404328f9fe8ec44577ee22e67b4f3af9d05256b40548c950d5d150f6f3916bcf"
+  },
+  {
+    "model": "stories15M",
+    "raw_equal": false,
+    "lf_equal": true,
+    "raw_sha256": "8cfeef1417f54e0b8111c5f9324567e4d0be417592bc0e5015b4dab722d4d144",
+    "lf_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+    "linux_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6"
+  }
+]

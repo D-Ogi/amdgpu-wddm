@@ -1,0 +1,9 @@
+{
+  "driver/kmd/psp.c": "7622f95d46f0bd8e73f35c23b49d2236349992b8a8ac46fbb947e09148de77ad",
+  "driver/kmd/bc250kmd.h": "d1291943c64771308f8f726bc0654e484dc62faaffcf79a8450b32c55ef9c273",
+  "experiments/E27-m9-inference/generate-init-entrypoints-test.py": "34f41c8ff2db43711906341a462e8676025b5cca110196d2307f5ed670ba16ea",
+  "experiments/E27-m9-inference/generate-firmware-preflight-test.py": "4f3aec29a3eb14a89de94112b7b65531d11017b5fab72546bda64a2c877ce643",
+  "experiments/E27-m9-inference/firmware-preflight-test-prefix.c": "e931e6a577244c9b5da648ac2cc0f4be43547e98f89038a3e406e56863632756",
+  "experiments/E27-m9-inference/firmware-preflight-test-suffix.c": "0f27804c822c5926d714555c8800d459b917f28b2f1aa6eb8bcb6f737df98fc8",
+  "experiments/E27-m9-inference/build-firmware-preflight-test.cmd": "84bded203939f4aab2a8de34dfa36df1dc6145d1ac1425870338e962df65876f"
+}

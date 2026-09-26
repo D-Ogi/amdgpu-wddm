@@ -1,0 +1,48 @@
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+
+
+Algorithm : SHA256
+Hash      : BE3F5F8C95A70EA40164F7ABC641556870B738B91B577918CEA0457895AB60E4
+Path      : C:\BC250\m9\gpu-residency0798\gpu-residency-probe.exe
+
+
+
+13:47:27 Tctl 71.4 C (raw 787B0FEF)
+D3DKMTMakeResident [preserved]     0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7015, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7015 (waited for 7015)
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-resident value=1
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001D180020000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001D180010000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 4
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 4 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001D180020000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=65536 all_words_match=1 fence=4
+CYCLE 3 PASS
+D3DKMTFreeGpuVirtualAddress [gpu-readback] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-readback] 0x00000000  STATUS_SUCCESS
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [gpu-ib] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-ib]  0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace
+gpu_probe_exit=

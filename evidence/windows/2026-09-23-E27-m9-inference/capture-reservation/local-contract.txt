@@ -1,0 +1,89 @@
+WDK 10.0.26100 enriched local documentation; line-numbered excerpts.
+19928: ## DXGK_CREATECONTEXTFLAGS structure
+19929: 
+19930: ### Declaration
+19931: 
+19932: `d3dkmddi.h` line 1512, WDK 10.0.26100:
+19933: 
+19934: ```c
+19935: typedef struct _DXGK_CREATECONTEXTFLAGS
+19936: {
+19937:     union
+19938:     {
+19939:         struct
+19940:         {
+19941:             UINT    SystemContext           : 1;
+19942:             UINT    GdiContext              : 1;
+19943: #if (DXGKDDI_INTERFACE_VERSION >= DXGKDDI_INTERFACE_VERSION_WDDM2_0)
+19944:             UINT    VirtualAddressing       : 1;
+19945: #if (DXGKDDI_INTERFACE_VERSION >= DXGKDDI_INTERFACE_VERSION_WDDM2_1)
+19946:             UINT    SystemProtectedContext  : 1;
+19947: #if (DXGKDDI_INTERFACE_VERSION >= DXGKDDI_INTERFACE_VERSION_WDDM2_3)
+19948:             UINT    HwQueueSupported        : 1;
+19949: #if (DXGKDDI_INTERFACE_VERSION >= DXGKDDI_INTERFACE_VERSION_WDDM3_2)
+19950:             UINT    TestContext             : 1;
+19951:             UINT    Reserved                : 26;
+19952: #else
+19953:             UINT    Reserved                : 27;
+19954: #endif // (DXGKDDI_INTERFACE_VERSION >= DXGKDDI_INTERFACE_VERSION_WDDM3_2)
+19955: #else  // ! DXGKDDI_INTERFACE_VERSION_WDDM2_3
+19956:             UINT    Reserved                : 28;
+19957: #endif // DXGKDDI_INTERFACE_VERSION_WDDM2_3
+19958: #else  // ! DXGKDDI_INTERFACE_VERSION_WDDM2_1
+19959:             UINT    Reserved                : 29;
+19960: #endif // DXGKDDI_INTERFACE_VERSION_WDDM2_1
+19961: #else  // ! DXGKDDI_INTERFACE_VERSION_WDDM2_0
+19962:             UINT    Reserved                : 30;
+19963: #endif // DXGKDDI_INTERFACE_VERSION_WDDM2_0
+19964:         };
+19965:         UINT Value;
+19966:     };
+19967: } DXGK_CREATECONTEXTFLAGS;
+19968: ```
+19969: 
+19970: ### Description
+19971: 
+19972: The **DXGK_CREATECONTEXTFLAGS** structure identifies how to create contexts.
+19973: 
+19974: ### Struct fields
+19975: 
+19976: #### Field SystemContext
+19977: 
+19978: A UINT value that specifies whether contexts that a driver's [**DxgkDdiCreateContext**](#nc-d3dkmddi-dxgkddi_createcontext) function creates are system contexts for the engine that the **EngineAffinity** member of the [**DXGKARG_CREATECONTEXT**](#ns-d3dkmddi-_dxgkarg_createcontext) structure specifies. A system context is created for the paging engine only.
+19979: 
+19980: #### Field GdiContext
+29087: ## _DXGK_TRANSFERVIRTUALFLAGS structure
+29088: 
+29089: ### Declaration
+29090: 
+29091: `d3dkmddi.h` line 4727, WDK 10.0.26100:
+29092: 
+29093: ```c
+29094: typedef struct _DXGK_TRANSFERVIRTUALFLAGS
+29095: {
+29096:    union
+29097:    {
+29098:         struct
+29099:         {
+29100:             UINT Src64KBPages   : 1;
+29101:             UINT Dst64KBPages   : 1;
+29102:             UINT Reserved       : 30;
+29103:         };
+29104:         UINT Flags;
+29105:    };
+29106: } DXGK_TRANSFERVIRTUALFLAGS;
+29107: ```
+30885: This member is reserved and should not be used.
+30886: 
+30887: #### Field Reserved.Reserved
+30888: 
+30889: This member is reserved and should not be used.
+30890: 
+30891: #### Field hSystemContext
+30892: 
+30893: [in] A handle to the system context for the paging operation.
+30894: 
+30895: #### Field DmaBufferGpuVirtualAddress
+30896: 
+30897: A **D3DGPU_VIRTUAL_ADDRESS** data type that indicates the virtual address where the DMA buffer was paged in. If the physical address is zero, the DMA buffer is not correctly paged in.
+30898: 

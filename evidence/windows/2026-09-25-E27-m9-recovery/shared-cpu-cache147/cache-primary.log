@@ -1,0 +1,7 @@
+test.c
+umd_blob.c
+Generowanie kodu...
+FAIL 219 info.FlagsWddm2.Cached==cached
+FAIL 219 info.FlagsWddm2.Cached==cached
+FAIL 219 info.FlagsWddm2.Cached==cached
+Actual CreateAllocation: 31684 checks, 3 failures

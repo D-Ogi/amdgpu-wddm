@@ -1,4 +1,4 @@
-E19 run 001, 2026-09-21 23:53 to 23:56: M6's bring-up under the full WDDM table. bc250kmd 0.7.12 (commit 24c9ba5,
+E19 run 001, 2026-09-21 23:53 to 23:56: M6's bring-up under the full WDDM table. bc250kmd 0.7.12 (commit 6057e77,
 .sys sha256 prefix f34f0988f12561fd, the build of E18 run 003 - no new package), boot 23:42:20.
 
 Gates: EnableFullWddm 1 (one shot), EnableMmio, EnableVram, EnableVramWrite, EnableGpuVa, EnableGart, EnablePsp,

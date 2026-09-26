@@ -1,0 +1,5 @@
+{
+  "driver/shim/bc250_sdma_paging.c": "24260f7fcdd7fd3234c571ed2c06487b3de42db69193e463e9c4395c2447bea0",
+  "driver/shim/include/bc250_sdma_paging.h": "d04f7ec3936dbb9105fa6e87289dd648505ca08decd553cbb38f23d7ea011c5c",
+  "driver/shim/test/paging_packets.c": "fcf6ef5872fc36f67fea254f40c51117dcd5937a7c757341c5cadb1316b6fd5d"
+}

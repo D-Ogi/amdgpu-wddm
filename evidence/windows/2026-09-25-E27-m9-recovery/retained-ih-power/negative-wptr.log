@@ -1,0 +1,6 @@
+ih_retained_actual.c
+FAIL 40: !*a->irq.ih.wptr_cpu && !*a->irq.ih.rptr_cpu && !a->irq.ih.rptr
+FAIL 154: !wb[0]&&!wb[1]&&!modelAdev.irq.ih.rptr&&!frees&&!releases&&modelAdev.backend==&d&&modelAdev.irq.ih.ring==ring
+FAIL 40: !*a->irq.ih.wptr_cpu && !*a->irq.ih.rptr_cpu && !a->irq.ih.rptr
+FAIL 40: !*a->irq.ih.wptr_cpu && !*a->irq.ih.rptr_cpu && !a->irq.ih.rptr
+Retained IH: 83 checks, 4 failures

@@ -1,0 +1,19 @@
+bc250kmd 0x00070038 log kept at the stop: 18 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.003 stage 10
+     1      0.003 gate: EnableFullWddm 0
+     2      0.005 stage 20
+     3      0.112 stage 30
+     4      0.114 stage 31
+     5      0.115 stage 32
+     6      0.115 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.116 stage 33
+     8      0.117 stage 34
+     9      0.117 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.117 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    11      0.118 stage 35
+    12      0.118 stage 39
+    13      0.130 stage 50
+    14      0.254 stage 60
+    15      0.256 stage 61
+    16     88.632 stage 70
+    17     88.634 stage 79

@@ -1,0 +1,157 @@
+--- M435/wddm.c
++++ M436/wddm.c
+@@ -331,6 +331,8 @@
+     LARGE_INTEGER VSyncLast;            // the performance counter at the last tick, for GetScanLine's phase
+     LARGE_INTEGER VSyncFrequency;
+ 
++    ULONG PrimaryPitch;
++    ULONGLONG PrimaryBytes;
+     PHYSICAL_ADDRESS PrimaryAddress;    // last successfully programmed address (retire only after flip pending clears)
+     volatile LONG PrimarySequence;      // even = published; odd = programming, never spin at DIRQL
+     UINT PrimarySegment;
+@@ -2296,11 +2298,12 @@
+     default:
+         return STATUS_INVALID_PARAMETER;
+     }
+-    // Stage A has no tiling and no alignment of its own, so a surface is its pitch times its height, linear. Four
+-    // bytes per pixel whatever the format was: that over-sizes a narrower format and never under-sizes one, and
+-    // it is already aligned to the four bytes the presentation caps above promise.
+-    private.Pitch = private.Width * 4;
+-    private.Size = (ULONGLONG)private.Pitch * private.Height;
++    // Scanout rows are aligned to 256 bytes (64 32-bit pixels). Other CPU
++    // surfaces retain their linear pitch. Extent includes every padded row.
++    if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
++    private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
++        DcnPrimaryPitch(private.Width):private.Width*4;
++    if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
+     // These are output fields, not just copies in our private LB7A blob.
+     // E26 ETW rejected shadow/staging creation when the public pitch was zero.
+     if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE)
+@@ -4043,6 +4046,21 @@
+     }
+ }
+ 
++// Copy visible pixels row by row: firmware and primary may have different padding.
++static BOOLEAN WddmCopyScanoutRows(PVOID Destination, SIZE_T DestinationBytes, ULONG DestinationPitch,
++                                  const void* Source, SIZE_T SourceBytes, ULONG SourcePitch,
++                                  ULONG Width, ULONG Height)
++{
++    ULONGLONG srcBytes,dstBytes;
++    ULONG row;
++    if (!DcnSurfaceBytes(Width,Height,SourcePitch,&srcBytes) || srcBytes>SourceBytes ||
++        !DcnSurfaceBytes(Width,Height,DestinationPitch,&dstBytes) || dstBytes>DestinationBytes) return FALSE;
++    for (row=0;row<Height;row++)
++        RtlCopyMemory((UCHAR*)Destination+(SIZE_T)row*DestinationPitch,
++            (const UCHAR*)Source+(SIZE_T)row*SourcePitch,(SIZE_T)Width*4);
++    return TRUE;
++}
++
+ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
+ {
+     BC250_DEVICE* device = Context->Device;
+@@ -4165,11 +4183,13 @@
+     {
+         PVOID flipMap = NULL;
+         SIZE_T flipLength = 0;
+-
+-        if (DcnScanoutMapping(device, &flipMap, &flipLength))
++        ULONG flipPitch=0;
++
++        if (DcnScanoutMapping(device, &flipMap, &flipLength, &flipPitch))
+         {
+             dst = (UCHAR*)flipMap;
+             dstLength = flipLength;
++            dstPitch = flipPitch;
+             toFlip = TRUE;
+         }
+         else
+@@ -4228,19 +4248,19 @@
+     // not a coherent view of VRAM. The address HUBP was scanning before this flip is DcnFirmwareAddress,
+     // captured from the register; M92 measured that as the carve-out base, which is VramPhysical (M31).
+     // Seed from that physical address, once per flip target, then the dirty rectangles on top.
+-    if (toFlip && device->VramEnabled && device->DcnScanoutSeedAddress != device->DcnCurrentAddress &&
++    if (toFlip && device->VramEnabled && device->DcnScanoutSeedAddress != device->DcnScanoutMapAddress &&
+         device->FramebufferLength != 0 && device->VramLength != 0)
+     {
+         ULONGLONG vramBase = (ULONGLONG)device->VramPhysical.QuadPart;
+         ULONGLONG seedAt = vramBase;
+-        SIZE_T seedBytes = dstLength < device->FramebufferLength ? dstLength : device->FramebufferLength;
++        SIZE_T seedBytes = device->FramebufferLength;
+         PHYSICAL_ADDRESS seedPhys;
+         PVOID seedMap;
+ 
+         if (device->DcnFirmwareKnown && device->DcnFirmwareAddress >= vramBase &&
+             device->DcnFirmwareAddress - vramBase < device->VramLength)
+             seedAt = device->DcnFirmwareAddress;
+-        if (seedAt != device->DcnCurrentAddress &&
++        if (seedAt != device->DcnScanoutMapAddress &&
+             (ULONGLONG)seedBytes <= device->VramLength - (seedAt - vramBase))
+         {
+             seedPhys.QuadPart = (LONGLONG)seedAt;
+@@ -4249,12 +4269,16 @@
+             {
+                 ULONG firstPixel = *(volatile ULONG*)seedMap;
+ 
+-                RtlCopyMemory(dst, seedMap, seedBytes);
++                BOOLEAN copied=WddmCopyScanoutRows(dst,dstLength,dstPitch,seedMap,seedBytes,
++                    device->Post.Pitch,device->Post.Width,device->Post.Height);
+                 MmUnmapIoSpace(seedMap, seedBytes);
+-                device->DcnScanoutSeedAddress = device->DcnCurrentAddress;
+-                InterlockedIncrement(&wddm->BlitSeeds);
+-                GuardLog("wddm: flip target seeded from VRAM physical 0x%llX, %lu bytes, first pixel 0x%08X, onto 0x%llX",
+-                         seedAt, (ULONG)seedBytes, firstPixel, device->DcnCurrentAddress);
++                if (copied)
++                {
++                    device->DcnScanoutSeedAddress = device->DcnScanoutMapAddress;
++                    InterlockedIncrement(&wddm->BlitSeeds);
++                    GuardLog("wddm: flip target seeded from VRAM physical 0x%llX, %lu bytes, first pixel 0x%08X, onto 0x%llX",
++                             seedAt, (ULONG)seedBytes, firstPixel, device->DcnScanoutMapAddress);
++                }
+             }
+             else if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS)
+                 GuardLog("wddm: flip target seed failed: no mapping for 0x%llX", seedAt);
+@@ -4453,6 +4477,8 @@
+     {
+         ULONG generation = (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
+         BOOLEAN changed;
++        ULONG pitch;
++        ULONGLONG bytes;
+         NTSTATUS status = STATUS_SUCCESS;
+         // Nonblocking ownership: a high-IRQL caller must never spin behind a
+         // preempted lower-IRQL programmer. The generation also protects vsync's
+@@ -4461,11 +4487,24 @@
+             (ULONG)InterlockedCompareExchange(&wddm->PrimarySequence, (LONG)(generation + 1u),
+                                              (LONG)generation) != generation)
+             return STATUS_DEVICE_BUSY;
++        // A NULL allocation preserves current private properties; initially POST.
++        pitch=wddm->PrimaryPitch?wddm->PrimaryPitch:device->Post.Pitch;
++        if (!DcnSurfaceBytes(device->Post.Width,device->Post.Height,pitch,&bytes)) status=STATUS_INVALID_PARAMETER;
++        if (pSetVidPnSourceAddress->hAllocation)
++        {
++            BC250_WDDM_OBJECT* allocation=WddmObject(pSetVidPnSourceAddress->hAllocation,BC250_WDDM_MAGIC_ALLOCATION);
++            if (!allocation || allocation->UmdAlloc || allocation->Allocation.Width!=device->Post.Width ||
++                allocation->Allocation.Height!=device->Post.Height ||
++                (allocation->Allocation.Format!=D3DDDIFMT_A8R8G8B8 && allocation->Allocation.Format!=D3DDDIFMT_X8R8G8B8) ||
++                !DcnSurfaceBytes(allocation->Allocation.Width,allocation->Allocation.Height,allocation->Allocation.Pitch,&bytes) ||
++                bytes>allocation->Allocation.Size) status=STATUS_INVALID_PARAMETER;
++            else { pitch=allocation->Allocation.Pitch; status=STATUS_SUCCESS; }
++        }
+         changed = InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0) !=
+-                  pSetVidPnSourceAddress->PrimaryAddress.QuadPart;
++                  pSetVidPnSourceAddress->PrimaryAddress.QuadPart || pitch!=wddm->PrimaryPitch;
+         if (high) InterlockedIncrement(&wddm->FlipsAboveDispatch);
+-        if (changed && device->VidPnFlipEnabled)
+-            status = DcnFlipSourceAddress(device, (ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart, NULL);
++        if (NT_SUCCESS(status) && changed && device->VidPnFlipEnabled)
++            status=DcnFlipSourceAddress(device,(ULONGLONG)pSetVidPnSourceAddress->PrimaryAddress.QuadPart,pitch,bytes,NULL);
+         if (NT_SUCCESS(status))
+         {
+             // Publish only after the programming sequence succeeds. A refused
+@@ -4473,6 +4512,7 @@
+             // can be submitted again and still takes the hardware path.
+             InterlockedExchange64(&wddm->PrimaryAddress.QuadPart, pSetVidPnSourceAddress->PrimaryAddress.QuadPart);
+             wddm->PrimarySegment = pSetVidPnSourceAddress->PrimarySegment;
++            wddm->PrimaryPitch=pitch;wddm->PrimaryBytes=bytes;
+             if (changed) InterlockedIncrement(&wddm->Flips);
+         }
+         InterlockedExchange(&wddm->PrimarySequence, (LONG)(generation + 2u));

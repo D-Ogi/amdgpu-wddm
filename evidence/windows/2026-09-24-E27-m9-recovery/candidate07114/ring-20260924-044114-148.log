@@ -1,0 +1,20 @@
+bc250kmd 0x00070071 log snapshot: 19 lines, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 0
+     2      0.003 stage 20
+     3      0.274 stage 30
+     4      0.278 stage 31
+     5      0.280 stage 32
+     6      0.280 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.280 stage 33
+     8      0.282 stage 34
+     9      0.282 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.282 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    11      0.282 stage 35
+    12      0.284 stage 39
+    13      0.292 stage 50
+    14      0.646 stage 60
+    15      0.650 stage 61
+    16    598.825 wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)
+    17    600.182 stage 70
+    18    600.182 stage 79

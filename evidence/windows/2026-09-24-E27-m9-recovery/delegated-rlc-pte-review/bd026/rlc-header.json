@@ -1,0 +1,15 @@
+{
+  "file_size_bytes": 25344,
+  "header_size_bytes": 104,
+  "header_major": 2,
+  "header_minor": 0,
+  "ip_major": 10,
+  "ip_minor": 1,
+  "ucode_version": 13,
+  "ucode_size_bytes": 25088,
+  "ucode_array_offset_bytes": 256,
+  "crc32": 2003437129,
+  "actual_size": 25344,
+  "sha256": "20acefdb6128a36275f4382425a109a7c9927f6053eab685bb51164ff1d18cfb",
+  "source_revision": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0"
+}

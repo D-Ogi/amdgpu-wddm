@@ -1,0 +1,73 @@
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CalcPrivateResourceSize
+CreateResource
+BC250 CreatePagingQueue 00000000
+BC250 Allocate 00000000 format 32 primary 0 handle 40000180 resource 0
+BC250 MapGpuVa 8000000a va 10000
+BC250 MakeResident 8000000a
+OpenAdapter10_2
+GetCaps
+GetSupportedVersions
+GetSupportedVersions
+OpenAdapter10_2
+GetSupportedVersions
+GetSupportedVersions
+CreateDevice
+CreateBlendState
+CreateDepthStencilState
+CreateRasterizerState
+CreateSampler
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+CloseAdapter
+CalcPrivateResourceSize
+CreateResource
+CreateResource(64x32x1 hResource=000001CA2C74EDB0)
+  ResourceDimension = 3
+  Usage = 0
+  BindFlags = 0x28
+  MapFlags = 0x0
+  MiscFlags = 0x2
+  Format = DXGI_FORMAT_R8G8B8A8_UNORM
+  SampleDesc.Count = 1
+  SampleDesc.Quality = 0
+  MipLevels = 1
+  ArraySize = 1
+  pPrimaryDesc = 0000000000000000
+BC250 Allocate 80070057 format 32 primary 0 handle 0 resource 0
+RelocateDeviceFuncs
+SetBlendState
+SetDepthStencilState
+SetRasterizerState
+VsSetSamplers
+GsSetSamplers
+PsSetSamplers
+SetRenderTargets
+DestroyRasterizerState
+DestroyDepthStencilState
+DestroyBlendState
+DestroySampler
+DestroyDevice
+CloseAdapter

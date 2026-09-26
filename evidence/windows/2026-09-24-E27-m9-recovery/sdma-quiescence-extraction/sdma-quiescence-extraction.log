@@ -1,0 +1,6 @@
+verify the generated tables against their imports
+extract_table --check: driver/shim/generated/gfx10_golden_cyan_skillfish.inc matches driver/amdgpu-import/reference/gfx_v10_0.c:3582-3615 (34 entries, sha256 2fe3bb3ab7461345)
+extract_table --check: driver/shim/generated/sdma5_golden_cyan_skillfish.inc matches driver/amdgpu-import/reference/sdma_v5_0.c:188-215 (28 entries, sha256 499a48f753ddc451)
+compile (user mode, host replay test)
+  P:\BC-250\bc250-win\driver\shim\bc250_sdma.c(620): error C2143: błąd składniowy: brakuje „;” przed „typ”
+  Generowanie kodu...

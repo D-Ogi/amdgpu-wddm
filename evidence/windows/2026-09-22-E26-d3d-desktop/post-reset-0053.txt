@@ -1,0 +1,19 @@
+UMD before cleanup:
+bc250umd.dll
+C:\BC250\e26\aperture\bc250d3d.dll
+C:\BC250\e26\aperture\bc250d3d.dll
+
+
+TimeCreated  : 9/23/2026 12:54:11 AM
+Id           : 41
+ProviderName : Microsoft-Windows-Kernel-Power
+Message      : The system has rebooted without cleanly shutting down first. This error could be 
+               caused if the system stopped responding, crashed, or lost power unexpectedly.
+
+TimeCreated  : 9/23/2026 12:54:55 AM
+Id           : 6008
+ProviderName : EventLog
+Message      : The previous system shutdown at 12:15:39 AM on ?9/?23/?2026 was unexpected.
+
+
+

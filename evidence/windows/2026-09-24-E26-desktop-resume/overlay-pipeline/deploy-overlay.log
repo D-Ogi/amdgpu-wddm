@@ -1,0 +1,8 @@
+Copy-Item : The process cannot access the file 'C:\BC250\mon\bc250mon.exe' because it is being 
+used by another process.
+At C:\BC250\tmp\deploy-overlay.ps1:9 char:1
++ Copy-Item -LiteralPath $new -Destination $old -Force
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Copy-Item], IOException
+    + FullyQualifiedErrorId : System.IO.IOException,Microsoft.PowerShell.Commands.CopyItemCommand
+ 

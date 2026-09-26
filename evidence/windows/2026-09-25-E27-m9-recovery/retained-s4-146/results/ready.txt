@@ -1,0 +1,4 @@
+pid=6000
+first_full_readback=PASS
+sequence=64
+timeout_ms=900000

@@ -1,0 +1,101 @@
+boot_before=2026-09-24T04:46:20
+
+
+EnableMmio        : 1
+EnableMmioWrite   : 0
+EnableVram        : 1
+EnableVramWrite   : 1
+EnableGart        : 1
+EnablePsp         : 1
+EnableGfx         : 1
+EnableIh          : 1
+EnableFullWddm    : 0
+EnableGpuVa       : 1
+EnableGpuSubmit   : 1
+EnablePresentBlit : 0
+EnableDcnWrite    : 0
+EnablePagingNode  : 1
+EnableVidPnFlip   : 0
+LastStage         : 50
+StageHistory      : 10 20 30 31 32 33 34 35 39 50 
+UnconfirmedStarts : 1
+
+
+
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+04:49:36 Tctl 72.0 C (raw 791B0FEF)
+
+closed_gates_verified
+pnp_restart_begin=2026-09-24T04:49:36.0858379+02:00
+Microsoft PnP Utility
+
+Restarting device:         [PCI device instance redacted]
+Device restarted successfully.
+
+pnputil_exit=0
+
+
+Status  : OK
+Problem : CM_PROB_NONE
+
+
+
+
+
+EnableMmio        : 0
+EnableMmioWrite   : 0
+EnableVram        : 0
+EnableVramWrite   : 0
+EnableGart        : 0
+EnablePsp         : 0
+EnableGfx         : 0
+EnableIh          : 0
+EnableFullWddm    : 0
+EnableGpuVa       : 0
+EnableGpuSubmit   : 0
+EnablePresentBlit : 0
+EnableDcnWrite    : 0
+EnablePagingNode  : 0
+EnableVidPnFlip   : 0
+LastStage         : 61
+StageHistory      : 10 20 30 31 32 33 34 35 39 50 60 61 
+UnconfirmedStarts : 1
+
+
+
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   [PCI device instance redacted]
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-0028AF8D
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x0007006C (milestone 7 revision 108)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     1
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio closed, mmio writes off, vram closed, vram writes off, gart closed, psp closed, gfx closed, ih closed
+info_exit=0
+log          16 lines since this driver load, 0 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table display-only
+     0      0.002 stage 10
+     1      0.002 gate: EnableFullWddm 0
+     2      0.004 stage 20
+     3      0.095 stage 30
+     4      0.097 stage 31
+     5      0.099 stage 32
+     6      0.099 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.099 stage 33
+     8      0.101 stage 34
+     9      0.101 interrupt resource 1: message, vector 0x70, flags 0x3
+    10      0.101 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    11      0.101 stage 35
+    12      0.103 stage 39
+    13      0.116 stage 50
+    14      0.151 stage 60
+    15      0.152 stage 61
+             16 lines printed
+log_exit=0
+boot_after=2026-09-24T04:46:20
+recovery_finished

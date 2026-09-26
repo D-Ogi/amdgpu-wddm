@@ -1,0 +1,24 @@
+{
+  "version": "0.7.108.1",
+  "sys_sha256": "F0F2AAE21FFF726E86B4262B552CD39CE9BC254BB039CEF796253D5FC2901775",
+  "wdk_build_exit": 0,
+  "startup_coordinator": {
+    "checks": 319,
+    "failures": 0
+  },
+  "stop_chain_current": {
+    "checks": 1676,
+    "failures": 0
+  },
+  "stop_chain_historical_negative_control": {
+    "checks": 1676,
+    "failures": 889,
+    "expected_exit": 1
+  },
+  "packagecheck": {
+    "checks": 25,
+    "errors": 0,
+    "warnings": 0
+  },
+  "scope": "Host results observed in tool output. Stop-chain uses actual Fini/Stop functions with no-op MMIO observer; does not validate hardware register semantics."
+}

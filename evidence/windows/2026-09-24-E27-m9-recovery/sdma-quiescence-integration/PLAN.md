@@ -1,0 +1,4 @@
+# RLC-scoped SDMA quiescence
+
+Before mappingretirement/RLCstop, withCP/SDMAhalted andbackingretained, enterconfirmedRLCsafe-mode usingAMDGC10.1request/poll. QuiescebothSDMA instances,thenunfreeze whileHALT remainsset andqueues/UTC_L1remainoff;exitRLCsafe mode. This avoidscarryingFREEZEacrossPSPfirmwarereload,anunproven dependency. OrdinarySDMAinit laterreenablesUTC/rings. Newexitoperation is AMD's request,not an independentlyprovenhardwarecompletion.
+Retirement succeeds only after returncodes,readback andsequencefault checks. Entrytimeout sends pairedexit request butblocksstorage retirement. Noresetmask/firmwareskip. Testsuccessfulordering andpairedexit,preserveordinaryreplay,stop/start/GTT/bootstraptests,WDK/package. No deployment before localchecks. Hardwaremustcomparecoldcontent andonewarmtransition inclPSPcommand2.

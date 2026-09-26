@@ -1,0 +1,14 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty; production source unchanged from M291; no deployment",
+  "sha256": {
+    "driver/kmd/gfx.c": "70c5c8c16b5159004c11ad86a09481844c9bbe7dcfc71c0cbc2d0158386c0ecd",
+    "driver/kmd/wddm.c": "8c6ccfb6143fbe684a4cd5ffe09869424887f3f1c95c84bd65c6599f388b2c4c",
+    "driver/kmd/vidmm.c": "63500a65d7951279c59fbcfd4ec46d5cd6c3f9e4f43567be029d3a379bed5650",
+    "experiments/E27-m9-inference/paging-route-test-suffix.c": "18aa3c9fe23c58ccb22334ef1d2e5494dd93a5e6884766271c4ce5e339b8b877",
+    "experiments/E27-m9-inference/generate-paging-route-test.py": "84b437007d11756b5e0df1e6424d661064a3d79af0d3985b45d4bfbb0cad472b"
+  },
+  "default_exit": 0,
+  "focused_exit": 0,
+  "omit_commit_focused_exit": 1
+}

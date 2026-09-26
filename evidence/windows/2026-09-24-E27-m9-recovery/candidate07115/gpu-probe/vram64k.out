@@ -1,0 +1,218 @@
+GPU_RESIDENCY bytes=65536 heap=4
+D3DKMTEnumAdapters2 (count)        0x00000000  STATUS_SUCCESS
+    34 adapter(s)
+D3DKMTEnumAdapters2                0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:002AFA2F  NumOfSources 0
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "bc250umd.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008A3E  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+D3DKMTOpenAdapterFromLuid          0x00000000  STATUS_SUCCESS
+    hAdapter 0x40000080 for LUID 00000000:002AFA2F
+QueryAdapterInfo GPUMMU_CAPS       0x00000000  STATUS_SUCCESS
+    VirtualAddressBitCount 48, flags 0x00000004 (ReadOnly 0, NoExecute 0, CacheCoherent 1)
+QueryAdapterInfo NODEMETADATA 0    0x00000000  STATUS_SUCCESS
+    node 0: EngineType 1 "BC-250 GFX" GpuMmu 1 IoMmu 0 flags 0x00000000
+QueryAdapterInfo DRIVERVERSION     0x00000000  STATUS_SUCCESS
+    KMT_DRIVERVERSION 2000 (2000 = WDDM 2.0)
+QueryAdapterInfo WDDM_2_0_CAPS     0x00000000  STATUS_SUCCESS
+    WDDM_2_0_CAPS 0x00000003 (GpuMmuSupported 1, IoMmuSupported 0)
+D3DKMTCreateDevice                 0x00000000  STATUS_SUCCESS
+    hDevice 0x400000C0
+D3DKMTCreatePagingQueue            0x00000000  STATUS_SUCCESS
+    hPagingQueue 0x40000140 hSyncObject 0x40000100 fence CPU VA 000001F99DEB0000, current value 7000
+CreateAllocation2 BC2A [preserved] 0x00000000  STATUS_SUCCESS
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [preserved] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000010000 (asked 0x0000000000000000, honoured), PagingFenceValue 7001
+    paging fence for MapGpuVirtualAddress reached 7001 (waited for 7001)
+D3DKMTMakeResident [preserved]     0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7002, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7002 (waited for 7002)
+BULK_CREATE name=preserved bytes=65536 elapsed_ms=0 success=1
+CreateAllocation2 BC2A [gpu-ib]    0x00000000  STATUS_SUCCESS
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [gpu-ib] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000020000 (asked 0x0000000000000000, honoured), PagingFenceValue 7003
+    paging fence for MapGpuVirtualAddress reached 7003 (waited for 7003)
+D3DKMTMakeResident [gpu-ib]        0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7004, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7004 (waited for 7004)
+BULK_CREATE name=gpu-ib bytes=65536 elapsed_ms=0 success=1
+CreateAllocation2 BC2A [gpu-readback] 0x00000000  STATUS_SUCCESS
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [gpu-readback] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000030000 (asked 0x0000000000000000, honoured), PagingFenceValue 7005
+    paging fence for MapGpuVirtualAddress reached 7005 (waited for 7005)
+D3DKMTMakeResident [gpu-readback]  0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7006, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7006 (waited for 7006)
+BULK_CREATE name=gpu-readback bytes=65536 elapsed_ms=0 success=1
+CreateContextVirtual BC2C          0x00000000  STATUS_SUCCESS
+D3DKMTCreateSynchronizationObject2 0x00000000  STATUS_SUCCESS
+    hSyncObject 0x40000280, fence CPU VA 000001F99DEB0040, fence GPU VA 0x0000000000040040, initial value 0
+D3DKMTLock2 [preserved]            0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEC0000
+CPU_FILL bytes=65536 seed=770640; validation uses GPU readback
+D3DKMTUnlock2 [preserved]          0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DED0000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 1
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 1 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=65536 all_words_match=1 fence=1
+CYCLE 1 BEGIN
+Evict                              0x00000000  STATUS_SUCCESS
+CreateAllocation2 BC2A [pressure]  0x00000000  STATUS_SUCCESS
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [pressure] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000041000 (asked 0x0000000000000000, honoured), PagingFenceValue 7007
+    paging fence for MapGpuVirtualAddress reached 7007 (waited for 7007)
+D3DKMTMakeResident [pressure]      0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7008, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7008 (waited for 7008)
+BULK_CREATE name=pressure bytes=65536 elapsed_ms=0 success=1
+D3DKMTLock2 [pressure]             0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEF0000
+CPU_FILL bytes=65536 seed=1; validation uses GPU readback
+D3DKMTUnlock2 [pressure]           0x00000000  STATUS_SUCCESS
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-pressure value=2
+D3DKMTFreeGpuVirtualAddress [pressure] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [pressure] 0x00000000  STATUS_SUCCESS
+D3DKMTMakeResident [preserved]     0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7009, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7009 (waited for 7009)
+BULK_RESIDENT bytes=65536 elapsed_ms=0 success=1
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-resident value=1
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DED0000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 2
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 2 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=65536 all_words_match=1 fence=2
+CYCLE 1 PASS
+CYCLE 2 BEGIN
+Evict                              0x00000000  STATUS_SUCCESS
+CreateAllocation2 BC2A [pressure]  0x00000000  STATUS_SUCCESS
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [pressure] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000041000 (asked 0x0000000000000000, honoured), PagingFenceValue 7010
+    paging fence for MapGpuVirtualAddress reached 7010 (waited for 7010)
+D3DKMTMakeResident [pressure]      0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7011, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7011 (waited for 7011)
+BULK_CREATE name=pressure bytes=65536 elapsed_ms=0 success=1
+D3DKMTLock2 [pressure]             0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEF0000
+CPU_FILL bytes=65536 seed=2; validation uses GPU readback
+D3DKMTUnlock2 [pressure]           0x00000000  STATUS_SUCCESS
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-pressure value=2
+D3DKMTFreeGpuVirtualAddress [pressure] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [pressure] 0x00000000  STATUS_SUCCESS
+D3DKMTMakeResident [preserved]     0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7012, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7012 (waited for 7012)
+BULK_RESIDENT bytes=65536 elapsed_ms=0 success=1
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-resident value=1
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DED0000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 3
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 3 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=65536 all_words_match=1 fence=3
+CYCLE 2 PASS
+CYCLE 3 BEGIN
+Evict                              0x00000000  STATUS_SUCCESS
+CreateAllocation2 BC2A [pressure]  0x00000000  STATUS_SUCCESS
+    mapping 16 page(s) of 0x10000 bytes at base 0x0000000000000000
+D3DKMTMapGpuVirtualAddress [pressure] 0x00000103  STATUS_PENDING
+    VirtualAddress 0x0000000000041000 (asked 0x0000000000000000, honoured), PagingFenceValue 7013
+    paging fence for MapGpuVirtualAddress reached 7013 (waited for 7013)
+D3DKMTMakeResident [pressure]      0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7014, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7014 (waited for 7014)
+BULK_CREATE name=pressure bytes=65536 elapsed_ms=0 success=1
+D3DKMTLock2 [pressure]             0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEF0000
+CPU_FILL bytes=65536 seed=3; validation uses GPU readback
+D3DKMTUnlock2 [pressure]           0x00000000  STATUS_SUCCESS
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-pressure value=2
+D3DKMTFreeGpuVirtualAddress [pressure] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [pressure] 0x00000000  STATUS_SUCCESS
+D3DKMTMakeResident [preserved]     0x00000103  STATUS_PENDING
+    NumAllocations back 1, PagingFenceValue 7015, NumBytesToTrim 0
+    STATUS_PENDING: the fence below is the completion
+    paging fence for MakeResident reached 7015 (waited for 7015)
+BULK_RESIDENT bytes=65536 elapsed_ms=0 success=1
+QueryAllocationResidency [preserved] 0x00000000  STATUS_SUCCESS
+RESIDENCY after-resident value=1
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+D3DKMTLock2 [gpu-ib]               0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DED0000
+D3DKMTUnlock2 [gpu-ib]             0x00000000  STATUS_SUCCESS
+Submit GPU readback                0x00000000  STATUS_SUCCESS
+    asking the context to signal the monitored fence to 4
+D3DKMTSignalSynchronizationObjectFromGpu 0x00000000  STATUS_SUCCESS
+D3DKMTWaitForSynchronizationObjectFromCpu 0x00000000  STATUS_SUCCESS
+    the monitored fence reached 4 after 0 ms
+D3DKMTLock2 [gpu-readback]         0x00000000  STATUS_SUCCESS
+    locked at CPU VA 000001F99DEE0000
+D3DKMTUnlock2 [gpu-readback]       0x00000000  STATUS_SUCCESS
+GPU_READBACK bytes=65536 all_words_match=1 fence=4
+CYCLE 3 PASS
+D3DKMTFreeGpuVirtualAddress [gpu-readback] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-readback] 0x00000000  STATUS_SUCCESS
+-- teardown
+D3DKMTDestroySynchronizationObject 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyContext               0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [gpu-ib] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [gpu-ib]  0x00000000  STATUS_SUCCESS
+D3DKMTFreeGpuVirtualAddress [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyAllocation2 [preserved] 0x00000000  STATUS_SUCCESS
+D3DKMTDestroyPagingQueue           0x00000000  STATUS_SUCCESS
+D3DKMTDestroyDevice                0x00000000  STATUS_SUCCESS
+D3DKMTCloseAdapter                 0x00000000  STATUS_SUCCESS
+GPU_RESIDENCY_RESULT PASS; physical relocation requires paging trace

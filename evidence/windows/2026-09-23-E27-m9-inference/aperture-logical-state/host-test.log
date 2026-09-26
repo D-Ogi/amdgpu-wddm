@@ -1,0 +1,5 @@
+paging-aperture-state-test.c
+paging_aperture_state.c
+paging_window.c
+Generowanie kodu...
+PASS 533 aperture logical-state checks

@@ -1,0 +1,13 @@
+# M369 - AMD SDMA quiescence register body extracted and modeled
+
+PROVENANCE: Linux amdgpu v6.18 sdma_v5_0_stop_queue / restore_queue, commit7d0a66e4bb9081d75c82ec4957c50034cb0ea449, AMD MIT.
+
+New uncalled shim primitives bc250_sdma_quiesce_instance andbc250_sdma_unfreeze_instance. Quiesce adapts actualAMDstop_queue registerbody: disableRB/IB forselectedinstance;requestFREEZE;pollFROZEN,withAMDSTATUS1low10bits idlefallback ontimeout;haltF32;disableUTC_L1. Errorleavespartialstate includingpossibleFREEZE;nofree/reset/firmwareoperation. ReturntimeoutusesBC250_ETIME,loopcounterunsignedforWDK. Unfreeze isonlyrestore_queue's matchingregisterfragment,notfullringrestore. API explicitlyrequiresserializedowner,RLCsafe-mode scope,retainedbacking andlatercompleteunfreeze/ring/translationrestoration. Ordinaryhw_fini unchanged;noKMDcaller.
+
+Addresses verifiedwithregcalc overAMDheaders. mmSDMA0_FREEZE +0x04A2C,mmSDMA0_STATUS1_REG +0x04A18;mmSDMA1_FREEZE +0x0622C,mmSDMA1_STATUS1_REG +0x06218. Runtimeusesbc250_sdma_reg_offset/SOC15macros;no numericaddressinnewcode. Fieldmasks fromgc_10_1_0_sh_mask.h.
+
+Actualshimhostmodels:bothinstances x FROZENack/idlefallback/nonidle refusal=6scenarios. Checkexactselectedregisterwriteorder,retainedunrelatedbits,RB/IBdisable,freeze-before-halt/cacheoff,correctpollcount,andpairedunfreeze. Outofrangeinstance emitsnowrites. Allpass. Existing354+35writeoracle exact(24addressexceptions),fournegativecontrols discriminate,22RLCreset/8flush/285writeGARTextraction checks pass. WDKshimcompilepasses. NoRLCsafe-mode/physicalDMAcompletion/hardwarecachecoherency modeled.
+
+Initialmechanicalextractormatcheda forwarddeclaration andfollowinggoldenarrayinstead offunctionbody;compilecaughtit,correctedselectorrequiresdefinitionnewlinebrace. SubsequentWDKsignednessdiagnosticcorrectedwithunsignedpollcounter. Failedandpassinglogs retained;incorrectintermediate neverbuiltintoadeployedpackage.
+
+Next integrate actualRLCsafe-mode request/ack/pairedexit andanexplicitSDMAunfreeze/restore phase before anyKMDcaller orhardwaretrial. DecidefreezeownershipacrossPSPload andretaintranslation/backingbarriers. Noresetexperiment,packageversion orlabchange inM369. Installed116display-onlyboot07:18:37fromM367 remainslastverifiedstate. WarmM9/cache/DMA/alias/lifetime/performance acceptance remainsopen.

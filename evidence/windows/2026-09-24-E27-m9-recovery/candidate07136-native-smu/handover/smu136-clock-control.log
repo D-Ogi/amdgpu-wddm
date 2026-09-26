@@ -1,0 +1,21 @@
+66750
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66750 ready=1
+clock request=1000MHz/820mV initial=1000MHz/VID116 expected_vid=116 voltage_staged=0
+sample=0 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=1 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=2 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=3 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=4 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=5 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=6 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+sample=7 smn_before_mc=66750 native_mc=66750 smn_after_mc=66750 bracket=True
+monitor_pid=11216 start=2026-09-24T22:17:07
+monitor_control=C:\BC250\mon\bc250control.dll sha256=D743A306D09DE6239BD9BD17630FA5F26CA5FBD30DD524A097861E585F11560D
+
+TaskName                         State
+--------                         -----
+BC250 GPU clock 1000MHz 820mV Disabled
+BC250 monitor overlay          Running
+
+
+paired_clock_control_complete=2026-09-24T22:23:32

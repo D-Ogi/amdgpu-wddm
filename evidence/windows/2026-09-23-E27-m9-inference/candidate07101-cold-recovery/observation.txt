@@ -1,0 +1,4 @@
+Recorded UTC: 2026-09-23T15:37:21.794857+00:00
+Owner reports desktop returned after disconnecting AC power. This is an owner observation, not a remotely verified boot or driver state.
+Read-only persisted-log recovery via Target.run timed out at 35 seconds. Independent probes of both configured routes did not connect to TCP port 22 within 3 seconds each. Route indexes disclose no addresses.
+Original host session 38884 remains live without output; this does not establish ongoing remote execution after the reported power cycle. No new startup, PnP operation or OS reset was requested. Requested local Start-Service sshd / Get-Service sshd to restore observation. No recovered CP checkpoint or runtime cache result.

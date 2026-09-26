@@ -1,0 +1,4 @@
+executable('bc250_ttn_control', 'bc250_ttn_control.c',
+ include_directories: [inc_include, inc_src, inc_gallium, inc_gallium_aux],
+ link_with: [libgallium],
+ dependencies: [dep_ws2_32, idep_nir, driver_swrast, idep_mesautil])

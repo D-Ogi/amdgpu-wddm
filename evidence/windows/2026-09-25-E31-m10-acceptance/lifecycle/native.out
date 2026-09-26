@@ -1,0 +1,9 @@
+LIFECYCLE size kind=0 width=640 height=480
+LIFECYCLE resize frame=32
+LIFECYCLE size kind=0 width=433 height=277
+LIFECYCLE minimize frame=64
+LIFECYCLE size kind=1 width=0 height=0
+LIFECYCLE restore
+LIFECYCLE size kind=0 width=433 height=277
+LIFECYCLE resize frame=96
+LIFECYCLE size kind=0 width=640 height=480

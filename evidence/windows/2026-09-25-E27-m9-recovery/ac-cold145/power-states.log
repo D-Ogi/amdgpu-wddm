@@ -1,0 +1,23 @@
+The following sleep states are not available on this system:
+    Standby (S1)
+	The system firmware does not support this standby state.
+
+    Standby (S2)
+	The system firmware does not support this standby state.
+
+    Standby (S3)
+	The system firmware does not support this standby state.
+
+    Hibernate
+	Hibernation has not been enabled.
+
+    Standby (S0 Low Power Idle)
+	The system firmware does not support this standby state.
+
+    Hybrid Sleep
+	Standby (S3) is not available.
+	Hibernation is not available.
+
+    Fast Startup
+	Hibernation is not available.
+

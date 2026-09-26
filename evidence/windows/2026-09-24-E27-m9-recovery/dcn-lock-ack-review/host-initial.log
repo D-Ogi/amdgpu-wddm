@@ -1,0 +1,10 @@
+Extracted DcnFlipWriteSequence from P:\bc-250\bc250-win\driver\kmd\dcn.c
+dcn_flip_actual.c
+P:\bc-250\scratch\m9\dcn-flip\dcn_flip_actual.c(8): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\dcn-flip\dcn_flip_actual.c(8): warning C4005: "_In_": ponowna definicja makra
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include\sal.h(305): note: zobacz poprzednią definicję „_In_”
+Exception: P:\BC-250\bc250-win\driver\kmd\test\run_dcn_flip.ps1:15
+Line |
+  15 |  if($LASTEXITCODE -ne 0){throw 'Host build failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Host build failed

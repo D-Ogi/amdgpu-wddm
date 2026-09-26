@@ -1,0 +1,10 @@
+compile (user mode, host test)
+  P:\BC-250\scratch\build\bd025\metadata\firmware_metadata_actual.inc(44): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+  P:\BC-250\scratch\build\bd025\metadata\firmware_metadata_actual.inc(44): warning C4459: deklaracja „smuVersion” powoduje ukrycie deklaracji globalnej
+  P:\BC-250\bc250-win\driver\kmd\test\firmware_metadata_test.c(25): note: zobacz deklarację „smuVersion”
+  Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\kmd\test\run_firmware_metadata.ps1:32
+Line |
+  32 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl.exe failed (2)

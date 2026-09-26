@@ -1,0 +1,9 @@
+# Physical aperture endpoint integration, 2026-09-23
+
+Local source/build only; lab still0798 from M258. Segment2 endpoints retain MC address/extent plus explicit Aperture flag. VidMm range preflight verifies every planned page before publication; one-page resolution returns actual system physical identity. Existing temporary GART copy/fill path handles these pages. Alias comparisons therefore use physical identities, including aperture/MDL one-page overlap, which uses existing VRAM staging.
+
+WDDM BuildPagingBuffer wrapper holds a new exclusive paging-builder lock around each DDI batch. Lock order: builder -> GfxPagingLock -> VidMm CpuUpdateLock. This prevents map/unmap publication between slices of that batch. It does not establish OS order across multiple pending buffers or multipass calls, nor physical page pinning after callback return.
+
+Host actual KMD route tests:13712checks0failures. New coverage: fragmented aperture page identities, actual two-page aperture-to-local and local-to-aperture DDI publication, aperture fill, one-page aperture/MDL physical alias staging, remapped identity before hardware execution, whole-range missing-page preflight. Extracted actual wrapper test proves local lock ownership/call ordering and status propagation, not a real concurrent kernel stress test.
+
+Signed WDK development build E0C06690DA90EE8C2D3C3F399052F78AD46B68AF0C42B1907FFBB326EE2187AC at scratch/build/aperture-endpoint-dev/package. DEV ONLY keeps0798version; not installed. Cross-page indirect alias cycles are still refused before emitting a prefix, with the previous multi-MDL gap extended to aperture-backed lists. No claim that all segment2 transfers or hardware callbacks are complete. Need full alias dependency handling, ordering/lifetime review and versioned deployment/live validation.

@@ -1,0 +1,17 @@
+[
+  {
+    "utc": "2026-09-24T02:45:35.592896+00:00",
+    "event": "post_shutdown_before",
+    "relay_on": true
+  },
+  {
+    "utc": "2026-09-24T02:45:36.750385+00:00",
+    "event": "off_verified",
+    "relay_on": false
+  },
+  {
+    "utc": "2026-09-24T02:45:45.900282+00:00",
+    "event": "on_verified",
+    "relay_on": true
+  }
+]

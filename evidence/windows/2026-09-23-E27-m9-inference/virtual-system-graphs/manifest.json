@@ -1,0 +1,16 @@
+{
+  "base_commit": "bed764da5192be7132d646be0e6331c1edeb30fd",
+  "state": "dirty development revision101; no deployment",
+  "sys_sha256": "B98111726EFA908EE07F640BDE25437F75F1347C17B7EEE0D5B16D12A0FDC348",
+  "sources_sha256": {
+    "driver/kmd/gfx.c": "70c5c8c16b5159004c11ad86a09481844c9bbe7dcfc71c0cbc2d0158386c0ecd",
+    "driver/kmd/bc250kmd.h": "bad3d68c03a6f49b205cd1983278671368627f210e8cace2345343b7ae64d168",
+    "driver/kmd/wddm.c": "8c6ccfb6143fbe684a4cd5ffe09869424887f3f1c95c84bd65c6599f388b2c4c",
+    "experiments/E27-m9-inference/paging-route-test-prefix.c": "57578a152c5d8944d83c7c8aaa11bb81d2480c065dadc285b0ca2d151e2ed712",
+    "experiments/E27-m9-inference/paging-route-test-suffix.c": "dd3ad5bf6491b2c4552a137d2b88ec150baf3bf98d679f8da170a877ac91f9d8",
+    "experiments/E27-m9-inference/generate-paging-route-test.py": "b88debdc0a800e3a9a3c107aa0c01325d0b786df138761f9f0f53bd0ffed7633"
+  },
+  "default_exit": 0,
+  "focused_exit": 0,
+  "focused_mutant_exit": 1
+}

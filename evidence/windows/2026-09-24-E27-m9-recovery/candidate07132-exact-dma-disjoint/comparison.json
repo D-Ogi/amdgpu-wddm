@@ -1,0 +1,25 @@
+{
+  "native_before_1g": [
+    65,
+    71,
+    2381488128
+  ],
+  "native_after_1g": [
+    100,
+    90,
+    13118906368
+  ],
+  "native_delta_1g": [
+    35,
+    19,
+    10737418240
+  ],
+  "capture_plans_before_after": [
+    0,
+    0
+  ],
+  "median_restore_ms_131": 7719,
+  "median_restore_ms_132": 1562,
+  "ratio_medians": 4.941741357234315,
+  "scope": "one ordered comparison; same boot, clock, probe and size; physical placement/workload history not controlled"
+}

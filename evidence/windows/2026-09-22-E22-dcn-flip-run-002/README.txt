@@ -1,4 +1,4 @@
-E22 run 002, 2026-09-22 ~06:45: bc250kmd 0.7.22 (b197b2b, .sys sha256 prefix 9d137aa9dc44fec8) display-only on
+E22 run 002, 2026-09-22 ~06:45: bc250kmd 0.7.22 (4c233e3, .sys sha256 prefix 9d137aa9dc44fec8) display-only on
 unit A, owner absent (the monitor was not observed; the picture evidence is the driver's own scanout read-back).
 run-002-script.ps1: gates EnableMmio, EnableVram, EnableVramWrite, EnableDcnWrite for one device start; `dcn` dump,
 `dcnflip 0x270000000` (no-op flip to the firmware's address), `dcnflip 0x271000000 fill 0xFF2060C0` (CPU fill of a

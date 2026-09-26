@@ -1,0 +1,12 @@
+M243: live clock-check positive/negative/recheck, 2026-09-23 unit A.
+New CLI query-only command returns0 for1000MHz/VID116 (request820mV).
+Negative expected1001MHz returns1 against same actual1000/116.
+Recheck1000/820 returns0. All SMU query replies0x01.
+Only GetGfxFrequency and GetGfxVid messages issued; no RequestGfxclk/ForceGfxVid.
+stdout/stderr collected separately by transport: mismatch stderr appears first
+in merged log, not proof it executed before the positive control.
+Fresh clock reading is now established for this test, not a perpetual guarantee.
+Independent protocol/units control remains E04; this run tests new CLI against
+real SMU plus deliberately wrong expectation. It does not test cold-start order,
+new KMD, current CU count or paging correctness.
+New CLI remains separate under target tmp; installed task/CLI unchanged.

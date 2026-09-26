@@ -1,4 +1,4 @@
-E24 run 007 again, 2026-09-22, bc250kmd 0.7.33 (560ad2b). Fresh boot 13:17:15. Same gates as run 007, flip gate closed, pressure 64 then 256 then 512 MB.
+E24 run 007 again, 2026-09-22, bc250kmd 0.7.33 (08f552d). Fresh boot 13:17:15. Same gates as run 007, flip gate closed, pressure 64 then 256 then 512 MB.
 
 The offset fix of 0.7.33 submitted the first fill: 80 dwords at shadow offset 0x0, 320 bytes, sequence 3, logged as "fence 1 on the SDMA0 ring". The fence slot stayed 0. At 500 ms the path closed itself ("seq 3 in flight, slot 0x0") and the later two submissions never reached the ring. Final tally: 1 hardware submitted, 0 completed, 1 timeout.
 

@@ -1,0 +1,3 @@
+test.c
+FAIL line70: Bc250StartHealth(0,0,0,&d,sizeof(d))==0 && accessFlag==0
+Start health client: 17 checks, 1 failures

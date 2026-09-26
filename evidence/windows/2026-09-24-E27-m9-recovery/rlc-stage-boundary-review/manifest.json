@@ -1,0 +1,10 @@
+{
+  "amdgpu_psp.c": "3082701d18cb59bc454613c4ce0ad17bfaa969a6bcd30f9fd06c36091aee75a4",
+  "PLAN.md": "5896c7cd0e6b391ea4ddef411cd76e9d4c501393a424801336276683a7f61bba",
+  "RESULT.md": "cba54ed5c49edd7803b29541c4a4facbad9454f79e10dd931be545c592938352",
+  "source\\driver\\kmd\\gfx.c": "f070a2b8f6f823f2cf8a3963d06be2f398bb05bd50fc2083a3140c9ae75825b7",
+  "source\\driver\\kmd\\gpumem.c": "8fb5b3f9311fe073de43525e166cf3a1631c8003a1461383dc9d4a3347bd1ba8",
+  "source\\driver\\kmd\\pnp.c": "a48236914b4c6c3b84656926a1c72eb17466a1901fe4be01b171a35033529718",
+  "source\\driver\\kmd\\psp.c": "a9b8016a507644247c6a38dd40b47ab6be4340e481ca17e98db5faa6a2aac7b1",
+  "source\\driver\\shim\\bc250_gfx.c": "e3d78854738d0a97ecd060b11f49cbab6fb3bbffc269fca91f24fa984cfe2341"
+}

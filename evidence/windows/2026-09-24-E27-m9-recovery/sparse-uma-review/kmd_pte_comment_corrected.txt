@@ -1,0 +1,32 @@
+			u64 dxgk_flags, u64 dxgk_address, u64 *out)
+{
+	u64 phys = 0, flags;
+	int system = 0, rc;
+
+	if (ctx == NULL || out == NULL)
+		return BC250_EINVAL;
+
+	*out = 0;
+
+	/* An entry VidMm marks not present translates to a flags word of 0 and nothing else is
+	 * read. amdgpu_gart.c:308-309 states the rule and the reason: "Starting from VEGA10, system
+	 * bit must be 0 to mean invalid", so clearing every flag is how absence is spelled on this
+	 * hardware, not a valid entry pointing somewhere harmless. The early return is also what
+	 * makes an unmap safe to hand over verbatim: the fields beside Valid may be anything at
+	 * all, and none of them can turn into a refusal here. */
+	if ((dxgk_flags & BC250_DXGK_PTE_VALID) == 0)
+		return 0;
+
+	/* A context that names the same id for both segments cannot be resolved, and the ambiguity
+	 * would land on whichever branch happens to be tested first. Refuse the context instead. */
+	if (ctx->system_segment == ctx->vram_segment)
+		return BC250_EINVAL;
+
+	/* Zero requests zero-resource semantics (Microsoft DXGK_PTE), not a reserved bit.
+	 * This path does not implement it and WddmGpuMmuCaps leaves ZeroInPteSupported0.
+	 * SystemReserved0/Reserved remain reserved. See docs/design/sparse-wddm.md. */
+	if ((dxgk_flags & (BC250_DXGK_PTE_ZERO | BC250_DXGK_PTE_SYSRESERVED0 |
+			   BC250_DXGK_PTE_RESERVED_MASK)) != 0)
+		return BC250_EINVAL;
+
+	/* One adapter. A non-zero index would be a linked-adapter entry naming another GPU's

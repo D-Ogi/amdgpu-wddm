@@ -1,0 +1,14 @@
+M223 mapped staged copy, 2026-09-23.
+Dirty worktree over base-commit.txt; source snapshots included. E27 procedure before tests.
+Mapping descriptor adds optional staging_mc (zero preserves old path). Two copies and
+four marker/poll barriers retain mappings through destination completion, then unmap/
+invalidate.100DW emitted/112DW reserved with two PTEs. Whole capacity checked first.
+Stage guards cover bounds, source/destination MC views, table, marker and sequence wrap.
+GfxPagingBuildCopyPage now stages aliased system identities, replacing M222 refusal.
+11661 checks/0 failures (124 new), full WDK0788 build/sign passes. SYS SHA256
+EB84F57F88CC6B45C459290C2B4DCAF09CB6243B21F1A2FCDE04DA25B85A5B09
+Package scratch/build/bc250kmd-0788/package-umd NOT DEPLOYED.
+Tests: actual KMD alias path; mapped order/markers/cleanup, all112 short capacities,
+alias/size/wrap guards; decoded two-window same-PFN model matches independent memmove.
+No actual GPU pipeline/cache/retirement or OS lifetime proof. Cross-slice overlap and
+Transfer DDI publication remain open. No lab access/reset/USB change/private redaction.

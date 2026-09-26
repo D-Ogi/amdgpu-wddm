@@ -1,0 +1,48 @@
+boot=2026-09-24T18:23:50
+
+
+Name              : C:\pagefile.sys
+AllocatedBaseSize : 32768
+CurrentUsage      : 0
+PeakUsage         : 0
+TempPageFile      : False
+
+
+
+
+
+CommittedBytes : 2914828288
+CommitLimit    : 42655780864
+AvailableBytes : 5069475840
+
+
+
+
+
+Size          : 536870907904
+SizeRemaining : 455598891008
+
+
+
+installed_sha256=37A52F95CD90726D909FBF273D55B9336D766E2997668BA713B8ADC45BCF4A87
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   [PCI instance redacted]
+# interface  [PCI interface redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00008992
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070085 (milestone 7 revision 133)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     346
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+Expected133 full table not active
+At C:\BC250\tmp\pagefile32-post-boot.ps1:19 char:96
++ ... otmatch 'FULL WDDM TABLE'){throw 'Expected133 full table not active'}
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Expected133 full table not active:String) [], Ru 
+   ntimeException
+    + FullyQualifiedErrorId : Expected133 full table not active
+ 

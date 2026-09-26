@@ -1,0 +1,13 @@
+# M377 - Concurrent64MiB clients and bounded post-completion observation pass
+
+Unit A Windows,2026-09-24. Same installed119 SYS4374CB20857D0CA5D09D8EFCF61F5D35718633D568571EF41FE717900E15236E, boot08:30:00. Preflight no full GPU initialization since M376 recovery; one first full start, no reinstall/OS restart/device stop/AC operation in M377.
+
+Read-only investigation: current AC standby/video timers are0(disabled). In the queried prior08:20-08:29System interval, only two DCOM10016 events were returned; event message identities omitted. No sleep-transition evidence in that window. Current settings alone do not prove historical settings or explain M376.
+
+Two64MiB probes launched with two live launchers observed. Both nativeexit0 and each has three residency departures/restorations, four full64MiB byte-matching GPU readbacks at fences64/128/192/256. Shared final workload counters GFX512/512,paging21725/21725,0timeouts/refusals,noTDR. Twelve reserved capture plans,0heap. Concurrent process liveness does not prove same-system-context callback interleaving or overlapping arena spans.
+
+Thirty post-completion iterations with2s waits, temperature and live CLI summaries pass; workload SSH observerexit0. Independent final info/confirm succeeds and retains initialized full WDDM. Because driver polling could affect idle behavior, a separate pre-recorded quiet plan runs12 OS-only5s heartbeats without this agent calling GPU/temperature interfaces. All12 heartbeats arrive; subsequent info/summary succeeds. Final GFX512/512,paging29899/29899,0errors,noTDR,12reserved/0heap. Windows/DWM and SSH remain active; this is not a complete GPU-idle or unrestricted stability proof. Streaming summaries wrap the finite KMD ring; lost historical lines must not be interpreted as absence of events. See raw host streams and quiet-validation.json.
+
+M376 post-1GiB connectivity incident was not reproduced by this smaller changed workload and bounded observation. Its cause remains unknown. No1GiB retry and no warm-start attempt. PFNs/cache attributes, arbitrary concurrency/idle duration, warm reentry and matched Windows-over-Linux performance remain open.
+
+CURRENT:119 remains initialized full WDDM in boot08:30:00, stage50, UnconfirmedStarts0 after confirm. EnableFullWddm on disk is0 due one-shot consumption; this is NOT display-only. Execution gates for GPU/paging remain enabled; raw MMIO/DCN/flip/blit/reset gates remain0. Pinned SSH responsive. No active workload/observer remains; all stream handles terminal. Preserve this device session for further content/shader/performance work rather than routinely stopping and reinitializing. Host hardware/PCI identity lines redacted; native outputs unchanged.

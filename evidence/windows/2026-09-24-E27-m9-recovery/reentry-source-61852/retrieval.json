@@ -1,0 +1,50 @@
+[
+  {
+    "file": "sdma_v5_0.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/sdma_v5_0.c",
+    "bytes": 68881,
+    "sha256": "c1c9bdb4dbc63442917586a3c8a1e96520fc9950e920848bbd4dbc248aa6ce82"
+  },
+  {
+    "file": "psp_v11_0.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/psp_v11_0.c",
+    "bytes": 20247,
+    "sha256": "93cca2738d9758c866517798aa2ce638cf43fc2f88b1f28bd2e2b936a25f16bb"
+  },
+  {
+    "file": "amdgpu_psp.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c",
+    "bytes": 126151,
+    "sha256": "3082701d18cb59bc454613c4ce0ad17bfaa969a6bcd30f9fd06c36091aee75a4"
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c",
+    "bytes": 462405,
+    "sha256": "d3ad9a579ba3763e3b696a62c4218e27451868d847601b930ae20de1eb111033"
+  },
+  {
+    "file": "amdgpu_device.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_device.c",
+    "bytes": 215867,
+    "sha256": "f54c388fcc69b549b3e5d139869fcf59c11b204d03fde2c16330b9ec1b5fe2fd"
+  },
+  {
+    "file": "amdgpu_reset.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_reset.c",
+    "bytes": 9567,
+    "sha256": "deb643b5dfb77a0252b7703ac95b919ce50a868fd9f8bba0c88348c76261f95c"
+  },
+  {
+    "file": "soc15.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/soc15.c",
+    "bytes": 46650,
+    "sha256": "e51e3c71fd479abe29b1ab667474de1a8416243e6a83bc9ce743306b1b17aea8"
+  },
+  {
+    "file": "amdgpu_ucode.c",
+    "url": "https://raw.githubusercontent.com/gregkh/linux/v6.18.52/drivers/gpu/drm/amd/amdgpu/amdgpu_ucode.c",
+    "bytes": 53559,
+    "sha256": "c28085638023bc9bf40eb21ddd94b06e62e935f87d948810e80cc8c4b2858b46"
+  }
+]

@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 524 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x01A310  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x018ED0  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x030A00  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x03D3F0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\smu-typed-dev-v2\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\smu-typed-dev-v2\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\smu-typed-dev-v2\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7684  bc250kmd.inf
+   368016  bc250kmd.sys
+  DEFFB5281DF207748E0F190E40C4E7432E63F347BBB14E41444DAE6B46CE3CFB  package\bc250kmd.sys

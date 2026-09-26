@@ -1,0 +1,8 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+scanline_probe.c
+P:\bc-250\bc250-win\experiments\E27-m9-inference\scanline_probe.c(17): error C2065: "QDC_ONLY_ACTIVE": niezadeklarowany identyfikator
+P:\bc-250\bc250-win\experiments\E27-m9-inference\scanline_probe.c(22): error C2065: "QDC_ONLY_ACTIVE": niezadeklarowany identyfikator

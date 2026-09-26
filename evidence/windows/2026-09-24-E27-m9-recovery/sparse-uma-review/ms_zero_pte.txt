@@ -1,0 +1,59 @@
+
+### Declaration
+
+`d3dukmdt.h` line 315, WDK 10.0.26100:
+
+```c
+typedef struct _DXGK_PTE
+{
+    union
+    {
+        struct
+        {
+            ULONGLONG Valid                 :  1;
+            ULONGLONG Zero                  :  1;
+            ULONGLONG CacheCoherent         :  1;
+            ULONGLONG ReadOnly              :  1;
+            ULONGLONG NoExecute             :  1;
+            ULONGLONG Segment               :  5;
+            ULONGLONG LargePage             :  1;
+            ULONGLONG PhysicalAdapterIndex  :  6;
+            ULONGLONG PageTablePageSize     :  2;       // DXGK_PTE_PAGE_SIZE
+            ULONGLONG SystemReserved0       :  1;
+            ULONGLONG Reserved              :  44;
+        };
+        ULONGLONG Flags;
+    };
+    union
+    {
+        ULONGLONG PageAddress;      // High 52 bits of 64 bit physical address. Low 12 bits are zero.
+        ULONGLONG PageTableAddress; // High 52 bits of 64 bit physical address. Low 12 bits are zero.
+    };
+} DXGK_PTE;
+```
+
+
+### Description
+
+A page table entry (PTE) provides a physical address of a page and other attributes. The exact format of PTE depends on hardware implementation.
+
+### Struct fields
+
+#### Field Valid
+
+When set, this indicates that the entry is valid. Accessing an invalid entry leads to an unrecoverable address fault, unless the <b>Zero</b> flag is set.
+
+#### Field Zero
+
+When set with <b>Valid</b> = 1, the access to the entry lead to returning the zero value for the memory access. This is used to support tiled resources.
+
+Supported starting with Windows 10.
+
+#### Field CacheCoherent
+
+When set, this indicates that the memory page is cache coherent between CPU and GPU.
+
+#### Field ReadOnly
+
+When set, this indicates that the memory page is read only.
+

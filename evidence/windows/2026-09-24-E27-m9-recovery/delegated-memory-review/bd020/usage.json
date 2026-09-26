@@ -1,0 +1,39 @@
+{
+  "derived_header_field_offset": 32,
+  "derived_table_index": 11,
+  "images": [
+    {
+      "path": "firmware\\unit-A-2026-09-21\\vbios-debugfs.rom",
+      "sha256": "bf4f1e3c77e27700b226265161cf7d0f92773dc2269c572aa47826c9f2830f22",
+      "rom_header": 388,
+      "master_data": 37964,
+      "usage_table": 39202,
+      "revision": "2.1",
+      "start_kib": 0,
+      "firmware_kib": 0,
+      "driver_kib": 0
+    },
+    {
+      "path": "firmware\\bios\\analysis\\extracted\\unitA-VFCT\\VBIOS_from_unitA_VFCT_1002-13FE_runtime-patched.rom",
+      "sha256": "bf4f1e3c77e27700b226265161cf7d0f92773dc2269c572aa47826c9f2830f22",
+      "rom_header": 388,
+      "master_data": 37964,
+      "usage_table": 39202,
+      "revision": "2.1",
+      "start_kib": 0,
+      "firmware_kib": 0,
+      "driver_kib": 0
+    },
+    {
+      "path": "firmware\\bios\\analysis\\extracted\\P3\\A0327FE0_sec2_VBIOS_113-AMDRBN-003_1002-13FE_sectF1004391.rom",
+      "sha256": "89ec00c3a91d515f545ea9ba7923e0c9b62080bdc8f27732f5dfedfa489687d1",
+      "rom_header": 388,
+      "master_data": 37964,
+      "usage_table": 39202,
+      "revision": "2.1",
+      "start_kib": 0,
+      "firmware_kib": 0,
+      "driver_kib": 0
+    }
+  ]
+}

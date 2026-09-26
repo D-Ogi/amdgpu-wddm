@@ -1,0 +1,21 @@
+{
+  "os_only_heartbeats": 12,
+  "quiet_completed": true,
+  "post_driver_query_passed": true,
+  "gfx": [
+    "512",
+    "512",
+    "0",
+    "0"
+  ],
+  "paging": [
+    "29899",
+    "29899",
+    "0",
+    "0"
+  ],
+  "capture": [
+    "12",
+    "0"
+  ]
+}

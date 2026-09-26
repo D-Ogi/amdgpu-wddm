@@ -1,0 +1,65 @@
+PROVENANCE: Linux amdgpu (AMD MIT); local Linux6.18.0 reference, not the exact E28 Alpine6.18.52 binary.
+
+5475: static void gfx_v10_0_rlc_reset(struct amdgpu_device *adev)
+5476: {
+5477: 	WREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 1);
+5478: 	udelay(50);
+5479: 	WREG32_FIELD15(GC, 0, GRBM_SOFT_RESET, SOFT_RESET_RLC, 0);
+5480: 	udelay(50);
+5481: }
+5482: 
+
+7635: 	/* GRBM_STATUS2 */
+7636: 	tmp = RREG32_SOC15(GC, 0, mmGRBM_STATUS2);
+7637: 	switch (amdgpu_ip_version(adev, GC_HWIP, 0)) {
+7638: 	case IP_VERSION(10, 3, 0):
+7639: 	case IP_VERSION(10, 3, 2):
+7640: 	case IP_VERSION(10, 3, 1):
+7641: 	case IP_VERSION(10, 3, 4):
+7642: 	case IP_VERSION(10, 3, 5):
+7643: 	case IP_VERSION(10, 3, 6):
+7644: 	case IP_VERSION(10, 3, 3):
+7645: 		if (REG_GET_FIELD(tmp, GRBM_STATUS2, RLC_BUSY_Sienna_Cichlid))
+7646: 			grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7647: 							GRBM_SOFT_RESET,
+7648: 							SOFT_RESET_RLC,
+7649: 							1);
+7650: 		break;
+7651: 	default:
+7652: 		if (REG_GET_FIELD(tmp, GRBM_STATUS2, RLC_BUSY))
+7653: 			grbm_soft_reset = REG_SET_FIELD(grbm_soft_reset,
+7654: 							GRBM_SOFT_RESET,
+7655: 							SOFT_RESET_RLC,
+7656: 							1);
+7657: 		break;
+7658: 	}
+7659: 
+7660: 	if (grbm_soft_reset) {
+7661: 		/* stop the rlc */
+7662: 		gfx_v10_0_rlc_stop(adev);
+7663: 
+7664: 		/* Disable GFX parsing/prefetching */
+7665: 		gfx_v10_0_cp_gfx_enable(adev, false);
+7666: 
+7667: 		/* Disable MEC parsing/prefetching */
+7668: 		gfx_v10_0_cp_compute_enable(adev, false);
+7669: 
+7670: 		tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+7671: 		tmp |= grbm_soft_reset;
+7672: 		dev_info(adev->dev, "GRBM_SOFT_RESET=0x%08X\n", tmp);
+7673: 		WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+7674: 		tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+7675: 
+7676: 		udelay(50);
+7677: 
+7678: 		tmp &= ~grbm_soft_reset;
+7679: 		WREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET, tmp);
+7680: 		tmp = RREG32_SOC15(GC, 0, mmGRBM_SOFT_RESET);
+7681: 
+7682: 		/* Wait a little for things to settle down */
+7683: 		udelay(50);
+7684: 	}
+7685: 	return 0;
+7686: }
+7687: 
+7688: static uint64_t gfx_v10_0_get_gpu_clock_counter(struct amdgpu_device *adev)

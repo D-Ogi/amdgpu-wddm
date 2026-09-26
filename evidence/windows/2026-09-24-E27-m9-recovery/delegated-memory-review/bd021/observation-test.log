@@ -1,0 +1,10 @@
+compile (user mode, paging-node packets)
+  Generowanie kodu...
+  P:\bc-250\scratch\build\bd021-observation\paging-route.c(2507): error C2084: funkcja "void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE *,ULONG,ULONG,const ULONGLONG *)" ma już treść
+  P:\bc-250\scratch\build\bd021-observation\paging-route.c(891): note: zobacz poprzednią definicję „VidMmCountEncoding”
+  Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_paging.ps1:51
+Line |
+  51 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl.exe failed (2)

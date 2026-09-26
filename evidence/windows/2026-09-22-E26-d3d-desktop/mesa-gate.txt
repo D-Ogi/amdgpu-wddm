@@ -1,0 +1,31 @@
+﻿time 2026-09-22T22:48:20  phase gate mesa-probe
+gate     EnableGpuVa 1  EnableVramWrite 1  EnableGpuSubmit 0  EnablePresentBlit 1  EnablePagingNode 0  EnableDcnWrite 0  EnableVidPnFlip 0
+disable: Microsoft PnP Utility Disabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device disabled successfully.
+enable:  Microsoft PnP Utility Enabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device enabled successfully.
+boot     2026-09-22T22:14:36
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+driver   0.7.48.1   (oem57.inf)
+umd      UserModeDriverName bc250umd.dll | C:\BC250\e26\bc250d3d.dll | C:\BC250\e26\bc250d3d.dll
+stages   last 50   history 10 20 30 31 32 33 34 35 39 50    unconfirmed 1
+keeplog  KeepLog 1  KeepStatus 0x00000000  files 86
+gates    EnableFullWddm 0  EnableMmio 1  EnableVram 1  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+gates    EnableDcnWrite 0  EnableVidPnFlip 0
+video    BC-250 GPU (bc250kmd, display-only, lab build) | status OK | availability 3 | mode 1920 x 1200 x 4294967296 colors | ram 0 | dll bc250umd.dll,C:\BC250\e26\bc250d3d.dll,C:\BC250\e26\bc250d3d.dll
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          213
+reports  live kernel reports written since boot: 0
+dwm      1 process(es), started 22:35:59
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00B2718C
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070030 (milestone 7 revision 48)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 0, flips 1 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart closed, psp closed, gfx closed, ih closed

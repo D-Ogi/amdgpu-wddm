@@ -1,0 +1,23 @@
+{
+  "ssh_listeners_before": {
+    "linux": 0,
+    "windows": 0
+  },
+  "transitions": [
+    {
+      "stage": "before",
+      "relay_on": true,
+      "utc": "2026-09-24T08:20:17.350058+00:00"
+    },
+    {
+      "stage": "off",
+      "relay_on": false,
+      "utc": "2026-09-24T08:20:18.507751+00:00"
+    },
+    {
+      "stage": "on",
+      "relay_on": true,
+      "utc": "2026-09-24T08:20:27.665536+00:00"
+    }
+  ]
+}

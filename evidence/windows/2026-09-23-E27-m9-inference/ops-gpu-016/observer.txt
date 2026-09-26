@@ -1,0 +1,49 @@
+GATE_BEGIN 2026-09-23T04:26:30
+GATE_END 2026-09-23T04:26:45
+STEP_BEGIN gart 2026-09-23T04:26:45
+STEP_END gart 2026-09-23T04:26:45
+STEP_BEGIN psp 2026-09-23T04:26:45
+STEP_END psp 2026-09-23T04:26:46
+STEP_BEGIN ih 2026-09-23T04:26:46
+STEP_END ih 2026-09-23T04:26:46
+STEP_BEGIN gfx-1 2026-09-23T04:26:46
+STEP_END gfx-1 2026-09-23T04:26:46
+STEP_BEGIN gfx-2 2026-09-23T04:26:46
+STEP_END gfx-2 2026-09-23T04:26:46
+STEP_BEGIN gfx-3 2026-09-23T04:26:46
+STEP_END gfx-3 2026-09-23T04:26:46
+STEP_BEGIN gfx-4 2026-09-23T04:26:46
+STEP_END gfx-4 2026-09-23T04:26:46
+STEP_BEGIN gfx-5 2026-09-23T04:26:46
+STEP_END gfx-5 2026-09-23T04:26:46
+STEP_BEGIN gfx-6 2026-09-23T04:26:46
+STEP_END gfx-6 2026-09-23T04:26:46
+STEP_BEGIN gfx-7 2026-09-23T04:26:46
+STEP_END gfx-7 2026-09-23T04:26:46
+STEP_BEGIN gfx-8 2026-09-23T04:26:46
+STEP_END gfx-8 2026-09-23T04:26:46
+STEP_BEGIN fence-control 2026-09-23T04:26:46
+STEP_END fence-control 2026-09-23T04:26:46
+OPERATORS_BEGIN 2026-09-23T04:26:46
+RESULT m8 PASS
+RESULT stories15M-1 PASS
+RESULT stories15M-2 PASS
+RESULT stories15M-3 PASS
+RESULT stories15M-4 PASS
+RESULT tinyllama-1 PASS
+RESULT tinyllama-2 PASS
+RESULT tinyllama-3 PASS
+RESULT tinyllama-4 PASS
+RESTORE_BEGIN 2026-09-23T04:27:46
+time 2026-09-23T04:28:06  phase confirm m9-restored
+UnconfirmedStarts = 0
+Select-String : Cannot find drive. A drive with the name 'bc250' does not exist.
+At C:\BC250\tmp\ops-gpu-016.ps1:132 char:13
++   if (-not (Select-String "$out\$name.err" -SimpleMatch 'bc250: progr ...
++             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (bc250:String) [Select-String], DriveNotFoundExcept 
+   ion
+    + FullyQualifiedErrorId : DriveNotFound,Microsoft.PowerShell.Commands.SelectStringCommand
+ 
+
+ssh_exit=1

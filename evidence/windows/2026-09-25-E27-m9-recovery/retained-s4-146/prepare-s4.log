@@ -1,0 +1,55 @@
+health abi=1 version=0x00070092 flags=15 generation=34815300295 epoch=5 completed=199 age_ms=318 ready_ms=150747
+power_states_before
+The following sleep states are not available on this system:
+    Standby (S1)
+	The system firmware does not support this standby state.
+
+    Standby (S2)
+	The system firmware does not support this standby state.
+
+    Standby (S3)
+	The system firmware does not support this standby state.
+
+    Hibernate
+	Hibernation has not been enabled.
+
+    Standby (S0 Low Power Idle)
+	The system firmware does not support this standby state.
+
+    Hybrid Sleep
+	Standby (S3) is not available.
+	Hibernation is not available.
+
+    Fast Startup
+	Hibernation is not available.
+
+	The hiberfile size has been set to: 3318415360 bytes.
+power_states_after
+The following sleep states are available on this system:
+    Hibernate
+    Fast Startup
+
+The following sleep states are not available on this system:
+    Standby (S1)
+	The system firmware does not support this standby state.
+
+    Standby (S2)
+	The system firmware does not support this standby state.
+
+    Standby (S3)
+	The system firmware does not support this standby state.
+
+    Standby (S0 Low Power Idle)
+	The system firmware does not support this standby state.
+
+    Hybrid Sleep
+	Standby (S3) is not available.
+
+
+
+HibernateEnabled : 1
+HiberFileType    : 2
+
+
+
+hibernate_prepared_no_transition

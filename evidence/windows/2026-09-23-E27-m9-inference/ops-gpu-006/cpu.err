@@ -1,0 +1,22 @@
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x12c4d5
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+0.00.191.555 I common_init_result: fitting params to device memory ...
+0.00.191.560 I common_init_result: (for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on)
+allocation handle=0x40000d80
+bc250: gfx preamble inlined (no gfx_init IB)
+0.00.261.059 W load: bad special token: 'tokenizer.ggml.seperator_token_id' = 4294967295, using default id -1
+0.00.261.067 W load: bad special token: 'tokenizer.ggml.padding_token_id' = 4294967295, using default id -1
+allocation handle=0x40001540
+allocation handle=0x400015c0
+0.00.272.953 I 
+0.00.272.993 I system_info: n_threads = 6 (n_threads_batch = 6) / 12 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | REPACK = 1 | 
+0.00.272.993 I 
+0.00.273.184 I number of input tokens = 5
+0.00.273.184 I   1
+0.00.273.185 I   403
+0.00.273.185 I   407
+0.00.273.185 I   261
+0.00.273.185 I   378

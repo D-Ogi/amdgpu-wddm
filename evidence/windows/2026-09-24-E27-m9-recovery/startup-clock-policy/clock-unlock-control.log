@@ -1,0 +1,69 @@
+AMD clock constants and complete function match pinned source
+clock-unlock-mutated.c
+clock_test.c
+Generowanie kodu...
+clock-unlock-mutated.c
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line29: b.begin_count==1&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line29: b.begin_count==1&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line29: b.begin_count==1&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line44: b.count==(unsigned int)step&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line44: b.count==(unsigned int)step&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line44: b.count==(unsigned int)step&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line44: b.count==(unsigned int)step&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line49: !r.ready&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line13: b->held==1
+FAIL line10: b->held==1
+FAIL line49: !r.ready&&b.end_count==1&&!b.held
+FAIL line11: b->held==1
+FAIL line10: b->held==1
+FAIL line52: !r.ready&&!b.count&&b.end_count==1
+FAIL line11: b->held==1
+FAIL line10: b->held==1
+FAIL line53: !r.ready&&!b.count&&b.end_count==2
+clock policy: 201 checks, 63 failures

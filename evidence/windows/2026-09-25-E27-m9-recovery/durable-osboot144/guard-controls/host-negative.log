@@ -1,0 +1,7 @@
+test.c
+FAIL 64: Start()==STATUS_ACCESS_DENIED&&admissions==0&&writes==0&&flushes==0
+FAIL 66: Start()==STATUS_OBJECT_TYPE_MISMATCH&&admissions==0&&writes==0&&closes==2
+FAIL 68: Start()==STATUS_ACCESS_DENIED&&admissions==0&&writes==0
+FAIL 70: Start()==STATUS_ACCESS_DENIED&&admissions==0&&flushes==0&&durable==0
+FAIL 72: Start()==STATUS_REGISTRY_IO_FAILED&&admissions==0&&cached==1&&durable==0
+durable start guard: 40 checks, 5 failures

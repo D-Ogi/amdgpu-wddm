@@ -1,0 +1,15 @@
+# BD-013: repair visible request with stale software blank state
+
+Parent supplied139 lab observations: OTG_BLANK_CONTROL remains0x101 (blank requested and currentblank), while raster/timing and rendering controls pass. This is a physical output blank, not evidence of failed rendering. Only DcnSetVisibility writes DcnBlanked in the source. A successful hide normally remembers TRUE, so the old early return is a proved defect but not yet the established sole cause of139's entire lifecycle regression. Original139 had no normal visibility-call breadcrumbs.
+
+DcnSetVisibility previously returned success immediately for VisibleTRUE when software DcnBlanked was false. It now checks actual BLANK_CONTROL whenever this driver owns MMIO writes. Only a read confirming request, DE mode and currentblank all clear can avoid the unblank write. Otherwise it clears the request/mode and uses the existing bounded quiet confirmation. It still uses no logger, allocation or lock. A no-MMIO/no-write display-only profile with no remembered own blank retains the prior successful show/POST behavior. No write gate was broadened.
+
+The normal source-visibility DDI now logs its first32 calls: sourceID, requestedvisibility, previousvisibility, hardwareprofile, softwareblank, returnedstatus and resultingsoftwarestate. This diagnostic is outside the quiet restore helper. A failed request still does not publish SourceVisible. SourceID validation remains unchanged: only0 is supported; no speculative ID_ALL expansion. Local MS DXGKARG_SETVIDPNSOURCEVISIBILITY and DXGKDDI_SETVIDPNSOURCEVISIBILITY describe start/stop scanning and retaining VSync, but do not specify ID_ALL for this callback. These breadcrumbs let the next lab attempt distinguish an ignored show from a missing show request or failure.
+
+Validation:
+- visibility139-fix.log:141 checks,0 failures. Includes inherited/live hardware blank with cached DcnBlankedFALSE, pending currentblank with requestclear, already-visible no redundantwrite, and legacy no-MMIO DDI behavior.
+- visibility139-before.log: identical fixture against exact frozen139 source produces140 checks,3 failures. It leaves hardwareblank asserted while claiming success. Difference in checkcount comes from the model's write checks.
+- post139-fix.log:588 checks,0 failures. Includes stale-softwarefalse hardwareblank in actual bugcheck display enable, alongside original hidden-source and no-MMIO POST cases. No real bugcheck was triggered.
+- build139-fix.log: full WDK build passed. Development SYS scratch/build/bd013-139-fix/package/bc250kmd.sys SHA25643C680FD4207A4A764F037C6C08AD047EF33E2E20CAC1AD4FE52A2AFEF776CD1. Metadata139, not deployed. Parent owns candidate140 freeze/build/deployment.
+
+Production changes: dcn.c DcnSetVisibility; display.c Bc250SetVidPnSourceVisibility only. Fixtures: test/display_visibility_test.c and test/post_display_test.c. Frozen copies/hash manifest/diff are in visibility139-fix-source/. No version/sharedstate/evidence/backlog/lab changes. Hardware repair acceptance remains open.

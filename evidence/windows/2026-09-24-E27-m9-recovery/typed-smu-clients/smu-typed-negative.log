@@ -1,0 +1,9 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+Generowanie kodu...
+FAIL line 115: r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && !r.Ready && calls==before
+FAIL line 118: r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && !r.Ready && calls==before
+SMU native owner: 30785 checks, 2 failures

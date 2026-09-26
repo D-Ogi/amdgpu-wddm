@@ -1,0 +1,7 @@
+Extracted publication and vsync functions from P:\bc-250\scratch\m9\vidpn-no-generation-mutated.c
+vidpn_flip_actual.c
+FAIL line 214: !WddmReadCompletedPrimary(&d,&w,&sample)
+FAIL line 215: sample.QuadPart==-1
+FAIL line 214: !WddmReadCompletedPrimary(&d,&w,&sample)
+FAIL line 215: sample.QuadPart==-1
+vidpn publication: 61 checks, 4 failures

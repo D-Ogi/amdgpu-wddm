@@ -1,0 +1,19 @@
+compile (user mode, paging-node packets)
+  Generowanie kodu...
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1522): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1522): warning C4013: niezdefiniowany "WddmLocalPagingEndpoint"; przy założeniu, że extern zwraca int
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1584): warning C4211: użyto niestandardowego rozszerzenia: ponownie zdefiniowano extern jako static
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1603): error C2084: funkcja "NTSTATUS WddmPublishPagingRecordEx(DXGKARG_BUILDPAGINGBUFFER *,ULONG,BOOLEAN,ULONG,ULONG,ULONGLONG,ULONGLONG,ULONG)" ma już treść
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1437): note: zobacz poprzednią definicję „WddmPublishPagingRecordEx”
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1632): error C2084: funkcja "NTSTATUS WddmPublishPagingRecord(DXGKARG_BUILDPAGINGBUFFER *,ULONG,BOOLEAN,ULONG,ULONG)" ma już treść
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1466): note: zobacz poprzednią definicję „WddmPublishPagingRecord”
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1641): error C2084: funkcja "NTSTATUS WddmBuildPagingCopies(BC250_DEVICE *,ULONGLONG,DXGKARG_BUILDPAGINGBUFFER *)" ma już treść
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1475): note: zobacz poprzednią definicję „WddmBuildPagingCopies”
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1679): error C2084: funkcja "NTSTATUS WddmBuildPhysicalFill(BC250_DEVICE *,DXGKARG_BUILDPAGINGBUFFER *,ULONGLONG *)" ma już treść
+  P:\bc-250\scratch\m9\physical-fill-routing\paging-route.c(1513): note: zobacz poprzednią definicję „WddmBuildPhysicalFill”
+  Generowanie kodu...
+Exception: P:\BC-250\bc250-win\driver\shim\test\run_paging.ps1:44
+Line |
+  44 |  … DE -ne 0) { throw "$(Split-Path -Leaf $exe) failed ($LASTEXITCODE)" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | cl.exe failed (2)

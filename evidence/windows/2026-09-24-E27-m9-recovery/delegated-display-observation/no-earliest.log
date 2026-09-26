@@ -1,0 +1,9 @@
+Extracted DCN observation helpers and hardware GetScanLine DDI
+dcn_observation_actual.c
+P:\bc-250\scratch\m9\bd007-009\no-earliest\dcn_observation_actual.c(96): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\bd007-009\no-earliest\dcn_observation_actual.c(96): warning C4100: „RequestedAddress”: parametr, do którego nie ma odniesienia
+Exception: P:\BC-250\bc250-win\driver\kmd\test\run_dcn_observation.ps1:16
+Line |
+  16 |  if($LASTEXITCODE -ne 0){throw 'Host build failed'}
+     |                          ~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Host build failed

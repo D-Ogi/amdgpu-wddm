@@ -1,0 +1,9 @@
+2026-09-23 unit A, inference0798
+Recoveryboot13:18:44,FullWddm0,guard90. NewMEMORY.DMP pulled toscratch0798-memory.dmp.
+Offline matching0798PDB cdb extracted driver ring, decoded168byte records and sortedsequence.
+Node0 fence167 IB0x200D2C000 size5152 accepted at106.428s, gfxseq6496.
+At106.928s500mswatchdog finds fence slot0x195F=6495, marksGFXfailed. Fence168 thenwaits430ms andisrefused.
+Node1 paging stillsubmits6497/6498 afterinitialGFXtimeout. Not the priorSDMAbusy-refusal defect.
+TDRResetEngine/ResetFromTimeout refuse becauseGPUhaltunproven.
+No completed32tokengeneration or inferencecorrectness claim. NeedisolateIB/shader/page mappingsforfence167.
+Rawkernel dump remainsoutsiderepo. Decodedring contains first256pluscircular tail, not a fullsubmissionhistory.

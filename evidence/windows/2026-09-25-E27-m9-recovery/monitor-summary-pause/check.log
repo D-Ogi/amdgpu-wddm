@@ -1,0 +1,91 @@
+pause_requested=2026-09-25T03:35:21.1025438+02:00
+health abi=1 version=0x00070092 flags=15 generation=591743209 epoch=5 completed=800 age_ms=370 ready_ms=434003
+health abi=1 version=0x00070092 flags=15 generation=591743209 epoch=5 completed=815 age_ms=418 ready_ms=446062
+{
+    "name":  "graphics",
+    "title":  "Active graphics pipeline",
+    "order":  12,
+    "rows":  [
+                 [
+                     "DWM",
+                     "PID 1548, since 03:28:12",
+                     "Info"
+                 ],
+                 [
+                     "D3D UMD",
+                     "bc250d3d / mesa-main-umd",
+                     "Info"
+                 ],
+                 [
+                     "Build hash",
+                     "D438EA42314A",
+                     "Info"
+                 ],
+                 [
+                     "Renderer",
+                     "Mesa llvmpipe",
+                     "Info"
+                 ],
+                 [
+                     "Draws",
+                     "CPU software rendering (JIT)",
+                     "Warn"
+                 ],
+                 [
+                     "Shaders",
+                     "LLVM 23.1.2 / native CPU code",
+                     "Info"
+                 ],
+                 [
+                     "UMD build",
+                     "Mesa 26.3.0-devel f9a2d34a + BC250",
+                     "Info"
+                 ],
+                 [
+                     "KMD module",
+                     "bc250kmd 0x00070092",
+                     "Info"
+                 ],
+                 [
+                     "KMD table",
+                     "full WDDM",
+                     "Info"
+                 ],
+                 [
+                     "KMD counters",
+                     "paused; snapshot 03:35:18",
+                     "Warn"
+                 ],
+                 [
+                     "Scanout",
+                     "DCN flip + hardware VSync",
+                     "Info"
+                 ],
+                 [
+                     "HW flips",
+                     "789",
+                     "Info"
+                 ],
+                 [
+                     "Window Blt",
+                     "CPU copy enabled; 49 blits",
+                     "Info"
+                 ],
+                 [
+                     "GPU compute",
+                     "0/0 fences completed",
+                     "Info"
+                 ],
+                 [
+                     "Paging",
+                     "SDMA 344/344",
+                     "Info"
+                 ],
+                 [
+                     "Sampled",
+                     "03:35:38 (pipeline, 5 s poll)",
+                     "Info"
+                 ]
+             ]
+}
+pause_interval_complete=2026-09-25T03:35:39.2813043+02:00

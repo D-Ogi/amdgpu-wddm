@@ -1,0 +1,3 @@
+{"utc": "2026-09-24T05:17:52.287214+00:00", "event": "before_recovery", "relay_on": true}
+{"utc": "2026-09-24T05:17:53.421021+00:00", "event": "off_verified", "relay_on": false}
+{"utc": "2026-09-24T05:18:02.571537+00:00", "event": "on_verified", "relay_on": true}

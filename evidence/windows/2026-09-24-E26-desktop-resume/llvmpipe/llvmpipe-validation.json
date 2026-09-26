@@ -1,0 +1,47 @@
+{
+  "name": "llvmpipe64k",
+  "bytes": 65536,
+  "cycles": 3,
+  "gpu_readbacks": [
+    [
+      "65536",
+      "1"
+    ],
+    [
+      "65536",
+      "2"
+    ],
+    [
+      "65536",
+      "3"
+    ],
+    [
+      "65536",
+      "4"
+    ]
+  ],
+  "departure_status": [
+    "2",
+    "2",
+    "2"
+  ],
+  "cumulative_gfx": [
+    "4",
+    "4",
+    "0",
+    "0"
+  ],
+  "cumulative_sdma": [
+    "827",
+    "827",
+    "0",
+    "0"
+  ],
+  "bulk_resident_ms": [
+    "0",
+    "15",
+    "0"
+  ],
+  "physical_endpoints_verified": false,
+  "shader_cache_policy_verified": false
+}

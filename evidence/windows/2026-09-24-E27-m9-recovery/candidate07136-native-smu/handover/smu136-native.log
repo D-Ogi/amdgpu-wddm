@@ -1,0 +1,7 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+Generowanie kodu...
+SMU native owner: 30675 checks, 0 failures

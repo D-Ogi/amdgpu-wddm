@@ -1,0 +1,84 @@
+{
+  "small": {
+    "bytes": 67108864,
+    "allocations": 1,
+    "complete_set_samples": 3,
+    "individual_status_checks": 3,
+    "readbacks": [
+      [
+        67108864,
+        64,
+        0
+      ]
+    ],
+    "all_gpu_resident_at_samples": true,
+    "continuous_residency_measured": false
+  },
+  "large": {
+    "bytes": 6442450944,
+    "allocations": 6,
+    "complete_set_samples": 103,
+    "individual_status_checks": 618,
+    "readbacks": [
+      [
+        1073741824,
+        1024,
+        0
+      ],
+      [
+        1073741824,
+        2048,
+        268435456
+      ],
+      [
+        1073741824,
+        3072,
+        536870912
+      ],
+      [
+        1073741824,
+        4096,
+        805306368
+      ],
+      [
+        1073741824,
+        5120,
+        1073741824
+      ],
+      [
+        1073741824,
+        6144,
+        1342177280
+      ]
+    ],
+    "all_gpu_resident_at_samples": true,
+    "continuous_residency_measured": false
+  },
+  "gfx": [
+    6784,
+    6784,
+    0,
+    0
+  ],
+  "paging": [
+    16614,
+    16614,
+    0,
+    0
+  ],
+  "capture_reserved_heap": [
+    0,
+    0
+  ],
+  "probe_v5_sha256": "15E8674A506EA4164B573DE51F747409414A4658090A43A7F10E9880B3ABCD7A",
+  "probe_v6_sha256": "A8F942D3C9ACC41E4B29A3F4EA3478466F95E2617568BE7FDBFBC4A04F31C530",
+  "final_time": "2026-09-24T18:52:02",
+  "single_6g_allocation": "rejected STATUS_INVALID_PARAMETER; cause open",
+  "legacy_control": "64MiB,3cycles,4readbacks,exit0",
+  "target_12g_proved": false,
+  "residency_mutation": {
+    "mutation": "one intermediate allocation reports shared despite aggregate GPU PASS",
+    "exit": 1,
+    "rejected": true
+  }
+}

@@ -1,0 +1,6 @@
+Extracted actual DCN restore and bugcheck display callbacks
+post_display_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL 349: d.SystemDisplayReady && !d.DcnBlanked && !(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)
+post display restore: 572 checks, 1 failures

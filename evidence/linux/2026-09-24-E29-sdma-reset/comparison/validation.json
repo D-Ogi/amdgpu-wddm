@@ -1,0 +1,26 @@
+{
+  "decoded_accesses": 56,
+  "rlc_safe_mode_writes": 0,
+  "fences": {
+    "sdma0": {
+      "before": [
+        23,
+        23
+      ],
+      "after": [
+        23,
+        23
+      ]
+    },
+    "sdma1": {
+      "before": [
+        57,
+        57
+      ],
+      "after": [
+        71,
+        71
+      ]
+    }
+  }
+}

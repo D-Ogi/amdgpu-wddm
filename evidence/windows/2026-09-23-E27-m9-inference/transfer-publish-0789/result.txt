@@ -1,0 +1,25 @@
+M224 physical Transfer publication, 2026-09-23.
+Dirty worktree over base-commit.txt; relevant snapshots included; procedure preceded tests.
+Physical Transfer DDI now calls per-slice adapter: prepare endpoints/token geometry,
+resolve/construct, preflight private header, commit tracked-table bytes, publish DMA,
+advance completed-slice token. Original command offset restored; accepted prefixes
+retained on insufficiency/later failure. Physical identities come from packet builder.
+Local overlap selects direction for entire range; reverse visits suffix slices first,
+and every overlapping-transfer slice is staged even if that particular slice is disjoint,
+ensuring phase barriers before reusing data. Helper Ex adds ForceSnapshot; old wrapper
+preserves existing callers. Table destination commit uses exclusive VidMm lock and
+byte metadata copy; unknown external MDL bytes invalidate knowledge rather than guess.
+Different multi-page MDLs explicitly refused before output pending cross-page alias
+analysis; this is an incomplete operation class, not compliant final handling.
+11700 normal checks pass (39 new vsM223). OmitLogicalCommit also omits Transfer commit:
+11699 dynamically reached checks/605 failures, exit1 expected; three new Transfer
+assertions fail. Full0789 WDK build/sign passes. SYS SHA256
+C72B474B5DB32DC7AB6827C6532B0281834D61E595FB76683FC80EF53B3B53C4
+Package scratch/build/bc250kmd-0789/package-umd NOT DEPLOYED.
+Tests exercise actual adapter/publication/commit/builders with modeled WDK/MDLs,
+decoded reverse whole-range data oracle across3 buffers, fragmented MDL/local four
+batches, reverse mixed direction, table byte effects, refusal and private parser.
+Outer DDI branch/counters source/compile only. No GPU/OS acceptance or lab changes.
+Outstanding: distinct multi-page MDL aliases, mixed system/local cross-page aliases,
+knowledge recovery for external table data, aperture/swizzle, restricted DDI failure
+policy, virtual Transfer table effects, cache/lifetime/recovery/hardware pressure/perf.

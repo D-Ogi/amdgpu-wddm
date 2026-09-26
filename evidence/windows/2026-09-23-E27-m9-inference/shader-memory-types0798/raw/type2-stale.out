@@ -1,0 +1,29 @@
+physical devices 1, using index 0
+device        AMD BC-250 (RADV GFX1013)
+ids           vendor=0x1002 device=0x13fe type=1
+driverVersion 0x06801063 (26.1.99)
+apiVersion    0x0040415c (1.4.348)
+queue family  0
+subgroup      size=64 supportedStages=0x3f3f supportedOps=0x6ff
+limits        wgInvocations=1024 wgSize=1024x1024x1024 sharedMem=65536 pushConst=256 storageBuffersPerStage=8388606
+memory types  11 heaps 2
+  type  0 heap 1 flags 0x001
+  type  1 heap 1 flags 0x001
+  type  2 heap 0 flags 0x006
+  type  3 heap 1 flags 0x007
+  type  4 heap 1 flags 0x007
+  type  5 heap 0 flags 0x00e
+  type  6 heap 0 flags 0x00e
+  type  7 heap 1 flags 0x0c1
+  type  8 heap 0 flags 0x0c6
+  type  9 heap 1 flags 0x0c7
+  type 10 heap 0 flags 0x0ce
+  heap  0 size 4008 MiB flags 0x0
+  heap  1 size 8017 MiB flags 0x1
+BUFFER memory_type=2 heap=0 flags=0x6 bytes=4194304
+BUFFER memory_type=2 heap=0 flags=0x6 bytes=4194304
+BUFFER memory_type=2 heap=0 flags=0x6 bytes=4194304
+COHERENCY rounds=16 words=1048576 same_allocations=1 host_coherent=1 dispatches_per_round=2 stale_control=1
+coherency00  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0x6747a9c9b5e067b5 match=yes t_submit_to_idle_us=    759.7 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+coherency01  n=1048576   hash=0x6747a9c9b5e067b5 cpu_hash=0xd7bd083bb8a604c8 match=NO  t_submit_to_idle_us=    241.2 first_words=5fb15569 0b00df29 a2447212 f5ec0d37 0d4d4e07 3bce3dcd 5056c8e9 16bd9080
+COHERENCY completed=1 mismatches=1

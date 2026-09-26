@@ -1,0 +1,23 @@
+PROVENANCE: Linux amdgpu (AMD MIT); local Linux6.18.0 reference, not the exact E28 Alpine6.18.52 binary.
+
+38: 	(adev->reg_offset[ip##_HWIP][inst][reg##_BASE_IDX] + (reg)+(offset))
+39: 
+40: #define __WREG32_SOC15_RLC__(reg, value, flag, hwip, inst) \
+41: 	((amdgpu_sriov_vf(adev) && adev->gfx.rlc.funcs && adev->gfx.rlc.rlcg_reg_access_supported) ? \
+42: 	 amdgpu_sriov_wreg(adev, reg, value, flag, hwip, inst) : \
+43: 	 WREG32(reg, value))
+44: 
+45: #define __RREG32_SOC15_RLC__(reg, flag, hwip, inst) \
+46: 	((amdgpu_sriov_vf(adev) && adev->gfx.rlc.funcs && adev->gfx.rlc.rlcg_reg_access_supported) ? \
+47: 	 amdgpu_sriov_rreg(adev, reg, flag, hwip, inst) : \
+48: 	 RREG32(reg))
+49: 
+
+143: 	__RREG32_SOC15_RLC__(reg, AMDGPU_REGS_RLC, GC_HWIP, 0)
+144: 
+145: #define WREG32_RLC_NO_KIQ(reg, value, hwip) \
+146: 	__WREG32_SOC15_RLC__(reg, value, AMDGPU_REGS_NO_KIQ | AMDGPU_REGS_RLC, hwip, 0)
+147: 
+148: #define RREG32_RLC_NO_KIQ(reg, hwip) \
+149: 	__RREG32_SOC15_RLC__(reg, AMDGPU_REGS_NO_KIQ | AMDGPU_REGS_RLC, hwip, 0)
+150: 

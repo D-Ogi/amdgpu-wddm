@@ -1,0 +1,8 @@
+System.Exception: same completed surface cannot confirm
+   w StartConfirmationTest.Check(Boolean value, String reason)
+   w StartConfirmationTest.Main()
+Exception: P:\BC-250\bc250-win\tools\win\bc250mon\test-start-confirmation.ps1:15
+Line |
+  15 |  if ($LASTEXITCODE -ne 0) { throw 'Start confirmation check failed' }
+     |                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Start confirmation check failed

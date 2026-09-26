@@ -1,0 +1,15 @@
+{
+  "reference": "Local Linux 6.18.0, Makefile; not the exact E28 runtime 6.18.52 source",
+  "sha256": {
+    "drivers/gpu/drm/amd/amdgpu/nv.c": "3dfa1647c0af8b93d23e3ef8649928220eaf31a6b15b6314639d5f0596280357",
+    "drivers/gpu/drm/amd/amdgpu/amdgpu_device.c": "b41793be1d7e8a8b87dbc44d3e7644f82c9d19d3d02a8e19258033e462e87172",
+    "drivers/gpu/drm/amd/amdgpu/gfx_v10_0.c": "41b4e75728f3ad25f69c179536f8b7ae30118026315216d5fd891f445a6a7e99",
+    "drivers/gpu/drm/amd/amdgpu/amdgpu_discovery.c": "190355ccd08a0a5a3fd5e4677e0b4609b8a5ab00b37a59688e5b9d288eceda26",
+    "drivers/gpu/drm/amd/amdgpu/amdgpu_psp.c": "8882e555989988c350d0df0206888c15095d237e4d1d81118c7e7d45399b5a91",
+    "drivers/gpu/drm/amd/amdgpu/amdgpu_psp.h": "39ba3c5e43db7d944eabed6d0ed208ec90fddb2f788c4b7d78eed6a11b46c087",
+    "drivers/gpu/drm/amd/amdgpu/psp_v11_0_8.c": "45214c7fde487b3f289b84969d25d72d4bc16a3d031dd6492bee35e06eb74dbc",
+    "drivers/gpu/drm/amd/pm/swsmu/smu11/cyan_skillfish_ppt.c": "6f14558d686cc4e45350a1f3b50dbb9726abd6fbff7d6d0da42180fe84e800da",
+    "drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c": "e69f01d1d3c8ec9abd685e804b5387bfc3fd4c028e4096d13e9c93b08821e7f7",
+    "drivers/gpu/drm/amd/amdgpu/soc15_common.h": "cd4df2dcb34a61d17d88a6dbc87e4e6f5ebf1b4041e04c9998f55e17a5a92ae4"
+  }
+}

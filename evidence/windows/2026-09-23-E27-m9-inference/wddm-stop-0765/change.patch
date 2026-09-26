@@ -1,0 +1,31 @@
+--- before/wddm.c
++++ after/wddm.c
+@@ -1332,11 +1332,13 @@
+     //     section as the timer's own cancel and for the same reason (WddmVSyncArm's own comment) - so that this
+     //     is strictly before DcnStop's surface restore and MmioStop (pnp.c's Bc250StopDevice), not merely
+     //     usually before them.
+-    //  2. Cancel the timer and take back both DPCs, then KeFlushQueuedDpcs - PASSIVE_LEVEL only, which is where
+-    //     StopDevice runs - so that any DPC already running has finished.
+-    //  3. Only then drop Device->Wddm and read or free anything.
++    //  2. Cancel timers and take back queued private DPCs, then atomically detach
++    //     Device->Wddm BEFORE KeFlushQueuedDpcs. IH is still enabled: its DPC may
++    //     arrive after the flush boundary. New DPC entries must already see NULL.
++    //  3. Flush joins DPCs that captured the old pointer before detach; only then
++    //     read summaries or free the object. The ISR itself never reads Wddm.
+     //
+-    // What this does not cover, and cannot: a DDI that read Device->Wddm before step 3 and then touches the
++    // What this does not cover: a DDI that read Device->Wddm before step 2 and then touches the
+     // state after it is freed. That one rests on dxgkrnl's own guarantee that no DDI arrives during StopDevice
+     // (Level Three, see WddmSummary).
+     KeAcquireSpinLock(&wddm->Lock, &irql);
+@@ -1352,8 +1354,8 @@
+     KeRemoveQueueDpc(&wddm->PagingSubmitDpc);
+     KeRemoveQueueDpc(&wddm->VSyncDpc);
+     KeRemoveQueueDpc(&wddm->ReportDpc);
+-    KeFlushQueuedDpcs();
+-    Device->Wddm = NULL;                // from here no DDI and no DPC of ours can find the state
++    InterlockedExchangePointer(&Device->Wddm, NULL);
++    KeFlushQueuedDpcs();                // join readers admitted before detach, even while IH remains enabled
+     VidMmStop();
+     // 2026-09-22 (ADR 0011 consequences): the present path's own destination mapping (dcn.c), torn down here -
+     // first in the stop order (docs/design/vidpn-flip.md section 8) - so it is gone before DcnStop's own

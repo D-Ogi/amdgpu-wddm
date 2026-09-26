@@ -1,0 +1,24 @@
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  [device interface redacted]
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-0083E23B
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070086 (milestone 7 revision 134)
+last stage   50 first CommitVidPn
+mode         1920x1200 pitch 7680 format 22 (FULL WDDM TABLE)
+presents     0
+counters     blits 60, flips 505 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio open, mmio writes off, vram open, vram writes on, gart open, psp open, gfx open, ih open
+
+D3DKMTEscape -> 0x80000011
+
+escape_exit=1
+Unexpected diagnostic result
+At C:\BC250\tmp\dcn134-guard.ps1:24 char:140
++ ... refused while VidPn owns OTG0'){throw 'Unexpected diagnostic result'}
++                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Unexpected diagnostic result:String) [], Runtime 
+   Exception
+    + FullyQualifiedErrorId : Unexpected diagnostic result
+ 

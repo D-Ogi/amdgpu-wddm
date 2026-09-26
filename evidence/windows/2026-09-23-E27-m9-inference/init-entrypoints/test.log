@@ -1,0 +1,42 @@
+Gart: execution body unchanged
+Psp: execution body unchanged
+Ih: execution body unchanged
+Gfx: execution body unchanged
+init.c
+141 checks, 0 failures
+Gart: execution body unchanged
+Psp: execution body unchanged
+Ih: execution body unchanged
+Gfx: execution body unchanged
+mutation.c
+FAIL mode=2 Gart propagates failures and rejects incomplete success
+FAIL mode=2 Gart report and return agree
+FAIL mode=2 Psp propagates failures and rejects incomplete success
+FAIL mode=2 Psp report and return agree
+FAIL mode=2 Ih propagates failures and rejects incomplete success
+FAIL mode=2 Ih report and return agree
+FAIL mode=2 Gfx propagates failures and rejects incomplete success
+FAIL mode=2 Gfx report and return agree
+FAIL mode=3 Gart propagates failures and rejects incomplete success
+FAIL mode=3 Gart report and return agree
+FAIL mode=3 Psp propagates failures and rejects incomplete success
+FAIL mode=3 Psp report and return agree
+FAIL mode=3 Ih propagates failures and rejects incomplete success
+FAIL mode=3 Ih report and return agree
+FAIL mode=3 Gfx propagates failures and rejects incomplete success
+FAIL mode=3 Gfx report and return agree
+FAIL mode=4 Gart propagates failures and rejects incomplete success
+FAIL mode=4 Gart report and return agree
+FAIL mode=4 Psp propagates failures and rejects incomplete success
+FAIL mode=4 Psp report and return agree
+FAIL mode=4 Ih propagates failures and rejects incomplete success
+FAIL mode=4 Ih report and return agree
+FAIL mode=4 Gfx propagates failures and rejects incomplete success
+FAIL mode=4 Gfx report and return agree
+FAIL mode=7 Psp propagates failures and rejects incomplete success
+FAIL mode=7 Psp report and return agree
+FAIL mode=7 Gfx propagates failures and rejects incomplete success
+FAIL mode=7 Gfx report and return agree
+FAIL mode=8 Psp propagates failures and rejects incomplete success
+FAIL mode=8 Psp report and return agree
+141 checks, 30 failures

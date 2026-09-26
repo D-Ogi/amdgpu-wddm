@@ -1,0 +1,6 @@
+test.c
+test.c(165): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+test.c(165): warning C4127: wyrażenie warunkowe jest stałą
+test.c(167): warning C4127: wyrażenie warunkowe jest stałą
+test.c(170): warning C4127: wyrażenie warunkowe jest stałą
+test.c(172): warning C4127: wyrażenie warunkowe jest stałą

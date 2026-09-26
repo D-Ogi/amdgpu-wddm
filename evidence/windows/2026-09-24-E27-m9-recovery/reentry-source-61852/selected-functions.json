@@ -1,0 +1,209 @@
+[
+  {
+    "file": "sdma_v5_0.c",
+    "function": "sdma_v5_0_soft_reset_engine",
+    "identical_normalized": true,
+    "sha256": [
+      "44398d908372029b71a2d31bb1b0d41f3fbe595b7bf1cf5e934eee5e73b2d963",
+      "44398d908372029b71a2d31bb1b0d41f3fbe595b7bf1cf5e934eee5e73b2d963"
+    ]
+  },
+  {
+    "file": "sdma_v5_0.c",
+    "function": "sdma_v5_0_reset_queue",
+    "identical_normalized": true,
+    "sha256": [
+      "f000b054a31ff94e56c4be6b66ab8db3fa6ac17b2a4cd80bb4b474d760e440bb",
+      "f000b054a31ff94e56c4be6b66ab8db3fa6ac17b2a4cd80bb4b474d760e440bb"
+    ]
+  },
+  {
+    "file": "sdma_v5_0.c",
+    "function": "sdma_v5_0_hw_init",
+    "identical_normalized": true,
+    "sha256": [
+      "a9d02bcdc0f83c305b5d6da1964937fcc8c20d0ee238a29a5e1f059b1d9ca81d",
+      "a9d02bcdc0f83c305b5d6da1964937fcc8c20d0ee238a29a5e1f059b1d9ca81d"
+    ]
+  },
+  {
+    "file": "sdma_v5_0.c",
+    "function": "sdma_v5_0_hw_fini",
+    "identical_normalized": true,
+    "sha256": [
+      "76a83d9d30e30ef4c8c5b5ede3e609593ef56a8772996190e95dede499fd0421",
+      "76a83d9d30e30ef4c8c5b5ede3e609593ef56a8772996190e95dede499fd0421"
+    ]
+  },
+  {
+    "file": "sdma_v5_0.c",
+    "function": "sdma_v5_0_soft_reset",
+    "identical_normalized": true,
+    "sha256": [
+      "fdff58ff4812ca14d0573849a2b591df5bc7df6b0f4063aa9a05497027462c87",
+      "fdff58ff4812ca14d0573849a2b591df5bc7df6b0f4063aa9a05497027462c87"
+    ]
+  },
+  {
+    "file": "amdgpu_sdma.c",
+    "function": "amdgpu_sdma_reset_engine",
+    "identical_normalized": false,
+    "sha256": [
+      "ac834b37bb33c714d047d46b8aefd9816dc637be9c779f541b49b1c05c0461f3",
+      "4dd52b5d6ff36786f2a12e976554c92ed5c7d1f07a1f74465288fc9a96ca7926"
+    ]
+  },
+  {
+    "file": "psp_v11_0.c",
+    "function": "psp_v11_0_ring_create",
+    "identical_normalized": true,
+    "sha256": [
+      "e56f14827b142a708d833497ac62c788f6c178476a75fc7657dda357d0e862a8",
+      "e56f14827b142a708d833497ac62c788f6c178476a75fc7657dda357d0e862a8"
+    ]
+  },
+  {
+    "file": "psp_v11_0.c",
+    "function": "psp_v11_0_ring_stop",
+    "identical_normalized": true,
+    "sha256": [
+      "9aff9b70c61542c142303b8aa8762d53d4981e351bf03932e26c159d691f7d5d",
+      "9aff9b70c61542c142303b8aa8762d53d4981e351bf03932e26c159d691f7d5d"
+    ]
+  },
+  {
+    "file": "psp_v11_0.c",
+    "function": "psp_v11_0_ring_destroy",
+    "identical_normalized": true,
+    "sha256": [
+      "737e1e23d9410286ae418be5e2d1a92980cc9f87ca62720c02b21e641b33d658",
+      "737e1e23d9410286ae418be5e2d1a92980cc9f87ca62720c02b21e641b33d658"
+    ]
+  },
+  {
+    "file": "amdgpu_psp.c",
+    "function": "psp_hw_fini",
+    "identical_normalized": true,
+    "sha256": [
+      "20036a314ff480271c10de27baf1932efb0346a7bd04defb0035473a4d569980",
+      "20036a314ff480271c10de27baf1932efb0346a7bd04defb0035473a4d569980"
+    ]
+  },
+  {
+    "file": "amdgpu_psp.c",
+    "function": "psp_suspend",
+    "identical_normalized": true,
+    "sha256": [
+      "e93ab35abbccbf781d7111f2c7552bdee5b97193c2dd938ed67ea5e6eb198f73",
+      "e93ab35abbccbf781d7111f2c7552bdee5b97193c2dd938ed67ea5e6eb198f73"
+    ]
+  },
+  {
+    "file": "amdgpu_psp.c",
+    "function": "psp_resume",
+    "identical_normalized": true,
+    "sha256": [
+      "60d4be226f018c340950453a433315d31e05acadc14b312eb1eb564b1356e980",
+      "60d4be226f018c340950453a433315d31e05acadc14b312eb1eb564b1356e980"
+    ]
+  },
+  {
+    "file": "amdgpu_psp.c",
+    "function": "psp_load_non_psp_fw",
+    "identical_normalized": true,
+    "sha256": [
+      "e81bd6fb0f096f795135ea76bcae3b4e362526021cbd0068712400c835f5f8b4",
+      "e81bd6fb0f096f795135ea76bcae3b4e362526021cbd0068712400c835f5f8b4"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_rlc_stop",
+    "identical_normalized": true,
+    "sha256": [
+      "5455bdcbc676e5ee16c5d1af67913ad758d94c2c2814c35ff6ed73197700f54c",
+      "5455bdcbc676e5ee16c5d1af67913ad758d94c2c2814c35ff6ed73197700f54c"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_rlc_reset",
+    "identical_normalized": true,
+    "sha256": [
+      "3737f2a178a620388c68e69f4df5197e09a718066c0920a22e575efafd0ee60c",
+      "3737f2a178a620388c68e69f4df5197e09a718066c0920a22e575efafd0ee60c"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_rlc_start",
+    "identical_normalized": true,
+    "sha256": [
+      "ad5e8ea5be6144c5441ed8ee2a0012a8c56b827d8fd3444514c1ede5cb2c5570",
+      "ad5e8ea5be6144c5441ed8ee2a0012a8c56b827d8fd3444514c1ede5cb2c5570"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_rlc_resume",
+    "identical_normalized": true,
+    "sha256": [
+      "81c3e665cecc307dbe2d3cff701b8b4d386703b42fc867008eea9b5a422fb64f",
+      "81c3e665cecc307dbe2d3cff701b8b4d386703b42fc867008eea9b5a422fb64f"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_cp_resume",
+    "identical_normalized": true,
+    "sha256": [
+      "1a1eb642e15f5c2f8c33303a951b59db186adf9b580574d4f53a0481fd88d5db",
+      "1a1eb642e15f5c2f8c33303a951b59db186adf9b580574d4f53a0481fd88d5db"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_hw_fini",
+    "identical_normalized": true,
+    "sha256": [
+      "35a75acc8c1406c2058b5877b79cccae6c916dbf32dac43834ffd8dd9bb4e3ce",
+      "35a75acc8c1406c2058b5877b79cccae6c916dbf32dac43834ffd8dd9bb4e3ce"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_hw_init",
+    "identical_normalized": true,
+    "sha256": [
+      "27c61944b95b67ef4c3db06cf3e27be7fd4d35c9a9b7f8ddec6371a8e573a4c9",
+      "27c61944b95b67ef4c3db06cf3e27be7fd4d35c9a9b7f8ddec6371a8e573a4c9"
+    ]
+  },
+  {
+    "file": "gfx_v10_0.c",
+    "function": "gfx_v10_0_soft_reset",
+    "identical_normalized": true,
+    "sha256": [
+      "2f71f4e25553eba900bac1e6c181b6d8b1ac3e1ac2827aed20649fb7970ad983",
+      "2f71f4e25553eba900bac1e6c181b6d8b1ac3e1ac2827aed20649fb7970ad983"
+    ]
+  },
+  {
+    "file": "soc15.c",
+    "function": "soc15_asic_reset",
+    "identical_normalized": true,
+    "sha256": [
+      "938861731cc99c0b4ac6e4474eb2fcb59e0a3c823b4af6c178a4a52d027663a8",
+      "938861731cc99c0b4ac6e4474eb2fcb59e0a3c823b4af6c178a4a52d027663a8"
+    ]
+  },
+  {
+    "file": "soc15.c",
+    "function": "soc15_asic_reset_method",
+    "identical_normalized": true,
+    "sha256": [
+      "cb6d5aacc39a00e139cc85b77f7590fb3a206f90f28eeb46537a71a6c06c8638",
+      "cb6d5aacc39a00e139cc85b77f7590fb3a206f90f28eeb46537a71a6c06c8638"
+    ]
+  }
+]

@@ -1,0 +1,144 @@
+Opened log file 'C:\BC250\e26\mode-debug.log'
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.016 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.000 seconds
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 0
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+*** wait with pending attach
+Unable to add extension DLL: ntsdexts
+Unable to add extension DLL: uext
+Unable to add extension DLL: exts
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*
+Symbol search path is: srv*
+Executable search path is: 
+ModLoad: 00007ff6`36ac0000 00007ff6`36ae1000   C:\Windows\system32\dwm.exe
+ModLoad: 00007ffe`581b0000 00007ffe`583c8000   C:\Windows\SYSTEM32\ntdll.dll
+ModLoad: 00007ffe`57770000 00007ffe`57834000   C:\Windows\System32\KERNEL32.DLL
+ModLoad: 00007ffe`55400000 00007ffe`557d3000   C:\Windows\System32\KERNELBASE.dll
+ModLoad: 00007ffe`515a0000 00007ffe`51637000   C:\Windows\SYSTEM32\apphelp.dll
+ModLoad: 00007ffe`55b40000 00007ffe`55c51000   C:\Windows\System32\ucrtbase.dll
+ModLoad: 00007ffe`57960000 00007ffe`57a11000   C:\Windows\System32\advapi32.dll
+ModLoad: 00007ffe`55e50000 00007ffe`55ef7000   C:\Windows\System32\msvcrt.dll
+ModLoad: 00007ffe`57fc0000 00007ffe`58068000   C:\Windows\System32\sechost.dll
+ModLoad: 00007ffe`559d0000 00007ffe`559f8000   C:\Windows\System32\bcrypt.dll
+ModLoad: 00007ffe`57840000 00007ffe`57958000   C:\Windows\System32\RPCRT4.dll
+ModLoad: 00007ffe`56220000 00007ffe`565b1000   C:\Windows\System32\combase.dll
+ModLoad: 00007ffe`580e0000 00007ffe`58109000   C:\Windows\System32\gdi32.dll
+ModLoad: 00007ffe`559a0000 00007ffe`559c6000   C:\Windows\System32\win32u.dll
+ModLoad: 00007ffe`557e0000 00007ffe`558fb000   C:\Windows\System32\gdi32full.dll
+ModLoad: 00007ffe`55900000 00007ffe`5599a000   C:\Windows\System32\msvcp_win.dll
+ModLoad: 00007ffe`56060000 00007ffe`56212000   C:\Windows\System32\USER32.dll
+ModLoad: 00007ffe`51750000 00007ffe`51785000   C:\Windows\SYSTEM32\dwmredir.dll
+ModLoad: 00007ffe`51020000 00007ffe`5118a000   C:\Windows\SYSTEM32\udwm.dll
+ModLoad: 00007ffe`50960000 00007ffe`50bb5000   C:\Windows\system32\dcomp.dll
+ModLoad: 00007ffe`55f00000 00007ffe`55fd8000   C:\Windows\System32\OLEAUT32.dll
+ModLoad: 00007ffe`51280000 00007ffe`513b3000   C:\Windows\system32\CoreMessaging.dll
+ModLoad: 00007ffe`38780000 00007ffe`38b9a000   C:\Windows\system32\dwmcore.dll
+ModLoad: 00007ffe`52a10000 00007ffe`52b07000   C:\Windows\system32\dxgi.dll
+ModLoad: 00007ffe`500f0000 00007ffe`506de000   C:\Windows\system32\d2d1.dll
+ModLoad: 00007ffe`4fcb0000 00007ffe`4ff07000   C:\Windows\system32\d3d11.dll
+ModLoad: 00007ffe`506e0000 00007ffe`50958000   C:\Windows\system32\DWrite.dll
+ModLoad: 00007ffe`54280000 00007ffe`54298000   C:\Windows\SYSTEM32\kernel.appcore.dll
+ModLoad: 00007ffe`55190000 00007ffe`551dd000   C:\Windows\SYSTEM32\powrprof.dll
+ModLoad: 00007ffe`4f750000 00007ffe`4fb36000   C:\Windows\system32\D3DCOMPILER_47.dll
+ModLoad: 00007ffe`526a0000 00007ffe`52852000   C:\Windows\system32\WindowsCodecs.dll
+ModLoad: 00007ffe`549c0000 00007ffe`549db000   C:\Windows\system32\CRYPTSP.dll
+ModLoad: 00007ffe`529b0000 00007ffe`529e7000   C:\Windows\SYSTEM32\dxcore.dll
+ModLoad: 00007ffe`57a30000 00007ffe`57a61000   C:\Windows\System32\IMM32.DLL
+ModLoad: 00007ffe`55170000 00007ffe`55183000   C:\Windows\system32\UMPDC.dll
+ModLoad: 00007ffe`55c60000 00007ffe`55cdb000   C:\Windows\System32\bcryptPrimitives.dll
+ModLoad: 00007ffe`4ed90000 00007ffe`4edc7000   C:\Windows\system32\XmlLite.dll
+ModLoad: 00007ffe`52890000 00007ffe`52943000   C:\Windows\system32\uxtheme.dll
+ModLoad: 00007ffe`51710000 00007ffe`5172c000   C:\Windows\SYSTEM32\dwmghost.dll
+ModLoad: 00007ffe`4e270000 00007ffe`4e2b9000   C:\Windows\SYSTEM32\directxdatabasehelper.dll
+ModLoad: 00007ffe`4e150000 00007ffe`4e15b000   C:\Windows\system32\avrt.dll
+ModLoad: 00007ffe`366e0000 00007ffe`36981000   C:\Windows\SYSTEM32\ism.dll
+ModLoad: 00007ffe`55a00000 00007ffe`55a7c000   C:\Windows\System32\WINTRUST.dll
+ModLoad: 00007ffe`55ce0000 00007ffe`55e48000   C:\Windows\System32\CRYPT32.dll
+ModLoad: 00007ffe`54ec0000 00007ffe`54f0e000   C:\Windows\SYSTEM32\cfgmgr32.dll
+ModLoad: 00007ffe`56b90000 00007ffe`56c94000   C:\Windows\System32\shcore.dll
+ModLoad: 00007ffe`4d840000 00007ffe`4dbac000   C:\Windows\system32\CoreUIComponents.dll
+ModLoad: 00007ffe`552c0000 00007ffe`553ff000   C:\Windows\System32\wintypes.dll
+ModLoad: 00007ffe`54a10000 00007ffe`54a22000   C:\Windows\system32\MSASN1.dll
+ModLoad: 00007ffe`549b0000 00007ffe`549bc000   C:\Windows\system32\CRYPTBASE.DLL
+ModLoad: 00007ffe`57f00000 00007ffe`57fb0000   C:\Windows\System32\clbcatq.dll
+ModLoad: 00007ffe`4d640000 00007ffe`4d837000   C:\Windows\System32\windowmanagementapi.dll
+ModLoad: 00007ffe`4cf20000 00007ffe`4d63a000   C:\Windows\system32\D3D10Warp.dll
+ModLoad: 00007ffe`541e0000 00007ffe`54217000   C:\Windows\system32\rsaenh.dll
+ModLoad: 00007ffe`56970000 00007ffe`5698f000   C:\Windows\System32\imagehlp.dll
+ModLoad: 00007ffe`4ced0000 00007ffe`4cf20000   C:\Windows\system32\wuceffects.dll
+ModLoad: 00007ffe`50db0000 00007ffe`50dfb000   C:\Windows\System32\UIAnimation.dll
+ModLoad: 00007ffe`4ce50000 00007ffe`4cec9000   C:\Windows\System32\DispBroker.Desktop.dll
+ModLoad: 00007ffe`4cb30000 00007ffe`4cbb0000   C:\Windows\System32\ActXPrxy.dll
+ModLoad: 00007ffe`461e0000 00007ffe`46260000   C:\Windows\System32\DispBroker.dll
+ModLoad: 00007ffe`4b580000 00007ffe`4b5aa000   C:\Windows\system32\Cabinet.dll
+ModLoad: 00007ffe`547f0000 00007ffe`54816000   C:\Windows\SYSTEM32\gpapi.dll
+ModLoad: 00007ffe`4c7c0000 00007ffe`4c87c000   C:\Windows\system32\mscms.dll
+ModLoad: 00007ffe`4c400000 00007ffe`4c4a2000   C:\Windows\System32\Windows.Graphics.dll
+ModLoad: 00007ffe`511d0000 00007ffe`511f1000   c:\windows\system32\gameinput.dll
+ModLoad: 00007ffe`4df60000 00007ffe`4e04e000   C:\Windows\System32\Windows.Gaming.Input.dll
+ModLoad: 00007ffd`f7c50000 00007ffd`f8911000   C:\BC250\e26\aperture\bc250d3d.dll
+ModLoad: 00007ffe`4c4f0000 00007ffe`4c796000   C:\Windows\System32\twinapi.appcore.dll
+ModLoad: 00007ffe`54050000 00007ffe`54064000   C:\Windows\SYSTEM32\wtsapi32.dll
+ModLoad: 00007ffe`54f40000 00007ffe`54fac000   C:\Windows\SYSTEM32\WINSTA.dll
+ModLoad: 00007ffe`4bdd0000 00007ffe`4c3fd000   C:\Windows\System32\OneCoreUAPCommonProxyStub.dll
+ModLoad: 00007ffe`53ac0000 00007ffe`53ace000   C:\Windows\system32\HID.DLL
+DestroyResource
+(b28.1640): Break instruction exception - code 80000003 (first chance)
+ntdll!DbgBreakPoint:
+00007ffe`58254af0 cc              int     3
+0:032> bu dxgi+0x49a0 ".if (@edx == 0x887a0025) {.echo MODE CHANGE STACK; kb; qd} .else {gc}"
+0:032> g
+onecoreuap\windows\core\color\moderncolor\rpc\server\lib\colormanagementrpcserver.cpp(792)\DispBroker.Desktop.dll!00007FFE4CE5AF80: (caller: 00007FFE578A9D53) ReturnHr(246) tid(738) 80070002 The system cannot find the file specified.
+    CallContext:[\GetDisplayActiveColorProfile] 
+BC250 Deallocate 00000000
+(b28.6f4): C++ EH exception - code e06d7363 (first chance)
+MODE CHANGE STACK
+RetAddr               : Args to Child                                                           : Call Site
+00007ffe`52a40e97     : 00000000`00000002 000001ec`f90e86d0 000001fd`6e572103 00000000`00000000 : dxgi+0x49a0
+00007ffe`55b924b0     : 00007ffe`52a40e6d 00000060`bc07ec10 00000060`bc07ec10 00000000`00000000 : dxgi!DXGIDeclareAdapterRemovalSupport+0x11ca7
+00007ffe`55b87145     : 00007ffe`52a40e6d 00000060`bc07d738 00000000`00000100 00000000`00000000 : ucrtbase!wcsstr+0x700
+00007ffe`582556f6     : 000001ec`00000001 00000000`0000000c 000001ec`00000000 00000060`bc07e6b0 : ucrtbase!is_exception_typeof+0x2405
+00007ffe`52a33f61     : 00000000`00000000 00000000`00000002 000001ed`074c9050 000001ed`074c9050 : ntdll!RtlCaptureContext2+0x4a6
+00007ffe`52a33c08     : 000001ed`074c90d8 00000060`bc07f169 000001ed`074c90d8 00000000`00000000 : dxgi!DXGIDeclareAdapterRemovalSupport+0x4d71
+00007ffe`52a32ec8     : 000001ed`074c9050 000001ec`00000001 000001ec`ef454a80 00007ffe`581ee1e5 : dxgi!DXGIDeclareAdapterRemovalSupport+0x4a18
+00007ffe`52a32549     : 00000060`bc07f4b0 000001ec`ef454a80 000001ec`ef454b88 000001ed`074c9050 : dxgi!DXGIDeclareAdapterRemovalSupport+0x3cd8
+00007ffe`52a1a110     : 000001ec`f90f8e88 000001ec`ef454b88 00000000`00000000 000001ec`ef454b88 : dxgi!DXGIDeclareAdapterRemovalSupport+0x3359
+00007ffe`52a32a55     : 00000000`00000000 000001ec`f64adef0 000001ec`f64adef0 00000060`bc07f4b0 : dxgi!CreateDXGIFactory1+0x2be0
+00007ffe`52a328b5     : 000001ec`ef454b58 000001ec`f64ad6a0 00000060`bc07f4c0 00000060`bc07f5c8 : dxgi!DXGIDeclareAdapterRemovalSupport+0x3865
+00007ffe`3884cf6a     : 000001ec`f72eca90 00007ffe`52a17f50 000001ec`ef454b58 000001ec`f64d30f0 : dxgi!DXGIDeclareAdapterRemovalSupport+0x36c5
+00007ffe`388490c4     : 00000000`00000000 000001ec`f95c985c 00000060`bc07f7b0 00000000`00000000 : dwmcore!MilCompositionEngine_Initialize+0x1b1a
+00007ffe`388498f7     : 000001ec`f84e1a70 000001ec`f64d30f0 000001ec`f8bff590 00000ddc`2d253058 : dwmcore!MilCompositionEngine_GetComposedEventId+0x1ae34
+00007ffe`387d0187     : 00000060`bc07f800 000001ec`f8bff590 00000060`bc07f890 00000000`00000000 : dwmcore!MilCompositionEngine_GetComposedEventId+0x1b667
+00007ffe`387cf4aa     : 00000000`00000000 000001ec`ef4478c0 000001ec`ef4478c0 000001ec`ef454500 : dwmcore+0x50187
+00007ffe`387cf125     : 00000000`00000000 000001ec`ef454500 00000000`00000000 000001ec`ef454500 : dwmcore+0x4f4aa
+00007ffe`387ceab7     : 00028b0a`00989680 00000000`00000000 000001ec`ef454500 00000000`00000000 : dwmcore+0x4f125
+00007ffe`387cdd72     : 00000000`00000000 00000000`00000000 000001ec`ef44d0a0 000001ec`ef44d0a0 : dwmcore+0x4eab7
+00007ffe`3885683f     : 000001ec`ef447820 00000000`00000000 00000000`00000000 000001ec`ef44d040 : dwmcore+0x4dd72
+00007ffe`38856771     : 000001ec`ef441010 000001ec`ef441010 00000000`00000000 00000000`00000000 : dwmcore!MilCompositionEngine_CreateChannel+0x90ff
+00007ffe`5778259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : dwmcore!MilCompositionEngine_CreateChannel+0x9031
+00007ffe`5820af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : KERNEL32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+quit:

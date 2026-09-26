@@ -1,0 +1,18 @@
+AMD mailbox bodies and MP1 offsets verified
+AMD clock constants and complete function match pinned source
+bc250_smu.c
+bc250_clock.c
+smu_native_test.c
+P:\bc-250\scratch\m9\smu-native-v2\smu-native.inc(22): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\smu-native-v2\smu-native.inc(22): warning C4127: wyrażenie warunkowe jest stałą
+P:\bc-250\scratch\m9\smu-native-v2\smu-native.inc(77): error C2065: "MAXULONG": niezadeklarowany identyfikator
+P:\bc-250\scratch\m9\smu-native-v2\smu-native.inc(77): warning C4389: "==": niezgodność typu ze znakiem/bez znaku
+P:\bc-250\scratch\m9\smu-native-v2\smu-native.inc(125): warning C4127: wyrażenie warunkowe jest stałą
+Generowanie kodu...
+Host build failed
+At P:\BC-250\bc250-win\driver\shim\test\run_smu_native.ps1:21 char:25
++ if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Host build failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Host build failed
+ 

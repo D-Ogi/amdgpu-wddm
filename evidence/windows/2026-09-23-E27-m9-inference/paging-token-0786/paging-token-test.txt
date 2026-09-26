@@ -1,0 +1,10 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+page-list resolution: 20196 address checks plus13 boundary controls
+PASS: >4GiB exact byte coverage, unaligned copy/fill carry, wide resume, rollback and overflow
+PASS: UINT slice tokens match 12405 actual stream boundaries, wide carry and capacity controls
+PASS: fragmented copy/fill byte equality, unaligned copy, canaries, tiny buffers, fault rollback, overflow, live-ring reservation limits, 1GiB resume exactly once
+compile-check (kernel flags, same source, no link)
+
+paging_stream_test.exe exit code 0

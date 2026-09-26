@@ -1,0 +1,28 @@
+M239 2026-09-23. IH publication integrated into real INIT branch.
+INIT uses hw_prepare; PLAN retains combined no-write hw_init model.
+After successful prepare, IhPublishAndEnable copies DpcAdev, sets its separate
+backend, initializes DPC sequence/rptr/stats before synchronization.
+IhEnableRoutine at synchronized IRQL sets Active then executes final enable.
+ISR exclusion covers this transition; another CPU's already queued DPC sees
+complete prepared storage. Callback clears Active on shim or MMIO failure.
+Helper restores adev backend on all callback outcomes, propagates native
+synchronization errors, checks callback invocation/result, and transfers report
+and fault metadata outside elevated callback. IhExecute calls existing Fini on
+activation failure. Stop synchronization still remains to be reviewed.
+
+EnableSequence and single EnableWrite live in nonpaged IH object. Callback uses
+DpcRead/Write restricted MMIO access; Dpc flag suppresses RecordFault logging.
+No caller-owned escape output touched at DIRQL. Original sequence's report
+capacity respected when copying final write. DPC uses its independent sequence.
+No allocation, blocking wait or lock acquisition in synchronized callback.
+
+Extracted helper, callback, ISR:95 checks pass; late Active mutation fails7.
+Models synchronization, enable/MMIO, sequence setup and immediate ISR delivery.
+Real IhExecute/Fini integration compiled, not exercised by this new host test.
+Initializer141 pass/mutation30 fail expected; startup319 pass.
+Full WDK build/sign passes:
+scratch/build/ih-publish-dev/package-umd
+SYS7395608CEC47E4988BF5ADC795B6C13F4BC46C1CBB888EF6CFF2FC42876000F1
+Version0793 retained, DEVONLY, not deployed; official0793 unchanged.
+No live interrupts or reset claim. No lab/USB/reboot. Need synchronized stop/
+late-DPC lifetime and failure-retention controls before automatic startup.

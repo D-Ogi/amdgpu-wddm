@@ -1,0 +1,10 @@
+test.c
+FAIL publish only ready state after releasing report
+FAIL gate/failure status
+FAIL failure no publication or resource leak
+FAIL only initialized VidMm cleaned
+FAIL hardware attempts only after preparation
+FAIL native failure preserved
+FAIL publish only ready state after releasing report
+FAIL successful ready adapter
+87 checks, 8 failures

@@ -1,0 +1,8 @@
+before.c
+umd_blob.c
+Generowanie kodu...
+FAIL line 45: Validate(&s,0)==STATUS_INVALID_PARAMETER
+after.c
+umd_blob.c
+Generowanie kodu...
+PASS: real BC2S pre-dispatch validation: valid controls, every truncation, capacity mismatch, null, wrong node/magic/IB, unsupported multi-IB

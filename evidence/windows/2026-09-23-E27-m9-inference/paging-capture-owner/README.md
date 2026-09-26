@@ -1,0 +1,9 @@
+# Context-owned captured-plan metadata
+
+PAGING_CAPTURE_OWNER stores an intrusive list of CPU-only captures and a monotonic31-bit identifier. Tagged32-bit tokens are never reused during an owner's lifetime, including after drain. Completion detaches one node; TakeAll transfers the remaining list to cleanup. Captures hold scalar root/VA/size/allocation-key metadata and progress, with captured arrays intended in the same allocation. Caller serializes through PagingBuildLock and owns each node before attachment; no OS MDL or GPU pointer is retained.
+
+BC250_WDDM_OBJECT embeds an empty owner. WddmFreeObject drains captures after detaching from the shared object list; adapter stop also drains before freeing each remaining object. Actual DestroyContext acquires the existing PagingBuildLock around object removal/free so builders have left before capture storage is freed. The release loop runs outside the spin lock. Builders do not yet attach captures: this is ownership infrastructure, not a completed retained-plan transfer path.
+
+Standalone owner46checks PASS: interleaved removal, stale token refusal, independent owner lookup, drain, monotonically new token after drain, exhaustion without reuse. Extracted actual WddmReleaseCaptures plus owner tests64checks PASS: eight heap captures freed exactly once; repeated cleanup is empty. These are single-thread host tests; they do not prove live OS cancellation or concurrent lifecycle behavior. WDK build passes, revision101development image not installed.
+
+Local MS d3dkmddi.md30891 identifies hSystemContext;6290-6325specifies PASSIVE_LEVEL context destruction and releasing context resources/tracking. Progress semantics4132/4144 do not establish ownership of captured endpoints. Production integration still needs immutable graph capture, batch lookup/key checks, completion detach, cancellation/retirement policy and full OS/hardware verification.

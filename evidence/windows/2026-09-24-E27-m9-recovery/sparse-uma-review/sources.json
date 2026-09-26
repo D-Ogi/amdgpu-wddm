@@ -1,0 +1,62 @@
+{
+  "compiler_workaround": {
+    "path": "scratch/mesa-radv-main-20260924/src/amd/common/nir/ac_nir_fixup_smem_loads_null_prt.c",
+    "sha256": "cd40be6c29b2e9cf1c4640189cc776979e6be60387e2c8c08e1ceca87bb6cd33",
+    "first_line": 1,
+    "last_line": 38
+  },
+  "sparse_gate": {
+    "path": "scratch/mesa-radv-main-20260924/src/amd/vulkan/radv_physical_device.c",
+    "sha256": "aedf0641b88d0023c7a99b95714db41473614cb42a446482629df9e860535c7c",
+    "first_line": 100,
+    "last_line": 112
+  },
+  "wddm_binding": {
+    "path": "scratch/mesa-radv-main-20260924/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c",
+    "sha256": "6e02f77f7768b879a5facc098492b51eab4ce59e7705ef0a82a677bf79af395a",
+    "first_line": 974,
+    "last_line": 1076
+  },
+  "linux_mirror": {
+    "path": "scratch/mesa-radv-main-20260924/src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c",
+    "sha256": "97eda0f94550fe4896989ef1404a5b7b4bc610da907868024e55fc7085918d01",
+    "first_line": 137,
+    "last_line": 184
+  },
+  "compiler_asic": {
+    "path": "scratch/mesa-radv-main-20260924/src/amd/common/ac_gpu_info.c",
+    "sha256": "cad65bc7f5767ab127e131dc33ec5a18f46849d306910ef561b95c20bb29df84",
+    "first_line": 433,
+    "last_line": 445
+  },
+  "kmd_caps": {
+    "path": "bc250-win/driver/kmd/wddm.c",
+    "sha256": "501fcc9c02bcaaa51722a1b62810f1fab082d5001b77ce60c73f99d73dce7b1a",
+    "first_line": 1877,
+    "last_line": 1893
+  },
+  "kmd_pte_comment_corrected": {
+    "path": "bc250-win/driver/shim/bc250_pte.c",
+    "sha256": "cff8a4695a9a4a12ba1ccc345055d7c4bebbbaae7bfcd03fec412c129575fd76",
+    "first_line": 140,
+    "last_line": 171
+  },
+  "ms_zero_pte": {
+    "path": "ref/ddi-display/d3dukmdt.md",
+    "sha256": "6f12f08ebf4acba34be1c1bf89fad4355b97c03b98461eee75b0d71c25f5e346",
+    "first_line": 3995,
+    "last_line": 4053
+  },
+  "ms_protection": {
+    "path": "ref/ddi-display/d3dukmdt.md",
+    "sha256": "6f12f08ebf4acba34be1c1bf89fad4355b97c03b98461eee75b0d71c25f5e346",
+    "first_line": 3793,
+    "last_line": 3845
+  },
+  "ms_mmu_caps": {
+    "path": "ref/ddi-display/d3dkmddi.md",
+    "sha256": "ea381f446626d68f66e064f67f75a9fe50288987b5bdd5d4430fb4fe3fb681fb",
+    "first_line": 22219,
+    "last_line": 22244
+  }
+}

@@ -1,0 +1,5 @@
+# M373 - Integrate SDMA per-engine reset before retirement
+
+Hypothesis: complete SDMA quiescence/reset/post-reset quiescence can remove retained engine state before PSP reload. First prove host lifecycle ordering, then build candidate118. Hardware validation remains a separate first-control/stop/one-warm trial.
+
+Compose original stop_queue fragments under RLC scope1 for both engines, paired exit, actual per-engine reset callbacks for0/1 outside the scope, then scope2 with complete quiescence again and halted unfreeze/readback. Keep all mappings/backing throughout; retire only on result0 and no sequence fault. Second quiescence reestablishes HALT, disabled RB/IB and UTC_L1-off after reset. Do not resume old rings or synthesize completion. This is Windows stop/reload composition, distinct from Linux live queue restoration. Log the original assertion/release reads and both phase outcomes; no extra register writes in observer logging. Existing guard fault prevents subsequent backend writes. Require host models that disturb post-reset state and reject a failed second scope. No claim that mask readback alone proves internal reset.

@@ -1,0 +1,51 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Cloning into 'DirectX-Headers-1.0'...
+The Meson build system
+Version: 1.12.0
+Source dir: P:\BC-250\scratch\mesa-radv-main-20260924
+Build dir: P:\BC-250\scratch\mesa-radv-main-build
+Build type: native build
+Project name: mesa
+Project version: 26.3.0-devel
+C compiler for the host machine: cl (msvc 19.44.35221 "Microsoft (R) C/C++ wersja kompilatora optymalizującego 19.44.35221 dla x64")
+C linker for the host machine: link link 14.44.35221.0
+C++ compiler for the host machine: cl (msvc 19.44.35221 "Microsoft (R) C/C++ wersja kompilatora optymalizującego 19.44.35221 dla x64")
+C++ linker for the host machine: link link 14.44.35221.0
+Host machine cpu family: x86_64
+Host machine cpu: x86_64
+Checking for size of "void*" : 8 
+Checking if "-mtls-dialect=gnu2" runs: DID NOT COMPILE
+Checking if "-mtls-dialect=desc" runs: DID NOT COMPILE
+Dependency libglvnd for host machine skipped: feature glvnd disabled
+Found pkg-config: YES (C:\msys64\mingw64\bin\pkg-config.exe) 1.8.0
+Found CMake: C:\msys64\mingw64\bin\cmake.exe (3.25.2)
+WARNING: Unknown generator expression '$<CONFIG:Debug>'.
+WARNING: Unknown generator expression '$<:Debug>'.
+WARNING: Unknown generator expression '$<CONFIG:Debug,RelWithDebInfo>'.
+WARNING: Unknown generator expression '$<:ProgramDatabase>'.
+Run-time dependency directx-headers found: NO  (tried pkg-config and cmake)
+Run-time dependency directx-headers found: NO  (tried pkg-config and cmake)
+Looking for a fallback subproject for the dependency DirectX-Headers
+
+Executing subproject DirectX-Headers for machine: host 
+
+DirectX-Headers| Project name: DirectX-Headers
+DirectX-Headers| Project version: 1.619.1
+DirectX-Headers| C++ compiler for the host machine: cl (msvc 19.44.35221 "Microsoft (R) C/C++ wersja kompilatora optymalizującego 19.44.35221 dla x64")
+DirectX-Headers| C++ linker for the host machine: link link 14.44.35221.0
+DirectX-Headers| Library d3d12 found: YES
+DirectX-Headers| Library dxcore found: YES
+DirectX-Headers| Found pkg-config: YES (C:\msys64\mingw64\bin\pkg-config.exe) 1.8.0
+DirectX-Headers| Build targets in project: 2
+DirectX-Headers| Subproject DirectX-Headers finished.
+
+Dependency DirectX-Headers for host machine found: YES 1.619.1 (overridden)
+Program glslangValidator found: NO
+
+scratch\mesa-radv-main-20260924\meson.build:752:15: ERROR: Program 'glslangValidator' not found or not executable
+
+A full log can be found at P:\BC-250\scratch\mesa-radv-main-build\meson-logs\meson-log.txt

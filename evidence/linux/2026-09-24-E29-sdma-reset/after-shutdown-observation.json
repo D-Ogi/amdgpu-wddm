@@ -1,0 +1,18 @@
+{
+  "configured_windows_tcp_listeners": 0,
+  "telemetry": {
+    "queried_utc": "2026-09-24T07:44:26.565030+00:00",
+    "transport": "LAN",
+    "relay_on": true,
+    "raw_dps": {
+      "18": 704,
+      "19": 1032,
+      "20": 2428
+    },
+    "current_a": 0.704,
+    "power_w": 103.2,
+    "voltage_v": 242.8,
+    "scale_source": "TinyTuya SocketDevice convention; model calibration unverified",
+    "measurement_age_seconds": null
+  }
+}

@@ -1,0 +1,4 @@
+before.c
+FAIL line204: completions==0 && reports==0 && closed[node]==1
+after.c
+PASS: both watchdogs keep pending work, emit no fake completion, block later software fences, accept only actual late arrival, and preserve normal completion

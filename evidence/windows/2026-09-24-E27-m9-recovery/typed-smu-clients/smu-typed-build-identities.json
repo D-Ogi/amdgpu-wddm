@@ -1,0 +1,8 @@
+{
+  "scratch/build/smu-typed-dev-v2/package/bc250kmd.sys": "deffb5281df207748e0f190e40c4e7432e63f347bbb14e41444dae6b46ce3cfb",
+  "scratch/build/smu-typed-client-v2/bc250kmd_cli.exe": "5d22182f3b5326adc6c7d07a73e54285f1336e807bcc6ae8ecc3a4210862abf4",
+  "scratch/build/smu-typed-client-v2/bc250control.dll": "b36e00397f67c4d0d88822252db1eef064d11133619fcbd0acb3383eccc603b2",
+  "scratch/build/smu-typed-reader/bc250rd.sys": "7c2843f786c663a87fc60fbd0b99ce52a499a5c26866ffb6ff27d235f3852fba",
+  "scratch/build/smu-typed-reader/bc250rd_cli.exe": "165e1c647ef812fbc522c198550c6906e1bc3db3bef2735601563b3a8f0c92fb",
+  "scratch/build/smu-typed-monitor/bc250mon.exe": "e3565799f011a70543f20fe69380732f56433e00fee9be472e1f81c3de6f688c"
+}

@@ -1,0 +1,32 @@
+compile
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 541 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x01B230  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x019DF0  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x032040  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x03EE30  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\build\bd013-014-observe\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bd013-014-observe\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\build\bd013-014-observe\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7684  bc250kmd.inf
+   376208  bc250kmd.sys
+  04E56D6A61F29855EC8AFB75B9E2C048BFDDB381A6FA9A891231BD5DA1F0EF73  package\bc250kmd.sys

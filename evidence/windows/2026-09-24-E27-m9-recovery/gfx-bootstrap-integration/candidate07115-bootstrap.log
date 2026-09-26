@@ -1,0 +1,17 @@
+test.c
+test.c(17): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+test.c(17): warning C4005: "_Inout_": ponowna definicja makra
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\sal.h(375): note: zobacz poprzednią definicję „_Inout_”
+test.c(18): warning C4005: "_In_": ponowna definicja makra
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\sal.h(305): note: zobacz poprzednią definicję „_In_”
+test.c(81): error C2146: błąd składniowy: brakuje „)” przed identyfikatorem „value”
+test.c(81): error C2081: "u32": nazwa w formalnej liście parametrów listy jest niedozwolona
+test.c(81): error C2061: błąd składniowy: identyfikator „value”
+test.c(81): error C2059: błąd składniowy: „;”
+test.c(81): error C2059: błąd składniowy: „)”
+test.c(82): error C2449: znaleziono „{” w zakresie pliku (brak nagłówka funkcji?)
+test.c(86): error C2059: błąd składniowy: „}”
+test.c(123): error C2065: "ObserveRetirementTlb": niezadeklarowany identyfikator
+test.c(123): warning C4047: "funkcja": "void (__cdecl *)(amdgpu_device *,const char *,unsigned int)" różni się w poziomach operatorów pośrednich od "int"
+test.c(123): warning C4024: "bc250_gmc_flush_gpu_tlb_observed": różne typy dla formalnego i rzeczywistego parametru 5
+test.c(181): warning C4013: niezdefiniowany "FlushTlb"; przy założeniu, że extern zwraca int

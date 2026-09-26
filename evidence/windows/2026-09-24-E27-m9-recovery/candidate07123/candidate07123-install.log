@@ -1,0 +1,25 @@
+candidate_sha256=5BD2B358B9A6E016EFB0B911F9511AA4DA7CA4E1E82DE22023512187ADCEC823
+boot_before=2026-09-24T10:48:56
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+10:57:22 Tctl 66.1 C (raw 733B0FEF)
+
+guard recovery: logs secured, all hardware gates verified closed
+Microsoft PnP Utility
+
+Adding driver package:  bc250kmd.inf
+Driver package added successfully.
+Published Name:         oem96.inf
+Driver package installed on device: [redacted PCI identity]
+
+Total driver packages:  1
+Added driver packages:  1
+pnputil_exit=0
+device_status=OK
+driver_version=0.7.123.1
+installed_sha256=5BD2B358B9A6E016EFB0B911F9511AA4DA7CA4E1E82DE22023512187ADCEC823
+closed_gates_verified
+boot_after=2026-09-24T10:48:56
+dwm_processes=1
+display_only_install_passed

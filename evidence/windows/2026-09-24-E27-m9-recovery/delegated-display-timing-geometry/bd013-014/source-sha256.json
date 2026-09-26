@@ -1,0 +1,38 @@
+[
+  {
+    "file": "driver/kmd/dcn.c",
+    "sha256": "8682fec7bdeab8a24b8e22b92772f220dd74dd7c9499b9fc2621c689cfdd852a"
+  },
+  {
+    "file": "driver/kmd/display.c",
+    "sha256": "66f1c2665143e46e10a75aa745f7053572eeba4f2d6882ba44f9335803bdfcac"
+  },
+  {
+    "file": "driver/kmd/wddm.c",
+    "sha256": "917d625911fa757f1d6c6669c46af5269df4424779bff1988c34742f8085993a"
+  },
+  {
+    "file": "driver/kmd/bc250kmd.h",
+    "sha256": "66f157a9a5724dfcb01d838b4c6ee7595d5668ef325b4c9ddf462ed98ec8bd29"
+  },
+  {
+    "file": "driver/kmd/test/generate_display_visibility_test.py",
+    "sha256": "9b26eb93a1254ea5527019a519695759e850f574c565232b177708c85c635380"
+  },
+  {
+    "file": "driver/kmd/test/display_visibility_test.c",
+    "sha256": "5513459c53c79db8c97355e05fe9258048a0a49afd7ee33fc35b72bdd90a14c8"
+  },
+  {
+    "file": "driver/kmd/test/run_display_visibility.ps1",
+    "sha256": "46852489825b662e84621520bcfe871b169cf6024f7264cd173dfac75f086e0d"
+  },
+  {
+    "file": "driver/kmd/test/generate_post_display_test.py",
+    "sha256": "f575c1fa0ab6b084abb5491ecf6190496652ad6b6da163217a588730a60f65f9"
+  },
+  {
+    "file": "driver/kmd/test/post_display_test.c",
+    "sha256": "bab4e2f5fc96adba3c8dcdf9438a20750f14db8d65b49d9d27d2bb03849be15f"
+  }
+]

@@ -1,0 +1,1139 @@
+log          221849 lines since this driver load, 220825 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.004 stage 10
+     1      0.005 gate: EnableFullWddm 1 (one shot: closed again on disk)
+     2      0.007 stage 20
+     3      0.120 stage 30
+     4      0.124 stage 31
+     5      0.126 stage 32
+     6      0.126 post display 1920x1200 pitch 7680 format 22 target 2424833
+     7      0.128 stage 33
+     8      0.128 stage 34
+     9      0.128 interrupt resource 1: message, vector 0x80, flags 0x3
+    10      0.128 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes off, vidpn flip off
+    11      0.128 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    12      0.128 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    13      0.128 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    14      0.130 gart: ready, dummy page at 0x26FFFA000
+    15      0.130 psp: ready
+    16      0.130 gpumem: ready, doorbells at 0xD0000000
+    17      0.130 gfx: ready, GPU submission allowed, paging node allowed
+    18      0.130 ih: ready
+    19      0.132 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    20      0.137 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    21      0.137 startup: entering interrupt connection
+    22      0.140 startup: entering firmware preparation
+    23      0.144 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    24      0.144 gfx: unpublished translation bootstrap entered with engines halted
+    25      0.144 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    26      0.144 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    27      0.144 startup: entering GART initialization
+    28      0.158 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    29      0.158 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.158 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    31      0.158 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    32      0.158 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    33      0.158 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    34      0.158 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    35      0.158 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    36      0.158 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    37      0.158 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    38      0.158 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    39      0.158 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    40      0.158 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    41      0.158 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    42      0.158 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    43      0.158 startup: entering PSP initialization
+    44      0.211 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    45      0.211 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    46      0.232 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    47      0.232 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    48      0.232 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    49      0.232 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 268 us, in TMR at 0x0
+    50      0.232 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.232 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    52      0.234 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1907 us, in TMR at 0x0
+    53      0.234 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    54      0.234 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    55      0.236 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1894 us, in TMR at 0x0
+    56      0.236 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    57      0.236 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    58      0.242 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF842000
+    59      0.242 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    60      0.242 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    61      0.248 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5911 us, in TMR at 0xF5FF883000
+    62      0.248 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    63      0.248 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    64      0.254 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5922 us, in TMR at 0xF5FF8C4000
+    65      0.254 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    66      0.254 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    67      0.260 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5966 us, in TMR at 0xF5FF800000
+    68      0.260 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    69      0.260 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    70      0.260 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 131 us, in TMR at 0x0
+    71      0.260 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    72      0.260 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    73      0.266 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5973 us, in TMR at 0xF5FF800000
+    74      0.266 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    75      0.266 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    76      0.266 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    77      0.266 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    78      0.266 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    79      0.268 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    80      0.268 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    81      0.268 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    82      0.268 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    83      0.268 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    84      0.268 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    85      0.268 startup: entering IH initialization
+    86      0.270 ih: init: rc 0, 18 writes
+    87      0.270 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    88      0.270 startup: entering GFX initialization
+    89      0.272 startup: entering GFX stage 1
+    90      0.274 gfx: RLC startup policy pp_gfxoff 0
+    91      0.278 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    92      0.278 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    93      0.280 startup: entering GFX stage 2
+    94      0.282 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+    95      0.282 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+    96      0.284 startup: entering GFX stage 3
+    97      0.288 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 3 us
+    98      0.288 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+    99      0.290 startup: entering GFX stage 4
+   100      0.292 gfx: stage 4 (constants): rc 0, 157 writes so far, 58 us
+   101      0.292 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   102      0.294 startup: entering GFX stage 5
+   103      0.296 startup: RLC boundary acquire-paging-lock
+   104      0.300 startup: RLC boundary acquire-gart-lock
+   105      0.302 startup: RLC boundary locks-acquired
+   106      0.304 startup: RLC boundary before-rlc-resume
+   107      0.306 startup: RLC boundary after-rlc-resume
+   108      0.308 startup: RLC boundary before-gfx-visibility
+   109      0.310 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   110      0.314 startup: visibility observer returned after-invalidate-request
+   111      0.316 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   112      0.320 startup: visibility observer returned after-invalidate-request-read
+   113      0.322 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   114      0.324 startup: visibility observer returned after-invalidate-ack
+   115      0.328 startup: visibility GFX returned 0, entering MMHUB
+   116      0.330 startup: visibility MMHUB returned 0
+   117      0.334 gpumem: startup GFX translations committed after RLC, before CP
+   118      0.336 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   119      0.336 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   120      0.336 startup: visibility publication observer returned
+   121      0.338 startup: RLC boundary after-gfx-visibility
+   122      0.342 gfx: stage 5 (RLC): rc 0, 11 writes so far, 38558 us
+   123      0.342 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   124      0.346 startup: entering GFX stage 6
+   125      0.348 startup: entering CP step 1
+   126      0.350 startup: CP1 checkpoint acquire-paging-lock
+   127      0.354 startup: CP1 checkpoint acquire-gart-lock
+   128      0.356 startup: CP1 checkpoint locks-acquired
+   129      0.360 amdgpu[0]: CP resume kiq-init begin
+
+   130      0.360 startup: CP1 checkpoint scheduler
+   131      0.362 startup: CP1 checkpoint scheduler-read
+   132      0.364 startup: CP1 checkpoint scheduler-write
+   133      0.366 startup: CP1 checkpoint scheduler-done
+   134      0.368 startup: CP1 checkpoint clear-mqd
+   135      0.370 startup: CP1 checkpoint select-queue
+   136      0.374 startup: CP1 checkpoint build-mqd
+   137      0.376 startup: CP1 checkpoint disable-wptr-poll
+   138      0.378 startup: CP1 checkpoint read-active
+   139      0.380 startup: CP1 checkpoint program-hqd
+   140      0.384 startup: CP1 checkpoint activate-hqd
+   141      0.386 startup: CP1 checkpoint restore-selection
+   142      0.388 startup: CP1 checkpoint complete
+   143      0.392 amdgpu[0]: CP resume kiq-init end result=0
+
+   144      0.392 gfx: CP step 1: rc 0, 27 writes, 31987 us
+   145      0.392 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   146      0.392 startup: CP step 1 returned 0x00000000 result 0
+   147      0.394 startup: entering CP step 2
+   148      0.398 amdgpu[0]: CP resume compute-unhalt begin
+
+   149      0.398 amdgpu[0]: CP resume compute-unhalt end
+
+   150      0.398 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   151      0.398 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   152      0.398 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   153      0.398 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   154      0.398 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   155      0.398 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   156      0.398 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   157      0.398 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   158      0.398 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   159      0.398 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   160      0.398 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   161      0.398 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   162      0.398 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   163      0.398 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   164      0.398 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   165      0.398 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   166      0.398 gfx: CP step 2: rc 0, 17 writes, 329 us
+   167      0.398 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   168      0.398 startup: CP step 2 returned 0x00000000 result 0
+   169      0.400 startup: entering CP step 3
+   170      0.404 amdgpu[0]: CP resume kcq-enable begin
+
+   171      0.404 amdgpu[0]: CP resume kcq-enable end result=0
+
+   172      0.404 gfx: CP step 3: rc 0, 1 writes, 58 us
+   173      0.404 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   174      0.404 startup: CP step 3 returned 0x00000000 result 0
+   175      0.406 startup: entering CP step 4
+   176      0.408 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   177      0.408 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   178      0.408 gfx: CP step 4: rc 0, 4 writes, 35 us
+   179      0.408 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   180      0.408 startup: CP step 4 returned 0x00000000 result 0
+   181      0.410 startup: entering CP step 5
+   182      0.414 amdgpu[0]: CP resume kgq-enable begin
+
+   183      0.414 amdgpu[0]: CP resume kgq-enable end result=0
+
+   184      0.414 gfx: CP step 5: rc 0, 1 writes, 29 us
+   185      0.414 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   186      0.414 startup: CP step 5 returned 0x00000000 result 0
+   187      0.416 startup: entering CP step 6
+   188      0.420 amdgpu[0]: CP resume gfx-start begin
+
+   189      0.420 amdgpu[0]: CP resume gfx-start end result=0
+
+   190      0.420 gfx: CP step 6: rc 0, 3 writes, 44 us
+   191      0.420 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   192      0.420 startup: CP step 6 returned 0x00000000 result 0
+   193      0.422 startup: entering CP step 7
+   194      0.424 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   195      0.424 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   196      0.424 gfx: CP step 7: rc 0, 1 writes, 22 us
+   197      0.424 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   198      0.424 startup: CP step 7 returned 0x00000000 result 0
+   199      0.426 startup: entering CP step 8
+   200      0.428 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   201      0.428 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   202      0.428 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   203      0.428 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   204      0.428 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   205      0.428 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   206      0.428 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   207      0.430 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   208      0.430 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   209      0.430 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   210      0.430 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   211      0.430 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   212      0.430 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   213      0.430 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   214      0.430 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   215      0.430 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   216      0.430 gfx: CP step 8: rc 0, 8 writes, 193 us
+   217      0.430 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   218      0.430 startup: CP step 8 returned 0x00000000 result 0
+   219      0.436 startup: entering GFX stage 7
+   220      0.438 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 108 us
+   221      0.438 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   222      0.440 startup: entering GFX stage 8
+   223      0.444 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 23 us
+   224      0.444 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   225      0.444 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   226      0.448 startup: both engines ready
+   227      0.450 startup: attempted 0xF completed 0xF status 0x00000000 ready 1 unwind 0 quarantine 0
+   228      0.450 wddm: GPU initialized before adapter admission
+   229      0.450 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   230      0.452 stage 35
+   231      0.452 stage 39
+   232      0.452 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   233      0.452 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   234      0.452 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   235      0.452 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   236      0.454 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   237      0.454 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   238      0.454 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   239      0.454 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   240      0.454 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   241      0.454 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   242      0.454 wddm: GetNodeMetadata node 0 adapter 0
+   243      0.454 wddm: GetNodeMetadata node 1 adapter 0
+   244      0.454 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   245      0.454 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 0, 65536 bytes
+   246      0.454 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   247      0.454 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   248      0.456 wddm: CreateProcess flags 0x00000001 pasids 1
+   249      0.456 wddm: CreateDevice flags 0x00000001 pasid 0
+   250      0.456 wddm: CreateDevice flags 0x00000001 pasid 0
+   251      0.458 wddm: capture reservation ready 22020400 bytes
+   252      0.458 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+   253      0.458 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+   254      0.458 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+   255      0.458 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+221081    433.541 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202469
+221082    433.541 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202470
+221083    433.541 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202471
+221084    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202472
+221085    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202473
+221086    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202474
+221087    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202475
+221088    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202476
+221089    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202477
+221090    433.543 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202478
+221091    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202479
+221092    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202480
+221093    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202481
+221094    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202482
+221095    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202483
+221096    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202484
+221097    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202485
+221098    433.545 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202486
+221099    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202487
+221100    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202488
+221101    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202489
+221102    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202490
+221103    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202491
+221104    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202492
+221105    433.547 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202493
+221106    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202494
+221107    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202495
+221108    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202496
+221109    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202497
+221110    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202498
+221111    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202499
+221112    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202500
+221113    433.549 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202501
+221114    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202502
+221115    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202503
+221116    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202504
+221117    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202505
+221118    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202506
+221119    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202507
+221120    433.551 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202508
+221121    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202509
+221122    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202510
+221123    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202511
+221124    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202512
+221125    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202513
+221126    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202514
+221127    433.553 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202515
+221128    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202516
+221129    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202517
+221130    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202518
+221131    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202519
+221132    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202520
+221133    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202521
+221134    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202522
+221135    433.555 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202523
+221136    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202524
+221137    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202525
+221138    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202526
+221139    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202527
+221140    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202528
+221141    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202529
+221142    433.557 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202530
+221143    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202531
+221144    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202532
+221145    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202533
+221146    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202534
+221147    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202535
+221148    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202536
+221149    433.559 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202537
+221150    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202538
+221151    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202539
+221152    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202540
+221153    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202541
+221154    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202542
+221155    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202543
+221156    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202544
+221157    433.561 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202545
+221158    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202546
+221159    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202547
+221160    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202548
+221161    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202549
+221162    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202550
+221163    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202551
+221164    433.563 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202552
+221165    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202553
+221166    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202554
+221167    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202555
+221168    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202556
+221169    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202557
+221170    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202558
+221171    433.565 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202559
+221172    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202560
+221173    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202561
+221174    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202562
+221175    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202563
+221176    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202564
+221177    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202565
+221178    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202566
+221179    433.567 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202567
+221180    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202568
+221181    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202569
+221182    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202570
+221183    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202571
+221184    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202572
+221185    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202573
+221186    433.569 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202574
+221187    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202575
+221188    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202576
+221189    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202577
+221190    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202578
+221191    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202579
+221192    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202580
+221193    433.571 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202581
+221194    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202582
+221195    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202583
+221196    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202584
+221197    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202585
+221198    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202586
+221199    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202587
+221200    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202588
+221201    433.573 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202589
+221202    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202590
+221203    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202591
+221204    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202592
+221205    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202593
+221206    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202594
+221207    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202595
+221208    433.575 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202596
+221209    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202597
+221210    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202598
+221211    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202599
+221212    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202600
+221213    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202601
+221214    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202602
+221215    433.577 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202603
+221216    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202604
+221217    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202605
+221218    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202606
+221219    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202607
+221220    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202608
+221221    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202609
+221222    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202610
+221223    433.579 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202611
+221224    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202612
+221225    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202613
+221226    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202614
+221227    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202615
+221228    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202616
+221229    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202617
+221230    433.581 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202618
+221231    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202619
+221232    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202620
+221233    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202621
+221234    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202622
+221235    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202623
+221236    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202624
+221237    433.583 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202625
+221238    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202626
+221239    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202627
+221240    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202628
+221241    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202629
+221242    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202630
+221243    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202631
+221244    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202632
+221245    433.585 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202633
+221246    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202634
+221247    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202635
+221248    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202636
+221249    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202637
+221250    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202638
+221251    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202639
+221252    433.587 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202640
+221253    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202641
+221254    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202642
+221255    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202643
+221256    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202644
+221257    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202645
+221258    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202646
+221259    433.589 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202647
+221260    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202648
+221261    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202649
+221262    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202650
+221263    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202651
+221264    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202652
+221265    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202653
+221266    433.591 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202654
+221267    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202655
+221268    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202656
+221269    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202657
+221270    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202658
+221271    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202659
+221272    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202660
+221273    433.593 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202661
+221274    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202662
+221275    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202663
+221276    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202664
+221277    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202665
+221278    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202666
+221279    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202667
+221280    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202668
+221281    433.595 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202669
+221282    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202670
+221283    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202671
+221284    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202672
+221285    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202673
+221286    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202674
+221287    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202675
+221288    433.597 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202676
+221289    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202677
+221290    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202678
+221291    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202679
+221292    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202680
+221293    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202681
+221294    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202682
+221295    433.599 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202683
+221296    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202684
+221297    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202685
+221298    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202686
+221299    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202687
+221300    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202688
+221301    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202689
+221302    433.601 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202690
+221303    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202691
+221304    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202692
+221305    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202693
+221306    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202694
+221307    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202695
+221308    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202696
+221309    433.603 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202697
+221310    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202698
+221311    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202699
+221312    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202700
+221313    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202701
+221314    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202702
+221315    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202703
+221316    433.605 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202704
+221317    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202705
+221318    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202706
+221319    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202707
+221320    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202708
+221321    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202709
+221322    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202710
+221323    433.607 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202711
+221324    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202712
+221325    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202713
+221326    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202714
+221327    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202715
+221328    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202716
+221329    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202717
+221330    433.609 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202718
+221331    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202719
+221332    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202720
+221333    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202721
+221334    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202722
+221335    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202723
+221336    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202724
+221337    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202725
+221338    433.611 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202726
+221339    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202727
+221340    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202728
+221341    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202729
+221342    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202730
+221343    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202731
+221344    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202732
+221345    433.613 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202733
+221346    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202734
+221347    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202735
+221348    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202736
+221349    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202737
+221350    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202738
+221351    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202739
+221352    433.615 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202740
+221353    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202741
+221354    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202742
+221355    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202743
+221356    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202744
+221357    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202745
+221358    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202746
+221359    433.617 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202747
+221360    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202748
+221361    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202749
+221362    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202750
+221363    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202751
+221364    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202752
+221365    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202753
+221366    433.619 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202754
+221367    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202755
+221368    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202756
+221369    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202757
+221370    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202758
+221371    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202759
+221372    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202760
+221373    433.621 gfx: paging submit, 996 dwords from private buffer at 0x0, seq 202761
+221374    433.621 gfx: paging submit, 166 dwords from private buffer at 0x0, seq 202762
+221375    433.623 gfx: paging submit, 848 dwords from private buffer at 0x298, seq 202763
+221376    433.623 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202764
+221377    433.623 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202765
+221378    433.623 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202766
+221379    433.623 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202767
+221380    433.623 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202768
+221381    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202769
+221382    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202770
+221383    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202771
+221384    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202772
+221385    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202773
+221386    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202774
+221387    433.625 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202775
+221388    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202776
+221389    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202777
+221390    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202778
+221391    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202779
+221392    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202780
+221393    433.627 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 202781
+221394    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202782
+221395    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202783
+221396    433.627 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202784
+221397    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202785
+221398    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202786
+221399    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202787
+221400    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202788
+221401    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202789
+221402    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202790
+221403    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202791
+221404    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202792
+221405    433.629 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202793
+221406    433.629 gfx: paging submit, 1003 dwords from private buffer at 0x0, seq 202794
+221407    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202795
+221408    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202796
+221409    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202797
+221410    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202798
+221411    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202799
+221412    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202800
+221413    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202801
+221414    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202802
+221415    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202803
+221416    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202804
+221417    433.631 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202805
+221418    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202806
+221419    433.633 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 202807
+221420    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202808
+221421    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202809
+221422    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202810
+221423    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202811
+221424    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202812
+221425    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202813
+221426    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202814
+221427    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202815
+221428    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202816
+221429    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202817
+221430    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202818
+221431    433.633 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202819
+221432    433.635 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202820
+221433    433.635 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202821
+221434    433.635 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202822
+221435    433.635 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202823
+221436    433.635 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202824
+221437    433.635 gfx: paging submit, 635 dwords from private buffer at 0x0, seq 202825
+221438    433.649 gfx: paging submit, 31 dwords from private buffer at 0x9EC, seq 202826
+221439    433.649 gfx: paging submit, 31 dwords from private buffer at 0xA68, seq 202827
+221440    433.769 wddm: software vsync off after 26802 ticks
+221441    433.769 gfx: paging submit, 320 dwords from private buffer at 0xAE4, seq 202828
+221442    433.769 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202829
+221443    433.769 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202830
+221444    433.771 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202831
+221445    433.771 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202832
+221446    433.771 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+221447    433.771 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202833
+221448    433.771 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221449    433.771 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202834
+221450    433.771 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221451    433.771 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202835
+221452    433.771 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221453    433.771 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202836
+221454    433.771 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221455    433.771 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202837
+221456    433.773 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221457    433.773 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202838
+221458    433.773 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221459    433.773 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202839
+221460    433.773 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221461    433.773 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202840
+221462    433.773 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221463    433.773 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202841
+221464    433.773 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221465    433.773 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202842
+221466    433.773 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221467    433.773 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202843
+221468    433.775 gfx: paging submit, 515 dwords from private buffer at 0x0, seq 202844
+221469    433.775 gfx: paging submit, 494 dwords from private buffer at 0x80C, seq 202845
+221470    433.775 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202846
+221471    433.775 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202847
+221472    433.775 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202848
+221473    433.775 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202849
+221474    433.775 gfx: paging submit, 335 dwords from private buffer at 0x0, seq 202850
+221475    433.775 gfx: paging submit, 672 dwords from private buffer at 0x53C, seq 202851
+221476    433.775 gfx: paging submit, 380 dwords from private buffer at 0x0, seq 202852
+221477    433.775 gfx: paging submit, 624 dwords from private buffer at 0x5F0, seq 202853
+221478    433.775 gfx: paging submit, 428 dwords from private buffer at 0x0, seq 202854
+221479    433.775 gfx: paging submit, 576 dwords from private buffer at 0x6B0, seq 202855
+221480    433.777 gfx: paging submit, 476 dwords from private buffer at 0x0, seq 202856
+221481    433.777 gfx: paging submit, 528 dwords from private buffer at 0x770, seq 202857
+221482    433.777 gfx: paging submit, 524 dwords from private buffer at 0x0, seq 202858
+221483    433.777 gfx: paging submit, 480 dwords from private buffer at 0x830, seq 202859
+221484    433.777 gfx: paging submit, 625 dwords from private buffer at 0x0, seq 202860
+221485    433.777 gfx: paging submit, 384 dwords from private buffer at 0x9C4, seq 202861
+221486    433.777 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202862
+221487    433.777 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202863
+221488    433.777 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202864
+221489    433.779 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202865
+221490    433.779 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221491    433.779 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202866
+221492    433.779 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221493    433.779 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202867
+221494    433.779 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221495    433.779 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202868
+221496    433.779 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221497    433.779 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202869
+221498    433.779 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221499    433.779 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202870
+221500    433.779 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221501    433.781 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202871
+221502    433.781 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221503    433.781 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202872
+221504    433.781 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221505    433.781 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202873
+221506    433.781 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221507    433.781 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202874
+221508    433.781 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221509    433.781 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202875
+221510    433.781 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221511    433.781 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202876
+221512    433.783 gfx: paging submit, 450 dwords from private buffer at 0x0, seq 202877
+221513    433.783 gfx: paging submit, 560 dwords from private buffer at 0x708, seq 202878
+221514    433.783 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 202879
+221515    433.783 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 202880
+221516    433.783 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202881
+221517    433.783 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202882
+221518    433.783 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 202883
+221519    433.783 gfx: paging submit, 264 dwords from private buffer at 0x0, seq 202884
+221520    433.783 gfx: paging submit, 752 dwords from private buffer at 0x420, seq 202885
+221521    433.783 gfx: paging submit, 300 dwords from private buffer at 0x0, seq 202886
+221522    433.785 gfx: paging submit, 704 dwords from private buffer at 0x4B0, seq 202887
+221523    433.785 gfx: paging submit, 348 dwords from private buffer at 0x0, seq 202888
+221524    433.785 gfx: paging submit, 656 dwords from private buffer at 0x570, seq 202889
+221525    433.785 gfx: paging submit, 396 dwords from private buffer at 0x0, seq 202890
+221526    433.785 gfx: paging submit, 614 dwords from private buffer at 0x630, seq 202891
+221527    433.785 gfx: paging submit, 489 dwords from private buffer at 0x0, seq 202892
+221528    433.785 wddm: software vsync on, 16 ms period, target 2424833
+221529    433.787 gfx: paging submit, 31 dwords from private buffer at 0x7A4, seq 202893
+221530    433.787 gfx: paging submit, 31 dwords from private buffer at 0x820, seq 202894
+221531    433.789 gfx: paging submit, 464 dwords from private buffer at 0x89C, seq 202895
+221532    433.789 gfx: paging submit, 445 dwords from private buffer at 0x0, seq 202896
+221533    433.789 gfx: paging submit, 15 dwords from private buffer at 0x6F4, seq 202897
+221534    433.789 gfx: paging submit, 39 dwords from private buffer at 0x730, seq 202898
+221535    433.789 gfx: paging submit, 15 dwords from private buffer at 0x7CC, seq 202899
+221536    433.813 wddm: malformed virtual present rejected
+221537    433.861 gfx: paging submit, 31 dwords from private buffer at 0x808, seq 202900
+221538    433.861 gfx: paging submit, 31 dwords from private buffer at 0x884, seq 202901
+221539    433.863 gfx: paging submit, 432 dwords from private buffer at 0x900, seq 202902
+221540    433.863 gfx: paging submit, 429 dwords from private buffer at 0x0, seq 202903
+221541    433.863 gfx: paging submit, 15 dwords from private buffer at 0x6B4, seq 202904
+221542    433.863 gfx: paging submit, 41 dwords from private buffer at 0x6F0, seq 202905
+221543    433.863 gfx: paging submit, 16 dwords from private buffer at 0x794, seq 202906
+221544    433.863 gfx: paging submit, 16 dwords from private buffer at 0x7D4, seq 202907
+221545    433.863 gfx: paging submit, 494 dwords from private buffer at 0x814, seq 202908
+221546    433.863 gfx: paging submit, 1018 dwords from private buffer at 0x0, seq 202909
+221547    433.863 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202910
+221548    433.863 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202911
+221549    433.863 gfx: paging submit, 731 dwords from private buffer at 0x0, seq 202912
+221550    433.863 gfx: paging submit, 31 dwords from private buffer at 0xB6C, seq 202913
+221551    433.865 wddm: software vsync off after 26807 ticks
+221552    433.867 gfx: paging submit, 256 dwords from private buffer at 0xBE8, seq 202914
+221553    433.867 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202915
+221554    433.867 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202916
+221555    433.867 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202917
+221556    433.867 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202918
+221557    433.867 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 15
+
+221558    433.867 gfx: paging submit, 1003 dwords from private buffer at 0x0, seq 202919
+221559    433.869 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221560    433.869 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202920
+221561    433.869 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221562    433.869 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202921
+221563    433.869 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221564    433.869 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202922
+221565    433.869 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221566    433.869 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202923
+221567    433.869 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221568    433.869 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202924
+221569    433.869 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221570    433.869 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202925
+221571    433.871 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221572    433.871 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202926
+221573    433.871 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221574    433.871 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202927
+221575    433.871 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221576    433.871 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202928
+221577    433.871 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221578    433.871 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202929
+221579    433.871 gfx: paging submit, 580 dwords from private buffer at 0x0, seq 202930
+221580    433.871 gfx: paging submit, 432 dwords from private buffer at 0x910, seq 202931
+221581    433.871 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 202932
+221582    433.871 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 202933
+221583    433.873 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202934
+221584    433.873 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202935
+221585    433.873 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 202936
+221586    433.873 gfx: paging submit, 584 dwords from private buffer at 0x0, seq 202937
+221587    433.873 gfx: paging submit, 432 dwords from private buffer at 0x920, seq 202938
+221588    433.873 gfx: paging submit, 620 dwords from private buffer at 0x0, seq 202939
+221589    433.873 gfx: paging submit, 384 dwords from private buffer at 0x9B0, seq 202940
+221590    433.873 gfx: paging submit, 668 dwords from private buffer at 0x0, seq 202941
+221591    433.873 gfx: paging submit, 336 dwords from private buffer at 0xA70, seq 202942
+221592    433.873 gfx: paging submit, 716 dwords from private buffer at 0x0, seq 202943
+221593    433.873 gfx: paging submit, 288 dwords from private buffer at 0xB30, seq 202944
+221594    433.873 gfx: paging submit, 815 dwords from private buffer at 0x0, seq 202945
+221595    433.873 gfx: paging submit, 192 dwords from private buffer at 0xCBC, seq 202946
+221596    433.875 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202947
+221597    433.875 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202948
+221598    433.875 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202949
+221599    433.875 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 202950
+221600    433.875 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 11
+
+221601    433.875 gfx: paging submit, 1007 dwords from private buffer at 0x0, seq 202951
+221602    433.875 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221603    433.875 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202952
+221604    433.875 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221605    433.875 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202953
+221606    433.875 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221607    433.875 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202954
+221608    433.877 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221609    433.877 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202955
+221610    433.877 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221611    433.877 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202956
+221612    433.877 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221613    433.877 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202957
+221614    433.877 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221615    433.877 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202958
+221616    433.877 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221617    433.877 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202959
+221618    433.877 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221619    433.877 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202960
+221620    433.879 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221621    433.879 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202961
+221622    433.879 gfx: paging submit, 670 dwords from private buffer at 0x0, seq 202962
+221623    433.879 gfx: paging submit, 336 dwords from private buffer at 0xA78, seq 202963
+221624    433.879 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 202964
+221625    433.879 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 202965
+221626    433.879 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202966
+221627    433.879 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202967
+221628    433.879 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 202968
+221629    433.881 gfx: paging submit, 276 dwords from private buffer at 0x0, seq 202969
+221630    433.881 gfx: paging submit, 736 dwords from private buffer at 0x450, seq 202970
+221631    433.881 gfx: paging submit, 316 dwords from private buffer at 0x0, seq 202971
+221632    433.881 gfx: paging submit, 688 dwords from private buffer at 0x4F0, seq 202972
+221633    433.881 gfx: paging submit, 364 dwords from private buffer at 0x0, seq 202973
+221634    433.881 gfx: paging submit, 640 dwords from private buffer at 0x5B0, seq 202974
+221635    433.881 gfx: paging submit, 412 dwords from private buffer at 0x0, seq 202975
+221636    433.881 gfx: paging submit, 594 dwords from private buffer at 0x670, seq 202976
+221637    433.881 gfx: paging submit, 509 dwords from private buffer at 0x0, seq 202977
+221638    433.881 wddm: software vsync on, 16 ms period, target 2424833
+221639    433.905 wddm: malformed virtual present rejected
+221640    433.951 gfx: paging submit, 31 dwords from private buffer at 0x7F4, seq 202978
+221641    433.951 gfx: paging submit, 31 dwords from private buffer at 0x870, seq 202979
+221642    433.953 gfx: paging submit, 432 dwords from private buffer at 0x8EC, seq 202980
+221643    433.953 gfx: paging submit, 217 dwords from private buffer at 0x0, seq 202981
+221644    433.953 gfx: paging submit, 15 dwords from private buffer at 0x364, seq 202982
+221645    433.953 gfx: paging submit, 39 dwords from private buffer at 0x3A0, seq 202983
+221646    433.953 gfx: paging submit, 16 dwords from private buffer at 0x43C, seq 202984
+221647    433.953 gfx: paging submit, 16 dwords from private buffer at 0x47C, seq 202985
+221648    433.953 gfx: paging submit, 702 dwords from private buffer at 0x4BC, seq 202986
+221649    433.953 gfx: paging submit, 1018 dwords from private buffer at 0x0, seq 202987
+221650    433.953 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202988
+221651    433.953 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202989
+221652    433.953 gfx: paging submit, 523 dwords from private buffer at 0x0, seq 202990
+221653    433.953 gfx: paging submit, 31 dwords from private buffer at 0x82C, seq 202991
+221654    433.955 wddm: software vsync off after 26811 ticks
+221655    433.955 gfx: paging submit, 464 dwords from private buffer at 0x8A8, seq 202992
+221656    433.955 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202993
+221657    433.957 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202994
+221658    433.957 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202995
+221659    433.957 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 202996
+221660    433.957 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221661    433.957 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202997
+221662    433.957 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221663    433.957 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202998
+221664    433.957 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221665    433.957 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 202999
+221666    433.957 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221667    433.957 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203000
+221668    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221669    433.959 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203001
+221670    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221671    433.959 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203002
+221672    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221673    433.959 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203003
+221674    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221675    433.959 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203004
+221676    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221677    433.959 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203005
+221678    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221679    433.959 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203006
+221680    433.959 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221681    433.961 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203007
+221682    433.961 gfx: paging submit, 370 dwords from private buffer at 0x0, seq 203008
+221683    433.961 gfx: paging submit, 640 dwords from private buffer at 0x5C8, seq 203009
+221684    433.961 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 203010
+221685    433.961 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 203011
+221686    433.961 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203012
+221687    433.961 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203013
+221688    433.961 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 203014
+221689    433.961 gfx: paging submit, 376 dwords from private buffer at 0x0, seq 203015
+221690    433.961 gfx: paging submit, 640 dwords from private buffer at 0x5E0, seq 203016
+221691    433.961 gfx: paging submit, 412 dwords from private buffer at 0x0, seq 203017
+221692    433.961 gfx: paging submit, 592 dwords from private buffer at 0x670, seq 203018
+221693    433.963 gfx: paging submit, 460 dwords from private buffer at 0x0, seq 203019
+221694    433.963 gfx: paging submit, 544 dwords from private buffer at 0x730, seq 203020
+221695    433.963 gfx: paging submit, 508 dwords from private buffer at 0x0, seq 203021
+221696    433.963 gfx: paging submit, 496 dwords from private buffer at 0x7F0, seq 203022
+221697    433.963 gfx: paging submit, 607 dwords from private buffer at 0x0, seq 203023
+221698    433.963 gfx: paging submit, 400 dwords from private buffer at 0x97C, seq 203024
+221699    433.963 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203025
+221700    433.963 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203026
+221701    433.963 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203027
+221702    433.963 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203028
+221703    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 14
+
+221704    433.965 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203029
+221705    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221706    433.965 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203030
+221707    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221708    433.965 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203031
+221709    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221710    433.965 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203032
+221711    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221712    433.965 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203033
+221713    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221714    433.965 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203034
+221715    433.965 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221716    433.965 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203035
+221717    433.967 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221718    433.967 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203036
+221719    433.967 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221720    433.967 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203037
+221721    433.967 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221722    433.967 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203038
+221723    433.967 amdgpu[2]: ring alloc of 16 dwords exceeds max_dw 13
+
+221724    433.967 gfx: paging submit, 1005 dwords from private buffer at 0x0, seq 203039
+221725    433.967 gfx: paging submit, 435 dwords from private buffer at 0x0, seq 203040
+221726    433.969 gfx: paging submit, 576 dwords from private buffer at 0x6CC, seq 203041
+221727    433.969 gfx: paging submit, 974 dwords from private buffer at 0x0, seq 203042
+221728    433.969 gfx: paging submit, 1006 dwords from private buffer at 0x0, seq 203043
+221729    433.969 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203044
+221730    433.969 gfx: paging submit, 1004 dwords from private buffer at 0x0, seq 203045
+221731    433.969 gfx: paging submit, 653 dwords from private buffer at 0x0, seq 203046
+221732    433.969 gfx: paging submit, 36 dwords from private buffer at 0x0, seq 203047
+221733    433.969 gfx: paging submit, 974 dwords from private buffer at 0x90, seq 203048
+221734    433.969 gfx: paging submit, 78 dwords from private buffer at 0x0, seq 203049
+221735    433.969 gfx: paging submit, 928 dwords from private buffer at 0x138, seq 203050
+221736    433.969 gfx: paging submit, 124 dwords from private buffer at 0x0, seq 203051
+221737    433.969 gfx: paging submit, 880 dwords from private buffer at 0x1F0, seq 203052
+221738    433.969 gfx: paging submit, 172 dwords from private buffer at 0x0, seq 203053
+221739    433.969 gfx: paging submit, 834 dwords from private buffer at 0x2B0, seq 203054
+221740    433.971 gfx: paging submit, 269 dwords from private buffer at 0x0, seq 203055
+221741    433.971 wddm: software vsync on, 16 ms period, target 2424833
+221742    433.995 wddm: malformed virtual present rejected
+221743    434.020 gfx: paging submit, 37 dwords from private buffer at 0x434, seq 203056
+221744    434.020 gfx: paging submit, 69 dwords from private buffer at 0x4C8, seq 203057
+221745    434.020 gfx: paging submit, 37 dwords from private buffer at 0x5DC, seq 203058
+221746    434.020 gfx: paging submit, 69 dwords from private buffer at 0x670, seq 203059
+221747    434.020 gfx: paging submit, 37 dwords from private buffer at 0x784, seq 203060
+221748    434.020 gfx: paging submit, 69 dwords from private buffer at 0x818, seq 203061
+221749    434.020 gfx: paging submit, 37 dwords from private buffer at 0x92C, seq 203062
+221750    434.020 gfx: paging submit, 69 dwords from private buffer at 0x9C0, seq 203063
+221751    434.020 gfx: paging submit, 37 dwords from private buffer at 0xAD4, seq 203064
+221752    434.020 gfx: paging submit, 69 dwords from private buffer at 0xB68, seq 203065
+221753    434.020 gfx: paging submit, 37 dwords from private buffer at 0xC7C, seq 203066
+221754    434.020 gfx: paging submit, 69 dwords from private buffer at 0xD10, seq 203067
+221755    434.022 gfx: paging submit, 37 dwords from private buffer at 0xE24, seq 203068
+221756    434.022 gfx: paging submit, 69 dwords from private buffer at 0xEB8, seq 203069
+221757    434.022 gfx: paging submit, 37 dwords from private buffer at 0x0, seq 203070
+221758    434.022 gfx: paging submit, 69 dwords from private buffer at 0x94, seq 203071
+221759    434.022 gfx: paging submit, 607 dwords from private buffer at 0x1A8, seq 203072
+221760    434.022 gfx: paging submit, 15 dwords from private buffer at 0xB24, seq 203073
+221761    434.022 gfx: paging submit, 37 dwords from private buffer at 0xB60, seq 203074
+221762    434.022 gfx: paging submit, 69 dwords from private buffer at 0xBF4, seq 203075
+221763    434.022 gfx: paging submit, 70 dwords from private buffer at 0xD08, seq 203076
+221764    434.022 gfx: paging submit, 15 dwords from private buffer at 0xE20, seq 203077
+221765    434.022 gfx: paging submit, 69 dwords from private buffer at 0xE5C, seq 203078
+221766    434.024 gfx: paging submit, 16 dwords from private buffer at 0xF70, seq 203079
+221767    434.024 gfx: paging submit, 67 dwords from private buffer at 0x0, seq 203080
+221768    434.024 gfx: paging submit, 69 dwords from private buffer at 0x10C, seq 203081
+221769    434.024 gfx: paging submit, 157 dwords from private buffer at 0x220, seq 203082
+221770    434.024 gfx: paging submit, 37 dwords from private buffer at 0x494, seq 203083
+221771    434.024 gfx: paging submit, 16 dwords from private buffer at 0x528, seq 203084
+221772    434.024 gfx: paging submit, 16 dwords from private buffer at 0x568, seq 203085
+221773    434.024 gfx: paging submit, 15 dwords from private buffer at 0x5A8, seq 203086
+221774    434.024 gfx: paging submit, 16 dwords from private buffer at 0x5E4, seq 203087
+221775    434.024 gfx: paging submit, 16 dwords from private buffer at 0x624, seq 203088
+221776    434.024 gfx: paging submit, 15 dwords from private buffer at 0x664, seq 203089
+221777    434.024 gfx: paging submit, 16 dwords from private buffer at 0x6A0, seq 203090
+221778    434.024 gfx: paging submit, 16 dwords from private buffer at 0x6E0, seq 203091
+221779    434.024 gfx: paging submit, 16 dwords from private buffer at 0x720, seq 203092
+221780    436.630 wddm summary: ---- DDI calls: name, count, first log line ----
+221781    436.630 wddm summary: QueryAdapterInfo                   15  first at 234
+221782    436.630 wddm summary: GetNodeMetadata                     2  first at 242
+221783    436.630 wddm summary: CreateDevice                      195  first at 249
+221784    436.630 wddm summary: DestroyDevice                     192  first at 466
+221785    436.630 wddm summary: CreateContext                     194  first at 252
+221786    436.630 wddm summary: DestroyContext                    192  first at 454
+221787    436.630 wddm summary: CreateProcess                      49  first at 248
+221788    436.630 wddm summary: DestroyProcess                     47  first at 467
+221789    436.630 wddm summary: SetRootPageTable                  194  first at 274
+221790    436.630 wddm summary: CreateAllocation                  539  first at 311
+221791    436.630 wddm summary: DestroyAllocation                 634  first at 459
+221792    436.630 wddm summary: DescribeAllocation                564  first at 366
+221793    436.630 wddm summary: GetStandardAllocationDriverData    752  first at 309
+221794    436.630 wddm summary: OpenAllocation                    539  first at 313
+221795    436.630 wddm summary: CloseAllocation                   537  first at 458
+221796    436.630 wddm summary: BuildPagingBuffer              225403  first at 254
+221797    436.630 wddm summary: SubmitCommandVirtual           203280  first at 294
+221798    436.630 wddm summary: PreemptCommand                      1  first at 203248
+221799    436.630 wddm summary: Present                           508  first at 430
+221800    436.630 wddm summary: SetVidPnSourceAddress             188  first at 418
+221801    436.630 wddm summary: ControlInterrupt                 4686  first at 422
+221802    436.630 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+221803    436.630 wddm summary: adapter info type   1       1  first at 234
+221804    436.630 wddm summary: adapter info type  15       1  first at 235
+221805    436.630 wddm summary: adapter info type  47       1  first at 236
+221806    436.630 wddm summary: adapter info type  13       1  first at 237
+221807    436.630 wddm summary: adapter info type  14       4  first at 238
+221808    436.630 wddm summary: adapter info type  11       2  first at 245
+221809    436.630 wddm summary: adapter info type  10       1  first at 247
+221810    436.630 wddm summary: adapter info type  16       1  first at 247
+221811    436.630 wddm summary: adapter info type   0       3  first at 192351
+221812    436.630 wddm summary: capture plans reserved 74 heap 0
+221813    436.630 wddm summary: capture context peaks plans 1 reserved-bytes 5505328
+221814    436.630 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+221815    436.630 wddm summary: paging operation  11   63073  first at 254
+221816    436.630 wddm summary: paging operation  12    3636  first at 302
+221817    436.630 wddm summary: paging operation   9   10881  first at 321
+221818    436.630 wddm summary: paging operation   2     191  first at 460
+221819    436.630 wddm summary: paging operation   8  147622  first at 2271
+221820    436.630 wddm summary: objects created/destroyed: dev 195/192 ctx 194/192 proc 49/47 alloc 539/634, 13 alive
+221821    436.630 wddm summary: allocations opened/closed: 539/537 calls
+221822    436.630 wddm summary: submissions 0 physical + 203280 virtual, 1 preemptions, last completed fence 196638
+221823    436.630 wddm summary: node 0 hardware: 6454 submitted, 6454 completed, 0 timeouts, 0 refused
+221824    436.630 wddm summary: umd: 163 allocs (0 refused), 5 contexts, 6454 submits on the ring, 0 not run
+221825    436.630 wddm profile: umd calls 6454, elapsed ticks 3495531, QPC frequency 10000000
+221826    436.630 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+221827    436.630 wddm summary: node 1 (paging, open): 196638 hardware submitted, 196638 completed, 0 timeouts, 0 refused
+221828    436.630 wddm summary: SubmitCommandVirtual by node: 0: 6642, 1: 196638, 0 private-buffer refusals
+221829    436.630 wddm summary: BuildPagingBuffer: 85 transfers, 10871 fills, 15821529088 bytes, 187955 insufficient-buffer
+221830    436.630 wddm summary: aperture map batches 0, unmap batches 0
+221831    436.630 wddm summary: paging TLB invalidations 3613, PTE update batches 61726
+221832    436.630 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+221833    436.630 wddm summary: presents 508, flips 161 of 188 address calls (0 arrived above DISPATCH_LEVEL)
+221834    436.630 wddm summary: blit gate closed, 0 blits, 0 skips, 0 sources translated contiguous
+221835    436.630 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+221836    436.630 wddm summary: widest blit 0 rows
+221837    436.630 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+221838    436.630 wddm summary: vsync not enabled by ControlInterrupt, 26977 ticks, 2347 reported to dxgkrnl
+221839    436.630 wddm summary: vidpn flip closed: 0 hardware flips, 0 refused, 0 hardware vsyncs armed 0 acked 0 refused 0 deferred (flip still pending)
+221840    436.630 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+221841    436.630 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+221842    436.630 vidmm summary: level 0: 1024 calls, 262656 entries, 512 valid
+221843    436.630 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+221844    436.630 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+221845    436.630 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+221846    436.630 vidmm summary: system leaf encoding coherent 38282 noncoherent 3544316 snoop mismatches 0
+221847    436.630 vidmm summary: 1028 cpu-virtual calls, 0 gpu-physical calls
+221848    436.630 vidmm summary: 264704 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 194 roots
+             1024 lines printed

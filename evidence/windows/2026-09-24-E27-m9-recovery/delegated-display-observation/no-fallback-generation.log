@@ -1,0 +1,7 @@
+Extracted publication and vsync functions from P:\bc-250\scratch\m9\bd007-009\no-fallback-generation.c
+vidpn_flip_actual.c
+dcn_translate.c
+Generowanie kodu...
+FAIL line 262: reports==before
+FAIL line 262: reports==before
+vidpn publication: 119 checks, 2 failures

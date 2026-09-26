@@ -1,0 +1,143 @@
+--- a/cube.c
++++ b/color-oracle.c
+@@ -1,3 +1,7 @@
++#ifdef _WIN32
++#include <windows.h>
++#include <dwmapi.h>
++#endif
+ /*
+  * Copyright (c) 2015-2019 The Khronos Group Inc.
+  * Copyright (c) 2015-2019 Valve Corporation
+@@ -954,7 +958,22 @@
+ 
+     const float draw_color[4] = {-0.4f, -0.3f, -0.2f, -0.1f};
+     demo_push_cb_label(demo, submission_resource->cmd, draw_color, "ActualDraw");
+-    vkCmdDraw(submission_resource->cmd, 12 * 3, 1, 0, 0);
++    PFN_vkCmdClearAttachments clear_attachments =
++        (PFN_vkCmdClearAttachments)vkGetDeviceProcAddr(demo->device, "vkCmdClearAttachments");
++    assert(clear_attachments);
++    const float palette[4][4] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,1,1,1}};
++    for (unsigned quadrant = 0; quadrant < 4; quadrant++) {
++        unsigned left = (quadrant & 1) ? demo->width / 2 : 0;
++        unsigned top = (quadrant & 2) ? demo->height / 2 : 0;
++        unsigned right = (quadrant & 1) ? demo->width : demo->width / 2;
++        unsigned bottom = (quadrant & 2) ? demo->height : demo->height / 2;
++        VkClearAttachment attachment = {0};
++        attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
++        attachment.colorAttachment = 0;
++        memcpy(attachment.clearValue.color.float32, palette[quadrant], sizeof(palette[quadrant]));
++        VkClearRect rect = {{{left,top},{right-left,bottom-top}},0,1};
++        clear_attachments(submission_resource->cmd, 1, &attachment, 1, &rect);
++    }
+     demo_pop_cb_label(demo, submission_resource->cmd);
+ 
+     // Note that ending the renderpass changes the image's layout from
+@@ -1152,6 +1171,10 @@
+ }
+ 
+ static void demo_draw(struct demo *demo) {
++#ifdef _WIN32
++    LARGE_INTEGER m10_start;
++    QueryPerformanceCounter(&m10_start);
++#endif
+     // Don't draw if initialization isn't complete, if the swapchain became outdated, or if the window is minimized
+     if (!demo->initialized || !demo->swapchain_ready || demo->is_minimized) {
+         return;
+@@ -1337,6 +1360,56 @@
+     }
+ 
+     err = vkQueuePresentKHR(demo->present_queue, &present);
++#ifdef _WIN32
++    /* Test-only capture boundary: no rendering, queue or semaphore changes. */
++    {
++        static unsigned m10_frame;
++        static FILE *m10_csv;
++        LARGE_INTEGER m10_end, m10_freq;
++        QueryPerformanceCounter(&m10_end);
++        QueryPerformanceFrequency(&m10_freq);
++        const char *prefix = getenv("BC250_CUBE_CAPTURE_PREFIX");
++        if (prefix) {
++            char path[1024];
++            if (!m10_csv) {
++                snprintf(path, sizeof(path), "%s.csv", prefix);
++                m10_csv = fopen(path, "w");
++                if (!m10_csv) exit(90);
++                fprintf(m10_csv, "frame,start_qpc,present_return_qpc,qpc_frequency,result,dwm_hr,refresh_count,vblank_qpc,refresh_period_qpc\n");
++            }
++            ++m10_frame;
++            DWM_TIMING_INFO timing = {0};
++            timing.cbSize = sizeof(timing);
++            HRESULT timing_hr = DwmGetCompositionTimingInfo(NULL, &timing);
++            fprintf(m10_csv, "%u,%lld,%lld,%lld,%d,%ld,%llu,%llu,%llu\n", m10_frame,
++                    m10_start.QuadPart, m10_end.QuadPart, m10_freq.QuadPart, err,
++                    timing_hr, timing.cRefresh, timing.qpcVBlank, timing.qpcRefreshPeriod);
++            fflush(m10_csv);
++            if ((m10_frame == 1 || m10_frame == 61) && err == VK_SUCCESS) {
++                snprintf(path, sizeof(path), "%s-%u.ready", prefix, m10_frame);
++                FILE *ready = fopen(path, "w");
++                if (!ready) exit(91);
++                RECT window_rect, client_rect;
++                POINT client_origin = {0,0};
++                GetWindowRect(demo->window, &window_rect);
++                GetClientRect(demo->window, &client_rect);
++                ClientToScreen(demo->window, &client_origin);
++                fprintf(ready, "{\"handle\":\"0x%llx\",\"width\":%ld,\"height\":%ld,\"x\":%ld,\"y\":%ld}\n",
++                        (unsigned long long)(uintptr_t)demo->window,
++                        client_rect.right, client_rect.bottom,
++                        client_origin.x, client_origin.y);
++                fclose(ready);
++                snprintf(path, sizeof(path), "%s-%u.release", prefix, m10_frame);
++                ULONGLONG deadline = GetTickCount64() + 15000;
++                while (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
++                    if (GetTickCount64() >= deadline) exit(92);
++                    Sleep(10);
++                }
++            }
++        }
++    }
++#endif
++
+     demo->current_submission_index += 1;
+     demo->current_submission_index %= FRAME_LAG;
+     demo->first_swapchain_frame = false;
+@@ -2804,7 +2877,7 @@
+     // Create window with the registered class:
+     RECT wr = {0, 0, demo->width, demo->height};
+     AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+-    demo->window = CreateWindowEx(0,
++    demo->window = CreateWindowEx(WS_EX_TOPMOST,
+                                   demo->name,            // class name
+                                   demo->name,            // app name
+                                   WS_OVERLAPPEDWINDOW |  // window style
+@@ -2822,6 +2895,9 @@
+         fflush(stdout);
+         exit(1);
+     }
++    DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_DONOTROUND;
++    if (FAILED(DwmSetWindowAttribute(demo->window, DWMWA_WINDOW_CORNER_PREFERENCE,
++                                      &corners, sizeof(corners)))) exit(94);
+     // Window client area size must be at least 1 pixel high, to prevent crash.
+     demo->minsize.x = GetSystemMetrics(SM_CXMINTRACK);
+     demo->minsize.y = GetSystemMetrics(SM_CYMINTRACK) + 1;
+@@ -4690,6 +4766,21 @@
+     err = vkGetPhysicalDeviceSurfaceFormatsKHR(demo->gpu, demo->surface, &formatCount, surfFormats);
+     assert(!err);
+     VkSurfaceFormatKHR surfaceFormat = pick_surface_format(surfFormats, formatCount);
++    const char *requested_format = getenv("BC250_TEST_FORMAT");
++    if (requested_format) {
++        VkFormat requested = (VkFormat)atoi(requested_format);
++        bool found = false;
++        for (uint32_t i = 0; i < formatCount; i++) {
++            if (surfFormats[i].format == requested) {
++                surfaceFormat = surfFormats[i];
++                found = true;
++                break;
++            }
++        }
++        if (!found) exit(93);
++    }
++    printf("ORACLE_FORMAT=%u\\n", surfaceFormat.format);
++
+     demo->format = surfaceFormat.format;
+     demo->color_space = surfaceFormat.colorSpace;
+     free(surfFormats);

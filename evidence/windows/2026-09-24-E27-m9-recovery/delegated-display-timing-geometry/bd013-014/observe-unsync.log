@@ -1,0 +1,34 @@
+Extracted actual observer, timing reader, diagnostic whitelist and escape prefix
+dcn_observe_actual.c
+FAIL 182: o.Status==BC250_ESCAPE_STATUS_DONE && o.NtStatus==0
+FAIL 184: o.ValidMask==BC250_DCN_OBSERVE_VALID_ALL && reads==22
+FAIL 185: o.SequenceBefore==12 && o.SequenceAfter==12 && d.DcnSurfaceSequence==12
+FAIL 187: o.PrimaryAddressLow==((0x0EB28ul)^0x5A000001u)
+FAIL 188: o.PrimaryAddressHigh==((0x0EB2Cul)^0x5A000001u)
+FAIL 189: o.EarliestInUseLow==((0x0EB94ul)^0x5A000001u)
+FAIL 190: o.EarliestInUseHigh==((0x0EB98ul)^0x5A000001u)
+FAIL 191: o.FlipControl==((0x0EB6Cul)^0x5A000001u)
+FAIL 192: o.SurfacePitch==((0x0EB1Cul)^0x5A000001u)
+FAIL 193: o.OtgStatusPosition==((0x14028ul)^0x5A000001u)
+FAIL 194: o.OtgGlobalControl0==((0x14140ul)^0x5A000001u)
+FAIL 195: o.OtgBlankControl==((0x14008ul)^0x5A000001u)
+FAIL 196: o.OtgDoubleBufferControl==((0x1406Cul)^0x5A000001u)
+FAIL 197: o.OtgFrameCount==((0x14030ul)^0x5A000001u)
+FAIL 198: o.TimingControl==((0x14004ul)^0x5A000001u)
+FAIL 199: o.TimingHTotal==((0x13FA8ul)^0x5A000001u)
+FAIL 200: o.TimingVTotal==((0x13FBCul)^0x5A000001u)
+FAIL 201: o.TimingHBlank==((0x13FACul)^0x5A000001u)
+FAIL 202: o.TimingVBlank==((0x13FD8ul)^0x5A000001u)
+FAIL 203: o.TimingPixelControl==((0x00500ul)^0x5A000001u)
+FAIL 204: o.TimingPhase==((0x00504ul)^0x5A000001u)
+FAIL 205: o.TimingModulo==((0x00508ul)^0x5A000001u)
+FAIL 206: o.TimingInterlace==((0x14010ul)^0x5A000001u)
+FAIL 207: o.TimingVTotalControl==((0x13FCCul)^0x5A000001u)
+FAIL 208: o.TimingReference==((0x6C9FCul)^0x5A000001u)
+FAIL 209: o.SequenceAfter-o.SequenceBefore==44
+FAIL 210: o.Status==BC250_ESCAPE_STATUS_REFUSED && o.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && reads==0 && o.ValidMask==0
+FAIL 214: o.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && reads==0
+FAIL 217: o.Status==BC250_ESCAPE_STATUS_REFUSED && o.ValidMask==(BC250_DCN_OBSERVE_VALID_ALL & ~(1u<<2)) && o.EarliestInUseLow==0
+FAIL 219: o.ValidMask==((1u<<11)-1u) && o.TimingControl==0 && o.TimingReference==0
+FAIL 221: o.ValidMask==((1u<<11)-1u) && o.TimingPhase==0
+DCN observer: 104 checks, 31 failures

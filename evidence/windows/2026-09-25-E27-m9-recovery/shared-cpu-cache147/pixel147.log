@@ -1,0 +1,32 @@
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66750 ready=1
+
+task_exit=0
+displayconfig sizes flags 2 err 0 paths 1 modes 2
+displayconfig query flags 2 err 0 paths 1 modes 2
+path src 0 dst 2424833 mode 1/0 flags 1 refresh 154000000/2568800
+displayconfig sizes flags 1 err 0 paths 1 modes 2
+displayconfig query flags 1 err 0 paths 1 modes 2
+path src 0 dst 2424833 mode 1/0 flags 1 refresh 154000000/2568800
+create 00000000 level a000
+UMD_MODULE=C:\BC250\m13\mesa-cache147-umd\bc250d3d.dll
+shared second device 00000000
+shared create 00000000
+shared handle 00000000
+shared open 00000000
+completion A-clear PASS ms=0
+shared A-to-B red mismatches 0 of 2048
+completion B-clear PASS ms=0
+shared B-to-A blue mismatches 0 of 2048
+shared control PASS
+buffer 00000000
+rtv 00000000
+staging 00000000
+completion green-copy PASS ms=0
+map 00000000
+green mismatches 0 of 307200
+present 0 087a0001
+device removed 00000000
+loaded_umd_path=C:\BC250\m13\mesa-cache147-umd\bc250d3d.dll
+loaded_umd_sha256=E0ACCCB5591CD2B9C8DC78B83BF1C78DF4F7ECB001D9FA77FE1C323BC48E91CB
+CACHE147_SHARED_PIXEL_CONTROL_PASS
+now=2026-09-25T05:14:01.3279488+02:00

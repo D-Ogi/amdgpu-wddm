@@ -1,0 +1,35 @@
+PROVENANCE: Linux amdgpu (AMD MIT); local Linux6.18.0 reference, not the exact E28 Alpine6.18.52 binary.
+
+2519: 
+2520: static void
+2521: amdgpu_pci_remove(struct pci_dev *pdev)
+2522: {
+2523: 	struct drm_device *dev = pci_get_drvdata(pdev);
+2524: 	struct amdgpu_device *adev = drm_to_adev(dev);
+2525: 
+2526: 	amdgpu_ras_eeprom_check_and_recover(adev);
+2527: 	amdgpu_xcp_dev_unplug(adev);
+2528: 	amdgpu_gmc_prepare_nps_mode_change(adev);
+2529: 	drm_dev_unplug(dev);
+2530: 
+2531: 	if (adev->pm.rpm_mode != AMDGPU_RUNPM_NONE) {
+2532: 		pm_runtime_get_sync(dev->dev);
+2533: 		pm_runtime_forbid(dev->dev);
+2534: 	}
+2535: 
+2536: 	amdgpu_driver_unload_kms(dev);
+2537: 
+2538: 	/*
+2539: 	 * Flush any in flight DMA operations from device.
+2540: 	 * Clear the Bus Master Enable bit and then wait on the PCIe Device
+2541: 	 * StatusTransactions Pending bit.
+2542: 	 */
+2543: 	pci_disable_device(pdev);
+2544: 	pci_wait_for_pending_transaction(pdev);
+2545: }
+2546: 
+2547: static void
+2548: amdgpu_pci_shutdown(struct pci_dev *pdev)
+2549: {
+2550: 	struct drm_device *dev = pci_get_drvdata(pdev);
+2551: 	struct amdgpu_device *adev = drm_to_adev(dev);

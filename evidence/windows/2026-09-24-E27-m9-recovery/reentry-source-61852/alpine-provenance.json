@@ -1,0 +1,78 @@
+{
+  "commit": "09a165f4c951edf370eddde03b2d1d5fd71805ed",
+  "recipe_url": "https://raw.githubusercontent.com/alpinelinux/aports/09a165f4c951edf370eddde03b2d1d5fd71805ed/main/linux-lts/APKBUILD",
+  "pkgver": "6.18.52",
+  "pkgrel": 0,
+  "checks": [
+    {
+      "file": "0001-powerpc-boot-wrapper-Add-z-notext-flag-for-ppc64le.patch",
+      "sha512_verified": true,
+      "paths": [
+        "arch/powerpc/boot/wrapper"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "0002-x86-Compress-vmlinux-with-zstd-19-instead-of-22.patch",
+      "sha512_verified": true,
+      "paths": [
+        "arch/x86/boot/compressed/Makefile"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "0003-kexec-add-kexec_load_disabled-boot-option.patch",
+      "sha512_verified": true,
+      "paths": [
+        "init/main.c",
+        "kernel/kexec_core.c"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "0004-objtool-respect-AWK-setting.patch",
+      "sha512_verified": true,
+      "paths": [
+        "tools/objtool/Makefile"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "0005-powerpc-config-defang-gcc-check-for-stack-protector-.patch",
+      "sha512_verified": true,
+      "paths": [
+        "arch/powerpc/Kconfig"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "0001-x86-CPU-AMD-avoid-printing-reset-reasons-on-Xen-domU.patch",
+      "sha512_verified": true,
+      "paths": [
+        "arch/x86/kernel/cpu/amd.c"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "sophgo-fixes.patch",
+      "sha512_verified": true,
+      "paths": [
+        "arch/riscv/boot/dts/sophgo/sg2042.dtsi",
+        "arch/riscv/boot/dts/sophgo/sg2042-milkv-pioneer.dts",
+        "arch/riscv/boot/dts/sophgo/sg2042-evb-v1.dts",
+        "arch/riscv/boot/dts/sophgo/sg2042-evb-v2.dts",
+        "arch/riscv/boot/dts/sophgo/sg2042.dtsi",
+        "arch/riscv/boot/dts/sophgo/sg2042-milkv-pioneer.dts",
+        "arch/riscv/boot/dts/sophgo/sg2042-evb-v1.dts",
+        "arch/riscv/boot/dts/sophgo/sg2042-evb-v2.dts"
+      ],
+      "amdgpu_touched": false
+    },
+    {
+      "file": "lts.x86_64.config",
+      "sha512_verified": true,
+      "paths": [],
+      "amdgpu_touched": false
+    }
+  ]
+}

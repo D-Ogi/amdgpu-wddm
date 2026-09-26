@@ -1,0 +1,9 @@
+test.c
+UnconfirmedStarts = 0 (flushed to disk)
+CLI confirmation: 12 checks, 0 failures
+cannot write UnconfirmedStarts, error 5
+cannot persist UnconfirmedStarts = 0, flush error 1016
+bc250kmd is not installed (no HKLM\fixture-service), nothing to confirm
+cannot open HKLM\fixture-service, error 5 (is this an elevated prompt?)
+cannot open HKLM\fixture-parameters, error 5 (is this an elevated prompt?)
+Monitor confirmation: 4 checks passed

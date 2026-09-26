@@ -1,0 +1,58 @@
+é?AØè¨$ErrorActionPreference=Stop : The term 'é?AØè¨$ErrorActionPreference=Stop' is not 
+recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At C:\BC250\tmp\sdma-va129-control.ps1:1 char:1
++ é?AØè¨$ErrorActionPreference='Stop'
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (é?AØè¨$ErrorActionPreference=Stop:String) [], Comm 
+   andNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+smu GetGfxFrequency  msg=0x37 param=0 (0x0) ... response=0x01 value=1000 (0x000003E8)
+smu GetGfxVid        msg=0x38 param=0 (0x0) ... response=0x01 value=116 (0x00000074)
+clock verified: 1000 MHz, VID 116 (request 820 mV)
+installed_sha256=C4DC9A5870C0EB2D349CAB522077338B2DAC814C7A85661C71458D232AD36AE7
+input_file=llama-completion.exe sha256=181C8E6F1E18E90A8228D98BCBB0A611A8F74B8721E47B74F97B87AF7614F856
+input_file=stories15M-q4_0.gguf sha256=66967FBECE6DBE97886593FDBB73589584927E29119EC31F08090732D1861739
+input_file=tinyllama-1.1b-chat-v1.0.Q4_0.gguf sha256=DA3087FB14AEDE55FDE6EB81A0E55E886810E43509EC82ECDC7AA5D62A03B556
+boot_before=2026-09-24T11:44:14
+icd_hash=DB886B8D53E6BEE89665287AF5EE19A1868E5874868C795F6B11472FBB4A3986
+16:05:08 Tctl 66.6 C (raw 73BB0FEF)
+16:05:11 Tctl 66.6 C (raw 73BB0FEF)
+16:05:14 Tctl 66.6 C (raw 73BB0FEF)
+16:05:18 Tctl 66.6 C (raw 73BB0FEF)
+16:05:21 Tctl 66.6 C (raw 73BB0FEF)
+16:05:24 Tctl 66.8 C (raw 73DB0FEF)
+16:05:27 Tctl 66.8 C (raw 73DB0FEF)
+16:05:30 Tctl 66.8 C (raw 73DB0FEF)
+16:05:34 Tctl 66.9 C (raw 73FB0FEF)
+16:05:37 Tctl 67.0 C (raw 741B0FEF)
+16:05:40 Tctl 67.1 C (raw 743B0FEF)
+task_state=Ready
+worker_exit=0
+m8 exit=0
+mlp          n=10240     hash=0x0eb467ee3ae0f043 cpu_hash=0x0eb467ee3ae0f043 match=yes t_submit_to_idle_us=    849.4 first_words=c1568000 c1167000 bf100000 c18f1800 4122a000 bee60000 c0e08000 c15b9000 argmax_hash=0x66d441abf069e3a2 argmax_cpu=0x66d441abf069e3a2 hist=25,27,10,3,619,252,1,3,28,56
+reduce       n=1025      hash=0xe9fc02f21706317a cpu_hash=0xe9fc02f21706317a match=yes t_submit_to_idle_us=    173.3 first_words=d3f84200 a0684200 6cd84200 39484200 05b84200 d2284200 9e984200 6b084200
+
+8 test(s) run, 0 mismatch(es)
+stories15M exit=0
+stories15M reference_match
+ Once upon a time, there was a little girl named Lily. She loved to play outside and explore the world around her. One day, she went on a walk in the forest and saw a big, scary bear. She was scared and didn't know what to do.
+Suddenly, she heard a voice behind her. It was her mom! "Lily, come here right now!" her mom said. Lily turned around and saw her mom standing there
+
+tinyllama exit=0
+tinyllama reference_match
+6. The capital of Australia is Canberra.
+
+
+
+UnconfirmedStarts = 0
+
+  Id StartTime            Responding
+  -- ---------            ----------
+4448 9/24/2026 1:58:18 PM       True
+final_time=2026-09-24T16:05:42
+limited_run_complete
+boot_after=2026-09-24T11:44:14
+
+

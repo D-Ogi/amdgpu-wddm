@@ -1,0 +1,5 @@
+installed_sha256=9EE1AA001125B414DC7CBB0382ABF6838427223D8130F1A89505D402D32B69CF
+boot=2026-09-24T03:35:18
+identity_read_complete
+{"Status":"OK","Problem":0,"FriendlyName":"BC-250 GPU (bc250kmd, display-only, lab build)"}
+{"EnableFullWddm":0,"LastStage":61,"UnconfirmedStarts":0}

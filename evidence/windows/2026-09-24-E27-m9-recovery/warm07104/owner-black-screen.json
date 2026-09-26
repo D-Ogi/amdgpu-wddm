@@ -1,0 +1,23 @@
+{
+  "utc": "2026-09-24T00:23:08.381890+00:00",
+  "owner_observation": "Black screen, no response",
+  "routes": [
+    {
+      "route": 0,
+      "tcp22": false
+    },
+    {
+      "route": 1,
+      "tcp22": false
+    },
+    {
+      "route": 2,
+      "tcp22": false
+    },
+    {
+      "route": 3,
+      "tcp22": false
+    }
+  ],
+  "next_action": "One physical reset requested if all routes unavailable; recover persisted logs before GPU initialization"
+}

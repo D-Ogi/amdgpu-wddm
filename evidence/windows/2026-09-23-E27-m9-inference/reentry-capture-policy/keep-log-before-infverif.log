@@ -1,0 +1,1 @@
+ERROR(1199) in P:\bc-250\scratch\m9\keep-log-before.inf, line 0: The syntax 'DIRID 13 (CopyFiles)' was introduced in OS version 10.0.16299, but DDInstall sections utilizing the syntax will install on earlier OS versions. Those DDInstall sections should be restricted to only install on 10.0.16299 or higher using a TargetOSVersion decoration.

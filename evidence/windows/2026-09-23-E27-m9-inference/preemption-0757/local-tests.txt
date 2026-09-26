@@ -1,0 +1,7 @@
+MSVC14.44, source report DPC extracted verbatim into host harness.
+Old KMD0.7.56: FAIL line88 nr==0 && w.PreemptionPending[0] (reports preemption while HwPending=true). Exit1.
+New KMD0.7.57: PASS busy GPU, completion-before-preempt, active submit, completion arriving during report, per-node fence, overlapping DPC. Exit0.
+This is a deterministic callback/state test, not a live kernel concurrency test.
+WDKbuild, catalog and signing pass; stack largest1240bytes WddmSubmitUmd (unchanged).
+SignedSYS SHA25616FFDAA230424DC12F027890F73032EB0D06C6EF570D3A332B4EB0703618B96D
+Installedoem66.inf0.7.57.1; display-only allruntimegatesclosed,UnconfirmedStarts0 at03:56:54.

@@ -1,0 +1,29 @@
+--- a/src/vulkan/wsi/wsi_common_win32.cpp
++++ b/src/vulkan/wsi/wsi_common_win32.cpp
+@@ -957,13 +957,13 @@
+    struct wsi_win32_swapchain *chain =
+       (struct wsi_win32_swapchain *)drv_chain;
+ 
++   /* acquire timeout has to be explicitly handled for sw wsi */
++   if (!chain->dxgi)
++      return wsi_win32_acquire_idle_cpu_image(chain, info, image_index);
++
+    /* Bail early if the swapchain is broken */
+    if (chain->status != VK_SUCCESS)
+       return chain->status;
+-
+-   /* acquire timeout has to be explicitly handled for sw wsi */
+-   if (!chain->dxgi)
+-      return wsi_win32_acquire_idle_cpu_image(chain, info, image_index);
+ 
+    if (wsi_win32_find_idle_image(chain, image_index))
+       return VK_SUCCESS;
+@@ -1099,7 +1099,7 @@
+ 
+    wsi_win32_set_image_idle(chain, image);
+ 
+-   return chain->status;
++   return result;
+ }
+ 
+ static VkResult

@@ -1,0 +1,21 @@
+{
+  "e29-first-load.log": "a36f604162705be1b8545a0a6a615222876dd6cedd8162b34c3c7886a1a9791c",
+  "e29-linux-preflight-lf.log": "320be79304bf23cd036fee77347a9abc865355b53fccf8880c2eada177d82996",
+  "e29-linux-preflight-modloop.log": "df9cb282e6efc3dc5e1fe38806159a20b69a02c7f5e023df6628ab25145985a4",
+  "e29-linux-preflight.log": "acf399a581285c3c591c507994d7444aaf7526205638acaec2b6128a5f2e8178",
+  "e29-post-reset-compute.log": "e2d96d7b7b923b9ebd170c671e993db91a3c42906f8c079b5dd4ba10314c00cf",
+  "e29-prepare-trace-v2.log": "57cefd2d45ad246ae5d06c24fb5f3303d407669119886f11c328f45b3e1dca3f",
+  "e29-prepare-trace.log": "46a2df057d6476486fec0d826b82f339351426a363b9fe7fa27899047a58b919",
+  "e29-sdma-control.log": "8a6f888911b0abec9cf487b979853a8ddc560319340b991c876688e35a7ffb10",
+  "e29-sdma-delayed.log": "dbc14f112a646304636766360885224485bfe573abefee27500d0d6aab6282e9",
+  "e29-sdma-post-reset-control.log": "d6f89419df244f224c0bb9e09bd9285d4a06676b5e60b6593e8c44f5dbeb6eec",
+  "e29-switch-linux.log": "47c9a385d01395b9b8791fce9ac36caa92f839a7ddec1096776dc31989e50a13",
+  "e29-windows-preflight.log": "4fb77bc06d8a2c33857065dd8303872506ab592350782696099101c263576e94",
+  "sources/sdma-reset-probe.py": "370d663e9798d57f3aeabdd50c8cac4a7fd9b998336128941a63b2f72a34d9f4",
+  "sources/prepare-sdma-reset-trace.sh": "5b2aee7a8af7abce68a8cfce9fea692cafc98af82842a513df3f6fbca80924bd",
+  "sources/run-sdma-reset-trace.sh": "600676927d37e3b5d31b98b5450d99fc7078a62d6c4789e6e490a49103c53d27",
+  "sources/sdma-reset-probes.txt": "7e1daf017c164353b4c0084562bbcb564c9acdd17dbb5a19a7950f66b07286ea",
+  "sources/dispatch.py": "87b3a433d3ed38c35aa41ebe67def53404f5c2521c5da7314d7109b3d1488578",
+  "sources/dispatch.json": "22553bc23ed3401ec2a2b18472650296120f70b178ef1402e04833f4e35b9276",
+  "sources/packets.json": "9590d58ccaaca24c165d2c3154d5b2580b2f42c052c33a664d3e2e27e85b6740"
+}

@@ -1,0 +1,223 @@
+Source: drivers/gpu/drm/amd/amdgpu/amdgpu_device.c
+5390: /**
+5391:  * amdgpu_device_ip_check_soft_reset - did soft reset succeed
+5392:  *
+5393:  * @adev: amdgpu_device pointer
+5394:  *
+5395:  * The list of all the hardware IPs that make up the asic is walked and
+5396:  * the check_soft_reset callbacks are run.  check_soft_reset determines
+5397:  * if the asic is still hung or not.
+5398:  * Returns true if any of the IPs are still in a hung state, false if not.
+5399:  */
+5400: static bool amdgpu_device_ip_check_soft_reset(struct amdgpu_device *adev)
+5401: {
+5402: 	int i;
+5403: 	bool asic_hang = false;
+5404: 
+5405: 	if (amdgpu_sriov_vf(adev))
+5406: 		return true;
+5407: 
+5408: 	if (amdgpu_asic_need_full_reset(adev))
+5409: 		return true;
+5410: 
+5411: 	for (i = 0; i < adev->num_ip_blocks; i++) {
+5412: 		if (!adev->ip_blocks[i].status.valid)
+5413: 			continue;
+5414: 		if (adev->ip_blocks[i].version->funcs->check_soft_reset)
+5415: 			adev->ip_blocks[i].status.hang =
+5416: 				adev->ip_blocks[i].version->funcs->check_soft_reset(
+5417: 					&adev->ip_blocks[i]);
+5418: 		if (adev->ip_blocks[i].status.hang) {
+5419: 			dev_info(adev->dev, "IP block:%s is hung!\n", adev->ip_blocks[i].version->funcs->name);
+5420: 			asic_hang = true;
+5421: 		}
+5422: 	}
+5423: 	return asic_hang;
+5424: }
+5425: 
+5426: /**
+5427:  * amdgpu_device_ip_pre_soft_reset - prepare for soft reset
+5428:  *
+5429:  * @adev: amdgpu_device pointer
+5430:  *
+5431:  * The list of all the hardware IPs that make up the asic is walked and the
+5432:  * pre_soft_reset callbacks are run if the block is hung.  pre_soft_reset
+5433:  * handles any IP specific hardware or software state changes that are
+5434:  * necessary for a soft reset to succeed.
+5435:  * Returns 0 on success, negative error code on failure.
+5436:  */
+5437: static int amdgpu_device_ip_pre_soft_reset(struct amdgpu_device *adev)
+5438: {
+5439: 	int i, r = 0;
+5440: 
+5441: 	for (i = 0; i < adev->num_ip_blocks; i++) {
+5442: 		if (!adev->ip_blocks[i].status.valid)
+5443: 			continue;
+5444: 		if (adev->ip_blocks[i].status.hang &&
+5445: 		    adev->ip_blocks[i].version->funcs->pre_soft_reset) {
+5446: 			r = adev->ip_blocks[i].version->funcs->pre_soft_reset(&adev->ip_blocks[i]);
+5447: 			if (r)
+5448: 				return r;
+5449: 		}
+5450: 	}
+5451: 
+5452: 	return 0;
+5453: }
+5454: 
+5455: /**
+5456:  * amdgpu_device_ip_need_full_reset - check if a full asic reset is needed
+5457:  *
+5458:  * @adev: amdgpu_device pointer
+5459:  *
+5460:  * Some hardware IPs cannot be soft reset.  If they are hung, a full gpu
+5461:  * reset is necessary to recover.
+5462:  * Returns true if a full asic reset is required, false if not.
+5463:  */
+5464: static bool amdgpu_device_ip_need_full_reset(struct amdgpu_device *adev)
+5465: {
+5466: 	int i;
+5467: 
+5468: 	if (amdgpu_asic_need_full_reset(adev))
+5469: 		return true;
+5470: 
+5471: 	for (i = 0; i < adev->num_ip_blocks; i++) {
+5472: 		if (!adev->ip_blocks[i].status.valid)
+5473: 			continue;
+5474: 		if ((adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_GMC) ||
+5475: 		    (adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_SMC) ||
+5476: 		    (adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_ACP) ||
+5477: 		    (adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_DCE) ||
+5478: 		     adev->ip_blocks[i].version->type == AMD_IP_BLOCK_TYPE_PSP) {
+5479: 			if (adev->ip_blocks[i].status.hang) {
+5480: 				dev_info(adev->dev, "Some block need full reset!\n");
+5481: 				return true;
+5482: 			}
+5483: 		}
+5484: 	}
+5485: 	return false;
+5486: }
+5487: 
+5488: /**
+5489:  * amdgpu_device_ip_soft_reset - do a soft reset
+5490:  *
+5491:  * @adev: amdgpu_device pointer
+5492:  *
+5493:  * The list of all the hardware IPs that make up the asic is walked and the
+5494:  * soft_reset callbacks are run if the block is hung.  soft_reset handles any
+5495:  * IP specific hardware or software state changes that are necessary to soft
+5496:  * reset the IP.
+5497:  * Returns 0 on success, negative error code on failure.
+5498:  */
+5499: static int amdgpu_device_ip_soft_reset(struct amdgpu_device *adev)
+5500: {
+5501: 	int i, r = 0;
+5502: 
+5503: 	for (i = 0; i < adev->num_ip_blocks; i++) {
+5504: 		if (!adev->ip_blocks[i].status.valid)
+5505: 			continue;
+5506: 		if (adev->ip_blocks[i].status.hang &&
+5507: 		    adev->ip_blocks[i].version->funcs->soft_reset) {
+5508: 			r = adev->ip_blocks[i].version->funcs->soft_reset(&adev->ip_blocks[i]);
+5509: 			if (r)
+5510: 				return r;
+5511: 		}
+5512: 	}
+5513: 
+5514: 	return 0;
+5515: }
+5706: int amdgpu_device_mode1_reset(struct amdgpu_device *adev)
+5707: {
+5708: 	u32 i;
+5709: 	int ret = 0;
+5710: 
+5711: 	if (adev->bios)
+5712: 		amdgpu_atombios_scratch_regs_engine_hung(adev, true);
+5713: 
+5714: 	dev_info(adev->dev, "GPU mode1 reset\n");
+5715: 
+5716: 	/* Cache the state before bus master disable. The saved config space
+5717: 	 * values are used in other cases like restore after mode-2 reset.
+5718: 	 */
+5719: 	amdgpu_device_cache_pci_state(adev->pdev);
+5720: 
+5721: 	/* disable BM */
+5722: 	pci_clear_master(adev->pdev);
+5723: 
+5724: 	if (amdgpu_dpm_is_mode1_reset_supported(adev)) {
+5725: 		dev_info(adev->dev, "GPU smu mode1 reset\n");
+5726: 		ret = amdgpu_dpm_mode1_reset(adev);
+5727: 	} else {
+5728: 		dev_info(adev->dev, "GPU psp mode1 reset\n");
+5729: 		ret = psp_gpu_reset(adev);
+5730: 	}
+5731: 
+5732: 	if (ret)
+5733: 		goto mode1_reset_failed;
+5734: 
+5735: 	amdgpu_device_load_pci_state(adev->pdev);
+5736: 	ret = amdgpu_psp_wait_for_bootloader(adev);
+5737: 	if (ret)
+5738: 		goto mode1_reset_failed;
+5739: 
+5740: 	/* wait for asic to come out of reset */
+5741: 	for (i = 0; i < adev->usec_timeout; i++) {
+5742: 		u32 memsize = adev->nbio.funcs->get_memsize(adev);
+5743: 
+5744: 		if (memsize != 0xffffffff)
+5745: 			break;
+5746: 		udelay(1);
+5747: 	}
+5748: 
+5749: 	if (i >= adev->usec_timeout) {
+5750: 		ret = -ETIMEDOUT;
+5751: 		goto mode1_reset_failed;
+5752: 	}
+5753: 
+5754: 	if (adev->bios)
+5755: 		amdgpu_atombios_scratch_regs_engine_hung(adev, false);
+5756: 
+5757: 	return 0;
+5758: 
+5759: mode1_reset_failed:
+5760: 	dev_err(adev->dev, "GPU mode1 reset failed\n");
+5761: 	return ret;
+5762: }
+5830: 		return r;
+5831: 
+5832: 	/* Don't suspend on bare metal if we are not going to HW reset the ASIC */
+5833: 	if (!amdgpu_sriov_vf(adev)) {
+5834: 
+5835: 		if (!need_full_reset)
+5836: 			need_full_reset = amdgpu_device_ip_need_full_reset(adev);
+5837: 
+5838: 		if (!need_full_reset && amdgpu_gpu_recovery &&
+5839: 		    amdgpu_device_ip_check_soft_reset(adev)) {
+5840: 			amdgpu_device_ip_pre_soft_reset(adev);
+5841: 			r = amdgpu_device_ip_soft_reset(adev);
+5842: 			amdgpu_device_ip_post_soft_reset(adev);
+5843: 			if (r || amdgpu_device_ip_check_soft_reset(adev)) {
+5844: 				dev_info(adev->dev, "soft reset failed, will fallback to full reset!\n");
+5845: 				need_full_reset = true;
+5846: 			}
+5847: 		}
+5848: 
+5849: 		if (!test_bit(AMDGPU_SKIP_COREDUMP, &reset_context->flags)) {
+5850: 			dev_info(tmp_adev->dev, "Dumping IP State\n");
+5851: 			/* Trigger ip dump before we reset the asic */
+5852: 			for (i = 0; i < tmp_adev->num_ip_blocks; i++)
+5853: 				if (tmp_adev->ip_blocks[i].version->funcs->dump_ip_state)
+5854: 					tmp_adev->ip_blocks[i].version->funcs
+5855: 						->dump_ip_state((void *)&tmp_adev->ip_blocks[i]);
+5856: 			dev_info(tmp_adev->dev, "Dumping IP State Completed\n");
+5857: 		}
+5858: 
+5859: 		if (need_full_reset)
+5860: 			r = amdgpu_device_ip_suspend(adev);
+5861: 		if (need_full_reset)
+5862: 			set_bit(AMDGPU_NEED_FULL_RESET, &reset_context->flags);
+5863: 		else
+5864: 			clear_bit(AMDGPU_NEED_FULL_RESET,
+5865: 				  &reset_context->flags);
+5866: 	}
+5867: 
+5868: 	return r;

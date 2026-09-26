@@ -1,0 +1,6 @@
+# GART phase extraction plan
+
+M362 observes warm RLCbusy first after initial GFXHUB invalidation. A safe future ordering change needs a configured-but-not-yet-GFX-visible phase; no GPU consumer may treat it as full readiness.
+Extract existing hub configuration/fault defaults as bc250_gmc_gart_configure_observed. Existing enable wrapper must call it followed by the same MMHUB and GFXHUB flushes, preserving register order and original return behavior. No KMD caller or runtime policy changes in this step.
+Host test compares all register writes of ordinary enable with configure+MMflush+GFXflush from identical backend state. Require configure to perform no invalidate request/poll/semaphore accesses, preserve observer phase order, and leave both flushes in ordinary enable. Run original replay and WDK shim compile.
+Source review must cover initialGART, IH GTT allocations, GFX/SDMA setup binds, CSB domain and first consumer boundary. A later integration must defer all early GFX invalidations while retaining MMHUB visibility for IH, drain pending GFX invalidation after RLC start and before CP, and prevent publication or backing release while pending. Physical RLC CSB visibility and first/warm hardware controls remain required.

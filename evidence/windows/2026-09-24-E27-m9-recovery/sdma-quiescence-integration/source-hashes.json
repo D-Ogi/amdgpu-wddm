@@ -1,0 +1,8 @@
+{
+  "driver/shim/bc250_gfx.c": "56f618bc9a58b1fff8682d7b8b11cf157ec0ff312fe2cddd4e81d72dba9f0f4f",
+  "driver/shim/bc250_sdma.c": "1239aab171930329f0880bc13074f9fbbc5aa5142da1c12e176d53a8d767117f",
+  "driver/shim/test/replay_gfx.c": "f0044c86a13d2595f35aae2f7d22b02f1738b2c4479644d9038b756756680551",
+  "driver/kmd/gfx.c": "feb535440a34659887f4e2f05772089ee39ebd3cfdc5b48f5730e3a6c805f76e",
+  "driver/kmd/gen_regs.py": "9c7a1e3295ddc5fb208cc64bcf5f1968cf3fe38a9b31dbbb3520cce6615e51d4",
+  "driver/kmd/regs.generated.h": "0462deb252852f57a2017601fa5a952a7c490f3135a9eb837bb9cc75cfe16554"
+}

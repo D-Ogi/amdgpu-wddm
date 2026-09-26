@@ -1,0 +1,16 @@
+Extracted VramStart, framebuffer resolver, segment layout and actual GART setup caller
+vram_geometry_actual.c
+P:\bc-250\scratch\m9\vram-geometry-v1\vram_geometry_actual.c(13): error C2220: następujące ostrzeżenie jest traktowane jako błąd
+P:\bc-250\scratch\m9\vram-geometry-v1\vram_geometry_actual.c(13): warning C4005: "_In_": ponowna definicja makra
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include\sal.h(305): note: zobacz poprzednią definicję „_In_”
+P:\bc-250\scratch\m9\vram-geometry-v1\vram_geometry_actual.c(14): warning C4005: "_Inout_": ponowna definicja makra
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include\sal.h(375): note: zobacz poprzednią definicję „_Inout_”
+P:\bc-250\scratch\m9\vram-geometry-v1\vram_geometry_actual.c(15): warning C4005: "_Out_": ponowna definicja makra
+C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\include\sal.h(342): note: zobacz poprzednią definicję „_Out_”
+Host build failed
+At P:\BC-250\bc250-win\driver\kmd\test\run_vram_geometry.ps1:15 char:25
++ if($LASTEXITCODE -ne 0){throw 'Host build failed'}
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Host build failed:String) [], RuntimeException
+    + FullyQualifiedErrorId : Host build failed
+ 

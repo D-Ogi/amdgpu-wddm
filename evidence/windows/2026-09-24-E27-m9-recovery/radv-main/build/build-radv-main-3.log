@@ -1,0 +1,105 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\mesa-radv-main-build'
+[1/94] Generating src/git_sha1.h with a custom command
+[2/94] Linking static target src/amd/compiler/libaco.a
+[3/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_rmv_layer.c.obj
+[4/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_app_workarounds.c.obj
+[5/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_ctx_roll_layer.c.obj
+[6/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meson-generated_.._radv_tracepoints.c.obj
+[7/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_rra_layer.c.obj
+[8/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meson-generated_.._radv_entrypoint_tracepoints.c.obj
+[9/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_astc_decode.c.obj
+[10/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta.c.obj
+[11/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_sqtt_layer.c.obj
+[12/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meson-generated_.._layers_radv_annotate_layer.c.obj
+[13/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_utrace_layer.c.obj
+[14/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_blit.c.obj
+[15/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_bufimage.c.obj
+[16/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy_indirect_cs.c.obj
+[17/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy_vrs_htile.c.obj
+[18/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_clear_hiz.c.obj
+[19/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy_indirect_fs.c.obj
+[20/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_dcc_retile.c.obj
+[21/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_blit2d.c.obj
+[22/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_buffer.c.obj
+[23/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_decompress.c.obj
+[24/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_etc_decode.c.obj
+[25/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy.c.obj
+[26/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_clear.c.obj
+[27/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_fmask_expand.c.obj
+[28/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_fmask_copy.c.obj
+[29/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_printf.c.obj
+[30/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_resolve_fs.c.obj
+[31/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_immediate_samplers.c.obj
+[32/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_resolve_cs.c.obj
+[33/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_fast_clear.c.obj
+[34/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_resolve.c.obj
+[35/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_descriptors.c.obj
+[36/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_rt_stage_common.c.obj
+[37/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_ray_queries.c.obj
+[38/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_rt_common.c.obj
+[39/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rra_gfx12.c.obj
+[40/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rra_gfx10_3.c.obj
+[41/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_debug_hang.c.obj
+[42/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rmv.c.obj
+[43/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_debug.c.obj
+[44/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_debug_nir.c.obj
+../mesa-radv-main-20260924/src/amd/vulkan/tools/radv_debug_nir.c(391): warning C4319: "~": zero rozszerzeniem "uint32_t" do "uint64_t" większego rozmiaru
+[45/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rra.c.obj
+[46/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_spm.c.obj
+[47/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_sqtt.c.obj
+[48/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_android.c.obj
+[49/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_rt_traversal_shader.c.obj
+[50/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_acceleration_structure.c.obj
+[51/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_buffer.c.obj
+[52/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_buffer_view.c.obj
+[53/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cp_reg_shadowing.c.obj
+[54/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cp_dma.c.obj
+[55/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cs.c.obj
+[56/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptors.c.obj
+[57/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_device_memory.c.obj
+[58/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptor_pool.c.obj
+[59/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_device.c.obj
+[60/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptor_update_template.c.obj
+[61/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptor_set.c.obj
+[62/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_event.c.obj
+[63/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_host_image_copy.c.obj
+[64/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_formats.c.obj
+[65/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_image.c.obj
+[66/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_instance.c.obj
+[67/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_image_view.c.obj
+[68/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_dgc.c.obj
+[69/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cmd_buffer.c.obj
+[70/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_perfcounter.c.obj
+[71/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_binary.c.obj
+[72/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_cache.c.obj
+[73/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_compute.c.obj
+[74/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_physical_device.c.obj
+[75/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_layout.c.obj
+[76/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_queue.c.obj
+FAILED: src/amd/vulkan/vulkan_radeon.dll.p/radv_queue.c.obj 
+"cl" "-Isrc\amd\vulkan\vulkan_radeon.dll.p" "-Isrc\amd\vulkan" "-I..\mesa-radv-main-20260924\src\amd\vulkan" "-Iinclude" "-I..\mesa-radv-main-20260924\include" "-Isrc" "-I..\mesa-radv-main-20260924\src" "-Isrc\amd" "-I..\mesa-radv-main-20260924\src\amd" "-Isrc\amd\common" "-I..\mesa-radv-main-20260924\src\amd\common" "-I..\mesa-radv-main-20260924\src\amd\common\nir" "-I..\mesa-radv-main-20260924\src\amd\vulkan\winsys\common" "-I..\mesa-radv-main-20260924\src\virtio\virtio-gpu" "-Isrc\amd\compiler" "-I..\mesa-radv-main-20260924\src\amd\compiler" "-Isubprojects\zlib-1.3.1" "-I..\mesa-radv-main-20260924\subprojects\zlib-1.3.1" "-Isrc\compiler\nir" "-I..\mesa-radv-main-20260924\src\compiler\nir" "-Isrc\compiler" "-I..\mesa-radv-main-20260924\src\compiler" "-Isrc\vulkan\util" "-I..\mesa-radv-main-20260924\src\vulkan\util" "-Isrc\vulkan\wsi" "-I..\mesa-radv-main-20260924\src\vulkan\wsi" "-Isrc\vulkan\runtime" "-I..\mesa-radv-main-20260924\src\vulkan\runtime" "-Isrc\vulkan\runtime\bvh" "-I..\mesa-radv-main-20260924\src\vulkan\runtime\bvh" "-Isrc\amd\vulkan\bvh" "-Isrc\amd\vulkan\layers" "-Isrc\util" "-Isrc\util\format" "-Isrc\compiler\spirv" "/MD" "/nologo" "/utf-8" "/W2" "/std:c11" "/O2" "/Z7" "-D__STDC_CONSTANT_MACROS" "-D__STDC_FORMAT_MACROS" "-D__STDC_LIMIT_MACROS" "-DPACKAGE_VERSION=\"26.3.0-devel\"" "-DHAVE_OPENGL=1" "-DHAVE_OPENGL_ES_1=1" "-DHAVE_OPENGL_ES_2=1" "-DMESA_SYSTEM_HAS_KMS_DRM=0" "-DVIDEO_CODEC_VC1DEC=0" "-DVIDEO_CODEC_H264DEC=0" "-DVIDEO_CODEC_H264ENC=0" "-DVIDEO_CODEC_H265DEC=0" "-DVIDEO_CODEC_H265ENC=0" "-DVIDEO_CODEC_AV1DEC=0" "-DVIDEO_CODEC_AV1ENC=0" "-DVIDEO_CODEC_VP9DEC=0" "-DVIDEO_CODEC_MPEG12DEC=0" "-DVIDEO_CODEC_JPEGDEC=0" "-DHAVE_WINDOWS_PLATFORM" "-DUSE_LIBGLVND=0" "-DUSE_D3D12_PREVIEW_HEADERS=0" "-DHAVE_VULKAN_DX" "-DHAVE_GFX_COMPUTE" "-DGLAPI_EXPORT_PROTO_ENTRY_POINTS=1" "-DALLOW_KCMP" "-DMESA_DEBUG=0" "-D_WIN32_WINNT=0x0A00" "-DWINVER=0x0A00" "-D_USE_MATH_DEFINES" "-D_CRT_NONSTDC_NO_DEPRECATE" "-D_CRT_SECURE_NO_WARNINGS" "-D_CRT_SECURE_NO_DEPRECATE" "-D_SCL_SECURE_NO_WARNINGS" "-D_SCL_SECURE_NO_DEPRECATE" "-D_ALLOW_KEYWORD_MACROS" "-D_HAS_EXCEPTIONS=0" "-DNOMINMAX" "-D_UCRT_NOISY_NAN" "-DUSE_SSE41" "-DMISSING_64BIT_ATOMICS" "-DHAVE_STRTOF" "-DHAVE_QSORT_S" "-DHAVE_STRUCT_TIMESPEC" "-DHAVE_ZLIB" "-DHAVE_COMPRESSION" "-DWIN32_LEAN_AND_MEAN" "-DDRAW_LLVM_AVAILABLE=0" "-DAMD_LLVM_AVAILABLE=0" "-DGALLIVM_USE_ORCJIT=0" "-DTHREAD_SANITIZER=0" "-DHAVE_RENDERDOC_INTEGRATION=0" "/wd4018" "/wd4056" "/wd4244" "/wd4267" "/wd4305" "/wd4351" "/wd4756" "/wd4800" "/wd4291" "/wd4146" "/wd4200" "/wd4624" "/wd4309" "/wd4838" "/wd5105" "/we4020" "/we4024" "/we4189" "/Zc:__cplusplus" "/Zc:enumTypes" "/Zc:preprocessor" "-DNO_REGEX" "-DVK_USE_PLATFORM_WIN32_KHR" "-DXXH_FORCE_ALIGN_CHECK=0" "-DXXH_FORCE_MEMORY_ACCESS=0" "/showIncludes" "/I..\mesa-radv-main-20260924\subprojects\DirectX-Headers-1.0\include" "/Fdsrc\amd\vulkan\vulkan_radeon.dll.p\radv_queue.c.pdb" /Fosrc/amd/vulkan/vulkan_radeon.dll.p/radv_queue.c.obj "/c" ../mesa-radv-main-20260924/src/amd/vulkan/radv_queue.c
+../mesa-radv-main-20260924/src/amd/vulkan/radv_queue.c(1897): error C4189: "device": lokalna zmienna jest zainicjowana, ale nie ma odwołania
+[77/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_sampler.c.obj
+[78/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_sdma.c.obj
+[79/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader_args.c.obj
+[80/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_rt.c.obj
+[81/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader_info.c.obj
+[82/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader_object.c.obj
+[83/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_video.c.obj
+[84/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_query.c.obj
+[85/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_graphics.c.obj
+[86/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline.c.obj
+[87/94] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader.c.obj
+ninja: build stopped: subcommand failed.

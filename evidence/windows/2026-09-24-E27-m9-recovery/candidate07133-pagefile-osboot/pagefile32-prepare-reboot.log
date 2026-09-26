@@ -1,0 +1,20 @@
+
+
+Name        : C:\pagefile.sys
+InitialSize : 32768
+MaximumSize : 32768
+
+
+
+
+
+Name              : C:\pagefile.sys
+AllocatedBaseSize : 7936
+CurrentUsage      : 70
+PeakUsage         : 90
+
+
+
+pagefile32_configuration_verified_activation_pending_reboot
+UnconfirmedStarts = 0
+Reboot requested for pagefile activation and133 OS startup test at 2026-09-24T18:23:08

@@ -1,0 +1,12 @@
+mmRLC_CP_SCHEDULERS: mm=0x4CAA seg1=0xA000 -> BAR5+0x3B2A8
+mmRLC_CNTL: mm=0x4C00 seg1=0xA000 -> BAR5+0x3B000
+mmRLC_STAT: mm=0x4C04 seg1=0xA000 -> BAR5+0x3B010
+mmRLC_SPM_MC_CNTL: mm=0x4C71 seg1=0xA000 -> BAR5+0x3B1C4
+
+        modprobe-3207    [004] .....   166.103616: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000001 mmRLC_CNTL
+        modprobe-3207    [004] .....   166.103616: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000000 mmRLC_CNTL
+        modprobe-3207    [004] .....   166.103622: amdgpu_device_rreg: 0x13fe, 0x0000ec71, 0x00000000 mmRLC_SPM_MC_CNTL
+        modprobe-3207    [004] .....   166.103623: amdgpu_device_wreg: 0x13fe, 0x0000ec71, 0x0000000f mmRLC_SPM_MC_CNTL
+        modprobe-3207    [004] .....   166.103624: amdgpu_device_rreg: 0x13fe, 0x0000ec00, 0x00000000 mmRLC_CNTL
+        modprobe-3207    [004] .....   166.103624: amdgpu_device_wreg: 0x13fe, 0x0000ec00, 0x00000001 mmRLC_CNTL
+        modprobe-3207    [004] .....   166.103677: amdgpu_device_rreg: 0x13fe, 0x0000ecaa, 0x58504840 mmRLC_CP_SCHEDULERS

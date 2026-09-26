@@ -1,0 +1,12 @@
+paging_permutation.c
+paging_graph_normalize_bench.c
+Generowanie kodu...
+pages=32 trial=0 per_band_s=0.000000 shared_s=0.000000 semantic_match=yes hash=1591fcc537bf54a3
+pages=32 trial=1 per_band_s=0.000000 shared_s=0.000000 semantic_match=yes hash=1591fcc537bf54a3
+pages=32 trial=2 per_band_s=0.000000 shared_s=0.000000 semantic_match=yes hash=1591fcc537bf54a3
+pages=4096 trial=0 per_band_s=0.001000 shared_s=0.000000 semantic_match=yes hash=ab3da03ac546f623
+pages=4096 trial=1 per_band_s=0.001000 shared_s=0.001000 semantic_match=yes hash=ab3da03ac546f623
+pages=4096 trial=2 per_band_s=0.002000 shared_s=0.000000 semantic_match=yes hash=ab3da03ac546f623
+pages=262144 trial=0 per_band_s=0.179000 shared_s=0.047000 semantic_match=yes hash=4adbdb6137e61623
+pages=262144 trial=1 per_band_s=0.193000 shared_s=0.048000 semantic_match=yes hash=4adbdb6137e61623
+pages=262144 trial=2 per_band_s=0.187000 shared_s=0.048000 semantic_match=yes hash=4adbdb6137e61623

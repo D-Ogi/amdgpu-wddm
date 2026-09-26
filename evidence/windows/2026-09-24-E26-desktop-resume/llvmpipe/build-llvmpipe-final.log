@@ -1,0 +1,24 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\mesa-llvmpipe-build'
+[1/11] Generating src/git_sha1.h with a custom command
+[2/9] Generating src/gallium/targets/d3d10umd/d3d10.def with a custom command
+[3/9] Compiling C object src/gallium/targets/d3d10umd/bc250d3d.dll.p/d3d10_gdi.c.obj
+[4/9] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/D3DKMT.cpp.obj
+[5/9] Compiling C++ object src/gallium/frontends/d3d10umd/libd3d10umd.a.p/DxgiFns.cpp.obj
+[6/9] Linking static target src/gallium/frontends/d3d10umd/libd3d10umd.a
+[7/9] Compiling C object src/compiler/nir/libnir.a.p/meson-generated_.._nir_opt_algebraic.c.obj
+[8/9] Linking static target src/compiler/nir/libnir.a
+[9/9] Linking target src/gallium/targets/d3d10umd/bc250d3d.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d.exp
+

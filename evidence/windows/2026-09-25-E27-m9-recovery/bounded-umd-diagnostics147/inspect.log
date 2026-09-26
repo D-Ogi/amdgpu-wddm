@@ -1,0 +1,8 @@
+now=2026-09-25T05:21:29.5572754+02:00
+[{"ProcessName":"bc250mon","Id":4432,"StartTime":"\/Date(1790301538827)\/","Responding":true},{"ProcessName":"dwm","Id":3636,"StartTime":"\/Date(1790306438546)\/","Responding":true},{"ProcessName":"LogonUI","Id":12212,"StartTime":"\/Date(1790303475515)\/","Responding":true}]
+health abi=1 version=0x00070093 flags=7 generation=49529103383 epoch=5 completed=26 age_ms=19719 ready_ms=50162
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66625 ready=1
+pid=3636 module=C:\BC250\m13\mesa-quiet147-umd\bc250d3d.dll
+hash=FF864DB8CBD6512DDD5538941A6332A9F85AF0D6EA287A5C3FC4A2C2C771E6D5
+pid=12212 module=C:\BC250\m13\mesa-quiet147-umd\bc250d3d.dll
+hash=FF864DB8CBD6512DDD5538941A6332A9F85AF0D6EA287A5C3FC4A2C2C771E6D5

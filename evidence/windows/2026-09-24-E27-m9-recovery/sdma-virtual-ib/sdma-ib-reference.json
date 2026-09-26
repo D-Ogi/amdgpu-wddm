@@ -1,0 +1,6 @@
+{
+  "source": "P:\\BC-250\\bc250-win\\driver\\amdgpu-import\\reference\\sdma_v5_0.c",
+  "source_sha256": "e722182d9ce9398369cc5af7ed8fb9ead7dd37d2554051c292ce01c4bbc27349",
+  "function": "sdma_v5_0_ring_emit_ib",
+  "adaptation": "test job/IB types; caller-supplied CSA; single-word NOP mode; function name only changed"
+}

@@ -1,0 +1,158 @@
+{
+  "residency": [
+    {
+      "name": "vram64k",
+      "bytes": 65536,
+      "cycles": 3,
+      "gpu_readbacks": [
+        [
+          "65536",
+          "1"
+        ],
+        [
+          "65536",
+          "2"
+        ],
+        [
+          "65536",
+          "3"
+        ],
+        [
+          "65536",
+          "4"
+        ]
+      ],
+      "departure_status": [
+        "2",
+        "2",
+        "2"
+      ],
+      "cumulative_gfx": [
+        "4",
+        "4",
+        "0",
+        "0"
+      ],
+      "cumulative_sdma": [
+        "1012",
+        "1012",
+        "0",
+        "0"
+      ],
+      "bulk_resident_ms": [
+        "0",
+        "0",
+        "15"
+      ],
+      "physical_endpoints_verified": false,
+      "shader_cache_policy_verified": false
+    },
+    {
+      "name": "warm64k",
+      "bytes": 65536,
+      "cycles": 3,
+      "gpu_readbacks": [
+        [
+          "65536",
+          "1"
+        ],
+        [
+          "65536",
+          "2"
+        ],
+        [
+          "65536",
+          "3"
+        ],
+        [
+          "65536",
+          "4"
+        ]
+      ],
+      "departure_status": [
+        "2",
+        "2",
+        "2"
+      ],
+      "cumulative_gfx": [
+        "4",
+        "4",
+        "0",
+        "0"
+      ],
+      "cumulative_sdma": [
+        "1327",
+        "1327",
+        "0",
+        "0"
+      ],
+      "bulk_resident_ms": [
+        "0",
+        "0",
+        "0"
+      ],
+      "physical_endpoints_verified": false,
+      "shader_cache_policy_verified": false
+    },
+    {
+      "name": "warm1g",
+      "bytes": 1073741824,
+      "cycles": 3,
+      "gpu_readbacks": [
+        [
+          "1073741824",
+          "1024"
+        ],
+        [
+          "1073741824",
+          "2048"
+        ],
+        [
+          "1073741824",
+          "3072"
+        ],
+        [
+          "1073741824",
+          "4096"
+        ]
+      ],
+      "departure_status": [
+        "3",
+        "3",
+        "3"
+      ],
+      "cumulative_gfx": [
+        "4100",
+        "4100",
+        "0",
+        "0"
+      ],
+      "cumulative_sdma": [
+        "171776",
+        "171776",
+        "0",
+        "0"
+      ],
+      "bulk_resident_ms": [
+        "7750",
+        "7406",
+        "7313"
+      ],
+      "physical_endpoints_verified": false,
+      "shader_cache_policy_verified": false
+    }
+  ],
+  "models": {
+    "stories15M": {
+      "normalized_sha256": "9a75289c5ee188d7abac6742089288116fe15fc5cf81e439741e0e524540d4e6",
+      "offload": "offloaded 7/7 layers to GPU",
+      "reference": "bc250-win\\evidence\\linux\\2026-09-21-E14-vulkan-compute-reference\\llama\\stories15M-ngl99.out"
+    },
+    "tinyllama": {
+      "normalized_sha256": "8a5491652c871b517bb0074b17afe8dd67ebb7ed74c592ed77a6ae5fa2981518",
+      "offload": "offloaded 23/23 layers to GPU",
+      "reference": "bc250-win\\evidence\\linux\\2026-09-21-E14-vulkan-compute-reference\\llama\\tinyllama-ngl99.out"
+    }
+  },
+  "m8_matches": 8
+}

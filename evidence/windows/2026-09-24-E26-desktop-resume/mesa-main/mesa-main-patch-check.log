@@ -1,0 +1,2 @@
+error: patch failed: src/gallium/auxiliary/nir/tgsi_to_nir.c:1338
+error: src/gallium/auxiliary/nir/tgsi_to_nir.c: patch does not apply

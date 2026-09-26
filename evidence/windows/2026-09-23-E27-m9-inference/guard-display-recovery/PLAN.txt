@@ -1,0 +1,3 @@
+Hypothesis: current Stage90/counter2 is the start guard, and one PnP restart with all hardware gates closed and counter confirmed restores display-only diagnostic escapes.
+Procedure: installed 0.7.101.1, no deployment; STOP/overlay, 1000 MHz/820 mV and <85 C preflight; procedure.ps1; no reboot or full GPU initialization.
+Expected: same boot, PnP OK, Stage50 and info/log success. Failure: preserve output; no automatic retry. This does not test KIQ or full WDDM.

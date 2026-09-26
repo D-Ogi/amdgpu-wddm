@@ -1,0 +1,84 @@
+[
+  {
+    "name": "graphics",
+    "title": "Active graphics pipeline",
+    "order": 12,
+    "rows": [
+      [
+        "DWM",
+        "PID 2140, since 13:52:06",
+        "Info"
+      ],
+      [
+        "D3D UMD",
+        "bc250d3d / llvm23-umd",
+        "Info"
+      ],
+      [
+        "Build hash",
+        "916D14B8CF3A",
+        "Info"
+      ],
+      [
+        "Renderer",
+        "Mesa llvmpipe",
+        "Info"
+      ],
+      [
+        "Draws",
+        "CPU software rendering (JIT)",
+        "Warn"
+      ],
+      [
+        "Shaders",
+        "LLVM 23.1.2 / native CPU code",
+        "Info"
+      ],
+      [
+        "UMD build",
+        "rotation + fence + TGSI/NIR",
+        "Info"
+      ],
+      [
+        "KMD module",
+        "bc250kmd 0x0007007F",
+        "Info"
+      ],
+      [
+        "KMD table",
+        "full WDDM",
+        "Info"
+      ],
+      [
+        "Scanout",
+        "DCN flip + hardware VSync",
+        "Info"
+      ],
+      [
+        "HW flips",
+        "79",
+        "Info"
+      ],
+      [
+        "Window Blt",
+        "CPU copy enabled; 2 blits",
+        "Info"
+      ],
+      [
+        "GPU compute",
+        "0/0 fences completed",
+        "Info"
+      ],
+      [
+        "Paging",
+        "SDMA 739/739",
+        "Info"
+      ],
+      [
+        "Sampled",
+        "13:53:06 (5 s poll)",
+        "Info"
+      ]
+    ]
+  }
+]

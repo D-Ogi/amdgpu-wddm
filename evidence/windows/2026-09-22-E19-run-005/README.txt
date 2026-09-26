@@ -1,4 +1,4 @@
-E19 runs 002 to 005, 2026-09-22 00:34 to 01:19: stage C of ADR 0008. bc250kmd 0.7.13 (commit ab8f864, .sys sha256
+E19 runs 002 to 005, 2026-09-22 00:34 to 01:19: stage C of ADR 0008. bc250kmd 0.7.13 (commit 898706c, .sys sha256
 prefix 9692e1996355551d, package-umd 0.7.13.1), full WDDM table, EnableGpuVa = EnableGpuSubmit = 1, engine gates open.
 The *-console.txt files are the driving scripts' filtered output (scratch\tmp\e19_run2.sh .. e19_run5.sh); the other
 files are the target's own logs of the same steps, selected by time.

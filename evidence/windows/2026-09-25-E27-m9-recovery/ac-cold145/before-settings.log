@@ -1,0 +1,36 @@
+
+
+UnconfirmedStarts    : 0
+LastStage            : 50
+StageHistory         : 10 20 30 31 32 33 34 35 39 50 
+EnableMmio           : 1
+EnableMmioWrite      : 0
+EnableVram           : 1
+EnableVramWrite      : 1
+EnableGart           : 1
+EnablePsp            : 1
+EnableGfx            : 1
+EnableIh             : 1
+EnableFullWddm       : 2
+KeepLog              : 1
+KeepStatus           : 0
+EnableGpuVa          : 1
+EnableGpuSubmit      : 1
+EnablePresentBlit    : 1
+EnableDcnWrite       : 1
+EnablePagingNode     : 1
+EnableVidPnFlip      : 1
+EnableRlcReloadReset : 0
+EnableSdmaIbControl  : 0
+EnableSdmaVaControl  : 0
+EnableNativeSmu      : 1
+PSPath               : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentContro
+                       lSet\Services\bc250kmd\Parameters
+PSParentPath         : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SYSTEM\CurrentContro
+                       lSet\Services\bc250kmd
+PSChildName          : Parameters
+PSDrive              : HKLM
+PSProvider           : Microsoft.PowerShell.Core\Registry
+
+
+

@@ -1,0 +1,31 @@
+﻿time 2026-09-22T23:06:37  phase gate mesa-color-restored
+gate     EnableGpuVa 0  EnableVramWrite 0  EnableGpuSubmit 0  EnablePresentBlit 0  EnablePagingNode 0  EnableDcnWrite 0  EnableVidPnFlip 0
+disable: Microsoft PnP Utility Disabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device disabled successfully.
+enable:  Microsoft PnP Utility Enabling device: PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19caf403&0&0041 Device enabled successfully.
+boot     2026-09-22T22:14:36
+device   BC-250 GPU (bc250kmd, display-only, lab build)   status OK   problem CM_PROB_NONE
+driver   0.7.48.1   (oem57.inf)
+umd      UserModeDriverName bc250umd.dll | bc250umd.dll | bc250umd.dll
+stages   last 61   history 10 20 30 31 32 33 34 35 39 50 60 61    unconfirmed 2
+keeplog  KeepLog 0  KeepStatus 0x00000000  files 95
+gates    EnableFullWddm 0  EnableMmio 0  EnableVram 0  EnableGart 0  EnablePsp 0  EnableGfx 0  EnableIh 0
+gates    EnableDcnWrite 0  EnableVidPnFlip 0
+video    BC-250 GPU (bc250kmd, display-only, lab build) | status OK | availability 3 | mode 1920 x 1200 x 4294967296 colors | ram 0 | dll bc250umd.dll,bc250umd.dll,bc250umd.dll
+events   Display 4101 (TDR)     0
+events   BugCheck 1001          0
+events   Kernel-PnP errors      0
+events   dwm / Dwminit          219
+reports  live kernel reports written since boot: 0
+dwm      1 process(es), started 23:06:12
+# adapter    BC-250 GPU (bc250kmd, display-only, lab build)
+# hardware   PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00
+# interface  \\?\pci#ven_1002&dev_13fe&subsys_00001022&rev_00#4&19caf403&0&0041#{1ca05180-a699-450a-9a0c-de4fbe3ddd89}
+D3DKMTOpenAdapterFromDeviceName -> 0x00000000 STATUS_SUCCESS
+# adapter    handle 0x40000000 luid 00000000-00D8E16D
+D3DKMTEscape(D3DKMT_ESCAPE_DRIVERPRIVATE, BC250_ESCAPE_GET_INFO) -> 0x00000000 STATUS_SUCCESS
+version      0x00070030 (milestone 7 revision 48)
+last stage   61 first present done
+mode         1920x1200 pitch 7680 format 22 (display-only)
+presents     80
+counters     blits 0, flips 0 (the full table's own present counters; both stay 0 in display-only mode)
+gates        mmio closed, mmio writes off, vram closed, vram writes off, gart closed, psp closed, gfx closed, ih closed
