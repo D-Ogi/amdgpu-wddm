@@ -1,0 +1,2 @@
+bu dxgi+0x49a0 ".if (@edx == 0x887a0025) {.echo MODE CHANGE STACK; kb; qd} .else {gc}"
+g

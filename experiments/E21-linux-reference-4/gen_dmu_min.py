@@ -1,8 +1,12 @@
 # Minimal DMU register set for the pre-driver read (session plan section 5), resolved through regcalc.
-import json, sys, io
-sys.path.insert(0, "P:/BC-250/bc250-win/tools/regcalc")
+# BC250_ROOT is the workspace root, by default the parent directory of this repository.
+import json, sys, io, os
+from pathlib import Path
+ROOT = Path(os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent)))
+REPO = ROOT / "bc250-win"
+sys.path.insert(0, str(REPO / "tools" / "regcalc"))
 from regcalc import RegMap
-rm = RegMap(ip="DMU", reg_header="P:/BC-250/bc250-win/third_party/linux-amdgpu/dcn_2_0_1_offset.h")
+rm = RegMap(ip="DMU", reg_header=str(REPO / "third_party" / "linux-amdgpu" / "dcn_2_0_1_offset.h"))
 names = []
 for n in range(4):
     for r in ("DCSURF_PRIMARY_SURFACE_ADDRESS", "DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH", "DCSURF_SURFACE_INUSE",
@@ -25,7 +29,8 @@ for n in names:
     except Exception:
         missing.append(n); continue
     regs.append(["DMU", n, off]); lists.append([n, off])
-io.open("P:/BC-250/scratch/lx/extra/dmusweep.json", "w").write(json.dumps({"regs": regs}, indent=0))
-io.open("P:/BC-250/scratch/lx/extra/dmulists.json", "w").write(json.dumps({"state": lists}, indent=0))
+extra = ROOT / "scratch" / "lx" / "extra"
+io.open(str(extra / "dmusweep.json"), "w").write(json.dumps({"regs": regs}, indent=0))
+io.open(str(extra / "dmulists.json"), "w").write(json.dumps({"state": lists}, indent=0))
 print(len(regs), "registers;", "NOT FOUND:", missing)
 for r in regs[:3]: print(r)

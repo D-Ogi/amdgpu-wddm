@@ -1,0 +1,68 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
+@@ -867,7 +867,7 @@
+    status = WDDM2_DISPATCH(SubmitCommand(&cmd));
+    if (!NT_SUCCESS(status))
+       fprintf(stderr, "bc250: SubmitCommand 0x%X (%u ibs packed, %u bytes)\n", status, n, bytes);
+-   else {
++   else if (ws->bc250_trace_submits) {
+       const uint32_t *dw = NULL;
+       if (n == 1 && ibs[0].bo)
+          dw = (const uint32_t *)((uint8_t *)ws->base.buffer_map(&ws->base, ibs[0].bo, false, NULL) +
+@@ -973,8 +973,10 @@
+        * A separate BO/fence per queue prevents cross-context overwrite. */
+       uint64_t pending_value = queue->bc250_progress.wait_value;
+       uint64_t observed = p_atomic_read(queue->bc250_progress.value_map);
+-      fprintf(stderr, "bc250: progress before submit previous=%" PRIu64 " observed=%" PRIu64
+-                      " waits=%u signals=%u\n", pending_value, observed, wait_count, signal_count);
++      /* Keep one queue identity witness, without formatting every hot-path submit. */
++      if (ctx->ws->bc250_trace_submits || pending_value == 0)
++         fprintf(stderr, "bc250: progress before submit previous=%" PRIu64 " observed=%" PRIu64
++                         " waits=%u signals=%u\n", pending_value, observed, wait_count, signal_count);
+       if (pending_value && !vk_wddm2_fence_wait(ctx->ws->device_h, &queue->bc250_progress))
+          return VK_ERROR_DEVICE_LOST;
+       status = radv_wddm2_bc250_submit(ctx, queue, submit);
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -1,3 +1,4 @@
++#include <stdlib.h>
+ /*
+  * Copyright © 2020 Valve Corporation
+  *
+@@ -766,6 +767,8 @@
+    ws->debug_all_bos = !!(debug_flags & RADV_DEBUG_ALL_BOS);
+    ws->debug_log_bos = debug_flags & RADV_DEBUG_HANG;
+    ws->dump_ibs = !!(debug_flags & RADV_DEBUG_DUMP_IBS);
++   const char *trace_submits = getenv("BC250_TRACE_SUBMITS");
++   ws->bc250_trace_submits = trace_submits && strcmp(trace_submits, "1") == 0;
+    radv_winsys_bo_list_init(&ws->global_bo_list);
+    radv_winsys_bo_log_init(&ws->bo_log, debug_flags);
+ 
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+@@ -51,6 +51,7 @@
+    bool debug_log_bos;
+    bool chain_ib;
+    bool dump_ibs;
++   bool bc250_trace_submits; /* optional hot-path diagnostic output */
+    bool bc250; /* caps blob was ours; allocate/context/submit use the BC2* contract */
+ 
+    uint32_t adapter_h;
+--- a/src/vulkan/util/vk_async_event.c
++++ b/src/vulkan/util/vk_async_event.c
+@@ -68,14 +68,13 @@
+ 
+ #ifdef _WIN32
+    DWORD ret = WaitForSingleObject(event, rel_timeout_ms);
+-   fprintf(stderr, "WaitForSingleObject: 0x%X\n", ret);
+    switch (ret) {
+    case WAIT_TIMEOUT:
+-      fprintf(stderr, "TIMEOUT\n");
+       return VK_TIMEOUT;
+    case WAIT_OBJECT_0:
+       return VK_SUCCESS;
+    default:
++      fprintf(stderr, "WaitForSingleObject failed: 0x%X\n", ret);
+       return VK_ERROR_UNKNOWN;
+    }
+ #else

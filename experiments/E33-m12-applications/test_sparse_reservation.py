@@ -1,5 +1,7 @@
 from pathlib import Path
-import argparse
+import argparse,os
+# BC250_ROOT is the workspace root, by default the parent directory of this repository.
+ROOT=os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent))
 args=argparse.ArgumentParser()
 args.add_argument('--source',type=Path,required=True)
 args.add_argument('--out',type=Path,required=True)
@@ -91,13 +93,13 @@ int main(void){
 cmd=r'''@echo off
 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 if errorlevel 1 exit /b 1
-set TEMP=P:\bc-250\scratch\tmp
+set TEMP=ROOTDIR\scratch\tmp
 set TMP=%TEMP%
-cl /nologo /TC /W3 /I P:\bc-250\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um /I P:\bc-250\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared /FoP:\bc-250\scratch\m12\sparse-reserve\reserve-test.obj /FeP:\bc-250\scratch\m12\sparse-reserve\reserve-test.exe P:\bc-250\scratch\m12\sparse-reserve\reserve-test.c
+cl /nologo /TC /W3 /I ROOTDIR\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um /I ROOTDIR\toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\shared /FoOUTDIR\reserve-test.obj /FeOUTDIR\reserve-test.exe OUTDIR\reserve-test.c
 if errorlevel 1 exit /b 1
-P:\bc-250\scratch\m12\sparse-reserve\reserve-test.exe
+OUTDIR\reserve-test.exe
 exit /b %errorlevel%
 '''
-cmd=cmd.replace('P:\\bc-250\\scratch\\m12\\sparse-reserve',str(w))
+cmd=cmd.replace('ROOTDIR',ROOT).replace('OUTDIR',str(w))
 (w/'run.cmd').write_text(cmd,newline='\n')
 print('Extracted production reserve and release call using actual WDK declarations')

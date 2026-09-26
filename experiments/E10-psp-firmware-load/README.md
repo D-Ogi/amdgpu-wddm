@@ -28,7 +28,7 @@ of amdgpu's PSP phase, reads included, against a strict model of the PSP. The dr
 `g_MmioPspAllow` only (generated from the trace: the five mailbox registers).
 
 Firmware: linux-firmware `amdgpu/cyan_skillfish2_{sdma,sdma1,ce,pfp,me,mec,mec2,rlc}.bin`, kept outside the
-repository (`P:\BC-250\ref\linux-firmware`, commit and sha256 in `PROVENANCE.txt` there). Header versions
+repository (`P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit`, commit and sha256 in `PROVENANCE.txt` there). Header versions
 equal what amdgpu reported on unit A (E01: ME 0x63, PFP 0x94, CE 0x25, RLC 0x0d, MEC 0x90). The driver
 reads them from `C:\BC250\firmware\` on the target.
 

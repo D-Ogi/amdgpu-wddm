@@ -1,0 +1,415 @@
+diff --git a/src/gallium/frontends/d3d10umd/Device.cpp b/src/gallium/frontends/d3d10umd/Device.cpp
+index 101a121..bc20738 100644
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -130,6 +130,18 @@ CreateDevice(D3D10DDI_HADAPTER hAdapter,                 // IN
+    Device *pDevice = CastDevice(pCreateData->hDrvDevice);
+    memset(pDevice, 0, sizeof *pDevice);
+ 
++   // E26: DWM requests runtime synchronization while creating its primary,
++   // before the first Present. Register a virtual context at device creation
++   // so the runtime has a context for its broadcast synchronization callbacks.
++   if (!pCreateData->pKTCallbacks->pfnCreateContextVirtualCb) return E_NOTIMPL;
++   D3DDDICB_CREATECONTEXTVIRTUAL context = {};
++   context.EngineAffinity = 1;
++   HRESULT contextResult = pCreateData->pKTCallbacks->pfnCreateContextVirtualCb(
++       (HANDLE)pCreateData->hRTDevice.handle, &context);
++   DebugPrintf("BC250 initial CreateContextVirtual %08lx\n", contextResult);
++   if (FAILED(contextResult)) return contextResult;
++   pDevice->hContext = context.hContext;
++
+    struct pipe_screen *screen = pAdapter->screen;
+    struct pipe_context *pipe = screen->context_create(screen, NULL, 0);
+    pDevice->pipe = pipe;
+@@ -294,14 +306,8 @@ CreateDevice(D3D10DDI_HADAPTER hAdapter,                 // IN
+    pCreateData->DXGIBaseDDI.pDXGIDDIBaseFunctions->pfnBlt =
+       _Blt;
+ 
+-   if (0) {
+-      return S_OK;
+-   } else {
+-      // Tell DXGI to not use the shared resource presentation path when
+-      // communicating with DWM:
+-      // http://msdn.microsoft.com/en-us/library/windows/hardware/ff569887(v=vs.85).aspx
+-      return DXGI_STATUS_NO_REDIRECTION;
+-   }
++   // E26: the linear shared-resource path is implemented for the tested formats.
++   return S_OK;
+ }
+ 
+ 
+@@ -360,6 +366,16 @@ DestroyDevice(D3D10DDI_HDEVICE hDevice)   // IN
+    pipe->set_sampler_views(pipe, MESA_SHADER_GEOMETRY, 0,
+                            PIPE_MAX_SHADER_SAMPLER_VIEWS, 0, sampler_views);
+ 
++   if (pDevice->hContext) {
++      D3DDDICB_DESTROYCONTEXT destroy = {};
++      destroy.hContext = pDevice->hContext;
++      pDevice->KTCallbacks.pfnDestroyContextCb(pDevice->hDevice, &destroy);
++   }
++   if (pDevice->pagingQueue) {
++      D3DDDI_DESTROYPAGINGQUEUE destroy = {};
++      destroy.hPagingQueue = pDevice->pagingQueue;
++      pDevice->KTCallbacks.pfnDestroyPagingQueueCb(pDevice->hDevice, &destroy);
++   }
+    pipe->destroy(pipe);
+ }
+ 
+diff --git a/src/gallium/frontends/d3d10umd/DxgiFns.cpp b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+index ea61523..ac666c2 100644
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -39,6 +39,8 @@
+ #include "Debug.h"
+ 
+ #include "util/format/u_format.h"
++#include "util/u_inlines.h"
++#include "frontend/winsys_handle.h"
+ 
+ 
+ /*
+@@ -52,6 +54,91 @@
+  * ----------------------------------------------------------------------
+  */
+ 
++HRESULT Bc250EnsureSurface(Device *device, Resource *resource)
++{
++   if (!resource || !resource->resource) return E_INVALIDARG;
++   if (resource->presentReady) return S_OK;
++   UINT width = resource->resource->width0, height = resource->resource->height0;
++   if (!width || !height || width > 8192 || height > 8192) return E_INVALIDARG;
++   if (!device->pagingQueue) {
++      if (!device->KTCallbacks.pfnCreatePagingQueueCb) return E_NOTIMPL;
++      D3DDDICB_CREATEPAGINGQUEUE queue = {};
++      queue.Priority = D3DDDI_PAGINGQUEUE_PRIORITY_NORMAL;
++      HRESULT hr = device->KTCallbacks.pfnCreatePagingQueueCb(device->hDevice, &queue);
++      DebugPrintf("BC250 CreatePagingQueue %08lx\n", hr);
++      if (FAILED(hr)) return hr;
++      device->pagingQueue = queue.hPagingQueue;
++      device->pagingFence = (volatile UINT64 *)queue.FenceValueCPUVirtualAddress;
++   }
++   UINT format;
++   switch (resource->Format) {
++   case DXGI_FORMAT_B8G8R8A8_UNORM: format = D3DDDIFMT_A8R8G8B8; break;
++   case DXGI_FORMAT_B8G8R8X8_UNORM: format = D3DDDIFMT_X8R8G8B8; break;
++   case DXGI_FORMAT_R8G8B8A8_UNORM: format = D3DDDIFMT_A8B8G8R8; break;
++   default: return E_NOTIMPL;
++   }
++   struct SurfacePrivate { UINT magic, version, width, height, pitch, format; UINT64 size; };
++   static_assert(sizeof(SurfacePrivate) == 32, "LB7A ABI");
++   SurfacePrivate data = {0x4137424c, 1, width, height, width*4, format, UINT64(width)*height*4};
++   HRESULT hr;
++   if (!resource->allocation) {
++      D3DDDI_ALLOCATIONINFO2 info = {};
++      info.pPrivateDriverData = &data; info.PrivateDriverDataSize = sizeof(data);
++      info.Flags.Primary = resource->primary; info.VidPnSourceId = resource->vidpn;
++      D3DDDICB_ALLOCATE allocate = {};
++      allocate.hResource = resource->hRTResource;
++      struct ResourcePrivate { UINT magic, version, shared; };
++      ResourcePrivate group = {0x52363245, 1, resource->shared ? 1u : 0u}; // "E26R"
++      allocate.pPrivateDriverData = &group; allocate.PrivateDriverDataSize = sizeof(group);
++      DebugPrintf("BC250 Allocate input runtime %p size %llu primary %u\n", resource->hRTResource, data.size, resource->primary);
++      allocate.NumAllocations = 1; allocate.pAllocationInfo2 = &info;
++      hr = device->KTCallbacks.pfnAllocateCb(device->hDevice, &allocate);
++      DebugPrintf("BC250 Allocate %08lx format %u primary %u handle %x resource %x\n", hr, format, resource->primary, info.hAllocation, allocate.hKMResource);
++      if (FAILED(hr)) return hr;
++      resource->allocation = info.hAllocation;
++   }
++   resource->gpuBytes = (data.size + 4095) & ~UINT64(4095);
++   D3DDDI_MAPGPUVIRTUALADDRESS map = {};
++   map.hPagingQueue = device->pagingQueue;
++   map.hAllocation = resource->allocation;
++   map.SizeInPages = resource->gpuBytes / 4096;
++   map.Protection.Write = 1;
++   hr = device->KTCallbacks.pfnMapGpuVirtualAddressCb(device->hDevice, &map);
++   DebugPrintf("BC250 MapGpuVa %08lx va %llx\n", hr, map.VirtualAddress);
++   // WDDM callbacks report successful asynchronous paging as E_PENDING.
++   if (FAILED(hr) && hr != E_PENDING) return hr;
++   resource->gpuVa = map.VirtualAddress;
++   UINT64 fence = map.PagingFenceValue;
++   D3DDDI_MAKERESIDENT resident = {};
++   resident.hPagingQueue = device->pagingQueue;
++   resident.NumAllocations = 1; resident.AllocationList = &resource->allocation;
++   hr = device->KTCallbacks.pfnMakeResidentCb(device->hDevice, &resident);
++   DebugPrintf("BC250 MakeResident %08lx\n", hr);
++   if (FAILED(hr) && hr != E_PENDING) return hr;
++   if (resident.PagingFenceValue > fence) fence = resident.PagingFenceValue;
++   ULONGLONG deadline = GetTickCount64() + 5000;
++   while (device->pagingFence && *device->pagingFence < fence && GetTickCount64() < deadline) Sleep(1);
++   if (!device->pagingFence || *device->pagingFence < fence) return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
++   D3DDDICB_LOCK2 lock = {};
++   lock.hAllocation = resource->allocation;
++   hr = device->KTCallbacks.pfnLock2Cb(device->hDevice, &lock);
++   if (FAILED(hr)) return hr;
++   resource->cpuMapping = lock.pData;
++   struct winsys_handle handle = {};
++   handle.type = WINSYS_HANDLE_TYPE_USER_MEMORY;
++   handle.user_memory = lock.pData; handle.stride = width * 4;
++   handle.size = data.size;
++   struct pipe_resource desc = *resource->resource;
++   desc.bind |= PIPE_BIND_DISPLAY_TARGET | PIPE_BIND_SHARED;
++   struct pipe_resource *imported = device->pipe->screen->resource_from_handle(
++       device->pipe->screen, &desc, &handle, 0);
++   if (!imported) return E_OUTOFMEMORY;
++   pipe_resource_reference(&resource->resource, NULL);
++   resource->resource = imported;
++   resource->presentReady = TRUE;
++   return S_OK;
++}
++
+ HRESULT APIENTRY
+ _Present(DXGI_DDI_ARG_PRESENT *pPresentData)
+ {
+@@ -61,11 +148,47 @@ _Present(DXGI_DDI_ARG_PRESENT *pPresentData)
+    struct Device *device = CastDevice(pPresentData->hDevice);
+    Resource *pSrcResource = CastResource(pPresentData->hSurfaceToPresent);
+ 
++   /* E26 software baseline: use the runtime's WDDM callbacks, not GetDC.
++    * LB7A is the existing linear-surface contract in bc250kmd/wddm.c.
++    * This path remains diagnostic until sharing, residency and flips pass. */
++   if (!device->KTCallbacks.pfnCreateContextVirtualCb ||
++       !device->KTCallbacks.pfnLock2Cb || !device->KTCallbacks.pfnUnlock2Cb)
++      return E_NOTIMPL;
++   if (!device->hContext) {
++      D3DDDICB_CREATECONTEXTVIRTUAL create = {};
++      create.EngineAffinity = 1;
++      HRESULT hr = device->KTCallbacks.pfnCreateContextVirtualCb(device->hDevice, &create);
++      DebugPrintf("BC250 CreateContextVirtual %08lx\n", hr);
++      if (FAILED(hr)) return hr;
++      device->hContext = create.hContext;
++   }
++   struct pipe_resource *resource = pSrcResource->resource;
++   UINT width = resource->width0, height = resource->height0;
++   if (!width || !height || width > 8192 || height > 8192) return E_INVALIDARG;
++   if (resource->format != PIPE_FORMAT_B8G8R8A8_UNORM &&
++       resource->format != PIPE_FORMAT_B8G8R8X8_UNORM &&
++       resource->format != PIPE_FORMAT_R8G8B8A8_UNORM &&
++       resource->format != PIPE_FORMAT_R8G8B8X8_UNORM) return E_NOTIMPL;
++   HRESULT allocated = Bc250EnsureSurface(device, pSrcResource);
++   if (FAILED(allocated)) return allocated;
+    device->pipe->flush(device->pipe, NULL, 0);
+-   device->pipe->screen->flush_frontbuffer(device->pipe->screen, device->pipe, 
+-      pSrcResource->resource, 0, 0, pPresentData->pDXGIContext, 0, NULL);
+-
+-   return S_OK;
++   MemoryBarrier();
++   HRESULT hr;
++   DXGIDDICB_PRESENT present = {};
++   present.hSrcAllocation = pSrcResource->allocation;
++   present.hContext = device->hContext;
++   Resource *dstResource = CastResource(pPresentData->hDstResource);
++   if (dstResource) {
++      hr = Bc250EnsureSurface(device, dstResource);
++      if (FAILED(hr)) return hr;
++      present.hDstAllocation = dstResource->allocation;
++   }
++   DebugPrintf("BC250 Present flags %x src %x dst %x\n", pPresentData->Flags.Value,
++               present.hSrcAllocation, present.hDstAllocation);
++   present.pDXGIContext = pPresentData->pDXGIContext;
++   hr = device->pDXGIBaseCallbacks->pfnPresentCb(device->hDevice, &present);
++   DebugPrintf("BC250 PresentCb %08lx\n", hr);
++   return hr;
+ }
+ 
+ 
+@@ -114,9 +237,15 @@ _GetGammaCaps( DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS *GetCaps )
+ HRESULT APIENTRY
+ _SetDisplayMode( DXGI_DDI_ARG_SETDISPLAYMODE *SetDisplayMode )
+ {
+-   LOG_UNSUPPORTED_ENTRYPOINT();
+-
+-   return S_OK;
++   Device *device = CastDevice(SetDisplayMode->hDevice);
++   Resource *resource = CastResource(SetDisplayMode->hResource);
++   HRESULT hr = Bc250EnsureSurface(device, resource);
++   if (FAILED(hr)) return hr;
++   D3DDDICB_SETDISPLAYMODE mode = {};
++   mode.hPrimaryAllocation = resource->allocation;
++   hr = device->KTCallbacks.pfnSetDisplayModeCb(device->hDevice, &mode);
++   DebugPrintf("BC250 SetDisplayMode %08lx\n", hr);
++   return hr;
+ }
+ 
+ 
+@@ -256,7 +385,31 @@ _RotateResourceIdentities( DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *RotateResour
+ HRESULT APIENTRY
+ _Blt(DXGI_DDI_ARG_BLT *Blt)
+ {
+-   LOG_UNSUPPORTED_ENTRYPOINT();
+-
++   LOG_ENTRYPOINT();
++   struct pipe_context *pipe = CastPipeDevice(Blt->hDevice);
++   struct pipe_resource *src = CastPipeResource(Blt->hSrcResource);
++   struct pipe_resource *dst = CastPipeResource(Blt->hDstResource);
++   if (!src || !dst || Blt->SrcSubresource || Blt->DstSubresource ||
++       src->target != PIPE_TEXTURE_2D || dst->target != PIPE_TEXTURE_2D ||
++       src->array_size != 1 || dst->array_size != 1 ||
++       Blt->Rotate > DXGI_DDI_MODE_ROTATION_IDENTITY) return E_NOTIMPL;
++   if (Blt->DstRight <= Blt->DstLeft || Blt->DstBottom <= Blt->DstTop ||
++       Blt->DstRight > dst->width0 || Blt->DstBottom > dst->height0)
++      return E_INVALIDARG;
++   if (!pipe->screen->is_format_supported(pipe->screen, src->format, src->target,
++        src->nr_samples, src->nr_storage_samples, PIPE_BIND_SAMPLER_VIEW) ||
++       !pipe->screen->is_format_supported(pipe->screen, dst->format, dst->target,
++        dst->nr_samples, dst->nr_storage_samples, PIPE_BIND_RENDER_TARGET)) return E_NOTIMPL;
++   struct pipe_blit_info info = {};
++   info.src.resource = src; info.src.format = src->format;
++   info.src.box.width = src->width0; info.src.box.height = src->height0; info.src.box.depth = 1;
++   info.dst.resource = dst; info.dst.format = dst->format;
++   info.dst.box.x = Blt->DstLeft; info.dst.box.y = Blt->DstTop;
++   info.dst.box.width = Blt->DstRight - Blt->DstLeft;
++   info.dst.box.height = Blt->DstBottom - Blt->DstTop; info.dst.box.depth = 1;
++   info.mask = PIPE_MASK_RGBA; info.filter = PIPE_TEX_FILTER_NEAREST;
++   pipe->blit(pipe, &info);
++   pipe->flush(pipe, NULL, 0);
++   MemoryBarrier();
+    return S_OK;
+ }
+diff --git a/src/gallium/frontends/d3d10umd/Resource.cpp b/src/gallium/frontends/d3d10umd/Resource.cpp
+index 65729f1..2ee4ceb 100644
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -252,6 +252,10 @@ CreateResource(D3D10DDI_HDEVICE hDevice,                                // IN
+    Resource *pResource = CastResource(hResource);
+ 
+    memset(pResource, 0, sizeof *pResource);
++   pResource->hRTResource = (HANDLE)hRTResource.handle;
++   pResource->primary = pCreateResource->pPrimaryDesc != NULL;
++   pResource->shared = (pCreateResource->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED) != 0;
++   pResource->vidpn = pCreateResource->pPrimaryDesc ? pCreateResource->pPrimaryDesc->VidPnSourceId : 0;
+ 
+ #if 0
+    if (pCreateResource->pPrimaryDesc) {
+@@ -308,7 +312,7 @@ CreateResource(D3D10DDI_HDEVICE hDevice,                                // IN
+    }
+ 
+    pResource->resource = screen->resource_create(screen, &templat);
+-   if (!pResource) {
++   if (!pResource->resource) {
+       DebugPrintf("%s: failed to create resource\n", __func__);
+       SetError(hDevice, E_OUTOFMEMORY);
+       return;
+@@ -318,6 +322,12 @@ CreateResource(D3D10DDI_HDEVICE hDevice,                                // IN
+    pResource->transfers = (struct pipe_transfer **)calloc(pResource->NumSubResources,
+                                                           sizeof *pResource->transfers);
+ 
++   if (pResource->primary || (pCreateResource->BindFlags & D3D10_DDI_BIND_PRESENT) ||
++       (pCreateResource->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED)) {
++      HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), pResource);
++      if (FAILED(hr)) { SetError(hDevice, hr); return; }
++   }
++
+    if (pCreateResource->pInitialDataUP) {
+       if (pResource->buffer) {
+          assert(pResource->NumSubResources == 1);
+@@ -418,8 +428,44 @@ OpenResource(D3D10DDI_HDEVICE hDevice,                            // IN
+              D3D10DDI_HRESOURCE hResource,                        // IN
+              D3D10DDI_HRTRESOURCE hRTResource)                    // IN
+ {
+-   LOG_UNSUPPORTED_ENTRYPOINT();
+-   SetError(hDevice, E_OUTOFMEMORY);
++   LOG_ENTRYPOINT();
++   struct SurfacePrivate { UINT magic, version, width, height, pitch, format; UINT64 size; };
++   if (pOpenResource->NumAllocations != 1 || !pOpenResource->pOpenAllocationInfo2) {
++      SetError(hDevice, E_NOTIMPL); return;
++   }
++   const D3DDDI_OPENALLOCATIONINFO2 *info = pOpenResource->pOpenAllocationInfo2;
++   if (!info->pPrivateDriverData || info->PrivateDriverDataSize < sizeof(SurfacePrivate)) {
++      SetError(hDevice, E_INVALIDARG); return;
++   }
++   SurfacePrivate data;
++   memcpy(&data, info->pPrivateDriverData, sizeof(data));
++   if (data.magic != 0x4137424c || data.version != 1 || !data.width || !data.height ||
++       data.width > 8192 || data.height > 8192 || data.pitch != data.width * 4 ||
++       data.size < UINT64(data.pitch) * data.height) { SetError(hDevice, E_INVALIDARG); return; }
++   DXGI_FORMAT format;
++   switch (data.format) {
++   case D3DDDIFMT_A8R8G8B8: format = DXGI_FORMAT_B8G8R8A8_UNORM; break;
++   case D3DDDIFMT_X8R8G8B8: format = DXGI_FORMAT_B8G8R8X8_UNORM; break;
++   case D3DDDIFMT_A8B8G8R8: format = DXGI_FORMAT_R8G8B8A8_UNORM; break;
++   default: SetError(hDevice, E_NOTIMPL); return;
++   }
++   D3D10DDI_MIPINFO mip = {};
++   mip.TexelWidth = mip.PhysicalWidth = data.width;
++   mip.TexelHeight = mip.PhysicalHeight = data.height;
++   mip.TexelDepth = mip.PhysicalDepth = 1;
++   D3D10DDIARG_CREATERESOURCE create = {};
++   create.pMipInfoList = &mip; create.ResourceDimension = D3D10DDIRESOURCE_TEXTURE2D;
++   create.Usage = D3D10_DDI_USAGE_DEFAULT;
++   create.BindFlags = D3D10_DDI_BIND_SHADER_RESOURCE | D3D10_DDI_BIND_RENDER_TARGET;
++   create.Format = format; create.SampleDesc.Count = 1;
++   create.MipLevels = 1; create.ArraySize = 1;
++   CreateResource(hDevice, &create, hResource, hRTResource);
++   Resource *resource = CastResource(hResource);
++   if (!resource->resource) return;
++   resource->allocation = info->hAllocation;
++   HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), resource);
++   DebugPrintf("BC250 OpenResource %08lx handle %x\n", hr, resource->allocation);
++   SetError(hDevice, hr);
+ }
+ 
+ 
+@@ -460,6 +506,19 @@ DestroyResource(D3D10DDI_HDEVICE hDevice,       // IN
+          pResource->transfers[SubResource] = NULL;
+       }
+    }
++   if (pResource->allocation) {
++      Device *device = CastDevice(hDevice);
++      if (pResource->cpuMapping) {
++         D3DDDICB_UNLOCK2 unlock = {};
++         unlock.hAllocation = pResource->allocation;
++         device->KTCallbacks.pfnUnlock2Cb(device->hDevice, &unlock);
++      }
++      D3DDDICB_DEALLOCATE2 free = {};
++      // Close by allocation; VidMm releases the associated GPU VA atomically.
++      free.NumAllocations = 1; free.HandleList = &pResource->allocation;
++      HRESULT hr = device->KTCallbacks.pfnDeallocate2Cb(device->hDevice, &free);
++      DebugPrintf("BC250 Deallocate %08lx\n", hr);
++   }
+    free(pResource->transfers);
+ 
+    pipe_resource_reference(&pResource->resource, NULL);
+diff --git a/src/gallium/frontends/d3d10umd/State.h b/src/gallium/frontends/d3d10umd/State.h
+index 7c7f2c2..0990af5 100644
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -95,6 +95,8 @@ struct Device
+ 
+    HANDLE hDevice;
+    HANDLE hContext;
++   D3DKMT_HANDLE pagingQueue;
++   volatile UINT64 *pagingFence;
+ 
+    D3DDDI_DEVICECALLBACKS KTCallbacks;
+    D3D10DDI_CORELAYER_DEVICECALLBACKS UMCallbacks;
+@@ -146,6 +148,7 @@ static inline void
+ SetError(D3D10DDI_HDEVICE hDevice, HRESULT hr)
+ {
+    if (FAILED(hr)) {
++      DebugPrintf("BC250 SetError %08lx\n", hr);
+       Device *pDevice = CastDevice(hDevice);
+       pDevice->UMCallbacks.pfnSetErrorCb(pDevice->hRTCoreLayer, hr);
+    }
+@@ -154,6 +157,13 @@ SetError(D3D10DDI_HDEVICE hDevice, HRESULT hr)
+ 
+ struct Resource
+ {
++   HANDLE hRTResource;
++   D3DKMT_HANDLE allocation;
++   UINT64 gpuVa, gpuBytes;
++   BOOL presentReady;
++   void *cpuMapping;
++   BOOL primary, shared;
++   UINT vidpn;
+    DXGI_FORMAT Format;
+    UINT MipLevels;
+    UINT NumSubResources;
+@@ -164,6 +174,8 @@ struct Resource
+ };
+ 
+ 
++HRESULT Bc250EnsureSurface(Device *device, Resource *resource);
++
+ static inline Resource *
+ CastResource(D3D10DDI_HRESOURCE hResource)
+ {

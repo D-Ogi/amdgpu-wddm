@@ -4,7 +4,7 @@ One directory per experiment, numbered in the order they were planned. The READM
 
 | # | Title | State |
 |---|---|---|
-| E01 | Linux baseline of our unit with the diagnostic USB | run once on unit A, 2026-09-21 (tool commit `ffa749e`, probes id `79152824`). Tool: `tools/diagusb` (record its commit and the `probes.json` id with the ... |
+| E01 | Linux baseline of our unit with the diagnostic USB | run once on unit A, 2026-09-21 (tool commit `16a37cc`, probes id `79152824`). Tool: `tools/diagusb` (record its commit and the `probes.json` id with the ... |
 | E02 | Control read of the same registers under Windows | run 001 done on 2026-09-21. Evidence: `evidence/windows/2026-09-21-E02-run-001/`. |
 | E05 | a display-only WDDM driver owns the GPU and keeps the firmware's display | run 001 done, H1-H4 hold (2026-09-21). Evidence: `evidence/windows/2026-09-21-E05-run-001/`. |
 | E06 | first load of our own miniport (bc250kmd, milestone M3) | run 001 done, H1-H4 hold, H5 answered: yes (2026-09-21). Evidence: `evidence/windows/2026-09-21-E06-run-001/`. |

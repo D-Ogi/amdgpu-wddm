@@ -1,7 +1,7 @@
 # E20: a picture under the full WDDM table
 
 Date: 2026-09-22. State: DONE (run 008, M84). Runs 001-008. Follows E19 (stage C, M77, M80).
-Design brief: `scratch\tmp\present_design.md` (an Opus agent; not a source of facts).
+Design brief: `scratch\tmp\present_design.md` (a design brief; not a source of facts).
 
 ## Why
 

@@ -1,0 +1,179 @@
+diff --git a/src/gallium/auxiliary/tgsi/tgsi_exec.c b/src/gallium/auxiliary/tgsi/tgsi_exec.c
+index eaaa1e1..1b03674 100644
+--- a/src/gallium/auxiliary/tgsi/tgsi_exec.c
++++ b/src/gallium/auxiliary/tgsi/tgsi_exec.c
+@@ -1515,8 +1515,14 @@ get_index_registers(const struct tgsi_exec_machine *mach,
+    if (reg->Register.Indirect) {
+       const unsigned execmask = mach->ExecMask;
+ 
+-      assert(reg->Indirect.File == TGSI_FILE_ADDRESS);
+-      const union tgsi_exec_channel *addr = &mach->Addrs[reg->Indirect.Index].xyzw[reg->Indirect.Swizzle];
++      /* D3D10 relative operands may use TEMP as well as ADDR.
++       * Fetch through the same register-file path as destination indirection. */
++      union tgsi_exec_channel indirect_index, indirect_value;
++      for (int lane = 0; lane < TGSI_QUAD_SIZE; lane++)
++         indirect_index.i[lane] = reg->Indirect.Index;
++      fetch_src_file_channel(mach, reg->Indirect.File, reg->Indirect.Swizzle,
++                             &indirect_index, &ZeroVec, &indirect_value);
++      const union tgsi_exec_channel *addr = &indirect_value;
+       for (int i = 0; i < TGSI_QUAD_SIZE; i++)
+          index->i[i] += addr->u[i];
+ 
+@@ -1557,8 +1563,14 @@ get_index_registers(const struct tgsi_exec_machine *mach,
+       if (reg->Dimension.Indirect) {
+          const unsigned execmask = mach->ExecMask;
+ 
+-         assert(reg->DimIndirect.File == TGSI_FILE_ADDRESS);
+-         const union tgsi_exec_channel *addr = &mach->Addrs[reg->DimIndirect.Index].xyzw[reg->DimIndirect.Swizzle];
++         /* D3D10 relative operands may use TEMP as well as ADDR.
++          * Fetch through the same register-file path as destination indirection. */
++         union tgsi_exec_channel indirect_index, indirect_value;
++         for (int lane = 0; lane < TGSI_QUAD_SIZE; lane++)
++            indirect_index.i[lane] = reg->DimIndirect.Index;
++         fetch_src_file_channel(mach, reg->DimIndirect.File, reg->DimIndirect.Swizzle,
++                                &indirect_index, &ZeroVec, &indirect_value);
++         const union tgsi_exec_channel *addr = &indirect_value;
+          for (int i = 0; i < TGSI_QUAD_SIZE; i++)
+             index2D->i[i] += addr->u[i];
+ 
+diff --git a/src/gallium/frontends/d3d10umd/Debug.cpp b/src/gallium/frontends/d3d10umd/Debug.cpp
+index 17f7292..55d8347 100644
+--- a/src/gallium/frontends/d3d10umd/Debug.cpp
++++ b/src/gallium/frontends/d3d10umd/Debug.cpp
+@@ -34,6 +34,18 @@ DebugPrintf(const char *format, ...)
+     va_end(ap);
+ 
+     OutputDebugStringA(buf);
++    static volatile LONG lines = 0;
++    if (InterlockedIncrement(&lines) <= 10000 || strstr(buf, "BC250 SetError")) {
++       char path[MAX_PATH];
++       snprintf(path, sizeof(path), "C:\\BC250\\e26\\umdlogs\\mesa-%lu.txt", GetCurrentProcessId());
++       HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
++                              NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
++       if (f != INVALID_HANDLE_VALUE) {
++          DWORD written;
++          WriteFile(f, buf, (DWORD)strlen(buf), &written, NULL);
++          CloseHandle(f);
++       }
++    }
+ }
+ 
+ 
+diff --git a/src/gallium/frontends/d3d10umd/Debug.h b/src/gallium/frontends/d3d10umd/Debug.h
+index efdf318..02f1c5b 100644
+--- a/src/gallium/frontends/d3d10umd/Debug.h
++++ b/src/gallium/frontends/d3d10umd/Debug.h
+@@ -60,7 +60,7 @@ AssertFail(const char *expr, const char *file, unsigned line, const char *functi
+ #endif
+ 
+ 
+-#if 0 && !defined(NDEBUG)
++#if 1
+ #define LOG_ENTRYPOINT() DebugPrintf("%s\n", __func__)
+ #else
+ #define LOG_ENTRYPOINT() (void)0
+diff --git a/src/gallium/include/frontend/winsys_handle.h b/src/gallium/include/frontend/winsys_handle.h
+index 289cb9d..6c57df0 100644
+--- a/src/gallium/include/frontend/winsys_handle.h
++++ b/src/gallium/include/frontend/winsys_handle.h
+@@ -10,6 +10,7 @@ typedef void *HANDLE;
+ extern "C" {
+ #endif
+ 
++#define WINSYS_HANDLE_TYPE_USER_MEMORY 6 /* caller-owned mapped CPU memory */
+ #define WINSYS_HANDLE_TYPE_SHARED 0
+ #define WINSYS_HANDLE_TYPE_KMS    1
+ #define WINSYS_HANDLE_TYPE_FD     2
+@@ -94,6 +95,7 @@ struct winsys_handle
+        * Output for resource_get_handle.
+        */
+       void *com_obj;
++      void *user_memory;
+ 
+       /**
+        * String name for an object.
+diff --git a/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c b/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
+index 3c43393..9b88cdf 100644
+--- a/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
++++ b/src/gallium/winsys/sw/gdi/gdi_sw_winsys.c
+@@ -43,6 +43,7 @@
+ #include "util/u_math.h"
+ #include "util/u_memory.h"
+ #include "frontend/sw_winsys.h"
++#include "frontend/winsys_handle.h"
+ #include "gdi_sw_winsys.h"
+ #include "wgl/stw_gdishim.h"
+ 
+@@ -57,6 +58,7 @@ struct gdi_sw_displaytarget
+    unsigned size;
+ 
+    void *data;
++   bool external_memory;
+ 
+    BITMAPV5HEADER bmi;
+ };
+@@ -134,7 +136,7 @@ gdi_sw_displaytarget_destroy(struct sw_winsys *winsys,
+ {
+    struct gdi_sw_displaytarget *gdt = gdi_sw_displaytarget(dt);
+ 
+-   align_free(gdt->data);
++   if (!gdt->external_memory) align_free(gdt->data);
+    FREE(gdt);
+ }
+ 
+@@ -220,8 +222,25 @@ gdi_sw_displaytarget_from_handle(struct sw_winsys *winsys,
+                                  struct winsys_handle *whandle,
+                                  unsigned *stride)
+ {
+-   assert(0);
+-   return NULL;
++   if (whandle->type != WINSYS_HANDLE_TYPE_USER_MEMORY || !whandle->user_memory ||
++       templet->last_level || templet->array_size != 1 || templet->depth0 != 1)
++      return NULL;
++   unsigned cpp = util_format_get_blocksize(templet->format);
++   if (!cpp || whandle->stride < (uint64_t)templet->width0 * cpp ||
++       whandle->size < (uint64_t)whandle->stride * templet->height0)
++      return NULL;
++   struct sw_displaytarget *dt = gdi_sw_displaytarget_create(winsys, templet->bind,
++       templet->format, templet->width0, templet->height0, 64, NULL, stride);
++   if (!dt) return NULL;
++   struct gdi_sw_displaytarget *gdt = gdi_sw_displaytarget(dt);
++   align_free(gdt->data);
++   gdt->data = whandle->user_memory;
++   gdt->external_memory = true;
++   gdt->stride = whandle->stride;
++   gdt->size = whandle->stride * templet->height0;
++   gdt->bmi.bV5Width = whandle->stride / cpp;
++   *stride = whandle->stride;
++   return dt;
+ }
+ 
+ 
+@@ -242,6 +261,27 @@ gdi_sw_display( struct sw_winsys *winsys,
+ {
+     struct gdi_sw_displaytarget *gdt = gdi_sw_displaytarget(dt);
+ 
++    /* E26 diagnostic: preserve frames before the GDI presentation boundary. */
++    static volatile LONG frame_count;
++    LONG frame = InterlockedIncrement(&frame_count);
++    if (frame == 1 || frame == 30) {
++       char path[MAX_PATH];
++       wsprintfA(path, "C:\\BC250\\e26\\umdlogs\\frame-%lu-%ld.bmp", GetCurrentProcessId(), frame);
++       HANDLE file = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL,
++                                 CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
++       if (file != INVALID_HANDLE_VALUE) {
++          BITMAPFILEHEADER header = {0};
++          DWORD written;
++          header.bfType = 0x4d42;
++          header.bfOffBits = sizeof(header) + sizeof(gdt->bmi);
++          header.bfSize = header.bfOffBits + gdt->size;
++          WriteFile(file, &header, sizeof(header), &written, NULL);
++          WriteFile(file, &gdt->bmi, sizeof(gdt->bmi), &written, NULL);
++          WriteFile(file, gdt->data, gdt->size, &written, NULL);
++          CloseHandle(file);
++       }
++    }
++
+     StretchDIBits(hDC,
+                   0, 0, gdt->width, gdt->height,
+                   0, 0, gdt->width, gdt->height,

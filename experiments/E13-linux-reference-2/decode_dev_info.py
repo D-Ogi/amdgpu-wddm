@@ -5,11 +5,14 @@ by hand. The member list of struct drm_amdgpu_info_device is parsed from amdgpu_
 Run:  python decode_dev_info.py <info.txt> [<amdgpu_drm.h>]
 """
 
+import os
 import re
 import sys
 from pathlib import Path
 
-HEADER = Path(r"P:\BC-250\ref\mesa\include\drm-uapi\amdgpu_drm.h")
+# BC250_ROOT is the workspace root; by default the parent directory of this repository.
+ROOT = Path(os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent)))
+HEADER = ROOT / "ref" / "mesa" / "include" / "drm-uapi" / "amdgpu_drm.h"
 SIZES = {"__u32": 4, "__u64": 8, "__s32": 4, "__u16": 2, "__u8": 1}
 
 

@@ -1,5 +1,7 @@
 from pathlib import Path
-import argparse
+import argparse,os
+# BC250_ROOT is the workspace root, by default the parent directory of this repository.
+ROOT=os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent))
 args=argparse.ArgumentParser(description='Source-extracted sparse ordering model; not a GPU acceptance test.')
 args.add_argument('--source',type=Path,required=True)
 args.add_argument('--out',type=Path,required=True)
@@ -184,7 +186,7 @@ int main(void){
 }
 '''
 (w/'order-test.c').write_text(prefix+body+tests,newline='\n')
-cmd='@echo off\ncall "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"\nif errorlevel 1 exit /b 1\nset TEMP=P:\\bc-250\\scratch\\tmp\nset TMP=%TEMP%\ncl /nologo /TC /W3 /I P:\\bc-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\um /I P:\\bc-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\shared /FoP:\\BC-250\\scratch\\m12\\sparse-order\\order-test.obj /FeP:\\BC-250\\scratch\\m12\\sparse-order\\order-test.exe P:\\BC-250\\scratch\\m12\\sparse-order\\order-test.c\nif errorlevel 1 exit /b 1\nP:\\BC-250\\scratch\\m12\\sparse-order\\order-test.exe\nexit /b %errorlevel%\n'
-cmd=cmd.replace('P:\\BC-250\\scratch\\m12\\sparse-order',str(w))
+cmd='@echo off\ncall "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Auxiliary\\Build\\vcvars64.bat"\nif errorlevel 1 exit /b 1\nset TEMP=ROOTDIR\\scratch\\tmp\nset TMP=%TEMP%\ncl /nologo /TC /W3 /I ROOTDIR\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\um /I ROOTDIR\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\shared /FoOUTDIR\\order-test.obj /FeOUTDIR\\order-test.exe OUTDIR\\order-test.c\nif errorlevel 1 exit /b 1\nOUTDIR\\order-test.exe\nexit /b %errorlevel%\n'
+cmd=cmd.replace('ROOTDIR',ROOT).replace('OUTDIR',str(w))
 (w/'run.cmd').write_text(cmd,newline='\n')
 print('Generated source-extracted ordering test')

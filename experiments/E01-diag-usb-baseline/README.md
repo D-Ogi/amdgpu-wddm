@@ -1,6 +1,6 @@
 # E01: Linux baseline of our unit with the diagnostic USB
 
-State: run once on unit A, 2026-09-21 (tool commit `ffa749e`, probes id `79152824`). Tool: `tools/diagusb` (record its commit and the `probes.json` id with the result).
+State: run once on unit A, 2026-09-21 (tool commit `16a37cc`, probes id `79152824`). Tool: `tools/diagusb` (record its commit and the `probes.json` id with the result).
 
 ## Hypotheses
 

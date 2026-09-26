@@ -1,0 +1,104 @@
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -69,6 +69,8 @@
+ 
+ struct Device
+ {
++   UINT64 profileDrawTicks, profileDrawMax, profileDrawCalls, profileLastPresent;
++   UINT profilePresents;
+    RenderTargetView *renderTargetViews;
+    ShaderResourceView *shaderResourceViews;
+    struct pipe_context *pipe;
+--- a/src/gallium/frontends/d3d10umd/Draw.cpp
++++ b/src/gallium/frontends/d3d10umd/Draw.cpp
+@@ -39,6 +39,16 @@
+ 
+ #include "util/u_draw.h"
+ #include "util/u_memory.h"
++
++// Diagnostic wall-clock accounting around native draw entry points.
++struct Bc250DrawTimer {
++   Device *device; LARGE_INTEGER start;
++   Bc250DrawTimer(Device *d):device(d){QueryPerformanceCounter(&start);}
++   ~Bc250DrawTimer(){LARGE_INTEGER end;QueryPerformanceCounter(&end);
++      UINT64 ticks=end.QuadPart-start.QuadPart;
++      device->profileDrawTicks+=ticks;device->profileDrawCalls++;
++      if(ticks>device->profileDrawMax)device->profileDrawMax=ticks;}
++};
+ 
+ static unsigned
+ ClampedUAdd(unsigned a,
+@@ -153,6 +163,7 @@
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+ 
+    ResolveState(pDevice);
+ 
+@@ -183,6 +194,7 @@
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+    struct pipe_draw_info info;
+    struct pipe_draw_start_count_bias draw;
+    struct pipe_resource *null_ib = NULL;
+@@ -241,6 +253,7 @@
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+ 
+    if (!InstanceCount) {
+       return;
+@@ -280,6 +293,7 @@
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+    struct pipe_draw_info info;
+    struct pipe_draw_start_count_bias draw;
+    struct pipe_resource *null_ib = NULL;
+@@ -344,6 +358,7 @@
+    LOG_ENTRYPOINT();
+ 
+    Device *pDevice = CastDevice(hDevice);
++   Bc250DrawTimer timer(pDevice);
+    struct pipe_draw_info info;
+    struct pipe_draw_indirect_info indirect;
+ 
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -187,7 +187,20 @@
+    DebugPrintf("BC250 Present flags %x src %x dst %x\n", pPresentData->Flags.Value,
+                present.hSrcAllocation, present.hDstAllocation);
+    present.pDXGIContext = pPresentData->pDXGIContext;
++   LARGE_INTEGER presentStart, presentEnd, frequency;
++   QueryPerformanceCounter(&presentStart);
+    hr = device->pDXGIBaseCallbacks->pfnPresentCb(device->hDevice, &present);
++   QueryPerformanceCounter(&presentEnd);QueryPerformanceFrequency(&frequency);
++   if(++device->profilePresents<=120 || device->profilePresents%60==0)
++      DebugPrintf("BC250 Perf frame %u gap_ms %.3f draws %llu draw_ms %.3f max_draw_ms %.3f present_ms %.3f\n",
++       device->profilePresents,
++       device->profileLastPresent?1000.0*(presentEnd.QuadPart-device->profileLastPresent)/frequency.QuadPart:0.0,
++       device->profileDrawCalls,1000.0*device->profileDrawTicks/frequency.QuadPart,
++       1000.0*device->profileDrawMax/frequency.QuadPart,
++       1000.0*(presentEnd.QuadPart-presentStart.QuadPart)/frequency.QuadPart);
++   device->profileLastPresent=presentEnd.QuadPart;
++   device->profileDrawTicks=device->profileDrawMax=device->profileDrawCalls=0;
++
+    DebugPrintf("BC250 PresentCb %08lx\n", hr);
+    return hr;
+ }
+--- a/src/gallium/frontends/d3d10umd/Debug.cpp
++++ b/src/gallium/frontends/d3d10umd/Debug.cpp
+@@ -35,7 +35,7 @@
+ 
+     OutputDebugStringA(buf);
+     static volatile LONG lines = 0;
+-    if (InterlockedIncrement(&lines) <= 10000 || strstr(buf, "BC250 SetError")) {
++    if (InterlockedIncrement(&lines) <= 10000 || strstr(buf, "BC250 SetError") || strstr(buf, "BC250 Perf")) {
+        char path[MAX_PATH];
+        snprintf(path, sizeof(path), "C:\\BC250\\e26\\umdlogs\\mesa-%lu.txt", GetCurrentProcessId());
+        HANDLE f = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
