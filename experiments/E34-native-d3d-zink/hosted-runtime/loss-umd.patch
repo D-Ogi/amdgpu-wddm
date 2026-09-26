@@ -1,0 +1,189 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -80,10 +80,49 @@
+    unsigned calls[64];
+    bc250_host_progress progress[16];
+    bool submission_failed;
++   bool device_lost;
++   UINT test_loss;
++   const UINT64 *present_cpu;
+    D3DKMT_HANDLE present_sync;
+    UINT64 present_value, present_waited[16];
+ };
+ 
++static HRESULT Bc250HostLost(Bc250HostProbeState *s)
++{
++   if (!s->device_lost) {
++      s->device_lost=true;
++      s->submission_failed=true;
++      fprintf(stderr,"BC250 hosted device lost: SetErrorCb\n");
++      s->device->UMCallbacks.pfnSetErrorCb(s->device->hRTCoreLayer,D3DDDIERR_DEVICEREMOVED);
++   }
++   return D3DDDIERR_DEVICEREMOVED;
++}
++
++static bool Bc250DeviceLostResult(HRESULT hr)
++{
++   return hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED ||
++          hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG ||
++          hr==DXGI_ERROR_DRIVER_INTERNAL_ERROR;
++}
++
++static HRESULT Bc250HostStatus(Bc250HostProbeState *s)
++{
++   if (s->device_lost) return D3DDDIERR_DEVICEREMOVED;
++   for (const auto &p:s->progress) {
++      if (!p.cpu_address) continue;
++      UINT64 observed=*(const volatile UINT64 *)p.cpu_address;
++      if (s->test_loss==2 && s->calls[BC250_HOST_SubmitCommand]>=3) {
++         fprintf(stderr,"BC250 injected fence observation UINT64_MAX; mapped memory unchanged\n");
++         observed=UINT64_MAX;
++      }
++      if (observed==UINT64_MAX) return Bc250HostLost(s);
++   }
++   if ((s->present_cpu && *(const volatile UINT64 *)s->present_cpu==UINT64_MAX) ||
++       (s->device->pagingFence && *s->device->pagingFence==UINT64_MAX))
++      return Bc250HostLost(s);
++   return S_OK;
++}
++
+ static HANDLE Bc250HostContext(Bc250HostProbeState *s, UINT token)
+ {
+    return token && token <= 16 ? s->contexts[token - 1] : NULL;
+@@ -93,12 +132,14 @@
+ {
+    auto &cb = s->device->KTCallbacks;
+    HANDLE rt = s->device->hDevice;
++   if (op==BC250_HOST_CHECK_STATUS) return Bc250HostStatus(s);
++   if (op==BC250_HOST_REPORT_LOST) return Bc250HostLost(s);
+    if (!argument) return E_INVALIDARG;
+ #define HOST_CALL(name, arg) (cb.pfn##name##Cb ? cb.pfn##name##Cb(rt, arg) : E_NOTIMPL)
+    switch (op) {
+    case BC250_HOST_PUBLISH_PROGRESS: {
+       auto *a=(bc250_host_progress *)argument;
+-      if (!Bc250HostContext(s,a->context) || !a->sync || !a->value) return E_INVALIDARG;
++      if (!Bc250HostContext(s,a->context) || !a->sync || !a->value || !a->cpu_address || a->value==UINT64_MAX) return E_INVALIDARG;
+       auto &old=s->progress[a->context-1];
+       if (old.sync && (old.sync!=a->sync || old.value>=a->value)) return E_INVALIDARG;
+       old=*a;
+@@ -234,6 +275,12 @@
+       return HOST_CALL(SignalSynchronizationObjectFromGpu2, &b);
+    }
+    case BC250_HOST_SubmitCommand: {
++      HRESULT health=Bc250HostStatus(s);
++      if (FAILED(health)) return health;
++      if (s->test_loss==1 && s->calls[BC250_HOST_SubmitCommand]>=2) {
++         fprintf(stderr,"BC250 injected SubmitCommand D3DDDIERR_DEVICEREMOVED; no submission\n");
++         return D3DDDIERR_DEVICEREMOVED;
++      }
+       auto *a=(D3DKMT_SUBMITCOMMAND *)argument;
+       if (a->BroadcastContextCount>D3DDDI_MAX_BROADCAST_CONTEXT || a->NumPrimaries>D3DDDI_MAX_WRITTEN_PRIMARIES || a->Flags.NullRendering || a->Flags.PresentRedirected || a->Flags.NoKmdAccess || a->Flags.Reserved || a->PresentHistoryToken || a->NumHistoryBuffers) return E_NOTIMPL;
+       D3DDDICB_SUBMITCOMMAND b = {};
+@@ -270,19 +317,25 @@
+       return (int32_t)0xc000000d;
+    }
+    HRESULT hr=Bc250HostOperation(s,operation,argument);
++   if (Bc250DeviceLostResult(hr)) {
++      Bc250HostLost(s);
++      return (int32_t)0xc00002b6;
++   }
+    if (FAILED(hr) && (operation==BC250_HOST_SubmitCommand || operation==BC250_HOST_SignalSynchronizationObjectFromGpu2 || operation==BC250_HOST_PUBLISH_PROGRESS))
+       s->submission_failed=true;
+    unsigned count=operation<64 ? ++s->calls[operation] : 0;
+    if (count<=2 || (FAILED(hr) && hr!=E_PENDING)) fprintf(stderr,"BC250 hosted op=%u count=%u hr=%08lx\n",operation,count,hr);
+    if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
+-   return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb : (int32_t)0xc0000001;
++   return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb :
++          hr==E_OUTOFMEMORY ? (int32_t)0xc0000017 :
++          hr==E_INVALIDARG ? (int32_t)0xc000000d : (int32_t)0xc0000001;
+ }
+ 
+ HRESULT Bc250QueuePresentWait(Device *device)
+ {
+    auto *s=(Bc250HostProbeState *)device->hosted_state;
+    if (!s || Bc250RuntimeDevice!=device || !device->hContext) return E_INVALIDARG;
+-   if (s->submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
++   if (FAILED(Bc250HostStatus(s)) || s->submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
+    if (!device->KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb ||
+        !device->KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb ||
+        !device->KTCallbacks.pfnCreateSynchronizationObject2Cb) return E_NOTIMPL;
+@@ -293,6 +346,7 @@
+       HRESULT hr=device->KTCallbacks.pfnCreateSynchronizationObject2Cb(device->hDevice,&create);
+       if (FAILED(hr)) return hr;
+       s->present_sync=create.hSyncObject;
++      s->present_cpu=(const UINT64 *)create.Info.MonitoredFence.FenceValueCPUVirtualAddress;
+    }
+    D3DKMT_HANDLE objects[16]={};
+    UINT64 values[16]={};
+@@ -334,6 +388,7 @@
+ {
+    auto *s=(Bc250HostProbeState *)device->hosted_state;
+    if (!s || !s->present_value) return S_OK;
++   if (FAILED(Bc250HostStatus(s))) return D3DDDIERR_DEVICEREMOVED;
+    if (Bc250RuntimeDevice!=device || !device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_INVALIDARG;
+    HANDLE event=CreateEventW(NULL,FALSE,FALSE,NULL);
+    if (!event) return HRESULT_FROM_WIN32(GetLastError());
+@@ -343,7 +398,8 @@
+    HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
+    if (SUCCEEDED(hr) && WaitForSingleObject(event,10000)!=WAIT_OBJECT_0) hr=DXGI_ERROR_DEVICE_HUNG;
+    CloseHandle(event);
+-   return hr;
++   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(s);
++   return SUCCEEDED(hr) ? Bc250HostStatus(s) : hr;
+ }
+ 
+ extern "C" bool d3d10_hosted_bootstrap(struct bc250_host *host);
+@@ -474,6 +530,10 @@
+       auto *state=new Bc250HostProbeState{};
+       state->device=pDevice;
+       state->thread=GetCurrentThreadId();
++      char testLoss[16]={};
++      if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE",NULL,0) &&
++          GetEnvironmentVariableA("BC250_HOST_TEST_LOSS",testLoss,sizeof(testLoss)))
++         state->test_loss=!strcmp(testLoss,"submit") ? 1 : !strcmp(testLoss,"fence") ? 2 : 0;
+       pDevice->hosted_state=state;
+       bc250_host host={};
+       host.sType=BC250_HOST_STYPE; host.version=BC250_HOST_VERSION;
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -7,7 +7,7 @@
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 4u
++#define BC250_HOST_VERSION 5u
+ #define BC250_HOST_IMPORT_STYPE 0x42434832u
+ struct bc250_host_import {
+    uint32_t sType;
+@@ -19,9 +19,12 @@
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
+ #define BC250_HOST_PUBLISH_PROGRESS 3u
++#define BC250_HOST_CHECK_STATUS 4u
++#define BC250_HOST_REPORT_LOST 5u
+ struct bc250_host_progress {
+    uint32_t context, sync;
+    uint64_t value;
++   const uint64_t *cpu_address;
+ };
+ struct bc250_host_paging {
+    uint32_t queue, sync;
+@@ -36,6 +39,18 @@
+    void *userdata;
+    int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
+ };
++static inline int32_t bc250_host_check_status(const struct bc250_host *host)
++{
++   return host->dispatch ? host->dispatch(host->userdata, BC250_HOST_CHECK_STATUS, 0) : 0;
++}
++static inline int bc250_host_fence_valid(const struct bc250_host *host, uint64_t value)
++{
++   if (host->dispatch && value == UINT64_MAX) {
++      host->dispatch(host->userdata, BC250_HOST_REPORT_LOST, 0);
++      return 0;
++   }
++   return bc250_host_check_status(host) >= 0;
++}
+ #define BC250_HOST_CreateAllocation2 16u
+ #define BC250_HOST_DestroyAllocation2 17u
+ #define BC250_HOST_ReserveGpuVirtualAddress 18u

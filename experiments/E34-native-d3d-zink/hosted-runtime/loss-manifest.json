@@ -1,0 +1,44 @@
+[
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/radv_device.c",
+    "before_sha256": "4165118e7356349abc5d5080ca4bff0d566345fb3ea8fc83aea4cb9eadb421cf",
+    "before_lf_sha256": "4165118e7356349abc5d5080ca4bff0d566345fb3ea8fc83aea4cb9eadb421cf",
+    "after_sha256": "42c9c7312fb070d828c3ac8812ca936065f21a8b5952e4609960563820cf6089"
+  },
+  {
+    "component": "icd",
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c",
+    "before_sha256": "9c710c25468c6a1323713ebd2dab0702628362db6c462398f12736cd28bdf72f",
+    "before_lf_sha256": "9c710c25468c6a1323713ebd2dab0702628362db6c462398f12736cd28bdf72f",
+    "after_sha256": "d787ba26ff30979b7b611eaf78b6593c2d8afb42dc5818dbf9e0a2b585379244"
+  },
+  {
+    "component": "icd",
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "6e3966559519c0d037afba688ee7453ccfc08b6f1aac34c70a82a2ae1a319f94",
+    "before_lf_sha256": "6e3966559519c0d037afba688ee7453ccfc08b6f1aac34c70a82a2ae1a319f94",
+    "after_sha256": "9847903f69ae56e6490abde9c0faf1cc86af6f9a1d098d55dd6646749acbecde"
+  },
+  {
+    "component": "icd",
+    "path": "src/vulkan/runtime/vk_wddm2_monitored_fence.c",
+    "before_sha256": "7cfcdf51c11eeec4498b104b09802c0369475ecf3ceae10914910122bcc9c4fd",
+    "before_lf_sha256": "96ef79a9a84691d1f1d91083b23e25fb58b04766068edc35b80179996f2419d3",
+    "after_sha256": "284120443789e2328dc0c2eaafa8f431e0ddcbbf7629219fba6eb88e0285277e"
+  },
+  {
+    "component": "umd",
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_sha256": "12adb04aa0fb15e9d7c2269f3028060e0d2df589697421b86fb98101b2642b05",
+    "before_lf_sha256": "12adb04aa0fb15e9d7c2269f3028060e0d2df589697421b86fb98101b2642b05",
+    "after_sha256": "9f314bf03c52a65ee6d58e76902bdbb82aa905a02187501597b9a9109c4681cf"
+  },
+  {
+    "component": "umd",
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "6e3966559519c0d037afba688ee7453ccfc08b6f1aac34c70a82a2ae1a319f94",
+    "before_lf_sha256": "6e3966559519c0d037afba688ee7453ccfc08b6f1aac34c70a82a2ae1a319f94",
+    "after_sha256": "9847903f69ae56e6490abde9c0faf1cc86af6f9a1d098d55dd6646749acbecde"
+  }
+]

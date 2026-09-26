@@ -1,0 +1,176 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\m12\mesa-current-build'
+[1/146] Generating src/git_sha1.h with a custom command
+[2/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/rmv_vk_rmv_common.c.obj
+[3/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_buffer_view.c.obj
+[4/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_buffer.c.obj
+[5/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/meson-generated_.._vk_dispatch_trampolines.c.obj
+[6/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_cmd_copy.c.obj
+[7/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_cmd_enqueue.c.obj
+[8/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/meson-generated_.._vk_cmd_queue.c.obj
+[9/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_command_pool.c.obj
+[10/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_command_buffer.c.obj
+[11/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_debug_utils.c.obj
+[12/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_deferred_operation.c.obj
+[13/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_descriptor_set_layout.c.obj
+[14/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_descriptor_update_template.c.obj
+[15/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_device.c.obj
+[16/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_fence.c.obj
+[17/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_device_generated_commands.c.obj
+[18/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_framebuffer.c.obj
+[19/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_meta_object_list.c.obj
+[20/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_log.c.obj
+[21/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_image.c.obj
+[22/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_object.c.obj
+[23/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_physical_device.c.obj
+[24/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_graphics_state.c.obj
+[25/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_pipeline_layout.c.obj
+[26/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_query_pool.c.obj
+[27/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_queue.c.obj
+[28/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_sampler.c.obj
+[29/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_render_pass.c.obj
+[30/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_sync.c.obj
+[31/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_semaphore.c.obj
+[32/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_sync_timeline.c.obj
+[33/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_synchronization.c.obj
+[34/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_ycbcr_conversion.c.obj
+[35/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_wddm2_monitored_fence.c.obj
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(36): warning C4005: "STATUS_WAIT_0": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2611): note: zobacz poprzednią definicję „STATUS_WAIT_0”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(39): warning C4005: "STATUS_INVALID_HANDLE": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2638): note: zobacz poprzednią definicję „STATUS_INVALID_HANDLE”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(40): warning C4005: "STATUS_ILLEGAL_INSTRUCTION": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2641): note: zobacz poprzednią definicję „STATUS_ILLEGAL_INSTRUCTION”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(42): warning C4005: "STATUS_PENDING": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2615): note: zobacz poprzednią definicję „STATUS_PENDING”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(48): warning C4005: "STATUS_TIMEOUT": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2614): note: zobacz poprzednią definicję „STATUS_TIMEOUT”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(49): warning C4005: "STATUS_INVALID_PARAMETER": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2639): note: zobacz poprzednią definicję „STATUS_INVALID_PARAMETER”
+P:\bc-250\scratch\m12\mesa-current-build\src\vulkan\runtime\vk_wddm2_dispatch_table.h(50): warning C4005: "STATUS_NO_MEMORY": ponowna definicja makra
+C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\um\winnt.h(2640): note: zobacz poprzednią definicję „STATUS_NO_MEMORY”
+[36/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_meta.c.obj
+[37/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_meta_blit_resolve.c.obj
+[38/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_meta_clear.c.obj
+[39/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_meta_copy_fill_update.c.obj
+[40/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_meta_draw_rects.c.obj
+[41/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_nir.c.obj
+[42/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_pipeline_cache.c.obj
+[43/146] Compiling C object src/vulkan/runtime/libvulkan_lite_runtime.a.p/vk_video.c.obj
+[44/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_shader_module.c.obj
+[45/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_pipeline.c.obj
+[46/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_shader.c.obj
+[47/146] Linking static target src/vulkan/runtime/libvulkan_lite_runtime.a
+[48/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_texcompress_astc.c.obj
+[49/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_acceleration_structure.c.obj
+[50/146] Compiling C object src/vulkan/runtime/libvulkan_runtime.a.p/vk_texcompress_etc2.c.obj
+[51/146] Compiling C object src/vulkan/runtime/libvulkan_instance.a.p/vk_instance.c.obj
+[52/146] Linking static target src/vulkan/runtime/libvulkan_runtime.a
+[53/146] Linking static target src/vulkan/runtime/libvulkan_instance.a
+[54/146] Compiling C object src/vulkan/wsi/libvulkan_wsi.a.p/wsi_common.c.obj
+[55/146] Linking static target src/vulkan/wsi/libvulkan_wsi.a
+[56/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meson-generated_.._layers_radv_annotate_layer.c.obj
+[57/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meson-generated_.._radv_tracepoints.c.obj
+[58/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meson-generated_.._radv_entrypoint_tracepoints.c.obj
+[59/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_ctx_roll_layer.c.obj
+[60/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_app_workarounds.c.obj
+[61/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_rmv_layer.c.obj
+[62/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_rra_layer.c.obj
+[63/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_sqtt_layer.c.obj
+[64/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_astc_decode.c.obj
+[65/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta.c.obj
+[66/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/layers_radv_utrace_layer.c.obj
+[67/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_blit2d.c.obj
+[68/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_blit.c.obj
+[69/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_buffer.c.obj
+[70/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_bufimage.c.obj
+[71/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_clear_hiz.c.obj
+[72/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_clear.c.obj
+[73/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy_indirect_cs.c.obj
+[74/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy.c.obj
+[75/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy_vrs_htile.c.obj
+[76/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_copy_indirect_fs.c.obj
+[77/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_dcc_retile.c.obj
+[78/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_decompress.c.obj
+[79/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_etc_decode.c.obj
+[80/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_fmask_copy.c.obj
+[81/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_fast_clear.c.obj
+[82/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_fmask_expand.c.obj
+[83/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_resolve.c.obj
+[84/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_resolve_cs.c.obj
+[85/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/meta_radv_meta_resolve_fs.c.obj
+[86/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_immediate_samplers.c.obj
+[87/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_printf.c.obj
+[88/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_descriptors.c.obj
+[89/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_lower_ray_queries.c.obj
+[90/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_rt_common.c.obj
+[91/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_debug_hang.c.obj
+[92/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_rt_stage_common.c.obj
+[93/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_debug_nir.c.obj
+../mesa-current-src/src/amd/vulkan/tools/radv_debug_nir.c(391): warning C4319: "~": zero rozszerzeniem "uint32_t" do "uint64_t" większego rozmiaru
+[94/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/nir_radv_nir_rt_traversal_shader.c.obj
+[95/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_debug.c.obj
+[96/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rmv.c.obj
+[97/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rra_gfx12.c.obj
+[98/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rra_gfx10_3.c.obj
+[99/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_rra.c.obj
+[100/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_spm.c.obj
+[101/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_android.c.obj
+[102/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_acceleration_structure.c.obj
+[103/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_buffer.c.obj
+[104/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/tools_radv_sqtt.c.obj
+[105/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_buffer_view.c.obj
+[106/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cs.c.obj
+[107/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cp_reg_shadowing.c.obj
+[108/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cp_dma.c.obj
+[109/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_device.c.obj
+[110/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_device_memory.c.obj
+[111/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptors.c.obj
+[112/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptor_pool.c.obj
+[113/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptor_set.c.obj
+[114/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_cmd_buffer.c.obj
+[115/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_descriptor_update_template.c.obj
+[116/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_dgc.c.obj
+[117/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_event.c.obj
+[118/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_host_image_copy.c.obj
+[119/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_formats.c.obj
+[120/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_image_view.c.obj
+[121/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_image.c.obj
+[122/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_instance.c.obj
+[123/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_perfcounter.c.obj
+[124/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_binary.c.obj
+[125/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_cache.c.obj
+[126/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_physical_device.c.obj
+[127/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_compute.c.obj
+[128/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_layout.c.obj
+[129/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_sampler.c.obj
+[130/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_queue.c.obj
+[131/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_rt.c.obj
+[132/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_sdma.c.obj
+[133/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline_graphics.c.obj
+[134/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader_info.c.obj
+[135/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader_object.c.obj
+[136/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_query.c.obj
+[137/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_wsi.c.obj
+[138/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_video.c.obj
+[139/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/winsys_wddm2_radv_wddm2_bo.c.obj
+[140/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_video_enc.c.obj
+[141/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/winsys_wddm2_radv_wddm2_winsys.c.obj
+[142/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/winsys_wddm2_radv_wddm2_cs.c.obj
+[143/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_pipeline.c.obj
+[144/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/winsys_wddm2_radv_wddm2_wsi.c.obj
+[145/146] Compiling C object src/amd/vulkan/vulkan_radeon.dll.p/radv_shader.c.obj
+[146/146] Linking target src/amd/vulkan/vulkan_radeon.dll
+   Trwa tworzenie biblioteki src\amd\vulkan\vulkan_radeon.lib i obiektu src\amd\vulkan\vulkan_radeon.exp
+

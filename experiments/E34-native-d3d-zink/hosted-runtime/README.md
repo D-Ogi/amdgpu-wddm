@@ -108,3 +108,23 @@ For exact replay normalize the verified input to LF and use git with
 core.autocrlf=false. present-manifest.json binds original and LF input hashes
 and final byte hashes. M543 records run026, candidate014, and the unsuccessful
 intermediate controls. The full project patch stack still needs a clean build.
+
+## Hosted loss propagation control
+
+ABI5 adds sticky device status and loss notification to the hosted bridge.
+HRESULT removal/reset/hung results retain device-loss identity; invalid fence
+observations cannot satisfy waits. UINT64_MAX is reserved by this private
+hosted timeline contract. The Microsoft monitored-fence documentation does not
+establish that every TDR writes this value, so no such universal claim is made.
+
+First run the existing120-Present positive control. Then use an app-scoped
+BC250_HOST_TEST_LOSS=submit or fence diagnostic, also requiring the existing
+BC250_D3D_RUNTIME_PROBE flag. Submit mode refuses the third callback before
+sending GPU work; fence mode substitutes an invalid local observation without
+writing the read-only fence mapping. Require the application's Present to fail
+and GetDeviceRemovedReason to report device loss, rather than successful pixels.
+No hardware hang/reset is induced. Preserve baseline restoration and bounded
+runner timeouts. A crash, timeout or undetected loss rejects the candidate.
+
+Apply loss-icd.patch and loss-umd.patch after the Present patches.
+loss-manifest.json binds UTF-8/LF inputs and outputs. M544 records027-029.
