@@ -20,7 +20,7 @@ Procedure:
    interactive scheduled task, three overlay captures, ROI analysis as in M546.
 5. Evidence pulled as one archive; images kept out of Git, hashes and ROI counts in.
 
-State: run on 2026-09-27 (fact M552). Both controls pass; the branches were
+State: run on 2026-09-27 (fact M553). Both controls pass; the branches were
 pushed to the fork afterwards with tags `...-consolidated-2026-09-27b`.
 
 Evidence: `evidence/windows/2026-09-27-E36-fork-branch-controls/`.
