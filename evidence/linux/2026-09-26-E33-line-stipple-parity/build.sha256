@@ -1,0 +1,4 @@
+fec7c475cf25d5457bd1550442f91f8f2fb6a1543dadc43e824b71cfe12e4415  /opt/bc250/lib/libvulkan_radeon.so
+1fa58014c86bb3cd12e88faf28ea47aa443424bea8abd052b85df31692ed2b20  /opt/bc250/lib/libgallium-26.3.0-devel.so
+823a81e39449082f0c15cdf6965a4bd16d2052c25a1b5621c784e1f760acab8d  /work/build/piglit/bin/line-smooth-stipple
+00cbb831d2a5b743d76554f18bee76eb3f31d2c89dc4fd5edf64c67f291280a3  /work/build/piglit/bin/shader_runner

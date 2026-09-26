@@ -1,0 +1,4 @@
+0
+BC250_M12_BUILD: recovering journal
+BC250_M12_BUILD: Clearing orphaned inode 424276 (uid=0, gid=0, mode=0100755, size=129447456)
+BC250_M12_BUILD: clean, 57191/1572864 files, 931710/6291456 blocks

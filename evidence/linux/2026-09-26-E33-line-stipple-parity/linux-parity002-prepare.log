@@ -1,0 +1,8 @@
+Pass 1: Checking inodes, blocks, and sizes
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+BC250_M12_BUILD: 57191/1572864 files (0.1% non-contiguous), 931710/6291456 blocks
+build_worker_pid=3326
+e2fsck 1.47.4 (6-Mar-2025)

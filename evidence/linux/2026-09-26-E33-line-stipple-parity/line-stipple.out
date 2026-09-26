@@ -1,0 +1,4 @@
+Probe color at (9,5)
+  Expected: 31 95 31
+  Observed: 0 128 0
+PIGLIT: {"result": "fail" }

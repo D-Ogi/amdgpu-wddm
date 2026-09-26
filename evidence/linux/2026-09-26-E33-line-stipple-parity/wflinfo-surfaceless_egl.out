@@ -1,0 +1,6 @@
+Waffle platform: surfaceless_egl
+Waffle api: gl
+OpenGL vendor string: Mesa
+OpenGL renderer string: zink Vulkan 1.4(AMD BC-250 (RADV GFX1013) (MESA_RADV))
+OpenGL version string: 4.6 (Compatibility Profile) Mesa 26.3.0-devel
+OpenGL context flags: 0x0
