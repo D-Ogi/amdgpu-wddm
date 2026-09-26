@@ -2,16 +2,19 @@
 # with the WDK kernel flags the miniport uses. Host-side only: nothing here touches the lab machine.
 #
 #   pwsh driver\shim\test\run_psp.ps1
-#   pwsh driver\shim\test\run_psp.ps1 -Firmware P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu -Verbose250
+#   pwsh driver\shim\test\run_psp.ps1 -Firmware D:\some\other\dir -Verbose250
 #
-# Everything is written under -Out (default P:\BC-250\scratch\m5psp), never into the repository and
+# Everything is written under -Out (default <BC250_ROOT>\scratch\m5psp), never into the repository and
 # never onto drive C:. The firmware files are linux-firmware's amdgpu/cyan_skillfish2_*.bin; they
-# are not part of this repository.
+# are not part of this repository. -Firmware defaults to tools\firmware\fetch_firmware.py's own
+# default directory (<BC250_ROOT>\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu) and -Kits to
+# <BC250_ROOT>\toolchain\nuget. BC250_ROOT is the workspace root: the environment variable, else this
+# repository's parent directory. See tools\firmware\README.md.
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\m5psp',
-    [string]$Firmware = 'P:\BC-250\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Out = '',
+    [string]$Firmware = '',
+    [string]$Kits = '',
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250
 )
@@ -19,6 +22,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = Resolve-Path (Join-Path $here '..\..\..')
+# Workspace root (BC250_ROOT): environment variable, else the repository's parent directory.
+$root = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $repo '..')).Path }
+if (-not $Out) { $Out = Join-Path $root 'scratch\m5psp' }
+if (-not $Firmware) { $Firmware = Join-Path $root 'ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu' }
+if (-not $Kits) { $Kits = Join-Path $root 'toolchain\nuget' }
 $shim = Join-Path $repo 'driver\shim'
 $imports = Join-Path $repo 'driver\amdgpu-import'
 $amdhdr = Join-Path $repo 'third_party\linux-amdgpu'

@@ -1,8 +1,12 @@
-# bc250-win
+# amdgpu-wddm
 
-Windows GPU support for the ASRock BC-250 (AMD Cyan Skillfish APU, GFX 10.1.3, PCI `1002:13FE`).
+An open Windows (WDDM) driver stack for AMD GPUs, developed first on the ASRock BC-250 (AMD Cyan Skillfish APU,
+GFX 10.1.3, PCI `1002:13FE`, VRAM carve-out, no resizable BAR). The repository's working name inside the
+workspace is `bc250-win`; the Mesa side lives in the companion repository
+[mesa-amdgpu-wddm](https://github.com/D-Ogi/mesa-amdgpu-wddm). Not affiliated with or endorsed by AMD,
+ASRock or Microsoft.
 
-**Status: milestone M0 - nothing in this repo has been confirmed on hardware yet.** The current state always lives in `docs/facts.md` and `docs/00-goal-and-roadmap.md`.
+**Current work (2026-09-26): M12 breadth on the accepted M10 baseline and the M13 accelerated desktop; M9 and M11 stay open.** See the measured results and open limitations in [facts](docs/facts.md) and the [roadmap](docs/00-goal-and-roadmap.md), whose last section points to the working roadmap; the accelerated desktop has its own [M13 acceptance gates](docs/m13-accelerated-desktop-roadmap.md).
 
 ## Starting point
 
@@ -36,6 +40,8 @@ python tools/regcalc/regcalc.py lookup mmGRBM_STATUS mmSPI_PG_ENABLE_STATIC_WGP_
 python tools/regcalc/regcalc.py reverse 0x5C3C
 python -m unittest discover -s tools/regcalc
 ```
+
+To build the KMD, LLVM and the Mesa components from source, follow [docs/build.md](docs/build.md).
 
 ## License
 

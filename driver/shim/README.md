@@ -949,4 +949,5 @@ file headers give; two control runs (a PSP that stays silent, a PSP that refuses
 the sequence where they should. What the model cannot show is what the real PSP accepts; that is
 the hardware experiment's job. The firmware files are linux-firmware's
 `amdgpu/cyan_skillfish2_*.bin`, kept outside this repository; their versions equal what amdgpu
-reported on unit A (E01).
+reported on unit A (E01). `tools/firmware/` fetches and verifies them against a pinned manifest and
+pushes them to the lab target; see `tools/firmware/README.md`.

@@ -1,4 +1,4 @@
-bc250-win - Windows GPU support for the ASRock BC-250
+amdgpu-wddm (working name bc250-win) - Windows GPU support for AMD GPUs, first the ASRock BC-250
 
 Required Notice: Copyright (c) 2026 D-Ogi. Licensed under the PolyForm Noncommercial License 1.0.0 (https://polyformproject.org/licenses/noncommercial/1.0.0).
 Required Notice: Unofficial community project, not affiliated with or endorsed by AMD, ASRock or Microsoft. Genuine releases are published only by D-Ogi, as source code with signed checksums (see SECURITY.md). A binary obtained anywhere else does not come from this project.
