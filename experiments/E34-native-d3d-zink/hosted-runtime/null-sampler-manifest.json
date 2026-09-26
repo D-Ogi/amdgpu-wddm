@@ -1,0 +1,17 @@
+[
+  {
+    "path": "src/gallium/frontends/d3d10umd/State.h",
+    "before_lf_sha256": "9c623b82aacc590ad814adc83b893ba2137d4434f643cd1539a50585ae89b492",
+    "after_lf_sha256": "afdd7c40bb6a0f5c20a439c5d40bee0ea2d33ce0a2ed676170c1d3bad59695bb"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Shader.cpp",
+    "before_lf_sha256": "ea920a5909d881d9a9271a25b129a3cffce95d4069a266be8eba407f0589c896",
+    "after_lf_sha256": "c09a4ab6c03025e69617881772deb4e0bf63fea39a337e6b3f6353accc7e82bc"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_lf_sha256": "ec53b8d35d9f00a6f81f5ae352c22e64f4187273c7b1fdffb31ef294d2c44e05",
+    "after_lf_sha256": "158bab67593da85c9c627cec4dab519ac1f290d8a8d52f570f7d27ca1e99c946"
+  }
+]

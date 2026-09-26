@@ -1,0 +1,95 @@
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -86,6 +86,7 @@
+    unsigned restart_index;
+    unsigned index_size;
+    unsigned ib_offset;
++   void *default_sampler;
+    void *samplers[MESA_SHADER_STAGES][PIPE_MAX_SAMPLERS];
+    struct pipe_sampler_view *sampler_views[MESA_SHADER_STAGES][PIPE_MAX_SHADER_SAMPLER_VIEWS];
+ 
+--- a/src/gallium/frontends/d3d10umd/Shader.cpp
++++ b/src/gallium/frontends/d3d10umd/Shader.cpp
+@@ -203,6 +203,8 @@
+    for (UINT i = 0; i < NumSamplers; i++) {
+       assert(Offset + i < PIPE_MAX_SAMPLERS);
+       samplers[Offset + i] = CastPipeSamplerState(phSamplers[i]);
++      if (!samplers[Offset + i])
++         samplers[Offset + i] = pDevice->default_sampler;
+    }
+ 
+    pipe->bind_sampler_states(pipe, shader_type, 0, PIPE_MAX_SAMPLERS, samplers);
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -55,6 +55,8 @@
+ 
+ #include <d3dkmthk.h>
+ #include <new>
++#include <float.h>
++#include <initializer_list>
+ 
+ static thread_local Device *Bc250RuntimeDevice;
+ struct Bc250RuntimeScope {
+@@ -474,6 +476,18 @@
+  *
+  * ----------------------------------------------------------------------
+  */
++
++static void
++Bc250DeleteDefaultSampler(Device *device)
++{
++   if (!device->default_sampler) return;
++   void *unbound[PIPE_MAX_SAMPLERS] = {};
++   auto *pipe = device->pipe;
++   for (auto stage : {MESA_SHADER_VERTEX, MESA_SHADER_FRAGMENT, MESA_SHADER_GEOMETRY})
++      pipe->bind_sampler_states(pipe, stage, 0, PIPE_MAX_SAMPLERS, unbound);
++   pipe->delete_sampler_state(pipe, device->default_sampler);
++   device->default_sampler = NULL;
++}
+ 
+ struct Bc250CreateGuard {
+    Device *device;
+@@ -496,6 +510,7 @@
+             DeleteEmptyShader(device, MESA_SHADER_VERTEX, device->empty_vs);
+          device->empty_fs = device->empty_vs = NULL;
+          pipe_resource_reference(&device->zero_vertex_buffer, NULL);
++         Bc250DeleteDefaultSampler(device);
+          pipe->destroy(pipe);
+          device->pipe = NULL;
+       }
+@@ -644,6 +659,27 @@
+    if (!pipe) return E_OUTOFMEMORY;
+    pDevice->pipe = pipe;
+    if (Bc250FailCreate("pipe")) return E_OUTOFMEMORY;
++   struct pipe_sampler_state default_sampler = {};
++   default_sampler.seamless_cube_map = 1;
++   default_sampler.wrap_s = PIPE_TEX_WRAP_CLAMP_TO_EDGE;
++   default_sampler.wrap_t = PIPE_TEX_WRAP_CLAMP_TO_EDGE;
++   default_sampler.wrap_r = PIPE_TEX_WRAP_CLAMP_TO_EDGE;
++   default_sampler.min_img_filter = PIPE_TEX_FILTER_LINEAR;
++   default_sampler.mag_img_filter = PIPE_TEX_FILTER_LINEAR;
++   default_sampler.min_mip_filter = PIPE_TEX_MIPFILTER_LINEAR;
++   default_sampler.compare_func = PIPE_FUNC_NEVER;
++   default_sampler.min_lod = -FLT_MAX;
++   default_sampler.max_lod = FLT_MAX;
++   for (unsigned i = 0; i < 4; ++i)
++      default_sampler.border_color.f[i] = 1.0f;
++   pDevice->default_sampler = pipe->create_sampler_state(pipe, &default_sampler);
++   if (!pDevice->default_sampler || Bc250FailCreate("sampler")) return E_OUTOFMEMORY;
++   for (auto stage : {MESA_SHADER_VERTEX, MESA_SHADER_FRAGMENT, MESA_SHADER_GEOMETRY}) {
++      for (unsigned i = 0; i < PIPE_MAX_SAMPLERS; ++i)
++         pDevice->samplers[stage][i] = pDevice->default_sampler;
++      pipe->bind_sampler_states(pipe, stage, 0, PIPE_MAX_SAMPLERS, pDevice->samplers[stage]);
++   }
++
+    static const float zero_vertex[4] = {0, 0, 0, 0};
+    pDevice->zero_vertex_buffer = pipe_buffer_create_with_data(
+        pipe, PIPE_BIND_VERTEX_BUFFER, PIPE_USAGE_IMMUTABLE,
+@@ -891,6 +927,7 @@
+                                 pipe->screen->shader_caps[MESA_SHADER_GEOMETRY].max_sampler_views),
+                            0, sampler_views);
+ 
++   Bc250DeleteDefaultSampler(pDevice);
+    fprintf(stderr,"D3D destroy stage 7\n"); fflush(stderr);
+    pipe->destroy(pipe);
+    pDevice->pipe = NULL;
