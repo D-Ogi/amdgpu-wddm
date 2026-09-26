@@ -1,0 +1,138 @@
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -47,6 +47,8 @@
+ #include "util/u_sampler.h"
+ #include "util/u_framebuffer.h"
+ 
++
++extern "C" struct pipe_screen *d3d10_create_screen(void);
+ 
+ static void APIENTRY DestroyDevice(D3D10DDI_HDEVICE hDevice);
+ static void APIENTRY RelocateDeviceFuncs(D3D10DDI_HDEVICE hDevice,
+@@ -125,10 +127,15 @@
+       return E_FAIL;
+    }
+ 
+-   Adapter *pAdapter = CastAdapter(hAdapter);
++
+ 
+    Device *pDevice = CastDevice(pCreateData->hDrvDevice);
+    memset(pDevice, 0, sizeof *pDevice);
++   pDevice->hRTCoreLayer = pCreateData->hRTCoreLayer;
++   pDevice->hDevice = (HANDLE)pCreateData->hRTDevice.handle;
++   pDevice->KTCallbacks = *pCreateData->pKTCallbacks;
++   pDevice->UMCallbacks = *pCreateData->pUMCallbacks;
++   pDevice->pDXGIBaseCallbacks = pCreateData->DXGIBaseDDI.pDXGIBaseCallbacks;
+ 
+    // This Zink-only diagnostic DLL is loaded through D3D_DRIVER_TYPE_SOFTWARE.
+    // That runtime cannot service native WDDM presentation callbacks. RADV owns
+@@ -152,11 +159,21 @@
+    }
+ 
+    fprintf(stderr,"BC250 D3D device stage 2\n"); fflush(stderr);
+-   struct pipe_screen *screen = pAdapter->screen;
++   // Adapter screen remains capability-only for this prototype. Rendering
++   // screens belong to one runtime device so future hosted callbacks cannot
++   // accidentally be inherited from a different D3D device.
++   pDevice->owned_screen = d3d10_create_screen();
++   if (!pDevice->owned_screen) return E_OUTOFMEMORY;
++   struct pipe_screen *screen = pDevice->owned_screen;
++   fprintf(stderr, "BC250 device screen=%p runtime=%p\n", screen, pDevice->hDevice);
+    DebugPrintf("BC250 Renderer: %s\n", screen->get_name(screen));
+    fprintf(stderr,"BC250 D3D device stage 3\n"); fflush(stderr);
+    struct pipe_context *pipe = screen->context_create(screen, NULL, 0);
+-   if (!pipe) return E_OUTOFMEMORY;
++   if (!pipe) {
++      screen->destroy(screen);
++      pDevice->owned_screen = NULL;
++      return E_OUTOFMEMORY;
++   }
+    pDevice->pipe = pipe;
+    static const float zero_vertex[4] = {0, 0, 0, 0};
+    pDevice->zero_vertex_buffer = pipe_buffer_create_with_data(
+@@ -182,11 +199,7 @@
+          screen->caps.max_dual_source_render_targets;
+ 
+    fprintf(stderr,"BC250 D3D device stage 8\n"); fflush(stderr);
+-   pDevice->hRTCoreLayer = pCreateData->hRTCoreLayer;
+-   pDevice->hDevice = (HANDLE)pCreateData->hRTDevice.handle;
+-   pDevice->KTCallbacks = *pCreateData->pKTCallbacks;
+-   pDevice->UMCallbacks = *pCreateData->pUMCallbacks;
+-   pDevice->pDXGIBaseCallbacks = pCreateData->DXGIBaseDDI.pDXGIBaseCallbacks;
++
+ 
+    pDevice->draw_so_target = NULL;
+ 
+@@ -402,6 +415,13 @@
+                            PIPE_MAX_SHADER_SAMPLER_VIEWS, 0, sampler_views);
+ 
+    fprintf(stderr,"D3D destroy stage 7\n"); fflush(stderr);
++   pipe->destroy(pipe);
++   pDevice->pipe = NULL;
++   if (pDevice->owned_screen) {
++      fprintf(stderr, "BC250 destroy device screen=%p runtime=%p\n", pDevice->owned_screen, pDevice->hDevice);
++      pDevice->owned_screen->destroy(pDevice->owned_screen);
++      pDevice->owned_screen = NULL;
++   }
+    if (pDevice->hContext) {
+       D3DDDICB_DESTROYCONTEXT destroy = {};
+       destroy.hContext = pDevice->hContext;
+@@ -413,7 +433,6 @@
+       pDevice->KTCallbacks.pfnDestroyPagingQueueCb(pDevice->hDevice, &destroy);
+    }
+    fprintf(stderr,"D3D destroy stage 8\n"); fflush(stderr);
+-   pipe->destroy(pipe);
+ }
+ 
+ 
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -74,6 +74,7 @@
+    RenderTargetView *renderTargetViews;
+    ShaderResourceView *shaderResourceViews;
+    struct pipe_context *pipe;
++   struct pipe_screen *owned_screen; // per-runtime-device Zink lifetime
+ 
+    struct cso_context *cso;
+    struct pipe_framebuffer_state fb;
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -345,10 +345,10 @@
+    pResource->transfers = (struct pipe_transfer **)calloc(pResource->NumSubResources,
+                                                           sizeof *pResource->transfers);
+ 
+-   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0))
++   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_INVENTORY", NULL, 0))
+       fprintf(stderr, "BC250 runtime resource misc=%x bind=%x primary=%u\n",
+               pCreateResource->MiscFlags, pCreateResource->BindFlags, pResource->primary);
+-   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0) ||
++   if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_INVENTORY", NULL, 0) ||
+        pResource->primary || (pCreateResource->BindFlags & D3D10_DDI_BIND_PRESENT) ||
+        (pCreateResource->MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED)) {
+       HRESULT hr = Bc250EnsureSurface(CastDevice(hDevice), pResource);
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <stdio.h>
++#include <stddef.h>
+ #include <windows.h>
+ #include <winternl.h>
+ #include <d3dkmthk.h>
+@@ -113,12 +114,13 @@
+       DebugPrintf("BC250 Allocate input runtime %p size %llu primary %u\n", resource->hRTResource, data.size, resource->primary);
+       allocate.NumAllocations = 1; allocate.pAllocationInfo2 = &info;
+       hr = device->KTCallbacks.pfnAllocateCb(device->hDevice, &allocate);
+-      fprintf(stderr, "BC250 Allocate %08lx format %u primary %u handle %x resource %x\n", hr, format, resource->primary, info.hAllocation, allocate.hKMResource);
++      fprintf(stderr, "BC250 Allocate hr=%08lx inputRT=%p callbackRT=%p miscShared=%u format=%u primary=%u allocation=%x resource=%x\n", hr, resource->hRTResource, allocate.hResource, resource->shared, format, resource->primary, info.hAllocation, allocate.hKMResource);
++      fprintf(stderr, "BC250 ALLOCATE ABI size=%zu private=%zu privateSize=%zu hResource=%zu hKMResource=%zu NumAllocations=%zu info2=%zu\n", sizeof(D3DDDICB_ALLOCATE), offsetof(D3DDDICB_ALLOCATE,pPrivateDriverData), offsetof(D3DDDICB_ALLOCATE,PrivateDriverDataSize), offsetof(D3DDDICB_ALLOCATE,hResource), offsetof(D3DDDICB_ALLOCATE,hKMResource), offsetof(D3DDDICB_ALLOCATE,NumAllocations), offsetof(D3DDDICB_ALLOCATE,pAllocationInfo2));
+       if (FAILED(hr)) return hr;
+       resource->allocation = info.hAllocation;
+       resource->surfacePitch = pitch;
+       resource->surfaceBytes = bytes;
+-      if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", NULL, 0)) {
++      if (GetEnvironmentVariableA("BC250_D3D_RUNTIME_INVENTORY", NULL, 0)) {
+          // Inventory only: do not claim this unimported resource is presentable.
+          auto share = (decltype(&D3DKMTShareObjects))GetProcAddress(GetModuleHandleA("gdi32.dll"), "D3DKMTShareObjects");
+          if (!share) return E_NOTIMPL;

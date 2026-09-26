@@ -61,3 +61,33 @@ Expected: native context and AllocateCb succeed; record rather than presume whic
 resources accept NT export. No image correctness claim follows from allocation.
 
 Runtime result: run002 passes context/allocation callbacks, with hKMResource zero; [M534 evidence](../../evidence/windows/2026-09-26-E34-runtime-callbacks/RESULT.md). Continue with the [hosted plan](hosted-plan.md).
+
+## Per-device screen lifetime
+
+Hypothesis: native D3D devices can each own a Zink screen; destroying one does not
+invalidate GPU rendering on the other. Create two hardware devices through the
+M534 process router. Clear/read 4096 exact red pixels on the first and blue on the
+second, destroy the first, then clear/read green on the second. Exit0 and baseline
+restoration required. This establishes frontend ownership only: standalone RADV
+still caches its winsys, and callback dispatch into RADV is not implemented yet.
+
+## hKMResource controls
+
+Hypothesis: the observed zero hKMResource can be localized by recording nonzero
+input runtime handles and actual compiled ALLOCATE layout, then checking whether
+the shipping CPU UMD produces a usable legacy shared handle. Build a WDK26100
+layout utility with header provenance; log identical offsets from the actual UMD.
+Run GetSharedHandle and OpenSharedResource on two native hardware D3D devices,
+first on the unchanged CPU baseline, then the instrumented candidate through the
+bounded process router. Record every HRESULT and restore original libraries.
+Do not infer the cause of a zero callback field merely from a successful API call.
+
+### Per-device ownership control
+
+Before hosted dispatch integration, create two native hardware D3D devices with
+separate Zink screens; verify 4096 exact red and blue pixels, destroy the first
+device, then verify 4096 green pixels on the second. Use the same bounded router
+procedure; keep DWM on the CPU UMD. A pass proves screen lifetime isolation, not
+separate kernel devices, hosted callbacks or GPU desktop composition.
+
+Controls measured in [M535](../../evidence/windows/2026-09-26-E34-runtime-controls/RESULT.md). Shared handle retrieval works; hosted runtime rendering remains open.

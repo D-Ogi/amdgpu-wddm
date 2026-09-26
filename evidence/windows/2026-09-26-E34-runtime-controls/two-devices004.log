@@ -1,0 +1,246 @@
+exit=0
+hardware D3D11CreateDevice=00000000
+module bc250d3d_zink.dll: C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+module vulkan_radeon.dll: C:\BC250\m10\wsi-final\vulkan_radeon.dll
+second hardware device=00000000
+channel=0 mismatches=0/4096
+channel=2 mismatches=0/4096
+first device destroyed; checking second
+channel=1 mismatches=0/4096
+PASS two native D3D devices with independent screen lifetimes
+
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x8999
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x40001080
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=000001902FF938E0 runtime=000001902D75D2E8
+BC250 D3D device stage 3
+allocation handle=0x40001440
+allocation handle=0x400014c0
+allocation handle=0x40001540
+allocation handle=0x400015c0
+allocation handle=0x40001640
+allocation handle=0x400016c0
+allocation handle=0x40001740
+allocation handle=0x400017c0
+allocation handle=0x40001840
+allocation handle=0x400018c0
+allocation handle=0x40001940
+allocation handle=0x400019c0
+allocation handle=0x40001a40
+allocation handle=0x40001ac0
+allocation handle=0x40001b40
+allocation handle=0x40001bc0
+allocation handle=0x40001c40
+allocation handle=0x40001cc0
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 zink init stage 0
+BC250 zink init stage 1
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=00000190303600B0 runtime=00000190302F25E8
+BC250 D3D device stage 3
+allocation handle=0x400021c0
+allocation handle=0x40002240
+allocation handle=0x80000200
+allocation handle=0x400022c0
+allocation handle=0x80000300
+allocation handle=0x40002340
+allocation handle=0x400023c0
+allocation handle=0x40002440
+allocation handle=0x80000500
+allocation handle=0x400024c0
+allocation handle=0x40002540
+allocation handle=0x400025c0
+allocation handle=0x40002640
+allocation handle=0x400026c0
+allocation handle=0x40002740
+allocation handle=0x400027c0
+allocation handle=0x40002840
+allocation handle=0x400028c0
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+allocation handle=0x80000ac0
+allocation handle=0x80000b40
+allocation handle=0x40002980
+allocation handle=0x40002a00
+allocation handle=0x40002a80
+allocation handle=0x40002b00
+allocation handle=0x80000bc0
+allocation handle=0x80000e40
+bc250: progress before submit previous=0 observed=0 waits=0 signals=1
+allocation handle=0x80000c40
+bc250: gather capacity=4096 bytes required=3936 ibs=4
+allocation handle=0x80000dc0
+allocation handle=0x40002b80
+allocation handle=0x40002c00
+allocation handle=0x40002c80
+allocation handle=0x80001140
+allocation handle=0x800011c0
+allocation handle=0x40002d00
+allocation handle=0x40002d80
+allocation handle=0x800012c0
+allocation handle=0x80001340
+allocation handle=0x40002e00
+allocation handle=0x40002e80
+allocation handle=0x40002f00
+allocation handle=0x40002f80
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 destroy device screen=000001902FF938E0 runtime=000001902D75D2E8
+D3D destroy stage 8
+allocation handle=0x400030c0
+allocation handle=0x40003140
+allocation handle=0x400031c0
+allocation handle=0x40003240
+allocation handle=0x400032c0
+allocation handle=0x40003340
+allocation handle=0x400033c0
+allocation handle=0x40003440
+allocation handle=0x400034c0
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 destroy device screen=00000190303600B0 runtime=00000190302F25E8
+D3D destroy stage 8
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\runtime-control.exe",
+        "Hash":  "D624FAE36995D3F77AD21379261FCE9512838AEEF8BC695A4571B712B9796704"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\bc250d3d_zink.dll",
+        "Hash":  "704DCFFB7E9ED7353D35D2527E947F846533248D6803FCD73BA071093529ADEE"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+CPU UMD file restored
+DWM before=1856 after=1856
+restored=9C40083C08210C71A6F6DC7EA12F7C1205BBC6AA1DFE48E596C8495B6C2A9798

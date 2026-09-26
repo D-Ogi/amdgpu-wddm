@@ -1,0 +1,3 @@
+    ../../toolchain/nuget/microsoft.windows.wdk.x64/c/Include/10.0.26100.0/um/d3d10umddi.h
+    ../../toolchain/nuget/microsoft.windows.wdk.x64/c/Include/10.0.26100.0/um/d3dumddi.h
+    ../m13-native-zink-src/include/winddk/winddk_compat.h

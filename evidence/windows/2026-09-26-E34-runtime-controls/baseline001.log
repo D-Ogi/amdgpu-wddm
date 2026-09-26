@@ -1,0 +1,22 @@
+exit=0
+hardware D3D11CreateDevice=00000000
+module bc250d3d.dll: C:\BC250\m11\resource-close\bc250d3d.dll
+CreateTexture2D shared=00000000
+Query IDXGIResource=00000000
+GetSharedHandle=00000000 nonzero=1
+second hardware device=00000000
+OpenSharedResource=00000000
+opened extent=64x64 format=28
+PASS shared handle queried and opened on second runtime device
+
+
+[
+    {
+        "Path":  "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+        "Hash":  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\runtime-control.exe",
+        "Hash":  "A121D43EF6227E5DCC8AAD477F270E6F6D0CE8ECFD275795961594F2475691AF"
+    }
+]
