@@ -1,0 +1,10 @@
+{
+  "recorded_utc": "2026-09-26T10:53:11.449828+00:00",
+  "normal_reboot_requested": true,
+  "pinned_windows_matches": 0,
+  "pinned_linux_matches": 0,
+  "plug_off_verified": true,
+  "off_interval_seconds_at_least": 10,
+  "plug_on_verified": true,
+  "windows_ssh_pending": true
+}

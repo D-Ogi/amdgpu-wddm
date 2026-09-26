@@ -1,0 +1,15 @@
+--- a/src/amd/compiler/aco_lower_to_hw_instr.cpp
++++ b/src/amd/compiler/aco_lower_to_hw_instr.cpp
+@@ -2282,6 +2282,12 @@
+                scratch_addr_lo, scratch_offset);
+       bld.sop2(aco_opcode::s_addc_u32, Definition(scratch_hi, s1), Definition(scc, s1),
+                scratch_addr_hi, hi_add, Operand(scc, s1));
++
++      /* The descriptor carries a 48-bit VA. Reconstruct its canonical upper
++       * bits from bit47 instead of assuming the Linux high-half allocation
++       * range: WDDM also uses low-half GPU VAs. Preserve the wave-offset carry. */
++      bld.sop1(aco_opcode::s_sext_i32_i16, Definition(scratch_hi, s1),
++               Operand(scratch_hi, s1));
+ 
+       /* "((size - 1) << 11) | register" (FLAT_SCRATCH_LO/HI is encoded as register
+        * 20/21) */

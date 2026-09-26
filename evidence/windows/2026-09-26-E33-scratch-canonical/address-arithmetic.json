@@ -1,0 +1,26 @@
+[
+  {
+    "va": "0x2013c0000",
+    "offset": "0x0",
+    "result": "0x2013c0000",
+    "expected": "0x2013c0000"
+  },
+  {
+    "va": "0x2fffffff0",
+    "offset": "0x40",
+    "result": "0x300000030",
+    "expected": "0x300000030"
+  },
+  {
+    "va": "0xffff800100e00000",
+    "offset": "0x0",
+    "result": "0xffff800100e00000",
+    "expected": "0xffff800100e00000"
+  },
+  {
+    "va": "0xffff8001fffffff0",
+    "offset": "0x40",
+    "result": "0xffff800200000030",
+    "expected": "0xffff800200000030"
+  }
+]

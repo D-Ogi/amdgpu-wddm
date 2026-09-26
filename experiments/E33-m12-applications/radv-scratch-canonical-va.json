@@ -1,0 +1,11 @@
+{
+  "upstream": "https://gitlab.freedesktop.org/mesa/mesa",
+  "license": "MIT",
+  "commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "patch": "radv-scratch-canonical-va.patch",
+  "patch_sha256": "fa438941b0506f658bf1a83eb803647ccf6ef648ba3da8b7d9ac0483d112d6b5",
+  "candidate_icd_sha256": "986B691F4439F0A190A56C2ABEE0AE9FA61ABBE8D117ED4DF5F2147C26DAF865",
+  "base_candidate_sha256": "8B5EC055501CD042F723F9EBC9FC29787A6173C61937A739DD7C4C520DBD2AA6",
+  "scope": "GFX10/10.3 p_init_scratch canonical reconstruction; earlier generations untouched",
+  "validation": "M512 bounded and unmodified upstream pixel pass on Windows; full piglit pending"
+}

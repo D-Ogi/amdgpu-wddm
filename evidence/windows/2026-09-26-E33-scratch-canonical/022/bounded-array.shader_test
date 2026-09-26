@@ -1,0 +1,57 @@
+[require]
+GLSL >= 1.20
+
+[vertex shader passthrough]
+
+[fragment shader]
+/*
+Test predication on values from large array
+
+Big local arrays may be handled differently than smaller ones, e.g. stored in
+a global memory. However drivers may have a subtle error combining this
+optimization with helper invocations of fragment shader.
+
+Since all side-effects of helper invocations are being ignored - driver may
+also erroneously ignore stores to a local array which was lowered to
+a global memory.
+
+This may cause an issue when a control flow in helper invocation depends
+on the value written to such array.
+
+To test this we make a loop which depends on a value written to a big local
+array, so if stores are being ignored - the loop will become infinite,
+causing a hang.
+*/
+
+
+#version 120
+
+int map[2048];
+
+uniform int indexInArray;
+
+void main() {
+  for (int i = 0; i < map.length(); i++) {
+    map[i] = 0;
+  }
+
+  int i = min(indexInArray, map.length() - 1);
+
+  do {
+    if(map[i] == 1){
+      break;
+    }else{
+      map[i] = 1;
+    }
+  }
+  while (true);
+
+  gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+}
+
+[test]
+uniform int indexInArray 500
+clear color 0.0 0.0 0.0 0.0
+clear
+draw rect -1.0 -1.0 2.0 2.0
+relative probe rect rgb (0.0, 0.0, 0.5, 0.5) (0.0, 1.0, 0.0)

@@ -1,0 +1,23 @@
+{
+  "diagnostic_only": true,
+  "files": [
+    {
+      "name": "bounded-array.shader_test",
+      "sha256": "afdb8f292627432c84601114cc38f4fca28e9151281d22526a978ba0e81dc431"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "d18e2372010f50202bba556250b69dddb166bc527c9d4e1324d6d01c8e71dcad"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    },
+    {
+      "name": "shader_runner.exe",
+      "sha256": "91bb45101ffd6cf3079b9687b6e6ffdfce2c1520e600c410315ed959f9b53ee9"
+    }
+  ],
+  "upstream_case": "shaders/glsl-predication-on-large-array.shader_test",
+  "shader_unmodified": true
+}
