@@ -1,0 +1,170 @@
+--- a/src/gallium/frontends/d3d10umd/Draw.cpp
++++ b/src/gallium/frontends/d3d10umd/Draw.cpp
+@@ -73,9 +73,9 @@
+       struct cso_velems_state *state = &pDevice->element_layout->state;
+       for (unsigned i = 0; i < state->count; i++)
+          state->velems[i].src_stride = pDevice->vertex_strides[state->velems[i].vertex_buffer_index];
+-      fprintf(stderr,"D3D resolve part 0 before\n"); fflush(stderr);
++      DebugPrintf("D3D resolve part 0 before\n");
+       cso_set_vertex_elements(pDevice->cso, state);
+-      fprintf(stderr,"D3D resolve part 0 after\n"); fflush(stderr);
++      DebugPrintf("D3D resolve part 0 after\n");
+    } else {
+       struct cso_velems_state empty = {};
+       cso_set_vertex_elements(pDevice->cso, &empty);
+@@ -117,14 +117,14 @@
+       }
+       pipe->bind_gs_state(pipe, gs->handle);
+    }
+-   fprintf(stderr,"D3D resolve part 1 before\n"); fflush(stderr);
++   DebugPrintf("D3D resolve part 1 before\n");
+       update_velems(pDevice);
+-      fprintf(stderr,"D3D resolve part 1 after\n"); fflush(stderr);
++      DebugPrintf("D3D resolve part 1 after\n");
+ 
+    if (pDevice->vbuffers_changed) {
+-      fprintf(stderr,"D3D resolve part 2 before\n"); fflush(stderr);
++      DebugPrintf("D3D resolve part 2 before\n");
+       cso_set_vertex_buffers(pDevice->cso, PIPE_MAX_ATTRIBS, pDevice->vertex_buffers);
+-      fprintf(stderr,"D3D resolve part 2 after\n"); fflush(stderr);
++      DebugPrintf("D3D resolve part 2 after\n");
+       pDevice->vbuffers_changed = false;
+    }
+ }
+@@ -174,9 +174,9 @@
+    Device *pDevice = CastDevice(hDevice);
+    Bc250DrawTimer timer(pDevice);
+ 
+-   fprintf(stderr,"D3D resolve begin\n"); fflush(stderr);
+-   ResolveState(pDevice);
+-   fprintf(stderr,"D3D resolve done\n"); fflush(stderr);
++   DebugPrintf("D3D resolve begin\n");
++   ResolveState(pDevice);
++   DebugPrintf("D3D resolve done\n");
+ 
+    assert(pDevice->primitive < MESA_PRIM_COUNT);
+    util_draw_arrays(pDevice->pipe,
+--- a/src/gallium/drivers/zink/zink_types.h
++++ b/src/gallium/drivers/zink/zink_types.h
+@@ -1734,6 +1734,9 @@
+ 
+ struct zink_context {
+    struct pipe_context base;
++   bool bc250_audit;
++   uint64_t bc250_audit_flushes, bc250_image_maps, bc250_image_map_bytes;
++   uint64_t bc250_buffer_maps, bc250_buffer_map_bytes, bc250_persistent_maps;
+    struct threaded_context *tc;
+    struct slab_child_pool transfer_pool;
+    struct slab_child_pool transfer_pool_unsync;
+--- a/src/gallium/drivers/zink/zink_resource.c
++++ b/src/gallium/drivers/zink/zink_resource.c
+@@ -2648,6 +2648,11 @@
+ {
+    MESA_TRACE_FUNC();
+    struct zink_context *ctx = zink_context(pctx);
++   if (ctx->bc250_audit) {
++      ctx->bc250_buffer_maps++;
++      ctx->bc250_buffer_map_bytes += (uint64_t)box->width;
++      if (usage & PIPE_MAP_PERSISTENT) ctx->bc250_persistent_maps++;
++   }
+    struct zink_screen *screen = zink_screen(pctx->screen);
+    struct zink_resource *res = zink_resource(pres);
+    struct zink_transfer *trans = create_transfer(ctx, pres, usage, box);
+@@ -2857,6 +2862,11 @@
+ {
+    MESA_TRACE_FUNC();
+    struct zink_context *ctx = zink_context(pctx);
++   if (ctx->bc250_audit) {
++      ctx->bc250_image_maps++;
++      ctx->bc250_image_map_bytes += (uint64_t)util_format_get_2d_size(pres->format, util_format_get_stride(pres->format, box->width), box->height) * box->depth;
++      if (usage & PIPE_MAP_PERSISTENT) ctx->bc250_persistent_maps++;
++   }
+    struct zink_screen *screen = zink_screen(pctx->screen);
+    struct zink_resource *res = zink_resource(pres);
+    if (res->unflushed_transient)
+--- a/src/gallium/drivers/zink/zink_context.c
++++ b/src/gallium/drivers/zink/zink_context.c
+@@ -98,9 +98,23 @@
+ }
+ 
+ static void
++bc250_audit_maps(struct zink_context *ctx, bool final)
++{
++   if (!ctx->bc250_audit) return;
++   uint64_t sequence = ++ctx->bc250_audit_flushes;
++   if (!final && sequence > 8 && sequence % 64) return;
++   fprintf(stderr, "BC250 audit maps ctx=%p final=%u sample=%llu image_calls=%llu image_request_bytes=%llu buffer_calls=%llu buffer_request_bytes=%llu persistent_calls=%llu\n",
++           (void *)ctx, final, (unsigned long long)sequence,
++           (unsigned long long)ctx->bc250_image_maps, (unsigned long long)ctx->bc250_image_map_bytes,
++           (unsigned long long)ctx->bc250_buffer_maps, (unsigned long long)ctx->bc250_buffer_map_bytes,
++           (unsigned long long)ctx->bc250_persistent_maps);
++}
++
++static void
+ zink_context_destroy(struct pipe_context *pctx)
+ {
+    struct zink_context *ctx = zink_context(pctx);
++   bc250_audit_maps(ctx, true);
+    struct zink_screen *screen = zink_screen(pctx->screen);
+ 
+    struct pipe_framebuffer_state fb = {0};
+@@ -4453,6 +4467,7 @@
+            unsigned flags)
+ {
+    struct zink_context *ctx = zink_context(pctx);
++   bc250_audit_maps(ctx, false);
+    bool deferred = flags & PIPE_FLUSH_DEFERRED;
+    bool deferred_fence = false;
+    struct zink_batch_state *bs = NULL;
+@@ -5845,6 +5860,7 @@
+    if (!ctx)
+       goto fail;
+ 
++   ctx->bc250_audit = debug_get_bool_option("BC250_HOST_AUDIT", false);
+    ctx->flags = flags;
+    memset(ctx->pipeline_changed, 1, sizeof(ctx->pipeline_changed));
+    ctx->gfx_pipeline_state.dirty = ctx->gfx_pipeline_state.mesh_dirty = true;
+--- a/src/gallium/frontends/d3d10umd/State.h
++++ b/src/gallium/frontends/d3d10umd/State.h
+@@ -190,6 +190,7 @@
+ HRESULT Bc250EnsureSurface(Device *device, Resource *resource);
+ HRESULT Bc250QueuePresentWait(Device *device);
+ HRESULT Bc250SignalPresent(Device *device);
++void Bc250AuditPresent(Device *device);
+ HRESULT Bc250WaitPresentIdle(Device *device);
+ void Bc250StopHostedSubmission(Device *device);
+ 
+--- a/src/gallium/frontends/d3d10umd/Device.cpp
++++ b/src/gallium/frontends/d3d10umd/Device.cpp
+@@ -351,6 +351,21 @@
+    return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb :
+           hr==E_OUTOFMEMORY ? (int32_t)0xc0000017 :
+           hr==E_INVALIDARG ? (int32_t)0xc000000d : (int32_t)0xc0000001;
++}
++
++void Bc250AuditPresent(Device *device)
++{
++   static const bool enabled = GetEnvironmentVariableA("BC250_HOST_AUDIT", NULL, 0) != 0;
++   auto *s = (Bc250HostProbeState *)device->hosted_state;
++   if (!enabled || !s || (device->profilePresents > 8 && device->profilePresents % 60)) return;
++   for (const auto &p : s->progress) {
++      if (!p.cpu_address) continue;
++      UINT64 completed = *(const volatile UINT64 *)p.cpu_address;
++      fprintf(stderr, "BC250 audit progress pid=%lu device=%p tick=%llu present=%u context=%u sync=%x submitted=%llu completed=%llu submits=%u\n",
++              GetCurrentProcessId(), device->hDevice, (unsigned long long)GetTickCount64(),
++              device->profilePresents, p.context, p.sync, (unsigned long long)p.value,
++              (unsigned long long)completed, s->calls[BC250_HOST_SubmitCommand]);
++   }
+ }
+ 
+ HRESULT Bc250QueuePresentWait(Device *device)
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -268,6 +268,7 @@
+        1000.0*device->profileDrawMax/frequency.QuadPart,
+        1000.0*(presentEnd.QuadPart-presentStart.QuadPart)/frequency.QuadPart,
+        1000.0*(renderEnd.QuadPart-renderStart.QuadPart)/frequency.QuadPart);
++   Bc250AuditPresent(device);
+    device->profileLastPresent=presentEnd.QuadPart;
+    device->profileDrawTicks=device->profileDrawMax=device->profileDrawCalls=0;
+ 

@@ -1,0 +1,37 @@
+[
+  {
+    "path": "src/gallium/frontends/d3d10umd/Draw.cpp",
+    "before_lf_sha256": "18641f33e11bdb794f1c2c14baa20c1038cb98cf7a3f7cf7e48562cec3a25c14",
+    "after_lf_sha256": "69dfd2a1a53ac35dec8895da5bc3388178783a31b4a6c848ac41b89733acfb98"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_types.h",
+    "before_lf_sha256": "c602d61f79236f33ea8bc61d6f420c638f99665924a4c7b344760dc0bccb06d6",
+    "after_lf_sha256": "1198613ea15031e4155462d5acbdc3fe25a9040363ad8748422ccbefba71f053"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_resource.c",
+    "before_lf_sha256": "e8e43e5b1df6442902a0c5fd34616126e74c4c21a312235f469c8b64f23134f3",
+    "after_lf_sha256": "bfdd45507ff19dfad0b906e114b0b949c84b108eb27bacec3016ac94ad6be8df"
+  },
+  {
+    "path": "src/gallium/drivers/zink/zink_context.c",
+    "before_lf_sha256": "bb3d011b2b3835117bab48e28e9607837595b93802aaa71417c514ae01eb1d09",
+    "after_lf_sha256": "51fec182db1a9dfe4f8b2c2eb432698e1ec15fea86cda3ce8bb2de3b4298dd90"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/State.h",
+    "before_lf_sha256": "afdd7c40bb6a0f5c20a439c5d40bee0ea2d33ce0a2ed676170c1d3bad59695bb",
+    "after_lf_sha256": "a6de1dbb4a3fa015d40d05ff7f829cac01599594cc2aa515de273734466e248b"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/Device.cpp",
+    "before_lf_sha256": "158bab67593da85c9c627cec4dab519ac1f290d8a8d52f570f7d27ca1e99c946",
+    "after_lf_sha256": "33da3d37c4e8cb9ab2b9a39b0ea234b12c6bce7ab50a51a1bd6b73103a6416bb"
+  },
+  {
+    "path": "src/gallium/frontends/d3d10umd/DxgiFns.cpp",
+    "before_lf_sha256": "f0d358cb392833d7d60d2c1f5165cf9234b44a079779d725921148a92587070a",
+    "after_lf_sha256": "649dc715b5901de0f7d3c577216a5fd6c4690024d73aa298090364782fde8c52"
+  }
+]
