@@ -9,7 +9,9 @@ bc250kmd_cli info [hardware-id]   the escape, to the adapter with that PnP hardw
                                   (default PCI\VEN_1002&DEV_13FE)
 bc250kmd_cli list                 every graphics adapter, with hardware id, interface path, handle and LUID
 bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts, with names
-bc250kmd_cli confirm              UnconfirmedStarts = 0 (elevated)
+bc250kmd_cli confirm              explicit human confirmation, checked durable zero (elevated)
+bc250kmd_cli health read          cached device-start identity and completed-presentation witness
+bc250kmd_cli health confirm <generation> <epoch>   checked confirmation of that observed start
 bc250kmd_cli read <offset>        one register through the driver (hex BAR5 byte offset from regcalc; ADR 0007)
 bc250kmd_cli write <offset> <v>   one register on the driver's write table, read back
 bc250kmd_cli memory               where the framebuffer, BAR0 and the VRAM carve-out are (E08)
@@ -29,6 +31,21 @@ bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage
 or the driver is not installed, `3` the start budget is used up (`stages`) or the driver refused the command
 (gate closed, offset outside its tables or windows, caller not an administrator), `4` (`vcompare`) the paths differ.
+
+## Startup health (ABI 1)
+
+`health read` returns a synchronized software snapshot without hardware access
+or GPU scheduler idling. Flags are full WDDM (1), engines ready (2), visible
+active output (4), and this generation/epoch durably confirmed (8). Completion
+counts refer to distinct successfully programmed and completed primary flips;
+repeated vblanks and old-buffer fallback reports do not count as progress.
+
+The monitor observes at least 60 seconds of fresh progress before issuing
+`health confirm`. A direct command is a diagnostic endpoint, not a replacement
+for that observation interval. Confirmation checks the live generation/epoch,
+readiness, age and native registry flush result. The separate `confirm` command
+records an explicit human decision and does not claim automatic health proof.
+See [startup confirmation](../../../docs/design/wddm-start-confirmation.md).
 
 ## How the adapter is found
 
@@ -100,10 +117,19 @@ build if they drift apart (`build.ps1` runs it; the monitor keeps a third copy w
 ## Build
 
 ```powershell
-pwsh tools\win\bc250kmd_cli\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd_cli
+pwsh tools\win\bc250kmd_cli\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250kmd_cli
 python -m unittest discover -s tools/win/bc250kmd_cli
 ```
 
 Headers and import libraries come from the SDK NuGet packages, the compiler from the installed Visual Studio:
 the same flow as `tools\win\bc250rd\build.ps1`, without the driver and the signing. On the target it lives in
 `C:\BC250\kmd\`.
+
+## Typed clock client
+
+`clock read` returns one paired KMD MHz/VID/temperature sample; `clock set MHz mV`
+runs the complete serialized clock policy and verifies readback. The native
+`bc250control.dll` built beside this CLI exports the same path to the monitor
+and reader compatibility CLI. No raw SMU message passthrough or bc250rd fallback.
+The KMD must have completed native-owner handover before these calls can succeed;
+an offline owner returns DEVICE_NOT_READY. See `docs/design/startup-clock-ownership.md`.

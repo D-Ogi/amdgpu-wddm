@@ -118,7 +118,7 @@ keeps `Pitch * Height == Size` the way the KMD's own `GetStandardAllocationDrive
 ## Build
 
 ```
-pwsh tools\win\kmtprobe\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\kmtprobe
+pwsh tools\win\kmtprobe\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\kmtprobe
 ```
 
 `/W4 /WX`, x64, `/MT`, no dependency on a WDK or SDK installation. Output: `kmtprobe.exe`, one file, no DLLs.
@@ -126,7 +126,7 @@ pwsh tools\win\kmtprobe\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250
 ## Run, on the target
 
 ```
-python tools\win\target.py push P:\BC-250\scratch\build\kmtprobe\kmtprobe.exe --to C:\BC250\tmp
+python tools\win\target.py push $env:BC250_ROOT\scratch\build\kmtprobe\kmtprobe.exe --to C:\BC250\tmp
 python tools\win\target.py run "C:\BC250\tmp\kmtprobe.exe --hold 20"
 ```
 

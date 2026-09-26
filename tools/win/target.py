@@ -7,7 +7,7 @@ within a couple of seconds and falls back to Wi-Fi otherwise, then hands out the
 three helpers: run a PowerShell script file on the target, push files, pull a file.
 
 The addresses and key paths are not in this repository. They come from a JSON file outside it, by default
-`P:/BC-250/secrets/client/target.json` (`BC250_TARGET_CONFIG` overrides the path); `tools/win/README.md`
+`<BC250_ROOT>/secrets/client/target.json` (`BC250_TARGET_CONFIG` overrides the path); `tools/win/README.md`
 documents its shape and the lab's values. Importing this module never touches that file - only connecting does.
 
     python target.py addr                      the address that answers right now
@@ -30,8 +30,11 @@ import subprocess
 import sys
 import tarfile
 import time
+from pathlib import Path
 
-ROOT = os.environ.get("BC250_ROOT", "P:/BC-250")
+# BC250_ROOT is the workspace root; by default the parent directory of this repository
+# (this file is tools/win/target.py, so the repository root is two levels up from here).
+ROOT = os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[2].parent))
 CONFIG = os.environ.get("BC250_TARGET_CONFIG", os.path.join(ROOT, "secrets", "client", "target.json"))
 
 # Only used when the configuration file leaves a field out. Addresses have no default on purpose: they are the

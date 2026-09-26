@@ -2,7 +2,7 @@
 # SDK NuGet packages unpacked under -Kits, the compiler from the installed Visual Studio. Same flow as
 # tools\win\bc250rd\build.ps1, minus the driver and the signing.
 #
-#   pwsh tools\win\bc250kmd_cli\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250kmd_cli
+#   pwsh tools\win\bc250kmd_cli\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250kmd_cli
 
 param(
     [Parameter(Mandatory)][string]$Kits,
@@ -37,5 +37,13 @@ $env:INCLUDE = ''; $env:LIB = ''
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
+
+# The monitor uses the same adapter selection and typed request code in-process.
+& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+    "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
+    "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250control.obj", "/Fe$Out\bc250control.dll",
+    (Join-Path $here 'bc250kmd_cli.c'), '/link', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64", 'gdi32.lib', 'setupapi.lib', 'advapi32.lib')
+if ($LASTEXITCODE -ne 0) { throw "control DLL build failed ($LASTEXITCODE)" }
 
 Get-Item "$Out\bc250kmd_cli.exe" | ForEach-Object { '{0,9}  {1}' -f $_.Length, $_.Name }

@@ -4,8 +4,9 @@
 That shape exists for two reasons: a debugger started per command would miss every bugcheck in between, and a
 non-interactive session cannot sit at a `kd>` prompt.
 
-The debugger is the portable WinDbg package unpacked under `P:\BC-250\toolchain\windbg\x64\amd64\` - nothing
-is installed. Symbols, symbol cache and logs live under `P:\BC-250\scratch\`; `_NT_SYMBOL_PATH`,
+The debugger is the portable WinDbg package unpacked under `<BC250_ROOT>\toolchain\windbg\x64\amd64\` - nothing
+is installed. Symbols, symbol cache and logs live under `<BC250_ROOT>\scratch\` (`BC250_ROOT` is the
+workspace root, by default the parent directory of this repository); `_NT_SYMBOL_PATH`,
 `DBGHELP_HOMEDIR` and `_NT_SYMCACHE_PATH` are set explicitly by these scripts, so nothing lands on `C:`.
 
 | File | What it is |
@@ -19,14 +20,14 @@ is installed. Symbols, symbol cache and logs live under `P:\BC-250\scratch\`; `_
 Needs no server and no target:
 
 ```
-python tools/win/kd/kd_cmd.py --dump P:\BC-250\scratch\dumps\092126-43343-01.dmp "!analyze -v"
-python tools/win/kd/kd_cmd.py --dump P:\BC-250\scratch\dumps\092126-43343-01.dmp "vertarget" "lm m nwifi"
+python tools/win/kd/kd_cmd.py --dump $env:BC250_ROOT\scratch\dumps\092126-43343-01.dmp "!analyze -v"
+python tools/win/kd/kd_cmd.py --dump $env:BC250_ROOT\scratch\dumps\092126-43343-01.dmp "vertarget" "lm m nwifi"
 ```
 
 Or served, when the same dump is going to be asked many questions:
 
 ```
-python tools/win/kd/kd_server.py start --dump P:\BC-250\scratch\dumps\092126-43343-01.dmp
+python tools/win/kd/kd_server.py start --dump $env:BC250_ROOT\scratch\dumps\092126-43343-01.dmp
 python tools/win/kd/kd_cmd.py "kb" "!pool ffff9a83385db060"
 python tools/win/kd/kd_server.py stop
 ```
@@ -40,7 +41,7 @@ python tools/win/kd/kd_server.py stop
 > `BC250_KD_LIVE_AT_MY_OWN_RISK=1`. Dump files are not affected. The text below describes the intended use.
 
 The target must have been set up for network debugging and rebooted, and the key it was given must be in
-`P:\BC-250\secrets\kd\key.txt`, one line, four dot-separated groups as `kdnet.exe` prints them.
+`<BC250_ROOT>\secrets\kd\key.txt`, one line, four dot-separated groups as `kdnet.exe` prints them.
 
 ```
 python tools/win/kd/kd_server.py start          # waits for the target to connect; returns at once
@@ -82,6 +83,6 @@ the connection lines out of the log and says `connected` or `waiting to reconnec
 ## What has been run
 
 Verified against the dump `092126-43343-01.dmp`: one-shot `--dump`, and the server plus `kd_cmd` round trip
-(`vertarget`, `lm m nwifi`, `!analyze -v` - symbols downloaded into `P:\BC-250\scratch\symbols`, bucket
+(`vertarget`, `lm m nwifi`, `!analyze -v` - symbols downloaded into `<BC250_ROOT>\scratch\symbols`, bucket
 `0x1E_C000001D_nwifi!NwfReadMsg`), `status`, `stop`. The live KDNET path and `--break` / `--go` have not been
 exercised against a target yet.

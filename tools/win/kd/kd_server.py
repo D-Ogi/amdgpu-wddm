@@ -12,8 +12,8 @@ sent to it with `kd_cmd.py` instead of holding an interactive debugger open.
 The server keeps running across target reboots: KDNET reconnects by itself, and kd waits for it. That is the
 reason for a server at all - a debugger started per command would miss every bugcheck between commands.
 
-The key lives in `P:/BC-250/secrets/kd/key.txt` and is never printed; `status` shows the command line with the
-key replaced. Symbols, symbol cache and logs are all under `P:/BC-250/scratch/kd` and `.../scratch/symbols`.
+The key lives in `<BC250_ROOT>/secrets/kd/key.txt` and is never printed; `status` shows the command line with
+the key replaced. Symbols, symbol cache and logs are all under `<BC250_ROOT>/scratch/kd` and `.../scratch/symbols`.
 """
 
 import datetime

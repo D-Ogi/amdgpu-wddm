@@ -42,3 +42,24 @@ that the sizing was never a reason.
 - Direct3D 12 natively is not part of M13's criterion. DWM does not need it, vkd3d-proton covers applications
   (M12), and whether it follows is a later decision.
 - Nothing here is measured.
+
+## Scheduling amendment, 2026-09-23
+
+The owner requested full WDDM repair immediately after M8 and a desktop sub-roadmap. M13 diagnostic
+bring-up and backend feasibility work may therefore proceed before M12 closes. This supersedes the
+ordering restriction in point3 and the timing clause in this ADR's status line. It does not select a
+GPU backend or close M9-M12. The native hardware D3D and accelerated DWM goals remain unchanged;
+[M13.1-M13.7](../m13-accelerated-desktop-roadmap.md) define measurable intermediate gates. Software
+rendering is an explicitly temporary control. Backend selection still requires an experiment and ADR update.
+
+## Route discussion, 2026-09-26
+
+Point 2's first candidate has been measured in part: `d3d10umd` over Zink over our RADV draws a native D3D shader
+with exact pixels (facts M531), reaches a shared WDDM allocation through a second device (M532, M533), and a
+hardware D3D device receives runtime allocations through the runtime callbacks (M534; `hKMResource` zero, cause
+unknown). The route now argued for is one point 2 did not name: a hosted ICD, one Vulkan device per D3D runtime
+device driven through the runtime's callbacks, with DXVK as the engine behind the D3D11 DDI and the
+`d3d10umd`/Zink build as the control. That argument lives in the workspace working roadmap,
+`agent-discussion/ROADMAP.md` (R0002, review draft), and in the two root proposals it was made from. This ADR is
+amended with the choice, as point 3 says, only after the owner's decision is recorded there. Nothing in this
+section selects a route.

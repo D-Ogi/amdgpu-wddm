@@ -29,10 +29,10 @@
     Get-Disk | Format-Table Number, FriendlyName, BusType, Size, IsBoot, IsSystem
 
 .EXAMPLE
-    .\write_usb.ps1 -DiskNumber 8 -SourceDir P:\BC-250\scratch\usbroot -ExpectedName 'Samsung Flash Drive FIT' -WhatIf
+    .\write_usb.ps1 -DiskNumber 8 -SourceDir $env:BC250_ROOT\scratch\usbroot -ExpectedName 'Samsung Flash Drive FIT' -WhatIf
 
 .EXAMPLE
-    .\write_usb.ps1 -DiskNumber 8 -SourceDir P:\BC-250\scratch\usbroot -ExpectedName 'Samsung Flash Drive FIT' -IUnderstandThisErasesTheDisk
+    .\write_usb.ps1 -DiskNumber 8 -SourceDir $env:BC250_ROOT\scratch\usbroot -ExpectedName 'Samsung Flash Drive FIT' -IUnderstandThisErasesTheDisk
 #>
 [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(

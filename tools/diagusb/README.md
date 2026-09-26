@@ -56,8 +56,10 @@ Needs `7z` on PATH and network access (Alpine ISO, the `python3` package closure
 wheel). Nothing needs admin rights.
 
 ```
-python tools/diagusb/build_usb.py --work P:\BC-250\scratch --net P:\BC-250\secrets\net
+python tools/diagusb/build_usb.py --work $env:BC250_ROOT\scratch --net $env:BC250_ROOT\secrets\net
 ```
+
+`BC250_ROOT` is the workspace root, by default the parent directory of this repository.
 
 `--net` is optional and points at a directory with `authorized_keys`, `wpa_supplicant.conf` and an
 SSH host key. Those are secrets and are never part of this repo. Leave it out and the stick works
@@ -79,10 +81,10 @@ diagnostics, QR display) can be checked before touching the real machine:
 $q = "$env:USERPROFILE\scoop\apps\qemu\current"
 & "$q\qemu-system-x86_64.exe" -machine q35 -m 2048 -smp 2 -accel tcg `
   -drive if=pflash,format=raw,readonly=on,file=$q\share\edk2-x86_64-code.fd `
-  -drive file=fat:P:\BC-250\scratch\usbroot,format=raw,if=none,id=stick,snapshot=on `
+  -drive file=fat:$env:BC250_ROOT\scratch\usbroot,format=raw,if=none,id=stick,snapshot=on `
   -device qemu-xhci -device usb-storage,drive=stick,bootindex=0 `
   -vga std -display none -monitor tcp:127.0.0.1:45454,server,nowait `
-  -serial file:P:\BC-250\scratch\qemu\serial.log
+  -serial file:$env:BC250_ROOT\scratch\qemu\serial.log
 ```
 
 QEMU sees the host directory as it was when the VM started, so restart it after every rebuild.
@@ -136,14 +138,14 @@ Get-Disk | Format-Table Number, FriendlyName, BusType, Size, IsBoot, IsSystem
 Dry run (all guards, prints the plan, changes nothing):
 
 ```powershell
-.\write_usb.ps1 -DiskNumber 8 -SourceDir P:\BC-250\scratch\usbroot `
+.\write_usb.ps1 -DiskNumber 8 -SourceDir $env:BC250_ROOT\scratch\usbroot `
   -ExpectedName 'Samsung Flash Drive FIT' -WhatIf
 ```
 
 Then the real thing:
 
 ```powershell
-.\write_usb.ps1 -DiskNumber 8 -SourceDir P:\BC-250\scratch\usbroot `
+.\write_usb.ps1 -DiskNumber 8 -SourceDir $env:BC250_ROOT\scratch\usbroot `
   -ExpectedName 'Samsung Flash Drive FIT' -IUnderstandThisErasesTheDisk
 ```
 
@@ -192,7 +194,7 @@ Three ways, in order of convenience:
 - **SSH**, if the stick was built with `--net`:
 
   ```
-  ssh -i P:\BC-250\secrets\client\bc250diag_ed25519 root@<ip>
+  ssh -i $env:BC250_ROOT\secrets\client\bc250diag_ed25519 root@<ip>
   ```
 
   The address is on the QR screen in the `NET` line, refreshed on every redraw (so a Wi-Fi
@@ -245,3 +247,8 @@ After a warm restart (`reboot`) out of the stick, Windows came up with the wired
 hardware reset it worked. Expect to need that reset, or shut the stick down with `poweroff` and start
 the machine cold.
 
+
+
+### Network-only reference capture
+
+Use the network-only GRUB entry (`bc250.mode=network`) to start the existing SSH/network service without running `diag.py`, its GPU probes, `qrshow.py`, or automatically loading amdgpu. This leaves module loading to the reference-capture script. Unlike `off`, it brings up networking. The current unit A stick uses a separately pinned unencrypted host key prepared through the trusted Windows connection; do not disable SSH host-key checking.

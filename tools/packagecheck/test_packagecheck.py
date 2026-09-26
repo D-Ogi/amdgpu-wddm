@@ -453,7 +453,7 @@ class NegativeTests(TempCaseMixin, unittest.TestCase):
         self.assertIn("UMD007", codes(report, pc.ERROR))
 
     def test_expect_commit_without_a_sidecar(self):
-        report = PackageFixture(self.tmp / "neg-commit").check(model="full", expect_commit="82d39fb")
+        report = PackageFixture(self.tmp / "neg-commit").check(model="full", expect_commit="83ce7bf")
         self.assertTrue(report.failed)
         self.assertIn("BLD001", codes(report, pc.ERROR))
 
@@ -465,23 +465,23 @@ class BuildInfoTests(TempCaseMixin, unittest.TestCase):
 
     def test_matching_sidecar(self):
         fixture = PackageFixture(self.tmp / "bld-ok")
-        self.sidecar(fixture.dir, commit="82d39fb", version="0.7.4", dirty=False,
+        self.sidecar(fixture.dir, commit="83ce7bf", version="0.7.4", dirty=False,
                      files={"bc250kmd.sys": pc.sha256_file(fixture.dir / "bc250kmd.sys")})
-        report = fixture.check(model="full", expect_commit="82d39fb", expect_version="0.7.4")
+        report = fixture.check(model="full", expect_commit="83ce7bf", expect_version="0.7.4")
         self.assertFalse(report.failed, [f.text for f in report.findings if f.level == pc.ERROR])
         self.assertIn("BLD013", codes(report, pc.OK))
 
     def test_sidecar_hash_mismatch(self):
         fixture = PackageFixture(self.tmp / "bld-stale")
-        self.sidecar(fixture.dir, commit="82d39fb", version="0.7.4", files={"bc250kmd.sys": "00" * 32})
-        report = fixture.check(model="full", expect_commit="82d39fb")
+        self.sidecar(fixture.dir, commit="83ce7bf", version="0.7.4", files={"bc250kmd.sys": "00" * 32})
+        report = fixture.check(model="full", expect_commit="83ce7bf")
         self.assertTrue(report.failed)
         self.assertIn("BLD012", codes(report, pc.ERROR))
 
     def test_sidecar_commit_mismatch(self):
         fixture = PackageFixture(self.tmp / "bld-commit")
         self.sidecar(fixture.dir, commit="deadbee", version="0.7.4")
-        report = fixture.check(model="full", expect_commit="82d39fb")
+        report = fixture.check(model="full", expect_commit="83ce7bf")
         self.assertTrue(report.failed)
         self.assertIn("BLD008", codes(report, pc.ERROR))
 

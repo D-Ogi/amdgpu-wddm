@@ -1560,7 +1560,7 @@ class PackageCheck:
         """Regenerate the catalog in a scratch copy and compare its membership with the shipped one.
 
         Inf2Cat has no read-only mode - it works by writing a .cat - so the package is never given to it.
-        The copy goes under scratch (P:\\BC-250\\scratch\\tmp by default), never on C:.
+        The copy goes under scratch (<BC250_ROOT>\\scratch\\tmp by default), never on C:.
         """
         r = self.report
         if not self.use_tools:

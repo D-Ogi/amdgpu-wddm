@@ -1,12 +1,12 @@
 # Prior art: Windows driver attempts for the BC-250
 
-Surveyed 2026-09-21. Local read-only clones live in `P:\BC-250\ref\`. None of these sources is a source of facts for this project (see `01-evidence-rules.md`); they are sources of ideas, of verified code we may borrow where the license allows, and of mistakes not to repeat.
+Surveyed 2026-09-21. Local read-only clones live in `<BC250_ROOT>\ref\` (`BC250_ROOT` is the workspace root, by default the parent directory of this repository). None of these sources is a source of facts for this project (see `01-evidence-rules.md`); they are sources of ideas, of verified code we may borrow where the license allows, and of mistakes not to repeat.
 
 Community baseline: `lildebil0/awesome-bc250`, `docs/en/07-windows.md` (state "early 2026"). Its summary is accurate: every official AMD driver ends in Code 43 because no shipping driver knows PCI `1002:13FE`; Linux works because `amdgpu`/Mesa are open and were patched; the from-scratch Windows efforts are at the "can we initialize the GPU at all" stage. Nothing in it points to a hardware lock against Windows. It also records the social context worth remembering: a history of hoaxes, malware posted as "drivers", and an unverified "leaking drivers bricks boards" rumor. Consequence for us: publish source and evidence, never binaries of unknown origin.
 
 ## 1. Keshas-dev/AMD-BC-250-Windows-Driver
 
-Clone `ref/keshas-driver` @ `63f8956` (2026-09-16). Apache-2.0. Tested on one real unit (BIOS P4.00G / `BC250_5.00_clv.bin`).
+Clone `ref/keshas-driver__WARN-AGENTS-md-is-not-facts` @ `63f8956` (2026-09-16). Apache-2.0. Tested on one real unit (BIOS P4.00G / `BC250_5.00_clv.bin`).
 
 - What it is: a WDM IOCTL driver plus a KMDOD-based display driver, a stub Vulkan ICD, many user-mode test tools. Not a WDDM render miniport.
 - Verified-looking parts worth borrowing: SMU mailbox over SMN (clocks, voltages, telemetry, CPU core unlock) with allow-lists and voltage limits; PSP GPCOM ring and `LOAD_IP_FW` once the MP0 base was corrected to `0x58000`; display at 2560x1440 through KMDOD; init-step kill switches and a last-step marker that survives a reboot.
@@ -23,7 +23,7 @@ Clone `ref/AMD-BC-250-PSP-Driver` @ `3bfa7a2` (2026-07-21). MIT. About 800 lines
 
 ## 3. ZEROAESQUERDA/BC250-windowsDriverTest
 
-Clone `ref/BC250-windowsDriverTest` @ `71c1f01` (2026-08-20). **No license file: all rights reserved, we may read it but not copy code.** About 5300 lines.
+Clone `ref/BC250-windowsDriverTest__WARN-no-licence-read-only-copy-nothing` @ `71c1f01` (2026-08-20). **No license file: all rights reserved, we may read it but not copy code.** About 5300 lines.
 
 - What it is: the only attempt shaped like the real thing, a full WDDM miniport skeleton (`DxgkInitialize` with `DRIVER_INITIALIZATION_DATA`: CreateDevice/Context/Allocation, Render, Patch, BuildPagingBuffer, SubmitCommand, fences, preemption, TDR) plus a UMD boundary DLL. By its own account it was written without access to a BC-250 and was never compiled with the WDK ("sandbox Linux"). Treat it as a design sketch.
 - What it gets right, and we adopt as practice: honest state machine for firmware (`Present / Valid / Loaded / Ready`), every unproven MMIO path behind a compile-time gate that defaults to off (`BC250_GFX_OFFSETS_VALIDATED=0`, interrupt and PSP gates likewise), DDIs returning `STATUS_NOT_SUPPORTED` / `E_NOTIMPL` instead of faking success, a GPU-written fence (`WRITE_DATA` with `DST_SEL=5 | WR_CONFIRM`) instead of a CPU-written one, UMA memory model that does not invent local VRAM.

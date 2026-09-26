@@ -2,11 +2,11 @@
 # NuGet packages unpacked under -Kits, the compiler from the installed Visual Studio. Same flow as
 # tools\win\bc250kmd_cli\build.ps1.
 #
-#   pwsh tools\win\kmtprobe\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\kmtprobe
+#   pwsh tools\win\kmtprobe\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\kmtprobe
 
 param(
     [Parameter(Mandatory)][string]$Kits,
-    [string]$Out = 'P:\BC-250\scratch\build\kmtprobe',
+    [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\kmtprobe",
     [string]$KitVersion = '10.0.26100.0'
 )
 

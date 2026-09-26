@@ -29,7 +29,7 @@ python tools/packagecheck/packagecheck.py <package-dir>
 Typical, before an install:
 
 ```
-python tools\packagecheck\packagecheck.py P:\BC-250\scratch\build\bc250kmd-074\package-umd ^
+python tools\packagecheck\packagecheck.py %BC250_ROOT%\scratch\build\bc250kmd-074\package-umd ^
        --model full --expect-version 0.7.4 --load ^
        --markdown ...\evidence\windows\2026-09-21-E16-run-004\packagecheck.md ^
        --manifest ...\evidence\windows\2026-09-21-E16-run-004\package-sha256.txt
@@ -154,7 +154,8 @@ INF installs, which catches a catalog that was not rebuilt after the INF changed
 which this package fails **on purpose** (dirid 13 without a `TargetOSVersion` decoration, and the stub
 DLL going to System32), so those are design decisions and their warnings are notes. `Inf2Cat` can only
 work by writing a `.cat`, so it is never given the package: the files are copied to a scratch directory
-(under `P:\BC-250\scratch\tmp`, never C:), catalogued there, and only the member list is compared.
+(under `<BC250_ROOT>\scratch\tmp`, never C:), catalogued there, and only the member list is compared.
+`BC250_ROOT` is the workspace root, by default the parent directory of this repository.
 
 ## Output files
 
@@ -181,7 +182,7 @@ work by writing a `.cat`, so it is never given the package: the files are copied
 Nothing in a bc250kmd package ties a binary to a commit today. `driver/kmd/build.ps1` runs no `rc.exe`,
 so no binary carries a version resource, and no commit string is compiled in. The only build identity in
 the `.sys` is its CodeView debug id and the PDB path, which happens to hold the build directory name
-(`P:\BC-250\scratch\build\bc250kmd-074\bc250kmd.pdb`) - useful, but it names a directory on this PC, not
+(`<BC250_ROOT>\scratch\build\bc250kmd-074\bc250kmd.pdb`) - useful, but it names a directory on this PC, not
 a commit.
 
 This matters. `scratch\build\bc250kmd-m7\package-umd` and `scratch\build\bc250kmd-074\package-umd` both
@@ -200,7 +201,7 @@ Expected shape:
 
 ```json
 {
-  "commit": "82d39fb",
+  "commit": "83ce7bf",
   "dirty": false,
   "version": "0.7.4",
   "built": "2026-09-21T21:19:25+02:00",

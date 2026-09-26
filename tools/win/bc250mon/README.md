@@ -53,11 +53,18 @@ before it stopped talking (ADR 0006 points 3 and 4, `driver/kmd/README.md`):
 When the service key does not exist the panel says `not installed` and writes nothing to the log; the state
 of the lab today is not an error.
 
-**Confirming a start** (ADR 0006 point 3). This process is started at logon in the interactive session, so
-the fact that it is polling at all is the evidence that the desktop came up. Once the driver is installed, the
-monitor has been running for 60 seconds and `LastStage` has reached 61 (`StageFirstPresentDone`), it writes
-`UnconfirmedStarts = 0` once per boot and logs it. "Once per boot" survives a restart of the monitor inside
-one boot through the marker file `C:\BC250\mon\kmd-confirmed.txt`, which holds the system's `BootId`.
+**Confirming a start** (ADR 0006 point 3). Full WDDM uses a typed KMD
+snapshot through `bc250control.dll`. The monitor requires 60 seconds of fresh,
+advancing completed-primary witnesses for one device-start generation and
+visibility epoch. Missing samples, gaps over 15 seconds, stale progress or an
+identity change restart observation. The kernel then checks the named live
+identity and readiness before performing a checked durable registry reset.
+
+Display-only retains its stage61/60-second policy only when a valid typed reply
+positively identifies that mode. An old DLL, unsupported ABI or failed query
+never selects a fallback confirmation path. Explicit human confirmation also
+checks the native registry flush result. These checks certify startup progress,
+not correct pixels, GPU rendering or complete M9 acceptance.
 
 Two actions drive the same thing by hand during an install: `kmd.confirm` forces the reset, `kmd.budget`
 prints the current values into the log. Neither has a button; they are for `mon.py action`.
@@ -93,6 +100,62 @@ condensing its output:
 When `bc250kmd_cli.exe` is missing, times out, or the escape itself refuses (not an administrator, or
 `bc250kmd` is not the adapter's active driver), the panel shows that one line under `info` instead of going
 empty or throwing.
+
+## Active graphics pipeline
+
+`GraphicsPipelineProvider.cs` samples every 5 seconds. It inspects the DLL actually
+loaded by DWM, hashes the module file, and looks up the exact build in
+`graphics-modules.json` in the monitor data directory. Copy the supplied manifest
+alongside the executable when deploying. Add a new hash only after identifying
+the renderer and shader execution path of that binary; a build with selectable
+backends also needs runtime backend evidence before assigning a renderer label.
+Unknown hashes are displayed as unknown, without a CPU/GPU claim.
+
+The panel shows DWM PID, UMD module and build, renderer, CPU/GPU draw execution,
+shader interpreter/JIT, and the live KMD version/table. Driver `log summary`
+provides hardware flip counts, enabled presentation paths, compute fence counts
+and SDMA paging counts. These counts are cumulative for the device session,
+not utilization percentages or evidence of work during the latest sample.
+Enabled CPU Blt is shown separately from its actual count. Full WDDM and DCN
+scanout do not imply GPU execution of DWM draws.
+
+The sampled time makes the observation's age visible. The existing `kmdinfo`
+panel remains available through the API; the overlay omits that duplicate panel
+when the pipeline panel exists. An overlay update needs only an overlay task
+restart, not a Windows or DWM restart.
+
+## Cached Vulkan inventory
+
+`VulkanInventoryProvider.cs` reads `vulkan-inventory.json` from the monitor data
+folder every five seconds. A relative `BC250MON_VULKAN_INVENTORY` override is
+resolved against that folder; an absolute override is also accepted. The provider
+never launches Vulkan tools, creates a Vulkan instance, or opens a GPU device.
+The collector runs separately on an explicit request. Publish the finished JSON
+by replacing the previous file, and retain the full text report beside it.
+
+The panel shows capture UTC and age, device/API/driver, the loader-observed ICD
+library (or only the requested manifest when unverified), extension/layer counts,
+format counts, and selected timeline semaphore, buffer device address, FP16 and
+sparse binding features. `?` means not captured, not unsupported. These are
+queried Vulkan capabilities, separate from the active DWM renderer shown in the
+pipeline panel. Enumeration does not validate rendering or inference results.
+
+Schema 1 examples are in `test/fixtures/vulkan-*.json` and are synthetic. Status
+is `ok`, `partial`, `error` or `unsupported`. Partial captures display a warning
+alongside known fields; truncated format statistics remain null. Error captures
+do not reuse older capability rows. `CapturedUtc` is required and UTC; caches
+older than 24 hours or captured with a different known KMD version are marked.
+`IcdPath` is the requested manifest and `IcdSha256` hashes that manifest.
+`IcdLibraryPath`/`IcdLibrarySha256` identify the actual library when observed;
+`IcdVerified` refers to that loader observation, described by `LoaderEvidence`,
+not merely a requested environment override. The JSON also retains collector,
+tool hash, captured KMD version, layer names and full report path.
+
+The overlay moves whole panels into additional columns when they exceed the
+monitor working area's height. Font size, click-through and hotkeys are unchanged.
+`test-vulkan-inventory.ps1 -Out <build directory>` checks actual provider parsing,
+cache replacement and panel geometry without opening a window or querying a GPU;
+`build.ps1` runs this check. The source fixtures are never deployed as live data.
 
 ## Scanout screenshots (the full WDDM table's own picture)
 
@@ -162,7 +225,7 @@ Temperature colours: green below 85 C, amber from 85 C, red from 92 C (Tctl).
 ## Build and deploy
 
 ```powershell
-pwsh tools\win\bc250mon\build.ps1 -Out P:\BC-250\scratch\build\bc250mon
+pwsh tools\win\bc250mon\build.ps1 -Out $env:BC250_ROOT\scratch\build\bc250mon -ControlDll $env:BC250_ROOT\scratch\build\bc250kmd_cli\bc250control.dll
 ```
 
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
@@ -195,7 +258,8 @@ mon.py screenshot [--scale 0.5] [--format png|jpg] [--quality 80] [--overlay 0|1
 mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]     what HUBP0 actually scans out (full WDDM table)
 ```
 
-`screenshot` writes to `P:\BC-250\scratch\screens\<timestamp>.<ext>` unless `--out` says otherwise, creates
+`screenshot` writes to `<BC250_ROOT>\scratch\screens\<timestamp>.<ext>` (`BC250_ROOT` is the workspace
+root, by default the parent directory of this repository) unless `--out` says otherwise, creates
 the folder, and prints the path, the pixel size and the file size. Half scale is the default because the
 reader pays per image token; a 1920x1200 screen at 0.5 is 960x600, about 750 kB as PNG and 30 kB as JPEG 70.
 
@@ -220,3 +284,14 @@ deletes the full-resolution intermediate BMP it pulls once the downscaled pictur
   capture still happens with the overlay in it and the log line says `overlay could not be hidden`.
 - Only the primary screen; a second monitor would need the endpoint to take a display index.
 - A capture runs on the API's single thread, so it blocks other requests for a few hundred milliseconds.
+
+## Native clock client migration (M440)
+
+The current source uses the typed KMD client in bc250control.dll, built by
+`tools/win/bc250kmd_cli/build.ps1`; pass that DLL to this build with `-ControlDll`
+and keep it beside bc250mon.exe. The earlier bc250rd descriptions above document
+the deployed legacy version, not this new source. The SoC panel takes paired
+clock/VID/temperature samples in-process and labels the KMD backend. Clock changes
+are one KMD transaction; the unforced-voltage stock button has been removed.
+No raw mailbox IOCTL or automatic fallback exists. Do not deploy before completing
+native KMD owner activation and the legacy-writer handover.

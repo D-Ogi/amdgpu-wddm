@@ -2,17 +2,20 @@
 # from the WDK/SDK NuGet packages unpacked under -Kits, the compiler from the installed Visual Studio.
 # The driver is test-signed with a self-signed certificate (the target runs with testsigning on).
 #
-#   pwsh tools\win\bc250rd\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\build\bc250rd
+#   pwsh tools\win\bc250rd\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\bc250rd
 
 param(
     [Parameter(Mandatory)][string]$Kits,
     [Parameter(Mandatory)][string]$Out,
+    [Parameter(Mandatory)][string]$ControlDll,
     [string]$KitVersion = '10.0.26100.0',
     [string]$CertSubject = 'CN=BC-250 lab test signing'
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$controlLib = Join-Path (Split-Path -Parent $ControlDll) 'bc250control.lib'
+if (-not (Test-Path -LiteralPath $ControlDll) -or -not (Test-Path -LiteralPath $controlLib)) { throw 'Build bc250kmd_cli control DLL/import library first' }
 $wdk = Join-Path $Kits 'microsoft.windows.wdk.x64\c'
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
 $sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
@@ -47,7 +50,7 @@ $crt = Join-Path $msvc.FullName 'lib\x64'
 Invoke-Tool $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\bc250rd_cli.obj", "/Fe$Out\bc250rd_cli.exe",
-    (Join-Path $here 'app\bc250rd_cli.c'), '/link', "/LIBPATH:$crt",
+    (Join-Path $here 'app\bc250rd_cli.c'), $controlLib, '/link', "/LIBPATH:$crt",
     "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64")
 
 # ---- test signing -------------------------------------------------------------------------------------------
@@ -64,5 +67,6 @@ if (-not (Test-Path $signtool)) { $signtool = "${env:ProgramFiles(x86)}\Windows 
 Write-Host 'driver: sign'
 Invoke-Tool $signtool @('sign', '/fd', 'SHA256', '/sha1', $cert.Thumbprint, "$Out\bc250rd.sys")
 
+Copy-Item -LiteralPath $ControlDll -Destination (Join-Path $Out 'bc250control.dll') -Force
 Copy-Item (Join-Path $here 'reglist.txt') $Out -Force
 Get-ChildItem $Out -File | Where-Object Extension -in '.sys', '.exe', '.cer', '.txt' | ForEach-Object { '{0,9}  {1}' -f $_.Length, $_.Name }

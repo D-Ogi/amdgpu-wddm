@@ -14,7 +14,7 @@ every call goes through SSH; the JSON body travels base64-encoded to stay clear 
                       [--window TITLE | --handle 0x...] [--out FILE]
     mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]
 
-Screenshots land in P:/BC-250/scratch/screens/<timestamp>.<ext> unless --out says otherwise. Every capture
+Screenshots land in <BC250_ROOT>/scratch/screens/<timestamp>.<ext> unless --out says otherwise. Every capture
 is written to the monitor's log, so the owner sees on the overlay that a picture was taken.
 
 `scanout` is `screenshot`'s counterpart under the full WDDM table, where GDI's CopyFromScreen reads the CDD's
@@ -33,12 +33,15 @@ import os
 import struct
 import sys
 import zlib
+from pathlib import Path
 from urllib.parse import quote
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import target  # noqa: E402  how to reach the target lives in one place, tools/win/target.py
 
-ROOT = os.environ.get("BC250_ROOT", "P:/BC-250")
+# BC250_ROOT is the workspace root; by default the parent directory of this repository
+# (this file is tools/win/bc250mon/mon.py, so the repository root is three levels up from here).
+ROOT = os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[3].parent))
 API = "http://127.0.0.1:2250"
 # tools/win/bc250kmd_cli/README.md: "on the target it lives in C:\BC250\kmd\".
 CLI = "C:\\BC250\\kmd\\bc250kmd_cli.exe"

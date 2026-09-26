@@ -3,7 +3,7 @@
 the KDNET key is read, and how a process is checked or asked to break.
 
 Nothing here writes to drive C:. The symbol store, the symbol cache (`DBGHELP_HOMEDIR`) and the logs are all
-under `P:/BC-250/scratch`, and both scripts set `_NT_SYMBOL_PATH` explicitly instead of inheriting whatever
+under `<BC250_ROOT>/scratch`, and both scripts set `_NT_SYMBOL_PATH` explicitly instead of inheriting whatever
 default points at `C:\\ProgramData`.
 """
 
@@ -13,8 +13,11 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
-ROOT = os.environ.get("BC250_ROOT", "P:/BC-250")
+# BC250_ROOT is the workspace root; by default the parent directory of this repository
+# (this file is tools/win/kd/kdenv.py, so the repository root is three levels up from here).
+ROOT = os.environ.get("BC250_ROOT", str(Path(__file__).resolve().parents[3].parent))
 
 
 def path(*parts):

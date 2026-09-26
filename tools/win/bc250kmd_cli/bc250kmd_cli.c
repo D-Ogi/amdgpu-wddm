@@ -268,7 +268,7 @@ static int Info(const WCHAR *wantedId)
 // Offsets are BAR5 byte offsets and come from tools/regcalc (on the target: bc250rd's reglist.txt), never from
 // memory. The driver checks them against its own generated tables, so a wrong one is refused, not executed.
 
-static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
+static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result, int hardwareAccess)
 {
     BC250_ADAPTER adapters[16];
     int count = FindAdapters(adapters, 16);
@@ -287,13 +287,114 @@ static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS
 
     escape.hAdapter = open.hAdapter;
     escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
-    escape.Flags.HardwareAccess = 1;        // dxgkrnl then serializes the call with the rest of the adapter's work
+    escape.Flags.HardwareAccess = hardwareAccess ? 1u : 0u;
+    escape.Flags.NoAdapterSynchronization = hardwareAccess ? 0u : 1u;
     escape.pPrivateDriverData = data;
     escape.PrivateDriverDataSize = size;
     *result = D3DKMTEscape(&escape);
 
     close.hAdapter = open.hAdapter;
     D3DKMTCloseAdapter(&close);
+    return 0;
+}
+
+static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
+{
+    return SendEscapeFlags(wantedId,data,size,result,1);
+}
+
+#ifdef BC250_CONTROL_DLL
+#define BC250_CONTROL_API __declspec(dllexport)
+#else
+#define BC250_CONTROL_API
+#endif
+// Shared implementation for CLI and direct monitor P/Invoke, no subprocess or
+// raw bc250rd fallback. A new adapter handle each call survives PnP replacement.
+BC250_CONTROL_API LONG WINAPI Bc250ClockControl(ULONG op,ULONG mhz,ULONG mv,
+    BC250_ESCAPE_CLOCK* data,ULONG bytes)
+{
+    NTSTATUS status=(NTSTATUS)0xC000000E; // STATUS_NO_SUCH_DEVICE before adapter lookup
+    if(!data || bytes!=sizeof(*data) || (op!=BC250_CLOCK_OP_READ && op!=BC250_CLOCK_OP_SET))
+        return (LONG)0xC000000D; // STATUS_INVALID_PARAMETER
+    memset(data,0,sizeof(*data));
+    data->Magic=BC250_ESCAPE_MAGIC;data->Command=BC250_ESCAPE_RUN_CLOCK;
+    data->AbiVersion=BC250_CLOCK_ABI;data->Op=op;
+    data->RequestedMHz=mhz;data->RequestedMv=mv;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),&status,op==BC250_CLOCK_OP_SET))return status;
+    if(!NT_SUCCESS(status))return status;
+    if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
+    if(data->Status!=BC250_ESCAPE_STATUS_DONE || !data->Ready)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    return 0;
+}
+
+// READ is an adapter-owned software snapshot, never a hardware-idling diagnostic.
+BC250_CONTROL_API LONG WINAPI Bc250StartHealth(ULONG op,ULONGLONG generation,ULONGLONG epoch,
+    BC250_ESCAPE_START_HEALTH* data,ULONG bytes)
+{
+    NTSTATUS status=(NTSTATUS)0xC000000E;
+    typedef char HealthAbiSizeCheck[(sizeof(BC250_ESCAPE_START_HEALTH)==96)?1:-1];
+    (void)sizeof(HealthAbiSizeCheck);
+    if(!data || bytes!=sizeof(*data) ||
+       (op!=BC250_START_HEALTH_READ && op!=BC250_START_HEALTH_CONFIRM))
+        return (LONG)0xC000000D;
+    memset(data,0,sizeof(*data));
+    data->Magic=BC250_ESCAPE_MAGIC;data->Command=BC250_ESCAPE_RUN_START_HEALTH;
+    data->Status=BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion=BC250_START_HEALTH_ABI;data->Op=op;
+    data->ExpectedGeneration=generation;data->ExpectedEpoch=epoch;
+    if(SendEscapeFlags(BC250_DEFAULT_HWID,data,sizeof(*data),&status,op==BC250_START_HEALTH_CONFIRM))return status;
+    if(!NT_SUCCESS(status))return status;
+    if(data->Status==BC250_ESCAPE_STATUS_UNKNOWN_COMMAND)return (LONG)0xC00000BB;
+    if(data->Status!=BC250_ESCAPE_STATUS_DONE || data->NtStatus!=0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if(data->Magic!=BC250_ESCAPE_MAGIC || data->Command!=BC250_ESCAPE_RUN_START_HEALTH ||
+       data->AbiVersion!=BC250_START_HEALTH_ABI || data->Op!=op)
+        return (LONG)0xC000000D;
+    if(op==BC250_START_HEALTH_CONFIRM &&
+       (data->Generation!=generation || data->Epoch!=epoch || (data->Flags&(BC250_START_HEALTH_REQUIRED|BC250_START_HEALTH_CONFIRMED))!=(BC250_START_HEALTH_REQUIRED|BC250_START_HEALTH_CONFIRMED)))
+        return (LONG)0xC00000A3;
+    return 0;
+}
+
+static int StartHealth(int argc,wchar_t** argv)
+{
+    BC250_ESCAPE_START_HEALTH data;
+    ULONG op=BC250_START_HEALTH_READ;
+    ULONGLONG generation=0,epoch=0;
+    WCHAR* end;
+    LONG status;
+    if(argc==5 && !_wcsicmp(argv[2],L"confirm")) {
+        op=BC250_START_HEALTH_CONFIRM;
+        generation=_wcstoui64(argv[3],&end,10);if(*end || !generation || argv[3][0]==L'-')return 2;
+        epoch=_wcstoui64(argv[4],&end,10);if(*end || !epoch || argv[4][0]==L'-')return 2;
+    } else if(argc!=3 || _wcsicmp(argv[2],L"read"))return 2;
+    status=Bc250StartHealth(op,generation,epoch,&data,sizeof(data));
+    if(status<0){PrintStatus("KMD start health",status);return 1;}
+    printf("health abi=%lu version=0x%08lX flags=%lu generation=%llu epoch=%llu completed=%llu age_ms=%llu ready_ms=%llu\n",
+        data.AbiVersion,data.Version,data.Flags,data.Generation,data.Epoch,data.Completed,
+        data.LastCompletionAgeMs,data.ReadyAgeMs);
+    return 0;
+}
+
+static int Clock(int argc,wchar_t** argv)
+{
+    BC250_ESCAPE_CLOCK data;
+    ULONG op=BC250_CLOCK_OP_READ,mhz=0,mv=0;
+    WCHAR* end;
+    LONG status;
+    if(argc==5 && !_wcsicmp(argv[2],L"set")) {
+        op=BC250_CLOCK_OP_SET;
+        mhz=wcstoul(argv[3],&end,10);if(*end || argv[3][0]==L'-')return 2;
+        mv=wcstoul(argv[4],&end,10);if(*end || argv[4][0]==L'-')return 2;
+    } else if(argc!=3 || _wcsicmp(argv[2],L"read"))return 2;
+    status=Bc250ClockControl(op,mhz,mv,&data,sizeof(data));
+    if(status<0) { PrintStatus("KMD clock",status);return 1; }
+    printf("clock backend=kmd-smu abi=%lu MHz=%lu VID=%lu temperature_mc=%ld ready=%lu\n",
+        data.AbiVersion,data.ObservedMHz,data.ObservedVid,data.TemperatureMc,data.Ready);
+    if(op==BC250_CLOCK_OP_SET)
+        printf("clock request=%luMHz/%lumV initial=%luMHz/VID%lu expected_vid=%lu voltage_staged=%lu\n",
+            mhz,mv,data.InitialMHz,data.InitialVid,data.ExpectedVid,data.VoltageStaged);
     return 0;
 }
 
@@ -858,7 +959,7 @@ static int DcnFlip(const WCHAR *physText, const WCHAR *fillWord, const WCHAR *fi
 // the CPU, that never touches the WDDM table. Needs the same gates as `fence s0 ... test` (EnableGfx, a bring-up
 // that has reached stage 7) plus EnableVramWrite. bytes defaults to 4096, up to BC250_SDMACOPY_MAX_BYTES (64 KiB).
 
-static int SdmaCopy(const WCHAR *bytesText)
+static int SdmaCopy(const WCHAR *bytesText, int indirect)
 {
     static BC250_ESCAPE_SDMACOPY s;
     NTSTATUS status;
@@ -866,7 +967,7 @@ static int SdmaCopy(const WCHAR *bytesText)
 
     memset(&s, 0, sizeof(s));
     s.Magic = BC250_ESCAPE_MAGIC;
-    s.Command = BC250_ESCAPE_RUN_SDMACOPY;
+    s.Command = indirect ? BC250_ESCAPE_RUN_SDMAIB : BC250_ESCAPE_RUN_SDMACOPY;
     if (bytesText != NULL) {
         s.Bytes = wcstoul(bytesText, &end, 0);
         if (*end || s.Bytes == 0 || s.Bytes > BC250_SDMACOPY_MAX_BYTES) {
@@ -880,7 +981,7 @@ static int SdmaCopy(const WCHAR *bytesText)
     if (s.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
     if (s.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) { printf("refused: this driver build has no sdmacopy command\n"); return 3; }
 
-    printf("sdmacopy %lu bytes: %s, NTSTATUS 0x%08lX %s, result %ld\n", s.Bytes != 0 ? s.Bytes : BC250_SDMACOPY_DEFAULT_BYTES,
+    printf("%s %lu bytes: %s, NTSTATUS 0x%08lX %s, result %ld\n", indirect ? "sdmaib VMID0" : "sdmacopy", s.Bytes != 0 ? s.Bytes : BC250_SDMACOPY_DEFAULT_BYTES,
            s.Status == BC250_ESCAPE_STATUS_DONE ? "done" : "REFUSED", s.NtStatus, StatusName((NTSTATUS)s.NtStatus), s.Result);
     printf("gates        mmio %s, vram %s, vram writes %s, gart %s, psp %s, gfx %s\n",
            (s.Flags & BC250_ESCAPE_FLAG_MMIO_MAPPED) ? "mapped" : "closed",
@@ -1047,19 +1148,27 @@ static int Confirm(void)
     RegCloseKey(key);
 
     s = RegCreateKeyExW(HKEY_LOCAL_MACHINE, BC250_PARAMETERS, 0, NULL, REG_OPTION_NON_VOLATILE,
-                        KEY_SET_VALUE, NULL, &key, &disposition);
+                        KEY_SET_VALUE | KEY_QUERY_VALUE, NULL, &key, &disposition);
     if (s != ERROR_SUCCESS) {
         fprintf(stderr, "cannot open HKLM\\%ls, error %lu%s\n", BC250_PARAMETERS, (unsigned long)s,
                 s == ERROR_ACCESS_DENIED ? " (is this an elevated prompt?)" : "");
         return 1;
     }
     s = RegSetValueExW(key, L"UnconfirmedStarts", 0, REG_DWORD, (const BYTE *)&zero, sizeof(zero));
-    RegCloseKey(key);
     if (s != ERROR_SUCCESS) {
+        RegCloseKey(key);
         fprintf(stderr, "cannot write UnconfirmedStarts, error %lu\n", (unsigned long)s);
         return 1;
     }
-    printf("UnconfirmedStarts = 0\n");
+    // RegFlushKey requires KEY_QUERY_VALUE and returns the persistence status.
+    // Closing the handle or rereading zero is not proof it reached the disk.
+    s = RegFlushKey(key);
+    RegCloseKey(key);
+    if (s != ERROR_SUCCESS) {
+        fprintf(stderr, "cannot persist UnconfirmedStarts = 0, flush error %lu\n", (unsigned long)s);
+        return 1;
+    }
+    printf("UnconfirmedStarts = 0 (flushed to disk)\n");
     return 0;
 }
 
@@ -1138,6 +1247,8 @@ int wmain(int argc, wchar_t **argv)
 {
     if (argc < 2) {
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
+                        "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
+                        "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
                         "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
@@ -1150,12 +1261,15 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore\n"
                         "       bc250kmd_cli fence <ring> <count> [noint|test|dispatch|ib]\n"
                         "       bc250kmd_cli ib <vmid> <root phys hex> <gpu va hex> <dwords>\n"
+                        "       bc250kmd_cli sdmaib [bytes]               (VMID0 indirect SDMA copy/fill control)\n"
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
+    if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
+    if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
     if (!_wcsicmp(argv[1], L"info")) return Info(argc > 2 ? argv[2] : BC250_DEFAULT_HWID);
     if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
     if (!_wcsicmp(argv[1], L"stages")) return Stages();
@@ -1177,7 +1291,8 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"dcnflip") && argc == 5) return DcnFlip(argv[2], argv[3], argv[4], 0);
     if (!_wcsicmp(argv[1], L"fence") && argc >= 3 && argc <= 5) return Fence(argc, argv);
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
-    if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
+    if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 0);
+    if (!_wcsicmp(argv[1], L"sdmaib") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL, 1);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);

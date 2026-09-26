@@ -6,7 +6,7 @@ One unmodified file from libdrm: the gfx10 compute shader binaries that its amdg
 gives: a shader binary is nine dwords of machine code and a single wrong nibble is an illegal
 instruction, a hang, or a store to an address nobody chose.
 
-Source checkout: `P:\BC-250\ref\libdrm`, tag **libdrm-2.4.114** (an annotated tag, object
+Source checkout: `<BC250_ROOT>\ref\libdrm`, tag **libdrm-2.4.114** (an annotated tag, object
 `6d4be7f9ba89babe9f8e574f0fee8b1141d0ea14`), commit `b9ca37b3134861048986b75896c0915cbf2e97f9`,
 dated 2022-11-03.
 
@@ -17,7 +17,7 @@ dated 2022-11-03.
 Verified in both directions on 2026-09-21:
 
 ```
-git -C P:\BC-250\ref\libdrm rev-parse libdrm-2.4.114:tests/amdgpu/shader_code_gfx10.h
+git -C $env:BC250_ROOT\ref\libdrm rev-parse libdrm-2.4.114:tests/amdgpu/shader_code_gfx10.h
 git hash-object --path=tests/amdgpu/shader_code_gfx10.h third_party\libdrm\shader_code_gfx10.h
 ```
 

@@ -1,3 +1,8 @@
+> Source migration in progress: new bc250rd builds no longer implement SMU
+> mailbox writes. The deployed legacy artifact is unchanged. Do not deploy this
+> build until matching native KMD startup/control clients are validated; the
+> old CLI clock path will return NOT_SUPPORTED. No automatic fallback is allowed.
+
 # bc250rd - read-only register reader for Windows (experiment E02)
 
 | File | Purpose |
@@ -58,3 +63,22 @@ are carried into the registered task's command line.
   write and this tool does not write.
 - Run on unit A: E02 run 001 (`evidence/windows/2026-09-21-E02-run-001/`). The temperature path was checked
   for plausibility against the Linux readings only, not against an independent sensor at the same moment.
+
+### Verified clock requests
+
+The CLI now reads GetGfxFrequency and GetGfxVid after clock and succeeds only
+when replies match requested MHz and encoded VID. The clock-check command takes
+MHz and mV arguments and performs only query messages. Exact VID comparison
+reflects SMU encoding, not exact analogue voltage measurement. This uses bc250rd
+SMU IOCTLs independently of miniport escapes. A historical successful task log
+does not establish current clocks or ordering before GPU initialization.
+
+## Typed clock client migration (M440)
+
+Build the KMD CLI first, then pass its `bc250control.dll` to this build using
+`-ControlDll` (the sibling import library is needed too). `clock` and
+`clock-check` retain their command names but use the typed KMD transaction;
+`smu` raw passthrough is removed. Temperature/PCI/register reads remain in the
+reader. The new reader driver refuses legacy SMU writes. Deploy the DLL, clients
+and reader together only after native KMD owner activation is ready; no fallback
+to an old writer is allowed during PnP. Source migration is not lab deployment.

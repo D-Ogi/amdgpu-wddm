@@ -5,9 +5,10 @@
 // and returns 32-bit reads, but only for offsets in allowlist.h: a read of the wrong BAR5 address can hang
 // this SoC (docs/facts.md M16).
 //
-// Writes to the GPU function exist in exactly one place: the three MP1 (SMU) mailbox registers, through a
-// separate one-page mapping, for an allow-list of messages (queries, and the clock/voltage requests that
-// amdgpu's overdrive interface sends, with amdgpu's limits). Reason: without a driver the APU idles hot.
+// SMU ownership is being moved to the KMD integration. This instrument contains no
+// mailbox write path. Old IOCTL_BC250RD_SMU_MSG callers receive NOT_SUPPORTED;
+// there is no automatic direct-access fallback while KMD is unavailable.
+// Deploy only with the matching KMD control clients after handover validation.
 //
 // Temperature: the thermal sensor is an SMN register. It is read through the root complex's SMN index/data
 // pair (configuration space 0x60/0x64 of 00:00.0), exactly as Linux' k10temp does on this unit. That is one
@@ -24,8 +25,6 @@
 #pragma warning(disable : 4996)   // HalGetBusDataByOffset is deprecated, see above
 
 static PUCHAR g_Bar5;             // read-only mapping, NULL until attached
-static PUCHAR g_Mailbox;          // read-write mapping of the one page that holds the MP1 mailbox
-#define MAILBOX_PAGE 0x58000u
 static BC250RD_INFO g_Info;
 static FAST_MUTEX g_Lock;
 
@@ -68,52 +67,6 @@ static NTSTATUS SmnRead(ULONG Address, PULONG Value)
     return got == 4 ? STATUS_SUCCESS : STATUS_IO_DEVICE_ERROR;
 }
 
-static BOOLEAN SmuAllowed(ULONG Message, ULONG Parameter)
-{
-    switch (Message) {
-    case BC250RD_SMU_TestMessage:
-    case BC250RD_SMU_GetSmuVersion:
-    case BC250RD_SMU_QueryGfxclk:
-    case BC250RD_SMU_GetGfxFrequency:
-    case BC250RD_SMU_GetGfxVid:
-    case BC250RD_SMU_UnforceGfxVid:
-        return TRUE;
-    case BC250RD_SMU_RequestGfxclk:
-        return Parameter >= BC250RD_SCLK_MIN_MHZ && Parameter <= BC250RD_SCLK_MAX_MHZ;
-    case BC250RD_SMU_ForceGfxVid:   // a higher vid is a lower voltage
-        return Parameter >= BC250RD_VID_FROM_MV(BC250RD_VDDC_MAX_MV) && Parameter <= BC250RD_VID_FROM_MV(BC250RD_VDDC_MIN_MV);
-    }
-    return FALSE;
-}
-
-static ULONG MailboxRead(ULONG Offset) { return READ_REGISTER_ULONG((PULONG)(g_Mailbox + (Offset - MAILBOX_PAGE))); }
-static VOID MailboxWrite(ULONG Offset, ULONG Value) { WRITE_REGISTER_ULONG((PULONG)(g_Mailbox + (Offset - MAILBOX_PAGE)), Value); }
-
-static ULONG SmuWaitResponse(void)
-{
-    LARGE_INTEGER ms;
-    ms.QuadPart = -10000;   // 1 ms
-    for (int i = 0; i < 2000; i++) {
-        ULONG r = MailboxRead(BC250RD_MP1_C2PMSG_90);
-        if (r != 0) return r;
-        KeDelayExecutionThread(KernelMode, FALSE, &ms);
-    }
-    return 0;
-}
-
-static NTSTATUS SmuMessage(BC250RD_SMU_MSG *m)
-{
-    if (!g_Mailbox) return STATUS_DEVICE_NOT_READY;
-    if (!SmuAllowed(m->Message, m->Parameter)) return STATUS_ACCESS_DENIED;
-    if (SmuWaitResponse() == 0) return STATUS_DEVICE_BUSY;   // a previous message never completed: do not touch
-    MailboxWrite(BC250RD_MP1_C2PMSG_90, 0);
-    MailboxWrite(BC250RD_MP1_C2PMSG_82, m->Parameter);
-    MailboxWrite(BC250RD_MP1_C2PMSG_66, m->Message);
-    m->Response = SmuWaitResponse();
-    m->Value = MailboxRead(BC250RD_MP1_C2PMSG_82);
-    return STATUS_SUCCESS;
-}
-
 static NTSTATUS Attach(void)
 {
     if (g_Bar5) return STATUS_SUCCESS;
@@ -139,11 +92,6 @@ static NTSTATUS Attach(void)
                 pa.QuadPart = bar5 & ~0xFul;
                 PVOID va = MmMapIoSpaceEx(pa, BC250RD_BAR5_SIZE, PAGE_READONLY | PAGE_NOCACHE);
                 if (!va) return STATUS_INSUFFICIENT_RESOURCES;
-                PHYSICAL_ADDRESS mb;
-                mb.QuadPart = pa.QuadPart + MAILBOX_PAGE;
-                g_Mailbox = (PUCHAR)MmMapIoSpaceEx(mb, PAGE_SIZE, PAGE_READWRITE | PAGE_NOCACHE);
-                if (!g_Mailbox) { MmUnmapIoSpace(va, BC250RD_BAR5_SIZE); return STATUS_INSUFFICIENT_RESOURCES; }
-
                 g_Info.Bus = bus; g_Info.Device = dev; g_Info.Function = fn;
                 g_Info.VendorId = cfg.VendorID; g_Info.DeviceId = cfg.DeviceID;
                 g_Info.Command = cfg.Command; g_Info.Status = cfg.Status; g_Info.RevisionId = cfg.RevisionID;
@@ -199,8 +147,8 @@ static NTSTATUS Bc250DeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
 
     case IOCTL_BC250RD_SMU_MSG:
         if (inLen != sizeof(BC250RD_SMU_MSG) || outLen < sizeof(BC250RD_SMU_MSG)) { status = STATUS_INVALID_PARAMETER; break; }
-        status = SmuMessage((BC250RD_SMU_MSG *)buf);
-        if (NT_SUCCESS(status)) written = sizeof(BC250RD_SMU_MSG);
+        // Permanently removed from this binary, including during PnP gaps.
+        status = STATUS_NOT_SUPPORTED;
         break;
 
     case IOCTL_BC250RD_SMN_READ: {
@@ -232,7 +180,6 @@ static VOID Bc250Unload(PDRIVER_OBJECT DriverObject)
 {
     UNICODE_STRING dos = RTL_CONSTANT_STRING(BC250RD_DEVICE_DOS);
     IoDeleteSymbolicLink(&dos);
-    if (g_Mailbox) MmUnmapIoSpace(g_Mailbox, PAGE_SIZE);
     if (g_Bar5) MmUnmapIoSpace(g_Bar5, BC250RD_BAR5_SIZE);
     if (DriverObject->DeviceObject) IoDeleteDevice(DriverObject->DeviceObject);
 }

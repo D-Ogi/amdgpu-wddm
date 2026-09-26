@@ -9,7 +9,7 @@ Two commits are involved, because the first batch was fetched before the pinned 
 
 - `93f51579e7df248780214094418f205253383cc5` - `torvalds/linux`, branch `master`, fetched 2026-09-21.
 - `7d0a66e4bb9081d75c82ec4957c50034cb0ea449` - tag **v6.18**, the commit `driver/amdgpu-import/`
-  is pinned to (`P:\BC-250\ref\linux-src`, `linux-src.PROVENANCE.txt`).
+  is pinned to (`<BC250_ROOT>\ref\linux-src`, `linux-src.PROVENANCE.txt`).
 
 Every file taken at the master commit was compared byte for byte (after line-ending normalization)
 with the same path at v6.18 on 2026-09-21: all nine are **identical**, so the two batches describe
@@ -89,3 +89,7 @@ Who uses what:
   rather than out of typed dwords. It is not a register header and it does not live under
   `asic_reg/`, but it is imported the same way and for the same reason, so it is listed here rather
   than in a second place. `sdma_v5_0.c` includes it exactly as we do.
+
+- `thm_10_0_offset.h`, `thm_10_0_sh_mask.h`: AMD MIT headers from Linux v6.18 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`; THM_TCON_CUR_TMP register and fields, combined with Cyan Skillfish THM base. Native BAR read still requires comparison with measured SMN temperature before activation.
+
+- `clk_11_0_1_offset.h`: AMD MIT, Linux v6.18 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, exact copy; DCN201 DP reference clock counter used by inherited timing readback.

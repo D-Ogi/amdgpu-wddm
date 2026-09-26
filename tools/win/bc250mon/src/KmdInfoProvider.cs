@@ -133,7 +133,7 @@ namespace Bc250Mon
 
         // Async stdout/stderr reads: the cli's output is a few hundred bytes, but reading one stream fully
         // before starting the other is the classic way to deadlock a child process that writes to both.
-        static int Run(string exe, string args, int timeoutMs, out string stdout, out string stderr)
+        internal static int Run(string exe, string args, int timeoutMs, out string stdout, out string stderr)
         {
             var outBuf = new StringBuilder();
             var errBuf = new StringBuilder();

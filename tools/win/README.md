@@ -22,7 +22,7 @@ python tools/win/target.py addr                     just the address (exit code 
 python tools/win/target.py wait 600                 block until it answers again after a reboot
 python tools/win/target.py ps script.ps1 [args]     copy a PowerShell script over and run it
 python tools/win/target.py push a.exe b.sys --to C:\BC250\bc250rd
-python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log P:\BC-250\scratch\
+python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log $env:BC250_ROOT\scratch\
 ```
 
 Inline PowerShell through Git Bash gets mangled (`$_`, quotes, backslashes): put anything with punctuation in
@@ -31,7 +31,8 @@ a `.ps1` file and use `ps`. There is no scp on the target, so `push` and `pull` 
 ### Configuration
 
 The addresses and key paths are **not** in this repository. They come from a JSON file outside it, by default
-`P:/BC-250/secrets/client/target.json` (`BC250_TARGET_CONFIG` points elsewhere). Importing `target.py` never
+`<BC250_ROOT>/secrets/client/target.json` (`BC250_TARGET_CONFIG` points elsewhere; `BC250_ROOT` is the
+workspace root, by default the parent directory of this repository). Importing `target.py` never
 reads it; only connecting does, so the tests and anything that just imports the module work without it.
 
 ```json

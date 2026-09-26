@@ -28,3 +28,7 @@ where we think they are. It is not how a game gets a frame onto the glass.
   stopping the adapter must put the firmware's address back. That restore is part of the first flip build, not a
   follow-up.
 - Until the interrupt is wired, frame pacing numbers mean nothing (ADR 0010, consequences).
+
+## M10 refinement (2026-09-25)
+[ADR0015](0015-m10-cpu-wsi.md) refines point4 for the owner-authorized M10 CPU
+Vulkan window presentation path. Hardware DCN scanout and IH VSync remain required.

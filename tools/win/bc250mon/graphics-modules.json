@@ -1,0 +1,68 @@
+{
+  "440B2AB98A943E3F77849D5C1672271792C71F5C864D4BB1562E27B3C2DFC43F": {
+    "Renderer": "Mesa softpipe",
+    "Execution": "CPU software rendering",
+    "Compiler": "TGSI interpreter; no LLVM/JIT",
+    "Build": "branch labels / old rotation"
+  },
+  "4A6B097AD176B8E1E1C98914CA2E7E2A1D419A6CE3FA4A18ACDB8E130C2FE7FD": {
+    "Renderer": "Mesa softpipe",
+    "Execution": "CPU software rendering",
+    "Compiler": "TGSI interpreter; no LLVM/JIT",
+    "Build": "resource rotation"
+  },
+  "E1976C4254055F0B96E294E713DBC5798C07E41E61526DD6FC3738A712FC1CAD": {
+    "Renderer": "Mesa softpipe",
+    "Execution": "CPU software rendering",
+    "Compiler": "TGSI interpreter; no LLVM/JIT",
+    "Build": "rotation + frame profile"
+  },
+  "69E620F50A75ED5667230DCE92CD35CB7E7982BE48A9FFBAD8A99D41BE70B00A": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 19.1.7 / native CPU code",
+    "Build": "rotation + render fence + profile"
+  },
+  "853E4FB36A4D71AF0F3380279744C2145BDD4976E86EAB5755850DF4AB12C514": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 19.1.7 / native CPU code",
+    "Build": "rotation + fence + TGSI/NIR"
+  },
+  "916D14B8CF3AA97E32C22D5AFC92F2BAEF82539C466B2654A5D70DA4CBC0F9DB": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 23.1.2 / native CPU code",
+    "Build": "rotation + fence + TGSI/NIR"
+  },
+  "D438EA42314A3ADD6817665A6133628A64404B5282FB82227230199DA22F768D": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 23.1.2 / native CPU code",
+    "Build": "Mesa 26.3.0-devel f9a2d34a + BC250"
+  },
+  "E0ACCCB5591CD2B9C8DC78B83BF1C78DF4F7ECB001D9FA77FE1C323BC48E91CB": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 23.1.2 / native CPU code",
+    "Build": "Mesa f9a2d34a + E26R v2 CPU-read cache (KMD147+)"
+  },
+  "FF864DB8CBD6512DDD5538941A6332A9F85AF0D6EA287A5C3FC4A2C2C771E6D5": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 23.1.2 / native CPU code",
+    "Build": "Mesa f9a2d34a + E26R v2 + bounded diagnostics (KMD147+)"
+  },
+  "CB1480EC67DB4DC22193E65AAB158680D00063332077205CE307B4474B1986C6": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 23.1.2 / native CPU code",
+    "Build": "Mesa f9a2d34a + E26R v2 + raster block surface padding"
+  },
+  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA": {
+    "Renderer": "Mesa llvmpipe",
+    "Execution": "CPU software rendering (JIT)",
+    "Compiler": "LLVM 23.1.2 / native CPU code",
+    "Build": "Mesa f9a2d34a + surface padding + atomic shared resource close"
+  }
+}

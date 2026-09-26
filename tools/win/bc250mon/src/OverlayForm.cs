@@ -185,8 +185,21 @@ namespace Bc250Mon
                 y += (int)size.Height + 8;
             }
 
-            foreach (var p in snap.Panels)
+            var panels = snap.Panels.Where(p => p.Name != "kmdinfo" ||
+                !snap.Panels.Any(item => item.Name == "graphics")).ToList();
+            var heights = panels.Select(p => OverlayLayout.PanelHeight(g, _text, p, w - 130)).ToList();
+            // Logs and the existing controls hint form the final block.
+            heights.Add(19 + snap.Log.Count * 15 + 6 + 22);
+            var area = Screen.PrimaryScreen.WorkingArea;
+            int availableHeight = (int)((area.Height - 24 - (_buttons.Visible ? _buttons.Height : 0)) / _scale);
+            int maxColumns = Math.Max(1, (int)((area.Width - 24) / (PanelWidth * _scale)));
+            int columns, bottom;
+            var positions = OverlayLayout.Flow(heights, y, availableHeight, maxColumns, out columns, out bottom);
+            for (int i = 0; i < panels.Count; ++i)
             {
+                var p = panels[i];
+                x = Margin_ + positions[i].X * PanelWidth;
+                y = positions[i].Y;
                 using (var b = new SolidBrush(dim)) g.DrawString(p.Title.ToUpperInvariant(), _small, b, x, y);
                 using (var pen = new Pen(Color.FromArgb(60, 66, 76))) g.DrawLine(pen, x, y + 15, x + w, y + 15);
                 y += 19;
@@ -204,6 +217,8 @@ namespace Bc250Mon
                 y += 8;
             }
 
+            x = Margin_ + positions[panels.Count].X * PanelWidth;
+            y = positions[panels.Count].Y;
             using (var b = new SolidBrush(dim)) g.DrawString("LOG", _small, b, x, y);
             using (var pen = new Pen(Color.FromArgb(60, 66, 76))) g.DrawLine(pen, x, y + 15, x + w, y + 15);
             y += 19;
@@ -219,8 +234,10 @@ namespace Bc250Mon
                 g.DrawString("Ctrl+Alt+F9 controls   Ctrl+Alt+F10 hide   Ctrl+Alt+F12 STOP", _small, b, x, y);
             y += 22;
 
-            int wanted = (int)(y * _scale) + (_buttons.Visible ? _buttons.Height : 0);
-            if (Math.Abs(wanted - Height) > 2) BeginInvoke((Action)(() => { Height = wanted; Dock_(); }));
+            int wanted = (int)(bottom * _scale) + (_buttons.Visible ? _buttons.Height : 0);
+            int wantedWidth = (int)(columns * PanelWidth * _scale);
+            if (Math.Abs(wanted - Height) > 2 || Width != wantedWidth)
+                BeginInvoke((Action)(() => { Width = wantedWidth; Height = wanted; Dock_(); }));
         }
     }
 }

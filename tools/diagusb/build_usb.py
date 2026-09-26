@@ -4,7 +4,7 @@
 The result is a directory. Copy its contents to an empty FAT32 partition and the stick boots on
 UEFI machines (see write_usb.ps1). Nothing here needs admin rights or Linux.
 
-    python tools/diagusb/build_usb.py --work P:\\BC-250\\scratch --net P:\\BC-250\\secrets\\net
+    python tools/diagusb/build_usb.py --work <BC250_ROOT>\\scratch --net <BC250_ROOT>\\secrets\\net
 
 Layout produced in <work>/usbroot:
     boot/ efi/ apks/            from the Alpine "standard" ISO (kernel has amdgpu + Cyan Skillfish firmware)

@@ -17,7 +17,7 @@ Every rule in section (e) names a source. Three kinds, and nothing else:
 Nothing here is from memory. A rule whose source would be "everyone knows" is a rule that does not belong.
 
 State of the tree this describes: `driver/kmd/wddm.c`, 2198 lines, SHA-256 `4B6C6FC5...C98CFD3C` - commit
-`78a44a0` (bc250kmd 0.7.14, 2026-09-22, stage C of the ring path) plus the working-tree changes to
+`5894284` (bc250kmd 0.7.14, 2026-09-22, stage C of the ring path) plus the working-tree changes to
 `Bc250WddmPresent` that were in flight when this was regenerated. The file is under active development and
 moved three times while this section was being written, so the line numbers below are a snapshot and drift
 with every change. Regenerate them with
@@ -305,7 +305,8 @@ a paging buffer in a segment that does carry `Flags.Aperture`, and a conditional
 `DxgkDdiPatch` present - so that R34 cannot degenerate into "never name a segment" and R37 into "always
 answer 1".
 
-`tools\wddm_contract_check\host\run.ps1 -Kits P:\BC-250\toolchain\nuget` compiles `driver/kmd/wddm.c`
+`tools\wddm_contract_check\host\run.ps1 -Kits $env:BC250_ROOT\toolchain\nuget` (`BC250_ROOT` is the
+workspace root, by default the parent directory of this repository) compiles `driver/kmd/wddm.c`
 unmodified as a user-mode object against the WDK km headers, links it against a stub kernel, and calls the
 real DDIs through the function pointers `WddmBuildTable()` produces. No test hook and no refactor in the
 driver: the km headers declare kernel services `DECLSPEC_IMPORT`, so supplying `__imp_ExAllocatePool2` and

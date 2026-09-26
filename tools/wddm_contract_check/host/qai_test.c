@@ -790,16 +790,29 @@ int main(int argc, char** argv)
 {
     unsigned i;
     int rc;
+    unsigned fixture_gib = 8;
+    struct bc250h_geometry geometry;
     struct bc250h_stub_counters counters;
 
-    for (i = 1; i < (unsigned)argc; i++)
+    for (i = 1; i < (unsigned)argc; i++) {
         if (strcmp(argv[i], "-v") == 0) g_Verbose = 1;
+        else if (strcmp(argv[i], "--vram-gib") == 0 && i + 1 < (unsigned)argc) {
+            const char* size = argv[++i];
+            if (strcmp(size, "8") == 0) fixture_gib = 8;
+            else if (strcmp(size, "12") == 0) fixture_gib = 12;
+            else if (strcmp(size, "16") == 0) fixture_gib = 16;
+            else { fprintf(stderr, "--vram-gib requires 8, 12 or 16 (synthetic fixture)\n"); return 2; }
+        } else { fprintf(stderr, "usage: qai_test [-v] [--vram-gib 8|12|16]\n"); return 2; }
+    }
+    if (!bc250h_fixture_geometry(fixture_gib, &geometry)) return 2;
+    printf("Synthetic geometry: %u GiB, CPU base 0x%llX, MC base 0x%llX; no hardware discovery\n",
+           fixture_gib, geometry.vram_physical, geometry.vram_mc_base);
     bc250h_stub_set_log_echo(g_Verbose);
 
     printf("wddm.c QueryAdapterInfo host buffer tests\n");
     printf("=========================================\n\n");
 
-    rc = bc250h_start(1);
+    rc = bc250h_start_geometry(1, &geometry);
     if (rc != 0) { printf("FATAL: bc250h_start failed (%d)\n", rc); return 3; }
 
     printf("DRIVER_INITIALIZATION_DATA: %u bytes, %u DDI pointers set, reserved members %s\n",
@@ -864,7 +877,7 @@ int main(int argc, char** argv)
     }
 
     /* The second configuration: the EnableVram gate closed, so wddm.c has no segment to declare. */
-    rc = bc250h_start(0);
+    rc = bc250h_start_geometry(0, &geometry);
     if (rc != 0) { printf("FATAL: bc250h_start(0) failed (%d)\n", rc); return 3; }
     g_SegmentCount = bc250h_segment_count();
     dump_segment("QUERYSEGMENT4 with EnableVram closed (no carve-out known)");

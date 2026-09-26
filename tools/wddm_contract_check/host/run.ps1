@@ -1,10 +1,12 @@
 # Builds and runs the host buffer tests for DxgkDdiQueryAdapterInfo of driver\kmd\wddm.c.
 #
 #   pwsh tools\wddm_contract_check\host\run.ps1
-#   pwsh tools\wddm_contract_check\host\run.ps1 -Kits P:\BC-250\toolchain\nuget -Verbose250
+#   pwsh tools\wddm_contract_check\host\run.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Verbose250
 #
 # Host-side only: no lab machine, no hardware, no driver load. Everything is written under -Out
-# (default P:\BC-250\scratch\build\contract-check), never into the repository and never onto drive C:.
+# (default <BC250_ROOT>\scratch\build\contract-check), never into the repository and never onto drive C:.
+# BC250_ROOT is the workspace root: the environment variable, else the parent directory of this
+# repository.
 #
 # The point of this script is the first compile below: driver\kmd\wddm.c, unmodified, built a second
 # time without /kernel and linked into a console program. The kernel services it calls come from
@@ -13,8 +15,9 @@
 # ntifs.h and no CRT, and qai_test.c sees the CRT and no ntifs.h (qai_bridge.h is the border).
 
 param(
-    [string]$Out = 'P:\BC-250\scratch\build\contract-check',
-    [string]$Kits = 'P:\BC-250\toolchain\nuget',
+    [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
+    [string]$Out = "$Root\scratch\build\contract-check",
+    [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0',
     [switch]$Verbose250,
     [switch]$BuildOnly
