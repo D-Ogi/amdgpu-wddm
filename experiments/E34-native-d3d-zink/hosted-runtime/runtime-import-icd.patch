@@ -1,0 +1,124 @@
+--- a/src/amd/vulkan/radv_device_memory.c
++++ b/src/amd/vulkan/radv_device_memory.c
+@@ -160,7 +160,16 @@
+    mem->android_hardware_buffer = NULL;
+ #endif
+ 
+-   if (ahb_import_info) {
++   const struct bc250_host_import *host_import=NULL;
++   for (const VkBaseInStructure *ext=pAllocateInfo->pNext;ext;ext=ext->pNext)
++      if ((uint32_t)ext->sType==BC250_HOST_IMPORT_STYPE) host_import=(const void *)ext;
++   if (host_import) {
++      if (!device->vk.bc250_host.dispatch || !device->ws->buffer_from_hosted ||
++          host_import->size<pAllocateInfo->allocationSize) { result=VK_ERROR_INVALID_EXTERNAL_HANDLE; goto fail; }
++      result=device->ws->buffer_from_hosted(device->ws,host_import->identity,host_import->allocation,
++                                           host_import->va,host_import->size,&mem->bo);
++      if (result!=VK_SUCCESS) goto fail;
++   } else if (ahb_import_info) {
+       result = radv_import_ahb_memory(device, mem, priority, ahb_import_info);
+       if (result != VK_SUCCESS)
+          goto fail;
+--- a/src/amd/vulkan/radv_radeon_winsys.h
++++ b/src/amd/vulkan/radv_radeon_winsys.h
+@@ -395,6 +395,7 @@
+ 
+    /* When non-NULL and true, do not build the indirect gfx-init IB. The state is
+     * emitted inline, the same stream as RADV_DEBUG=noibchaining. NULL means no. */
++   VkResult (*buffer_from_hosted)(struct radeon_winsys *, void *, uint32_t, uint64_t, uint64_t, struct radeon_winsys_bo **);
+    bool (*inline_gfx_preamble)(struct radeon_winsys *ws);
+ };
+ 
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -1088,7 +1088,7 @@
+ radv_wddm2_bo_make_resident(struct radeon_winsys *_ws, struct radeon_winsys_bo *_bo,
+                             bool resident)
+ {
+-   if (all_resident)
++   if (all_resident || radv_wddm2_bo(_bo)->borrowed)
+       return VK_SUCCESS;
+ 
+    //fprintf(stderr, "make resident \n");
+@@ -1105,7 +1105,7 @@
+             .MustSucceed = 1,
+          },
+       };
+-      status = D3DKMTMakeResident(&make_resident);
++      status = BC250_WDDM_CALL(&ws->host, MakeResident, &make_resident);
+       if (!NT_SUCCESS(status))
+          return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+ 
+@@ -1115,7 +1115,7 @@
+          .ObjectHandleArray = &ws->paging_fence_h,
+          .FenceValueArray = &make_resident.PagingFenceValue,
+       };
+-      status = D3DKMTWaitForSynchronizationObjectFromCpu(&wait);
++      status = BC250_WDDM_CALL(&ws->host, WaitForSynchronizationObjectFromCpu, &wait);
+       if (!NT_SUCCESS(status))
+          return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    } else {
+@@ -1156,6 +1156,7 @@
+ 
+    radv_wddm2_bo_unmap(_ws, _bo, false);
+ 
++   if (bo->borrowed) { FREE(bo); return; }
+    if (bo->sparse_high_va) {
+       const D3DKMT_FREEGPUVIRTUALADDRESS high = {
+          .hAdapter = ws->adapter_h,
+@@ -1476,9 +1477,27 @@
+       fprintf(file, "  To get BO VA ranges, please specify RADV_DEBUG=allbos\n");
+ }
+ 
++static VkResult
++radv_wddm2_bo_from_hosted(struct radeon_winsys *rws, void *identity, uint32_t allocation,
++                         uint64_t va, uint64_t size, struct radeon_winsys_bo **out)
++{
++   struct radv_wddm2_winsys *ws=radv_wddm2_winsys(rws);
++   if (!ws->host.dispatch || identity!=ws->host.identity || !allocation || !va || !size ||
++       (va & 4095) || (size & 4095) || va>=RADV_WDDM2_PRT_CONTROL_MASK || size>RADV_WDDM2_PRT_CONTROL_MASK-va)
++      return VK_ERROR_INVALID_EXTERNAL_HANDLE;
++   struct radv_wddm2_bo *bo=CALLOC_STRUCT(radv_wddm2_bo);
++   if (!bo) return VK_ERROR_OUT_OF_HOST_MEMORY;
++   bo->ws=ws; bo->borrowed=true;
++   bo->base.va=va; bo->base.size=size; bo->base.handle=allocation; bo->base.obj_id=allocation;
++   bo->base.initial_domain=RADEON_DOMAIN_VRAM;
++   *out=&bo->base;
++   return VK_SUCCESS;
++}
++
+ void
+ radv_wddm2_bo_init_functions(struct radv_wddm2_winsys *ws)
+ {
++   ws->base.buffer_from_hosted=radv_wddm2_bo_from_hosted;
+    ws->base.buffer_create = radv_wddm2_bo_create;
+    ws->base.buffer_destroy = radv_wddm2_bo_destroy;
+    ws->base.buffer_map = radv_wddm2_bo_map;
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.h
+@@ -51,6 +51,7 @@
+    uint64_t reserved_size;
+    uint64_t sparse_high_va;
+    bool emulate_sparse_residency;
++   bool borrowed;
+ 
+    void *map;
+    uint32_t handle;
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -7,7 +7,15 @@
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 2u
++#define BC250_HOST_VERSION 3u
++#define BC250_HOST_IMPORT_STYPE 0x42434832u
++struct bc250_host_import {
++   uint32_t sType;
++   const void *pNext;
++   void *identity;
++   uint32_t allocation;
++   uint64_t va, size;
++};
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
+ struct bc250_host_paging {

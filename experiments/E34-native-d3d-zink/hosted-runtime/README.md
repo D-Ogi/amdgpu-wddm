@@ -50,3 +50,17 @@ Use BC250_HOSTED_RENDER=1 starting with candidate003 and run009. Retain the 45-s
 outer deadline and baseline restoration. Require all three 4096-pixel checks,
 correct surviving-device lifetime and no wrong-thread callback. This is offscreen;
 Present, sharing and DWM remain separate gates.
+
+## Borrowed runtime surface control
+
+Hypothesis: hosted Zink renders directly into an allocation created for a native
+D3D shared texture. The private import carries the device identity, allocation
+handle, mapped GPU VA and size. The UMD owns residency, VA and deallocation;
+RADV borrows them and never frees the allocation. No surface Lock2 is used.
+
+Candidate007/run014 changes the existing color control to use shared render
+targets, retaining a separate staging resource as the readback oracle. Require
+three exact 4096-pixel colors including the surviving device. The import uses
+explicit linear layout and the runtime surface pitch. Teardown waits for GPU
+completion before releasing the imported Gallium resource and runtime allocation.
+This control does not exercise Present or DWM.

@@ -1,0 +1,162 @@
+--- a/src/gallium/drivers/zink/zink_resource.c
++++ b/src/gallium/drivers/zink/zink_resource.c
+@@ -54,6 +54,8 @@
+ 
+ #if defined(ZINK_USE_DMABUF) && !defined(_WIN32)
+ #include "drm-uapi/drm_fourcc.h"
++#elif defined(_WIN32)
++#include "amd/common/ac_drm_fourcc.h"
+ #else
+ /* these won't actually be used */
+ #define DRM_FORMAT_MOD_INVALID 0
+@@ -1001,6 +1003,10 @@
+ static inline bool
+ get_export_flags(struct zink_screen *screen, const struct pipe_resource *templ, struct mem_alloc_info *alloc_info)
+ {
++   if (alloc_info->whandle && alloc_info->whandle->bc250_identity) {
++      alloc_info->external=0; alloc_info->export_types=0; alloc_info->shared=false;
++      return screen->bc250_host.dispatch!=NULL;
++   }
+    bool needs_export = (templ->bind & (ZINK_BIND_VIDEO | ZINK_BIND_DMABUF)) != 0;
+    if (alloc_info->whandle) {
+       if (alloc_info->whandle->type == WINSYS_HANDLE_TYPE_FD ||
+@@ -1097,12 +1103,23 @@
+       mai.pNext = &imfi;
+    }
+ #else
++   struct bc250_host_import host_import={0};
+    VkImportMemoryWin32HandleInfoKHR imfi = {
+       VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+       NULL,
+    };
+ 
+-   if (alloc_info->whandle) {
++   if (alloc_info->whandle && alloc_info->whandle->bc250_identity) {
++      if (!screen->bc250_host.dispatch || alloc_info->whandle->bc250_identity!=screen->bc250_host.identity)
++         return roc_fail_and_cleanup_object;
++      host_import.sType=BC250_HOST_IMPORT_STYPE;
++      host_import.pNext=mai.pNext;
++      host_import.identity=alloc_info->whandle->bc250_identity;
++      host_import.allocation=(uint32_t)(uintptr_t)alloc_info->whandle->handle;
++      host_import.va=alloc_info->whandle->bc250_va;
++      host_import.size=alloc_info->whandle->size;
++      mai.pNext=&host_import;
++   } else if (alloc_info->whandle) {
+       HANDLE source_target = GetCurrentProcess();
+       HANDLE out_handle;
+ 
+@@ -1476,13 +1493,15 @@
+ 
+    filter_external_image_export_types(screen, ici, mod, alloc_info);
+ 
+-   if (alloc_info->shared || alloc_info->external) {
++   if (alloc_info->shared || alloc_info->external || (alloc_info->whandle && alloc_info->whandle->bc250_identity)) {
++      if (alloc_info->shared || alloc_info->external) {
+       s->emici.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+       s->emici.pNext = ici->pNext;
+       s->emici.handleTypes = alloc_info->export_types;
+       assert(!(s->emici.handleTypes & VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) ||
+              ici->tiling != VK_IMAGE_TILING_OPTIMAL);
+       ici->pNext = &s->emici;
++      }
+ 
+       assert(ici->tiling != VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT || mod != DRM_FORMAT_MOD_INVALID);
+       if (alloc_info->whandle && ici->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
+@@ -2320,6 +2339,7 @@
+ #ifdef ZINK_USE_DMABUF
+    struct zink_screen *screen = zink_screen(pscreen);
+ 
++   fprintf(stderr,"BC250 zink import type=%u modifier=%llu identity=%p va=%llu\n",whandle->type,(unsigned long long)whandle->modifier,whandle->bc250_identity,(unsigned long long)whandle->bc250_va);
+    if (whandle->modifier != DRM_FORMAT_MOD_INVALID &&
+        !screen->info.have_EXT_image_drm_format_modifier)
+       return NULL;
+@@ -2343,7 +2363,7 @@
+          whandle->modifier = modifier;
+       }
+    }
+-   templ2.bind |= ZINK_BIND_DMABUF;
++   if (!whandle->bc250_identity) templ2.bind |= ZINK_BIND_DMABUF;
+    struct pipe_resource *pres = resource_create(pscreen, &templ2, whandle, usage, &modifier, modifier_count, NULL, NULL);
+    if (!pres)
+       return NULL;
+--- a/src/gallium/frontends/d3d10umd/DxgiFns.cpp
++++ b/src/gallium/frontends/d3d10umd/DxgiFns.cpp
+@@ -154,6 +154,23 @@
+    ULONGLONG deadline = GetTickCount64() + 5000;
+    while (device->pagingFence && *device->pagingFence < fence && GetTickCount64() < deadline) Sleep(1);
+    if (!device->pagingFence || *device->pagingFence < fence) return HRESULT_FROM_WIN32(WAIT_TIMEOUT);
++   fprintf(stderr,"BC250 surface hosted=%u allocation=%x pitch=%u bytes=%llu\n",device->hosted_state!=NULL,resource->allocation,data.pitch,resource->gpuBytes);
++   if (device->hosted_state) {
++      struct winsys_handle handle={};
++      handle.type=WINSYS_HANDLE_TYPE_FD;
++      handle.handle=(HANDLE)(uintptr_t)resource->allocation;
++      handle.stride=data.pitch; handle.size=resource->gpuBytes;
++      handle.modifier=0; handle.format=resource->resource->format;
++      handle.bc250_va=resource->gpuVa; handle.bc250_identity=device->hDevice;
++      struct pipe_resource desc=*resource->resource;
++      desc.bind |= PIPE_BIND_DISPLAY_TARGET | PIPE_BIND_SHARED;
++      struct pipe_resource *imported=device->pipe->screen->resource_from_handle(device->pipe->screen,&desc,&handle,0);
++      if (!imported) return E_OUTOFMEMORY;
++      pipe_resource_reference(&resource->resource,NULL);
++      resource->resource=imported;
++      resource->presentReady=TRUE;
++      return S_OK;
++   }
+    D3DDDICB_LOCK2 lock = {};
+    lock.hAllocation = resource->allocation;
+    hr = device->KTCallbacks.pfnLock2Cb(device->hDevice, &lock);
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -536,8 +536,22 @@
+          pResource->transfers[SubResource] = NULL;
+       }
+    }
++   if (pResource->allocation && CastDevice(hDevice)->hosted_state) {
++      pipe_fence_handle *fence=NULL;
++      pipe->flush(pipe,&fence,0);
++      bool done=!fence || pipe->screen->fence_finish(pipe->screen,pipe,fence,10000000000ull);
++      pipe->screen->fence_reference(pipe->screen,&fence,NULL);
++      if (!done) { SetError(hDevice,DXGI_ERROR_DEVICE_HUNG); return; }
++      pipe_resource_reference(&pResource->resource,NULL);
++   }
+    if (pResource->allocation) {
+       Device *device = CastDevice(hDevice);
++      if (device->hosted_state && pResource->gpuVa) {
++         D3DDDICB_FREEGPUVIRTUALADDRESS unmap={};
++         unmap.BaseAddress=pResource->gpuVa; unmap.Size=pResource->gpuBytes;
++         HRESULT hr=device->KTCallbacks.pfnFreeGpuVirtualAddressCb(device->hDevice,&unmap);
++         if (FAILED(hr)) { SetError(hDevice,hr); return; }
++      }
+       if (pResource->cpuMapping) {
+          D3DDDICB_UNLOCK2 unlock = {};
+          unlock.hAllocation = pResource->allocation;
+--- a/src/gallium/include/frontend/winsys_handle.h
++++ b/src/gallium/include/frontend/winsys_handle.h
+@@ -109,6 +109,8 @@
+     * Output for resource_get_handle.
+     */
+    uint64_t size;
++   uint64_t bc250_va;
++   void *bc250_identity;
+ };
+ 
+ #ifdef __cplusplus
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -7,7 +7,15 @@
+ #define BC250_HOST_BOOTSTRAP_H
+ #include <stdint.h>
+ #define BC250_HOST_STYPE 0x42434831u
+-#define BC250_HOST_VERSION 2u
++#define BC250_HOST_VERSION 3u
++#define BC250_HOST_IMPORT_STYPE 0x42434832u
++struct bc250_host_import {
++   uint32_t sType;
++   const void *pNext;
++   void *identity;
++   uint32_t allocation;
++   uint64_t va, size;
++};
+ #define BC250_HOST_CREATE_PAGING 1u
+ #define BC250_HOST_DESTROY_PAGING 2u
+ struct bc250_host_paging {
