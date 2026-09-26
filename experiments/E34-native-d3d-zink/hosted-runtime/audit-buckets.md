@@ -18,3 +18,9 @@ The same60-second rollback watchdog and75-second window lifetime apply. Compare
 map buckets between steady samples before the final diagnostic capture, correlate
 loss-free DMA execution to DWM, and audit KMD blit counters. Reject G0 if copies
 remain unexplained, ETW loses required events, or the image oracle differs.
+
+Result: [M562 DWM010](../../../evidence/windows/2026-09-27-E34-dwm010/RESULT.md)
+retains 8000 correct composition pixels, 589 matched DWM DMA pairs with zero
+ETW loss, classified map histories and the persistent-write source audit.
+The bounded run supports no recurring CPU full-frame presentation copy;
+complete G0/M13 acceptance and permanent deployment remain open.

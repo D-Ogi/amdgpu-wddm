@@ -1,0 +1,10 @@
+{
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_resource.c": "7a1027554792cfc3bc9b2bb94b5c1fd4e82eca9defba466c12e6a04e321b5f15",
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_context.c": "d426b8b2f0aac3c2cac7672093915b29d40009c5519f56d5c528239a00353e9b",
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_descriptors.c": "80f54a81bc3c2f7afba768775308c42d00e7a43aaca5375de667a7aafa61e4f4",
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_resource.h": "2db1679653b3d84b6a989246378217b2e944052e9a4c8c816668afafd2677d48",
+  "scratch/m13-native-zink-src/src/gallium/auxiliary/util/u_upload_mgr.c": "ff713a582d712eeb621675ac85a367d4e8ff6852ca332325a67a0f247ed5061d",
+  "scratch/m13-native-zink-src/src/gallium/frontends/d3d10umd/DxgiFns.cpp": "649dc715b5901de0f7d3c577216a5fd6c4690024d73aa298090364782fde8c52",
+  "scratch/m12/mesa-current-src/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c": "edb50ec0d3a5783a4d2c22076740c4108132643f19a2a7e399a212ace10f100b",
+  "bc250-win/driver/kmd/wddm.c": "6a59fe0bcc1e50f72e13ff8ee965f7d5e47c2ef11bed8bce12366a5d7aebc284"
+}
