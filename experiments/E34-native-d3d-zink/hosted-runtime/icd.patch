@@ -2,14 +2,14 @@
 +++ b/src/amd/vulkan/radv_device.c
 @@ -1,9 +1,9 @@
  /*
-- * Copyright Â© 2016 Red Hat.
-- * Copyright Â© 2016 Bas Nieuwenhuizen
-+ * Copyright Ă‚Â© 2016 Red Hat.
-+ * Copyright Ă‚Â© 2016 Bas Nieuwenhuizen
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
   *
   * based in part on anv driver which is:
-- * Copyright Â© 2015 Intel Corporation
-+ * Copyright Ă‚Â© 2015 Intel Corporation
+- * Copyright © 2015 Intel Corporation
++ * Copyright Â© 2015 Intel Corporation
   *
   * SPDX-License-Identifier: MIT
   */
@@ -37,16 +37,16 @@
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
 @@ -1,10 +1,10 @@
  /*
-- * Copyright Â© 2020 Valve Corporation
-+ * Copyright Ă‚Â© 2020 Valve Corporation
+- * Copyright © 2020 Valve Corporation
++ * Copyright Â© 2020 Valve Corporation
   *
   * based on amdgpu winsys.
-- * Copyright Â© 2016 Red Hat.
-- * Copyright Â© 2016 Bas Nieuwenhuizen
-- * Copyright Â© 2022 Collabora, Ltd
-+ * Copyright Ă‚Â© 2016 Red Hat.
-+ * Copyright Ă‚Â© 2016 Bas Nieuwenhuizen
-+ * Copyright Ă‚Â© 2022 Collabora, Ltd
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
+- * Copyright © 2022 Collabora, Ltd
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2022 Collabora, Ltd
   *
   * Permission is hereby granted, free of charge, to any person obtaining a
   * copy of this software and associated documentation files (the "Software"),
@@ -358,14 +358,14 @@
 +++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c
 @@ -1,9 +1,9 @@
  /*
-- * Copyright Â© 2020 Valve Corporation
-+ * Copyright Ă‚Â© 2020 Valve Corporation
+- * Copyright © 2020 Valve Corporation
++ * Copyright Â© 2020 Valve Corporation
   *
   * based on amdgpu winsys.
-- * Copyright Â© 2016 Red Hat.
-- * Copyright Â© 2016 Bas Nieuwenhuizen
-+ * Copyright Ă‚Â© 2016 Red Hat.
-+ * Copyright Ă‚Â© 2016 Bas Nieuwenhuizen
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
   *
   * Permission is hereby granted, free of charge, to any person obtaining a
   * copy of this software and associated documentation files (the "Software"),
@@ -614,16 +614,16 @@
 @@ -1,11 +1,11 @@
  #include <stdlib.h>
  /*
-- * Copyright Â© 2020 Valve Corporation
-+ * Copyright Ă‚Â© 2020 Valve Corporation
+- * Copyright © 2020 Valve Corporation
++ * Copyright Â© 2020 Valve Corporation
   *
   * based on amdgpu winsys.
-- * Copyright Â© 2016 Red Hat.
-- * Copyright Â© 2016 Bas Nieuwenhuizen
-- * Copyright Â© 2022 Collabora, Ltd
-+ * Copyright Ă‚Â© 2016 Red Hat.
-+ * Copyright Ă‚Â© 2016 Bas Nieuwenhuizen
-+ * Copyright Ă‚Â© 2022 Collabora, Ltd
+- * Copyright © 2016 Red Hat.
+- * Copyright © 2016 Bas Nieuwenhuizen
+- * Copyright © 2022 Collabora, Ltd
++ * Copyright Â© 2016 Red Hat.
++ * Copyright Â© 2016 Bas Nieuwenhuizen
++ * Copyright Â© 2022 Collabora, Ltd
   *
   * Permission is hereby granted, free of charge, to any person obtaining a
   * copy of this software and associated documentation files (the "Software"),
@@ -695,8 +695,8 @@
 @@ -1,5 +1,6 @@
 +#include "util/bc250_host_bootstrap.h"
  /*
-- * Copyright Â© 2020 Intel Corporation
-+ * Copyright Ă‚Â© 2020 Intel Corporation
+- * Copyright © 2020 Intel Corporation
++ * Copyright Â© 2020 Intel Corporation
   *
   * Permission is hereby granted, free of charge, to any person obtaining a
   * copy of this software and associated documentation files (the "Software"),
@@ -712,8 +712,8 @@
 +++ b/src/vulkan/runtime/vk_wddm2_monitored_fence.c
 @@ -1,5 +1,5 @@
  /*
-- * Copyright Â© 2021 Intel Corporation
-+ * Copyright Ă‚Â© 2021 Intel Corporation
+- * Copyright © 2021 Intel Corporation
++ * Copyright Â© 2021 Intel Corporation
   *
   * Permission is hereby granted, free of charge, to any person obtaining a
   * copy of this software and associated documentation files (the "Software"),

@@ -1,0 +1,58 @@
+[
+  {
+    "path": "src/amd/vulkan/radv_device.c",
+    "before_sha256": "a1a21ac380e0dbf90fcbc8b4deec72536bf4b375c72a2af6299649ac0eb23923",
+    "before_lf_sha256": "a1a21ac380e0dbf90fcbc8b4deec72536bf4b375c72a2af6299649ac0eb23923",
+    "after_sha256": "4165118e7356349abc5d5080ca4bff0d566345fb3ea8fc83aea4cb9eadb421cf",
+    "after_lf_sha256": "4165118e7356349abc5d5080ca4bff0d566345fb3ea8fc83aea4cb9eadb421cf",
+    "after_newline": "LF"
+  },
+  {
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c",
+    "before_sha256": "3615a2379a39ae1eb7269b9e6c9238e958fe540d3a36093bb7eda97d7b8beee3",
+    "before_lf_sha256": "3615a2379a39ae1eb7269b9e6c9238e958fe540d3a36093bb7eda97d7b8beee3",
+    "after_sha256": "b6a053a2ef901e4fc8eea8f456ecef7d3f8117a280d40f24b8e674d0e950fb2d",
+    "after_lf_sha256": "e032d905528d2bc5fe520037748f89f228709167b5f874f292c1e10d4d0960a1",
+    "after_newline": "CRLF"
+  },
+  {
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c",
+    "before_sha256": "c329c09b0654425dc8f02e3f19fb7bb211b87f6ee76c972a2539a912a8c999e7",
+    "before_lf_sha256": "02e8548a3e7348eae528c87db56a7249aa7f18bafc79fdf06105f8528054672f",
+    "after_sha256": "dffa2a6f320e3c814a2ad2130b447320e3e98ba06c724d0b94327de9b29050fe",
+    "after_lf_sha256": "dffa2a6f320e3c814a2ad2130b447320e3e98ba06c724d0b94327de9b29050fe",
+    "after_newline": "LF"
+  },
+  {
+    "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c",
+    "before_sha256": "6ec91b725b141698146507f613a18608a402347630df22c8fe0c779a4275ed1c",
+    "before_lf_sha256": "8803bca46c445de51e9e26e442d5f8a22de125855b33e4e4a1571f13aa244c7d",
+    "after_sha256": "ccbc06a35e9fe28a5c3185390381b231163a04872a5d2c2a3c30f5ff1531a7d4",
+    "after_lf_sha256": "ccbc06a35e9fe28a5c3185390381b231163a04872a5d2c2a3c30f5ff1531a7d4",
+    "after_newline": "LF"
+  },
+  {
+    "path": "src/util/bc250_host_bootstrap.h",
+    "before_sha256": "c0a5a505da235aeb9e618f5cd0502d98a7a6c1485123df19a1277803abb51103",
+    "before_lf_sha256": "314dc3cefd1f86c65be465c573760f9c537481692332f83d3cfae11e6851db7e",
+    "after_sha256": "af56849ecf050568f04756240ff48178a194e4242fe886d447719836fef60be4",
+    "after_lf_sha256": "af56849ecf050568f04756240ff48178a194e4242fe886d447719836fef60be4",
+    "after_newline": "LF"
+  },
+  {
+    "path": "src/vulkan/runtime/vk_device.h",
+    "before_sha256": "74b38becaff9ec18a6e4da138169b21d5f8c38d2c0b03f9c047e1881a1f6a539",
+    "before_lf_sha256": "15e51424e825affcf56d046eb4d09f44d7eb80f7ee28d60dd2ac624fee4d8029",
+    "after_sha256": "7cc008d94cb83d17fb378d3e64a564aafe34178e222f8b161492c4860678d511",
+    "after_lf_sha256": "7cc008d94cb83d17fb378d3e64a564aafe34178e222f8b161492c4860678d511",
+    "after_newline": "LF"
+  },
+  {
+    "path": "src/vulkan/runtime/vk_wddm2_monitored_fence.c",
+    "before_sha256": "1915e2a99d5ca78fccfbeba2e28559d6f269335aafbbafa0fd4397e290c1a04e",
+    "before_lf_sha256": "de9d4f604d3d07d6782cf03d87b4b2914f5ea0653649ee1e99f4504b15f4b35b",
+    "after_sha256": "7cfcdf51c11eeec4498b104b09802c0369475ecf3ceae10914910122bcc9c4fd",
+    "after_lf_sha256": "96ef79a9a84691d1f1d91083b23e25fb58b04766068edc35b80179996f2419d3",
+    "after_newline": "CRLF"
+  }
+]

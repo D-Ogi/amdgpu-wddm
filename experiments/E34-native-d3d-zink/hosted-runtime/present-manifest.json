@@ -3,7 +3,7 @@
     "component": "icd",
     "path": "src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c",
     "before_sha256": "dffa2a6f320e3c814a2ad2130b447320e3e98ba06c724d0b94327de9b29050fe",
-    "before_lf_sha256": "be183ab50bf887f897fd7b4ed230b0689020558a8681c903d0c45ecdc7103879",
+    "before_lf_sha256": "dffa2a6f320e3c814a2ad2130b447320e3e98ba06c724d0b94327de9b29050fe",
     "after_sha256": "9c710c25468c6a1323713ebd2dab0702628362db6c462398f12736cd28bdf72f"
   },
   {
@@ -24,7 +24,7 @@
     "component": "umd",
     "path": "src/gallium/drivers/zink/zink_context.c",
     "before_sha256": "a5f4f51d8261452bfa83cd4d4f9f728805381c0926885e5f393ca3b5d8633d02",
-    "before_lf_sha256": "9c3008e45574d17724b7622bdd308151bdd18fb2217725b734f411e88712a305",
+    "before_lf_sha256": "75a14ded04d9d8e3aaf5b482fae9da20a841c7b51a1b4dd14d5bf6031a7abcbf",
     "after_sha256": "b0ae09f3de50b3130c123d4f38a9048e3594044b737afa4346939f5a70818a1d"
   },
   {
@@ -45,7 +45,7 @@
     "component": "umd",
     "path": "src/gallium/drivers/zink/zink_types.h",
     "before_sha256": "48d18578f940f057fd4b4a1890d70e070027f6c9e1ce43223342202cca95dc4f",
-    "before_lf_sha256": "bc85bd149257e3796d768a208e813e03baa3a5b7e8b3f5d5e10b9c5b3abeb5f6",
+    "before_lf_sha256": "734a9716f2ace34d5efcf634b29a2664eda40704f412d20cdbafea9b5745f1c7",
     "after_sha256": "4287e28e69806223d7a69083c0d2968366bb01d1e66fe1c7633544cf52ceada7"
   },
   {

@@ -1,0 +1,7 @@
+{
+  "original_patch_sha256": "2b27decc4c1b855995c1642dfd7dc1299e0aaae07e6f09d3b165bca7d74ecb22",
+  "corrected_patch_sha256": "ee1f85a7ad4ed71fd5ae1e463d75d26e7f4daae7ec664023f3dee8967954b9d5",
+  "files": 7,
+  "utf8_lf_replay_pass": true,
+  "original_manifest_byte_hashes_reproduced": true
+}
