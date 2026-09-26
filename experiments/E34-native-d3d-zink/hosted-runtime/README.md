@@ -36,4 +36,17 @@ callbacks and the unchanged standalone two-device control. A callback failure,
 timeout or mismatch rejects the candidate. No result from this control establishes
 GPU DWM, native Present ordering or absence of full-frame CPU copies.
 
-Local build: both DLLs link; all eight fast gates pass. Runtime result pending.
+Local build: both DLLs link; all eight fast gates pass. Bounded runtime control passed as M539.
+
+## Persistent screen control
+
+Hypothesis: a private hosted Zink screen can remain attached to its D3D device
+across DDI entries and render the existing two-device exact-color control.
+Wrap D3D and DXGI device entrypoints in a thread-local runtime scope. Reject
+callbacks from workers or another device. For this bring-up only, disable
+threaded submission and run Zink program jobs synchronously in that scope.
+
+Use BC250_HOSTED_RENDER=1 starting with candidate003 and run009. Retain the 45-second
+outer deadline and baseline restoration. Require all three 4096-pixel checks,
+correct surviving-device lifetime and no wrong-thread callback. This is offscreen;
+Present, sharing and DWM remain separate gates.
