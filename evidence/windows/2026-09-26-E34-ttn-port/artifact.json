@@ -1,0 +1,14 @@
+{
+  "umd_sha256": "e8be981a30efc05fac53492a33c2c48125d8885443f1bf3bc62d236e848d7b5a",
+  "replay": {
+    "source_commit": "c1f06fd6d8895ae3adaf7951961b4fb46416d2b8",
+    "upstream_base": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+    "path": "src/gallium/auxiliary/nir/tgsi_to_nir.c",
+    "patch": "ttn-e26.patch",
+    "patch_sha256": "e173d4f7178c06c78d7a1d50d0ccdfe7e3a0204c03c7840066297c7bc96604c1",
+    "before_raw_sha256": "cb5d712581e0d1bcec94d619ecf2f29cd0886192bc7a3844031415c27308636c",
+    "after_raw_sha256": "85f3e1339f5bd0998d9c473187f2234fe1e00915b84386eee67ce7aefc621f5e",
+    "replay": "byte-identical",
+    "consolidated_source_match": "LF-normalized byte-identical"
+  }
+}
