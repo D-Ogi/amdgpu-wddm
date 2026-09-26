@@ -1,0 +1,17 @@
+{
+  "upstream_case": "spec@!opengl 1.0@gl-1.0-swapbuffers-behavior",
+  "files": [
+    {
+      "name": "gl-1.0-swapbuffers-behavior.exe",
+      "sha256": "3bef17a95370edbb83839cd065b22b9c9f0fafc28ef4390a5c1175aa7bef3e4e"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "1daf0b6025592d53a3599fe068ccf8eb5675e97563d900830b3cd8aa8db0c858"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    }
+  ]
+}

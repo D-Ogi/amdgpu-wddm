@@ -1,0 +1,19 @@
+{
+  "upstream_mesa": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "provenance": "Mesa, MIT; incremental patch on the existing BC-250 Win32 WSI branch",
+  "base_icd_sha256": "986B691F4439F0A190A56C2ABEE0AE9FA61ABBE8D117ED4DF5F2147C26DAF865",
+  "candidate": {
+    "sha256": "B365C281AFD975AB7963F6AE19B7CD51DE7F0E5ACA56D350AC7E5F0D0FD254CF",
+    "base": "986B691F",
+    "patch": "wsi-cpu-acquire-rotation.patch"
+  },
+  "base_file_sha256": "2ef6b699c2fe3012b9489211e0cdc6bb79410631a639ad6040945481655c6dbd",
+  "patched_file_sha256": "37e37409d020470c397f5907aae64d33d4d0c860f91b3756578c6291494a0743",
+  "patch_sha256": "25c039b3f6d417badeacda882d12ebe37eb8e8154af8a10f18ff732717283998",
+  "limitations": [
+    "DXGI selection unchanged and not runtime tested",
+    "Linux comparison pending",
+    "Vulkan does not promise a specific acquisition order; this prevents starvation with Zink readback",
+    "CPU presentation retained; this is not GPU DWM rendering"
+  ]
+}

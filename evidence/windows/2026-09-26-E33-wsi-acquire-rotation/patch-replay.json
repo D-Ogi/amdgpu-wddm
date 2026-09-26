@@ -1,0 +1,7 @@
+{
+  "method": "reverse then forward on exact built source, normalized LF",
+  "roundtrip_matches": true,
+  "base_sha256": "2ef6b699c2fe3012b9489211e0cdc6bb79410631a639ad6040945481655c6dbd",
+  "patched_sha256": "1499d9792bf2713e841cbdf30558688e87dc407180438b6bf8c35b4c86293277",
+  "note": "Roundtrip uses exact built source bytes with normalized line endings."
+}

@@ -1,0 +1,17 @@
+{
+  "diagnostic": "upstream swapbuffers with stage logging only",
+  "files": [
+    {
+      "name": "gl-1.0-swapbuffers-behavior.exe",
+      "sha256": "e0c44d88f5b4af422f42dc7c5982a2c6679ea4e90ece5a26dc2b7a7b64829de0"
+    },
+    {
+      "name": "libgallium_wgl.dll",
+      "sha256": "1daf0b6025592d53a3599fe068ccf8eb5675e97563d900830b3cd8aa8db0c858"
+    },
+    {
+      "name": "opengl32.dll",
+      "sha256": "2b1fe59c27d4c21b68c7f429fa79f29730f2c6a02bea7519400b7532fbbcb480"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+--- a/src/vulkan/wsi/wsi_common_win32.cpp
++++ b/src/vulkan/wsi/wsi_common_win32.cpp
+@@ -106,6 +106,7 @@
+    IDXGISwapChain3            *dxgi;
+    struct wsi_win32           *wsi;
+    wsi_win32_surface          *surface;
++   uint32_t                   next_cpu_image;
+    mtx_t                      acquire_mutex;
+    struct u_cnd_monotonic     acquire_cond;
+    uint64_t                     flip_sequence;
+@@ -906,10 +907,17 @@
+ wsi_win32_find_idle_image(struct wsi_win32_swapchain *chain,
+                           uint32_t *out_image_index)
+ {
+-   for (uint32_t i = 0; i < chain->base.image_count; i++) {
++   /* CPU presentation releases images immediately. Always starting at zero
++    * can starve other idle images while Zink cycles presents for readback.
++    * Rotate this path under acquire_mutex; preserve DXGI's selection order. */
++   const uint32_t first = chain->dxgi ? 0 : chain->next_cpu_image;
++   for (uint32_t n = 0; n < chain->base.image_count; n++) {
++      const uint32_t i = (first + n) % chain->base.image_count;
+       if (chain->images[i].state == WSI_IMAGE_IDLE) {
+          *out_image_index = i;
+          chain->images[i].state = WSI_IMAGE_DRAWING;
++         if (!chain->dxgi)
++            chain->next_cpu_image = (i + 1) % chain->base.image_count;
+          return true;
+       }
+    }

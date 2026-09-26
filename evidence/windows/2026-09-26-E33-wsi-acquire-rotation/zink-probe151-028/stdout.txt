@@ -1,0 +1,3 @@
+After 1st swap, back buffer is no longer green.
+After 2nd swap: back buffer is blue. SwapBuffers is a true swap.
+PIGLIT: {"result": "pass" }

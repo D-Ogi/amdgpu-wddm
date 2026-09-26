@@ -1,0 +1,19 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\m12\mesa-current-build'
+[1/7] Generating src/git_sha1.h with a custom command
+[2/4] Compiling C++ object src/vulkan/wsi/libvulkan_wsi.a.p/wsi_common_win32.cpp.obj
+[3/4] Linking static target src/vulkan/wsi/libvulkan_wsi.a
+[4/4] Linking target src/amd/vulkan/vulkan_radeon.dll
+   Trwa tworzenie biblioteki src\amd\vulkan\vulkan_radeon.lib i obiektu src\amd\vulkan\vulkan_radeon.exp
+
