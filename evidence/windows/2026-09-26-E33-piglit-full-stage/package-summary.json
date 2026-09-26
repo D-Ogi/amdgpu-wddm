@@ -1,0 +1,12 @@
+{
+  "piglit_commit": "0cc014230c0701d7a61bf240009ddd0711462d4e",
+  "profile": "quick",
+  "case_count": 45037,
+  "runtime": "Python3.14.0 embedded; Mako1.4.1; MarkupSafe3.0.3",
+  "zink_sha256": "dfc11a1421c4dddb95ab348b1ccfacac2fd8459e1e80e0f81d4d4c89db239d24",
+  "archive_sha256": "4a1931b65ec8f760e9b1911cdd44bb577972e184791f78d2c650a3f085f2d553",
+  "archive_bytes": 1583631937,
+  "manifest_sha256": "8e617dad7489120406496226395be38eb944a1f3a7208c79140c5257260262c4",
+  "file_count": 57626,
+  "full_manifest_location": "scratch/m12/piglit-full001-manifest.json"
+}
