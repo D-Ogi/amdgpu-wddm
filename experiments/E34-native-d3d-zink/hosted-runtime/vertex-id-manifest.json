@@ -1,0 +1,7 @@
+[
+  {
+    "path": "src/gallium/drivers/zink/zink_compiler.c",
+    "before_lf_sha256": "5b03af3b370de417ad29fc6eafc8b6d27a13a99d42a05f44875be8424e747966",
+    "after_lf_sha256": "c9bf00896c76d03ad7db497a41593c3ccedf4cfb7a18f4568111a50183a24795"
+  }
+]
