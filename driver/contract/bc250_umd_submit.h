@@ -46,7 +46,8 @@ extern "C" {
 #define BC250_UMD_CONTEXT_MAGIC     0x43324342u
 #define BC250_UMD_SUBMIT_MAGIC      0x53324342u
 
-#define BC250_UMD_ALLOC_VERSION     1u
+#define BC250_UMD_ALLOC_VERSION     1u // legacy producer, cache intent unspecified
+#define BC250_UMD_ALLOC_VERSION_CACHE_POLICY 2u // same wire size; gem_flags is authoritative
 /* 2: version 1 plus node_ordinal, appended - ADR 0013's node layout, see the struct below. */
 #define BC250_UMD_CONTEXT_VERSION   2u
 #define BC250_UMD_SUBMIT_VERSION    1u

@@ -201,17 +201,7 @@ struct bc250_umd_tiling {
  * ME, MEC or PFP query fails (ac_gpu_info.c:1546-1565), so these are not optional. The rest are
  * carried because bc250kmd already knows them from the PSP load and because a version mismatch
  * against a Linux capture is the cheapest way to catch a wrong firmware blob. */
-struct bc250_umd_firmware {
-    __u32 me_version,   me_feature;
-    __u32 pfp_version,  pfp_feature;
-    __u32 ce_version,   ce_feature;
-    __u32 mec_version,  mec_feature;
-    __u32 mec2_version, mec2_feature;
-    __u32 rlc_version,  rlc_feature;
-    __u32 sdma_version, sdma_feature;
-    __u32 smc_version;
-    __u32 reserved;
-};
+#include "bc250_umd_firmware.h"
 
 /* What the DRM layer would have told the winsys and WDDM does not. */
 struct bc250_umd_kernel {
