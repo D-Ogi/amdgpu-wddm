@@ -1,0 +1,9 @@
+{
+  "injected_failures": 7,
+  "successful_context_cleanup": 7,
+  "successful_pixel_readbacks": 3,
+  "pixels_per_readback": 4096,
+  "dwm_before": 9648,
+  "dwm_after": 9648,
+  "hosted_paging_destroys": 8
+}
