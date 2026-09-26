@@ -1,0 +1,4 @@
+full_worker_live=28204
+results {'pass': 231, 'skip': 34} completed 265
+last {'event': 'start', 'name': 'asmparsertest@arbvp1.0@rsq.txt', 'utc': 1790432492.784529}
+cases 45159

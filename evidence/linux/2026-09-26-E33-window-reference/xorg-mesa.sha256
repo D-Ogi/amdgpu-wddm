@@ -1,0 +1,16 @@
+03a91da7f918a5a70643ec64b750f19a90832230235d6b66076daf3fbf489149  /opt/bc250-xorg/include/GL/internal/dri_interface.h
+4eacf82b37a754dc5e64c89ab9c8a32ad8b96bfac12e91f7e217e7fa5c5602c5  /opt/bc250-xorg/include/gbm_backend_abi.h
+95f3b4a6ee5175c7cc5d47368d4efb100063fe49e5a6f5b19030ac2ceed73b81  /opt/bc250-xorg/include/gbm.h
+df92523469632129b6b0c37bcade9fa8cc449e23e487beda2cc130b4e4bd1df5  /opt/bc250-xorg/include/EGL/eglext_angle.h
+e9119482f23bfa6a4fd006278d16434328fa91abcb6c55033959c262644d85f4  /opt/bc250-xorg/include/EGL/eglmesaext.h
+cd3881df4227c13ca7f9cfe6c78820f21d5f7a00a41b299214f6f827e63be369  /opt/bc250-xorg/share/glvnd/egl_vendor.d/50_mesa.json
+577a4a7d2d78e0f656fa48054dcd125f24075a238442a1fe3e88389ef9a89231  /opt/bc250-xorg/share/drirc.d/00-mesa-defaults.conf
+a8c4ccc3c7dfe4a5f18825f3263117215c63804a6cd903258399900bdc7e8527  /opt/bc250-xorg/share/drirc.d/00-radeonsi-defaults.conf
+f05e31cd7c1eeacbe9158dcee3f9e97f07326460e8e3b63a92132ba9f7993944  /opt/bc250-xorg/lib/libEGL_mesa.so.0.0.0
+3b34e71f5b23a2fcf5e9e1ccdb28038ce9a4c44f5f7322c79003e46484d480bd  /opt/bc250-xorg/lib/libGLX_mesa.so.0.0.0
+23576d8fa8b9b19f21a55ed86ecaefff8cbbc81515029db943e436e861bf824e  /opt/bc250-xorg/lib/libgbm.so.1.0.0
+c83198ee42852bfb65b62d8570886515c54ad33a98771f1792e3699ca95981f2  /opt/bc250-xorg/lib/gbm/dri_gbm.so
+7e650bba3ea4703211a00b9a786c90b5d448bfb308e3d77c5c85d806670653bc  /opt/bc250-xorg/lib/libgallium-26.3.0-devel.so
+8397b96e5eef61d7e0dcc47a4d73ea31263ac3f43572320a9de6a46dec5a0348  /opt/bc250-xorg/lib/pkgconfig/gbm.pc
+339bc156d668998f464f7e0946660480940a193b21150a2709f971dab56ccbad  /opt/bc250-xorg/lib/pkgconfig/dri.pc
+4f41fcd9423ea44e47ee84c42662e4f05c9d229402d26d768b604ca5d37ee89d  /opt/bc250-xorg/lib/dri/libdril_dri.so

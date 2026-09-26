@@ -1,0 +1,11 @@
+[  1642.851] (++) Using config file: "/work/parity002/xorg-glamor.conf"
+[  1642.912] (**) modeset(0): Option "AccelMethod" "glamor"
+[  1642.912] (II) Loading sub module "glamoregl"
+[  1642.912] (II) LoadModule: "glamoregl"
+[  1642.912] (II) Loading /usr/lib/xorg/modules/libglamoregl.so
+[  1642.916] (II) Module glamoregl: vendor="X.Org Foundation"
+[  1642.934] (II) modeset(0): glamor X acceleration enabled on AMD BC-250 (radeonsi, gfx1013, ACO, DRM 3.64, 6.18.52-0-lts)
+[  1642.934] (II) modeset(0): glamor initialized
+[  1642.976] (II) modeset(0): [DRI2]   DRI driver: radeonsi
+[  1642.983] (II) AIGLX: Loaded and initialized radeonsi
+[  1642.983] (II) GLX: Initialized DRI2 GL provider for screen 0
