@@ -1,0 +1,15 @@
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+> C:\Python314\python.exe -m mesonbuild.mesonmain setup P:\BC-250\scratch\mesa-fork-2026-09-27\build-radv P:\BC-250\scratch\mesa-fork-2026-09-27\wt-radv -Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=amd -Dgallium-drivers=[] -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
+Cloning into 'DirectX-Headers-1.0'...
+
+Generating targets:   0%|          | 0/104 eta ?
+Generating targets:  55%|█████▍    | 57/104 eta 00:00
+                                                     
+
+Writing build.ninja:   0%|          | 0/840 eta ?
+Writing build.ninja:  72%|███████▏  | 606/840 eta 00:00
+                                                       
+configure gate: the Build Options line matches the radv option set (12 options)
+> C:\msys64\mingw64\bin\ninja.exe -C P:\BC-250\scratch\mesa-fork-2026-09-27\build-radv src/amd/vulkan/vulkan_radeon.dll
+FAD08ECB16C9CFFDCB8D09D408C8ABC428B348D948D945D78DE30892D88A65AF  src/amd/vulkan/vulkan_radeon.dll

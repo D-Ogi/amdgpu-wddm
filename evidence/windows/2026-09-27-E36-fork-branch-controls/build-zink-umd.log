@@ -1,0 +1,18 @@
+'vswhere.exe' is not recognized as an internal or external command,
+operable program or batch file.
+> C:\Python314\python.exe -m mesonbuild.mesonmain setup P:\BC-250\scratch\mesa-fork-2026-09-27\build-umd P:\BC-250\scratch\mesa-fork-2026-09-27\wt-umd -Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=[] -Dgallium-drivers=zink -Dgallium-d3d10umd=true -Dgallium-d3d10-dll-name=bc250d3d_zink -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled
+
+Generating targets:   0%|          | 0/141 eta ?
+Generating targets:  75%|███████▌  | 106/141 eta 00:00
+                                                      
+
+Writing build.ninja:   0%|          | 0/1155 eta ?
+Writing build.ninja:  24%|██▍       | 280/1155 eta 00:00
+Writing build.ninja:  48%|████▊     | 560/1155 eta 00:00
+Writing build.ninja:  69%|██████▉   | 795/1155 eta 00:00
+Writing build.ninja:  85%|████████▍ | 977/1155 eta 00:00
+Writing build.ninja: 100%|█████████▉| 1153/1155 eta 00:00
+                                                         
+configure gate: the Build Options line matches the zink-umd option set (14 options)
+> C:\msys64\mingw64\bin\ninja.exe -C P:\BC-250\scratch\mesa-fork-2026-09-27\build-umd src/gallium/targets/d3d10umd/bc250d3d_zink.dll
+848BCBF5FD3B864B183F2194308FA70D254C615B5B30BDBC602C34C9EDC00287  src/gallium/targets/d3d10umd/bc250d3d_zink.dll
