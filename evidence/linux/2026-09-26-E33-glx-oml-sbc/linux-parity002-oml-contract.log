@@ -1,0 +1,118 @@
+2005:glXWaitForSbcOML(Display *dpy, GLXDrawable drawable, int64_t target_sbc,
+2006-                 int64_t *ust, int64_t *msc, int64_t *sbc)
+2007-{
+2008-#ifdef GLX_DIRECT_RENDERING
+2009-   __GLXDRIdrawable *pdraw = GetGLXDRIDrawable(dpy, drawable);
+2010-   struct glx_screen *psc = pdraw ? pdraw->psc : NULL;
+2011-   int ret;
+2012-#endif
+2013-
+2014-   /* The OML_sync_control spec says this should "generate a GLX_BAD_VALUE
+2015-    * error", but the return type in the spec is Bool.
+2016-    */
+2017-   if (target_sbc < 0)
+2018-      return False;
+2019-
+2020-#ifdef GLX_DIRECT_RENDERING
+2021-   if (pdraw && psc->driScreen.waitForSBC) {
+2022-      ret = psc->driScreen.waitForSBC(pdraw, target_sbc, ust, msc, sbc);
+2023-      return ret;
+2024-   }
+2025-#endif
+2026-
+2027-   return False;
+2028-}
+2029-
+2030-/*@}*/
+2031-
+2032-
+2033-/**
+2034- * GLX_MESA_copy_sub_buffer
+2035- */
+2036-#define X_GLXvop_CopySubBufferMESA 5154 /* temporary */
+2037-void
+2038-glXCopySubBufferMESA(Display * dpy, GLXDrawable drawable,
+2039-                     int x, int y, int width, int height)
+2040-{
+2041-   xGLXVendorPrivateReq *req;
+2042-   struct glx_context *gc;
+2043-   GLXContextTag tag;
+2044-   CARD32 *drawable_ptr;
+2045-   INT32 *x_ptr, *y_ptr, *w_ptr, *h_ptr;
+2046-   CARD8 opcode;
+2047-
+2048-#if defined(GLX_DIRECT_RENDERING) && !defined(GLX_USE_APPLEGL)
+2049-   __GLXDRIdrawable *pdraw = GetGLXDRIDrawable(dpy, drawable);
+2050-   if (pdraw != NULL) {
+2051-      struct glx_screen *psc = pdraw->psc;
+2052-      if (psc->driScreen.copySubBuffer != NULL) {
+2053-         psc->driScreen.copySubBuffer(pdraw, x, y, width, height, True);
+2054-      }
+2055-
+2056-      return;
+2057-   }
+2058-#endif
+2059-
+2060-   opcode = __glXSetupForCommand(dpy);
+2061-   if (!opcode)
+2062-      return;
+2063-
+2064-   /*
+2065-    ** The calling thread may or may not have a current context.  If it
+2066-    ** does, send the context tag so the server can do a flush.
+2067-    */
+2068-   gc = __glXGetCurrentContext();
+2069-   if ((gc != &dummyContext) && (dpy == gc->currentDpy) &&
+2070-       ((drawable == gc->currentDrawable) ||
+1932:glXSwapBuffersMscOML(Display *dpy, GLXDrawable drawable,
+1933-                     int64_t target_msc, int64_t divisor, int64_t remainder)
+1934-{
+1935-   struct glx_context *gc = __glXGetCurrentContext();
+1936-#ifdef GLX_DIRECT_RENDERING
+1937-   __GLXDRIdrawable *pdraw = GetGLXDRIDrawable(dpy, drawable);
+1938-   struct glx_screen *psc = pdraw ? pdraw->psc : NULL;
+1939-#endif
+1940-
+1941-   if (gc == &dummyContext) /* no GLX for this */
+1942-      return -1;
+1943-
+1944-#ifdef GLX_DIRECT_RENDERING
+1945-   if (!pdraw || !gc->isDirect)
+1946-      return -1;
+1947-#endif
+1948-
+1949-   /* The OML_sync_control spec says these should "generate a GLX_BAD_VALUE
+1950-    * error", but it also says "It [glXSwapBuffersMscOML] will return a value
+1951-    * of -1 if the function failed because of errors detected in the input
+1952-    * parameters"
+1953-    */
+1954-   if (divisor < 0 || remainder < 0 || target_msc < 0)
+1955-      return -1;
+1956-   if (divisor > 0 && remainder >= divisor)
+1957-      return -1;
+1958-
+1959-   if (target_msc == 0 && divisor == 0 && remainder == 0)
+1960-      remainder = 1;
+1961-
+1962-#ifdef GLX_DIRECT_RENDERING
+1963-   if (psc->driScreen.swapBuffers)
+1964-      return psc->driScreen.swapBuffers(pdraw, target_msc, divisor,
+1965-                   remainder, False);
+1966-#endif
+1967-
+1968-   return -1;
+1969-}
+1970-
+1971-
+1972-Bool
+1973-glXWaitForMscOML(Display *dpy, GLXDrawable drawable, int64_t target_msc,
+1974-                 int64_t divisor, int64_t remainder, int64_t *ust,
+1975-                 int64_t *msc, int64_t *sbc)
+1976-{
+1977-#ifdef GLX_DIRECT_RENDERING
+1978-   __GLXDRIdrawable *pdraw = GetGLXDRIDrawable(dpy, drawable);
+1979-   struct glx_screen *psc = pdraw ? pdraw->psc : NULL;
+1980-   int ret;
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/drisw_glx.c:665:   psp->swapBuffers = driswSwapBuffers;
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/dri3_glx.c:538:   psp->swapBuffers = dri3_swap_buffers;
+/mnt/bc250-build/root/work/src/mesa-05e6c9622e135ac2aeaf56ec70222642627e2162/src/glx/dri3_glx.c:542:   psp->waitForSBC = dri3_wait_for_sbc;
