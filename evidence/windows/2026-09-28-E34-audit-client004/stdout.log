@@ -1,0 +1,13 @@
+checkpoint_ack marker=1 tick=5951062
+checkpoint_ack marker=2 tick=5951578
+checkpoint_ack marker=3 tick=5951593
+pixels expected=ff00ff00 bad=0 total=76800
+checkpoint_ack marker=4 tick=5951609
+checkpoint_ack marker=5 tick=5951609
+copy_api=UpdateSubresource
+deliberate_cpu_copy frames=12 bytes=3686400
+checkpoint_ack marker=6 tick=5952031
+checkpoint_ack marker=7 tick=5952031
+pixels expected=ff00ffff bad=0 total=76800
+checkpoint_ack marker=8 tick=5952046
+PASS GPU clears, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints

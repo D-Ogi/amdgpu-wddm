@@ -1,0 +1,57 @@
+{
+  "events": 84,
+  "requests": 24,
+  "successful": 24,
+  "ended": 16,
+  "live_map_ids": [
+    5,
+    8,
+    11,
+    14,
+    18,
+    38,
+    41,
+    44
+  ],
+  "pending_store_ids": [],
+  "store_checkpoint_counters": true,
+  "interval_store_span_bytes": 0,
+  "interval_boundary_store_ids": [],
+  "completed_store_span_bytes": 20,
+  "writers": {
+    "zink_buffer_subdata": 2
+  },
+  "stores": [
+    {
+      "store": 19,
+      "map": 15,
+      "writer": "zink_buffer_subdata",
+      "kind": "buffer_subdata",
+      "offset": 0,
+      "bytes": 4,
+      "mapped_offset": 0,
+      "mapped_resource_id": 16,
+      "staging": true,
+      "begin_seq": 13,
+      "end_seq": 14,
+      "crossing_markers": []
+    },
+    {
+      "store": 23,
+      "map": 22,
+      "writer": "zink_buffer_subdata",
+      "kind": "buffer_subdata",
+      "offset": 0,
+      "bytes": 16,
+      "mapped_offset": 4096,
+      "mapped_resource_id": 16,
+      "staging": true,
+      "begin_seq": 18,
+      "end_seq": 19,
+      "crossing_markers": []
+    }
+  ],
+  "log_bytes": 50146,
+  "store_records": 4,
+  "scope": "Small clear/update client only; inspect writer coverage before any DWM conclusion"
+}
