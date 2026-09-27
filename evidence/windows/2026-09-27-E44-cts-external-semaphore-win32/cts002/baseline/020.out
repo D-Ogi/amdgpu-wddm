@@ -1,0 +1,16 @@
+Writing test log into C:\BC250\m12\cts-extsem-002\baseline\020.qpa
+Warning: WGL not supported: Failed to load WGL extension functions
+dEQP Core vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce (0xf6a29701) starting..
+  target implementation = 'Default'
+
+Test case 'dEQP-VK.api.external.semaphore.opaque_win32.signal_wait_import_temporary'..
+  NotSupported (Semaphore doesn't support exporting in external type at vktApiExternalMemoryTests.cpp:398)
+
+DONE!
+
+Test run totals:
+  Passed:        0/1 (0.0%)
+  Failed:        0/1 (0.0%)
+  Not supported: 1/1 (100.0%)
+  Warnings:      0/1 (0.0%)
+  Waived:        0/1 (0.0%)

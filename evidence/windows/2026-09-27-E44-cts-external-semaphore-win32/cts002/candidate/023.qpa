@@ -1,0 +1,24 @@
+#sessionInfo releaseName vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce
+#sessionInfo releaseId 0xf6a29701
+#sessionInfo targetName "Default"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x1002
+#sessionInfo deviceID 0x13fe
+#sessionInfo deviceName AMD BC-250 (RADV GFX1013)
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.api.external.semaphore.opaque_win32_kmt.create_win32_permanent --deqp-log-filename=C:\BC250\m12\cts-extsem-002\candidate\023.qpa --deqp-watchdog=enable"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.api.external.semaphore.opaque_win32_kmt.create_win32_permanent
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.api.external.semaphore.opaque_win32_kmt.create_win32_permanent" Version="0.3.4" CaseType="SelfValidate">
+ <Text>Semaphore doesn&apos;t support exporting in external type at vktApiExternalMemoryTests.cpp:398</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">7998</Number>
+ <Result StatusCode="NotSupported">Semaphore doesn&apos;t support exporting in external type at vktApiExternalMemoryTests.cpp:398</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 0.04 seconds
+
+#endSession

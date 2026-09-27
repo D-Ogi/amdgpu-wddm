@@ -1,0 +1,117 @@
+#sessionInfo releaseName vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce
+#sessionInfo releaseId 0xf6a29701
+#sessionInfo targetName "Default"
+#sessionInfo logFormatVersion "0.3.4"
+#sessionInfo vendorID 0x1002
+#sessionInfo deviceID 0x13fe
+#sessionInfo deviceName AMD BC-250 (RADV GFX1013)
+#sessionInfo commandLineParameters "--deqp-case=dEQP-VK.api.external.semaphore.opaque_win32.import_multiple_times_permanent --deqp-log-filename=C:\BC250\m12\cts-extsem-002\candidate\007.qpa --deqp-watchdog=enable"
+
+#beginSession
+
+#beginTestCaseResult dEQP-VK.api.external.semaphore.opaque_win32.import_multiple_times_permanent
+<?xml version="1.0" encoding="UTF-8"?>
+<TestCaseResult CasePath="dEQP-VK.api.external.semaphore.opaque_win32.import_multiple_times_permanent" Version="0.3.4" CaseType="SelfValidate">
+ <Section Name="compute" Description="Program: compute">
+  <ShaderProgram LinkStatus="OK">
+   <InfoLog></InfoLog>
+   <ComputeShader CompileStatus="OK">
+    <ShaderSource>#version 310 es
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 0) writeonly buffer Output {
+    uint values[];
+};
+
+void main (void) {
+    uint offset = gl_NumWorkGroups.x*gl_NumWorkGroups.y*gl_WorkGroupID.z + gl_NumWorkGroups.x*gl_WorkGroupID.y + gl_WorkGroupID.x;
+
+      atomicAdd(values[offset], 1u);
+}
+</ShaderSource>
+    <InfoLog></InfoLog>
+</ComputeShader>
+</ShaderProgram>
+  <Number Name="ComputeCompileTime" Description="Compute shader compile time" Tag="Time" Unit="ms">81.667000</Number>
+  <Number Name="LinkTime" Description="Link time" Tag="Time" Unit="ms">0.010000</Number>
+</Section>
+ <ShaderProgram LinkStatus="OK">
+  <InfoLog></InfoLog>
+  <SpirVAssemblySource>; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 46
+; Schema: 0
+OpCapability Shader
+%1 = OpExtInstImport &quot;GLSL.std.450&quot;
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %4 &quot;main&quot; %11 %20
+OpExecutionMode %4 LocalSize 64 1 1
+OpDecorate %11 BuiltIn NumWorkgroups
+OpDecorate %20 BuiltIn WorkgroupId
+OpDecorate %34 ArrayStride 4
+OpDecorate %35 BufferBlock
+OpMemberDecorate %35 0 NonReadable
+OpMemberDecorate %35 0 Offset 0
+OpDecorate %37 NonReadable
+OpDecorate %37 Binding 0
+OpDecorate %37 DescriptorSet 0
+OpDecorate %45 BuiltIn WorkgroupSize
+%2 = OpTypeVoid
+%3 = OpTypeFunction %2
+%6 = OpTypeInt 32 0
+%7 = OpTypePointer Function %6
+%9 = OpTypeVector %6 3
+%10 = OpTypePointer Input %9
+%11 = OpVariable %10 Input
+%12 = OpConstant %6 0
+%13 = OpTypePointer Input %6
+%16 = OpConstant %6 1
+%20 = OpVariable %10 Input
+%21 = OpConstant %6 2
+%34 = OpTypeRuntimeArray %6
+%35 = OpTypeStruct %34
+%36 = OpTypePointer Uniform %35
+%37 = OpVariable %36 Uniform
+%38 = OpTypeInt 32 1
+%39 = OpConstant %38 0
+%41 = OpTypePointer Uniform %6
+%44 = OpConstant %6 64
+%45 = OpConstantComposite %9 %44 %16 %16
+%4 = OpFunction %2 None %3
+%5 = OpLabel
+%8 = OpVariable %7 Function
+%14 = OpAccessChain %13 %11 %12
+%15 = OpLoad %6 %14
+%17 = OpAccessChain %13 %11 %16
+%18 = OpLoad %6 %17
+%19 = OpIMul %6 %15 %18
+%22 = OpAccessChain %13 %20 %21
+%23 = OpLoad %6 %22
+%24 = OpIMul %6 %19 %23
+%25 = OpAccessChain %13 %11 %12
+%26 = OpLoad %6 %25
+%27 = OpAccessChain %13 %20 %16
+%28 = OpLoad %6 %27
+%29 = OpIMul %6 %26 %28
+%30 = OpIAdd %6 %24 %29
+%31 = OpAccessChain %13 %20 %12
+%32 = OpLoad %6 %31
+%33 = OpIAdd %6 %30 %32
+OpStore %8 %33
+%40 = OpLoad %6 %8
+%42 = OpAccessChain %41 %37 %39 %40
+%43 = OpAtomicIAdd %6 %42 %16 %12 %16
+OpReturn
+OpFunctionEnd
+</SpirVAssemblySource>
+</ShaderProgram>
+ <Text>Semaphore doesn&apos;t support exporting in external type at vktApiExternalMemoryTests.cpp:398</Text>
+ <Number Name="TestDuration" Description="Test case duration in microseconds" Tag="Time" Unit="us">91701</Number>
+ <Result StatusCode="NotSupported">Semaphore doesn&apos;t support exporting in external type at vktApiExternalMemoryTests.cpp:398</Result>
+</TestCaseResult>
+
+#endTestCaseResult
+
+Run took 0.14 seconds
+
+#endSession
