@@ -1,0 +1,10 @@
+{
+    "phase":  "all-original-processes-exited",
+    "utc":  "2026-09-27T14:01:39.9586004Z",
+    "processes":  [
+                      {
+                          "start":  "2026-09-27T14:01:20.0164818Z",
+                          "pid":  5200
+                      }
+                  ]
+}
