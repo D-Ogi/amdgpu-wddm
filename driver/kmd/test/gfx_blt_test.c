@@ -203,6 +203,17 @@ int main(void)
         CHECK(!Bc250GfxPresentMatches(record,24,sourceBase+4,64));
         CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,32));
         memcpy(original,record,sizeof(record));
+        Bc250GfxPresentInvalidate(NULL,24);
+        for(i=0;i<4;i++) {
+            Bc250GfxPresentInvalidate(record,i);
+            CHECK(!memcmp(record,original,sizeof(record)));
+        }
+        Bc250GfxPresentInvalidate(record,24);
+        CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,64));
+        CHECK(!memcmp(record+4,original+4,sizeof(record)-4));
+        CHECK(Bc250GfxPresentRecord(record,24,sourceBase,64));
+        CHECK(Bc250GfxPresentMatches(record,24,sourceBase,64));
+        CHECK(Bc250GfxPresentMatches(record,24,sourceBase,64)); /* resubmit does not consume */
         for(i=0;i<24;i++){
             record[i]^=1;CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,64));
             memcpy(record,original,sizeof(record));

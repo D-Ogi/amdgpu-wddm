@@ -609,6 +609,16 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
         // it would race the drain and free it twice. The removal and the decision are one critical section.
         KeAcquireSpinLock(&wddm->Lock, &irql);
         if (wddm->Stopping) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
+        if (Object->Magic==BC250_WDDM_MAGIC_ALLOCATION) {
+            LIST_ENTRY* entry;
+            // Invalidate all open snapshots before this pool address can be
+            // reused by a different allocation with identical geometry.
+            for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
+                BC250_WDDM_OBJECT* opened=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
+                if (opened->Magic==BC250_WDDM_MAGIC_OPENED && opened->BackingAllocation==Object)
+                    opened->BackingAllocation=NULL;
+            }
+        }
         RemoveEntryList(&Object->Link);
         wddm->ObjectCount--;
         KeReleaseSpinLock(&wddm->Lock, irql);
@@ -2447,7 +2457,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // run 003): dxgkrnl had nowhere to put the two surfaces of a Blt, and a driver that cannot name the source
     // cannot show it. Still no patch-location list: with virtual addressing there is nothing to patch.
     pCreateContext->ContextInfo.AllocationListSize =
-        (!umd || parentWddm->GpuPresentGate) ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
+        !umd ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
     object->AllocationListSize = pCreateContext->ContextInfo.AllocationListSize;
     // Review 14: the adapter declares GpuMmu, so no context should come without virtual addressing. If one does, it
     // has a list, no patch list and no Patch DDI behind it - say so here rather than leave it to a 0x113 later.
@@ -4244,7 +4254,7 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
         pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(ULONG) &&
         *(const ULONG*)pSubmitCommand->pDmaBufferPrivateData == BC250_GFX_PRESENT_MAGIC)
     {
-        if (wddm == NULL || !wddm->GpuPresentGate || context == NULL ||
+        if (wddm == NULL || !wddm->GpuPresentGate || context == NULL || context->UmdContext ||
             node != BC250_WDDM_NODE_3D || context->RootPhysical == 0 ||
             pSubmitCommand->DmaBufferUmdPrivateDataSize != 0 || KeGetCurrentIrql() > APC_LEVEL ||
             !Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
@@ -4266,8 +4276,10 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     }
 
     // Only driver-built, non-UMD present packets enter the CPU presentation path.
-    // The scheduler has now selected this context's root and made its allocations
-    // resident. Complete the fence only after all copied rows are visible.
+    // The scheduler has selected this context's root. Residency is owned by the
+    // device residency list, not the Present allocation list. CDD/system callers
+    // must retain both surfaces there through completion. Complete the fence only
+    // after all copied rows are visible.
     if (context != NULL && !context->UmdContext && pSubmitCommand->Flags.Present &&
         pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
         pSubmitCommand->pDmaBufferPrivateData != NULL &&
@@ -4904,7 +4916,10 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     UINT i,next=Present->MultipassOffset,written=0;
     BC250_GFX_BLIT_RESULT result;
     NTSTATUS status=STATUS_INVALID_PARAMETER;
-    if (Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
+    // BC2C UMD admission is withheld until source AND destination residency on
+    // that exact submitting device is established. ACQUIRE_MEM is not a wait
+    // for another queue, and an allocation-list entry does not confer residency.
+    if (Context->UmdContext || Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
         !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
         (Present->SubRectCnt && !Present->pDstSubRects)) return status;
     if (!Present->pDmaBuffer || ((ULONG_PTR)Present->pDmaBuffer&3u) ||
@@ -4967,6 +4982,11 @@ static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
     BC250_WDDM_OBJECT* context = WddmObject(hContext, BC250_WDDM_MAGIC_CONTEXT);
+
+    // A recycled OS private buffer may still contain a previous BGP1. Clear at
+    // producer entry, including early-return/non-Blt paths. Do not clear during
+    // submission: a legal scheduler resubmission must retain the same record.
+    Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
 
     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
     // software packet below; its pixels are copied only at SubmitCommandVirtual.

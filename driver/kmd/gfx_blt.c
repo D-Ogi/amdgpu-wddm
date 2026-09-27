@@ -164,3 +164,9 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
     *written=capacity;
     return result;
 }
+
+void Bc250GfxPresentInvalidate(void* record, unsigned int capacity)
+{
+    unsigned char* p=(unsigned char*)record;
+    if (p && capacity>=4) p[0]=p[1]=p[2]=p[3]=0;
+}

@@ -57,3 +57,7 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
     unsigned long long SourceBase, unsigned long long DestinationBase,
     unsigned int Offset, unsigned int* Next, unsigned int* Buffer,
     unsigned int CapacityDwords, unsigned int* Written);
+
+/* Called by the Present producer on every new call, never by submit/re-submit.
+ * Clear recognition before any early return or alternate command path. */
+void Bc250GfxPresentInvalidate(void* Record, unsigned int Capacity);

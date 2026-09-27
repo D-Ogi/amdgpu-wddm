@@ -24,8 +24,9 @@ More becomes STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER. An empty list intersection
 produces an acquire plus NOP IB with ordinary hardware completion. Small or unaligned DMA
 capacity is returned as insufficient without publishing a record.
 
-With the gate enabled, UMD contexts request a Present allocation list as well as
-the existing BC2S private capacity. No interop capability is advertised. Runtime
+BC2C UMD contexts are rejected by both GPU Present producer and consumer until
+source and destination residency on their exact submitting device is established.
+Their allocation-list sizing remains unchanged. No interop capability is advertised. Runtime
 allocation admission, authoritative GetHandleData identity for CDD/shared opens,
 CPU/GPU producer visibility, lifetime and scheduling across contexts, multipass
 callbacks, private-data delivery, and the exact signed build still require lab
@@ -46,3 +47,10 @@ host-tested with independent pixel decoding at seven aligned capacities.
 Cache invalidation does not establish producer completion or residency: WDDM2
 Present allocation lists do not make allocations resident. Exact source and
 destination residency on the submitting device remain an admission obligation.
+
+At each Present callback entry the recognition word is cleared before early
+returns or alternate paths can reuse a stale BGP1. Submit never clears it, so
+scheduler resubmission retains the record. DestroyAllocation clears backing
+snapshots in all opened objects under the adapter list lock before freeing the
+allocation. These measures prevent stale recognition and pool-address reuse;
+they do not establish residency, OS handle resolution or DDI lifetime guarantees.
