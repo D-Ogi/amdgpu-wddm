@@ -1,6 +1,9 @@
-# DWM026 draft: GPU Present trial with verified CPU baseline
+# DWM026: GPU Present trial with verified CPU baseline
 
-Not launched. Final build, manifest and target preflight required.
+Not launched at preparation commit. Runner source e57dbe1; router/control built
+with MSVC /W4 /WX. Target PS5 parsing, manifest hashes, exact160 rollback
+and no-marker restore passed at2026-09-27T10:08:09Z. See manifest.json.
+Artifacts are staged under C:/BC250/m13/dwm-hosted026.
 The intended experiment is the engine-copy producer/consumer on the observed
 non-UMD1920x1200 pair. The025 trace has17 written-primary references on the same CDD device, plus
 source MakeResident1 and live VA pairs. The OS residency rule for written-primary
@@ -26,7 +29,7 @@ all final instrumentation is known. Preserve failed captures; a later successful
 capture does not erase the failure history or excuse another invalid baseline.
 
 Trial renaming uses exact identifiers. DWM025's script used ETW buffer size1025
-because an earlier broad024->025 replacement also changed1024. This draft
+because an earlier broad024->025 replacement also changed1024. This trial
 restores1024;025 reported zero lost events, so its recorded trace is not invalidated.
 Do not alter the completed025 source/manifest or immutable evidence.
 
