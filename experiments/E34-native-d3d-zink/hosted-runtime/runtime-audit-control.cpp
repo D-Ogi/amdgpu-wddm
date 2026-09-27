@@ -65,8 +65,9 @@ static bool Pixels(ID3D11DeviceContext *ctx,ID3D11Texture2D *frame,ID3D11Texture
 }
 int wmain(int argc,wchar_t **argv){
  setvbuf(stdout,nullptr,_IONBF,0);
- if(argc==2&&!wcscmp(argv[1],L"--help")){puts("runtime-audit-control.exe MARKER_PATH STDERR_LOG_PATH (interactive lab only; requires audit UMD and external watchdog)");return 0;}
- if(argc!=3){puts("FAIL arguments; use --help");return 1;}
+ if(argc==2&&!wcscmp(argv[1],L"--help")){puts("runtime-audit-control.exe MARKER_PATH STDERR_LOG_PATH [--update-subresource] (interactive lab only; requires audit UMD and external watchdog)");return 0;}
+ const bool update=argc==4&&!wcscmp(argv[3],L"--update-subresource");
+ if(argc!=3&&!update){puts("FAIL arguments; use --help");return 1;}
  if(GetFileAttributesW(argv[1])!=INVALID_FILE_ATTRIBUTES){puts("FAIL marker path already exists; require fresh run directory");return 2;}
  AuditReader reader;if(!reader.Open(argv[2])){puts("FAIL audit log open");return 3;}
  if(!SetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE","1")||!SetEnvironmentVariableA("BC250_HOST_AUDIT","1")||
@@ -96,9 +97,9 @@ int wmain(int argc,wchar_t **argv){
  if(actual.SwapEffect!=sd.SwapEffect||actual.BufferCount!=2||actual.BufferDesc.Width!=Width||actual.BufferDesc.Height!=Height||actual.BufferDesc.Format!=sd.BufferDesc.Format)return 15;
  ComPtr<ID3D11Texture2D> frame,upload,readback;ComPtr<ID3D11RenderTargetView> view;
  if(!Check(swap->GetBuffer(0,IID_PPV_ARGS(&frame)),"GetBuffer")||!Check(dev->CreateRenderTargetView(frame.Get(),nullptr,&view),"RTV"))return 16;
- D3D11_TEXTURE2D_DESC td={};frame->GetDesc(&td);td.Usage=D3D11_USAGE_STAGING;td.BindFlags=0;td.MiscFlags=0;td.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
+ D3D11_TEXTURE2D_DESC td={};frame->GetDesc(&td);td.Usage=update?D3D11_USAGE_DEFAULT:D3D11_USAGE_STAGING;td.BindFlags=update?D3D11_BIND_SHADER_RESOURCE:0;td.MiscFlags=0;td.CPUAccessFlags=update?0:D3D11_CPU_ACCESS_WRITE;
  if(!Check(dev->CreateTexture2D(&td,nullptr,&upload),"upload texture"))return 17;
- td.CPUAccessFlags=D3D11_CPU_ACCESS_READ;if(!Check(dev->CreateTexture2D(&td,nullptr,&readback),"readback texture"))return 18;
+ td.Usage=D3D11_USAGE_STAGING;td.BindFlags=0;td.CPUAccessFlags=D3D11_CPU_ACCESS_READ;if(!Check(dev->CreateTexture2D(&td,nullptr,&readback),"readback texture"))return 18;
  const float black[4]={0,0,0,1};ctx->ClearRenderTargetView(view.Get(),black);
  if(!Check(swap->Present(0,0),"warmup Present")||!Checkpoint(ctx.Get(),reader,argv[1],1))return 19;
  for(UINT n=0;n<16;n++){
@@ -112,12 +113,19 @@ int wmain(int argc,wchar_t **argv){
  if(!Checkpoint(ctx.Get(),reader,argv[1],5))return 23;
  for(UINT n=0;n<12;n++){
   Pump();std::fill(pixels.begin(),pixels.end(),(n&1)?0xff00ffffu:0xffff00ffu);
-  D3D11_MAPPED_SUBRESOURCE mapped={};if(!Check(ctx->Map(upload.Get(),0,D3D11_MAP_WRITE,0,&mapped),"upload Map"))return 24;
-  if(mapped.RowPitch<RowBytes){ctx->Unmap(upload.Get(),0);return 25;}
-  for(UINT y=0;y<Height;y++){memcpy(static_cast<unsigned char*>(mapped.pData)+y*mapped.RowPitch,pixels.data()+y*Width,RowBytes);copied+=RowBytes;}
-  ctx->Unmap(upload.Get(),0);ctx->CopyResource(frame.Get(),upload.Get());
+  if(update){
+   ctx->UpdateSubresource(upload.Get(),0,nullptr,pixels.data(),RowBytes,RowBytes*Height);
+   copied+=static_cast<unsigned long long>(RowBytes)*Height;
+  }else{
+   D3D11_MAPPED_SUBRESOURCE mapped={};if(!Check(ctx->Map(upload.Get(),0,D3D11_MAP_WRITE,0,&mapped),"upload Map"))return 24;
+   if(mapped.RowPitch<RowBytes){ctx->Unmap(upload.Get(),0);return 25;}
+   for(UINT y=0;y<Height;y++){memcpy(static_cast<unsigned char*>(mapped.pData)+y*mapped.RowPitch,pixels.data()+y*Width,RowBytes);copied+=RowBytes;}
+   ctx->Unmap(upload.Get(),0);
+  }
+  ctx->CopyResource(frame.Get(),upload.Get());
   if(!Check(swap->Present(0,0),"CPU-copy Present"))return 26;Sleep(30);
  }
+ printf("copy_api=%s\n",update?"UpdateSubresource":"Map");
  printf("deliberate_cpu_copy frames=12 bytes=%llu\n",copied);
  if(copied!=12ULL*RowBytes*Height||!Checkpoint(ctx.Get(),reader,argv[1],6)||!Checkpoint(ctx.Get(),reader,argv[1],7))return 27;
  ctx->CopyResource(frame.Get(),upload.Get());

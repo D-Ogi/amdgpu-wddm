@@ -12,7 +12,7 @@ require = lifetime.require
 
 
 def analyze(directory, run_name="audit-client001"):
-    require(run_name in ("audit-client001", "audit-client002"), "unsupported run identity")
+    require(run_name in ("audit-client001", "audit-client002", "audit-client003"), "unsupported run identity")
     def receipt(name):
         return json.loads((directory / name).read_text(encoding="utf-8-sig"))
     for name in ("done.json", "watchdog-done.json", "control-result.json"):
@@ -75,6 +75,6 @@ def analyze(directory, run_name="audit-client001"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory",type=Path)
-    parser.add_argument("--run-name",choices=("audit-client001","audit-client002"),default="audit-client001")
+    parser.add_argument("--run-name",choices=("audit-client001","audit-client002","audit-client003"),default="audit-client001")
     args = parser.parse_args()
     print(json.dumps(analyze(args.directory,args.run_name),indent=2))
