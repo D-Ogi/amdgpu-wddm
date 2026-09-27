@@ -68,3 +68,17 @@ logs. Start the shared trial clock before the GPU transition, reserve rollback t
 inside the owner's180-second budget, and give the independent watchdog the same
 boundary. Do not reuse DWM038's160-second post-startup loop and300-second watchdog
 as if they implemented an overall three-minute limit.
+
+## Capture interval reconciliation
+
+`analyze-dwm-checkpoints.py DIRECTORY --pid PID` reconciles boundary JSON receipts
+against exact checkpoint lines from that DWM log. It rejects mixed process identities,
+marker gaps, mismatched acknowledgements, unpaired capture intervals and audit
+bucket overflow. Output separates map begins in rendering/capture intervals and
+reports maps spanning a boundary, live buffers and image writes during rendering.
+It does not accept full G0 or count writes through persistent pointers.
+
+`test-dwm-checkpoints.py` applies explicitly synthetic phase labels to the immutable
+M687 client trace: all12 deliberately introduced writes remain in the render risk
+list, while both known readbacks fall in separate capture intervals. Five malformed
+receipt sets are rejected. These labels are a host analyzer control, not a DWM run.
