@@ -1,0 +1,181 @@
+{
+  "scope": "Diagnostic shape check, not full-desktop pixel oracle or proof of absence of intermittent artifacts. Components <=64 pixels ignored. CPU baseline is the positive control.",
+  "captures": {
+    "baseline.bmp": {
+      "large_components": [
+        {
+          "pixels": 25236,
+          "bbox": [
+            624,
+            163,
+            840,
+            280
+          ],
+          "fill": 0.9985754985754985
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-14.bmp": {
+      "large_components": [
+        {
+          "pixels": 29764,
+          "bbox": [
+            736,
+            187,
+            936,
+            336
+          ],
+          "fill": 0.9987919463087248
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-14.png": {
+      "large_components": [
+        {
+          "pixels": 21780,
+          "bbox": [
+            744,
+            193,
+            960,
+            294
+          ],
+          "fill": 0.9983498349834984
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-2.bmp": {
+      "large_components": [
+        {
+          "pixels": 20020,
+          "bbox": [
+            688,
+            151,
+            872,
+            260
+          ],
+          "fill": 0.9982050259274032
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-2.png": {
+      "large_components": [
+        {
+          "pixels": 23364,
+          "bbox": [
+            696,
+            157,
+            896,
+            274
+          ],
+          "fill": 0.9984615384615385
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-20.bmp": {
+      "large_components": [
+        {
+          "pixels": 34932,
+          "bbox": [
+            760,
+            205,
+            1008,
+            346
+          ],
+          "fill": 0.9989704873026767
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-20.png": {
+      "large_components": [
+        {
+          "pixels": 27380,
+          "bbox": [
+            608,
+            151,
+            792,
+            300
+          ],
+          "fill": 0.9986868981616575
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-8.bmp": {
+      "large_components": [
+        {
+          "pixels": 23396,
+          "bbox": [
+            712,
+            169,
+            944,
+            270
+          ],
+          "fill": 0.998463639467395
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-8.png": {
+      "large_components": [
+        {
+          "pixels": 26996,
+          "bbox": [
+            720,
+            175,
+            968,
+            284
+          ],
+          "fill": 0.9986682450429121
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "gpu.bmp": {
+      "large_components": [
+        {
+          "pixels": 23300,
+          "bbox": [
+            624,
+            163,
+            864,
+            270
+          ],
+          "fill": 0.9073208722741433
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": false
+    },
+    "screen.png": {
+      "large_components": [
+        {
+          "pixels": 23396,
+          "bbox": [
+            632,
+            169,
+            864,
+            270
+          ],
+          "fill": 0.998463639467395
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    }
+  }
+}
