@@ -181,7 +181,7 @@ typedef struct _BC250_PRESENT_OBSERVATION {
     UINT Flags, Node, ListSize, DmaBytes, PrivateBytes, Offset, SubRects;
     UINT PhysicalAdapter[2];
     BOOLEAN UmdContext, SystemContext, ListValid, SnapshotValid;
-    ULONGLONG Va[2];
+    ULONGLONG InterruptTime, Qpc, Va[2];
     RECT Src, Dst;
     BC250_WDDM_ALLOCATION_PRIVATE Allocations[2];
 } BC250_PRESENT_OBSERVATION;
@@ -385,6 +385,7 @@ typedef struct _BC250_WDDM {
     volatile LONG64 PresentObservationCalls;
     BC250_PRESENT_OBSERVATION PresentObservations[BC250_PRESENT_OBSERVATIONS];
     volatile LONG64 DriverCapsInteropReturned[2]; // successful replies, not registry state
+    volatile LONG64 DriverCapsFirstTime[2], DriverCapsLastTime[2]; // interrupt time, 100 ns
 
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
@@ -1542,6 +1543,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm: DRIVERCAPS returned interop0 %lld interop1 %lld",
         InterlockedCompareExchange64(&Wddm->DriverCapsInteropReturned[0],0,0),
         InterlockedCompareExchange64(&Wddm->DriverCapsInteropReturned[1],0,0));
+    for (i=0;i<2;i++)
+        GuardLog("wddm: DRIVERCAPS interop%u first100ns%lld last100ns%lld",
+            i,InterlockedCompareExchange64(&Wddm->DriverCapsFirstTime[i],0,0),
+            InterlockedCompareExchange64(&Wddm->DriverCapsLastTime[i],0,0));
     GuardLog("wddm: Blt observation calls%lld capacity%u",
         InterlockedCompareExchange64(&Wddm->PresentObservationCalls,0,0),BC250_PRESENT_OBSERVATIONS);
     for (i=0;i<BC250_PRESENT_OBSERVATIONS;i++) {
@@ -1549,6 +1554,7 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         UINT j;
         // Acquire the immutable payload, skipping a still-active writer.
         if (!InterlockedCompareExchange(&o->Published,0,0)) continue;
+        GuardLog("wddm: Blt obs%u interrupt100ns%llu qpc%llu",i,o->InterruptTime,o->Qpc);
         GuardLog("wddm: Blt obs%u ctx%p dev%p flags%x node%u umd%u system%u",
             i,o->Context,o->OwnerDevice,o->Flags,o->Node,o->UmdContext,o->SystemContext);
         GuardLog("wddm: Blt obs%u dma%u private%u offset%u rects%u list%u valid%u snapshot%u",
@@ -2284,9 +2290,21 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 
     // Successful replies, not merely the gate latched at start. Pre-start
     // replies have no adapter-owned storage and are identified in the log.
-    if (wddm)
-        InterlockedIncrement64(&wddm->DriverCapsInteropReturned[
-            caps->PresentationCaps.DriverSupportsCddDwmInterop ? 1 : 0]);
+    if (wddm) {
+        UINT interop=caps->PresentationCaps.DriverSupportsCddDwmInterop ? 1 : 0;
+        LONG64 now=(LONG64)KeQueryInterruptTime(),previous;
+        // Keep chronological bounds even when concurrent replies publish in
+        // reverse order. Each field is atomic, not a transactional snapshot.
+        do {
+            previous=InterlockedCompareExchange64(&wddm->DriverCapsFirstTime[interop],0,0);
+            if (previous && previous<=now) break;
+        } while (InterlockedCompareExchange64(&wddm->DriverCapsFirstTime[interop],now,previous)!=previous);
+        do {
+            previous=InterlockedCompareExchange64(&wddm->DriverCapsLastTime[interop],0,0);
+            if (previous>=now) break;
+        } while (InterlockedCompareExchange64(&wddm->DriverCapsLastTime[interop],now,previous)!=previous);
+        InterlockedIncrement64(&wddm->DriverCapsInteropReturned[interop]);
+    }
     GuardLog("wddm: DRIVERCAPS reply started%u interop%u extent-shifts%u/%u",
         wddm!=NULL,caps->PresentationCaps.DriverSupportsCddDwmInterop,
         caps->PresentationCaps.MaxTextureWidthShift,caps->PresentationCaps.MaxTextureHeightShift);
@@ -5104,6 +5122,8 @@ static void WddmObservePresent(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT
     call=InterlockedIncrement64(&wddm->PresentObservationCalls);
     if (call<=0 || call>BC250_PRESENT_OBSERVATIONS) return;
     o=&wddm->PresentObservations[call-1];
+    o->InterruptTime=KeQueryInterruptTime();
+    o->Qpc=(ULONGLONG)KeQueryPerformanceCounter(NULL).QuadPart;
     o->Context=Context;o->OwnerDevice=Context->OwnerDevice;
     o->Flags=Present->Flags.Value;o->Node=Context->NodeOrdinal;
     o->UmdContext=Context->UmdContext;o->SystemContext=Context->SystemContext;
