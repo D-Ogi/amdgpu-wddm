@@ -1,0 +1,111 @@
+{
+  "checks": [
+    {
+      "result": {
+        "pass": true,
+        "pixels": 8000,
+        "mismatches": 0,
+        "regions": [
+          {
+            "region": "red",
+            "mismatches": 0,
+            "pixels": 1400
+          },
+          {
+            "region": "overlap",
+            "mismatches": 0,
+            "pixels": 6600
+          }
+        ]
+      },
+      "file": "baseline.bmp",
+      "run": "dwm024"
+    },
+    {
+      "result": {
+        "pass": true,
+        "pixels": 8000,
+        "mismatches": 0,
+        "regions": [
+          {
+            "region": "red",
+            "mismatches": 0,
+            "pixels": 1400
+          },
+          {
+            "region": "overlap",
+            "mismatches": 0,
+            "pixels": 6600
+          }
+        ]
+      },
+      "file": "gpu.bmp",
+      "run": "dwm024"
+    },
+    {
+      "result": {
+        "pass": false,
+        "pixels": 8000,
+        "mismatches": 8000,
+        "regions": [
+          {
+            "region": "red",
+            "mismatches": 1400,
+            "pixels": 1400
+          },
+          {
+            "region": "overlap",
+            "mismatches": 6600,
+            "pixels": 6600
+          }
+        ]
+      },
+      "file": "baseline.bmp",
+      "run": "dwm025"
+    },
+    {
+      "result": {
+        "pass": true,
+        "pixels": 8000,
+        "mismatches": 0,
+        "regions": [
+          {
+            "region": "red",
+            "mismatches": 0,
+            "pixels": 1400
+          },
+          {
+            "region": "overlap",
+            "mismatches": 0,
+            "pixels": 6600
+          }
+        ]
+      },
+      "file": "gpu.bmp",
+      "run": "dwm025"
+    }
+  ],
+  "images": [
+    {
+      "run": "dwm024",
+      "file": "baseline.bmp",
+      "sha256": "e099b537a974486dee3f72bfe384fc0176f8b555d91576e6ff74f03ab845945d"
+    },
+    {
+      "run": "dwm024",
+      "file": "gpu.bmp",
+      "sha256": "5c24c68b9bec602209fc826f6bc4d73b9f828c64f45eb4e80c40da2d6cce8d9b"
+    },
+    {
+      "run": "dwm025",
+      "file": "baseline.bmp",
+      "sha256": "0d74a39d6fa943e6e491d685cea5c1a0f6897e4b7973325904e33e7aade3b0ea"
+    },
+    {
+      "run": "dwm025",
+      "file": "gpu.bmp",
+      "sha256": "1e9118bae147cb177ee453a309a89ace87fa9aeae6b5c6cfca1fb4f674f2e62f"
+    }
+  ],
+  "expected_outcomes_verified": true
+}
