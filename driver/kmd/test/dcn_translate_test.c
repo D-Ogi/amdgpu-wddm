@@ -1,3 +1,4 @@
+#include "gdi_private.h"
 // Host controls for the supplied DCN address geometry. All windows are synthetic,
 // including the retained 256 MiB fixture. Larger fixtures prove arithmetic only,
 // not firmware support, installed RAM, usable application capacity or residency.
@@ -61,6 +62,27 @@ static void Geometry(unsigned long long mcBase, unsigned long long vramBase,
 int main(void)
 {
     unsigned long w,h,pitch;unsigned long long bytes;
+    BC250_GDI_PRIVATE gdi={0};
+    unsigned long type=99;
+    unsigned int n;
+    typedef char GdiAbiSize[(sizeof(gdi.Surface)==32 && sizeof(gdi)==48)?1:-1];
+    GdiAbiSize abi={0};
+    CHECK(abi[0]==0);
+    CHECK(!WddmGdiPrivate(0,32,&type) && type==0);
+    CHECK(WddmGdiPrivate(&gdi,32,&type) && type==0);
+    gdi.Surface.Version=1;gdi.Magic=BC250_GDI_PRIVATE_MAGIC;
+    for(n=1;n<=8;n++) {
+        gdi.Type=n;
+        CHECK(WddmGdiPrivate(&gdi,48,&type) && type==n);
+    }
+    for(n=0;n<64;n++) if(n!=32 && n!=48)
+        CHECK(!WddmGdiPrivate(&gdi,n,&type) && type==0);
+    gdi.Type=0;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+    gdi.Type=9;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+    gdi.Type=2;gdi.Flags=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+    gdi.Flags=0;gdi.Reserved=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+    gdi.Reserved=0;gdi.Magic^=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+    gdi.Magic^=1;gdi.Surface.Version=2;CHECK(!WddmGdiPrivate(&gdi,48,&type));
     for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
         CHECK(DcnSharedTextureLayout(w,h,&pitch,&bytes));
         // Independent consumer contract: Resource.cpp OpenResource on a0ad8af5.
@@ -73,6 +95,18 @@ int main(void)
     CHECK(!DcnSharedTextureLayout(1,0,&pitch,&bytes) && !pitch && !bytes);
     CHECK(!DcnSharedTextureLayout(1,0xfffffffful,&pitch,&bytes) && !pitch && !bytes);
     CHECK(!DcnSharedTextureLayout(0xfffffffful,1,&pitch,&bytes) && !pitch && !bytes);
+    for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
+        CHECK(DcnStagingLayout(w,h,1,&pitch,&bytes));
+        CHECK(!(pitch&3u) && pitch>=w && pitch-w<4);
+        CHECK(bytes==(unsigned long long)pitch*h);
+        CHECK(DcnStagingLayout(w,h,4,&pitch,&bytes));
+        CHECK(pitch==w*4u && bytes==(unsigned long long)w*4u*h);
+    }
+    CHECK(!DcnStagingLayout(1,1,2,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnStagingLayout(0,1,1,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnStagingLayout(1,0,4,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnStagingLayout(0xfffffffful,1,1,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnStagingLayout(0x40000000ul,1,4,&pitch,&bytes) && !pitch && !bytes);
     Geometry(0xF400000000ull, 0x270000000ull, 256ull << 20);
     Geometry(0xF400000000ull, 0x270000000ull, 8ull << 30);
     Geometry(0xE800000000ull, 0x670000000ull, 12ull << 30);

@@ -51,3 +51,17 @@ int DcnSharedTextureLayout(unsigned long Width,unsigned long Height,
     if (!DcnSurfaceBytes(Width,(Height+3ul)&~3ul,pitch,Bytes)) return 0;
     *Pitch=pitch;return 1;
 }
+
+int DcnStagingLayout(unsigned long Width,unsigned long Height,
+    unsigned long BytesPerPixel,unsigned long* Pitch,unsigned long long* Bytes)
+{
+    unsigned long long row;
+    if (!Pitch || !Bytes) return 0;
+    *Pitch=0;*Bytes=0;
+    if (!Width || !Height || (BytesPerPixel!=1 && BytesPerPixel!=4)) return 0;
+    row=((unsigned long long)Width*BytesPerPixel+3ull)&~3ull;
+    if (row>0xffffffffull) return 0;
+    *Pitch=(unsigned long)row;
+    *Bytes=row*Height;
+    return 1;
+}

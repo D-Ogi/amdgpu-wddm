@@ -35,6 +35,10 @@ unsigned long DcnPrimaryPitch(unsigned long Width);
 int DcnSharedTextureLayout(unsigned long Width, unsigned long Height,
     unsigned long* Pitch, unsigned long long* Bytes);
 
+// Linear GDI staging; AlignmentShift=2, A8 or 32-bit pixels.
+int DcnStagingLayout(unsigned long Width, unsigned long Height,
+    unsigned long BytesPerPixel, unsigned long* Pitch, unsigned long long* Bytes);
+
 #ifdef __cplusplus
 }
 #endif
