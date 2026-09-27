@@ -1,0 +1,94 @@
+start 2026-09-27T03:35:06.0452279+02:00
+temperature_before=67.9
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=97 completed=9033 age_ms=170 ready_ms=819341
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67875 ready=1
+exe 609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5
+settings_before=58327E6D88E3C801FFD56F2472FC68CAF87DAC8F2DA1AA5080B45C9E4B3E4606
+saves_before=115
+package placed
+presentmon pid=12644
+logman: Name:                 BC250W3 | Status:               Running | Name:                 BC250W3\BC250W3 | Provider: | Name:                 Microsoft-Windows-D3D9 | Provider Guid:        {783ACA0A-790E-4D7F-8451-AA850511C6B9} | KeywordsAll:          0x8000000000000002 (Events,Microsoft-Windows-Direct3D9/Analytic) | KeywordsAny:          0x8000000000000002 (Events,Microsoft-Windows-Direct3D9/Analytic) | Provider: | Name:                 Microsoft-Windows-Kernel-Process | Provider Guid:        {22FB2CD6-0E7B-422B-A0C7-2FAD1FD0E716} | KeywordsAll:          0x8000000000000010 (WINEVENT_KEYWORD_PROCESS,Microsoft-Windows-Kernel-Process/Analytic) | KeywordsAny:          0x8000000000000010 (WINEVENT_KEYWORD_PROCESS,Microsoft-Windows-Kernel-Process/Analytic) | Provider: | Name:                 Microsoft-Windows-DxgKrnl | Provider Guid:        {802EC45A-1E99-4B83-9920-87C98277BA9D} | Provider: | Name:                 {AE4F8626-8265-40D1-A70B-11B64240E8E9} | Provider Guid:        {AE4F8626-8265-40D1-A70B-11B64240E8E9} | Provider: | Name:                 {65CD4C8A-0848-4583-92A0-31C0FBAF00C0} | Provider Guid:        {65CD4C8A-0848-4583-92A0-31C0FBAF00C0} | Provider: | Name:                 Microsoft-Windows-DXGI | Provider Guid:        {CA11C036-0102-4A2D-A6AD-F03CFED5D3C9} | KeywordsAll:          0x8000000000000002 (Events,Microsoft-Windows-DXGI/Analytic) | KeywordsAny:          0x8000000000000002 (Events,Microsoft-Windows-DXGI/Analytic)
+pid=6136
+module 0s C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\d3d12.dll 7B77ED5C
+module 0s C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\dxgi.dll 2E674A56
+module 0s C:\Windows\SYSTEM32\vulkan-1.dll 5C42CA8E
+t=0 tctl=67.8 ws_mb=49 responding=True csv_bytes=0 pm_alive=True
+module 3s C:\Windows\system32\dxgi.dll DDC578A2
+module 3s C:\BC250\m10\wsi-final\vulkan_radeon.dll 93B1D1FD
+module 3s C:\Windows\system32\DComp.DLL 285F0317
+module 3s C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\d3d12core.dll 90B1DAD6
+t=3 tctl=68.9 ws_mb=1087 responding=True csv_bytes=0 pm_alive=True
+t=6 tctl=70.6 ws_mb=505 responding=True csv_bytes=0 pm_alive=True
+window 9s 'The Witcher 3'
+t=9 tctl=72.9 ws_mb=894 responding=True csv_bytes=0 pm_alive=True
+t=13 tctl=73.2 ws_mb=1595 responding=True csv_bytes=0 pm_alive=True
+t=16 tctl=73.2 ws_mb=1359 responding=True csv_bytes=0 pm_alive=True
+t=19 tctl=73.4 ws_mb=1405 responding=True csv_bytes=0 pm_alive=True
+t=22 tctl=73.2 ws_mb=1397 responding=True csv_bytes=0 pm_alive=True
+t=25 tctl=73.1 ws_mb=1357 responding=True csv_bytes=0 pm_alive=True
+t=28 tctl=73.1 ws_mb=1356 responding=True csv_bytes=0 pm_alive=True
+t=31 tctl=73 ws_mb=1355 responding=True csv_bytes=0 pm_alive=True
+auto screenshot 0 at 34s
+t=37 tctl=73.4 ws_mb=1345 responding=True csv_bytes=0 pm_alive=True
+t=40 tctl=73.5 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=43 tctl=73.1 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=46 tctl=72.9 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=50 tctl=72.8 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=53 tctl=72.5 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=56 tctl=72.5 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=59 tctl=72.4 ws_mb=1305 responding=True csv_bytes=0 pm_alive=True
+t=62 tctl=72.9 ws_mb=1306 responding=True csv_bytes=0 pm_alive=True
+auto screenshot 1 at 63s
+t=66 tctl=74.8 ws_mb=2044 responding=True csv_bytes=0 pm_alive=True
+t=72 tctl=75.1 ws_mb=2891 responding=False csv_bytes=0 pm_alive=True
+t=80 tctl=79.9 ws_mb=3722 responding=True csv_bytes=0 pm_alive=True
+t=83 tctl=78.9 ws_mb=3878 responding=True csv_bytes=0 pm_alive=True
+t=86 tctl=78 ws_mb=3927 responding=True csv_bytes=0 pm_alive=True
+t=89 tctl=77.1 ws_mb=3912 responding=True csv_bytes=0 pm_alive=True
+t=92 tctl=76.2 ws_mb=3830 responding=True csv_bytes=0 pm_alive=True
+auto screenshot 2 at 95s
+t=98 tctl=75.1 ws_mb=3501 responding=True csv_bytes=0 pm_alive=True
+t=101 tctl=74.5 ws_mb=3490 responding=True csv_bytes=0 pm_alive=True
+t=104 tctl=74.1 ws_mb=3485 responding=True csv_bytes=0 pm_alive=True
+t=107 tctl=73.8 ws_mb=3480 responding=True csv_bytes=0 pm_alive=True
+t=110 tctl=73.4 ws_mb=3480 responding=True csv_bytes=0 pm_alive=True
+t=113 tctl=73 ws_mb=3480 responding=True csv_bytes=0 pm_alive=True
+t=116 tctl=72.6 ws_mb=3481 responding=True csv_bytes=0 pm_alive=True
+t=120 tctl=72.4 ws_mb=3497 responding=True csv_bytes=0 pm_alive=True
+t=123 tctl=72.1 ws_mb=3503 responding=True csv_bytes=0 pm_alive=True
+auto screenshot 3 at 126s
+t=129 tctl=72 ws_mb=3465 responding=True csv_bytes=0 pm_alive=True
+t=132 tctl=71.8 ws_mb=3465 responding=True csv_bytes=0 pm_alive=True
+t=135 tctl=71.6 ws_mb=3463 responding=True csv_bytes=0 pm_alive=True
+t=138 tctl=71.5 ws_mb=3463 responding=True csv_bytes=0 pm_alive=True
+t=141 tctl=71.4 ws_mb=3463 responding=True csv_bytes=0 pm_alive=True
+t=144 tctl=71.4 ws_mb=3463 responding=True csv_bytes=0 pm_alive=True
+t=147 tctl=71.2 ws_mb=3463 responding=True csv_bytes=0 pm_alive=True
+t=150 tctl=71.2 ws_mb=3463 responding=True csv_bytes=0 pm_alive=True
+auto screenshot 4 at 153s
+t=156 tctl=71.8 ws_mb=3464 responding=True csv_bytes=0 pm_alive=True
+t=159 tctl=72.1 ws_mb=3464 responding=True csv_bytes=0 pm_alive=True
+stop file seen at 162s
+{
+    "elapsed_seconds":  162,
+    "exit_code":  null,
+    "has_exited":  false,
+    "end_reason":  "stop-file",
+    "last_title":  "The Witcher 3",
+    "auto_screenshots":  5
+}
+killing pid 6136
+presentmon still alive after 15 s, stopping
+presentmon_csv_bytes=0
+removed d3d12.dll
+removed dxgi.dll
+removed d3d12core.dll
+settings unchanged
+saves_after=115 (before 115)
+icd_after=93B1D1FD
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=97 completed=15063 age_ms=316 ready_ms=1003373
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=70625 ready=1
+temperature_after=70.6
+dwm=4400
+end 2026-09-27T03:38:10.1310787+02:00
+run_exit=0
