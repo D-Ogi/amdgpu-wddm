@@ -2668,9 +2668,9 @@ static SIZE_T Bc250WddmGetRootPageTableSize(_In_ const HANDLE hAdapter, _Inout_ 
 static DXGKDDI_SETROOTPAGETABLE Bc250WddmSetRootPageTable;
 static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETROOTPAGETABLE* pSetPageTable)
 {
-    // Stage A has no VM context to program: the address is recorded in the log and nowhere else. It is not a plain
-    // physical address - D3DGPU_PHYSICAL_ADDRESS is a segment id and an offset into that segment.
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetRootPageTable))
+    BOOLEAN first = WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetRootPageTable);
+    // The OS address is a segment and offset, resolved below for this context.
+    if (first)
         GuardLog("wddm: SetRootPageTable segment %u offset 0x%llX, %u entries", pSetPageTable->Address.SegmentId,
                  pSetPageTable->Address.SegmentOffset, pSetPageTable->NumEntries);
     VidMmSetRootPageTable(pSetPageTable);
@@ -2678,8 +2678,16 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
     {
         BC250_WDDM_OBJECT* context = WddmObject(pSetPageTable->hContext, BC250_WDDM_MAGIC_CONTEXT);
         ULONGLONG physical = 0;
+        BOOLEAN resolved = FALSE;
 
-        if (context != NULL) context->RootPhysical = VidMmRootPhysical(&pSetPageTable->Address, &physical) ? physical : 0;
+        if (context != NULL) {
+            resolved = VidMmRootPhysical(&pSetPageTable->Address, &physical);
+            context->RootPhysical = resolved ? physical : 0;
+        }
+        if (first && KeGetCurrentIrql() <= DISPATCH_LEVEL)
+            GuardLog("wddm: root binding handle%p ctx%p owner%p resolved%u physical%llX irql%u",
+                pSetPageTable->hContext, (void*)context, context ? (void*)context->OwnerDevice : NULL,
+                (UINT)resolved, physical, (UINT)KeGetCurrentIrql());
     }
 }
 
@@ -5126,6 +5134,8 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     if (InterlockedIncrement64(&wddm->GpuPresentRecords)<=16) {
         GuardLog("wddm: GPU Present built ctx%p ib%llX bytes%u next%u more%u",
             (void*)Context,ib,Present->DmaSize,next,result==Bc250GfxBltMore);
+        GuardLog("wddm: GPU Present build ctx%p owner%p root%llX irql%u",
+            (void*)Context,(void*)Context->OwnerDevice,Context->RootPhysical,(UINT)KeGetCurrentIrql());
         for (i=0;i<2;i++)
             GuardLog("wddm: GPU Present surface%u handle%p va%llX %ux%u pitch%u fmt%u bytes%llu",
                 i,handles[i],va[i],allocations[i].Width,allocations[i].Height,
