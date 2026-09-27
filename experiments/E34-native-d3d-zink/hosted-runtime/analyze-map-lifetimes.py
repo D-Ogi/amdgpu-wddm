@@ -1,5 +1,6 @@
-"""Check one process/DLL lifetime trace; this does not measure CPU stores."""
+"""Check one process/DLL map lifetimes and instrumented CPU writer spans."""
 import argparse
+from bisect import bisect_left, bisect_right
 import json
 from pathlib import Path
 
@@ -175,18 +176,31 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     pending_stores = [sid for sid, record in stores.items() if "end" not in record]
     require(allow_live or not pending_stores, "incomplete store trace")
     store_inventory = []
+    marker_checkpoints = [cp for cp in checkpoints if cp["marker"]]
+    marker_sequences = [cp["seq"] for cp in marker_checkpoints]
     for sid, record in stores.items():
         begin = record["begin"]
         end = record.get("end")
         store_inventory.append(dict(store=sid, map=begin["map"], writer=begin["writer"],
             kind=begin["kind"], offset=begin["offset"], bytes=begin["bytes"],
             mapped_offset=begin["mapped_offset"],
+            mapped_resource_id=maps[begin["map"]]["result"]["resource_id"],
+            staging=bool(maps[begin["map"]]["result"]["staging"]),
             begin_seq=begin["seq"], end_seq=end["seq"] if end else None,
-            crossing_markers=[cp["marker"] for cp in checkpoints if cp["marker"] and
-                begin["seq"] < cp["seq"] and (end is None or cp["seq"] < end["seq"])]))
+            crossing_markers=[cp["marker"] for cp in marker_checkpoints[
+                bisect_right(marker_sequences, begin["seq"]):
+                bisect_left(marker_sequences, end["seq"]) if end else len(marker_sequences)]]))
+    interval_stores = [r for r in store_inventory if start and
+        start["seq"] < r["begin_seq"] and r["end_seq"] is not None and
+        r["end_seq"] < checkpoints[-1]["seq"]]
+    boundary_stores = [r["store"] for r in store_inventory if start and
+        (start_marker in r["crossing_markers"] or end_marker in r["crossing_markers"])]
     return {
         "stores": store_inventory, "pending_store_ids": pending_stores,
         "store_checkpoint_counters": bool(store_checkpoints),
+        "store_totals_scope": "whole parsed prefix, including records before start marker",
+        "interval_store_span_bytes": sum(r["bytes"] for r in interval_stores) if start else None,
+        "interval_boundary_store_ids": boundary_stores if start else None,
         "completed_store_span_bytes": sum(r["begin"]["bytes"] for r in stores.values() if "end" in r),
         "events": events, "requests": len(maps),
         "successful": sum(row["result"]["success"] for row in maps.values()),
@@ -197,7 +211,7 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
         "sequenced": sequenced, "checkpoint_count": len(checkpoints),
         "last_checkpoint": checkpoints[-1] if checkpoints else None,
         "interval_delta": {key: checkpoints[-1][key] - start[key] for key in counts} if start else None,
-        "scope": "sequenced event and checkpoint consistency; CPU stores and uninstrumented paths are not measured" if checkpoints else "observed event consistency only; missing whole maps and CPU stores are not detected",
+        "scope": "sequenced map and instrumented writer spans; uninstrumented writers and application stores through DDI maps require separate evidence" if checkpoints else "observed event consistency only; missing whole maps and CPU stores are not detected",
     }
 
 

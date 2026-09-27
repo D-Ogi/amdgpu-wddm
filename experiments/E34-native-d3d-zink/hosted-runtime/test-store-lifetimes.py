@@ -29,12 +29,25 @@ class Stores(unittest.TestCase):
         self.assertEqual(result['completed_store_span_bytes'], 32)
         self.assertEqual(result['pending_store_ids'], [])
         self.assertEqual(result['stores'][0]['crossing_markers'], [2])
+        self.assertEqual(result['stores'][0]['mapped_resource_id'], 1)
+        self.assertFalse(result['stores'][0]['staging'])
 
     def test_pending_at_marker(self):
         result = m.analyze(trace(), allow_live=True, start_marker=1, end_marker=2)
         self.assertEqual(result['completed_store_span_bytes'], 0)
         self.assertEqual(result['pending_store_ids'], [2])
         self.assertIsNone(result['stores'][0]['end_seq'])
+        self.assertEqual(result['interval_store_span_bytes'], 0)
+        self.assertEqual(result['interval_boundary_store_ids'], [2])
+
+    def test_interval_excludes_startup(self):
+        result = m.analyze(trace(), allow_live=True, start_marker=2, end_marker=3)
+        self.assertEqual(result['completed_store_span_bytes'], 32)
+        self.assertEqual(result['interval_store_span_bytes'], 0)
+        self.assertEqual(result['interval_boundary_store_ids'], [2])
+        whole = m.analyze(trace(), allow_live=True, start_marker=1, end_marker=3)
+        self.assertEqual(whole['interval_store_span_bytes'], 32)
+        self.assertEqual(whole['interval_boundary_store_ids'], [])
 
     def test_bad_evidence(self):
         mutations = [
