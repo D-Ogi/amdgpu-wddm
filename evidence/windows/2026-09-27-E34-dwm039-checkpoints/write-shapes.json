@@ -1,0 +1,849 @@
+{
+  "desktop": [
+    1920,
+    1200
+  ],
+  "render_image_write_count": 1477,
+  "exact_desktop_box_ids": [
+    851
+  ],
+  "at_least_desktop_texel_count_ids": [
+    851
+  ],
+  "requested_texels": 107114036,
+  "groups": [
+    {
+      "box": [
+        160,
+        120,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 479
+    },
+    {
+      "box": [
+        320,
+        240,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 472
+    },
+    {
+      "box": [
+        460,
+        1077,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 57
+    },
+    {
+      "box": [
+        80,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 28
+    },
+    {
+      "box": [
+        27,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 27
+    },
+    {
+      "box": [
+        45,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 27
+    },
+    {
+      "box": [
+        67,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 27
+    },
+    {
+      "box": [
+        21,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 26
+    },
+    {
+      "box": [
+        460,
+        1062,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 25
+    },
+    {
+      "box": [
+        460,
+        1093,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 22
+    },
+    {
+      "box": [
+        1,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        2,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        4,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        8,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        16,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        32,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        64,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        128,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        256,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        512,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        1024,
+        1,
+        1
+      ],
+      "usage": "22",
+      "bind": "8",
+      "count": 11
+    },
+    {
+      "box": [
+        200,
+        140,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        200,
+        188,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        216,
+        140,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        216,
+        156,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        232,
+        140,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        232,
+        148,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        232,
+        164,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        248,
+        156,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        248,
+        172,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        264,
+        164,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        264,
+        180,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 5
+    },
+    {
+      "box": [
+        200,
+        164,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        200,
+        172,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        200,
+        180,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        216,
+        148,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        216,
+        172,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        216,
+        188,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        232,
+        156,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        248,
+        148,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        248,
+        164,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        248,
+        188,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        264,
+        140,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        264,
+        172,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        264,
+        188,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 4
+    },
+    {
+      "box": [
+        200,
+        148,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        200,
+        156,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        216,
+        164,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        216,
+        180,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        232,
+        172,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        232,
+        180,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        232,
+        188,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        248,
+        140,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        248,
+        180,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        264,
+        148,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        264,
+        156,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 3
+    },
+    {
+      "box": [
+        1,
+        1,
+        1
+      ],
+      "usage": "a",
+      "bind": "a",
+      "count": 1
+    },
+    {
+      "box": [
+        32,
+        32,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        48,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        112,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        168,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        184,
+        117,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        184,
+        125,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        184,
+        149,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        200,
+        109,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        200,
+        117,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        200,
+        149,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        216,
+        117,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        232,
+        101,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        232,
+        117,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        232,
+        133,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        232,
+        149,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        248,
+        117,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        248,
+        125,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        248,
+        141,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        312,
+        14,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        460,
+        1026,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        601,
+        800,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        1024,
+        960,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        1920,
+        48,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        1920,
+        1200,
+        1
+      ],
+      "usage": "a",
+      "bind": "8",
+      "count": 1
+    },
+    {
+      "box": [
+        2048,
+        1,
+        1
+      ],
+      "usage": "a",
+      "bind": "a",
+      "count": 1
+    }
+  ],
+  "boundary_spanning_image_ids": [],
+  "live_buffer_ids": [
+    5,
+    8,
+    11,
+    14,
+    18,
+    990,
+    1113,
+    1242
+  ],
+  "scope": "Requested map extents only. No CPU-store count, caller attribution, byte count, or exclusion of tiled/partial/persistent frame copies. Matching a window size is not resource identity.",
+  "source_sha256": "4159261c1168b6243818824ab0de6e4cfdb0fead45d188b43f9a7172323b17b3"
+}
