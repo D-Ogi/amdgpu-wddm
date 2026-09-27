@@ -8,9 +8,10 @@ A returned notification callback does not prove acceptance by the scheduler.
 The ISR counts mutually exclusive early exits: no MMIO, flip disabled, unarmed,
 no VUPDATE event, read failure and ACK failure. Existing acknowledged-event and
 interrupt counters remain available. The last successfully read value is the
-raw OTG_GLOBAL_SYNC_STATUS word; an early exit leaves that value unchanged.
+raw OTG_GLOBAL_SYNC_STATUS word; no-MMIO, flip-disabled, unarmed and read-failure exits leave it unchanged.
+No-event and ACK-failure exits retain the successfully read word.
 The existing periodic summary emits the samples; there is no per-frame logging,
-additional MMIO access, change to acknowledgement writes or recovery policy.
+change to acknowledgement writes or recovery policy.
 CollectDbgInfo retains its existing Level Zero behavior and does not freeze them.
 
 Times use [KeQueryInterruptTime](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kequeryinterrupttime),
@@ -29,3 +30,14 @@ Validation uses run_display_visibility.ps1, extracting the real DCN ISR and
 checking successful ACK, each early exit, preserved counters and DPC queueing.
 The host harness is deterministic; it does not validate hardware delivery,
 concurrency, performance or recovery after a real timeout.
+
+The HardwareAccess/Level Two summary escape additionally samples five existing
+DCN allow-list registers: OTG_STATUS_FRAME_COUNT, OTG_GLOBAL_SYNC_STATUS,
+OTG_CONTROL, OTG_MASTER_UPDATE_LOCK and OTG_STATUS_POSITION (OTG0). The valid
+mask assigns these fields bits0..4, respectively; failed reads are not values.
+Begin/end use the same interrupt-time clock as ISR samples. Reads are sequential,
+not an atomic snapshot, and no delay is inserted. Compare consecutive snapshots
+to test frame progress. ISR acknowledgements can clear event bits concurrently;
+a zero event bit alone does not prove stopped timing. No reads occur from the
+stop summary or CollectDbgInfo. Names/offsets verified with regcalc against
+third_party/linux-amdgpu/dcn_2_0_1_offset.h, DMU, 2026-09-27.

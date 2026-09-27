@@ -893,6 +893,36 @@ NTSTATUS DcnVsyncEnable(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     return returned?change.Status:(NT_SUCCESS(change.Status)?STATUS_UNSUCCESSFUL:change.Status);
 }
 
+// Called only by the HardwareAccess, Level Two summary escape. Never from
+// CollectDbgInfo or stop: a mapped BAR alone does not grant hardware access.
+// Samples are sequential and can straddle a scan line/frame; no wait or write.
+void DcnLogVsyncSnapshot(_In_ const BC250_DEVICE* Device)
+{
+    static const ULONG offsets[] = {
+        BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT,
+        BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS,
+        BC250_REG_DMU_OTG0_OTG_CONTROL,
+        BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,
+        BC250_REG_DMU_OTG0_OTG_STATUS_POSITION
+    };
+    ULONG values[RTL_NUMBER_OF(offsets)] = {0};
+    ULONG valid = 0, i;
+    ULONGLONG begin, end;
+
+    if (!Device->VidPnFlipEnabled || Device->Mmio == NULL) return;
+    begin = KeQueryInterruptTime();
+    for (i = 0; i < RTL_NUMBER_OF(offsets); ++i)
+    {
+        NTSTATUS status = MmioDcnRead(Device, offsets[i], &values[i]);
+        if (NT_SUCCESS(status)) valid |= 1u << i;
+        else GuardLog("vsync snapshot: slot %lu read failed %08lX", i, (ULONG)status);
+    }
+    end = KeQueryInterruptTime();
+    GuardLog("vsync snapshot: 100ns begin %llu end %llu valid %02lX", begin, end, valid);
+    GuardLog("vsync snapshot: frame %08lX sync %08lX control %08lX lock %08lX position %08lX",
+             values[0], values[1], values[2], values[3], values[4]);
+}
+
 // pnp.c's Bc250InterruptRoutine calls this on every interrupt this driver's ISR takes, the same shape as ih.c's
 // own IhInterrupt: a no-op (FALSE, nothing read) unless Device->VidPnFlipEnabled and Device->DcnVsyncArmed are
 // both true, which is what makes this inert with the gate closed or nobody listening. DIRQL: MmioDcnRead and
