@@ -1,0 +1,35 @@
+{
+    "utc":  "2026-09-27T08:38:29.5462868Z",
+    "exists":  true,
+    "state":  "Ready",
+    "result":  0,
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "worker_alive":  false,
+    "worker_start":  {
+                         "pid":  6040,
+                         "utc":  "2026-09-27T08:34:31.9954485Z",
+                         "boot":  "2026-09-26T18:44:31.5000000+02:00",
+                         "start":  "2026-09-27T08:34:31.4801524Z"
+                     },
+    "worker_done":  {
+                        "utc":  "2026-09-27T08:34:57.0933377Z",
+                        "pid":  6040,
+                        "exit_code":  0
+                    },
+    "collector_alive":  false,
+    "collector_start":  {
+                            "start":  "2026-09-27T08:34:32.5240041Z",
+                            "pid":  10172
+                        },
+    "collector_done":  {
+                           "utc":  "2026-09-27T08:37:33.0072688Z",
+                           "samples":  160,
+                           "reader_timeout":  false
+                       },
+    "installer_alive":  false,
+    "installer_start":  {
+                            "start":  "2026-09-27T08:34:32.6075888Z",
+                            "pid":  8304
+                        },
+    "removed":  true
+}
