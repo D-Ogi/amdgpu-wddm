@@ -1,0 +1,8 @@
+Control exit=1 
+At C:\BC250\m13\gfx-blt-control001\run-gfx-blt-control.ps1:45 char:18
++  if($code -ne 0){throw "Control exit=$code $reason"}
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Control exit=1 :String) [], RuntimeException
+    + FullyQualifiedErrorId : Control exit=1 
+ 
+

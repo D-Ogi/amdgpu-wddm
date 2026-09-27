@@ -1,6 +1,8 @@
 # Native GFX Blt positive control
 
-Status: compiled locally, hardware execution pending the coordinated lab window.
+Status: control001 stopped at a residency assertion before GPU submission (M608).
+Hardware execution remains unproven; resolve the residency/placement witness
+before another run.
 
 Hypothesis: the exact production row builder and DMA_DATA emitter copy the
 requested rectangle on node0, and its queued monitored fence retires only after

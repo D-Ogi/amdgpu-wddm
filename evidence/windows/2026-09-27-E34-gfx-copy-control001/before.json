@@ -1,0 +1,14 @@
+{
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "dwm":  [
+                4596
+            ],
+    "clock":  "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66625 ready=1\r\n",
+    "umd":  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "utc":  "2026-09-27T05:28:30.3966003Z",
+    "kmd":  "0C0DA4E13FF110606265274B063D3B6034459A294FE2A552FD5806E0971B05EB",
+    "icd":  "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D",
+    "total_kib":  8101604,
+    "health":  "health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=20097 age_ms=712 ready_ms=2724471\r\n",
+    "free_kib":  4672900
+}
