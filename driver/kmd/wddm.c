@@ -364,6 +364,10 @@ typedef struct _BC250_WDDM {
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
     BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
+    volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
+    volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
+    volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
+
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
     volatile LONG BlitTranslations;             // sources whose complete page range translated contiguously
@@ -1513,6 +1517,22 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
+    // Cumulative counters are not bounded by the detailed-log budget. Read
+    // closure after quiescence; individual atomic reads are not one snapshot.
+    GuardLog("wddm: GPU Present calls%lld records%lld rotate%lld refused%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentCalls,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentRecords,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentRotates,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentRefused,0,0));
+    GuardLog("wddm: GPU Present submits%lld rejected%lld failed%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentSubmits,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSubmitRejected,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSubmitFailed,0,0));
+    GuardLog("wddm: GPU Present errors parameter%lld handle%lld color%lld other%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[0],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[1],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[2],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[3],0,0));
     GuardLog("wddm summary: blit gate %s, %ld blits, %ld skips, %ld sources translated contiguous", Wddm->BlitGate ? "open" : "closed",
              Wddm->Blits, Wddm->BlitSkips, Wddm->BlitTranslations);
     // 2026-09-22 (ADR 0011 consequences, facts M100): where the copy actually landed. BlitsToFlip should be
@@ -4256,10 +4276,20 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
             pSubmitCommand->DmaBufferUmdPrivateDataSize != 0 || KeGetCurrentIrql() > APC_LEVEL ||
             !Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
                 pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferVirtualAddress,
-                pSubmitCommand->DmaBufferSize)) return STATUS_INVALID_PARAMETER;
+                pSubmitCommand->DmaBufferSize)) {
+            if (wddm) InterlockedIncrement64(&wddm->GpuPresentSubmitRejected);
+            return STATUS_INVALID_PARAMETER;
+        }
         if (GfxSubmitReady(device) && WddmSubmitHardware(device,wddm,context,
                 pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
-                pSubmitCommand->SubmissionFenceId,node)) return STATUS_SUCCESS;
+                pSubmitCommand->SubmissionFenceId,node)) {
+            if (InterlockedIncrement64(&wddm->GpuPresentSubmits)<=16)
+                GuardLog("wddm: GPU Present submit ctx%p fence%llu va%llX bytes%u",
+                    (void*)context,pSubmitCommand->SubmissionFenceId,
+                    pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize);
+            return STATUS_SUCCESS;
+        }
+        InterlockedIncrement64(&wddm->GpuPresentSubmitFailed);
         WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);
         return STATUS_SUCCESS; // preserve the existing nonempty-work recovery contract
     }
@@ -4984,6 +5014,14 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     Present->pDmaBuffer=(UCHAR*)Present->pDmaBuffer+Present->DmaSize;
     Present->pDmaBufferPrivateData=(UCHAR*)Present->pDmaBufferPrivateData+sizeof(record);
     Present->MultipassOffset=next;
+    if (InterlockedIncrement64(&wddm->GpuPresentRecords)<=16) {
+        GuardLog("wddm: GPU Present built ctx%p ib%llX bytes%u next%u more%u",
+            (void*)Context,ib,Present->DmaSize,next,result==Bc250GfxBltMore);
+        for (i=0;i<2;i++)
+            GuardLog("wddm: GPU Present surface%u handle%p va%llX %ux%u pitch%u fmt%u bytes%llu",
+                i,handles[i],va[i],allocations[i].Width,allocations[i].Height,
+                allocations[i].Pitch,allocations[i].Format,allocations[i].Size);
+    }
     return result==Bc250GfxBltMore ? STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER : STATUS_SUCCESS;
 }
 
@@ -5041,8 +5079,26 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
                  pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);
     }
     if (context != NULL && pPresent->Flags.Blt &&
-        ((BC250_WDDM*)context->Device->Wddm)->GpuPresentGate)
-        return WddmBuildGpuPresent(context,pPresent);
+        ((BC250_WDDM*)context->Device->Wddm)->GpuPresentGate) {
+        BC250_WDDM* wddm=(BC250_WDDM*)context->Device->Wddm;
+        UINT before=pPresent->MultipassOffset;
+        LONG64 call=InterlockedIncrement64(&wddm->GpuPresentCalls);
+        NTSTATUS status=WddmBuildGpuPresent(context,pPresent);
+        if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
+            InterlockedIncrement64(&wddm->GpuPresentRotates);
+        else if (!NT_SUCCESS(status)) {
+            UINT kind=status==STATUS_INVALID_PARAMETER ? 0 :
+                status==STATUS_INVALID_HANDLE ? 1 :
+                status==STATUS_GRAPHICS_CANNOTCOLORCONVERT ? 2 : 3;
+            InterlockedIncrement64(&wddm->GpuPresentRefused);
+            InterlockedIncrement64(&wddm->GpuPresentStatuses[kind]);
+        }
+        if (call<=16)
+            GuardLog("wddm: GPU Present call%lld status%x dma%u private%u offset%u->%u",
+                call,(UINT)status,pPresent->DmaSize,pPresent->DmaBufferPrivateDataSize,
+                before,pPresent->MultipassOffset);
+        return status;
+    }
     if (context != NULL && !context->UmdContext && pPresent->Flags.Value == 1 &&
         ((BC250_WDDM*)context->Device->Wddm)->BlitGate)
     {
