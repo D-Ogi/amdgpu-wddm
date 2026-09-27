@@ -1,0 +1,51 @@
+[
+    {
+        "error":  "",
+        "case":  "delayed",
+        "samples":  13,
+        "pass":  true,
+        "elapsed_ms":  6000
+    },
+    {
+        "error":  "Hosted DWM startup witness deadline expired",
+        "case":  "no-create",
+        "samples":  61,
+        "pass":  true,
+        "elapsed_ms":  30000
+    },
+    {
+        "error":  "Hosted DWM startup witness deadline expired",
+        "case":  "wrong-icd",
+        "samples":  61,
+        "pass":  true,
+        "elapsed_ms":  30000
+    },
+    {
+        "error":  "DWM identity changed/lost during startup",
+        "case":  "changed",
+        "samples":  3,
+        "pass":  true,
+        "elapsed_ms":  1000
+    },
+    {
+        "error":  "DWM identity changed/lost during startup",
+        "case":  "lost",
+        "samples":  3,
+        "pass":  true,
+        "elapsed_ms":  1000
+    },
+    {
+        "error":  "Owner STOP during hosted startup",
+        "case":  "stop",
+        "samples":  1,
+        "pass":  true,
+        "elapsed_ms":  0
+    },
+    {
+        "error":  "Hosted DWM startup witness deadline expired",
+        "case":  "late-ready",
+        "samples":  1,
+        "pass":  true,
+        "elapsed_ms":  31000
+    }
+]
