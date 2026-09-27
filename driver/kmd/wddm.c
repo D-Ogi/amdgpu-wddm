@@ -4924,10 +4924,20 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     if (Context->UmdContext || Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
         !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
         (Present->SubRectCnt && !Present->pDstSubRects)) return status;
-    if (!Present->pDmaBuffer || ((ULONG_PTR)Present->pDmaBuffer&3u) ||
-        Present->DmaSize<64 || (Present->DmaSize&31u) ||
-        !Present->pDmaBufferPrivateData || Present->DmaBufferPrivateDataSize<sizeof(record))
+    // A malformed available buffer is not exhaustion: retrying an equally
+    // sized buffer cannot repair its alignment or an absent backing pointer.
+    if ((Present->DmaSize && !Present->pDmaBuffer) ||
+        ((ULONG_PTR)Present->pDmaBuffer&3u) ||
+        (Present->DmaBufferPrivateDataSize && !Present->pDmaBufferPrivateData))
+        return status;
+    // DXGKARG_PRESENT reports remaining private bytes, not the context's
+    // original capacity. Exhaustion can legitimately require buffer rotation.
+    // Fresh non-UMD contexts have enough room for both our IB and its record.
+    C_ASSERT(PAGE_SIZE>=64 && !(PAGE_SIZE&31u));
+    C_ASSERT(sizeof(BC250_PRESENT_PACKET)>=BC250_GFX_PRESENT_RECORD_BYTES);
+    if (Present->DmaSize<64 || Present->DmaBufferPrivateDataSize<sizeof(record))
         return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    if (Present->DmaSize&31u) return status;
     if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize)) return status;
     for (i=0;i<2;i++) {
         const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
@@ -4935,12 +4945,13 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
         if (info->PhysicalAdapterIndex) return status;
         handles[i]=info->hDeviceSpecificAllocation;
     }
-    if (!WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,handles,allocations)) return status;
+    if (!WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,handles,allocations))
+        return STATUS_INVALID_HANDLE;
     for (i=0;i<2;i++) {
         const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
             (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
         const BC250_WDDM_ALLOCATION_PRIVATE* a=&allocations[i];
-        if (!WddmLinearColorFormat(a->Format)) return status;
+        if (!WddmLinearColorFormat(a->Format)) return STATUS_GRAPHICS_CANNOTCOLORCONVERT;
         surface[i].Width=a->Width;surface[i].Height=a->Height;surface[i].Pitch=a->Pitch;
         surface[i].Bytes=a->Size;surface[i].Format=WddmRedFirst(a->Format)?Bc250BltRgba8:Bc250BltBgra8;
         va[i]=info->AllocationVirtualAddress;
