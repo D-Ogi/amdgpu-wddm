@@ -1,0 +1,261 @@
+BC250 audit upload event=create manager=0000022A8333E620 created_ns=2741892393600 time_ns=2741892396700 pipe=0000022A8874DFA0 resource=0000000000000000 generation=0 bind=70 map_flags=322 capacity=0 offset=0 size=0 allocations=0 requested_bytes=0 copy_bytes=0
+BC250 audit upload event=create manager=0000022A8333CF20 created_ns=2741892428900 time_ns=2741892429000 pipe=0000022A8874DFA0 resource=0000000000000000 generation=0 bind=70 map_flags=322 capacity=0 offset=0 size=0 allocations=0 requested_bytes=0 copy_bytes=0
+BC250 audit lifetime event=begin seq=1 map=5 tid=7904 time_ns=2741898091600 ctx=0000022A8874DFA0 resource=0000022A887AA880 resource_id=3 object_id=4 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=2 map=5 time_ns=2741898881500 success=1 resource=0000022A887AA880 resource_id=3 object_id=4 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit lifetime event=begin seq=3 map=8 tid=7904 time_ns=2741899829200 ctx=0000022A8874DFA0 resource=0000022A887D35C0 resource_id=6 object_id=7 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=4 map=8 time_ns=2741899855800 success=1 resource=0000022A887D35C0 resource_id=6 object_id=7 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit lifetime event=begin seq=5 map=11 tid=7904 time_ns=2741900705100 ctx=0000022A8874DFA0 resource=0000022A887F7740 resource_id=9 object_id=10 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=6 map=11 time_ns=2741900731600 success=1 resource=0000022A887F7740 resource_id=9 object_id=10 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit lifetime event=begin seq=7 map=14 tid=7904 time_ns=2741901485600 ctx=0000022A8874DFA0 resource=0000022A8881F4C0 resource_id=12 object_id=13 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=8 map=14 time_ns=2741901511100 success=1 resource=0000022A8881F4C0 resource_id=12 object_id=13 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit lifetime event=begin seq=9 map=15 tid=7904 time_ns=2741902012900 ctx=0000022A8874DFA0 resource=0000022A886F7380 resource_id=1 object_id=2 target=0 width=4 height=1 depth=1 format=81 bind=8400 level=0 usage=2a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=4 box_height=1 box_depth=1
+BC250 audit upload event=release manager=0000022A8333E620 created_ns=2741892393600 time_ns=2741902039600 pipe=0000022A8874DFA0 resource=0000000000000000 generation=0 bind=70 map_flags=322 capacity=0 offset=0 size=0 allocations=0 requested_bytes=0 copy_bytes=0
+BC250 audit lifetime event=begin seq=10 map=18 tid=7904 time_ns=2741903483900 ctx=0000022A8874DFA0 resource=0000022A8881FF80 resource_id=16 object_id=17 target=0 width=1048576 height=1 depth=1 format=81 bind=8070 level=0 usage=322 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=1048576 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=11 map=18 time_ns=2741903528300 success=1 resource=0000022A8881FF80 resource_id=16 object_id=17 usage=322 staging=0 stride=0 layer_stride=0
+BC250 audit upload event=map manager=0000022A8333E620 created_ns=2741892393600 time_ns=2741903546100 pipe=0000022A8874DFA0 resource=0000022A8881FF80 generation=1 bind=70 map_flags=322 capacity=1048576 offset=0 size=1048576 allocations=0 requested_bytes=0 copy_bytes=0
+BC250 audit upload event=alloc manager=0000022A8333E620 created_ns=2741892393600 time_ns=2741903567200 pipe=0000022A8874DFA0 resource=0000022A8881FF80 generation=1 bind=70 map_flags=322 capacity=1048576 offset=0 size=4 allocations=1 requested_bytes=4 copy_bytes=0
+BC250 audit lifetime event=result seq=12 map=15 time_ns=2741903588100 success=1 resource=0000022A8881FF80 resource_id=16 object_id=17 usage=2a staging=1 stride=0 layer_stride=0
+BC250 audit lifetime event=end seq=13 map=15 time_ns=2741903679800
+BC250 audit lifetime event=begin seq=14 map=21 tid=7904 time_ns=2741903765300 ctx=0000022A8874DFA0 resource=0000022A888202C0 resource_id=19 object_id=20 target=0 width=16 height=1 depth=1 format=81 bind=8010 level=0 usage=2a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=16 box_height=1 box_depth=1
+BC250 audit upload event=alloc manager=0000022A8333E620 created_ns=2741892393600 time_ns=2741903891100 pipe=0000022A8874DFA0 resource=0000022A8881FF80 generation=1 bind=70 map_flags=322 capacity=1048576 offset=4096 size=16 allocations=2 requested_bytes=20 copy_bytes=0
+BC250 audit lifetime event=result seq=15 map=21 time_ns=2741903915200 success=1 resource=0000022A8881FF80 resource_id=16 object_id=17 usage=2a staging=1 stride=0 layer_stride=0
+BC250 audit lifetime event=end seq=16 map=21 time_ns=2741903935000
+BC250 audit lifetime event=checkpoint seq=17 time_ns=2741948296200 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=1 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=1 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=1 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=1 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=1 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=1 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737750 present=1 context=1 sync=40002200 submitted=1 completed=1 submits=1
+BC250 audit lifetime event=checkpoint seq=18 time_ns=2741952683100 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=2 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=2 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=2 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=2 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=2 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=2 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit lifetime event=checkpoint seq=19 time_ns=2741955194000 marker=1 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=3 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=3 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=3 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=3 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=3 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=3 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit lifetime event=checkpoint seq=20 time_ns=2741959088200 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=4 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=4 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=4 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=4 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=4 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=4 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737765 present=2 context=1 sync=40002200 submitted=2 completed=2 submits=2
+BC250 audit lifetime event=checkpoint seq=21 time_ns=2741961433400 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=5 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=5 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=5 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=5 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=5 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=5 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit lifetime event=checkpoint seq=22 time_ns=2741994171900 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=6 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=6 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=6 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=6 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=6 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=6 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit lifetime event=checkpoint seq=23 time_ns=2741994821900 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=7 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=7 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=7 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=7 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=7 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=7 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737796 present=3 context=1 sync=40002200 submitted=3 completed=3 submits=3
+BC250 audit lifetime event=checkpoint seq=24 time_ns=2741996720900 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=8 image_calls=0 image_request_bytes=0 buffer_calls=7 buffer_request_bytes=1144596 persistent_calls=5
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=8 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=8 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=8 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=8 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=8 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit lifetime event=begin seq=25 map=36 tid=7904 time_ns=2742029842700 ctx=0000022A8874DFA0 resource=0000022A865EA940 resource_id=34 object_id=35 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=26 map=36 time_ns=2742029872100 success=1 resource=0000022A865EA940 resource_id=34 object_id=35 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737828 present=4 context=1 sync=40002200 submitted=4 completed=4 submits=4
+BC250 audit lifetime event=begin seq=27 map=39 tid=7904 time_ns=2742063623100 ctx=0000022A8874DFA0 resource=0000022A865EAB80 resource_id=37 object_id=38 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=28 map=39 time_ns=2742063651800 success=1 resource=0000022A865EAB80 resource_id=37 object_id=38 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737859 present=5 context=1 sync=40002200 submitted=5 completed=5 submits=5
+BC250 audit lifetime event=begin seq=29 map=42 tid=7904 time_ns=2742098096300 ctx=0000022A8874DFA0 resource=0000022A865EAD80 resource_id=40 object_id=41 target=0 width=24000 height=1 depth=1 format=81 bind=8008000 level=0 usage=703 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=24000 box_height=1 box_depth=1
+BC250 audit lifetime event=result seq=30 map=42 time_ns=2742098127200 success=1 resource=0000022A865EAD80 resource_id=40 object_id=41 usage=703 staging=0 stride=0 layer_stride=0
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737906 present=6 context=1 sync=40002200 submitted=6 completed=6 submits=6
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737937 present=7 context=1 sync=40002200 submitted=7 completed=7 submits=7
+BC250 audit progress pid=7748 device=0000022A866505A8 tick=2737968 present=8 context=1 sync=40002200 submitted=8 completed=8 submits=8
+BC250 audit lifetime event=checkpoint seq=31 time_ns=2742486778000 marker=2 requests=10 successful=10 failed=0 ended=2 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=51 image_calls=0 image_request_bytes=0 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=51 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=51 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=51 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=51 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=51 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit lifetime event=checkpoint seq=32 time_ns=2742490391300 marker=3 requests=10 successful=10 failed=0 ended=2 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=52 image_calls=0 image_request_bytes=0 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=52 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=52 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=52 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=52 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=52 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit ddi event=begin id=1 tid=7904 time_ns=2742497766800 origin=resource_map ctx=0000022A8874DFA0 resource=0000022A86656140 level=0 usage=1 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=33 map=43 tid=7904 time_ns=2742497822600 ctx=0000022A8874DFA0 resource=0000022A86656140 resource_id=32 object_id=33 target=2 width=320 height=240 depth=1 format=105 bind=0 level=0 usage=1 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=34 map=43 time_ns=2742502224100 success=1 resource=0000022A865E54C0 resource_id=44 object_id=45 usage=1 staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=end id=1 tid=7904 time_ns=2742502257000
+BC250 audit lifetime event=end seq=35 map=43 time_ns=2742502537300
+BC250 audit lifetime event=checkpoint seq=36 time_ns=2742506162900 marker=4 requests=11 successful=11 failed=0 ended=3 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=56 image_calls=1 image_request_bytes=307200 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=56 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=56 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=56 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=56 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=56 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=56 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=1 bytes=307200
+BC250 audit lifetime event=checkpoint seq=37 time_ns=2742509942700 marker=5 requests=11 successful=11 failed=0 ended=3 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=57 image_calls=1 image_request_bytes=307200 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=57 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=57 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=57 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=57 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=57 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=57 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=1 bytes=307200
+BC250 audit ddi event=begin id=2 tid=7904 time_ns=2742511165900 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=38 map=46 tid=7904 time_ns=2742511189000 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=39 map=46 time_ns=2742515007200 success=1 resource=0000022A865E54C0 resource_id=47 object_id=48 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=2 tid=7904 time_ns=2742515065700
+BC250 audit lifetime event=end seq=40 map=46 time_ns=2742520745700
+BC250 audit ddi event=end id=2 tid=7904 time_ns=2742520786500
+BC250 audit ddi event=begin id=3 tid=7904 time_ns=2742554045000 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=41 map=49 tid=7904 time_ns=2742554125100 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=42 map=49 time_ns=2742554199200 success=1 resource=0000022A8664F600 resource_id=50 object_id=51 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=3 tid=7904 time_ns=2742554258400
+BC250 audit lifetime event=end seq=43 map=49 time_ns=2742554390500
+BC250 audit ddi event=end id=3 tid=7904 time_ns=2742554418200
+BC250 audit ddi event=begin id=4 tid=7904 time_ns=2742586088100 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=44 map=52 tid=7904 time_ns=2742586171300 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=45 map=52 time_ns=2742586242600 success=1 resource=0000022A8664F400 resource_id=53 object_id=54 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=4 tid=7904 time_ns=2742586301700
+BC250 audit lifetime event=end seq=46 map=52 time_ns=2742586435500
+BC250 audit ddi event=end id=4 tid=7904 time_ns=2742586463600
+BC250 audit lifetime event=checkpoint seq=47 time_ns=2742587015600 marker=0 requests=14 successful=14 failed=0 ended=6 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=64 image_calls=4 image_request_bytes=1228800 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=64 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=64 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=64 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=64 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=64 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=64 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=1 bytes=307200
+BC250 audit bucket ctx=0000022A8874DFA0 sample=64 id=5 target=2 size=320x240x1 format=105 bind=8 usage=a box=320x240x1 runtime=0 user_ptr=0 calls=3 bytes=921600
+BC250 audit ddi event=begin id=5 tid=7904 time_ns=2742618118700 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=48 map=55 tid=7904 time_ns=2742618204700 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=49 map=55 time_ns=2742618276100 success=1 resource=0000022A8664EFC0 resource_id=56 object_id=57 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=5 tid=7904 time_ns=2742618496700
+BC250 audit lifetime event=end seq=50 map=55 time_ns=2742618616300
+BC250 audit ddi event=end id=5 tid=7904 time_ns=2742618631200
+BC250 audit ddi event=begin id=6 tid=7904 time_ns=2742650094200 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=51 map=58 tid=7904 time_ns=2742650178600 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=52 map=58 time_ns=2742650249400 success=1 resource=0000022A8664F400 resource_id=59 object_id=60 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=6 tid=7904 time_ns=2742650308600
+BC250 audit lifetime event=end seq=53 map=58 time_ns=2742650442100
+BC250 audit ddi event=end id=6 tid=7904 time_ns=2742650470100
+BC250 audit ddi event=begin id=7 tid=7904 time_ns=2742682175500 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=54 map=61 tid=7904 time_ns=2742682253700 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=55 map=61 time_ns=2742682369300 success=1 resource=0000022A8664F600 resource_id=62 object_id=63 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=7 tid=7904 time_ns=2742682428700
+BC250 audit lifetime event=end seq=56 map=61 time_ns=2742682561200
+BC250 audit ddi event=end id=7 tid=7904 time_ns=2742682577600
+BC250 audit ddi event=begin id=8 tid=7904 time_ns=2742714199600 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=57 map=64 tid=7904 time_ns=2742714285600 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=58 map=64 time_ns=2742714357400 success=1 resource=0000022A8664F400 resource_id=65 object_id=66 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=8 tid=7904 time_ns=2742714416500
+BC250 audit lifetime event=end seq=59 map=64 time_ns=2742714549500
+BC250 audit ddi event=end id=8 tid=7904 time_ns=2742714564200
+BC250 audit ddi event=begin id=9 tid=7904 time_ns=2742746145000 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=60 map=67 tid=7904 time_ns=2742746207800 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=61 map=67 time_ns=2742746252000 success=1 resource=0000022A8664DC80 resource_id=68 object_id=69 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=9 tid=7904 time_ns=2742746284100
+BC250 audit lifetime event=end seq=62 map=67 time_ns=2742746382400
+BC250 audit ddi event=end id=9 tid=7904 time_ns=2742746397400
+BC250 audit ddi event=begin id=10 tid=7904 time_ns=2742778161600 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=63 map=70 tid=7904 time_ns=2742778245800 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=64 map=70 time_ns=2742778338200 success=1 resource=0000022A8664F840 resource_id=71 object_id=72 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=10 tid=7904 time_ns=2742778412500
+BC250 audit lifetime event=end seq=65 map=70 time_ns=2742778562700
+BC250 audit ddi event=end id=10 tid=7904 time_ns=2742778582100
+BC250 audit ddi event=begin id=11 tid=7904 time_ns=2742810183800 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=66 map=73 tid=7904 time_ns=2742810255700 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=67 map=73 time_ns=2742810517600 success=1 resource=0000022A8664E0C0 resource_id=74 object_id=75 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=11 tid=7904 time_ns=2742810560800
+BC250 audit lifetime event=end seq=68 map=73 time_ns=2742810657800
+BC250 audit ddi event=end id=11 tid=7904 time_ns=2742810673100
+BC250 audit ddi event=begin id=12 tid=7904 time_ns=2742842297000 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=69 map=76 tid=7904 time_ns=2742842391900 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=70 map=76 time_ns=2742842472900 success=1 resource=0000022A8664ED80 resource_id=77 object_id=78 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=12 tid=7904 time_ns=2742842538200
+BC250 audit lifetime event=end seq=71 map=76 time_ns=2742842643700
+BC250 audit ddi event=end id=12 tid=7904 time_ns=2742842659100
+BC250 audit ddi event=begin id=13 tid=7904 time_ns=2742874328600 origin=update_subresource ctx=0000022A8874DFA0 resource=0000022A889F6B00 level=0 usage=a x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=72 map=79 tid=7904 time_ns=2742874411200 ctx=0000022A8874DFA0 resource=0000022A889F6B00 resource_id=30 object_id=31 target=2 width=320 height=240 depth=1 format=105 bind=8 level=0 usage=a user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=73 map=79 time_ns=2742874491600 success=1 resource=0000022A8664ED80 resource_id=80 object_id=81 usage=a staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=copy_complete id=13 tid=7904 time_ns=2742874556900
+BC250 audit lifetime event=end seq=74 map=79 time_ns=2742874652800
+BC250 audit ddi event=end id=13 tid=7904 time_ns=2742874667900
+BC250 audit lifetime event=checkpoint seq=75 time_ns=2742910862600 marker=6 requests=23 successful=23 failed=0 ended=15 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=93 image_calls=13 image_request_bytes=3993600 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=93 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=93 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=93 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=93 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=93 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=93 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=1 bytes=307200
+BC250 audit bucket ctx=0000022A8874DFA0 sample=93 id=5 target=2 size=320x240x1 format=105 bind=8 usage=a box=320x240x1 runtime=0 user_ptr=0 calls=12 bytes=3686400
+BC250 audit lifetime event=checkpoint seq=76 time_ns=2742914440900 marker=7 requests=23 successful=23 failed=0 ended=15 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=94 image_calls=13 image_request_bytes=3993600 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=94 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=94 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=94 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=94 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=94 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=94 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=1 bytes=307200
+BC250 audit bucket ctx=0000022A8874DFA0 sample=94 id=5 target=2 size=320x240x1 format=105 bind=8 usage=a box=320x240x1 runtime=0 user_ptr=0 calls=12 bytes=3686400
+BC250 audit ddi event=begin id=14 tid=7904 time_ns=2742915890600 origin=resource_map ctx=0000022A8874DFA0 resource=0000022A86656140 level=0 usage=1 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=begin seq=77 map=82 tid=7904 time_ns=2742915917100 ctx=0000022A8874DFA0 resource=0000022A86656140 resource_id=32 object_id=33 target=2 width=320 height=240 depth=1 format=105 bind=0 level=0 usage=1 user_ptr=0 runtime=0 x=0 y=0 z=0 box_width=320 box_height=240 box_depth=1
+BC250 audit lifetime event=result seq=78 map=82 time_ns=2742916540600 success=1 resource=0000022A8664EB80 resource_id=83 object_id=84 usage=1 staging=1 stride=1280 layer_stride=307200
+BC250 audit ddi event=end id=14 tid=7904 time_ns=2742916563900
+BC250 audit lifetime event=end seq=79 map=82 time_ns=2742916830500
+BC250 audit lifetime event=checkpoint seq=80 time_ns=2742920284900 marker=8 requests=24 successful=24 failed=0 ended=16 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=0 sample=98 image_calls=14 image_request_bytes=4300800 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=98 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=98 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=98 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=98 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=98 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=98 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=2 bytes=614400
+BC250 audit bucket ctx=0000022A8874DFA0 sample=98 id=5 target=2 size=320x240x1 format=105 bind=8 usage=a box=320x240x1 runtime=0 user_ptr=0 calls=12 bytes=3686400
+BC250 audit lifetime event=checkpoint seq=81 time_ns=2742922992600 marker=0 requests=24 successful=24 failed=0 ended=16 pending=0 live=8
+BC250 audit maps ctx=0000022A8874DFA0 final=1 sample=103 image_calls=14 image_request_bytes=4300800 buffer_calls=10 buffer_request_bytes=1216596 persistent_calls=8
+BC250 audit bucket_summary ctx=0000022A8874DFA0 sample=103 overflow=0
+BC250 audit bucket ctx=0000022A8874DFA0 sample=103 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=7 bytes=168000
+BC250 audit bucket ctx=0000022A8874DFA0 sample=103 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000022A8874DFA0 sample=103 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000022A8874DFA0 sample=103 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000022A8874DFA0 sample=103 id=4 target=2 size=320x240x1 format=105 bind=0 usage=1 box=320x240x1 runtime=0 user_ptr=0 calls=2 bytes=614400
+BC250 audit bucket ctx=0000022A8874DFA0 sample=103 id=5 target=2 size=320x240x1 format=105 bind=8 usage=a box=320x240x1 runtime=0 user_ptr=0 calls=12 bytes=3686400
+BC250 audit upload event=release manager=0000022A8333E620 created_ns=2741892393600 time_ns=2742923229800 pipe=0000022A8874DFA0 resource=0000022A8881FF80 generation=1 bind=70 map_flags=322 capacity=1048576 offset=4112 size=0 allocations=2 requested_bytes=20 copy_bytes=0
+BC250 audit lifetime event=end seq=82 map=18 time_ns=2742923251900
+BC250 audit upload event=destroy manager=0000022A8333E620 created_ns=2741892393600 time_ns=2742923266800 pipe=0000022A8874DFA0 resource=0000022A8881FF80 generation=1 bind=70 map_flags=322 capacity=0 offset=0 size=0 allocations=2 requested_bytes=20 copy_bytes=0
+BC250 audit upload event=release manager=0000022A8333CF20 created_ns=2741892428900 time_ns=2742923287200 pipe=0000022A8874DFA0 resource=0000000000000000 generation=0 bind=70 map_flags=322 capacity=0 offset=0 size=0 allocations=0 requested_bytes=0 copy_bytes=0
+BC250 audit upload event=destroy manager=0000022A8333CF20 created_ns=2741892428900 time_ns=2742923307100 pipe=0000022A8874DFA0 resource=0000000000000000 generation=0 bind=70 map_flags=322 capacity=0 offset=0 size=0 allocations=0 requested_bytes=0 copy_bytes=0
+BC250 audit lifetime event=end seq=83 map=36 time_ns=2742924396700
+BC250 audit lifetime event=end seq=84 map=39 time_ns=2742925356700
+BC250 audit lifetime event=end seq=85 map=42 time_ns=2742926172600
+BC250 audit lifetime event=end seq=86 map=14 time_ns=2742927044000
+BC250 audit lifetime event=end seq=87 map=5 time_ns=2742927850800
+BC250 audit lifetime event=end seq=88 map=8 time_ns=2742928662700
+BC250 audit lifetime event=end seq=89 map=11 time_ns=2742929539300
