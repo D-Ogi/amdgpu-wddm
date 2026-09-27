@@ -1,0 +1,9 @@
+{
+  "test-detached-log.exe": "acf3a4dde3ed7d6090b82c5e2028755181d74beb9dd33f4a3573fd27fcd313b0",
+  "test-detached-log-old.exe": "7767485153281cee08c85f82f67959d7d90057c491e7fd6e64275d5fb74b2d8b",
+  "test-shared-log.exe": "30bfdcdde138d46c251e43f1918975d1eb3b98e701322f6e33d66ba5f7356d2d",
+  "shared-log-old.h": "1dfcbecda1b9b9b98a080ac602be2615904a99194931bb1e2888d77e214b8950",
+  "shared-log.h": "1e184a3186b02268fdd6d7d8abfbd4e729a3b1f11d39e3b27654e5fc9c1b80ae",
+  "test-detached-log.cpp": "78a15c8896f9449965b1b455a1f130b3d367ad532e14e3ea5d5a028851376863",
+  "test-shared-log.cpp": "6d1fb46d12ce00f45caadf2c44ea8c35125d8097b5441c904e611d800f0a6a7a"
+}
