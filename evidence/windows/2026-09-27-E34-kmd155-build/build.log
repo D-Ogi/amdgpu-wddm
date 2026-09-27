@@ -1,0 +1,70 @@
+compile
+source capture: 19f0dfe1dc208b34bb7339f27a8f9eeaf84079f1 clean=True
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+kmd-commands PASS 0.69s
+kmd-contract PASS 0.39s
+radv-contract PASS 0.24s
+umd-contract PASS 0.24s
+surface-layout PASS 0.87s
+blit-plan PASS 0.91s
+gfx-copy PASS 0.93s
+gfx-blt PASS 1s
+blob-abi PASS 0.98s
+surface-control PASS 0.22s
+kmd-analysis PASS 0.59s
+umd-analysis PASS 3.45s
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 583 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x01CFC0  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x01BB80  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x036CC0  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x0451F0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\g0-hosted\kmd155-final001\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\kmd155-final001\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\kmd155-final001\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7684  bc250kmd.inf
+   407440  bc250kmd.sys
+umd package
+  bc250kmd.inf generated: 9 lines enabled, 1 commented out, DriverVer = 09/27/2026,0.7.155.1
+  .........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\g0-hosted\kmd155-final001\package-umd\bc250kmd.cat
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\kmd155-final001\package-umd\bc250kmd.cat
+umd package: P:\bc-250\scratch\g0-hosted\kmd155-final001\package-umd
+      792  bc250-lab-test.cer
+     2839  bc250kmd.cat
+     7632  bc250kmd.inf
+   407440  bc250kmd.sys
+     4096  bc250umd.dll
+  EADEBFA25C4D90A1D1AD654A9B799D8B4BCD6938246DA62E327D291604564A97  package\bc250kmd.sys
+  EADEBFA25C4D90A1D1AD654A9B799D8B4BCD6938246DA62E327D291604564A97  package-umd\bc250kmd.sys
+source/artifact manifest written; source eligible=True
