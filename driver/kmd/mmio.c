@@ -99,6 +99,11 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnCurrentAddress = 0;
     Device->DcnDiverged = FALSE;
     // 0.7.24 (ADR 0011 point 3 step 3): the hardware vsync's own state, same reset rule.
+    Device->InterruptLastTime = Device->DcnVsyncEntryTime = 0;
+    Device->DcnVsyncAckTime = Device->DcnVsyncNotifyTime = 0;
+    Device->DcnVsyncNoMmio = Device->DcnVsyncFlipDisabled = Device->DcnVsyncUnarmed = 0;
+    Device->DcnVsyncNoEvent = Device->DcnVsyncReadFailed = Device->DcnVsyncAckFailed = 0;
+    Device->DcnVsyncLastStatus = 0;
     Device->DcnVsyncArmed = 0;
     Device->DcnVsyncAcked = 0;
     Device->DcnVsyncTicks = 0;

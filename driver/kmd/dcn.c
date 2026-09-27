@@ -903,13 +903,22 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
 {
     ULONG status;
 
-    if (Device->Mmio == NULL || !Device->VidPnFlipEnabled || Device->DcnVsyncArmed == 0) return FALSE;
+    InterlockedExchange64(&Device->DcnVsyncEntryTime, (LONG64)KeQueryInterruptTime());
+    if (Device->Mmio == NULL) { InterlockedIncrement(&Device->DcnVsyncNoMmio); return FALSE; }
+    if (!Device->VidPnFlipEnabled) { InterlockedIncrement(&Device->DcnVsyncFlipDisabled); return FALSE; }
+    if (Device->DcnVsyncArmed == 0) { InterlockedIncrement(&Device->DcnVsyncUnarmed); return FALSE; }
     if (!NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS, &status)))
     {
+        InterlockedIncrement(&Device->DcnVsyncReadFailed);
         InterlockedIncrement(&Device->DcnVsyncRefused);
         return FALSE;
     }
-    if ((status & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) == 0) return FALSE;
+    InterlockedExchange(&Device->DcnVsyncLastStatus, (LONG)status);
+    if ((status & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) == 0)
+    {
+        InterlockedIncrement(&Device->DcnVsyncNoEvent);
+        return FALSE;
+    }
 
     // Acknowledge only our event, preserving unrelated enable fields. The
     // synchronized enable callback cannot interleave this read-modify-write.
@@ -921,9 +930,11 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
     if (!NT_SUCCESS(MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS,
                                    DcnVsyncAckValue(status), TRUE)))
     {
+        InterlockedIncrement(&Device->DcnVsyncAckFailed);
         InterlockedIncrement(&Device->DcnVsyncRefused);
         return FALSE;
     }
+    InterlockedExchange64(&Device->DcnVsyncAckTime, (LONG64)KeQueryInterruptTime());
     InterlockedIncrement(&Device->DcnVsyncTicks);
     InterlockedIncrement(&Device->DcnVsyncAcked);
     Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);

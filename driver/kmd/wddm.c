@@ -670,6 +670,8 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
     BC250_WDDM_NOTIFY* notify = (BC250_WDDM_NOTIFY*)Context;
 
     notify->Device->Dxgk.DxgkCbNotifyInterrupt(notify->Device->Dxgk.DeviceHandle, &notify->Data);
+    if (notify->Data.InterruptType == DXGK_INTERRUPT_CRTC_VSYNC)
+        InterlockedExchange64(&notify->Device->DcnVsyncNotifyTime, (LONG64)KeQueryInterruptTime());
     return TRUE;
 }
 
@@ -1658,6 +1660,18 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Device->VidPnFlipEnabled ? "open" : "closed", Wddm->Device->DcnFlipsHardware, Wddm->Device->DcnFlipRefused,
              Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred,
              Wddm->Device->DcnVsyncOldBufferReports);
+    // Independently sampled counters/times: no interrupt lock and no per-frame logging.
+    GuardLog("vsync diagnostic: irq %ld no-mmio %ld flip-off %ld unarmed %ld",
+             Wddm->Device->InterruptCount, Wddm->Device->DcnVsyncNoMmio,
+             Wddm->Device->DcnVsyncFlipDisabled, Wddm->Device->DcnVsyncUnarmed);
+    GuardLog("vsync diagnostic: no-event %ld read-fail %ld ack-fail %ld",
+             Wddm->Device->DcnVsyncNoEvent, Wddm->Device->DcnVsyncReadFailed, Wddm->Device->DcnVsyncAckFailed);
+    GuardLog("vsync diagnostic: 100ns irq %lld entry %lld ack %lld notify %lld status %08lX",
+             InterlockedCompareExchange64(&Wddm->Device->InterruptLastTime, 0, 0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncEntryTime, 0, 0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncAckTime, 0, 0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncNotifyTime, 0, 0),
+             (ULONG)Wddm->Device->DcnVsyncLastStatus);
     if (Wddm->ReportFailures != 0)
         GuardLog("wddm summary: *** %ld reports refused by DxgkCbSynchronizeExecution ***", Wddm->ReportFailures);
 

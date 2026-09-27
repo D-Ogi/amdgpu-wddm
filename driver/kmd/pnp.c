@@ -246,6 +246,7 @@ BOOLEAN Bc250InterruptRoutine(_In_ const PVOID MiniportDeviceContext, _In_ ULONG
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     BOOLEAN ih, vsync;
 
+    InterlockedExchange64(&device->InterruptLastTime, (LONG64)KeQueryInterruptTime());
     InterlockedIncrement(&device->InterruptCount);
     InterlockedExchange(&device->LastMessageNumber, (LONG)MessageNumber);
     ih = IhInterrupt(device);
