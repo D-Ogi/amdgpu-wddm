@@ -2569,6 +2569,19 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
 
 // ---- allocations ------------------------------------------------------------------------------------------------
 
+C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE==1);
+C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
+C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
+static ULONG WddmSurfacePixelBytes(ULONG Format)
+{
+    switch (Format) {
+    case D3DDDIFMT_A8: return 1;
+    case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
+    case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: return 4;
+    default: return 0;
+    }
+}
+
 static DXGKDDI_GETSTANDARDALLOCATIONDRIVERDATA Bc250WddmGetStandardAllocationDriverData;
 static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdapter,
                                                          _Inout_ DXGKARG_GETSTANDARDALLOCATIONDRIVERDATA* pData)
@@ -2581,6 +2594,23 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     RtlZeroMemory(&private, sizeof(private));
     private.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
     private.Version = 1;
+
+    // Retain the CDD/DWM allocation contract independently of the shared first-DDI
+    // log budget: primary/shadow requests can exhaust it before a GDI request.
+    // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
+    // Separate the size query from the private-data fill, at most20 lines per start.
+    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE && pData->pCreateGdiSurfaceData != NULL)
+    {
+        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
+        ULONG slot = type <= 8 ? type : 9;
+        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
+        LONG bit = (LONG)(1u << (slot * 2 + fill));
+        if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
+            GuardLog("wddm: GDI request type %u flags 0x%08X phase %s %ux%u format %u",
+                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
+                     pData->pCreateGdiSurfaceData->Width, pData->pCreateGdiSurfaceData->Height,
+                     (ULONG)pData->pCreateGdiSurfaceData->Format);
+    }
 
     switch (pData->StandardAllocationType)
     {
@@ -2620,23 +2650,9 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     // the UMD-created shared textures. Logical Width/Height remain unchanged.
     // Staging uses its format size and the advertised four-byte row alignment.
     {
-        BOOLEAN texture=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE &&
-            pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_TEXTURE;
-        BOOLEAN staging=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE &&
-            (pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE ||
-             pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_STAGING);
-        if (staging) {
-            ULONG bpp;
-            switch (private.Format) {
-            case D3DDDIFMT_A8: bpp=1;break;
-            case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
-            case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: bpp=4;break;
-            default: return STATUS_INVALID_PARAMETER;
-            }
-            if (!DcnStagingLayout(private.Width,private.Height,bpp,&private.Pitch,&private.Size))
-                return STATUS_INVALID_PARAMETER;
-        } else if (texture) {
-            if (!DcnSharedTextureLayout(private.Width,private.Height,&private.Pitch,&private.Size))
+        if (pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE) {
+            if (!WddmGdiLayout(private.Width,private.Height,(ULONG)pData->pCreateGdiSurfaceData->Type,
+                    WddmSurfacePixelBytes(private.Format),&private.Pitch,&private.Size))
                 return STATUS_INVALID_PARAMETER;
         } else {
             if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
@@ -2653,22 +2669,6 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
         pData->pCreateStagingSurfaceData->Pitch = private.Pitch;
     else if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
         pData->pCreateGdiSurfaceData->Pitch = private.Pitch;
-
-    // Retain the CDD/DWM allocation contract independently of the shared first-DDI
-    // log budget: primary/shadow requests can exhaust it before a GDI request.
-    // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
-    // Separate the size query from the private-data fill, at most20 lines per start.
-    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
-    {
-        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
-        ULONG slot = type <= 8 ? type : 9;
-        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
-        LONG bit = (LONG)(1u << (slot * 2 + fill));
-        if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
-            GuardLog("wddm: GDI surface type %u flags 0x%08X phase %s %ux%u format %u pitch %u bytes %llu",
-                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
-                     private.Width, private.Height, private.Format, private.Pitch, private.Size);
-    }
 
     // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
     if (pData->pAllocationPrivateDriverData != NULL)
@@ -2824,6 +2824,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
             private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
             !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
+            !WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) ||
             (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
         {
             if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
@@ -2861,7 +2862,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         info->PreferredSegment.SegmentId0 = allocationSharedCpu ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
         info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
         info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
-        info->EvictionSegmentSet = 0;                   // surfaces live in the local segment only; no eviction target
+        info->EvictionSegmentSet = 0;                   // no explicit eviction segment; VidMm owns backing-store eviction
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
         // Linear VRAM blits use physical mappings. System-memory pages are not assumed contiguous.
@@ -2981,7 +2982,8 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
             }
         }
         else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
-            private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType))
+            private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
+            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)))
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
             if (opened != NULL) {

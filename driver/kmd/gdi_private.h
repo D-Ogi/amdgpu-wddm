@@ -1,5 +1,6 @@
 #ifndef BC250_GDI_PRIVATE_H
 #define BC250_GDI_PRIVATE_H
+#include "dcn_translate.h"
 
 // Windows ABI: 32-bit unsigned long, 64-bit unsigned long long.
 #define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
@@ -35,4 +36,32 @@ static __inline int WddmGdiPrivate(const void* Data, unsigned int Bytes, unsigne
     return 1;
 }
 
+/* Type values are the WDK GDISURFACETYPE ABI (checked by the kernel caller).
+ * A tag describes requested policy, never OS provenance or backing identity. */
+static __inline int WddmGdiLayout(unsigned long Width,unsigned long Height,
+    unsigned long Type,unsigned long Bpp,unsigned long* Pitch,unsigned long long* Size)
+{
+    if (Bpp!=1 && Bpp!=4) return 0;
+    if (Type==2 || Type==3) return DcnStagingLayout(Width,Height,Bpp,Pitch,Size);
+    if (Bpp!=4) return 0;
+    if (Type==1) return DcnSharedTextureLayout(Width,Height,Pitch,Size);
+    return DcnStagingLayout(Width,Height,4,Pitch,Size);
+}
+
+static __inline int WddmSurfaceGeometry(const BC250_WDDM_ALLOCATION_PRIVATE* Surface,
+    unsigned long Type,unsigned long Bpp)
+{
+    unsigned long pitch;
+    unsigned long long size;
+    if (!Surface || Surface->Magic!=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC ||
+        Surface->Version!=1 || Type>8 || Surface->Size>~0ull-4095ull) return 0;
+    if (!Type) {
+        /* Legacy UMD producers may add pitch/row padding. Bound the footprint,
+         * but do not require the standard-GDI producer's exact layout. */
+        return Bpp==4 && DcnSurfaceBytes(Surface->Width,Surface->Height,Surface->Pitch,&size) &&
+            Surface->Size>=size;
+    }
+    return WddmGdiLayout(Surface->Width,Surface->Height,Type,Bpp,&pitch,&size) &&
+        Surface->Pitch==pitch && Surface->Size==size;
+}
 #endif

@@ -83,6 +83,39 @@ int main(void)
     gdi.Flags=0;gdi.Reserved=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
     gdi.Reserved=0;gdi.Magic^=1;CHECK(!WddmGdiPrivate(&gdi,48,&type));
     gdi.Magic^=1;gdi.Surface.Version=2;CHECK(!WddmGdiPrivate(&gdi,48,&type));
+    /* Validate the received blob independently of producer allocation calls. */
+    gdi.Surface.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
+    gdi.Surface.Version=1;
+    for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
+        unsigned long kind;
+        gdi.Surface.Width=w;gdi.Surface.Height=h;
+        for(kind=1;kind<=3;kind++) {
+            unsigned long bpp=kind==1?4:1;
+            CHECK(WddmGdiLayout(w,h,kind,bpp,&gdi.Surface.Pitch,&gdi.Surface.Size));
+            CHECK(WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
+            gdi.Surface.Size--;
+            CHECK(!WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
+            gdi.Surface.Size+=2;
+            CHECK(!WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
+            gdi.Surface.Size--;
+            gdi.Surface.Pitch+=4;
+            CHECK(!WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
+        }
+    }
+    gdi.Surface.Width=3;gdi.Surface.Height=3;
+    gdi.Surface.Pitch=256;gdi.Surface.Size=1024;
+    CHECK(WddmSurfaceGeometry(&gdi.Surface,0,4)); /* legacy padded UMD */
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,1));
+    gdi.Surface.Size=767;CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    gdi.Surface.Size=~0ull;CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    gdi.Surface.Size=1024;gdi.Surface.Version=2;
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    gdi.Surface.Version=1;gdi.Surface.Magic^=1;
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    gdi.Surface.Magic^=1;gdi.Surface.Pitch=8;
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    CHECK(!WddmGdiLayout(3,3,1,1,&pitch,&bytes));
+    CHECK(!WddmGdiLayout(3,3,2,0,&pitch,&bytes));
     for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
         CHECK(DcnSharedTextureLayout(w,h,&pitch,&bytes));
         // Independent consumer contract: Resource.cpp OpenResource on a0ad8af5.
