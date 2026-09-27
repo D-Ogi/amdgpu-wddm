@@ -1,0 +1,80 @@
+start 2026-09-27T03:03:56.5407293+02:00
+temperature_before=67.4
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=89 completed=6234 age_ms=134 ready_ms=1523487
+exe 609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5
+settings_before=58327E6D88E3C801FFD56F2472FC68CAF87DAC8F2DA1AA5080B45C9E4B3E4606
+saves_before=115
+package placed
+pid=5480
+module 0s d3d12.dll 7B77ED5C
+module 0s dxgi.dll 2E674A56
+module 0s vulkan-1.dll 5C42CA8E
+module 0s vulkan_radeon.dll 93B1D1FD
+t=0 tctl=67.6 ws_mb=88 responding=True
+module 3s d3d12core.dll 90B1DAD6
+t=3 tctl=69 ws_mb=1099 responding=True
+t=6 tctl=69.5 ws_mb=478 responding=True
+window 9s 'The Witcher 3'
+t=9 tctl=73 ws_mb=902 responding=True
+t=13 tctl=72.6 ws_mb=1561 responding=True
+t=16 tctl=72 ws_mb=1320 responding=True
+t=19 tctl=71.6 ws_mb=1384 responding=True
+t=22 tctl=71.1 ws_mb=1384 responding=True
+t=25 tctl=70.6 ws_mb=1335 responding=True
+t=28 tctl=70.2 ws_mb=1335 responding=True
+t=31 tctl=70 ws_mb=1335 responding=True
+auto screenshot 0 at 33s
+t=36 tctl=70.4 ws_mb=1335 responding=True
+t=39 tctl=70.1 ws_mb=1335 responding=True
+t=42 tctl=69.9 ws_mb=1335 responding=True
+t=45 tctl=70 ws_mb=1335 responding=True
+t=48 tctl=69.6 ws_mb=1335 responding=True
+t=51 tctl=69.5 ws_mb=1329 responding=True
+t=54 tctl=70 ws_mb=1329 responding=True
+t=57 tctl=69.9 ws_mb=1298 responding=True
+t=60 tctl=69.6 ws_mb=1298 responding=True
+auto screenshot 1 at 62s
+t=65 tctl=70.1 ws_mb=1298 responding=True
+t=68 tctl=69.8 ws_mb=1298 responding=True
+t=71 tctl=69.5 ws_mb=1298 responding=True
+t=75 tctl=69.2 ws_mb=1298 responding=True
+t=78 tctl=69 ws_mb=1298 responding=True
+t=81 tctl=69.8 ws_mb=1291 responding=True
+t=84 tctl=71.1 ws_mb=1557 responding=True
+t=87 tctl=72.5 ws_mb=2304 responding=True
+t=90 tctl=72.4 ws_mb=2571 responding=False
+auto screenshot 2 at 96s
+t=99 tctl=77.8 ws_mb=3458 responding=True
+t=103 tctl=77.4 ws_mb=3820 responding=True
+t=106 tctl=76.5 ws_mb=3874 responding=True
+t=109 tctl=75.8 ws_mb=3867 responding=True
+t=112 tctl=75 ws_mb=3805 responding=True
+t=115 tctl=74.4 ws_mb=3509 responding=True
+t=118 tctl=74 ws_mb=3408 responding=True
+t=121 tctl=73.9 ws_mb=3399 responding=True
+auto screenshot 3 at 124s
+t=127 tctl=73.2 ws_mb=3372 responding=True
+t=130 tctl=73 ws_mb=3367 responding=True
+t=133 tctl=72.5 ws_mb=3367 responding=True
+t=136 tctl=72.2 ws_mb=3367 responding=True
+stop file seen at 139s
+{
+    "elapsed_seconds":  139,
+    "exit_code":  null,
+    "has_exited":  false,
+    "end_reason":  "stop-file",
+    "last_title":  "The Witcher 3",
+    "auto_screenshots":  4
+}
+killing pid 5480
+removed d3d12.dll
+removed dxgi.dll
+removed d3d12core.dll
+settings unchanged
+saves_after=115 (before 115)
+icd_after=93B1D1FD
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=89 completed=10133 age_ms=140 ready_ms=1665544
+temperature_after=72
+dwm=5748
+end 2026-09-27T03:06:18.6401987+02:00
+run_exit=0

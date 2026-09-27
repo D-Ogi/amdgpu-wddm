@@ -1,0 +1,27 @@
+{
+    "vulkan-1.dll":  {
+                         "t":  0,
+                         "path":  "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                         "sha256":  "5C42CA8E"
+                     },
+    "d3d12.dll":  {
+                      "t":  0,
+                      "path":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\d3d12.dll",
+                      "sha256":  "7B77ED5C"
+                  },
+    "dxgi.dll":  {
+                     "t":  0,
+                     "path":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\dxgi.dll",
+                     "sha256":  "2E674A56"
+                 },
+    "vulkan_radeon.dll":  {
+                              "t":  0,
+                              "path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+                              "sha256":  "93B1D1FD"
+                          },
+    "d3d12core.dll":  {
+                          "t":  3,
+                          "path":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\d3d12core.dll",
+                          "sha256":  "90B1DAD6"
+                      }
+}
