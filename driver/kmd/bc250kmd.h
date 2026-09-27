@@ -169,6 +169,15 @@ typedef struct _BC250_DEVICE {
     // software timer while VidPnFlipEnabled is open. DcnVsyncArmed is read lock-free by the ISR (DIRQL,
     // dcn.c's DcnVsyncInterrupt), the same acceptable race as ih.c's own Active; DcnVsyncAcked is what the ISR
     // hands the vsync DPC (WddmDcnVsync, wddm.c) once per real event it found and acknowledged.
+    // Diagnostic samples, not one atomic snapshot. Times are KeQueryInterruptTime
+    // (100 ns, clock-tick resolution); zero means no sample since device start.
+    volatile LONG64 InterruptLastTime;
+    volatile LONG64 DcnVsyncEntryTime;
+    volatile LONG64 DcnVsyncAckTime;
+    volatile LONG64 DcnVsyncNotifyTime; // NotifyInterrupt returned, not OS acceptance
+    volatile LONG DcnVsyncNoMmio, DcnVsyncFlipDisabled, DcnVsyncUnarmed;
+    volatile LONG DcnVsyncNoEvent, DcnVsyncReadFailed, DcnVsyncAckFailed;
+    volatile LONG DcnVsyncLastStatus; // raw OTG_GLOBAL_SYNC_STATUS, valid after a successful read
     volatile LONG DcnVsyncArmed;
     volatile LONG DcnVsyncAcked;
     volatile LONG DcnVsyncTicks;         // every VUPDATE_NO_LOCK event the ISR acknowledged, armed or not

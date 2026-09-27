@@ -12,6 +12,7 @@ typedef void* PVOID;
 typedef void* HANDLE;
 typedef int KIRQL;
 typedef int64_t LONGLONG;
+typedef int64_t LONG64;
 typedef struct {LONGLONG QuadPart;} LARGE_INTEGER;
 typedef struct {int Lock,Stopping,VSyncArmed,VSyncTimer,VSyncDpc;long VSyncTicks;} BC250_WDDM;
 typedef struct { unsigned VidPnSourceId;BOOLEAN Visible;} DXGKARG_SETVIDPNSOURCEVISIBILITY;
@@ -29,6 +30,9 @@ typedef struct {
     NTSTATUS VisibilityFirstTrueStatus,VisibilityLastTrueStatus;
     BC250_VISIBILITY_EVENT VisibilityHistory[BC250_VISIBILITY_HISTORY_COUNT];
     volatile long DcnVsyncArmed,DcnVsyncRefused,DcnVsyncTicks,DcnVsyncAcked;
+    volatile LONG64 DcnVsyncEntryTime,DcnVsyncAckTime;
+    volatile LONG DcnVsyncNoMmio,DcnVsyncFlipDisabled,DcnVsyncUnarmed;
+    volatile LONG DcnVsyncNoEvent,DcnVsyncReadFailed,DcnVsyncAckFailed,DcnVsyncLastStatus;
     struct {
         void* DeviceHandle;
         NTSTATUS (*DxgkCbSynchronizeExecution)(void*,BOOLEAN(*)(void*),void*,ULONG,BOOLEAN*);
@@ -53,6 +57,10 @@ static unsigned checks,failures;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
 static struct {ULONG sync,blank,dbuf,last_sync;unsigned irq,sync_calls,queues,arms,writes,stalls,hold_blank;NTSTATUS sync_status;} model;
 static LONGLONG TestQpc;
+static LONG64 TestInterruptTime;
+static int TestReadFail;
+static LONG64 KeQueryInterruptTime(void){return ++TestInterruptTime;}
+static LONG64 InterlockedExchange64(volatile LONG64*p,LONG64 v){LONG64 old=*p;CHECK(model.irq);*p=v;return old;}
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*frequency)
 {
     LARGE_INTEGER value;
@@ -76,7 +84,7 @@ static void KeCancelTimer(int*t){(void)t;}
 static void KeStallExecutionProcessor(ULONG us){CHECK(us==100);model.stalls++;TestQpc+=(LONGLONG)us*10;}
 static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
 {
-    if(!d->Mmio)return STATUS_DEVICE_NOT_READY;
+    if(!d->Mmio || TestReadFail)return STATUS_DEVICE_NOT_READY;
     if(reg==BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS){CHECK(model.irq);*out=model.sync;}
     else if(reg==BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL)*out=model.blank;
     else if(reg==BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL)*out=model.dbuf;
@@ -118,6 +126,17 @@ int main(void)
     model.irq=1;CHECK(DcnVsyncInterrupt(&d));model.irq=0;
     CHECK(d.DcnVsyncTicks==1 && d.DcnVsyncAcked==1 && model.queues==1);
     CHECK((model.sync&other)==other && d.DcnVsyncArmed==1);
+    CHECK(d.DcnVsyncEntryTime>0 && d.DcnVsyncAckTime>d.DcnVsyncEntryTime);
+    model.irq=1;
+    CHECK(!DcnVsyncInterrupt(&d) && d.DcnVsyncNoEvent==1);
+    d.Mmio=NULL;CHECK(!DcnVsyncInterrupt(&d) && d.DcnVsyncNoMmio==1);d.Mmio=&model;
+    d.VidPnFlipEnabled=FALSE;CHECK(!DcnVsyncInterrupt(&d) && d.DcnVsyncFlipDisabled==1);d.VidPnFlipEnabled=TRUE;
+    d.DcnVsyncArmed=0;CHECK(!DcnVsyncInterrupt(&d) && d.DcnVsyncUnarmed==1);d.DcnVsyncArmed=1;
+    model.sync|=OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK;
+    TestReadFail=1;CHECK(!DcnVsyncInterrupt(&d) && d.DcnVsyncReadFailed==1);TestReadFail=0;
+    d.DcnWriteEnabled=FALSE;CHECK(!DcnVsyncInterrupt(&d) && d.DcnVsyncAckFailed==1);d.DcnWriteEnabled=TRUE;
+    CHECK(d.DcnVsyncTicks==1 && d.DcnVsyncAcked==1 && model.queues==1);
+    model.irq=0;
     CHECK(DcnVsyncEnable(&d,FALSE)==STATUS_SUCCESS);
     CHECK(d.DcnVsyncArmed==0 && !(model.sync&OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_INT_EN_MASK));
     CHECK(DcnVsyncEnable(&d,TRUE)==STATUS_SUCCESS); // gfx rearm uses the same synchronized owner
