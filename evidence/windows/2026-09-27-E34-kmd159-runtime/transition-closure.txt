@@ -1,0 +1,44 @@
+{
+    "utc":  "2026-09-27T07:44:23.7437267Z",
+    "exists":  true,
+    "state":  "Ready",
+    "result":  0,
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "worker_alive":  false,
+    "worker_start":  {
+                         "pid":  7608,
+                         "utc":  "2026-09-27T07:40:09.6507707Z",
+                         "boot":  "2026-09-26T18:44:31.5000000+02:00",
+                         "start":  "2026-09-27T07:40:09.1186530Z"
+                     },
+    "worker_done":  {
+                        "utc":  "2026-09-27T07:40:34.5085266Z",
+                        "pid":  7608,
+                        "exit_code":  0
+                    },
+    "collector_alive":  false,
+    "collector_start":  {
+                            "start":  "2026-09-27T07:40:10.2173806Z",
+                            "pid":  12984
+                        },
+    "collector_done":  {
+                           "utc":  "2026-09-27T07:43:11.8516878Z",
+                           "samples":  161,
+                           "reader_timeout":  false
+                       },
+    "installer_alive":  false,
+    "installer_start":  {
+                            "start":  "2026-09-27T07:40:10.3031481Z",
+                            "pid":  7428
+                        },
+    "removed":  true
+}
+Get-ScheduledTask : No MSFT_ScheduledTask objects found with property 'TaskName' equal to 'BC250 
+GFX Blt control005'.  Verify the value of the property and retry.
+At C:\BC250\tmp\archive.ps1:9 char:1
++ Get-ScheduledTask -TaskName 'BC250 GFX Blt control005' | Select-Objec ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (BC250 GFX Blt control005:String) [Get-ScheduledTas 
+   k], CimJobException
+    + FullyQualifiedErrorId : CmdletizationQuery_NotFound_TaskName,Get-ScheduledTask
+ 
