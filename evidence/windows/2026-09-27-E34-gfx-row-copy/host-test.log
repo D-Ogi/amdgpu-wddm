@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS decoded row copies at30 capacities, padding, intra-row resume, batch-only sync, whole-footprint rejection
+compile-check (kernel flags, same source, no link)
+
+gfx_blt_test.exe exit code 0

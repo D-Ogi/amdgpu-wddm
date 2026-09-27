@@ -11,3 +11,10 @@
 unsigned int Bc250GfxCopyDwords(unsigned int Bytes);
 unsigned int Bc250EmitGfxCopy(unsigned int* Buffer, unsigned int CapacityDwords,
     unsigned long long Source, unsigned long long Destination, unsigned int Bytes);
+
+/* Compose a larger IB: WaitBefore orders earlier CP DMA and SyncAfter waits at
+ * the end of this span. A caller batching spans supplies these only at IB edges. */
+unsigned int Bc250GfxCopyMaxBytes(void);
+unsigned int Bc250EmitGfxCopySpan(unsigned int* Buffer, unsigned int CapacityDwords,
+    unsigned long long Source, unsigned long long Destination, unsigned int Bytes,
+    int WaitBefore, int SyncAfter);

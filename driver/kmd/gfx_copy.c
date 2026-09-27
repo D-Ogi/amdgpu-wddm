@@ -12,8 +12,9 @@ unsigned int Bc250GfxCopyDwords(unsigned int bytes)
     return bytes ? ((bytes / COPY_MAX) + (bytes % COPY_MAX != 0u)) * COPY_DWORDS : 0u;
 }
 
-unsigned int Bc250EmitGfxCopy(unsigned int* buffer, unsigned int capacity,
-    unsigned long long source, unsigned long long destination, unsigned int bytes)
+unsigned int Bc250EmitGfxCopySpan(unsigned int* buffer, unsigned int capacity,
+    unsigned long long source, unsigned long long destination, unsigned int bytes,
+    int waitBefore, int syncAfter)
 {
     unsigned int required = Bc250GfxCopyDwords(bytes), written = 0, remaining = bytes;
     if (!buffer || !required || capacity < required) return 0;
@@ -24,8 +25,8 @@ unsigned int Bc250EmitGfxCopy(unsigned int* buffer, unsigned int capacity,
         unsigned int control = S_501_DST_SEL(V_501_DST_ADDR_USING_L2) |
             S_501_SRC_SEL(V_501_SRC_ADDR_USING_L2);
         unsigned int command = S_506_BYTE_COUNT(count);
-        if (count == remaining) control |= S_501_CP_SYNC(1);
-        if (!written) command |= S_506_RAW_WAIT(1);
+        if (count == remaining && syncAfter) control |= S_501_CP_SYNC(1);
+        if (!written && waitBefore) command |= S_506_RAW_WAIT(1);
         /* radv_cs_emit_cp_dma's GFX7+ seven-dword layout, specialized to GFX10. */
         buffer[written++] = (unsigned int)PACKET3(PACKET3_DMA_DATA, 5);
         buffer[written++] = control;
@@ -38,4 +39,15 @@ unsigned int Bc250EmitGfxCopy(unsigned int* buffer, unsigned int capacity,
         if (remaining) { source += count; destination += count; }
     }
     return written;
+}
+
+unsigned int Bc250GfxCopyMaxBytes(void)
+{
+    return COPY_MAX;
+}
+
+unsigned int Bc250EmitGfxCopy(unsigned int* buffer, unsigned int capacity,
+    unsigned long long source, unsigned long long destination, unsigned int bytes)
+{
+    return Bc250EmitGfxCopySpan(buffer, capacity, source, destination, bytes, 1, 1);
 }
