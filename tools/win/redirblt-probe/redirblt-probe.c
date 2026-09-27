@@ -117,6 +117,7 @@ typedef struct _OPTIONS {
     DWORD HoldSeconds;                  // keep the window and the allocation after the variants
     DWORD HandshakeTimeoutMs;
     DWORD WatchdogMs;
+    DWORD HandshakeFlags;               // dwFlags of ordinal 100 (default SUPPORT_PRESENT_TO_GDI_SURFACE; 0 = the historical S_OK path)
 } OPTIONS;
 
 // ---- probe state --------------------------------------------------------------------------------------
@@ -552,6 +553,30 @@ static BOOL StepFindAdapter(PROBE* Probe)
             printf("    AdapterString \"%ls\"  ChipType \"%ls\"\n", registry.AdapterString, registry.ChipType);
         if (NT_SUCCESS(QueryAdapter(adapters[i].hAdapter, KMTQAITYPE_UMDRIVERNAME, &umd, sizeof(umd))))
             printf("    UmdFileName   \"%ls\"\n", umd.UmdFileName);
+        // What dxgkrnl itself reports about the adapter: the type bits (software device, render, display) and the
+        // WDDM 1.2 caps as the OS derived them from the KMD's DXGK_DRIVERCAPS, SupportKernelModeCommandBuffer (GDI
+        // hardware acceleration) among them. Raw words first, so a reader can decode bits this build does not name.
+        {
+            D3DKMT_ADAPTERTYPE type;
+            D3DKMT_WDDM_1_2_CAPS caps12;
+
+            ZeroMemory(&type, sizeof(type));
+            ZeroMemory(&caps12, sizeof(caps12));
+            if (NT_SUCCESS(QueryAdapter(adapters[i].hAdapter, KMTQAITYPE_ADAPTERTYPE, &type, sizeof(type))))
+                printf("    ADAPTERTYPE   0x%08X render=%u display=%u software=%u post=%u hybrid_discrete=%u hybrid_integrated=%u indirect=%u\n",
+                       type.Value, type.RenderSupported, type.DisplaySupported, type.SoftwareDevice, type.PostDevice,
+                       type.HybridDiscrete, type.HybridIntegrated, type.IndirectDisplayDevice);
+            else
+                printf("    ADAPTERTYPE   query failed\n");
+            if (NT_SUCCESS(QueryAdapter(adapters[i].hAdapter, KMTQAITYPE_WDDM_1_2_CAPS, &caps12, sizeof(caps12))))
+                printf("    WDDM_1_2_CAPS 0x%08X kernel_mode_command_buffer=%u software_device_bitmaps=%u ccd=%u non_vga=%u per_engine_tdr=%u"
+                       " preemption gfx=%d compute=%d\n",
+                       caps12.Value, caps12.SupportKernelModeCommandBuffer, caps12.SupportSoftwareDeviceBitmaps, caps12.SupportCCD,
+                       caps12.SupportNonVGA, caps12.SupportPerEngineTDR, (int)caps12.PreemptionCaps.GraphicsPreemptionGranularity,
+                       (int)caps12.PreemptionCaps.ComputePreemptionGranularity);
+            else
+                printf("    WDDM_1_2_CAPS query failed\n");
+        }
         if (Probe->Opt.HaveLuid)
             match = adapters[i].AdapterLuid.LowPart == Probe->Opt.Luid.LowPart &&
                     adapters[i].AdapterLuid.HighPart == Probe->Opt.Luid.HighPart;
@@ -749,7 +774,7 @@ static DWORD WINAPI HandshakeThread(LPVOID Parameter)
     call->Result.Surface = NULL;
     call->Result.UpdateId = 0;
     call->Result.hr = call->Probe->GetSurface(call->Probe->Window, call->Probe->Luid, NULL,
-                                              DWM_REDIRECTION_FLAG_SUPPORT_PRESENT_TO_GDI_SURFACE,
+                                              call->Probe->Opt.HandshakeFlags,
                                               &call->Result.Format, &call->Result.Surface, &call->Result.UpdateId);
     call->Result.Ms = (DWORD)(GetTickCount64() - t0);
     call->Result.Completed = TRUE;
@@ -1255,6 +1280,8 @@ static void Usage(void)
         "  --pump <ms>        message pump after ShowWindow (default 500)\n"
         "  --hold <s>         keep the window and the source alive after the variants (default 5)\n"
         "  --handshake-timeout <ms>  deadline for one DwmDxGetWindowSharedSurface call (default 2000)\n"
+        "  --flags <hex>      dwFlags of ordinal 100 (default 10 = SUPPORT_PRESENT_TO_GDI_SURFACE; 0 asks for the\n"
+        "                     historical dedicated-surface S_OK path instead)\n"
         "  --timeout <s>      watchdog on the whole process (default 90, raised to cover --hold)\n"
         "  --help\n"
         "\n"
@@ -1334,6 +1361,7 @@ int main(int argc, char** argv)
     probe.Opt.HoldSeconds = 5;
     probe.Opt.HandshakeTimeoutMs = 2000;
     probe.Opt.WatchdogMs = 90000;
+    probe.Opt.HandshakeFlags = DWM_REDIRECTION_FLAG_SUPPORT_PRESENT_TO_GDI_SURFACE;
     probe.FirstSuccess = -1;
 
     for (i = 1; i < argc; i++)
@@ -1387,6 +1415,14 @@ int main(int argc, char** argv)
             probe.Opt.HandshakeTimeoutMs = (DWORD)strtoul(argv[++i], NULL, 10);
             if (probe.Opt.HandshakeTimeoutMs == 0 || probe.Opt.HandshakeTimeoutMs > 60000) { printf("bad --handshake-timeout\n"); return 2; }
         }
+        else if (strcmp(argv[i], "--flags") == 0)
+        {
+            char* end = NULL;
+
+            NEED_VALUE(i, argc);
+            probe.Opt.HandshakeFlags = (DWORD)strtoul(argv[++i], &end, 16);
+            if (end == NULL || *end != 0) { printf("bad --flags, want hex\n"); return 2; }
+        }
         else if (strcmp(argv[i], "--timeout") == 0)
         {
             unsigned long seconds;
@@ -1407,9 +1443,9 @@ int main(int argc, char** argv)
     needSource = RedirbltNeedSourceAndContext(probe.Opt.HandshakeOnly);
     setvbuf(stdout, NULL, _IONBF, 0);
     if (!StartWatchdog(probe.Opt.WatchdogMs)) { printf("no watchdog\n"); return 1; }
-    printf("redirblt-probe: %ldx%ld colour 0x%08X, watchdog %lu ms, handshake-only %d, no-open %d, device %d, source %d\n",
+    printf("redirblt-probe: %ldx%ld colour 0x%08X, watchdog %lu ms, handshake-only %d, no-open %d, device %d, source %d, flags 0x%lX\n",
            probe.Opt.Width, probe.Opt.Height, probe.Opt.Color, probe.Opt.WatchdogMs, probe.Opt.HandshakeOnly, probe.Opt.NoOpen,
-           needDevice, needSource);
+           needDevice, needSource, probe.Opt.HandshakeFlags);
     SetProcessDPIAware();
 
     if (!StepStatic(&probe)) { code = 1; goto done; }

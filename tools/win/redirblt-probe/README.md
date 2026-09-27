@@ -21,7 +21,8 @@ agent discussion. Nothing here is a lab claim; the transcript of a run is.
 |---|---|---|
 | 0 | `LoadLibraryExW(dwmapi)`, `GetProcAddress` ordinals 100/101, `DwmIsCompositionEnabled`, session ids | `PROBE ... ordinal100=1 ordinal101=1 composition=1 session=N console=N` |
 | window | `CreateWindowExW` 641x479 client, `ShowWindow`, square corners, no GDI paint (`WM_PAINT` validates only) | `WINDOW hwnd=... exstyle=...` with `WS_EX_NOREDIRECTIONBITMAP` and `WS_EX_LAYERED` asserted clear; `STAMP` rows with the exact UTC for the trace |
-| device | `EnumAdapters2`, `OpenAdapterFromLuid`, `CreateDevice`, `CreatePagingQueue`, `CheckVidPnExclusiveOwnership(0)` | `ADAPTER luid=...` |
+| adapter | `EnumAdapters2` (WARP is listed too), per adapter the registry strings, `KMTQAITYPE_ADAPTERTYPE` and `KMTQAITYPE_WDDM_1_2_CAPS` as dxgkrnl reports them (raw word plus decoded bits: software device, `SupportKernelModeCommandBuffer` = GDI hardware acceleration, `SupportSoftwareDeviceBitmaps`) | `ADAPTERTYPE 0x... render=1 ...`, `WDDM_1_2_CAPS 0x... kernel_mode_command_buffer=0 ...` |
+| device | `OpenAdapterFromLuid`, `CreateDevice`, `CreatePagingQueue`, `CheckVidPnExclusiveOwnership(0)` (context only: SUCCESS means no EXCLUSIVE owner, not that a present will be admitted) | `ADAPTER luid=...` |
 | source | `CreateAllocation2` with the KMD's 32-byte LB7A block (A8R8G8B8, 256-byte pitch), map, `MakeResident`, `Lock2` fill with the colour, `Unlock2` | `SOURCE halloc=... size=... pitch=...` |
 | context | `CreateContextVirtual` node 0, affinity 1, `ClientHint VULKAN`, no flags: the fork's present context field for field | |
 | 1 | ordinal 100 on a worker thread with a deadline (the WAIT flag is documented as 0, so a call may block a VSync); twice, to see whether the update id moves | `HANDSHAKE n=1 hr=0x00263005 fmt=87 handle=... update=...` |
@@ -75,6 +76,7 @@ rebinds the id to the opened surface (no reopen); a different handle closes and 
 | `--gdi-paint` | fill the client area once with GDI before the handshake (the "does painting create the surface" control) |
 | `--no-open` | diagnostic: do not open the handle; B, C and D are skipped. With `--handshake-only`, no device or paging queue is created either: window, adapter LUID, DWM answer, handle kind |
 | `--update` | step 3, after an `S_OK` handshake only |
+| `--flags <hex>` | `dwFlags` of ordinal 100 (default `10`, SUPPORT_PRESENT_TO_GDI_SURFACE; `0` asks for the historical dedicated-surface S_OK path, an exploratory variation) |
 | `--pump <ms>`, `--hold <s>`, `--handshake-timeout <ms>`, `--timeout <s>` | pump after `ShowWindow` (500), hold after the variants (5), per-call deadline (2000), watchdog (90, raised to cover the rest) |
 
 ## Reading the trace
