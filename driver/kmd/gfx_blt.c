@@ -109,3 +109,34 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxBltList(
     *written = used; *next = offset + used / 7u;
     return *next == (unsigned int)total ? Bc250GfxBltDone : Bc250GfxBltMore;
 }
+
+static unsigned int PresentWord(const unsigned char* p)
+{
+    return (unsigned int)p[0] | ((unsigned int)p[1]<<8) |
+        ((unsigned int)p[2]<<16) | ((unsigned int)p[3]<<24);
+}
+static int PresentRange(unsigned long long address, unsigned int bytes)
+{
+    /* GFX IB start is DWORD aligned; its length is padded to8dwords. */
+    return address && !(address&3u) && bytes && !(bytes&31u) &&
+        address<=~0ull-(bytes-1u);
+}
+int Bc250GfxPresentRecord(void* record, unsigned int capacity,
+    unsigned long long address, unsigned int bytes)
+{
+    unsigned int words[6],i,j;unsigned char* p=(unsigned char*)record;
+    if(!record || capacity<BC250_GFX_PRESENT_RECORD_BYTES || !PresentRange(address,bytes))return 0;
+    words[0]=BC250_GFX_PRESENT_MAGIC;words[1]=1;words[2]=BC250_GFX_PRESENT_RECORD_BYTES;
+    words[3]=bytes;words[4]=(unsigned int)address;words[5]=(unsigned int)(address>>32);
+    for(i=0;i<6;i++)for(j=0;j<4;j++)p[i*4+j]=(unsigned char)(words[i]>>(8*j));
+    return 1;
+}
+int Bc250GfxPresentMatches(const void* record, unsigned int capacity,
+    unsigned long long address, unsigned int bytes)
+{
+    const unsigned char* p=(const unsigned char*)record;
+    if(!record || capacity<BC250_GFX_PRESENT_RECORD_BYTES || !PresentRange(address,bytes))return 0;
+    return PresentWord(p)==BC250_GFX_PRESENT_MAGIC && PresentWord(p+4)==1 &&
+        PresentWord(p+8)==BC250_GFX_PRESENT_RECORD_BYTES && PresentWord(p+12)==bytes &&
+        (((unsigned long long)PresentWord(p+20)<<32)|PresentWord(p+16))==address;
+}

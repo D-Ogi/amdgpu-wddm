@@ -146,6 +146,27 @@ int main(void)
             0,&offset,buffer,64,&written)==Bc250GfxBltInvalid);
         CHECK(!offset && !written && !memcmp(buffer,saved,sizeof(buffer)));
     }
+    {
+        unsigned char record[32],original[32];
+        memset(record,0xcc,sizeof(record));memcpy(original,record,sizeof(record));
+        CHECK(!Bc250GfxPresentRecord(record,23,sourceBase,32));
+        CHECK(!Bc250GfxPresentRecord(record,32,sourceBase+1,32));
+        CHECK(!Bc250GfxPresentRecord(record,32,sourceBase,28));
+        CHECK(!Bc250GfxPresentRecord(record,32,~0ull-3,32));
+        CHECK(!memcmp(record,original,sizeof(record)));
+        CHECK(Bc250GfxPresentRecord(record,32,sourceBase,64));
+        CHECK(!memcmp(record+24,original+24,8));
+        CHECK(Bc250GfxPresentMatches(record,24,sourceBase,64));
+        CHECK(!Bc250GfxPresentMatches(record,23,sourceBase,64));
+        CHECK(!Bc250GfxPresentMatches(record,24,sourceBase+4,64));
+        CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,32));
+        memcpy(original,record,sizeof(record));
+        for(i=0;i<24;i++){
+            record[i]^=1;CHECK(!Bc250GfxPresentMatches(record,24,sourceBase,64));
+            memcpy(record,original,sizeof(record));
+        }
+    }
+    puts("PASS Present private-record binding, truncation, mutation and range checks");
     puts("PASS full dirty-list prevalidation and packet-ordinal multipass at30 capacities");
     puts("PASS decoded row copies at30 capacities, padding, intra-row resume, batch-only sync, whole-footprint rejection");
     return 0;

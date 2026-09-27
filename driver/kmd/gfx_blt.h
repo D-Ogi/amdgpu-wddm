@@ -36,3 +36,12 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxBltList(
     unsigned long long SourceBase, unsigned long long DestinationBase,
     unsigned int Offset, unsigned int* Next, unsigned int* Buffer,
     unsigned int CapacityDwords, unsigned int* Written);
+
+/* OS-owned private record for a driver-generated Present IB. This binds the
+ * entire padded command buffer; it never describes a user BC2S submission. */
+#define BC250_GFX_PRESENT_MAGIC 0x31504742u /* BGP1 */
+#define BC250_GFX_PRESENT_RECORD_BYTES 24u
+int Bc250GfxPresentRecord(void* Record, unsigned int Capacity,
+    unsigned long long Address, unsigned int Bytes);
+int Bc250GfxPresentMatches(const void* Record, unsigned int Capacity,
+    unsigned long long Address, unsigned int Bytes);

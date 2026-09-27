@@ -15,6 +15,7 @@
 #include "umd_caps.h"
 #include "firmware_metadata.h"
 #include "gfx_completion_queue.h"
+#include "gfx_blt.h"
 #include "paging_private.h"
 #include <ntstrsafe.h>
 
@@ -364,6 +365,7 @@ typedef struct _BC250_WDDM {
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
     volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BOOLEAN BlitGate;
+    BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
     volatile LONG BlitTranslations;             // sources whose first and last page translated and were contiguous
@@ -1637,6 +1639,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
+    wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
@@ -4176,6 +4179,26 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
                 pSubmitCommand->DmaBufferPrivateDataSize,pSubmitCommand->DmaBufferVirtualAddress,
                 pSubmitCommand->DmaBufferSize,TRUE,pSubmitCommand->SubmissionFenceId,context->RootPhysical)) return STATUS_SUCCESS;
         InterlockedIncrement(&wddm->PagingVirtualUnmapped);
+    }
+
+    // Driver-generated GPU Present must be recognized before UMD BC2S dispatch.
+    // The record is OS-owned private data, with an exact VA/length binding. No
+    // malformed BGP1 can fall through to BC2S or CPU E26P completion.
+    if (pSubmitCommand->Flags.Present && pSubmitCommand->pDmaBufferPrivateData != NULL &&
+        pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(ULONG) &&
+        *(const ULONG*)pSubmitCommand->pDmaBufferPrivateData == BC250_GFX_PRESENT_MAGIC)
+    {
+        if (wddm == NULL || !wddm->GpuPresentGate || context == NULL ||
+            node != BC250_WDDM_NODE_3D || context->RootPhysical == 0 ||
+            pSubmitCommand->DmaBufferUmdPrivateDataSize != 0 || KeGetCurrentIrql() > APC_LEVEL ||
+            !Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
+                pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferVirtualAddress,
+                pSubmitCommand->DmaBufferSize)) return STATUS_INVALID_PARAMETER;
+        if (GfxSubmitReady(device) && WddmSubmitHardware(device,wddm,context,
+                pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
+                pSubmitCommand->SubmissionFenceId,node)) return STATUS_SUCCESS;
+        WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);
+        return STATUS_SUCCESS; // preserve the existing nonempty-work recovery contract
     }
 
     // M8. A UMD context's packet is the IB in its BC2S blob, not the DMA buffer a present uses. Handled
