@@ -29,6 +29,8 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     active_stores = {}
     ended_stores = 0
     store_checkpoints = None
+    runtime_checkpoints = None
+    runtime_sequence = 0
     events = 0
     sequenced = None
     threaded = None
@@ -40,6 +42,12 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     if start_marker is not None:
         require(end_marker is not None and 0 < start_marker < end_marker, "invalid marker interval")
     for number, line in enumerate(lines, 1):
+        if line.startswith("BC250 audit runtime "):
+            runtime_row = dict(item.split("=", 1) for item in line.split()[3:])
+            require(runtime_row["event"] in {"import", "destroy"}, "invalid runtime event")
+            runtime_sequence += 1
+            require(int(runtime_row["seq"]) == runtime_sequence, "runtime sequence gap")
+            continue
         is_store = STORE_PREFIX in line
         prefix = STORE_PREFIX if is_store else PREFIX
         if prefix not in line:
@@ -54,6 +62,15 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
             require(event in fields, "unknown/invalid event")
             schema = set(fields[event].split())
             if not is_store and event == "checkpoint":
+                has_runtime_count = "runtime_events" in row
+                if runtime_checkpoints is None:
+                    runtime_checkpoints = has_runtime_count
+                require(runtime_checkpoints == has_runtime_count, "mixed runtime checkpoint schemas")
+                if has_runtime_count:
+                    schema.add("runtime_events")
+                    require(int(row["runtime_events"]) == runtime_sequence, "runtime checkpoint count mismatch")
+                else:
+                    require(runtime_sequence == 0, "runtime events without checkpoint counter")
                 has_store_counts = "stores_begun" in row or "stores_ended" in row
                 if store_checkpoints is None:
                     store_checkpoints = has_store_counts

@@ -106,6 +106,23 @@ class Stores(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'outside successful map lifetime'):
             m.analyze(rows)
 
+    def test_runtime_event_counter(self):
+        rows = [r + ' runtime_events=1' if 'event=checkpoint' in r else r for r in trace()]
+        rows.insert(0, 'BC250 audit runtime event=import seq=1')
+        self.assertEqual(m.analyze(rows)['successful'], 1)
+        with self.assertRaisesRegex(ValueError, 'runtime checkpoint count mismatch'):
+            m.analyze(rows[1:])
+
+    def test_runtime_sequence_gap(self):
+        rows = ['BC250 audit runtime event=import seq=2'] + trace()
+        with self.assertRaisesRegex(ValueError, 'runtime sequence gap'):
+            m.analyze(rows)
+
+    def test_runtime_missing_checkpoint_counter(self):
+        rows = ['BC250 audit runtime event=import seq=1'] + trace()
+        with self.assertRaisesRegex(ValueError, 'runtime events without checkpoint counter'):
+            m.analyze(rows)
+
     def test_legacy(self):
         rows = [r for r in trace() if 'event=checkpoint' not in r and 'audit store' not in r]
         rows = [' '.join(v for v in r.split() if not v.startswith('seq=')) for r in rows]

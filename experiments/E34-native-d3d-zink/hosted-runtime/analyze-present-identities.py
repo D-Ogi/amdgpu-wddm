@@ -27,7 +27,7 @@ def success(row):
     require(number(row,"hr",16)<0x80000000,"failed callback")
 
 
-def analyze(text,end_marker):
+def analyze(text,end_marker,expected_presents=None):
     active={}; imports={}; destroyed=set(); sequence=0
     pending={}; last_present={}; last_signal={}; completed=[]; runtime_maps=[]
     stopped=False; checkpoints=0
@@ -102,12 +102,15 @@ def analyze(text,end_marker):
     require(stopped and checkpoints>0,"missing final checkpoint")
     require(imports and completed,"no imported/presented surfaces")
     require(not pending,"pending Present at boundary")
+    if expected_presents is not None:
+        require(len(completed)==expected_presents,"Present total differs from independent expectation")
     presented={rid for p in completed for rid in p["resources"].values()}
-    return dict(scope="Import/resource/allocation and runtime callback witnesses only; no whole-stack CPU-copy verdict",runtime_events=sequence,imports=list(imports.values()),destroyed_resource_ids=sorted(destroyed),presents=completed,presented_resource_ids=sorted(presented),runtime_maps=runtime_maps,presented_resource_maps=[m for m in runtime_maps if m["resource_id"] in presented])
+    return dict(expected_present_count_checked=expected_presents is not None,scope="Import/resource/allocation and runtime callback witnesses only; no whole-stack CPU-copy verdict",runtime_events=sequence,imports=list(imports.values()),destroyed_resource_ids=sorted(destroyed),presents=completed,presented_resource_ids=sorted(presented),runtime_maps=runtime_maps,presented_resource_maps=[m for m in runtime_maps if m["resource_id"] in presented])
 
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("log",type=Path);parser.add_argument("--end-marker",type=int,required=True)
+    parser.add_argument("--expected-presents",type=int)
     args=parser.parse_args()
-    print(json.dumps(analyze(args.log.read_text(encoding="utf-8-sig"),args.end_marker),indent=2))
+    print(json.dumps(analyze(args.log.read_text(encoding="utf-8-sig"),args.end_marker,args.expected_presents),indent=2))

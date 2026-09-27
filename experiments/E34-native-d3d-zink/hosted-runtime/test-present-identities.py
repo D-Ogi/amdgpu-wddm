@@ -19,6 +19,15 @@ class IdentityControls(unittest.TestCase):
         result=m.analyze("\n".join(rows),8)
         self.assertEqual(result["presented_resource_ids"],[11])
         self.assertEqual(result["presented_resource_maps"],[dict(map=21,resource_id=11,usage=2)])
+    def test_independent_count_detects_missing_whole_tail(self):
+        self.assertTrue(m.analyze("\n".join(ROWS),8,1)["expected_present_count_checked"])
+        with self.assertRaisesRegex(ValueError,"Present total differs"):
+            m.analyze("\n".join(ROWS),8,2)
+
+    def test_msvc_handle_formats(self):
+        rows=[r.replace("resource=1000", "resource=0000000000001000").replace("allocation=2000", "allocation=0000000000002000").replace("identity=3000", "identity=0000000000003000") for r in ROWS]
+        self.assertEqual(m.analyze("\n".join(rows),8)["presented_resource_ids"],[11])
+
     def test_pointer_reuse(self):
         rows=ROWS[:5]+["BC250 audit runtime event=destroy seq=2 resource=1000 resource_id=11 object_id=12"]
         rows += [IMPORT.replace("seq=1","seq=3").replace("resource_id=11","resource_id=13").replace("object_id=12","object_id=14")]
@@ -29,6 +38,8 @@ class IdentityControls(unittest.TestCase):
     def test_mutations_fail_closed(self):
         cases={
             "missing_import":ROWS[1:],
+            "duplicate_wait":ROWS[:3]+[WAIT]+ROWS[3:],
+            "second_process":ROWS[:5]+[IMPORT,END],
             "runtime_gap":[IMPORT.replace("seq=1","seq=2")]+ROWS[1:],
             "wrong_allocation":ROWS[:4]+[COMPLETE.replace("src_allocation=2000","src_allocation=2001"),END],
             "wrong_device":[IMPORT.replace("identity=3000","identity=3001")]+ROWS[1:],
