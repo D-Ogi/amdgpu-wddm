@@ -82,3 +82,10 @@ It does not accept full G0 or count writes through persistent pointers.
 M687 client trace: all12 deliberately introduced writes remain in the render risk
 list, while both known readbacks fall in separate capture intervals. Five malformed
 receipt sets are rejected. These labels are a host analyzer control, not a DWM run.
+
+The DWM classifier also invokes the aggregate coverage verifier over the complete
+saved log, separately from the lifetime prefix ending at the requested final marker.
+Missing buckets fail even when the remaining overflow value is zero. A synthetic
+persistent-buffer-to-image metadata mutation remains visible as a boundary-spanning
+image risk; a capture label does not suppress it. These checks do not equate
+aggregate requested byte counts with measured CPU writes.

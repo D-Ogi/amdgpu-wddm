@@ -9,6 +9,10 @@ spec = importlib.util.spec_from_file_location("lifetimes", Path(__file__).with_n
 lifetimes = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lifetimes)
 require = lifetimes.require
+coverage_spec = importlib.util.spec_from_file_location("coverage", Path(__file__).with_name("classify-map-coverage.py"))
+coverage = importlib.util.module_from_spec(coverage_spec)
+coverage_spec.loader.exec_module(coverage)
+
 
 
 def analyze(text, receipts):
@@ -85,7 +89,8 @@ def analyze(text, receipts):
             resource=begin["resource"], box=[int(begin[k]) for k in ("box_width","box_height","box_depth")]))
     overflow = re.findall(r"BC250 audit bucket_summary .*? overflow=(\d+)", text)
     require(overflow and all(int(n)==0 for n in overflow), "missing or overflowed aggregate audit")
-    return dict(lifetime=summary, boundaries=sequence, maps=inventory,
+    aggregate = coverage.classify(text)
+    return dict(lifetime=summary, aggregate_whole_log=aggregate, boundaries=sequence, maps=inventory,
         render_image_write_ids=[r["map"] for r in inventory if r["phase"] == "render" and r["target"] != 0 and r["write"]],
         boundary_spanning_image_ids=[r["map"] for r in inventory if r["spans_boundary"] and r["target"] != 0],
         live_buffer_ids=[r["map"] for r in inventory if r["live"] and r["target"] == 0],

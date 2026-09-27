@@ -31,6 +31,22 @@ class DwmCheckpointTests(unittest.TestCase):
         self.assertEqual(mapped[82]["phase"],"final-capture")
         self.assertEqual(len(report["live_buffer_ids"]),8)
 
+    def test_missing_aggregate_bucket_rejected(self):
+        lines=self.text.splitlines()
+        index=next(i for i,line in enumerate(lines) if line.startswith("BC250 audit bucket "))
+        del lines[index]
+        with self.assertRaisesRegex(ValueError,"Incomplete map-call coverage"):
+            dwm.analyze("\n".join(lines),self.receipts)
+
+    def test_image_spanning_boundaries_is_not_excused_as_capture(self):
+        # Synthetic metadata mutation of a persistent buffer, not new hardware evidence.
+        lines=self.text.splitlines()
+        index=next(i for i,line in enumerate(lines) if "event=begin " in line and " map=8 " in line)
+        lines[index]=lines[index].replace(" target=0 "," target=2 ")
+        report=dwm.analyze("\n".join(lines),self.receipts)
+        self.assertIn(8,report["boundary_spanning_image_ids"])
+        self.assertNotIn(8,report["live_buffer_ids"])
+
     def test_bad_boundaries_rejected(self):
         variants=[]
         bad=copy.deepcopy(self.receipts);bad[1]["pid"]=999;variants.append(bad)
