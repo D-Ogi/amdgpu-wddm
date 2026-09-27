@@ -47,10 +47,28 @@ int main(void)
     CHECK(!RedirbltVariantAllowed(VariantC, TRUE, REDIRBLT_HR_GDI_SURFACE, FALSE, FALSE, TRUE, &why));  // not ready
     CHECK(!RedirbltVariantAllowed(VariantD, TRUE, REDIRBLT_HR_GDI_SURFACE, FALSE, TRUE, FALSE, &why));  // other handle
 
-    // 5. changed handle
-    CHECK(RedirbltReopenNeeded(FALSE, NULL, h1));
-    CHECK(!RedirbltReopenNeeded(TRUE, h1, h1));
-    CHECK(RedirbltReopenNeeded(TRUE, h1, h2));
+    // 5. destination after a fresh handshake: keep, rebind or reopen
+    CHECK(RedirbltDestinationAction(FALSE, NULL, 0, h1, 7, &why) == DestinationReopen);        // nothing opened
+    CHECK(RedirbltDestinationAction(TRUE, h1, 7, h1, 7, &why) == DestinationKeep);             // same handle, same id
+    CHECK(RedirbltDestinationAction(TRUE, h1, 7, h2, 7, &why) == DestinationReopen);           // changed handle
+    CHECK(RedirbltDestinationAction(TRUE, h1, 7, h2, 8, &why) == DestinationReopen);           // changed handle and id
+    CHECK(RedirbltDestinationAction(TRUE, h1, 7, h1, 8, &why) == DestinationRebind);           // same handle, new id (238)
+    CHECK(RedirbltDestinationBound(TRUE, h1, 7, h1, 7));
+    CHECK(!RedirbltDestinationBound(TRUE, h1, 7, h1, 8));                                      // not bound before the rebind
+    CHECK(RedirbltDestinationBound(TRUE, h1, 8, h1, 8));                                       // bound after adopting id 8
+    CHECK(!RedirbltDestinationBound(TRUE, h1, 8, h2, 8));
+    CHECK(!RedirbltDestinationBound(FALSE, h1, 8, h1, 8));
+    // a run of handshakes on one surface: id 7, 8, 9 must each end bound without a reopen
+    {
+        UINT64 boundId = 7, id;
+        for (id = 7; id <= 9; id++)
+        {
+            REDIRBLT_DESTINATION_ACTION action = RedirbltDestinationAction(TRUE, h1, boundId, h1, id, &why);
+            CHECK(action != DestinationReopen);
+            if (action == DestinationRebind) boundId = id;
+            CHECK(RedirbltDestinationBound(TRUE, h1, boundId, h1, id));
+        }
+    }
 
     // 6. handle ownership
     ZeroMemory(&set, sizeof(set));

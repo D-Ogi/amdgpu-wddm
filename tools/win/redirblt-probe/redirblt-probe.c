@@ -140,7 +140,7 @@ typedef struct _OPENED {
     BOOL Owned;                         // hResource must be destroyed
     BOOL Ready;                         // LUID ours, LB7A blob, mapped, resident
     HANDLE OpenedFrom;                  // the raw handshake handle this was opened from
-    UINT64 UpdateId;                    // the update id of that handshake
+    UINT64 UpdateId;                    // the update id bound to it: that handshake's, or a later one's on the same handle
     REDIRBLT_HANDLE_KIND Kind;
     D3DKMT_HANDLE hResource;
     D3DKMT_HANDLE hAllocation;
@@ -1072,14 +1072,32 @@ static void RunVariants(PROBE* Probe)
         if (needsHandshake)
         {
             // A fresh update id per attempt; the DWM may reserve one per call. A destination opened from an
-            // earlier handshake handle is stale for this one: reopen, never mix ids and surfaces.
+            // earlier handshake handle is stale for this one: reopen, never mix ids and surfaces. The same
+            // handle with a new id is the same validated surface: bind the new id to it (review 238).
             (void)Handshake(Probe);
             if (needsDestination && !Probe->Opt.NoOpen && Probe->Handshake.Completed &&
-                Probe->Handshake.hr == DWM_S_GDI_REDIRECTION_SURFACE &&
-                RedirbltReopenNeeded(Probe->Opened.Owned, Probe->Opened.OpenedFrom, Probe->Handshake.Surface))
-                (void)OpenShared(Probe);
-            fromThisHandle = Probe->Opened.Owned && Probe->Opened.OpenedFrom == Probe->Handshake.Surface &&
-                             Probe->Opened.UpdateId == Probe->Handshake.UpdateId;
+                Probe->Handshake.hr == DWM_S_GDI_REDIRECTION_SURFACE)
+            {
+                const char* action = "";
+
+                switch (RedirbltDestinationAction(Probe->Opened.Owned, Probe->Opened.OpenedFrom, Probe->Opened.UpdateId,
+                                                  Probe->Handshake.Surface, Probe->Handshake.UpdateId, &action))
+                {
+                case DestinationReopen:
+                    (void)OpenShared(Probe);
+                    break;
+                case DestinationRebind:
+                    printf("REBIND from=0x%p update=%llu->%llu: %s\n", Probe->Opened.OpenedFrom,
+                           (unsigned long long)Probe->Opened.UpdateId, (unsigned long long)Probe->Handshake.UpdateId, action);
+                    fflush(stdout);
+                    Probe->Opened.UpdateId = Probe->Handshake.UpdateId;
+                    break;
+                case DestinationKeep:
+                    break;
+                }
+            }
+            fromThisHandle = RedirbltDestinationBound(Probe->Opened.Owned, Probe->Opened.OpenedFrom, Probe->Opened.UpdateId,
+                                                      Probe->Handshake.Surface, Probe->Handshake.UpdateId);
         }
         if (!RedirbltVariantAllowed((VARIANT_ID)v, Probe->Handshake.Completed, Probe->Handshake.hr, Probe->Opt.NoOpen,
                                     Probe->Opened.Ready, fromThisHandle, &why))

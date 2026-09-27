@@ -26,7 +26,7 @@ agent discussion. Nothing here is a lab claim; the transcript of a run is.
 | context | `CreateContextVirtual` node 0, affinity 1, `ClientHint VULKAN`, no flags: the fork's present context field for field | |
 | 1 | ordinal 100 on a worker thread with a deadline (the WAIT flag is documented as 0, so a call may block a VSync); twice, to see whether the update id moves | `HANDSHAKE n=1 hr=0x00263005 fmt=87 handle=... update=...` |
 | 1b | `GetSharedResourceAdapterLuid` (global handle, then NT handle: a query that also classifies the handle), then `QueryResourceInfo` and `OpenResource` (or the NT-handle forms), map and make resident | `SHARED kind=global luid=... ours=1`, `OPENED numalloc=1 halloc=... first16=...`, the LB7A block, `DESTINATION ready=1 from=<handle> update=<id>: ...` |
-| 2 | one `D3DKMTPresent` per variant, a fresh handshake before each token-carrying one (and a reopen when the handle changed), stop at the first `STATUS_SUCCESS` | `PRESENT variant=A flags=0x000100C1 ...` then `RESULT variant=A status=0x... composition=...`; `SKIP variant=B: <reason>` when a prerequisite is missing |
+| 2 | one `D3DKMTPresent` per variant, a fresh handshake before each token-carrying one (a reopen when the handle changed, a `REBIND` line when only the update id did), stop at the first `STATUS_SUCCESS` | `PRESENT variant=A flags=0x000100C1 ...` then `RESULT variant=A status=0x... composition=...`; `SKIP variant=B: <reason>` when a prerequisite is missing |
 | 3 | only with `--update` and only after an `S_OK` handshake (dedicated DX surface): ordinal 101 once. Never after `DWM_S_GDI_REDIRECTION_SURFACE`, whatever a variant returned | `UPDATE hr=...` |
 | hold | `capture_ready rgb=... x= y= width= height= hold_ms=` as the colour control prints it, then the message pump | |
 
@@ -53,13 +53,15 @@ window, the dwmapi module and the probe block. On every other path teardown runs
 LUID query classified as such are closed once each, global share handles and unclassified handles never.
 
 The decisions (what an unresolved wait does, when ordinal 101 may be called, when a destination is ready, which
-variants may run, when a changed handle forces a reopen, which handles are closed, what `--handshake-only`
+variants may run, when a fresh handshake keeps, rebinds or reopens the destination, which handles are closed, what `--handshake-only`
 needs) are pure functions in `redirblt_policy.h`, pinned by `redirblt-policy-test.c`, which `build.ps1` runs
 on the development PC before the probe is built. No window, no DWM, no D3DKMT in that test.
 
 B, C and D run only with a destination that is ready: the surface's adapter is ours, the blob is the KMD's LB7A
-block, the map and the residency succeeded, and it was opened from the very handshake whose update id goes
-into the token. Anything else is a `SKIP` line, never a present with `hDestination 0`.
+block, the map and the residency succeeded, and it is bound to the handshake whose update id goes into the
+token: opened from that handle, carrying that id. A later handshake that returns the same handle with a new id
+rebinds the id to the opened surface (no reopen); a different handle closes and reopens. Anything else is a
+`SKIP` line, never a present with `hDestination 0`.
 
 ## Options
 

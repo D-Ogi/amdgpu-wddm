@@ -36,6 +36,18 @@ if ($inSource.Matches[0].Groups[1].Value -ne $inTool.Matches[0].Groups[1].Value)
 }
 Write-Host "  allocation private magic $($inTool.Matches[0].Groups[1].Value) matches gdi_private.h"
 
+# A reviewed artifact is never lost to a rebuild: the existing probe is kept under retained\ by its full hash.
+$previous = Join-Path $Out 'redirblt-probe.exe'
+if (Test-Path -LiteralPath $previous) {
+    $hash = (Get-FileHash -LiteralPath $previous).Hash
+    $keep = Join-Path $Out "retained\redirblt-probe-$hash.exe"
+    if (-not (Test-Path -LiteralPath $keep)) {
+        New-Item -ItemType Directory -Force (Split-Path -Parent $keep) | Out-Null
+        Copy-Item -LiteralPath $previous -Destination $keep
+    }
+    Write-Host "  previous artifact retained as retained\redirblt-probe-$hash.exe"
+}
+
 $env:INCLUDE = ''; $env:LIB = ''
 # The decisions first: redirblt_policy.h is pinned by a host-only test (no window, no DWM, no D3DKMT). A
 # failing case fails the build.

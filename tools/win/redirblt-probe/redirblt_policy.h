@@ -73,17 +73,37 @@ static __inline BOOL RedirbltVariantAllowed(REDIRBLT_VARIANT Variant, BOOL Hands
     if (Variant == VariantA) { *Reason = "GDI redirection surface offered"; return TRUE; }
     if (NoOpen) { *Reason = "--no-open: no destination by choice"; return FALSE; }
     if (!DestinationReady) { *Reason = "destination not ready"; return FALSE; }
-    if (!DestinationFromThisHandle) { *Reason = "destination was opened from a different handshake handle"; return FALSE; }
+    if (!DestinationFromThisHandle) { *Reason = "destination not bound to this handshake's handle and update id"; return FALSE; }
     *Reason = "destination ready from this handshake";
     return TRUE;
 }
 
-// 5. A handshake handle that differs from the one the destination was opened from means the destination is
-//    stale: close and reopen, never mix the new update id with the old destination.
-static __inline BOOL RedirbltReopenNeeded(BOOL HaveOpened, HANDLE OpenedFrom, HANDLE Current)
+// 5. What to do with the opened destination after a fresh handshake. The surface identity is the handle: a
+//    different handle means a stale destination (close and reopen, never mix the new update id with the old
+//    surface). The same handle with a new update id is the same validated surface with a new token: bind the
+//    new id to it, no reopen (review 238). The same handle and id: nothing to do.
+typedef enum _REDIRBLT_DESTINATION_ACTION {
+    DestinationKeep = 0,                // same handle, same update id
+    DestinationRebind,                  // same handle, new update id: adopt the id, keep the opened surface
+    DestinationReopen                   // nothing opened, or a different handle
+} REDIRBLT_DESTINATION_ACTION;
+
+static __inline REDIRBLT_DESTINATION_ACTION RedirbltDestinationAction(BOOL HaveOpened, HANDLE OpenedFrom, UINT64 OpenedUpdateId,
+                                                                      HANDLE Current, UINT64 CurrentUpdateId, const char** Reason)
 {
-    if (!HaveOpened) return TRUE;
-    return OpenedFrom != Current;
+    if (!HaveOpened) { *Reason = "nothing opened yet"; return DestinationReopen; }
+    if (OpenedFrom != Current) { *Reason = "handshake handle changed"; return DestinationReopen; }
+    if (OpenedUpdateId != CurrentUpdateId) { *Reason = "same surface, new update id"; return DestinationRebind; }
+    *Reason = "same surface, same update id";
+    return DestinationKeep;
+}
+
+// The destination is bound to the current handshake when it is owned, opened from this very handle and carries
+// this very update id (after a rebind, it does).
+static __inline BOOL RedirbltDestinationBound(BOOL HaveOpened, HANDLE OpenedFrom, UINT64 OpenedUpdateId,
+                                              HANDLE Current, UINT64 CurrentUpdateId)
+{
+    return HaveOpened && OpenedFrom == Current && OpenedUpdateId == CurrentUpdateId;
 }
 
 // 6. Which handles the teardown closes: NT handles we classified, each once. Unknown and global never.
