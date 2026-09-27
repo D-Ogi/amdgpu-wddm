@@ -1,0 +1,21 @@
+{
+  "commit": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "deployment_source_eligible": true,
+  "source_manifest_sha256": "cedf42804c39c79ac1dc6ca3728ce50c3bd446d0c68057e1d1854c5996758302",
+  "compile_commands_sha256": "c890814d3ea560d038647597b2bacf0f0525b89dc9950a5a0bd760c3c6efe0c5",
+  "packages": {
+    "package": {
+      "bc250-lab-test.cer": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd",
+      "bc250kmd.cat": "bb2fa0b13b0f38a81896316ff106fe45c2e534bea1a471fc2e03141c1e77ffb2",
+      "bc250kmd.inf": "045fdf91cf3b991842a5592c5161944acdae8b135cee3748620d4a61107db52c",
+      "bc250kmd.sys": "0c0da4e13ff110606265274b063d3b6034459a294fe2a552fd5806e0971b05eb"
+    },
+    "package-umd": {
+      "bc250-lab-test.cer": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd",
+      "bc250kmd.cat": "c82d1258f1db57b54d22744820bf0b41d13e3752bcab05717452001fe51865cf",
+      "bc250kmd.inf": "789c3c765f0952b3eee1b76db161e5bb5efb97b88c967f68e0eb9c6554f64194",
+      "bc250kmd.sys": "0c0da4e13ff110606265274b063d3b6034459a294fe2a552fd5806e0971b05eb",
+      "bc250umd.dll": "d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661"
+    }
+  }
+}
