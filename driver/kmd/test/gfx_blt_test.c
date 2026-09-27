@@ -69,6 +69,84 @@ int main(void)
     CHECK(!memcmp(buffer,saved,sizeof(buffer)));
     memset(&bad,0,sizeof(bad));cursor.Row=cursor.ByteInRow=0;
     CHECK(Bc250EmitGfxBlt(&bad,sourceBase,destinationBase,&cursor,&next,NULL,0,&written)==Bc250GfxBltDone && !written);
+    /* Dirty-list multipass: pixel oracle is independent of the packet cursor. */
+    {
+        BC250_BLIT_RECT rects[4]={{4,3,7,5},{8,5,9,8},{0,0,1,1},{6,4,8,7}};
+        unsigned int offset,totalWrites,k;
+        memset(expected,0xcc,sizeof(expected));
+        for(y=3;y<8;y++)for(x=4;x<9;x++) {
+            int hit=0;
+            for(k=0;k<4;k++)if((int)x>=rects[k].Left && (int)x<rects[k].Right &&
+                (int)y>=rects[k].Top && (int)y<rects[k].Bottom)hit=1;
+            if(hit)memcpy(expected+y*48+x*4,source+(y-2)*40+(x-2)*4,4);
+        }
+        for(capacity=7;capacity<=36;capacity++) {
+            offset=totalWrites=attempts=0;memset(actual,0xcc,sizeof(actual));
+            do {
+                memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
+                result=Bc250EmitGfxBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+                    offset,&offset,buffer,capacity,&written);
+                CHECK(result==Bc250GfxBltMore || result==Bc250GfxBltDone);
+                CHECK(written && written%7==0 && written<=capacity);
+                CHECK(!memcmp(buffer+written,saved+written,sizeof(buffer)-written*sizeof(buffer[0])));
+                for(j=0;j<written;j+=7) {
+                    unsigned long long from=(((unsigned long long)buffer[j+3]<<32)|buffer[j+2])-sourceBase;
+                    unsigned long long to=(((unsigned long long)buffer[j+5]<<32)|buffer[j+4])-destinationBase;
+                    unsigned int bytes=buffer[j+6]&S_506_BYTE_COUNT(~0u);
+                    CHECK(from+bytes<=sizeof(source) && to+bytes<=sizeof(actual));
+                    memcpy(actual+to,source+from,bytes);
+                }
+                CHECK(buffer[6]&S_506_RAW_WAIT(1));
+                CHECK(buffer[written-6]&S_501_CP_SYNC(1));
+                totalWrites+=written/7;CHECK(offset==totalWrites);CHECK(++attempts<=8);
+            } while(result==Bc250GfxBltMore);
+            CHECK(offset==8 && !memcmp(actual,expected,sizeof(actual)));
+        }
+        /* A bad late rectangle must not leave a valid prefix in the DMA buffer,
+         * including when a previous pass already consumed that prefix. */
+        rects[3].Right=12;
+        for(offset=0;offset<3;offset++) {
+            unsigned int nextOffset;
+            memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
+            CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+                offset,&nextOffset,buffer,64,&written)==Bc250GfxBltInvalid);
+            CHECK(!written && nextOffset==offset && !memcmp(saved,buffer,sizeof(buffer)));
+        }
+        CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,0,0,sourceBase,destinationBase,
+            0,&offset,buffer,6,&written)==Bc250GfxBltNoSpace && !written && !offset);
+        CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,0,0,sourceBase,destinationBase,
+            6,&offset,buffer,64,&written)==Bc250GfxBltInvalid && !written && offset==6);
+        CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,0,0,sourceBase,destinationBase,
+            5,&offset,0,0,&written)==Bc250GfxBltDone && !written && offset==5);
+    }
+    {
+        BC250_BLIT_SURFACE huge={0,2,0,0,Bc250BltBgra8};
+        BC250_BLIT_RECT full;
+        unsigned int offset=0;
+        huge.Width=(maximum+64u)/4u;huge.Pitch=maximum+80u;
+        huge.Bytes=(unsigned long long)huge.Pitch*huge.Height;
+        full.Left=full.Top=0;full.Right=(int)huge.Width;full.Bottom=2;
+        for(i=0;i<4;i++) {
+            result=Bc250EmitGfxBltList(&huge,&huge,&full,&full,0,0,sourceBase,destinationBase,
+                offset,&offset,buffer,7,&written);
+            CHECK(result==(i==3?Bc250GfxBltDone:Bc250GfxBltMore) && offset==i+1 && written==7);
+            CHECK((buffer[6]&S_506_BYTE_COUNT(~0u))==((i&1)?64:maximum));
+            CHECK((((unsigned long long)buffer[3]<<32)|buffer[2])==
+                sourceBase+(unsigned long long)(i/2)*huge.Pitch+(i&1)*maximum);
+        }
+        /* More than UINT packets cannot be represented by MultipassOffset. */
+        huge.Height=0x7fffffffu;huge.Width=maximum/4u+1u;huge.Pitch=huge.Width*4;
+        huge.Bytes=(unsigned long long)huge.Pitch*huge.Height;
+        full.Right=(int)huge.Width;full.Bottom=(int)huge.Height;
+        /* Two packets/row still fit UINT; a third packet makes the total overflow. */
+        huge.Width=maximum/2u+1u;huge.Pitch=huge.Width*4;
+        huge.Bytes=(unsigned long long)huge.Pitch*huge.Height;full.Right=(int)huge.Width;
+        memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
+        CHECK(Bc250EmitGfxBltList(&huge,&huge,&full,&full,0,0,0,1ull<<62,
+            0,&offset,buffer,64,&written)==Bc250GfxBltInvalid);
+        CHECK(!offset && !written && !memcmp(buffer,saved,sizeof(buffer)));
+    }
+    puts("PASS full dirty-list prevalidation and packet-ordinal multipass at30 capacities");
     puts("PASS decoded row copies at30 capacities, padding, intra-row resume, batch-only sync, whole-footprint rejection");
     return 0;
 }
