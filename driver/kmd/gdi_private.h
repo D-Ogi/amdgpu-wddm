@@ -42,6 +42,7 @@ static __inline int WddmGdiLayout(unsigned long Width,unsigned long Height,
     unsigned long Type,unsigned long Bpp,unsigned long* Pitch,unsigned long long* Size)
 {
     if (Bpp!=1 && Bpp!=4) return 0;
+    if (Type==4) return Bpp==1 && DcnStagingLayout(Width,Height,1,Pitch,Size);
     if (Type==2 || Type==3) return DcnStagingLayout(Width,Height,Bpp,Pitch,Size);
     if (Bpp!=4) return 0;
     if (Type==1) return DcnSharedTextureLayout(Width,Height,Pitch,Size);

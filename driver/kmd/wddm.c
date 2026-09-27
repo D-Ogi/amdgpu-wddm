@@ -345,6 +345,8 @@ typedef struct _BC250_WDDM {
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
     volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BOOLEAN BlitGate;
+    BOOLEAN HandleIdentityProbe;
+    volatile LONG HandleIdentityProbeCalls[2]; // at most16 LB7A and16 BC2A opens per start
     BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
@@ -1590,6 +1592,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
+    wddm->HandleIdentityProbe = (GuardReadSetting(L"EnableHandleIdentityProbe", 0) == 1);
     wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
@@ -1637,6 +1640,13 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
              Device->Dxgk.DxgkCbSynchronizeExecution != NULL, Device->Dxgk.DxgkCbNotifyInterrupt != NULL,
              Device->Dxgk.DxgkCbQueueDpc != NULL, Device->Dxgk.DxgkCbNotifyDpc != NULL,
              Device->Dxgk.Size, (ULONG)sizeof(Device->Dxgk));
+    if (wddm->HandleIdentityProbe)
+        GuardLog("wddm: handle callbacks size %u get@%u=%p acquire@%u=%p release@%u=%p",
+            Device->Dxgk.Size,
+            (ULONG)FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbGetHandleData),(void*)Device->Dxgk.DxgkCbGetHandleData,
+            (ULONG)FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbAcquireHandleData),(void*)Device->Dxgk.DxgkCbAcquireHandleData,
+            (ULONG)FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbReleaseHandleData),(void*)Device->Dxgk.DxgkCbReleaseHandleData);
+
     return STATUS_SUCCESS;
 Failed:
     // No WDDM object was published and no OS work was accepted. The coordinator
@@ -2518,6 +2528,8 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
 C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE==1);
 C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
 C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
+C_ASSERT(D3DKMDT_GDISURFACE_LOOKUPTABLE==4);
+C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE_CPUVISIBLE_CROSSADAPTER==8);
 static ULONG WddmSurfacePixelBytes(ULONG Format)
 {
     switch (Format) {
@@ -2878,6 +2890,40 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
+// Diagnostic only. The WDDM2 Microsoft compute sample uses this callback pair
+// during OpenAllocation. Hold the acquired reference through live-object lookup
+// and release it before returning; do not adopt it as backing identity yet.
+static void WddmProbeHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO* Info,
+    ULONG OpenFlags, void* GetResult)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
+    DXGKARGCB_GETHANDLEDATA query={0};
+    DXGKARGCB_RELEASEHANDLEDATA release={0};
+    void* acquired=NULL;
+    BC250_WDDM_OBJECT* live=NULL;
+    BOOLEAN attempted=FALSE;
+    ULONG kind=UmdBlobIsAlloc(Info->pPrivateDriverData,Info->PrivateDriverDataSize)?1u:0u;
+    if (!wddm || !wddm->HandleIdentityProbe ||
+        InterlockedIncrement(&wddm->HandleIdentityProbeCalls[kind])>16) return;
+    if (KeGetCurrentIrql()<=APC_LEVEL &&
+        Device->Dxgk.Size>=FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbReleaseHandleData)+sizeof(Device->Dxgk.DxgkCbReleaseHandleData) &&
+        Device->Dxgk.DxgkCbAcquireHandleData && Device->Dxgk.DxgkCbReleaseHandleData) {
+        query.hObject=Info->hAllocation;
+        query.Type=DXGK_HANDLE_ALLOCATION;
+        release.Type=DXGK_HANDLE_ALLOCATION;
+        attempted=TRUE;
+        acquired=Device->Dxgk.DxgkCbAcquireHandleData(&query,&release.ReleaseHandle);
+        if (acquired) {
+            live=WddmListedObject(wddm,acquired,BC250_WDDM_MAGIC_ALLOCATION);
+            Device->Dxgk.DxgkCbReleaseHandleData(release);
+        }
+    }
+    // Pointers below are comparison values only, never dereferenced after release.
+    GuardLog("wddm: identity probe kind %u flags %x handle %08X bytes %u irql %u attempted %u get %p acquire %p live %p",
+        kind,OpenFlags,(ULONG)Info->hAllocation,Info->PrivateDriverDataSize,(ULONG)KeGetCurrentIrql(),
+        attempted,GetResult,acquired,(void*)live);
+}
+
 static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
 static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DXGKARG_OPENALLOCATION* pOpenAllocation)
 {
@@ -2885,13 +2931,10 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
     UINT i;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
-    // What goes into hDeviceSpecificAllocation comes back in every DXGK_ALLOCATIONLIST entry of a Present or a Render
-    // (facts M82 saw the NULL 0.7.15 put there). 0.7.16 asked DxgkCbGetHandleData(DXGK_HANDLE_ALLOCATION) for the
-    // object CreateAllocation stored and got something else for the CDD's handles (E20 run 003: 0xC00006C0,
-    // 0xC0000000 - "not one of our allocations"); the raw answer is still logged below, for the record. What this
-    // DDI does get, by contract, is the allocation's own private driver data - the blob GetStandardAllocationDriverData
-    // wrote and CreateAllocation validated - so the handle handed out is an object of our own holding a copy of it,
-    // and CloseAllocation frees it again. dxgkrnl closes what it opened, and the stop's sweep frees the rest.
+    // Opened handles are carried back in Present entries. Historical GetHandleData
+    // returned NULL for both CDD LB7A and user BC2A opens; this is not a proven
+    // CDD-specific restriction. Keep private metadata for CPU compatibility while
+    // the separately gated callback-pair probe investigates authoritative identity.
     for (i = 0; i < pOpenAllocation->NumAllocations; i++)
     {
         DXGK_OPENALLOCATIONINFO* info = &pOpenAllocation->pOpenAllocation[i];
@@ -2940,12 +2983,13 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         if (opened != NULL) {
             opened->OwnerDevice = hDevice;
             // GetHandleData is authoritative only when its result names a live
-            // CreateAllocation object. Historical CDD handles did not; retain
+            // CreateAllocation object. Historical opens did not resolve; retain
             // CPU compatibility, but do not admit those to the new GPU path.
             opened->BackingAllocation = WddmListedObject((BC250_WDDM*)parent->Device->Wddm,
                 raw, BC250_WDDM_MAGIC_ALLOCATION);
         }
         info->hDeviceSpecificAllocation = opened;
+        WddmProbeHandleIdentity(parent->Device,info,pOpenAllocation->Flags.Value,raw);
         if (parent->Device->Wddm != NULL && ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] < BC250_WDDM_LOG_CALLS)
             GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p (GetHandleData said %p)", i, (ULONG)info->hAllocation,
                      info->PrivateDriverDataSize, (void*)opened, raw);

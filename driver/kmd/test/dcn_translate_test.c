@@ -89,8 +89,8 @@ int main(void)
     for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
         unsigned long kind;
         gdi.Surface.Width=w;gdi.Surface.Height=h;
-        for(kind=1;kind<=3;kind++) {
-            unsigned long bpp=kind==1?4:1;
+        for(kind=1;kind<=8;kind++) {
+            unsigned long bpp=(kind>=2 && kind<=4)?1:4;
             CHECK(WddmGdiLayout(w,h,kind,bpp,&gdi.Surface.Pitch,&gdi.Surface.Size));
             CHECK(WddmSurfaceGeometry(&gdi.Surface,kind,bpp));
             gdi.Surface.Size--;
@@ -114,6 +114,24 @@ int main(void)
     CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
     gdi.Surface.Magic^=1;gdi.Surface.Pitch=8;
     CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    gdi.Surface.Pitch=13;gdi.Surface.Size=1024;
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4)); /* misaligned legacy pitch */
+    gdi.Surface.Width=1;gdi.Surface.Height=0xfffffffeul;
+    gdi.Surface.Pitch=0xfffffffcul;
+    gdi.Surface.Size=(unsigned long long)0xfffffffcul*0xfffffffeul;
+    CHECK(WddmSurfaceGeometry(&gdi.Surface,0,4)); /* 64-bit product */
+    gdi.Surface.Size--;
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,4));
+    CHECK(!WddmSurfaceGeometry(&gdi.Surface,0,0)); /* unsupported format */
+    CHECK(!WddmGdiLayout(3,3,4,4,&pitch,&bytes)); /* lookup is A8 only */
+    CHECK(WddmGdiLayout(257,1,4,1,&pitch,&bytes) && pitch==260 && bytes==260);
+    for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
+        gdi.Surface.Width=w;gdi.Surface.Height=h;
+        /* Mesa DxgiFns shared-surface layout, independently calculated. */
+        gdi.Surface.Pitch=((w*4u+255u)/256u)*256u;
+        gdi.Surface.Size=(unsigned long long)gdi.Surface.Pitch*((h+3u)/4u)*4u;
+        CHECK(WddmSurfaceGeometry(&gdi.Surface,0,4));
+    }
     CHECK(!WddmGdiLayout(3,3,1,1,&pitch,&bytes));
     CHECK(!WddmGdiLayout(3,3,2,0,&pitch,&bytes));
     for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
