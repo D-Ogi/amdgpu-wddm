@@ -1,4 +1,4 @@
-# DWM039 checkpoint integration - NOT READY TO RUN
+# DWM039 checkpoint trial - prepared locally, not run
 
 Hypothesis: M687's measured copy detector can bracket DWM rendering and isolate
 primary/GDI capture reads on UMDCC82A2D9, preserving correct composition and GPU work.
@@ -20,13 +20,26 @@ when the worker already wrote done.json. Trial deadlines use shared QPC ticks.
 Critical durable receipts publish by same-directory rename after Flush(true).
 These are host controls, not a measured target watchdog/recovery exercise.
 
-The local package has24 hashed files, manifest6D097845FF55DD3BFAABD7A44C62FFF0AD871C2B5FB77DE95BF51F6ACEA67208.
+The initial draft package remains archived locally. The reviewed package002 has24
+hashed files, manifest10542CAE91E247A9485532D7E6B368E8EFC18C648CC582FFE3EA59B06CE450DF.
 Router465F0219/control6B188424 are pinned by stage.py alongside the two DLLs;
 compiled-source hashes must match the retained build receipt. Package is local,
-not deployed. launch.ps1 deliberately refuses to run this reviewed-in-progress
-snapshot. Remaining: review/install-abort fault coverage, final bounded-operation
-and target preflight review, then an updated immutable package with launch enabled.
-Wait for explicit Fable diagnostic-slot closure before lab work.
+not deployed. Launch verifies the exact staging path and every manifest entry
+before creating a task; the worker checks watchdog PID/start before mutation.
+
+Five host interruption cases restore both fake baseline files after0..4 DLL move/
+copy steps, using the real durable restoration helper. This covers file mutation
+boundaries only, not hardware or OS scheduler faults. The installation and restore
+share the same named mutex; the watchdog publishes abort before stopping the worker
+and restoring. The worker checks abort while holding that mutex.
+
+Next operational steps: obtain explicit Fable diagnostic-slot closure, read fresh
+lab baseline/STOP/temperature, stage this exact package, run verify-stage.ps1, announce
+through the overlay, launch once, observe the same task to terminal, then collect
+and independently validate images/ETW/audit/rollback. Never rerun on observation
+timeout. Preserve a failed run and its original tasks until terminal state is known.
+Target watchdog recovery and overall180-second elapsed time are unmeasured until
+that run. G0 acceptance remains open.
 
 Acceptance: exact modules, correct selected pixels, loss-free DWM-owned DMA/fences,
 all required checkpoints and no audit overflow, full live-buffer classification.

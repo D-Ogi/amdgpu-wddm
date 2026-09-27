@@ -51,6 +51,9 @@ try {
  if((Get-ScheduledTask -TaskName $task).State -ne 'Running'){throw 'Watchdog not running'}
  for($n=0;$n -lt 50 -and !(Test-Path "$d\watchdog-ready.json");$n++){Start-Sleep -Milliseconds 100}
  if(!(Test-Path "$d\watchdog-ready.json")){throw 'Watchdog readiness missing'}
+ $watchReady=Get-Content "$d\watchdog-ready.json" -Raw|ConvertFrom-Json
+ $watchProcess=Get-Process -Id $watchReady.pid -ErrorAction Stop
+ if($watchProcess.StartTime.ToUniversalTime().ToString('o') -ne $watchReady.start){throw 'Watchdog identity mismatch'}
  Write-DurableText "$d\started" ([DateTime]::UtcNow.ToString('o'))
  if(Get-ScheduledTask -TaskName $controlTask -ErrorAction SilentlyContinue){throw 'Existing control task'}
  $who=(Get-CimInstance Win32_ComputerSystem).UserName
