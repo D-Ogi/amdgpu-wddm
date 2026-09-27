@@ -1,8 +1,9 @@
 # Native GFX Blt positive control
 
-Status: control001 stopped at a residency assertion before GPU submission (M608).
-Hardware execution remains unproven; resolve the residency/placement witness
-before another run.
+Status: control002 passes all five hardware copy cases (M609), after control001
+stopped at an incorrect GTT residency expectation before submission (M608).
+The revised gate measures residency; independent physical placement and engine
+Present integration remain open.
 
 Hypothesis: the exact production row builder and DMA_DATA emitter copy the
 requested rectangle on node0, and its queued monitored fence retires only after
