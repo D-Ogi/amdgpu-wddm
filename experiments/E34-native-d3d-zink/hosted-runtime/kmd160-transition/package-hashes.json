@@ -1,0 +1,18 @@
+{
+  "candidate160": {
+    "bc250-lab-test.cer": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd",
+    "bc250kmd.cat": "644f54918383b0df9c4d5e3499fdaea9e16a1c70b5bd1d59d22d57b5e5585db9",
+    "bc250kmd.inf": "ee78ebd0c5c4cd657bde9b31cf61b10395d2cc0505fff0132f5182c19452ff4c",
+    "bc250kmd.sys": "8e676c810190ef38bacf3e8332edc2760e07844fd779e18cb32b22d24ac90218",
+    "bc250umd.dll": "d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661",
+    "source-manifest.json": "fc428e6746a5afc278eed85a026f02a3afa7d502764174fe7e0470095b593ae0"
+  },
+  "rollback159": {
+    "bc250-lab-test.cer": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd",
+    "bc250kmd.cat": "7ab2a2aa524eaccd1f3b5394b9721958cfa81836074201ed556f1e5c847bf326",
+    "bc250kmd.inf": "ffe5d548442f042e6fdfca766c4c027ff532cbd5627fc79bc428cda8ac323a15",
+    "bc250kmd.sys": "5c64097667eb37615cafd12b291d7281918d0025b5e761c2b74bdcbbbf1644e7",
+    "bc250umd.dll": "d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661",
+    "source-manifest.json": "fde97c16e9e3b7099e293636117a229504dbe6eebec6ddf4d27da80a3f09a25f"
+  }
+}
