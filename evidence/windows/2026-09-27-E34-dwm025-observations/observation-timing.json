@@ -1,0 +1,110 @@
+{
+  "scope": "UTC/QPC brackets extrapolated to trace start; envelope of observed anchors, not a hardware bound on unobserved clock drift. First16 only, call17 not retained.",
+  "trace_start_filetime": 134349754927525031,
+  "gpu_dwm_pid": 11008,
+  "first_dwm_present_us": 5755840,
+  "anchors": 24,
+  "first_anchor": {
+    "frames": 60,
+    "paint_red": 60,
+    "paint_blue": 60,
+    "paint_moving": 13,
+    "qpc_before": 608368665882,
+    "qpc_after": 608368665894,
+    "qpc_frequency": 10000000,
+    "utc_filetime": 134349755033360040
+  },
+  "last_anchor": {
+    "frames": 1650,
+    "paint_red": 1650,
+    "paint_blue": 1650,
+    "paint_moving": 331,
+    "qpc_before": 610107720976,
+    "qpc_after": 610107720995,
+    "qpc_frequency": 10000000,
+    "utc_filetime": 134349756772415140
+  },
+  "all_retained_before_first_dwm_present": true,
+  "observations": [
+    {
+      "index": 0,
+      "trace_us_min": 3826189.199999988,
+      "trace_us_max": 3826191.100000009
+    },
+    {
+      "index": 1,
+      "trace_us_min": 3831569.499999998,
+      "trace_us_max": 3831571.400000006
+    },
+    {
+      "index": 2,
+      "trace_us_min": 3935846.999999998,
+      "trace_us_max": 3935848.900000006
+    },
+    {
+      "index": 3,
+      "trace_us_min": 3947202.699999988,
+      "trace_us_max": 3947204.600000009
+    },
+    {
+      "index": 4,
+      "trace_us_min": 3982100.899999976,
+      "trace_us_max": 3982102.800000012
+    },
+    {
+      "index": 5,
+      "trace_us_min": 3998178.199999988,
+      "trace_us_max": 3998180.100000009
+    },
+    {
+      "index": 6,
+      "trace_us_min": 4092821.799999982,
+      "trace_us_max": 4092823.700000018
+    },
+    {
+      "index": 7,
+      "trace_us_min": 4149174.099999994,
+      "trace_us_max": 4149176.0
+    },
+    {
+      "index": 8,
+      "trace_us_min": 4199215.499999998,
+      "trace_us_max": 4199217.400000006
+    },
+    {
+      "index": 9,
+      "trace_us_min": 4249248.099999994,
+      "trace_us_max": 4249250.0
+    },
+    {
+      "index": 10,
+      "trace_us_min": 4297529.699999988,
+      "trace_us_max": 4297531.600000009
+    },
+    {
+      "index": 11,
+      "trace_us_min": 4348451.399999976,
+      "trace_us_max": 4348453.300000012
+    },
+    {
+      "index": 12,
+      "trace_us_min": 4414506.199999988,
+      "trace_us_max": 4414508.100000009
+    },
+    {
+      "index": 13,
+      "trace_us_min": 4448768.199999988,
+      "trace_us_max": 4448770.100000009
+    },
+    {
+      "index": 14,
+      "trace_us_min": 4498841.699999988,
+      "trace_us_max": 4498843.600000009
+    },
+    {
+      "index": 15,
+      "trace_us_min": 4548840.999999998,
+      "trace_us_max": 4548842.900000006
+    }
+  ]
+}

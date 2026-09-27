@@ -1,0 +1,170 @@
+{
+  "source_sha256": "749c0750d723f3bc8b450f64d60191fc6f352040f53b876afa5be0a0fa5c92e4",
+  "retained_count": 16,
+  "calls": [
+    17
+  ],
+  "records": {
+    "0": {
+      "time": "interrupt100ns608259151472 qpc608301092778",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "1": {
+      "time": "interrupt100ns608259206578 qpc608301146581",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "2": {
+      "time": "interrupt100ns608260247474 qpc608302189356",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "3": {
+      "time": "interrupt100ns608260367572 qpc608302302913",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects2 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "4": {
+      "time": "interrupt100ns608260716696 qpc608302651895",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects2 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "5": {
+      "time": "interrupt100ns608260876871 qpc608302812668",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "6": {
+      "time": "interrupt100ns608261821367 qpc608303759104",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "7": {
+      "time": "interrupt100ns608262387104 qpc608304322627",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "8": {
+      "time": "interrupt100ns608262887530 qpc608304823041",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "9": {
+      "time": "interrupt100ns608263387950 qpc608305323367",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "10": {
+      "time": "interrupt100ns608263870557 qpc608305806183",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "11": {
+      "time": "interrupt100ns608264379912 qpc608306315400",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "12": {
+      "time": "interrupt100ns608265040475 qpc608306975948",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "13": {
+      "time": "interrupt100ns608265383261 qpc608307318568",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "14": {
+      "time": "interrupt100ns608265883876 qpc608307819303",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    },
+    "15": {
+      "time": "interrupt100ns608266384104 qpc608308319296",
+      "context": "ctxFFFF978FC1042670 devFFFF978FC1041870 flags1 node0 umd0 system0",
+      "buffers": "dma4096 private2184 offset0 rects1 list256 valid1 snapshot1",
+      "rect": "src 0,0,1920,1200 dst 0,0,1920,1200",
+      "side0-identity": "side0 handleFFFF978FC1EA9950 adapter0 va8DC000",
+      "side0-layout": "side0 1920x1200 pitch7680 fmt21 bytes9216000",
+      "side1-identity": "side1 handleFFFF978FC1055610 adapter0 va12000",
+      "side1-layout": "side1 1920x1200 pitch7680 fmt21 bytes9216000"
+    }
+  },
+  "all_snapshot_valid": true
+}
