@@ -1,0 +1,13 @@
+{
+  "source": "150631a8584a5c8c8ae676b09820561d6317438d",
+  "parent": "a63dade027d6e16c626ac2daab4fc2ea3dcaa690",
+  "source_clean": true,
+  "artifact": {
+    "name": "bc250d3d_zink.dll",
+    "sha256": "2A772DD45B71EAAD450A203D5ADA3CD158F178AF59DCCDC09FEE5F09DE473F64",
+    "bytes": 15178752
+  },
+  "build": "Complete UMD target rebuilt successfully; final changed resource object and link pass without warnings. Initial layer_stride format warning fixed before final build.",
+  "host_control": "Extracted actual ID/begin/result/end helpers; real Mesa atomic header, stub resource metadata and clock. MSVC /std:c11 /O2 /W4 /WX. Not a GPU map integration test.",
+  "lab_deployed": false
+}

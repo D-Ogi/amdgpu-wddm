@@ -89,3 +89,12 @@ The resource/lifetime identity, successful-map/unmap tracking, explicit interval
 boundary, diagnostic-capture attribution and deliberate-copy controls above remain
 unfinished. The growable table retains the existing aggregate key and is not a
 substitute for that work.
+
+M684 source150631a8 prepares process/DLL-local resource/object IDs and map
+begin/result/end events. A result counts as successful only if its returned
+pointer is non-NULL; end does not require a context pointer. The extracted-helper
+host control and malformed-trace checks pass; no lab deployment yet. These are
+Gallium transfer lifetimes, not persistent Vulkan BO mappings or CPU-store counts.
+The new analyzer requires one process/DLL instance per input and cannot detect
+whole missing maps. Interval reconciliation, role/capture attribution and the
+deliberate-copy control remain open. See M684 for exact artifact and test scope.
