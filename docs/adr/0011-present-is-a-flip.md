@@ -1,6 +1,9 @@
 # ADR 0011: present is a flip, the CPU blit is a diagnostic
 
-Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 3 at the owner's suggestion).
+Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 3 at the owner's suggestion). State on
+2026-09-27: points 2 and 3 are done (hardware flip through `SetVidPnSourceAddress` and the IH VSync, facts
+M545); point 1 is overdue (the CPU blit still exists behind `EnablePresentBlit`) and point 4 is in force again
+after the M10 exception of ADR 0015 was withdrawn; both are carried out under [ADR 0018](0018-engine-present-for-vulkan-wsi.md).
 
 ## Context
 
@@ -29,6 +32,7 @@ where we think they are. It is not how a game gets a frame onto the glass.
   follow-up.
 - Until the interrupt is wired, frame pacing numbers mean nothing (ADR 0010, consequences).
 
-## M10 refinement (2026-09-25)
-[ADR0015](0015-m10-cpu-wsi.md) refines point4 for the owner-authorized M10 CPU
-Vulkan window presentation path. Hardware DCN scanout and IH VSync remain required.
+## M10 refinement (2026-09-25), withdrawn 2026-09-27
+[ADR0015](0015-m10-cpu-wsi.md) refined point 4 for the owner-authorized M10 CPU
+Vulkan window presentation path. Hardware DCN scanout and IH VSync remained required. ADR 0015 is superseded
+by [ADR 0018](0018-engine-present-for-vulkan-wsi.md): point 4 applies in full from M12 on.
