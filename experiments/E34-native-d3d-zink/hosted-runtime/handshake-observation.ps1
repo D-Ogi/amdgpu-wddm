@@ -2,12 +2,13 @@
 # A measured answer is not a successful GPU presentation.
 function Get-HandshakeObservation {
  param([Parameter(Mandatory)][string]$Transcript,[Parameter(Mandatory)][int]$ExitCode)
- if($Transcript -match '(?m)^(PRESENT |RESULT variant=|SOURCE |OPENED |UPDATE |SHARED )'){throw 'Probe exceeded handshake-only/no-open scope'}
+ if($Transcript -match '(?m)^(PRESENT |RESULT variant=|SOURCE |OPENED |UPDATE )'){throw 'Probe exceeded handshake-only/no-open scope'}
  if($Transcript -match 'D3DKMT(?:CreateAllocation2|CreateContextVirtual|OpenResource|Present|Lock2)'){throw 'Unexpected allocation/context/open/Present call'}
  if($Transcript -match '(?im)timeout_ms=|WATCHDOG fired|WAIT_FAILED'){throw 'Unresolved or timed-out handshake'}
- $summary=[regex]::Matches($Transcript,'(?m)^SUMMARY ordinal100=([01]) ordinal101=([01]) handshakes=(\d+) handshake_hr=0x([0-9A-Fa-f]{8}) first_success=none\s*$')
+ $summary=[regex]::Matches($Transcript,'(?m)^SUMMARY ordinal100=([01]) ordinal101=([01]) handshakes=(\d+) handshake_hr=0x([0-9A-Fa-f]{8}) handle_kind=(?:unknown|global|nt) destination_ready=0 first_success=none exit=(\d+)\s*$')
  if($summary.Count -ne 1){throw 'Missing or ambiguous terminal summary'}
  $last=$summary[0]
+ if([int]$last.Groups[5].Value -ne $ExitCode){throw 'Summary exit differs from actual process exit'}
  if($last.Groups[1].Value -eq '0'){
   if($ExitCode -ne 3 -or [int]$last.Groups[3].Value -ne 0){throw 'Inconsistent absent-ordinal result'}
   return @{outcome='ordinal_absent';gpu_surface_offered=$false;present_tested=$false;calls=0}
