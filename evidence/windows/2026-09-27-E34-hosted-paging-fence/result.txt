@@ -1,0 +1,19 @@
+create  map>resident (10, 5 pending)       result=0 waits=1 waited=10 expected=10 unexpected_op=0  PASS
+import  map>resident (10, 5 pending)       result=0 waits=1 waited=10 expected=10 unexpected_op=0  PASS
+create  map<resident (5, 10 pending)       result=0 waits=1 waited=10 expected=10 unexpected_op=0  PASS
+import  map<resident (5, 10 pending)       result=0 waits=1 waited=10 expected=10 unexpected_op=0  PASS
+create  map=resident (7, 7 pending)        result=0 waits=1 waited=7 expected=7 unexpected_op=0  PASS
+import  map=resident (7, 7 pending)        result=0 waits=1 waited=7 expected=7 unexpected_op=0  PASS
+create  map 9 pending, resident S_OK 0     result=0 waits=1 waited=9 expected=9 unexpected_op=0  PASS
+import  map 9 pending, resident S_OK 0     result=0 waits=1 waited=9 expected=9 unexpected_op=0  PASS
+create  map 0 done, resident 4 pending     result=0 waits=1 waited=4 expected=4 unexpected_op=0  PASS
+import  map 0 done, resident 4 pending     result=0 waits=1 waited=4 expected=4 unexpected_op=0  PASS
+sparse  last chunk done (9, 12, 0)         result=0 waits=2 waited=12 expected=12 unexpected_op=0  PASS
+sparse  chunk smaller (9, 4, 6)            result=0 waits=2 waited=9 expected=9 unexpected_op=0  PASS
+sparse  ascending (1, 2, 3)                result=0 waits=2 waited=3 expected=3 unexpected_op=0  PASS
+failures=0
+allocation handle=0x40
+allocation handle=0x40
+allocation handle=0x40
+allocation handle=0x40
+allocation handle=0x40
