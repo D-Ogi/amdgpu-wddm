@@ -1,6 +1,6 @@
 # KMD153 diagnostic transition preparation
 
-Status: prepared and syntax checked, not deployed or runtime validated.
+Status: initial deployment and hosted GPU regression recorded in M603. The revised readiness/worker flow below has not repeated the installation; explicit rollback remains unexecuted.
 
 Hypothesis: the bounded per-type diagnostic from M602 captures GDI allocation
 requests during adapter start after the generic first-eight-call budget is used.
@@ -35,7 +35,7 @@ Procedure:
    not advertise CDD/DWM interop.
 5. Verify loaded version/hash, health, clock1000/820, CPU DWM module, paging and
    GPU controls. Only then run a bounded desktop trial of at most three minutes.
-   No153 runtime validation has been performed yet.
+   M603 covers the transition and hosted state regression. A GPU desktop trial on153 remains pending.
 
 Recovery is explicit, never automatic on an SSH timeout. The earlier151-to152
 PnP transition hit TDR116. Preserve the transcript, boot identity and dump first.
@@ -52,9 +52,7 @@ this is syntax validation, not execution of installation or rollback. The
 read-only preflight completed at target UTC2026-09-27T04:33:09Z:152 hashes match,
 CPU DWM4596, no test processes, only overlay/watchdog lab tasks,66.8C,native1000MHz,
 legacy writer disabled. Raw receipt and full log remain private under
-scratch/g0-hosted/kmd153-transition/preflight-20260927T043250Z. No new runtime
-fact or promotion is claimed. Record the actual transition and regression in a
-new immutable evidence set and facts.md entry.
+scratch/g0-hosted/kmd153-transition/preflight-20260927T043250Z. The subsequent transition and GPU regression are recorded in M603; no permanent promotion is claimed.
 
 Dispatcher validation: candidate and rollback packages are staged and every file
 matches the manifest. All six scripts pass the target PowerShell5.1 parser and
@@ -69,3 +67,11 @@ starts a second job. Cleanup refuses while either recorded process is alive.
 The original generated install script contained an embedded encoding marker.
 It passed syntax parsing but was corrected before staging; all deployed script
 bytes are now ASCII. No installation had been attempted with that file.
+
+M603 records the initial transition failure at the early interface query and the
+independent successful153 checks. The scripts now wait explicitly for that
+interface, pin the installer process handle before collecting its exit code,
+and preserve stderr separately. Inspect includes the installer process identity.
+The collector runs its full bounded window even if the worker ends early.
+The readiness helper passes on the active153. These changes have not repeated
+the installation and must not be represented as a fully tested transition path.

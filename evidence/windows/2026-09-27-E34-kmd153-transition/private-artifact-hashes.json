@@ -1,0 +1,12 @@
+{
+  "scratch/g0-hosted/kmd153-transition/receipt001.zip": "db20435dd41d814dc7f8478a20c7ede36e754fdd6bc94a54c19a5b109d47ecb6",
+  "scratch/g0-hosted/kmd153-transition/final153.json": "02d70d0f2ea4437dbc2c6854471feb9920a9c40dff3d69f0030c91e9d07f6479",
+  "scratch/g0-hosted/cross-process/run122.ps1": "826790b661e5b4aeeb2c04e83b63ac1c5aab880dcfac4a94b5427586530b95b8",
+  "scratch/g0-hosted/cross-process/run122.log": "8d600d1a9bf8c60acf3e44101bc375be9d5aa8babb0c445bc4a9b7409118ff3b",
+  "scratch/g0-hosted/cross-process/111/stdout.txt": "036eb91c40e2bc3ab23b134c61339fa9016d6634eb09b16ebbef409ab4d5075b",
+  "scratch/g0-hosted/cross-process/122/done122.json": "c7c79bdbff3fd7242316af845db5b2823a427f90d0ea5b6bf8ef4b921ae0ec24",
+  "scratch/g0-hosted/cross-process/122/kmd-after122.log": "802abcf269a0475be6597333901976dd30d17c2c0cc040261e2b161d89a40e18",
+  "scratch/g0-hosted/cross-process/122/kmd-before122.log": "078f83789b2cdf9d0f75edd3b56ee55bb0c7df477fc16e5b92af00e7d7784aed",
+  "scratch/g0-hosted/cross-process/122/stderr122.txt": "33da343296b43e65587b4a183fb7ba5de676d271b7531ff505650c187d2acd67",
+  "scratch/g0-hosted/cross-process/122/stdout122.txt": "eceec7c0783ab2e7e078e624d05dd44a1ac236962e4d7d6cd5b814f500949ff4"
+}

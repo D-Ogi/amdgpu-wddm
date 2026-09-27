@@ -1,0 +1,10 @@
+  9590    224.400 wddm summary: objects created/destroyed: dev 12/5 ctx 12/7 proc 7/3 alloc 93/94, 33 alive
+  9593    224.400 wddm summary: node 0 hardware: 2147 submitted, 2147 completed, 0 timeouts, 0 refused
+  9597    224.400 wddm summary: node 1 (paging, open): 783 hardware submitted, 783 completed, 0 timeouts, 0 refused
+  9601    224.402 wddm summary: native DMA transfers 20 fills 27 bytes 130850816
+  9625    224.402 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  9678    226.756 wddm summary: objects created/destroyed: dev 12/5 ctx 12/7 proc 7/3 alloc 93/94, 33 alive
+  9681    226.756 wddm summary: node 0 hardware: 2147 submitted, 2147 completed, 0 timeouts, 0 refused
+  9685    226.756 wddm summary: node 1 (paging, open): 783 hardware submitted, 783 completed, 0 timeouts, 0 refused
+  9689    226.756 wddm summary: native DMA transfers 20 fills 27 bytes 130850816
+  9713    226.756 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)

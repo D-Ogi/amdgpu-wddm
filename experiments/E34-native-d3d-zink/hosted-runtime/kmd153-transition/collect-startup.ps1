@@ -4,7 +4,7 @@ $stopAt=[DateTime]::UtcNow.AddMinutes(3)
 $i=0
 $timedOut=$false
 try {
- while([DateTime]::UtcNow -lt $stopAt -and -not (Test-Path (Join-Path $out 'worker-done.json'))){
+ while([DateTime]::UtcNow -lt $stopAt){
   $i++
   $file=Join-Path $out ('startup-log-{0:D3}.txt' -f $i)
   $errorFile=Join-Path $out ('startup-log-{0:D3}.err' -f $i)

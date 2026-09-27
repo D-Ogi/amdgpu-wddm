@@ -85,6 +85,7 @@ New-ItemProperty $reg -Name EnableFullWddm -Value 2 -PropertyType DWord -Force |
 'enable_begin='+(Get-Date).ToString('s')
 & pnputil.exe /enable-device $gpu[0].InstanceId
 if($LASTEXITCODE -ne 0){throw 'PnP enable failed'}
+& "$out\wait-ready153.ps1"
 & C:\BC250\m8\bc250kmd_cli.exe log | Out-File "$out\early-driver.log"
 Start-Sleep -Seconds 8
 & C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read

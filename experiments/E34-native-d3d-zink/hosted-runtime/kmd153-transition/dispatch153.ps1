@@ -28,7 +28,7 @@ if($Mode -eq 'Start'){
 $task=Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
 $info=if($task){Get-ScheduledTaskInfo -TaskName $name}else{$null}
 $state=[ordered]@{utc=[DateTime]::UtcNow.ToString('o');exists=($null -ne $task);state=if($task){[string]$task.State}else{'Missing'};result=if($info){$info.LastTaskResult}else{$null};boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString('o')}
-foreach($kind in @('worker','collector')){
+foreach($kind in @('worker','collector','installer')){
  $p=Join-Path $out ($kind+'-start.json')
  if(Test-Path $p){
   $receipt=Get-Content $p -Raw | ConvertFrom-Json
@@ -40,7 +40,7 @@ foreach($kind in @('worker','collector')){
  if(Test-Path $p){$state[$kind+'_done']=Get-Content $p -Raw | ConvertFrom-Json}
 }
 if($Mode -eq 'Cleanup'){
- if($state.state -eq 'Running' -or $state.worker_alive -or $state.collector_alive){throw 'Job still active'}
+ if($state.state -eq 'Running' -or $state.worker_alive -or $state.collector_alive -or $state.installer_alive){throw 'Job still active'}
  if($task){Unregister-ScheduledTask -TaskName $name -Confirm:$false}
  $state.removed=$true
 }
