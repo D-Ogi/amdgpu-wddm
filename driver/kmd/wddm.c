@@ -2944,40 +2944,67 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
-// Diagnostic only. The WDDM2 Microsoft compute sample uses this callback pair
-// during OpenAllocation. Hold the acquired reference through live-object lookup
-// and release it before returning; do not adopt it as backing identity yet.
-static void WddmProbeHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO* Info,
-    ULONG OpenFlags, void* GetResult)
+// WDK26100 Acquire/Release keeps the VidMm allocation and KMD object alive
+// through lookup and publication. Match and publish under the same lock used
+// by WddmFreeObject to clear snapshots before an allocation address is reused.
+// No runtime callback runs under that lock. The opened object is still private
+// to OpenAllocation; its handle is published only after this function returns.
+static void WddmBindHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO* Info,
+    BC250_WDDM_OBJECT* Opened, ULONG OpenFlags)
 {
     BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
     DXGKARGCB_GETHANDLEDATA query={0};
     DXGKARGCB_RELEASEHANDLEDATA release={0};
     void* acquired=NULL;
-    BC250_WDDM_OBJECT* live=NULL;
-    BOOLEAN attempted=FALSE;
-    ULONG kind;
-    if (!wddm || !wddm->HandleIdentityProbe) return;
-    kind=UmdBlobIsAlloc(Info->pPrivateDriverData,Info->PrivateDriverDataSize)?1u:0u;
-    if (InterlockedIncrement(&wddm->HandleIdentityProbeCalls[kind])>16) return;
+    void* legacy=NULL;
+    BOOLEAN attempted=FALSE,bound=FALSE,released=FALSE,diagnostic=FALSE;
+    ULONG kind=0;
+    if (!wddm || !Opened) return;
+    if (wddm->HandleIdentityProbe) {
+        kind=Opened->UmdAlloc?1u:0u;
+        diagnostic=InterlockedIncrement(&wddm->HandleIdentityProbeCalls[kind])<=16;
+    }
+    query.hObject=Info->hAllocation;
+    query.Type=DXGK_HANDLE_ALLOCATION;
+    release.Type=DXGK_HANDLE_ALLOCATION;
     if (KeGetCurrentIrql()<=APC_LEVEL &&
         Device->Dxgk.Size>=FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbReleaseHandleData)+sizeof(Device->Dxgk.DxgkCbReleaseHandleData) &&
         Device->Dxgk.DxgkCbAcquireHandleData && Device->Dxgk.DxgkCbReleaseHandleData) {
-        query.hObject=Info->hAllocation;
-        query.Type=DXGK_HANDLE_ALLOCATION;
-        release.Type=DXGK_HANDLE_ALLOCATION;
+        // Legacy comparison is bounded diagnostics, never a binding fallback.
+        if (diagnostic && Device->Dxgk.DxgkCbGetHandleData)
+            legacy=Device->Dxgk.DxgkCbGetHandleData(&query);
         attempted=TRUE;
         acquired=Device->Dxgk.DxgkCbAcquireHandleData(&query,&release.ReleaseHandle);
-        if (acquired) live=WddmListedObject(wddm,acquired,BC250_WDDM_MAGIC_ALLOCATION);
-        // NULL private data does not establish that no reference was acquired.
-        // Release an explicit token even on that branch; retain the sample's
-        // paired release for a successful pointer result as well.
-        if (acquired || release.ReleaseHandle) Device->Dxgk.DxgkCbReleaseHandleData(release);
+        if (acquired) {
+            const LIST_ENTRY* entry;
+            KIRQL irql;
+            KeAcquireSpinLock(&wddm->Lock,&irql);
+            if (!wddm->Stopping) {
+                for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
+                    BC250_WDDM_OBJECT* object=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
+                    if ((void*)object==acquired) {
+                        if (object->Magic==BC250_WDDM_MAGIC_ALLOCATION && object->Device==Device) {
+                            Opened->BackingAllocation=object;
+                            bound=TRUE;
+                        }
+                        break;
+                    }
+                }
+            }
+            KeReleaseSpinLock(&wddm->Lock,irql);
+        }
+        // Release a nonzero token even if private data was NULL. Also retain
+        // the paired release for a successful pointer with a zero token.
+        if (acquired || release.ReleaseHandle) {
+            Device->Dxgk.DxgkCbReleaseHandleData(release);
+            released=TRUE;
+        }
     }
-    // Pointers below are comparison values only, never dereferenced after release.
-    GuardLog("wddm: identity probe kind %u flags %x handle %08X bytes %u irql %u attempted %u get %p acquire %p release %p live %p",
-        kind,OpenFlags,(ULONG)Info->hAllocation,Info->PrivateDriverDataSize,(ULONG)KeGetCurrentIrql(),
-        attempted,GetResult,acquired,release.ReleaseHandle,(void*)live);
+    // Boolean witnesses fit in a GuardLog record. No pointer is dereferenced
+    // after release; bound records publication, not indefinite ownership.
+    if (diagnostic)
+        GuardLog("wddm: identity bind kind %u flags %x attempted %u get %u acquire %u token %u bound %u released %u",
+            kind,OpenFlags,attempted,legacy!=NULL,acquired!=NULL,release.ReleaseHandle!=NULL,bound,released);
 }
 
 static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
@@ -2989,25 +3016,15 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
     // Opened handles are carried back in Present entries. Historical GetHandleData
     // returned NULL for both CDD LB7A and user BC2A opens; this is not a proven
-    // CDD-specific restriction. Keep private metadata for CPU compatibility while
-    // the separately gated callback-pair probe investigates authoritative identity.
+    // CDD-specific restriction. Acquire/Release now establishes backing identity;
+    // unresolved opens retain CPU compatibility but fail GPU Present admission.
     for (i = 0; i < pOpenAllocation->NumAllocations; i++)
     {
         DXGK_OPENALLOCATIONINFO* info = &pOpenAllocation->pOpenAllocation[i];
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* opened = NULL;
-        void* raw = NULL;
         ULONG gdiType=0;
 
-        if (parent->Device->Dxgk.DxgkCbGetHandleData != NULL)
-        {
-            DXGKARGCB_GETHANDLEDATA data;
-
-            data.hObject = info->hAllocation;
-            data.Type = DXGK_HANDLE_ALLOCATION;
-            data.Flags.Value = 0;
-            raw = parent->Device->Dxgk.DxgkCbGetHandleData(&data);
-        }
         if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
         {
             struct umd_alloc_view view;
@@ -3038,17 +3055,12 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         }
         if (opened != NULL) {
             opened->OwnerDevice = hDevice;
-            // GetHandleData is authoritative only when its result names a live
-            // CreateAllocation object. Historical opens did not resolve; retain
-            // CPU compatibility, but do not admit those to the new GPU path.
-            opened->BackingAllocation = WddmListedObject((BC250_WDDM*)parent->Device->Wddm,
-                raw, BC250_WDDM_MAGIC_ALLOCATION);
+            WddmBindHandleIdentity(parent->Device,info,opened,pOpenAllocation->Flags.Value);
         }
         info->hDeviceSpecificAllocation = opened;
-        WddmProbeHandleIdentity(parent->Device,info,pOpenAllocation->Flags.Value,raw);
         if (parent->Device->Wddm != NULL && ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] < BC250_WDDM_LOG_CALLS)
-            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p (GetHandleData said %p)", i, (ULONG)info->hAllocation,
-                     info->PrivateDriverDataSize, (void*)opened, raw);
+            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p", i, (ULONG)info->hAllocation,
+                     info->PrivateDriverDataSize, (void*)opened);
     }
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiOpenAllocation))
         GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X", pOpenAllocation->NumAllocations, pOpenAllocation->Flags.Value);
