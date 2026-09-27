@@ -34,34 +34,34 @@ function Request-AuditCheckpoint {
   try {$file.Write($bytes,0,$bytes.Length);$file.Flush($true)} finally {$file.Dispose()}
   if(Test-Path -LiteralPath $MarkerPath){[IO.File]::Replace($temporary,$MarkerPath,[NullString]::Value)}
   else {[IO.File]::Move($temporary,$MarkerPath)}
+  $publishedQpc=[Diagnostics.Stopwatch]::GetTimestamp()
   $wait=[Diagnostics.Stopwatch]::StartNew()
-  $line=New-Object Text.StringBuilder
+  $buffer=New-Object char[] 16384
+  $pending=''
   $observed=0
   while($wait.Elapsed.TotalMilliseconds -lt $timeout -and $TrialClock.Elapsed.TotalSeconds -lt $DeadlineSeconds){
    $process.Refresh()
    if($process.HasExited){throw 'Checkpoint process exited'}
    if($stream.Length -lt $offset){throw 'Checkpoint log was truncated'}
-   for($i=0;$i -lt 16384;$i++){
-    $value=$reader.Read()
-    if($value -lt 0){break}
-    $observed++
-    if($observed -gt 8MB){throw 'Checkpoint diagnostic byte budget exceeded'}
-    if($value -eq 10){
-     $text=$line.ToString();[void]$line.Clear()
-     if($text -match '^BC250 audit lifetime event=checkpoint .* marker=([0-9]+) '){
-      if([UInt64]$Matches[1] -eq $Marker){
-       if($text -notmatch ' pending=0 '){throw 'Pending map request at checkpoint'}
-       return [pscustomobject]@{marker=$Marker;pid=$ProcessId;process_start_utc=$ProcessStartUtc.ToUniversalTime().ToString('o');utc=[DateTime]::UtcNow.ToString('o');trial_seconds=$TrialClock.Elapsed.TotalSeconds;log_start_offset=$offset;line=$text}
-      }
+   $count=$reader.Read($buffer,0,$buffer.Length)
+   if($count -eq 0){Start-Sleep -Milliseconds 20;continue}
+   $observed+=$count
+   if($observed -gt 8MB){throw 'Checkpoint diagnostic byte budget exceeded'}
+   $pending+=[string]::new($buffer,0,$count)
+   while(($newline=$pending.IndexOf([char]10)) -ge 0){
+    if($newline -gt 16384){throw 'Oversized checkpoint diagnostic line'}
+    $text=$pending.Substring(0,$newline)
+    $pending=$pending.Substring($newline+1)
+    if($text -match '^BC250 audit lifetime event=checkpoint .* marker=([0-9]+) '){
+     if([UInt64]$Matches[1] -eq $Marker){
+      if($text -notmatch ' pending=0 '){throw 'Pending map request at checkpoint'}
+      return [pscustomobject]@{marker=$Marker;pid=$ProcessId;process_start_utc=$ProcessStartUtc.ToUniversalTime().ToString('o');utc=[DateTime]::UtcNow.ToString('o');trial_seconds=$TrialClock.Elapsed.TotalSeconds;log_start_offset=$offset;published_qpc=$publishedQpc;ack_qpc=[Diagnostics.Stopwatch]::GetTimestamp();qpc_frequency=[Diagnostics.Stopwatch]::Frequency;observed_chars=$observed;line=$text}
      }
-    } else {
-     if($line.Length -ge 16384){throw 'Oversized checkpoint diagnostic line'}
-     [void]$line.Append([char]$value)
     }
    }
-   Start-Sleep -Milliseconds 20
+   if($pending.Length -gt 16384){throw 'Oversized checkpoint diagnostic line'}
   }
-  throw 'Checkpoint acknowledgement deadline exceeded'
+  throw ("Checkpoint acknowledgement deadline exceeded: observed_chars={0} log_start_offset={1} pending_chars={2} published_qpc={3}" -f $observed,$offset,$pending.Length,$publishedQpc)
  } finally {
   if($reader){$reader.Dispose()}else{$stream.Dispose()}
   if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force}
