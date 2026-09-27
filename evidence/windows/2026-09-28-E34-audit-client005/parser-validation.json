@@ -1,0 +1,24 @@
+{
+  "descriptors": {
+    "completed": 32,
+    "bytes": 1792,
+    "mapped_resource_ids": [
+      3,
+      6,
+      9,
+      12,
+      52,
+      57,
+      62
+    ],
+    "duration_ns": 551853100
+  },
+  "rejected": [
+    "draws=18",
+    "pixels expected=ffff00ff bad=0",
+    "bytes=3686400",
+    "kind=get_descriptor",
+    "stores_begun=",
+    "B514FF61"
+  ]
+}
