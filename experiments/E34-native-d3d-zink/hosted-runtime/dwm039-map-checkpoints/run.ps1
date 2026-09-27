@@ -21,6 +21,8 @@ $controlTask='BC250-G0-Composition039'
 $cli='C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'
 Start-Transcript -Path "$d\run.log" -Force | Out-Null
 try {
+ $freshBaseline=& "$d\preflight.ps1"
+ Write-DurableText "$d\preflight.json" ($freshBaseline|Out-String)
  if((Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 3).stop){throw 'Owner STOP'}
  if((Get-PSDrive C).Free -lt 2GB){throw 'Insufficient capture space'}
  if(Test-Path "$d\started"){throw 'Existing run'}

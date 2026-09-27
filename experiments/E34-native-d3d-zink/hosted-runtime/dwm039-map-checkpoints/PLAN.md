@@ -12,7 +12,7 @@ One clock starts before DLL/gate mutation. Planned render stop105s, final marker
 limit130s, independent rollback140s, measured total acceptance<=180s. OS stalls
 can exceed deadlines; a watchdog does not prove a hard real-time guarantee.
 
-Local validation completed: router/control build with /W4 /WX,21 scripts parsed
+Local validation completed: router/control build with /W4 /WX,23 scripts parsed
 under Windows PowerShell5.1,7 watchdog decision controls, and durable copy/restore
 controls (including corrupt-backup fallback and preservation of unknown files).
 Worker failures clear success; watchdog requires restoration evidence, including
@@ -20,8 +20,8 @@ when the worker already wrote done.json. Trial deadlines use shared QPC ticks.
 Critical durable receipts publish by same-directory rename after Flush(true).
 These are host controls, not a measured target watchdog/recovery exercise.
 
-The initial draft package remains archived locally. The reviewed package002 has24
-hashed files, manifest10542CAE91E247A9485532D7E6B368E8EFC18C648CC582FFE3EA59B06CE450DF.
+The initial draft package remains archived locally. The reviewed package003 has25
+hashed files, manifestEB24251FE95EE5FC97FE37C3FEF20EC1BDC55E9A225BA3C23FC11982AD0B1FFB.
 Router465F0219/control6B188424 are pinned by stage.py alongside the two DLLs;
 compiled-source hashes must match the retained build receipt. Package is local,
 not deployed. Launch verifies the exact staging path and every manifest entry
@@ -33,7 +33,12 @@ boundaries only, not hardware or OS scheduler faults. The installation and resto
 share the same named mutex; the watchdog publishes abort before stopping the worker
 and restoring. The worker checks abort while holding that mutex.
 
-Next operational steps: obtain explicit Fable diagnostic-slot closure, read fresh
+The worker saves a fresh read-only preflight before any mutation, checking the
+CPU DWM, exact baseline binaries, loaded ABI, confirmed health, clock, temperature,
+STOP, competing work and latched gates. Diagnostic slot closure is recorded in
+local coordination message151; the subsequent reboot requires a new baseline.
+
+Next operational steps: read fresh
 lab baseline/STOP/temperature, stage this exact package, run verify-stage.ps1, announce
 through the overlay, launch once, observe the same task to terminal, then collect
 and independently validate images/ETW/audit/rollback. Never rerun on observation

@@ -7,7 +7,7 @@ from pathlib import Path
 source = Path(__file__).resolve().parent
 root = source.parents[4]
 build = root / "scratch/g0-hosted/dwm039"
-out = root / "scratch/g0-hosted/dwm039-package002"
+out = root / "scratch/g0-hosted/dwm039-package003"
 
 def sha(path):
     with path.open("rb") as stream:
