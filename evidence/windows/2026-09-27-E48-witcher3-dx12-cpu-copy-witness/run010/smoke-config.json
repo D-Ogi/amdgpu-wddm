@@ -1,0 +1,13 @@
+{
+    "pass_pattern":  "(?m)^8 test\\(s\\) run, 0 mismatch\\(es\\)\\s*$",
+    "timeout_seconds":  90,
+    "arguments":  "C:\\BC250\\m8\\spv --runs 1",
+    "exe":  "C:\\BC250\\m8\\vkcompute.exe",
+    "modules":  [
+                    {
+                        "path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+                        "sha256":  "63AF86CB862570709956E0376FDBDCB434DB3573E6A99412ED60311CFFAE48DA",
+                        "name":  "vulkan_radeon.dll"
+                    }
+                ]
+}

@@ -1,0 +1,10 @@
+{
+    "exit_code":  0,
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "loaded_artifacts":  {
+                             "vulkan_radeon.dll":  "50E99A84C1FEA6295E6D54AB3E516498462E84FB3651A24A52FE5F2E942C151F"
+                         },
+    "error":  "",
+    "status":  "PASS",
+    "config_sha256":  "FEE63A3AA05C05CD548B28602239D4CECA8FA801B3269D6C97440640F1522704"
+}

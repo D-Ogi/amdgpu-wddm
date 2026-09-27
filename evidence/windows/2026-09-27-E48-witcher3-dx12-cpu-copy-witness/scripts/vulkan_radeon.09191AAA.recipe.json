@@ -1,0 +1,149 @@
+{
+  "recipe": "mesa",
+  "schema": 1,
+  "config": "radv",
+  "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM)",
+  "utc": "2026-09-27T05:50:42.5020283Z",
+  "status": "built",
+  "recipe_identity": {
+    "repository_commit": "4633abec937c470e866480859b6a49ed70f5e856",
+    "files_sha256": {
+      "build-mesa.ps1": "192E791725919E528053C8917AA1E3C233DC1CAE3566FC55F1ECB9F21ED7F6FD",
+      "mesa-configs.json": "35A0BBC8D8F4D73B510D4A55C48A942B85486360444CF1AF3ABC7F2C307244BD",
+      "common.ps1": "925E8538A8A678EB3E1C234664AD16A92B8B86F9F7A6A2F0F5F45616DF06DC9A"
+    }
+  },
+  "bc250_root": "P:\\bc-250",
+  "source": {
+    "path": "P:\\bc-250\\scratch\\mesa-fork-2026-09-27\\wt-radv",
+    "git": true,
+    "commit": "238c495ac894e20150026c308265521bffd8747c",
+    "describe": "amdgpu-wddm-radv-wddm2-consolidated-2026-09-27b-7-g238c495a",
+    "modified_entries": 0,
+    "untracked_entries": 0,
+    "worktree_diff_sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "version_file": "26.3.0-devel",
+    "note": "worktree_diff_sha256 is the SHA-256 of \"git diff --binary HEAD\" (tracked files only)"
+  },
+  "build_dir": "P:\\bc-250\\scratch\\mesa-fork-2026-09-27\\build-radv",
+  "meson_options": [
+    "-Dbuildtype=debugoptimized",
+    "-Dforce_fallback_for=zlib",
+    "-Dllvm=disabled",
+    "-Damd-use-llvm=false",
+    "-Dvulkan-drivers=amd",
+    "-Dgallium-drivers=[]",
+    "-Ddefault_library=static",
+    "-Dplatforms=windows",
+    "-Dvideo-codecs=[]",
+    "-Degl=disabled",
+    "-Dglx=disabled",
+    "-Dzstd=disabled"
+  ],
+  "ninja_targets": [
+    "src/amd/vulkan/vulkan_radeon.dll"
+  ],
+  "environment": {
+    "vs_install": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools",
+    "vc_tools_version": "14.44.35207",
+    "windows_sdk_version": "10.0.26100.0",
+    "path_prepended": [
+      "P:\\bc-250\\scratch\\glslang\\bin",
+      "P:\\bc-250\\toolchain\\winflexbison-2.5.25"
+    ],
+    "include_prepended": [
+      "P:\\bc-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\um",
+      "P:\\bc-250\\toolchain\\nuget\\microsoft.windows.wdk.x64\\c\\Include\\10.0.26100.0\\shared"
+    ],
+    "pythonpath": "P:\\bc-250\\scratch\\py",
+    "llvm_config": null,
+    "temp": "P:\\bc-250\\scratch\\tmp"
+  },
+  "tools": {
+    "python": {
+      "path": "C:\\Python314\\python.exe",
+      "version": "Python 3.14.0"
+    },
+    "meson": "1.12.0",
+    "mako": "1.4.1",
+    "ninja": {
+      "path": "C:\\msys64\\mingw64\\bin\\ninja.exe",
+      "version": "1.11.1"
+    },
+    "cl": {
+      "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+      "version": "19.44.35221"
+    },
+    "win_flex": "win_flex.exe 2.6.4",
+    "win_bison": "bison (GNU Bison) 3.8.2",
+    "glslangValidator": {
+      "path": "P:\\bc-250\\scratch\\glslang\\bin\\glslangValidator.exe",
+      "version": "Glslang Version: 11:16.6.0"
+    },
+    "llvm_config": null
+  },
+  "gate": {
+    "logged_build_options": [
+      "-Dbuildtype=debugoptimized",
+      "-Dforce_fallback_for=zlib",
+      "-Dllvm=disabled",
+      "-Damd-use-llvm=false",
+      "-Dvulkan-drivers=amd",
+      "-Dgallium-drivers=[]",
+      "-Ddefault_library=static",
+      "-Dplatforms=windows",
+      "-Dvideo-codecs=[]",
+      "-Degl=disabled",
+      "-Dglx=disabled",
+      "-Dzstd=disabled"
+    ],
+    "same_set": true,
+    "same_order": true,
+    "missing": [],
+    "extra": []
+  },
+  "probes": [
+    "Dependency DirectX-Headers for host machine found: YES 1.619.1 (overridden)",
+    "Dependency expat for host machine skipped: feature expat disabled",
+    "Dependency libglvnd for host machine skipped: feature glvnd disabled",
+    "Dependency libva-win32 for host machine skipped: feature gallium-va disabled",
+    "Dependency libzstd for host machine skipped: feature zstd disabled",
+    "Dependency llvm(modules: bitwriter, engine, mcdisassembler, mcjit, core, executionengine, scalaropts, transformutils, instcombine, amdgpu, bitreader, ipo) for host machine skipped: feature llvm disabled",
+    "Dependency zlib for host machine from subproject subprojects/zlib-1.3.1 found: YES 1.3.1",
+    "Found CMake: C:\\msys64\\mingw64\\bin\\cmake.exe (3.25.2)",
+    "Found ninja-1.11.1 at C:\\msys64\\mingw64\\bin\\ninja.exe",
+    "Found pkg-config: YES (C:\\msys64\\mingw64\\bin\\pkg-config.exe) 1.8.0",
+    "Program decode.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\mesa-fork-2026-09-27\\wt-radv\\src\\compiler\\isaspec\\decode.py)",
+    "Program dumpbin found: YES (C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\dumpbin.exe)",
+    "Program encode.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\mesa-fork-2026-09-27\\wt-radv\\src\\compiler\\isaspec\\encode.py)",
+    "Program glslangValidator found: YES (P:\\bc-250\\scratch\\glslang\\bin\\glslangValidator.exe)",
+    "Program install_megadrivers.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\mesa-fork-2026-09-27\\wt-radv\\bin\\install_megadrivers.py)",
+    "Program ln found: NO",
+    "Program python3.14 found: YES 3.14.0 3.14.0 (C:\\ProgramData\\chocolatey\\bin\\python3.14.exe)",
+    "Program python3.15 found: NO",
+    "Program python3.16 found: NO",
+    "Program sphinx-build skipped: feature html-docs disabled",
+    "Program symbols-check.py found: YES (C:\\Python314\\python.exe P:\\BC-250\\scratch\\mesa-fork-2026-09-27\\wt-radv\\bin\\symbols-check.py)",
+    "Program win_bison found: YES (P:\\bc-250\\toolchain\\winflexbison-2.5.25\\win_bison.exe)",
+    "Program win_flex found: YES (P:\\bc-250\\toolchain\\winflexbison-2.5.25\\win_flex.exe)",
+    "Run-time dependency directx-headers found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency libelf found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency libudev found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency libunwind found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua found: NO  (tried pkg-config)",
+    "Run-time dependency lua-5.3 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua-5.4 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua5.3 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua5.4 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua53 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency lua54 found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency spirv-tools found: NO  (tried pkg-config and cmake)",
+    "Run-time dependency valgrind found: NO  (tried pkg-config)"
+  ],
+  "artifacts": {
+    "src/amd/vulkan/vulkan_radeon.dll": {
+      "bytes": 24258560,
+      "sha256": "09191AAADD4416CCF6C90343DE58152A9DE933B84817999A2868ABC9BB114614"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+From 238c495ac894e20150026c308265521bffd8747c Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 07:50:36 +0200
+Subject: [PATCH] wsi: record the blit buffer's memory type on the buffer-blit
+ CPU path
+
+The Win32 CPU path on this port is the buffer-blit variant (wants_linear is
+false): the CPU reads the blit buffer, so the present-log witness must name
+that buffer's type, not the unset image field.
+---
+ src/vulkan/wsi/wsi_common.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 9e0575ed..f2e6ab49 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -3167,6 +3167,8 @@ wsi_create_buffer_blit_context(const struct wsi_swapchain *chain,
+       .memoryTypeIndex =
+          info->select_blit_dst_memory_type(wsi, reqs.memoryTypeBits),
+    };
++   /* On the buffer-blit path the CPU reads the blit buffer, not the image. */
++   image->memory_type_index = buf_mem_info.memoryTypeIndex;
+ 
+    void *sw_host_ptr = NULL;
+    if (info->alloc_shm)
+-- 
+2.27.0.windows.1
+

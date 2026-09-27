@@ -1,0 +1,88 @@
+From 6358c3a96c91f564f7248a145ede12b0004c673b Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 07:56:09 +0200
+Subject: [PATCH] wsi/win32: log the CPU cycles spent in the present copy
+
+copy_us against QueryThreadCycleTime over the same loop separates a slow
+copy from a copy whose thread did not run (E47: 19.5 ms per 9.2 MB in the
+game process, 1.07 ms for the same bytes in vkcube on the same box).
+---
+ src/vulkan/wsi/wsi_common_win32.cpp | 21 +++++++++++++++------
+ 1 file changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common_win32.cpp b/src/vulkan/wsi/wsi_common_win32.cpp
+index b08bed15..e221b461 100644
+--- a/src/vulkan/wsi/wsi_common_win32.cpp
++++ b/src/vulkan/wsi/wsi_common_win32.cpp
+@@ -130,15 +130,19 @@ struct wsi_win32_swapchain {
+ static void
+ wsi_win32_present_log(struct wsi_win32_swapchain *chain, const char *path,
+                       uint64_t present_id, uint64_t t_enter, uint64_t t_copy,
+-                      uint64_t t_blit, uint64_t t_done, VkResult result)
++                      uint64_t t_blit, uint64_t t_done, VkResult result,
++                      uint64_t copy_cycles)
+ {
+    if (!chain->present_log)
+       return;
++   /* copy_cycles: CPU cycles this thread actually ran during the copy
++    * (QueryThreadCycleTime); against copy_us it tells starvation from work.
++    */
+    fprintf(chain->present_log,
+-           "%p,%s,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d\n",
++           "%p,%s,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%d,%" PRIu64 "\n",
+            (void *)chain, path, present_id, t_enter / 1000,
+            (t_copy - t_enter) / 1000, (t_blit - t_copy) / 1000,
+-           (t_done - t_blit) / 1000, (int)result);
++           (t_done - t_blit) / 1000, (int)result, copy_cycles);
+    if ((++chain->present_log_lines & 63) == 0)
+       fflush(chain->present_log);
+ }
+@@ -1167,7 +1171,7 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
+          result = VK_ERROR_SURFACE_LOST_KHR;
+       if (chain->present_log)
+          wsi_win32_present_log(chain, "dxgi", present_id, t_enter, t_enter, t_blit,
+-                               os_time_get_nano(), result);
++                               os_time_get_nano(), result, 0);
+       return wsi_win32_complete_present(chain, present_id, result);
+    }
+ 
+@@ -1183,6 +1187,9 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
+       return wsi_win32_complete_present(chain, present_id, result);
+    }
+ 
++   ULONG64 cycles_before = 0, cycles_after = 0;
++   if (chain->present_log)
++      QueryThreadCycleTime(GetCurrentThread(), &cycles_before);
+    const uint8_t *ptr = (const uint8_t *)image->base.cpu_map;
+    uint8_t *dptr = (uint8_t *)image->sw.ppvBits;
+    for (unsigned h = 0; h < chain->extent.height; h++) {
+@@ -1201,6 +1208,8 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
+    }
+ 
+    const uint64_t t_copy = chain->present_log ? os_time_get_nano() : 0;
++   if (chain->present_log)
++      QueryThreadCycleTime(GetCurrentThread(), &cycles_after);
+    HDC window_dc = GetDC(chain->wnd);
+    HDC memory_dc = window_dc ? CreateCompatibleDC(window_dc) : NULL;
+    HGDIOBJ previous = memory_dc ? SelectObject(memory_dc, image->sw.bmp) : NULL;
+@@ -1228,7 +1237,7 @@ wsi_win32_queue_present(struct wsi_swapchain *drv_chain,
+       result = VK_ERROR_SURFACE_LOST_KHR;
+    if (chain->present_log)
+       wsi_win32_present_log(chain, "gdi", present_id, t_enter, t_copy, t_blit,
+-                            os_time_get_nano(), result);
++                            os_time_get_nano(), result, cycles_after - cycles_before);
+ 
+    wsi_win32_set_image_idle(chain, image);
+    return wsi_win32_complete_present(chain, present_id, result);
+@@ -1435,7 +1444,7 @@ wsi_win32_surface_create_swapchain(
+       if (chain->present_log) {
+          fprintf(chain->present_log,
+                  "# chain %p %ux%u format %u images %u path %s mode %u\n"
+-                 "chain,path,present_id,enter_us,copy_us,blit_us,dwmflush_us,result\n",
++                 "chain,path,present_id,enter_us,copy_us,blit_us,dwmflush_us,result,copy_cycles\n",
+                  (void *)chain, create_info->imageExtent.width,
+                  create_info->imageExtent.height, (unsigned)create_info->imageFormat,
+                  num_images, supports_dxgi ? "dxgi" : "gdi",
+-- 
+2.27.0.windows.1
+
