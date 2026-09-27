@@ -85,5 +85,6 @@ List capacities are rounded to8dwords and the supplied capacity is aligned down
 to8 before emission, leaving enough room for the final CP NOP padding within the
 actual command allocation. The runner's -Mode dirty-list requires an explicit
 COPY_MODE dirty-list receipt. The old single-plan mode remains available for
-regression. Compilation is not hardware execution: no result for this new mode
-is claimed until a fresh coordinated run completes and its evidence is retained.
+regression. Control003 passes this mode on KMD153 (M613): all five cases, zero mismatches,
+34 completed submissions. Evidence: [GPU dirty-list copies](../../../evidence/windows/2026-09-27-E34-gfx-copy-control003/RESULT.md).
+This validates the list builder via BC2S, not the new BGP1 Present callback path.
