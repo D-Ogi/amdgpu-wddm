@@ -172,6 +172,20 @@ typedef struct _BC250_WDDM_OBJECT {
     ULONGLONG UmdRequestedVa;
 } BC250_WDDM_OBJECT;
 
+#define BC250_PRESENT_OBSERVATIONS 16
+// One writer per slot; immutable after Published. Handles are values only.
+// Retained per adapter start, independently of the rolling GuardLog.
+typedef struct _BC250_PRESENT_OBSERVATION {
+    volatile LONG Published;
+    HANDLE Context, OwnerDevice, Handles[2];
+    UINT Flags, Node, ListSize, DmaBytes, PrivateBytes, Offset, SubRects;
+    UINT PhysicalAdapter[2];
+    BOOLEAN UmdContext, SystemContext, ListValid, SnapshotValid;
+    ULONGLONG Va[2];
+    RECT Src, Dst;
+    BC250_WDDM_ALLOCATION_PRIVATE Allocations[2];
+} BC250_PRESENT_OBSERVATION;
+
 // The software VSync. FlipOnVSyncMmIo means dxgkrnl retires a queued flip when the driver reports
 // DXGK_INTERRUPT_CRTC_VSYNC, and nothing else retires it: with MaxQueuedFlipOnVSync = 1 and no report at all, the
 // second flip never leaves the queue and DWM stops. Stage A may not read the display core (ADR 0006 point 2), so
@@ -353,6 +367,9 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
     volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
     volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
+    volatile LONG64 PresentObservationCalls;
+    BC250_PRESENT_OBSERVATION PresentObservations[BC250_PRESENT_OBSERVATIONS];
+    volatile LONG64 DriverCapsInteropReturned[2]; // successful replies, not registry state
 
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
@@ -1472,6 +1489,32 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
         Wddm->CddDwmInterop,Wddm->GpuPresentGate,Wddm->HandleIdentityProbe);
+    GuardLog("wddm: DRIVERCAPS returned interop0 %lld interop1 %lld",
+        InterlockedCompareExchange64(&Wddm->DriverCapsInteropReturned[0],0,0),
+        InterlockedCompareExchange64(&Wddm->DriverCapsInteropReturned[1],0,0));
+    GuardLog("wddm: Blt observation calls%lld capacity%u",
+        InterlockedCompareExchange64(&Wddm->PresentObservationCalls,0,0),BC250_PRESENT_OBSERVATIONS);
+    for (i=0;i<BC250_PRESENT_OBSERVATIONS;i++) {
+        BC250_PRESENT_OBSERVATION* o=&Wddm->PresentObservations[i];
+        UINT j;
+        // Acquire the immutable payload, skipping a still-active writer.
+        if (!InterlockedCompareExchange(&o->Published,0,0)) continue;
+        GuardLog("wddm: Blt obs%u ctx%p dev%p flags%x node%u umd%u system%u",
+            i,o->Context,o->OwnerDevice,o->Flags,o->Node,o->UmdContext,o->SystemContext);
+        GuardLog("wddm: Blt obs%u dma%u private%u offset%u rects%u list%u valid%u snapshot%u",
+            i,o->DmaBytes,o->PrivateBytes,o->Offset,o->SubRects,o->ListSize,o->ListValid,o->SnapshotValid);
+        GuardLog("wddm: Blt obs%u src %ld,%ld,%ld,%ld dst %ld,%ld,%ld,%ld",
+            i,o->Src.left,o->Src.top,o->Src.right,o->Src.bottom,
+            o->Dst.left,o->Dst.top,o->Dst.right,o->Dst.bottom);
+        for (j=0;j<2;j++) {
+            const BC250_WDDM_ALLOCATION_PRIVATE* a=&o->Allocations[j];
+            GuardLog("wddm: Blt obs%u side%u handle%p adapter%u va%llX",
+                i,j,o->Handles[j],o->PhysicalAdapter[j],o->Va[j]);
+            if (o->SnapshotValid)
+                GuardLog("wddm: Blt obs%u side%u %ux%u pitch%u fmt%u bytes%llu",
+                    i,j,a->Width,a->Height,a->Pitch,a->Format,a->Size);
+        }
+    }
     GuardLog("wddm: GPU Present calls%lld records%lld rotate%lld refused%lld",
         InterlockedCompareExchange64(&Wddm->GpuPresentCalls,0,0),
         InterlockedCompareExchange64(&Wddm->GpuPresentRecords,0,0),
@@ -2089,7 +2132,7 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
 static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
 {
     DXGK_DRIVERCAPS* caps = (DXGK_DRIVERCAPS*)Query->pOutputData;
-    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     // A query before a successful start uses the gate-closed node count.
     // Required WDDM/VidMm resource failures now fail StartDevice.
     UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
@@ -2184,6 +2227,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 
     // No hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor into the image it presents,
     // exactly as in the display-only build.
+
+    // Successful replies, not merely the gate latched at start. Pre-start
+    // replies have no adapter-owned storage and are identified in the log.
+    if (wddm)
+        InterlockedIncrement64(&wddm->DriverCapsInteropReturned[
+            caps->PresentationCaps.DriverSupportsCddDwmInterop ? 1 : 0]);
+    GuardLog("wddm: DRIVERCAPS reply started%u interop%u extent-shifts%u/%u",
+        wddm!=NULL,caps->PresentationCaps.DriverSupportsCddDwmInterop,
+        caps->PresentationCaps.MaxTextureWidthShift,caps->PresentationCaps.MaxTextureHeightShift);
 
     // What was promised, and into how large a structure: the size says which DXGK_DRIVERCAPS this dxgkrnl thinks
     // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
@@ -4958,6 +5010,42 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     return result==Bc250GfxBltMore ? STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER : STATUS_SUCCESS;
 }
 
+// Diagnostic only: no mapping, pixel access or GPU work. Uses the producer's
+// GpuMmu list contract and locked snapshot even when the producer gate is 0.
+static void WddmObservePresent(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Present)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
+    BC250_PRESENT_OBSERVATION* o;
+    LONG64 call;
+    UINT i;
+    if (!wddm || !Present->Flags.Blt ||
+        (!wddm->HandleIdentityProbe && !wddm->CddDwmInterop)) return;
+    call=InterlockedIncrement64(&wddm->PresentObservationCalls);
+    if (call<=0 || call>BC250_PRESENT_OBSERVATIONS) return;
+    o=&wddm->PresentObservations[call-1];
+    o->Context=Context;o->OwnerDevice=Context->OwnerDevice;
+    o->Flags=Present->Flags.Value;o->Node=Context->NodeOrdinal;
+    o->UmdContext=Context->UmdContext;o->SystemContext=Context->SystemContext;
+    o->ListSize=Context->AllocationListSize;
+    o->DmaBytes=Present->DmaSize;o->PrivateBytes=Present->DmaBufferPrivateDataSize;
+    o->Offset=Present->MultipassOffset;o->SubRects=Present->SubRectCnt;
+    o->Src=Present->SrcRect;o->Dst=Present->DstRect;
+    if (Present->pAllocationInfo && Context->AllocationListSize>DXGK_PRESENT_MAX_INDEX) {
+        for (i=0;i<2;i++) {
+            const DXGK_PRESENTALLOCATIONINFO* a=Present->pAllocationInfo+
+                (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
+            o->Handles[i]=a->hDeviceSpecificAllocation;
+            o->PhysicalAdapter[i]=a->PhysicalAdapterIndex;
+            o->Va[i]=a->AllocationVirtualAddress;
+        }
+        o->ListValid=TRUE;
+        if (!o->PhysicalAdapter[0] && !o->PhysicalAdapter[1])
+            o->SnapshotValid=WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,
+                o->Handles,o->Allocations);
+    }
+    InterlockedExchange(&o->Published,1);
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -4967,6 +5055,7 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     // producer entry, including early-return/non-Blt paths. Do not clear during
     // submission: a legal scheduler resubmission must retain the same record.
     Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
+    if (context) WddmObservePresent(context,pPresent);
 
     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
     // software packet below; its pixels are copied only at SubmitCommandVirtual.
