@@ -940,6 +940,30 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
     return TRUE;
 }
 
+// BGP1 may arrive in a burst when CDD stops pacing to vblank (M659).
+// Idle is not a submission prerequisite: the lower layer admits same-root jobs
+// and reports temporary ring/root-switch pressure. Match the UMD ready-or-busy
+// policy, with a wall-clock deadline and no completion synthesized on failure.
+static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
+    _In_ const BC250_WDDM_OBJECT* Context, ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
+{
+    const ULONGLONG deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
+    LARGE_INTEGER tick;
+    tick.QuadPart = -10000ll;
+    for (;;) {
+        if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
+            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) return TRUE;
+        // Refresh retirement before the terminal retry: a completion can race
+        // the separate ready/busy observations or release the last queue slot.
+        WddmGpuFence(Device);
+        if (!GfxSubmitBusy(Device) || KeQueryInterruptTime() >= deadline) {
+            return (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
+                WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node);
+        }
+        KeDelayExecutionThread(KernelMode, FALSE, &tick);
+    }
+}
+
 // ---- ADR 0008 stage D: node 1's own hardware channel (docs/design/paging-node.md section 5) ---------------------
 //
 // A parallel channel to stage C's above, not a generalization of it: WddmSubmitPagingHardware runs at
@@ -4336,7 +4360,7 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
             }
             return STATUS_INVALID_PARAMETER;
         }
-        if (GfxSubmitReady(device) && WddmSubmitHardware(device,wddm,context,
+        if (WddmSubmitPresentHardware(device,wddm,context,
                 pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
                 pSubmitCommand->SubmissionFenceId,node)) {
             if (InterlockedIncrement64(&wddm->GpuPresentSubmits)<=16)
