@@ -17,6 +17,14 @@ try {
  $good=Join-Path $OutputDirectory 'good.bmp';$bitmap.Save($good)
  $check=& "$PSScriptRoot\check-stable-composition.ps1" -Image $good -Heartbeat $witness
  if(!$check.pass -or $check.pixels -ne 26584){throw 'Positive image control failed'}
+ $final=$state.Clone();$final.animating=$true;$final.frames=20;$final.frozen=$true;$final.freeze_result=0
+ $final | ConvertTo-Json | Set-Content $witness
+ if(!(& "$PSScriptRoot\check-stable-composition.ps1" -Image $good -Heartbeat $witness -Frozen).pass){throw 'Frozen positive control failed'}
+ $final.frozen=$false;$final | ConvertTo-Json | Set-Content $witness
+ $rejected=$false
+ try {& "$PSScriptRoot\check-stable-composition.ps1" -Image $good -Heartbeat $witness -Frozen | Out-Null} catch {$rejected=$true}
+ if(!$rejected){throw 'Live animation accepted as frozen'}
+ $state | ConvertTo-Json | Set-Content $witness
  # One bottom corner pixel must fail, with no rounded-corner mask/tolerance.
  $bitmap.SetPixel(791,251,[Drawing.Color]::Black)
  $bad=Join-Path $OutputDirectory 'corner.bmp';$bitmap.Save($bad)
