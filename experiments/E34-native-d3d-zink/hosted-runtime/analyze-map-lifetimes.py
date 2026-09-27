@@ -4,6 +4,11 @@ import json
 from pathlib import Path
 
 PREFIX = "BC250 audit lifetime "
+STORE_PREFIX = "BC250 audit store "
+STORE_FIELDS = {
+    "begin": "event seq store map time_ns writer kind offset bytes capacity mapped_offset valid",
+    "end": "event seq store time_ns",
+}
 FIELDS = {
     "begin": "event map time_ns ctx resource resource_id object_id target width height depth format bind level usage user_ptr runtime x y z box_width box_height box_depth",
     "result": "event map time_ns success resource resource_id object_id usage staging stride layer_stride",
@@ -19,6 +24,8 @@ def require(condition, message):
 
 def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     maps = {}
+    stores = {}
+    active_stores = {}
     events = 0
     sequenced = None
     threaded = None
@@ -30,20 +37,23 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     if start_marker is not None:
         require(end_marker is not None and 0 < start_marker < end_marker, "invalid marker interval")
     for number, line in enumerate(lines, 1):
-        if PREFIX not in line:
+        is_store = STORE_PREFIX in line
+        prefix = STORE_PREFIX if is_store else PREFIX
+        if prefix not in line:
             continue
-        items = line.split(PREFIX, 1)[1].split()
+        items = line.split(prefix, 1)[1].split()
         try:
             pairs = [item.split("=", 1) for item in items]
             row = dict(pairs)
             event = row["event"]
             require(len(row) == len(pairs), "duplicate fields")
-            require(event in FIELDS, "unknown/invalid event")
-            schema = set(FIELDS[event].split())
+            fields = STORE_FIELDS if is_store else FIELDS
+            require(event in fields, "unknown/invalid event")
+            schema = set(fields[event].split())
             has_sequence = "seq" in row
             if has_sequence:
                 schema.add("seq")
-            if event == "begin":
+            if event == "begin" and not is_store:
                 has_thread = "tid" in row
                 if threaded is None:
                     threaded = has_thread
@@ -55,7 +65,7 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
                 sequenced = has_sequence
             require(has_sequence == sequenced, "mixed sequenced/legacy events")
             for key, value in list(row.items()):
-                if key == "event":
+                if key == "event" or (is_store and key in {"writer", "kind"}):
                     continue
                 base = 16 if key in {"ctx", "resource", "usage", "bind"} else 10
                 row[key] = int(value, base)
@@ -65,6 +75,33 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
                 require(row["seq"] == events + 1, "missing/reordered event sequence")
                 require(row["time_ns"] >= last_time, "global time reversed")
                 last_time = row["time_ns"]
+            if is_store:
+                require(sequenced, "store requires event sequence")
+                sid = row["store"]
+                require(sid > 0, "zero store identity")
+                if event == "begin":
+                    require(sid not in stores, "duplicate store begin")
+                    require(row["map"] in maps, "store has unknown map")
+                    mapped = maps[row["map"]]
+                    require(mapped.get("result", {}).get("success") == 1 and "end" not in mapped,
+                            "store outside successful map lifetime")
+                    require(mapped["begin"]["target"] == 0 and mapped["begin"]["usage"] & 2,
+                            "store map is not a writable buffer")
+                    require(row["valid"] == 1, "invalid store range")
+                    require(row["capacity"] == mapped["begin"]["box_width"], "store capacity mismatch")
+                    require(row["offset"] <= row["capacity"] and
+                            row["bytes"] <= row["capacity"] - row["offset"], "store exceeds map bounds")
+                    require(row["kind"] in {"get_descriptor", "descriptor_copy", "buffer_subdata"},
+                            "unknown store kind")
+                    require(row["writer"].isidentifier(), "invalid writer identity")
+                    stores[sid] = {"begin": row}
+                    active_stores.setdefault(row["map"], set()).add(sid)
+                else:
+                    require(sid in stores and "end" not in stores[sid], "orphan/duplicate store end")
+                    stores[sid]["end"] = row
+                    active_stores[stores[sid]["begin"]["map"]].remove(sid)
+                events += 1
+                continue
             if event == "checkpoint":
                 for key, value in counts.items():
                     require(row[key] == value, f"checkpoint {key} mismatch")
@@ -102,6 +139,8 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
                         require(not (row["resource_id"] or row["object_id"] or row["resource"]), "failed map has mapped identity")
                 else:
                     require("result" in record and record["result"]["success"], "end without successful result")
+                    require(not active_stores.get(mid),
+                            "unmap while store pending")
                 record[event] = row
                 if event == "result":
                     counts["successful" if row["success"] else "failed"] += 1
@@ -120,7 +159,21 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     live = [mid for mid, row in maps.items() if row.get("result", {}).get("success") and "end" not in row]
     if pending or (live and not allow_live):
         raise ValueError(f"incomplete trace: pending={pending}, live={live}")
+    pending_stores = [sid for sid, record in stores.items() if "end" not in record]
+    require(allow_live or not pending_stores, "incomplete store trace")
+    store_inventory = []
+    for sid, record in stores.items():
+        begin = record["begin"]
+        end = record.get("end")
+        store_inventory.append(dict(store=sid, map=begin["map"], writer=begin["writer"],
+            kind=begin["kind"], offset=begin["offset"], bytes=begin["bytes"],
+            mapped_offset=begin["mapped_offset"],
+            begin_seq=begin["seq"], end_seq=end["seq"] if end else None,
+            crossing_markers=[cp["marker"] for cp in checkpoints if cp["marker"] and
+                begin["seq"] < cp["seq"] and (end is None or cp["seq"] < end["seq"])]))
     return {
+        "stores": store_inventory, "pending_store_ids": pending_stores,
+        "completed_store_span_bytes": sum(r["begin"]["bytes"] for r in stores.values() if "end" in r),
         "events": events, "requests": len(maps),
         "successful": sum(row["result"]["success"] for row in maps.values()),
         "failed": sum(not row["result"]["success"] for row in maps.values()),
