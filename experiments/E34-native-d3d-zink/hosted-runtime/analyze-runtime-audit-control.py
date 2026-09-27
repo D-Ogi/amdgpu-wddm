@@ -11,7 +11,8 @@ spec.loader.exec_module(lifetime)
 require = lifetime.require
 
 
-def analyze(directory):
+def analyze(directory, run_name="audit-client001"):
+    require(run_name in ("audit-client001", "audit-client002"), "unsupported run identity")
     def receipt(name):
         return json.loads((directory / name).read_text(encoding="utf-8-sig"))
     for name in ("done.json", "watchdog-done.json", "control-result.json"):
@@ -19,7 +20,7 @@ def analyze(directory):
     manifest = receipt("manifest.json")
     modules = receipt("modules.json")["modules"]
     for name in ("bc250d3d_zink.dll", "vulkan_radeon.dll"):
-        expected = "C:\\BC250\\m13\\audit-client001\\" + name
+        expected = "C:\\BC250\\m13\\" + run_name + "\\" + name
         found = [m for m in modules if m["path"].lower() == expected.lower()]
         require(len(found) == 1 and found[0]["sha256"] == manifest[name], f"module identity: {name}")
     stdout = (directory / "stdout.log").read_text()
@@ -74,5 +75,6 @@ def analyze(directory):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory",type=Path)
+    parser.add_argument("--run-name",choices=("audit-client001","audit-client002"),default="audit-client001")
     args = parser.parse_args()
-    print(json.dumps(analyze(args.directory),indent=2))
+    print(json.dumps(analyze(args.directory,args.run_name),indent=2))

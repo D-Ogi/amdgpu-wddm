@@ -26,6 +26,8 @@ interleaved threads on the same resource, and eight damaged traces. These are
 host controls; no new candidate lab result is claimed.
 
 Before the next DWM trial, use the deliberate frame-upload client to prove that
-its12 known CPU copies correlate with DDI scopes and Zink maps, while GPU clears
-have no frontend-copy witnesses. Incorporate the reviewed hosted paging-fence
+its12 known CPU copies correlate with ResourceMap scopes and Zink maps, while GPU clears
+have no frontend-copy witnesses. The12 writes happen in the application after
+Map returns, so those scopes must also have no frontend-copy witness. A separate
+UpdateSubresource arm is required to validate actual frontend-copy events. Incorporate the reviewed hosted paging-fence
 fix before promoting a new combined candidate. Preserve exact component hashes.
