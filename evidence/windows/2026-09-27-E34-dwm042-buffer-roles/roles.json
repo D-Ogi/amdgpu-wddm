@@ -1,0 +1,98 @@
+{
+  "scope": "Observed map roles and uploader ranges; not a census of stores through returned pointers",
+  "mesa_revision": "13e623af70d45982aeb6d3dc9261f9c6fde0d81e",
+  "buffers": [
+    {
+      "map": 5,
+      "resource_id": 3,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 8,
+      "resource_id": 6,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 11,
+      "resource_id": 9,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 14,
+      "resource_id": 12,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 18,
+      "resource_id": 16,
+      "bytes": 1048576,
+      "bind": "8070",
+      "descriptor_flag": false,
+      "uploader_map_matches": 1,
+      "uploader_allocations": [
+        {
+          "offset": 0,
+          "size": 4,
+          "time_ns": 2955183058900
+        },
+        {
+          "offset": 4096,
+          "size": 16,
+          "time_ns": 2955194205300
+        }
+      ],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 961,
+      "resource_id": 959,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 1078,
+      "resource_id": 1076,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    },
+    {
+      "map": 1118,
+      "resource_id": 1116,
+      "bytes": 24000,
+      "bind": "8008000",
+      "descriptor_flag": true,
+      "uploader_map_matches": 0,
+      "uploader_allocations": [],
+      "helper_copy_events": 0
+    }
+  ],
+  "uploader_lifetime": "observed prefix only: terminal records absent"
+}
