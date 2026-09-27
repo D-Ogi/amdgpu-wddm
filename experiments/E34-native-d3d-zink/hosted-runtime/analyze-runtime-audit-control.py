@@ -12,7 +12,8 @@ require = lifetime.require
 
 
 def analyze(directory, run_name="audit-client001"):
-    require(run_name in ("audit-client001", "audit-client002", "audit-client003"), "unsupported run identity")
+    require(run_name in ("audit-client001", "audit-client002", "audit-client003", "audit-client004", "audit-client005"), "unsupported run identity")
+    textured = run_name == "audit-client005"
     def receipt(name):
         return json.loads((directory / name).read_text(encoding="utf-8-sig"))
     for name in ("done.json", "watchdog-done.json", "control-result.json"):
@@ -24,7 +25,11 @@ def analyze(directory, run_name="audit-client001"):
         found = [m for m in modules if m["path"].lower() == expected.lower()]
         require(len(found) == 1 and found[0]["sha256"] == manifest[name], f"module identity: {name}")
     stdout = (directory / "stdout.log").read_text()
-    require("PASS GPU clears, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints" in stdout, "missing application pass")
+    pass_text = "PASS GPU texture draws" if textured else "PASS GPU clears"
+    require(pass_text + ", deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints" in stdout, "missing application pass")
+    if textured:
+        require("gpu_work=texture_draw draws=18" in stdout, "missing texture draws")
+        require("pixels expected=ffff00ff bad=0 total=76800" in stdout, "magenta pixel control")
     require(re.findall(r"checkpoint_ack marker=(\d+) ", stdout) == [str(i) for i in range(1,9)], "application marker acknowledgements")
     require("deliberate_cpu_copy frames=12 bytes=3686400" in stdout, "copy amount")
     for value in ("ff00ff00", "ff00ffff"):
@@ -62,12 +67,29 @@ def analyze(directory, run_name="audit-client001"):
     require(not phases["gpu"]["image_write_ids"] and not phases["gpu"]["full_frame_write_ids"], "GPU-only arm contains CPU frame/image-write map")
     require(len(phases["cpu_copy"]["full_frame_write_ids"]) == 12, "deliberate CPU copies not detected exactly12 times")
     for name in ("gpu_readback","cpu_readback"):
-        require(len(phases[name]["full_frame_read_ids"]) == 1, "isolated readback not detected")
+        require(len(phases[name]["full_frame_read_ids"]) == (2 if textured and name == "gpu_readback" else 1), "isolated readback not detected")
     live_images = [mid for mid in complete["live_map_ids"] if int(begins[mid]["target"]) != 0]
     require(not live_images, "unclosed image maps")
     overflows = re.findall(r"BC250 audit bucket_summary .*? overflow=(\d+)", "\n".join(lines))
     require(overflows and all(int(n)==0 for n in overflows), "missing/overflowed aggregate map audit")
-    return {"phases":phases,"through_marker8":complete,"known_application_copy_bytes":3686400,
+    descriptor_summary = None
+    if textured:
+        require(complete["store_checkpoint_counters"], "missing store checkpoint counters")
+        require(not complete["pending_store_ids"], "unfinished store operations")
+        low, high = int(checkpoints[1]["seq"]), int(checkpoints[2]["seq"])
+        stores = [r for r in complete["stores"] if low < r["begin_seq"] and
+                  r["end_seq"] is not None and r["end_seq"] < high]
+        descriptors = [r for r in stores if r["kind"] == "get_descriptor"]
+        require(descriptors, "texture draws did not exercise descriptor stores")
+        for record in descriptors:
+            mapped = begins[record["map"]]
+            require(int(mapped["target"]) == 0 and int(mapped["bind"],16) & (1 << 27),
+                    "descriptor store destination is not descriptor buffer")
+        descriptor_summary = dict(completed=len(descriptors),
+            bytes=sum(r["bytes"] for r in descriptors),
+            mapped_resource_ids=sorted({r["mapped_resource_id"] for r in descriptors}),
+            duration_ns=int(checkpoints[2]["time_ns"])-int(checkpoints[1]["time_ns"]))
+    return {"descriptor_gpu_interval":descriptor_summary,"phases":phases,"through_marker8":complete,"known_application_copy_bytes":3686400,
             "live_buffer_map_ids":complete["live_map_ids"],
             "scope":"small-client positive control only; persistent pointer stores, desktop ownership and full G0 remain separate"}
 
@@ -75,6 +97,6 @@ def analyze(directory, run_name="audit-client001"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory",type=Path)
-    parser.add_argument("--run-name",choices=("audit-client001","audit-client002","audit-client003"),default="audit-client001")
+    parser.add_argument("--run-name",choices=("audit-client001","audit-client002","audit-client003","audit-client004","audit-client005"),default="audit-client001")
     args = parser.parse_args()
     print(json.dumps(analyze(args.directory,args.run_name),indent=2))
