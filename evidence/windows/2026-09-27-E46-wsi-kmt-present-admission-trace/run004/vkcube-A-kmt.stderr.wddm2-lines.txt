@@ -1,0 +1,11 @@
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+wddm2: present context 0x40001840 created; VidPn source 0 exclusive-ownership check 0x0
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40001480, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x400019c0, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40001ec0, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40002240, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x80000700, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40002840, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40002cc0, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40003080, 640x480)

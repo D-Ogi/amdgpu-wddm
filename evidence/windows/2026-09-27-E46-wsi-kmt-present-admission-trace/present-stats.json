@@ -1,0 +1,46 @@
+{
+ "A-kmt": {
+  "presents": 900,
+  "distinct_chains": 12,
+  "results": {
+   "-1000000000": 900
+  },
+  "interval_us": {
+   "median": 4935,
+   "p95": 6042
+  },
+  "copy_us_median": 0.0,
+  "blit_us": {
+   "median": 62.0,
+   "p95": 76,
+   "max": 838
+  },
+  "dwmflush_us": {
+   "median": 6.0,
+   "p95": 7
+  },
+  "span_s": 4.77
+ },
+ "B-cpu": {
+  "presents": 900,
+  "distinct_chains": 1,
+  "results": {
+   "0": 900
+  },
+  "interval_us": {
+   "median": 16791,
+   "p95": 47240
+  },
+  "copy_us_median": 147.0,
+  "blit_us": {
+   "median": 311.0,
+   "p95": 394,
+   "max": 739
+  },
+  "dwmflush_us": {
+   "median": 15765.0,
+   "p95": 46085
+  },
+  "span_s": 17.58
+ }
+}

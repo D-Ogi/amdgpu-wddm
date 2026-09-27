@@ -1,0 +1,73 @@
+start 2026-09-27T06:18:03.8482950+02:00
+temperature_before=67.6
+boot 2026-09-26T18:44:31.5000000+02:00
+dwm_before=4596
+log          2270897 lines since this driver load, 2269873 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+icd_swapped=0CD4A98D
+presentmon_pid=3980
+etw_kmt004_start_exit=0
+stage A-kmt start 2026-09-27T06:18:07.6235375+02:00
+pid=9404 session=1
+t=0 tctl=67.5 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\Windows\system32\dxgi.dll DDC578A2
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 0CD4A98D
+module 2s C:\Windows\system32\DComp.DLL 285F0317
+t=2 tctl=69 present_csv_bytes=15965
+t=4 tctl=69.4 present_csv_bytes=91908
+screenshot A-kmt-0 65D368CC4014
+stage A-kmt exit=0 elapsed=7s
+stderr lines=15357
+
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+wddm2: present context 0x40001840 created; VidPn source 0 exclusive-ownership check 0x0
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40001480, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x400019c0, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40001ec0, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40002240, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x80000700, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40002840, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40002cc0, 640x480)
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000004904D0, source 0x40003080, 640x480)
+log          2321114 lines since this driver load, 2320090 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+stage B-cpu start 2026-09-27T06:18:17.0696509+02:00
+pid=3596 session=1
+t=0 tctl=69.8 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\Windows\system32\dxgi.dll DDC578A2
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 0CD4A98D
+module 2s C:\Windows\system32\DComp.DLL 285F0317
+t=2 tctl=69.5 present_csv_bytes=3455
+t=4 tctl=69.2 present_csv_bytes=10111
+screenshot B-cpu-0 B9692B6CA284
+t=7 tctl=69 present_csv_bytes=16767
+t=9 tctl=68.8 present_csv_bytes=20095
+t=11 tctl=68.6 present_csv_bytes=26751
+t=13 tctl=68.5 present_csv_bytes=33407
+screenshot B-cpu-1 D5EA634E14FF
+t=16 tctl=68.5 present_csv_bytes=40063
+stage B-cpu exit=0 elapsed=18s
+stderr lines=23457
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+log          2325434 lines since this driver load, 2324410 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+presentmon_exit=
+etw_kmt004_stop_exit=0
+etw_kmt004_etl_bytes=367001600
+registered ICD restored to 93B1D1FD
+presentmon_csv_bytes=0
+registered_icd_after=93B1D1FD
+temperature_after=68.2
+dwm_after=4596
+screenshot end EE1527D3BD68
+end 2026-09-27T06:18:43.7245883+02:00
+run_exit=0
+
+

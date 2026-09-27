@@ -38,7 +38,11 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   bitmap the DWM uploads, the same call is a legacy copy to the front buffer, and while the DWM owns the VidPn
   source it is refused with `STATUS_GRAPHICS_VIDPN_SOURCE_IN_USE` before the miniport (E45, M598; the routing is
   inferred from the PresentMon trace consumer and the D3D team's description of the ICD present in Mesa MR
-  24223, `docs/research/2026-09-27-windowed-present-under-dwm.md`). Redirection surfaces live on the GPU when
+  24223, `docs/research/2026-09-27-windowed-present-under-dwm.md`). E46 (M601) narrows it: dxgkrnl's own
+  Present event logs the call with the ICD's parameters and the refusing status, emits no blit event and no
+  token, while `D3DKMTCheckVidPnExclusiveOwnership` on the source says free; so the refusal is an admission
+  rule for a windowed Blt from a non-owner device that the documentation does not state, and the
+  redirection-surface reading stays a hypothesis until a KMD with the interop cap is traced the same way. Redirection surfaces live on the GPU when
   the KMD advertises GDI hardware acceleration (`SupportKernelModeCommandBuffer`, needs `DxgkDdiRenderKm`) or
   CDD-DWM interop (`DXGK_PRESENTATIONCAPS.DriverSupportsCddDwmInterop`: CDD presents into texture allocations
   the DWM's UMD creates), neither of which the KMD sets today. The route stays ADR 0018's KMD item, now with
@@ -148,11 +152,10 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
    candidate ICD, not promoted.
 2. Done, negative: plumbing control E45 (M598). The ICD side works up to dxgkrnl; the present is refused with
    `VIDPN_SOURCE_IN_USE` because no GPU redirection surface exists for the window.
-3. Three read-only probes before any KMD change: `D3DKMTCheckVidPnExclusiveOwnership` on source 0 from the
-   present device (expected `VIDPN_SOURCE_IN_USE` while the DWM runs); a raw `Microsoft-Windows-DxgKrnl` trace
-   of `Blit_Info` (`hwnd`, `bRedirectedPresent`) and `PresentHistory` for the vkcube window during the KMT
-   path; a KMD log of the `D3DKMDT_GDISURFACETYPE` values dxgkrnl asks for in `GetStandardAllocationDriverData`
-   and `CreateAllocation` on the lab.
+3. Probes: done for the ICD side (E46, M601: the ownership query returns success, the DxgKrnl trace shows the
+   present refused at admission with no blit event); still open on the KMD side, a log of the
+   `D3DKMDT_GDISURFACETYPE` values dxgkrnl asks for in `GetStandardAllocationDriverData` and `CreateAllocation`
+   (a diagnostic KMD build, not a read-only probe of the deployed one).
 4. KMD: `DriverSupportsCddDwmInterop` plus the engine Blt (ADR 0018 KMD item) serving CDD staging-to-texture and
    WSI VRAM-to-VRAM copies into DWM-UMD-created textures, per the contract above; DWM's UMD: GPU-sampleable
    redirection textures. Measured against the same present log and the `Blit_Info` trace.
