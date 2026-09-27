@@ -37,6 +37,18 @@ if ($inSource.Matches[0].Groups[1].Value -ne $inTool.Matches[0].Groups[1].Value)
 Write-Host "  allocation private magic $($inTool.Matches[0].Groups[1].Value) matches gdi_private.h"
 
 $env:INCLUDE = ''; $env:LIB = ''
+# The decisions first: redirblt_policy.h is pinned by a host-only test (no window, no DWM, no D3DKMT). A
+# failing case fails the build.
+& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
+    "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
+    "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\redirblt-policy-test.obj", "/Fe$Out\redirblt-policy-test.exe",
+    (Join-Path $here 'redirblt-policy-test.c'), '/link', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')",
+    "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64", 'kernel32.lib') |
+    ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
+if ($LASTEXITCODE -ne 0) { throw "cl failed on the policy test ($LASTEXITCODE)" }
+& "$Out\redirblt-policy-test.exe" | ForEach-Object { Write-Host "  $_" }
+if ($LASTEXITCODE -ne 0) { throw 'policy test failed' }
+
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/Fo$Out\redirblt-probe.obj", "/Fe$Out\redirblt-probe.exe",

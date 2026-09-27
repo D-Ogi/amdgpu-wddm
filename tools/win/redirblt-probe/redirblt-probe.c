@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "redirblt_policy.h"    // the decisions, as pure functions pinned by redirblt-policy-test.c
 
 // ---- what the KMD accepts -----------------------------------------------------------------------------
 //
@@ -95,7 +96,7 @@ C_ASSERT(WS_EX_NOREDIRECTIONBITMAP == 0x00200000L);
 
 // ---- options ------------------------------------------------------------------------------------------
 
-typedef enum _VARIANT_ID { VariantV0 = 0, VariantA, VariantB, VariantC, VariantD, VariantCount } VARIANT_ID;
+typedef REDIRBLT_VARIANT VARIANT_ID;
 
 static const char* const g_VariantNames[VariantCount] = { "V0", "A", "B", "C", "D" };
 
@@ -108,10 +109,10 @@ typedef struct _OPTIONS {
     UINT32 Color;                       // ARGB as stored in an A8R8G8B8 pixel
     BOOL Variants[VariantCount];        // which to run, in V0..D order
     BOOL All;                           // do not stop at the first success
-    BOOL Update;                        // after a success, call ordinal 101 once
-    BOOL HandshakeOnly;                 // stop after the handshake and the open (no present)
+    BOOL Update;                        // after an S_OK handshake, call ordinal 101 once (never after 0x263005)
+    BOOL HandshakeOnly;                 // window, handshake and (unless --no-open) the open; no source, context, present
     BOOL GdiPaint;                      // paint the client area once with GDI before the handshake
-    BOOL NoOpen;                        // do not open the shared handle (variants B-D then run with hDestination 0)
+    BOOL NoOpen;                        // diagnostic: do not open the shared handle; B, C and D are then skipped
     DWORD PumpMs;                       // message pump after ShowWindow
     DWORD HoldSeconds;                  // keep the window and the allocation after the variants
     DWORD HandshakeTimeoutMs;
@@ -127,12 +128,20 @@ typedef struct _HANDSHAKE {
     UINT64 UpdateId;
     DWORD Ms;
     BOOL Completed;                     // the worker thread returned
+    REDIRBLT_HANDLE_KIND Kind;          // how Surface was classified (unknown until the LUID query says)
+    LUID Luid;                          // adapter of the surface, from D3DKMTGetSharedResourceAdapterLuid
+    BOOL LuidKnown;
+    BOOL LuidOurs;
 } HANDSHAKE;
 
+// The opened shared surface. Owned (a resource to release) and Ready (usable as a present destination) are
+// tracked apart: a later failure still leaves something to release, and nothing half-prepared is presented to.
 typedef struct _OPENED {
-    BOOL Global;                        // the handle opened as a global share handle (else as an NT handle)
-    LUID Luid;                          // from D3DKMTGetSharedResourceAdapterLuid
-    BOOL LuidKnown;
+    BOOL Owned;                         // hResource must be destroyed
+    BOOL Ready;                         // LUID ours, LB7A blob, mapped, resident
+    HANDLE OpenedFrom;                  // the raw handshake handle this was opened from
+    UINT64 UpdateId;                    // the update id of that handshake
+    REDIRBLT_HANDLE_KIND Kind;
     D3DKMT_HANDLE hResource;
     D3DKMT_HANDLE hAllocation;
     UINT64 GpuVa;                       // reported by the open, then by our own map
@@ -166,7 +175,7 @@ typedef struct _PROBE {
     HANDSHAKE Handshake;
     UINT HandshakeCount;
     OPENED Opened;
-    BOOL HaveOpened;
+    REDIRBLT_HANDLE_SET OwnedNtHandles; // every NT handle a handshake gave us, closed once at teardown
     NTSTATUS VariantStatus[VariantCount];
     BOOL VariantRan[VariantCount];
     int FirstSuccess;                   // -1 = none
@@ -747,13 +756,49 @@ static DWORD WINAPI HandshakeThread(LPVOID Parameter)
     return 0;
 }
 
+// Which adapter the shared handle belongs to, and thereby what kind of handle it is: a global share handle
+// (the Windows 7 form) answers the first query, an NT handle the second. A query only: nothing is opened.
+static void ClassifyHandle(PROBE* Probe)
+{
+    HANDSHAKE* h = &Probe->Handshake;
+    D3DKMT_GETSHAREDRESOURCEADAPTERLUID luid;
+
+    h->Kind = HandleUnknown;
+    h->LuidKnown = FALSE;
+    h->LuidOurs = FALSE;
+    if (h->Surface == NULL) { printf("SHARED kind=none\n"); fflush(stdout); return; }
+    ZeroMemory(&luid, sizeof(luid));
+    luid.hGlobalShare = (D3DKMT_HANDLE)(ULONG_PTR)h->Surface;
+    if (NT_SUCCESS(Report("D3DKMTGetSharedResourceAdapterLuid (global)", D3DKMTGetSharedResourceAdapterLuid(&luid))))
+        h->Kind = HandleGlobal;
+    else
+    {
+        ZeroMemory(&luid, sizeof(luid));
+        luid.hNtHandle = h->Surface;
+        if (NT_SUCCESS(Report("D3DKMTGetSharedResourceAdapterLuid (nt)", D3DKMTGetSharedResourceAdapterLuid(&luid))))
+            h->Kind = HandleNt;
+    }
+    if (h->Kind == HandleUnknown) { printf("SHARED kind=unknown handle=0x%p (not closed at exit)\n", h->Surface); fflush(stdout); return; }
+    h->Luid = luid.AdapterLuid;
+    h->LuidKnown = TRUE;
+    h->LuidOurs = h->Luid.LowPart == Probe->Luid.LowPart && h->Luid.HighPart == Probe->Luid.HighPart;
+    if (RedirbltHandleSetAdd(&Probe->OwnedNtHandles, h->Surface, h->Kind))
+        Note("NT handle 0x%p is ours: closed once at teardown", h->Surface);
+    printf("SHARED kind=%s handle=0x%p luid=%08lX:%08lX ours=%d\n", h->Kind == HandleGlobal ? "global" : "nt", h->Surface,
+           (unsigned long)h->Luid.HighPart, (unsigned long)h->Luid.LowPart, h->LuidOurs);
+    fflush(stdout);
+}
+
 // DWM_REDIRECTION_FLAG_WAIT is documented with value 0, so every call may block until a VSync has passed. The
-// call therefore runs on its own thread with a deadline; a thread that never returns is reported and left alone.
+// call therefore runs on its own thread with a deadline. A worker that has not returned still holds the
+// window, the dwmapi module and the probe block, and the watchdog is cancelled on a normal exit: so an
+// unresolved wait ends the process here, without the ordinary teardown (exit 5), never with TerminateThread.
 static BOOL Handshake(PROBE* Probe)
 {
     HANDSHAKE_CALL* call;
     HANDLE thread;
-    DWORD wait;
+    DWORD wait, error;
+    const char* why = "";
 
     if (Probe->GetSurface == NULL) return FALSE;
     call = (HANDSHAKE_CALL*)calloc(1, sizeof(*call));
@@ -764,15 +809,18 @@ static BOOL Handshake(PROBE* Probe)
     thread = CreateThread(NULL, 0, HandshakeThread, call, 0, NULL);
     if (thread == NULL) { free(call); return FALSE; }
     wait = WaitForSingleObject(thread, Probe->Opt.HandshakeTimeoutMs);
-    CloseHandle(thread);
-    if (wait != WAIT_OBJECT_0)
+    error = wait == WAIT_FAILED ? GetLastError() : 0;
+    if (RedirbltAfterWait(wait, error, &why) != WaitProceed)
     {
-        printf("HANDSHAKE n=%u timeout_ms=%lu (the call has not returned; it is left running)\n", Probe->HandshakeCount,
-               Probe->Opt.HandshakeTimeoutMs);
+        printf("HANDSHAKE n=%u unresolved wait=0x%08lX error=%lu deadline_ms=%lu: %s\n", Probe->HandshakeCount,
+               (unsigned long)wait, error, Probe->Opt.HandshakeTimeoutMs, why);
+        printf("SUMMARY ordinal100=1 ordinal101=%d handshakes=%u handshake_hr=unresolved first_success=none exit=5\n",
+               Probe->UpdateSurface != NULL, Probe->HandshakeCount);
         fflush(stdout);
-        Probe->Handshake.Completed = FALSE;
-        return FALSE;                   // the block is not freed: the thread still owns it
+        TerminateProcess(GetCurrentProcess(), 5);
+        return FALSE;
     }
+    CloseHandle(thread);
     Probe->Handshake = call->Result;
     free(call);
     ReportHr("DwmDxGetWindowSharedSurface", Probe->Handshake.hr);
@@ -780,45 +828,72 @@ static BOOL Handshake(PROBE* Probe)
            (unsigned long)Probe->Handshake.hr, (unsigned)Probe->Handshake.Format, Probe->Handshake.Surface,
            (unsigned long long)Probe->Handshake.UpdateId, Probe->Handshake.Ms);
     fflush(stdout);
+    if (SUCCEEDED(Probe->Handshake.hr)) ClassifyHandle(Probe);
     return SUCCEEDED(Probe->Handshake.hr);
 }
 
-// ---- step 1b: open the shared surface on our device ---------------------------------------------------------------
+// ---- step 1b: open the shared surface on our device -----------------------------------------------------------------
 
+static void CloseOpened(PROBE* Probe)
+{
+    OPENED* o = &Probe->Opened;
+
+    if (!o->Owned) { ZeroMemory(o, sizeof(*o)); return; }
+    if (o->MappedVa != 0)
+    {
+        D3DKMT_FREEGPUVIRTUALADDRESS free_va;
+
+        ZeroMemory(&free_va, sizeof(free_va));
+        free_va.hAdapter = Probe->hAdapter;
+        free_va.BaseAddress = o->MappedVa;
+        free_va.Size = o->MappedSize;
+        (void)Report("D3DKMTFreeGpuVirtualAddress [opened]", D3DKMTFreeGpuVirtualAddress(&free_va));
+    }
+    {
+        // An opened resource is released through its resource handle; the allocations go with it.
+        D3DKMT_DESTROYALLOCATION2 destroy;
+
+        ZeroMemory(&destroy, sizeof(destroy));
+        destroy.hDevice = Probe->hDevice;
+        destroy.hResource = o->hResource;
+        (void)Report("D3DKMTDestroyAllocation2 [opened]", D3DKMTDestroyAllocation2(&destroy));
+    }
+    ZeroMemory(o, sizeof(*o));
+}
+
+// Opens the surface of the latest handshake. Ready only when the surface is on our adapter, the blob is the
+// KMD's LB7A block, and the map and the residency both succeeded; Owned as soon as the open succeeded, so that
+// a later failure still releases the resource. Anything unknown is a rejection (review 236 item 5).
 static BOOL OpenShared(PROBE* Probe)
 {
-    D3DKMT_GETSHAREDRESOURCEADAPTERLUID luid;
     OPENED* o = &Probe->Opened;
-    HANDLE hs = Probe->Handshake.Surface;
+    HANDSHAKE* h = &Probe->Handshake;
+    HANDLE hs = h->Surface;
     NTSTATUS status;
     UINT total = 0, resource = 0, runtime = 0, num = 0;
     void* buffer = NULL;
     D3DDDI_OPENALLOCATIONINFO2* infos = NULL;
     UINT i;
+    BOOL blobOurs = FALSE, mapped = FALSE, resident = FALSE;
+    const char* why = "";
+    UINT64 size = 0;
 
-    ZeroMemory(o, sizeof(*o));
-    if (hs == NULL) { Note("no surface handle to open"); return FALSE; }
-
-    // Global share handle first (the Windows 7 form), NT handle second.
-    ZeroMemory(&luid, sizeof(luid));
-    luid.hGlobalShare = (D3DKMT_HANDLE)(ULONG_PTR)hs;
-    status = Report("D3DKMTGetSharedResourceAdapterLuid (global)", D3DKMTGetSharedResourceAdapterLuid(&luid));
-    if (NT_SUCCESS(status)) o->Global = TRUE;
-    else
+    CloseOpened(Probe);
+    if (hs == NULL || !h->Completed) { Note("no surface handle to open"); return FALSE; }
+    if (h->Kind == HandleUnknown) { printf("OPEN rejected: handle kind unknown\n"); fflush(stdout); return FALSE; }
+    if (!h->LuidOurs)
     {
-        ZeroMemory(&luid, sizeof(luid));
-        luid.hNtHandle = hs;
-        status = Report("D3DKMTGetSharedResourceAdapterLuid (nt)", D3DKMTGetSharedResourceAdapterLuid(&luid));
-        if (!NT_SUCCESS(status)) { printf("SHARED kind=unknown\n"); fflush(stdout); return FALSE; }
+        printf("OPEN rejected: the surface lives on adapter %08lX:%08lX, not ours\n", (unsigned long)h->Luid.HighPart,
+               (unsigned long)h->Luid.LowPart);
+        fflush(stdout);
+        return FALSE;
     }
-    o->Luid = luid.AdapterLuid;
-    o->LuidKnown = TRUE;
-    printf("SHARED kind=%s luid=%08lX:%08lX ours=%d\n", o->Global ? "global" : "nt",
-           (unsigned long)o->Luid.HighPart, (unsigned long)o->Luid.LowPart,
-           o->Luid.LowPart == Probe->Luid.LowPart && o->Luid.HighPart == Probe->Luid.HighPart);
-    fflush(stdout);
+    if (Probe->hDevice == 0) { printf("OPEN rejected: no device\n"); fflush(stdout); return FALSE; }
+    o->OpenedFrom = hs;
+    o->UpdateId = h->UpdateId;
+    o->Kind = h->Kind;
 
-    if (o->Global)
+    if (h->Kind == HandleGlobal)
     {
         D3DKMT_QUERYRESOURCEINFO query;
 
@@ -841,12 +916,12 @@ static BOOL OpenShared(PROBE* Probe)
         runtime = query.PrivateRuntimeDataSize; num = query.NumAllocations;
     }
     Note("resource: %u allocation(s), private %u total / %u resource / %u runtime bytes", num, total, resource, runtime);
-    if (num == 0 || num > 16) return FALSE;
+    if (num == 0 || num > 16) { printf("OPEN rejected: %u allocations\n", num); fflush(stdout); return FALSE; }
     buffer = calloc(1, (size_t)total + resource + runtime + 16);
     infos = (D3DDDI_OPENALLOCATIONINFO2*)calloc(num, sizeof(*infos));
     if (buffer == NULL || infos == NULL) { free(buffer); free(infos); return FALSE; }
 
-    if (o->Global)
+    if (h->Kind == HandleGlobal)
     {
         D3DKMT_OPENRESOURCE open;
 
@@ -883,6 +958,7 @@ static BOOL OpenShared(PROBE* Probe)
         o->hResource = open.hResource;
     }
     if (!NT_SUCCESS(status)) { free(buffer); free(infos); return FALSE; }
+    o->Owned = TRUE;                    // from here on, CloseOpened releases it whatever happens below
     o->NumAllocations = num; o->TotalPrivate = total; o->ResourcePrivate = resource; o->RuntimePrivate = runtime;
     o->hAllocation = infos[0].hAllocation;
     o->GpuVa = infos[0].GpuVirtualAddress;
@@ -897,25 +973,34 @@ static BOOL OpenShared(PROBE* Probe)
     fflush(stdout);
     free(buffer);
     free(infos);
-    Probe->HaveOpened = TRUE;
-    // A destination the KMD can address: map it in our process, as the fork maps every opened allocation. The
-    // size comes from the LB7A block when the blob is ours; otherwise the source's size is the best estimate.
+
+    // Geometry: only the KMD's own LB7A block is trusted for the size of the map.
+    if (o->PrivateBytes >= 32)
     {
-        UINT64 size = Probe->SourceSize;
+        BC250_WDDM_ALLOCATION_PRIVATE p;
 
-        if (o->PrivateBytes >= 32)
+        memcpy(&p, o->Private32, sizeof(p));
+        Note("blob: magic 0x%08lX version %lu %lux%lu pitch %lu format %lu size %llu%s", p.Magic, p.Version, p.Width,
+             p.Height, p.Pitch, p.Format, (unsigned long long)p.Size,
+             p.Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC ? " (LB7A)" : " (not LB7A)");
+        if (p.Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && p.Version == BC250_ALLOCATION_PRIVATE_VERSION && p.Size != 0 &&
+            p.Size < (1ull << 32) && p.Width != 0 && p.Height != 0 && p.Pitch >= p.Width * 4ul)
         {
-            BC250_WDDM_ALLOCATION_PRIVATE p;
-
-            memcpy(&p, o->Private32, sizeof(p));
-            Note("blob: magic 0x%08lX version %lu %lux%lu pitch %lu format %lu size %llu%s", p.Magic, p.Version, p.Width,
-                 p.Height, p.Pitch, p.Format, (unsigned long long)p.Size,
-                 p.Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC ? " (LB7A)" : " (not LB7A)");
-            if (p.Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && p.Size != 0 && p.Size < (1ull << 32)) size = p.Size;
+            blobOurs = TRUE;
+            size = p.Size;
         }
-        if (o->GpuVa == 0 && MapAndMakeResident(Probe, o->hAllocation, size, "opened", &o->MappedVa)) o->MappedSize = size;
     }
-    return TRUE;
+    if (blobOurs && o->hAllocation != 0)
+    {
+        // A destination the KMD can address: mapped in our process, as the fork maps every opened allocation.
+        if (o->GpuVa != 0) { mapped = TRUE; resident = TRUE; Note("open reported a GPU VA already; no map of our own"); }
+        else if (MapAndMakeResident(Probe, o->hAllocation, size, "opened", &o->MappedVa)) { o->MappedSize = size; mapped = TRUE; resident = TRUE; }
+        else if (o->MappedVa != 0) { o->MappedSize = size; mapped = TRUE; }   // the map went through, residency did not
+    }
+    o->Ready = RedirbltDestinationReady(h->LuidKnown, h->LuidOurs, blobOurs && o->hAllocation != 0, mapped, resident, &why);
+    printf("DESTINATION ready=%d from=0x%p update=%llu: %s\n", o->Ready, o->OpenedFrom, (unsigned long long)o->UpdateId, why);
+    fflush(stdout);
+    return o->Ready;
 }
 
 // ---- step 2: the present variants ---------------------------------------------------------------------------------
@@ -926,8 +1011,8 @@ static NTSTATUS PresentVariant(PROBE* Probe, VARIANT_ID Variant)
     RECT full = Probe->Client;
     NTSTATUS status;
     D3DKMT_HANDLE context = Variant == VariantD ? Probe->hContextGl : Probe->hContext;
-    D3DKMT_HANDLE destination = 0;
     BOOL token = Variant != VariantV0;
+    BOOL destination = Variant == VariantB || Variant == VariantC || Variant == VariantD;
 
     ZeroMemory(&present, sizeof(present));
     present.hContext = context;
@@ -949,11 +1034,13 @@ static NTSTATUS PresentVariant(PROBE* Probe, VARIANT_ID Variant)
         present.PresentHistoryToken.Token.Blt.DirtyRegions.NumRects = 1;
         present.PresentHistoryToken.Token.Blt.DirtyRegions.Rects[0] = full;
     }
-    if (Variant == VariantB || Variant == VariantC || Variant == VariantD)
-        destination = Probe->HaveOpened ? Probe->Opened.hAllocation : 0;
-    if (Variant == VariantC)
-        present.PresentHistoryToken.Token.Blt.hPhysicalSurface = (ULONG64)(ULONG_PTR)Probe->Handshake.Surface;
-    present.hDestination = destination;
+    if (destination)
+    {
+        // RunVariants admitted this variant only with a ready destination opened from this very handshake.
+        present.hDestination = Probe->Opened.hAllocation;
+        if (Variant == VariantC)
+            present.PresentHistoryToken.Token.Blt.hPhysicalSurface = (ULONG64)(ULONG_PTR)Probe->Opened.OpenedFrom;
+    }
 
     Stamp("present");
     printf("PRESENT variant=%s context=0x%08lX flags=0x%08X hsource=0x%08lX hdest=0x%08lX token_model=%u eventid=%llu"
@@ -977,21 +1064,35 @@ static void RunVariants(PROBE* Probe)
     for (v = 0; v < VariantCount; v++)
     {
         BOOL needsHandshake = v != VariantV0;
+        BOOL needsDestination = v == VariantB || v == VariantC || v == VariantD;
+        BOOL fromThisHandle = FALSE;
+        const char* why = "";
 
         if (!Probe->Opt.Variants[v]) continue;
         if (needsHandshake)
         {
-            // A fresh update id per attempt; the DWM may reserve one per call.
-            if (!Handshake(Probe) || Probe->Handshake.hr != DWM_S_GDI_REDIRECTION_SURFACE)
-            {
-                Note("variant %s skipped: the handshake did not return DWM_S_GDI_REDIRECTION_SURFACE", g_VariantNames[v]);
-                continue;
-            }
-            if ((v == VariantB || v == VariantC || v == VariantD) && !Probe->HaveOpened && !Probe->Opt.NoOpen)
+            // A fresh update id per attempt; the DWM may reserve one per call. A destination opened from an
+            // earlier handshake handle is stale for this one: reopen, never mix ids and surfaces.
+            (void)Handshake(Probe);
+            if (needsDestination && !Probe->Opt.NoOpen && Probe->Handshake.Completed &&
+                Probe->Handshake.hr == DWM_S_GDI_REDIRECTION_SURFACE &&
+                RedirbltReopenNeeded(Probe->Opened.Owned, Probe->Opened.OpenedFrom, Probe->Handshake.Surface))
                 (void)OpenShared(Probe);
+            fromThisHandle = Probe->Opened.Owned && Probe->Opened.OpenedFrom == Probe->Handshake.Surface &&
+                             Probe->Opened.UpdateId == Probe->Handshake.UpdateId;
+        }
+        if (!RedirbltVariantAllowed((VARIANT_ID)v, Probe->Handshake.Completed, Probe->Handshake.hr, Probe->Opt.NoOpen,
+                                    Probe->Opened.Ready, fromThisHandle, &why))
+        {
+            printf("SKIP variant=%s: %s\n", g_VariantNames[v], why);
+            fflush(stdout);
+            continue;
         }
         if (v == VariantD && Probe->hContextGl == 0 && !CreateContext(Probe, D3DKMT_CLIENTHINT_OPENGL, &Probe->hContextGl, "opengl"))
+        {
+            printf("SKIP variant=D: no OPENGL context\n");
             continue;
+        }
         Probe->VariantStatus[v] = PresentVariant(Probe, (VARIANT_ID)v);
         Probe->VariantRan[v] = TRUE;
         Pump(100);
@@ -1003,15 +1104,20 @@ static void RunVariants(PROBE* Probe)
     }
 }
 
-// ---- step 3: the update call, only on request and only after a success ---------------------------------------------
+// ---- step 3: the update call, only on request and only after an S_OK handshake ------------------------------------
+//
+// Ordinal 101 is documented for the S_OK branch alone (dedicated DX surface, D3DKMTRender route). The
+// GDI-surface branch carries its update id in the present token and documents no update call, so a successful
+// redirected variant never leads here (review 236 item 2).
 
-static void UpdateAfterSuccess(PROBE* Probe)
+static void UpdateAfterHandshake(PROBE* Probe)
 {
     RECT rc = Probe->Client;
     HRESULT hr;
+    const char* why = "";
 
     if (Probe->UpdateSurface == NULL) { Note("ordinal 101 absent, no update call"); return; }
-    if (Probe->FirstSuccess < 0) { Note("no successful variant, no update call"); return; }
+    if (!RedirbltUpdateAllowed(Probe->Handshake.Completed, Probe->Handshake.hr, &why)) { Note("no update call: %s", why); return; }
     hr = Probe->UpdateSurface(Probe->Window, Probe->Handshake.UpdateId, 0, NULL, &rc);
     ReportHr("DwmDxUpdateWindowSharedSurface", hr);
     printf("UPDATE hr=0x%08lX update=%llu\n", (unsigned long)hr, (unsigned long long)Probe->Handshake.UpdateId);
@@ -1020,22 +1126,10 @@ static void UpdateAfterSuccess(PROBE* Probe)
 
 // ---- teardown ----------------------------------------------------------------------------------------------------
 
-static void FreeVa(PROBE* Probe, UINT64 Va, UINT64 Size, const char* Name)
-{
-    D3DKMT_FREEGPUVIRTUALADDRESS free_va;
-    char label[64];
-
-    if (Va == 0) return;
-    ZeroMemory(&free_va, sizeof(free_va));
-    free_va.hAdapter = Probe->hAdapter;
-    free_va.BaseAddress = Va;
-    free_va.Size = Size;
-    sprintf_s(label, sizeof(label), "D3DKMTFreeGpuVirtualAddress [%s]", Name);
-    (void)Report(label, D3DKMTFreeGpuVirtualAddress(&free_va));
-}
-
 static void Teardown(PROBE* Probe)
 {
+    UINT i;
+
     printf("-- teardown\n");
     fflush(stdout);
     if (Probe->hContextGl != 0)
@@ -1056,30 +1150,30 @@ static void Teardown(PROBE* Probe)
         (void)Report("D3DKMTDestroyContext [present]", D3DKMTDestroyContext(&destroy));
         Probe->hContext = 0;
     }
-    if (Probe->HaveOpened)
+    CloseOpened(Probe);
+    // Only NT handles the LUID query classified as such, each once; global share handles and unclassified
+    // handles are not handles of this process.
+    for (i = 0; i < Probe->OwnedNtHandles.Count; i++)
     {
-        D3DKMT_DESTROYALLOCATION2 destroy;
-
-        FreeVa(Probe, Probe->Opened.MappedVa, Probe->Opened.MappedSize, "opened");
-        // An opened resource is released through its resource handle; the allocations go with it.
-        ZeroMemory(&destroy, sizeof(destroy));
-        destroy.hDevice = Probe->hDevice;
-        destroy.hResource = Probe->Opened.hResource;
-        (void)Report("D3DKMTDestroyAllocation2 [opened]", D3DKMTDestroyAllocation2(&destroy));
-        Probe->HaveOpened = FALSE;
+        Note("CloseHandle 0x%p -> %d", Probe->OwnedNtHandles.Handles[i], CloseHandle(Probe->OwnedNtHandles.Handles[i]));
+        Probe->OwnedNtHandles.Handles[i] = NULL;
     }
-    if (Probe->Handshake.Surface != NULL && !Probe->Opened.Global)
-    {
-        // An NT handle is ours to close; a global share handle is not a handle of this process.
-        (void)CloseHandle(Probe->Handshake.Surface);
-        Probe->Handshake.Surface = NULL;
-    }
+    Probe->OwnedNtHandles.Count = 0;
     if (Probe->hSource != 0)
     {
         D3DKMT_DESTROYALLOCATION2 destroy;
         D3DKMT_HANDLE list[1];
 
-        FreeVa(Probe, Probe->SourceVa, Probe->SourceSize, "source");
+        if (Probe->SourceVa != 0)
+        {
+            D3DKMT_FREEGPUVIRTUALADDRESS free_va;
+
+            ZeroMemory(&free_va, sizeof(free_va));
+            free_va.hAdapter = Probe->hAdapter;
+            free_va.BaseAddress = Probe->SourceVa;
+            free_va.Size = Probe->SourceSize;
+            (void)Report("D3DKMTFreeGpuVirtualAddress [source]", D3DKMTFreeGpuVirtualAddress(&free_va));
+        }
         list[0] = Probe->hSource;
         ZeroMemory(&destroy, sizeof(destroy));
         destroy.hDevice = Probe->hDevice;
@@ -1133,10 +1227,13 @@ static void Usage(void)
         "  --color <hex32>    ARGB pixel value of the source (default FF0000FF, blue)\n"
         "  --variants <list>  comma list from V0,A,B,C,D (default all, in that order)\n"
         "  --all              run every listed variant instead of stopping at the first STATUS_SUCCESS\n"
-        "  --handshake-only   ordinal check, window, handshake and open; no present at all\n"
+        "  --handshake-only   window, adapter identity, handshake and (unless --no-open) the open; no source,\n"
+        "                     no context, no present. The first discriminating run.\n"
         "  --gdi-paint        fill the client area once with GDI before the handshake (control)\n"
-        "  --no-open          do not open the shared handle; B, C and D then carry hDestination 0\n"
-        "  --update           after a successful variant call DwmDxUpdateWindowSharedSurface once (step 3)\n"
+        "  --no-open          diagnostic: do not open the shared handle; B, C and D are skipped, never run\n"
+        "                     with hDestination 0. With --handshake-only, no device is created either.\n"
+        "  --update           after an S_OK handshake (dedicated DX surface) call ordinal 101 once; never after\n"
+        "                     DWM_S_GDI_REDIRECTION_SURFACE, whatever a present variant returned\n"
         "  --pump <ms>        message pump after ShowWindow (default 500)\n"
         "  --hold <s>         keep the window and the source alive after the variants (default 5)\n"
         "  --handshake-timeout <ms>  deadline for one DwmDxGetWindowSharedSurface call (default 2000)\n"
@@ -1145,8 +1242,9 @@ static void Usage(void)
         "\n"
         "Variants: V0 = E45 form (Blt, rects, no token); A = V0 + RedirectedBlt + REDIRECTED_BLT token with the\n"
         "update id; B = A + hDestination = the opened shared surface; C = B + hPhysicalSurface = the raw handle;\n"
-        "D = B on a context with ClientHint OPENGL.\n"
-        "Exit: 0 sequence ran, 1 a step failed, 2 bad arguments, 3 dwmapi ordinal 100 absent, 4 watchdog.\n");
+        "D = B on a context with ClientHint OPENGL. B, C, D need a destination opened from the same handshake.\n"
+        "Exit: 0 sequence ran, 1 a step failed, 2 bad arguments, 3 dwmapi ordinal 100 absent, 4 watchdog,\n"
+        "5 a handshake call did not return (terminated without teardown).\n");
 }
 
 static BOOL ParseLuid(const char* Text, LUID* Luid)
@@ -1206,6 +1304,7 @@ int main(int argc, char** argv)
     PROBE probe;
     int i, v;
     int code = 0;
+    BOOL needDevice, needSource;
 
     ZeroMemory(&probe, sizeof(probe));
     probe.Opt.Match = "bc250";
@@ -1286,10 +1385,13 @@ int main(int argc, char** argv)
 
         if (probe.Opt.WatchdogMs < needed) probe.Opt.WatchdogMs = needed;
     }
+    needDevice = RedirbltNeedDevice(probe.Opt.HandshakeOnly, probe.Opt.NoOpen);
+    needSource = RedirbltNeedSourceAndContext(probe.Opt.HandshakeOnly);
     setvbuf(stdout, NULL, _IONBF, 0);
     if (!StartWatchdog(probe.Opt.WatchdogMs)) { printf("no watchdog\n"); return 1; }
-    printf("redirblt-probe: %ldx%ld colour 0x%08X, watchdog %lu ms\n", probe.Opt.Width, probe.Opt.Height, probe.Opt.Color,
-           probe.Opt.WatchdogMs);
+    printf("redirblt-probe: %ldx%ld colour 0x%08X, watchdog %lu ms, handshake-only %d, no-open %d, device %d, source %d\n",
+           probe.Opt.Width, probe.Opt.Height, probe.Opt.Color, probe.Opt.WatchdogMs, probe.Opt.HandshakeOnly, probe.Opt.NoOpen,
+           needDevice, needSource);
     SetProcessDPIAware();
 
     if (!StepStatic(&probe)) { code = 1; goto done; }
@@ -1300,47 +1402,53 @@ int main(int argc, char** argv)
         goto done;
     }
     if (!StepWindow(&probe)) { code = 1; goto done; }
-    if (!StepFindAdapter(&probe) || !StepOpenAdapter(&probe)) { code = 1; goto done; }
-    if (!StepSource(&probe)) { code = 1; goto done; }
-    if (!CreateContext(&probe, D3DKMT_CLIENTHINT_VULKAN, &probe.hContext, "present")) { code = 1; goto done; }
+    if (!StepFindAdapter(&probe)) { code = 1; goto done; }
+    if (needDevice && !StepOpenAdapter(&probe)) { code = 1; goto done; }
+    if (needSource)
+    {
+        if (!StepSource(&probe)) { code = 1; goto done; }
+        if (!CreateContext(&probe, D3DKMT_CLIENTHINT_VULKAN, &probe.hContext, "present")) { code = 1; goto done; }
+    }
 
-    // The first handshake, and a second one to see whether the update id moves per call.
+    // The first handshake; with a GDI surface offered, the open, then a second handshake to see whether the
+    // update id moves per call (which also tells whether the handle stays the same).
     if (Handshake(&probe) && probe.Handshake.hr == DWM_S_GDI_REDIRECTION_SURFACE)
     {
         UINT64 first = probe.Handshake.UpdateId;
+        HANDLE firstHandle = probe.Handshake.Surface;
 
         if (!probe.Opt.NoOpen) (void)OpenShared(&probe);
         if (Handshake(&probe))
-            Note("update id %llu then %llu: %s", (unsigned long long)first, (unsigned long long)probe.Handshake.UpdateId,
-                 probe.Handshake.UpdateId != first ? "one per call" : "unchanged");
+            Note("update id %llu then %llu (%s), handle %s", (unsigned long long)first, (unsigned long long)probe.Handshake.UpdateId,
+                 probe.Handshake.UpdateId != first ? "one per call" : "unchanged",
+                 probe.Handshake.Surface == firstHandle ? "same" : "DIFFERENT");
     }
     else if (probe.Handshake.Completed)
         Note("the DWM did not offer a GDI redirection surface for this window on this adapter (see HANDSHAKE)");
 
-    if (!probe.Opt.HandshakeOnly)
-    {
-        RunVariants(&probe);
-        if (probe.Opt.Update) UpdateAfterSuccess(&probe);
-    }
+    if (!probe.Opt.HandshakeOnly) RunVariants(&probe);
+    if (probe.Opt.Update) UpdateAfterHandshake(&probe);
 
     {
         POINT origin = { 0, 0 };
         UINT32 c = probe.Opt.Color;
 
         ClientToScreen(probe.Window, &origin);
-        printf("capture_ready rgb=%u,%u,%u x=%ld y=%ld width=%ld height=%ld hold_ms=%lu\n", (c >> 16) & 0xFF, (c >> 8) & 0xFF,
-               c & 0xFF, origin.x, origin.y, probe.Client.right, probe.Client.bottom, probe.Opt.HoldSeconds * 1000);
+        printf("capture_ready rgb=%u,%u,%u x=%ld y=%ld width=%ld height=%ld hold_ms=%lu source=%d\n", (c >> 16) & 0xFF,
+               (c >> 8) & 0xFF, c & 0xFF, origin.x, origin.y, probe.Client.right, probe.Client.bottom,
+               probe.Opt.HoldSeconds * 1000, probe.hSource != 0);
         Stamp("hold");
         Pump(probe.Opt.HoldSeconds * 1000);
     }
 
 done:
-    printf("SUMMARY ordinal100=%d ordinal101=%d handshakes=%u handshake_hr=0x%08lX first_success=%s", probe.GetSurface != NULL,
-           probe.UpdateSurface != NULL, probe.HandshakeCount, (unsigned long)probe.Handshake.hr,
-           probe.FirstSuccess >= 0 ? g_VariantNames[probe.FirstSuccess] : "none");
+    printf("SUMMARY ordinal100=%d ordinal101=%d handshakes=%u handshake_hr=0x%08lX handle_kind=%s destination_ready=%d first_success=%s",
+           probe.GetSurface != NULL, probe.UpdateSurface != NULL, probe.HandshakeCount, (unsigned long)probe.Handshake.hr,
+           probe.Handshake.Kind == HandleNt ? "nt" : probe.Handshake.Kind == HandleGlobal ? "global" : "unknown",
+           probe.Opened.Ready, probe.FirstSuccess >= 0 ? g_VariantNames[probe.FirstSuccess] : "none");
     for (v = 0; v < VariantCount; v++)
         if (probe.VariantRan[v]) printf(" %s=0x%08lX", g_VariantNames[v], (unsigned long)probe.VariantStatus[v]);
-    printf("\n");
+    printf(" exit=%d\n", code);
     Teardown(&probe);
     SetEvent(g_Done);
     return code;
