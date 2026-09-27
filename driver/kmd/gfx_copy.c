@@ -51,3 +51,8 @@ unsigned int Bc250EmitGfxCopy(unsigned int* buffer, unsigned int capacity,
 {
     return Bc250EmitGfxCopySpan(buffer, capacity, source, destination, bytes, 1, 1);
 }
+
+unsigned int Bc250GfxCopyNop(void)
+{
+    return (unsigned int)PACKET3(PACKET3_NOP, 0x3fff);
+}

@@ -18,3 +18,6 @@ unsigned int Bc250GfxCopyMaxBytes(void);
 unsigned int Bc250EmitGfxCopySpan(unsigned int* Buffer, unsigned int CapacityDwords,
     unsigned long long Source, unsigned long long Destination, unsigned int Bytes,
     int WaitBefore, int SyncAfter);
+
+/* Single-word CP padding used for the GFX IB alignment tail. */
+unsigned int Bc250GfxCopyNop(void);

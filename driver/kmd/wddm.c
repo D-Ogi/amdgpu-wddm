@@ -16,6 +16,7 @@
 #include "firmware_metadata.h"
 #include "gfx_completion_queue.h"
 #include "gfx_blt.h"
+#include "gfx_copy.h"
 #include "paging_private.h"
 #include <ntstrsafe.h>
 
@@ -162,6 +163,8 @@ typedef struct _BC250_WDDM_OBJECT {
     UINT NodeOrdinal;                   // contexts
     ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
     PAGING_CAPTURE_OWNER Captures;     // contexts: CPU-only plans, released on completion or object teardown
+    HANDLE OwnerDevice;                 // contexts/opened allocations: DDI device identity
+    HANDLE BackingAllocation;           // opened: verified CreateAllocation object, never guessed
     UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
     // M8: a context or allocation that arrived as a contract blob (umd_blob.c), not the GDI one above.
@@ -2420,6 +2423,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     }
     object = WddmNewContext(parent->Device,(BOOLEAN)pCreateContext->Flags.SystemContext);
     if (object == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    object->OwnerDevice = hDevice;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
     object->SystemContext = (BOOLEAN)pCreateContext->Flags.SystemContext;
     if (umd)
@@ -2451,7 +2455,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // run 003): dxgkrnl had nowhere to put the two surfaces of a Blt, and a driver that cannot name the source
     // cannot show it. Still no patch-location list: with virtual addressing there is nothing to patch.
     pCreateContext->ContextInfo.AllocationListSize =
-        !umd ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
+        (!umd || parentWddm->GpuPresentGate) ? DXGK_ALLOCATION_LIST_SIZE_GDICONTEXT : 0;
     object->AllocationListSize = pCreateContext->ContextInfo.AllocationListSize;
     // Review 14: the adapter declares GpuMmu, so no context should come without virtual addressing. If one does, it
     // has a list, no patch list and no Patch DDI behind it - say so here rather than leave it to a 0x113 later.
@@ -2930,6 +2934,14 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
             if (opened != NULL) opened->Allocation = *private;
+        }
+        if (opened != NULL) {
+            opened->OwnerDevice = hDevice;
+            // GetHandleData is authoritative only when its result names a live
+            // CreateAllocation object. Historical CDD handles did not; retain
+            // CPU compatibility, but do not admit those to the new GPU path.
+            opened->BackingAllocation = WddmListedObject((BC250_WDDM*)parent->Device->Wddm,
+                raw, BC250_WDDM_MAGIC_ALLOCATION);
         }
         info->hDeviceSpecificAllocation = opened;
         if (parent->Device->Wddm != NULL && ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] < BC250_WDDM_LOG_CALLS)
@@ -4835,6 +4847,78 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
                  (toFlip ? "flipped surface" : "POST framebuffer"), mapFailed ? " (mapping failed, fell back)" : "");
 }
 
+// Build a complete OS-owned IB. The gate remains diagnostic until CDD/UMD
+// admission, cache ordering and lifecycle have been verified on the exact build.
+static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT* Present)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
+    BC250_WDDM_OBJECT *opened[2], *backing[2];
+    BC250_BLIT_SURFACE surface[2];
+    BC250_BLIT_RECT src, dst, *dirty=NULL;
+    ULONGLONG va[2], ib=Present->DmaBufferGpuVirtualAddress;
+    ULONG record[BC250_GFX_PRESENT_RECORD_BYTES/sizeof(ULONG)];
+    UINT i,next=Present->MultipassOffset,written=0;
+    BC250_GFX_BLIT_RESULT result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    if (Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
+        !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
+        (Present->SubRectCnt && !Present->pDstSubRects)) return status;
+    if (!Present->pDmaBuffer || ((ULONG_PTR)Present->pDmaBuffer&3u) ||
+        Present->DmaSize<32 || (Present->DmaSize&31u) ||
+        !Present->pDmaBufferPrivateData || Present->DmaBufferPrivateDataSize<sizeof(record))
+        return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize)) return status;
+    for (i=0;i<2;i++) {
+        const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
+            (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
+        const BC250_WDDM_ALLOCATION_PRIVATE* a;
+        if (info->PhysicalAdapterIndex) return status;
+        opened[i]=WddmListedObject(wddm,info->hDeviceSpecificAllocation,BC250_WDDM_MAGIC_OPENED);
+        if (!opened[i] || opened[i]->OwnerDevice!=Context->OwnerDevice || opened[i]->UmdAlloc) return status;
+        backing[i]=WddmListedObject(wddm,opened[i]->BackingAllocation,BC250_WDDM_MAGIC_ALLOCATION);
+        if (!backing[i] || backing[i]->UmdAlloc ||
+            RtlCompareMemory(&backing[i]->Allocation,&opened[i]->Allocation,
+                sizeof(opened[i]->Allocation))!=sizeof(opened[i]->Allocation)) return status;
+        a=&opened[i]->Allocation;
+        if (!WddmLinearColorFormat(a->Format)) return status;
+        surface[i].Width=a->Width;surface[i].Height=a->Height;surface[i].Pitch=a->Pitch;
+        surface[i].Bytes=a->Size;surface[i].Format=WddmRedFirst(a->Format)?Bc250BltRgba8:Bc250BltBgra8;
+        va[i]=info->AllocationVirtualAddress;
+        if (!va[i] || (va[i]&(PAGE_SIZE-1)) || !a->Size || va[i]>MAXULONGLONG-(a->Size-1)) return status;
+        // The active command allocation must never be a copy source or target.
+        if (ib<=va[i] ? va[i]-ib<Present->DmaSize : ib-va[i]<a->Size) return status;
+    }
+    // Distinct VidMm allocations, not merely distinct opened handles or VAs.
+    // This driver does not create LB7A over externally supplied system memory.
+    if (backing[0]==backing[1] || opened[0]->Allocation.Format!=opened[1]->Allocation.Format) return status;
+    src.Left=Present->SrcRect.left;src.Top=Present->SrcRect.top;
+    src.Right=Present->SrcRect.right;src.Bottom=Present->SrcRect.bottom;
+    dst.Left=Present->DstRect.left;dst.Top=Present->DstRect.top;
+    dst.Right=Present->DstRect.right;dst.Bottom=Present->DstRect.bottom;
+    if (Present->SubRectCnt) {
+        if (Present->SubRectCnt>MAXULONG/sizeof(*dirty)) return status;
+        dirty=ExAllocatePool2(POOL_FLAG_NON_PAGED,(SIZE_T)Present->SubRectCnt*sizeof(*dirty),BC250_WDDM_TAG);
+        if (!dirty) return STATUS_INSUFFICIENT_RESOURCES;
+        for(i=0;i<Present->SubRectCnt;i++) {
+            dirty[i].Left=Present->pDstSubRects[i].left;dirty[i].Top=Present->pDstSubRects[i].top;
+            dirty[i].Right=Present->pDstSubRects[i].right;dirty[i].Bottom=Present->pDstSubRects[i].bottom;
+        }
+    }
+    result=Bc250EmitGfxBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
+        va[0],va[1],Present->MultipassOffset,&next,Present->pDmaBuffer,Present->DmaSize/4u,&written);
+    if (dirty) ExFreePoolWithTag(dirty,BC250_WDDM_TAG);
+    if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return status;
+    // Consume the entire aligned DMA buffer, one record/IB. This prevents two
+    // Present records being appended while the consumer expects one exact span.
+    for(i=written;i<Present->DmaSize/4u;i++)((ULONG*)Present->pDmaBuffer)[i]=Bc250GfxCopyNop();
+    KeMemoryBarrier();
+    RtlCopyMemory(Present->pDmaBufferPrivateData,record,sizeof(record));
+    Present->pDmaBuffer=(UCHAR*)Present->pDmaBuffer+Present->DmaSize;
+    Present->pDmaBufferPrivateData=(UCHAR*)Present->pDmaBufferPrivateData+sizeof(record);
+    Present->MultipassOffset=next;
+    return result==Bc250GfxBltMore ? STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER : STATUS_SUCCESS;
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -4883,6 +4967,9 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
                  pPresent->DstRect.right, pPresent->DstRect.bottom, pPresent->SrcRect.left, pPresent->SrcRect.top,
                  pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);
     }
+    if (context != NULL && pPresent->Flags.Blt &&
+        ((BC250_WDDM*)context->Device->Wddm)->GpuPresentGate)
+        return WddmBuildGpuPresent(context,pPresent);
     if (context != NULL && !context->UmdContext && pPresent->Flags.Value == 1 &&
         ((BC250_WDDM*)context->Device->Wddm)->BlitGate)
     {
