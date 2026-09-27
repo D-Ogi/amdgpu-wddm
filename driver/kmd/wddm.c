@@ -4359,16 +4359,19 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     // Driver-generated GPU Present must be recognized before UMD BC2S dispatch.
     // The record is OS-owned private data, with an exact VA/length binding. No
     // malformed BGP1 can fall through to BC2S or CPU E26P completion.
+    // M656: even a non-UMD Present reports our consumed24-byte private record
+    // as DmaBufferUmdPrivateDataSize. It is not required to be zero here.
+    // Accept exactly the producer's record span, never arbitrary UMD data.
     if (pSubmitCommand->Flags.Present && pSubmitCommand->pDmaBufferPrivateData != NULL &&
         pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(ULONG) &&
         *(const ULONG*)pSubmitCommand->pDmaBufferPrivateData == BC250_GFX_PRESENT_MAGIC)
     {
         if (wddm == NULL || !wddm->GpuPresentGate || context == NULL || context->UmdContext ||
             node != BC250_WDDM_NODE_3D || context->RootPhysical == 0 ||
-            pSubmitCommand->DmaBufferUmdPrivateDataSize != 0 || KeGetCurrentIrql() > APC_LEVEL ||
-            !Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
-                pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferVirtualAddress,
-                pSubmitCommand->DmaBufferSize)) {
+            KeGetCurrentIrql() > APC_LEVEL ||
+            !Bc250GfxPresentSubmitMatches(pSubmitCommand->pDmaBufferPrivateData,
+                pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferUmdPrivateDataSize,
+                pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize)) {
             LONG64 rejected = wddm ? InterlockedIncrement64(&wddm->GpuPresentSubmitRejected) : 0;
             // DWM026 built valid-looking IB spans but failed admission. Keep the
             // original checks; expose every input before changing any contract.

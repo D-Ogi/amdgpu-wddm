@@ -1,0 +1,35 @@
+{
+  "rejects": {
+    "1": {
+      "ctx": "   523      1.582 wddm: GPU Present reject1 ctxFFFF978FC144CCF0 fence1 node0 irql0",
+      "gate": "   524      1.582 wddm: GPU Present reject1 gate1 umd0 root46DFFF000 private2184 umdprivate24",
+      "va": "   525      1.582 wddm: GPU Present reject1 va11000 bytes4096 match1",
+      "words": "   526      1.582 wddm: GPU Present reject1 words 31504742 00000001 00000018 00001000 00011000 00000000",
+      "root_binding": "   521      1.582 wddm: root binding handleFFFF978FC144CCF0 ctxFFFF978FC144CCF0 ownerFFFF978FC144CB30 resolved1 physical46DFFF000 irql0"
+    },
+    "2": {
+      "ctx": "   648      1.721 wddm: GPU Present reject2 ctxFFFF978FC466D190 fence2 node0 irql0",
+      "gate": "   650      1.721 wddm: GPU Present reject2 gate1 umd0 root46DFFF000 private2184 umdprivate24",
+      "va": "   651      1.721 wddm: GPU Present reject2 va11A7000 bytes4096 match1",
+      "words": "   653      1.721 wddm: GPU Present reject2 words 31504742 00000001 00000018 00001000 011A7000 00000000",
+      "root_binding": "   645      1.721 wddm: root binding handleFFFF978FC466D190 ctxFFFF978FC466D190 ownerFFFF978FC466B4B0 resolved1 physical46DFFF000 irql0"
+    },
+    "3": {
+      "ctx": "   792      1.908 wddm: GPU Present reject3 ctxFFFF978FC466EA10 fence3 node0 irql0",
+      "gate": "   794      1.908 wddm: GPU Present reject3 gate1 umd0 root46DFFF000 private2184 umdprivate24",
+      "va": "   796      1.908 wddm: GPU Present reject3 va10000 bytes4096 match1",
+      "words": "   798      1.908 wddm: GPU Present reject3 words 31504742 00000001 00000018 00001000 00010000 00000000",
+      "root_binding": "   789      1.908 wddm: root binding handleFFFF978FC466EA10 ctxFFFF978FC466EA10 ownerFFFF978FC466EE70 resolved1 physical46DFFF000 irql0"
+    },
+    "4": {
+      "ctx": "   879      1.976 wddm: GPU Present reject4 ctxFFFF978FC466FB90 fence4 node0 irql0",
+      "gate": "   880      1.976 wddm: GPU Present reject4 gate1 umd0 root46DFFF000 private2184 umdprivate24",
+      "va": "   881      1.976 wddm: GPU Present reject4 va8DB000 bytes4096 match1",
+      "words": "   882      1.976 wddm: GPU Present reject4 words 31504742 00000001 00000018 00001000 008DB000 00000000",
+      "root_binding": "   877      1.976 wddm: root binding handleFFFF978FC466FB90 ctxFFFF978FC466FB90 ownerFFFF978FC4670A70 resolved1 physical46DFFF000 irql0"
+    }
+  },
+  "raw_files": {
+    "startup-log-004.txt": "5a582d3f8d337b15018e5688b9feac8b625c09f613ea805f6b83e4c8457e54d9"
+  }
+}

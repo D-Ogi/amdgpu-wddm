@@ -46,6 +46,12 @@ int Bc250GfxPresentRecord(void* Record, unsigned int Capacity,
 int Bc250GfxPresentMatches(const void* Record, unsigned int Capacity,
     unsigned long long Address, unsigned int Bytes);
 
+/* Non-UMD Present submission: dxgkrnl reports the producer's consumed private
+ * span in DmaBufferUmdPrivateDataSize (M656). Require exactly one BGP1 record,
+ * independently of the larger OS-owned buffer capacity. */
+int Bc250GfxPresentSubmitMatches(const void* Record, unsigned int Capacity,
+    unsigned int UsedPrivateBytes, unsigned long long Address, unsigned int Bytes);
+
 /* Complete Present IB: acquire before every pass, copies, full NOP padding.
  * Capacity must be a multiple of eight DWORDs and at least16. Offset counts
  * copy packets only. Invalid/no-space never writes Buffer. Residency and
