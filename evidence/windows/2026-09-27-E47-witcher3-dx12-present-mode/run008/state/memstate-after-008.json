@@ -1,0 +1,152 @@
+{
+    "tag":  "after-008",
+    "utc":  "2026-09-27T05:23:54.4920579Z",
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "total_visible_mb":  7912,
+    "free_physical_mb":  4540,
+    "total_virtual_mb":  40680,
+    "free_virtual_mb":  35492,
+    "counters_bytes":  {
+                           "\\memory\\modified page list bytes":  4263936,
+                           "\\memory\\standby cache normal priority bytes":  133017600,
+                           "\\memory\\free \u0026 zero page list bytes":  4101210112,
+                           "\\memory\\pool nonpaged bytes":  370278400,
+                           "\\memory\\committed bytes":  5452042240,
+                           "\\memory\\available bytes":  4740378624,
+                           "\\memory\\commit limit":  42655780864,
+                           "\\memory\\cache bytes":  63332352,
+                           "\\memory\\pool paged bytes":  312889344
+                       },
+    "processes":  {
+                      "dwm":  [
+                                  {
+                                      "ws_mb":  155,
+                                      "pid":  4596,
+                                      "threads":  48,
+                                      "handles":  1003,
+                                      "paged_mb":  143,
+                                      "nonpaged_kb":  121,
+                                      "private_mb":  143
+                                  }
+                              ],
+                      "bc250mon":  [
+                                       {
+                                           "ws_mb":  37,
+                                           "pid":  4436,
+                                           "threads":  41,
+                                           "handles":  726,
+                                           "paged_mb":  44,
+                                           "nonpaged_kb":  33,
+                                           "private_mb":  44
+                                       }
+                                   ],
+                      "powershell":  [
+                                         {
+                                             "ws_mb":  23,
+                                             "pid":  3080,
+                                             "threads":  20,
+                                             "handles":  647,
+                                             "paged_mb":  97,
+                                             "nonpaged_kb":  30,
+                                             "private_mb":  97
+                                         },
+                                         {
+                                             "ws_mb":  53,
+                                             "pid":  6324,
+                                             "threads":  26,
+                                             "handles":  600,
+                                             "paged_mb":  48,
+                                             "nonpaged_kb":  26,
+                                             "private_mb":  48
+                                         },
+                                         {
+                                             "ws_mb":  80,
+                                             "pid":  7396,
+                                             "threads":  29,
+                                             "handles":  766,
+                                             "paged_mb":  69,
+                                             "nonpaged_kb":  31,
+                                             "private_mb":  69
+                                         }
+                                     ],
+                      "csrss":  [
+                                    {
+                                        "ws_mb":  6,
+                                        "pid":  856,
+                                        "threads":  11,
+                                        "handles":  588,
+                                        "paged_mb":  2,
+                                        "nonpaged_kb":  23,
+                                        "private_mb":  2
+                                    },
+                                    {
+                                        "ws_mb":  14,
+                                        "pid":  940,
+                                        "threads":  15,
+                                        "handles":  600,
+                                        "paged_mb":  2,
+                                        "nonpaged_kb":  25,
+                                        "private_mb":  2
+                                    }
+                                ]
+                  },
+    "top_working_set":  [
+                            {
+                                "private_mb":  727,
+                                "pid":  11160,
+                                "name":  "steamwebhelper",
+                                "ws_mb":  534
+                            },
+                            {
+                                "private_mb":  430,
+                                "pid":  7084,
+                                "name":  "MsMpEng",
+                                "ws_mb":  338
+                            },
+                            {
+                                "private_mb":  192,
+                                "pid":  4964,
+                                "name":  "explorer",
+                                "ws_mb":  232
+                            },
+                            {
+                                "private_mb":  143,
+                                "pid":  4596,
+                                "name":  "dwm",
+                                "ws_mb":  155
+                            },
+                            {
+                                "private_mb":  48,
+                                "pid":  6240,
+                                "name":  "msedge",
+                                "ws_mb":  134
+                            },
+                            {
+                                "private_mb":  98,
+                                "pid":  11044,
+                                "name":  "steamwebhelper",
+                                "ws_mb":  114
+                            },
+                            {
+                                "private_mb":  156,
+                                "pid":  10008,
+                                "name":  "steam",
+                                "ws_mb":  107
+                            },
+                            {
+                                "private_mb":  102,
+                                "pid":  13272,
+                                "name":  "steamwebhelper",
+                                "ws_mb":  101
+                            }
+                        ],
+    "kmd_health":  "health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=19743 age_ms=26 ready_ms=2448172",
+    "kmd_clock":  "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67875 ready=1",
+    "tctl":  67.9,
+    "kmd_driver":  {
+                       "inf":  "oem124.inf",
+                       "version":  "0.7.153.1",
+                       "device":  "BC-250 GPU (bc250kmd, display-only, lab build)"
+                   },
+    "dwm_pid":  4596
+}

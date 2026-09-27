@@ -1,0 +1,152 @@
+start 2026-09-27T07:17:07.6292473+02:00
+temperature_before=67.1
+health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=13490 age_ms=218 ready_ms=2043379
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67125 ready=1
+exe 609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5
+settings_before=58327E6D88E3C801FFD56F2472FC68CAF87DAC8F2DA1AA5080B45C9E4B3E4606
+saves_before=115
+icd_swapped=6661C2D2
+Smoke PASS: content, live module identity, unchanged boot
+smoke_exit=0
+{
+    "exit_code":  0,
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "loaded_artifacts":  {
+                             "vulkan_radeon.dll":  "6661C2D2FE1DBAAAAA007D1686A0C42F33E7A9F5204DC0681EF98AA404F952AD"
+                         },
+    "error":  "",
+    "status":  "PASS",
+    "config_sha256":  "6C439DB1BC9656331E7EB7093F48D2AFD8EA8E54182E4A9B04627C7F36E281CC"
+}
+package placed
+pid=5584
+module 0s C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\d3d12.dll 7B77ED5C
+module 0s C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\dxgi.dll 2E674A56
+t=0 tctl=67.1 ws_mb=20 responding=True present_csv_bytes=0
+module 3s C:\Windows\SYSTEM32\vulkan-1.dll 5C42CA8E
+module 3s C:\Windows\system32\dxgi.dll DDC578A2
+module 3s C:\BC250\m10\wsi-final\vulkan_radeon.dll 6661C2D2
+module 3s C:\Windows\system32\DComp.DLL 285F0317
+module 3s C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3\bin\x64_dx12\d3d12core.dll 90B1DAD6
+t=3 tctl=67.1 ws_mb=121 responding=True present_csv_bytes=0
+t=6 tctl=67.1 ws_mb=1060 responding=True present_csv_bytes=0
+t=10 tctl=67.1 ws_mb=1064 responding=True present_csv_bytes=0
+t=13 tctl=67 ws_mb=241 responding=True present_csv_bytes=0
+t=16 tctl=67.1 ws_mb=312 responding=True present_csv_bytes=0
+t=19 tctl=67.1 ws_mb=419 responding=True present_csv_bytes=0
+t=22 tctl=67.1 ws_mb=628 responding=True present_csv_bytes=0
+window 25s 'The Witcher 3'
+t=25 tctl=67.1 ws_mb=828 responding=True present_csv_bytes=0
+t=31 tctl=67.2 ws_mb=1437 responding=True present_csv_bytes=317
+auto screenshot 0 at 32s
+t=35 tctl=67.5 ws_mb=1328 responding=True present_csv_bytes=3892
+t=39 tctl=67.4 ws_mb=1416 responding=True present_csv_bytes=7506
+t=42 tctl=67.4 ws_mb=1398 responding=True present_csv_bytes=11153
+t=45 tctl=67.4 ws_mb=1365 responding=True present_csv_bytes=14797
+t=48 tctl=67.4 ws_mb=1365 responding=True present_csv_bytes=22093
+t=51 tctl=67.4 ws_mb=1365 responding=True present_csv_bytes=25736
+t=54 tctl=67.4 ws_mb=1365 responding=True present_csv_bytes=29384
+t=57 tctl=67.4 ws_mb=1365 responding=True present_csv_bytes=33032
+t=61 tctl=67.5 ws_mb=1365 responding=True present_csv_bytes=36677
+auto screenshot 1 at 66s
+t=70 tctl=68.1 ws_mb=1365 responding=True present_csv_bytes=47620
+t=73 tctl=68.1 ws_mb=1365 responding=True present_csv_bytes=54917
+t=76 tctl=68.2 ws_mb=1365 responding=True present_csv_bytes=58590
+t=79 tctl=68.1 ws_mb=1365 responding=True present_csv_bytes=62299
+t=82 tctl=68.1 ws_mb=1359 responding=True present_csv_bytes=66011
+t=85 tctl=68 ws_mb=1359 responding=True present_csv_bytes=69723
+t=89 tctl=68 ws_mb=1320 responding=True present_csv_bytes=73435
+t=92 tctl=67.9 ws_mb=1320 responding=True present_csv_bytes=77147
+auto screenshot 2 at 97s
+t=100 tctl=67.9 ws_mb=1320 responding=True present_csv_bytes=91995
+t=103 tctl=67.9 ws_mb=1320 responding=True present_csv_bytes=95707
+t=107 tctl=67.9 ws_mb=1320 responding=True present_csv_bytes=99418
+t=110 tctl=68.1 ws_mb=1320 responding=True present_csv_bytes=103130
+t=113 tctl=68.1 ws_mb=1349 responding=True present_csv_bytes=106843
+t=116 tctl=68.2 ws_mb=1488 responding=True present_csv_bytes=110555
+t=119 tctl=68.4 ws_mb=1924 responding=True present_csv_bytes=114266
+t=123 tctl=68.4 ws_mb=2013 responding=True present_csv_bytes=117979
+auto screenshot 3 at 129s
+t=132 tctl=68.2 ws_mb=2393 responding=True present_csv_bytes=129115
+t=135 tctl=68.4 ws_mb=2596 responding=True present_csv_bytes=136539
+t=140 tctl=68.2 ws_mb=2891 responding=False present_csv_bytes=140251
+t=148 tctl=68.4 ws_mb=2952 responding=True present_csv_bytes=151387
+t=153 tctl=70.2 ws_mb=3146 responding=True present_csv_bytes=151387
+auto screenshot 4 at 153s
+t=156 tctl=70 ws_mb=3457 responding=True present_csv_bytes=155098
+t=159 tctl=69.9 ws_mb=3457 responding=True present_csv_bytes=158809
+t=162 tctl=69.8 ws_mb=3365 responding=True present_csv_bytes=158809
+t=166 tctl=69.6 ws_mb=3394 responding=True present_csv_bytes=162521
+t=169 tctl=69.5 ws_mb=3401 responding=True present_csv_bytes=166233
+t=172 tctl=69.4 ws_mb=3381 responding=True present_csv_bytes=169944
+t=175 tctl=69.2 ws_mb=3359 responding=True present_csv_bytes=173656
+t=178 tctl=69.1 ws_mb=3325 responding=True present_csv_bytes=177368
+t=181 tctl=69.1 ws_mb=3149 responding=True present_csv_bytes=177368
+auto screenshot 5 at 187s
+t=190 tctl=69 ws_mb=3011 responding=True present_csv_bytes=188501
+t=193 tctl=68.9 ws_mb=3003 responding=True present_csv_bytes=188501
+t=196 tctl=68.9 ws_mb=2966 responding=True present_csv_bytes=192213
+t=199 tctl=68.9 ws_mb=2966 responding=True present_csv_bytes=195925
+t=203 tctl=68.9 ws_mb=2967 responding=True present_csv_bytes=199637
+t=206 tctl=68.9 ws_mb=2966 responding=True present_csv_bytes=203349
+t=209 tctl=68.9 ws_mb=2947 responding=True present_csv_bytes=207061
+t=212 tctl=69 ws_mb=2852 responding=True present_csv_bytes=210771
+auto screenshot 6 at 218s
+t=221 tctl=69.8 ws_mb=2686 responding=True present_csv_bytes=218193
+t=224 tctl=69.8 ws_mb=2637 responding=True present_csv_bytes=221905
+t=227 tctl=69.8 ws_mb=2599 responding=True present_csv_bytes=225617
+t=230 tctl=69.6 ws_mb=2575 responding=True present_csv_bytes=225617
+t=234 tctl=69.6 ws_mb=2511 responding=True present_csv_bytes=229329
+t=237 tctl=69.6 ws_mb=2466 responding=True present_csv_bytes=233041
+t=240 tctl=69.5 ws_mb=2401 responding=True present_csv_bytes=236753
+t=243 tctl=69.5 ws_mb=2401 responding=True present_csv_bytes=240465
+auto screenshot 7 at 249s
+t=252 tctl=69.5 ws_mb=2381 responding=True present_csv_bytes=247889
+t=255 tctl=69.5 ws_mb=2382 responding=True present_csv_bytes=251601
+t=258 tctl=69.5 ws_mb=2382 responding=True present_csv_bytes=255313
+t=261 tctl=69.4 ws_mb=2335 responding=True present_csv_bytes=259024
+t=264 tctl=69.4 ws_mb=2308 responding=True present_csv_bytes=259024
+t=267 tctl=69.4 ws_mb=2308 responding=True present_csv_bytes=262736
+t=271 tctl=69.4 ws_mb=2294 responding=True present_csv_bytes=266448
+auto screenshot 8 at 276s
+t=279 tctl=69.6 ws_mb=2220 responding=True present_csv_bytes=273872
+t=282 tctl=69.5 ws_mb=2180 responding=True present_csv_bytes=277585
+t=285 tctl=69.5 ws_mb=2116 responding=True present_csv_bytes=281297
+t=289 tctl=69.5 ws_mb=2060 responding=True present_csv_bytes=285008
+t=292 tctl=69.5 ws_mb=2036 responding=True present_csv_bytes=288720
+t=295 tctl=69.5 ws_mb=2033 responding=True present_csv_bytes=292431
+t=298 tctl=69.5 ws_mb=2033 responding=True present_csv_bytes=292431
+t=301 tctl=69.5 ws_mb=2034 responding=True present_csv_bytes=296142
+auto screenshot 9 at 306s
+t=310 tctl=69.6 ws_mb=2035 responding=True present_csv_bytes=307277
+t=313 tctl=69.6 ws_mb=2023 responding=True present_csv_bytes=307277
+t=316 tctl=69.6 ws_mb=1995 responding=True present_csv_bytes=310989
+t=319 tctl=69.6 ws_mb=1994 responding=True present_csv_bytes=314700
+t=322 tctl=69.8 ws_mb=1989 responding=True present_csv_bytes=318412
+stop file seen at 325s
+{
+    "elapsed_seconds":  325,
+    "exit_code":  null,
+    "has_exited":  false,
+    "end_reason":  "stop-file",
+    "last_title":  "The Witcher 3",
+    "auto_screenshots":  10
+}
+killing pid 5584
+present_csv_bytes=322124
+present_chain: # chain 0000021A8C917080 1920x1200 format 37 images 3 path gdi
+present_chain: # chain 0000021A8C9185B0 1920x1200 format 37 images 3 path gdi
+vkd3d_fence_export_errors=0
+removed d3d12.dll
+removed dxgi.dll
+removed d3d12core.dll
+registered ICD restored to 93B1D1FD
+settings unchanged
+saves_after=115 (before 115)
+icd_after=93B1D1FD
+health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=19664 age_ms=332 ready_ms=2390465
+clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=69625 ready=1
+temperature_after=69.6
+dwm=4596
+end 2026-09-27T07:22:54.8327701+02:00
+run_exit=0

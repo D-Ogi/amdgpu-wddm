@@ -1,0 +1,37 @@
+{
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\d3d12.dll":  {
+                                                                                                       "t":  0,
+                                                                                                       "path":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\d3d12.dll",
+                                                                                                       "sha256":  "7B77ED5C"
+                                                                                                   },
+    "C:\\Windows\\system32\\dxgi.dll":  {
+                                            "t":  3,
+                                            "path":  "C:\\Windows\\system32\\dxgi.dll",
+                                            "sha256":  "DDC578A2"
+                                        },
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\d3d12core.dll":  {
+                                                                                                           "t":  3,
+                                                                                                           "path":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\d3d12core.dll",
+                                                                                                           "sha256":  "90B1DAD6"
+                                                                                                       },
+    "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll":  {
+                                                         "t":  3,
+                                                         "path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+                                                         "sha256":  "6661C2D2"
+                                                     },
+    "C:\\Windows\\SYSTEM32\\vulkan-1.dll":  {
+                                                "t":  3,
+                                                "path":  "C:\\Windows\\SYSTEM32\\vulkan-1.dll",
+                                                "sha256":  "5C42CA8E"
+                                            },
+    "C:\\Windows\\system32\\DComp.DLL":  {
+                                             "t":  3,
+                                             "path":  "C:\\Windows\\system32\\DComp.DLL",
+                                             "sha256":  "285F0317"
+                                         },
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\dxgi.dll":  {
+                                                                                                      "t":  0,
+                                                                                                      "path":  "C:\\Program Files (x86)\\Steam\\steamapps\\common\\The Witcher 3\\bin\\x64_dx12\\dxgi.dll",
+                                                                                                      "sha256":  "2E674A56"
+                                                                                                  }
+}
