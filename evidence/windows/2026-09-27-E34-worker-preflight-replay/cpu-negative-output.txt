@@ -1,0 +1,9 @@
+﻿Baseline UMD/ICD mismatch
+At C:\BC250\m13\wsi-preflight001\preflight.ps1:25 char:113
++ ... 4A076CBEA2695DC8044CEF806A6F735E'){throw 'Baseline UMD/ICD mismatch'}
++                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Baseline UMD/ICD mismatch:String) [], RuntimeExc 
+   eption
+    + FullyQualifiedErrorId : Baseline UMD/ICD mismatch
+ 
+
