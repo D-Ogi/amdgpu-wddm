@@ -347,6 +347,7 @@ typedef struct _BC250_WDDM {
     UINT PrimarySegment;
 
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
+    volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BOOLEAN BlitGate;
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
@@ -2559,6 +2560,22 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
         pData->pCreateStagingSurfaceData->Pitch = private.Pitch;
     else if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
         pData->pCreateGdiSurfaceData->Pitch = private.Pitch;
+
+    // Retain the CDD/DWM allocation contract independently of the shared first-DDI
+    // log budget: primary/shadow requests can exhaust it before a GDI request.
+    // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
+    // Separate the size query from the private-data fill, at most20 lines per start.
+    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE)
+    {
+        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
+        ULONG slot = type <= 8 ? type : 9;
+        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
+        LONG bit = (LONG)(1u << (slot * 2 + fill));
+        if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
+            GuardLog("wddm: GDI surface type %u flags 0x%08X phase %s %ux%u format %u pitch %u bytes %llu",
+                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
+                     private.Width, private.Height, private.Format, private.Pitch, private.Size);
+    }
 
     // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
     if (pData->pAllocationPrivateDriverData != NULL)
