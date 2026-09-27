@@ -346,7 +346,7 @@ typedef struct _BC250_WDDM {
     volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BOOLEAN BlitGate;
     BOOLEAN HandleIdentityProbe;
-    volatile LONG HandleIdentityProbeCalls[2]; // at most16 LB7A and16 BC2A opens per start
+    volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
     BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
@@ -2902,9 +2902,10 @@ static void WddmProbeHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINF
     void* acquired=NULL;
     BC250_WDDM_OBJECT* live=NULL;
     BOOLEAN attempted=FALSE;
-    ULONG kind=UmdBlobIsAlloc(Info->pPrivateDriverData,Info->PrivateDriverDataSize)?1u:0u;
-    if (!wddm || !wddm->HandleIdentityProbe ||
-        InterlockedIncrement(&wddm->HandleIdentityProbeCalls[kind])>16) return;
+    ULONG kind;
+    if (!wddm || !wddm->HandleIdentityProbe) return;
+    kind=UmdBlobIsAlloc(Info->pPrivateDriverData,Info->PrivateDriverDataSize)?1u:0u;
+    if (InterlockedIncrement(&wddm->HandleIdentityProbeCalls[kind])>16) return;
     if (KeGetCurrentIrql()<=APC_LEVEL &&
         Device->Dxgk.Size>=FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbReleaseHandleData)+sizeof(Device->Dxgk.DxgkCbReleaseHandleData) &&
         Device->Dxgk.DxgkCbAcquireHandleData && Device->Dxgk.DxgkCbReleaseHandleData) {
@@ -2913,15 +2914,16 @@ static void WddmProbeHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINF
         release.Type=DXGK_HANDLE_ALLOCATION;
         attempted=TRUE;
         acquired=Device->Dxgk.DxgkCbAcquireHandleData(&query,&release.ReleaseHandle);
-        if (acquired) {
-            live=WddmListedObject(wddm,acquired,BC250_WDDM_MAGIC_ALLOCATION);
-            Device->Dxgk.DxgkCbReleaseHandleData(release);
-        }
+        if (acquired) live=WddmListedObject(wddm,acquired,BC250_WDDM_MAGIC_ALLOCATION);
+        // NULL private data does not establish that no reference was acquired.
+        // Release an explicit token even on that branch; retain the sample's
+        // paired release for a successful pointer result as well.
+        if (acquired || release.ReleaseHandle) Device->Dxgk.DxgkCbReleaseHandleData(release);
     }
     // Pointers below are comparison values only, never dereferenced after release.
-    GuardLog("wddm: identity probe kind %u flags %x handle %08X bytes %u irql %u attempted %u get %p acquire %p live %p",
+    GuardLog("wddm: identity probe kind %u flags %x handle %08X bytes %u irql %u attempted %u get %p acquire %p release %p live %p",
         kind,OpenFlags,(ULONG)Info->hAllocation,Info->PrivateDriverDataSize,(ULONG)KeGetCurrentIrql(),
-        attempted,GetResult,acquired,(void*)live);
+        attempted,GetResult,acquired,release.ReleaseHandle,(void*)live);
 }
 
 static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
