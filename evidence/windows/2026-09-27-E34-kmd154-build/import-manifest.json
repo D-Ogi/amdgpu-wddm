@@ -1,0 +1,26 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "import_source": "6df2003b339d70e18b43008d1b632deeb432a7b0",
+  "copied_files": {
+    "driver/kmd/blit_plan.c": "fb6276bf8b1263904642d329e30f7b62e7f7ba430aed7c046b062ce801cb8147",
+    "driver/kmd/blit_plan.h": "f9980e8ccac1d4b0bd49e4f68b4dd59de767ec0954e2a14a5af62592777fdfb7",
+    "driver/kmd/gfx_copy.c": "6387c6af5de1b2772d9b90fb1c0a18b2f8c29a5e1b52bab28c33c5499d1c4519",
+    "driver/kmd/gfx_copy.h": "f7dc84d267dc37f00bdcbbb29904731ec7a0ccfe510ac97cc7d624199930cc0b",
+    "driver/kmd/gfx_copy_fields.h": "fc95af0806826084ffafd6922f14b9a834958f4da0ce43fa3e70bf9ce362eb10",
+    "driver/kmd/gfx-copy-provenance.md": "a6243936e4203b31315ebbc98b38bf53dab0c206e7bf3b455a874e6f34fc4ff4",
+    "driver/kmd/gfx_blt.c": "9cf82600ff28e3ed8238c5b960aee46e7c810a07e6d9da895ae562ec62344df5",
+    "driver/kmd/gfx_blt.h": "3047be817611c5006c47b216c9341ce66535c7a71ba89f8c6ee2bf1c6fcc14f3",
+    "driver/kmd/test/blit_plan_test.c": "61cc983a40316c9f4fa5da1875dc46b1748bb9d98291fa96caa37b703bbe4894",
+    "driver/kmd/test/run_blit_plan.ps1": "335eb05bc03a793d89f07b9baaf73451605645bebf17aa00a86275226ad4858e",
+    "driver/kmd/test/gfx_copy_test.c": "4cb47b8c589cdb8f48df51875c1cabc1ad78c2e6c32b6180b201fd3b76ac5858",
+    "driver/kmd/test/run_gfx_copy.ps1": "46507e4cce3848a1f56757e5f245a7f3cdba2039a07bb02d1bde0e7387c38006",
+    "driver/kmd/test/gfx_blt_test.c": "1ea9078330148f73c4fb3ea72c27a6a8adb47b77e4c5d8ca7be821401e3aa141",
+    "driver/kmd/test/run_gfx_blt.ps1": "6c0a7c4377a9f61fb0fc86fccd4c149ff405bef1cb5a8312c95828d5488c22f8",
+    "tools/quality/quick.ps1": "252ef43f715427a1afa618357cd31f558707afbab14034b6a4beacee7f6fe314",
+    "experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md": "cbac048de2085619effb29f2c8a73592418daa1b08b34c5f70cfcb46fe6dbca8"
+  },
+  "wddm_patches": {
+    "3fb72d3-wddm.patch": "991fd625310fdd868c130fa73fffb8d06dcdee2d2fef534a2746137ab2eeb302",
+    "8f66f9c-wddm.patch": "7c7d90478967fb2ea368fb1fe03340fe52733145c2777fc1c531a21b8780431e"
+  }
+}

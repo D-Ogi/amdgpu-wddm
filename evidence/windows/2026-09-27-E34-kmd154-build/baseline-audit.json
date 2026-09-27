@@ -1,0 +1,26 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "compared_existing_driver_and_third_party_files": 303,
+  "changed_existing": [
+    "driver/kmd/bc250kmd.inf",
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/wddm.c"
+  ],
+  "new_source_files": [
+    "driver/kmd/blit_plan.c",
+    "driver/kmd/blit_plan.h",
+    "driver/kmd/gfx-copy-provenance.md",
+    "driver/kmd/gfx_blt.c",
+    "driver/kmd/gfx_blt.h",
+    "driver/kmd/gfx_copy.c",
+    "driver/kmd/gfx_copy.h",
+    "driver/kmd/gfx_copy_fields.h",
+    "driver/kmd/test/blit_plan_test.c",
+    "driver/kmd/test/gfx_blt_test.c",
+    "driver/kmd/test/gfx_copy_test.c",
+    "driver/kmd/test/run_blit_plan.ps1",
+    "driver/kmd/test/run_gfx_blt.ps1",
+    "driver/kmd/test/run_gfx_copy.ps1"
+  ],
+  "method": "full bytes, CRLF normalized only; exact WDDM patches retained separately"
+}

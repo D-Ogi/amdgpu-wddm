@@ -1,0 +1,9 @@
+{
+  "baseline-audit.json": "e5e701da3121be310c5acf8f7998e77c35d1da22ee1773e09050f9fd32936a78",
+  "build.log": "da85628de313951582897eb8aac4034144a57acdabe51354c6a6c8b14b7254b2",
+  "import-manifest.json": "910284b5cf038da3c931a2ab1a1c1a2f7e52a04ea95171aa554004316b076296",
+  "powershell5-failed-build.log": "5ee511bc548f6f548577de3ae0cb6ec41a364b30ff2251596136c360dd6ce631",
+  "quality-result.json": "3eaeda97d1f2e401762ae831e8183b33d32077ed2c6dc768bbbbda4bb1a0af0e",
+  "RESULT.md": "bd7600e30a6141a647748e3ac4b96b96514dc51ee10a21ce0c08b3fed2b97184",
+  "source-manifest.json": "0e13ef7cb2f554563bbcc51637f4497391b8016fe3645f7512879118d8d0ce72"
+}

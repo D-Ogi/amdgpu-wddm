@@ -1,0 +1,55 @@
+compile
+source capture: d7846ec37cf0ba2885591f9027bfb34650ee8ef9 clean=True
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+kmd-commands PASS 0.64s
+kmd-contract PASS 0.37s
+radv-contract PASS 0.24s
+umd-contract PASS 0.23s
+blit-plan PASS 0.82s
+gfx-copy PASS 0.82s
+gfx-blt PASS 0.89s
+blob-abi PASS 0.95s
+surface-control PASS 0.23s
+kmd-analysis PASS 0.62s
+umd-analysis PASS 3.21s
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 581 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x01C0D0  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x01AC90  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x036A20  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x044AF0  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\g0-hosted\kmd154-final\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\kmd154-final\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\kmd154-final\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7684  bc250kmd.inf
+   405392  bc250kmd.sys
+umd package
+P:\BC-250\scratch\g0-kmd154-source\driver\kmd\build.ps1 : Cannot bind parameter 'Encoding'. Cannot convert value "utf8NoBOM" to type "Microsoft.PowerShell.Commands.FileSystemCmdletProv
+iderEncoding". Error: "Unable to match the identifier name utf8NoBOM to a valid enumerator name. Specify one of the following enumerator names and try again:
+Unknown, String, Unicode, Byte, BigEndianUnicode, UTF8, UTF7, UTF32, Ascii, Default, Oem, BigEndianUTF32"
+    + CategoryInfo          : InvalidArgument: (:) [build.ps1], ParameterBindingException
+    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,build.ps1
+ 
