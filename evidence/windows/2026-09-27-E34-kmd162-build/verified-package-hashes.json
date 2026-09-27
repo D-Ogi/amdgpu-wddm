@@ -1,0 +1,15 @@
+{
+  "package": {
+    "bc250-lab-test.cer": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd",
+    "bc250kmd.cat": "bfce6c5429219976f5b3ca27ebece859b012419cb338ab94c168b4a13341885b",
+    "bc250kmd.inf": "9ce3020271cd9fb8db724b92ff7403b86e2259585d19ed45077f0b177ef28007",
+    "bc250kmd.sys": "89a7ae285abd34c17f825d51cbd3c27aca7ba7cef764122cb35a274c9bcc78f8"
+  },
+  "package-umd": {
+    "bc250-lab-test.cer": "6a967b055def34c084fcf5a71432bce54dbff807d056655b33b5763cccbe6cfd",
+    "bc250kmd.cat": "ada84e89a35aad3e87dc539c3fcacbc4e340fe890c198bff3945eb7e723ec0a3",
+    "bc250kmd.inf": "84e06c608f548d44561653d98a5d1a39d65339f90112428c8810a2d4d79006e8",
+    "bc250kmd.sys": "89a7ae285abd34c17f825d51cbd3c27aca7ba7cef764122cb35a274c9bcc78f8",
+    "bc250umd.dll": "d5bd1ad82c00438900dc47a50b3efa36d98f9a9cc7f6987d0f1545a0de4cb661"
+  }
+}
