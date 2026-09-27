@@ -1,0 +1,54 @@
+{
+    "utc":  "2026-09-27T14:32:57.9001503Z",
+    "attempt":  1,
+    "elapsed":  2.5158593,
+    "painted":  true,
+    "heartbeat":  {
+                      "baseline_ready":  true,
+                      "baseline_result":  0,
+                      "animating":  false,
+                      "frames":  0,
+                      "paint_red":  1,
+                      "paint_blue":  1,
+                      "paint_moving":  1,
+                      "qpc_before":  128453386959,
+                      "qpc_after":  128453386970,
+                      "qpc_frequency":  10000000,
+                      "utc_filetime":  134349931778144000,
+                      "frozen":  false,
+                      "freeze_result":  1,
+                      "moving_client":  [
+                                            608,
+                                            151,
+                                            792,
+                                            252
+                                        ]
+                  },
+    "reader":  {
+                   "start":  "2026-09-27T14:32:57.9097752Z",
+                   "pid":  12020
+               },
+    "exit_code":  0,
+    "image":  {
+                  "pass":  true,
+                  "pixels":  26584,
+                  "mismatches":  0,
+                  "regions":  [
+                                  {
+                                      "region":  "red",
+                                      "mismatches":  0,
+                                      "pixels":  1400
+                                  },
+                                  {
+                                      "region":  "overlap",
+                                      "mismatches":  0,
+                                      "pixels":  6600
+                                  },
+                                  {
+                                      "region":  "moving_full_client",
+                                      "mismatches":  0,
+                                      "pixels":  18584
+                                  }
+                              ]
+              }
+}

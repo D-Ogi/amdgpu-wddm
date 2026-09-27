@@ -1,0 +1,21 @@
+{
+    "baseline_ready":  true,
+    "baseline_result":  0,
+    "animating":  false,
+    "frames":  0,
+    "paint_red":  1,
+    "paint_blue":  1,
+    "paint_moving":  1,
+    "qpc_before":  128494901708,
+    "qpc_after":  128494901719,
+    "qpc_frequency":  10000000,
+    "utc_filetime":  134349931819658749,
+    "frozen":  false,
+    "freeze_result":  1,
+    "moving_client":  [
+                          608,
+                          151,
+                          792,
+                          252
+                      ]
+}
