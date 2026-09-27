@@ -45,3 +45,19 @@ int Bc250GfxPresentRecord(void* Record, unsigned int Capacity,
     unsigned long long Address, unsigned int Bytes);
 int Bc250GfxPresentMatches(const void* Record, unsigned int Capacity,
     unsigned long long Address, unsigned int Bytes);
+
+/* Complete Present IB: acquire before every pass, copies, full NOP padding.
+ * Capacity must be a multiple of eight DWORDs and at least16. Offset counts
+ * copy packets only. Invalid/no-space never writes Buffer. Residency and
+ * cross-queue producer completion remain caller obligations. */
+BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
+    const BC250_BLIT_SURFACE* Source, const BC250_BLIT_SURFACE* Destination,
+    const BC250_BLIT_RECT* SourceRect, const BC250_BLIT_RECT* DestinationRect,
+    const BC250_BLIT_RECT* Dirty, unsigned int Count,
+    unsigned long long SourceBase, unsigned long long DestinationBase,
+    unsigned int Offset, unsigned int* Next, unsigned int* Buffer,
+    unsigned int CapacityDwords, unsigned int* Written);
+
+/* Called by the Present producer on every new call, never by submit/re-submit.
+ * Clear recognition before any early return or alternate command path. */
+void Bc250GfxPresentInvalidate(void* Record, unsigned int Capacity);

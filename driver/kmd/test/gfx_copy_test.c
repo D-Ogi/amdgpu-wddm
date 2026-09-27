@@ -45,6 +45,20 @@ int main(void)
     CHECK(!Bc250EmitGfxCopy(NULL,32,0,4096,4));
     CHECK(!memcmp(buffer,saved,sizeof(buffer)));
     CHECK(Bc250EmitGfxCopy(buffer,7,0,16,16)==7); /* adjacent is not overlapping */
+    memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
+    CHECK(!Bc250EmitGfxAcquire(NULL,8));
+    for(i=0;i<8;i++) {
+        CHECK(!Bc250EmitGfxAcquire(buffer,i));
+        CHECK(!memcmp(buffer,saved,sizeof(buffer)));
+    }
+    CHECK(Bc250EmitGfxAcquire(buffer,8)==8);
+    /* Independently decoded GFX10 type3 header, global range and cache bits. */
+    CHECK((buffer[0]>>30)==3 && ((buffer[0]>>16)&0x3fff)==6 && ((buffer[0]>>8)&255)==0x58);
+    CHECK(buffer[1]==0 && buffer[2]==0xffffffffu && buffer[3]==0xffffffu);
+    CHECK(buffer[4]==0 && buffer[5]==0 && buffer[6]==10);
+    CHECK(buffer[7]==((1u<<0)|(1u<<4)|(1u<<5)|(1u<<7)|(1u<<8)|(1u<<9)|(1u<<14)|(1u<<15)));
+    CHECK(!memcmp(buffer+8,saved+8,sizeof(buffer)-8*sizeof(buffer[0])));
+    puts("PASS GFX10 acquire packet, global range, cache operations, short-buffer atomicity");
     puts("PASS GFX copy chunks,64-bit addresses,final sync,first RAW wait,capacity/overlap/overflow rejection");
     return 0;
 }
