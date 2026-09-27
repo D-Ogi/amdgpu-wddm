@@ -40,7 +40,7 @@ static ComPtr<ID3DBlob> compile(const char* entry, const char* profile) {
 int main(int argc, char** argv) {
    setvbuf(stdout, nullptr, _IONBF, 0);
    try {
-      require(argc == 2, "usage: graphics-state-control baseline|warp|hosted");
+      require(argc == 2 || (argc == 3 && !strcmp(argv[2], "batch")), "usage: graphics-state-control baseline|warp|hosted [batch]");
       const bool hosted = !strcmp(argv[1], "hosted"), warp = !strcmp(argv[1], "warp");
       require(hosted || warp || !strcmp(argv[1], "baseline"), "invalid mode");
       if (hosted) SetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", "1");
@@ -163,6 +163,77 @@ int main(int argc, char** argv) {
          ctx->OMSetRenderTargets(1,otherRtv.GetAddressOf(),nullptr); ctx->PSSetShaderResources(0,1,srv.GetAddressOf());
          ctx->PSSetShader(fetch.Get(),nullptr,0); draw(1,1,1,1,.5f);
          read("render-to-texture",other.Get(),0,0,0,255,true,0);
+
+         if (argc == 3) {
+            ctx->PSSetShaderResources(0,0,nullptr);
+            ID3D11ShaderResourceView* noView=nullptr; ctx->PSSetShaderResources(0,1,&noView);
+            ctx->OMSetRenderTargets(1,rtv.GetAddressOf(),nullptr); ctx->PSSetShader(solid.Get(),nullptr,0);
+            const char vertexText[]="cbuffer P:register(b0){float4 color;float depth;float3 pad;};float4 VS(float2 p:POSITION):SV_Position{return float4(p,depth,1);}";
+            ComPtr<ID3DBlob> vertexCode, vertexError;
+            check(D3DCompile(vertexText,sizeof(vertexText)-1,"batch-vertices",nullptr,nullptr,"VS","vs_4_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&vertexCode,&vertexError),"batch VS compile");
+            ComPtr<ID3D11VertexShader> vertexShader;
+            check(dev->CreateVertexShader(vertexCode->GetBufferPointer(),vertexCode->GetBufferSize(),nullptr,&vertexShader),"batch VS");
+            D3D11_INPUT_ELEMENT_DESC element={"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0};
+            ComPtr<ID3D11InputLayout> layout;
+            check(dev->CreateInputLayout(&element,1,vertexCode->GetBufferPointer(),vertexCode->GetBufferSize(),&layout),"batch layout");
+            D3D11_BUFFER_DESC dynamicDesc={}; dynamicDesc.ByteWidth=32; dynamicDesc.Usage=D3D11_USAGE_DYNAMIC;
+            dynamicDesc.BindFlags=D3D11_BIND_CONSTANT_BUFFER; dynamicDesc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
+            ComPtr<ID3D11Buffer> dynamicCb, dynamicVb, index;
+            check(dev->CreateBuffer(&dynamicDesc,nullptr,&dynamicCb),"dynamic CB");
+            dynamicDesc.ByteWidth=64; dynamicDesc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+            check(dev->CreateBuffer(&dynamicDesc,nullptr,&dynamicVb),"dynamic VB");
+            const unsigned short indices[]={0,0,0,0,1,2,3,4,5};
+            D3D11_BUFFER_DESC indexDesc={}; indexDesc.ByteWidth=sizeof(indices); indexDesc.BindFlags=D3D11_BIND_INDEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial={}; initial.pSysMem=indices;
+            check(dev->CreateBuffer(&indexDesc,&initial,&index),"index buffer");
+            D3D11_RASTERIZER_DESC scissorDesc=rd; scissorDesc.ScissorEnable=TRUE;
+            ComPtr<ID3D11RasterizerState> scissor;
+            check(dev->CreateRasterizerState(&scissorDesc,&scissor),"scissor raster");
+            auto discard=[&](ID3D11Buffer* buffer,const void* bytes,size_t size) {
+               D3D11_MAPPED_SUBRESOURCE mapped={}; check(ctx->Map(buffer,0,D3D11_MAP_WRITE_DISCARD,0,&mapped),"Map DISCARD");
+               memcpy(mapped.pData,bytes,size); ctx->Unmap(buffer,0);
+            };
+            for (UINT variant=0;variant<3;++variant) {
+               ctx->RSSetState(variant ? raster.Get() : scissor.Get());
+               ctx->VSSetShader(variant ? vertexShader.Get() : vs.Get(),nullptr,0);
+               ctx->IASetInputLayout(variant ? layout.Get() : nullptr);
+               ID3D11Buffer* constants=variant ? dynamicCb.Get() : cb.Get();
+               ctx->VSSetConstantBuffers(0,1,&constants); ctx->PSSetConstantBuffers(0,1,&constants);
+               UINT stride=8,offset=variant==1 ? 16 : 0;
+               ctx->IASetVertexBuffers(0,1,dynamicVb.GetAddressOf(),&stride,&offset);
+               ctx->IASetIndexBuffer(index.Get(),DXGI_FORMAT_R16_UINT,0);
+               ctx->ClearRenderTargetView(rtv.Get(),blue);
+               for (UINT pass=0;pass<4;++pass) for (UINT n=0;n<64;++n) {
+                  UINT tile=(n*17+pass*11)%64,x=tile%8,y=tile/8;
+                  float constantsData[8]={float(x*32)/255.0f,float(y*32)/255.0f,float(pass*64)/255.0f,1,.5f,0,0,0};
+                  if (!variant) {
+                     D3D11_RECT rect={LONG(x*8),LONG(y*8),LONG((x+1)*8),LONG((y+1)*8)};
+                     ctx->RSSetScissorRects(1,&rect); ctx->UpdateSubresource(cb.Get(),0,nullptr,constantsData,0,0); ctx->Draw(3,0);
+                  } else {
+                     const float left=float(x)/4.0f-1, right=float(x+1)/4.0f-1;
+                     const float top=1-float(y)/4.0f, bottom=1-float(y+1)/4.0f;
+                     float vertices[16]={-99,-99,-99,-99,left,top,right,top,left,bottom,left,bottom,right,top,right,bottom};
+                     discard(dynamicCb.Get(),constantsData,sizeof(constantsData));
+                     discard(dynamicVb.Get(),vertices,sizeof(vertices));
+                     if (variant==1) ctx->Draw(6,0); else ctx->DrawIndexed(6,3,2);
+                  }
+               }
+               ctx->CopyResource(staging.Get(),target.Get()); finish();
+               D3D11_MAPPED_SUBRESOURCE mapped={};check(ctx->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped),"batch readback");
+               unsigned bad=0;uint64_t hash=14695981039346656037ull;
+               for(UINT y=0;y<64;++y)for(UINT x=0;x<64;++x) {
+                  auto pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.RowPitch+x*4;
+                  const unsigned expected[4]={(x/8)*32,(y/8)*32,192,255}; bool mismatch=false;
+                  for(UINT c=0;c<4;++c){if(pixel[c]!=expected[c])mismatch=true;hash=(hash^pixel[c])*1099511628211ull;}
+                  if(mismatch && bad++==0)printf("batch first mismatch %u,%u actual=%u,%u,%u,%u expected=%u,%u,%u,%u\n",x,y,pixel[0],pixel[1],pixel[2],pixel[3],expected[0],expected[1],expected[2],expected[3]);
+               }
+               ctx->Unmap(staging.Get(),0);
+               const char* label=variant==0 ? "batched-scissor-cb-update" : (variant==1 ? "batched-vb-cb-discard" : "batched-indexed-discard");
+               printf("case=%s draws=256 mismatches=%u/4096 fnv64=%016llx\n",label,bad,static_cast<unsigned long long>(hash));
+               require(bad==0,label);
+            }
+            puts("PASS batched dynamic draw controls: 768 draws, 12288 checked pixels");
+         }
          ctx->ClearState(); finish();
       }
       ctx->Flush(); check(dev->GetDeviceRemovedReason(),"device after resource release");
