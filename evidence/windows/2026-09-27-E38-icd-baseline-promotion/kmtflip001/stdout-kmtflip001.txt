@@ -1,0 +1,8 @@
+create flip=00000000
+swap effect=3 buffers=2
+present frame=0 hr=00000000
+present frame=40 hr=00000000
+present frame=80 hr=00000000
+final green mismatches=0/76800 removed=00000000
+PASS 120 native hosted flip Presents and final pixels
+

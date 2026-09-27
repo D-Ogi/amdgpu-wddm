@@ -1,0 +1,65 @@
+temperature_before=66.8
+boot 2026-09-26T18:44:31.5000000+02:00
+start_utc 2026-09-27T00:19:02.2218148Z
+dwm_before=84
+--- registry (unchanged by this script)
+C:\BC250\m10\wsi-final\radeon_icd.json = 0
+manifest 234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE
+--- before
+234175BD 131 radeon_icd.json
+207D4B12 93 run-vkcube.cmd
+55D1D519 594 run-vkcube.ps1
+87A96AF3 388096 vkcube.exe
+5C42CA8E 1711544 vulkan-1.dll
+9C40083C 24263168 vulkan_radeon.dll
+7A9970CA 24258048 vulkan_radeon.dll.dwm001-held-7208b42e25414afb9c7ea8a9d616e9af
+7A9970CA 24258048 vulkan_radeon.dll.dwm002-held-018e51199f6d429d89d00a2c1fabd62a
+7A9970CA 24258048 vulkan_radeon.dll.dwm003-held-8a7198da77464060997334270bd90947
+7A9970CA 24258048 vulkan_radeon.dll.dwm004-held-e2b550515c8946aaaaf30d517c885b38
+7A9970CA 24258048 vulkan_radeon.dll.dwm005-held-55ec7f083e5a40e8a73203b26787caf7
+7A9970CA 24258048 vulkan_radeon.dll.dwm006-held-4ceec7d4fc6d4f0299fc8c2b3788c1b8
+7A9970CA 24258048 vulkan_radeon.dll.dwm007-held-14b7247781aa4067ad5856f9dfb41ce1
+7A9970CA 24258048 vulkan_radeon.dll.dwm008-held-40ce623157d244f7978e2cc4fd4ed2bd
+7A9970CA 24258048 vulkan_radeon.dll.dwm009-held-8293829eaa8a440b9016040a87926ccf
+7A9970CA 24258048 vulkan_radeon.dll.dwm010-held-ae620c23365241c683006ea7c84a1251
+rollback copy written
+active=93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D
+promoted
+--- after
+234175BD 131 radeon_icd.json
+207D4B12 93 run-vkcube.cmd
+55D1D519 594 run-vkcube.ps1
+87A96AF3 388096 vkcube.exe
+5C42CA8E 1711544 vulkan-1.dll
+93B1D1FD 24253952 vulkan_radeon.93B1D1FD.dll
+9C40083C 24263168 vulkan_radeon.9C40083C.dll
+93B1D1FD 24253952 vulkan_radeon.dll
+7A9970CA 24258048 vulkan_radeon.dll.dwm001-held-7208b42e25414afb9c7ea8a9d616e9af
+7A9970CA 24258048 vulkan_radeon.dll.dwm002-held-018e51199f6d429d89d00a2c1fabd62a
+7A9970CA 24258048 vulkan_radeon.dll.dwm003-held-8a7198da77464060997334270bd90947
+7A9970CA 24258048 vulkan_radeon.dll.dwm004-held-e2b550515c8946aaaaf30d517c885b38
+7A9970CA 24258048 vulkan_radeon.dll.dwm005-held-55ec7f083e5a40e8a73203b26787caf7
+7A9970CA 24258048 vulkan_radeon.dll.dwm006-held-4ceec7d4fc6d4f0299fc8c2b3788c1b8
+7A9970CA 24258048 vulkan_radeon.dll.dwm007-held-14b7247781aa4067ad5856f9dfb41ce1
+7A9970CA 24258048 vulkan_radeon.dll.dwm008-held-40ce623157d244f7978e2cc4fd4ed2bd
+7A9970CA 24258048 vulkan_radeon.dll.dwm009-held-8293829eaa8a440b9016040a87926ccf
+7A9970CA 24258048 vulkan_radeon.dll.dwm010-held-ae620c23365241c683006ea7c84a1251
+Smoke PASS: content, live module identity, unchanged boot
+smoke_exit=0
+{
+    "exit_code":  0,
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "loaded_artifacts":  {
+                             "vulkan_radeon.dll":  "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D"
+                         },
+    "error":  "",
+    "status":  "PASS",
+    "config_sha256":  "0BF2904A4379ADFF890EF6750845CD6D5B2E0A5CEEC47DDC92B02F2C8C84535C"
+}
+
+8 test(s) run, 0 mismatch(es)
+
+final_active=93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D
+dwm_after=84
+temperature_after=66.9
+end_utc 2026-09-27T00:19:18.8540689Z
