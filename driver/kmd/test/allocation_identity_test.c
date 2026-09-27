@@ -31,10 +31,10 @@ typedef struct { int Lock; BOOLEAN Stopping,GpuPresentGate,HandleIdentityProbe; 
 static KIRQL level;
 static int locked,acquires,releases,gets,logs;
 static void *data,*token;
-static void (*onAcquire)(void),(*onRelease)(void);
+static void (*onAcquire)(void),(*onRelease)(void),(*onUnlock)(void);
 static KIRQL KeGetCurrentIrql(void) { return level; }
 static void KeAcquireSpinLock(int* lock,KIRQL* old) { (void)lock;REQUIRE(!locked);locked=1;*old=level;level=2; }
-static void KeReleaseSpinLock(int* lock,KIRQL old) { (void)lock;REQUIRE(locked);locked=0;level=old; }
+static void KeReleaseSpinLock(int* lock,KIRQL old) { (void)lock;REQUIRE(locked);locked=0;level=old;if(onUnlock)onUnlock(); }
 static int InterlockedIncrement(int* p) { return ++*p; }
 static size_t RtlCompareMemory(const void* a,const void* b,size_t n) { REQUIRE(locked);return memcmp(a,b,n)?0:n; }
 static void GuardLog(const char* format,...) { (void)format;++logs; }
@@ -53,17 +53,23 @@ static void insert(BC250_WDDM_OBJECT* obj,ULONG magic) {
 }
 static void unlinkA(void) { a.Link.Blink->Flink=a.Link.Flink;a.Link.Flink->Blink=a.Link.Blink; }
 static void destroyOnRelease(void) { REQUIRE(o.BackingAllocation==&a);o.BackingAllocation=NULL;unlinkA(); }
+static void changeAtUnlock(void) {
+ REQUIRE(!locked);
+ a.Allocation.Width=o.Allocation.Width=99;
+ b.Allocation.Size=p.Allocation.Size=7;
+}
 static void reset(void) {
  memset(&w,0,sizeof(w));memset(&dev,0,sizeof(dev));memset(&a,0,sizeof(a));memset(&b,0,sizeof(b));memset(&o,0,sizeof(o));memset(&p,0,sizeof(p));
  w.Objects.Flink=w.Objects.Blink=&w.Objects;w.GpuPresentGate=1;w.HandleIdentityProbe=1;
  dev.Wddm=&w;dev.Dxgk.Size=sizeof(dev.Dxgk);dev.Dxgk.DxgkCbAcquireHandleData=acquire;dev.Dxgk.DxgkCbReleaseHandleData=release;dev.Dxgk.DxgkCbGetHandleData=get;
  insert(&a,1);insert(&b,1);insert(&o,2);insert(&p,2);
- info.hAllocation=&a;data=&a;token=&b;onAcquire=onRelease=NULL;level=0;locked=acquires=releases=gets=logs=0;
+ info.hAllocation=&a;data=&a;token=&b;onAcquire=onRelease=onUnlock=NULL;level=0;locked=acquires=releases=gets=logs=0;
 }
 static void bind(void) { WddmBindHandleIdentity(&dev,&info,&o,1);REQUIRE(!locked); }
 static BOOLEAN snapshot(BC250_WDDM_ALLOCATION_PRIVATE out[2]) { HANDLE h[2]={&o,&p};return WddmSnapshotPresentAllocations(&w,&dev,h,out); }
 int main(void) {
  BC250_WDDM_ALLOCATION_PRIVATE out[2],before[2];
+ unsigned variant;
  reset();bind();REQUIRE(o.BackingAllocation==&a && acquires==1 && releases==1 && gets==1 && logs==1);
  reset();w.HandleIdentityProbe=0;bind();REQUIRE(o.BackingAllocation==&a && acquires==1 && releases==1 && !gets && !logs);
  reset();w.GpuPresentGate=0;bind();REQUIRE(o.BackingAllocation==&a && acquires==1 && releases==1);
@@ -84,8 +90,25 @@ int main(void) {
  reset();onAcquire=unlinkA;bind();REQUIRE(!o.BackingAllocation && releases==1);
  reset();onRelease=destroyOnRelease;bind();REQUIRE(!o.BackingAllocation && releases==1);
  reset();o.BackingAllocation=&a;p.BackingAllocation=&b;REQUIRE(snapshot(out));REQUIRE(out[0].Width==64 && out[1].Size==8192);
- // Snapshots remain values when the formerly matched objects change.
- a.Allocation.Width=o.Allocation.Width=99;REQUIRE(out[0].Width==64);
+ // Mutate at the unlock boundary, before the helper returns. A descriptor
+ // read/copy moved out of the critical section must not pass this witness.
+ reset();o.BackingAllocation=&a;p.BackingAllocation=&b;onUnlock=changeAtUnlock;
+ REQUIRE(snapshot(out));REQUIRE(out[0].Width==64 && out[1].Size==8192);
+ REQUIRE(o.Allocation.Width==99 && p.Allocation.Size==7);
+ for(variant=0;variant<6;variant++) {
+  HANDLE h[2];reset();o.BackingAllocation=&a;p.BackingAllocation=&b;h[0]=&o;h[1]=&p;
+  switch(variant) {
+   case 0:o.BackingAllocation=NULL;break;
+   case 1:o.Magic=BC250_WDDM_MAGIC_ALLOCATION;break;
+   case 2:o.Link.Blink->Flink=o.Link.Flink;o.Link.Flink->Blink=o.Link.Blink;break;
+   case 3:h[0]=NULL;break;
+   case 4:a.Magic=BC250_WDDM_MAGIC_OPENED;break;
+   default:h[0]=(HANDLE)(uintptr_t)1;break;
+  }
+  memset(out,0x5a,sizeof(out));memcpy(before,out,sizeof(out));
+  REQUIRE(!WddmSnapshotPresentAllocations(&w,&dev,h,out));
+  REQUIRE(!memcmp(out,before,sizeof(out)) && !locked);
+ }
  reset();o.BackingAllocation=&a;p.BackingAllocation=&a;memset(out,0x5a,sizeof(out));memcpy(before,out,sizeof(out));REQUIRE(!snapshot(out));REQUIRE(!memcmp(out,before,sizeof(out)));
  reset();o.BackingAllocation=&a;p.BackingAllocation=&b;p.OwnerDevice=NULL;REQUIRE(!snapshot(out));
  reset();o.BackingAllocation=&a;p.BackingAllocation=&b;b.Allocation.Width++;REQUIRE(!snapshot(out));

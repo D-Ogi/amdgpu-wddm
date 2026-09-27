@@ -1647,6 +1647,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
     wddm->HandleIdentityProbe = (GuardReadSetting(L"EnableHandleIdentityProbe", 0) == 1);
+    // Start-latched: changing registry values does not enable existing unbound opens.
     wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
