@@ -30,11 +30,19 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   (`ref\windows-driver-docs\...\display\providing-kernel-mode-support-to-the-opengl-installable-client-driver.md`,
   `ref\ddi-display\d3dkmthk.md`, WDK 10.0.26100 `D3DKMT_PRESENT`) has the ICD call `D3DKMTPresent` itself with
   `hWindow`, `hSource` (the allocation being presented), `Flags.Blt`, `SrcRect`/`DstRect`, `SubRectCnt` and
-  `pSrcSubRects`, on its own `hContext`. dxgkrnl decides the route: with DWM composing it is the GDI redirection
-  surface (PresentMon reports such presents as "Composed: Copy with GPU GDI"), full-screen it is the primary,
-  and in the hybrid case the cross-adapter allocation. In every route the copy itself arrives at the KMD as
-  `DxgkDdiPresent(Flags.Blt)` with dxgkrnl's destination allocation. This is exactly ADR 0018's KMD item, and
-  it is the route the rest of this note is built on.
+  `pSrcSubRects`, on its own `hContext`. dxgkrnl decides the route: with DWM composing and the window's GDI
+  redirection surface living on the GPU it is that surface (PresentMon reports such presents as "Composed: Copy
+  with GPU GDI"; dxgkrnl's `Blit_Info` event carries `bRedirectedPresent`), full-screen it is the primary, and in
+  the hybrid case the cross-adapter allocation. Only then does the copy arrive at the KMD as
+  `DxgkDdiPresent(Flags.Blt)` with dxgkrnl's destination allocation. When the redirection surface is a CPU-side
+  bitmap the DWM uploads, the same call is a legacy copy to the front buffer, and while the DWM owns the VidPn
+  source it is refused with `STATUS_GRAPHICS_VIDPN_SOURCE_IN_USE` before the miniport (E45, M598; the routing is
+  inferred from the PresentMon trace consumer and the D3D team's description of the ICD present in Mesa MR
+  24223, `docs/research/2026-09-27-windowed-present-under-dwm.md`). Redirection surfaces live on the GPU when
+  the KMD advertises GDI hardware acceleration (`SupportKernelModeCommandBuffer`, needs `DxgkDdiRenderKm`) or
+  CDD-DWM interop (`DXGK_PRESENTATIONCAPS.DriverSupportsCddDwmInterop`: CDD presents into texture allocations
+  the DWM's UMD creates), neither of which the KMD sets today. The route stays ADR 0018's KMD item, now with
+  that cap as its precondition.
 
 ## Options considered
 
@@ -118,23 +126,38 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   fence on that ring; the source is protected by the monitored-fence wait the WSI queues ahead of the present;
   residency of both allocations is held by dxgkrnl for the length of the present and by the fence for the
   length of the copy.
-- Gate: the current software packet (`EnablePresentBlit`, INF default 0) is the plumbing control for this path:
-  with the gate on, the WSI's present must reach `WddmPresentBlit` with an LB7A-described source and produce the
-  frame on screen with `copy_us = 0` in the WSI and no CPU work on the presenting thread. That run proves the
-  route (hypothesis H1 of `facts.md`: a DWM-composed `D3DKMTPresent(Blt)` reaches `DxgkDdiPresent`) before the
-  engine copy exists. The software packet goes once the engine copy passes ADR 0018 point 5.
+- Precondition (E45): dxgkrnl names a destination for a windowed present only when the window's redirection
+  surface is a GPU allocation. The KMD has to advertise `DriverSupportsCddDwmInterop` (the smaller commitment;
+  GDI hardware acceleration would add `DxgkDdiRenderKm` and the whole GDI operation set) and then serve two
+  kinds of `DxgkDdiPresent` Blt into `D3DKMDT_GDISURFACE_TEXTURE` allocations created by the DWM's UMD: the
+  CDD's copies from CPU staging into the texture and the WSI's VRAM-to-VRAM copy. The DWM's UMD must create
+  those textures as GPU-sampleable allocations and compose from them; on the software UMD that means CPU reads
+  of VRAM, so the app-side copy disappears before the composition-side one does (M13). Whether the cap alone
+  makes dxgkrnl route a third-party ICD's present into the texture is not documented and is measured, not
+  assumed.
+- Gate: the current software packet (`EnablePresentBlit`, lab state open) remains the plumbing control once the
+  cap is in: the WSI's present must reach `WddmPresentBlit` with an LB7A-described source and a texture
+  destination, and produce the frame on screen with `copy_us = 0` in the WSI and no CPU work on the presenting
+  thread. Without the cap the present never reaches the miniport (E45). The software packet goes once the
+  engine copy passes ADR 0018 point 5.
 
 ## Plan
 
 1. WSI `kmt` path in the RADV fork (branch `amdgpu-wddm/radv-wddm2-wsi-kmt`): dispatch entry, hook,
    LB7A surface allocation in the winsys, present context, present log path, CPU fallback switch. Built as a
    candidate ICD, not promoted.
-2. Plumbing control in the lab, under a window agreed with the KMD side: `EnablePresentBlit=1`, `vkcube` and one
-   DXVK title, PresentMon capture, the E43 log, the KMD guard log for `WddmPresentBlit` entries, screenshot
-   oracle. Result recorded as a `facts.md` row on H1 and on the `kmt` path's per-frame cost.
-3. KMD engine Blt (ADR 0018 KMD item) per the contract above, measured against the same log.
-4. The composition-swapchain flavour (C) after M13/M15, if a measurement shows a benefit over B (its end state
-   is the zero-copy binding of the Vulkan image to the DXGI back buffer).
+2. Done, negative: plumbing control E45 (M598). The ICD side works up to dxgkrnl; the present is refused with
+   `VIDPN_SOURCE_IN_USE` because no GPU redirection surface exists for the window.
+3. Three read-only probes before any KMD change: `D3DKMTCheckVidPnExclusiveOwnership` on source 0 from the
+   present device (expected `VIDPN_SOURCE_IN_USE` while the DWM runs); a raw `Microsoft-Windows-DxgKrnl` trace
+   of `Blit_Info` (`hwnd`, `bRedirectedPresent`) and `PresentHistory` for the vkcube window during the KMT
+   path; a KMD log of the `D3DKMDT_GDISURFACETYPE` values dxgkrnl asks for in `GetStandardAllocationDriverData`
+   and `CreateAllocation` on the lab.
+4. KMD: `DriverSupportsCddDwmInterop` plus the engine Blt (ADR 0018 KMD item) serving CDD staging-to-texture and
+   WSI VRAM-to-VRAM copies into DWM-UMD-created textures, per the contract above; DWM's UMD: GPU-sampleable
+   redirection textures. Measured against the same present log and the `Blit_Info` trace.
+5. The composition-swapchain flavour (C, the flip model) after M13/M15: the DWM samples the app's buffers, no
+   copy at all. It needs a D3D11/12 device of the adapter and the DWM's UMD opening the shared buffers.
 
 ## Open questions
 
@@ -142,9 +165,10 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   from a non-D3D-runtime device while the DWM composes. With one sub-rectangle it returns
   `STATUS_GRAPHICS_VIDPN_SOURCE_IN_USE` and never calls `DxgkDdiPresent`; the plumbing above it (LB7A linear
   device-local images, the non-UMD present context, the GPU-side wait and signal on the WSI timeline) works.
-  The documented ICD example is the pre-composition contract; the composed route needs a redirection surface
-  named by a `D3DKMT_PRESENTHISTORYTOKEN`. Which token model and what the DWM's UMD must open is the open
-  question now (research note in the workspace scratch, `research-windowed-present-under-dwm.md`).
+  The documented ICD example is the composed route as well, but only over a GPU redirection surface; the
+  token (`D3DKMT_PM_REDIRECTED_BLT`, obtainable through `DwmDxGetWindowSharedSurface`, documented for Windows 7
+  only) merely tells the DWM which update landed. The open question moved to the KMD cap and the DWM's UMD
+  (`docs/research/2026-09-27-windowed-present-under-dwm.md`).
 - What does `bOptimizeForComposition` report on that route, and does dxgkrnl require a
   `D3DKMT_PRESENTHISTORYTOKEN` on it (the documented ICD example sets none)?
 - Which allocation does dxgkrnl name as the destination on the composed route, and what private data does it
