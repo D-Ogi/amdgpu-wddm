@@ -138,9 +138,13 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
 
 ## Open questions
 
-- Does dxgkrnl accept a `D3DKMTPresent(Blt)` with `hWindow` from a context whose device has no D3D runtime
-  device, in a DWM-composed session, and route it to the redirection surface (H1)? The OpenGL ICD contract says
-  yes; the control run decides.
+- H1, answered by E45 (facts M598): dxgkrnl does not accept the token-less `D3DKMTPresent(Blt)` with `hWindow`
+  from a non-D3D-runtime device while the DWM composes. With one sub-rectangle it returns
+  `STATUS_GRAPHICS_VIDPN_SOURCE_IN_USE` and never calls `DxgkDdiPresent`; the plumbing above it (LB7A linear
+  device-local images, the non-UMD present context, the GPU-side wait and signal on the WSI timeline) works.
+  The documented ICD example is the pre-composition contract; the composed route needs a redirection surface
+  named by a `D3DKMT_PRESENTHISTORYTOKEN`. Which token model and what the DWM's UMD must open is the open
+  question now (research note in the workspace scratch, `research-windowed-present-under-dwm.md`).
 - What does `bOptimizeForComposition` report on that route, and does dxgkrnl require a
   `D3DKMT_PRESENTHISTORYTOKEN` on it (the documented ICD example sets none)?
 - Which allocation does dxgkrnl name as the destination on the composed route, and what private data does it
