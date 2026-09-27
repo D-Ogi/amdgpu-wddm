@@ -1,0 +1,1 @@
+BC250 audit lifetime event=checkpoint seq=1408 time_ns=7255799266600 marker=1 requests=256 successful=256 failed=0 ended=251 pending=0 live=5 stores_begun=318 stores_ended=318
