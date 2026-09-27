@@ -1,0 +1,3 @@
+# chain 000001883C06D610 640x480 format 44 images 2 path kmt
+chain,path,present_id,enter_us,copy_us,blit_us,dwmflush_us,result
+000001883C06D610,kmt,0,11674163099,0,3665,50,-1000000000

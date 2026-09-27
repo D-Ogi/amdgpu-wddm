@@ -1,0 +1,10 @@
+{
+    "launch":  true,
+    "age_ms":  2,
+    "epoch":  5,
+    "generation":  115997992792,
+    "flags":  15,
+    "completed":  1060,
+    "ready_ms":  64575,
+    "flag_names":  "Full, Ready, Visible, Confirmed"
+}

@@ -1,0 +1,1073 @@
+log          20406 lines since this driver load, 19382 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+     2      0.002 stage 20
+     3      0.347 stage 30
+     4      0.349 guard: count 0 -> 1 flushed, durable required 1
+     5      0.349 stage 31
+     6      0.351 stage 32
+     7      0.351 post display 1920x1200 pitch 7680 format 22 target 2424833
+     8      0.351 stage 33
+     9      0.353 stage 34
+    10      0.353 interrupt resource 1: message, vector 0x80, flags 0x3
+    11      0.353 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    12      0.353 smu: native owner start status 0x00000000
+    13      0.353 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    14      0.353 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    15      0.353 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    16      0.355 gart: ready, dummy page at 0x26FFFA000
+    17      0.355 psp: ready
+    18      0.355 gpumem: ready, doorbells at 0xD0000000
+    19      0.355 gfx: ready, GPU submission allowed, paging node allowed
+    20      0.355 ih: ready
+    21      0.361 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    22      0.369 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+    23      0.369 startup: entering interrupt connection
+    24      0.373 startup: entering firmware preparation
+    25      0.383 startup: entering native clock preparation
+    26      0.387 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1000MHz/VID116 observed 1000MHz/VID116 temp 66875mc staged 0
+    27      0.391 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    28      0.391 gfx: unpublished translation bootstrap entered with engines halted
+    29      0.391 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    30      0.391 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    31      0.391 startup: entering GART initialization
+    32      0.405 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    33      0.405 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    34      0.405 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    35      0.405 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    36      0.405 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    37      0.405 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    38      0.405 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    39      0.405 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    40      0.405 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    41      0.405 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    42      0.405 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    43      0.405 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    44      0.405 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    45      0.405 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    46      0.405 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    47      0.405 startup: entering PSP initialization
+    48      0.459 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    49      0.459 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    50      0.480 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    51      0.480 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    52      0.480 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    53      0.480 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 252 us, in TMR at 0x0
+    54      0.480 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    55      0.480 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    56      0.482 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1893 us, in TMR at 0x0
+    57      0.482 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    58      0.482 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    59      0.484 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1890 us, in TMR at 0x0
+    60      0.484 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    61      0.484 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    62      0.490 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5917 us, in TMR at 0xF5FF842000
+    63      0.490 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    64      0.490 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    65      0.496 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5912 us, in TMR at 0xF5FF883000
+    66      0.496 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    67      0.496 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    68      0.502 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5862 us, in TMR at 0xF5FF8C4000
+    69      0.502 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    70      0.502 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    71      0.508 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6012 us, in TMR at 0xF5FF800000
+    72      0.508 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    73      0.508 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    74      0.508 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 131 us, in TMR at 0x0
+    75      0.508 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    76      0.508 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    77      0.514 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5962 us, in TMR at 0xF5FF800000
+    78      0.514 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    79      0.514 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    80      0.514 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+    81      0.514 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    82      0.514 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    83      0.516 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1739 us, in TMR at 0x0
+    84      0.516 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    85      0.516 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    86      0.516 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+    87      0.516 gfx: RLC after-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+    88      0.516 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+    89      0.516 startup: entering IH initialization
+    90      0.518 ih: init: rc 0, 18 writes
+    91      0.518 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+    92      0.518 startup: entering GFX initialization
+    93      0.522 startup: entering GFX stage 1
+    94      0.524 gfx: RLC startup policy pp_gfxoff 0
+    95      0.528 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 2 us
+    96      0.528 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+    97      0.530 startup: entering GFX stage 2
+    98      0.532 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 26 us
+    99      0.532 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+   100      0.534 startup: entering GFX stage 3
+   101      0.538 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 4 us
+   102      0.538 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+   103      0.540 startup: entering GFX stage 4
+   104      0.544 gfx: stage 4 (constants): rc 0, 157 writes so far, 61 us
+   105      0.544 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+   106      0.546 startup: entering GFX stage 5
+   107      0.548 startup: RLC boundary acquire-paging-lock
+   108      0.550 startup: RLC boundary acquire-gart-lock
+   109      0.554 startup: RLC boundary locks-acquired
+   110      0.556 startup: RLC boundary before-rlc-resume
+   111      0.558 startup: RLC boundary after-rlc-resume
+   112      0.562 startup: RLC boundary before-gfx-visibility
+   113      0.564 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   114      0.566 startup: visibility observer returned after-invalidate-request
+   115      0.570 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   116      0.572 startup: visibility observer returned after-invalidate-request-read
+   117      0.574 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   118      0.576 startup: visibility observer returned after-invalidate-ack
+   119      0.580 startup: visibility GFX returned 0, entering MMHUB
+   120      0.582 startup: visibility MMHUB returned 0
+   121      0.586 gpumem: startup GFX translations committed after RLC, before CP
+   122      0.590 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   123      0.590 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   124      0.590 startup: visibility publication observer returned
+   125      0.594 startup: RLC boundary after-gfx-visibility
+   126      0.596 gfx: stage 5 (RLC): rc 0, 11 writes so far, 40465 us
+   127      0.596 gfx: op 1 to stage 5 -> 0x00000000, result 0, 11 writes, 0 doorbells
+   128      0.600 startup: entering GFX stage 6
+   129      0.602 startup: entering CP step 1
+   130      0.606 startup: CP1 checkpoint acquire-paging-lock
+   131      0.611 startup: CP1 checkpoint acquire-gart-lock
+   132      0.612 startup: CP1 checkpoint locks-acquired
+   133      0.616 amdgpu[0]: CP resume kiq-init begin
+
+   134      0.616 startup: CP1 checkpoint scheduler
+   135      0.618 startup: CP1 checkpoint scheduler-read
+   136      0.622 startup: CP1 checkpoint scheduler-write
+   137      0.624 startup: CP1 checkpoint scheduler-done
+   138      0.628 startup: CP1 checkpoint clear-mqd
+   139      0.630 startup: CP1 checkpoint select-queue
+   140      0.634 startup: CP1 checkpoint build-mqd
+   141      0.638 startup: CP1 checkpoint disable-wptr-poll
+   142      0.640 startup: CP1 checkpoint read-active
+   143      0.644 startup: CP1 checkpoint program-hqd
+   144      0.646 startup: CP1 checkpoint activate-hqd
+   145      0.648 startup: CP1 checkpoint restore-selection
+   146      0.652 startup: CP1 checkpoint complete
+   147      0.654 amdgpu[0]: CP resume kiq-init end result=0
+
+   148      0.654 gfx: CP step 1: rc 0, 27 writes, 39046 us
+   149      0.654 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+   150      0.654 startup: CP step 1 returned 0x00000000 result 0
+   151      0.656 startup: entering CP step 2
+   152      0.660 amdgpu[0]: CP resume compute-unhalt begin
+
+   153      0.660 amdgpu[0]: CP resume compute-unhalt end
+
+   154      0.660 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   155      0.660 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   156      0.660 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   157      0.660 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   158      0.660 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   159      0.660 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   160      0.660 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   161      0.660 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   162      0.660 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   163      0.660 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   164      0.660 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   165      0.660 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   166      0.660 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   167      0.660 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   168      0.660 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   169      0.660 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   170      0.660 gfx: CP step 2: rc 0, 17 writes, 337 us
+   171      0.660 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+   172      0.660 startup: CP step 2 returned 0x00000000 result 0
+   173      0.662 startup: entering CP step 3
+   174      0.666 amdgpu[0]: CP resume kcq-enable begin
+
+   175      0.666 amdgpu[0]: CP resume kcq-enable end result=0
+
+   176      0.666 gfx: CP step 3: rc 0, 1 writes, 60 us
+   177      0.666 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   178      0.666 startup: CP step 3 returned 0x00000000 result 0
+   179      0.668 startup: entering CP step 4
+   180      0.670 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   181      0.670 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   182      0.670 gfx: CP step 4: rc 0, 4 writes, 35 us
+   183      0.670 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+   184      0.670 startup: CP step 4 returned 0x00000000 result 0
+   185      0.674 startup: entering CP step 5
+   186      0.676 amdgpu[0]: CP resume kgq-enable begin
+
+   187      0.676 amdgpu[0]: CP resume kgq-enable end result=0
+
+   188      0.676 gfx: CP step 5: rc 0, 1 writes, 56 us
+   189      0.676 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+   190      0.676 startup: CP step 5 returned 0x00000000 result 0
+   191      0.680 startup: entering CP step 6
+   192      0.682 amdgpu[0]: CP resume gfx-start begin
+
+   193      0.682 amdgpu[0]: CP resume gfx-start end result=0
+
+   194      0.682 gfx: CP step 6: rc 0, 3 writes, 49 us
+   195      0.682 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+   196      0.682 startup: CP step 6 returned 0x00000000 result 0
+   197      0.686 startup: entering CP step 7
+   198      0.688 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   199      0.688 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   200      0.688 gfx: CP step 7: rc 0, 1 writes, 27 us
+   201      0.688 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+   202      0.688 startup: CP step 7 returned 0x00000000 result 0
+   203      0.692 startup: entering CP step 8
+   204      0.694 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   205      0.694 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   206      0.694 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   207      0.694 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   208      0.694 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   209      0.694 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   210      0.694 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   211      0.694 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   212      0.694 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   213      0.694 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   214      0.694 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   215      0.694 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   216      0.694 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   217      0.694 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   218      0.694 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   219      0.694 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   220      0.694 gfx: CP step 8: rc 0, 8 writes, 287 us
+   221      0.694 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+   222      0.694 startup: CP step 8 returned 0x00000000 result 0
+   223      0.702 startup: entering GFX stage 7
+   224      0.708 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 258 us
+   225      0.708 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+   226      0.712 startup: entering GFX stage 8
+   227      0.716 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 26 us
+   228      0.716 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   229      0.716 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+   230      0.720 startup: both engines ready
+   231      0.724 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   232      0.724 wddm: GPU initialized before adapter admission
+   233      0.724 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+   234      0.724 wddm: handle callbacks size 312 get@104=FFFFF80382E9E910 acquire@288=FFFFF80382D84100 release@296=FFFFF80382D84760
+   235      0.724 stage 35
+   236      0.726 stage 39
+   237      0.726 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+   238      0.726 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+   239      0.726 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+   240      0.726 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+   241      0.726 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+   242      0.726 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+   243      0.726 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+   244      0.726 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   245      0.726 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   246      0.726 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   247      0.726 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+   248      0.726 wddm: GetNodeMetadata node 0 adapter 0
+   249      0.726 wddm: GetNodeMetadata node 1 adapter 0
+   250      0.726 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+   251      0.726 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+   252      0.726 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+   253      0.732 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+   254      0.732 wddm: CreateProcess flags 0x00000001 pasids 1
+   255      0.732 wddm: CreateDevice flags 0x00000001 pasid 0
+ 19638     80.217 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19639     80.223 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19640     80.223 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19641     80.289 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19642     80.289 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19643     80.327 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19644     80.327 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19645     80.341 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19646     80.341 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19647     80.435 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19648     80.435 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19649     80.728 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19650     80.728 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19651     80.742 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19652     80.742 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19653     80.762 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19654     80.762 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19655     80.774 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19656     80.774 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19657     80.792 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19658     80.792 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19659     80.870 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19660     80.870 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19661     80.874 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19662     80.874 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19663     80.946 wddm summary: ---- DDI calls: name, count, first log line ----
+ 19664     80.946 wddm summary: QueryAdapterInfo                   16  first at 240
+ 19665     80.946 wddm summary: GetNodeMetadata                     2  first at 248
+ 19666     80.946 wddm summary: CreateDevice                       13  first at 255
+ 19667     80.946 wddm summary: DestroyDevice                       5  first at 1168
+ 19668     80.946 wddm summary: CreateContext                      15  first at 258
+ 19669     80.946 wddm summary: DestroyContext                      8  first at 1141
+ 19670     80.946 wddm summary: CreateProcess                       8  first at 254
+ 19671     80.946 wddm summary: DestroyProcess                      4  first at 2042
+ 19672     80.946 wddm summary: SetRootPageTable                    4  first at 281
+ 19673     80.946 wddm summary: CreateAllocation                  258  first at 327
+ 19674     80.946 wddm summary: DestroyAllocation                 154  first at 1125
+ 19675     80.946 wddm summary: DescribeAllocation               1235  first at 357
+ 19676     80.946 wddm summary: GetStandardAllocationDriverData      4  first at 325
+ 19677     80.946 wddm summary: OpenAllocation                    260  first at 330
+ 19678     80.946 wddm summary: CloseAllocation                   148  first at 1124
+ 19679     80.946 wddm summary: BuildPagingBuffer                5367  first at 260
+ 19680     80.946 wddm summary: SubmitCommandVirtual             3415  first at 304
+ 19681     80.946 wddm summary: PreemptCommand                      7  first at 11238
+ 19682     80.946 wddm summary: CalibrateGpuClock                3204  first at 395
+ 19683     80.946 wddm summary: Present                          1237  first at 589
+ 19684     80.946 wddm summary: SetVidPnSourceAddress            1232  first at 389
+ 19685     80.946 wddm summary: ControlInterrupt                    1  first at 488
+ 19686     80.946 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 19687     80.946 wddm summary: adapter info type   1       1  first at 240
+ 19688     80.946 wddm summary: adapter info type  15       1  first at 241
+ 19689     80.946 wddm summary: adapter info type  47       1  first at 242
+ 19690     80.946 wddm summary: adapter info type  13       1  first at 243
+ 19691     80.946 wddm summary: adapter info type  14       4  first at 244
+ 19692     80.946 wddm summary: adapter info type  11       2  first at 251
+ 19693     80.946 wddm summary: adapter info type  10       1  first at 253
+ 19694     80.946 wddm summary: adapter info type  16       1  first at 253
+ 19695     80.946 wddm summary: adapter info type   0       4  first at 1054
+ 19696     80.946 wddm summary: capture plans reserved 0 heap 0
+ 19697     80.946 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 19698     80.946 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 19699     80.946 wddm summary: paging operation  11    4183  first at 260
+ 19700     80.946 wddm summary: paging operation  12    1055  first at 318
+ 19701     80.946 wddm summary: paging operation   9      83  first at 338
+ 19702     80.946 wddm summary: paging operation   8      39  first at 1120
+ 19703     80.946 wddm summary: paging operation   2       7  first at 2073
+ 19704     80.946 wddm summary: objects created/destroyed: dev 13/5 ctx 15/8 proc 8/4 alloc 258/154, 252 alive
+ 19705     80.946 wddm summary: allocations opened/closed: 260/148 calls
+ 19706     80.946 wddm summary: submissions 0 physical + 3415 virtual, 7 preemptions, last completed fence 1244
+ 19707     80.946 wddm summary: node 0 hardware: 1244 submitted, 1244 completed, 0 timeouts, 0 refused
+ 19708     80.946 wddm summary: umd: 246 allocs (0 refused), 6 contexts, 1236 submits on the ring, 0 not run
+ 19709     80.946 wddm profile: umd calls 1236, elapsed ticks 815307, QPC frequency 10000000
+ 19710     80.946 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 19711     80.946 wddm summary: node 1 (paging, open): 2171 hardware submitted, 2171 completed, 0 timeouts, 0 refused
+ 19712     80.946 wddm: paging OS-private queue admissions=2171 (no submit allocation)
+ 19713     80.946 wddm summary: SubmitCommandVirtual by node: 0: 1244, 1: 2171, 0 private-buffer refusals
+ 19714     80.946 wddm summary: paging DMA VA nonzero 4338 zero 1029, mapping observations 8
+ 19715     80.946 wddm summary: native DMA transfers 36 fills 78 bytes 324718592
+ 19716     80.946 wddm: native PTE copies gate1 ranges0
+ 19717     80.946 wddm summary: native DMA exact disjoint checks 23
+ 19718     80.946 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x245FF9000 CPU_PA0x245FF9000
+ 19719     80.946 wddm summary: BuildPagingBuffer: 36 transfers, 78 fills, 324718592 bytes, 1051 insufficient-buffer
+ 19720     80.946 wddm summary: aperture map batches 0, unmap batches 0
+ 19721     80.946 wddm summary: paging TLB invalidations 1047, PTE update batches 3100
+ 19722     80.946 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 19723     80.946 wddm summary: presents 1237, flips 1230 of 1232 address calls (1229 arrived above DISPATCH_LEVEL)
+ 19724     80.946 wddm: CDD interop1 GPU Present gate1 identity probe1
+ 19725     80.946 wddm: DRIVERCAPS returned interop0 0 interop1 1
+ 19726     80.946 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+ 19727     80.946 wddm: DRIVERCAPS interop1 first100ns115959835374 last100ns115959835374
+ 19728     80.946 wddm: Blt observation calls8 capacity16
+ 19729     80.946 wddm: Blt obs0 interrupt100ns115968931783 qpc116010872852
+ 19730     80.946 wddm: Blt obs0 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19731     80.946 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 19732     80.946 wddm: Blt obs0 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19733     80.946 wddm: Blt obs0 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19734     80.946 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19735     80.946 wddm: Blt obs0 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19736     80.946 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19737     80.946 wddm: Blt obs1 interrupt100ns115968951804 qpc116010874583
+ 19738     80.946 wddm: Blt obs1 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19739     80.946 wddm: Blt obs1 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+ 19740     80.946 wddm: Blt obs1 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19741     80.946 wddm: Blt obs1 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19742     80.946 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19743     80.948 wddm: Blt obs1 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19744     80.948 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19745     80.948 wddm: Blt obs2 interrupt100ns115968951804 qpc116010879267
+ 19746     80.948 wddm: Blt obs2 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19747     80.948 wddm: Blt obs2 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+ 19748     80.948 wddm: Blt obs2 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19749     80.948 wddm: Blt obs2 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19750     80.948 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19751     80.948 wddm: Blt obs2 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19752     80.948 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19753     80.948 wddm: Blt obs3 interrupt100ns115968951804 qpc116010880768
+ 19754     80.948 wddm: Blt obs3 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19755     80.948 wddm: Blt obs3 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+ 19756     80.948 wddm: Blt obs3 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19757     80.948 wddm: Blt obs3 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19758     80.948 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19759     80.948 wddm: Blt obs3 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19760     80.948 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19761     80.948 wddm: Blt obs4 interrupt100ns115968951804 qpc116010882266
+ 19762     80.948 wddm: Blt obs4 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19763     80.948 wddm: Blt obs4 dma4096 private2184 offset580 rects1 list256 valid1 snapshot1
+ 19764     80.948 wddm: Blt obs4 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19765     80.948 wddm: Blt obs4 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19766     80.948 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19767     80.948 wddm: Blt obs4 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19768     80.948 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19769     80.948 wddm: Blt obs5 interrupt100ns115968951804 qpc116010883751
+ 19770     80.948 wddm: Blt obs5 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19771     80.948 wddm: Blt obs5 dma4096 private2184 offset725 rects1 list256 valid1 snapshot1
+ 19772     80.948 wddm: Blt obs5 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19773     80.948 wddm: Blt obs5 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19774     80.948 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19775     80.948 wddm: Blt obs5 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19776     80.948 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19777     80.948 wddm: Blt obs6 interrupt100ns115968951804 qpc116010885240
+ 19778     80.948 wddm: Blt obs6 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19779     80.948 wddm: Blt obs6 dma4096 private2184 offset870 rects1 list256 valid1 snapshot1
+ 19780     80.948 wddm: Blt obs6 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19781     80.948 wddm: Blt obs6 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19782     80.948 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19783     80.948 wddm: Blt obs6 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19784     80.948 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19785     80.948 wddm: Blt obs7 interrupt100ns115969011837 qpc116010934825
+ 19786     80.948 wddm: Blt obs7 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19787     80.948 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 19788     80.948 wddm: Blt obs7 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19789     80.948 wddm: Blt obs7 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19790     80.948 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19791     80.948 wddm: Blt obs7 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19792     80.948 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19793     80.948 wddm: GPU Present calls8 records8 rotate6 refused0
+ 19794     80.948 wddm: GPU Present submits8 rejected0 failed0
+ 19795     80.948 wddm: GPU Present errors parameter0 handle0 color0 other0
+ 19796     80.948 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 19797     80.948 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 19798     80.948 wddm summary: widest blit 0 rows
+ 19799     80.948 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 19800     80.948 wddm summary: vsync enabled, 0 ticks, 4787 reported to dxgkrnl
+ 19801     80.948 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+ 19802     80.948 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 19803     80.948 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+ 19804     80.948 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116002866774..116002866941
+ 19805     80.948 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062033179..116062033401
+ 19806     80.948 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062119337..116062119672
+ 19807     80.948 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116062425217..116062425450
+ 19808     80.948 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116063461865..116063461998
+ 19809     80.948 wddm summary: dcn lock acknowledgement timeouts 0
+ 19810     80.948 wddm summary: vidpn flip open: 1230 hardware flips, 0 refused, 1 hardware vsyncs armed 4803 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+ 19811     80.948 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 19812     80.948 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 19813     80.948 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 19814     80.948 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 19815     80.948 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 19816     80.948 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 19817     80.948 vidmm summary: PTE encoding level 0 segment 0 coherent 13632 noncoherent 163632 snoop mismatches 0
+ 19818     80.948 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 272826 snoop mismatches 0
+ 19819     80.948 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+ 19820     80.948 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 890 snoop mismatches 0
+ 19821     80.948 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 24 snoop mismatches 0
+ 19822     80.948 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 11 snoop mismatches 0
+ 19823     80.948 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 19824     80.948 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 4 roots
+ 19825     80.984 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19826     80.984 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19827     80.990 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19828     80.990 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19829     81.090 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19830     81.090 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19831     81.108 gfx: paging submit, 288 ring dwords reserved for buffer at 0x400B64, seq 3419
+ 19832     81.108 gfx: paging submit, 793 ring dwords reserved for buffer at 0x410000, seq 3420
+ 19833     81.110 gfx: paging submit, 224 ring dwords reserved for buffer at 0x410C64, seq 3421
+ 19834     81.110 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 3422
+ 19835     81.110 gfx: paging submit, 939 ring dwords reserved for buffer at 0x410000, seq 3423
+ 19836     81.112 gfx: paging submit, 48 ring dwords reserved for buffer at 0x410F00, seq 3424
+ 19837     81.112 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 3425
+ 19838     81.112 gfx: paging submit, 1017 ring dwords reserved for buffer at 0x410000, seq 3426
+ 19839     81.112 gfx: paging submit, 107 ring dwords reserved for buffer at 0x400000, seq 3427
+ 19840     81.114 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19841     81.114 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19842     81.202 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19843     81.202 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19844     81.208 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19845     81.208 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19846     81.308 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19847     81.308 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19848     81.324 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19849     81.324 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19850     81.422 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19851     81.422 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19852     81.424 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19853     81.424 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19854     81.528 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19855     81.528 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19856     81.540 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19857     81.540 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19858     81.642 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19859     81.642 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19860     81.658 gfx: paging submit, 798 ring dwords reserved for buffer at 0x4001AC, seq 3438
+ 19861     81.658 gfx: paging submit, 15 ring dwords reserved for buffer at 0x400E24, seq 3439
+ 19862     81.660 gfx: paging submit, 96 ring dwords reserved for buffer at 0x400E60, seq 3440
+ 19863     81.660 gfx: paging submit, 985 ring dwords reserved for buffer at 0x410000, seq 3441
+ 19864     81.660 gfx: paging submit, 32 ring dwords reserved for buffer at 0x410F64, seq 3442
+ 19865     81.662 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 3443
+ 19866     81.664 gfx: paging submit, 93 ring dwords reserved for buffer at 0x410000, seq 3444
+ 19867     81.664 gfx: paging submit, 896 ring dwords reserved for buffer at 0x4101C0, seq 3445
+ 19868     81.664 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 3446
+ 19869     81.664 gfx: paging submit, 75 ring dwords reserved for buffer at 0x410000, seq 3447
+ 19870     81.664 gfx: paging submit, 185 ring dwords reserved for buffer at 0x400000, seq 3448
+ 19871     81.664 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19872     81.664 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19873     81.945 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19874     81.945 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19875     81.967 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19876     81.967 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19877     81.975 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 19878     81.975 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 19879     82.065 wddm summary: ---- DDI calls: name, count, first log line ----
+ 19880     82.065 wddm summary: QueryAdapterInfo                   16  first at 240
+ 19881     82.065 wddm summary: GetNodeMetadata                     2  first at 248
+ 19882     82.065 wddm summary: CreateDevice                       13  first at 255
+ 19883     82.065 wddm summary: DestroyDevice                       5  first at 1168
+ 19884     82.065 wddm summary: CreateContext                      15  first at 258
+ 19885     82.065 wddm summary: DestroyContext                      8  first at 1141
+ 19886     82.065 wddm summary: CreateProcess                       8  first at 254
+ 19887     82.065 wddm summary: DestroyProcess                      4  first at 2042
+ 19888     82.065 wddm summary: SetRootPageTable                    4  first at 281
+ 19889     82.065 wddm summary: CreateAllocation                  259  first at 327
+ 19890     82.065 wddm summary: DestroyAllocation                 156  first at 1125
+ 19891     82.065 wddm summary: DescribeAllocation               1252  first at 357
+ 19892     82.065 wddm summary: GetStandardAllocationDriverData      4  first at 325
+ 19893     82.065 wddm summary: OpenAllocation                    261  first at 330
+ 19894     82.065 wddm summary: CloseAllocation                   150  first at 1124
+ 19895     82.065 wddm summary: BuildPagingBuffer                5410  first at 260
+ 19896     82.065 wddm summary: SubmitCommandVirtual             3452  first at 304
+ 19897     82.065 wddm summary: PreemptCommand                      7  first at 11238
+ 19898     82.065 wddm summary: CalibrateGpuClock                3250  first at 395
+ 19899     82.065 wddm summary: Present                          1254  first at 589
+ 19900     82.065 wddm summary: SetVidPnSourceAddress            1249  first at 389
+ 19901     82.065 wddm summary: ControlInterrupt                    1  first at 488
+ 19902     82.065 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 19903     82.065 wddm summary: adapter info type   1       1  first at 240
+ 19904     82.065 wddm summary: adapter info type  15       1  first at 241
+ 19905     82.065 wddm summary: adapter info type  47       1  first at 242
+ 19906     82.065 wddm summary: adapter info type  13       1  first at 243
+ 19907     82.065 wddm summary: adapter info type  14       4  first at 244
+ 19908     82.065 wddm summary: adapter info type  11       2  first at 251
+ 19909     82.065 wddm summary: adapter info type  10       1  first at 253
+ 19910     82.065 wddm summary: adapter info type  16       1  first at 253
+ 19911     82.065 wddm summary: adapter info type   0       4  first at 1054
+ 19912     82.065 wddm summary: capture plans reserved 0 heap 0
+ 19913     82.065 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 19914     82.065 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 19915     82.065 wddm summary: paging operation  11    4215  first at 260
+ 19916     82.065 wddm summary: paging operation  12    1064  first at 318
+ 19917     82.065 wddm summary: paging operation   9      84  first at 338
+ 19918     82.065 wddm summary: paging operation   8      40  first at 1120
+ 19919     82.065 wddm summary: paging operation   2       7  first at 2073
+ 19920     82.065 wddm summary: objects created/destroyed: dev 13/5 ctx 15/8 proc 8/4 alloc 259/156, 250 alive
+ 19921     82.065 wddm summary: allocations opened/closed: 261/150 calls
+ 19922     82.065 wddm summary: submissions 0 physical + 3452 virtual, 7 preemptions, last completed fence 1261
+ 19923     82.065 wddm summary: node 0 hardware: 1261 submitted, 1261 completed, 0 timeouts, 0 refused
+ 19924     82.065 wddm summary: umd: 247 allocs (0 refused), 6 contexts, 1253 submits on the ring, 0 not run
+ 19925     82.065 wddm profile: umd calls 1253, elapsed ticks 825137, QPC frequency 10000000
+ 19926     82.065 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 19927     82.065 wddm summary: node 1 (paging, open): 2191 hardware submitted, 2191 completed, 0 timeouts, 0 refused
+ 19928     82.065 wddm: paging OS-private queue admissions=2191 (no submit allocation)
+ 19929     82.065 wddm summary: SubmitCommandVirtual by node: 0: 1261, 1: 2191, 0 private-buffer refusals
+ 19930     82.065 wddm summary: paging DMA VA nonzero 4381 zero 1029, mapping observations 8
+ 19931     82.065 wddm summary: native DMA transfers 37 fills 79 bytes 328912896
+ 19932     82.065 wddm: native PTE copies gate1 ranges0
+ 19933     82.065 wddm summary: native DMA exact disjoint checks 24
+ 19934     82.065 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x245FF9000 CPU_PA0x245FF9000
+ 19935     82.065 wddm summary: BuildPagingBuffer: 37 transfers, 79 fills, 328912896 bytes, 1063 insufficient-buffer
+ 19936     82.065 wddm summary: aperture map batches 0, unmap batches 0
+ 19937     82.065 wddm summary: paging TLB invalidations 1056, PTE update batches 3131
+ 19938     82.065 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 19939     82.065 wddm summary: presents 1254, flips 1247 of 1249 address calls (1246 arrived above DISPATCH_LEVEL)
+ 19940     82.065 wddm: CDD interop1 GPU Present gate1 identity probe1
+ 19941     82.065 wddm: DRIVERCAPS returned interop0 0 interop1 1
+ 19942     82.065 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+ 19943     82.065 wddm: DRIVERCAPS interop1 first100ns115959835374 last100ns115959835374
+ 19944     82.065 wddm: Blt observation calls8 capacity16
+ 19945     82.065 wddm: Blt obs0 interrupt100ns115968931783 qpc116010872852
+ 19946     82.065 wddm: Blt obs0 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19947     82.065 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 19948     82.065 wddm: Blt obs0 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19949     82.065 wddm: Blt obs0 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19950     82.065 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19951     82.065 wddm: Blt obs0 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19952     82.065 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19953     82.065 wddm: Blt obs1 interrupt100ns115968951804 qpc116010874583
+ 19954     82.065 wddm: Blt obs1 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19955     82.065 wddm: Blt obs1 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+ 19956     82.065 wddm: Blt obs1 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19957     82.065 wddm: Blt obs1 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19958     82.065 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19959     82.065 wddm: Blt obs1 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19960     82.065 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19961     82.065 wddm: Blt obs2 interrupt100ns115968951804 qpc116010879267
+ 19962     82.065 wddm: Blt obs2 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19963     82.065 wddm: Blt obs2 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+ 19964     82.065 wddm: Blt obs2 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19965     82.065 wddm: Blt obs2 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19966     82.065 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19967     82.065 wddm: Blt obs2 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19968     82.065 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19969     82.065 wddm: Blt obs3 interrupt100ns115968951804 qpc116010880768
+ 19970     82.065 wddm: Blt obs3 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19971     82.065 wddm: Blt obs3 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+ 19972     82.065 wddm: Blt obs3 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19973     82.065 wddm: Blt obs3 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19974     82.065 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19975     82.065 wddm: Blt obs3 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19976     82.065 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19977     82.065 wddm: Blt obs4 interrupt100ns115968951804 qpc116010882266
+ 19978     82.065 wddm: Blt obs4 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19979     82.065 wddm: Blt obs4 dma4096 private2184 offset580 rects1 list256 valid1 snapshot1
+ 19980     82.065 wddm: Blt obs4 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19981     82.065 wddm: Blt obs4 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19982     82.065 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19983     82.065 wddm: Blt obs4 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19984     82.065 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19985     82.065 wddm: Blt obs5 interrupt100ns115968951804 qpc116010883751
+ 19986     82.065 wddm: Blt obs5 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19987     82.065 wddm: Blt obs5 dma4096 private2184 offset725 rects1 list256 valid1 snapshot1
+ 19988     82.065 wddm: Blt obs5 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19989     82.065 wddm: Blt obs5 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19990     82.065 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19991     82.065 wddm: Blt obs5 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 19992     82.065 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 19993     82.065 wddm: Blt obs6 interrupt100ns115968951804 qpc116010885240
+ 19994     82.065 wddm: Blt obs6 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 19995     82.065 wddm: Blt obs6 dma4096 private2184 offset870 rects1 list256 valid1 snapshot1
+ 19996     82.065 wddm: Blt obs6 src 0,0,1920,1200 dst 0,0,1920,1200
+ 19997     82.065 wddm: Blt obs6 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 19998     82.065 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 19999     82.065 wddm: Blt obs6 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20000     82.065 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20001     82.065 wddm: Blt obs7 interrupt100ns115969011837 qpc116010934825
+ 20002     82.065 wddm: Blt obs7 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20003     82.065 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 20004     82.065 wddm: Blt obs7 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20005     82.065 wddm: Blt obs7 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20006     82.065 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20007     82.065 wddm: Blt obs7 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20008     82.065 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20009     82.065 wddm: GPU Present calls8 records8 rotate6 refused0
+ 20010     82.065 wddm: GPU Present submits8 rejected0 failed0
+ 20011     82.065 wddm: GPU Present errors parameter0 handle0 color0 other0
+ 20012     82.065 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 20013     82.067 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 20014     82.067 wddm summary: widest blit 0 rows
+ 20015     82.067 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 20016     82.067 wddm summary: vsync enabled, 0 ticks, 4854 reported to dxgkrnl
+ 20017     82.067 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+ 20018     82.067 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 20019     82.067 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+ 20020     82.067 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116002866774..116002866941
+ 20021     82.067 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062033179..116062033401
+ 20022     82.067 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062119337..116062119672
+ 20023     82.067 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116062425217..116062425450
+ 20024     82.067 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116063461865..116063461998
+ 20025     82.067 wddm summary: dcn lock acknowledgement timeouts 0
+ 20026     82.067 wddm summary: vidpn flip open: 1247 hardware flips, 0 refused, 1 hardware vsyncs armed 4870 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+ 20027     82.067 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 20028     82.067 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 20029     82.067 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 20030     82.067 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 20031     82.067 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 20032     82.067 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 20033     82.067 vidmm summary: PTE encoding level 0 segment 0 coherent 13632 noncoherent 164656 snoop mismatches 0
+ 20034     82.067 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 275898 snoop mismatches 0
+ 20035     82.067 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+ 20036     82.067 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 890 snoop mismatches 0
+ 20037     82.067 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 24 snoop mismatches 0
+ 20038     82.067 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 11 snoop mismatches 0
+ 20039     82.067 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 20040     82.067 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 4 roots
+ 20041     82.075 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20042     82.075 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20043     82.093 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20044     82.093 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20045     82.183 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20046     82.183 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20047     82.195 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20048     82.195 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20049     82.295 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20050     82.295 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20051     82.309 gfx: paging submit, 669 ring dwords reserved for buffer at 0x4002E4, seq 3458
+ 20052     82.309 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D58, seq 3459
+ 20053     82.309 gfx: paging submit, 508 ring dwords reserved for buffer at 0x410000, seq 3460
+ 20054     82.309 gfx: paging submit, 496 ring dwords reserved for buffer at 0x4107F0, seq 3461
+ 20055     82.309 gfx: paging submit, 601 ring dwords reserved for buffer at 0x400000, seq 3462
+ 20056     82.311 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20057     82.311 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20058     82.403 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20059     82.403 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20060     82.409 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20061     82.409 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20062     82.513 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20063     82.513 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20064     82.525 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20065     82.525 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20066     82.623 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20067     82.623 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20068     82.733 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20069     82.733 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20070     82.745 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20071     82.745 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20072     82.757 wddm summary: ---- DDI calls: name, count, first log line ----
+ 20073     82.757 wddm summary: QueryAdapterInfo                   16  first at 240
+ 20074     82.757 wddm summary: GetNodeMetadata                     2  first at 248
+ 20075     82.757 wddm summary: CreateDevice                       13  first at 255
+ 20076     82.757 wddm summary: DestroyDevice                       5  first at 1168
+ 20077     82.757 wddm summary: CreateContext                      15  first at 258
+ 20078     82.757 wddm summary: DestroyContext                      8  first at 1141
+ 20079     82.757 wddm summary: CreateProcess                       8  first at 254
+ 20080     82.757 wddm summary: DestroyProcess                      4  first at 2042
+ 20081     82.757 wddm summary: SetRootPageTable                    4  first at 281
+ 20082     82.757 wddm summary: CreateAllocation                  260  first at 327
+ 20083     82.757 wddm summary: DestroyAllocation                 156  first at 1125
+ 20084     82.757 wddm summary: DescribeAllocation               1265  first at 357
+ 20085     82.757 wddm summary: GetStandardAllocationDriverData      4  first at 325
+ 20086     82.757 wddm summary: OpenAllocation                    262  first at 330
+ 20087     82.757 wddm summary: CloseAllocation                   150  first at 1124
+ 20088     82.757 wddm summary: BuildPagingBuffer                5419  first at 260
+ 20089     82.757 wddm summary: SubmitCommandVirtual             3470  first at 304
+ 20090     82.757 wddm summary: PreemptCommand                      7  first at 11238
+ 20091     82.757 wddm summary: CalibrateGpuClock                3278  first at 395
+ 20092     82.757 wddm summary: Present                          1267  first at 589
+ 20093     82.757 wddm summary: SetVidPnSourceAddress            1262  first at 389
+ 20094     82.757 wddm summary: ControlInterrupt                    1  first at 488
+ 20095     82.757 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 20096     82.757 wddm summary: adapter info type   1       1  first at 240
+ 20097     82.757 wddm summary: adapter info type  15       1  first at 241
+ 20098     82.757 wddm summary: adapter info type  47       1  first at 242
+ 20099     82.757 wddm summary: adapter info type  13       1  first at 243
+ 20100     82.757 wddm summary: adapter info type  14       4  first at 244
+ 20101     82.757 wddm summary: adapter info type  11       2  first at 251
+ 20102     82.757 wddm summary: adapter info type  10       1  first at 253
+ 20103     82.757 wddm summary: adapter info type  16       1  first at 253
+ 20104     82.757 wddm summary: adapter info type   0       4  first at 1054
+ 20105     82.759 wddm summary: capture plans reserved 0 heap 0
+ 20106     82.759 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 20107     82.759 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 20108     82.759 wddm summary: paging operation  11    4222  first at 260
+ 20109     82.759 wddm summary: paging operation  12    1066  first at 318
+ 20110     82.759 wddm summary: paging operation   9      84  first at 338
+ 20111     82.759 wddm summary: paging operation   8      40  first at 1120
+ 20112     82.759 wddm summary: paging operation   2       7  first at 2073
+ 20113     82.759 wddm summary: objects created/destroyed: dev 13/5 ctx 15/8 proc 8/4 alloc 260/156, 252 alive
+ 20114     82.759 wddm summary: allocations opened/closed: 262/150 calls
+ 20115     82.759 wddm summary: submissions 0 physical + 3470 virtual, 7 preemptions, last completed fence 1274
+ 20116     82.759 wddm summary: node 0 hardware: 1274 submitted, 1274 completed, 0 timeouts, 0 refused
+ 20117     82.759 wddm summary: umd: 248 allocs (0 refused), 6 contexts, 1266 submits on the ring, 0 not run
+ 20118     82.759 wddm profile: umd calls 1266, elapsed ticks 832672, QPC frequency 10000000
+ 20119     82.759 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 20120     82.759 wddm summary: node 1 (paging, open): 2196 hardware submitted, 2196 completed, 0 timeouts, 0 refused
+ 20121     82.759 wddm: paging OS-private queue admissions=2196 (no submit allocation)
+ 20122     82.759 wddm summary: SubmitCommandVirtual by node: 0: 1274, 1: 2196, 0 private-buffer refusals
+ 20123     82.759 wddm summary: paging DMA VA nonzero 4390 zero 1029, mapping observations 8
+ 20124     82.759 wddm summary: native DMA transfers 37 fills 79 bytes 328912896
+ 20125     82.759 wddm: native PTE copies gate1 ranges0
+ 20126     82.759 wddm summary: native DMA exact disjoint checks 24
+ 20127     82.759 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x245FF9000 CPU_PA0x245FF9000
+ 20128     82.759 wddm summary: BuildPagingBuffer: 37 transfers, 79 fills, 328912896 bytes, 1065 insufficient-buffer
+ 20129     82.759 wddm summary: aperture map batches 0, unmap batches 0
+ 20130     82.759 wddm summary: paging TLB invalidations 1058, PTE update batches 3138
+ 20131     82.759 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 20132     82.759 wddm summary: presents 1267, flips 1260 of 1262 address calls (1259 arrived above DISPATCH_LEVEL)
+ 20133     82.759 wddm: CDD interop1 GPU Present gate1 identity probe1
+ 20134     82.759 wddm: DRIVERCAPS returned interop0 0 interop1 1
+ 20135     82.759 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+ 20136     82.759 wddm: DRIVERCAPS interop1 first100ns115959835374 last100ns115959835374
+ 20137     82.759 wddm: Blt observation calls8 capacity16
+ 20138     82.759 wddm: Blt obs0 interrupt100ns115968931783 qpc116010872852
+ 20139     82.759 wddm: Blt obs0 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20140     82.759 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 20141     82.759 wddm: Blt obs0 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20142     82.759 wddm: Blt obs0 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20143     82.759 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20144     82.759 wddm: Blt obs0 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20145     82.759 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20146     82.759 wddm: Blt obs1 interrupt100ns115968951804 qpc116010874583
+ 20147     82.759 wddm: Blt obs1 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20148     82.759 wddm: Blt obs1 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+ 20149     82.759 wddm: Blt obs1 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20150     82.759 wddm: Blt obs1 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20151     82.759 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20152     82.759 wddm: Blt obs1 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20153     82.759 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20154     82.759 wddm: Blt obs2 interrupt100ns115968951804 qpc116010879267
+ 20155     82.759 wddm: Blt obs2 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20156     82.759 wddm: Blt obs2 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+ 20157     82.759 wddm: Blt obs2 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20158     82.759 wddm: Blt obs2 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20159     82.759 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20160     82.759 wddm: Blt obs2 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20161     82.759 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20162     82.759 wddm: Blt obs3 interrupt100ns115968951804 qpc116010880768
+ 20163     82.759 wddm: Blt obs3 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20164     82.759 wddm: Blt obs3 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+ 20165     82.759 wddm: Blt obs3 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20166     82.759 wddm: Blt obs3 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20167     82.759 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20168     82.759 wddm: Blt obs3 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20169     82.759 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20170     82.759 wddm: Blt obs4 interrupt100ns115968951804 qpc116010882266
+ 20171     82.759 wddm: Blt obs4 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20172     82.759 wddm: Blt obs4 dma4096 private2184 offset580 rects1 list256 valid1 snapshot1
+ 20173     82.759 wddm: Blt obs4 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20174     82.759 wddm: Blt obs4 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20175     82.759 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20176     82.759 wddm: Blt obs4 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20177     82.759 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20178     82.759 wddm: Blt obs5 interrupt100ns115968951804 qpc116010883751
+ 20179     82.759 wddm: Blt obs5 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20180     82.759 wddm: Blt obs5 dma4096 private2184 offset725 rects1 list256 valid1 snapshot1
+ 20181     82.759 wddm: Blt obs5 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20182     82.759 wddm: Blt obs5 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20183     82.759 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20184     82.759 wddm: Blt obs5 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20185     82.759 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20186     82.759 wddm: Blt obs6 interrupt100ns115968951804 qpc116010885240
+ 20187     82.759 wddm: Blt obs6 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20188     82.759 wddm: Blt obs6 dma4096 private2184 offset870 rects1 list256 valid1 snapshot1
+ 20189     82.759 wddm: Blt obs6 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20190     82.759 wddm: Blt obs6 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20191     82.759 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20192     82.759 wddm: Blt obs6 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20193     82.759 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20194     82.759 wddm: Blt obs7 interrupt100ns115969011837 qpc116010934825
+ 20195     82.759 wddm: Blt obs7 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20196     82.759 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 20197     82.759 wddm: Blt obs7 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20198     82.759 wddm: Blt obs7 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20199     82.759 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20200     82.759 wddm: Blt obs7 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20201     82.759 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20202     82.759 wddm: GPU Present calls8 records8 rotate6 refused0
+ 20203     82.759 wddm: GPU Present submits8 rejected0 failed0
+ 20204     82.759 wddm: GPU Present errors parameter0 handle0 color0 other0
+ 20205     82.759 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 20206     82.759 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 20207     82.759 wddm summary: widest blit 0 rows
+ 20208     82.759 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 20209     82.759 wddm summary: vsync enabled, 0 ticks, 4896 reported to dxgkrnl
+ 20210     82.759 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+ 20211     82.759 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 20212     82.759 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+ 20213     82.759 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116002866774..116002866941
+ 20214     82.759 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062033179..116062033401
+ 20215     82.759 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062119337..116062119672
+ 20216     82.759 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116062425217..116062425450
+ 20217     82.759 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116063461865..116063461998
+ 20218     82.759 wddm summary: dcn lock acknowledgement timeouts 0
+ 20219     82.759 wddm summary: vidpn flip open: 1260 hardware flips, 0 refused, 1 hardware vsyncs armed 4912 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+ 20220     82.759 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 20221     82.759 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 20222     82.759 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 20223     82.759 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 20224     82.759 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 20225     82.759 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 20226     82.759 vidmm summary: PTE encoding level 0 segment 0 coherent 13632 noncoherent 165680 snoop mismatches 0
+ 20227     82.759 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 275898 snoop mismatches 0
+ 20228     82.759 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+ 20229     82.759 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 892 snoop mismatches 0
+ 20230     82.759 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 24 snoop mismatches 0
+ 20231     82.759 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 11 snoop mismatches 0
+ 20232     82.759 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 20233     82.759 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 4 roots
+ 20234     82.791 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20235     82.791 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20236     82.846 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20237     82.846 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20238     82.860 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20239     82.860 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20240     82.950 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20241     82.950 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20242     82.960 gfx: VMID 1 root 0x46DFEC000 flush -> 0
+ 20243     82.960 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+ 20244     83.220 wddm summary: ---- DDI calls: name, count, first log line ----
+ 20245     83.220 wddm summary: QueryAdapterInfo                   16  first at 240
+ 20246     83.220 wddm summary: GetNodeMetadata                     2  first at 248
+ 20247     83.220 wddm summary: CreateDevice                       13  first at 255
+ 20248     83.220 wddm summary: DestroyDevice                       5  first at 1168
+ 20249     83.220 wddm summary: CreateContext                      15  first at 258
+ 20250     83.220 wddm summary: DestroyContext                      8  first at 1141
+ 20251     83.220 wddm summary: CreateProcess                       8  first at 254
+ 20252     83.220 wddm summary: DestroyProcess                      4  first at 2042
+ 20253     83.220 wddm summary: SetRootPageTable                    4  first at 281
+ 20254     83.220 wddm summary: CreateAllocation                  260  first at 327
+ 20255     83.220 wddm summary: DestroyAllocation                 156  first at 1125
+ 20256     83.220 wddm summary: DescribeAllocation               1270  first at 357
+ 20257     83.220 wddm summary: GetStandardAllocationDriverData      4  first at 325
+ 20258     83.220 wddm summary: OpenAllocation                    262  first at 330
+ 20259     83.220 wddm summary: CloseAllocation                   150  first at 1124
+ 20260     83.220 wddm summary: BuildPagingBuffer                5419  first at 260
+ 20261     83.220 wddm summary: SubmitCommandVirtual             3475  first at 304
+ 20262     83.220 wddm summary: PreemptCommand                      7  first at 11238
+ 20263     83.220 wddm summary: CalibrateGpuClock                3296  first at 395
+ 20264     83.220 wddm summary: Present                          1272  first at 589
+ 20265     83.220 wddm summary: SetVidPnSourceAddress            1267  first at 389
+ 20266     83.220 wddm summary: ControlInterrupt                    1  first at 488
+ 20267     83.220 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+ 20268     83.220 wddm summary: adapter info type   1       1  first at 240
+ 20269     83.220 wddm summary: adapter info type  15       1  first at 241
+ 20270     83.220 wddm summary: adapter info type  47       1  first at 242
+ 20271     83.220 wddm summary: adapter info type  13       1  first at 243
+ 20272     83.220 wddm summary: adapter info type  14       4  first at 244
+ 20273     83.220 wddm summary: adapter info type  11       2  first at 251
+ 20274     83.220 wddm summary: adapter info type  10       1  first at 253
+ 20275     83.220 wddm summary: adapter info type  16       1  first at 253
+ 20276     83.220 wddm summary: adapter info type   0       4  first at 1054
+ 20277     83.220 wddm summary: capture plans reserved 0 heap 0
+ 20278     83.220 wddm summary: capture context peaks plans 0 reserved-bytes 0
+ 20279     83.220 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+ 20280     83.220 wddm summary: paging operation  11    4222  first at 260
+ 20281     83.220 wddm summary: paging operation  12    1066  first at 318
+ 20282     83.220 wddm summary: paging operation   9      84  first at 338
+ 20283     83.220 wddm summary: paging operation   8      40  first at 1120
+ 20284     83.220 wddm summary: paging operation   2       7  first at 2073
+ 20285     83.220 wddm summary: objects created/destroyed: dev 13/5 ctx 15/8 proc 8/4 alloc 260/156, 252 alive
+ 20286     83.220 wddm summary: allocations opened/closed: 262/150 calls
+ 20287     83.220 wddm summary: submissions 0 physical + 3475 virtual, 7 preemptions, last completed fence 1279
+ 20288     83.220 wddm summary: node 0 hardware: 1279 submitted, 1279 completed, 0 timeouts, 0 refused
+ 20289     83.220 wddm summary: umd: 248 allocs (0 refused), 6 contexts, 1271 submits on the ring, 0 not run
+ 20290     83.220 wddm profile: umd calls 1271, elapsed ticks 834847, QPC frequency 10000000
+ 20291     83.220 wddm profile: probe enabled 0, calls 0, elapsed ticks 0 (included in umd)
+ 20292     83.220 wddm summary: node 1 (paging, open): 2196 hardware submitted, 2196 completed, 0 timeouts, 0 refused
+ 20293     83.220 wddm: paging OS-private queue admissions=2196 (no submit allocation)
+ 20294     83.220 wddm summary: SubmitCommandVirtual by node: 0: 1279, 1: 2196, 0 private-buffer refusals
+ 20295     83.220 wddm summary: paging DMA VA nonzero 4390 zero 1029, mapping observations 8
+ 20296     83.220 wddm summary: native DMA transfers 37 fills 79 bytes 328912896
+ 20297     83.220 wddm: native PTE copies gate1 ranges0
+ 20298     83.220 wddm summary: native DMA exact disjoint checks 24
+ 20299     83.220 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E150000 PA0x245FF9000 CPU_PA0x245FF9000
+ 20300     83.220 wddm summary: BuildPagingBuffer: 37 transfers, 79 fills, 328912896 bytes, 1065 insufficient-buffer
+ 20301     83.220 wddm summary: aperture map batches 0, unmap batches 0
+ 20302     83.220 wddm summary: paging TLB invalidations 1058, PTE update batches 3138
+ 20303     83.220 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+ 20304     83.220 wddm summary: presents 1272, flips 1265 of 1267 address calls (1264 arrived above DISPATCH_LEVEL)
+ 20305     83.220 wddm: CDD interop1 GPU Present gate1 identity probe1
+ 20306     83.220 wddm: DRIVERCAPS returned interop0 0 interop1 1
+ 20307     83.220 wddm: DRIVERCAPS interop0 first100ns0 last100ns0
+ 20308     83.220 wddm: DRIVERCAPS interop1 first100ns115959835374 last100ns115959835374
+ 20309     83.220 wddm: Blt observation calls8 capacity16
+ 20310     83.220 wddm: Blt obs0 interrupt100ns115968931783 qpc116010872852
+ 20311     83.220 wddm: Blt obs0 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20312     83.220 wddm: Blt obs0 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 20313     83.220 wddm: Blt obs0 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20314     83.220 wddm: Blt obs0 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20315     83.220 wddm: Blt obs0 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20316     83.220 wddm: Blt obs0 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20317     83.220 wddm: Blt obs0 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20318     83.220 wddm: Blt obs1 interrupt100ns115968951804 qpc116010874583
+ 20319     83.220 wddm: Blt obs1 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20320     83.220 wddm: Blt obs1 dma4096 private2184 offset145 rects1 list256 valid1 snapshot1
+ 20321     83.220 wddm: Blt obs1 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20322     83.220 wddm: Blt obs1 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20323     83.220 wddm: Blt obs1 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20324     83.220 wddm: Blt obs1 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20325     83.220 wddm: Blt obs1 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20326     83.220 wddm: Blt obs2 interrupt100ns115968951804 qpc116010879267
+ 20327     83.220 wddm: Blt obs2 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20328     83.220 wddm: Blt obs2 dma4096 private2184 offset290 rects1 list256 valid1 snapshot1
+ 20329     83.220 wddm: Blt obs2 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20330     83.220 wddm: Blt obs2 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20331     83.220 wddm: Blt obs2 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20332     83.220 wddm: Blt obs2 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20333     83.220 wddm: Blt obs2 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20334     83.220 wddm: Blt obs3 interrupt100ns115968951804 qpc116010880768
+ 20335     83.220 wddm: Blt obs3 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20336     83.220 wddm: Blt obs3 dma4096 private2184 offset435 rects1 list256 valid1 snapshot1
+ 20337     83.220 wddm: Blt obs3 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20338     83.220 wddm: Blt obs3 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20339     83.220 wddm: Blt obs3 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20340     83.220 wddm: Blt obs3 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20341     83.220 wddm: Blt obs3 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20342     83.220 wddm: Blt obs4 interrupt100ns115968951804 qpc116010882266
+ 20343     83.220 wddm: Blt obs4 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20344     83.220 wddm: Blt obs4 dma4096 private2184 offset580 rects1 list256 valid1 snapshot1
+ 20345     83.220 wddm: Blt obs4 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20346     83.220 wddm: Blt obs4 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20347     83.220 wddm: Blt obs4 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20348     83.220 wddm: Blt obs4 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20349     83.220 wddm: Blt obs4 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20350     83.220 wddm: Blt obs5 interrupt100ns115968951804 qpc116010883751
+ 20351     83.220 wddm: Blt obs5 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20352     83.220 wddm: Blt obs5 dma4096 private2184 offset725 rects1 list256 valid1 snapshot1
+ 20353     83.220 wddm: Blt obs5 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20354     83.220 wddm: Blt obs5 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20355     83.220 wddm: Blt obs5 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20356     83.220 wddm: Blt obs5 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20357     83.220 wddm: Blt obs5 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20358     83.220 wddm: Blt obs6 interrupt100ns115968951804 qpc116010885240
+ 20359     83.220 wddm: Blt obs6 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20360     83.220 wddm: Blt obs6 dma4096 private2184 offset870 rects1 list256 valid1 snapshot1
+ 20361     83.220 wddm: Blt obs6 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20362     83.220 wddm: Blt obs6 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20363     83.220 wddm: Blt obs6 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20364     83.220 wddm: Blt obs6 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20365     83.220 wddm: Blt obs6 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20366     83.220 wddm: Blt obs7 interrupt100ns115969011837 qpc116010934825
+ 20367     83.220 wddm: Blt obs7 ctxFFFF910E8D70B170 devFFFF910E8D70C670 flags1 node0 umd0 system0
+ 20368     83.220 wddm: Blt obs7 dma4096 private2184 offset0 rects1 list256 valid1 snapshot1
+ 20369     83.220 wddm: Blt obs7 src 0,0,1920,1200 dst 0,0,1920,1200
+ 20370     83.220 wddm: Blt obs7 side0 handleFFFF910E8CF37470 adapter0 va8DC000
+ 20371     83.220 wddm: Blt obs7 side0 1920x1200 pitch7680 fmt21 bytes9216000
+ 20372     83.220 wddm: Blt obs7 side1 handleFFFF910E8D71B7F0 adapter0 va12000
+ 20373     83.220 wddm: Blt obs7 side1 1920x1200 pitch7680 fmt21 bytes9216000
+ 20374     83.220 wddm: GPU Present calls8 records8 rotate6 refused0
+ 20375     83.220 wddm: GPU Present submits8 rejected0 failed0
+ 20376     83.220 wddm: GPU Present errors parameter0 handle0 color0 other0
+ 20377     83.220 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+ 20378     83.220 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 0 scanout remaps (0 failed), last blit 0 row
+ 20379     83.220 wddm summary: widest blit 0 rows
+ 20380     83.220 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+ 20381     83.220 wddm summary: vsync enabled, 0 ticks, 4923 reported to dxgkrnl
+ 20382     83.220 wddm summary: visibility calls 5 source 0x00000000 requested 1 status 0x00000000 current 1
+ 20383     83.220 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+ 20384     83.220 wddm visibility: true 3 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+ 20385     83.220 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116002866774..116002866941
+ 20386     83.220 wddm visibility event: 2 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062033179..116062033401
+ 20387     83.220 wddm visibility event: 3 src 0 req 0 status 00000000 visible 0 blank 1 qpc 116062119337..116062119672
+ 20388     83.220 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116062425217..116062425450
+ 20389     83.220 wddm visibility event: 5 src 0 req 1 status 00000000 visible 1 blank 0 qpc 116063461865..116063461998
+ 20390     83.220 wddm summary: dcn lock acknowledgement timeouts 0
+ 20391     83.220 wddm summary: vidpn flip open: 1265 hardware flips, 0 refused, 1 hardware vsyncs armed 4939 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+ 20392     83.220 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+ 20393     83.220 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+ 20394     83.220 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+ 20395     83.220 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+ 20396     83.220 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+ 20397     83.220 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+ 20398     83.220 vidmm summary: PTE encoding level 0 segment 0 coherent 13632 noncoherent 165680 snoop mismatches 0
+ 20399     83.220 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 275898 snoop mismatches 0
+ 20400     83.220 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512 snoop mismatches 0
+ 20401     83.220 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 892 snoop mismatches 0
+ 20402     83.220 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 24 snoop mismatches 0
+ 20403     83.220 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 11 snoop mismatches 0
+ 20404     83.220 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls
+ 20405     83.220 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 4 roots
+             1024 lines printed

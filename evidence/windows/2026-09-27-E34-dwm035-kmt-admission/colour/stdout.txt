@@ -1,0 +1,5 @@
+icd_interface=7
+icd=C:\BC250\m13\dwm-hosted035\wsi-kmt.dll pid=6084
+square_corners_hr=00000000
+gpu=AMD BC-250 (RADV GFX1013)
+present frame=0 image=0 rgb=255,0,0 result=-1000000000 tick_ms=11669968

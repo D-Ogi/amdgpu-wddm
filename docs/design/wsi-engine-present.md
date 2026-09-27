@@ -4,6 +4,10 @@ Date: 2026-09-27 (second revision, replaces the D3D11 composition draft of the s
 nothing measured beyond the `facts.md` rows cited. Owner of the WSI side: the Vulkan/ICD work; owner of the
 KMD side: the kernel driver work (ADR 0018 consequences).
 
+Current validation update: M677 in [facts](../facts.md) repeats the KMT admission
+refusal on exact KMD164 with interop1 and hosted GPU DWM. The cap alone does not
+validate Path B for candidate0CD4A98D; further routing work remains necessary.
+
 ## What the port does today
 
 `radv_wddm2_wsi_init` (fork `amdgpu-wddm/radv-wddm2-kmt-enum` c34ab7cd) sets `wsi->sw = true` on the BC250, so

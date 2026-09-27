@@ -1,0 +1,2 @@
+wddm2: present context 0x40000980 created; VidPn source 0 exclusive-ownership check 0x0
+wddm2: D3DKMTPresent failed 0xC01E0342 (window 00000000000E049C, source 0x40000400, 640x480)
