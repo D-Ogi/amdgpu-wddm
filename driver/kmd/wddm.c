@@ -1371,25 +1371,29 @@ static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_
 // WDDM lock orders decisions against stop; DcnVsyncEnable then uses the graphics
 // interrupt-synchronization callback to serialize MMIO and armed state with ISR.
 // The synchronized callback never takes this WDDM lock (one-way lock order).
-static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
+static NTSTATUS WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     LARGE_INTEGER due;
     BOOLEAN changed = FALSE;
     KIRQL irql;
+    NTSTATUS status = STATUS_SUCCESS;
 
-    if (wddm == NULL) return;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
 
     if (Device->VidPnFlipEnabled)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
+        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return STATUS_DEVICE_NOT_READY; }
         if (On != (Device->DcnVsyncArmed != 0))
-            changed = NT_SUCCESS(DcnVsyncEnable(Device, On));
+        {
+            status = DcnVsyncEnable(Device, On);
+            changed = NT_SUCCESS(status);
+        }
         KeReleaseSpinLock(&wddm->Lock, irql);
         if (changed)
             GuardLog("wddm: hardware vsync %s (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)", On ? "on" : "off");
-        return;
+        return status;
     }
 
     due.QuadPart = -((LONGLONG)BC250_WDDM_VSYNC_MS * 10000);
@@ -1398,7 +1402,7 @@ static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     if (wddm->Stopping && On)
     {
         KeReleaseSpinLock(&wddm->Lock, irql);   // the stop does the disarm; nothing may arm behind it
-        return;
+        return STATUS_DEVICE_NOT_READY;
     }
     if (On != wddm->VSyncArmed)
     {
@@ -1408,13 +1412,14 @@ static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
         else KeCancelTimer(&wddm->VSyncTimer);
     }
     KeReleaseSpinLock(&wddm->Lock, irql);
-    if (!changed) return;                       // logging stays outside the lock
+    if (!changed) return STATUS_SUCCESS;        // logging stays outside the lock
 
     if (On)
         GuardLog("wddm: software vsync on, %u ms period, target %u", (ULONG)BC250_WDDM_VSYNC_MS,
                  (ULONG)wddm->VSyncTargetId);
     else
         GuardLog("wddm: software vsync off after %ld ticks", wddm->VSyncTicks);
+    return STATUS_SUCCESS;
 }
 
 // display.c's SetVidPnSourceVisibility calls this; it is the earliest point at which a flip can be queued.
@@ -5433,9 +5438,12 @@ static NTSTATUS Bc250WddmControlInterrupt(_In_ const HANDLE hAdapter, _In_ const
         // otherwise wait on a timer nothing had armed.
         if (wddm != NULL)
         {
-            wddm->VSyncEnabled = EnableInterrupt;
-            if (EnableInterrupt) WddmVSyncArm(device, TRUE);
-        }
+            // Publish enabled reporting only after its timing source is armed.
+            // A failed MMIO/synchronization operation must reach the caller;
+            // retain the previous reporting state so a retry can recover.
+            if (EnableInterrupt) status = WddmVSyncArm(device, TRUE);
+            if (NT_SUCCESS(status)) wddm->VSyncEnabled = EnableInterrupt;
+        } else status = STATUS_DEVICE_NOT_READY;
         break;
     case DXGK_INTERRUPT_DMA_COMPLETED:
         // Always on and not ours to switch off: a submission is completed whether or not anyone asked for it.
