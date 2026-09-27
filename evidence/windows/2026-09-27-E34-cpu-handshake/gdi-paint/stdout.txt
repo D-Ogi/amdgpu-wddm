@@ -1,0 +1,26 @@
+redirblt-probe: 641x479 colour 0xFF0000FF, watchdog 40000 ms, handshake-only 1, no-open 1, device 0, source 0
+DwmIsCompositionEnabled                  hr=0x00000000  S_OK (dedicated DX surface: readback route)
+PROBE pid=11060 session=1 console=1 composition=1 dwmapi=6.2.22621.5697 ordinal100=1 ordinal101=1
+STAMP create-window utc=2026-09-27T15:14:04.669Z filetime=134349956446690304 qpc=153121933274
+DwmSetWindowAttribute (corners)          hr=0x00000000  S_OK (dedicated DX surface: readback route)
+STAMP show-window utc=2026-09-27T15:14:04.809Z filetime=134349956448093872 qpc=153123336845
+WINDOW hwnd=0x000000000010049C style=0x14CF0000 exstyle=0x00000100 client=641x479 outer=657x518 at=320,240
+    GDI paint: client area filled with grey
+STAMP gdi-paint utc=2026-09-27T15:14:05.441Z filetime=134349956454412084 qpc=153129655056
+D3DKMTEnumAdapters2 (count)              0x00000000  STATUS_SUCCESS
+D3DKMTEnumAdapters2                      0x00000000  STATUS_SUCCESS
+  adapter 0: LUID 00000000:026B1AA2  NumOfSources 1
+    AdapterString "Microsoft Basic Display Adapter"  ChipType ""
+    UmdFileName   "C:\BC250\m11\resource-close\bc250d3d.dll"
+    ^ selected
+  adapter 1: LUID 00000000:00008C54  NumOfSources 0
+    UmdFileName   "d3d10warp.dll"
+STAMP handshake utc=2026-09-27T15:14:05.724Z filetime=134349956457249453 qpc=153132492423
+DwmDxGetWindowSharedSurface              hr=0x00263008  DWM_S_GDI_REDIRECTION_SURFACE_BLT_VIA_GDI
+HANDSHAKE n=1 hr=0x00263008 fmt=0 handle=0x0000000000000000 update=0 ms=0
+SHARED kind=none
+    the DWM did not offer a GDI redirection surface for this window on this adapter (see HANDSHAKE)
+capture_ready rgb=0,0,255 x=328 y=271 width=641 height=479 hold_ms=1000 source=0
+STAMP hold utc=2026-09-27T15:14:05.792Z filetime=134349956457925488 qpc=153133168459
+SUMMARY ordinal100=1 ordinal101=1 handshakes=1 handshake_hr=0x00263008 handle_kind=unknown destination_ready=0 first_success=none exit=0
+-- teardown

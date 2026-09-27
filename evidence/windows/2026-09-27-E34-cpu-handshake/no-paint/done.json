@@ -1,0 +1,22 @@
+{
+    "observation":  {
+                        "outcome":  "gdi_blit_required",
+                        "present_tested":  false,
+                        "gpu_surface_offered":  false,
+                        "records":  [
+                                        {
+                                            "handle":  "0x0000000000000000",
+                                            "format":  0,
+                                            "update_id":  "0",
+                                            "sequence":  1,
+                                            "milliseconds":  0,
+                                            "hr":  "00263008"
+                                        }
+                                    ],
+                        "calls":  1
+                    },
+    "utc":  "2026-09-27T15:14:03.6756885Z",
+    "process_alive":  false,
+    "failure":  null,
+    "exit_code":  0
+}
