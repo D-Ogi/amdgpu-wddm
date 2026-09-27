@@ -1,0 +1,38 @@
+physical devices 1, using index 0
+device        AMD BC-250 (RADV GFX1013)
+ids           vendor=0x1002 device=0x13fe type=1
+driverVersion 0x06802063 (26.2.99)
+apiVersion    0x0040416b (1.4.363)
+queue family  0
+subgroup      size=64 supportedStages=0x3f3f supportedOps=0x6ff
+limits        wgInvocations=1024 wgSize=1024x1024x1024 sharedMem=65536 pushConst=256 storageBuffersPerStage=8388606
+memory types  11 heaps 2
+  type  0 heap 1 flags 0x001
+  type  1 heap 1 flags 0x001
+  type  2 heap 0 flags 0x006
+  type  3 heap 1 flags 0x007
+  type  4 heap 1 flags 0x007
+  type  5 heap 0 flags 0x00e
+  type  6 heap 0 flags 0x00e
+  type  7 heap 1 flags 0x0c1
+  type  8 heap 0 flags 0x0c6
+  type  9 heap 1 flags 0x0c7
+  type 10 heap 0 flags 0x0ce
+  heap  0 size 4008 MiB flags 0x0
+  heap  1 size 8017 MiB flags 0x1
+shaders       C:\BC250\m8\spv
+runs          1 (the reported time is the median)
+lcg           state = 1664525 * state + 1013904223, values taken from the high bits
+hash          FNV-1a 64 over the raw output bytes
+
+fill_g1      n=16384     hash=0x7018cdd513a22325 cpu_hash=0x7018cdd513a22325 match=yes t_submit_to_idle_us=    572.2 first_words=22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+fill_g16     n=16384     hash=0x7018cdd513a22325 cpu_hash=0x7018cdd513a22325 match=yes t_submit_to_idle_us=    301.0 first_words=22222222 22222222 22222222 22222222 22222222 22222222 22222222 22222222
+inthash      n=1048576   hash=0xbc33291b528dfab4 cpu_hash=0xbc33291b528dfab4 match=yes t_submit_to_idle_us=    229.0 first_words=16b125c1 05fc5a43 85f1a078 9c7f3e31 721509cc 86c00cb9 d4759fb4 1b1cbf77
+saxpy        n=1048576   hash=0x3ee3408930ca6e61 cpu_hash=0x3ee3408930ca6e61 match=yes t_submit_to_idle_us=    246.8 first_words=45137000 451ff000 45573000 442dc000 452cf000 44154000 4421c000 45165000
+sgemm        n=65536     hash=0x24396beb3a1a7367 cpu_hash=0x24396beb3a1a7367 match=yes t_submit_to_idle_us=    751.9 first_words=46670000 4656e800 46545800 466d8400 46698400 465ba800 4663f800 4670a800
+sgemm_tiled  n=65536     hash=0x24396beb3a1a7367 cpu_hash=0x24396beb3a1a7367 match=yes t_submit_to_idle_us=    382.1 first_words=46670000 4656e800 46545800 466d8400 46698400 465ba800 4663f800 4670a800
+mlp          n=10240     hash=0x0eb467ee3ae0f043 cpu_hash=0x0eb467ee3ae0f043 match=yes t_submit_to_idle_us=   1044.1 first_words=c1568000 c1167000 bf100000 c18f1800 4122a000 bee60000 c0e08000 c15b9000 argmax_hash=0x66d441abf069e3a2 argmax_cpu=0x66d441abf069e3a2 hist=25,27,10,3,619,252,1,3,28,56
+reduce       n=1025      hash=0xe9fc02f21706317a cpu_hash=0xe9fc02f21706317a match=yes t_submit_to_idle_us=    176.5 first_words=d3f84200 a0684200 6cd84200 39484200 05b84200 d2284200 9e984200 6b084200
+
+8 test(s) run, 0 mismatch(es)
+

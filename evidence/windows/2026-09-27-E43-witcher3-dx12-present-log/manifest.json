@@ -1,0 +1,154 @@
+{
+ "artifacts": {
+  "candidate ICD": "6661C2D2FE1DBAAAAA007D1686A0C42F33E7A9F5204DC0681EF98AA404F952AD (fork amdgpu-wddm/radv-wddm2-present-log 0f9811a5 on radv-wddm2-fence-share 59f53088 on c34ab7cd; build log scratch/mesa-fork-2026-09-27/build-radv-presentlog.log)",
+  "registered ICD before and after": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (E38)",
+  "witcher3.exe (bin/x64_dx12)": "609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5, 4.0.0.103190",
+  "vkd3d-proton d3d12.dll / d3d12core.dll": "7B77ED5C / 90B1DAD6 (472989aa, E37 package)",
+  "DXVK dxgi.dll (app-local)": "2E674A56 (3.1.1)",
+  "E14 smoke": "C:/BC250/m13/fork-consolidated001/run-smoke.ps1 with vkcompute.exe, receipt in run005/smoke",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD unchanged (generation 575721647), UMD 8279AC7F, CPU DWM 4400, clock 1000 MHz VID 116",
+  "screenshots": "run005 auto-000..008 (full scale) and run005-s1 (half scale) private in scratch/witcher3/dx12; hashes in capture-hashes.json"
+ },
+ "files": {
+  "capture-hashes.json": {
+   "sha256": "67a20b9e56464e291f17a425801ff157db50a6b8231dce6855f95cfd1702b26d",
+   "bytes": 952
+  },
+  "patches/0001-vk_wddm2-create-exportable-monitored-fences-with-NtS.patch": {
+   "sha256": "db71c48da2f4f0e43329969db57d1b912afc3e6fac67c70ebab22239d63b7734",
+   "bytes": 4181
+  },
+  "patches/0002-wsi-win32-optional-per-present-timing-log-BC250_WSI_.patch": {
+   "sha256": "26e1e03d4ec98ea0efb24bb28e264546e0dbf9b2fcb4aca3b0c9358b7397abe2",
+   "bytes": 5742
+  },
+  "RESULT.md": {
+   "sha256": "f130d61d893cf9be3cd8deb0952b091dff005b39850fc5f84284f557921071ca",
+   "bytes": 6119
+  },
+  "run005/after-clock.txt": {
+   "sha256": "b4161b01b5ce238f3a31c9f8dca531d7a3aedb99f2faca3ed16ae883df8b524a",
+   "bytes": 152
+  },
+  "run005/after-health.txt": {
+   "sha256": "77ebf4dcd2a08d2fa057f86a8505578baa62fb1188f7c7372b2a4cd0ed281d6c",
+   "bytes": 232
+  },
+  "run005/before-clock.txt": {
+   "sha256": "29de840ab202863ddab9819db5b7ba8ae2894b91ef0866f81f4a964b5099e1c1",
+   "bytes": 152
+  },
+  "run005/before-health.txt": {
+   "sha256": "7f37e7ace4c7900bb56bd9967ac6ae3ad7005c706646ed94c45eefde73cd095b",
+   "bytes": 232
+  },
+  "run005/done-w3dx12-005.json": {
+   "sha256": "eb4dd71113f5e07c9287c2039a21474d2660aadcde566ca9e9b47c90ef95d558",
+   "bytes": 67
+  },
+  "run005/dxvk.conf": {
+   "sha256": "ccfe36229353882e2544a4d21afab4b3a44a634a8886cba2b3c948005b513964",
+   "bytes": 25
+  },
+  "run005/input-003-to-005.log": {
+   "sha256": "05504b8d633d5912e08567a51b8cace60c357464e4eb987be153cd320843ba1d",
+   "bytes": 360
+  },
+  "run005/launch.json": {
+   "sha256": "84f223493e832a3ddc738e2945c2db03ba8b328d88d996c2f051453fadea83c1",
+   "bytes": 258
+  },
+  "run005/modules.json": {
+   "sha256": "39d11d18bed3e9bd06d3fa7a8f787872e45b1965f018ae4e1dbf59f4e5800274",
+   "bytes": 3272
+  },
+  "run005/postcheck.txt": {
+   "sha256": "57f7323353bd447c7ab313c2822923538bbddedf76717d9d9c746df8fea5ff72",
+   "bytes": 321
+  },
+  "run005/present-summary.json": {
+   "sha256": "0afbbbcde4fa2c392c7265c8dff83933a151696603726219e55c3c90eb6c2017",
+   "bytes": 11607
+  },
+  "run005/present.csv": {
+   "sha256": "1c7dcb5404904b1e7f61ea567598084356d081e996a0fb0c456660faa0043471",
+   "bytes": 527608
+  },
+  "run005/result.json": {
+   "sha256": "77ba4940d25ceb8ef34ff1c361a524403f41678850bea9a7901650a446bd5313",
+   "bytes": 186
+  },
+  "run005/run-w3dx12-005.log": {
+   "sha256": "a58ee38d6106961ac322efac8a30d1fcccd3776937cb16bbcd0e18dacd102d6c",
+   "bytes": 8099
+  },
+  "run005/smoke/receipt.json": {
+   "sha256": "1ac9810ad6578dee48cf1c818b47c7ba385ac51a422d7b937907609d109d8ef5",
+   "bytes": 388
+  },
+  "run005/smoke/stderr.txt": {
+   "sha256": "d97a6020f5034b4d031cbd818c07a512231587deba0c56069ba94df1b77efe2a",
+   "bytes": 2332
+  },
+  "run005/smoke/stdout.txt": {
+   "sha256": "b351f628453e9390b11e3912896a8b2152be2a8d4f641a6d2f06d37c6cd25479",
+   "bytes": 2789
+  },
+  "run005/smoke-config.json": {
+   "sha256": "6c439db1bc9656331e7eb7093f48d2afd8ea8e54182e4a9b04627c7f36e281cc",
+   "bytes": 527
+  },
+  "run005/vkd3d.log": {
+   "sha256": "3a3f3fab1a1c6d676956709242afdf653eb4264d615962fafd5788ad9aaa19b8",
+   "bytes": 17284
+  },
+  "run005/witcher3_dxgi.log": {
+   "sha256": "3aac8362bc207d8adcd55829a183815442e7d893f533c21c148d7801798aa5eb",
+   "bytes": 1898
+  },
+  "scripts/analyze-present-log.py": {
+   "sha256": "8f4f00a4975050b38864738c5d7cc34ff3a0a8c9bf9645bc02339a711fef268e",
+   "bytes": 5890
+  },
+  "scripts/finish-e43.py": {
+   "sha256": "297a21ce6ad85ffcdb1f78d813e211020c9e844e982bd9af2e8239c6c771fc76",
+   "bytes": 5053
+  },
+  "scripts/input-dx12-003.ps1": {
+   "sha256": "729ebf5784367b10209101a798aa14f16c59b5f8312d86e4e7666434fe3ed5d5",
+   "bytes": 3063
+  },
+  "scripts/input-launch-dx12-003.ps1": {
+   "sha256": "5f83439382424085b01b47c57cccddf74259deee20c0c962630b71fa1af37e3d",
+   "bytes": 1214
+  },
+  "scripts/launch-w3dx12-005.ps1": {
+   "sha256": "02a5106265a4b4f3885c9017acd25a1032b15e06812ab7e18fec9b216af4dda1",
+   "bytes": 2034
+  },
+  "scripts/postcheck-e42.ps1": {
+   "sha256": "4190fa6d92a67014461a733de352d080ac1afeb040731d7366c147901e6d4c4f",
+   "bytes": 1693
+  },
+  "scripts/pull-005.py": {
+   "sha256": "976f3da7b37e1e26d25394a85a5996e6f17634cd8d85af53dce87e0809fcfabf",
+   "bytes": 1713
+  },
+  "scripts/run-w3dx12-005.ps1": {
+   "sha256": "0ced86763d24bbd504c574f88ee800004d9610d6e88f682ab2b350532a69322c",
+   "bytes": 10924
+  },
+  "scripts/status-005.ps1": {
+   "sha256": "b896a7789e9d22708a2b72dc2de3e6faf1963a6974fb50e08a88a95744abf19d",
+   "bytes": 614
+  },
+  "scripts/stop-005.ps1": {
+   "sha256": "3f4c02b82fcfae67253123cdb235f9393118bbcd922d5eb018e5383e5f7e8a53",
+   "bytes": 1389
+  },
+  "scripts/worker-w3dx12-005.ps1": {
+   "sha256": "bf6fa0ef00544e0db23c4a81ffda3b599bcc17fa3cbd4dde70359b0c52bdbf2f",
+   "bytes": 381
+  }
+ }
+}

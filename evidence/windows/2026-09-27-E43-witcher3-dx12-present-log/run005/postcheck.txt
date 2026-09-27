@@ -1,0 +1,12 @@
+presentmon_procs=0
+logman_bc250w3=absent
+witcher3_procs=0
+running_test_tasks=
+w3_tasks=
+d3d12.dll present=False
+d3d12core.dll present=False
+dxgi.dll present=False
+icd=93B1D1FD
+dwm=4400
+tctl=69.0
+health abi=1 version=0x00070098 flags=7 generation=575721647 epoch=97 completed=26201 age_ms=768 ready_ms=2444120
