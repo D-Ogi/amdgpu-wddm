@@ -13,8 +13,14 @@ function Copy-VerifiedDurable {
 function Write-DurableText {
  param([string]$Path,[string]$Text)
  $bytes=(New-Object Text.UTF8Encoding($false)).GetBytes($Text)
- $file=New-Object IO.FileStream($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
- try {$file.Write($bytes,0,$bytes.Length);$file.Flush($true)} finally {$file.Dispose()}
+ $temporary=$Path+'.pending-'+[guid]::NewGuid().ToString('N')
+ try {
+  $file=New-Object IO.FileStream($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
+  try {$file.Write($bytes,0,$bytes.Length);$file.Flush($true)} finally {$file.Dispose()}
+  # Same-directory rename publishes a complete receipt, never a partial JSON file.
+  # Move refuses to replace an existing receipt.
+  [IO.File]::Move($temporary,$Path)
+ } finally {if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary -Force}}
 }
 function Flush-ExistingFile {
  param([string]$Path)

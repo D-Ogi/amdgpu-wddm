@@ -12,11 +12,21 @@ One clock starts before DLL/gate mutation. Planned render stop105s, final marker
 limit130s, independent rollback140s, measured total acceptance<=180s. OS stalls
 can exceed deadlines; a watchdog does not prove a hard real-time guarantee.
 
-Remaining before staging: fault-injection review of the shared installation/restore mutex and abort handling,
-watchdog closure/error receipts and cleanup integration, bounded startup/final
-operations, package generation and exact candidate pins, rebuilt router/control identity,
-PowerShell parsing and fault controls. No manifest has been generated. Do not run
-this draft. Wait for explicit Fable diagnostic-slot closure before lab work.
+Local validation completed: router/control build with /W4 /WX,21 scripts parsed
+under Windows PowerShell5.1,7 watchdog decision controls, and durable copy/restore
+controls (including corrupt-backup fallback and preservation of unknown files).
+Worker failures clear success; watchdog requires restoration evidence, including
+when the worker already wrote done.json. Trial deadlines use shared QPC ticks.
+Critical durable receipts publish by same-directory rename after Flush(true).
+These are host controls, not a measured target watchdog/recovery exercise.
+
+The local package has24 hashed files, manifest6D097845FF55DD3BFAABD7A44C62FFF0AD871C2B5FB77DE95BF51F6ACEA67208.
+Router465F0219/control6B188424 are pinned by stage.py alongside the two DLLs;
+compiled-source hashes must match the retained build receipt. Package is local,
+not deployed. launch.ps1 deliberately refuses to run this reviewed-in-progress
+snapshot. Remaining: review/install-abort fault coverage, final bounded-operation
+and target preflight review, then an updated immutable package with launch enabled.
+Wait for explicit Fable diagnostic-slot closure before lab work.
 
 Acceptance: exact modules, correct selected pixels, loss-free DWM-owned DMA/fences,
 all required checkpoints and no audit overflow, full live-buffer classification.

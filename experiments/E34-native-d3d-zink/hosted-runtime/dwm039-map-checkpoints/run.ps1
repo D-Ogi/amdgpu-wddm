@@ -13,6 +13,8 @@ function Save-AuditBoundary([string]$Label) {
 }
 $traceStarted=$false
 $success=$false
+$restorationSucceeded=$false
+$failure=$null
 $gpuPid=0
 $measuredSeconds=0
 $controlTask='BC250-G0-Composition039'
@@ -63,8 +65,9 @@ try {
  if($LASTEXITCODE -ne 0){throw 'ETW start failed'}
  $traceStarted=$true
 
+ $trialQpc=[Diagnostics.Stopwatch]::GetTimestamp()
  $trialClock=[Diagnostics.Stopwatch]::StartNew()
- Write-DurableText "$d\trial-boundary.json" (@{utc=[DateTime]::UtcNow.ToString('o');rollback_seconds=140;acceptance_seconds=180}|ConvertTo-Json)
+ Write-DurableText "$d\trial-boundary.json" (@{utc=[DateTime]::UtcNow.ToString('o');qpc=$trialQpc;qpc_frequency=[Diagnostics.Stopwatch]::Frequency;rollback_seconds=140;acceptance_seconds=180}|ConvertTo-Json)
  try {
   $installMutex=New-Object Threading.Mutex($false,'Global\BC250G0DwmRestore039')
   $installLocked=$false
@@ -195,12 +198,13 @@ try {
 
  } finally {
   & "$d\restore.ps1" -Restart
+  $restorationSucceeded=$true
   if($trialClock.Elapsed.TotalSeconds -gt 180){$success=$false;throw 'Overall180-second budget exceeded'}
  }
-} catch {$_ | Out-String;throw} finally {
+} catch {$success=$false;$failure=$_|Out-String;$failure;throw} finally {
  if($traceStarted){& logman stop BC250G0Dwm039 -ets *> "$d\etw-stop.log"}
  Get-ScheduledTask -TaskName $controlTask -ErrorAction SilentlyContinue | Stop-ScheduledTask -ErrorAction SilentlyContinue
  Get-Process composition-control -ErrorAction SilentlyContinue | Where-Object {$_.Path -eq "$d\composition-control.exe"} | Stop-Process -Force -ErrorAction SilentlyContinue
- @{utc=[DateTime]::UtcNow.ToString('o');success=$success;gpu_pid=$gpuPid;measured_seconds=$measuredSeconds;trial_seconds=$(if($trialClock){$trialClock.Elapsed.TotalSeconds}else{0});markers=$nextMarker} | ConvertTo-Json | Set-Content "$d\done.json"
+ Write-DurableText "$d\done.json" (@{utc=[DateTime]::UtcNow.ToString('o');success=$success;restoration_succeeded=$restorationSucceeded;failure=$failure;gpu_pid=$gpuPid;measured_seconds=$measuredSeconds;trial_seconds=$(if($trialClock){$trialClock.Elapsed.TotalSeconds}else{0});markers=$nextMarker} | ConvertTo-Json)
  Stop-Transcript | Out-Null
 }
