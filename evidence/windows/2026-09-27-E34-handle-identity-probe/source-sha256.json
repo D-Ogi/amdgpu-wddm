@@ -1,0 +1,9 @@
+{
+  "parent": "ede9a1509c69364386a297b5393960daac86adaf",
+  "files": [
+    {
+      "path": "driver/kmd/wddm.c",
+      "sha256": "df4b765cbff740fad64eec1d2d3cbd7beefa1caeb7456f42d7a6aa672159c18a"
+    }
+  ]
+}
