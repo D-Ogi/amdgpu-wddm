@@ -27,7 +27,9 @@ Present review. All other results retain their actual meaning. Even0x263005
 proves neither GPU rendering by the probe nor successful windowed Present.
 An exact selected-pixel image is not a complete no-CPU-frame-copy proof.
 
-Results: not run. Compare to M681 and record the result with immutable evidence.
+Results: M682, [GPU handshake comparison](../../../../evidence/windows/2026-09-27-E34-dwm038-handshake/RESULT.md).
+Both cases return0x263008; no surface offer. Image/DMA controls pass, map
+coverage fails with12 overflows. CPU baseline restored; no G0 acceptance.
 
 Preparation validation: router and composition control compile with /W4 /WX;
 PS5.1 parses all scripts; the handshake transcript controls pass. Remote stage
