@@ -63,3 +63,16 @@ wrong pixel, or missing deliberate-copy detection rejects the control.
 Only after this control passes should the candidate enter a bounded desktop run
 with explicit workload/capture markers, DWM-owned GPU execution/fences, and
 persistent-map/CPU-copy coverage. A passing small window is not G0 acceptance.
+
+## Texture draw mode
+
+--texture-draw preserves the eight markers and intentional UpdateSubresource
+control, but replaces the clear-only GPU interval with16 full-screen triangle
+draws alternating two immutable1x1 textures. At the readback boundary, two more
+draws verify magenta and green after black clears, avoiding assumptions about
+which swapchain buffer Present leaves available. Both shaders use t0/s0. This
+exercises descriptor updates, not separate sampler indices or nonzero base vertex.
+The final deliberate-copy readback remains yellow. Require all three76800-pixel
+checks,18 reported draws, completed get_descriptor spans, matching checkpoint
+counters and exact candidate module witnesses. Record log size/rate separately;
+audited timings are not performance results.

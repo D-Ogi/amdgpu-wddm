@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 #include <cstdio>
@@ -63,10 +64,51 @@ static bool Pixels(ID3D11DeviceContext *ctx,ID3D11Texture2D *frame,ID3D11Texture
  }
  ctx->Unmap(readback,0);printf("pixels expected=%08x bad=%u total=%u\n",expected,bad,Width*Height);return !bad;
 }
+struct TextureDraw {
+ ComPtr<ID3D11VertexShader> vertex;
+ ComPtr<ID3D11PixelShader> pixel;
+ ComPtr<ID3D11ShaderResourceView> views[2];
+ ComPtr<ID3D11SamplerState> sampler;
+ ComPtr<ID3D11RasterizerState> raster;
+ bool Init(ID3D11Device *dev){
+  const char *vs="float4 main(uint id:SV_VertexID):SV_Position { float2 p=float2((id<<1)&2,id&2); return float4(p*float2(2,-2)+float2(-1,1),0,1); }";
+  const char *ps="Texture2D<float4> tex:register(t0); SamplerState samp:register(s0); float4 main():SV_Target { return tex.Sample(samp,float2(0.5,0.5)); }";
+  ComPtr<ID3DBlob> vb,pb,error;
+  if(!Check(D3DCompile(vs,strlen(vs),nullptr,nullptr,nullptr,"main","vs_4_0",0,0,&vb,&error),"compile VS")||
+     !Check(D3DCompile(ps,strlen(ps),nullptr,nullptr,nullptr,"main","ps_4_0",0,0,&pb,&error),"compile PS"))return false;
+  if(!Check(dev->CreateVertexShader(vb->GetBufferPointer(),vb->GetBufferSize(),nullptr,&vertex),"VS")||
+     !Check(dev->CreatePixelShader(pb->GetBufferPointer(),pb->GetBufferSize(),nullptr,&pixel),"PS"))return false;
+  D3D11_TEXTURE2D_DESC td={};td.Width=td.Height=td.MipLevels=td.ArraySize=1;
+  td.Format=DXGI_FORMAT_R8G8B8A8_UNORM;td.SampleDesc.Count=1;
+  td.Usage=D3D11_USAGE_IMMUTABLE;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+  const UINT colors[2]={0xff00ff00,0xffff00ff};
+  for(UINT i=0;i<2;i++){
+   D3D11_SUBRESOURCE_DATA data={&colors[i],4,4};ComPtr<ID3D11Texture2D> texture;
+   if(!Check(dev->CreateTexture2D(&td,&data,&texture),"sampled texture")||
+      !Check(dev->CreateShaderResourceView(texture.Get(),nullptr,&views[i]),"SRV"))return false;
+  }
+  D3D11_SAMPLER_DESC sd={};sd.Filter=D3D11_FILTER_MIN_MAG_MIP_POINT;
+  sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;
+  sd.MaxLOD=D3D11_FLOAT32_MAX;sd.MaxAnisotropy=1;sd.ComparisonFunc=D3D11_COMPARISON_NEVER;
+  D3D11_RASTERIZER_DESC rd={};rd.FillMode=D3D11_FILL_SOLID;rd.CullMode=D3D11_CULL_NONE;rd.DepthClipEnable=TRUE;
+  return Check(dev->CreateSamplerState(&sd,&sampler),"sampler")&&Check(dev->CreateRasterizerState(&rd,&raster),"raster");
+ }
+ void Draw(ID3D11DeviceContext *ctx,ID3D11RenderTargetView *target,UINT index){
+  const float black[4]={0,0,0,1};ctx->ClearRenderTargetView(target,black);
+  D3D11_VIEWPORT vp={0,0,static_cast<float>(Width),static_cast<float>(Height),0,1};
+  ctx->RSSetViewports(1,&vp);ctx->RSSetState(raster.Get());ctx->OMSetRenderTargets(1,&target,nullptr);
+  ctx->VSSetShader(vertex.Get(),nullptr,0);ctx->PSSetShader(pixel.Get(),nullptr,0);
+  ID3D11ShaderResourceView *srv=views[index].Get();ID3D11SamplerState *ss=sampler.Get();
+  ctx->PSSetShaderResources(0,1,&srv);ctx->PSSetSamplers(0,1,&ss);
+  ctx->IASetInputLayout(nullptr);ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  ctx->Draw(3,0);
+ }
+};
 int wmain(int argc,wchar_t **argv){
  setvbuf(stdout,nullptr,_IONBF,0);
- if(argc==2&&!wcscmp(argv[1],L"--help")){puts("runtime-audit-control.exe MARKER_PATH STDERR_LOG_PATH [--update-subresource] (interactive lab only; requires audit UMD and external watchdog)");return 0;}
- const bool update=argc==4&&!wcscmp(argv[3],L"--update-subresource");
+ if(argc==2&&!wcscmp(argv[1],L"--help")){puts("runtime-audit-control.exe MARKER_PATH STDERR_LOG_PATH [--update-subresource|--texture-draw] (interactive lab only; requires audit UMD and external watchdog)");return 0;}
+ const bool textured=argc==4&&!wcscmp(argv[3],L"--texture-draw");
+ const bool update=textured||(argc==4&&!wcscmp(argv[3],L"--update-subresource"));
  if(argc!=3&&!update){puts("FAIL arguments; use --help");return 1;}
  if(GetFileAttributesW(argv[1])!=INVALID_FILE_ATTRIBUTES){puts("FAIL marker path already exists; require fresh run directory");return 2;}
  AuditReader reader;if(!reader.Open(argv[2])){puts("FAIL audit log open");return 3;}
@@ -100,15 +142,22 @@ int wmain(int argc,wchar_t **argv){
  D3D11_TEXTURE2D_DESC td={};frame->GetDesc(&td);td.Usage=update?D3D11_USAGE_DEFAULT:D3D11_USAGE_STAGING;td.BindFlags=update?D3D11_BIND_SHADER_RESOURCE:0;td.MiscFlags=0;td.CPUAccessFlags=update?0:D3D11_CPU_ACCESS_WRITE;
  if(!Check(dev->CreateTexture2D(&td,nullptr,&upload),"upload texture"))return 17;
  td.Usage=D3D11_USAGE_STAGING;td.BindFlags=0;td.CPUAccessFlags=D3D11_CPU_ACCESS_READ;if(!Check(dev->CreateTexture2D(&td,nullptr,&readback),"readback texture"))return 18;
+ TextureDraw draw;if(textured&&!draw.Init(dev.Get()))return 30;
  const float black[4]={0,0,0,1};ctx->ClearRenderTargetView(view.Get(),black);
  if(!Check(swap->Present(0,0),"warmup Present")||!Checkpoint(ctx.Get(),reader,argv[1],1))return 19;
  for(UINT n=0;n<16;n++){
-  Pump();float color[4]={0,0,0,1};color[n%3]=1;ctx->ClearRenderTargetView(view.Get(),color);
+  Pump();float color[4]={0,0,0,1};color[n%3]=1;
+  if(textured)draw.Draw(ctx.Get(),view.Get(),n%2);else ctx->ClearRenderTargetView(view.Get(),color);
   if(!Check(swap->Present(0,0),"GPU Present"))return 20;Sleep(30);
  }
  if(!Checkpoint(ctx.Get(),reader,argv[1],2)||!Checkpoint(ctx.Get(),reader,argv[1],3))return 21;
- const float green[4]={0,1,0,1};ctx->ClearRenderTargetView(view.Get(),green);
+ if(textured){
+  draw.Draw(ctx.Get(),view.Get(),1);
+  if(!Pixels(ctx.Get(),frame.Get(),readback.Get(),0xffff00ff))return 31;
+  draw.Draw(ctx.Get(),view.Get(),0);
+ }else{const float green[4]={0,1,0,1};ctx->ClearRenderTargetView(view.Get(),green);}
  if(!Pixels(ctx.Get(),frame.Get(),readback.Get(),0xff00ff00)||!Checkpoint(ctx.Get(),reader,argv[1],4))return 22;
+ if(textured){ctx->ClearState();printf("gpu_work=texture_draw draws=18\n");}
  std::vector<UINT> pixels(Width*Height);unsigned long long copied=0;
  if(!Checkpoint(ctx.Get(),reader,argv[1],5))return 23;
  for(UINT n=0;n<12;n++){
@@ -132,5 +181,5 @@ int wmain(int argc,wchar_t **argv){
  if(!Pixels(ctx.Get(),frame.Get(),readback.Get(),0xff00ffff)||!Checkpoint(ctx.Get(),reader,argv[1],8))return 28;
  if(!Check(dev->GetDeviceRemovedReason(),"device status"))return 29;
  ctx->ClearState();ctx->Flush();view.Reset();frame.Reset();upload.Reset();readback.Reset();swap.Reset();ctx.Reset();dev.Reset();DestroyWindow(window);
- puts("PASS GPU clears, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints");return 0;
+ puts(textured?"PASS GPU texture draws, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints":"PASS GPU clears, deliberate CPU-copy frames, isolated readbacks and8 acknowledged checkpoints");return 0;
 }
