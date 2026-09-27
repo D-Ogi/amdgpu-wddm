@@ -19,6 +19,22 @@ class IdentityControls(unittest.TestCase):
         result=m.analyze("\n".join(rows),8)
         self.assertEqual(result["presented_resource_ids"],[11])
         self.assertEqual(result["presented_resource_maps"],[dict(map=21,resource_id=11,usage=2)])
+    def test_checkpoint_counter(self):
+        snapshot="BC250 audit present event=snapshot device=3000 checkpoint_seq=1 marker=8 status=0 completed=1 signaled=1 sync=6000"
+        rows=ROWS[:5]+[snapshot,END]
+        result=m.analyze("\n".join(rows),8)
+        self.assertTrue(result["checkpoint_present_count_checked"])
+        cases=[
+            ROWS[:5]+[snapshot.replace("completed=1","completed=2"),END],
+            ROWS[:5]+[snapshot.replace("signaled=1","signaled=2"),END],
+            ROWS[:5]+[snapshot.replace("status=0","status=c00000bb"),END],
+            ROWS[:5]+[snapshot.replace("checkpoint_seq=1","checkpoint_seq=2"),END],
+            ROWS[:5]+[snapshot.replace("marker=8","marker=7"),END],
+            [IMPORT,snapshot,END],
+        ]
+        for rows in cases:
+            with self.assertRaises(ValueError):m.analyze("\n".join(rows),8)
+
     def test_independent_count_detects_missing_whole_tail(self):
         self.assertTrue(m.analyze("\n".join(ROWS),8,1)["expected_present_count_checked"])
         with self.assertRaisesRegex(ValueError,"Present total differs"):

@@ -12,8 +12,8 @@ require = lifetime.require
 
 
 def analyze(directory, run_name="audit-client001"):
-    require(run_name in ("audit-client001", "audit-client002", "audit-client003", "audit-client004", "audit-client005", "audit-client006"), "unsupported run identity")
-    textured = run_name in ("audit-client005", "audit-client006")
+    require(run_name in ("audit-client001", "audit-client002", "audit-client003", "audit-client004", "audit-client005", "audit-client006", "audit-client007"), "unsupported run identity")
+    textured = run_name in ("audit-client005", "audit-client006", "audit-client007")
     def receipt(name):
         return json.loads((directory / name).read_text(encoding="utf-8-sig"))
     for name in ("done.json", "watchdog-done.json", "control-result.json"):
@@ -89,7 +89,15 @@ def analyze(directory, run_name="audit-client001"):
             bytes=sum(r["bytes"] for r in descriptors),
             mapped_resource_ids=sorted({r["mapped_resource_id"] for r in descriptors}),
             duration_ns=int(checkpoints[2]["time_ns"])-int(checkpoints[1]["time_ns"]))
-    return {"descriptor_gpu_interval":descriptor_summary,"phases":phases,"through_marker8":complete,"known_application_copy_bytes":3686400,
+    identity_summary = None
+    if run_name == "audit-client007":
+        spec = importlib.util.spec_from_file_location("present_identity", Path(__file__).with_name("analyze-present-identities.py"))
+        identity = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(identity)
+        joined = identity.analyze("\n".join(lines), 8, 29)
+        require(joined["checkpoint_present_count_checked"], "missing independent checkpoint Present count")
+        identity_summary = {"presents":len(joined["presents"]), "resources":joined["presented_resource_ids"], "snapshot":joined["final_present_snapshot"], "runtime_maps":joined["runtime_maps"]}
+    return {"present_identity":identity_summary,"descriptor_gpu_interval":descriptor_summary,"phases":phases,"through_marker8":complete,"known_application_copy_bytes":3686400,
             "live_buffer_map_ids":complete["live_map_ids"],
             "scope":"small-client positive control only; persistent pointer stores, desktop ownership and full G0 remain separate"}
 
@@ -97,6 +105,6 @@ def analyze(directory, run_name="audit-client001"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory",type=Path)
-    parser.add_argument("--run-name",choices=("audit-client001","audit-client002","audit-client003","audit-client004","audit-client005", "audit-client006"),default="audit-client001")
+    parser.add_argument("--run-name",choices=("audit-client001","audit-client002","audit-client003","audit-client004","audit-client005", "audit-client006", "audit-client007"),default="audit-client001")
     args = parser.parse_args()
     print(json.dumps(analyze(args.directory,args.run_name),indent=2))

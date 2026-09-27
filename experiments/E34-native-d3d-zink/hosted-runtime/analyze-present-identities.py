@@ -31,6 +31,7 @@ def analyze(text,end_marker,expected_presents=None):
     active={}; imports={}; destroyed=set(); sequence=0
     pending={}; last_present={}; last_signal={}; completed=[]; runtime_maps=[]
     stopped=False; checkpoints=0
+    pending_snapshot=None; snapshot_schema=None; final_snapshot=None
     for line in text.splitlines():
         if not line.startswith("BC250 audit "): continue
         row=dict(re.findall(r"(\w+)=([^ ]+)",line))
@@ -53,10 +54,26 @@ def analyze(text,end_marker,expected_presents=None):
                 runtime_maps.append(dict(map=number(row,"map"),resource_id=number(row,"resource_id"),usage=number(row,"usage",16)))
         elif line.startswith("BC250 audit lifetime event=checkpoint "):
             require(number(row,"runtime_events")==sequence,"runtime checkpoint count mismatch")
+            has_snapshot=pending_snapshot is not None
+            if snapshot_schema is None: snapshot_schema=has_snapshot
+            require(has_snapshot==snapshot_schema,"missing/mixed Present checkpoint snapshots")
+            if pending_snapshot is not None:
+                require(number(pending_snapshot,"checkpoint_seq")==number(row,"seq") and number(pending_snapshot,"marker")==number(row,"marker"),"Present snapshot boundary mismatch")
+                if number(row,"marker")==end_marker: final_snapshot=pending_snapshot
+                pending_snapshot=None
             checkpoints+=1
             if number(row,"marker")==end_marker:
                 stopped=True;break
         elif line.startswith("BC250 audit present "):
+            if row["event"]=="snapshot":
+                require(pending_snapshot is None,"duplicate unbound Present snapshot")
+                device=pointer(row,"device");sync=pointer(row,"sync")
+                require(device>0 and number(row,"status",16)==0,"Present counter query unavailable")
+                require(number(row,"completed")==last_present.get(device,0),"completed Present counter mismatch")
+                require(number(row,"signaled")==last_signal.get((device,sync),0),"Present signal counter mismatch")
+                require(sync>0 or number(row,"completed")==0,"missing Present sync identity")
+                pending_snapshot=row
+                continue
             device=pointer(row,"device"); ordinal=number(row,"present");key=(device,ordinal)
             event=row["event"]
             if event=="wait":
@@ -105,7 +122,8 @@ def analyze(text,end_marker,expected_presents=None):
     if expected_presents is not None:
         require(len(completed)==expected_presents,"Present total differs from independent expectation")
     presented={rid for p in completed for rid in p["resources"].values()}
-    return dict(expected_present_count_checked=expected_presents is not None,scope="Import/resource/allocation and runtime callback witnesses only; no whole-stack CPU-copy verdict",runtime_events=sequence,imports=list(imports.values()),destroyed_resource_ids=sorted(destroyed),presents=completed,presented_resource_ids=sorted(presented),runtime_maps=runtime_maps,presented_resource_maps=[m for m in runtime_maps if m["resource_id"] in presented])
+    checkpoint_count_checked=final_snapshot is not None and set(last_present)=={pointer(final_snapshot,"device")}
+    return dict(checkpoint_present_count_checked=checkpoint_count_checked,final_present_snapshot=final_snapshot,expected_present_count_checked=expected_presents is not None,scope="Import/resource/allocation and runtime callback witnesses only; no whole-stack CPU-copy verdict",runtime_events=sequence,imports=list(imports.values()),destroyed_resource_ids=sorted(destroyed),presents=completed,presented_resource_ids=sorted(presented),runtime_maps=runtime_maps,presented_resource_maps=[m for m in runtime_maps if m["resource_id"] in presented])
 
 
 if __name__=="__main__":
