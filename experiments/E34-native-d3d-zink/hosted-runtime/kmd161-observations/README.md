@@ -29,4 +29,8 @@ No new residency, allocation admission or CPU fallback is introduced. A valid
 pair snapshot still does not prove submitting-device residency or retirement.
 Full G0 requires pixel correctness, DWM GPU ownership and no CPU frame copies.
 
-Result: pending build/runtime evidence.
+Result: final002 source6c93d74/SYS40F7916F passes the full build and13 gates;
+see [M647 build evidence](../../../../evidence/windows/2026-09-27-E34-kmd161-build/RESULT.md).
+The final build also includes ba3f4c2 observation/reply timestamps. Initial
+final001/85667a7 lacks these and was never staged. Runtime remains pending;
+existing ETW attribution needs lifetime/adapter checks before repeating interop.
