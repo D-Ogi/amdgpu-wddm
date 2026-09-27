@@ -18,6 +18,8 @@ def trace():
         'lifetime event=checkpoint marker=3 requests=1 successful=1 failed=0 ended=0 pending=0 live=1',
         'lifetime event=end map=1',
     ]
+    for index, begun, ended in [(2, 0, 0), (4, 1, 0), (6, 1, 1)]:
+        rows[index] += f' stores_begun={begun} stores_ended={ended}'
     return [f'BC250 audit {row} seq={i} time_ns={i}' for i, row in enumerate(rows, 1)]
 
 
@@ -64,6 +66,25 @@ class Stores(unittest.TestCase):
     def test_missing_whole_store_detected(self):
         rows = [r for r in trace() if 'audit store' not in r]
         with self.assertRaisesRegex(ValueError, 'event sequence'):
+            m.analyze(rows)
+
+    def test_missing_store_pair_resequenced(self):
+        rows = [r for r in trace() if 'audit store' not in r]
+        import re
+        rows = [re.sub(r'seq=\d+', f'seq={i}', r) for i, r in enumerate(rows, 1)]
+        with self.assertRaisesRegex(ValueError, 'checkpoint stores_begun mismatch'):
+            m.analyze(rows)
+
+    def test_wrong_completion_count(self):
+        rows = trace()
+        rows[4] = rows[4].replace('stores_ended=0', 'stores_ended=1')
+        with self.assertRaisesRegex(ValueError, 'checkpoint stores_ended mismatch'):
+            m.analyze(rows)
+
+    def test_mixed_checkpoint_schemas(self):
+        rows = trace()
+        rows[4] = rows[4].replace(' stores_begun=1 stores_ended=0', '')
+        with self.assertRaisesRegex(ValueError, 'mixed store checkpoint schemas'):
             m.analyze(rows)
 
     def test_store_after_unmap(self):

@@ -26,6 +26,8 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     maps = {}
     stores = {}
     active_stores = {}
+    ended_stores = 0
+    store_checkpoints = None
     events = 0
     sequenced = None
     threaded = None
@@ -50,6 +52,13 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
             fields = STORE_FIELDS if is_store else FIELDS
             require(event in fields, "unknown/invalid event")
             schema = set(fields[event].split())
+            if not is_store and event == "checkpoint":
+                has_store_counts = "stores_begun" in row or "stores_ended" in row
+                if store_checkpoints is None:
+                    store_checkpoints = has_store_counts
+                require(store_checkpoints == has_store_counts, "mixed store checkpoint schemas")
+                if has_store_counts:
+                    schema.update({"stores_begun", "stores_ended"})
             has_sequence = "seq" in row
             if has_sequence:
                 schema.add("seq")
@@ -99,10 +108,14 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
                 else:
                     require(sid in stores and "end" not in stores[sid], "orphan/duplicate store end")
                     stores[sid]["end"] = row
+                    ended_stores += 1
                     active_stores[stores[sid]["begin"]["map"]].remove(sid)
                 events += 1
                 continue
             if event == "checkpoint":
+                if store_checkpoints:
+                    require(row["stores_begun"] == len(stores), "checkpoint stores_begun mismatch")
+                    require(row["stores_ended"] == ended_stores, "checkpoint stores_ended mismatch")
                 for key, value in counts.items():
                     require(row[key] == value, f"checkpoint {key} mismatch")
                 require(row["pending"] == counts["requests"] - counts["successful"] - counts["failed"], "checkpoint pending mismatch")
@@ -173,6 +186,7 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
                 begin["seq"] < cp["seq"] and (end is None or cp["seq"] < end["seq"])]))
     return {
         "stores": store_inventory, "pending_store_ids": pending_stores,
+        "store_checkpoint_counters": bool(store_checkpoints),
         "completed_store_span_bytes": sum(r["begin"]["bytes"] for r in stores.values() if "end" in r),
         "events": events, "requests": len(maps),
         "successful": sum(row["result"]["success"] for row in maps.values()),
