@@ -71,3 +71,21 @@ These measurements should accompany the next exact candidate and matched runtime
 control. Do not rerun unchanged desktop trials merely to obtain another passing
 image; M679 already establishes its bounded pixel and GPU-progress result.
 The redirected-blt WSI probe proceeds separately and does not replace this work.
+
+## Prepared audit revisions after M682
+
+M682 adds two short-lived probe windows and exhausts the old128-bucket table:
+12 image-map requests/2,592,632 bytes lack bucket identity. The coverage classifier
+rejects that trace. Its passing image/DMA controls do not repair the missing audit.
+
+M680 source9f8a1ff9 adds opt-in uploader allocation/copy events. M683 sourcea63dade0
+adds growable aggregate map buckets and a per-context lock across counters,
+bucket updates and snapshots. Candidate UMD B17855E4 builds; its actual-helper
+4097-key/OOM/relocation host control passes. See the M683 fact/evidence entry.
+Neither revision has been deployed to the lab. Allocation failure remains explicit
+and invalidates coverage, rather than disappearing when the fixed limit is removed.
+
+The resource/lifetime identity, successful-map/unmap tracking, explicit interval
+boundary, diagnostic-capture attribution and deliberate-copy controls above remain
+unfinished. The growable table retains the existing aggregate key and is not a
+substitute for that work.
