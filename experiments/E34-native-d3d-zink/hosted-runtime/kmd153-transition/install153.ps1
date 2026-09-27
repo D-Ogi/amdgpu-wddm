@@ -1,7 +1,7 @@
 $ErrorActionPreference='Stop'
 Start-Transcript -Path 'C:\BC250\m12\candidate07153\transition.log' -NoClobber | Out-Null
 try {
-ď»ż$ErrorActionPreference='Stop'
+$ErrorActionPreference='Stop'
 if ((Invoke-RestMethod http://127.0.0.1:2250/flags).stop) { throw 'Owner STOP requested' }
 $out='C:\BC250\m12\candidate07153'
 $pkg=Join-Path $out 'package-umd'

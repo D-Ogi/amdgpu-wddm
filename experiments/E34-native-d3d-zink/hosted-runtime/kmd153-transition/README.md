@@ -25,7 +25,7 @@ Procedure:
    Verify every remote package file against the manifest before execution.
    Announce display interruption on the overlay and recheck preflight.
 3. Run install153.ps1 as a durable remote job that can be inspected independently
-   of SSH. This dispatcher is not prepared yet. The script preserves settings and
+   of SSH using dispatch153.ps1 Prepare/Start/Inspect/Cleanup. The script preserves settings and
    their types, class registration and logs before disabling the adapter. It
    installs153, restores parameters and registration, then enables the adapter.
    An observation timeout does not establish that the job failed or stopped.
@@ -55,3 +55,17 @@ legacy writer disabled. Raw receipt and full log remain private under
 scratch/g0-hosted/kmd153-transition/preflight-20260927T043250Z. No new runtime
 fact or promotion is claimed. Record the actual transition and regression in a
 new immutable evidence set and facts.md entry.
+
+Dispatcher validation: candidate and rollback packages are staged and every file
+matches the manifest. All six scripts pass the target PowerShell5.1 parser and
+an ASCII check. The task is registered as SYSTEM, on demand only, with no reboot
+trigger and a five-minute execution limit. Prepare does not start the task.
+Worker and collector receipts record process IDs and start times; Inspect checks
+both against live processes and reports the scheduled-task state. The collector
+retains per-second log snapshots for at most three minutes, bounds each reader
+to three seconds and stops on a reader timeout. Neither SSH loss nor elapsed time
+starts a second job. Cleanup refuses while either recorded process is alive.
+
+The original generated install script contained an embedded encoding marker.
+It passed syntax parsing but was corrected before staging; all deployed script
+bytes are now ASCII. No installation had been attempted with that file.
