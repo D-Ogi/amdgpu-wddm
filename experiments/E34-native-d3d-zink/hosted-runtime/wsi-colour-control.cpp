@@ -2,6 +2,8 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #define VK_NO_PROTOTYPES
 #include <windows.h>
+#include <dwmapi.h>
+#include <vulkan/vk_icd.h>
 #include <vulkan/vulkan.h>
 #include <cstdio>
 #include <cstring>
@@ -43,6 +45,11 @@ int wmain(int argc,wchar_t** argv) {
     auto gipa=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(dll,"vk_icdGetInstanceProcAddr"));
 #pragma warning(pop)
     if(!gipa) return 1;
+    auto negotiate=reinterpret_cast<PFN_vkNegotiateLoaderICDInterfaceVersion>(gipa(nullptr,"vk_icdNegotiateLoaderICDInterfaceVersion"));
+    if(!negotiate) { puts("FAIL missing ICD negotiation"); return 1; }
+    uint32_t interfaceVersion=7; VK(negotiate(&interfaceVersion));
+    printf("icd_interface=%u\n",interfaceVersion);
+    if(interfaceVersion<5) return 1;
     wchar_t loaded[32768]{};
     if(!GetModuleFileNameW(dll,loaded,32768)) return 1;
     printf("icd=%ls pid=%lu\n",loaded,GetCurrentProcessId());
@@ -56,7 +63,7 @@ int wmain(int argc,wchar_t** argv) {
     VkInstance instance{}; VK(create(&ici,nullptr,&instance));
     IP(vkEnumeratePhysicalDevices); IP(vkGetPhysicalDeviceProperties); IP(vkGetPhysicalDeviceQueueFamilyProperties);
     IP(vkCreateWin32SurfaceKHR); IP(vkGetPhysicalDeviceSurfaceSupportKHR); IP(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
-    IP(vkGetPhysicalDeviceSurfaceFormatsKHR); IP(vkCreateDevice); IP(vkDestroySurfaceKHR); IP(vkDestroyInstance);
+    IP(vkGetPhysicalDeviceSurfaceFormatsKHR); IP(vkGetPhysicalDeviceSurfacePresentModesKHR); IP(vkCreateDevice); IP(vkDestroySurfaceKHR); IP(vkDestroyInstance);
     if(!SetProcessDPIAware()) { puts("FAIL DPI awareness"); return 1; }
     HINSTANCE module=GetModuleHandleW(nullptr);
     WNDCLASSW wc{}; wc.lpfnWndProc=windowProc; wc.hInstance=module; wc.lpszClassName=L"BC250WSIColour";
@@ -66,6 +73,10 @@ int wmain(int argc,wchar_t** argv) {
     HWND window=CreateWindowW(wc.lpszClassName,L"BC250 GPU Present colour control",style|WS_VISIBLE,
         320,240,rect.right-rect.left,rect.bottom-rect.top,nullptr,nullptr,module,nullptr);
     if(!window) return 1;
+    DWM_WINDOW_CORNER_PREFERENCE corner=DWMWCP_DONOTROUND;
+    HRESULT cornerResult=DwmSetWindowAttribute(window,DWMWA_WINDOW_CORNER_PREFERENCE,&corner,sizeof(corner));
+    printf("square_corners_hr=%08lx\n",static_cast<unsigned long>(cornerResult));
+    if(FAILED(cornerResult)) return 1;
     auto sci=info<VkWin32SurfaceCreateInfoKHR>(VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR);
     sci.hinstance=module; sci.hwnd=window; VkSurfaceKHR surface{}; VK(vkCreateWin32SurfaceKHR(instance,&sci,nullptr,&surface));
     uint32_t count=0; VK(vkEnumeratePhysicalDevices(instance,&count,nullptr));
@@ -95,6 +106,10 @@ int wmain(int argc,wchar_t** argv) {
     DP(vkCreateSemaphore); DP(vkCreateFence); DP(vkResetFences); DP(vkQueueSubmit); DP(vkWaitForFences);
     DP(vkDeviceWaitIdle); DP(vkDestroyFence); DP(vkDestroySemaphore); DP(vkDestroyCommandPool);
     DP(vkDestroySwapchainKHR); DP(vkDestroyDevice);
+    uint32_t nm=0; VK(vkGetPhysicalDeviceSurfacePresentModesKHR(pd,surface,&nm,nullptr));
+    std::vector<VkPresentModeKHR> modes(nm); VK(vkGetPhysicalDeviceSurfacePresentModesKHR(pd,surface,&nm,modes.data()));
+    bool fifo=false; for(auto mode:modes) if(mode==VK_PRESENT_MODE_FIFO_KHR) fifo=true;
+    if(!fifo) { puts("FAIL FIFO unavailable"); return 1; }
     VkSurfaceCapabilitiesKHR caps{}; VK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pd,surface,&caps));
     if(!(caps.supportedUsageFlags&VK_IMAGE_USAGE_TRANSFER_DST_BIT)) return 1;
     uint32_t nf=0; VK(vkGetPhysicalDeviceSurfaceFormatsKHR(pd,surface,&nf,nullptr));

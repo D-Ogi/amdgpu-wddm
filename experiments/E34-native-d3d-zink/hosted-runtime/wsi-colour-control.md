@@ -1,6 +1,6 @@
 # Known-content window for engine Present validation
 
-Status: prepared, not run on the lab. This is a content and routing control for
+Status: CPU positive control measured in M674; GPU KMT route not yet run. This is a content and routing control for
 G0, not a replacement for the desktop acceptance requirements.
 
 ## Hypothesis
@@ -16,12 +16,14 @@ The compiler uses /W4 /WX. Only `--help` and invalid arguments are safe host
 controls; a valid ICD argument creates a window and is for the lab session.
 
 `wsi-colour-control.exe ABSOLUTE_ICD_DLL` loads that ICD directly through
-vk_icdGetInstanceProcAddr, without the Vulkan loader, manifest or registry.
+vk_icdGetInstanceProcAddr, without the Vulkan loader, manifest or registry. It explicitly negotiates ICD
+interface >=5 and logs the returned version.
 Require its printed loaded path and independently sampled module SHA256 to match
 the chosen artifact. This selects only the probe's ICD; DWM continues to use its
 separately verified hosted ICD. Confirm direct WSI dispatch at runtime before
 interpreting results; a build alone does not prove that interface works.
 
+The window requests square corners so the complete client is a content oracle.
 The program accepts exactly one AMD 1002:13fe device, a graphics/present queue,
 a 640x480 UNORM swapchain, opaque alpha and FIFO. It clears swapchain images on
 the GPU: 20 red frames, 20 green, 20 blue, about 100 ms apart. It logs every
@@ -63,4 +65,4 @@ can still block: the interactive lab runner must enforce an external deadline.
 The independent packet-content control M673 already passed through BC2S. This
 new probe specifically tests the real Windows Present route; neither test alone
 proves whole-desktop correctness or excludes every steady-state CPU frame copy.
-No lab run, G0 pass or promotion is claimed by this preparation.
+M674 records the CPU controls. No G0 pass or promotion is claimed.

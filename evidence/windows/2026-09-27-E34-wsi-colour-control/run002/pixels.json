@@ -1,0 +1,33 @@
+{
+  "client": [
+    328,
+    271,
+    640,
+    480
+  ],
+  "captures": {
+    "primary.bmp": {
+      "sha256": "a90e8d6fa7695245496ed44dbe84272eccb1518ccd3fc828d5ca61818ec75e26",
+      "image_size": [
+        1920,
+        1200
+      ],
+      "pixels": 307200,
+      "blue": 307200,
+      "mismatches": 0,
+      "client_rgb_sha256": "9c95c54fe2526ffd7ddc5ac3b8b45f1c8371fe16485456641c4973d2a96c7e03"
+    },
+    "screen.png": {
+      "sha256": "e504c5ab41cf75d111cf37047735b46159af5e4cb7fcf586b47992b7e039f7c8",
+      "image_size": [
+        1920,
+        1200
+      ],
+      "pixels": 307200,
+      "blue": 307200,
+      "mismatches": 0,
+      "client_rgb_sha256": "9c95c54fe2526ffd7ddc5ac3b8b45f1c8371fe16485456641c4973d2a96c7e03"
+    }
+  },
+  "pass": true
+}
