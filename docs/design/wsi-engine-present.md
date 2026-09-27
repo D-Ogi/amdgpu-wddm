@@ -103,11 +103,13 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   `A8B8G8R8`/`X8B8G8R8`, pitch a multiple of 256 bytes, page-aligned in VRAM, described by the `LB7A` private
   data block (format, width, height, pitch, size). Tiled sources are rejected at `DxgkDdiPresent` until a
   tiled-aware copy is measured.
-- Destination: the allocation dxgkrnl names in `DxgkDdiPresent` (`hDstAllocation`, the redirection surface,
-  the primary or the cross-adapter surface), never the POST framebuffer or the current scanout surface picked
-  by the KMD on its own. Its pitch and format come from that allocation's private data, or from the standard
-  allocation description for surfaces dxgkrnl created; a destination pitch different from the source pitch is
-  honoured row by row.
+- Destination: the allocation dxgkrnl names in `DxgkDdiPresent` (entry 2 of the allocation list: the
+  redirection surface, the primary or the cross-adapter surface). The software packet already copies into it
+  when that entry names an opened LB7A object (`WddmPresentBlit`, geometry, translation and overlap checks
+  before the copy) and falls back to the POST framebuffer or the current scanout surface only when the entry is
+  empty or unknown; the engine copy keeps the first behaviour and drops the fallback. Pitch and format come
+  from that allocation's private data, or from the standard allocation description for surfaces dxgkrnl
+  created; a destination pitch different from the source pitch is honoured row by row.
 - Rectangles: `SrcRect` and `DstRect` of equal size (no scaling, no colour conversion), `pDstSubRects` clipped to
   `DstRect` and to both allocations' extents; out-of-bounds rectangles are rejected before any engine work.
 - Context: the present arrives on the WSI's present context (non-UMD, node 0) today; the KMD Blt must also
