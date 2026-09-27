@@ -1705,6 +1705,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
         return;
     }
+    DcnLogVsyncSnapshot(Device);
     WddmSummaryOf(wddm);
     VidMmSummary();
 }

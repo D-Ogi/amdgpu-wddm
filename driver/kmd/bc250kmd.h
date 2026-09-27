@@ -398,6 +398,7 @@ NTSTATUS DcnReadScanLine(_In_ const BC250_DEVICE* Device, _Out_ BOOLEAN* InBlank
 // take none), which is what makes the second one legal at DIRQL - Quiet=TRUE is what keeps it fast (review 16
 // section 24: no DbgPrintEx from here on every vblank).
 NTSTATUS DcnVsyncEnable(_Inout_ BC250_DEVICE* Device, BOOLEAN On);
+void DcnLogVsyncSnapshot(_In_ const BC250_DEVICE* Device);
 BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device);
 
 // 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip has
