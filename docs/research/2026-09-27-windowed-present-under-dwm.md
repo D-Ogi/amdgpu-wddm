@@ -3,12 +3,20 @@
 Read-only research for the E45 result (facts M598): a token-less `D3DKMTPresent(Blt, hWindow, hSource)` from a
 non-UMD context returns `0xC01E0342 STATUS_GRAPHICS_VIDPN_SOURCE_IN_USE` and `DxgkDdiPresent` never runs.
 
+**Correction, 2026-09-27.** The CDD-DWM interop inference in this document is refuted by measurement.
+Sections 1, 2d and 2e and the plan in section 4 read `DriverSupportsCddDwmInterop` as enough to put a window's
+redirection surface on the GPU and admit the Blt. KMD 164 advertises the cap. Under a GPU DWM the same present
+still fails with `0xC01E0342` (facts M677). The redirection handshake answers `BLT_VIA_GDI` (`0x263008`), and no
+new GDI surface appears for the probe window (M682). The affected lines below are marked [EV] or "refuted";
+the rest stands as written.
+
 Evidence labels:
 
 - **[DOC]** quoted from Microsoft documentation or headers in `ref\`.
 - **[SRC]** quoted from open-source code or public review threads in `ref\`.
 - **[INF]** inference from the documents. It is not stated in any of them.
 - **[KNOW]** the author's background knowledge, not backed by a local file. Treat it as a hypothesis to measure.
+- **[EV]** a later measurement on unit A, cited by its `docs/facts.md` row. Added after the first version.
 
 Sources used, with revisions:
 
@@ -87,7 +95,8 @@ That explains why `DxgkDdiPresent` never ran. The status comes from an ownership
 **Why there was no GPU redirection surface.** [INF] The KMD does not advertise GDI hardware acceleration.
 `bc250-win\driver\kmd\wddm.c:2131-2146` sets only `No*` presentation caps. It leaves
 `SupportKernelModeCommandBuffer` and `DriverSupportsCddDwmInterop` at zero and has no `DxgkDdiRenderKm`. See
-section 2d for why that matters.
+section 2d for why that matters. [EV] The interop half of this reading is refuted: with the cap set the result is
+unchanged (M677, M682). GDI hardware acceleration remains unmeasured.
 
 Cheap tests of this reading:
 
@@ -217,11 +226,17 @@ acceleration.
 - [INF] Without GDI acceleration or CDD-DWM interop, the GDI redirection bitmap of a window is a CPU-side surface
   that the DWM uploads. max8rr8's measurement (`ResourceUpdateSubResourceUP` in the DWM) matches this. A
   `D3DKMTPresent` Blt then has no GPU destination. That is consistent with the E45 rejection in section 1.
-- [INF] `DriverSupportsCddDwmInterop` is the cheaper of the two caps. The redirection bitmaps become textures
+- [INF, refuted] `DriverSupportsCddDwmInterop` is the cheaper of the two caps. The redirection bitmaps become textures
   created by the DWM's UMD. CDD pushes GDI content into them with `DxgkDdiPresent` blts, from CPU staging into the
   texture. An ICD's `D3DKMTPresent` Blt would then land in the same texture through `DxgkDdiPresent`. No document
   states the last step for a non-runtime ICD. It follows from PresentMon's "Composed: Copy with GPU GDI" and the
   jenatali comment.
+- [EV] The previous bullet is refuted on this driver. KMD 164 sets the cap and runs a GPU DWM. The probe window
+  still gets no new GDI surface, and the handshake answers `BLT_VIA_GDI` (M682). The KMT present is still refused
+  at admission (M677). The archived logs show CDD's GDI context on our KMD but no GPU-backed redirection surface
+  (M685). The cap does not move redirection bitmaps to the GPU here. GDI hardware acceleration
+  (`SupportKernelModeCommandBuffer` with `DxgkDdiRenderKm`) is the remaining documented candidate; it is
+  unmeasured.
 
 ### 2e. Each mechanism in the question
 
@@ -229,7 +244,7 @@ In the table, "CPU copy" means a per-frame CPU copy in steady state.
 
 | Mechanism | Documented purpose | Windowed zero-CPU-copy route for a VRAM image while DWM composes? | DWM-side need |
 |---|---|---|---|
-| `D3DKMTPresent` Blt + `hWindow`, no token | ICD example, `d3dkmthk.md:15074-15097` | **Yes, one GPU blt**, but only if the window's GDI redirection surface is a GPU allocation (sections 1, 2d). E45 shows it is not today. | Redirection surfaces as GPU textures: KMD `SupportKernelModeCommandBuffer` or `DriverSupportsCddDwmInterop`. DWM's UMD samples a VRAM texture. No open of the ICD's allocation. |
+| `D3DKMTPresent` Blt + `hWindow`, no token | ICD example, `d3dkmthk.md:15074-15097` | **Yes, one GPU blt**, but only if the window's GDI redirection surface is a GPU allocation (sections 1, 2d). E45 shows it is not today. | Redirection surfaces as GPU textures: KMD `SupportKernelModeCommandBuffer`. `DriverSupportsCddDwmInterop` is not enough (M677, M682). DWM's UMD samples a VRAM texture. No open of the ICD's allocation. |
 | Same + token `D3DKMT_PM_REDIRECTED_BLT` with update id | `dwmdxgetwindowsharedsurface.md:78` | Same as above. The token only tells the DWM which update landed. Win7-only documentation. | Same as above, plus `DwmDxGetWindowSharedSurface` (dwmapi ordinal 100) returning `DWM_S_GDI_REDIRECTION_SURFACE`. |
 | `D3DKMTRender` + `PresentRedirected` + token (DX/GL redirection bitmap) | `dwmdxgetwindowsharedsurface.md:77`, `RENDERFLAGS` `:31807` | **No.** It works, but the OS emulates it with a GPU-to-staging copy, a CPU readback and an upload (`mr-24223.md:65-86`). Not expressible on a GPUVA context (`SUBMITCOMMAND` token reserved). | DWM's UMD `ResourceUpdateSubresourceUP`. KMD staging blt through `DxgkDdiPresent`. |
 | `D3DKMT_PM_REDIRECTED_VISTABLT` | "redirected Windows Vista bitblt" (`d3dkmthk.md:40816`, token is one ULONGLONG `:30166`) | [INF] The Vista form of the above. No documented producer. | Unknown. |
@@ -288,7 +303,7 @@ Work per side:
 - **KMD.**
   - Advertise `PresentationCaps.DriverSupportsCddDwmInterop = 1`. This is the smaller commitment than
     `SupportKernelModeCommandBuffer`, which would need `DxgkDdiRenderKm` and the full GDI op set
-    (`d3dkmddi.md:27165-27167`).
+    (`d3dkmddi.md:27165-27167`). [EV] Done in KMD 164, and not sufficient (M677, M682).
   - Implement `DxgkDdiPresent` Blt with real DMA:
     - source `pAllocationList[DXGK_PRESENT_SOURCE_INDEX]`, destination `[DXGK_PRESENT_DESTINATION_INDEX]`
       (`d3dkmddi.md` `DxgkDdiPresent` remarks);
@@ -345,7 +360,7 @@ median. Keep it as the fallback.
 **Suggested order.** Run the three read-only probes of R1's precondition. Then prototype
 `DriverSupportsCddDwmInterop` with the ADR 0018 engine Blt in `DxgkDdiPresent`, and watch whether dxgkrnl starts
 naming a destination for the vkcube HWND (`Blit_Info` plus a `PresentHistory` `REDIRECTED_BLT` in ETW). Plan R2
-with M13.
+with M13. [EV] The interop prototype ran: no `Blit_Info`, no redirected-blt history, and the same refusal (M677).
 
 ## Uncertain / not found
 
@@ -353,7 +368,8 @@ with M13.
   in section 1 is inference.
 - Whether `DriverSupportsCddDwmInterop` alone, without GDI hardware acceleration, makes the DWM allocate GPU
   redirection textures for DWM-composed windows, and whether dxgkrnl then routes a third-party ICD's windowed
-  `D3DKMTPresent` Blt into them. Not documented. Measure it.
+  `D3DKMTPresent` Blt into them. Not documented. Measure it. [EV] Measured: it does not, on this driver
+  (M677, M682).
 - Where `hLogicalSurface`/`hPhysicalSurface` of `D3DKMT_BLTMODEL_PRESENTHISTORYTOKEN` come from, and whether
   `EventId` is the `DwmDxGetWindowSharedSurface` update id. The documentation says "update ID in the Blt member" only.
 - Whether `DwmDxGetWindowSharedSurface` (dwmapi ordinal 100) and `DwmDxUpdateWindowSharedSurface` still exist and

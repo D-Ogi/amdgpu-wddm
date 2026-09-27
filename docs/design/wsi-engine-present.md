@@ -51,6 +51,10 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   CDD-DWM interop (`DXGK_PRESENTATIONCAPS.DriverSupportsCddDwmInterop`: CDD presents into texture allocations
   the DWM's UMD creates), neither of which the KMD sets today. The route stays ADR 0018's KMD item, now with
   that cap as its precondition.
+  Correction, 2026-09-27: KMD 164 sets the interop cap, and under a GPU DWM the present is refused the same way
+  (facts M677). The redirection handshake answers `BLT_VIA_GDI` with no new GDI surface for the window (M682).
+  The interop cap is therefore not the precondition. GDI hardware acceleration is the remaining documented
+  candidate and is unmeasured.
 
 ## Options considered
 
@@ -135,7 +139,8 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
   residency of both allocations is held by dxgkrnl for the length of the present and by the fence for the
   length of the copy.
 - Precondition (E45): dxgkrnl names a destination for a windowed present only when the window's redirection
-  surface is a GPU allocation. The KMD has to advertise `DriverSupportsCddDwmInterop` (the smaller commitment;
+  surface is a GPU allocation. (The interop-cap part of this bullet is refuted by M677 and M682; see the
+  correction above.) The KMD has to advertise `DriverSupportsCddDwmInterop` (the smaller commitment;
   GDI hardware acceleration would add `DxgkDdiRenderKm` and the whole GDI operation set) and then serve two
   kinds of `DxgkDdiPresent` Blt into `D3DKMDT_GDISURFACE_TEXTURE` allocations created by the DWM's UMD: the
   CDD's copies from CPU staging into the texture and the WSI's VRAM-to-VRAM copy. The DWM's UMD must create
@@ -162,7 +167,8 @@ semaphores, then `IDXGISwapChain3::Present1`. That path needs a D3D12 device on 
    (a diagnostic KMD build, not a read-only probe of the deployed one).
 4. KMD: `DriverSupportsCddDwmInterop` plus the engine Blt (ADR 0018 KMD item) serving CDD staging-to-texture and
    WSI VRAM-to-VRAM copies into DWM-UMD-created textures, per the contract above; DWM's UMD: GPU-sampleable
-   redirection textures. Measured against the same present log and the `Blit_Info` trace.
+   redirection textures. Measured against the same present log and the `Blit_Info` trace. Measured with the
+   cap on KMD 164: the refusal is unchanged (M677, M682), so this step alone does not open the route.
 5. The composition-swapchain flavour (C, the flip model) after M13/M15: the DWM samples the app's buffers, no
    copy at all. It needs a D3D11/12 device of the adapter and the DWM's UMD opening the shared buffers.
 
