@@ -1,0 +1,40 @@
+{
+  "015": {
+    "classification": "VISUAL FAIL",
+    "done": {
+      "gpu_pid": 7804,
+      "utc": "2026-09-27T02:23:41.4824239Z",
+      "measured_seconds": 180.1084841,
+      "success": true
+    },
+    "cpu_dwm_after": 8544,
+    "temperature_range": [
+      66.8,
+      70
+    ],
+    "matched_dma_pairs": 3635,
+    "trace_loss": {
+      "events": 0,
+      "buffers": 0
+    }
+  },
+  "016": {
+    "classification": "VISUAL FAIL",
+    "done": {
+      "gpu_pid": 4316,
+      "utc": "2026-09-27T02:26:59.5639755Z",
+      "measured_seconds": 62.4951863,
+      "success": true
+    },
+    "cpu_dwm_after": 6696,
+    "temperature_range": [
+      67.1,
+      70.2
+    ],
+    "matched_dma_pairs": 1267,
+    "trace_loss": {
+      "events": 0,
+      "buffers": 0
+    }
+  }
+}
