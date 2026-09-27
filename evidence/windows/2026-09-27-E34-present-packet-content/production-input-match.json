@@ -1,0 +1,32 @@
+{
+  "gfx_blt.c": {
+    "control_raw_sha256": "bd25e6446cca9a08cc06f9103f5e9a863e5600edde30303fd70609d590f5041c",
+    "exact164_raw_sha256": "8c4370fed92a0f5546d8b2ab2943af939308631ceb4b065b49d84c45f5a147fd",
+    "normalized_equal": true
+  },
+  "gfx_blt.h": {
+    "control_raw_sha256": "ec5a97710dde8785ef4bd349fb8e89b87deed1be0d496a24919e3ab155521959",
+    "exact164_raw_sha256": "b9212c017c02f779168c523b0f41035bcb110a864db545087af18cce0b4d159f",
+    "normalized_equal": true
+  },
+  "gfx_copy.c": {
+    "control_raw_sha256": "e2720d6e88b482435fcf12595d9615b3af9f04f5ad993f8f5ba899155e2dbf0d",
+    "exact164_raw_sha256": "884a52dd44920d5b004a88c0786166b2c0c399021b4817e6b0554a7b0956de27",
+    "normalized_equal": true
+  },
+  "gfx_copy.h": {
+    "control_raw_sha256": "2893082a980303ccc91ded7e8c4e77b0f8554c04d54e8d53c5286213a9424ea1",
+    "exact164_raw_sha256": "b02186ae29180a2bb644a27840cfb7711bb021ba64d9a348c40dc61c7c83f65f",
+    "normalized_equal": true
+  },
+  "blit_plan.c": {
+    "control_raw_sha256": "fb6276bf8b1263904642d329e30f7b62e7f7ba430aed7c046b062ce801cb8147",
+    "exact164_raw_sha256": "030cba2fd51e127171df455d3d6630f9952667ad4c7df3098c842be14c34aada",
+    "normalized_equal": true
+  },
+  "blit_plan.h": {
+    "control_raw_sha256": "f9980e8ccac1d4b0bd49e4f68b4dd59de767ec0954e2a14a5af62592777fdfb7",
+    "exact164_raw_sha256": "7f9b59f4dc7fbff5a11b0ebf5068aec4d40492672b749da06e91a32e3acb55de",
+    "normalized_equal": true
+  }
+}

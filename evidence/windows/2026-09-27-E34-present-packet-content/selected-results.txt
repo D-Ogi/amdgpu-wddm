@@ -1,0 +1,42 @@
+COPY_MODE present-packet
+COPY_RESIDENCY phase=before buffer=copy-source requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-destination requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESULT PASS bytes=65536 pixels=20 packets=10 mismatches=0 fence=11
+COPY_IBS mode=present-packet submissions=10 final_offset=10
+COPY_RESIDENCY phase=after buffer=copy-source requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-destination requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-source requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-destination requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESULT PASS bytes=65536 pixels=20 packets=10 mismatches=0 fence=22
+COPY_IBS mode=present-packet submissions=10 final_offset=10
+COPY_RESIDENCY phase=after buffer=copy-source requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-destination requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-source requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-destination requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESULT PASS bytes=65536 pixels=20 packets=10 mismatches=0 fence=26
+COPY_IBS mode=present-packet submissions=3 final_offset=10
+COPY_RESIDENCY phase=after buffer=copy-source requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-destination requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-source requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-destination requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESULT PASS bytes=65536 pixels=20 packets=10 mismatches=0 fence=30
+COPY_IBS mode=present-packet submissions=3 final_offset=10
+COPY_RESIDENCY phase=after buffer=copy-source requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-destination requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-source requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-destination requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=before buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+COPY_RESULT PASS bytes=9371648 pixels=2302800 packets=2400 mismatches=0 fence=41
+COPY_IBS mode=present-packet submissions=2 final_offset=2400
+COPY_RESIDENCY phase=after buffer=copy-source requested_heap=2 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-destination requested_heap=4 observed=1 expected=1 PASS
+COPY_RESIDENCY phase=after buffer=copy-readback requested_heap=2 observed=1 expected=1 PASS
+GFX_BLT_CONTROL PASS final_fence=41
