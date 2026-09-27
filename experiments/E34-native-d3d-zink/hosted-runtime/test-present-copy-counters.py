@@ -41,4 +41,16 @@ try:m.latest("wddm summary: blit gate open, 0 blits")
 except ValueError:pass
 else:raise AssertionError("truncated summary accepted")
 cases.append("truncated_counter_rejected")
+# Repeated last summary is stale evidence even if the collector UTC increases.
+selected=baseline["samples"][1]["sample"]
+first=baseline["samples"][0]["raw"]
+def stale(path):
+    if path.name == "startup-log-%03d.txt" % selected:
+        return first+"\n"
+    return original(path)
+with patch.object(m,"text",stale):
+    try: m.analyze(directory)
+    except ValueError: pass
+    else: raise AssertionError("stale repeated counter accepted")
+cases.append("stale_summary_rejected")
 print(json.dumps(dict(pass_controls=True,cases=cases,samples=len(baseline["samples"])),indent=2))

@@ -64,7 +64,7 @@ def analyze(directory):
     samples.sort(key=lambda r:r["sample"])
     if len(samples)<2: raise ValueError("insufficient in-window samples")
     for a,b in zip(samples,samples[1:]):
-        if b["sequence"]<a["sequence"] or b["seconds"]<a["seconds"]:
+        if b["sequence"]<=a["sequence"] or b["seconds"]<=a["seconds"]:
             raise ValueError("counter history reset/reversed within selected samples")
         if any(b[k]<a[k] for k in ("blits","skips","translated")):
             raise ValueError("counters decreased")
