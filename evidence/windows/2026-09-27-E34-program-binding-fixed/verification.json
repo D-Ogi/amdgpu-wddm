@@ -1,0 +1,88 @@
+{
+  "090": {
+    "completion": {
+      "dwm_before": [
+        5748
+      ],
+      "utc": "2026-09-27T01:11:14.3392232Z",
+      "dwm_after": [
+        5748
+      ],
+      "exit": 0
+    },
+    "restored": true,
+    "dwm_before": 5748,
+    "dwm_after": 5748,
+    "before": {
+      "objects created/destroyed:": "1162780  30374.130 wddm summary: objects created/destroyed: dev 464/451 ctx 739/728 proc 233/226 alloc 9819/12009, 186 alive",
+      "node 0 hardware:": "1162783  30374.130 wddm summary: node 0 hardware: 239409 submitted, 239215 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "1163448  30380.936 wddm summary: objects created/destroyed: dev 466/453 ctx 743/732 proc 234/227 alloc 9882/12078, 186 alive",
+      "node 0 hardware:": "1163451  30380.936 wddm summary: node 0 hardware: 239438 submitted, 239244 completed, 0 timeouts, 0 refused"
+    }
+  },
+  "091": {
+    "completion": {
+      "dwm_before": [
+        5748
+      ],
+      "utc": "2026-09-27T01:12:23.6018447Z",
+      "dwm_after": [
+        5748
+      ],
+      "exit": 0
+    },
+    "restored": true,
+    "dwm_before": 5748,
+    "dwm_after": 5748,
+    "before": {
+      "objects created/destroyed:": "1164862  30444.239 wddm summary: objects created/destroyed: dev 466/453 ctx 743/732 proc 234/227 alloc 9882/12078, 186 alive",
+      "node 0 hardware:": "1164865  30444.239 wddm summary: node 0 hardware: 239438 submitted, 239244 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "1165471  30450.198 wddm summary: objects created/destroyed: dev 468/455 ctx 747/736 proc 235/228 alloc 9943/12145, 186 alive",
+      "node 0 hardware:": "1165474  30450.198 wddm summary: node 0 hardware: 239461 submitted, 239267 completed, 0 timeouts, 0 refused"
+    }
+  },
+  "092": {
+    "completion": {
+      "dwm_before": [
+        5748
+      ],
+      "utc": "2026-09-27T01:13:03.9324896Z",
+      "dwm_after": [
+        5748
+      ],
+      "exit": 0
+    },
+    "restored": true,
+    "dwm_before": 5748,
+    "dwm_after": 5748,
+    "before": {
+      "objects created/destroyed:": "1166077  30476.443 wddm summary: objects created/destroyed: dev 468/455 ctx 747/736 proc 235/228 alloc 9943/12145, 186 alive",
+      "node 0 hardware:": "1166080  30476.443 wddm summary: node 0 hardware: 239461 submitted, 239267 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "1179151  30490.407 wddm summary: objects created/destroyed: dev 472/459 ctx 755/744 proc 237/230 alloc 10061/12275, 186 alive",
+      "node 0 hardware:": "1179154  30490.407 wddm summary: node 0 hardware: 245461 submitted, 245267 completed, 0 timeouts, 0 refused"
+    }
+  },
+  "093": {
+    "completion": {
+      "exit": 0,
+      "utc": "2026-09-27T01:14:01.4035171Z"
+    },
+    "restored": true,
+    "dwm_before": 5748,
+    "dwm_after": 5748,
+    "before": {
+      "objects created/destroyed:": "1179959  30529.836 wddm summary: objects created/destroyed: dev 472/459 ctx 755/744 proc 237/230 alloc 10061/12275, 186 alive",
+      "node 0 hardware:": "1179962  30529.836 wddm summary: node 0 hardware: 245461 submitted, 245267 completed, 0 timeouts, 0 refused"
+    },
+    "after": {
+      "objects created/destroyed:": "1181085  30548.002 wddm summary: objects created/destroyed: dev 474/461 ctx 759/748 proc 238/231 alloc 10129/12349, 186 alive",
+      "node 0 hardware:": "1181088  30548.002 wddm summary: node 0 hardware: 245584 submitted, 245390 completed, 0 timeouts, 0 refused"
+    }
+  }
+}
