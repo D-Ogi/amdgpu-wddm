@@ -1,0 +1,87 @@
+{
+  "dwm_pid": 9948,
+  "trace_loss": {
+    "events": 0,
+    "buffers": 0
+  },
+  "matched": 3634,
+  "pending": 0,
+  "unmatched": 0,
+  "duplicate_starts": 0,
+  "contexts": [
+    {
+      "TimeStamp": "463046",
+      "hContext": "0xffffdd81faa4c280",
+      "ContextHandle": "0x00000000400002c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1348172",
+      "hContext": "0xffffdd81fa4976a0",
+      "ContextHandle": "0x0000000040001b40",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1377228",
+      "hContext": "0xffffdd81fefb0a70",
+      "ContextHandle": "0x0000000040002940",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1417265",
+      "hContext": "0xffffdd81fefb0a70",
+      "ContextHandle": "0x0000000080001880",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1447452",
+      "hContext": "0xffffdd81fa4976a0",
+      "ContextHandle": "0x0000000080002780",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1465115",
+      "hContext": "0xffffdd81f5f74dd0",
+      "ContextHandle": "0x00000000400042c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "1646207",
+      "hContext": "0xffffdd81fb0ebdd0",
+      "ContextHandle": "0x0000000080001d00",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "2129607",
+      "hContext": "0xffffdd81f8d35280",
+      "ContextHandle": "0x0000000040004700",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "2226182",
+      "hContext": "0xffffdd81fa4976a0",
+      "ContextHandle": "0x0000000040005400",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "2230941",
+      "hContext": "0xffffdd81f974e280",
+      "ContextHandle": "0x0000000040005900",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    }
+  ],
+  "duration_seconds": 180.0941696,
+  "restored_cpu_pid": 4596,
+  "owner_visual_verdict": "not received",
+  "source_commit": "a0ad8af5ea46b90400d947d82d056f3bd58278c5"
+}
