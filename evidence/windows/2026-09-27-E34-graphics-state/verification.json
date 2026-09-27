@@ -1,0 +1,270 @@
+{
+  "080": {
+    "cases": [
+      [
+        "depth-near",
+        "0",
+        "0",
+        "79d66447807a4325"
+      ],
+      [
+        "depth-reject-far",
+        "0",
+        "0",
+        "79d66447807a4325"
+      ],
+      [
+        "stencil-replace",
+        "0",
+        "0",
+        "d2bfb75560f4c325"
+      ],
+      [
+        "stencil-reject",
+        "0",
+        "0",
+        "d2bfb75560f4c325"
+      ],
+      [
+        "stencil-accept",
+        "0",
+        "0",
+        "14a0420cba6ba325"
+      ],
+      [
+        "alpha-blend",
+        "0",
+        "1",
+        "0278d51976872325"
+      ],
+      [
+        "shader-branch",
+        "0",
+        "0",
+        "d3cb42920d2c7325"
+      ],
+      [
+        "render-to-texture",
+        "0",
+        "0",
+        "d3cb42920d2c7325"
+      ]
+    ],
+    "done": {
+      "dwm_before": [
+        84
+      ],
+      "utc": "2026-09-27T00:07:53.0780810Z",
+      "dwm_after": [
+        84
+      ],
+      "exit": 0
+    }
+  },
+  "081": {
+    "cases": [
+      [
+        "depth-near",
+        "0",
+        "0",
+        "79d66447807a4325"
+      ],
+      [
+        "depth-reject-far",
+        "0",
+        "0",
+        "79d66447807a4325"
+      ],
+      [
+        "stencil-replace",
+        "0",
+        "0",
+        "d2bfb75560f4c325"
+      ],
+      [
+        "stencil-reject",
+        "0",
+        "0",
+        "d2bfb75560f4c325"
+      ],
+      [
+        "stencil-accept",
+        "0",
+        "0",
+        "14a0420cba6ba325"
+      ],
+      [
+        "alpha-blend",
+        "0",
+        "1",
+        "b6258ab8e751a325"
+      ],
+      [
+        "shader-branch",
+        "0",
+        "0",
+        "d3cb42920d2c7325"
+      ],
+      [
+        "render-to-texture",
+        "0",
+        "0",
+        "d3cb42920d2c7325"
+      ]
+    ],
+    "done": {
+      "dwm_before": [
+        84
+      ],
+      "utc": "2026-09-27T00:08:07.2365077Z",
+      "dwm_after": [
+        84
+      ],
+      "exit": 0
+    }
+  },
+  "082": {
+    "cases": [
+      [
+        "depth-near",
+        "0",
+        "0",
+        "79d66447807a4325"
+      ],
+      [
+        "depth-reject-far",
+        "0",
+        "0",
+        "79d66447807a4325"
+      ],
+      [
+        "stencil-replace",
+        "0",
+        "0",
+        "d2bfb75560f4c325"
+      ],
+      [
+        "stencil-reject",
+        "0",
+        "0",
+        "d2bfb75560f4c325"
+      ],
+      [
+        "stencil-accept",
+        "0",
+        "0",
+        "14a0420cba6ba325"
+      ],
+      [
+        "alpha-blend",
+        "0",
+        "1",
+        "0278d51976872325"
+      ],
+      [
+        "shader-branch",
+        "0",
+        "0",
+        "d3cb42920d2c7325"
+      ],
+      [
+        "render-to-texture",
+        "0",
+        "0",
+        "d3cb42920d2c7325"
+      ]
+    ],
+    "done": {
+      "dwm_before": [
+        84
+      ],
+      "utc": "2026-09-27T00:08:29.9505545Z",
+      "dwm_after": [
+        84
+      ],
+      "exit": 0
+    },
+    "audit": [
+      "audit maps ctx=00000151711099B0 final=0 sample=1 image_calls=0 image_request_bytes=0 buffer_calls=8 buffer_request_bytes=1144628 persistent_calls=5",
+      "audit bucket_summary ctx=00000151711099B0 sample=1 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=1 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000",
+      "audit bucket ctx=00000151711099B0 sample=1 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=1 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=1 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=1 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=1 bytes=32",
+      "audit maps ctx=00000151711099B0 final=0 sample=2 image_calls=0 image_request_bytes=0 buffer_calls=8 buffer_request_bytes=1144628 persistent_calls=5",
+      "audit bucket_summary ctx=00000151711099B0 sample=2 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=2 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000",
+      "audit bucket ctx=00000151711099B0 sample=2 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=2 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=2 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=2 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=1 bytes=32",
+      "audit maps ctx=00000151711099B0 final=0 sample=3 image_calls=1 image_request_bytes=16384 buffer_calls=8 buffer_request_bytes=1144628 persistent_calls=5",
+      "audit bucket_summary ctx=00000151711099B0 sample=3 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=3 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000",
+      "audit bucket ctx=00000151711099B0 sample=3 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=3 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=3 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=3 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=1 bytes=32",
+      "audit bucket ctx=00000151711099B0 sample=3 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=1 bytes=16384",
+      "audit maps ctx=00000151711099B0 final=0 sample=4 image_calls=1 image_request_bytes=16384 buffer_calls=9 buffer_request_bytes=1144660 persistent_calls=5",
+      "audit bucket_summary ctx=00000151711099B0 sample=4 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=4 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000",
+      "audit bucket ctx=00000151711099B0 sample=4 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=4 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=4 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=4 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=2 bytes=64",
+      "audit bucket ctx=00000151711099B0 sample=4 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=1 bytes=16384",
+      "audit maps ctx=00000151711099B0 final=0 sample=5 image_calls=1 image_request_bytes=16384 buffer_calls=9 buffer_request_bytes=1144660 persistent_calls=5",
+      "audit bucket_summary ctx=00000151711099B0 sample=5 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=5 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000",
+      "audit bucket ctx=00000151711099B0 sample=5 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=5 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=5 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=5 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=2 bytes=64",
+      "audit bucket ctx=00000151711099B0 sample=5 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=1 bytes=16384",
+      "audit maps ctx=00000151711099B0 final=0 sample=6 image_calls=2 image_request_bytes=32768 buffer_calls=9 buffer_request_bytes=1144660 persistent_calls=5",
+      "audit bucket_summary ctx=00000151711099B0 sample=6 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=6 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000",
+      "audit bucket ctx=00000151711099B0 sample=6 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=6 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=6 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=6 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=2 bytes=64",
+      "audit bucket ctx=00000151711099B0 sample=6 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=2 bytes=32768",
+      "audit maps ctx=00000151711099B0 final=0 sample=7 image_calls=2 image_request_bytes=32768 buffer_calls=11 buffer_request_bytes=1168692 persistent_calls=6",
+      "audit bucket_summary ctx=00000151711099B0 sample=7 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=7 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=5 bytes=120000",
+      "audit bucket ctx=00000151711099B0 sample=7 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=7 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=7 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=7 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=3 bytes=96",
+      "audit bucket ctx=00000151711099B0 sample=7 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=2 bytes=32768",
+      "audit maps ctx=00000151711099B0 final=0 sample=8 image_calls=2 image_request_bytes=32768 buffer_calls=11 buffer_request_bytes=1168692 persistent_calls=6",
+      "audit bucket_summary ctx=00000151711099B0 sample=8 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=8 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=5 bytes=120000",
+      "audit bucket ctx=00000151711099B0 sample=8 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=8 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=8 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=8 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=3 bytes=96",
+      "audit bucket ctx=00000151711099B0 sample=8 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=2 bytes=32768",
+      "audit maps ctx=00000151711099B0 final=1 sample=29 image_calls=8 image_request_bytes=131072 buffer_calls=16 buffer_request_bytes=1168852 persistent_calls=6",
+      "audit bucket_summary ctx=00000151711099B0 sample=29 overflow=0",
+      "audit bucket ctx=00000151711099B0 sample=29 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=5 bytes=120000",
+      "audit bucket ctx=00000151711099B0 sample=29 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4",
+      "audit bucket ctx=00000151711099B0 sample=29 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576",
+      "audit bucket ctx=00000151711099B0 sample=29 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16",
+      "audit bucket ctx=00000151711099B0 sample=29 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=8 bytes=256",
+      "audit bucket ctx=00000151711099B0 sample=29 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=8 bytes=131072"
+    ],
+    "kmd-after082": {
+      "objects created/destroyed:": "951832  26616.549 wddm summary: objects created/destroyed: dev 392/378 ctx 651/639 proc 191/183 alloc 7002/8511, 195 alive",
+      "allocations opened/closed:": "951833  26616.549 wddm summary: allocations opened/closed: 7647/7570 calls",
+      "node 0 hardware:": "951835  26616.549 wddm summary: node 0 hardware: 191077 submitted, 190944 completed, 0 timeouts, 0 refused"
+    },
+    "kmd-before082": {
+      "objects created/destroyed:": "951243  26610.530 wddm summary: objects created/destroyed: dev 390/376 ctx 647/635 proc 190/182 alloc 6944/8447, 195 alive",
+      "allocations opened/closed:": "951244  26610.530 wddm summary: allocations opened/closed: 7589/7512 calls",
+      "node 0 hardware:": "951246  26610.530 wddm summary: node 0 hardware: 191060 submitted, 190927 completed, 0 timeouts, 0 refused"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+mode=warp pid=7684 renderer=C:\Windows\SYSTEM32\D3D10Warp.dll
+branch DXBC conditional opcode verified
+case=depth-near mismatches=0/4096 tolerance=0 fnv64=79d66447807a4325
+case=depth-reject-far mismatches=0/4096 tolerance=0 fnv64=79d66447807a4325
+case=stencil-replace mismatches=0/4096 tolerance=0 fnv64=d2bfb75560f4c325
+case=stencil-reject mismatches=0/4096 tolerance=0 fnv64=d2bfb75560f4c325
+case=stencil-accept mismatches=0/4096 tolerance=0 fnv64=14a0420cba6ba325
+case=alpha-blend mismatches=0/4096 tolerance=1 fnv64=0278d51976872325
+case=shader-branch mismatches=0/4096 tolerance=0 fnv64=d3cb42920d2c7325
+case=render-to-texture mismatches=0/4096 tolerance=0 fnv64=d3cb42920d2c7325
+PASS native graphics state: 8 cases, 32768 checked pixels
+
+
+
