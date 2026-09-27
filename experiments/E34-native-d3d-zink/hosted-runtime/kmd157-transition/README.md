@@ -31,3 +31,13 @@ No live KDNET. No ordinary OS reboot is planned.
 
 This successor includes f58e193: nonzero release tokens are released even when
 private data is NULL. The prior156 task was never started and was removed.
+
+## Native allocation control004
+
+After healthy flags15 and exact157 identity, run the pinned binary0821C9BD
+with run-gfx-blt-control157.ps1 in gfx-blt-control004, Mode dirty-list. This
+reuses the five known-good BC2A allocation/copy cases from control003 to
+exercise OpenAllocation and collect Acquire/Get/Release diagnostics. Expected:
+five content PASS results and thirty residency PASS receipts, retained boot/DWM.
+Callback identity is evaluated independently of pixel correctness. Preserve
+full driver logs immediately after the run. This is BC2S, not BGP1 Present.
