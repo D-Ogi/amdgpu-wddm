@@ -1,0 +1,1 @@
+Replay: PASS, all183 snapshots identical. Negative control: changed first overflow=8 to overflow=9; assertion rejects before output. Private replay test: scratch/g0-hosted/test-reconciliation.py.

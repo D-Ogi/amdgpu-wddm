@@ -1,0 +1,58 @@
+{
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_resource.c": {
+    "sha256": "cfca87813c7fbd04dd27384873eb42929c19b415dfa2e1cd453aaedb0cbbf4d5",
+    "normalized_sha256": "cfca87813c7fbd04dd27384873eb42929c19b415dfa2e1cd453aaedb0cbbf4d5",
+    "M562_sha256": "7a1027554792cfc3bc9b2bb94b5c1fd4e82eca9defba466c12e6a04e321b5f15",
+    "matches_M562_raw": false,
+    "matches_M562_normalized": false
+  },
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_context.c": {
+    "sha256": "d426b8b2f0aac3c2cac7672093915b29d40009c5519f56d5c528239a00353e9b",
+    "normalized_sha256": "d426b8b2f0aac3c2cac7672093915b29d40009c5519f56d5c528239a00353e9b",
+    "M562_sha256": "d426b8b2f0aac3c2cac7672093915b29d40009c5519f56d5c528239a00353e9b",
+    "matches_M562_raw": true,
+    "matches_M562_normalized": true
+  },
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_descriptors.c": {
+    "sha256": "80f54a81bc3c2f7afba768775308c42d00e7a43aaca5375de667a7aafa61e4f4",
+    "normalized_sha256": "80f54a81bc3c2f7afba768775308c42d00e7a43aaca5375de667a7aafa61e4f4",
+    "M562_sha256": "80f54a81bc3c2f7afba768775308c42d00e7a43aaca5375de667a7aafa61e4f4",
+    "matches_M562_raw": true,
+    "matches_M562_normalized": true
+  },
+  "scratch/m13-native-zink-src/src/gallium/drivers/zink/zink_resource.h": {
+    "sha256": "2db1679653b3d84b6a989246378217b2e944052e9a4c8c816668afafd2677d48",
+    "normalized_sha256": "2db1679653b3d84b6a989246378217b2e944052e9a4c8c816668afafd2677d48",
+    "M562_sha256": "2db1679653b3d84b6a989246378217b2e944052e9a4c8c816668afafd2677d48",
+    "matches_M562_raw": true,
+    "matches_M562_normalized": true
+  },
+  "scratch/m13-native-zink-src/src/gallium/auxiliary/util/u_upload_mgr.c": {
+    "sha256": "ff713a582d712eeb621675ac85a367d4e8ff6852ca332325a67a0f247ed5061d",
+    "normalized_sha256": "31e9544a8ba017d58449f12dc0a8e829ca03c672503874c3c52276c78423b582",
+    "M562_sha256": "ff713a582d712eeb621675ac85a367d4e8ff6852ca332325a67a0f247ed5061d",
+    "matches_M562_raw": true,
+    "matches_M562_normalized": false
+  },
+  "scratch/m13-native-zink-src/src/gallium/frontends/d3d10umd/DxgiFns.cpp": {
+    "sha256": "b20de5ec3aaffe307557fcfb16744d99fb243d81d92a6e7c34b3f3c4952aa0ed",
+    "normalized_sha256": "b20de5ec3aaffe307557fcfb16744d99fb243d81d92a6e7c34b3f3c4952aa0ed",
+    "M562_sha256": "649dc715b5901de0f7d3c577216a5fd6c4690024d73aa298090364782fde8c52",
+    "matches_M562_raw": false,
+    "matches_M562_normalized": false
+  },
+  "scratch/m12/mesa-current-src/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c": {
+    "sha256": "edb50ec0d3a5783a4d2c22076740c4108132643f19a2a7e399a212ace10f100b",
+    "normalized_sha256": "edb50ec0d3a5783a4d2c22076740c4108132643f19a2a7e399a212ace10f100b",
+    "M562_sha256": "edb50ec0d3a5783a4d2c22076740c4108132643f19a2a7e399a212ace10f100b",
+    "matches_M562_raw": true,
+    "matches_M562_normalized": true
+  },
+  "bc250-win/driver/kmd/wddm.c": {
+    "sha256": "6a59fe0bcc1e50f72e13ff8ee965f7d5e47c2ef11bed8bce12366a5d7aebc284",
+    "normalized_sha256": "7030fe76bfd26148cd9ce05e26944429afd7490ea2679d4d0139ab043e954dad",
+    "M562_sha256": "6a59fe0bcc1e50f72e13ff8ee965f7d5e47c2ef11bed8bce12366a5d7aebc284",
+    "matches_M562_raw": true,
+    "matches_M562_normalized": false
+  }
+}
