@@ -1,0 +1,43 @@
+boot 2026-09-26T18:44:31.5000000+02:00
+start 2026-09-27T02:32:48.2643695+02:00
+7B77ED5C 23040 d3d12.dll
+90B1DAD6 3440640 d3d12core.dll
+2E674A56 847872 dxgi.dll
+30F69C05 143872 fl-probe.exe
+registered 93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D 24253952
+A-default temperature_before=67.8
+A-default env=
+A-default exit=0 icd_in_registered_path=93B1D1FD
+A-default description="AMD BC-250 (RADV GFX1013)"
+A-default max_feature_level="11_1"
+A-default tiled_resources_tier=0
+A-default resource_binding_tier=3
+A-default conservative_rasterization_tier=3
+A-default rovs_supported=true
+A-default typed_uav_load_additional_formats=true
+A-default highest_shader_model="0x68"
+A-default raytracing_tier=11
+A-default mesh_shader_tier=0
+A-default variable_shading_rate_tier=0
+A-default devices_created=1
+B-sparse temperature_before=67.9
+B-sparse env=RADV_EXPERIMENTAL=sparse
+B-sparse exit=0 icd_in_registered_path=93B1D1FD
+B-sparse description="AMD BC-250 (RADV GFX1013)"
+B-sparse max_feature_level="12_1"
+B-sparse tiled_resources_tier=4
+B-sparse resource_binding_tier=3
+B-sparse conservative_rasterization_tier=3
+B-sparse rovs_supported=true
+B-sparse typed_uav_load_additional_formats=true
+B-sparse highest_shader_model="0x68"
+B-sparse raytracing_tier=11
+B-sparse mesh_shader_tier=0
+B-sparse variable_shading_rate_tier=0
+B-sparse devices_created=1
+final_registered=93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D
+temperature_after=68
+dwm=8008
+probe_procs=
+end 2026-09-27T02:32:49.5874748+02:00
+probe_exit=0
