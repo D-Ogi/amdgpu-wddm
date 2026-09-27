@@ -4361,16 +4361,41 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
             !Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
                 pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferVirtualAddress,
                 pSubmitCommand->DmaBufferSize)) {
-            if (wddm) InterlockedIncrement64(&wddm->GpuPresentSubmitRejected);
+            LONG64 rejected = wddm ? InterlockedIncrement64(&wddm->GpuPresentSubmitRejected) : 0;
+            // DWM026 built valid-looking IB spans but failed admission. Keep the
+            // original checks; expose every input before changing any contract.
+            if (rejected > 0 && rejected <= 16 && KeGetCurrentIrql() <= DISPATCH_LEVEL) {
+                ULONG words[BC250_GFX_PRESENT_RECORD_BYTES / sizeof(ULONG)] = {0};
+                if (pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(words))
+                    RtlCopyMemory(words, pSubmitCommand->pDmaBufferPrivateData, sizeof(words));
+                GuardLog("wddm: GPU Present reject%lld ctx%p fence%llu node%u irql%u",
+                    rejected, (void*)context, pSubmitCommand->SubmissionFenceId,
+                    node, (UINT)KeGetCurrentIrql());
+                GuardLog("wddm: GPU Present reject%lld gate%u umd%u root%llX private%u umdprivate%u",
+                    rejected, (UINT)wddm->GpuPresentGate, context ? (UINT)context->UmdContext : 0,
+                    context ? context->RootPhysical : 0,
+                    pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferUmdPrivateDataSize);
+                GuardLog("wddm: GPU Present reject%lld va%llX bytes%u match%u",
+                    rejected, pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize,
+                    (UINT)Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
+                        pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferVirtualAddress,
+                        pSubmitCommand->DmaBufferSize));
+                GuardLog("wddm: GPU Present reject%lld words %08X %08X %08X %08X %08X %08X",
+                    rejected, words[0], words[1], words[2], words[3], words[4], words[5]);
+            }
             return STATUS_INVALID_PARAMETER;
         }
         if (GfxSubmitReady(device) && WddmSubmitHardware(device,wddm,context,
                 pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
                 pSubmitCommand->SubmissionFenceId,node)) {
             if (InterlockedIncrement64(&wddm->GpuPresentSubmits)<=16)
+            {
                 GuardLog("wddm: GPU Present submit ctx%p fence%llu va%llX bytes%u",
                     (void*)context,pSubmitCommand->SubmissionFenceId,
                     pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize);
+                GuardLog("wddm: GPU Present submitted ctx%p fence%llu root%llX node%u",
+                    (void*)context,pSubmitCommand->SubmissionFenceId,context->RootPhysical,node);
+            }
             return STATUS_SUCCESS;
         }
         InterlockedIncrement64(&wddm->GpuPresentSubmitFailed);
