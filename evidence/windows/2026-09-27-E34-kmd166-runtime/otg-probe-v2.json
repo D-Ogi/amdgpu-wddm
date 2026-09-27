@@ -1,0 +1,34 @@
+{
+  "scope": "CPU baseline OTG read positive control, no GPU desktop claim",
+  "utc": "2026-09-27T21:01:06.2369918Z",
+  "samples": [
+    {
+      "lock": "00000000",
+      "frame": 120526,
+      "sync": "00101104",
+      "begin": 19986811682,
+      "end": 19986811682,
+      "position": "043F0012",
+      "control": "80011311"
+    },
+    {
+      "lock": "00000000",
+      "frame": 120553,
+      "sync": "00101104",
+      "begin": 19991315740,
+      "end": 19991315740,
+      "position": "023B0038",
+      "control": "80011311"
+    },
+    {
+      "lock": "00000000",
+      "frame": 120573,
+      "sync": "00101104",
+      "begin": 19994738483,
+      "end": 19994738483,
+      "position": "0195028A",
+      "control": "80011311"
+    }
+  ],
+  "pass": true
+}

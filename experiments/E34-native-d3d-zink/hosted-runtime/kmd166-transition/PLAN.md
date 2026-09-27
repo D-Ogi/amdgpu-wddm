@@ -18,4 +18,5 @@ is a failed diagnostic control, not permission to infer stopped hardware.
 Run matched native GPU copy/residency control separately before any desktop trial.
 Close original processes, archive receipts and remove only terminal tasks.
 
-Result: not run. Source/build gates are not runtime evidence.
+Result: M694 records successful deployment, corrected probe-otg-v2.ps1 and native013.
+The original probe selected stale first records and is retained for provenance; use v2.
