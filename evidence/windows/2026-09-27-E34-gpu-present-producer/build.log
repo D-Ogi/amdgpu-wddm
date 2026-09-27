@@ -1,0 +1,50 @@
+compile
+source capture: 8f66f9c5ffc9fde6d06a641e931315c01cf57f1a clean=True
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+kmd-commands PASS 0.67s
+kmd-contract PASS 0.38s
+radv-contract PASS 0.25s
+umd-contract PASS 0.24s
+blit-plan PASS 0.9s
+gfx-copy PASS 0.89s
+gfx-blt PASS 0.92s
+blob-abi PASS 0.97s
+surface-control PASS 0.23s
+kmd-analysis PASS 0.61s
+umd-analysis PASS 3.48s
+  Generowanie kodu...
+  Trwa kompilowanie...
+  Generowanie kodu...
+  Generowanie kodu...
+  Generowanie kodu...
+link
+stack budget
+bc250kmd.sys: 581 functions with unwind data, largest fixed frame 3992 bytes
+  warn    3992 bytes  rva 0x01C0D0  GfxPagingBuildUpdate
+  warn    2248 bytes  rva 0x01AC90  GfxPagingBuildAperture
+  warn    2120 bytes  rva 0x036A20  VidMmCommitPagingAperture
+  warn    1240 bytes  rva 0x044D70  WddmSubmitUmdImpl
+catalog
+  ........................
+  Signability test complete.
+  Errors:
+  None
+  Warnings:
+  None
+  Catalog generation complete.
+  P:\bc-250\scratch\g0-hosted\gpu-present-main-build001\package\bc250kmd.cat
+sign
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\gpu-present-main-build001\package\bc250kmd.sys
+  Done Adding Additional Store
+  Successfully signed: P:\bc-250\scratch\g0-hosted\gpu-present-main-build001\package\bc250kmd.cat
+      792  bc250-lab-test.cer
+     2407  bc250kmd.cat
+     7544  bc250kmd.inf
+   406416  bc250kmd.sys
+  FB57329568630D41389F1E7688BD4C2C8C3A362C775387B602879942CC02FC18  package\bc250kmd.sys
+source/artifact manifest written; source eligible=True
