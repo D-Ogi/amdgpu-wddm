@@ -1,0 +1,180 @@
+From c34ab7cd1b4d45cd36111ffa625b72cf8cf6f649 Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 01:53:07 +0200
+Subject: [PATCH 2/2] vk_dxgi: enumerate WDDM adapters through
+ D3DKMTEnumAdapters2, not DXGI
+
+An ICD should not create a DXGI factory while it enumerates physical
+devices. A process that carries its own dxgi.dll (DXVK, vkd3d-proton,
+capture layers) creates its Vulkan instance from inside that module while
+holding its own locks; if the ICD's adapter lookup reaches the same module,
+the thread re-enters it. The port hit exactly this with the bare-name
+LoadLibraryA("DXGI.DLL") lookup (M496, E33 system-dxgi; E37 run 004
+minidump of the pre-M496 baseline: main thread in DXVK's CreateDXGIFactory2
+called from vk_dxgi_adapter_foreach, waiting in RtlAcquireSRWLockExclusive
+on DXVK's instance singleton lock). M496 moved the lookup to the full
+System32 path, which avoided the re-entry in the measured runs; it still
+leaves the ICD dependent on DXGI's own initialisation inside a foreign
+process at instance creation time.
+
+Enumerate through the D3DKMT thunks instead: EnumAdapters2 gives every WDDM
+adapter with its LUID, QueryAdapterInfo supplies the type, PCI ids, segment
+sizes and description that DXGI_ADAPTER_DESC1 carried. No COM, no DXGI, no
+user-mode module load. Software adapters are skipped by their type; WARP is
+not a WDDM adapter and never appears. The physical adapter index is 0 (no
+linked adapters). The callback's adapter pointer is NULL; radv never used it.
+
+vk_dxgi_find_adapter and vk_dxgi_create_d3d12_device still use DXGI and
+D3D12 by System32 path for the WSI interop path; they are not reached
+during enumeration and are left for a separate change.
+---
+ src/vulkan/runtime/vk_dxgi.cpp | 120 ++++++++++++++++++++++++---------
+ 1 file changed, 90 insertions(+), 30 deletions(-)
+
+diff --git a/src/vulkan/runtime/vk_dxgi.cpp b/src/vulkan/runtime/vk_dxgi.cpp
+index 058e6a75..1ca1fea4 100644
+--- a/src/vulkan/runtime/vk_dxgi.cpp
++++ b/src/vulkan/runtime/vk_dxgi.cpp
+@@ -26,6 +26,9 @@
+ #include <windows.h>
+ #include <dxgi1_4.h>
+ #include "util/u_win32_library.h"
++#include "vk_wddm2_dispatch_table.h"
++#include <d3dkmthk.h>
++#include <stdlib.h>
+ #include <directx/d3d12.h>
+ 
+ static IDXGIFactory4 *
+@@ -57,42 +60,99 @@ vk_dxgi_get_factory(bool debug)
+    return factory;
+ }
+ 
++/* Adapter enumeration goes through the D3DKMT thunks, not through DXGI.
++ *
++ * An ICD must not call CreateDXGIFactory while it enumerates physical
++ * devices: a process that carries its own dxgi.dll (DXVK, vkd3d-proton, a
++ * capture layer) has that module registered under the name "dxgi.dll", and
++ * LoadLibrary returns the loaded module for any path with that base name. The
++ * ICD then re-enters the translation layer that is creating a Vulkan instance
++ * at this very moment. With DXVK's DXGI this is a self-deadlock on its
++ * instance singleton lock (E37, run 004 minidump). D3DKMTEnumAdapters2 lists
++ * every WDDM adapter with its LUID, needs no COM and never loads a user-mode
++ * module; the queries below mirror what DXGI_ADAPTER_DESC1 carried.
++ *
++ * WARP is not a WDDM adapter, so is_warp stays false here; software devices
++ * that the kernel does know are skipped by their adapter type.
++ */
++static NTSTATUS
++vk_kmt_query_adapter(D3DKMT_HANDLE adapter, KMTQUERYADAPTERINFOTYPE type, void *data, UINT size)
++{
++   D3DKMT_QUERYADAPTERINFO query = {};
++   query.hAdapter = adapter;
++   query.Type = type;
++   query.pPrivateDriverData = data;
++   query.PrivateDriverDataSize = size;
++   return WDDM2_DISPATCH(QueryAdapterInfo(&query));
++}
++
+ VkResult
+ vk_dxgi_adapter_foreach(vk_dxgi_adapter_cb func, void *user_data)
+-{   IDXGIFactory4 *factory = vk_dxgi_get_factory(false);
+-   if (!factory)
++{
++   D3DKMT_ENUMADAPTERS2 enum_adapters = {};
++   NTSTATUS status = WDDM2_DISPATCH(EnumAdapters2(&enum_adapters));
++   if (!NT_SUCCESS(status) || !enum_adapters.NumAdapters)
+       return VK_ERROR_INITIALIZATION_FAILED;
+ 
+-   IDXGIAdapter1 *adapter = NULL;
+-   VkResult result = VK_SUCCESS;
+-
+-   for (UINT i = 0; SUCCEEDED(factory->EnumAdapters1(i, &adapter)); ++i) {
+-      DXGI_ADAPTER_DESC1 dxgi_desc;
+-      adapter->GetDesc1(&dxgi_desc);
+-
+-      struct vk_dx_adapter_info info = {};
+-      info.physical_adapter_index = i;
+-      info.adapter_luid = dxgi_desc.AdapterLuid;
+-      info.vendor_id = dxgi_desc.VendorId;
+-      info.device_id = dxgi_desc.DeviceId;
+-      info.subsys_id = dxgi_desc.SubSysId;
+-      info.revision = dxgi_desc.Revision;
+-      info.shared_system_memory = dxgi_desc.SharedSystemMemory;
+-      info.dedicated_system_memory = dxgi_desc.DedicatedSystemMemory;
+-      info.dedicated_video_memory = dxgi_desc.DedicatedVideoMemory;
+-      info.is_warp = (dxgi_desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
+-      WideCharToMultiByte(CP_ACP, 0, dxgi_desc.Description,
+-                          ARRAYSIZE(dxgi_desc.Description),
+-                          info.description, sizeof(info.description), NULL, NULL);
+-
+-      result = func(&info, (void *)adapter, user_data);
+-      adapter->Release();
+-
+-      if (result != VK_SUCCESS)
+-         break;
++   D3DKMT_ADAPTERINFO *adapters =
++      (D3DKMT_ADAPTERINFO *)calloc(enum_adapters.NumAdapters, sizeof(*adapters));
++   if (!adapters)
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
++   enum_adapters.pAdapters = adapters;
++   status = WDDM2_DISPATCH(EnumAdapters2(&enum_adapters));
++   if (!NT_SUCCESS(status)) {
++      free(adapters);
++      return VK_ERROR_INITIALIZATION_FAILED;
+    }
+ 
+-   factory->Release();
++   VkResult result = VK_SUCCESS;
++   for (ULONG i = 0; i < enum_adapters.NumAdapters; i++) {
++      D3DKMT_HANDLE handle = adapters[i].hAdapter;
++      if (result == VK_SUCCESS) {
++         struct vk_dx_adapter_info info = {};
++         D3DKMT_ADAPTERTYPE type = {};
++         D3DKMT_QUERY_DEVICE_IDS ids = {};
++         D3DKMT_SEGMENTSIZEINFO segments = {};
++         D3DKMT_ADAPTERREGISTRYINFO registry = {};
++
++         info.adapter_luid = adapters[i].AdapterLuid;
++         /* One physical adapter per LUID; linked adapters are not supported. */
++         info.physical_adapter_index = 0;
++
++         bool usable = true;
++         if (NT_SUCCESS(vk_kmt_query_adapter(handle, KMTQAITYPE_ADAPTERTYPE, &type, sizeof(type))))
++            usable = type.RenderSupported && !type.SoftwareDevice;
++
++         ids.PhysicalAdapterIndex = 0;
++         if (usable &&
++             NT_SUCCESS(vk_kmt_query_adapter(handle, KMTQAITYPE_PHYSICALADAPTERDEVICEIDS, &ids, sizeof(ids)))) {
++            info.vendor_id = ids.DeviceIds.VendorID;
++            info.device_id = ids.DeviceIds.DeviceID;
++            info.subsys_id = ids.DeviceIds.SubSystemID;
++            info.revision = ids.DeviceIds.RevisionID;
++         } else {
++            usable = false;
++         }
++
++         if (usable) {
++            if (NT_SUCCESS(vk_kmt_query_adapter(handle, KMTQAITYPE_GETSEGMENTSIZE, &segments, sizeof(segments)))) {
++               info.dedicated_video_memory = segments.DedicatedVideoMemorySize;
++               info.dedicated_system_memory = segments.DedicatedSystemMemorySize;
++               info.shared_system_memory = segments.SharedSystemMemorySize;
++            }
++            if (NT_SUCCESS(vk_kmt_query_adapter(handle, KMTQAITYPE_ADAPTERREGISTRYINFO, &registry, sizeof(registry)))) {
++               WideCharToMultiByte(CP_ACP, 0, registry.AdapterString, -1,
++                                   info.description, sizeof(info.description), NULL, NULL);
++               info.description[sizeof(info.description) - 1] = '\0';
++            }
++            result = func(&info, NULL, user_data);
++         }
++      }
++      D3DKMT_CLOSEADAPTER close_adapter = {};
++      close_adapter.hAdapter = handle;
++      WDDM2_DISPATCH(CloseAdapter(&close_adapter));
++   }
++   free(adapters);
+    return result;
+ }
+ 
+-- 
+2.27.0.windows.1
+

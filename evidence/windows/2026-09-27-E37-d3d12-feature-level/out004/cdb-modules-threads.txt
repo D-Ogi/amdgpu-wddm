@@ -1,0 +1,351 @@
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+
+************* Preparing the environment for Debugger Extensions Gallery repositories **************
+   ExtensionRepository : Implicit
+   UseExperimentalFeatureForNugetShare : true
+   AllowNugetExeUpdate : true
+   NonInteractiveNuget : true
+   AllowNugetMSCredentialProviderInstall : true
+   AllowParallelInitializationOfLocalRepositories : true
+
+   -- Configuring repositories
+      ----> Repository : LocalInstalled, Enabled: true
+      ----> Repository : UserExtensions, Enabled: true
+
+>>>>>>>>>>>>> Preparing the environment for Debugger Extensions Gallery repositories completed, duration 0.000 seconds
+
+************* Waiting for Debugger Extensions Gallery to Initialize **************
+
+>>>>>>>>>>>>> Waiting for Debugger Extensions Gallery to Initialize completed, duration 0.015 seconds
+   ----> Repository : UserExtensions, Enabled: true, Packages count: 0
+   ----> Repository : LocalInstalled, Enabled: true, Packages count: 46
+
+Microsoft (R) Windows Debugger Version 10.0.29617.1000 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+
+Loading Dump File [P:\BC-250\scratch\fl-probe-2026-09-27\A004.dmp]
+User Mini Dump File: Only registers, stack and portions of memory are available
+
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+Symbol search path is: srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+Executable search path is: 
+Windows 10 Version 22631 MP (12 procs) Free x64
+Product: WinNt, suite: SingleUserTS
+Edition build lab: 22621.1.amd64fre.ni_release.220506-1250
+Debug session time: Sun Sep 27 01:43:16.000 2026 (UTC + 2:00)
+System Uptime: not available
+Process Uptime: 0 days 0:00:31.000
+.................................
+ReadVirtual() failed in GetXStateConfiguration() first read attempt (error == 0.)
+Invalid mini-dump Miscellaneous information in InitializeConfiguration()
+For analysis of this file, run !analyze -v
+ntdll!NtWaitForAlertByThreadId+0x14:
+00007fff`10eb49f4 c3              ret
+0:000> cdb: Reading initial command '.dumpdebug; lm; ~*kb 30; q'
+----- User Mini Dump Analysis
+
+MINIDUMP_HEADER:
+Version         A793 (A05D)
+NumberOfStreams 11
+Flags           00000000
+                0000 MiniDumpNormal
+
+Streams:
+Stream 0: type ThreadListStream (3), size 00000124, RVA 00000630
+  6 threads
+  RVA 00000634, ID FB4, Teb:000000853E263000
+  RVA 00000664, ID 1084, Teb:000000853E265000
+  RVA 00000694, ID 1E30, Teb:000000853E267000
+  RVA 000006C4, ID 1214, Teb:000000853E269000
+  RVA 000006F4, ID 23F8, Teb:000000853E26B000
+  RVA 00000724, ID 6A0, Teb:000000853E26D000
+Stream 1: type ModuleListStream (4), size 00000DF0, RVA 00000760
+  33 modules
+  RVA 00000764, 00007ff7`5fe60000 - 00007ff7`5fe88000: 'C:\BC250\m12\fl-probe001\fl-probe.exe', DllCharacteristics: 8160, Timestamp: 6ab85365, CheckSum: 0
+  RVA 000007D0, 00007fff`10e10000 - 00007fff`11028000: 'C:\Windows\System32\ntdll.dll', DllCharacteristics: 4160, Timestamp: ac55daa3, CheckSum: 2243e1
+  RVA 0000083C, 00007fff`0ee70000 - 00007fff`0ef34000: 'C:\Windows\System32\kernel32.dll', DllCharacteristics: 4160, Timestamp: e4caca22, CheckSum: ce524
+  RVA 000008A8, 00007fff`0e4f0000 - 00007fff`0e8c3000: 'C:\Windows\System32\KERNELBASE.dll', DllCharacteristics: 4160, Timestamp: 5dcc5c14, CheckSum: 3e4356
+  RVA 00000914, 00007ffe`ddb30000 - 00007ffe`ddc02000: 'C:\BC250\m12\fl-probe001\dxgi.dll', DllCharacteristics: 160, Timestamp: 6ab6ba0e, CheckSum: dc842
+  RVA 00000980, 00007fff`0cf20000 - 00007fff`0cf2a000: 'C:\BC250\m12\fl-probe001\d3d12.dll', DllCharacteristics: 160, Timestamp: 6ab6bbb8, CheckSum: 6d04
+  RVA 000009EC, 00007fff`10830000 - 00007fff`10ca4000: 'C:\Windows\System32\setupapi.dll', DllCharacteristics: 4160, Timestamp: a28394ab, CheckSum: 47f710
+  RVA 00000A58, 00007fff`0e3d0000 - 00007fff`0e4e1000: 'C:\Windows\System32\ucrtbase.dll', DllCharacteristics: 4160, Timestamp: 10c46e71, CheckSum: 117e0c
+  RVA 00000AC4, 00007fff`0eb30000 - 00007fff`0ebd7000: 'C:\Windows\System32\msvcrt.dll', DllCharacteristics: 4160, Timestamp: 657b2709, CheckSum: b47d5
+  RVA 00000B30, 00007fff`10280000 - 00007fff`10432000: 'C:\Windows\System32\user32.dll', DllCharacteristics: 4160, Timestamp: fb78ab8e, CheckSum: 1bb261
+  RVA 00000B9C, 00007fff`0a790000 - 00007fff`0a79a000: 'C:\Windows\System32\version.dll', DllCharacteristics: 4160, Timestamp: 90a1b58a, CheckSum: 1a2f1
+  RVA 00000C08, 00007fff`0e3a0000 - 00007fff`0e3c6000: 'C:\Windows\System32\win32u.dll', DllCharacteristics: 4160, Timestamp: b9672e49, CheckSum: 28fce
+  RVA 00000C74, 00007fff`050a0000 - 00007fff`050cc000: 'C:\Windows\System32\VCRUNTIME140.dll', DllCharacteristics: 4160, Timestamp: c35ddc74, CheckSum: 3a467
+  RVA 00000CE0, 00007fff`0efd0000 - 00007fff`0eff9000: 'C:\Windows\System32\gdi32.dll', DllCharacteristics: 4160, Timestamp: 826ecf8e, CheckSum: 2bbcb
+  RVA 00000D4C, 00007fff`0df20000 - 00007fff`0e03b000: 'C:\Windows\System32\gdi32full.dll', DllCharacteristics: 4160, Timestamp: 247892e7, CheckSum: 11fba2
+  RVA 00000DB8, 00007fff`0e8d0000 - 00007fff`0e96a000: 'C:\Windows\System32\msvcp_win.dll', DllCharacteristics: 4160, Timestamp: 8e0806c9, CheckSum: 9ce46
+  RVA 00000E24, 00007fff`0eca0000 - 00007fff`0ed51000: 'C:\Windows\System32\advapi32.dll', DllCharacteristics: 4160, Timestamp: 2523d084, CheckSum: b7a84
+  RVA 00000E90, 00007fff`10600000 - 00007fff`106a8000: 'C:\Windows\System32\sechost.dll', DllCharacteristics: 4160, Timestamp: 3de51b78, CheckSum: b38c0
+  RVA 00000EFC, 00007fff`0e230000 - 00007fff`0e258000: 'C:\Windows\System32\bcrypt.dll', DllCharacteristics: 41e0, Timestamp: 3056f80e, CheckSum: 2db0c
+  RVA 00000F68, 00007fff`10cb0000 - 00007fff`10dc8000: 'C:\Windows\System32\rpcrt4.dll', DllCharacteristics: 4160, Timestamp: 130b1708, CheckSum: 1206a0
+  RVA 00000FD4, 00007fff`0a7f0000 - 00007fff`0a827000: 'C:\Windows\System32\DXCore.dll', DllCharacteristics: 4160, Timestamp: ca535bd, CheckSum: 41545
+  RVA 00001040, 00007fff`10240000 - 00007fff`10271000: 'C:\Windows\System32\imm32.dll', DllCharacteristics: 4160, Timestamp: fa580f06, CheckSum: 3f1d1
+  RVA 000010AC, 00007ffe`7e210000 - 00007ffe`7e3b8000: 'C:\Windows\System32\vulkan-1.dll', DllCharacteristics: 4160, Timestamp: 69370578, CheckSum: 1b1da5
+  RVA 00001118, 00007fff`0db60000 - 00007fff`0dbae000: 'C:\Windows\System32\cfgmgr32.dll', DllCharacteristics: 4160, Timestamp: b33d799, CheckSum: 5f720
+  RVA 00001184, 00007fff`0a830000 - 00007fff`0a927000: 'C:\Windows\System32\dxgi.dll', DllCharacteristics: 4160, Timestamp: 675ea67f, CheckSum: 10223a
+  RVA 000011F0, 00007ffe`fd8c0000 - 00007ffe`fd8da000: 'C:\Windows\System32\windows.staterepositorycore.dll', DllCharacteristics: 4160, Timestamp: b32f12b1, CheckSum: 292eb
+  RVA 0000125C, 00007fff`057d0000 - 00007fff`05819000: 'C:\Windows\System32\directxdatabasehelper.dll', DllCharacteristics: 4160, Timestamp: 3fedc0d4, CheckSum: 4ca23
+  RVA 000012C8, 00007fff`0c030000 - 00007fff`0c048000: 'C:\Windows\System32\kernel.appcore.dll', DllCharacteristics: 4160, Timestamp: 998d6161, CheckSum: 24007
+  RVA 00001334, 00007ffe`7cad0000 - 00007ffe`7e210000: 'C:\BC250\m10\wsi-final\vulkan_radeon.dll', DllCharacteristics: 160, Timestamp: 6ab60c46, CheckSum: 1732e43
+  RVA 000013A0, 00007fff`0cd50000 - 00007fff`0cd5c000: 'C:\Windows\System32\VCRUNTIME140_1.dll', DllCharacteristics: 4160, Timestamp: dc08a728, CheckSum: 1354b
+  RVA 0000140C, 00007fff`0a960000 - 00007fff`0a98b000: 'C:\Windows\System32\dwmapi.dll', DllCharacteristics: 4160, Timestamp: 674bec05, CheckSum: 2c37b
+  RVA 00001478, 00007fff`0f910000 - 00007fff`0fca1000: 'C:\Windows\System32\combase.dll', DllCharacteristics: 4160, Timestamp: a2a181f8, CheckSum: 39768b
+  RVA 000014E4, 00007ffe`fa5b0000 - 00007ffe`fa64d000: 'C:\Windows\System32\msvcp140.dll', DllCharacteristics: 4160, Timestamp: 38eb906f, CheckSum: a2e73
+Stream 2: type MemoryListStream (5), size 00000074, RVA 000043DE
+  7 memory ranges
+  range#    RVA      Address             Size
+       0 00004452    00000085`3e5ff478   00000000`00000b88
+       1 00004FDA    00000085`3e7ffb28   00000000`000004d8
+       2 000054B2    00000085`3e13d288   00000000`00002d78
+       3 0000822A    00000085`3e4ff948   00000000`000006b8
+       4 000088E2    00000085`3e6ff768   00000000`00000898
+       5 0000917A    00000085`3e8ffa18   00000000`000005e8
+       6 00009762    00007fff`10eb4974   00000000`00000160
+  Total memory: 5470
+Stream 3: type SystemInfoStream (7), size 00000038, RVA 000000A4
+  ProcessorArchitecture   0009 (PROCESSOR_ARCHITECTURE_AMD64)
+  ProcessorLevel          0017
+  ProcessorRevision       4700
+  NumberOfProcessors      0C
+  MajorVersion            0000000A
+  MinorVersion            00000000
+  BuildNumber             00005867 (22631)
+  PlatformId              00000002 (VER_PLATFORM_WIN32_NT)
+  CSDVersionRva           000017D4
+                            Length: 0
+  Product: WinNt, suite: SingleUserTS
+Stream 4: type MiscInfoStream (15), size 00000554, RVA 000000DC
+Stream 5: type SystemMemoryInfoStream (21), size 000001EC, RVA 00001550
+  Revision                                  :                                1
+  Flags                                     :                              0xf
+  BasicInfo
+    TimerResolution                         :                          156,250
+    PageSize                                :                           0x1000
+    NumberOfPhysicalPages                   :                        2,025,401
+    LowestPhysicalPageNumber                :                              0x1
+    HighestPhysicalPageNumber               :                         0x26ffff
+    AllocationGranularity                   :                          0x10000
+    MinimumUserModeAddress                  :                          0x10000
+    MaximumUserModeAddress                  :                   0x7ffffffeffff
+    ActiveProcessorsAffinityMask            :                            0xfff
+    NumberOfProcessors                      :                               12
+  FileCacheInfo
+    CurrentSize                             :                      181,714,944
+    PeakSize                                :                      306,454,528
+    PageFaultCount                          :                       51,835,389
+    MinimumWorkingSet                       :                            0x100
+    MaximumWorkingSet                       :                      0x100000000
+    CurrentSizeIncludingTransitionInPages   :                        1,109,998
+    PeakSizeIncludingTransitionInPages      :                        1,135,538
+    TransitionRePurposeCount                :                       10,622,457
+    Flags                                   :                                0
+  BasicPerfInfo
+    AvailablePages                          :                        1,069,112
+    CommittedPages                          :                        1,307,611
+    CommitLimit                             :                       10,414,009
+    PeakCommitment                          :                        3,233,035
+  PerfInfo
+    IdleProcessTime                         :                2,890,111,562,500
+    IoReadTransferCount                     :                  269,155,827,997
+    IoWriteTransferCount                    :                   41,312,618,986
+    IoOtherTransferCount                    :                   24,377,679,523
+    IoReadOperationCount                    :                       15,420,355
+    IoWriteOperationCount                   :                        2,739,525
+    IoOtherOperationCount                   :                       34,783,700
+    AvailablePages                          :                        1,069,112
+    CommittedPages                          :                        1,307,611
+    CommitLimit                             :                       10,414,009
+    PeakCommitment                          :                        3,233,035
+    CommitLimit                             :                       10,414,009
+    PageFaultCount                          :                      202,216,098
+    CopyOnWriteCount                        :                        5,493,953
+    TransitionCount                         :                       67,665,560
+    CacheTransitionCount                    :                                0
+    DemandZeroCount                         :                       85,875,448
+    PageReadCount                           :                        5,543,707
+    PageReadIoCount                         :                          600,627
+    CacheReadCount                          :                                0
+    CacheIoCount                            :                                0
+    DirtyPagesWriteCount                    :                          135,388
+    DirtyWriteIoCount                       :                              739
+    MappedPagesWriteCount                   :                           22,839
+    MappedWriteIoCount                      :                              682
+    PagedPoolPages                          :                           69,976
+    NonPagedPoolPages                       :                           86,273
+    PagedPoolAllocs                         :                                0
+    PagedPoolFrees                          :                                0
+    NonPagedPoolAllocs                      :                                0
+    NonPagedPoolFrees                       :                                0
+    FreeSystemPtes                          :                       10,695,203
+    ResidentSystemCodePage                  :                            4,175
+    TotalSystemDriverPages                  :                            4,692
+    TotalSystemCodePages                    :                                2
+    NonPagedPoolLookasideHits               :                                0
+    PagedPoolLookasideHits                  :                                0
+    AvailablePagedPoolPages                 :                        9,106,398
+    ResidentSystemCachePage                 :                           44,364
+    ResidentPagedPoolPage                   :                           63,924
+    ResidentSystemDriverPage                :                           10,195
+    CcFastReadNoWait                        :                                0
+    CcFastReadWait                          :                       13,813,139
+    CcFastReadResourceMiss                  :                                0
+    CcFastReadNotPossible                   :                            6,538
+    CcFastMdlReadNoWait                     :                                0
+    CcFastMdlReadWait                       :                                0
+    CcFastMdlReadResourceMiss               :                                0
+    CcFastMdlReadNotPossible                :                                0
+    CcMapDataNoWait                         :                                0
+    CcMapDataWait                           :                       18,528,250
+    CcMapDataNoWaitMiss                     :                                0
+    CcMapDataWaitMiss                       :                          113,677
+    CcPinMappedDataCount                    :                        1,004,027
+    CcPinReadNoWait                         :                              362
+    CcPinReadWait                           :                          991,345
+    CcPinReadNoWaitMiss                     :                          532,414
+    CcPinReadWaitMiss                       :                            8,223
+    CcCopyReadNoWait                        :                           19,867
+    CcCopyReadWait                          :                       15,220,927
+    CcCopyReadNoWaitMiss                    :                            3,005
+    CcCopyReadWaitMiss                      :                        1,028,516
+    CcMdlReadNoWait                         :                                0
+    CcMdlReadWait                           :                              941
+    CcMdlReadNoWaitMiss                     :                                0
+    CcMdlReadWaitMiss                       :                              443
+    CcReadAheadIos                          :                          406,015
+    CcLazyWriteIos                          :                           84,165
+    CcLazyWritePages                        :                        3,990,752
+    CcDataFlushes                           :                          189,284
+    CcDataPages                             :                       14,006,663
+    ContextSwitches                         :                      110,382,418
+    FirstLevelTbFills                       :                                0
+    SecondLevelTbFills                      :                                0
+    SystemCalls                             :                      810,441,726
+    CcTotalDirtyPages                       :                               68
+    CcDirtyPageThreshold                    :                          253,175
+    ResidentAvailablePages                  :                        1,817,564
+    SharedCommittedPages                    :                           96,552
+Stream 6: type ProcessVmCountersStream (22), size 00000098, RVA 0000173C
+  Revision                                  :                                2
+  Process Counters
+    PageFaultCount                          :                            2,476
+    PeakWorkingSetSize                      :                         0x905000
+    WorkingSetSize                          :                         0x905000
+    QuotaPeakPagedPoolUsage                 :                          0x2e9f0
+    QuotaPagedPoolUsage                     :                          0x2d9e0
+    QuotaPeakNonPagedPoolUsage              :                           0x2780
+    QuotaNonPagedPoolUsage                  :                           0x2700
+    PagefileUsage                           :                         0x294000
+    PeakPagefileUsage                       :                         0x294000
+    PeakVirtualSize                         :                      0x10797b000
+    VirtualSize                             :                      0x10797b000
+    PrivateUsage                            :                         0x294000
+    PrivateWorkingSetSize                   :                         0x1a6000
+    SharedCommitUsage                       :                         0x2ab000
+  Job Counters
+    JobSharedCommitUsage                    :                        0x14f1000
+    JobPrivateCommitUsage                   :                        0xa53d000
+    JobPeakPrivateCommitUsage               :                      0x1f039d000
+    JobPrivateCommitLimit                   :                                0
+    JobTotalCommitLimit                     :                                0
+Stream 7: type UnusedStream (0), size 00000000, RVA 00000000
+Stream 8: type UnusedStream (0), size 00000000, RVA 00000000
+Stream 9: type UnusedStream (0), size 00000000, RVA 00000000
+Stream 10: type UnusedStream (0), size 00000000, RVA 00000000
+start             end                 module name
+00007ff7`5fe60000 00007ff7`5fe88000   fl_probe   (deferred)             
+00007ffe`7cad0000 00007ffe`7e210000   vulkan_radeon   (deferred)             
+00007ffe`7e210000 00007ffe`7e3b8000   vulkan_1   (deferred)             
+00007ffe`ddb30000 00007ffe`ddc02000   dxgi       (deferred)             
+00007ffe`fa5b0000 00007ffe`fa64d000   msvcp140   (deferred)             
+00007ffe`fd8c0000 00007ffe`fd8da000   windows_staterepositorycore   (deferred)             
+00007fff`050a0000 00007fff`050cc000   VCRUNTIME140   (deferred)             
+00007fff`057d0000 00007fff`05819000   directxdatabasehelper   (deferred)             
+00007fff`0a790000 00007fff`0a79a000   version    (deferred)             
+00007fff`0a7f0000 00007fff`0a827000   DXCore     (deferred)             
+00007fff`0a830000 00007fff`0a927000   dxgi_7fff0a830000   (deferred)             
+00007fff`0a960000 00007fff`0a98b000   dwmapi     (deferred)             
+00007fff`0c030000 00007fff`0c048000   kernel_appcore   (deferred)             
+00007fff`0cd50000 00007fff`0cd5c000   VCRUNTIME140_1   (deferred)             
+00007fff`0cf20000 00007fff`0cf2a000   d3d12      (deferred)             
+00007fff`0db60000 00007fff`0dbae000   cfgmgr32   (deferred)             
+00007fff`0df20000 00007fff`0e03b000   gdi32full   (deferred)             
+00007fff`0e230000 00007fff`0e258000   bcrypt     (deferred)             
+00007fff`0e3a0000 00007fff`0e3c6000   win32u     (deferred)             
+00007fff`0e3d0000 00007fff`0e4e1000   ucrtbase   (deferred)             
+00007fff`0e4f0000 00007fff`0e8c3000   KERNELBASE   (deferred)             
+00007fff`0e8d0000 00007fff`0e96a000   msvcp_win   (deferred)             
+00007fff`0eb30000 00007fff`0ebd7000   msvcrt     (deferred)             
+00007fff`0eca0000 00007fff`0ed51000   advapi32   (deferred)             
+00007fff`0ee70000 00007fff`0ef34000   kernel32   (deferred)             
+00007fff`0efd0000 00007fff`0eff9000   gdi32      (deferred)             
+00007fff`0f910000 00007fff`0fca1000   combase    (deferred)             
+00007fff`10240000 00007fff`10271000   imm32      (deferred)             
+00007fff`10280000 00007fff`10432000   user32     (deferred)             
+00007fff`10600000 00007fff`106a8000   sechost    (deferred)             
+00007fff`10830000 00007fff`10ca4000   setupapi   (deferred)             
+00007fff`10cb0000 00007fff`10dc8000   rpcrt4     (deferred)             
+00007fff`10e10000 00007fff`11028000   ntdll    # (pdb symbols)          p:\bc-250\scratch\symbols\ntdll.pdb\9AE10B2525EE40A925B62FC4A181D6D11\ntdll.pdb
+
+.  0  Id: ec4.fb4 Suspend: 0 Teb: 00000085`3e263000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e47ea5     : 00000000`00000000 00000277`db0c03b0 00000085`3e13d1d8 00000000`00000000 : ntdll!NtWaitForAlertByThreadId+0x14
+*** WARNING: Unable to verify timestamp for dxgi.dll
+00007ffe`ddb493c2     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlAcquireSRWLockExclusive+0x165
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`f22cf66c : dxgi+0x193c2
+
+   1  Id: ec4.1084 Suspend: 0 Teb: 00000085`3e265000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e458ae     : 00000277`db0a7090 00000277`db0a7090 00000000`00000001 00000277`db0aa400 : ntdll!NtWaitForWorkViaWorkerFactory+0x14
+00007fff`0ee8259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!TppWorkerThread+0x2ee
+00007fff`10e6af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : kernel32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+
+   2  Id: ec4.1e30 Suspend: 0 Teb: 00000085`3e267000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e458ae     : 00000000`0001000a 00000277`db0a7001 00000000`00000001 00000277`db0a7090 : ntdll!NtWaitForWorkViaWorkerFactory+0x14
+00007fff`0ee8259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!TppWorkerThread+0x2ee
+00007fff`10e6af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : kernel32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+
+   3  Id: ec4.1214 Suspend: 0 Teb: 00000085`3e269000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e458ae     : 00000277`db0a7090 00000277`db0a7090 00000000`00000001 00000277`db0ac0b0 : ntdll!NtWaitForWorkViaWorkerFactory+0x14
+00007fff`0ee8259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!TppWorkerThread+0x2ee
+00007fff`10e6af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : kernel32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+
+   4  Id: ec4.23f8 Suspend: 0 Teb: 00000085`3e26b000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e458ae     : 00000277`db100830 00000277`db100830 00000000`00000001 00000277`db100830 : ntdll!NtWaitForWorkViaWorkerFactory+0x14
+00007fff`0ee8259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!TppWorkerThread+0x2ee
+00007fff`10e6af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : kernel32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+
+   5  Id: ec4.6a0 Suspend: 0 Teb: 00000085`3e26d000 Unfrozen
+RetAddr               : Args to Child                                                           : Call Site
+00007fff`10e458ae     : 00000277`00000000 00000277`db100830 00000000`00000000 00000000`00000000 : ntdll!NtWaitForWorkViaWorkerFactory+0x14
+00007fff`0ee8259d     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!TppWorkerThread+0x2ee
+00007fff`10e6af78     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : kernel32!BaseThreadInitThunk+0x1d
+00000000`00000000     : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x28
+quit:
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\ObjectiveC.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\stl.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\windows.natvis'
+NatVis script unloaded from 'P:\bc-250\toolchain\windbg\x64\amd64\Visualizers\winrt.natvis'
