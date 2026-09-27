@@ -1,0 +1,12 @@
+{
+  "audit_lines": 31450,
+  "checks": {
+    "mac": 0,
+    "uuid": 0,
+    "ipv4": 0,
+    "user_path": 0,
+    "ssid": 0,
+    "secret_word": 0
+  },
+  "scope": "Audit stream is process/resource pointers, counters, geometry and fence identifiers; pointer values are diagnostic lab data explicitly authorized by owner. Pattern checks are not an exhaustive privacy proof."
+}

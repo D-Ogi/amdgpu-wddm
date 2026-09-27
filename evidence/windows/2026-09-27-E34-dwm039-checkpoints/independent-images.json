@@ -1,0 +1,132 @@
+{
+  "scope": "Exact selected static regions and entire cyan client at acknowledged stationary/frozen states; not a full-desktop or live-animation oracle.",
+  "images": [
+    {
+      "image": "baseline.bmp",
+      "sha256": "e8d9b9adb1da1d1715a7a59c5676f99ed8b85e347c98652827088c05a7f19b95",
+      "regions": [
+        {
+          "name": "red",
+          "bounds": [
+            110,
+            180,
+            145,
+            220
+          ],
+          "pixels": 1400,
+          "mismatches": 0,
+          "rgb_sha256": "ddf9d50e329de3198fc1692c24eb6521e3fa9926c79c07ac55b38bdc3a7b10d5"
+        },
+        {
+          "name": "overlap",
+          "bounds": [
+            180,
+            170,
+            290,
+            230
+          ],
+          "pixels": 6600,
+          "mismatches": 0,
+          "rgb_sha256": "654f3e845da711da50854ccc086bef9e0224518d7d4b8e1e221422bf8a456841"
+        },
+        {
+          "name": "full_cyan",
+          "bounds": [
+            608,
+            151,
+            792,
+            252
+          ],
+          "pixels": 18584,
+          "mismatches": 0,
+          "rgb_sha256": "acde8d1aa3ce9ad11eda5174ecd370af00421ba0ec3040ca963efe71da06d951"
+        }
+      ]
+    },
+    {
+      "image": "gpu.bmp",
+      "sha256": "7b7469d07c45e6280a8cc03a7cc7e3f94d686acdd9e89de51f8a22880a2daeb1",
+      "regions": [
+        {
+          "name": "red",
+          "bounds": [
+            110,
+            180,
+            145,
+            220
+          ],
+          "pixels": 1400,
+          "mismatches": 0,
+          "rgb_sha256": "ddf9d50e329de3198fc1692c24eb6521e3fa9926c79c07ac55b38bdc3a7b10d5"
+        },
+        {
+          "name": "overlap",
+          "bounds": [
+            180,
+            170,
+            290,
+            230
+          ],
+          "pixels": 6600,
+          "mismatches": 0,
+          "rgb_sha256": "654f3e845da711da50854ccc086bef9e0224518d7d4b8e1e221422bf8a456841"
+        },
+        {
+          "name": "full_cyan",
+          "bounds": [
+            648,
+            181,
+            832,
+            314
+          ],
+          "pixels": 24472,
+          "mismatches": 0,
+          "rgb_sha256": "469a3696032ec3fb78abf82144eff58b562ba117bdcc63870cdd4b8f497e9844"
+        }
+      ]
+    },
+    {
+      "image": "screen.png",
+      "sha256": "d80480fcb0c32130c38519da364a86bd66ce6b165d9a81e6e8887897204877cc",
+      "regions": [
+        {
+          "name": "red",
+          "bounds": [
+            110,
+            180,
+            145,
+            220
+          ],
+          "pixels": 1400,
+          "mismatches": 0,
+          "rgb_sha256": "ddf9d50e329de3198fc1692c24eb6521e3fa9926c79c07ac55b38bdc3a7b10d5"
+        },
+        {
+          "name": "overlap",
+          "bounds": [
+            180,
+            170,
+            290,
+            230
+          ],
+          "pixels": 6600,
+          "mismatches": 0,
+          "rgb_sha256": "654f3e845da711da50854ccc086bef9e0224518d7d4b8e1e221422bf8a456841"
+        },
+        {
+          "name": "full_cyan",
+          "bounds": [
+            648,
+            181,
+            832,
+            314
+          ],
+          "pixels": 24472,
+          "mismatches": 0,
+          "rgb_sha256": "469a3696032ec3fb78abf82144eff58b562ba117bdcc63870cdd4b8f497e9844"
+        }
+      ]
+    }
+  ],
+  "pass": true
+}

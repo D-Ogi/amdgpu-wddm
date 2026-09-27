@@ -1,0 +1,10 @@
+{
+    "marker":  2,
+    "pid":  7768,
+    "process_start_utc":  "2026-09-27T18:15:49.0500128Z",
+    "utc":  "2026-09-27T18:16:22.2436862Z",
+    "trial_seconds":  38.834473599999995,
+    "log_start_offset":  1362520,
+    "line":  "BC250 audit lifetime event=checkpoint seq=6678 time_ns=390750728400 marker=2 requests=2223 successful=2223 failed=0 ended=2215 pending=0 live=8\r",
+    "label":  "dynamic-2-capture-start"
+}
