@@ -13,6 +13,7 @@ function Wait-HostedDwmWitness {
   $ready=$sample.identity -and $missing.Count -eq 0 -and $sample.create_success
   $receipt=@{attempt=$attempt;elapsed_ms=$elapsed;sample=$sample;missing=$missing;ready=[bool]$ready;first_create_success_utc=$firstCreateUtc}
   & $Record $receipt
+  if($sample.ambiguous){throw ('Ambiguous new DWM identities: '+($sample.candidates | ConvertTo-Json -Compress))}
   if($sample.stop){throw 'Owner STOP during hosted startup'}
   if($identity -and $sample.identity -ne $identity){throw 'DWM identity changed/lost during startup'}
   if($sample.identity -and !$identity){$identity=$sample.identity}

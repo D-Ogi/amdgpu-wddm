@@ -47,7 +47,7 @@ try {
  Start-ScheduledTask -TaskName $controlTask
  & "$d\wait-composition-baseline.ps1" -Directory $d -TaskName $controlTask
  if(!(Test-Path "$d\baseline-ready.json")){throw 'CPU baseline readiness witness missing'}
- & logman start BC250G0Dwm032 -ets -o "$d\gpu.etl" -p Microsoft-Windows-DxgKrnl 0xffffffffffffffff 5 -f bin -bs 1024 -nb 64 256 *> "$d\etw-start.log"
+ & logman start BC250G0Dwm032 -ets -o "$d\gpu.etl" -pf "$d\etw-providers.txt" -f bin -bs 1024 -nb 64 256 *> "$d\etw-start.log"
  if($LASTEXITCODE -ne 0){throw 'ETW start failed'}
  $traceStarted=$true
 
@@ -71,8 +71,10 @@ try {
   [IO.File]::WriteAllText("$d\enable",'bounded DWM route')
   $before=@(Get-Process dwm | Select-Object -ExpandProperty Id)
   "DWM before=$($before -join ',')"
+  $restartUtc=[DateTime]::UtcNow
+  Write-DurableText "$d\restart-boundary.json" (@{utc=$restartUtc.ToString('o');previous_pids=$before} | ConvertTo-Json)
   foreach($idValue in $before){Stop-Process -Id $idValue -Force}
-  $ready=& "$d\wait-hosted-startup.ps1" -Directory $d -PreviousPids $before -TaskName $controlTask
+  $ready=& "$d\wait-hosted-startup.ps1" -Directory $d -PreviousPids $before -TaskName $controlTask -RestartUtc $restartUtc
   $gpuPid=[int]$ready.sample.pid
   $watch=[Diagnostics.Stopwatch]::StartNew()
   $i=0

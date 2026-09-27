@@ -1,0 +1,24 @@
+{
+  "pass": true,
+  "events": [
+    {
+      "event": "Microsoft-Windows-Kernel-Process/ProcessStart/win:Start",
+      "timestamp_us": "392910",
+      "pid": 5332,
+      "sequence": "9351",
+      "create_time": "09/27/2026 12:51:20.966",
+      "image": "powershell.exe",
+      "exit_code": null
+    },
+    {
+      "event": "Microsoft-Windows-Kernel-Process/ProcessStop/win:Stop",
+      "timestamp_us": "1731351",
+      "pid": 5332,
+      "sequence": "9351",
+      "create_time": "09/27/2026 12:51:20.966",
+      "image": "powershell.exe",
+      "exit_code": "0"
+    }
+  ],
+  "same_dwm": true
+}
