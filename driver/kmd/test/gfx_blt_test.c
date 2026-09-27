@@ -138,6 +138,9 @@ int main(void)
             0,&offset,buffer,8,&written)==Bc250GfxBltNoSpace && !offset && !written);
         CHECK(!memcmp(buffer,saved,sizeof(buffer)));
         CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+            0,&offset,buffer,20,&written)==Bc250GfxBltNoSpace && !offset && !written);
+        CHECK(!memcmp(buffer,saved,sizeof(buffer)));
+        CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
             8,&offset,buffer,16,&written)==Bc250GfxBltDone && offset==8 && written==16);
         for(j=8;j<16;j++)CHECK(buffer[j]==0xffff1000u);
         /* A bad late rectangle must not leave a valid prefix in the DMA buffer,
