@@ -45,8 +45,8 @@ float4 PS(V i):SV_Target { return i.color; }
    for(auto& t:snap)check(dev->CreateTexture2D(&td,nullptr,&t),"state snapshot");
    D3D11_RASTERIZER_DESC rd={};rd.FillMode=D3D11_FILL_SOLID;rd.CullMode=D3D11_CULL_NONE;rd.DepthClipEnable=TRUE;
    ComPtr<ID3D11RasterizerState> raster;check(dev->CreateRasterizerState(&rd,&raster),"state raster");
-   const char* names[]={"viewport-cb-update","streams-layout-stride","vb-nooverwrite","vs-cb-discard","indexed-strip-nooverwrite","instance-stream-base","indexed-list16-nooverwrite"};
-   for(UINT mode=0;mode<7;++mode) {
+   const char* names[]={"viewport-cb-update","streams-layout-stride","vb-nooverwrite","vs-cb-discard","indexed-strip-nooverwrite","instance-stream-base","indexed-list16-nooverwrite","indexed-list16-discard"};
+   for(UINT mode=0;mode<8;++mode) {
       printf("state-begin=%s\n",names[mode]);ctx->ClearState();ctx->RSSetState(raster.Get());
       ctx->VSSetShader(mode==5?ivs.Get():vs.Get(),nullptr,0);ctx->PSSetShader(ps.Get(),nullptr,0);ctx->OMSetRenderTargets(1,rtv.GetAddressOf(),nullptr);
       ID3D11Buffer* constants=mode==3?dynamicCb.Get():cb.Get();ctx->VSSetConstantBuffers(0,1,&constants);
@@ -62,10 +62,10 @@ float4 PS(V i):SV_Target { return i.color; }
             ctx->RSSetViewports(1,&vp);
             const float positions[6][2]={{-1,1},{1,1},{-1,-1},{-1,-1},{1,1},{1,-1}};
             float data[64]={},colors[64]={};UINT stride=24,offset=0,layout=0;
-            const bool splitLayout=mode==1&&(n%2!=0),strip=mode==4||mode==5||mode==6;
-            const UINT vertices=strip?4:6,first=(mode==4||mode==6)?3:0;
+            const bool splitLayout=mode==1&&(n%2!=0),strip=mode==4||mode==5||mode==6||mode==7;
+            const UINT vertices=strip?4:6,first=(mode==4||mode==6||mode==7)?3:0;
             if(splitLayout){stride=32;layout=1;offset=16;}
-            if(mode==2||mode==4||mode==6)offset=n*256;
+            if(mode==2||mode==4||mode==6||mode==7)offset=n*256;
             for(UINT v=0;v<vertices;++v) {
                UINT index=strip&&v==3?5:v;float px=positions[index][0],py=positions[index][1];
                if(mode==1){px=px*.125f-.875f+float(x)*.25f;py=py*.125f+.875f-float(y)*.25f;}
@@ -73,8 +73,8 @@ float4 PS(V i):SV_Target { return i.color; }
                data[at]=px;data[at+1]=py;
                if(splitLayout)memcpy(colors+v*8+4,color,sizeof(color));else memcpy(data+at+2,color,sizeof(color));
             }
-            D3D11_MAP map=(mode==2||mode==4||mode==6)&&n?D3D11_MAP_WRITE_NO_OVERWRITE:D3D11_MAP_WRITE_DISCARD;
-            write(vb.Get(),map,(mode==2||mode==4||mode==6)?offset:0,data,sizeof(data));
+            D3D11_MAP map=(mode==2||mode==4||mode==6||mode==7)&&n?D3D11_MAP_WRITE_NO_OVERWRITE:D3D11_MAP_WRITE_DISCARD;
+            write(vb.Get(),map,(mode==2||mode==4||mode==6||mode==7)?offset:0,data,sizeof(data));
             ctx->IASetVertexBuffers(0,1,vb.GetAddressOf(),&stride,&offset);
             if(splitLayout){UINT cs=32,co=0;write(colorBuffer.Get(),D3D11_MAP_WRITE_DISCARD,0,colors,sizeof(colors));ctx->IASetVertexBuffers(3,1,colorBuffer.GetAddressOf(),&cs,&co);}
             if(mode==5) {
@@ -82,7 +82,7 @@ float4 PS(V i):SV_Target { return i.color; }
                write(colorBuffer.Get(),n?D3D11_MAP_WRITE_NO_OVERWRITE:D3D11_MAP_WRITE_DISCARD,(n+1)*32,inst,sizeof(inst));
                UINT cs=32,co=0;ctx->IASetVertexBuffers(3,1,colorBuffer.GetAddressOf(),&cs,&co);layout=2;
             }
-            ctx->IASetInputLayout(layouts[layout].Get());ctx->IASetPrimitiveTopology(strip&&mode!=6?D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP:D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            ctx->IASetInputLayout(layouts[layout].Get());ctx->IASetPrimitiveTopology(strip&&mode!=6&&mode!=7?D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP:D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             if(mode==4) {
                UINT indices[8]={777,888,0,1,2,3,0xffffffff,0xffffffff};
                write(ib.Get(),n?D3D11_MAP_WRITE_NO_OVERWRITE:D3D11_MAP_WRITE_DISCARD,n*32,indices,sizeof(indices));
@@ -90,6 +90,14 @@ float4 PS(V i):SV_Target { return i.color; }
             } else if(mode==6) {
                unsigned short indices[16]={777,888,0,1,2,2,1,3,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
                write(ib.Get(),n?D3D11_MAP_WRITE_NO_OVERWRITE:D3D11_MAP_WRITE_DISCARD,n*32,indices,sizeof(indices));
+               ctx->IASetIndexBuffer(ib.Get(),DXGI_FORMAT_R16_UINT,4);ctx->DrawIndexed(6,n*16,3);
+            } else if(mode==7) {
+               // Every new backing store is fully initialized. Stale backing
+               // contains degenerate indices at this draw's current offset.
+               unsigned short indices[1024]={};
+               unsigned short current[8]={777,888,0,1,2,2,1,3};
+               memcpy(indices+n*16,current,sizeof(current));
+               write(ib.Get(),D3D11_MAP_WRITE_DISCARD,0,indices,sizeof(indices));
                ctx->IASetIndexBuffer(ib.Get(),DXGI_FORMAT_R16_UINT,4);ctx->DrawIndexed(6,n*16,3);
             } else if(mode==5)ctx->DrawInstanced(4,1,0,n+1);
             else ctx->Draw(vertices,0);
@@ -110,5 +118,5 @@ float4 PS(V i):SV_Target { return i.color; }
          ctx->Unmap(snap[pass].Get(),0);printf("state=%s pass=%u mismatches=%u/4096 fnv64=%016llx\n",names[mode],pass,bad,static_cast<unsigned long long>(hash));require(!bad,"state-transition pixels");
       }
    }
-   ctx->ClearState();ctx->Flush();printf("PASS state transitions: 1792 draws, 114688 pixels\n");
+   ctx->ClearState();ctx->Flush();printf("PASS state transitions: 2048 draws, 131072 pixels\n");
 }
