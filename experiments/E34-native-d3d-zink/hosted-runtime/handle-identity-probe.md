@@ -13,10 +13,10 @@ copying sample allocation ownership code.
 
 EnableHandleIdentityProbe defaults0 and is independent of EnableGpuPresentBlit.
 When enabled at adapter start it reports interface size, header-derived offsets
-and callback pointers. At most16 LB7A and16 BC2A opens compare GetHandleData with
+and callback pointers. At most16 non-BC2A and16 BC2A opens compare GetHandleData with
 AcquireHandleData and a live-object lookup. Acquisition requires both callback
-pointers, sufficient interface size and IRQL<=APC. Successful acquisition is
-released immediately after lookup. No acquired identity changes the opened
+pointers, sufficient interface size and IRQL<=APC. A nonzero release token is released even if private data is NULL; a successful
+pointer result also always takes the paired release. The token is logged. No acquired identity changes the opened
 object or the GPU Present admission decision.
 
 Procedure, not yet run:
