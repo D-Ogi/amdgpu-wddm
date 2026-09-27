@@ -648,13 +648,11 @@ static BOOL WaitPagingFence(PROBE* Probe, UINT64 Value, const char* What)
     }
 }
 
+static BOOL MakeResident(PROBE* Probe, D3DKMT_HANDLE hAllocation, const char* Name);
+
 static BOOL MapAndMakeResident(PROBE* Probe, D3DKMT_HANDLE hAllocation, UINT64 Size, const char* Name, UINT64* Va)
 {
     D3DDDI_MAPGPUVIRTUALADDRESS map;
-    D3DDDI_MAKERESIDENT resident;
-    D3DKMT_HANDLE list[1];
-    UINT priorities[1];
-    NTSTATUS status;
     char label[64];
 
     ZeroMemory(&map, sizeof(map));
@@ -670,6 +668,18 @@ static BOOL MapAndMakeResident(PROBE* Probe, D3DKMT_HANDLE hAllocation, UINT64 S
     Note("%s mapped at 0x%016llX, %llu page(s), paging fence %llu", Name, map.VirtualAddress, map.SizeInPages,
          map.PagingFenceValue);
     if (!WaitPagingFence(Probe, map.PagingFenceValue, label)) return FALSE;
+    return MakeResident(Probe, hAllocation, Name);
+}
+
+// Residency is a contract of its own: a GPU virtual address reported by an open says nothing about it. So an
+// opened allocation gets an explicit MakeResident with its paging fence waited, exactly like our own source.
+static BOOL MakeResident(PROBE* Probe, D3DKMT_HANDLE hAllocation, const char* Name)
+{
+    D3DDDI_MAKERESIDENT resident;
+    D3DKMT_HANDLE list[1];
+    UINT priorities[1];
+    NTSTATUS status;
+    char label[64];
 
     list[0] = hAllocation;
     priorities[0] = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
@@ -833,7 +843,27 @@ static BOOL Handshake(PROBE* Probe)
     Stamp("handshake");
     thread = CreateThread(NULL, 0, HandshakeThread, call, 0, NULL);
     if (thread == NULL) { free(call); return FALSE; }
-    wait = WaitForSingleObject(thread, Probe->Opt.HandshakeTimeoutMs);
+    // The window belongs to this thread. If the DWM answers the worker's call only after a message to the window
+    // is handled (a SendMessage from another process blocks until this thread pumps), a plain wait would turn
+    // into the deadline. So: pump while waiting, until the worker ends or the deadline passes.
+    {
+        ULONGLONG start = GetTickCount64();
+
+        for (;;)
+        {
+            ULONGLONG spent = GetTickCount64() - start;
+            DWORD left = spent >= Probe->Opt.HandshakeTimeoutMs ? 0 : (DWORD)(Probe->Opt.HandshakeTimeoutMs - spent);
+            MSG msg;
+
+            wait = MsgWaitForMultipleObjects(1, &thread, FALSE, left, QS_ALLINPUT);
+            if (wait == WAIT_OBJECT_0 + 1)
+            {
+                while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+                continue;
+            }
+            break;              // WAIT_OBJECT_0 (worker ended), WAIT_TIMEOUT or WAIT_FAILED
+        }
+    }
     error = wait == WAIT_FAILED ? GetLastError() : 0;
     if (RedirbltAfterWait(wait, error, &why) != WaitProceed)
     {
@@ -961,7 +991,9 @@ static BOOL OpenShared(PROBE* Probe)
         open.ResourcePrivateDriverDataSize = resource;
         open.pPrivateRuntimeData = (BYTE*)buffer + total + resource;
         open.PrivateRuntimeDataSize = runtime;
-        status = Report("D3DKMTOpenResource", D3DKMTOpenResource(&open));
+        // pOpenAllocationInfo2 is the D3DDDI_OPENALLOCATIONINFO2 form, which pairs with D3DKMTOpenResource2
+        // (the GPU-VA era entry); the legacy D3DKMTOpenResource takes the legacy INFO array.
+        status = Report("D3DKMTOpenResource2", D3DKMTOpenResource2(&open));
         o->hResource = open.hResource;
     }
     else
@@ -1018,7 +1050,13 @@ static BOOL OpenShared(PROBE* Probe)
     if (blobOurs && o->hAllocation != 0)
     {
         // A destination the KMD can address: mapped in our process, as the fork maps every opened allocation.
-        if (o->GpuVa != 0) { mapped = TRUE; resident = TRUE; Note("open reported a GPU VA already; no map of our own"); }
+        // An address reported by the open is a map, not residency: residency is asked for explicitly either way.
+        if (o->GpuVa != 0)
+        {
+            mapped = TRUE;
+            Note("open reported a GPU VA already; no map of our own");
+            resident = MakeResident(Probe, o->hAllocation, "opened");
+        }
         else if (MapAndMakeResident(Probe, o->hAllocation, size, "opened", &o->MappedVa)) { o->MappedSize = size; mapped = TRUE; resident = TRUE; }
         else if (o->MappedVa != 0) { o->MappedSize = size; mapped = TRUE; }   // the map went through, residency did not
     }

@@ -62,7 +62,10 @@ B, C and D run only with a destination that is ready: the surface's adapter is o
 block, the map and the residency succeeded, and it is bound to the handshake whose update id goes into the
 token: opened from that handle, carrying that id. A later handshake that returns the same handle with a new id
 rebinds the id to the opened surface (no reopen); a different handle closes and reopens. Anything else is a
-`SKIP` line, never a present with `hDestination 0`.
+`SKIP` line, never a present with `hDestination 0`. A global handle is opened with `D3DKMTOpenResource2` (the
+`D3DDDI_OPENALLOCATIONINFO2` form), an NT handle with `D3DKMTOpenResourceFromNtHandle`; residency is always asked
+for with `D3DKMTMakeResident` and its paging fence, never inferred from a GPU address the open reported. The
+window's thread pumps messages while the handshake worker runs (`MsgWaitForMultipleObjects`).
 
 ## Options
 
