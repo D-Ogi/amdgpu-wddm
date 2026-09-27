@@ -19,7 +19,7 @@ pointers, sufficient interface size and IRQL<=APC. A nonzero release token is re
 pointer result also always takes the paired release. The token is logged. No acquired identity changes the opened
 object or the GPU Present admission decision.
 
-Procedure, not yet run:
+Original diagnostic procedure (runtime result: M627):
 1. Build an isolated successor to155 containing the A8 correction and this probe;
    preserve153 rollback artifacts and exact settings. Keep GPU Present and GDI
    interop disabled. Keep the working CPU presentation settings.
@@ -36,6 +36,14 @@ Procedure, not yet run:
    lifetime. If both callbacks fail, add deferred re-query; do not infer backing
    identity from equal geometry or raw per-device handle values.
 
-No deployment or runtime result yet. This is D0 metadata and D1 acquisition only;
+M627 records the diagnostic deployment and runtime result. This is D0 metadata and D1 acquisition only;
 callback image ownership, deferred lookup and independent VA mapping are not
 implemented. It neither submits GPU work nor writes pixel data.
+
+## Binding successor (M628, not deployed)
+
+The successor uses Acquire/Release on every valid opened allocation, regardless
+of the diagnostic gate. It publishes only a live same-adapter allocation under
+the destruction lock and releases before returning. Get remains a bounded
+diagnostic comparison. See M628 for host validation and runtime checks still
+required; M627 validates the probe, not the production binding successor.
