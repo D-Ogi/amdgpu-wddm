@@ -1,5 +1,12 @@
 $ErrorActionPreference='Stop'
 $d='C:\BC250\m13\dwm-hosted026'
+# The independent collector must be terminal before receipts or task cleanup.
+if(Test-Path "$d\collector-start.json"){
+ $identity=Get-Content "$d\collector-start.json" -Raw | ConvertFrom-Json
+ $process=Get-Process -Id $identity.pid -ErrorAction SilentlyContinue
+ if($process -and $process.StartTime.ToUniversalTime().ToString('o') -eq $identity.start){throw 'Original startup collector still active'}
+ if(!(Test-Path "$d\collector-done.json")){throw 'Startup collector has no terminal receipt'}
+}
 if(!(Test-Path "$d\restored.json")){throw 'No restoration witness'}
 if((Get-ScheduledTask -TaskName BC250-G0-DwmRun026).State -eq 'Running'){throw 'Runner still active'}
 if((Get-FileHash 'C:\BC250\m11\resource-close\bc250d3d.dll').Hash -ne '8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA'){throw 'UMD baseline mismatch'}

@@ -55,6 +55,9 @@ try {
   Copy-Item -LiteralPath "$d\router.dll" -Destination $umd
   Move-Item -LiteralPath $icd -Destination "$d\original-icd.dll"
   Copy-Item -LiteralPath $standalone -Destination $icd
+  # Preserve early root/fence records before the ordinary log ring wraps.
+  $collector=Start-Process -FilePath "$env:windir\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"$d\collect-startup.ps1") -WindowStyle Hidden -PassThru
+  @{pid=$collector.Id;start=$collector.StartTime.ToUniversalTime().ToString('o')} | ConvertTo-Json | Set-Content "$d\collector-start.json"
   & "$d\interop.ps1" -Value 1
   # PnP restart may replace the adapter LUID. Publish it before allowing the
   # one-process router claim; no DWM started during restart can consume it.

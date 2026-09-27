@@ -36,7 +36,7 @@ try {
  $problem=(Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
  if($problem -ne 22){throw 'Adapter not disabled'}
  New-ItemProperty $reg -Name EnableCddDwmInterop -Value $Value -PropertyType DWord -Force | Out-Null
- New-ItemProperty $reg -Name EnableGpuPresentBlit -Value 0 -PropertyType DWord -Force | Out-Null
+ New-ItemProperty $reg -Name EnableGpuPresentBlit -Value $Value -PropertyType DWord -Force | Out-Null
  New-ItemProperty $reg -Name EnableHandleIdentityProbe -Value 1 -PropertyType DWord -Force | Out-Null
  & pnputil.exe /enable-device $gpu[0].InstanceId *> "$d\interop-$suffix-$tag-enable.log"
  if($LASTEXITCODE -ne 0){throw 'Adapter enable failed'}
@@ -50,7 +50,7 @@ try {
  & $cli log summary *> "$d\interop-$suffix-$tag-after.log"
  if($LASTEXITCODE -ne 0){throw 'Summary failed'}
  $text=Get-Content "$d\interop-$suffix-$tag-after.log" -Raw
- if($text -notmatch ("CDD interop"+$Value+" GPU Present gate0 identity probe1")){throw 'Latched gate witness missing'}
+ if($text -notmatch ("CDD interop"+$Value+" GPU Present gate"+$Value+" identity probe1")){throw 'Latched gate witness missing'}
  @{utc=[DateTime]::UtcNow.ToString('o');value=$Value;health=$health} | ConvertTo-Json | Set-Content "$d\interop-$suffix-$tag.json"
  if($Value -eq 0){Remove-Item -LiteralPath "$d\interop-pending" -Force}
 } finally {if($locked){$mutex.ReleaseMutex()};$mutex.Dispose()}
