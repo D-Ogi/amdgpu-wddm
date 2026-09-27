@@ -1,0 +1,14 @@
+{
+  "revision": "a0ad8af5ea46b90400d947d82d056f3bd58278c5",
+  "worktree_clean": true,
+  "files": {
+    "Resource.cpp": {
+      "path": "src/gallium/frontends/d3d10umd/Resource.cpp",
+      "sha256": "f51aa95e102d6b0061e20dea104d80d65b7e914a1fe28ba3d8c7fad1eea76da7"
+    },
+    "DxgiFns.cpp": {
+      "path": "src/gallium/frontends/d3d10umd/DxgiFns.cpp",
+      "sha256": "b20de5ec3aaffe307557fcfb16744d99fb243d81d92a6e7c34b3f3c4952aa0ed"
+    }
+  }
+}

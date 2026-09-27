@@ -22,8 +22,8 @@ are filled with the imported CP NOP encoding, preventing another Present record
 from being appended to the same IB. The private record is published only after
 command construction and a memory barrier. MultipassOffset is a packet ordinal;
 More becomes STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER. An empty list intersection
-produces an acquire plus NOP IB with ordinary hardware completion. Small or unaligned DMA
-capacity is returned as insufficient without publishing a record.
+produces an acquire plus NOP IB with ordinary hardware completion. Exhausted remaining DMA/private capacity requests buffer rotation without publishing a record.
+Malformed pointers or alignment fail separately (M637).
 
 BC2C UMD contexts are rejected by both GPU Present producer and consumer until
 source and destination residency on their exact submitting device is established.
@@ -61,3 +61,10 @@ normal owner exit on CPU/hosted GPU. Neither executes BGP1. M634 corrects
 standard-GDI CPU visibility and refuses unimplemented ownership types; that
 source change is not deployed. Interop capability, CDD device residency and
 actual Blt admission remain the next runtime prerequisites.
+
+M638 source inspection corrects the assumption that a UMD-created DWM texture
+must be BC2A. The current frontend creates shared/presentable surfaces as typed
+LB7A and imports that runtime allocation into Zink. Keep BC2A rejection; first
+identify the actual CDD destination and context in the bounded interop capture.
+A BC2A texture ABI extension is not established as a prerequisite for that path.
+UMD-device MakeResident still does not prove CDD-device residency.
