@@ -1,0 +1,29 @@
+{
+  "source_commit": "9f8a1ff989bfc9cf18b8845009c7caefdb99a7d8",
+  "parent": "a0ad8af5ea46b90400d947d82d056f3bd58278c5",
+  "source_clean": true,
+  "changed_source": "src/gallium/auxiliary/util/u_upload_mgr.c",
+  "source_sha256": "5d9330a19588350668d21c8b75906aae54fa9dab4bd0199e46135ac080fa7090",
+  "artifact_sha256": "0418690092F95F4BF23B5FC45D674344D8ACAAC2875853C4815AF6DA47DDF473",
+  "build_exit_code": 0,
+  "build_log_sha256": "5621b5eccbca065acdca5e5a65db41550f3d14ad55fbd1764ad87f3cdb6fddae",
+  "control": {
+    "actual_source_included": true,
+    "allocations": 4,
+    "allocated_bytes": 4144,
+    "copies": 3,
+    "copied_bytes": 4112,
+    "buffer_generations": [
+      1,
+      2
+    ],
+    "failure_and_disabled_controls": true,
+    "all_test_resources_released": true
+  },
+  "deployed": false,
+  "limitations": [
+    "Counts successful handed-out ranges and helper memcpy only, not later writes through returned pointers.",
+    "Opt-in diagnostic event logging changes performance.",
+    "No runtime validation or final measurement-boundary snapshot yet."
+  ]
+}
