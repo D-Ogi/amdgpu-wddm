@@ -47,8 +47,10 @@ vkd3d log of run 003: same kinds of entries as E41 (DXR state objects, D24S8 to 
 PresentMon builds its rows from the DXGI runtime's Present events and the dxgkrnl present/flip events.
 The port's Win32 WSI (`src/vulkan/wsi/wsi_common_win32.cpp` on fork `amdgpu-wddm/radv-wddm2-kmt-enum`
 c34ab7cd) takes its DXGI/DirectComposition path only when `wsi_device->win32.get_d3d12_command_queue` is
-set; the RADV WDDM winsys sets no such hook, so `supports_dxgi` is false and every swapchain uses the
-CPU-image path: per present a CPU copy (with a B8G8R8A8 swizzle for R8G8B8A8 chains) of the rendered image
+set. Correction (2026-09-27, after the first write-up): the RADV WDDM winsys does implement that hook
+(`radv_wddm2_wsi.c`), but `radv_wddm2_wsi_init` sets `wsi->sw = true` and installs no hooks when the caps
+blob is ours, because no D3D12 UMD exists for the adapter; this is the CPU presentation ADR 0015 chose for
+M10 with the owner's permission. So `supports_dxgi` is false and every swapchain uses the CPU-image path: per present a CPU copy (with a B8G8R8A8 swizzle for R8G8B8A8 chains) of the rendered image
 into a DIB section, `BitBlt` into the window DC, `GdiFlush`, `DwmFlush`. That path issues no DXGI present
 and no dxgkrnl present, so PresentMon has nothing to record; the loaded system `dxgi.dll` and `DComp.DLL`
 come from the factory/device probe at WSI init, not from a swapchain. `--terminate_on_proc_exit` not firing
