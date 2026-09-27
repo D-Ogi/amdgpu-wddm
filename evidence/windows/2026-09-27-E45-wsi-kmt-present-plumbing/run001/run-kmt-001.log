@@ -1,0 +1,67 @@
+start 2026-09-27T05:49:53.7762424+02:00
+temperature_before=67.6
+boot 2026-09-26T18:44:31.5000000+02:00
+dwm_before=8116
+log          2092170 lines since this driver load, 2091146 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+presentmon_pid=9468
+stage A-kmt start 2026-09-27T05:49:57.2592500+02:00
+pid=2432 session=1
+t=0 tctl=67.6 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\Windows\system32\dxgi.dll DDC578A2
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 93B1D1FD
+module 2s C:\Windows\system32\DComp.DLL 285F0317
+t=2 tctl=67.6 present_csv_bytes=0
+t=4 tctl=67.5 present_csv_bytes=0
+screenshot A-kmt-0 711F12A18C66
+t=7 tctl=67.5 present_csv_bytes=0
+t=9 tctl=67.4 present_csv_bytes=0
+t=11 tctl=67.2 present_csv_bytes=0
+t=13 tctl=67.5 present_csv_bytes=0
+screenshot A-kmt-1 CE18441F4E76
+t=16 tctl=68 present_csv_bytes=0
+t=18 tctl=67.9 present_csv_bytes=0
+stage A-kmt exit=0 elapsed=20s
+stderr lines=23457
+
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+log          2096594 lines since this driver load, 2095570 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+stage B-cpu start 2026-09-27T05:50:19.5563889+02:00
+pid=8884 session=1
+t=0 tctl=67.8 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+module 2s C:\Windows\system32\dxgi.dll DDC578A2
+module 2s C:\BC250\m10\wsi-final\vulkan_radeon.dll 93B1D1FD
+module 2s C:\Windows\system32\DComp.DLL 285F0317
+t=2 tctl=67.8 present_csv_bytes=0
+t=4 tctl=67.9 present_csv_bytes=0
+screenshot B-cpu-0 A582985A4946
+t=7 tctl=68.4 present_csv_bytes=0
+t=9 tctl=68.2 present_csv_bytes=0
+t=11 tctl=68 present_csv_bytes=0
+t=13 tctl=68 present_csv_bytes=0
+screenshot B-cpu-1 F34B1678C73F
+t=16 tctl=68 present_csv_bytes=0
+t=18 tctl=68.1 present_csv_bytes=0
+stage B-cpu exit=0 elapsed=20s
+stderr lines=23457
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+log          2100918 lines since this driver load, 2099894 lost to the wrap, 7 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 stage 10
+     1      0.000 gate: EnableFullWddm 2
+presentmon_exit=
+presentmon_csv_bytes=0
+registered_icd_after=93B1D1FD
+temperature_after=68.1
+dwm_after=8116
+screenshot end BB95ADF78558
+end 2026-09-27T05:50:47.4270025+02:00
+run_exit=0
+
+

@@ -1,0 +1,273 @@
+{
+ "artifacts": {
+  "candidate ICD B9F4C95B": "B9F4C95B22AB80F671FC94A678A70F3A960DB05F12D6615C0A8422FB8ED693F9 (fork amdgpu-wddm/radv-wddm2-wsi-kmt 1ae7b6af on radv-wddm2-present-log 0f9811a5; build log scratch/mesa-fork-2026-09-27/build-radv-kmt4.log)",
+  "candidate ICD 11BA2143": "11BA214350632A0DA665521D7132318DA62043C5D7EAFE7BFF7EF1BDB48FEFF2 (fork aa8296c0; build log build-radv-kmt5.log)",
+  "registered ICD before and after": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (E38)",
+  "vkcube.exe": "87A96AF3A4677C4AE0BC293625B9F18BFE80A41362992BC03CA2AA3CADE37721",
+  "PresentMon 2.6.0": "B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD 152 unchanged (generation 575721647), UMD 8279AC7F, CPU DWM 8116, clock 1000 MHz VID 116, BlitGate open",
+  "screenshots": "private in scratch/wsi-kmt-2026-09-27/run00{1,2,3}; hashes in capture-hashes.json"
+ },
+ "files": {
+  "capture-hashes.json": {
+   "sha256": "45cdfeffe5182a253db10b41f8fb924bb35f66561fef98356362edc3af895026",
+   "bytes": 1321
+  },
+  "patches/0001-wsi-win32-KMT-present-path-D3DKMTPresent-of-a-linear.patch": {
+   "sha256": "56bfc52971f2c802685140273158376647a7e9ba1928443bcc355f7894431f70",
+   "bytes": 37523
+  },
+  "patches/0002-wsi-wddm2-a-Blt-present-always-names-at-least-one-su.patch": {
+   "sha256": "4b2c3ddbb8c5a95b7501a471dfe85007ce672f5aefe7b221e4dc6257b717da1a",
+   "bytes": 1567
+  },
+  "present-stats.json": {
+   "sha256": "3b4b2dac811d3d931fb5d5e2878f416606145b7255218018216fb07ec06800c0",
+   "bytes": 1514
+  },
+  "RESULT.md": {
+   "sha256": "670e9441c72d2227469633106709591032a261b8ff946f0e08b8bea0594f1837",
+   "bytes": 7585
+  },
+  "run001/after-A-kmt-log-summary.blit-lines.txt": {
+   "sha256": "4600e6753e7188201f0e7061342abb7bf3b56cdcd950334674bdbb160e5ca869",
+   "bytes": 1342
+  },
+  "run001/after-B-cpu-log-summary.blit-lines.txt": {
+   "sha256": "e838136a6138ff12236b56dce8f937f5ae2afd55d771b7d3b8cb22f081ce6f01",
+   "bytes": 671
+  },
+  "run001/after-clock.txt": {
+   "sha256": "c252686026572137edd522e69330db88f45e84f3826338c0712471f1553b5a11",
+   "bytes": 75
+  },
+  "run001/after-health.txt": {
+   "sha256": "2a04de4c59f6c5f930e0e8b2758834f580d5df69910addfe108eeacfb30dd6b8",
+   "bytes": 113
+  },
+  "run001/after-log-summary.blit-lines.txt": {
+   "sha256": "39ebd20d89084b61e180c1e2fb02f164b77798e7ff4227815ccd8969b07c1c44",
+   "bytes": 2684
+  },
+  "run001/before-clock.txt": {
+   "sha256": "22dfa7152a508a1d304268aace2177704bf556ad2801b709140f5f00f4a1cbee",
+   "bytes": 75
+  },
+  "run001/before-health.txt": {
+   "sha256": "4bf217475f6d69ab358b2abd4f1273190d0ba26328a2e3540065ca5b531fec52",
+   "bytes": 113
+  },
+  "run001/before-log-summary.blit-lines.txt": {
+   "sha256": "03079efe7901719c6132966eaee8b4620c7351ac3259c36b455e85aa9cfe32c0",
+   "bytes": 5282
+  },
+  "run001/done-kmt-001.json": {
+   "sha256": "f76570bdeb8b262c1693b41ac58380d5be6acafa625c7d1f77f9fac54ed36233",
+   "bytes": 67
+  },
+  "run001/logman-stop.txt": {
+   "sha256": "9154b5ed74215245825774eb266dd48509e5a8daecbfc41f6c7e80127084c3c1",
+   "bytes": 37
+  },
+  "run001/modules-A-kmt.json": {
+   "sha256": "452053ca2620c64c26c4abf01184443e47554a1228b2f3018d6ce0319aa3d6d4",
+   "bytes": 239
+  },
+  "run001/modules-B-cpu.json": {
+   "sha256": "452053ca2620c64c26c4abf01184443e47554a1228b2f3018d6ce0319aa3d6d4",
+   "bytes": 239
+  },
+  "run001/run-kmt-001.log": {
+   "sha256": "05adc4b31b4861cdc51c233d9926a63c44e975673148efd76302313ea910edd9",
+   "bytes": 2731
+  },
+  "run001/vkcube-A-kmt.stderr.wddm2-lines.txt": {
+   "sha256": "4c59d1fc660dabec3ab52e28adbaf14bc1386c5ffb1589cf24a6eb8fb134d2a8",
+   "bytes": 52
+  },
+  "run001/vkcube-B-cpu.stderr.wddm2-lines.txt": {
+   "sha256": "4c59d1fc660dabec3ab52e28adbaf14bc1386c5ffb1589cf24a6eb8fb134d2a8",
+   "bytes": 52
+  },
+  "run002/after-A-kmt-log-summary.blit-lines.txt": {
+   "sha256": "f6902434b7859ef27f62dda6f0bc4d2f7978db1c4b99c6313cac9b643374a95b",
+   "bytes": 671
+  },
+  "run002/after-B-cpu-log-summary.blit-lines.txt": {
+   "sha256": "0a56a7c98d5307dcac273aee4de5ec74ab6f3f39b63d8e20faaeb37624f18130",
+   "bytes": 1342
+  },
+  "run002/after-clock.txt": {
+   "sha256": "c252686026572137edd522e69330db88f45e84f3826338c0712471f1553b5a11",
+   "bytes": 75
+  },
+  "run002/after-health.txt": {
+   "sha256": "4ee81bcf72e9d3b5001a66dca98ac1d2435af352a0e4a9b78732d0f7d8d9e4bb",
+   "bytes": 114
+  },
+  "run002/after-log-summary.blit-lines.txt": {
+   "sha256": "436877e228a1757ec125d5bd32151579a35282826dcdbfb8cd9368435925f70f",
+   "bytes": 2684
+  },
+  "run002/before-clock.txt": {
+   "sha256": "a9c35445d3bf1051c55c92cfd7905b1dcd9c8679b544d8ee2f2a0a53594a9d16",
+   "bytes": 75
+  },
+  "run002/before-health.txt": {
+   "sha256": "43d6f6b6171c29b86edbd947e575d80f70ffecae40a87b64138daffdf4983cb7",
+   "bytes": 113
+  },
+  "run002/before-log-summary.blit-lines.txt": {
+   "sha256": "c09af06ab0140f332e821af8cf22c35fe171cd7430d5152901b162dc3f188570",
+   "bytes": 5282
+  },
+  "run002/done-kmt-002.json": {
+   "sha256": "da42d2c0bbcee84479f52ce6d2fc852091686610a2d6201ba57ff068660e1aa3",
+   "bytes": 67
+  },
+  "run002/logman-stop.txt": {
+   "sha256": "9154b5ed74215245825774eb266dd48509e5a8daecbfc41f6c7e80127084c3c1",
+   "bytes": 37
+  },
+  "run002/modules-A-kmt.json": {
+   "sha256": "cc0cd967c0f52c08ac516212081b3548df65fcd8d784d4b18981812f86df4df6",
+   "bytes": 239
+  },
+  "run002/modules-B-cpu.json": {
+   "sha256": "cc0cd967c0f52c08ac516212081b3548df65fcd8d784d4b18981812f86df4df6",
+   "bytes": 239
+  },
+  "run002/present-A-kmt.csv": {
+   "sha256": "60650769a6210b184b985a0b81d7cae14643309525a233cc46bb51e61fd89864",
+   "bytes": 165749
+  },
+  "run002/present-B-cpu.csv": {
+   "sha256": "ab1cc97c667b9978e04e9d9f469e3f1cff26e89aacadc9b3494fd4847913f487",
+   "bytes": 46929
+  },
+  "run002/run-kmt-002.log": {
+   "sha256": "4434ee7806def08d2069692657e90610d4afad2aaf2b21b62152fb3a27f6bce2",
+   "bytes": 3336
+  },
+  "run002/vkcube-A-kmt.stderr.wddm2-lines.txt": {
+   "sha256": "f40c65b87ffcff088e9828a291b6b48891b673dadf7e86fb2de8691de625bbb7",
+   "bytes": 804
+  },
+  "run002/vkcube-B-cpu.stderr.wddm2-lines.txt": {
+   "sha256": "4c59d1fc660dabec3ab52e28adbaf14bc1386c5ffb1589cf24a6eb8fb134d2a8",
+   "bytes": 52
+  },
+  "run003/after-A-kmt-log-summary.blit-lines.txt": {
+   "sha256": "19cc28ab219039dfb12abea1a350ddf491214fdcbe919c9a695caeea255e855f",
+   "bytes": 1342
+  },
+  "run003/after-B-cpu-log-summary.blit-lines.txt": {
+   "sha256": "2542b57d7cc626be5da261d0c6ac2e21e8bfaf78e6d2a01b5ac172bc62339dd3",
+   "bytes": 1342
+  },
+  "run003/after-clock.txt": {
+   "sha256": "2a97ed1362dfd32bd4408733b6e3219f380f885eb6a75737516bd275b6ea69eb",
+   "bytes": 75
+  },
+  "run003/after-health.txt": {
+   "sha256": "0640fb528b31a86e76d633e6020c57dc20c0c7970d8beacb683ebbde1ad99bd5",
+   "bytes": 114
+  },
+  "run003/after-log-summary.blit-lines.txt": {
+   "sha256": "b740c188ff4f66bbcd0fe3023a39a4dcebce321261a2b4ee419c5910ae7b8308",
+   "bytes": 2684
+  },
+  "run003/before-clock.txt": {
+   "sha256": "22dfa7152a508a1d304268aace2177704bf556ad2801b709140f5f00f4a1cbee",
+   "bytes": 75
+  },
+  "run003/before-health.txt": {
+   "sha256": "ab6c639d52c4eed125b6261d1661940371a59257ba9135917a8ae8f51f3d02f9",
+   "bytes": 113
+  },
+  "run003/before-log-summary.blit-lines.txt": {
+   "sha256": "4bd7ee6c9e82ae4ea25b83f3e298eb3ce1fedb512ce369fe709d265ab5913afd",
+   "bytes": 5282
+  },
+  "run003/done-kmt-003.json": {
+   "sha256": "911477a7c590b95fafc54dd7ec07c0b62ef231ef8691547e9e036cdec2bf5669",
+   "bytes": 67
+  },
+  "run003/logman-stop.txt": {
+   "sha256": "9154b5ed74215245825774eb266dd48509e5a8daecbfc41f6c7e80127084c3c1",
+   "bytes": 37
+  },
+  "run003/modules-A-kmt.json": {
+   "sha256": "98c1d6debb684ca94b7c2afe9e2c7b3fce2e52a9ca8e3eb49714c645563de1cc",
+   "bytes": 239
+  },
+  "run003/modules-B-cpu.json": {
+   "sha256": "98c1d6debb684ca94b7c2afe9e2c7b3fce2e52a9ca8e3eb49714c645563de1cc",
+   "bytes": 239
+  },
+  "run003/present-A-kmt.csv": {
+   "sha256": "f24b31fdc313f8c3b37d433b8e576b22c68973299410b15b9de8221ff94cdbd9",
+   "bytes": 165745
+  },
+  "run003/present-B-cpu.csv": {
+   "sha256": "47f8530d1f3efca53b52e1a67f328132d2223893989b0fd89ab18254fc86b2fd",
+   "bytes": 46928
+  },
+  "run003/run-kmt-003.log": {
+   "sha256": "a272c160f51d63d9f79b71501508be7e7861bc272cdf9c265192f09ab4bf63ae",
+   "bytes": 3340
+  },
+  "run003/vkcube-A-kmt.stderr.wddm2-lines.txt": {
+   "sha256": "70d3fa7fd9c6d84d884823df1d59cbf2c58ac22fba4aff89df5f3805334b9f57",
+   "bytes": 804
+  },
+  "run003/vkcube-B-cpu.stderr.wddm2-lines.txt": {
+   "sha256": "4c59d1fc660dabec3ab52e28adbaf14bc1386c5ffb1589cf24a6eb8fb134d2a8",
+   "bytes": 52
+  },
+  "scripts/cleanup-kmt-003.ps1": {
+   "sha256": "d213a1a8400ba0e985442ae73ea6d36058f64a04db14759a25f0a35b2a680ff6",
+   "bytes": 1092
+  },
+  "scripts/finish-e45.py": {
+   "sha256": "562a809bde5eb31673ac1557f940fafce3f8a7fcf63bd8ddb4e8da8836451424",
+   "bytes": 4376
+  },
+  "scripts/labcheck.ps1": {
+   "sha256": "e958c5d29d9c3569b43992285e14b658d997521d7636c390d4cc2aefe5b7f7ec",
+   "bytes": 1142
+  },
+  "scripts/launch-kmt-003.ps1": {
+   "sha256": "e20c40f28c371fa2f0ac7bd028d673668a6781260e7ed023df305566be4281b2",
+   "bytes": 2013
+  },
+  "scripts/make002.py": {
+   "sha256": "00d189359f375fb202ba9053e7a7b849a302539834605555c416565f0a41e64c",
+   "bytes": 3965
+  },
+  "scripts/make003.py": {
+   "sha256": "dfaf97c91d574f3489c6702ee03f290e3df020e04c1945847e9f04e3d3144226",
+   "bytes": 2246
+  },
+  "scripts/pull-003.py": {
+   "sha256": "fc86ab5f70ee53b81cb5dc62b0b5992e3ea6b2a1da25b49bf13124d6d98d90ef",
+   "bytes": 1746
+  },
+  "scripts/run-kmt-002.ps1": {
+   "sha256": "e459671c16b77cfb83f24212b81fe388ccd163fde70081926493b9f1fd2d6735",
+   "bytes": 10241
+  },
+  "scripts/run-kmt-003.ps1": {
+   "sha256": "752e1fbb90d1d3b54ba4a53443666bbe4a45339d872cd05a2820b60bc5b5dd31",
+   "bytes": 10338
+  },
+  "scripts/status-kmt-003.ps1": {
+   "sha256": "2c59f6cd028d4897b623ce55fe6a1af2f00f62bb5c0537746ed481c219237c5d",
+   "bytes": 659
+  },
+  "scripts/worker-kmt-003.ps1": {
+   "sha256": "d50365b6ff32a647b65475d28d5f4e7101cfbb58f9579622953dec1846006a0b",
+   "bytes": 375
+  }
+ }
+}
