@@ -44,3 +44,27 @@ and END markers can use the same strictly increasing sequence of request IDs.
 Host controls use the retained M684/M686 event fixtures with test-map-lifetimes.py
 and test-map-checkpoints.py. Legacy unsequenced logs remain readable but cannot
 satisfy a requested checkpoint boundary.
+
+## PowerShell runner helper
+
+`request-audit-checkpoint.ps1` exposes `Request-AuditCheckpoint` for Windows
+PowerShell 5.1. The caller supplies the exact DWM PID/start time, marker/log paths,
+a running trial stopwatch, a shared absolute elapsed-time deadline, and increasing
+marker IDs. It opens the log before atomic marker publication, tails complete lines,
+and returns the matching acknowledgement plus process/time metadata. A pending map,
+changed process identity, missing acknowledgement or expired deadline rejects the
+boundary. Diagnostic lines are capped at16 KiB and observed bytes at8 MiB per call.
+The full saved log must still pass the sequence/lifetime analyzer after collection.
+This helper alone does not enforce rollback or prove CPU-store coverage.
+
+`test-request-audit-checkpoint.ps1` runs without the lab. It checks a deliberately
+split acknowledgement line and rejects a repeated marker, pending map, missing
+acknowledgement, expired trial deadline and changed process start time. Windows
+PowerShell 5.1 requires `[NullString]::Value` for File.Replace's absent backup path.
+
+Desktop integration remains pending: set BC250_AUDIT_MARKER and BC250_UPLOAD_AUDIT
+before loading the candidate; bracket each capture separately; retain full process
+logs. Start the shared trial clock before the GPU transition, reserve rollback time
+inside the owner's180-second budget, and give the independent watchdog the same
+boundary. Do not reuse DWM038's160-second post-startup loop and300-second watchdog
+as if they implemented an overall three-minute limit.
