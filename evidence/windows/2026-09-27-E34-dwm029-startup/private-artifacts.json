@@ -1,0 +1,14 @@
+{
+  "receipts.zip": {
+    "bytes": 5328823,
+    "sha256": "0508e9b926f7050c9961f627b5384f65beaa645367f6245e3716a21bda1704f8"
+  },
+  "gpu.etl": {
+    "bytes": 25165824,
+    "sha256": "fb81fd265c7104ba032a74bab030e204d0e84e856ee56589f944b02d5da9490b"
+  },
+  "events-xperf.csv": {
+    "bytes": 27272320,
+    "sha256": "873c09c990b357dcb0f1315ccbfae3bb8956e42c33b2868ae8ac139fcb112005"
+  }
+}

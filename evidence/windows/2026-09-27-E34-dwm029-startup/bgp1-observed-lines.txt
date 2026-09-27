@@ -1,0 +1,95 @@
+   442      0.972 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   459      0.972 wddm: CDD interop1 GPU Present gate1 identity probe1
+   464      0.972 wddm: GPU Present calls0 records0 rotate0 refused0
+   465      0.973 wddm: GPU Present submits0 rejected0 failed0
+   466      0.973 wddm: GPU Present errors parameter0 handle0 color0 other0
+   540      1.131 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   557      1.131 wddm: CDD interop1 GPU Present gate1 identity probe1
+   562      1.131 wddm: GPU Present calls0 records0 rotate0 refused0
+   563      1.131 wddm: GPU Present submits0 rejected0 failed0
+   564      1.131 wddm: GPU Present errors parameter0 handle0 color0 other0
+   596      1.352 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib11000 bytes4096 next145 more1
+   597      1.352 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root0 irql0
+   598      1.352 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   599      1.352 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   600      1.352 wddm: GPU Present call1 statusc01e0001 dma4096 private2184 offset0->145
+   607      1.352 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib10000 bytes4096 next290 more1
+   609      1.352 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root0 irql0
+   610      1.352 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   611      1.352 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   613      1.352 wddm: GPU Present call2 statusc01e0001 dma4096 private2184 offset145->290
+   616      1.353 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   618      1.353 gfx: pipeline queued seq55 prior0 observed_after_doorbell0 overlap0
+   620      1.353 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence1 va11000 bytes4096
+   621      1.353 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence1 root46DFFF000 node0
+   622      1.353 wddm: hardware fence arrived, reporting fence 1
+   624      1.353 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   626      1.353 gfx: pipeline queued seq56 prior55 observed_after_doorbell55 overlap0
+   628      1.353 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence2 va10000 bytes4096
+   629      1.353 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence2 root46DFFF000 node0
+   630      1.353 wddm: hardware fence arrived, reporting fence 2
+   638      1.353 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib11A6000 bytes4096 next435 more1
+   639      1.353 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root46DFFF000 irql0
+   640      1.353 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   641      1.353 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   642      1.353 wddm: GPU Present call3 statusc01e0001 dma4096 private2184 offset290->435
+   646      1.353 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   650      1.353 gfx: pipeline queued seq58 prior56 observed_after_doorbell56 overlap0
+   654      1.353 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence3 va11A6000 bytes4096
+   655      1.353 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib11000 bytes4096 next580 more1
+   656      1.353 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence3 root46DFFF000 node0
+   657      1.353 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root46DFFF000 irql0
+   658      1.353 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   659      1.353 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   660      1.353 wddm: hardware fence arrived, reporting fence 3
+   661      1.353 wddm: GPU Present call4 statusc01e0001 dma4096 private2184 offset435->580
+   665      1.353 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   669      1.353 gfx: pipeline queued seq59 prior58 observed_after_doorbell58 overlap0
+   673      1.353 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence4 va11000 bytes4096
+   674      1.353 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib10000 bytes4096 next725 more1
+   675      1.353 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence4 root46DFFF000 node0
+   676      1.353 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root46DFFF000 irql0
+   677      1.353 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   678      1.353 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   679      1.353 wddm: GPU Present call5 statusc01e0001 dma4096 private2184 offset580->725
+   680      1.353 wddm: hardware fence arrived, reporting fence 4
+   684      1.353 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   688      1.353 gfx: pipeline queued seq60 prior59 observed_after_doorbell59 overlap0
+   692      1.353 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence5 va10000 bytes4096
+   693      1.353 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib11A6000 bytes4096 next870 more1
+   694      1.353 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence5 root46DFFF000 node0
+   695      1.353 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root46DFFF000 irql0
+   696      1.353 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   697      1.353 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   698      1.354 wddm: GPU Present call6 statusc01e0001 dma4096 private2184 offset725->870
+   699      1.354 wddm: hardware fence arrived, reporting fence 5
+   707      1.354 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib11000 bytes4096 next997 more0
+   708      1.354 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   709      1.354 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root46DFFF000 irql0
+   710      1.354 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   711      1.354 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   713      1.354 wddm: GPU Present call7 status0 dma4096 private2184 offset870->997
+   714      1.354 gfx: pipeline queued seq61 prior60 observed_after_doorbell60 overlap0
+   716      1.354 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence6 va11A6000 bytes4096
+   717      1.354 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence6 root46DFFF000 node0
+   718      1.354 wddm: hardware fence arrived, reporting fence 6
+   720      1.354 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   722      1.354 gfx: pipeline queued seq62 prior61 observed_after_doorbell61 overlap0
+   724      1.354 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence7 va11000 bytes4096
+   725      1.354 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence7 root46DFFF000 node0
+   726      1.354 wddm: hardware fence arrived, reporting fence 7
+   733      1.370 wddm: GPU Present built ctxFFFF910E8FFB29B0 ib10000 bytes4096 next120 more0
+   734      1.370 wddm: GPU Present build ctxFFFF910E8FFB29B0 ownerFFFF910E8FFB1D70 root46DFFF000 irql0
+   735      1.370 wddm: GPU Present surface0 handleFFFF910E8FFB7250 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+   736      1.370 wddm: GPU Present surface1 handleFFFF910E8FFB30B0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+   737      1.370 wddm: GPU Present call8 status0 dma4096 private2184 offset0->120
+   739      1.370 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+   741      1.370 gfx: pipeline queued seq63 prior62 observed_after_doorbell62 overlap0
+   743      1.370 wddm: GPU Present submit ctxFFFF910E8FFB29B0 fence8 va10000 bytes4096
+   744      1.370 wddm: GPU Present submitted ctxFFFF910E8FFB29B0 fence8 root46DFFF000 node0
+   745      1.370 wddm: hardware fence arrived, reporting fence 8
+   792      2.253 wddm summary: node 0 hardware: 8 submitted, 8 completed, 0 timeouts, 0 refused
+   809      2.253 wddm: CDD interop1 GPU Present gate1 identity probe1
+   878      2.255 wddm: GPU Present calls8 records8 rotate6 refused0
+   879      2.255 wddm: GPU Present submits8 rejected0 failed0
+   880      2.255 wddm: GPU Present errors parameter0 handle0 color0 other0
