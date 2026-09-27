@@ -37,10 +37,11 @@ static ComPtr<ID3DBlob> compile(const char* entry, const char* profile) {
    if (error) printf("compiler %s: %s\n", entry, static_cast<const char*>(error->GetBufferPointer()));
    check(hr, "D3DCompile"); return blob;
 }
+#include "textured-batch.h"
 int main(int argc, char** argv) {
    setvbuf(stdout, nullptr, _IONBF, 0);
    try {
-      require(argc == 2 || (argc == 3 && !strcmp(argv[2], "batch")), "usage: graphics-state-control baseline|warp|hosted [batch]");
+      require(argc == 2 || (argc == 3 && (!strcmp(argv[2], "batch") || !strcmp(argv[2], "texture"))), "usage: graphics-state-control baseline|warp|hosted [batch]");
       const bool hosted = !strcmp(argv[1], "hosted"), warp = !strcmp(argv[1], "warp");
       require(hosted || warp || !strcmp(argv[1], "baseline"), "invalid mode");
       if (hosted) SetEnvironmentVariableA("BC250_D3D_RUNTIME_PROBE", "1");
@@ -164,7 +165,7 @@ int main(int argc, char** argv) {
          ctx->PSSetShader(fetch.Get(),nullptr,0); draw(1,1,1,1,.5f);
          read("render-to-texture",other.Get(),0,0,0,255,true,0);
 
-         if (argc == 3) {
+         if (argc == 3 && !strcmp(argv[2], "batch")) {
             ctx->PSSetShaderResources(0,0,nullptr);
             ID3D11ShaderResourceView* noView=nullptr; ctx->PSSetShaderResources(0,1,&noView);
             ctx->OMSetRenderTargets(1,rtv.GetAddressOf(),nullptr); ctx->PSSetShader(solid.Get(),nullptr,0);
@@ -236,6 +237,7 @@ int main(int argc, char** argv) {
          }
          ctx->ClearState(); finish();
       }
+      if (argc == 3 && !strcmp(argv[2], "texture")) { textured_batch(dev.Get(),ctx.Get(),false); textured_batch(dev.Get(),ctx.Get(),true); }
       ctx->Flush(); check(dev->GetDeviceRemovedReason(),"device after resource release");
       puts("PASS native graphics state: 8 cases, 32768 checked pixels");
       return 0;
