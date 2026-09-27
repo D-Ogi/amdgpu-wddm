@@ -1,0 +1,98 @@
+{
+  "entry_count": 7481,
+  "rptr": 239392,
+  "writeback_wptr": 239392,
+  "tail_all_zero": true,
+  "kinds": [
+    {
+      "client": 8,
+      "source": 224,
+      "count": 1814
+    },
+    {
+      "client": 4,
+      "source": 87,
+      "count": 5332
+    },
+    {
+      "client": 20,
+      "source": 181,
+      "count": 335
+    }
+  ],
+  "last_vupdate": {
+    "offset": 239360,
+    "client": 4,
+    "source": 87,
+    "timestamp": 824168222479
+  },
+  "last_entries": [
+    {
+      "offset": 239136,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824158232835
+    },
+    {
+      "offset": 239168,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824159897775
+    },
+    {
+      "offset": 239200,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824161562715
+    },
+    {
+      "offset": 239232,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824163227659
+    },
+    {
+      "offset": 239264,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824164892599
+    },
+    {
+      "offset": 239296,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824166557539
+    },
+    {
+      "offset": 239328,
+      "client": 20,
+      "source": 181,
+      "timestamp": 824168221112
+    },
+    {
+      "offset": 239360,
+      "client": 4,
+      "source": 87,
+      "timestamp": 824168222479
+    }
+  ],
+  "note": "Raw ring decode follows exact165 bc250_ih_decode; no unconsumed entries in saved memory. Hardware register state not captured.",
+  "consumer": {
+    "active": 1,
+    "our_interrupts": 7461,
+    "dpc_count": 14799,
+    "in_dpc": 0,
+    "dpc_again": 0,
+    "sequence_fault": 0,
+    "fault_offset": 0,
+    "overflow_count": 0,
+    "decode_errors": 0
+  },
+  "layout": {
+    "source": "b83a594",
+    "amdgpu_device_size": 23488,
+    "ih_offset": 23288,
+    "method": "MSVC offsetof against exact source; PDB name lookup returned a different reduced amdgpu_device type."
+  },
+  "limits": "Saved memory after recovery attempt; no live MMIO. Cached DpcAdev ring.enabled=0 is not hardware state: copy precedes enable on the other Adev. No queued tail in this dump does not prove OTG stopped."
+}
