@@ -1,0 +1,31 @@
+{
+  "source": "Three phone photographs explicitly supplied by the owner after DWM013; originals retained privately, unmodified.",
+  "observation": "IMG_2406 and IMG_2408 show large diagonal triangular regions, stretched unrelated window content, repeated interface elements and black rectangular remnants. IMG_2407 is comparatively intact.",
+  "interpretation": "Prioritize vertex/constant-buffer updates, texture coordinates and descriptor state in dynamic multi-draw isolation. No root cause established; still photographs do not measure flicker frequency or establish which frame/call caused corruption.",
+  "artifacts": {
+    "IMG_2408.jpeg": {
+      "bytes": 7148515,
+      "sha256": "442da53096b16b9a0e6a5aaf65b97f227bc8de2b13a867901f1e506821fed5f7",
+      "encoded_dimensions": [
+        5712,
+        4284
+      ]
+    },
+    "IMG_2407.jpeg": {
+      "bytes": 6630475,
+      "sha256": "a04bc1bf07f497f74a2de7e20a926a7d655f64406c86b687a7dc8e01b167d78f",
+      "encoded_dimensions": [
+        5712,
+        4284
+      ]
+    },
+    "IMG_2406.jpeg": {
+      "bytes": 7101465,
+      "sha256": "8925e0b82b92774b985bd7b34b9a44d7d58511d7477c975c51a0e84524ddd665",
+      "encoded_dimensions": [
+        5712,
+        4284
+      ]
+    }
+  }
+}
