@@ -6,6 +6,7 @@
 #include "../../../driver/kmd/gfx_copy.h"
 
 static BOOL g_CopyPending;
+static BOOL g_ListMode;
 static BOOL SubmitCopy(PROBE* p,UINT dwords,UINT64* sequence)
 {
     struct bc250_umd_submit_private blob={0};D3DKMT_SUBMITCOMMAND submit={0};
@@ -49,7 +50,8 @@ static BOOL Fill(PROBE* p,BUFFER* b,BOOL pattern)
 static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UINT height,UINT capacity,UINT64* sequence)
 {
     BUFFER dst={0},readback={0};BC250_BLIT_SURFACE s,d;
-    BC250_BLIT_RECT sr,dr;BC250_BLIT_PLAN plan;BC250_BLIT_CURSOR cursor={0};
+    BC250_BLIT_RECT sr,dr,dirty[4];BC250_BLIT_PLAN plan;BC250_BLIT_CURSOR cursor={0};
+    UINT offset=0;
     BC250_GFX_BLIT_RESULT result;BOOL ok=FALSE;
     UINT written,padded,i,packets=0;UINT64 at,bad=0;
     p->Data.Name="copy-source";dst.Name="copy-destination";readback.Name="copy-readback";
@@ -61,6 +63,14 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     sr.Left=2;sr.Top=1;sr.Right=(int)width+2;sr.Bottom=(int)height+1;
     dr.Left=4;dr.Top=3;dr.Right=(int)width+4;dr.Bottom=(int)height+3;
     if(Bc250PlanBlt(&s,&d,&sr,&dr,NULL,&plan)!=Bc250BltCopy)return FALSE;
+    /* Leave a one-pixel vertical stripe untouched. Split the right region into
+     * two rectangles, plus an empty intersection, to exercise list transitions. */
+    dirty[0]=dr;dirty[0].Right=dr.Left+(int)(width/2u);
+    dirty[1]=dr;dirty[1].Left=dirty[0].Right+1;dirty[1].Bottom=dr.Top+(int)(height/2u);
+    dirty[2]=dirty[1];dirty[2].Top=dirty[1].Bottom;dirty[2].Bottom=dr.Bottom;
+    dirty[3].Left=dirty[3].Top=0;dirty[3].Right=dirty[3].Bottom=1;
+    if(g_ListMode)capacity=(capacity+7u)&~7u;
+    if((((UINT64)capacity+7u)&~7ull)>p->Command.Size/4u)return FALSE;
     Note("COPY_CASE source_heap=%u destination_heap=%u width=%u height=%u capacity=%u",sourceHeap,destinationHeap,width,height,capacity);
     if(!CreateUmdBuffer(p,&p->Data,sourceHeap)||!CreateUmdBuffer(p,&dst,destinationHeap)||
        !CreateUmdBuffer(p,&readback,AMDGPU_GEM_DOMAIN_GTT)||!Fill(p,&p->Data,TRUE)||
@@ -71,7 +81,10 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
         UINT32* dw;
         if(!LockBuffer(p,&p->Command))goto done;
         dw=(UINT32*)p->Command.Locked;
-        result=Bc250EmitGfxBlt(&plan,p->Data.MappedVa,dst.MappedVa,&cursor,&cursor,dw,capacity,&written);
+        if(g_ListMode)
+            result=Bc250EmitGfxBltList(&s,&d,&sr,&dr,dirty,4,p->Data.MappedVa,dst.MappedVa,
+                offset,&offset,dw,capacity&~7u,&written);
+        else result=Bc250EmitGfxBlt(&plan,p->Data.MappedVa,dst.MappedVa,&cursor,&cursor,dw,capacity,&written);
         if((result!=Bc250GfxBltDone && result!=Bc250GfxBltMore)||!written){UnlockBuffer(p,&p->Command);goto done;}
         padded=(written+7u)&~7u;
         for(i=written;i<padded;i++)dw[i]=BC250_CP_NOP;
@@ -95,12 +108,12 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     for(at=0;at<readback.Size/4;at++){
         UINT64 y=at/(d.Pitch/4),x=at%(d.Pitch/4);UINT32 expected=0xa5a5a5a5u;
         UINT32 got=((volatile UINT32*)readback.Locked)[at];
-        if(y>=3 && y<height+3u && x>=4 && x<width+4u)
+        if(y>=3 && y<height+3u && x>=4 && x<width+4u && (!g_ListMode || x!=4u+width/2u))
             expected=Pattern((y-3u+1u)*(s.Pitch/4)+(x-4u+2u),0xBC250u);
         if(got!=expected){if(bad<4)printf("COPY_MISMATCH word=%llu got=%08x expected=%08x\n",at,got,expected);bad++;}
     }
     if(!UnlockBuffer(p,&readback))goto done;
-    printf("COPY_RESULT %s bytes=%llu pixels=%llu packets=%u mismatches=%llu fence=%llu\n",bad?"FAIL":"PASS",readback.Size,(UINT64)width*height,packets,bad,*sequence);
+    printf("COPY_RESULT %s bytes=%llu pixels=%llu packets=%u mismatches=%llu fence=%llu\n",bad?"FAIL":"PASS",readback.Size,(UINT64)(width-(g_ListMode?1u:0u))*height,packets,bad,*sequence);
     ok=bad==0 && CopyResidency(p,&p->Data,sourceHeap,"after") &&
         CopyResidency(p,&dst,destinationHeap,"after") && CopyResidency(p,&readback,AMDGPU_GEM_DOMAIN_GTT,"after");
 done:
@@ -110,11 +123,13 @@ done:
 int main(int argc,char** argv)
 {
     PROBE p={0};BOOL ok=FALSE;UINT64 sequence=0;
-    if(argc!=2 || strcmp(argv[1],"--run")){
-        puts("gfx-blt-control --run: five bounded native GFX row-copy controls, hardware required; no display or ICD change");
+    if(argc!=2 || (strcmp(argv[1],"--run") && strcmp(argv[1],"--run-list"))){
+        puts("gfx-blt-control --run|--run-list: five bounded GFX copies; list mode preserves a stripe; hardware required");
         return argc==1 || (argc==2 && !strcmp(argv[1],"--help"))?0:2;
     }
+    g_ListMode=!strcmp(argv[1],"--run-list");
     setvbuf(stdout,NULL,_IONBF,0);
+    printf("COPY_MODE %s\n",g_ListMode?"dirty-list":"single-plan");
     if(!StartWatchdog(180000))return 2;
     p.Opt.Match="bc250";p.Opt.FenceTimeoutMs=5000;
     p.Command.Name="copy-ib";p.Command.Size=65536;

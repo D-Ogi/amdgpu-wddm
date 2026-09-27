@@ -1,5 +1,6 @@
 param([Parameter(Mandatory)][ValidatePattern('^[0-9A-Fa-f]{64}$')][string]$ExpectedExeSha,
- [Parameter(Mandatory)][ValidatePattern('^C:\\BC250\\m13\\gfx-blt-control[0-9]{3}$')][string]$OutDir)
+ [Parameter(Mandatory)][ValidatePattern('^C:\\BC250\\m13\\gfx-blt-control[0-9]{3}$')][string]$OutDir,
+ [ValidateSet('single-plan','dirty-list')][string]$Mode='single-plan')
 $ErrorActionPreference='Stop'
 $out=$OutDir
 $exe=Join-Path $out 'gfx-blt-control.exe'
@@ -31,7 +32,7 @@ if($LASTEXITCODE -ne 0){throw 'Pre-test counters failed'}
 @{utc=[DateTime]::UtcNow.ToString('o');pid=$PID;exe_sha256=$ExpectedExeSha} | ConvertTo-Json | Set-Content (Join-Path $out 'start.json')
 $code=125;$reason='';$p=$null
 try {
- $p=Start-Process -FilePath $exe -ArgumentList '--run' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $out 'stdout.txt') -RedirectStandardError (Join-Path $out 'stderr.txt')
+ $p=Start-Process -FilePath $exe -ArgumentList $(if($Mode -eq 'dirty-list'){'--run-list'}else{'--run'}) -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $out 'stdout.txt') -RedirectStandardError (Join-Path $out 'stderr.txt')
  $processHandle=$p.Handle
  @{pid=$p.Id;start=$p.StartTime.ToUniversalTime().ToString('o')} | ConvertTo-Json | Set-Content (Join-Path $out 'process.json')
  $watch=[Diagnostics.Stopwatch]::StartNew()
@@ -44,7 +45,8 @@ try {
  if($reason){Stop-Process -Id $p.Id -ErrorAction SilentlyContinue;if(-not $p.WaitForExit(5000)){throw 'Control still active; inspect handle'}}
  $p.Refresh();$code=if($reason){124}else{$p.ExitCode}
  if($code -ne 0){throw "Control exit=$code $reason"}
- $stdout=Get-Content (Join-Path $out 'stdout.txt') -Raw
+ $stdout=[IO.File]::ReadAllText((Join-Path $out 'stdout.txt'))
+ if($stdout -notmatch ('(?m)^COPY_MODE '+[regex]::Escape($Mode)+'\r?$')){throw 'Control mode mismatch'}
  if(([regex]::Matches($stdout,'(?m)^COPY_RESULT PASS ')).Count -ne 5 -or ([regex]::Matches($stdout,'(?m)^COPY_RESIDENCY[^\r\n]*PASS')).Count -ne 30 -or $stdout -notmatch 'GFX_BLT_CONTROL PASS' -or $stdout -match 'COPY_RESIDENCY[^\r\n]*FAIL'){throw 'Missing content/residency PASS'}
  $after=Snapshot
  $after | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'after.json')

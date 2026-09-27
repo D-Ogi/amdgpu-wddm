@@ -71,3 +71,19 @@ substituted by a PASS label. DDI integration and full G0 acceptance remain open.
 The runner now takes an explicit fresh -OutDir under C:\BC250\m13 with a
 three-digit run suffix. It still rejects an existing start receipt, validates
 the executable hash, and requires all five content and30 residency receipts.
+
+## Dirty-list hardware mode
+
+The --run-list mode uses the production list adapter in all five heap/size
+cases. It copies left and right regions while leaving a one-pixel vertical stripe
+at the destination midpoint unchanged. The right region is split into top and
+bottom rectangles; a fourth rectangle has an empty intersection. The independent
+word oracle excludes the stripe by coordinates, not by replaying the dirty list.
+Full-allocation verification still covers pitch padding and all untouched pixels.
+
+List capacities are rounded to8dwords and the supplied capacity is aligned down
+to8 before emission, leaving enough room for the final CP NOP padding within the
+actual command allocation. The runner's -Mode dirty-list requires an explicit
+COPY_MODE dirty-list receipt. The old single-plan mode remains available for
+regression. Compilation is not hardware execution: no result for this new mode
+is claimed until a fresh coordinated run completes and its evidence is retained.
