@@ -222,6 +222,28 @@ int main(void)
             memcpy(record,original,sizeof(record));
         }
     }
+    {
+        /* Replay DWM027's actual private capacity/used span and IB shape. */
+        unsigned char record[2184];
+        memset(record,0xcc,sizeof(record));
+        CHECK(Bc250GfxPresentRecord(record,sizeof(record),0x11000ull,4096));
+        CHECK(Bc250GfxPresentSubmitMatches(record,sizeof(record),24,0x11000ull,4096));
+        CHECK(Bc250GfxPresentSubmitMatches(record,sizeof(record),24,0x11000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),0,0x11000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),23,0x11000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),25,0x11000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),sizeof(record),0x11000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,23,24,0x11000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),24,0x10000ull,4096));
+        CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),24,0x11000ull,4064));
+        CHECK(!Bc250GfxPresentSubmitMatches(NULL,sizeof(record),24,0x11000ull,4096));
+        for(i=0;i<24;i++) {
+            record[i]^=1;
+            CHECK(!Bc250GfxPresentSubmitMatches(record,sizeof(record),24,0x11000ull,4096));
+            record[i]^=1;
+        }
+    }
+    puts("PASS Present consumed-private-span replay and negative boundaries");
     puts("PASS acquired and padded Present IBs, resumed copies, rejection and independent pixels");
     puts("PASS Present private-record binding, truncation, mutation and range checks");
     puts("PASS full dirty-list prevalidation and packet-ordinal multipass at30 capacities");

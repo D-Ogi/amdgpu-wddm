@@ -141,6 +141,13 @@ int Bc250GfxPresentMatches(const void* record, unsigned int capacity,
         (((unsigned long long)PresentWord(p+20)<<32)|PresentWord(p+16))==address;
 }
 
+int Bc250GfxPresentSubmitMatches(const void* record, unsigned int capacity,
+    unsigned int usedPrivateBytes, unsigned long long address, unsigned int bytes)
+{
+    return usedPrivateBytes == BC250_GFX_PRESENT_RECORD_BYTES &&
+        Bc250GfxPresentMatches(record, capacity, address, bytes);
+}
+
 BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
     const BC250_BLIT_SURFACE* source, const BC250_BLIT_SURFACE* destination,
     const BC250_BLIT_RECT* sourceRect, const BC250_BLIT_RECT* destinationRect,
