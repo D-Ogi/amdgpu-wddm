@@ -1,0 +1,29 @@
+{
+  "scope": "Logical map requests only. Exact reconciliation does not count CPU stores or classify missing bucket identities.",
+  "snapshots": 155,
+  "last": [
+    {
+      "ctx": "0000023C7BD02070",
+      "sample": 9408,
+      "totals": {
+        "image_calls": 4171,
+        "image_request_bytes": 1304718632,
+        "buffer_calls": 30114,
+        "buffer_request_bytes": 2521036900,
+        "persistent_calls": 8
+      },
+      "overflow": 0,
+      "unclassified": {
+        "image": {
+          "calls": 0,
+          "bytes": 0
+        },
+        "buffer": {
+          "calls": 0,
+          "bytes": 0
+        }
+      },
+      "unclassified_persistent_calls": 0
+    }
+  ]
+}
