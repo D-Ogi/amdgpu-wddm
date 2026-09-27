@@ -1,0 +1,14 @@
+{
+  "gpu.etl": {
+    "bytes": 138412032,
+    "sha256": "0df3cc0bf8e57253689403d6dcd88368c81f86e91f72168f92d1afef969cd418"
+  },
+  "receipts.zip": {
+    "bytes": 27572781,
+    "sha256": "0e84fa77e1cf1a2fa5f9568b6e4656958a4959d4fb96d29f78b0575ab32f2718"
+  },
+  "result\\dwm-11524.log": {
+    "bytes": 2685296,
+    "sha256": "4e565d3ae93cde777da9c6e997eccdb5a4a5995123a64fbc0ecaafd666a5fa01"
+  }
+}
