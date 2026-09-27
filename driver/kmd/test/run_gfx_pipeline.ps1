@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$EqualityFence,[switch]$SerializeGather,[string]$SourceRoot='')
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='')
 $ErrorActionPreference='Stop'
 $repo=Join-Path $Root 'bc250-win'
 $env:TEMP=Join-Path $Root 'scratch\tmp'; $env:TMP=$env:TEMP
@@ -6,6 +6,14 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 if(!$SourceRoot){$SourceRoot=$repo}
 & python "$PSScriptRoot\generate_gfx_pipeline_test.py" "$Out\gfx_pipeline_actual.inc" $SourceRoot
 if($LASTEXITCODE -ne 0){throw 'extraction failed'}
+if($IdleOnlyPresent){
+    $actual=Get-Content "$Out\gfx_pipeline_actual.inc" -Raw
+    $marker='static BOOLEAN WddmSubmitPresentHardware('
+    $at=$actual.IndexOf($marker)
+    if($at -lt 0){throw 'Present admission extraction missing'}
+    $actual=$actual.Substring(0,$at)+$actual.Substring($at).Replace('(GfxSubmitReady(Device) || GfxSubmitBusy(Device))','GfxSubmitReady(Device)')
+    [IO.File]::WriteAllText("$Out\gfx_pipeline_actual.inc",$actual)
+}
 if($SerializeGather){
     $g=Get-Content "$Out\gather_actual.inc" -Raw
     $g=$g.Replace('reuse.wait_value = slot->retire_value;', 'reuse.wait_value = queue->bc250_progress.wait_value;')
@@ -33,6 +41,7 @@ $ringResult=$LASTEXITCODE
 if($LASTEXITCODE -ne 0){throw 'pipeline test build failed'}
 & "$Out\pipeline_test.exe"
 $queueResult=$LASTEXITCODE
+if($KmdOnly){if($ringResult -ne 0 -or $queueResult -ne 0){exit 1};exit 0}
 & $cl @flags "/Fe$Out\gather_test.exe" "$PSScriptRoot\gfx_gather_test.c" @link
 if($LASTEXITCODE -ne 0){throw 'gather test build failed'}
 & "$Out\gather_test.exe"

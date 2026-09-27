@@ -1,0 +1,18 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+kmd-commands PASS 0.64s
+kmd-contract PASS 0.37s
+radv-contract PASS 0.24s
+umd-contract PASS 0.23s
+surface-layout PASS 0.85s
+blit-plan PASS 0.87s
+allocation-identity PASS 0.22s
+gfx-copy PASS 0.87s
+gfx-blt PASS 0.9s
+blob-abi PASS 1.02s
+surface-control PASS 0.22s
+kmd-analysis PASS 0.58s
+umd-analysis PASS 3.32s

@@ -3,6 +3,7 @@ import sys
 repo=Path(__file__).resolve().parents[3]
 source=Path(sys.argv[2]) if len(sys.argv)>2 else repo
 s=(source/'driver/kmd/wddm.c').read_text()
+assert 'if (WddmSubmitPresentHardware(device,wddm,context,' in s, 'BGP1 must use tested bounded admission'
 a=s.index('static void WddmGfxHeadLocked(')
 b=s.index('// ---- ADR 0008 stage D:',a)
 Path(sys.argv[1]).write_text(s[a:b])
