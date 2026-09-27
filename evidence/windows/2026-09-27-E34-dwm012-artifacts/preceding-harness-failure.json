@@ -1,0 +1,19 @@
+{
+  "done": {
+    "gpu_pid": 8036,
+    "utc": "2026-09-27T00:20:57.4842348Z",
+    "measured_seconds": 0,
+    "success": false
+  },
+  "restore": {
+    "before": [
+      8036
+    ],
+    "utc": "2026-09-27T00:20:56.2517205Z",
+    "after": [
+      3164
+    ]
+  },
+  "reason": "Get-Content could not open the live DWM log due to file sharing; metadata-only online monitoring used in012",
+  "private_run_log_sha256": "62fbf0cf39bcf742bd838b676a4a5dabd1c53b31201f941b826ed4b4d4b024a3"
+}
