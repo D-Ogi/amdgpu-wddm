@@ -59,6 +59,33 @@ static void Geometry(unsigned long long mcBase, unsigned long long vramBase,
     }
 }
 
+static void GdiAllocationPolicies(void)
+{
+    /* WDK26100 contract fixtures: type, shared/cached request, then expected
+     * CPU visibility, aperture, cache and physical access. Legacy rows preserve
+     * existing resource policy; standard rows override irrelevant UMD hints. */
+    const int rows[][7]={
+        {0,0,0,1,0,0,1},{0,0,1,1,0,0,1},
+        {0,1,0,1,1,0,0},{0,1,1,1,1,1,0},
+        {1,1,1,0,0,0,0},{2,0,0,1,1,1,0},
+        {3,1,1,0,0,0,0},{4,1,1,0,0,0,0}
+    };
+    unsigned int i;
+    BC250_GDI_ALLOCATION_POLICY p;
+    for(i=0;i<sizeof(rows)/sizeof(rows[0]);i++) {
+        CHECK(WddmGdiAllocationPolicy((unsigned long)rows[i][0],rows[i][1],rows[i][2],&p));
+        CHECK(p.CpuVisible==rows[i][3] && p.Aperture==rows[i][4] &&
+            p.Cached==rows[i][5] && p.AccessedPhysically==rows[i][6]);
+    }
+    for(i=5;i<10;i++) {
+        p.CpuVisible=p.Aperture=p.Cached=p.AccessedPhysically=7;
+        CHECK(!WddmGdiAllocationPolicy(i,1,1,&p));
+        CHECK(p.CpuVisible==7 && p.Aperture==7 && p.Cached==7 && p.AccessedPhysically==7);
+    }
+    CHECK(!WddmGdiAllocationPolicy(0xfffffffful,0,0,&p));
+    CHECK(!WddmGdiAllocationPolicy(1,0,0,0));
+}
+
 int main(void)
 {
     unsigned long w,h,pitch;unsigned long long bytes;
@@ -67,6 +94,7 @@ int main(void)
     unsigned int n;
     typedef char GdiAbiSize[(sizeof(gdi.Surface)==32 && sizeof(gdi)==48)?1:-1];
     GdiAbiSize abi={0};
+    GdiAllocationPolicies();
     CHECK(abi[0]==0);
     CHECK(!WddmGdiPrivate(0,32,&type) && type==0);
     CHECK(WddmGdiPrivate(&gdi,32,&type) && type==0);

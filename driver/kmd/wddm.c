@@ -2601,6 +2601,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     BC250_WDDM* wddm = WddmOf(hAdapter);
     BC250_WDDM_ALLOCATION_PRIVATE private;
     BC250_GDI_PRIVATE gdi;
+    BC250_GDI_ALLOCATION_POLICY gdiPolicy;
     UINT privateBytes=sizeof(private);
 
     RtlZeroMemory(&private, sizeof(private));
@@ -2647,7 +2648,8 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     case D3DKMDT_STANDARDALLOCATION_GDISURFACE:
         if (pData->pCreateGdiSurfaceData == NULL) return STATUS_INVALID_PARAMETER;
         if (pData->pCreateGdiSurfaceData->Flags.Value ||
-            !pData->pCreateGdiSurfaceData->Type || pData->pCreateGdiSurfaceData->Type>8)
+            !pData->pCreateGdiSurfaceData->Type ||
+            !WddmGdiAllocationPolicy((ULONG)pData->pCreateGdiSurfaceData->Type,0,0,&gdiPolicy))
             return STATUS_INVALID_PARAMETER;
         privateBytes=sizeof(gdi);
         private.Width = pData->pCreateGdiSurfaceData->Width;
@@ -2767,7 +2769,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* object;
         ULONG gdiType=0;
-        BOOLEAN allocationSharedCpu=sharedCpu, allocationCachedCpu=cachedCpu;
+        BC250_GDI_ALLOCATION_POLICY policy;
 
         if (info->PrivateDriverDataSize == sizeof(BC250_WDDM_ALLOCATION_PRIVATE) && private != NULL &&
             private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && private->Width == 64 && private->Height == 32)
@@ -2837,6 +2839,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
             private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
             !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
             !WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) ||
+            !WddmGdiAllocationPolicy(gdiType,sharedCpu,cachedCpu,&policy) ||
             (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
         {
             if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
@@ -2854,13 +2857,8 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         }
         object->Allocation = *private;
         object->GdiType=gdiType;
-        // WDK26100 GDISURFACE_STAGING_CPUVISIBLE requires a linear coherent
-        // aperture allocation. Preserve this per-allocation intent across CDD.
-        if (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE) {
-            allocationSharedCpu=TRUE;
-            allocationCachedCpu=TRUE;
-        }
-
+        // WDK26100: standard texture/staging/lookup surfaces are GPU-only;
+        // CPU staging uses coherent aperture. Legacy type0 keeps its policy.
         info->hAllocation = object;
         info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
         // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
@@ -2871,19 +2869,15 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         info->pAllocationUsageHint = NULL;
         info->PitchAlignedSize = 0;                     // the aperture segment is not a pitch-aligned one
         info->PreferredSegment.Value = 0;
-        info->PreferredSegment.SegmentId0 = allocationSharedCpu ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
+        info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
         info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
         info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
         info->EvictionSegmentSet = 0;                   // no explicit eviction segment; VidMm owns backing-store eviction
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
-        // Linear VRAM blits use physical mappings. System-memory pages are not assumed contiguous.
-        info->FlagsWddm2.AccessedPhysically = !allocationSharedCpu;
-        // Explicit v2 non-primary CPU-read intent or standard CPU staging.
-        // Other legacy LB7A allocations retain Cached=0. System aperture coherency is supplied through VidMm
-        // CacheCoherent PTEs, not by changing local scanout mapping attributes.
-        info->FlagsWddm2.Cached = allocationCachedCpu &&
-            info->PreferredSegment.SegmentId0 == BC250_WDDM_SEGMENT_APERTURE;
+        info->FlagsWddm2.CpuVisible = policy.CpuVisible;
+        info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
+        info->FlagsWddm2.Cached = policy.Cached;
         info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
     }
     if (pCreateAllocation->Flags.Resource && pCreateAllocation->hResource == NULL)
@@ -2963,6 +2957,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* opened = NULL;
         ULONG gdiType=0;
+        BC250_GDI_ALLOCATION_POLICY policy;
 
         if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
         {
@@ -2984,7 +2979,8 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         }
         else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
             private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
-            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)))
+            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) &&
+            WddmGdiAllocationPolicy(gdiType,0,0,&policy))
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
             if (opened != NULL) {
