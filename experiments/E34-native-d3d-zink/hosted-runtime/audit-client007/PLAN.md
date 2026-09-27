@@ -1,6 +1,6 @@
 # Audit client007 - independent Present checkpoint count
 
-Prepared, not run. UMDd7948d8e adds the optional read-only host audit query6
+Completed: M704, all required controls passed. UMDd7948d8e adds the optional read-only host audit query6
 without changing host-v5 layout or existing operations. Same166/C0CE and006
 texture workload; CPU DWM retained. Independent watchdog and45-second deadline.
 
@@ -12,3 +12,5 @@ Old hosts must produce an unavailable snapshot, never an implicit zero/pass.
 
 Fresh preflight/STOP/thermal and exact manifest before one launch. Restore8279/
 CF39, preserve DWM/boot, remove terminal tasks. No G0 or permanent promotion.
+
+Result: [M704 evidence](../../../../evidence/windows/2026-09-28-E34-audit-client007/RESULT.md).
