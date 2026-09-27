@@ -7,6 +7,7 @@
 
 static BOOL g_CopyPending;
 static BOOL g_ListMode;
+static BOOL g_PresentListMode;
 static BOOL SubmitCopy(PROBE* p,UINT dwords,UINT64* sequence)
 {
     struct bc250_umd_submit_private blob={0};D3DKMT_SUBMITCOMMAND submit={0};
@@ -53,7 +54,7 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     BC250_BLIT_RECT sr,dr,dirty[4];BC250_BLIT_PLAN plan;BC250_BLIT_CURSOR cursor={0};
     UINT offset=0;
     BC250_GFX_BLIT_RESULT result;BOOL ok=FALSE;
-    UINT written,padded,i,packets=0;UINT64 at,bad=0;
+    UINT written,padded,i,packets=0,ibSubmissions=0;UINT64 at,bad=0;
     p->Data.Name="copy-source";dst.Name="copy-destination";readback.Name="copy-readback";
     s.Width=width+4;s.Height=height+3;s.Pitch=(width+8)*4;s.Format=Bc250BltBgra8;
     d.Width=width+6;d.Height=height+5;d.Pitch=(width+12)*4;d.Format=Bc250BltBgra8;
@@ -70,6 +71,7 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     dirty[2]=dirty[1];dirty[2].Top=dirty[1].Bottom;dirty[2].Bottom=dr.Bottom;
     dirty[3].Left=dirty[3].Top=0;dirty[3].Right=dirty[3].Bottom=1;
     if(g_ListMode)capacity=(capacity+7u)&~7u;
+    if(g_PresentListMode && capacity<16u)capacity=16u;
     if((((UINT64)capacity+7u)&~7ull)>p->Command.Size/4u)return FALSE;
     Note("COPY_CASE source_heap=%u destination_heap=%u width=%u height=%u capacity=%u",sourceHeap,destinationHeap,width,height,capacity);
     if(!CreateUmdBuffer(p,&p->Data,sourceHeap)||!CreateUmdBuffer(p,&dst,destinationHeap)||
@@ -81,15 +83,20 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
         UINT32* dw;
         if(!LockBuffer(p,&p->Command))goto done;
         dw=(UINT32*)p->Command.Locked;
-        if(g_ListMode)
+        if(g_PresentListMode)
+            result=Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,dirty,4,p->Data.MappedVa,dst.MappedVa,
+                offset,&offset,dw,capacity,&written);
+        else if(g_ListMode)
             result=Bc250EmitGfxBltList(&s,&d,&sr,&dr,dirty,4,p->Data.MappedVa,dst.MappedVa,
                 offset,&offset,dw,capacity&~7u,&written);
         else result=Bc250EmitGfxBlt(&plan,p->Data.MappedVa,dst.MappedVa,&cursor,&cursor,dw,capacity,&written);
         if((result!=Bc250GfxBltDone && result!=Bc250GfxBltMore)||!written){UnlockBuffer(p,&p->Command);goto done;}
+        if(g_PresentListMode && written!=capacity){puts("FAIL Present wrapper did not consume full IB");UnlockBuffer(p,&p->Command);goto done;}
         padded=(written+7u)&~7u;
         for(i=written;i<padded;i++)dw[i]=BC250_CP_NOP;
         MemoryBarrier();if(!UnlockBuffer(p,&p->Command)||!SubmitCopy(p,padded,sequence))goto done;
-        packets+=written/7u;
+        ibSubmissions++;
+        if(g_PresentListMode)packets=offset;else packets+=written/7u;
     }while(result==Bc250GfxBltMore);
     /* Independent readback uses the previously exercised E27 direct-memory DMA
      * layout, without the new row builder or L2 selectors. The preceding hardware
@@ -114,6 +121,7 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     }
     if(!UnlockBuffer(p,&readback))goto done;
     printf("COPY_RESULT %s bytes=%llu pixels=%llu packets=%u mismatches=%llu fence=%llu\n",bad?"FAIL":"PASS",readback.Size,(UINT64)(width-(g_ListMode?1u:0u))*height,packets,bad,*sequence);
+    printf("COPY_IBS mode=%s submissions=%u final_offset=%u\n",g_PresentListMode?"present-packet":g_ListMode?"dirty-list":"single-plan",ibSubmissions,offset);
     ok=bad==0 && CopyResidency(p,&p->Data,sourceHeap,"after") &&
         CopyResidency(p,&dst,destinationHeap,"after") && CopyResidency(p,&readback,AMDGPU_GEM_DOMAIN_GTT,"after");
 done:
@@ -123,13 +131,14 @@ done:
 int main(int argc,char** argv)
 {
     PROBE p={0};BOOL ok=FALSE;UINT64 sequence=0;
-    if(argc!=2 || (strcmp(argv[1],"--run") && strcmp(argv[1],"--run-list"))){
-        puts("gfx-blt-control --run|--run-list: five bounded GFX copies; list mode preserves a stripe; hardware required");
+    if(argc!=2 || (strcmp(argv[1],"--run") && strcmp(argv[1],"--run-list") && strcmp(argv[1],"--run-present-list"))){
+        puts("gfx-blt-control --run|--run-list|--run-present-list: five bounded copies; Present packet mode uses BC2S transport, not DDI Present");
         return argc==1 || (argc==2 && !strcmp(argv[1],"--help"))?0:2;
     }
-    g_ListMode=!strcmp(argv[1],"--run-list");
+    g_PresentListMode=!strcmp(argv[1],"--run-present-list");
+    g_ListMode=g_PresentListMode || !strcmp(argv[1],"--run-list");
     setvbuf(stdout,NULL,_IONBF,0);
-    printf("COPY_MODE %s\n",g_ListMode?"dirty-list":"single-plan");
+    printf("COPY_MODE %s\n",g_PresentListMode?"present-packet":g_ListMode?"dirty-list":"single-plan");
     if(!StartWatchdog(180000))return 2;
     p.Opt.Match="bc250";p.Opt.FenceTimeoutMs=5000;
     p.Command.Name="copy-ib";p.Command.Size=65536;
