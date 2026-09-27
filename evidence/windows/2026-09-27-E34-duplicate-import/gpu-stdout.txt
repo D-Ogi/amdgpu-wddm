@@ -1,0 +1,11 @@
+pid=10116 UMD=C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+pid=10116 UMD=C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+pid=7680 UMD=C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+duplicate_reopen=1 iteration=0 PASS
+parent progress=100 generations=1 checked_pixels=204800
+duplicate_reopen=2 iteration=100 PASS
+child PASS checked_pixels=216240
+owner_exit=normal child_exit=0 survivor_pixels=29376
+duplicate_imports PASS reopens=2 independent_devices=3
+PASS iterations=101 generations=2 parent_pixels=207248 child_pixels=216240 distinct_pids=7680,10116
+
