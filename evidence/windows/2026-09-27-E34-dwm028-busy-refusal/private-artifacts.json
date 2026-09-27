@@ -1,0 +1,18 @@
+{
+  "MEMORY.DMP": {
+    "bytes": 642741111,
+    "sha256": "5e6f695e01e51b0ce54d6a7653a2e75af7d86dd9e9c22e023bc9d501aed10f83"
+  },
+  "092726-61468-01.dmp": {
+    "bytes": 1482788,
+    "sha256": "803dcd95b642eb685284172c09a3646f2a84747a2ce187c07897176a16a4945a"
+  },
+  "guard-ring.bin": {
+    "bytes": 172032,
+    "sha256": "436ffe22d810daf6ea3193411032a3603203f77e26896dc5904a8ba9e642204e"
+  },
+  "crash-receipts.zip": {
+    "bytes": 3249055,
+    "sha256": "5b4bd07df5debbeb4889854001fc5c4cb20d398d82dbe3bdde327029a969d0d5"
+  }
+}

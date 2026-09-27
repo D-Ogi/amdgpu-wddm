@@ -1,0 +1,12 @@
+11: kd> .sympath+ P:\bc-250\scratch\g0-hosted\kmd163-final001
+Expanded Symbol search path is: p:\bc-250\scratch\build\bc250kmd;p:\bc-250\scratch\build\bc250rd;srv*p:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols;p:\bc-250\scratch\g0-hosted\kmd163-final001
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\build\bc250kmd
+OK                                             P:\BC-250\scratch\build\bc250rd
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\bc-250\scratch\g0-hosted\kmd163-final001
+11: kd> .reload /f bc250kmd.sys
+11: kd> dq poi(ffffd38c0eea0880+5250)+50 L1
+ffff9d01`95b52050  00000000`00000041

@@ -1,0 +1,705 @@
+    0      0.000 stage 10
+    1      0.000 gate: EnableFullWddm 2
+    2      0.000 stage 20
+    3     31.021 stage 30
+    4     31.021 guard: count 1 -> 2 flushed, durable required 1
+    5     31.021 stage 31
+    6     31.021 stage 32
+    7     31.021 post display 1920x1200 pitch 7680 format 22 target 4294967295
+    8     31.023 stage 33
+    9     31.023 stage 34
+   10     31.023 interrupt resource 1: message, vector 0x51, flags 0x3
+   11     31.023 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+   12     31.023 smu: native owner start status 0x00000000
+   13     31.023 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+   14     31.023 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+   15     31.023 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+   16     31.023 gart: ready, dummy page at 0x26FFFA000
+   17     31.023 psp: ready
+   18     31.023 gpumem: ready, doorbells at 0xD0000000
+   19     31.023 gfx: ready, GPU submission allowed, paging node allowed
+   20     31.023 ih: ready
+   21     31.023 wddm: POST display target 4294967295 is not ours, vsync reports name child 0x250001
+   22     31.023 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+   23     31.025 vidmm: table segment 3 at physical 0x45E150000 + 0xFEB0000, host memory below 0x270000000, updates are WRITTEN
+   24     31.025 startup: entering interrupt connection
+   25     31.027 startup: entering firmware preparation
+   26     31.033 startup: entering native clock preparation
+   27     31.035 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1500MHz/VID101 observed 1000MHz/VID116 temp 70000mc staged 0
+   28     31.037 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+   29     31.037 gfx: unpublished translation bootstrap entered with engines halted
+   30     31.037 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   31     31.037 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+   32     31.037 startup: entering GART initialization
+   33     31.049 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+   34     31.049 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   35     31.049 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+   36     31.049 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+   37     31.049 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   38     31.049 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+   39     31.049 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+   40     31.049 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   41     31.049 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+   42     31.049 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+   43     31.049 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   44     31.049 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+   45     31.049 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+   46     31.049 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   47     31.049 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+   48     31.049 startup: entering PSP initialization
+   49     31.095 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   50     31.095 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+   51     31.117 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   52     31.117 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+   53     31.117 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+   54     31.117 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 240 us, in TMR at 0x0
+   55     31.117 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   56     31.117 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   57     31.119 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1941 us, in TMR at 0x0
+   58     31.119 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   59     31.119 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   60     31.121 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1889 us, in TMR at 0x0
+   61     31.121 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   62     31.121 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   63     31.127 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5853 us, in TMR at 0xF5FF842000
+   64     31.127 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   65     31.127 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   66     31.131 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5904 us, in TMR at 0xF5FF883000
+   67     31.131 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   68     31.131 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   69     31.137 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF8C4000
+   70     31.137 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   71     31.137 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   72     31.143 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   73     31.143 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   74     31.143 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   75     31.143 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   76     31.143 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   77     31.143 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   78     31.149 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5953 us, in TMR at 0xF5FF800000
+   79     31.149 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   80     31.149 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   81     31.151 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   82     31.151 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   83     31.151 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   84     31.151 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1736 us, in TMR at 0x0
+   85     31.151 gfx: RLC after-psp-command CNTL 0x00000001 read 0x00000000 STATUS2 0x01000008 read 0x00000000
+   86     31.151 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   87     31.151 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   88     31.151 gfx: RLC after-psp CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   89     31.151 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+   90     31.151 startup: entering IH initialization
+   91     31.153 ih: init: rc 0, 18 writes
+   92     31.153 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   93     31.153 startup: entering GFX initialization
+   94     31.155 startup: entering GFX stage 1
+   95     31.157 gfx: RLC startup policy pp_gfxoff 0
+   96     31.157 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 1 us
+   97     31.157 gfx: op 1 to stage 1 -> 0x00000000, result 0, 49 writes, 0 doorbells
+   98     31.159 startup: entering GFX stage 2
+   99     31.159 gfx: stage 2 (golden registers): rc 0, 34 writes so far, 25 us
+  100     31.159 gfx: op 1 to stage 2 -> 0x00000000, result 0, 34 writes, 0 doorbells
+  101     31.161 startup: entering GFX stage 3
+  102     31.161 gfx: stage 3 (GRBM CAM probe): rc 0, 3 writes so far, 2 us
+  103     31.161 gfx: op 1 to stage 3 -> 0x00000000, result 0, 3 writes, 0 doorbells
+  104     31.163 startup: entering GFX stage 4
+  105     31.163 gfx: stage 4 (constants): rc 0, 157 writes so far, 74 us
+  106     31.163 gfx: op 1 to stage 4 -> 0x00000000, result 0, 157 writes, 0 doorbells
+  107     31.163 startup: entering GFX stage 5
+  108     31.165 startup: RLC boundary acquire-paging-lock
+  109     31.165 startup: RLC boundary acquire-gart-lock
+  110     31.165 startup: RLC boundary locks-acquired
+  111     31.167 startup: RLC boundary before-rlc-resume
+  112     31.167 startup: RLC boundary after-rlc-resume
+  113     31.169 startup: RLC boundary before-gfx-visibility
+  114     31.169 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+  115     31.171 startup: visibility observer returned after-invalidate-request
+  116     31.171 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+  117     31.171 startup: visibility observer returned after-invalidate-request-read
+  118     31.173 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+  119     31.173 startup: visibility observer returned after-invalidate-ack
+  120     31.175 startup: visibility GFX returned 0, entering MMHUB
+  121     31.175 startup: visibility MMHUB returned 0
+  122     31.175 gpumem: startup GFX translations committed after RLC, before CP
+  123     31.177 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+  124     31.177 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+  125     31.177 startup: visibility publication observer returned
+  126     31.177 startup: RLC boundary after-gfx-visibility
+  127     31.177 gfx: stage 5 (RLC): rc 0, 12 writes so far, 11256 us
+  128     31.177 gfx: op 1 to stage 5 -> 0x00000000, result 0, 12 writes, 0 doorbells
+  129     31.179 startup: entering GFX stage 6
+  130     31.179 startup: entering CP step 1
+  131     31.181 startup: CP1 checkpoint acquire-paging-lock
+  132     31.181 startup: CP1 checkpoint acquire-gart-lock
+  133     31.181 startup: CP1 checkpoint locks-acquired
+  134     31.183 amdgpu[0]: CP resume kiq-init begin
+
+  135     31.183 startup: CP1 checkpoint scheduler
+  136     31.184 startup: CP1 checkpoint scheduler-read
+  137     31.185 startup: CP1 checkpoint scheduler-write
+  138     31.185 startup: CP1 checkpoint scheduler-done
+  139     31.185 startup: CP1 checkpoint clear-mqd
+  140     31.187 startup: CP1 checkpoint select-queue
+  141     31.187 startup: CP1 checkpoint build-mqd
+  142     31.189 startup: CP1 checkpoint disable-wptr-poll
+  143     31.189 startup: CP1 checkpoint read-active
+  144     31.189 startup: CP1 checkpoint program-hqd
+  145     31.191 startup: CP1 checkpoint activate-hqd
+  146     31.191 startup: CP1 checkpoint restore-selection
+  147     31.193 startup: CP1 checkpoint complete
+  148     31.193 amdgpu[0]: CP resume kiq-init end result=0
+
+  149     31.193 gfx: CP step 1: rc 0, 27 writes, 10600 us
+  150     31.193 gfx: op 1 to stage 6 -> 0x00000000, result 0, 27 writes, 0 doorbells
+  151     31.193 startup: CP step 1 returned 0x00000000 result 0
+  152     31.193 startup: entering CP step 2
+  153     31.195 amdgpu[0]: CP resume compute-unhalt begin
+
+  154     31.195 amdgpu[0]: CP resume compute-unhalt end
+
+  155     31.195 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+  156     31.195 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+  157     31.195 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+  158     31.195 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+  159     31.195 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+  160     31.195 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+  161     31.195 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+  162     31.195 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+  163     31.195 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+  164     31.195 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+  165     31.195 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+  166     31.195 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+  167     31.195 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+  168     31.195 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+  169     31.195 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+  170     31.195 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+  171     31.195 gfx: CP step 2: rc 0, 17 writes, 229 us
+  172     31.195 gfx: op 1 to stage 6 -> 0x00000000, result 0, 17 writes, 0 doorbells
+  173     31.195 startup: CP step 2 returned 0x00000000 result 0
+  174     31.195 startup: entering CP step 3
+  175     31.197 amdgpu[0]: CP resume kcq-enable begin
+
+  176     31.197 amdgpu[0]: CP resume kcq-enable end result=0
+
+  177     31.197 gfx: CP step 3: rc 0, 1 writes, 47 us
+  178     31.197 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+  179     31.197 startup: CP step 3 returned 0x00000000 result 0
+  180     31.197 startup: entering CP step 4
+  181     31.199 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+  182     31.199 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+  183     31.199 gfx: CP step 4: rc 0, 4 writes, 23 us
+  184     31.199 gfx: op 1 to stage 6 -> 0x00000000, result 0, 4 writes, 0 doorbells
+  185     31.199 startup: CP step 4 returned 0x00000000 result 0
+  186     31.199 startup: entering CP step 5
+  187     31.199 amdgpu[0]: CP resume kgq-enable begin
+
+  188     31.199 amdgpu[0]: CP resume kgq-enable end result=0
+
+  189     31.199 gfx: CP step 5: rc 0, 1 writes, 17 us
+  190     31.199 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 2 doorbells
+  191     31.199 startup: CP step 5 returned 0x00000000 result 0
+  192     31.201 startup: entering CP step 6
+  193     31.201 amdgpu[0]: CP resume gfx-start begin
+
+  194     31.201 amdgpu[0]: CP resume gfx-start end result=0
+
+  195     31.201 gfx: CP step 6: rc 0, 3 writes, 19 us
+  196     31.201 gfx: op 1 to stage 6 -> 0x00000000, result 0, 3 writes, 1 doorbells
+  197     31.201 startup: CP step 6 returned 0x00000000 result 0
+  198     31.203 startup: entering CP step 7
+  199     31.203 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+  200     31.203 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+  201     31.203 gfx: CP step 7: rc 0, 1 writes, 9 us
+  202     31.203 gfx: op 1 to stage 6 -> 0x00000000, result 0, 1 writes, 1 doorbells
+  203     31.203 startup: CP step 7 returned 0x00000000 result 0
+  204     31.203 startup: entering CP step 8
+  205     31.205 amdgpu[0]: CP resume compute-test ring=0 begin
+
+  206     31.205 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+  207     31.205 amdgpu[0]: CP resume compute-test ring=1 begin
+
+  208     31.205 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+  209     31.205 amdgpu[0]: CP resume compute-test ring=2 begin
+
+  210     31.205 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+  211     31.205 amdgpu[0]: CP resume compute-test ring=3 begin
+
+  212     31.205 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+  213     31.205 amdgpu[0]: CP resume compute-test ring=4 begin
+
+  214     31.205 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+  215     31.205 amdgpu[0]: CP resume compute-test ring=5 begin
+
+  216     31.205 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+  217     31.205 amdgpu[0]: CP resume compute-test ring=6 begin
+
+  218     31.205 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+  219     31.205 amdgpu[0]: CP resume compute-test ring=7 begin
+
+  220     31.205 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+  221     31.205 gfx: CP step 8: rc 0, 8 writes, 63 us
+  222     31.205 gfx: op 1 to stage 6 -> 0x00000000, result 0, 8 writes, 8 doorbells
+  223     31.205 startup: CP step 8 returned 0x00000000 result 0
+  224     31.207 startup: entering GFX stage 7
+  225     31.209 gfx: stage 7 (SDMA): rc 0, 93 writes so far, 126 us
+  226     31.209 gfx: op 1 to stage 7 -> 0x00000000, result 0, 93 writes, 2 doorbells
+  227     31.209 startup: entering GFX stage 8
+  228     31.211 gfx: stage 8 (interrupt sources): rc 0, 35 writes so far, 22 us
+  229     31.211 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+  230     31.211 gfx: op 1 to stage 8 -> 0x00000000, result 0, 35 writes, 0 doorbells
+  231     31.211 startup: both engines ready
+  232     31.213 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+  233     31.213 wddm: GPU initialized before adapter admission
+  234     31.213 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 312 of 312 bytes
+  235     31.213 wddm: handle callbacks size 312 get@104=FFFFF8042BFFE910 acquire@288=FFFFF8042BEE4100 release@296=FFFFF8042BEE4760
+  236     31.213 stage 35
+  237     31.213 stage 39
+  238     31.213 wddm: display QueryChildRelations call 1 detail 0x38 -> 0x00000000
+  239     31.213 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+  240     31.213 wddm: DRIVERCAPS into 576 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x12 slots 0 tdr 1 dflip 1 rot 1
+  241     31.213 wddm: QueryAdapterInfo type 1 in 0 out 576 -> 0x00000000
+  242     31.213 wddm: QueryAdapterInfo type 15 in 4 out 20 -> 0xC00000BB
+  243     31.221 wddm: QueryAdapterInfo type 47 in 0 out 4 -> 0xC00000BB
+  244     31.221 wddm: QueryAdapterInfo type 13 in 4 out 24 -> 0x00000000
+  245     31.221 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+  246     31.221 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+  247     31.221 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+  248     31.221 wddm: QueryAdapterInfo type 14 in 4 out 20 -> 0x00000000
+  249     31.221 wddm: GetNodeMetadata node 0 adapter 0
+  250     31.221 wddm: GetNodeMetadata node 1 adapter 0
+  251     31.221 wddm: QUERYSEGMENT4 pass 1: 3 segment(s)
+  252     31.221 wddm: QUERYSEGMENT4 pass 2: 3 segment(s), stride 104, paging buffer segment 2, 65536 bytes
+  253     31.221 wddm: segment 1 flags 0x00080404 gpu 0xF4008D0000 cpu 0x2708D0000 size 0x1ED880000
+  254     31.223 wddm: QueryAdapterInfo type 16 in 0 out 4 -> 0xC00000BB
+  255     31.223 wddm: CreateProcess flags 0x00000001 pasids 1
+  256     31.223 wddm: CreateDevice flags 0x00000001 pasid 0
+  257     31.223 wddm: CreateDevice flags 0x00000001 pasid 0
+  258     31.225 wddm: capture reservation ready 22020400 bytes
+  259     31.225 wddm: CreateContext node 1 engine 0x1 flags 0x00000005 private 0
+  260     31.225 wddm: CreateContext answered dma 65536 bytes segment set 0x2, lists 256/0, caps 0x00000001
+  261     31.225 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+  262     31.225 vidmm: table physical cache query pa 0x45E153000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  263     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  264     31.225 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+  265     31.225 vidmm: table physical cache query pa 0x45E154000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  266     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  267     31.225 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+  268     31.225 vidmm: table physical cache query pa 0x45E155000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  269     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  270     31.225 wddm: BuildPagingBuffer operation 11 segment 0, 65536 bytes free, pass offset 0
+  271     31.225 vidmm: table physical cache query pa 0x45E156000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  272     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  273     31.225 vidmm: table physical cache query pa 0x45E157000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  274     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  275     31.225 vidmm: table physical cache query pa 0x45E158000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  276     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  277     31.225 vidmm: table physical cache query pa 0x45E159000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  278     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  279     31.225 vidmm: table physical cache query pa 0x45E15A000 status 0xC0000141 type 6; retained map requests NC; borrowed VA attributes unproven
+  280     31.225 vidmm: CPU update level 0 mode 0 start 0 count 512 status 0x00000000
+  281     31.257 wddm: paging DMA mapping op11 VA0x410000 root0x0 translated0 system0 PA0x0 CPU_PA0x121D3F000 match0 offset0
+  282     31.257 wddm: SetRootPageTable segment 3 offset 0x0, 512 entries
+  283     31.257 vidmm: root page table 3:0x0 = physical 0x45E150000, 512 entries (the VMID is pointed at it by the first packet)
+  284     31.257 wddm: root binding handleFFFFD38C0EE85710 ctxFFFFD38C0EE85710 ownerFFFFD38C0EE850F0 resolved1 physical45E150000 irql0
+  285     31.257 wddm: display QueryDeviceDescriptor call 1 detail 0x250001 -> 0xC01D0001
+  286     31.257 wddm: display QueryDeviceDescriptor call 2 detail 0x250001 -> 0xC01D0001
+  287     31.257 wddm: display RecommendMonitorModes call 1 detail 0x0 -> 0x00000000
+  288     31.281 wddm: display IsSupportedVidPn call 1 detail 0x0 -> 0x00000000
+  289     31.281 wddm: display IsSupportedVidPn call 2 detail 0x0 -> 0x00000000
+  290     31.281 wddm: display IsSupportedVidPn call 3 detail 0x0 -> 0x00000000
+  291     31.281 wddm: display EnumVidPnCofuncModality call 1 detail 0x0 -> 0x00000000
+  292     31.281 wddm: display IsSupportedVidPn call 4 detail 0x0 -> 0x00000000
+  293     31.281 wddm: display EnumVidPnCofuncModality call 2 detail 0x0 -> 0x00000000
+  294     31.281 wddm: display IsSupportedVidPn call 5 detail 0x0 -> 0x00000000
+  295     31.281 wddm: display EnumVidPnCofuncModality call 3 detail 0x0 -> 0x00000000
+  296     31.281 wddm: display IsSupportedVidPn call 6 detail 0x0 -> 0x00000000
+  297     31.281 wddm: display EnumVidPnCofuncModality call 4 detail 0x0 -> 0x00000000
+  298     31.281 wddm: display EnumVidPnCofuncModality call 5 detail 0x0 -> 0x00000000
+  299     31.283 wddm: CreateProcess flags 0x00000002 pasids 1
+  300     31.283 wddm: CreateDevice flags 0x00000002 pasid 0
+  301     31.283 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+  302     31.283 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001
+  303     31.283 wddm: paging DMA mapping op11 VA0x410000 root0x45E150000 translated1 system1 PA0x121D3F000 CPU_PA0x121D3F000 match1 offset0
+  304     31.283 wddm: paging DMA mapping op11 VA0x4100B8 root0x45E150000 translated1 system1 PA0x121D3F0B8 CPU_PA0x121D3F0B8 match1 offset184
+  305     31.283 wddm: paging DMA mapping op11 VA0x400000 root0x45E150000 translated1 system1 PA0x121C7F000 CPU_PA0x121C7F000 match1 offset0
+  306     31.283 wddm: paging DMA mapping op11 VA0x4000E8 root0x45E150000 translated1 system1 PA0x121C7F0E8 CPU_PA0x121C7F0E8 match1 offset232
+  307     31.283 wddm: paging DMA mapping op11 VA0x400128 root0x45E150000 translated1 system1 PA0x121C7F128 CPU_PA0x121C7F128 match1 offset296
+  308     31.283 wddm: SubmitCommandVirtual fence 1 node 1 flags 0x00000001 va 0x410000 size 4024
+  309     31.283 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 1
+  310     31.283 wddm: SubmitCommandVirtual fence 2 node 1 flags 0x00000001 va 0x400000 size 4072
+  311     31.283 gfx: paging submit, 1018 ring dwords reserved for buffer at 0x400000, seq 2
+  312     31.283 wddm: paging DMA mapping op11 VA0x410000 root0x45E150000 translated1 system1 PA0x121D3F000 CPU_PA0x121D3F000 match1 offset0
+  313     31.283 wddm: paging DMA mapping op11 VA0x4101B0 root0x45E150000 translated1 system1 PA0x121D3F1B0 CPU_PA0x121D3F1B0 match1 offset432
+  314     31.283 wddm: paging DMA mapping op11 VA0x400000 root0x45E150000 translated1 system1 PA0x121C7F000 CPU_PA0x121C7F000 match1 offset0
+  315     31.283 wddm: SubmitCommandVirtual fence 3 node 1 flags 0x00000001 va 0x410000 size 4016
+  316     31.283 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 3
+  317     31.283 wddm: SubmitCommandVirtual fence 4 node 1 flags 0x00000001 va 0x400000 size 4016
+  318     31.283 wddm: BuildPagingBuffer operation 12 segment 0, 64720 bytes free, pass offset 0
+  319     31.283 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 4
+  320     31.283 wddm: SubmitCommandVirtual fence 5 node 1 flags 0x00000001 va 0x410000 size 876
+  321     31.283 gfx: paging submit, 219 ring dwords reserved for buffer at 0x410000, seq 5
+  322     31.283 wddm: BuildPagingBuffer operation 12 segment 0, 64596 bytes free, pass offset 0
+  323     31.283 wddm: SubmitCommandVirtual fence 6 node 1 flags 0x00000001 va 0x41036C size 124
+  324     31.283 gfx: paging submit, 31 ring dwords reserved for buffer at 0x41036C, seq 6
+  325     31.283 wddm: display EnumVidPnCofuncModality call 6 detail 0x0 -> 0x00000000
+  326     31.283 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+  327     31.283 wddm: GetStandardAllocationDriverData type 1 1920x1200 format 21 -> 9216000 bytes
+  328     31.283 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+  329     31.283 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+  330     31.283 wddm: OpenAllocation [0] handle 0x400000C0 private 32 bytes -> FFFFD38C0EE87BD0
+  331     31.283 wddm: OpenAllocation 1 allocations flags 0x00000001
+  332     31.283 wddm: SubmitCommandVirtual fence 7 node 1 flags 0x00000001 va 0x4103E8 size 3072
+  333     31.283 gfx: paging submit, 768 ring dwords reserved for buffer at 0x4103E8, seq 7
+  334     31.283 wddm: SubmitCommandVirtual fence 8 node 1 flags 0x00000001 va 0x400000 size 4016
+  335     31.283 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 8
+  336     31.283 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 9
+  337     31.283 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 10
+  338     31.283 wddm: BuildPagingBuffer operation 12 segment 0, 62152 bytes free, pass offset 0
+  339     31.283 wddm: BuildPagingBuffer operation 9 segment 0, 62092 bytes free, pass offset 0
+  340     31.283 gfx: paging submit, 895 ring dwords reserved for buffer at 0x410000, seq 11
+  341     31.285 gfx: paging submit, 96 ring dwords reserved for buffer at 0x410E40, seq 12
+  342     31.285 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x400000, seq 13
+  343     31.285 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 14
+  344     31.285 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 15
+  345     31.285 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 16
+  346     31.285 wddm: BuildPagingBuffer operation 12 segment 0, 62984 bytes free, pass offset 0
+  347     31.285 gfx: paging submit, 653 ring dwords reserved for buffer at 0x400000, seq 17
+  348     31.285 gfx: paging submit, 920 ring dwords reserved for buffer at 0x410000, seq 18
+  349     31.285 gfx: paging submit, 96 ring dwords reserved for buffer at 0x410E60, seq 19
+  350     31.285 gfx: paging submit, 956 ring dwords reserved for buffer at 0x400000, seq 20
+  351     31.285 gfx: paging submit, 48 ring dwords reserved for buffer at 0x400EF0, seq 21
+  352     31.285 gfx: paging submit, 974 ring dwords reserved for buffer at 0x410000, seq 22
+  353     31.285 gfx: paging submit, 44 ring dwords reserved for buffer at 0x400000, seq 23
+  354     31.285 gfx: paging submit, 960 ring dwords reserved for buffer at 0x4000B0, seq 24
+  355     31.285 gfx: paging submit, 92 ring dwords reserved for buffer at 0x410000, seq 25
+  356     31.285 gfx: paging submit, 918 ring dwords reserved for buffer at 0x410170, seq 26
+  357     31.285 gfx: paging submit, 185 ring dwords reserved for buffer at 0x400000, seq 27
+  358     31.285 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+  359     31.285 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+  360     31.285 wddm: GetStandardAllocationDriverData type 2 1920x1200 format 21 -> 9216000 bytes
+  361     31.285 wddm: CreateAllocation 1 allocations, flags 1 resource yes
+  362     31.285 wddm: identity bind kind 0 flags 1 attempted 1 get 0 acquire 1 token 1 bound 1 released 1
+  363     31.285 wddm: OpenAllocation [0] handle 0x40000140 private 32 bytes -> FFFFD38C0EE87E70
+  364     31.285 wddm: OpenAllocation 1 allocations flags 0x00000001
+  365     31.285 gfx: paging submit, 832 ring dwords reserved for buffer at 0x4002E4, seq 28
+  366     31.285 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 29
+  367     31.285 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 30
+  368     31.285 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 31
+  369     31.285 wddm: BuildPagingBuffer operation 9 segment 0, 62348 bytes free, pass offset 0
+  370     31.285 gfx: paging submit, 831 ring dwords reserved for buffer at 0x400000, seq 32
+  371     31.287 gfx: paging submit, 160 ring dwords reserved for buffer at 0x400D40, seq 33
+  372     31.287 gfx: paging submit, 1006 ring dwords reserved for buffer at 0x410000, seq 34
+  373     31.287 gfx: paging submit, 974 ring dwords reserved for buffer at 0x400000, seq 35
+  374     31.287 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x410000, seq 36
+  375     31.287 gfx: paging submit, 1004 ring dwords reserved for buffer at 0x400000, seq 37
+  376     31.287 gfx: paging submit, 653 ring dwords reserved for buffer at 0x410000, seq 38
+  377     31.287 gfx: paging submit, 452 ring dwords reserved for buffer at 0x400000, seq 39
+  378     31.287 gfx: paging submit, 560 ring dwords reserved for buffer at 0x400710, seq 40
+  379     31.287 gfx: paging submit, 492 ring dwords reserved for buffer at 0x410000, seq 41
+  380     31.287 gfx: paging submit, 512 ring dwords reserved for buffer at 0x4107B0, seq 42
+  381     31.287 gfx: paging submit, 540 ring dwords reserved for buffer at 0x400000, seq 43
+  382     31.287 gfx: paging submit, 464 ring dwords reserved for buffer at 0x400870, seq 44
+  383     31.287 gfx: paging submit, 588 ring dwords reserved for buffer at 0x410000, seq 45
+  384     31.287 gfx: paging submit, 418 ring dwords reserved for buffer at 0x410930, seq 46
+  385     31.287 gfx: paging submit, 685 ring dwords reserved for buffer at 0x400000, seq 47
+  386     31.289 stage 50
+  387     31.289 wddm: display CommitVidPn call 1 detail 0x0 -> 0x00000000
+  388     31.289 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+  389     31.289 dcnflip: SetVidPnSourceAddress flip: card 0xF4008D0000 -> physical 0x2708D0000
+  390     31.289 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+  391     31.289 wddm: hardware vsync on (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)
+  392     31.289 display visibility: call 1 source 0x00000000 visible 1 previous 0 hardware 1 blanked 0
+  393     31.289 display visibility: call 1 status 0x00000000 current 1 blanked 0
+  394     31.289 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+  395     31.289 wddm: DescribeAllocation 1920x1200 format 21 refresh 154000000/2568800
+  396     31.291 wddm: ControlInterrupt type 3 on -> 0x00000000
+  397     31.294 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  398     31.294 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C0EE98690/2184, driver data 0
+  399     31.294 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  400     31.294 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  401     31.294 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  402     31.294 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x11000
+  403     31.294 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  404     31.294 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root0 irql0
+  405     31.294 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  406     31.294 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  407     31.294 wddm: GPU Present call1 status0 dma4096 private2184 offset0->50
+  408     31.294 wddm: SetRootPageTable segment 3 offset 0xFEAF000, 512 entries
+  409     31.294 vidmm: root page table 3:0xFEAF000 = physical 0x46DFFF000, 512 entries (the VMID is pointed at it by the first packet)
+  410     31.294 wddm: root binding handleFFFFD38C0EE867B0 ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 resolved1 physical46DFFF000 irql0
+  411     31.294 wddm: SubmitCommandVirtual fence 1 node 0 flags 0x00000002 va 0x11000 size 4096
+  412     31.294 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  413     31.294 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  414     31.294 gfx: pipeline queued seq48 prior0 observed_after_doorbell0 overlap0
+  415     31.294 wddm: fence 1 on the gfx ring: sequence 48, vmid 1, root 0x46DFFF000, va 0x11000, 4096 bytes
+  416     31.294 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence1 va11000 bytes4096
+  417     31.294 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence1 root46DFFF000 node0
+  418     31.294 wddm: PreemptCommand fence 1 node 0
+  419     31.294 wddm: preemption queued fence 1 node 0 hardware pending 1 active submits 0
+  420     31.294 wddm: hardware fence arrived, reporting fence 1
+  421     31.294 wddm: preemption report fence 1 node 0 last completed 1 at DMA boundary
+  422     31.324 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+  423     31.324 display visibility: call 2 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+  424     31.324 display visibility: call 2 status 0x00000000 current 1 blanked 0
+  425     31.324 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+  426     31.328 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  427     31.328 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C03870460/2184, driver data 0
+  428     31.328 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  429     31.328 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  430     31.328 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  431     31.328 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x10000
+  432     31.328 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  433     31.328 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  434     31.328 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  435     31.328 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  436     31.328 wddm: GPU Present call2 status0 dma4096 private2184 offset0->50
+  437     31.328 wddm: SubmitCommandVirtual fence 2 node 0 flags 0x00000002 va 0x10000 size 4096
+  438     31.328 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  439     31.328 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  440     31.328 gfx: pipeline queued seq49 prior48 observed_after_doorbell48 overlap0
+  441     31.328 wddm: fence 2 on the gfx ring: sequence 49, vmid 1, root 0x46DFFF000, va 0x10000, 4096 bytes
+  442     31.328 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence2 va10000 bytes4096
+  443     31.328 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence2 root46DFFF000 node0
+  444     31.328 wddm: hardware fence arrived, reporting fence 2
+  445     31.362 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  446     31.362 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C0EE98690/2184, driver data 0
+  447     31.362 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  448     31.362 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  449     31.362 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  450     31.362 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x11000
+  451     31.362 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  452     31.362 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  453     31.362 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  454     31.362 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  455     31.362 wddm: GPU Present call3 status0 dma4096 private2184 offset0->50
+  456     31.362 wddm: SubmitCommandVirtual fence 3 node 0 flags 0x00000002 va 0x11000 size 4096
+  457     31.362 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  458     31.362 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  459     31.362 gfx: pipeline queued seq50 prior49 observed_after_doorbell49 overlap0
+  460     31.362 wddm: fence 3 on the gfx ring: sequence 50, vmid 1, root 0x46DFFF000, va 0x11000, 4096 bytes
+  461     31.362 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence3 va11000 bytes4096
+  462     31.362 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence3 root46DFFF000 node0
+  463     31.362 wddm: hardware fence arrived, reporting fence 3
+  464     31.384 wddm: SetVidPnSourceAddress segment 1 address 0xF4008D0000 flags 0x00000001 (firmware framebuffer 0xC0000000)
+  465     31.386 display visibility: call 3 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+  466     31.386 display visibility: call 3 status 0x00000000 current 1 blanked 0
+  467     31.386 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+  468     31.396 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  469     31.396 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C03870460/2184, driver data 0
+  470     31.396 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  471     31.396 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  472     31.396 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  473     31.396 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x10000
+  474     31.396 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  475     31.396 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  476     31.396 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  477     31.396 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  478     31.396 wddm: GPU Present call4 status0 dma4096 private2184 offset0->50
+  479     31.396 wddm: SubmitCommandVirtual fence 4 node 0 flags 0x00000002 va 0x10000 size 4096
+  480     31.396 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  481     31.396 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  482     31.396 gfx: pipeline queued seq51 prior50 observed_after_doorbell50 overlap0
+  483     31.396 wddm: fence 4 on the gfx ring: sequence 51, vmid 1, root 0x46DFFF000, va 0x10000, 4096 bytes
+  484     31.396 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence4 va10000 bytes4096
+  485     31.396 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence4 root46DFFF000 node0
+  486     31.396 wddm: hardware fence arrived, reporting fence 4
+  487     31.430 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  488     31.430 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C0EE98690/2184, driver data 0
+  489     31.430 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  490     31.430 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  491     31.430 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  492     31.430 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x11000
+  493     31.430 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  494     31.430 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  495     31.430 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  496     31.430 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  497     31.430 wddm: GPU Present call5 status0 dma4096 private2184 offset0->50
+  498     31.430 wddm: SubmitCommandVirtual fence 5 node 0 flags 0x00000002 va 0x11000 size 4096
+  499     31.430 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  500     31.430 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  501     31.430 gfx: pipeline queued seq52 prior51 observed_after_doorbell51 overlap0
+  502     31.430 wddm: fence 5 on the gfx ring: sequence 52, vmid 1, root 0x46DFFF000, va 0x11000, 4096 bytes
+  503     31.430 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence5 va11000 bytes4096
+  504     31.430 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence5 root46DFFF000 node0
+  505     31.430 wddm: hardware fence arrived, reporting fence 5
+  506     31.464 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  507     31.464 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C03870460/2184, driver data 0
+  508     31.464 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  509     31.464 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  510     31.464 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  511     31.464 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x10000
+  512     31.464 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  513     31.464 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  514     31.464 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  515     31.464 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  516     31.464 wddm: GPU Present call6 status0 dma4096 private2184 offset0->50
+  517     31.464 wddm: SubmitCommandVirtual fence 6 node 0 flags 0x00000002 va 0x10000 size 4096
+  518     31.464 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  519     31.464 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  520     31.464 gfx: pipeline queued seq53 prior52 observed_after_doorbell52 overlap0
+  521     31.464 wddm: fence 6 on the gfx ring: sequence 53, vmid 1, root 0x46DFFF000, va 0x10000, 4096 bytes
+  522     31.464 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence6 va10000 bytes4096
+  523     31.464 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence6 root46DFFF000 node0
+  524     31.464 wddm: hardware fence arrived, reporting fence 6
+  525     31.498 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  526     31.498 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C0EE98690/2184, driver data 0
+  527     31.498 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  528     31.498 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  529     31.498 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  530     31.498 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x11000
+  531     31.498 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  532     31.498 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  533     31.498 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  534     31.498 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  535     31.498 wddm: GPU Present call7 status0 dma4096 private2184 offset0->50
+  536     31.498 wddm: SubmitCommandVirtual fence 7 node 0 flags 0x00000002 va 0x11000 size 4096
+  537     31.498 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  538     31.498 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  539     31.498 gfx: pipeline queued seq54 prior53 observed_after_doorbell53 overlap0
+  540     31.498 wddm: fence 7 on the gfx ring: sequence 54, vmid 1, root 0x46DFFF000, va 0x11000, 4096 bytes
+  541     31.498 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence7 va11000 bytes4096
+  542     31.498 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence7 root46DFFF000 node0
+  543     31.498 wddm: hardware fence arrived, reporting fence 7
+  544     31.532 wddm: Present flags 0x00000001 source 0 dest 0, 1 sub-rectangles, 4096 DMA bytes free
+  545     31.532 wddm: Present list FFFF9A809CB1BA10 (context list 256), private FFFFD38C03870460/2184, driver data 0
+  546     31.532 wddm: Present list q0-3  0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  547     31.532 wddm: Present list q4-7  FFFFD38C0EE87E70 00000000008DC000 0000000000000000 0000000000000000
+  548     31.532 wddm: Present list q8-11 FFFFD38C0EE87BD0 0000000000012000 0000000000000000 0000000000000000
+  549     31.532 wddm: Present dst (936,916)-(984,966) src (936,916)-(984,966) va 0x10000
+  550     31.532 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  551     31.532 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  552     31.532 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  553     31.532 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  554     31.532 wddm: GPU Present call8 status0 dma4096 private2184 offset0->50
+  555     31.532 wddm: SubmitCommandVirtual fence 8 node 0 flags 0x00000002 va 0x10000 size 4096
+  556     31.532 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  557     31.532 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  558     31.532 gfx: pipeline queued seq55 prior54 observed_after_doorbell54 overlap0
+  559     31.532 wddm: fence 8 on the gfx ring: sequence 55, vmid 1, root 0x46DFFF000, va 0x10000, 4096 bytes
+  560     31.532 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence8 va10000 bytes4096
+  561     31.532 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence8 root46DFFF000 node0
+  562     31.532 wddm: hardware fence arrived, reporting fence 8
+  563     31.566 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  564     31.566 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  565     31.566 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  566     31.566 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  567     31.566 wddm: GPU Present call9 status0 dma4096 private2184 offset0->50
+  568     31.566 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  569     31.566 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  570     31.566 gfx: pipeline queued seq56 prior55 observed_after_doorbell55 overlap0
+  571     31.566 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence9 va11000 bytes4096
+  572     31.566 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence9 root46DFFF000 node0
+  573     31.600 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  574     31.600 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  575     31.600 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  576     31.600 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  577     31.600 wddm: GPU Present call10 status0 dma4096 private2184 offset0->50
+  578     31.600 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  579     31.600 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  580     31.600 gfx: pipeline queued seq57 prior56 observed_after_doorbell56 overlap0
+  581     31.600 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence10 va10000 bytes4096
+  582     31.600 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence10 root46DFFF000 node0
+  583     31.634 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  584     31.634 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  585     31.634 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  586     31.634 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  587     31.634 wddm: GPU Present call11 status0 dma4096 private2184 offset0->50
+  588     31.634 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  589     31.634 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  590     31.634 gfx: pipeline queued seq58 prior57 observed_after_doorbell57 overlap0
+  591     31.634 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence11 va11000 bytes4096
+  592     31.634 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence11 root46DFFF000 node0
+  593     31.668 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  594     31.668 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  595     31.668 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  596     31.668 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  597     31.668 wddm: GPU Present call12 status0 dma4096 private2184 offset0->50
+  598     31.668 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  599     31.668 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  600     31.668 gfx: pipeline queued seq59 prior58 observed_after_doorbell58 overlap0
+  601     31.668 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence12 va10000 bytes4096
+  602     31.668 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence12 root46DFFF000 node0
+  603     31.702 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  604     31.702 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  605     31.702 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  606     31.702 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  607     31.702 wddm: GPU Present call13 status0 dma4096 private2184 offset0->50
+  608     31.702 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  609     31.702 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  610     31.702 gfx: pipeline queued seq60 prior59 observed_after_doorbell59 overlap0
+  611     31.702 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence13 va11000 bytes4096
+  612     31.702 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence13 root46DFFF000 node0
+  613     31.736 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  614     31.736 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  615     31.736 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  616     31.736 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  617     31.736 wddm: GPU Present call14 status0 dma4096 private2184 offset0->50
+  618     31.736 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  619     31.736 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  620     31.736 gfx: pipeline queued seq61 prior60 observed_after_doorbell60 overlap0
+  621     31.736 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence14 va10000 bytes4096
+  622     31.736 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence14 root46DFFF000 node0
+  623     31.770 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib11000 bytes4096 next50 more0
+  624     31.770 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  625     31.770 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  626     31.770 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  627     31.770 wddm: GPU Present call15 status0 dma4096 private2184 offset0->50
+  628     31.770 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  629     31.770 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  630     31.770 gfx: pipeline queued seq62 prior61 observed_after_doorbell61 overlap0
+  631     31.770 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence15 va11000 bytes4096
+  632     31.770 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence15 root46DFFF000 node0
+  633     31.804 wddm: GPU Present built ctxFFFFD38C0EE867B0 ib10000 bytes4096 next50 more0
+  634     31.804 wddm: GPU Present build ctxFFFFD38C0EE867B0 ownerFFFFD38C0EE87A10 root46DFFF000 irql0
+  635     31.804 wddm: GPU Present surface0 handleFFFFD38C0EE87E70 va8DC000 1920x1200 pitch7680 fmt21 bytes9216000
+  636     31.804 wddm: GPU Present surface1 handleFFFFD38C0EE87BD0 va12000 1920x1200 pitch7680 fmt21 bytes9216000
+  637     31.804 wddm: GPU Present call16 status0 dma4096 private2184 offset0->50
+  638     31.804 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  639     31.804 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  640     31.804 gfx: pipeline queued seq63 prior62 observed_after_doorbell62 overlap0
+  641     31.804 wddm: GPU Present submit ctxFFFFD38C0EE867B0 fence16 va10000 bytes4096
+  642     31.804 wddm: GPU Present submitted ctxFFFFD38C0EE867B0 fence16 root46DFFF000 node0
+  643     31.839 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  644     31.839 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  645     32.021 wddm: ControlInterrupt type 3 off -> 0x00000000
+  646     32.021 gfx: VMID 1 root 0x46DFFF000 flush -> 0
+  647     32.021 gfx: job frame C0004200 00000000  C0012800 81018003 00000000  C0009000 00000000  IB  C0009000 10000000  fence  C0008B00 00000000
+  648     32.021 gfx: submission path failed, no further ring writes this device start (seq 65 in flight, slot 0x40)
+  649     32.021 wddm: fence 19 node 0 NOT dispatched; node closed, no completion, recovery required
+  650     32.021 gfx: paging submit, 31 ring dwords reserved for buffer at 0x400AB4, seq 66
+  651     32.021 gfx: paging submit, 31 ring dwords reserved for buffer at 0x400B30, seq 67
+  652     35.023 wddm: QueryDependentEngineGroup node 0 engine 0
+  653     35.023 wddm: PreemptCommand fence 2 node 0
+  654     35.023 wddm: preemption queued fence 2 node 0 hardware pending 0 active submits 0
+  655     35.052 wddm: *** ResetEngine node 0 engine 0: refused, this part has no engine reset ***
+  656     35.082 gfx: paging submission path failed, no further ring writes this device start (seq 67 in flight, slot 0x43)
+  657     35.082 wddm: ResetFromTimeout failed: GPU memory access not proven stopped
