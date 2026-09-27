@@ -22,6 +22,25 @@ typedef struct _BC250_GDI_PRIVATE {
     unsigned long Magic, Type, Flags, Reserved;
 } BC250_GDI_PRIVATE;
 
+// Allocation admission is narrower than layout arithmetic. Existing-system
+// memory and cross-adapter ownership are not implemented; reserved types are
+// not admitted merely because their dimensions can be described.
+typedef struct _BC250_GDI_ALLOCATION_POLICY {
+    int CpuVisible, Aperture, Cached, AccessedPhysically;
+} BC250_GDI_ALLOCATION_POLICY;
+static __inline int WddmGdiAllocationPolicy(unsigned long Type,int SharedCpu,int CachedCpu,
+    BC250_GDI_ALLOCATION_POLICY* Policy)
+{
+    BC250_GDI_ALLOCATION_POLICY result;
+    if (!Policy || Type>4) return 0;
+    result.CpuVisible=!Type || Type==2;
+    result.Aperture=Type ? Type==2 : SharedCpu!=0;
+    result.Cached=Type ? Type==2 : (CachedCpu && result.Aperture);
+    result.AccessedPhysically=!Type && !result.Aperture;
+    *Policy=result;
+    return 1;
+}
+
 static __inline int WddmGdiPrivate(const void* Data, unsigned int Bytes, unsigned long* Type)
 {
     const BC250_GDI_PRIVATE* gdi=(const BC250_GDI_PRIVATE*)Data;
