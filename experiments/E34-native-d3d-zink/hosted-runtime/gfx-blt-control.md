@@ -46,3 +46,27 @@ hardware probe does not: it submits many packets through ordinary-sized rows.
 Nor does it test the DDI present allocation list, all-rectangle prevalidation,
 MultipassOffset integration, cross-context producer synchronization or CDD/DWM
 interop. Those remain requirements before advertising the cap or completing G0.
+
+## Residency gate correction after control001
+
+The revised probe requires QueryAllocationResidency status1 for every buffer
+before and after the copy. It no longer interprets this enum as a GTT/VRAM
+placement measurement. Each allocation already completes MakeResident and its
+paging fence. Status2/3, unknown values and API errors remain failures.
+
+The five heap combinations refer to the requested BC2A heaps and KMD153's exact
+supported read/write segment masks (c3499f1b, wddm.c): GTT is restricted to
+aperture2, VRAM to memory segment1. This is a source contract, not an independent
+physical mapping readout. The WDDM2 system-memory segment is implicit; specifying
+the aperture ID selects system memory for GPU-virtual allocations. See the local
+Microsoft documentation at revision110f60ea, display/gpu-segments.md, and
+[GPU segments](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/gpu-segments).
+The [residency enum](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmthk/ne-d3dkmthk-_d3dkmt_allocationresidencystatus)
+does not expose a SegmentId. The primary acceptance of this control is actual
+GPU copy contents, padding preservation and fence completion; it cannot claim
+independent physical-placement validation. No placement conclusion is silently
+substituted by a PASS label. DDI integration and full G0 acceptance remain open.
+
+The runner now takes an explicit fresh -OutDir under C:\BC250\m13 with a
+three-digit run suffix. It still rejects an existing start receipt, validates
+the executable hash, and requires all five content and30 residency receipts.

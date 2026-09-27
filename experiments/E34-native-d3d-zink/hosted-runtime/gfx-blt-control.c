@@ -22,17 +22,20 @@ static BOOL SubmitCopy(PROBE* p,UINT dwords,UINT64* sequence)
     if(!StepSignalFence(p,++*sequence)||!StepWaitFence(p,*sequence))return FALSE;
     g_CopyPending=FALSE;return TRUE;
 }
-static BOOL Placement(PROBE* p,BUFFER* b,UINT heap,const char* phase)
+static BOOL CopyResidency(PROBE* p,BUFFER* b,UINT heap,const char* phase)
 {
     D3DKMT_ALLOCATIONRESIDENCYSTATUS observed=0;
-    D3DKMT_ALLOCATIONRESIDENCYSTATUS expected=heap==AMDGPU_GEM_DOMAIN_VRAM ?
-        D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINGPUMEMORY :
-        D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINSHAREDMEMORY;
+    /* This query is a residency gate, not a physical segment query. M608
+     * observed status1 for an allocation restricted to the GTT aperture by
+     * KMD153's BC2A contract. Do not infer VRAM from that status. MakeResident
+     * and its paging fence were already completed by CreateUmdBuffer. */
+    const D3DKMT_ALLOCATIONRESIDENCYSTATUS expected=
+        D3DKMT_ALLOCATIONRESIDENCYSTATUS_RESIDENTINGPUMEMORY;
     D3DKMT_QUERYALLOCATIONRESIDENCY q={0};
     q.hDevice=p->hDevice;q.phAllocationList=&b->hAllocation;
     q.AllocationCount=1;q.pResidencyStatus=&observed;
-    if(!NT_SUCCESS(ReportOn("Copy placement query",b,D3DKMTQueryAllocationResidency(&q))))return FALSE;
-    printf("COPY_PLACEMENT phase=%s buffer=%s requested_heap=%u observed=%u expected=%u %s\n",
+    if(!NT_SUCCESS(ReportOn("Copy residency query",b,D3DKMTQueryAllocationResidency(&q))))return FALSE;
+    printf("COPY_RESIDENCY phase=%s buffer=%s requested_heap=%u observed=%u expected=%u %s\n",
         phase,b->Name,heap,(UINT)observed,(UINT)expected,observed==expected?"PASS":"FAIL");
     return observed==expected;
 }
@@ -62,8 +65,8 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     if(!CreateUmdBuffer(p,&p->Data,sourceHeap)||!CreateUmdBuffer(p,&dst,destinationHeap)||
        !CreateUmdBuffer(p,&readback,AMDGPU_GEM_DOMAIN_GTT)||!Fill(p,&p->Data,TRUE)||
        !Fill(p,&dst,FALSE)||!Fill(p,&readback,FALSE)||
-       !Placement(p,&p->Data,sourceHeap,"before")||!Placement(p,&dst,destinationHeap,"before")||
-       !Placement(p,&readback,AMDGPU_GEM_DOMAIN_GTT,"before"))goto done;
+       !CopyResidency(p,&p->Data,sourceHeap,"before")||!CopyResidency(p,&dst,destinationHeap,"before")||
+       !CopyResidency(p,&readback,AMDGPU_GEM_DOMAIN_GTT,"before"))goto done;
     do {
         UINT32* dw;
         if(!LockBuffer(p,&p->Command))goto done;
@@ -98,8 +101,8 @@ static BOOL RunCase(PROBE* p,UINT sourceHeap,UINT destinationHeap,UINT width,UIN
     }
     if(!UnlockBuffer(p,&readback))goto done;
     printf("COPY_RESULT %s bytes=%llu pixels=%llu packets=%u mismatches=%llu fence=%llu\n",bad?"FAIL":"PASS",readback.Size,(UINT64)width*height,packets,bad,*sequence);
-    ok=bad==0 && Placement(p,&p->Data,sourceHeap,"after") &&
-        Placement(p,&dst,destinationHeap,"after") && Placement(p,&readback,AMDGPU_GEM_DOMAIN_GTT,"after");
+    ok=bad==0 && CopyResidency(p,&p->Data,sourceHeap,"after") &&
+        CopyResidency(p,&dst,destinationHeap,"after") && CopyResidency(p,&readback,AMDGPU_GEM_DOMAIN_GTT,"after");
 done:
     if(g_CopyPending){puts("FAIL unresolved GPU work: defer allocation teardown to process/device cleanup");SetEvent(g_Done);ExitProcess(1);}
     TeardownBuffer(p,&readback);TeardownBuffer(p,&dst);TeardownBuffer(p,&p->Data);return ok;

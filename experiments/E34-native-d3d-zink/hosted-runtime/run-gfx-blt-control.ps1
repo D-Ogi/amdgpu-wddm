@@ -1,6 +1,7 @@
-param([Parameter(Mandatory)][ValidatePattern('^[0-9A-Fa-f]{64}$')][string]$ExpectedExeSha)
+param([Parameter(Mandatory)][ValidatePattern('^[0-9A-Fa-f]{64}$')][string]$ExpectedExeSha,
+ [Parameter(Mandatory)][ValidatePattern('^C:\\BC250\\m13\\gfx-blt-control[0-9]{3}$')][string]$OutDir)
 $ErrorActionPreference='Stop'
-$out='C:\BC250\m13\gfx-blt-control001'
+$out=$OutDir
 $exe=Join-Path $out 'gfx-blt-control.exe'
 if(Test-Path (Join-Path $out 'start.json')){throw 'Existing run: inspect, never overwrite or restart'}
 if((Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 3).stop){throw 'Owner STOP'}
@@ -44,7 +45,7 @@ try {
  $p.Refresh();$code=if($reason){124}else{$p.ExitCode}
  if($code -ne 0){throw "Control exit=$code $reason"}
  $stdout=Get-Content (Join-Path $out 'stdout.txt') -Raw
- if(([regex]::Matches($stdout,'(?m)^COPY_RESULT PASS ')).Count -ne 5 -or ([regex]::Matches($stdout,'(?m)^COPY_PLACEMENT[^\r\n]*PASS')).Count -ne 30 -or $stdout -notmatch 'GFX_BLT_CONTROL PASS' -or $stdout -match 'COPY_PLACEMENT[^\r\n]*FAIL'){throw 'Missing content/placement PASS'}
+ if(([regex]::Matches($stdout,'(?m)^COPY_RESULT PASS ')).Count -ne 5 -or ([regex]::Matches($stdout,'(?m)^COPY_RESIDENCY[^\r\n]*PASS')).Count -ne 30 -or $stdout -notmatch 'GFX_BLT_CONTROL PASS' -or $stdout -match 'COPY_RESIDENCY[^\r\n]*FAIL'){throw 'Missing content/residency PASS'}
  $after=Snapshot
  $after | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $out 'after.json')
  if($after.boot -ne $before.boot -or (Compare-Object $before.dwm $after.dwm)){throw 'Unexpected boot/DWM change'}
