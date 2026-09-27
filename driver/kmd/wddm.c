@@ -2890,68 +2890,7 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
-// WDK26100 Acquire/Release keeps the VidMm allocation and KMD object alive
-// through lookup and publication. Match and publish under the same lock used
-// by WddmFreeObject to clear snapshots before an allocation address is reused.
-// No runtime callback runs under that lock. The opened object is still private
-// to OpenAllocation; its handle is published only after this function returns.
-static void WddmBindHandleIdentity(BC250_DEVICE* Device, DXGK_OPENALLOCATIONINFO* Info,
-    BC250_WDDM_OBJECT* Opened, ULONG OpenFlags)
-{
-    BC250_WDDM* wddm=(BC250_WDDM*)Device->Wddm;
-    DXGKARGCB_GETHANDLEDATA query={0};
-    DXGKARGCB_RELEASEHANDLEDATA release={0};
-    void* acquired=NULL;
-    void* legacy=NULL;
-    BOOLEAN attempted=FALSE,bound=FALSE,released=FALSE,diagnostic=FALSE;
-    ULONG kind=0;
-    if (!wddm || !Opened) return;
-    if (wddm->HandleIdentityProbe) {
-        kind=Opened->UmdAlloc?1u:0u;
-        diagnostic=InterlockedIncrement(&wddm->HandleIdentityProbeCalls[kind])<=16;
-    }
-    query.hObject=Info->hAllocation;
-    query.Type=DXGK_HANDLE_ALLOCATION;
-    release.Type=DXGK_HANDLE_ALLOCATION;
-    if (KeGetCurrentIrql()<=APC_LEVEL &&
-        Device->Dxgk.Size>=FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbReleaseHandleData)+sizeof(Device->Dxgk.DxgkCbReleaseHandleData) &&
-        Device->Dxgk.DxgkCbAcquireHandleData && Device->Dxgk.DxgkCbReleaseHandleData) {
-        // Legacy comparison is bounded diagnostics, never a binding fallback.
-        if (diagnostic && Device->Dxgk.DxgkCbGetHandleData)
-            legacy=Device->Dxgk.DxgkCbGetHandleData(&query);
-        attempted=TRUE;
-        acquired=Device->Dxgk.DxgkCbAcquireHandleData(&query,&release.ReleaseHandle);
-        if (acquired) {
-            const LIST_ENTRY* entry;
-            KIRQL irql;
-            KeAcquireSpinLock(&wddm->Lock,&irql);
-            if (!wddm->Stopping) {
-                for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
-                    BC250_WDDM_OBJECT* object=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
-                    if ((void*)object==acquired) {
-                        if (object->Magic==BC250_WDDM_MAGIC_ALLOCATION && object->Device==Device) {
-                            Opened->BackingAllocation=object;
-                            bound=TRUE;
-                        }
-                        break;
-                    }
-                }
-            }
-            KeReleaseSpinLock(&wddm->Lock,irql);
-        }
-        // Release a nonzero token even if private data was NULL. Also retain
-        // the paired release for a successful pointer with a zero token.
-        if (acquired || release.ReleaseHandle) {
-            Device->Dxgk.DxgkCbReleaseHandleData(release);
-            released=TRUE;
-        }
-    }
-    // Boolean witnesses fit in a GuardLog record. No pointer is dereferenced
-    // after release; bound records publication, not indefinite ownership.
-    if (diagnostic)
-        GuardLog("wddm: identity bind kind %u flags %x attempted %u get %u acquire %u token %u bound %u released %u",
-            kind,OpenFlags,attempted,legacy!=NULL,acquired!=NULL,release.ReleaseHandle!=NULL,bound,released);
-}
+#include "wddm_allocation_identity.inc"
 
 static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
 static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DXGKARG_OPENALLOCATION* pOpenAllocation)
@@ -4887,7 +4826,8 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
 static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT* Present)
 {
     BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
-    BC250_WDDM_OBJECT *opened[2], *backing[2];
+    HANDLE handles[2];
+    BC250_WDDM_ALLOCATION_PRIVATE allocations[2];
     BC250_BLIT_SURFACE surface[2];
     BC250_BLIT_RECT src, dst, *dirty=NULL;
     ULONGLONG va[2], ib=Present->DmaBufferGpuVirtualAddress;
@@ -4909,15 +4849,14 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     for (i=0;i<2;i++) {
         const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
             (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
-        const BC250_WDDM_ALLOCATION_PRIVATE* a;
         if (info->PhysicalAdapterIndex) return status;
-        opened[i]=WddmListedObject(wddm,info->hDeviceSpecificAllocation,BC250_WDDM_MAGIC_OPENED);
-        if (!opened[i] || opened[i]->OwnerDevice!=Context->OwnerDevice || opened[i]->UmdAlloc) return status;
-        backing[i]=WddmListedObject(wddm,opened[i]->BackingAllocation,BC250_WDDM_MAGIC_ALLOCATION);
-        if (!backing[i] || backing[i]->UmdAlloc ||
-            RtlCompareMemory(&backing[i]->Allocation,&opened[i]->Allocation,
-                sizeof(opened[i]->Allocation))!=sizeof(opened[i]->Allocation)) return status;
-        a=&opened[i]->Allocation;
+        handles[i]=info->hDeviceSpecificAllocation;
+    }
+    if (!WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,handles,allocations)) return status;
+    for (i=0;i<2;i++) {
+        const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
+            (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
+        const BC250_WDDM_ALLOCATION_PRIVATE* a=&allocations[i];
         if (!WddmLinearColorFormat(a->Format)) return status;
         surface[i].Width=a->Width;surface[i].Height=a->Height;surface[i].Pitch=a->Pitch;
         surface[i].Bytes=a->Size;surface[i].Format=WddmRedFirst(a->Format)?Bc250BltRgba8:Bc250BltBgra8;
@@ -4926,9 +4865,6 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
         // The active command allocation must never be a copy source or target.
         if (ib<=va[i] ? va[i]-ib<Present->DmaSize : ib-va[i]<a->Size) return status;
     }
-    // Distinct VidMm allocations, not merely distinct opened handles or VAs.
-    // This driver does not create LB7A over externally supplied system memory.
-    if (backing[0]==backing[1] || opened[0]->Allocation.Format!=opened[1]->Allocation.Format) return status;
     src.Left=Present->SrcRect.left;src.Top=Present->SrcRect.top;
     src.Right=Present->SrcRect.right;src.Bottom=Present->SrcRect.bottom;
     dst.Left=Present->DstRect.left;dst.Top=Present->DstRect.top;
