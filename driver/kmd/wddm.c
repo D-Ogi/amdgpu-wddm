@@ -2607,12 +2607,23 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     default:
         return STATUS_INVALID_PARAMETER;
     }
-    // Scanout rows are aligned to 256 bytes (64 32-bit pixels). Other CPU
-    // surfaces retain their linear pitch. Extent includes every padded row.
-    if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
-    private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
-        DcnPrimaryPitch(private.Width):private.Width*4;
-    if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
+    // Standard GDI textures are opened by the DWM UMD. Its LB7A OpenResource
+    // contract needs pitch alignment and a four-row-padded allocation, just like
+    // the UMD-created shared textures. Logical Width/Height remain unchanged.
+    // Scanout uses the same row alignment; other CPU surfaces keep linear pitch.
+    {
+        BOOLEAN texture=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE &&
+            pData->pCreateGdiSurfaceData->Type==D3DKMDT_GDISURFACE_TEXTURE;
+        if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
+        if (texture) {
+            if (!DcnSharedTextureLayout(private.Width,private.Height,&private.Pitch,&private.Size))
+                return STATUS_INVALID_PARAMETER;
+        } else {
+            private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
+                DcnPrimaryPitch(private.Width):private.Width*4;
+            if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
+        }
+    }
     // These are output fields, not just copies in our private LB7A blob.
     // E26 ETW rejected shadow/staging creation when the public pitch was zero.
     if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE)

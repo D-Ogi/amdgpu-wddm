@@ -39,3 +39,15 @@ int DcnSurfaceBytes(unsigned long Width,unsigned long Height,unsigned long Pitch
     *Bytes=(unsigned long long)Pitch*Height;
     return 1;
 }
+
+int DcnSharedTextureLayout(unsigned long Width,unsigned long Height,
+    unsigned long* Pitch,unsigned long long* Bytes)
+{
+    unsigned long pitch;
+    if (!Pitch || !Bytes) return 0;
+    *Pitch=0;*Bytes=0;
+    if (!Height || Height>0xfffffffcul) return 0;
+    pitch=DcnPrimaryPitch(Width);
+    if (!DcnSurfaceBytes(Width,(Height+3ul)&~3ul,pitch,Bytes)) return 0;
+    *Pitch=pitch;return 1;
+}

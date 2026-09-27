@@ -60,6 +60,19 @@ static void Geometry(unsigned long long mcBase, unsigned long long vramBase,
 
 int main(void)
 {
+    unsigned long w,h,pitch;unsigned long long bytes;
+    for(w=1;w<=129;w++)for(h=1;h<=9;h++) {
+        CHECK(DcnSharedTextureLayout(w,h,&pitch,&bytes));
+        // Independent consumer contract: Resource.cpp OpenResource on a0ad8af5.
+        CHECK(!(pitch&15u));
+        CHECK(pitch>=((w+3u)&~3u)*4u);
+        CHECK(bytes>=(unsigned long long)pitch*((h+3u)&~3u));
+    }
+    CHECK(DcnSharedTextureLayout(1,1,&pitch,&bytes) && pitch==256 && bytes==1024);
+    CHECK(!DcnSharedTextureLayout(0,1,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnSharedTextureLayout(1,0,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnSharedTextureLayout(1,0xfffffffful,&pitch,&bytes) && !pitch && !bytes);
+    CHECK(!DcnSharedTextureLayout(0xfffffffful,1,&pitch,&bytes) && !pitch && !bytes);
     Geometry(0xF400000000ull, 0x270000000ull, 256ull << 20);
     Geometry(0xF400000000ull, 0x270000000ull, 8ull << 30);
     Geometry(0xE800000000ull, 0x670000000ull, 12ull << 30);

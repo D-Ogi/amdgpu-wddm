@@ -31,6 +31,10 @@ int DcnSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pit
                     unsigned long long* Bytes);
 unsigned long DcnPrimaryPitch(unsigned long Width);
 
+// LB7A shared-texture layout accepted by the DWM UMD's OpenResource checks.
+int DcnSharedTextureLayout(unsigned long Width, unsigned long Height,
+    unsigned long* Pitch, unsigned long long* Bytes);
+
 #ifdef __cplusplus
 }
 #endif
