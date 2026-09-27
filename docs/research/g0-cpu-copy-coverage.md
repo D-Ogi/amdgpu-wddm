@@ -98,3 +98,13 @@ Gallium transfer lifetimes, not persistent Vulkan BO mappings or CPU-store count
 The new analyzer requires one process/DLL instance per input and cannot detect
 whole missing maps. Interval reconciliation, role/capture attribution and the
 deliberate-copy control remain open. See M684 for exact artifact and test scope.
+
+M686 source0185cb8d adds a serialized process/DLL event sequence and cumulative
+checkpoint counts. BC250_AUDIT_MARKER requests an explicit boundary at a subsequent
+Flush, which emits a checkpoint and forces an aggregate snapshot. Four-thread
+actual-helper/Windows-futex control passes; the verifier now catches whole missing
+maps through both sequence gaps and independent checkpoint count reconciliation.
+Use an explicit required end marker, not an arbitrary truncated log tail. A marker
+is not a GPU fence or proof of quiescence; pending/live state remains explicit.
+This prepared candidate still needs deployment, uploader/capture correlation and
+a deliberate-copy control. See M686 and the checkpoint protocol beside the analyzer.

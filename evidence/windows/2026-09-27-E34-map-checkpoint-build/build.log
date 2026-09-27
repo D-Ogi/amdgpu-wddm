@@ -1,0 +1,25 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+ninja: Entering directory `P:\bc-250\scratch\g0-umd-audit-build'
+[1/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_fence.c.obj
+[2/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_render_pass.c.obj
+[3/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_query.c.obj
+[4/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_kopper.c.obj
+[5/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_batch.c.obj
+[6/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_blit.c.obj
+[7/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_descriptors.c.obj
+[8/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_bo.c.obj
+[9/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_resource.c.obj
+[10/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_program.c.obj
+[11/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_surface.c.obj
+[12/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_screen.c.obj
+[13/17] Compiling C++ object src/gallium/drivers/zink/libzink.a.p/zink_synchronization.cpp.obj
+[14/17] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_context.c.obj
+[15/17] Compiling C++ object src/gallium/drivers/zink/libzink.a.p/zink_draw.cpp.obj
+[16/17] Linking static target src/gallium/drivers/zink/libzink.a
+[17/17] Linking target src/gallium/targets/d3d10umd/bc250d3d_zink.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d_zink.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d_zink.exp
+
