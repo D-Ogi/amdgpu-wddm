@@ -21,6 +21,7 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
     maps = {}
     events = 0
     sequenced = None
+    threaded = None
     last_time = 0
     checkpoints = []
     counts = dict(requests=0, successful=0, failed=0, ended=0)
@@ -42,6 +43,13 @@ def analyze(lines, allow_live=False, end_marker=None, start_marker=None):
             has_sequence = "seq" in row
             if has_sequence:
                 schema.add("seq")
+            if event == "begin":
+                has_thread = "tid" in row
+                if threaded is None:
+                    threaded = has_thread
+                require(threaded == has_thread, "mixed thread/legacy begin events")
+                if has_thread:
+                    schema.add("tid")
             require(set(row) == schema, "missing/unknown fields")
             if sequenced is None:
                 sequenced = has_sequence
