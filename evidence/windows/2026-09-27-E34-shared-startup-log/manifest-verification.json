@@ -1,0 +1,22 @@
+{
+  "archive.ps1": true,
+  "bc250d3d_zink.dll": true,
+  "check-composition-baseline.ps1": true,
+  "cleanup.ps1": true,
+  "collect-startup.ps1": true,
+  "composition-control.exe": true,
+  "durable.ps1": true,
+  "hosted-startup-witness.ps1": true,
+  "interop.ps1": true,
+  "launch.ps1": true,
+  "poll.ps1": true,
+  "restore.ps1": true,
+  "router.dll": true,
+  "run.ps1": true,
+  "test-durable.ps1": true,
+  "verify-stage.ps1": true,
+  "vulkan_radeon.dll": true,
+  "wait-composition-baseline.ps1": true,
+  "wait-hosted-startup.ps1": true,
+  "watchdog.ps1": true
+}

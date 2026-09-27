@@ -1,0 +1,1 @@
+CRT secure writer negative: shared reader refused as expected
