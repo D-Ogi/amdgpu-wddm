@@ -1,0 +1,14 @@
+{
+  "source_commit": "a0ad8af5ea46b90400d947d82d056f3bd58278c5",
+  "source_clean": true,
+  "tracked_inputs_unchanged": 12949,
+  "build_exit_code": 0,
+  "artifact_sha256": "5C74BF98F2362127173C53F7808950D4B6676E1B1C901A341163F7032AE78965",
+  "source_manifest_sha256": "3bdce77459f925ec311e6d47d539fe702d4a26cdfa5d87cf1ccd7c7bf2503805",
+  "build_log_sha256": "51c1238963b76154e3344d5e287c781b674cc7280841b5f18c0350296b9ca13c",
+  "recipe_sha256": "1b171eca8e8d48b4371d226a8442d40e96a7af6c1e5b11817f42d4aed6f2eb70",
+  "runtime_validated": false,
+  "compile_commands.json_sha256": "8f68f06371db9cc906bdbf76a2f173b73d9a375f798574792f9c8ea7f2dbf4b9",
+  "meson-info/intro-buildoptions.json_sha256": "8c454c5b961adbecf21fb0a53367ac432ff77606bf336e0ca1b5a611ccddc26f",
+  "meson-info/intro-dependencies.json_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+}
