@@ -140,3 +140,27 @@ int Bc250GfxPresentMatches(const void* record, unsigned int capacity,
         PresentWord(p+8)==BC250_GFX_PRESENT_RECORD_BYTES && PresentWord(p+12)==bytes &&
         (((unsigned long long)PresentWord(p+20)<<32)|PresentWord(p+16))==address;
 }
+
+BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
+    const BC250_BLIT_SURFACE* source, const BC250_BLIT_SURFACE* destination,
+    const BC250_BLIT_RECT* sourceRect, const BC250_BLIT_RECT* destinationRect,
+    const BC250_BLIT_RECT* dirty, unsigned int count,
+    unsigned long long sourceBase, unsigned long long destinationBase,
+    unsigned int offset, unsigned int* next, unsigned int* buffer,
+    unsigned int capacity, unsigned int* written)
+{
+    BC250_GFX_BLIT_RESULT result;
+    unsigned int copied,i;
+    if (!next || !written) return Bc250GfxBltInvalid;
+    *next=offset;*written=0;
+    if (capacity<16u || (capacity&7u)) return Bc250GfxBltNoSpace;
+    if (!buffer) return Bc250GfxBltInvalid;
+    result=Bc250EmitGfxBltList(source,destination,sourceRect,destinationRect,
+        dirty,count,sourceBase,destinationBase,offset,next,
+        buffer+BC250_GFX_ACQUIRE_DWORDS,capacity-BC250_GFX_ACQUIRE_DWORDS,&copied);
+    if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return result;
+    (void)Bc250EmitGfxAcquire(buffer,capacity);
+    for(i=BC250_GFX_ACQUIRE_DWORDS+copied;i<capacity;i++)buffer[i]=Bc250GfxCopyNop();
+    *written=capacity;
+    return result;
+}

@@ -4908,7 +4908,7 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
         !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
         (Present->SubRectCnt && !Present->pDstSubRects)) return status;
     if (!Present->pDmaBuffer || ((ULONG_PTR)Present->pDmaBuffer&3u) ||
-        Present->DmaSize<32 || (Present->DmaSize&31u) ||
+        Present->DmaSize<64 || (Present->DmaSize&31u) ||
         !Present->pDmaBufferPrivateData || Present->DmaBufferPrivateDataSize<sizeof(record))
         return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
     if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize)) return status;
@@ -4948,13 +4948,13 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
             dirty[i].Right=Present->pDstSubRects[i].right;dirty[i].Bottom=Present->pDstSubRects[i].bottom;
         }
     }
-    result=Bc250EmitGfxBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
+    result=Bc250EmitGfxPresentBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
         va[0],va[1],Present->MultipassOffset,&next,Present->pDmaBuffer,Present->DmaSize/4u,&written);
     if (dirty) ExFreePoolWithTag(dirty,BC250_WDDM_TAG);
     if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return status;
     // Consume the entire aligned DMA buffer, one record/IB. This prevents two
     // Present records being appended while the consumer expects one exact span.
-    for(i=written;i<Present->DmaSize/4u;i++)((ULONG*)Present->pDmaBuffer)[i]=Bc250GfxCopyNop();
+    if (written!=Present->DmaSize/4u) return status;
     KeMemoryBarrier();
     RtlCopyMemory(Present->pDmaBufferPrivateData,record,sizeof(record));
     Present->pDmaBuffer=(UCHAR*)Present->pDmaBuffer+Present->DmaSize;

@@ -21,3 +21,9 @@ unsigned int Bc250EmitGfxCopySpan(unsigned int* Buffer, unsigned int CapacityDwo
 
 /* Single-word CP padding used for the GFX IB alignment tail. */
 unsigned int Bc250GfxCopyNop(void);
+
+/* Linux gfx_v10_0_emit_mem_sync sequence, eight DWORDs including header.
+ * Makes prior producer writes visible to the L2 DMA read; it does not wait for
+ * another queue or make an allocation resident. Caller supplies that ordering. */
+#define BC250_GFX_ACQUIRE_DWORDS 8u
+unsigned int Bc250EmitGfxAcquire(unsigned int* Buffer, unsigned int CapacityDwords);

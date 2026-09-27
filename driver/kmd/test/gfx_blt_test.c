@@ -102,6 +102,44 @@ int main(void)
             } while(result==Bc250GfxBltMore);
             CHECK(offset==8 && !memcmp(actual,expected,sizeof(actual)));
         }
+        /* Exact production Present wrapper: every pass starts with acquire,
+         * copy packet ordinals exclude acquire/NOPs, same independent pixels. */
+        for(capacity=16;capacity<=64;capacity+=8) {
+            offset=attempts=0;memset(actual,0xcc,sizeof(actual));
+            do {
+                unsigned int prior=offset,packets;
+                memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
+                result=Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,
+                    sourceBase,destinationBase,offset,&offset,buffer,capacity,&written);
+                CHECK(result==Bc250GfxBltDone || result==Bc250GfxBltMore);
+                CHECK(written==capacity && offset>prior);
+                CHECK((buffer[0]>>30)==3 && ((buffer[0]>>16)&0x3fff)==6 && ((buffer[0]>>8)&255)==0x58);
+                CHECK(buffer[7]& (1u<<14)); /* GL2 invalidate precedes first DMA */
+                packets=offset-prior;
+                CHECK(8+7*packets<=written);
+                for(j=8;j<8+7*packets;j+=7) {
+                    unsigned long long from=(((unsigned long long)buffer[j+3]<<32)|buffer[j+2])-sourceBase;
+                    unsigned long long to=(((unsigned long long)buffer[j+5]<<32)|buffer[j+4])-destinationBase;
+                    unsigned int bytes=buffer[j+6]&S_506_BYTE_COUNT(~0u);
+                    CHECK(((buffer[j]>>8)&255)==0x50);
+                    CHECK(from+bytes<=sizeof(source) && to+bytes<=sizeof(actual));
+                    memcpy(actual+to,source+from,bytes);
+                }
+                CHECK(buffer[14]&S_506_RAW_WAIT(1));
+                CHECK(buffer[8+7*packets-6]&S_501_CP_SYNC(1));
+                for(;j<written;j++)CHECK(buffer[j]==0xffff1000u);
+                CHECK(!memcmp(buffer+written,saved+written,sizeof(buffer)-written*sizeof(buffer[0])));
+                CHECK(++attempts<=8);
+            } while(result==Bc250GfxBltMore);
+            CHECK(offset==8 && !memcmp(actual,expected,sizeof(actual)));
+        }
+        memset(buffer,0xcc,sizeof(buffer));memcpy(saved,buffer,sizeof(buffer));
+        CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+            0,&offset,buffer,8,&written)==Bc250GfxBltNoSpace && !offset && !written);
+        CHECK(!memcmp(buffer,saved,sizeof(buffer)));
+        CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+            8,&offset,buffer,16,&written)==Bc250GfxBltDone && offset==8 && written==16);
+        for(j=8;j<16;j++)CHECK(buffer[j]==0xffff1000u);
         /* A bad late rectangle must not leave a valid prefix in the DMA buffer,
          * including when a previous pass already consumed that prefix. */
         rects[3].Right=12;
@@ -111,6 +149,10 @@ int main(void)
             CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
                 offset,&nextOffset,buffer,64,&written)==Bc250GfxBltInvalid);
             CHECK(!written && nextOffset==offset && !memcmp(saved,buffer,sizeof(buffer)));
+            CHECK(Bc250EmitGfxPresentBltList(&s,&d,&sr,&dr,rects,4,sourceBase,destinationBase,
+                offset,&nextOffset,buffer,64,&written)==Bc250GfxBltInvalid);
+            CHECK(!written && nextOffset==offset && !memcmp(saved,buffer,sizeof(buffer)));
+
         }
         CHECK(Bc250EmitGfxBltList(&s,&d,&sr,&dr,0,0,sourceBase,destinationBase,
             0,&offset,buffer,6,&written)==Bc250GfxBltNoSpace && !written && !offset);
@@ -166,6 +208,7 @@ int main(void)
             memcpy(record,original,sizeof(record));
         }
     }
+    puts("PASS acquired and padded Present IBs, resumed copies, rejection and independent pixels");
     puts("PASS Present private-record binding, truncation, mutation and range checks");
     puts("PASS full dirty-list prevalidation and packet-ordinal multipass at30 capacities");
     puts("PASS decoded row copies at30 capacities, padding, intra-row resume, batch-only sync, whole-footprint rejection");

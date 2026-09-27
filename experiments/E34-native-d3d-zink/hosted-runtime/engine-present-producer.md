@@ -21,7 +21,7 @@ are filled with the imported CP NOP encoding, preventing another Present record
 from being appended to the same IB. The private record is published only after
 command construction and a memory barrier. MultipassOffset is a packet ordinal;
 More becomes STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER. An empty list intersection
-produces a NOP-only IB with ordinary hardware completion. Small or unaligned DMA
+produces an acquire plus NOP IB with ordinary hardware completion. Small or unaligned DMA
 capacity is returned as insufficient without publishing a record.
 
 With the gate enabled, UMD contexts request a Present allocation list as well as
@@ -37,3 +37,12 @@ complete. Do not enable the gate as a substitute for the CDD/DWM interop contrac
 The main development tree contains runtime changes beyond deployed KMD153.
 Any lab candidate must be reconciled against that exact baseline in an isolated
 source tree and assigned its own artifact identity before deployment.
+
+Each IB now starts with the eight-DWORD GFX10 ACQUIRE_MEM sequence from the
+imported gfx_v10_0_emit_mem_sync. The minimum capacity is64 bytes (16 DWORDs),
+leaving room for acquire, at least one copy packet, and alignment padding.
+MultipassOffset still counts copy packets only. The production wrapper is
+host-tested with independent pixel decoding at seven aligned capacities.
+Cache invalidation does not establish producer completion or residency: WDDM2
+Present allocation lists do not make allocations resident. Exact source and
+destination residency on the submitting device remain an admission obligation.

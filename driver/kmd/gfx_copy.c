@@ -56,3 +56,24 @@ unsigned int Bc250GfxCopyNop(void)
 {
     return (unsigned int)PACKET3(PACKET3_NOP, 0x3fff);
 }
+
+unsigned int Bc250EmitGfxAcquire(unsigned int* buffer, unsigned int capacity)
+{
+    if (!buffer || capacity<BC250_GFX_ACQUIRE_DWORDS) return 0;
+    /* Same imported gfx_v10_0 sequence as shim/bc250_dispatch.c emit_mem_sync. */
+    buffer[0]=(unsigned int)PACKET3(PACKET3_ACQUIRE_MEM,6);
+    buffer[1]=0;
+    buffer[2]=0xffffffffu;
+    buffer[3]=0xffffffu;
+    buffer[4]=buffer[5]=0;
+    buffer[6]=0xau;
+    buffer[7]=PACKET3_ACQUIRE_MEM_GCR_CNTL_GL2_INV(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GL2_WB(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLM_INV(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLM_WB(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GL1_INV(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLV_INV(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLK_INV(1) |
+        PACKET3_ACQUIRE_MEM_GCR_CNTL_GLI_INV(1);
+    return BC250_GFX_ACQUIRE_DWORDS;
+}

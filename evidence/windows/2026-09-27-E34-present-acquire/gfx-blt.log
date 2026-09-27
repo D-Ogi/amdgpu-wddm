@@ -1,0 +1,10 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS acquired and padded Present IBs, resumed copies, rejection and independent pixels
+PASS Present private-record binding, truncation, mutation and range checks
+PASS full dirty-list prevalidation and packet-ordinal multipass at30 capacities
+PASS decoded row copies at30 capacities, padding, intra-row resume, batch-only sync, whole-footprint rejection
+compile-check (kernel flags, same source, no link)
+
+gfx_blt_test.exe exit code 0
