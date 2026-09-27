@@ -364,6 +364,7 @@ typedef struct _BC250_WDDM {
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
     BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
+    BOOLEAN CddDwmInterop; // explicit diagnostic capability, default off and start-latched
     volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
     volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
     volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
@@ -1519,6 +1520,8 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->FlipsAboveDispatch);
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
+    GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
+        Wddm->CddDwmInterop,Wddm->GpuPresentGate,Wddm->HandleIdentityProbe);
     GuardLog("wddm: GPU Present calls%lld records%lld rotate%lld refused%lld",
         InterlockedCompareExchange64(&Wddm->GpuPresentCalls,0,0),
         InterlockedCompareExchange64(&Wddm->GpuPresentRecords,0,0),
@@ -1670,6 +1673,7 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->HandleIdentityProbe = (GuardReadSetting(L"EnableHandleIdentityProbe", 0) == 1);
     // Start-latched: changing registry values does not enable existing unbound opens.
     wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
+    wddm->CddDwmInterop = (GuardReadSetting(L"EnableCddDwmInterop", 0) == 1);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
@@ -2186,6 +2190,16 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // Not a flag: the header says this field must be >= 2. Four-byte pitch alignment, which is what a 32 bits per
     // pixel surface needs anyway. Zero here would be out of contract, and nothing in the research says so.
     caps->PresentationCaps.AlignmentShift = 2;
+    // An explicit trial setting, independent of producer selection so the
+    // existing CPU diagnostic path can first identify the CDD's actual shapes.
+    // Never infer this capability merely from successful GPU submissions.
+    if (Device->Wddm && ((BC250_WDDM*)Device->Wddm)->CddDwmInterop) {
+        caps->PresentationCaps.DriverSupportsCddDwmInterop = 1;
+        // Match the hosted frontend's maximum shared texture extent (8192).
+        caps->PresentationCaps.MaxTextureWidthShift = 2;
+        caps->PresentationCaps.MaxTextureHeightShift = 2;
+    }
+
 
     // "MultiEngineAware means the driver supports contexts", which a GpuMmu driver must; PreemptionAware needs it
     // set or adapter initialization is halted. A packet scheduler that owns the ring can honestly promise not to

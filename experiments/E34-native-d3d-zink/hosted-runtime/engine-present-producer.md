@@ -27,7 +27,7 @@ Malformed pointers or alignment fail separately (M637).
 
 BC2C UMD contexts are rejected by both GPU Present producer and consumer until
 source and destination residency on their exact submitting device is established.
-Their allocation-list sizing remains unchanged. No interop capability is advertised. Runtime
+Their allocation-list sizing remains unchanged. Interop capability remains off by default. Runtime
 allocation admission, complete standard-GDI allocation policy,
 CPU/GPU producer visibility, lifetime and scheduling across contexts, multipass
 callbacks, private-data delivery, and the exact signed build still require lab
@@ -59,7 +59,7 @@ they do not establish residency, OS handle resolution or DDI lifetime guarantees
 M632 validates13 acquired bindings on159; M633 validates shared imports and
 normal owner exit on CPU/hosted GPU. Neither executes BGP1. M634 corrects
 standard-GDI CPU visibility and refuses unimplemented ownership types; that
-source change is not deployed. Interop capability, CDD device residency and
+source change is not deployed. Interop runtime validation, CDD device residency and
 actual Blt admission remain the next runtime prerequisites.
 
 M638 source inspection corrects the assumption that a UMD-created DWM texture
@@ -68,3 +68,12 @@ LB7A and imports that runtime allocation into Zink. Keep BC2A rejection; first
 identify the actual CDD destination and context in the bounded interop capture.
 A BC2A texture ABI extension is not established as a prerequisite for that path.
 UMD-device MakeResident still does not prove CDD-device residency.
+
+EnableCddDwmInterop is a separate default-off, start-latched diagnostic setting.
+When explicitly set it advertises DriverSupportsCddDwmInterop and an8192-texel
+maximum shared texture extent. It does not enable RenderKm or change allocation
+admission. It is independent of EnableGpuPresentBlit so a shape-capture trial can
+select the existing CPU diagnostic producer first. That path may refuse system
+pages and cannot qualify G0; do not treat a retained desktop or zero Blts as a
+successful interop result. Capture-only and GPU trials require exact rollback
+artifacts and bounded workloads; no registry-only live switch is implied.
