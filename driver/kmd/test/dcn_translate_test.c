@@ -1,3 +1,4 @@
+#include "../present_range.h"
 #include "gdi_private.h"
 // Host controls for the supplied DCN address geometry. All windows are synthetic,
 // including the retained 256 MiB fixture. Larger fixtures prove arithmetic only,
@@ -9,6 +10,44 @@ static int g_failures, g_checks;
 
 #define CHECK(cond) \
     do { g_checks++; if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
+
+typedef struct { unsigned long long Pages[4]; int Missing,System,Calls; } RANGE_TEST;
+static int RangeTranslate(void* Context,unsigned long long Va,unsigned long long* Physical,int* System)
+{
+    RANGE_TEST* t=(RANGE_TEST*)Context;
+    unsigned page=(unsigned)(Va/4096);
+    t->Calls++;
+    if (page>=4 || (int)page==t->Missing) return 0;
+    *Physical=t->Pages[page]+(Va&4095); *System=(int)page==t->System;
+    return 1;
+}
+static void PresentRanges(void)
+{
+    RANGE_TEST t={{0x10000,0x11000,0x12000,0x13000},-1,-1,0};
+    unsigned long long first=7,last=9;
+    CHECK(Bc250PresentVramRange(&t,RangeTranslate,0,4*4096,&first,&last));
+    CHECK(first==0x10000 && last==0x13fff && t.Calls==4);
+    t.Calls=0;
+    CHECK(Bc250PresentVramRange(&t,RangeTranslate,4095,4098,&first,&last));
+    CHECK(first==0x10fff && last==0x12000 && t.Calls==3);
+    // Matching first/last physical addresses conceal a foreign middle page.
+    t.Pages[1]=0x90000; first=7;last=9;
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,0,4*4096,&first,&last));
+    CHECK(first==7 && last==9);
+    t.Pages[1]=0x11000;t.Missing=2;
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,0,4*4096,&first,&last));
+    t.Missing=-1;t.System=1;
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,0,4*4096,&first,&last));
+    t.System=-1;t.Calls=0;
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,0,0,&first,&last));
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,~0ull,2,&first,&last));
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,0,1,0,&last));
+    CHECK(!Bc250PresentVramRange(&t,0,0,1,&first,&last));
+    CHECK(t.Calls==0);
+    t.Pages[0]=~0ull-100;
+    CHECK(!Bc250PresentVramRange(&t,RangeTranslate,0,4096,&first,&last));
+    CHECK(first==7 && last==9);
+}
 
 static void Geometry(unsigned long long mcBase, unsigned long long vramBase,
                      unsigned long long vramLength)
@@ -186,6 +225,7 @@ int main(void)
     CHECK(!DcnStagingLayout(1,0,4,&pitch,&bytes) && !pitch && !bytes);
     CHECK(!DcnStagingLayout(0xfffffffful,1,1,&pitch,&bytes) && !pitch && !bytes);
     CHECK(!DcnStagingLayout(0x40000000ul,1,4,&pitch,&bytes) && !pitch && !bytes);
+    PresentRanges();
     Geometry(0xF400000000ull, 0x270000000ull, 256ull << 20);
     Geometry(0xF400000000ull, 0x270000000ull, 8ull << 30);
     Geometry(0xE800000000ull, 0x670000000ull, 12ull << 30);

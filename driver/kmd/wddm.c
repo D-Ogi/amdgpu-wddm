@@ -132,6 +132,7 @@ typedef struct _BC250_WDDM_KIND {
 } BC250_WDDM_KIND;
 
 #include "gdi_private.h"
+#include "present_range.h"
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
@@ -365,7 +366,7 @@ typedef struct _BC250_WDDM {
     BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
-    volatile LONG BlitTranslations;             // sources whose first and last page translated and were contiguous
+    volatile LONG BlitTranslations;             // sources whose complete page range translated contiguously
     // 2026-09-22 (ADR 0011 consequences, facts M100): of Blits, the breakdown by destination. BlitsToFlip +
     // BlitsToFirmware == Blits always; BlitsMapFailed is the subset of BlitsToFirmware that landed there only
     // because the flip surface would not map (a fallback, never a skip - see WddmPresentBlit).
@@ -4546,8 +4547,8 @@ static NTSTATUS Bc250WddmFormatHistoryBuffer(_In_ const HANDLE hContext, _In_ DX
 // E20, H3 (ADR 0011: a diagnostic, never the present path of a game). A Blt present of a GDI context names its
 // source at DXGK_PRESENT_SOURCE_INDEX of pAllocationList (facts M82): our allocation object, once OpenAllocation
 // hands it out, and the surface's GPU virtual address in the context's address space. The source is translated
-// through the context's root (first and last byte: a VRAM allocation is one contiguous range of the segment, so the
-// two must be Size - 1 apart, and the walk proves the tables rather than assuming them), mapped read-only by physical
+// through the context's root, checking every page for contiguous VRAM backing. Endpoints alone do not
+// establish contiguity for allocations without AccessedPhysically. The source is mapped read-only by physical
 // address for this one call - never through BAR0 (facts M32) - and its sub-rectangles are copied into the firmware
 // framebuffer the way display.c's CopyRect does it: clamped to the mode, 4 bytes a pixel, no scaling. Nothing is
 // cached, so no lifetime is shared with DestroyAllocation, and nothing is written except the framebuffer.
@@ -4592,6 +4593,15 @@ static BOOLEAN WddmCopyScanoutRows(PVOID Destination, SIZE_T DestinationBytes, U
     return TRUE;
 }
 
+static int WddmPresentTranslate(void* Context, unsigned long long Va,
+    unsigned long long* Physical, int* System)
+{
+    BOOLEAN system=FALSE;
+    BOOLEAN result=VidMmTranslate(((BC250_WDDM_OBJECT*)Context)->RootPhysical,Va,Physical,&system);
+    *System=system;
+    return result;
+}
+
 static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
     BC250_DEVICE* device = Context->Device;
@@ -4602,7 +4612,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     int reading = 0;
     const BC250_WDDM_ALLOCATION_PRIVATE* alloc = NULL;
     ULONGLONG va = 0, first = 0, last = 0;
-    BOOLEAN systemFirst = FALSE, systemLast = FALSE, verbose;
+    BOOLEAN verbose;
     const UCHAR* map;
     PHYSICAL_ADDRESS physical;
     RECT whole;
@@ -4675,15 +4685,13 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     }
     if (why == NULL)
     {
-        if (!VidMmTranslate(Context->RootPhysical, va, &first, &systemFirst) ||
-            !VidMmTranslate(Context->RootPhysical, va + alloc->Size - 1, &last, &systemLast)) why = "source VA does not translate";
-        else if (systemFirst || systemLast) why = "source in system memory";
-        else if (last - first != alloc->Size - 1) why = "source not contiguous";
+        if (!Bc250PresentVramRange(Context,WddmPresentTranslate,va,alloc->Size,&first,&last))
+            why = "source pages not contiguous VRAM";
         else InterlockedIncrement(&wddm->BlitTranslations);
         if (verbose && object != NULL)
             GuardLog("wddm: blit source (reading %d) %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s", reading,
                      (void*)object, alloc->Width, alloc->Height, alloc->Pitch, alloc->Format, alloc->Size, va, first, last,
-                     (systemFirst || systemLast) ? " SYSTEM" : "", why != NULL ? " REFUSED" : "");
+                     "", why != NULL ? " REFUSED" : "");
     }
     if (why != NULL)
     {
@@ -4736,15 +4744,12 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     {
         BC250_WDDM_OBJECT* destination = WddmListedObject(wddm, (HANDLE)(ULONG_PTR)raw[8], BC250_WDDM_MAGIC_OPENED);
         ULONGLONG dstFirst = 0, dstLast = 0, primaryPhysical = 0;
-        BOOLEAN dstSystemFirst = FALSE, dstSystemLast = FALSE;
         const BC250_WDDM_ALLOCATION_PRIVATE* d = destination ? &destination->Allocation : NULL;
         if (d == NULL || d->Width == 0 || d->Height == 0 || d->Pitch < d->Width * 4ull ||
             d->Size < (ULONGLONG)d->Pitch * d->Height || d->Size > 0x10000000ull ||
             !WddmLinearColorFormat(d->Format) ||
             raw[9] > MAXULONGLONG - d->Size ||
-            !VidMmTranslate(Context->RootPhysical, raw[9], &dstFirst, &dstSystemFirst) ||
-            !VidMmTranslate(Context->RootPhysical, raw[9] + d->Size - 1, &dstLast, &dstSystemLast) ||
-            dstSystemFirst || dstSystemLast || dstLast < dstFirst || dstLast - dstFirst != d->Size - 1 ||
+            !Bc250PresentVramRange(Context,WddmPresentTranslate,raw[9],d->Size,&dstFirst,&dstLast) ||
             (dstFirst < last + 1 && first < dstLast + 1))
         {
             InterlockedIncrement(&wddm->BlitSkips);
