@@ -7,6 +7,7 @@
 #include <cwchar>
 #include <stdexcept>
 #include <cstdint>
+#include <memory>
 
 using Microsoft::WRL::ComPtr;
 static void require(bool value, const char* message) {
@@ -32,6 +33,8 @@ struct Shared {
    HANDLE texture;
    UINT width, height, iteration;
    uint64_t checkedPixels;
+   bool duplicateImports;
+   UINT duplicateReopens;
 };
 struct Device {
    ComPtr<ID3D11Device> device;
@@ -133,16 +136,39 @@ struct Surface {
 };
 static int child(Shared* shared, HANDLE go, HANDLE done, bool baseline) {
    try {
-      Device device(baseline); Surface surface;
+      Device device(baseline); Surface surface, duplicate;
+      std::unique_ptr<Device> duplicateDevice;
+      if (shared->duplicateImports) duplicateDevice.reset(new Device(baseline));
       shared->status = 0; SetEvent(done);
       for (;;) {
          require(WaitForSingleObject(go, 15000) == WAIT_OBJECT_0, "parent timeout");
          const LONG command = shared->command;
-         if (command == Open) surface.setup(device, shared->width, shared->height, shared->texture);
+         if (command == Open) {
+            surface.setup(device, shared->width, shared->height, shared->texture);
+            if (duplicateDevice) duplicate.setup(*duplicateDevice, shared->width, shared->height, shared->texture);
+         }
          else if (command == Exchange) {
             shared->checkedPixels += surface.verify(device, shared->iteration, false);
-            surface.write(device, shared->iteration, true);
-         } else if (command == Close) { device.finish(); surface.reset(); check(device.device->GetDeviceRemovedReason(), "after imported release"); }
+            if (duplicateDevice && shared->iteration % 100 == 0) {
+               shared->checkedPixels += duplicate.verify(*duplicateDevice, shared->iteration, false);
+               device.finish(); surface.reset();
+               check(device.device->GetDeviceRemovedReason(), "after duplicate primary close");
+               // The third device retains the same imported allocation while
+               // the first import closes, then writes before that import reopens.
+               duplicate.write(*duplicateDevice, shared->iteration, true);
+               surface.setup(device, shared->width, shared->height, shared->texture);
+               shared->checkedPixels += surface.verify(device, shared->iteration, true);
+               ++shared->duplicateReopens;
+               printf("duplicate_reopen=%u iteration=%u PASS\n", shared->duplicateReopens, shared->iteration);
+            } else surface.write(device, shared->iteration, true);
+         } else if (command == Close) {
+            device.finish(); surface.reset();
+            if (duplicateDevice) {
+               duplicateDevice->finish(); duplicate.reset();
+               check(duplicateDevice->device->GetDeviceRemovedReason(), "after duplicate release");
+            }
+            check(device.device->GetDeviceRemovedReason(), "after imported release");
+         }
          else if (command == CreateOwned) {
             surface.setup(device, shared->width, shared->height);
             surface.write(device, shared->iteration, false);
@@ -189,6 +215,8 @@ int wmain(int argc, wchar_t** argv) {
       require(mapping.h && go.h && done.h, "IPC creation");
       auto* shared = static_cast<Shared*>(MapViewOfFile(mapping.h, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Shared)));
       require(shared != nullptr, "MapViewOfFile"); ZeroMemory(shared, sizeof(*shared));
+      require(argc <= 5 && (argc < 5 || !wcscmp(argv[4], L"duplicate")), "invalid duplicate mode");
+      shared->duplicateImports = argc == 5;
       Handle job(CreateJobObjectW(nullptr, nullptr)); require(job.h != nullptr, "CreateJobObject");
       JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {};
       limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -250,6 +278,10 @@ int wmain(int argc, wchar_t** argv) {
          check(device.device->GetDeviceRemovedReason(), "after surviving imported release");
          printf("owner_exit=%s child_exit=%lu survivor_pixels=%llu\n", abrupt ? "abrupt" : "normal", exitCode,
             static_cast<unsigned long long>(survivorPixels));
+      }
+      if (shared->duplicateImports) {
+         require(shared->duplicateReopens == (iterations + 99) / 100, "missing duplicate reopen witnesses");
+         printf("duplicate_imports PASS reopens=%u independent_devices=3\n", shared->duplicateReopens);
       }
       printf("PASS iterations=%u generations=%u parent_pixels=%llu child_pixels=%llu distinct_pids=%lu,%lu\n", iterations, generations,
          static_cast<unsigned long long>(pixels), static_cast<unsigned long long>(shared->checkedPixels), GetCurrentProcessId(), process.dwProcessId);
