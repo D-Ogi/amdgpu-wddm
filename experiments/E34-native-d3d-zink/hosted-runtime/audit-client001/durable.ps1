@@ -1,0 +1,36 @@
+# Durable artifacts must exist before any experimental gate or DLL mutation.
+function Copy-VerifiedDurable {
+ param([string]$Source,[string]$Destination,[string]$Expected)
+ if((Get-FileHash -LiteralPath $Source).Hash -ne $Expected){throw 'Durable source hash mismatch'}
+ if(Test-Path -LiteralPath $Destination){throw 'Durable destination exists; inspect original attempt'}
+ $inputFile=[IO.File]::Open($Source,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+ try {
+  $outputFile=New-Object IO.FileStream($Destination,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,1048576,[IO.FileOptions]::WriteThrough)
+  try {$inputFile.CopyTo($outputFile);$outputFile.Flush($true)} finally {$outputFile.Dispose()}
+ } finally {$inputFile.Dispose()}
+ if((Get-FileHash -LiteralPath $Destination).Hash -ne $Expected){throw 'Durable destination hash mismatch'}
+}
+function Write-DurableText {
+ param([string]$Path,[string]$Text)
+ $bytes=(New-Object Text.UTF8Encoding($false)).GetBytes($Text)
+ $file=New-Object IO.FileStream($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
+ try {$file.Write($bytes,0,$bytes.Length);$file.Flush($true)} finally {$file.Dispose()}
+}
+function Flush-ExistingFile {
+ param([string]$Path)
+ $file=[IO.File]::Open($Path,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::ReadWrite)
+ try {$file.Flush($true)} finally {$file.Dispose()}
+}
+function Restore-DurableBaseline {
+ param([string]$Path,[string]$Backup,[string]$Original,[string]$Baseline,[string]$Candidate)
+ $current=if(Test-Path -LiteralPath $Path){(Get-FileHash -LiteralPath $Path).Hash}else{''}
+ if($current -eq $Baseline){return}
+ if($current -and $current -ne $Candidate){throw 'Unexpected active file; preserved'}
+ $verified=$null
+ foreach($file in @($Backup,$Original)){
+  if((Test-Path -LiteralPath $file) -and (Get-FileHash -LiteralPath $file).Hash -eq $Baseline){$verified=$file;break}
+ }
+ if(!$verified){throw 'No verified baseline/original backup'}
+ if($current){Move-Item -LiteralPath $Path -Destination ($Path+'.held-'+[guid]::NewGuid().ToString('N'))}
+ Copy-VerifiedDurable $verified $Path $Baseline
+}
