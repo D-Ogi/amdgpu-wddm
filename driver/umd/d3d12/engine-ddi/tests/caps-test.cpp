@@ -202,6 +202,64 @@ D3D12DDI_3DPIPELINELEVEL level_1074(const engine_ddi::AdapterCaps* caps, D3D12DD
                                                              : static_cast<D3D12DDI_3DPIPELINELEVEL>(0);
 }
 
+// 1003 TEXTURE_LAYOUT_SETS (20 bytes, pInfo {D3D12DDI_TL_ROW_MAJOR, unit}) for every functional unit, and 1061
+// SWIZZLE_PATTERN, each against the 1060 answer: no row-major texture means no row-major layout on any unit, and a
+// device-dependent swizzle count of 0 means no swizzle pattern index.
+void check_layout_sets(const engine_ddi::AdapterCaps* caps, const char* what) {
+    D3D12DDI_TEXTURE_LAYOUT_CAPS_0026 layout;
+    std::memset(&layout, 0xEE, sizeof(layout));
+    const HRESULT hr60 = get(caps, D3D12DDICAPS_TYPE_0022_TEXTURE_LAYOUT, layout);
+    check(hr60 == S_OK && !layout.SupportsRowMajorTexture && layout.DeviceDependentSwizzleCount == 0,
+          "%s: 1060 reports no row-major texture and no device-dependent swizzle pattern", what);
+    const D3D12DDI_ROW_MAJOR_LAYOUT_CAPS none{};
+    const D3D12DDI_FUNCTIONAL_UNIT units[] = {D3D12DDI_FUNCUNIT_COMBINED, D3D12DDI_FUNCUNIT_COPY_SRC,
+                                              D3D12DDI_FUNCUNIT_COPY_DST};
+    for (const D3D12DDI_FUNCTIONAL_UNIT unit : units) {
+        UINT key[2] = {D3D12DDI_TL_ROW_MAJOR, static_cast<UINT>(unit)};
+        D3D12DDI_ROW_MAJOR_LAYOUT_CAPS sets;
+        std::memset(&sets, 0xEE, sizeof(sets));
+        const HRESULT hr = get(caps, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets, key, 20);
+        check(hr == S_OK && !std::memcmp(&sets, &none, sizeof(none)) && key[0] == D3D12DDI_TL_ROW_MAJOR &&
+                  key[1] == static_cast<UINT>(unit) && !layout.SupportsRowMajorTexture,
+              "%s: 1003 TEXTURE_LAYOUT_SETS, DataSize 20, pInfo {ROW_MAJOR, unit %d}: both SubCaps cover no element "
+              "size and Flags NONE, as 1060 has no row-major texture (hr %08lx, SubCaps[0].MaxElementSize %u)",
+              what, static_cast<int>(unit), static_cast<unsigned long>(hr),
+              static_cast<unsigned>(sets.SubCaps[0].MaxElementSize));
+    }
+    D3D12DDI_ROW_MAJOR_LAYOUT_CAPS sets;
+    std::memset(&sets, 0xEE, sizeof(sets));
+    HRESULT hr = get(caps, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets);
+    check(hr == E_INVALIDARG && untouched(&sets, sizeof(sets)), "%s: 1003 with pInfo NULL: E_INVALIDARG, nothing written",
+          what);
+    UINT index = 0;
+    D3D12DDI_SWIZZLE_PATTERN_DESC_0022 pattern;
+    std::memset(&pattern, 0xEE, sizeof(pattern));
+    hr = get(caps, D3D12DDICAPS_TYPE_0022_SWIZZLE_PATTERN, pattern, &index);
+    check(hr == E_INVALIDARG && untouched(&pattern, sizeof(pattern)) && layout.DeviceDependentSwizzleCount == 0,
+          "%s: 1061 SWIZZLE_PATTERN, %zu bytes, index 0: E_INVALIDARG, nothing written, as 1060 counts 0 patterns",
+          what, sizeof(pattern));
+}
+
+// 1057 PROTECTED_RESOURCE_SESSION_SUPPORT (8 bytes, NodeIndex 0), 1069 EXECUTECOMMANDLISTS_PARALLELISM and 1071
+// SUPPORT_BATCHED_MARKERS (a BOOL each): the documented "none" answers.
+void check_none_types(const engine_ddi::AdapterCaps* caps, const char* what) {
+    D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030 session;
+    std::memset(&session, 0xEE, sizeof(session));
+    session.NodeIndex = 0;
+    const HRESULT hr57 = get(caps, D3D12DDICAPS_TYPE_0030_PROTECTED_RESOURCE_SESSION_SUPPORT, session);
+    BOOL parallel;
+    std::memset(&parallel, 0xEE, sizeof(parallel));
+    const HRESULT hr69 = get(caps, D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM, parallel);
+    BOOL markers;
+    std::memset(&markers, 0xEE, sizeof(markers));
+    const HRESULT hr71 = get(caps, D3D12DDICAPS_TYPE_0073_SUPPORT_BATCHED_MARKERS, markers);
+    check(hr57 == S_OK && session.NodeIndex == 0 &&
+              session.Support == D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_FLAG_0030_NONE && hr69 == S_OK &&
+              parallel == FALSE && hr71 == S_OK && markers == FALSE,
+          "%s: 1057 (%zu bytes, node 0) Support NONE; 1069 and 1071 (%zu bytes) FALSE", what, sizeof(session),
+          sizeof(BOOL));
+}
+
 void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     // A 1.1 function table (the shell asked GetFuncs for 1.1): no QueryAdapterCaps, refused before any call.
     {
@@ -245,9 +303,10 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     hr = engine_ddi::build_caps(caps, kDdi, &r);
     check(r1074 && hr == E_INVALIDARG && untouched(raw, sizeof(raw)),
           "1074 with 4 bytes and 1007 with 8 bytes: E_INVALIDARG, nothing written");
-    r = {D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM, nullptr, raw, sizeof(BOOL)};
+    UINT node0 = 0;
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node0, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
     hr = engine_ddi::build_caps(caps, kDdi, &r);
-    check(hr == E_NOTIMPL && untouched(raw, sizeof(raw)), "unanswered type 1069: E_NOTIMPL, nothing written (hr %08lx)",
+    check(hr == E_NOTIMPL && untouched(raw, sizeof(raw)), "unanswered type 1059: E_NOTIMPL, nothing written (hr %08lx)",
           static_cast<unsigned long>(hr));
     r = {D3D12DDICAPS_TYPE_3DPIPELINESUPPORT, nullptr, raw, 4};
     hr = engine_ddi::build_caps(caps, 91, &r);
@@ -326,6 +385,8 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               prio.SupportedQueueFlagsForGlobalRealtimeQueues == D3D12DDI_COMMAND_QUEUE_FLAG_NONE && hr_sched == S_OK &&
               sched.ComputeQueuesPer3DQueue == 0,
           "1060 TEXTURE_LAYOUT, 1062 queue priority and 1067 scheduling: documented constants");
+    check_layout_sets(caps, "FL12_0 engine");
+    check_none_types(caps, "FL12_0 engine");
 
     D3D12DDI_OPTIONS_DATA_0090 o90;
     std::memset(&o90, 0xEE, sizeof(o90));
@@ -660,6 +721,8 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
           "1012, 1006 and 1004 answered: %u shader models, binding tier %d, tiled tier %d, heap tier %d, waves %u-%u",
           n, static_cast<int>(o.ResourceBindingTier), static_cast<int>(o.TiledResourcesTier),
           static_cast<int>(o.ResourceHeapTier), s.WaveLaneCountMin, s.WaveLaneCountMax);
+    check_layout_sets(caps, "engine");
+    check_none_types(caps, "engine");
     engine_ddi::free_adapter_caps(caps);
     return 0;
 }

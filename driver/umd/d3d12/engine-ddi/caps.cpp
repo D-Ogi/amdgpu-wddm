@@ -21,6 +21,9 @@ static_assert(sizeof(D3D12DDI_ARCHITECTURE_INFO_DATA) == 4, "1005: H:2916-2920")
 static_assert(sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041) == 20, "1002: H:6806-6814");
 static_assert(sizeof(D3D12DDI_GPUVA_CAPS_0004) == 4, "1009: H:250-257");
 static_assert(sizeof(D3D12DDI_TEXTURE_LAYOUT_CAPS_0026) == 20, "1060: H:5525-5536");
+static_assert(sizeof(D3D12DDI_ROW_MAJOR_LAYOUT_CAPS) == 20, "1003: H:280-292, SubCaps[2] of 8 bytes and Flags");
+static_assert(sizeof(D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030) == 8, "1057: H:13697-13701");
+static_assert(sizeof(BOOL) == 4, "1069 and 1071: pData = BOOL, H:128, H:131");
 static_assert(sizeof(D3D12DDICAPS_UMD_BASED_COMMAND_QUEUE_PRIORITY_DATA_0023) == 4, "1062: H:5140-5143");
 static_assert(sizeof(D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050) == 4, "1067: H:7004-7008");
 static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0090) == 4, "1077: H:11127-11131");
@@ -96,6 +99,14 @@ D3D12DDI_3DPIPELINELEVEL pipeline_level(D3D_FEATURE_LEVEL level) noexcept {
     default: return static_cast<D3D12DDI_3DPIPELINELEVEL>(0);
     }
 }
+
+// 1060 SupportsRowMajorTexture, and with it the whole 1003 answer. The pinned engine creates no texture of layout
+// ROW_MAJOR (vkd3d-proton fork libs/vkd3d/resource.c, vkd3d_get_image_create_info refuses it with E_NOTIMPL) and
+// reports CrossAdapterRowMajorTextureSupported FALSE (libs/vkd3d/device.c, d3d12_device_caps_init_feature_options).
+constexpr BOOL kRowMajorTexture = FALSE;
+
+// 1060 DeviceDependentSwizzleCount: the valid indices of 1061 are 0 through this count - 1 (H:4752-4755).
+constexpr UINT kDeviceDependentSwizzleCount = 0;
 
 D3D12DDI_3DPIPELINELEVEL lower(D3D12DDI_3DPIPELINELEVEL a, D3D12DDI_3DPIPELINELEVEL b) noexcept { return a < b ? a : b; }
 
@@ -397,11 +408,57 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         if (!d || r.pInfo) return E_INVALIDARG;
         D3D12DDI_TEXTURE_LAYOUT_CAPS_0026 t{};
         t.DeviceDependentLayoutCount = 0;
-        t.DeviceDependentSwizzleCount = 0;
+        t.DeviceDependentSwizzleCount = kDeviceDependentSwizzleCount;
         t.Supports64KStandardSwizzle = c.options.StandardSwizzle64KBSupported;
-        t.SupportsRowMajorTexture = FALSE;                  // no 1:1 engine answer; not claimed
+        t.SupportsRowMajorTexture = kRowMajorTexture;
         t.IndexableSwizzlePatterns = FALSE;
         *d = t;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS: {
+        // *pInfo is UINT[2] {D3D12DDI_TL_ROW_MAJOR, D3D12DDI_FUNCTIONAL_UNIT}, pData D3D12DDI_ROW_MAJOR_LAYOUT_CAPS
+        // (H:268-271). ROW_MAJOR is the only layout the query names; the units are COMBINED, COPY_SRC and COPY_DST
+        // (H:259-266). With no row-major texture (1060) every unit gets the zero answer: both SubCaps entries cover
+        // no element size (MaxElementSize 0, the unused entry of cosumd12 CosUmd12Adapter.cpp:345-367) and Flags NONE.
+        static_assert(!kRowMajorTexture, "claiming row-major textures in 1060 needs real SubCaps in 1003");
+        auto* d = payload<D3D12DDI_ROW_MAJOR_LAYOUT_CAPS>(r);
+        if (!d) return E_INVALIDARG;
+        const UINT* key = static_cast<const UINT*>(r.pInfo);
+        if (!key || key[0] != D3D12DDI_TL_ROW_MAJOR || key[1] > D3D12DDI_FUNCUNIT_COPY_DST) {
+            if (key)
+                log_line("GetCaps TEXTURE_LAYOUT_SETS: layout %u, functional unit %u outside the contract", key[0], key[1]);
+            else
+                log_line("GetCaps TEXTURE_LAYOUT_SETS: pInfo NULL, the contract names UINT[2]");
+            return E_INVALIDARG;
+        }
+        *d = D3D12DDI_ROW_MAJOR_LAYOUT_CAPS{};
+        log_line("GetCaps TEXTURE_LAYOUT_SETS: layout %u, functional unit %u: no row-major layout", key[0], key[1]);
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0022_SWIZZLE_PATTERN:
+        // *pInfo is an index below 1060's DeviceDependentSwizzleCount (H:4752-4755), which is 0: no index exists.
+        static_assert(kDeviceDependentSwizzleCount == 0, "1061 answers no swizzle pattern");
+        log_line("GetCaps SWIZZLE_PATTERN (DataSize %u, pInfo %s): 1060 reports no device-dependent swizzle pattern",
+                 r.DataSize, r.pInfo ? "set" : "null");
+        return E_INVALIDARG;
+    case D3D12DDICAPS_TYPE_0030_PROTECTED_RESOURCE_SESSION_SUPPORT: {
+        // NodeIndex is an input inside the payload (H:13697-13701). engine-ddi refuses every protected resource
+        // session (pfnSetProtectedResourceSession is a fail-safe, resources.cpp refuses a session handle).
+        auto* d = payload<D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030>(r);
+        if (!d || d->NodeIndex != 0) return E_INVALIDARG;
+        d->Support = D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_FLAG_0030_NONE;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_EXECUTECOMMANDLISTS_PARALLELISM: {
+        auto* d = payload<BOOL>(r);                         // pData = BOOL (H:128)
+        if (!d) return E_INVALIDARG;
+        *d = FALSE;                                         // not claimed: the queue table is the shell's
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0073_SUPPORT_BATCHED_MARKERS: {
+        auto* d = payload<BOOL>(r);                         // pData = BOOL (H:131)
+        if (!d) return E_INVALIDARG;
+        *d = FALSE;                                         // pfnSetMarker is a fail-safe; no marker batching
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_0023_UMD_BASED_COMMAND_QUEUE_PRIORITY: {
@@ -432,6 +489,7 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         return S_OK;
     }
     default:
+        // Every other type defined at 0092 is left unanswered on purpose (INTEGRATION.md, "GetCaps mapping").
         log_line("GetCaps type %u (DataSize %u, pInfo %s): not answered in this revision", static_cast<unsigned>(r.Type),
                  r.DataSize, r.pInfo ? "set" : "null");
         return E_NOTIMPL;

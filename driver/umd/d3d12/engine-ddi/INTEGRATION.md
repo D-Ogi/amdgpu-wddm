@@ -77,9 +77,50 @@ tiled resources tier 0, binding tier 3, raytracing tier 1.1. With this mapping 1
 ### GetCaps mapping
 
 Sources are the engine's QueryAdapterCaps answers (D3D12_FEATURE_*, SDK `d3d12.h` 10.0.26100) or a constant.
-Layout references are WDK 10.0.26100 `um/d3d12umddi.h` ("H:"). Every type not listed returns E_NOTIMPL and logs
-type and size; so do 1000, 1003, 1013, 1057, 1059 (its payload's meaning is not documented, H:1431-1434), 1066,
-1069, 1070, 1071 and 1075. A wrong DataSize is E_INVALIDARG with nothing written.
+Layout references are WDK 10.0.26100 `um/d3d12umddi.h` ("H:"); DDI-ref and the other source names are those of
+"Memory architecture policy" below; cosumd12 is Microsoft's compute-only sample driver,
+`ref\graphics-driver-samples\compute-only-sample\cosumd12` (@de4a2161), cited for shape only. A wrong DataSize is
+E_INVALIDARG with nothing written. An unanswered type returns E_NOTIMPL and logs type, size and whether pInfo is set.
+
+Every `D3D12DDICAPS_TYPE` value (H:94-150) that exists at 0092. The version is the suffix of the name; a value
+without one predates the suffixes, except 1069, which H:127-130 lists between 1068 (0061) and 1070 (0073). 1008 and
+1011 are not defined. Left out because they are later than 0092: 1013 (0103), 1075 (0103), 1079 (0093), 1080 (0098),
+1081 (0101), 1082 (0102), 1084-1086 (106), 1087 (0109), 1088 (0110), 1091 (0110); 1083 is reserved (H:142).
+
+| Type | Name | Status | Reason |
+|---|---|---|---|
+| 1000 | TEXTURE_LAYOUT | E_NOTIMPL | deprecated by 1060 (H:96, H:165-170) |
+| 1001 | SWIZZLE_PATTERN | E_NOTIMPL | deprecated by 1061 (H:97, H:206-215) |
+| 1002 | MEMORY_ARCHITECTURE | answered | table below |
+| 1003 | TEXTURE_LAYOUT_SETS | answered | table below |
+| 1004 | SHADER | answered | table below |
+| 1005 | ARCHITECTURE_INFO | answered | table below |
+| 1006 | D3D12_OPTIONS | answered | table below |
+| 1007 | 3DPIPELINESUPPORT | answered | table below |
+| 1009 | GPUVA_CAPS | answered | table below |
+| 1010 | TEXTURE_LAYOUT1 | E_NOTIMPL | deprecated by 1060 (H:106, H:184-188) |
+| 1012 | 0011_SHADER_MODELS | answered | table below |
+| 1057 | 0030_PROTECTED_RESOURCE_SESSION_SUPPORT | answered | table below |
+| 1058 | 0030_CRYPTO_SESSION_SUPPORT | E_NOTIMPL | deprecated, moved to the video caps (H:112) |
+| 1059 | 0022_CPU_PAGE_TABLE_FALSE_POSITIVES | E_NOTIMPL | the payload is a D3D12DDI_COMMAND_QUEUE_FLAGS per node (H:1431-1434), but neither H nor DDI-ref says what a set flag means, so no answer can be derived; cosumd12 answers COMPUTE with "TODO: What is this?" (CosUmd12Adapter.cpp:369-376) |
+| 1060 | 0022_TEXTURE_LAYOUT | answered | table below |
+| 1061 | 0022_SWIZZLE_PATTERN | answered: E_INVALIDARG | table below |
+| 1062 | 0023_UMD_BASED_COMMAND_QUEUE_PRIORITY | answered | table below |
+| 1063, 1064, 1065 | 0030_CONTENT_PROTECTION_SYSTEM_COUNT, _SUPPORT, 0030_CRYPTO_SESSION_TRANSFORM_SUPPORT | E_NOTIMPL | deprecated, moved to the video caps (H:120-122) |
+| 1066 | 0033_ADAPTER_COMPUTE_ONLY | E_NOTIMPL | H names no payload for it and DDI-ref says only "Adapter compute only"; this is a 3D adapter, whose level 1007 and 1074 report (cosumd12 states compute-only through 1007 `1_0_CORE` alone) |
+| 1067 | 0050_HARDWARE_SCHEDULING_CAPS | answered | table below |
+| 1068 | QUERY_META_COMMAND_CAPS_0061 | E_NOTIMPL | the payload names a CommandId (H:17859-17866) from EnumerateMetaCommands, which reports none ("Query slots around CreateDevice" below) |
+| 1069 | EXECUTECOMMANDLISTS_PARALLELISM | answered | table below |
+| 1070 | SAMPLER_FEEDBACK_0073 | E_NOTIMPL | a per-resource query of the feedback map size (H:9428-9437); 1006 reports SamplerFeedbackTier NOT_SUPPORTED |
+| 1071 | 0073_SUPPORT_BATCHED_MARKERS | answered | table below |
+| 1072, 1073 | 0074_PROTECTED_RESOURCE_SESSION_TYPE_COUNT, _TYPES | E_NOTIMPL | asked only when 1057 reports SUPPORTED (DDI-ref ne-d3d12umddi-d3d12ddicaps_type.md:159, :163); 1057 reports NONE |
+| 1074 | 0081_3DPIPELINESUPPORT1 | answered | table below |
+| 1077 | OPTIONS_0090 | answered | table below |
+| 1078 | OPTIONS_0091 | answered | table below |
+
+Answered: 18 of the 31 values at 0092 (13 before 1003), 1061 as a refusal by contract. The 13 left E_NOTIMPL are the deprecated
+1000, 1001, 1010, 1058, 1063, 1064 and 1065, the undocumented 1059 and 1066, and 1068, 1070, 1072 and 1073, which
+the runtime reaches only through a capability engine-ddi reports as absent.
 
 L below is min(level of FEATURE_LEVELS.MaxSupportedFeatureLevel, 12_1), asked for {11_0, 11_1, 12_0, 12_1, 12_2}.
 The engine-ddi ceiling is 12_1 because 12_2 needs raytracing 1.1, mesh shaders, VRS tier 2 and sampler feedback,
@@ -122,7 +163,12 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1002 | | ResourceSerializationTier | the policy's explicit value; with Default or no policy 0 | no engine answer; overridden by the policy (tier 0: see "Open points" below) |
 | 1009 GPUVA_CAPS | `D3D12DDI_GPUVA_CAPS_0004`, 4, H:250-257; pInfo NULL or node 0 | MaxGPUVirtualAddressBitsPerResource | same value | GPU_VIRTUAL_ADDRESS_SUPPORT |
 | 1060 TEXTURE_LAYOUT | `D3D12DDI_TEXTURE_LAYOUT_CAPS_0026`, 20, H:5525-5536; pInfo NULL, else E_INVALIDARG (no swizzle patterns) | Supports64KStandardSwizzle | StandardSwizzle64KBSupported | OPTIONS |
-| 1060 | | DeviceDependentLayoutCount, DeviceDependentSwizzleCount, SupportsRowMajorTexture, IndexableSwizzlePatterns | 0, 0, FALSE, FALSE | no device-dependent layouts; no 1:1 engine answer for row-major textures |
+| 1060 | | DeviceDependentLayoutCount, DeviceDependentSwizzleCount, SupportsRowMajorTexture, IndexableSwizzlePatterns | 0, 0, FALSE, FALSE | no device-dependent layouts; the pinned engine creates no ROW_MAJOR texture (vkd3d-proton fork `libs/vkd3d/resource.c`, `vkd3d_get_image_create_info` refuses the layout with E_NOTIMPL) and answers OPTIONS.CrossAdapterRowMajorTextureSupported FALSE (`libs/vkd3d/device.c`, `d3d12_device_caps_init_feature_options`) |
+| 1003 TEXTURE_LAYOUT_SETS | `D3D12DDI_ROW_MAJOR_LAYOUT_CAPS`, 20, H:280-292 (`SubCaps[2]` of `D3D12DDI_ROW_MAJOR_LAYOUT_SUB_CAPS`, four UINT16 each: MaxElementSize, BaseOffsetAlignment, PitchAlignment, DepthPitchAlignment; then `D3D12DDI_ROW_MAJOR_LAYOUT_FLAGS` Flags, H:272-278); `*pInfo` is `UINT[2]` {`D3D12DDI_TL_ROW_MAJOR`, `D3D12DDI_FUNCTIONAL_UNIT`} (H:268-271) | the whole struct, for each of COMBINED, COPY_SRC, COPY_DST (H:259-266) | all zero: both SubCaps entries MaxElementSize 0 and alignments 0, Flags NONE. pInfo NULL, a layout other than ROW_MAJOR (1, H:193) or a unit above COPY_DST: E_INVALIDARG | 1060 SupportsRowMajorTexture FALSE, same reason (one constant in caps.cpp, `kRowMajorTexture`, with a static_assert tying the two). Reading: each SubCaps entry states the alignments for elements up to its MaxElementSize, and an entry of MaxElementSize 0 covers none; INFERENCE from the field names and from cosumd12 (CosUmd12Adapter.cpp:345-367), which fills entry 0 for all sizes (0xFFFF) and zeroes entry 1 as unused. Neither H nor DDI-ref ("Texture layout sets.") documents the fields |
+| 1061 0022_SWIZZLE_PATTERN | `D3D12DDI_SWIZZLE_PATTERN_DESC_0022`, 232, H:4752-4767; `*pInfo` an index 0 through DeviceDependentSwizzleCount - 1 | - | E_INVALIDARG for every request, nothing written | 1060 DeviceDependentSwizzleCount 0: no index exists (constant `kDeviceDependentSwizzleCount`, shared with 1060) |
+| 1057 0030_PROTECTED_RESOURCE_SESSION_SUPPORT | `D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030`, 8, H:13697-13701; NodeIndex (input) 0, else E_INVALIDARG | Support | NONE | engine-ddi refuses protected resource sessions: pfnSetProtectedResourceSession is a fail-safe and resource creation refuses a session handle (resources.cpp) |
+| 1069 EXECUTECOMMANDLISTS_PARALLELISM | BOOL, 4, H:128 | the BOOL | FALSE | not claimed: ExecuteCommandLists is a slot of the shell's queue table |
+| 1071 0073_SUPPORT_BATCHED_MARKERS | BOOL, 4, H:131 | the BOOL | FALSE | "Indicates whether UMD supports batched markers" (DDI-ref); pfnSetMarker is a fail-safe |
 | 1062 UMD_BASED_COMMAND_QUEUE_PRIORITY | `D3D12DDICAPS_UMD_BASED_COMMAND_QUEUE_PRIORITY_DATA_0023`, 4, H:5140-5143 | SupportedQueueFlagsForGlobalRealtimeQueues | NONE | no realtime queues |
 | 1067 HARDWARE_SCHEDULING_CAPS | `D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050`, 4, H:7004-7008 | ComputeQueuesPer3DQueue | 0 | "0 means don't use scheduling groups", H:7007 |
 | 1077 OPTIONS_0090 | `D3D12DDI_OPTIONS_DATA_0090`, 4, H:11127-11131 | RelaxedFormatCastingSupported | same value | OPTIONS12 |
@@ -131,6 +177,13 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 FEATURE_LEVELS, SHADER_MODEL, ARCHITECTURE1, GPU_VIRTUAL_ADDRESS_SUPPORT, OPTIONS and OPTIONS1 are required:
 `query_adapter_caps` fails with the engine's Result when one is unanswered. The others are optional: an
 unanswered one is logged and its fields report no support.
+
+Open point on 1003. API-ref ns-d3d12-d3d12_feature_data_d3d12_options.md:118 says that a device with
+CrossAdapterRowMajorTextureSupported FALSE "only supports copy operations to and from cross-adapter row-major
+textures", and Specs ResourceHeaps.md:732-738 gives the copy requirements of pitch-linear data (512-byte base,
+256-byte pitch). engine-ddi claims neither in 1003, because the engine creates no ROW_MAJOR texture to copy. No
+source here says whether the runtime accepts the all-zero answer; build_caps logs the layout and unit of every 1003
+request. If the runtime refuses it, the way forward is ROW_MAJOR support in the engine, not another constant.
 
 ### Memory architecture policy
 
