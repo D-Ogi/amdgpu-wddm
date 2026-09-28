@@ -38,6 +38,9 @@ static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
 static unsigned destroys;
 static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {++destroys;return E_FAIL;}
+static HRESULT APIENTRY kernel_free_probe(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS*) {
+    return E_NOTIMPL;
+}
 int main(int argc,char** argv) {
     if(argc!=2)return 2;
     HMODULE dll=LoadLibraryA(argv[1]);assert(dll);
@@ -72,9 +75,12 @@ int main(int argc,char** argv) {
     assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_INVALIDARG);
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 um{};D3DDDI_DEVICECALLBACKS km{};
     um.pfnSetErrorCb=error;um.pfnCreateContextVirtualCb=create_context;um.pfnDestroyContextCb=destroy_context;
+    km.pfnFreeGpuVirtualAddressCb=kernel_free_probe;
     device.p12UMCallbacks_0062=&um;device.pKTCallbacks=&km;
     device.Version=0;assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_NOINTERFACE);
     device.Version=sizeArgs.Version;assert(funcs.pfnCreateDevice(a.hAdapter,&device)==S_OK);
+    km={};
+    assert(static_cast<native12::Device*>(storage)->kernel_callbacks.pfnFreeGpuVirtualAddressCb==kernel_free_probe);
     assert(funcs.pfnCloseAdapter(a.hAdapter)==E_UNEXPECTED);
     D3D12DDI_DEVICE_FUNCS_CORE_0088 core{};native12::install_queue_entries(core);
     D3D12DDIARG_CREATECOMMANDQUEUE_0050 qargs{};qargs.QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;

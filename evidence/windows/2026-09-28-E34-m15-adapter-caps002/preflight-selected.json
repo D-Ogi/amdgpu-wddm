@@ -1,0 +1,32 @@
+{
+  "utc": "2026-09-28T20:31:12.0756157Z",
+  "version": "0.7.171.1",
+  "kmd_sha256": "65172CA1058A11335F1132644DA844748758E9BE017D5192B5CE1E9B424FEEDF",
+  "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+  "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+  "boot": "2026-09-28T04:44:36.4905530+02:00",
+  "dwm": [
+    {
+      "modules": [
+        {
+          "sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+          "name": "bc250d3d.dll"
+        }
+      ],
+      "pid": 7632,
+      "start": "2026-09-28T06:59:57.2664225+02:00"
+    }
+  ],
+  "confirmed": {
+    "launch": true,
+    "age_ms": 210,
+    "epoch": 5,
+    "generation": 619082915701,
+    "flags": 15,
+    "completed": 2821,
+    "ready_ms": 2097754,
+    "flag_names": "Full, Ready, Visible, Confirmed"
+  },
+  "temperature": "22:31:18 Tctl 66.8 C (raw 73DB0FEF)\r\n",
+  "legacy_clock_state": "Disabled"
+}

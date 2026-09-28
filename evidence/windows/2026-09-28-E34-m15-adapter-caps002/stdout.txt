@@ -1,0 +1,6 @@
+QueryAdapterCaps hr=00000000 closed_without_device_callbacks=1 queue_calls=0
+feature=2 hr=00000000
+feature=0 hr=00000000
+feature=27 hr=00000000
+caps: max_fl=b100 tiled_tier=0 binding_tier=3 raytracing_tier=11
+PASSED

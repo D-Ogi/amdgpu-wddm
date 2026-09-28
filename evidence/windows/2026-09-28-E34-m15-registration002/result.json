@@ -1,0 +1,15 @@
+{
+    "status":  "registered-diagnostic",
+    "tree_closed":  true,
+    "phases":  [
+                   "Capture",
+                   "Install",
+                   "Cpu",
+                   "Gpu",
+                   "Verify"
+               ],
+    "runtime_functional":  false,
+    "registered":  true,
+    "baseline_restored":  false,
+    "elapsed":  91.0060616
+}

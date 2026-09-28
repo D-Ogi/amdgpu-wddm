@@ -1,0 +1,255 @@
+From 754e6b69d152d52f4b7b67119cbf4baf5564ab9c Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 20:40:48 +0200
+Subject: [PATCH 1/4] radv: admit a bounded GENERAL queue count for bound
+ hosted queues
+
+The native D3D12 engine (ABI 1.1 draft, V7) takes one GENERAL VkQueue
+for its internal queue and one for every application queue, and hosted
+RADV reports a single GENERAL queue. Two application queues plus the
+internal one need at least three.
+
+Add struct bc250_host_queue_binding, a private structure chained to
+VkInstanceCreateInfo next to struct bc250_host. It opts the instance
+into runtime-bound queues and carries the function table that a later
+change fills. It is validated as strictly as struct bc250_host and
+refused without one.
+
+With the opt-in, and a winsys that can create bindable contexts, the
+GENERAL family reports RADV_BC250_BOUND_GENERAL_QUEUES (8): the
+internal queue and seven application queues. vkCreateDevice refuses
+more GENERAL queues than that. No winsys provides ctx_create_bindable
+yet, so the count stays 1 until each queue owns its context; no two
+VkQueues ever share a context.
+
+Instances without the structure, the D3D11 bridge among them, are
+unchanged. The binding contract is a draft pending T0.
+---
+ src/amd/vulkan/radv_device.c          | 15 ++++++++
+ src/amd/vulkan/radv_instance.c        | 54 +++++++++++++++++++++------
+ src/amd/vulkan/radv_instance.h        |  2 +
+ src/amd/vulkan/radv_physical_device.c | 19 +++++++++-
+ src/amd/vulkan/radv_physical_device.h | 11 ++++++
+ src/amd/vulkan/radv_radeon_winsys.h   |  6 +++
+ src/util/bc250_host_bootstrap.h       | 21 +++++++++++
+ 7 files changed, 115 insertions(+), 13 deletions(-)
+
+diff --git a/src/amd/vulkan/radv_device.c b/src/amd/vulkan/radv_device.c
+index 999a665c274..4856f4e7dd4 100644
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -1588,6 +1588,21 @@ radv_CreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo *pCr
+    bool video_dec_queue = false;
+    bool video_enc_queue = false;
+ 
++   if (radv_bound_queues_enabled(pdev)) {
++      /* Admission matches consumption: each bound queue takes one context
++       * of the embedder's, so never create more than were reported. */
++      uint32_t general_queues = 0;
++      for (unsigned i = 0; i < pCreateInfo->queueCreateInfoCount; i++) {
++         const VkDeviceQueueCreateInfo *queue_create = &pCreateInfo->pQueueCreateInfos[i];
++         if (vk_queue_to_radv(pdev, queue_create->queueFamilyIndex) == RADV_QUEUE_GENERAL)
++            general_queues += queue_create->queueCount;
++      }
++      if (general_queues > radv_general_queue_count(pdev)) {
++         result = VK_ERROR_INITIALIZATION_FAILED;
++         goto fail;
++      }
++   }
++
+    /* Create one context per queue priority. */
+    for (unsigned i = 0; i < pCreateInfo->queueCreateInfoCount; i++) {
+       const VkDeviceQueueCreateInfo *queue_create = &pCreateInfo->pQueueCreateInfos[i];
+diff --git a/src/amd/vulkan/radv_instance.c b/src/amd/vulkan/radv_instance.c
+index f46a5a8fd95..6a5d8501181 100644
+--- a/src/amd/vulkan/radv_instance.c
++++ b/src/amd/vulkan/radv_instance.c
+@@ -248,6 +248,43 @@ radv_parse_pstate(const char *str)
+    }
+ }
+ 
++/* Private BC250 structures of the instance chain. Both are validated
++ * strictly: a mismatched size or version means the embedder was built
++ * against another contract.
++ */
++static VkResult
++radv_instance_parse_bc250(struct radv_instance *instance, const VkInstanceCreateInfo *pCreateInfo)
++{
++   struct bc250_host_queue_funcs *queue_funcs = NULL;
++
++   for (const VkBaseInStructure *ext = pCreateInfo->pNext; ext; ext = ext->pNext) {
++      if ((uint32_t)ext->sType == BC250_HOST_STYPE) {
++         const struct bc250_host *host = (const void *)ext;
++         if (host->version != BC250_HOST_VERSION || host->size != sizeof(*host) ||
++             !host->identity || !host->dispatch || !host->adapter_luid)
++            return VK_ERROR_INITIALIZATION_FAILED;
++         instance->bc250_host = *host;
++         instance->bc250_host.pNext = NULL;
++      } else if ((uint32_t)ext->sType == BC250_HOST_QUEUE_BINDING_STYPE) {
++         const struct bc250_host_queue_binding *binding = (const void *)ext;
++         if (binding->version != BC250_HOST_QUEUE_BINDING_VERSION || binding->size != sizeof(*binding) ||
++             !binding->funcs || binding->funcs->size != sizeof(*binding->funcs))
++            return VK_ERROR_INITIALIZATION_FAILED;
++         queue_funcs = binding->funcs;
++      }
++   }
++
++   if (!queue_funcs)
++      return VK_SUCCESS;
++
++   /* Only the host can create the contexts that binding hands out. */
++   if (!instance->bc250_host.dispatch)
++      return VK_ERROR_INITIALIZATION_FAILED;
++
++   instance->bc250_bound_queues = true;
++   return VK_SUCCESS;
++}
++
+ VKAPI_ATTR VkResult VKAPI_CALL
+ radv_CreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationCallbacks *pAllocator,
+                     VkInstance *pInstance)
+@@ -273,18 +310,11 @@ radv_CreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationC
+       return vk_error(NULL, result);
+    }
+ 
+-   for (const VkBaseInStructure *ext = pCreateInfo->pNext; ext; ext = ext->pNext) {
+-      if ((uint32_t)ext->sType == BC250_HOST_STYPE) {
+-         const struct bc250_host *host = (const void *)ext;
+-         if (host->version != BC250_HOST_VERSION || host->size != sizeof(*host) ||
+-             !host->identity || !host->dispatch || !host->adapter_luid) {
+-            vk_instance_finish(&instance->vk);
+-            vk_free(pAllocator, instance);
+-            return VK_ERROR_INITIALIZATION_FAILED;
+-         }
+-         instance->bc250_host = *host;
+-         instance->bc250_host.pNext = NULL;
+-      }
++   result = radv_instance_parse_bc250(instance, pCreateInfo);
++   if (result != VK_SUCCESS) {
++      vk_instance_finish(&instance->vk);
++      vk_free(pAllocator, instance);
++      return result;
+    }
+ 
+    vk_instance_add_driver_trace_modes(&instance->vk, trace_options);
+diff --git a/src/amd/vulkan/radv_instance.h b/src/amd/vulkan/radv_instance.h
+index b4bf91b4c56..172e9589409 100644
+--- a/src/amd/vulkan/radv_instance.h
++++ b/src/amd/vulkan/radv_instance.h
+@@ -167,6 +167,8 @@ enum radv_trace_mode {
+ struct radv_instance {
+    struct vk_instance vk;
+    struct bc250_host bc250_host;
++   /* The embedder binds every queue to a runtime queue context (draft). */
++   bool bc250_bound_queues;
+ 
+    VkAllocationCallbacks alloc;
+ 
+diff --git a/src/amd/vulkan/radv_physical_device.c b/src/amd/vulkan/radv_physical_device.c
+index 5f126bd54bf..e66e53171c4 100644
+--- a/src/amd/vulkan/radv_physical_device.c
++++ b/src/amd/vulkan/radv_physical_device.c
+@@ -110,6 +110,23 @@ radv_sparse_enabled(const struct radv_physical_device *pdev)
+    return pdev->info.has_sparse || (instance->experimental_flags & RADV_EXPERIMENTAL_SPARSE);
+ }
+ 
++bool
++radv_bound_queues_enabled(const struct radv_physical_device *pdev)
++{
++   const struct radv_instance *instance = radv_physical_device_instance(pdev);
++
++   return instance->bc250_bound_queues && pdev->ws->ctx_create_bindable;
++}
++
++/* Admission follows consumption: every GENERAL queue that a device may
++ * create gets its own context when bound, so no two VkQueues ever share one.
++ */
++uint32_t
++radv_general_queue_count(const struct radv_physical_device *pdev)
++{
++   return radv_bound_queues_enabled(pdev) ? RADV_BC250_BOUND_GENERAL_QUEUES : 1;
++}
++
+ bool
+ radv_transfer_queue_enabled(const struct radv_physical_device *pdev)
+ {
+@@ -3083,7 +3100,7 @@ radv_get_physical_device_queue_family_properties(struct radv_physical_device *pd
+             VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT;
+          *pQueueFamilyProperties[idx] = (VkQueueFamilyProperties){
+             .queueFlags = gfx_flags | radv_queue_family_protected_flag(pdev, RADV_QUEUE_GENERAL),
+-            .queueCount = 1,
++            .queueCount = radv_general_queue_count(pdev),
+             .timestampValidBits = 64,
+             .minImageTransferGranularity = (VkExtent3D){1, 1, 1},
+          };
+diff --git a/src/amd/vulkan/radv_physical_device.h b/src/amd/vulkan/radv_physical_device.h
+index 1a6f6b1c32b..684749304b7 100644
+--- a/src/amd/vulkan/radv_physical_device.h
++++ b/src/amd/vulkan/radv_physical_device.h
+@@ -222,6 +222,17 @@ VK_DEFINE_HANDLE_CASTS(radv_physical_device, vk.base, VkPhysicalDevice, VK_OBJEC
+ 
+ bool radv_sparse_enabled(const struct radv_physical_device *pdev);
+ 
++/* GENERAL queues of a hosted instance whose queues the embedder binds
++ * (draft): the engine's internal queue plus seven application queues. Each
++ * bound queue holds one WDDM context, two monitored fences and at most
++ * BC250_GATHER_SLOTS gather BOs, so this also bounds those per device.
++ */
++#define RADV_BC250_BOUND_GENERAL_QUEUES 8
++
++bool radv_bound_queues_enabled(const struct radv_physical_device *pdev);
++
++uint32_t radv_general_queue_count(const struct radv_physical_device *pdev);
++
+ static inline struct radv_instance *
+ radv_physical_device_instance(const struct radv_physical_device *pdev)
+ {
+diff --git a/src/amd/vulkan/radv_radeon_winsys.h b/src/amd/vulkan/radv_radeon_winsys.h
+index 12e9575fe09..c7649e20ef9 100644
+--- a/src/amd/vulkan/radv_radeon_winsys.h
++++ b/src/amd/vulkan/radv_radeon_winsys.h
+@@ -328,6 +328,12 @@ struct radeon_winsys {
+    VkResult (*ctx_create)(struct radeon_winsys *ws, enum radeon_ctx_priority priority, struct radeon_winsys_ctx **ctx);
+    void (*ctx_destroy)(struct radeon_winsys_ctx *ctx);
+ 
++   /* Optional, hosted WDDM only: a context whose kernel objects come from
++    * the embedder's queue. It is created without any and cannot submit
++    * until it is bound. */
++   VkResult (*ctx_create_bindable)(struct radeon_winsys *ws, enum radeon_ctx_priority priority,
++                                   struct radeon_winsys_ctx **ctx);
++
+    bool (*ctx_wait_idle)(struct radeon_winsys_ctx *ctx, enum amd_ip_type amd_ip_type, int ring_index);
+ 
+    int (*ctx_set_pstate)(struct radeon_winsys_ctx *ctx, uint32_t pstate, uint64_t timeout);
+diff --git a/src/util/bc250_host_bootstrap.h b/src/util/bc250_host_bootstrap.h
+index f53bcfe3bf6..d4b6ff10bd6 100644
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -39,6 +39,27 @@ struct bc250_host {
+    void *userdata;
+    int32_t (*dispatch)(void *userdata, uint32_t operation, void *argument);
+ };
++/* Queue binding, a draft of engine ABI 1.1 that T0 may still change.
++ * Chained to VkInstanceCreateInfo next to struct bc250_host, it opts the
++ * instance into runtime-bound queues: every VkQueue then gets a WDDM context
++ * of its own that exists only while the embedder has the queue bound, and
++ * the GENERAL family offers a bounded number of queues instead of one.
++ * vkCreateInstance validates the structure and fills *funcs.
++ */
++#define BC250_HOST_QUEUE_BINDING_STYPE 0x42434833u
++#define BC250_HOST_QUEUE_BINDING_VERSION 1u
++struct bc250_host_queue_funcs {
++   uint32_t size; /* in: sizeof(struct bc250_host_queue_funcs) */
++   /* out: both return a VkResult; vk_queue is a VkQueue of the instance */
++   int32_t (*bind)(void *vk_queue, void *queue);
++   int32_t (*unbind)(void *vk_queue);
++};
++struct bc250_host_queue_binding {
++   uint32_t sType;
++   const void *pNext;
++   uint32_t version, size;
++   struct bc250_host_queue_funcs *funcs;
++};
+ static inline int32_t bc250_host_check_status(const struct bc250_host *host)
+ {
+    return host->dispatch ? host->dispatch(host->userdata, BC250_HOST_CHECK_STATUS, 0) : 0;

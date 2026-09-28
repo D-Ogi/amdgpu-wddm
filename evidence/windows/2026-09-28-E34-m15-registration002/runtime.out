@@ -1,0 +1,3 @@
+factory hr=00000000
+runtime=system32/d3d12.dll adapter=BC-250
+CreateDevice FL11_0 hr=887a0004

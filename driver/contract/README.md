@@ -8,8 +8,12 @@ Windows there is no ioctl. A WDDM user-mode driver calls `D3DKMTQueryAdapterInfo
 `DxgkDdiQueryAdapterInfo`, and whatever bytes the miniport writes arrive verbatim in user mode.
 dxgkrnl neither inspects nor versions them. The shape of those bytes is this directory.
 
-Nothing here is wired into the driver yet. It is the contract and its test, built so that the
-shape can be argued about before anything depends on it.
+The contract is in use. The KMD answers `DXGKQAITYPE_UMDRIVERPRIVATE` with a blob generated from
+this directory's filler (`driver/kmd/umd_caps.c`), includes the firmware and adapter identity
+headers, and reads the submit blobs with host tests against `bc250_umd_submit.h`
+(`driver/kmd/umd_blob.c`). The RADV winsys (`driver/icd`) and the D3D12 shell (`driver/umd/d3d12`)
+build against the same headers. It was built so that the shape could be argued about before
+anything depended on it; the host tests below still hold it to that.
 
 ## Files
 
@@ -394,8 +398,8 @@ to be able to kill the process, and nothing on this PC gets to open a window.
 
 - `DxgkDdiQueryAdapterInfo(DXGKQAITYPE_UMDRIVERPRIVATE)` copies the unit A caps blob
   (`driver/kmd/umd_caps.c`, 1472 bytes, bc250kmd 0.7.41). A shorter output buffer is refused.
-  The winsys that asks for it is `driver/icd/mesa-wddm2-bc250.patch`. It has not been run on
-  unit A.
+  The winsys that asks for it is `driver/icd/mesa-wddm2-bc250.patch`, run on unit A for M8
+  (M139).
 - `DxgkDdiCreateAllocation`, `DxgkDdiCreateContext` and `DxgkDdiSubmitCommandVirtual` do read the
   three blobs in `bc250_umd_submit.h`, on node 0 only (`driver/kmd/umd_blob.c`, bc250kmd 0.7.40).
   GDI allocations stay on the `"LB7A"` struct. A context with empty private data is unchanged
@@ -432,5 +436,6 @@ Consumers zero-initialize the extended buffer and validate magic, version, size,
 and reserved before using the identity. Older KMDs can return success while leaving
 the trailer untouched; this means unsupported identity transport, not LUID zero.
 The M14 helper preserves its output on callback failure or an invalid trailer.
-This extension requires a rebuilt KMD; it is not present in deployed KMD170.
+This extension requires a rebuilt KMD: KMD170 does not have it; KMD171 carries it, and a
+read-only control on unit A found its LUID equal to `D3DKMTEnumAdapters2`'s (M727).
 Local contract reference: WDK 10.0.26100 `DXGK_START_INFO` in `dispmprt.h`.

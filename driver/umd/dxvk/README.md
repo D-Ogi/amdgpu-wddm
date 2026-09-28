@@ -1,6 +1,8 @@
-# System D3D10/11 UMD on DXVK: integration in progress
+# System D3D10/11 UMD on DXVK
 
-ADR 0017 selects DXVK as the engine behind the system runtime DDI. This directory starts the new UMD integration; it is not a loadable driver, does not advertise FL11 and is not deployed. The working G0 Mesa/Zink driver remains the desktop control.
+ADR 0017 selects DXVK as the engine behind the system runtime DDI. This directory builds `amdgpu_wddm_d3d11.dll` (`tools/build/build-umd-dxvk.ps1`), the system D3D10/11 UMD shell that loads the DXVK engine `amdgpu_wddm_dxvk.dll` and the hosted ICD `amdgpu_wddm_radv.dll` next to it (see "Loadable UMD boundary"). In bounded lab trials, loaded by the system D3D11 runtime through a per-process router in the registered UMD path, it renders at FL11_1 on the GPU: under its earlier name `bc250d3d11.dll` an offscreen control (M736), a window with Present (M747) and resizes (M752); under the new names the error controls (M756), with the renamed engine and ICD pair admitted separately (M755). Facts are in `docs/facts.md`. It is not deployed as the registered lab UMD, and full M14 acceptance, composition, performance and FL12_1 remain open. The working G0 Mesa/Zink driver remains the desktop control.
+
+The sections below are the integration record in the order it was built; earlier sections describe components before they were wired into the loadable shell, and their "not yet wired" notes are kept as that record.
 
 `runtime-domain.h` implements device-scoped, thread-local authority for runtime callbacks. The DDI wrapper creates a `RuntimeDomain::Scope`; the hosted dispatch callback checks the same domain in this UMD module. A DXVK worker has no scope and must marshal work back to a runtime entry instead of calling the callbacks directly. This component does not implement that marshalling queue, locking, lifetime ownership or the engine interface. A domain must outlive its scopes and engine activity; its address cannot be moved or copied. Do not duplicate this guard independently in both DLLs.
 
