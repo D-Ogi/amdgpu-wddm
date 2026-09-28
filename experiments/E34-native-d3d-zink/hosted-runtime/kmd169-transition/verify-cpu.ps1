@@ -1,3 +1,13 @@
+# Project only acceptance inputs; never serialize registry provider metadata.
+function Select-KmdCpuParameters {
+ param($Source)
+ return @{
+  EnableGpuPresentBlit=$Source.EnableGpuPresentBlit
+  EnableCddDwmInterop=$Source.EnableCddDwmInterop
+  UnconfirmedStarts=$Source.UnconfirmedStarts
+ }
+}
+
 # Pure acceptance check; the caller gathers fresh OS observations.
 function Assert-KmdCpuBaseline {
  param($Saved,$Observed,[switch]$AllowUnconfirmed)

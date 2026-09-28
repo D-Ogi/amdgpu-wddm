@@ -99,3 +99,7 @@ prepare.py --same-package-control uses the pinned rollback166 package for both p
 A completed Install receipt plus exact166/problem22 permits binding reuse. Otherwise the recovery phase uses the previously exercised forced newdev exact166 rebind, records its result and any reboot request, then explicitly disables before Configure. Reboot requests and failed recovery are not accepted. Configure now writes and flushes the actual class registry key and checks both MultiString registrations before enable. The fallback can itself start the INF defaults briefly, as M711/M712 showed; this risk is retained and must be reviewed, not described as a deferred fallback.
 
 This control mode has local syntax/admission validation only. It has not run on the lab. The inherited global deadlines remain unchanged; successful installation does not by itself close the control without confirmed CPU recovery and restored log settings.
+
+## Readiness receipt projection after M714
+
+CPU observations now project only EnableGpuPresentBlit, EnableCddDwmInterop and UnconfirmedStarts from Get-ItemProperty. Provider metadata (PSDrive/PSProvider and related object graphs) is not serialized. Missing values stay null and fail the existing baseline checks. M715 validates the corrected two-report path on CPU166 in1.535s; it does not retroactively turn M714's automatic verification timeout into a pass.

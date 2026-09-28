@@ -1,0 +1,17 @@
+{"stdout":"{\"child_pid\":6088,\"root_exit_observed\":true,\"child_exit\":0,\"timed_out\":false,\"termination_requested\":true,\"job_empty\":true}\r\n","stderr":"","exit_code":0}
+{
+    "attempts":  2,
+    "readiness_bytes":  1913,
+    "cpu_bytes":  1089,
+    "health":  {
+                   "flags":  15,
+                   "epoch":  5,
+                   "completed":  497,
+                   "ready_ms":  373684,
+                   "generation":  27099748258,
+                   "age_ms":  254
+               },
+    "utc":  "2026-09-28T03:36:18.3102907Z",
+    "seconds":  1.5349541
+}
+

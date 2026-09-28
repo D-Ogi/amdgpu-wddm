@@ -180,7 +180,7 @@ if($Phase -eq 'Capture'){
    return @{
     umd_registration=@($registration.UserModeDriverName)
     icd_registration=@($registration.VulkanDriverName)
-    parameters=$parameters
+    parameters=(Select-KmdCpuParameters $parameters)
     dwm=@(Get-Process dwm | ForEach-Object {
      @{pid=$_.Id;start=$_.StartTime.ToUniversalTime().ToString('o');modules=@($_.Modules |
       Where-Object {$_.ModuleName -match 'bc250|vulkan_radeon'} |
