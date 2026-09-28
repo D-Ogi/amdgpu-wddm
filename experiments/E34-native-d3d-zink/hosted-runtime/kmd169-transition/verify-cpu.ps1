@@ -54,13 +54,26 @@ function Wait-KmdCpuBaseline {
 
 function Get-KmdReadyHealth {
  param([string]$Text,[string]$Abi)
- $pattern='(?m)^health abi=1 version='+[regex]::Escape($Abi)+' flags=(7|15) generation=([0-9]+) epoch=([0-9]+) '
+ $pattern='(?m)^health abi=1 version='+[regex]::Escape($Abi)+' flags=(7|15) generation=([0-9]+) epoch=([0-9]+) completed=([0-9]+) age_ms=([0-9]+) ready_ms=([0-9]+)\r?$'
  $matchesFound=[regex]::Matches($Text,$pattern)
  if($matchesFound.Count -ne 1){throw 'Expected one ready health witness for exact ABI'}
  $m=$matchesFound[0]
- return @{flags=[int]$m.Groups[1].Value;generation=[uint32]$m.Groups[2].Value;epoch=[uint32]$m.Groups[3].Value}
+ return @{flags=[int]$m.Groups[1].Value;generation=[uint64]$m.Groups[2].Value;epoch=[uint64]$m.Groups[3].Value;completed=[uint64]$m.Groups[4].Value;age_ms=[uint64]$m.Groups[5].Value;ready_ms=[uint64]$m.Groups[6].Value}
 }
 function Assert-KmdConfirmedHealth {
  param($Before,$After)
  if($After.flags -ne 15 -or $After.generation -ne $Before.generation -or $After.epoch -ne $Before.epoch){throw 'Confirmation does not match observed ready start'}
+}
+
+# Mirrors exact166 start_health.c confirmation admission, not just READY flags.
+# KMD rechecks this under its lock; a user-mode snapshot cannot replace that check.
+function Assert-KmdConfirmEligible {
+ param($Health)
+ foreach($name in @('flags','completed','age_ms','ready_ms')) {
+  if($null -eq $Health.$name){throw "Missing confirmation field: $name"}
+ }
+ if($Health.flags -notin @(7,15) -or $Health.completed -eq 0 -or
+    $Health.ready_ms -lt 60000 -or $Health.age_ms -gt 15000){
+  throw 'Health confirmation requires completed work, ready_ms >= 60000 and age_ms <= 15000'
+ }
 }

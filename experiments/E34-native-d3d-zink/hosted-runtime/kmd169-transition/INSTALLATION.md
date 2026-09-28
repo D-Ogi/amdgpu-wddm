@@ -44,3 +44,7 @@ request; explicit enable is issued by a separate process after configuration.
 Local validation: native /W4 /WX build and eight invalid-argument controls. These
 prove build/admission behavior, not suppression by the display class installer.
 Preparation now requires --selector and includes its binary in the stage manifest.
+
+## Confirmation admission after M712
+
+The runner now rejects confirmation before 60000 ms of readiness, with no completed work, or with a completion older than 15000 ms. Flags 7 alone do not admit confirmation. Generation and epoch are parsed as 64-bit values, matching the CLI. This is a fail-closed guard, not a completed timing redesign: candidate readiness and restored-baseline confirmation still need separate budgeting before another trial. The current runner must not be dispatched as a repaired transition. The deferred installer rejection E0000217 also remains unresolved.

@@ -145,6 +145,7 @@ if($Phase -eq 'Capture'){
    $info=& C:\BC250\m8\bc250kmd_cli.exe info|Out-String
    if($LASTEXITCODE -ne 0 -or $info -notmatch $abi -or $info -notmatch 'FULL WDDM TABLE'){throw 'Loaded KMD identity mismatch'}
    if($before.flags -eq 7){
+    Assert-KmdConfirmEligible $before
     $confirmed=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health confirm $before.generation $before.epoch|Out-String
     if($LASTEXITCODE -ne 0){throw 'Checked health confirmation failed'}
     Assert-KmdConfirmedHealth $before (Get-KmdReadyHealth $confirmed $abi)
