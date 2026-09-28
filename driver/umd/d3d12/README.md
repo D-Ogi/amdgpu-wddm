@@ -209,3 +209,18 @@ FL11_1/tiled0/binding3/RT1.1 engine answers. These are not native UMD support:
 the mapper suppresses features whose DDI slots are still unimplemented.
 Adapter031 builds and all host gates pass. A fresh system-runtime test of the
 mapped GetCaps remains necessary; device construction and rendering are open.
+
+## Typed table composition
+
+device-table.h composes core0088 (retained by0092) and both list0092 tables
+from the native engine library plus explicitly supplied, typed shell entries.
+It requires all18 shell core functions and an explicit Present function and
+writes the destination only after successful composition. Its build gate
+checks122 core slots and70 slots in each list, missing shell entries, resolver
+conflicts and unchanged output on failure against the real native library.
+
+This helper is not yet published by FillDDITable. A live engine DeviceContext,
+memory hooks, queue binding/submission, fence semantics and the remaining shell
+DDI implementations must be connected before that gate changes. Six existing
+queue/fence entries manage local ownership only; non-null pointers do not prove
+GPU submission or runtime acceptance.

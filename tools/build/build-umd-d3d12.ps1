@@ -83,6 +83,10 @@ try {
   if($LASTEXITCODE){throw 'Adapter caps probe build failed'}
   & .\adapter-caps-probe.exe --help
   if($LASTEXITCODE){throw 'Adapter caps probe help failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:device-table-test.exe "$repo\driver\umd\d3d12\device-table-test.cpp" $engineLib
+  if($LASTEXITCODE){throw 'Device table composition test build failed'}
+  & .\device-table-test.exe
+  if($LASTEXITCODE){throw 'Device table composition tests failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help
