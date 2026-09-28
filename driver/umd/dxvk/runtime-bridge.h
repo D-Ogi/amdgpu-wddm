@@ -11,6 +11,7 @@ namespace bc250::umd {
 struct RuntimeDevice {
     RuntimeDomain domain;
     HANDLE hDevice = nullptr;
+    HANDLE present_context = nullptr;
     D3D10DDI_HRTCORELAYER hRTCoreLayer = {};
     volatile UINT64 *pagingFence = nullptr;
     D3DDDI_DEVICECALLBACKS KTCallbacks = {};
@@ -29,6 +30,10 @@ struct HostBridge {
    D3DKMT_HANDLE present_sync;
    UINT64 present_value, present_waited[16];
 };
+HRESULT queue_present_wait(HostBridge &bridge);
+HRESULT signal_present(HostBridge &bridge);
+// Destruction/readback only. Steady-state Present uses GPU waits above.
+HRESULT wait_present_idle(HostBridge &bridge);
 int32_t host_dispatch(void *userdata, uint32_t operation, void *argument);
 // Descriptor is copied by the hosted ICD, but userdata and device remain borrowed.
 // Only call with a live, initialized bridge. Device destruction must first drain

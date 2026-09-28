@@ -43,3 +43,11 @@ The inherited operation set covers allocation, GPU VA, residency, context transl
 The callback control builds with `/W4 /WX` for project code and checks allocation outputs, context-token translation/destruction, worker denial, wait-before-submit handling with no duplicate wait for the same Present value, pending residency translation and sticky device loss. These are controlled host callbacks, not a new hardware measurement. The private host contract is copied unchanged from the cited G0 revision.
 
 PROVENANCE: Mesa (gitlab.freedesktop.org/mesa/mesa), MIT; callback bridge derived from the project's Mesa fork and original license retained.
+
+## Present synchronization
+
+The runtime bridge now exposes `queue_present_wait`, `signal_present` and `wait_present_idle`, adapted from the same G0 source. Set `RuntimeDevice::present_context` to the runtime-created presentation context. The caller flushes engine rendering, calls `queue_present_wait`, issues the actual runtime Present callback and then calls `signal_present` on successful submission. This component does not issue Present itself. The engine's subsequent SubmitCommand waits for the latest Present fence value on each rendering context.
+
+The wait aggregates the published progress of up to 16 rendering contexts. A single monitored fence is reused for Present completion. CPU waiting is isolated in `wait_present_idle`, with a 10-second bound, for teardown/readback only. The UMD still owns destruction of the fence and contexts after draining the engine. The UINT64_MAX loss sentinel is never emitted as a normal Present value. Signal failure does not advance the published value and blocks subsequent presentation work through the bridge's sticky failure flag.
+
+The callback control includes two render queues, exact wait objects/values, fence reuse, no CPU-wait callback on the steady path, worker rejection, signal failure and sentinel exclusion. It does not establish a hardware Present result or complete M14.

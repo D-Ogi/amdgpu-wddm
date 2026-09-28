@@ -264,4 +264,79 @@ int32_t host_dispatch(void *userdata, uint32_t operation, void *argument)
           hr==E_INVALIDARG ? (int32_t)0xc000000d : (int32_t)0xc0000001;
 }
 
+HRESULT queue_present_wait(HostBridge &bridge)
+{
+   auto *s=&bridge;
+   auto *device=s->device;
+   if (!device || !device->domain.entered()) return E_INVALIDARG;
+   if (!s || !device->domain.entered() || !device->present_context) return E_INVALIDARG;
+   if (FAILED(Bc250HostStatus(s)) || s->submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
+   if (!device->KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb ||
+       !device->KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb ||
+       !device->KTCallbacks.pfnCreateSynchronizationObject2Cb) return E_NOTIMPL;
+   if (!s->present_sync) {
+      D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 create={};
+      create.Info.Type=D3DDDI_MONITORED_FENCE;
+      create.Info.MonitoredFence.EngineAffinity=1;
+      HRESULT hr=device->KTCallbacks.pfnCreateSynchronizationObject2Cb(device->hDevice,&create);
+      if (FAILED(hr)) return hr;
+      s->present_sync=create.hSyncObject;
+      s->present_cpu=(const UINT64 *)create.Info.MonitoredFence.FenceValueCPUVirtualAddress;
+   }
+   D3DKMT_HANDLE objects[16]={};
+   UINT64 values[16]={};
+   UINT count=0;
+   for (const auto &p:s->progress) {
+      if (!p.sync) continue;
+      if (!Bc250HostContext(s,p.context)) return E_FAIL;
+      objects[count]=p.sync; values[count]=p.value; ++count;
+   }
+   D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait={};
+   wait.hContext=device->present_context; wait.ObjectCount=count;
+   wait.ObjectHandleArray=objects; wait.MonitoredFenceValueArray=values;
+   HRESULT hr=count ? device->KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb(device->hDevice,&wait) : S_OK;
+
+   return hr;
+}
+
+HRESULT signal_present(HostBridge &bridge)
+{
+   auto *s=&bridge;
+   auto *device=s->device;
+   if (!device || !device->domain.entered()) return E_INVALIDARG;
+   if (!s || !device->domain.entered() || !s->present_sync) return E_INVALIDARG;
+   if (!device->present_context || !device->KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb) return E_INVALIDARG;
+   if (FAILED(Bc250HostStatus(s)) || s->submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
+   UINT64 value=s->present_value+1;
+   if (!value || value==UINT64_MAX) return E_FAIL;
+   D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal={};
+   signal.ObjectCount=1; signal.ObjectHandleArray=&s->present_sync;
+   signal.BroadcastContextCount=1; signal.BroadcastContextArray=&device->present_context;
+   signal.MonitoredFenceValueArray=&value;
+   HRESULT hr=device->KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb(device->hDevice,&signal);
+   if (SUCCEEDED(hr)) s->present_value=value;
+   else s->submission_failed=true;
+   return hr;
+}
+
+HRESULT wait_present_idle(HostBridge &bridge)
+{
+   auto *s=&bridge;
+   auto *device=s->device;
+   if (!device || !device->domain.entered()) return E_INVALIDARG;
+   if (!s || !s->present_value) return S_OK;
+   if (FAILED(Bc250HostStatus(s))) return D3DDDIERR_DEVICEREMOVED;
+   if (!device->domain.entered() || !device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_INVALIDARG;
+   HANDLE event=CreateEventW(NULL,FALSE,FALSE,NULL);
+   if (!event) return HRESULT_FROM_WIN32(GetLastError());
+   D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait={};
+   wait.ObjectCount=1; wait.ObjectHandleArray=&s->present_sync; wait.FenceValueArray=&s->present_value;
+   wait.hAsyncEvent=event;
+   HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
+   if (SUCCEEDED(hr) && WaitForSingleObject(event,10000)!=WAIT_OBJECT_0) hr=DXGI_ERROR_DEVICE_HUNG;
+   CloseHandle(event);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(s);
+   return SUCCEEDED(hr) ? Bc250HostStatus(s) : hr;
+}
+
 }
