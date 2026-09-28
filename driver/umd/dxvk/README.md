@@ -249,3 +249,12 @@ memory wrapper. Image layout/row pitch compatibility, runtime allocation ownersh
 residency and final teardown ordering remain caller responsibilities and are not
 yet integrated with CreateResource. The isolated mock Vulkan test passes; this is
 not yet a measured runtime-image import on the lab.
+
+create_linear_runtime_image now creates the Vulkan image and verifies its measured
+subresource offset/rowPitch/size against runtime storage before import+bind. The
+initial supported layout is single-mip/layer RGBA8/BGRA8 linear 2D, one sample;
+other formats/layouts remain implementation work. Checks avoid row-footprint
+integer overflow. Failure destroys the image and releases any failed-bind memory
+wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
+Mock tests cover pitch mismatch, bind failure, success, teardown and oversized
+height. CreateResource integration and GPU validation remain pending.
