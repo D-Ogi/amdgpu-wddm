@@ -15,22 +15,6 @@
 namespace harness {
 
 namespace {
-struct StubMemory {
-    VkDevice device = VK_NULL_HANDLE;
-    VkPhysicalDeviceMemoryProperties properties{};
-    PFN_vkAllocateMemory allocate = nullptr;
-    PFN_vkFreeMemory free = nullptr;
-    PFN_vkCreateBuffer create_buffer = nullptr;
-    PFN_vkDestroyBuffer destroy_buffer = nullptr;
-    PFN_vkGetBufferMemoryRequirements requirements = nullptr;
-    PFN_vkBindBufferMemory bind = nullptr;
-    PFN_vkGetBufferDeviceAddress address = nullptr;
-    uint32_t allocations = 0;
-    uint32_t dedicated = 0;
-    uint32_t frees = 0;
-    D3DKMT_HANDLE next_allocation = 0x40000000u;
-};
-
 StubMemory& stub_of(void* shell) { return *static_cast<StubMemory*>(static_cast<Shell*>(shell)->memory); }
 
 // The memory type vkd3d-proton picks for the CUSTOM heap engine-ddi makes from the DDI heap (its
@@ -46,6 +30,8 @@ uint32_t pick_type(const StubMemory& m, uint32_t buffer_types, D3D12DDI_CPU_PAGE
         if (((buffer_types >> i) & 1) && (m.properties.memoryTypes[i].propertyFlags & want) == want) return i;
     return UINT32_MAX;
 }
+
+} // namespace
 
 // allocate_memory: one whole VkDeviceMemory with VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, not dedicated, not mapped.
 // gpu_va is the device address of a probe buffer bound at offset 0, the stub's stand-in for the completed GPU
@@ -103,6 +89,7 @@ HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory
     return S_OK;
 }
 
+namespace {
 struct Observed {
     uint32_t with_memory = 0;
     uint32_t freed_ok = 0;
@@ -112,6 +99,8 @@ void observe(void* user, const engine_ddi::ReleaseEvent* event) {
     o->with_memory += event->had_memory ? 1u : 0u;
     o->freed_ok += (event->had_memory && event->free_result == S_OK) ? 1u : 0u;
 }
+
+} // namespace
 
 bool load_stub(Env& env, StubMemory& m) {
     VkInstance instance = VK_NULL_HANDLE;
@@ -134,6 +123,7 @@ bool load_stub(Env& env, StubMemory& m) {
     return m.allocate && m.free && m.create_buffer && m.destroy_buffer && m.requirements && m.bind && m.address;
 }
 
+namespace {
 constexpr UINT32 pattern(UINT i) { return 0x85ebca6bu * (i + 7); }
 } // namespace
 

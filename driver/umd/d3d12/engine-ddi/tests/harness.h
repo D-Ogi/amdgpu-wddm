@@ -137,6 +137,30 @@ bool ddi_form(const BYTE* container, size_t bytes, DdiShader& out);
 void* create_shader(Env& env, Device& device, PFND3D12DDI_CREATE_SHADER_0026 slot, const DdiShader& shader,
                     D3D12DDI_HROOTSIGNATURE root);
 
+// ---- The stub shell's RuntimeBacked memory (test-runtime-backed.cpp) --------------------------------------------------
+// allocate_memory and free_memory as INTEGRATION.md asks of the shell, on the engine's own VkDevice
+// (GetVulkanHandles): one whole VkDeviceMemory per heap with VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, the type
+// vkd3d-proton would pick for the heap's CPU page property, stand-in allocation handles. Device::shell.memory points
+// at the StubMemory; open_device(env, device, stub_allocate, stub_free) makes a RuntimeBacked device over it.
+struct StubMemory {
+    VkDevice device = VK_NULL_HANDLE;
+    VkPhysicalDeviceMemoryProperties properties{};
+    PFN_vkAllocateMemory allocate = nullptr;
+    PFN_vkFreeMemory free = nullptr;
+    PFN_vkCreateBuffer create_buffer = nullptr;
+    PFN_vkDestroyBuffer destroy_buffer = nullptr;
+    PFN_vkGetBufferMemoryRequirements requirements = nullptr;
+    PFN_vkBindBufferMemory bind = nullptr;
+    PFN_vkGetBufferDeviceAddress address = nullptr;
+    uint32_t allocations = 0;
+    uint32_t dedicated = 0;
+    uint32_t frees = 0;
+    D3DKMT_HANDLE next_allocation = 0x40000000u;
+};
+bool load_stub(Env& env, StubMemory& m);
+HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* request, engine_ddi::ImportedMemory* out);
+HRESULT APIENTRY stub_free(void* shell, const engine_ddi::ImportedMemory* memory);
+
 // ---- Round trips ---------------------------------------------------------------------------------------------------
 void test_copy(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
@@ -144,5 +168,6 @@ void test_graphics(Env& env, Device& device);
 void test_retirement(Env& env);
 void test_device_queries(Env& env, Device& device);
 void test_runtime_backed(Env& env);
+void test_tiled(Env& env);
 
 } // namespace harness
