@@ -1666,6 +1666,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred,
              Wddm->Device->DcnVsyncOldBufferReports);
     // Independently sampled counters/times: no interrupt lock and no per-frame logging.
+    GuardLog("vsync vector: DPC polls %ld ACKs %ld sync-failures %ld",
+             Wddm->Device->DcnVsyncDpcPolls, Wddm->Device->DcnVsyncDpcAcked,
+             Wddm->Device->DcnVsyncDpcSyncFailures);
     GuardLog("vsync diagnostic: irq %ld no-mmio %ld flip-off %ld unarmed %ld",
              Wddm->Device->InterruptCount, Wddm->Device->DcnVsyncNoMmio,
              Wddm->Device->DcnVsyncFlipDisabled, Wddm->Device->DcnVsyncUnarmed);

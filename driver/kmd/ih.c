@@ -39,6 +39,10 @@
 #define BC250_IH_TAG 'hI2B'
 #define BC250_IH_RB_ENABLE 0x00000001ul     // IH_RB_CNTL.RB_ENABLE (osssys_5_0_0_sh_mask.h), for the "is it off" read only
 #define BC250_IH_RB_OVERFLOW_CLEAR 0x80000000ul     // IH_RB_CNTL.WPTR_OVERFLOW_CLEAR, for the plan's model only
+// Identifier reference: Linux include/ivsrcid/dcn/irqsrcs_dcn_1_0.h,
+// DCN_1_0__SRCID__OTG0_IHC_V_UPDATE_NO_LOCK_INTERRUPT; DCE client in soc15_ih_clientid.h.
+#define BC250_IH_DCE_CLIENT 4u
+#define BC250_IH_OTG0_VUPDATE_SOURCE 0x57u
 #define BC250_IH_DPC_ROUNDS 4              // amdgpu_ih_process() looks again after publishing the read pointer
 
 typedef struct _BC250_IH_STATS {
@@ -54,6 +58,7 @@ typedef struct _BC250_IH {
     volatile LONG Active;               // the ring is enabled and the DPC may consume it
     volatile LONG OurInterrupts;        // interrupt routine calls taken as ours
     volatile LONG DpcCount;
+    volatile LONG VsyncPending; // consumed vector may have arrived after the ISR poll
     volatile LONG InDpc;                // one consumer at a time: nothing documented says the DPC is not re-entered
     volatile LONG DpcAgain;             // a DPC that found the consumer busy asks it for another pass
     BC250_SEQUENCE Sequence;            // the escape's
@@ -165,6 +170,8 @@ static BOOLEAN Consume(_Inout_ BC250_IH* ih)
         while (errors == 0 && rptr != wptr && budget != 0)
         {
             if (bc250_ih_decode(adev, &rptr, &entry) != 0) { errors++; rptr = wptr; break; }
+            if (entry.client_id == BC250_IH_DCE_CLIENT && entry.src_id == BC250_IH_OTG0_VUPDATE_SOURCE)
+                InterlockedExchange(&ih->VsyncPending, 1);
             Note(&ih->Stats, &entry);
             budget--;
         }
@@ -237,6 +244,14 @@ void IhDpc(_Inout_ BC250_DEVICE* Device)
     }
 }
 
+// Consume only the notification latch, never hold the IH stats lock across DCN.
+BOOLEAN IhTakeVsync(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_IH* ih = (BC250_IH*)Device->Ih;
+    if (ih == NULL) return FALSE;
+    return InterlockedExchange(&ih->VsyncPending, 0) != 0 && ih->Active != 0;
+}
+
 // Caller holds GartLock, hardware preparation completed with delivery disabled.
 // The DPC copy and this context reside in nonpaged memory.
 typedef struct _BC250_IH_ENABLE_CONTEXT {
@@ -280,6 +295,7 @@ static NTSTATUS IhPublishAndEnable(BC250_DEVICE* Device, BC250_IH* Ih,
     Ih->Rptr=0;
     KeAcquireSpinLock(&Ih->StatsLock,&irql);
     RtlZeroMemory(&Ih->Stats,sizeof(Ih->Stats));
+    InterlockedExchange(&Ih->VsyncPending,0);
     KeReleaseSpinLock(&Ih->StatsLock,irql);
 
     // The escape's output may not be safe at DIRQL. Record into owned storage

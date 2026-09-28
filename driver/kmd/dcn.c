@@ -971,6 +971,40 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
     return TRUE;
 }
 
+// A coalesced IH vector can be consumed without another ISR entry. Poll/ACK
+// under the same interrupt lock as ISR and enable/disable read-modify-writes.
+typedef struct _BC250_DCN_VECTOR_POLL {
+    BC250_DEVICE* Device;
+    BOOLEAN Invoked;
+} BC250_DCN_VECTOR_POLL;
+
+static BOOLEAN DcnVsyncVectorSynchronized(_In_ PVOID Context)
+{
+    BC250_DCN_VECTOR_POLL* poll=(BC250_DCN_VECTOR_POLL*)Context;
+    poll->Invoked=TRUE;
+    InterlockedIncrement(&poll->Device->DcnVsyncDpcPolls);
+    if (DcnVsyncInterrupt(poll->Device))
+        InterlockedIncrement(&poll->Device->DcnVsyncDpcAcked);
+    return TRUE; // invocation succeeded even if ISR already cleared the event
+}
+
+void DcnVsyncFromVector(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_DCN_VECTOR_POLL poll;
+    BOOLEAN returned=FALSE;
+    NTSTATUS status;
+    if (Device->Dxgk.DxgkCbSynchronizeExecution==NULL)
+    {
+        InterlockedIncrement(&Device->DcnVsyncDpcSyncFailures);
+        return;
+    }
+    poll.Device=Device;poll.Invoked=FALSE;
+    status=Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle,
+        DcnVsyncVectorSynchronized,&poll,0,&returned);
+    if (!NT_SUCCESS(status) || !returned || !poll.Invoked)
+        InterlockedIncrement(&Device->DcnVsyncDpcSyncFailures);
+}
+
 // ---- the present path's own destination once the flip is live (2026-09-22, ADR 0011 consequences) -------------
 //
 // M97/M100: once DxgkDdiSetVidPnSourceAddress has flipped HUBP0 away from the firmware's framebuffer, nothing
