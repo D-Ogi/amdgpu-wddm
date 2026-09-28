@@ -39,6 +39,7 @@ What the D3D11 interfaces cannot express goes through `IBc250DxvkDevice`:
 | DDI resource destruction and `ResourceIsStagingBusy` | `WaitForResourceIdle`, `IsResourceBusy` |
 | DXGI present, `RotateResourceIdentities`, `Blt` | `SubmitForPresent`, `RotateResourceIdentities`, `Blt` |
 | DXGI 1.2 `Blt1` with a source rectangle (ABI 1.1) | `IBc250DxvkDevice1::Blt1` |
+| Runtime allocations with a tiling the shell chose, such as LINEAR (ABI 1.2) | `IBc250DxvkDevice2::CreateTexture2DFromImage2` |
 
 ## The ABI
 
@@ -50,9 +51,9 @@ that collide with the WDK's in one translation unit, so the header uses only `wi
 
 The DLL exports one function, `Bc250DxvkEngineGetFuncs(abiVersion, funcs)`. A major mismatch returns
 `E_NOINTERFACE`. Minor versions only add, and what they add sits behind a new interface or function, so an older
-engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.1 is in force: 1.0 plus
-`IBc250DxvkDevice1` (`Blt1`), which the engine device answers to `QueryInterface`. The rules E1-E6 are written in
-the header and are not repeated here:
+engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.2 is in force: 1.0 plus
+`IBc250DxvkDevice1` (`Blt1`) and `IBc250DxvkDevice2` (`CreateTexture2DFromImage2`), which the engine device
+answers to `QueryInterface`. The rules E1-E6 are written in the header and are not repeated here:
 - E1 the shell owns VkInstance and VkDevice;
 - E2 threads;
 - E3 submission;
@@ -128,7 +129,11 @@ measurement showing the CPU wait matters.
 
 - **Image creation.** `GetImageCreateInfo` returns the `VkImageCreateInfo` that DXVK's `D3D11CommonTexture`
   would use for the description, including the format list that keeps compression on mutable-format images. The
-  shell creates and binds the image on its runtime allocation; `CreateTexture2DFromImage` wraps it.
+  shell creates and binds the image on its runtime allocation; `CreateTexture2DFromImage` wraps it. An image
+  with another tiling, such as the LINEAR surfaces the shell allocates, goes through `CreateTexture2DFromImage2`.
+  It takes the shell's `VkImageCreateInfo`, checks it against `GetImageCreateInfo` and imports the image with
+  that tiling. DXVK chooses format features and layouts by tiling, so a LINEAR image wrapped as OPTIMAL would be
+  driven with features it may not have.
 - **Present.** `SubmitForPresent` ends the engine frame and submits (E3); the shell then orders its present
   fence and calls `pfnPresentCb`.
 - **Rotation.** `RotateResourceIdentities` moves image storage in command order through
@@ -185,6 +190,7 @@ import when a destroyed handle's value comes back (ABA).
 | On-disk shader cache | Per-application DXVK keeps the dxbc-spirv results of each executable in `%LOCALAPPDATA%\dxvk` (or `DXVK_SHADER_CACHE_PATH`); its writer thread does file I/O only. The engine turns the cache off, to keep a writer thread and cache files out of every process that loads the system driver, DWM included. Every process start therefore translates its shaders again. | Decide with the load-time part of the 5 % comparison; the cache needs no Vulkan call, so E2 does not forbid it. |
 | `Blt` and `Blt1` with ROTATE90/270 | `E_NOTIMPL`. Not reachable: the runtime asks for a rotation only from a driver that can return `DXGI_DDI_ERR_UNSUPPORTED` when it creates a primary, and the shell never does (dxgiddi `BltDXGI` and `Blt1DXGI` remarks). ROTATE180 is implemented anyway. | Implement if the shell ever refuses a primary. The docs define `Rotate` as a counter-clockwise turn of the source. |
 | `Blt` and `Blt1` into a multisampled destination | `E_NOTIMPL` | Implement when a runtime path needs it. |
+| Rendering into LINEAR runtime surfaces | The shell allocates back buffers and other runtime surfaces LINEAR, so a title draws straight into LINEAR images. Per-application DXVK draws into its own OPTIMAL back buffer and copies it once per frame to the presentable image. `bc250dxvk_engine_test --bench-tiling` times both on 1920x1080 RGBA8. On the development PC (RTX 4090, not unit A), clearing and 8 blended full-screen draws took 0.044 ms per frame into OPTIMAL and 0.119 ms into LINEAR. The OPTIMAL to LINEAR copy took 0.007 ms, and a 1:1 read took the same time from either tiling. | Run `--bench-tiling` on unit A. If drawing into LINEAR costs more than the copy there, the engine draws back buffers into an OPTIMAL image and copies it into the runtime surface at present, as per-application DXVK does. |
 | 5 % bound against per-application DXVK | Not measured | Needs the shell's positive run through the system runtime. The per-application comparison build is the `per-app` recipe in build.md. |
 
 ## Validation
@@ -194,6 +200,7 @@ it owns instance and device, feeds DDI-form shaders and runtime-style images, an
 - pixels;
 - 500 sustained frames under a memory bound;
 - storage rotation, Blt and Blt1 source rectangles;
+- a LINEAR shell image: `CreateTexture2DFromImage2` checks, the tiling the engine uses, drawing and Blt1;
 - ClearView on buffer render target views;
 - stream output of points, lines and triangles, and a rasterized stream;
 - occlusion and stream-output overflow predication;
