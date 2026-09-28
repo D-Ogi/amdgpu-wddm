@@ -57,6 +57,9 @@ void test_copy(Env& env, Device& device) {
     hr = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec);
     checkf(hr == S_OK && rec.table == 1, "copy: pool, recorder and DIRECT list, bound to the graphics table (hr %08lx)",
            static_cast<unsigned long>(hr));
+    if (hr == S_OK)
+        check(engine_ddi::command_list_shell(rec.hlist()) == &device.shell,
+              "copy: command_list_shell names the shell of the list's device");
     if (hr == S_OK) {
         const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[rec.table];
         D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};

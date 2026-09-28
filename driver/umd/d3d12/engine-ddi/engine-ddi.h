@@ -211,6 +211,15 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
 HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T table_size, uint32_t table_index,
                           const FillInfo* info) noexcept;
 
+// The owner of a command list, for the shell's own command-list slots (whose first argument is the list, not the
+// device): ShellHooks::shell of the device context that created the list. Null for storage that holds no live
+// engine-ddi command list: not yet constructed by CreateCommandList, or already destroyed by DestroyCommandList
+// (CloseCommandList and ResetCommandList do not end a list). Read-only: it reads the list's record, takes no lock
+// and calls nothing, and the shell needs no knowledge of the record's layout. Lifetime: the runtime serializes the
+// calls of one command list, so a call made from a slot of that list, or while the shell otherwise knows the list
+// is not being created or destroyed, reads a stable record.
+void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept;
+
 // ---- Shaders ---------------------------------------------------------------------------------------------------
 // Native intake (every create-shader slot): the payload is the bare program with its length in DWORD 1, and
 // register-only signature entries. That the buffer holds exactly pShaderCode[1] DWORDs is an INFERENCE from the

@@ -234,6 +234,11 @@ CommandListRecord* list_of(D3D12DDI_HCOMMANDLIST list, const char* slot) noexcep
     return r;
 }
 
+void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept {
+    const auto* r = record_of<CommandListRecord>(list.pDrvPrivate, Tag::CommandList);
+    return (r && r->h.device) ? r->h.device->hooks.shell : nullptr;
+}
+
 bool reject_in_compute_table(const CommandListRecord* list) noexcept {
     if (list->table != 0) return false;
     list->h.device->report_list(list->rt, E_INVALIDARG);

@@ -136,6 +136,13 @@ unanswered one is logged and its fields report no support.
   registered too.
 - Queues (the queue table is the shell's): after creating the WDDM context, `create_engine_queue`;
   ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`.
+- Command lists: a shell slot of the list table (its first argument is the `D3D12DDI_HCOMMANDLIST`, not the
+  device) finds its device's shell with `command_list_shell(list)`: `ShellHooks::shell` of the context that created
+  the list, or null for storage that holds no live engine-ddi list (before CreateCommandList constructs it, after
+  DestroyCommandList; CloseCommandList and ResetCommandList do not end a list). It reads the record without a lock,
+  so it is called from a slot of that list or while the shell knows the list is neither being created nor
+  destroyed; the runtime serializes the calls of one list. The core slots start with the `D3D12DDI_HDEVICE` and need
+  nothing of this kind.
 - Present: `resource_allocation` for the back buffer's runtime allocation.
 
 ### Query slots around CreateDevice
