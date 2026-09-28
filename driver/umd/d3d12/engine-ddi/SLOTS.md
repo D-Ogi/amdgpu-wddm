@@ -1,4 +1,4 @@
-# engine-ddi slot ownership (boundary r2)
+# engine-ddi slot ownership (boundary r3)
 
 Who fills each DDI 0092 slot. `engine-ddi` slots are filled by `fill_device_core` / `fill_command_list`; `shell` slots
 by the native12 shell. A mixed slot names the owner and the boundary call it makes. Phase: P0 first pixel, P1 FL 11_x
@@ -6,10 +6,12 @@ rendering, P2 FL 12_0/12_1 (tiled, conservative raster, ROV), P3 DXR, P4 other (
 is implemented, its entry is the fail-safe of `engine-ddi.h`; no slot is left NULL once the table is published.
 
 "native: blocked on payload contract" marks the shader slots. The payload shape is known from the WDK header: a
-bare program with its length in DWORD 1, plus register-only signature entries. How to translate it for the
-engine is not agreed. Until it is:
-- the native intake copies the payload, logs its first four DWORDs, length and signature counts, and reports
-  E_NOTIMPL;
+bare program with its length in DWORD 1, plus register-only signature entries. That the buffer holds exactly that
+many DWORDs is an inference from the SAL annotation `_In_reads_(pShaderCode[1])`, not a measurement. How to
+translate it for the engine is not agreed. Until it is:
+- the native intake reads within the declared length only (null check first, then DWORD 1, a length below 2
+  refused), copies that length, logs at most the first four DWORDs inside it, the length and the signature counts,
+  and reports E_NOTIMPL;
 - no container is synthesized;
 - a harness-only path, compiled with `AMDGPU_WDDM_ENGINE_DDI_HARNESS`, accepts a complete DXBC or DXIL
   container. It is for offline pipeline and dispatch tests, and it says nothing about the runtime payload.

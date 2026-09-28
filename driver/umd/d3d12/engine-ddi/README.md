@@ -1,7 +1,9 @@
 # engine-ddi: D3D12 DDI slots on the vkd3d-proton engine
 
-Status: boundary r2 (2026-09-28), r1 revised after review. No slot code exists yet. The directory is not part of
-the shell build: the gate below runs from its own script.
+Status: boundary r3 (2026-09-28): r2 plus the adapter caps path on engine ABI 1.2. The static library
+`engine-ddi.lib` builds with `tools/build/build-engine-ddi.ps1`, and [INTEGRATION.md](INTEGRATION.md) says what
+the shell calls and when. The engine ABI header is included by path from the pinned vkd3d-proton fork checkout
+([engine-abi.json](engine-abi.json)).
 
 ## What it is
 
@@ -86,10 +88,12 @@ Steps 2 to 4 run only on the thread of a DDI call into the owning device while i
 They never run from an engine thread or callback: INLINE mode has no engine threads, and engine-ddi starts none.
 
 **Shaders.**
-- The native intake builds no container. The DDI payload is the bare program (`_In_reads_(pShaderCode[1])`)
-  with register-only signatures.
-- engine-ddi copies it into private storage, logs `pShaderCode[0..3]`, the length and the signature entry
-  counts, and reports E_NOTIMPL.
+- The native intake builds no container. The DDI payload is the bare program with its length in DWORD 1, and
+  register-only signatures. That the buffer holds exactly that many DWORDs is an inference from the SAL
+  annotation `_In_reads_(pShaderCode[1])`; no runtime payload has been measured.
+- Reads stay within the declared length: a null check first, then DWORD 1, and a length below 2 is refused.
+  engine-ddi copies the declared length into private storage, logs at most the first four DWORDs inside it, the
+  length and the signature entry counts, and reports E_NOTIMPL.
 - A harness-only path (`AMDGPU_WDDM_ENGINE_DDI_HARNESS`) accepts a complete DXBC or DXIL container, so that
   pipelines and dispatches can be tested offline. It proves nothing about the runtime payload.
 
@@ -100,12 +104,14 @@ They never run from an engine thread or callback: INLINE mode has no engine thre
 - `resource_allocation`: gives Present the runtime allocation behind a committed back buffer.
 
 **Caps.**
-- `collect_caps` takes `EngineCaps`, an adapter-level result of the engine's own policy. The declared source is
-  the planned engine ABI 1.2 QueryAdapterCaps: a physical-device query with no VkDevice, queues or GPU storage.
-- There is no temporary engine device in the native driver. The harness may fill `EngineCaps` from a real
-  engine device's CheckFeatureSupport, under the harness macro only.
-- `build_caps` writes only exact, validated payload sizes at or below the negotiated version, with no prefix
-  copies.
+- GetCaps comes before any device (lab run M768). `query_adapter_caps` asks the engine once through ABI 1.2
+  QueryAdapterCaps (V11), with the create info the shell will pass to CreateDevice. The engine answers
+  D3D12_FEATURE_* queries under its own device policy, with no VkDevice. `AdapterCaps` keeps those answers and
+  nothing of engine-ddi's own.
+- There is no temporary engine device in the native driver, and no harness-only caps source.
+- `build_caps` maps each answered type from the engine's answers or a documented constant (the table in
+  INTEGRATION.md). It writes only exact 0092 payload sizes, never a prefix. A wrong size is E_INVALIDARG and an
+  unanswered type E_NOTIMPL, both logged with type and size.
 
 **Records.**
 - Every object's runtime-owned storage starts with a 24-byte header: a type tag, flags, one engine reference and
@@ -126,15 +132,19 @@ Two clarifications were added after the review:
 - retirement before `free_memory`, on a DDI thread;
 - the runtime owner in `MemoryRequest`, and `gpu_va` as a completed mapping.
 
+r3 replaced the r2 caps declarations (`EngineCaps`, `collect_caps`) with `query_adapter_caps`,
+`free_adapter_caps` and `build_caps` over the engine's QueryAdapterCaps answers.
+
 ## Gate
 
-`engine-ddi-header-test.cpp` is built with the shell's flags:
-- `/std:c++20 /W4 /WX`;
-- SDK `d3d12.h` together with WDK `d3d12umddi.h`;
-- the Vulkan headers and the engine ABI header, the latter exported byte for byte from the vkd3d-proton fork.
-
-It checks that the header is self-contained and that the boundary revision is 2. It also checks:
-- the record tags are unique;
-- the table sizes are 976 and 560;
-- the boundary structs have their pinned layouts;
-- the r2 signatures of `free_memory`, `collect_caps` and `pfnCreateHeapAndResource`.
+`tools/build/build-engine-ddi.ps1 -NativeOnly` is the recipe for what the shell links; it needs no engine DLL
+and no GPU. Without `-NativeOnly` it also builds the harness and runs against the pinned engine DLL.
+1. The engine ABI header's SHA-256 must equal the pin in `engine-abi.json`.
+2. `engine-ddi-header-test.cpp`, built with the shell's flags (`/std:c++20 /W4 /WX`, SDK `d3d12.h` with WDK
+   `d3d12umddi.h`, the Vulkan headers and the engine ABI header). It checks that the header is self-contained,
+   boundary revision 3, unique record tags, table sizes 976 and 560, the pinned struct layouts, the signatures of
+   `free_memory`, the caps functions and `pfnCreateHeapAndResource`, and the ABI 1.2 header.
+3. `engine-ddi.lib` compiled with `/analyze` under the same `/WX`, with no `harness_` symbol in it.
+4. `tests/native-policy-test.cpp`: EnginePrivateTest refused, both tables filled.
+5. `tests/caps-test.cpp` against a stub engine: GetCaps 1074 with 8 bytes and 1007 with 4 bytes, and every
+   other answered type at its exact size. With `--engine` it runs `query_adapter_caps` on the real DLL.

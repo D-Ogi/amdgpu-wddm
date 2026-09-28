@@ -1,0 +1,718 @@
+// SPDX-License-Identifier: MIT
+// engine-ddi: heaps and resources (D59-D61, D57-D58, D74, D75, D84, D0), resource_allocation, and the list slots
+// that move data between resources (L10, L13, L17).
+#include "internal.h"
+#include <algorithm>
+
+namespace engine_ddi {
+
+// DDI and API enums that are passed through by value.
+static_assert(D3D12DDI_RT_BUFFER == static_cast<int>(D3D12_RESOURCE_DIMENSION_BUFFER) &&
+              D3D12DDI_RT_TEXTURE1D == static_cast<int>(D3D12_RESOURCE_DIMENSION_TEXTURE1D) &&
+              D3D12DDI_RT_TEXTURE2D == static_cast<int>(D3D12_RESOURCE_DIMENSION_TEXTURE2D) &&
+              D3D12DDI_RT_TEXTURE3D == static_cast<int>(D3D12_RESOURCE_DIMENSION_TEXTURE3D), "resource dimension");
+static_assert(D3D12DDI_TL_UNDEFINED == static_cast<int>(D3D12_TEXTURE_LAYOUT_UNKNOWN) &&
+              D3D12DDI_TL_ROW_MAJOR == static_cast<int>(D3D12_TEXTURE_LAYOUT_ROW_MAJOR) &&
+              D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE == static_cast<int>(D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE) &&
+              D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE == static_cast<int>(D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE),
+              "texture layout");
+static_assert(static_cast<unsigned>(D3D12DDI_BARRIER_LAYOUT_UNDEFINED) == static_cast<unsigned>(D3D12_BARRIER_LAYOUT_UNDEFINED) &&
+              D3D12DDI_BARRIER_LAYOUT_COMMON == static_cast<int>(D3D12_BARRIER_LAYOUT_COMMON) &&
+              D3D12DDI_BARRIER_LAYOUT_RENDER_TARGET == static_cast<int>(D3D12_BARRIER_LAYOUT_RENDER_TARGET) &&
+              D3D12DDI_BARRIER_LAYOUT_COPY_DEST == static_cast<int>(D3D12_BARRIER_LAYOUT_COPY_DEST) &&
+              D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON == static_cast<int>(D3D12_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON),
+              "barrier layout");
+static_assert(D3D12DDI_RESOURCE_STATE_COMMON == static_cast<int>(D3D12_RESOURCE_STATE_COMMON) &&
+              D3D12DDI_RESOURCE_STATE_RENDER_TARGET == static_cast<int>(D3D12_RESOURCE_STATE_RENDER_TARGET) &&
+              D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS == static_cast<int>(D3D12_RESOURCE_STATE_UNORDERED_ACCESS) &&
+              D3D12DDI_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE == static_cast<int>(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) &&
+              D3D12DDI_RESOURCE_STATE_PIXEL_SHADER_RESOURCE == static_cast<int>(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) &&
+              D3D12DDI_RESOURCE_STATE_COPY_DEST == static_cast<int>(D3D12_RESOURCE_STATE_COPY_DEST) &&
+              D3D12DDI_RESOURCE_STATE_COPY_SOURCE == static_cast<int>(D3D12_RESOURCE_STATE_COPY_SOURCE) &&
+              D3D12DDI_RESOURCE_STATE_RESOLVE_SOURCE == static_cast<int>(D3D12_RESOURCE_STATE_RESOLVE_SOURCE) &&
+              D3D12DDI_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE ==
+                  static_cast<int>(D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE),
+              "resource states");
+static_assert(sizeof(D3D12DDI_CLEAR_VALUES) == sizeof(D3D12_CLEAR_VALUE) &&
+              offsetof(D3D12DDI_CLEAR_VALUES, Color) == offsetof(D3D12_CLEAR_VALUE, Color), "clear value layout");
+static_assert(D3D12DDI_RESOURCE_BARRIER_FLAG_BEGIN_ONLY == static_cast<int>(D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY) &&
+              D3D12DDI_RESOURCE_BARRIER_FLAG_END_ONLY == static_cast<int>(D3D12_RESOURCE_BARRIER_FLAG_END_ONLY),
+              "barrier flags");
+
+namespace {
+constexpr uint32_t kCategoryMask =
+    D3D12DDI_HEAP_FLAG_BUFFERS | D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES | D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+
+HRESULT to_api_desc(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DESC1& out) noexcept {
+    out = D3D12_RESOURCE_DESC1{};
+    if (in.ResourceType < D3D12DDI_RT_BUFFER || in.ResourceType > D3D12DDI_RT_TEXTURE3D) return E_INVALIDARG;
+    if (in.Layout > D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE) return E_INVALIDARG;
+    if (in.pRowMajorLayout) return E_NOTIMPL;           // a custom row-major layout has no API form
+    out.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(in.ResourceType);
+    out.Width = in.Width;
+    out.Height = in.Height;
+    out.DepthOrArraySize = in.DepthOrArraySize;
+    out.MipLevels = in.MipLevels;
+    out.Format = in.Format;
+    out.SampleDesc = in.SampleDesc;
+    out.Layout = static_cast<D3D12_TEXTURE_LAYOUT>(in.Layout);
+    const UINT f = in.Flags;
+    D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
+    if (f & D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET) flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    if (f & D3D12DDI_RESOURCE_FLAG_0003_DEPTH_STENCIL) flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    if (f & D3D12DDI_RESOURCE_FLAG_0022_UNORDERED_ACCESS) flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    if ((f & D3D12DDI_RESOURCE_FLAG_0003_DEPTH_STENCIL) && !(f & D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE))
+        flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+    if (f & D3D12DDI_RESOURCE_FLAG_0003_CROSS_ADAPTER) flags |= D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+    if (f & D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS) flags |= D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+    if (f & D3D12DDI_RESOURCE_FLAG_0020_VIDEO_DECODE_REFERENCE_ONLY) flags |= D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY;
+    if (f & D3D12DDI_RESOURCE_FLAG_0080_VIDEO_ENCODE_REFERENCE_ONLY) flags |= D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY;
+    if (f & D3D12DDI_RESOURCE_FLAG_0088_RAYTRACING_ACCELERATION_STRUCTURE)
+        flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+    out.Flags = flags;
+    out.SamplerFeedbackMipRegion = {in.SamplerFeedbackMipRegion.Width, in.SamplerFeedbackMipRegion.Height,
+                                    in.SamplerFeedbackMipRegion.Depth};
+    return S_OK;
+}
+
+D3D12_RESOURCE_DESC to_desc0(const D3D12_RESOURCE_DESC1& d) noexcept {
+    return {d.Dimension, d.Alignment, d.Width, d.Height, d.DepthOrArraySize, d.MipLevels, d.Format, d.SampleDesc,
+            d.Layout, d.Flags};
+}
+
+uint32_t category_of(const D3D12_RESOURCE_DESC1& d) noexcept {
+    if (d.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) return D3D12DDI_HEAP_FLAG_BUFFERS;
+    if (d.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+        return D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+    return D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES;
+}
+
+HRESULT heap_desc_of(const D3D12DDIARG_CREATEHEAP_0001& in, D3D12_HEAP_DESC& out) noexcept {
+    if (in.CPUPageProperty > D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK || in.MemoryPool > D3D12DDI_MEMORY_POOL_L1 ||
+        !in.ByteSize || !(in.Flags & kCategoryMask))
+        return E_INVALIDARG;
+    out = D3D12_HEAP_DESC{};
+    out.SizeInBytes = in.ByteSize;
+    out.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
+    out.Properties.CPUPageProperty = static_cast<D3D12_CPU_PAGE_PROPERTY>(in.CPUPageProperty + 1);
+    out.Properties.MemoryPoolPreference = static_cast<D3D12_MEMORY_POOL>(in.MemoryPool + 1);
+    out.Properties.CreationNodeMask = 1;
+    out.Properties.VisibleNodeMask = 1;
+    out.Alignment = in.Alignment;
+    D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
+    if (!(in.Flags & D3D12DDI_HEAP_FLAG_BUFFERS)) flags |= D3D12_HEAP_FLAG_DENY_BUFFERS;
+    if (!(in.Flags & D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)) flags |= D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
+    if (!(in.Flags & D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES)) flags |= D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
+    out.Flags = flags;
+    return S_OK;
+}
+
+// The engine's placed resource at offset in the backing (engine-ddi.h placement rules, D3D12 part).
+HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURCE_DESC1& desc,
+              D3D12DDI_BARRIER_LAYOUT layout, const D3D12DDI_CLEAR_VALUES* clear, UINT castable_count,
+              const DXGI_FORMAT* castable, ID3D12Resource** out) noexcept {
+    *out = nullptr;
+    if (!(b->desc.Flags & category_of(desc))) return E_INVALIDARG;
+    const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+    const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+    if (info.SizeInBytes == UINT64_MAX || !info.Alignment) return E_INVALIDARG;
+    if (offset % info.Alignment || offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset)
+        return E_INVALIDARG;
+    const bool target = desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+    const D3D12_CLEAR_VALUE* cv = (clear && target) ? reinterpret_cast<const D3D12_CLEAR_VALUE*>(clear) : nullptr;
+    if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) layout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
+    if (static_cast<uint32_t>(layout) >= 0x80000000u && layout != D3D12DDI_BARRIER_LAYOUT_UNDEFINED) {
+        // The DDI-only LEGACY_* layouts name a legacy initial state.
+        D3D12_RESOURCE_STATES state;
+        switch (layout) {
+        case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_SOURCE: state = D3D12_RESOURCE_STATE_COPY_SOURCE; break;
+        case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST: state = D3D12_RESOURCE_STATE_COPY_DEST; break;
+        case D3D12DDI_BARRIER_LAYOUT_LEGACY_SHADER_RESOURCE:
+            state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            break;
+        case D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE: state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE; break;
+        default: return E_INVALIDARG;
+        }
+        if (castable_count) return E_NOTIMPL;           // CreatePlacedResource1 takes no castable formats
+        return c->device8->CreatePlacedResource1(b->heap, offset, &desc, state, cv, __uuidof(ID3D12Resource),
+                                                 reinterpret_cast<void**>(out));
+    }
+    return c->device10->CreatePlacedResource2(b->heap, offset, &desc, static_cast<D3D12_BARRIER_LAYOUT>(layout), cv,
+                                              castable_count, castable, __uuidof(ID3D12Resource),
+                                              reinterpret_cast<void**>(out));
+}
+
+// The backing and its release record, allocated together while the create can still fail (internal.h,
+// PendingRelease).
+Backing* new_backing(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_0001& desc, ID3D12Heap* heap) noexcept {
+    auto* node = make_new<PendingRelease>();
+    if (!node) return nullptr;
+    auto* b = make_new<Backing>();
+    if (!b) {
+        delete node;
+        return nullptr;
+    }
+    b->release_node = node;
+    b->refs.store(1);
+    b->device = c;
+    b->heap = heap;
+    InitializeSRWLock(&b->map_lock);
+    b->desc = desc;
+    b->id = c->next_id.fetch_add(1);
+    return b;
+}
+
+// Engine ABI 1.2 dependencies of RuntimeBacked heaps (engine-ddi.h). Absent in ABI 1.1.
+uint32_t engine_memory_type_bits(DeviceContext*, const D3D12DDIARG_CREATEHEAP_0001&) noexcept { return 0; }
+HRESULT engine_heap_from_memory(DeviceContext*, const D3D12_HEAP_DESC&, const ImportedMemory&, ID3D12Heap** heap) noexcept {
+    *heap = nullptr;
+    return E_NOTIMPL;
+}
+
+void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
+                        const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind) noexcept {
+    backing_acquire(b);
+    new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, 0};
+    c->live.fetch_add(1);
+}
+
+D3D12DDI_HEAP_AND_RESOURCE_SIZES APIENTRY calc_heap_and_resource(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATEHEAP_0001*,
+                                                                 const D3D12DDIARG_CREATERESOURCE_0088*,
+                                                                 D3D12DDI_HPROTECTEDRESOURCESESSION_0030) {
+    return {sizeof(HeapRecord), sizeof(ResourceRecord)};
+}
+
+HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_0001* heap_desc, D3D12DDI_HHEAP hheap,
+                                 D3D12DDI_HRTRESOURCE rt, const D3D12DDIARG_CREATERESOURCE_0088* res_desc,
+                                 const D3D12DDI_CLEAR_VALUES* clear, D3D12DDI_HRESOURCE hres) noexcept {
+    D3D12_RESOURCE_DESC1 desc{};
+    if (res_desc) {
+        if (!hres.pDrvPrivate) return E_INVALIDARG;
+        HRESULT hr = to_api_desc(*res_desc, desc);
+        if (FAILED(hr)) return hr;
+        if (res_desc->NumCastableFormats && !res_desc->pCastableFormats) return E_INVALIDARG;
+    }
+    if (!heap_desc) {
+        // Placed: the base resource names the heap memory.
+        if (!res_desc) return E_INVALIDARG;
+        auto* base = record_of<ResourceRecord>(res_desc->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate,
+                                               Tag::Resource, c);
+        if (!base) {
+            if (res_desc->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate || hheap.pDrvPrivate)
+                return E_INVALIDARG;
+            return E_NOTIMPL;                           // reserved resource: tiled resources (P2)
+        }
+        if (c->mode == MemoryMode::RuntimeBacked) return E_NOTIMPL;   // first slice: dedicated allocations only
+        const uint64_t offset = base->offset + res_desc->ReuseBufferGPUVA.BaseAddress.UMD.Offset;
+        if (offset < base->offset) return E_INVALIDARG;
+        ID3D12Resource* engine = nullptr;
+        HRESULT hr = place(c, base->backing, offset, desc, res_desc->InitialBarrierLayout, clear,
+                           res_desc->NumCastableFormats, res_desc->pCastableFormats, &engine);
+        if (FAILED(hr)) return hr;
+        construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, base->backing, offset, desc, rt,
+                           ResourceKind::Placed);
+        return S_OK;
+    }
+    if (!hheap.pDrvPrivate) return E_INVALIDARG;
+    D3D12_HEAP_DESC hd{};
+    HRESULT hr = heap_desc_of(*heap_desc, hd);
+    if (FAILED(hr)) return hr;
+    uint64_t need = 0, align = 0;
+    if (res_desc) {
+        if (!(heap_desc->Flags & category_of(desc))) return E_INVALIDARG;
+        const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+        const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+        if (info.SizeInBytes == UINT64_MAX) return E_INVALIDARG;
+        need = info.SizeInBytes;
+        align = info.Alignment;
+        if (heap_desc->ByteSize < need) return E_INVALIDARG;
+    }
+
+    ID3D12Heap* heap = nullptr;
+    ImportedMemory memory{};
+    bool imported = false;
+    if (c->mode == MemoryMode::RuntimeBacked) {
+        if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
+        if (!res_desc) return E_NOTIMPL;                // first slice: dedicated allocations only
+        MemoryRequest request{};
+        request.size = sizeof(MemoryRequest);
+        request.flags = kMemoryDedicated | ((heap_desc->Flags & D3D12DDI_HEAP_FLAG_PRIMARY) ? kMemoryPrimary : 0);
+        request.rt_owner = rt;
+        request.heap = heap_desc;
+        request.resource = res_desc;
+        request.byte_size = heap_desc->ByteSize;
+        request.alignment = std::max<uint64_t>(align, heap_desc->Alignment);
+        request.memory_type_bits = engine_memory_type_bits(c, *heap_desc);
+        hr = import_memory(c, request, &memory);
+        if (FAILED(hr)) return hr;
+        hr = engine_heap_from_memory(c, hd, memory, &heap);
+        if (FAILED(hr)) {
+            // Nothing uses the memory yet: hand it straight back (engine-ddi.h, exactly once).
+            ReleasePayload payload{{nullptr, nullptr}, true, memory, 0};
+            run_release(c->hooks, payload);
+            return hr;
+        }
+        imported = true;
+    } else {
+        if (align > 64 * 1024 && !hd.Alignment) hd.Alignment = align;
+        hr = c->device->CreateHeap(&hd, __uuidof(ID3D12Heap), reinterpret_cast<void**>(&heap));
+        if (FAILED(hr)) return hr;
+    }
+
+    Backing* b = new_backing(c, *heap_desc, heap);
+    if (!b) {
+        ReleasePayload payload{{heap, nullptr}, imported, memory, 0};
+        run_release(c->hooks, payload);
+        return E_OUTOFMEMORY;
+    }
+    b->imported = imported;
+    b->memory = memory;
+    b->dedicated = res_desc != nullptr;
+
+    ID3D12Resource* engine = nullptr;
+    if (res_desc) {
+        hr = place(c, b, 0, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
+                   res_desc->pCastableFormats, &engine);
+        if (FAILED(hr)) {
+            backing_release(b);
+            return hr;
+        }
+    }
+    heap->AddRef();
+    new (hheap.pDrvPrivate) HeapRecord{{Tag::Heap, 0, heap, c}, b};
+    c->live.fetch_add(1);
+    if (res_desc) {
+        construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, b, 0, desc, rt,
+                           ResourceKind::Committed);
+    }
+    return S_OK;
+}
+
+HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATEHEAP_0001* heap_desc,
+                                               D3D12DDI_HHEAP hheap, D3D12DDI_HRTRESOURCE rt,
+                                               const D3D12DDIARG_CREATERESOURCE_0088* res_desc,
+                                               const D3D12DDI_CLEAR_VALUES* clear,
+                                               D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session, D3D12DDI_HRESOURCE hres) {
+    DeviceContext* c = resolve(device);
+    if (!c) return E_INVALIDARG;
+    c->process_retired();
+    if (session.pDrvPrivate) return E_NOTIMPL;           // protected resource sessions
+    return create_heap_and_resource(c, heap_desc, hheap, rt, res_desc, clear, hres);
+}
+
+void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, D3D12DDI_HRESOURCE hres) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (hres.pDrvPrivate) {
+        if (auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c)) {
+            Backing* b = r->backing;
+            release_engine(r->h);
+            poison(r->h);
+            c->live.fetch_sub(1);
+            if (b) backing_release(b);
+        } else {
+            c->report(E_INVALIDARG);
+        }
+    }
+    if (hheap.pDrvPrivate) {
+        if (auto* h = record_of<HeapRecord>(hheap.pDrvPrivate, Tag::Heap, c)) {
+            Backing* b = h->backing;
+            release_engine(h->h);
+            poison(h->h);
+            c->live.fetch_sub(1);
+            backing_release(b);
+        } else {
+            c->report(E_INVALIDARG);
+        }
+    }
+    c->process_retired();
+}
+
+HRESULT APIENTRY map_heap(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, void** data) {
+    DeviceContext* c = resolve(device);
+    if (!c || !data) return E_INVALIDARG;
+    *data = nullptr;
+    auto* h = record_of<HeapRecord>(hheap.pDrvPrivate, Tag::Heap, c);
+    if (!h) return E_INVALIDARG;
+    Backing* b = h->backing;
+    if (b->desc.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE) return E_INVALIDARG;
+    AcquireSRWLockExclusive(&b->map_lock);
+    HRESULT hr = S_OK;
+    if (!b->map_count) {
+        if (!b->map_buffer) {
+            // A heap-wide buffer at offset 0; heaps that allow no buffers need an engine entry (gap G3).
+            if (!(b->desc.Flags & D3D12DDI_HEAP_FLAG_BUFFERS)) {
+                hr = E_NOTIMPL;
+            } else {
+                D3D12_RESOURCE_DESC1 desc{};
+                desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+                desc.Width = b->desc.ByteSize;
+                desc.Height = 1;
+                desc.DepthOrArraySize = 1;
+                desc.MipLevels = 1;
+                desc.SampleDesc.Count = 1;
+                desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+                hr = c->device10->CreatePlacedResource2(b->heap, 0, &desc, D3D12_BARRIER_LAYOUT_UNDEFINED, nullptr, 0,
+                                                        nullptr, __uuidof(ID3D12Resource),
+                                                        reinterpret_cast<void**>(&b->map_buffer));
+            }
+        }
+        if (SUCCEEDED(hr)) hr = b->map_buffer->Map(0, nullptr, &b->cpu);
+    }
+    if (SUCCEEDED(hr)) {
+        ++b->map_count;
+        *data = b->cpu;
+    }
+    ReleaseSRWLockExclusive(&b->map_lock);
+    return hr;
+}
+
+void APIENTRY unmap_heap(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    auto* h = record_of<HeapRecord>(hheap.pDrvPrivate, Tag::Heap, c);
+    if (!h) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    Backing* b = h->backing;
+    AcquireSRWLockExclusive(&b->map_lock);
+    if (!b->map_count) {
+        ReleaseSRWLockExclusive(&b->map_lock);
+        c->report(E_INVALIDARG);
+        return;
+    }
+    if (!--b->map_count) {
+        b->map_buffer->Unmap(0, nullptr);
+        b->cpu = nullptr;
+    }
+    ReleaseSRWLockExclusive(&b->map_lock);
+}
+
+D3D12DDI_GPU_VIRTUAL_ADDRESS APIENTRY check_resource_virtual_address(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE hres) {
+    DeviceContext* c = resolve(device);
+    if (!c) return 0;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r) {
+        c->report(E_INVALIDARG);
+        return 0;
+    }
+    if (r->desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) return 0;
+    if (r->backing && r->backing->imported && !r->backing->memory.gpu_va) {
+        c->report(E_INVALIDARG);                        // no completed mapping (engine-ddi.h, gpu_va)
+        return 0;
+    }
+    return static_cast<ID3D12Resource*>(r->h.engine)->GetGPUVirtualAddress();
+}
+
+void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
+                                             D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS, UINT32 alignment_restriction, UINT,
+                                             D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!in || !out) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+    D3D12_RESOURCE_DESC1 desc{};
+    HRESULT hr = to_api_desc(*in, desc);
+    if (FAILED(hr)) {
+        c->report(hr);
+        return;
+    }
+    desc.Alignment = alignment_restriction;
+    const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+    D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+    if (info.SizeInBytes == UINT64_MAX && alignment_restriction) {
+        desc.Alignment = 0;                             // a small-alignment request the engine refuses
+        const D3D12_RESOURCE_DESC retry = to_desc0(desc);
+        info = c->device->GetResourceAllocationInfo(0, 1, &retry);
+    }
+    if (info.SizeInBytes == UINT64_MAX || info.Alignment > UINT32_MAX) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    out->ResourceDataSize = info.SizeInBytes;
+    out->ResourceDataAlignment = static_cast<UINT32>(info.Alignment);
+    out->Layout = in->ResourceType == D3D12DDI_RT_BUFFER ? D3D12DDI_TL_ROW_MAJOR : in->Layout;
+}
+
+D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device, D3D10DDI_HRESOURCE hres) {
+    DeviceContext* c = resolve(device);
+    if (!c) return 0;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r) {
+        c->report(E_INVALIDARG);
+        return 0;
+    }
+    return (r->backing && r->backing->imported) ? r->backing->memory.allocation : 0;
+}
+
+void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT* out) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!out) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    *out = 0;
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
+    if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s)))) return;
+    struct Bit { UINT api; UINT ddi; };
+    static const Bit one[] = {
+        {D3D12_FORMAT_SUPPORT1_BUFFER, D3D12DDI_FORMAT_SUPPORT_BUFFER},
+        {D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER, D3D12DDI_FORMAT_SUPPORT_VERTEX_BUFFER},
+        {D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE, D3D12DDI_FORMAT_SUPPORT_SHADER_SAMPLE},
+        {D3D12_FORMAT_SUPPORT1_RENDER_TARGET, D3D12DDI_FORMAT_SUPPORT_RENDERTARGET},
+        {D3D12_FORMAT_SUPPORT1_BLENDABLE, D3D12DDI_FORMAT_SUPPORT_BLENDABLE},
+        {D3D12_FORMAT_SUPPORT1_DISPLAY, D3D12DDI_FORMAT_SUPPORT_DISPLAY},
+        {D3D12_FORMAT_SUPPORT1_SHADER_GATHER, D3D12DDI_FORMAT_SUPPORT_SHADER_GATHER},
+        {D3D12_FORMAT_SUPPORT1_MULTISAMPLE_RENDERTARGET, D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET},
+        {D3D12_FORMAT_SUPPORT1_MULTISAMPLE_LOAD, D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_LOAD},
+        {D3D12_FORMAT_SUPPORT1_DECODER_OUTPUT, D3D12DDI_FORMAT_SUPPORT_DECODER_OUTPUT},
+        {D3D12_FORMAT_SUPPORT1_VIDEO_PROCESSOR_OUTPUT, D3D12DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT},
+        {D3D12_FORMAT_SUPPORT1_VIDEO_PROCESSOR_INPUT, D3D12DDI_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT},
+        {D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW, D3D12DDI_FORMAT_SUPPORT_UAV_WRITES},
+        {D3D12_FORMAT_SUPPORT1_VIDEO_ENCODER, D3D12DDI_FORMAT_SUPPORT_VIDEO_ENCODER},
+    };
+    static const Bit two[] = {
+        {D3D12_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP, D3D12DDI_FORMAT_SUPPORT_OUTPUT_MERGER_LOGIC_OP},
+        {D3D12_FORMAT_SUPPORT2_TILED, D3D12DDI_FORMAT_SUPPORT_TILED},
+        {D3D12_FORMAT_SUPPORT2_MULTIPLANE_OVERLAY, D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY},
+        {D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD, D3D12DDI_FORMAT_SUPPORT_UAV_READS},
+    };
+    UINT bits = 0;
+    for (const Bit& b : one) bits |= (s.Support1 & b.api) ? b.ddi : 0;
+    for (const Bit& b : two) bits |= (s.Support2 & b.api) ? b.ddi : 0;
+    *out = bits;
+}
+
+// ---- Command-list slots -------------------------------------------------------------------------------------------
+ID3D12Resource* engine_resource(CommandListRecord* l, D3D12DDI_HRESOURCE h) noexcept {
+    auto* r = record_of<ResourceRecord>(h.pDrvPrivate, Tag::Resource, l->h.device);
+    return r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr;
+}
+
+void APIENTRY copy_buffer_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDIARG_BUFFER_PLACEMENT dst,
+                                 D3D12DDIARG_BUFFER_PLACEMENT src, UINT64 bytes) {
+    CommandListRecord* l = list_of(hlist, "CopyBufferRegion");
+    if (!l) return;
+    ID3D12Resource* d = engine_resource(l, dst.BaseAddress.UMD.hResource);
+    ID3D12Resource* s = engine_resource(l, src.BaseAddress.UMD.hResource);
+    if (!d || !s) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    l->list()->CopyBufferRegion(d, dst.BaseAddress.UMD.Offset, s, src.BaseAddress.UMD.Offset, bytes);
+}
+
+UINT block_size(DXGI_FORMAT f) noexcept {
+    return ((f >= DXGI_FORMAT_BC1_TYPELESS && f <= DXGI_FORMAT_BC5_SNORM) ||
+            (f >= DXGI_FORMAT_BC6H_TYPELESS && f <= DXGI_FORMAT_BC7_UNORM_SRGB))
+               ? 4u
+               : 1u;
+}
+
+HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* p, const D3D12DDIARG_PLACED_RESOURCE& r,
+                      D3D12_TEXTURE_COPY_LOCATION& out) noexcept {
+    if (!p) return E_INVALIDARG;
+    out = D3D12_TEXTURE_COPY_LOCATION{};
+    out.pResource = engine_resource(l, p->BaseAddress.UMD.hResource);
+    if (!out.pResource) return E_INVALIDARG;
+    switch (r.Layout) {
+    case D3D12DDI_RL_SELECT_SUBRESOURCE:
+        if (p->BaseAddress.UMD.Offset > UINT32_MAX) return E_INVALIDARG;
+        out.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        out.SubresourceIndex = static_cast<UINT>(p->BaseAddress.UMD.Offset);
+        return S_OK;
+    case D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED: {
+        const auto* f = static_cast<const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
+        if (!f) return E_INVALIDARG;
+        if (static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
+            return E_NOTIMPL;                           // the API derives the slice pitch
+        const UINT bs = block_size(f->Format);
+        out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
+        out.PlacedFootprint.Footprint = {f->Format, f->PhysicalWidth * bs, f->PhysicalHeight * bs, f->PhysicalDepth,
+                                         f->Pitch};
+        return S_OK;
+    }
+    case D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED: {
+        const auto* f = static_cast<const D3D12DDIARG_VIRTUAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
+        if (!f) return E_INVALIDARG;
+        if (static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
+            return E_NOTIMPL;
+        out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
+        out.PlacedFootprint.Footprint = {f->Format, f->VirtualWidth, f->VirtualHeight, f->VirtualDepth, f->Pitch};
+        return S_OK;
+    }
+    default:
+        return E_INVALIDARG;
+    }
+}
+
+void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG_BUFFER_PLACEMENT* pdst,
+                                  D3D12DDIARG_PLACED_RESOURCE dst, UINT x, UINT y, UINT z,
+                                  const D3D12DDIARG_BUFFER_PLACEMENT* psrc, D3D12DDIARG_PLACED_RESOURCE src,
+                                  const D3D12DDI_BOX* box) {
+    CommandListRecord* l = list_of(hlist, "CopyTextureRegion");
+    if (!l) return;
+    D3D12_TEXTURE_COPY_LOCATION d, s;
+    HRESULT hr = copy_location(l, pdst, dst, d);
+    if (SUCCEEDED(hr)) hr = copy_location(l, psrc, src, s);
+    if (SUCCEEDED(hr) && box && (box->Left < 0 || box->Top < 0 || box->Front < 0 || box->Right < box->Left ||
+                                 box->Bottom < box->Top || box->Back < box->Front))
+        hr = E_INVALIDARG;
+    if (FAILED(hr)) {
+        l->h.device->report_list(l->rt, hr);
+        return;
+    }
+    D3D12_BOX b{};
+    if (box)
+        b = {static_cast<UINT>(box->Left), static_cast<UINT>(box->Top), static_cast<UINT>(box->Front),
+             static_cast<UINT>(box->Right), static_cast<UINT>(box->Bottom), static_cast<UINT>(box->Back)};
+    l->list()->CopyTextureRegion(&d, x, y, z, &s, box ? &b : nullptr);
+}
+
+void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDIARG_RESOURCE_BARRIER_0022* in) {
+    CommandListRecord* l = list_of(hlist, "ResourceBarrier");
+    if (!l) return;
+    if (count && !in) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    std::vector<D3D12_RESOURCE_BARRIER> out;
+    try {
+        out.reserve(count);
+    } catch (...) {
+        l->h.device->report_list(l->rt, E_OUTOFMEMORY);
+        return;
+    }
+    for (UINT i = 0; i < count; ++i) {
+        const D3D12DDIARG_RESOURCE_BARRIER_0022& b = in[i];
+        D3D12_RESOURCE_BARRIER a{};
+        a.Flags = static_cast<D3D12_RESOURCE_BARRIER_FLAGS>(
+            b.Flags & (D3D12DDI_RESOURCE_BARRIER_FLAG_BEGIN_ONLY | D3D12DDI_RESOURCE_BARRIER_FLAG_END_ONLY));
+        switch (b.Type) {
+        case D3D12DDI_RESOURCE_BARRIER_TYPE_TRANSITION:
+            a.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            a.Transition.pResource = engine_resource(l, b.Transition.hResource);
+            a.Transition.Subresource = b.Transition.Subresource;
+            a.Transition.StateBefore = static_cast<D3D12_RESOURCE_STATES>(b.Transition.StateBefore);
+            a.Transition.StateAfter = static_cast<D3D12_RESOURCE_STATES>(b.Transition.StateAfter);
+            if (!a.Transition.pResource) {
+                l->h.device->report_list(l->rt, E_INVALIDARG);
+                return;
+            }
+            break;
+        case D3D12DDI_RESOURCE_BARRIER_TYPE_UAV:
+            a.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            a.UAV.pResource = b.UAV.hResource.pDrvPrivate ? engine_resource(l, b.UAV.hResource) : nullptr;
+            if (b.UAV.hResource.pDrvPrivate && !a.UAV.pResource) {
+                l->h.device->report_list(l->rt, E_INVALIDARG);
+                return;
+            }
+            break;
+        case D3D12DDI_RESOURCE_BARRIER_TYPE_ALIASING:
+        case D3D12DDI_RESOURCE_BARRIER_TYPE_0022_RANGED: {
+            // RANGED with the aliasing flag, or the deprecated aliasing type: an aliasing barrier that activates
+            // the resource. RANGED alone: a UAV-style barrier on the whole resource (INFERENCE on its runtime use).
+            ID3D12Resource* r = b.Ranged.hResource.pDrvPrivate ? engine_resource(l, b.Ranged.hResource) : nullptr;
+            if (b.Ranged.hResource.pDrvPrivate && !r) {
+                l->h.device->report_list(l->rt, E_INVALIDARG);
+                return;
+            }
+            if (b.Type == D3D12DDI_RESOURCE_BARRIER_TYPE_ALIASING || (b.Flags & D3D12DDI_RESOURCE_BARRIER_FLAG_0022_ALIASING)) {
+                a.Type = D3D12_RESOURCE_BARRIER_TYPE_ALIASING;
+                a.Aliasing.pResourceBefore = nullptr;
+                a.Aliasing.pResourceAfter = r;
+            } else {
+                a.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                a.UAV.pResource = r;
+            }
+            break;
+        }
+        default:
+            l->h.device->report_list(l->rt, E_INVALIDARG);
+            return;
+        }
+        out.push_back(a);
+    }
+    if (!out.empty()) l->list()->ResourceBarrier(static_cast<UINT>(out.size()), out.data());
+}
+} // namespace
+
+// ---- Backing lifetime -------------------------------------------------------------------------------------------
+void backing_acquire(Backing* b) noexcept { b->refs.fetch_add(1); }
+
+void backing_release(Backing* b) noexcept {
+    if (b->refs.fetch_sub(1) != 1) return;
+    DeviceContext* c = b->device;
+    if (b->map_count && b->map_buffer) b->map_buffer->Unmap(0, nullptr);
+    PendingRelease* node = b->release_node;
+    node->payload = ReleasePayload{{b->map_buffer, b->heap}, b->imported, b->memory, b->id};
+    delete b;
+    c->release(node);
+}
+
+// ---- RuntimeBacked import (engine-ddi.h: memory request and validation) -----------------------------------------
+HRESULT validate_import(const MemoryRequest& request, const ImportedMemory& m) noexcept {
+    if (m.size != sizeof(ImportedMemory) || m.reserved || m.memory == VK_NULL_HANDLE || !m.allocation) return E_INVALIDARG;
+    if (m.byte_size < request.byte_size) return E_INVALIDARG;
+    // memory_type_bits is 0 until engine ABI 1.2 supplies the engine's accepted types; the check applies then.
+    if (request.memory_type_bits && (m.memory_type_index >= 32 || !(request.memory_type_bits & (1u << m.memory_type_index))))
+        return E_INVALIDARG;
+    if (!m.gpu_va) return E_INVALIDARG;                 // no completed mapping
+    if (request.alignment && m.gpu_va % request.alignment) return E_INVALIDARG;
+    return S_OK;
+}
+
+HRESULT import_memory(DeviceContext* c, const MemoryRequest& request, ImportedMemory* out) noexcept {
+    *out = ImportedMemory{};
+    ImportedMemory m{};
+    HRESULT hr = c->hooks.allocate_memory(c->hooks.shell, &request, &m);
+    if (FAILED(hr)) return hr;                          // on failure engine-ddi owns nothing
+    hr = validate_import(request, m);
+    if (FAILED(hr)) {
+        ReleasePayload payload{{nullptr, nullptr}, true, m, 0};
+        run_release(c->hooks, payload);                 // exactly once; a failure is reported there
+        return hr;
+    }
+    *out = m;
+    return S_OK;
+}
+
+HRESULT resource_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HANDLE* allocation,
+                            uint64_t* offset) noexcept {
+    if (!c || !allocation || !offset) return E_INVALIDARG;
+    *allocation = 0;
+    *offset = 0;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r || c->mode != MemoryMode::RuntimeBacked || r->kind != ResourceKind::Committed || !r->backing ||
+        !r->backing->imported)
+        return E_INVALIDARG;
+    *allocation = r->backing->memory.allocation;
+    return S_OK;
+}
+
+void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
+    t->pfnCheckFormatSupport = check_format_support;
+    t->pfnCalcPrivateHeapAndResourceSizes = calc_heap_and_resource;
+    t->pfnCreateHeapAndResource = create_heap_and_resource_slot;
+    t->pfnDestroyHeapAndResource = destroy_heap_and_resource;
+    t->pfnMapHeap = map_heap;
+    t->pfnUnmapHeap = unmap_heap;
+    t->pfnCheckResourceVirtualAddress = check_resource_virtual_address;
+    t->pfnCheckResourceAllocationInfo = check_resource_allocation_info;
+    t->pfnCheckResourceAllocationHandle = check_resource_allocation_handle;
+}
+
+void fill_list_resources(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexcept {
+    t->pfnCopyBufferRegion = copy_buffer_region;
+    t->pfnCopyTextureRegion = copy_texture_region;
+    t->pfnResourceBarrier = resource_barrier;
+}
+
+} // namespace engine_ddi

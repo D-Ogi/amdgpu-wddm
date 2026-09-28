@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: D3D12 DDI 0092 slots translated onto the vkd3d-proton engine (amdgpu_wddm_vkd3d.dll).
 //
-// Boundary r2 (2026-09-28): r1 revised after review. The engine side owns this directory.
+// Boundary r3 (2026-09-28): r2 plus the adapter caps path (query_adapter_caps, build_caps answering GetCaps) on
+// engine ABI 1.2 QueryAdapterCaps, after the lab run M768 showed the runtime's first two GetCaps calls. The engine
+// side owns this directory; INTEGRATION.md lists what the shell calls and when.
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -9,13 +11,13 @@
 // engine-ddi never reads native12::Device. The shell hands over what it needs through ShellHooks and finds the
 // DeviceContext of a D3D12DDI_HDEVICE through the ResolveDevice hook.
 //
-// Declared dependencies (not in engine ABI 1.1; this revision states what it needs from them):
-//   - Engine ABI 1.2 CreateHeapFromMemory: an ID3D12Heap over a VkDeviceMemory the engine does not own. The
-//     engine never frees borrowed memory, and its final Release of such a heap returns only after the engine's
-//     own internal work on that memory (clears, uploads, sparse initialisation) has retired.
-//   - Engine ABI 1.2 QueryAdapterCaps: an adapter-level caps query (see EngineCaps).
-//   Until they exist, RuntimeBacked heap creation stops after the shell's allocation has been validated and
-//   handed back (E_NOTIMPL), and nothing in the native build fills EngineCaps.
+// Engine ABI: bc250_vkd3d_engine.h r3-draft (ABI 1.2), included by path from the vkd3d-proton fork checkout
+// pinned in engine-abi.json. engine-ddi uses:
+//   - 1.1: CreateDevice in the INLINE queue mode and CreateCommandQueue (queue.cpp);
+//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp), so the engine must be asked for 1.2.
+// Not wired yet: 1.2 V10 CreateHeapFromMemory. RuntimeBacked heap creation still stops after the shell's
+// allocation has been validated and handed back (E_NOTIMPL); V10 takes a VkDeviceMemory the shell allocates on
+// the engine's VkDevice (GetVulkanHandles), and ImportedMemory below has to follow it.
 #pragma once
 #include <windows.h>
 #include <d3d12.h>
@@ -26,7 +28,7 @@
 
 namespace engine_ddi {
 
-inline constexpr uint32_t kBoundaryRevision = 2;
+inline constexpr uint32_t kBoundaryRevision = 3;
 
 // ---- Memory policy -----------------------------------------------------------------------------------------
 // RuntimeBacked is the only mode of the native driver. The memory of every heap, and of every committed
@@ -198,12 +200,15 @@ HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T tab
                           const FillInfo* info) noexcept;
 
 // ---- Shaders ---------------------------------------------------------------------------------------------------
-// Native intake (every create-shader slot): the payload is the bare program the DDI declares,
-// _In_reads_(pShaderCode[1]) with the length in DWORD 1, and register-only signature entries. engine-ddi builds
-// no container from it. It copies the payload into the shader's private storage (CalcPrivateShaderSize sizes it
-// from pShaderCode[1]), records and logs pShaderCode[0..3], the length and the signature entry counts, and
-// reports E_NOTIMPL through report_device_error. The record holds no engine object. Native pipelines that name
-// such a shader fail with E_NOTIMPL.
+// Native intake (every create-shader slot): the payload is the bare program with its length in DWORD 1, and
+// register-only signature entries. That the buffer holds exactly pShaderCode[1] DWORDs is an INFERENCE from the
+// SAL annotation _In_reads_(pShaderCode[1]) on D3D12DDIARG_CREATE_SHADER_0026; no runtime payload has been
+// measured. Reads are bounded by it: pShaderCode is checked for null before DWORD 1 is read, a length below 2 is
+// refused, and nothing past the declared length is read. engine-ddi builds no container. It copies the declared
+// length into the shader's private storage (CalcPrivateShaderSize sizes it from the same DWORD 1), logs at most
+// the first four DWORDs that lie within that length, the length and the signature entry counts, and reports
+// E_NOTIMPL through report_device_error. The record holds no engine object. Native pipelines that name such a
+// shader fail with E_NOTIMPL.
 // Harness path, compiled only with AMDGPU_WDDM_ENGINE_DDI_HARNESS: a payload that starts with the "DXBC" magic
 // is taken as a complete DXBC or DXIL container (total size in DWORD 6) and handed to the engine unchanged when
 // a pipeline uses it. That path exists so that pipelines and dispatches can be tested offline; it proves nothing
@@ -230,40 +235,25 @@ HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
                             uint64_t* offset) noexcept;
 
 // ---- Capabilities --------------------------------------------------------------------------------------------------
-// Adapter-level answers of the engine's policy, the same policy its CreateDevice applies, never raw Vulkan
-// features alone. GetCaps arrives before CreateDevice, so they come from the planned engine ABI 1.2
-// QueryAdapterCaps: a physical-device query with no VkDevice, no queues and no GPU storage. There is no
-// temporary engine device in the native driver. The offline harness may fill EngineCaps from CheckFeatureSupport
-// of a real engine device, and only under AMDGPU_WDDM_ENGINE_DDI_HARNESS (source HarnessEngineDevice).
-enum class CapsSource : uint32_t { AdapterQuery = 1, HarnessEngineDevice = 2 };
-
-struct EngineCaps {
-    uint32_t size;                              // sizeof(EngineCaps)
-    CapsSource source;
-    LUID adapter_luid;
-    D3D_FEATURE_LEVEL max_feature_level;
-    D3D_SHADER_MODEL highest_shader_model;
-    D3D_ROOT_SIGNATURE_VERSION highest_root_signature_version;
-    uint32_t reserved;                          // 0
-    D3D12_FEATURE_DATA_ARCHITECTURE1 architecture;
-    D3D12_FEATURE_DATA_GPU_VIRTUAL_ADDRESS_SUPPORT gpu_va;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS options;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS3 options3;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
-};
-
-struct CapsSnapshot;
-// Copies and validates one EngineCaps result. HarnessEngineDevice is refused unless the implementation is built
-// with AMDGPU_WDDM_ENGINE_DDI_HARNESS.
-HRESULT collect_caps(const EngineCaps* caps, CapsSnapshot** out) noexcept;
-void free_caps(CapsSnapshot* caps) noexcept;
-// Answers one GetCaps call. It writes only when DataSize equals the exact size of a validated layout for that
-// type at or below the negotiated version, and never copies a prefix. It returns E_NOTIMPL for types this
-// revision does not answer, and E_INVALIDARG for a size it does not know.
-HRESULT build_caps(const CapsSnapshot* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
+// GetCaps arrives before any device (M768: OpenAdapter12, GetCaps 1074, GetCaps 1007, GetSupportedVersions), so
+// its answers come from engine ABI 1.2 QueryAdapterCaps (V11): the engine's CheckFeatureSupport answers for the
+// device CreateDevice(info) would make, under the same policy, with no VkDevice. There is no temporary engine
+// device and no caps structure of engine-ddi's own: AdapterCaps holds the engine's answers of one batch.
+class AdapterCaps;
+// Asks the engine once, one QueryAdapterCaps batch (one VkInstance), for the D3D12_FEATURE_* answers build_caps
+// maps. info must be the create info the shell will pass to CreateDevice (INLINE queue mode, its Services and
+// MinimumFeatureLevel), because admission and policy depend on it. Needs funcs from GetFuncs(1.2) with
+// QueryAdapterCaps set, otherwise E_INVALIDARG. Returns the engine's failure when the engine refuses info or a
+// required feature is unanswered (INTEGRATION.md lists which); *out is null then.
+HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VKD3D_DEVICE_CREATE_INFO* info,
+                           AdapterCaps** out) noexcept;
+void free_adapter_caps(AdapterCaps* caps) noexcept;
+// Answers one GetCaps call from the engine's answers or a documented constant (INTEGRATION.md, "GetCaps").
+// ddi_version is the build version whose payload layouts the caller expects; this revision knows 92
+// (D3D12DDI_BUILD_VERSION_0092) only. It writes only when DataSize is the exact payload size of the type,
+// never a prefix; a wrong size or a bad pInfo is E_INVALIDARG with nothing written, and a type it does not
+// answer is E_NOTIMPL. Both are logged with the type and the size. Thread-safe: it only reads caps.
+HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases
