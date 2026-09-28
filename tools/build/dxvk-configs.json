@@ -16,7 +16,7 @@
       ]
     },
     "ddi-engine": {
-      "description": "bc250dxvk.dll, DXVK's D3D10/11 implementation as the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4); needs the amdgpu-wddm/ddi-engine DXVK branch",
+      "description": "amdgpu_wddm_dxvk.dll, DXVK's D3D10/11 implementation as the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4); needs the amdgpu-wddm/ddi-engine DXVK branch",
       "options": [
         "-Dbuildtype=release",
         "-Denable_d3d8=false",
@@ -25,8 +25,8 @@
         "-Denable_ddi_engine=true"
       ],
       "targets": [
-        "src/ddi/bc250dxvk.dll",
-        "src/ddi/bc250dxvk_engine_test.exe"
+        "src/ddi/amdgpu_wddm_dxvk.dll",
+        "src/ddi/amdgpu_wddm_dxvk_engine_test.exe"
       ]
     }
   }

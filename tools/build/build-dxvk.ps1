@@ -8,8 +8,8 @@ Configures and builds DXVK with a recorded meson option set (dxvk-configs.json).
 
   per-app     upstream DXVK as application-local DLLs, the comparison path for the proposed M14 system D3D11
               driver (ADR 0017, D004 5 % bound)
-  ddi-engine  bc250dxvk.dll, the engine behind the M14 system D3D10/11 DDI UMD; needs a checkout of the
-              amdgpu-wddm/ddi-engine DXVK branch (enable_ddi_engine does not exist upstream)
+  ddi-engine  amdgpu_wddm_dxvk.dll, the engine behind the M14 system D3D10/11 DDI UMD; needs a checkout of
+              the amdgpu-wddm/ddi-engine DXVK branch (enable_ddi_engine does not exist upstream)
 
 The build is a native MSVC build, as the M12 E33 per-application packages were: vcvars64.bat, meson from
 PYTHONPATH, ninja and glslangValidator on PATH. DXVK needs no WDK headers. After configure the script compares

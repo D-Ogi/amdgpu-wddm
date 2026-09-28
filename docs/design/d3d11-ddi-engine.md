@@ -2,7 +2,7 @@
 
 Date: 2026-09-28. Status: engine implemented and tested offline; standalone control M725 and native Microsoft
 runtime offscreen/window controls M736-M747 measured on unit A. M747 passes window Present and exact image
-comparison; broad compatibility, composition transport and the performance bound remain open. Scope: the engine `bc250dxvk.dll`, its ABI and its
+comparison; broad compatibility, composition transport and the performance bound remain open. Scope: the engine `amdgpu_wddm_dxvk.dll`, its ABI and its
 known gaps. The shell (the DDI UMD in `driver/umd/dxvk/`) is described in that directory's README. Build recipe:
 [build.md](../build.md#dxvk). Direction: ADR 0017 item 4 (DXVK is the engine), item 7 (5 % bound), item 8
 (threading is a measurement).
@@ -12,7 +12,7 @@ known gaps. The shell (the DDI UMD in `driver/umd/dxvk/`) is described in that d
 ```
 application -> d3d11.dll / dxgi.dll (Microsoft runtime)
             -> shell: DDI tables, handles, runtime callbacks, hosted RADV bootstrap, VkInstance/VkDevice
-            -> engine bc250dxvk.dll: DXVK's D3D11 device and immediate context on the imported VkDevice
+            -> engine amdgpu_wddm_dxvk.dll: DXVK's D3D11 device and immediate context on the imported VkDevice
             -> hosted RADV (the hosted ICD) -> runtime callbacks -> dxgkrnl -> KMD
 ```
 
@@ -50,7 +50,7 @@ The single copy of the contract is `src/ddi/bc250_dxvk_engine.h` in the DXVK bra
 the DXVK checkout it builds against. It is WDK-free: DXVK's `util_gdi.h` declares extern-C D3DKMT prototypes
 that collide with the WDK's in one translation unit, so the header uses only `windows.h`, `d3d11_4.h` and
 `vulkan_core.h`. Structures that mirror WDK structures keep their layout, and the shell checks that with
-`static_assert`.
+`static_assert`. The header is at revision r7; before r7 the engine DLL was `bc250dxvk.dll`.
 
 The DLL exports one function, `Bc250DxvkEngineGetFuncs(abiVersion, funcs)`. A major mismatch returns
 `E_NOINTERFACE`. Minor versions only add, and what they add sits behind a new interface or function, so an older
@@ -198,7 +198,10 @@ it. A system driver cannot end the application's process for that, least of all 
 - **Returned errors.** Plain allocations throw `DxvkOutOfMemoryError`, and so does a Vulkan call that fails with
   an out-of-memory result. The D3D11 entry points that catch `DxvkError` return `E_OUTOFMEMORY` for it. `Map`
   catches it too. The new storage is allocated before any state changes, so a failed `Map` leaves nothing
-  mapped.
+  mapped. The code the shell reports still depends on the DDI entry. Creation entries are AllowOutOfMemory and
+  pass `E_OUTOFMEMORY` through. `Map` is an AllowMapErrors entry (only `DXGI_DDI_ERR_WASSTILLDRAWING` with
+  DONOTWAIT, and `D3DDDIERR_DEVICEREMOVED`) and has no code for `E_OUTOFMEMORY`, so the shell reports an
+  `E_OUTOFMEMORY` from `Map` as `D3DDDIERR_DEVICEREMOVED` and answers as a removed device from then on.
 - **Deferred errors.** Work that cannot return an error records it on the device.
   - An `UpdateSubresource` whose staging allocation failed is dropped whole: `TakeDeferredError` returns
     `E_OUTOFMEMORY`.
@@ -266,18 +269,18 @@ import when a destroyed handle's value comes back (ABA).
 | Predication on the GPU | Predicates are honoured by waiting on the CPU when a result is not yet available (see Predication). | Measure the wait on unit A with a title that predicates; move to `VK_EXT_conditional_rendering` only if it matters. |
 | ClearView on buffer render target views | Closed in engine commit dd35ce7c. Upstream DXVK logged an error and cleared nothing. A typed buffer view is cleared in the buffer; otherwise the 1D proxy image is refreshed from the buffer, cleared and copied back. The engine test covers both paths. | None. |
 | Optimized pipelines in inline mode | Closed offline in engine commit 4c5fd822. With graphics pipeline libraries, DXVK draws with a fast-linked pipeline and compiles the optimized variant on a pipeline worker. Inline mode used to run that compile on the drawing thread, which then paid for both. The compile is now queued, and `SubmitForPresent` runs the queue after the frame's submission. It starts compiles for up to `dxvk.inlinePipelineBudget` microseconds (default 2000), so one long compile can exceed the budget. A budget of 0 keeps the fast-linked pipelines. The engine test classifies every graphics pipeline the engine creates. The previous engine fails its check, because its draw compiled the optimized pipeline itself. | Measure on unit A with a real title: warm-up frame times, and how long the queue takes to drain at the default budget. A client that never presents keeps fast-linked pipelines. |
-| Inline execution on CPU-bound work | Measured offline (engine commit ea512f65, development PC, three runs each): `bc250dxvk_engine_test --bench` issues 1000 draws per frame, each with a constant buffer DISCARD and a texture switch, at a frame latency of 3. Inline mode took 346-357 us wall per frame. With DXVK's worker threads it took 184-233 us (switch `BC250DXVK_MEASURE_WORKER_THREADS=1`, which breaks E2 and exists only for this comparison). So the application thread pays roughly 1.5-1.9 times as much per draw inline. A GPU-bound title does not notice; a CPU-bound one can miss the 5 % bound by far. | Two steps. First, the ADR 0017 item 8 measurement on unit A: do the runtime callbacks that hosted RADV uses (allocation, residency, submission) work from a thread that is not inside a DDI entry? If they do, serialize them per device and allow DXVK's workers. If they do not, add a broker mode (a later ABI minor): workers queue the runtime-reaching work, and DDI entries and engine waits service the queue. |
+| Inline execution on CPU-bound work | Measured offline (engine commit ea512f65, development PC, three runs each): `amdgpu_wddm_dxvk_engine_test --bench` issues 1000 draws per frame, each with a constant buffer DISCARD and a texture switch, at a frame latency of 3. Inline mode took 346-357 us wall per frame. With DXVK's worker threads it took 184-233 us (switch `BC250DXVK_MEASURE_WORKER_THREADS=1`, which breaks E2 and exists only for this comparison). So the application thread pays roughly 1.5-1.9 times as much per draw inline. A GPU-bound title does not notice; a CPU-bound one can miss the 5 % bound by far. | Two steps. First, the ADR 0017 item 8 measurement on unit A: do the runtime callbacks that hosted RADV uses (allocation, residency, submission) work from a thread that is not inside a DDI entry? If they do, serialize them per device and allow DXVK's workers. If they do not, add a broker mode (a later ABI minor): workers queue the runtime-reaching work, and DDI entries and engine waits service the queue. |
 | On-disk shader cache | Per-application DXVK keeps the dxbc-spirv results of each executable in `%LOCALAPPDATA%\dxvk` (or `DXVK_SHADER_CACHE_PATH`); its writer thread does file I/O only. The engine turns the cache off, to keep a writer thread and cache files out of every process that loads the system driver, DWM included. Every process start therefore translates its shaders again. | Decide with the load-time part of the 5 % comparison; the cache needs no Vulkan call, so E2 does not forbid it. The d3d11bench protocol turns the cache off on both paths for the bound. Its shaders scene is too small to price the cache (its README has the development PC numbers); that needs a title with many large shaders. |
 | `Blt` and `Blt1` with ROTATE90/270 | `E_NOTIMPL`. Not reachable: the runtime asks for a rotation only from a driver that can return `DXGI_DDI_ERR_UNSUPPORTED` when it creates a primary, and the shell never does (dxgiddi `BltDXGI` and `Blt1DXGI` remarks). ROTATE180 is implemented anyway. | Implement if the shell ever refuses a primary. The docs define `Rotate` as a counter-clockwise turn of the source. |
 | `Blt` and `Blt1` into a multisampled destination | `E_NOTIMPL` | Implement when a runtime path needs it. |
-| Rendering into LINEAR runtime surfaces | The shell allocates back buffers and other runtime surfaces LINEAR, so a title draws straight into LINEAR images. Per-application DXVK draws into its own OPTIMAL back buffer and copies it once per frame to the presentable image. `bc250dxvk_engine_test --bench-tiling` times both on 1920x1080 RGBA8. On the development PC (RTX 4090, not unit A), clearing and 8 blended full-screen draws took 0.044 ms per frame into OPTIMAL and 0.119-0.133 ms into LINEAR (two runs). The OPTIMAL to LINEAR copy took 0.007 ms, and a 1:1 read took the same time from either tiling. | Run `--bench-tiling` on unit A. If drawing into LINEAR costs more than the copy there, the engine draws back buffers into an OPTIMAL image and copies it into the runtime surface at present, as per-application DXVK does. |
+| Rendering into LINEAR runtime surfaces | The shell allocates back buffers and other runtime surfaces LINEAR, so a title draws straight into LINEAR images. Per-application DXVK draws into its own OPTIMAL back buffer and copies it once per frame to the presentable image. `amdgpu_wddm_dxvk_engine_test --bench-tiling` times both on 1920x1080 RGBA8. On the development PC (RTX 4090, not unit A), clearing and 8 blended full-screen draws took 0.044 ms per frame into OPTIMAL and 0.119-0.133 ms into LINEAR (two runs). The OPTIMAL to LINEAR copy took 0.007 ms, and a 1:1 read took the same time from either tiling. | Run `--bench-tiling` on unit A. If drawing into LINEAR costs more than the copy there, the engine draws back buffers into an OPTIMAL image and copies it into the runtime surface at present, as per-application DXVK does. |
 | Offer, reclaim and residency priority | Not implemented. The runtime offers and reclaims whole resources and expects the UMD to pass the request on to the kernel; DXVK suballocates most resources from shared memory blocks, and hosted RADV has no query from a `VkDeviceMemory` to its kernel allocation. `TrimMemory` covers memory that is already free. | A later ABI minor: a discarded-content placeholder storage for an offered resource, re-created on reclaim, and a hosted query for the allocations behind a resource. Both need an agreed contract with the shell first. |
 | 5 % bound against per-application DXVK | Not measured. The workload and the comparison exist: `tools/win/d3d11bench` (draws, fill and shader-creation scenes; `compare.py` gates each scene on the bound plus the run-to-run spread and on equal output checksums). Its README has the protocol. | Needs the shell's positive run through the system runtime. The per-application side is the `per-app` recipe in build.md, built from the same DXVK revision as the engine. |
 
 ## Validation
 
-`bc250dxvk_engine_test.exe` is the offline positive control ([build.md](../build.md#dxvk)). It plays the shell:
-it owns instance and device, feeds DDI-form shaders and runtime-style images, and checks the following:
+`amdgpu_wddm_dxvk_engine_test.exe` is the offline positive control ([build.md](../build.md#dxvk)). It plays the
+shell: it owns instance and device, feeds DDI-form shaders and runtime-style images, and checks the following:
 - pixels;
 - 500 sustained frames under a memory bound;
 - storage rotation, Blt and Blt1 source rectangles;

@@ -199,17 +199,19 @@ only `vcvars64.bat`, meson, ninja and glslangValidator. The tree must have its s
 | Config | Source | Targets |
 |---|---|---|
 | `per-app` | upstream DXVK | `d3d11.dll`, `dxgi.dll`, `d3d10core.dll`, `d3d9.dll`: application-local DLLs, the comparison path of the M14 5 % bound (D004) |
-| `ddi-engine` | DXVK branch `amdgpu-wddm/ddi-engine` | `bc250dxvk.dll`, the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4), and `bc250dxvk_engine_test.exe` |
+| `ddi-engine` | DXVK branch `amdgpu-wddm/ddi-engine` | `amdgpu_wddm_dxvk.dll`, the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4), and `amdgpu_wddm_dxvk_engine_test.exe` |
 
 Both are `-Dbuildtype=release` without D3D8. `ddi-engine` also drops D3D9 and D3D10 and sets
 `-Denable_ddi_engine=true`, an option that exists only on that branch. The branch is upstream DXVK plus
 this project's commits under `src/ddi/` and small host-mode hooks in `src/dxvk/` and `src/d3d11/`. It is not
-published yet; each `recipe.json` names its commit.
+published yet; each `recipe.json` names its commit. Branch commits before engine header r7 name the DLL
+`bc250dxvk.dll` and the test `bc250dxvk_engine_test.exe`.
 
-`bc250dxvk_engine_test.exe <bc250dxvk.dll> [adapter substring]` is the engine's offline positive control. It
-runs on any Vulkan 1.3 GPU, opens no window and exits by itself; exit code 0 means every check passed. The
-test plays the UMD shell: it owns the Vulkan instance and device, allocates the images and feeds shaders in DDI
-form. The checks are listed under Validation in [the engine design note](design/d3d11-ddi-engine.md#validation).
+`amdgpu_wddm_dxvk_engine_test.exe <amdgpu_wddm_dxvk.dll> [adapter substring]` is the engine's offline positive
+control. It runs on any Vulkan 1.3 GPU, opens no window and exits by itself; exit code 0 means every check
+passed. The test plays the UMD shell: it owns the Vulkan instance and device, allocates the images and feeds
+shaders in DDI form. The checks are listed under Validation in
+[the engine design note](design/d3d11-ddi-engine.md#validation).
 
 ## vkd3d-proton
 
