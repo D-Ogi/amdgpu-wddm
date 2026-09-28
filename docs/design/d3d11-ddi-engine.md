@@ -104,6 +104,14 @@ so every shader key carried the same constant there. Shaders with equal bytecode
 their declaration, strides or rasterized stream. For the DDI this is the common case, because every stream-output
 shader of one signature arrives as the same container. The branch fixes it.
 
+The runtime's `D3D11_1DDIARG_SIGNATURE_ENTRY` carries no stream, so the shell passes Stream 0 for every entry.
+When all entries of a gs_5_0 output signature say 0, the engine reads the streams from the program itself: each
+entry takes the first `dcl_stream` block whose output declaration covers its register and components and has not
+claimed them yet. fxc reuses registers across streams, so the register alone is not enough. A nonzero Stream is
+kept. On the way, dxbc-spirv turned out to emit no `Stream` decoration for outputs of streams 1-3, stream output
+included, because the geometry stream mask was set only after the output declarations; streams 1-3 then captured
+stream 0's values. Per-application DXVK has the same bug; the submodule branch fixes it (commit 253c08c).
+
 ### Predication
 
 Upstream DXVK's `SetPredication` records the predicate and ignores it. The branch honours it on the immediate
@@ -187,11 +195,11 @@ import when a destroyed handle's value comes back (ABA).
 | ClearView on buffer render target views | Closed in engine commit dd35ce7c. Upstream DXVK logged an error and cleared nothing. A typed buffer view is cleared in the buffer; otherwise the 1D proxy image is refreshed from the buffer, cleared and copied back. The engine test covers both paths. | None. |
 | Optimized pipelines in inline mode | Closed offline in engine commit 4c5fd822. With graphics pipeline libraries, DXVK draws with a fast-linked pipeline and compiles the optimized variant on a pipeline worker. Inline mode used to run that compile on the drawing thread, which then paid for both. The compile is now queued, and `SubmitForPresent` runs the queue after the frame's submission. It starts compiles for up to `dxvk.inlinePipelineBudget` microseconds (default 2000), so one long compile can exceed the budget. A budget of 0 keeps the fast-linked pipelines. The engine test classifies every graphics pipeline the engine creates. The previous engine fails its check, because its draw compiled the optimized pipeline itself. | Measure on unit A with a real title: warm-up frame times, and how long the queue takes to drain at the default budget. A client that never presents keeps fast-linked pipelines. |
 | Inline execution on CPU-bound work | Measured offline (engine commit ea512f65, development PC, three runs each): `bc250dxvk_engine_test --bench` issues 1000 draws per frame, each with a constant buffer DISCARD and a texture switch, at a frame latency of 3. Inline mode took 346-357 us wall per frame. With DXVK's worker threads it took 184-233 us (switch `BC250DXVK_MEASURE_WORKER_THREADS=1`, which breaks E2 and exists only for this comparison). So the application thread pays roughly 1.5-1.9 times as much per draw inline. A GPU-bound title does not notice; a CPU-bound one can miss the 5 % bound by far. | Two steps. First, the ADR 0017 item 8 measurement on unit A: do the runtime callbacks that hosted RADV uses (allocation, residency, submission) work from a thread that is not inside a DDI entry? If they do, serialize them per device and allow DXVK's workers. If they do not, add a broker mode (a later ABI minor): workers queue the runtime-reaching work, and DDI entries and engine waits service the queue. |
-| On-disk shader cache | Per-application DXVK keeps the dxbc-spirv results of each executable in `%LOCALAPPDATA%\dxvk` (or `DXVK_SHADER_CACHE_PATH`); its writer thread does file I/O only. The engine turns the cache off, to keep a writer thread and cache files out of every process that loads the system driver, DWM included. Every process start therefore translates its shaders again. | Decide with the load-time part of the 5 % comparison; the cache needs no Vulkan call, so E2 does not forbid it. |
+| On-disk shader cache | Per-application DXVK keeps the dxbc-spirv results of each executable in `%LOCALAPPDATA%\dxvk` (or `DXVK_SHADER_CACHE_PATH`); its writer thread does file I/O only. The engine turns the cache off, to keep a writer thread and cache files out of every process that loads the system driver, DWM included. Every process start therefore translates its shaders again. | Decide with the load-time part of the 5 % comparison; the cache needs no Vulkan call, so E2 does not forbid it. The d3d11bench protocol turns the cache off on both paths for the bound, and prices the decision with a separate per-application series that keeps it. |
 | `Blt` and `Blt1` with ROTATE90/270 | `E_NOTIMPL`. Not reachable: the runtime asks for a rotation only from a driver that can return `DXGI_DDI_ERR_UNSUPPORTED` when it creates a primary, and the shell never does (dxgiddi `BltDXGI` and `Blt1DXGI` remarks). ROTATE180 is implemented anyway. | Implement if the shell ever refuses a primary. The docs define `Rotate` as a counter-clockwise turn of the source. |
 | `Blt` and `Blt1` into a multisampled destination | `E_NOTIMPL` | Implement when a runtime path needs it. |
 | Rendering into LINEAR runtime surfaces | The shell allocates back buffers and other runtime surfaces LINEAR, so a title draws straight into LINEAR images. Per-application DXVK draws into its own OPTIMAL back buffer and copies it once per frame to the presentable image. `bc250dxvk_engine_test --bench-tiling` times both on 1920x1080 RGBA8. On the development PC (RTX 4090, not unit A), clearing and 8 blended full-screen draws took 0.044 ms per frame into OPTIMAL and 0.119-0.133 ms into LINEAR (two runs). The OPTIMAL to LINEAR copy took 0.007 ms, and a 1:1 read took the same time from either tiling. | Run `--bench-tiling` on unit A. If drawing into LINEAR costs more than the copy there, the engine draws back buffers into an OPTIMAL image and copies it into the runtime surface at present, as per-application DXVK does. |
-| 5 % bound against per-application DXVK | Not measured | Needs the shell's positive run through the system runtime. The per-application comparison build is the `per-app` recipe in build.md. |
+| 5 % bound against per-application DXVK | Not measured. The workload and the comparison exist: `tools/win/d3d11bench` (draws, fill and shader-creation scenes; `compare.py` gates each scene on the bound plus the run-to-run spread and on equal output checksums). Its README has the protocol. | Needs the shell's positive run through the system runtime. The per-application side is the `per-app` recipe in build.md, built from the same DXVK revision as the engine. |
 
 ## Validation
 
@@ -203,6 +211,9 @@ it owns instance and device, feeds DDI-form shaders and runtime-style images, an
 - a LINEAR shell image: `CreateTexture2DFromImage2` checks, the tiling the engine uses, drawing and Blt1;
 - ClearView on buffer render target views;
 - stream output of points, lines and triangles, and a rasterized stream;
+- stream output on a second stream of an fxc gs_5_0 program that reuses a stream 0 register, with the Stream 0
+  signatures the shell passes, against the same program created through the D3D11 API, the path that
+  per-application DXVK runs;
 - occlusion and stream-output overflow predication;
 - the thread of every Vulkan call (E2);
 - no optimized pipeline compiled by a draw, and the deferred ones compiled by `SubmitForPresent`;
