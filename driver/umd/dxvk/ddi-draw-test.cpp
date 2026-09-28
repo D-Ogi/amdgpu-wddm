@@ -9,6 +9,7 @@
 #include "ddi-resource.h"
 #include "ddi-buffer-binding.h"
 #include "ddi-transfer.h"
+#include "ddi-map.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -35,6 +36,7 @@ int main() {
     install_resource_ddi(table);
     install_buffer_binding_ddi(table);
     install_transfer_ddi(table);
+    install_map_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -244,5 +246,29 @@ int main() {
     table.pfnResourceUpdateSubresourceUP(h,rhandle,1,nullptr,&payload,4,4,0);
     table.pfnResourceResolveSubresource(h,rhandle,0,rhandle,1,DXGI_FORMAT_R8G8B8A8_UNORM);
     if (errors!=54 || owner.runtime().domain.entered()) std::abort();
+    D3D11_MAP mt=D3D11_MAP_READ; UINT mf=0;
+    const D3D10_DDI_MAP types[]={D3D10_DDI_MAP_READ,D3D10_DDI_MAP_WRITE,D3D10_DDI_MAP_READWRITE,
+        D3D10_DDI_MAP_WRITE_DISCARD,D3D10_DDI_MAP_WRITE_NOOVERWRITE};
+    const D3D11_MAP expectedTypes[]={D3D11_MAP_READ,D3D11_MAP_WRITE,D3D11_MAP_READ_WRITE,
+        D3D11_MAP_WRITE_DISCARD,D3D11_MAP_WRITE_NO_OVERWRITE};
+    for (unsigned i=0;i<5;++i) {
+        if (convert_map(types[i],0,mt,mf)!=S_OK || mt!=expectedTypes[i] || mf) std::abort();
+    }
+    if (convert_map(D3D10_DDI_MAP_READ,D3D10_DDI_MAP_FLAG_DONOTWAIT,mt,mf)!=S_OK || mf!=D3D11_MAP_FLAG_DO_NOT_WAIT) std::abort();
+    if (convert_map(static_cast<D3D10_DDI_MAP>(0),0,mt,mf)!=E_INVALIDARG || mt!=D3D11_MAP_READ || mf!=D3D11_MAP_FLAG_DO_NOT_WAIT) std::abort();
+    if (convert_map(D3D10_DDI_MAP_READ,0x80000000,mt,mf)!=E_INVALIDARG) std::abort();
+    const PFND3D10DDI_RESOURCEMAP mapEntries[]={table.pfnResourceMap,table.pfnStagingResourceMap,
+        table.pfnDynamicIABufferMapNoOverwrite,table.pfnDynamicIABufferMapDiscard,
+        table.pfnDynamicConstantBufferMapDiscard,table.pfnDynamicResourceMapDiscard};
+    for (auto call:mapEntries) {
+        D3D10DDI_MAPPED_SUBRESOURCE mapped{&payload,111,222};
+        call(h,rhandle,2,D3D10_DDI_MAP_READ,0,&mapped);
+        if (mapped.pData || mapped.RowPitch || mapped.DepthPitch) std::abort();
+    }
+    table.pfnResourceUnmap(h,rhandle,2); table.pfnStagingResourceUnmap(h,rhandle,2);
+    table.pfnDynamicIABufferUnmap(h,rhandle,0); table.pfnDynamicConstantBufferUnmap(h,rhandle,0);
+    table.pfnDynamicResourceUnmap(h,rhandle,0);
+    table.pfnDefaultConstantBufferUpdateSubresourceUP(h,rhandle,0,nullptr,&payload,4,4,0);
+    if (errors!=66 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

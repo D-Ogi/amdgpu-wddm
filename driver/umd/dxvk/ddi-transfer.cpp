@@ -67,6 +67,6 @@ void APIENTRY resolve(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT dstSub,
 }
 void install_transfer_ddi(D3D11_1DDI_DEVICEFUNCS &t) {
     t.pfnResourceCopy=copy; t.pfnResourceCopyRegion=region;
-    t.pfnResourceUpdateSubresourceUP=update; t.pfnResourceResolveSubresource=resolve;
+    t.pfnDefaultConstantBufferUpdateSubresourceUP=update; t.pfnResourceUpdateSubresourceUP=update; t.pfnResourceResolveSubresource=resolve;
 }
 }
