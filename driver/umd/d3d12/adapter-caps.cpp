@@ -52,7 +52,7 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     BC250_VKD3D_SHELL_SERVICES services{sizeof(services),&queue_calls,refuse_queue,no_queue};
     LUID luid{};std::memcpy(&luid,&adapter.contract.luid,sizeof(luid));
     BC250_VKD3D_DEVICE_CREATE_INFO info{sizeof(info),abi,scope.entry(),luid,D3D_FEATURE_LEVEL_11_0,
-        BC250_VKD3D_QUEUE_MODE_INLINE,&services};
+        BC250_VKD3D_QUEUE_MODE_INLINE,&services,BC250_VKD3D_INSTANCE_MODE_PRIVATE};
     hr=engine_ddi::query_adapter_caps(&funcs,&info,&owner.caps);
     if(SUCCEEDED(hr) && (!scope.completed() || queue_calls))return E_UNEXPECTED;
     if(SUCCEEDED(hr))owner.access={funcs,get};

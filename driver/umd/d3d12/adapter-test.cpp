@@ -5,8 +5,7 @@
 #include <cstring>
 #include <cstdio>
 #include <vector>
-#include "queue-ddi.h"
-#include "fence-ddi.h"
+#include "device-state.h"
 static unsigned queryMode;
 static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* request) {
     assert(adapter==reinterpret_cast<HANDLE>(UINT_PTR(0x1234)));
@@ -36,11 +35,7 @@ static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* re
 }
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
-static unsigned destroys;
-static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {++destroys;return E_FAIL;}
-static HRESULT APIENTRY kernel_free_probe(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS*) {
-    return E_NOTIMPL;
-}
+static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {return E_FAIL;}
 int main(int argc,char** argv) {
     if(argc!=2)return 2;
     HMODULE dll=LoadLibraryA(argv[1]);assert(dll);
@@ -75,32 +70,15 @@ int main(int argc,char** argv) {
     assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_INVALIDARG);
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 um{};D3DDDI_DEVICECALLBACKS km{};
     um.pfnSetErrorCb=error;um.pfnCreateContextVirtualCb=create_context;um.pfnDestroyContextCb=destroy_context;
-    km.pfnFreeGpuVirtualAddressCb=kernel_free_probe;
+    device.hRTDevice.handle=reinterpret_cast<HANDLE>(UINT_PTR(0x5678));
     device.p12UMCallbacks_0062=&um;device.pKTCallbacks=&km;
     device.Version=0;assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_NOINTERFACE);
-    device.Version=sizeArgs.Version;assert(funcs.pfnCreateDevice(a.hAdapter,&device)==S_OK);
-    km={};
-    assert(static_cast<native12::Device*>(storage)->kernel_callbacks.pfnFreeGpuVirtualAddressCb==kernel_free_probe);
-    assert(funcs.pfnCloseAdapter(a.hAdapter)==E_UNEXPECTED);
-    D3D12DDI_DEVICE_FUNCS_CORE_0088 core{};native12::install_queue_entries(core);
-    D3D12DDIARG_CREATECOMMANDQUEUE_0050 qargs{};qargs.QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;
-    SIZE_T qsize=core.pfnCalcPrivateCommandQueueSize(device.hDrvDevice,&qargs);assert(qsize);
-    D3D12DDI_HCOMMANDQUEUE queue{};queue.pDrvPrivate=::operator new(qsize);
-    assert(core.pfnCreateCommandQueue(device.hDrvDevice,&qargs,queue,{})==S_OK);
-    native12::install_fence_entries(core);
-    D3D12DDI_FENCE placement{};placement.FenceValue.BaseAddress=0x200030000ULL;
-    D3D12DDIARG_CREATE_FENCE fa{1,&placement};
-    auto fs=core.pfnCalcPrivateFenceSize(device.hDrvDevice,&fa);assert(fs);
-    D3D12DDI_HFENCE fence{::operator new(fs)};
-    assert(core.pfnCreateFence(device.hDrvDevice,fence,&fa)==S_OK);
-    placement={};
-    assert(static_cast<native12::FenceState*>(fence.pDrvPrivate)->placement.FenceValue.BaseAddress==0x200030000ULL);
-    core.pfnDestroyFence(device.hDrvDevice,fence);::operator delete(fence.pDrvPrivate);
-    core.pfnDestroyCommandQueue(device.hDrvDevice,queue);::operator delete(queue.pDrvPrivate);
-    assert(destroys==1);
-    assert(!static_cast<native12::Device*>(storage)->queues.empty());
-    funcs.pfnDestroyDevice(device.hDrvDevice);::operator delete(storage);
-    assert(destroys==1); // No retry with the expired runtime queue handle.
+    device.Version=sizeArgs.Version;
+    // A CPU-only shell is no longer a successful device. Missing allocation
+    // callbacks refuse before any engine DLL or GPU is touched on the host.
+    assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_INVALIDARG);
+    assert(static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate)->devices.load()==0);
+    ::operator delete(storage);
 
     assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,guard,sizeof(guard),0,{})==E_NOTIMPL);
     assert(guard[1]==0x123456);

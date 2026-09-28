@@ -6,10 +6,12 @@
 #include "adapter-contract.h"
 namespace native12 {
 struct AdapterCapsOwner;
+class DeviceEngine;
 struct Adapter {
     D3D12DDI_HRTADAPTER runtime;
     D3DDDI_ADAPTERCALLBACKS callbacks;
     std::atomic<unsigned> devices{0};
+    std::atomic<unsigned> retained_engines{0};
     AdapterContract contract{};
     SRWLOCK caps_lock=SRWLOCK_INIT;
     AdapterCapsOwner* engine_caps{};
@@ -23,6 +25,7 @@ struct Device {
     D3DDDI_DEVICECALLBACKS kernel_callbacks{};
     QueueRegistry queues;
     MemoryRegistry memory;
+    DeviceEngine* engine{};
     std::atomic<bool> lost{false};
     void remove() noexcept {
         lost.store(true);

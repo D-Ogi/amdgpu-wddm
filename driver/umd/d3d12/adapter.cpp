@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdint>
 #include "device-state.h"
+#include "device-engine.h"
 #include "adapter-caps.h"
 #include "ddi-0092-layout.h"
 namespace {
@@ -31,15 +32,18 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     if(!a->hDrvDevice.pDrvPrivate || reinterpret_cast<uintptr_t>(a->hDrvDevice.pDrvPrivate)%alignof(Device) ||
        !a->p12UMCallbacks_0062 || !a->pKTCallbacks) return E_INVALIDARG;
     const auto& cb=*a->p12UMCallbacks_0062;
-    if(!cb.pfnSetErrorCb || !cb.pfnCreateContextVirtualCb || !cb.pfnDestroyContextCb) return E_INVALIDARG;
+    if(!a->hRTDevice.handle || !cb.pfnSetErrorCb || !cb.pfnCreateContextVirtualCb || !cb.pfnDestroyContextCb ||
+       !cb.pfnAllocateCb || !cb.pfnDeallocateCb) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
-    new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
+    auto device=new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
+    HRESULT hr=native12::create_device_engine(*device);
+    if(FAILED(hr)){device->~Device();trace("CreateDevice-engine-failed",static_cast<unsigned>(hr));return hr;}
     ++adapter->devices;return S_OK;
 }
 HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
     if(!h.pDrvPrivate) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
-    if(adapter->devices.load()!=0) return E_UNEXPECTED;
+    if(adapter->devices.load()!=0 || adapter->retained_engines.load()!=0) return E_UNEXPECTED;
     native12::close_adapter_caps(*adapter);delete adapter;trace("CloseAdapter");return S_OK;
 }
 HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
@@ -69,6 +73,7 @@ HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER,D3D12DDI_TABLE_TYPE type,void*,SIZ
 void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     if(!h.pDrvPrivate) return;
     auto device=static_cast<Device*>(h.pDrvPrivate);auto adapter=device->adapter;
+    native12::destroy_device_engine(*device);
     unsigned retired=0,active=0;
     device->queues.discard_device_metadata(retired,active);
     trace("DestroyDevice-unresolved-retired-contexts",retired);
