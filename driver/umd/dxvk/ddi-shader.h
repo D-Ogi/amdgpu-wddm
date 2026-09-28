@@ -8,5 +8,7 @@ enum class ShaderStage { vertex, geometry, pixel, compute, hull, domain };
 struct DdiShader { IUnknown *object; ShaderStage stage; };
 HRESULT copy_legacy_signature(const D3D11_1DDIARG_SIGNATURE_ENTRY *entries,UINT count,
     std::vector<BC250_DXVK_SIGNATURE_ENTRY> &out);
+HRESULT copy_stream_output(const D3D11DDIARG_CREATEGEOMETRYSHADERWITHSTREAMOUTPUT &,
+    std::vector<BC250_DXVK_SO_ENTRY> &);
 void install_shader_ddi(D3D11_1DDI_DEVICEFUNCS &table);
 }

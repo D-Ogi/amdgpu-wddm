@@ -507,5 +507,31 @@ int main() {
     table.pfnQueryGetData(h,queryHandle,&queryResult,sizeof(queryResult),0);
     table.pfnSetPredication(h,queryHandle,TRUE); table.pfnDestroyQuery(h,queryHandle);
     if (errors!=107 || queryStorage.object || queryStorage.predicate || queryResult!=0x12345678 || owner.runtime().domain.entered()) std::abort();
+    D3D11DDIARG_STREAM_OUTPUT_DECLARATION_ENTRY declarations[2]{};
+    std::memset(declarations,0xCD,sizeof(declarations));
+    declarations[0].Stream=2; declarations[0].OutputSlot=3; declarations[0].RegisterIndex=7; declarations[0].RegisterMask=6;
+    declarations[1].Stream=0; declarations[1].OutputSlot=0; declarations[1].RegisterIndex=UINT_MAX; declarations[1].RegisterMask=15;
+    UINT strides[4]{16,32,48,64};
+    D3D11DDIARG_CREATEGEOMETRYSHADERWITHSTREAMOUTPUT soArgs{};
+    soArgs.pOutputStreamDecl=declarations; soArgs.NumEntries=2;
+    soArgs.BufferStridesInBytes=strides; soArgs.NumStrides=4; soArgs.RasterizedStream=D3D11_SO_NO_RASTERIZED_STREAM;
+    std::vector<BC250_DXVK_SO_ENTRY> soEntries;
+    if (copy_stream_output(soArgs,soEntries)!=S_OK || soEntries.size()!=2 || soEntries[0].Stream!=2 ||
+        soEntries[0].OutputSlot!=3 || soEntries[0].RegisterIndex!=7 || soEntries[0].RegisterMask!=6 ||
+        soEntries[1].RegisterIndex!=UINT_MAX || soEntries[1].RegisterMask!=15) std::abort();
+    soArgs.pOutputStreamDecl=nullptr;
+    if (copy_stream_output(soArgs,soEntries)!=E_INVALIDARG) std::abort();
+    soArgs.pOutputStreamDecl=declarations; soArgs.NumStrides=5;
+    if (copy_stream_output(soArgs,soEntries)!=E_INVALIDARG) std::abort();
+    soArgs.NumStrides=4; soArgs.RasterizedStream=4;
+    if (copy_stream_output(soArgs,soEntries)!=E_INVALIDARG) std::abort();
+    soArgs.RasterizedStream=0; declarations[0].RegisterMask=16;
+    if (copy_stream_output(soArgs,soEntries)!=E_INVALIDARG) std::abort();
+    declarations[0].RegisterMask=6;
+    DdiShader soShader{}; D3D10DDI_HSHADER soHandle{}; soHandle.pDrvPrivate=&soShader;
+    D3D11_1DDIARG_STAGE_IO_SIGNATURES soSignatures{};
+    if (table.pfnCalcPrivateGeometryShaderWithStreamOutput(h,&soArgs,&soSignatures)!=sizeof(DdiShader)) std::abort();
+    table.pfnCreateGeometryShaderWithStreamOutput(h,&soArgs,soHandle,{},&soSignatures);
+    if (errors!=108 || soShader.object || soShader.stage!=ShaderStage::geometry || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

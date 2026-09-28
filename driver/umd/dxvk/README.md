@@ -159,3 +159,13 @@ requires an unchanged caller buffer. DONOTFLUSH is forwarded without a shell wai
 Device-dependent performance counters remain unsupported. Host tests cover mapping,
 pending-buffer preservation and missing-engine error/domain handling; this does
 not yet establish query correctness on the hosted GPU path.
+
+Geometry-shader stream-output creation is connected through the engine shader
+ABI. Declaration entries are copied field-by-field, preserving component masks,
+stream/slot indices and UINT_MAX gap entries without interpreting structure padding.
+Buffer strides and rasterized-stream selection are passed unchanged. Null, VS or
+DS code is forwarded for engine pass-through construction, always yielding a GS.
+The engine's known pass-through limitation for line/triangle primitives remains
+open; connecting this DDI does not establish full stream-output conformance.
+Host controls exercise declaration translation, invalid bounds, WDK signatures
+and missing-engine error handling. Actual hosted stream-output rendering is pending.
