@@ -2,8 +2,9 @@
 #pragma once
 #include "queue-registry.h"
 #include <atomic>
+#include "adapter-contract.h"
 namespace native12 {
-struct Adapter { D3D12DDI_HRTADAPTER runtime; D3DDDI_ADAPTERCALLBACKS callbacks; std::atomic<unsigned> devices{0}; };
+struct Adapter { D3D12DDI_HRTADAPTER runtime; D3DDDI_ADAPTERCALLBACKS callbacks; std::atomic<unsigned> devices{0}; AdapterContract contract{}; };
 struct Device {
     Adapter* adapter{};
     D3D12DDI_HRTDEVICE runtime{};

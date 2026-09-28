@@ -76,8 +76,12 @@ extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter12(D3D12DDIARG_OPEN
     if(!a->pAdapterFuncs) return E_INVALIDARG;
     *a->pAdapterFuncs={};
     if(!a->pAdapterCallbacks || !a->pAdapterCallbacks->pfnQueryAdapterInfoCb) return E_INVALIDARG;
+    native12::AdapterContract contract;
+    HRESULT hr=native12::query_contract(a->hRTAdapter,a->pAdapterCallbacks->pfnQueryAdapterInfoCb,contract);
+    if(FAILED(hr)){trace("OpenAdapter12-contract-failed",static_cast<unsigned>(hr));return hr;}
     auto adapter=new(std::nothrow) Adapter{a->hRTAdapter,*a->pAdapterCallbacks};
     if(!adapter) return E_OUTOFMEMORY;
+    adapter->contract=contract;
     *a->pAdapterFuncs={device_size,create_device,close_adapter,versions,caps,optional_tables,fill_table,destroy_device};
     a->hAdapter.pDrvPrivate=adapter;trace("OpenAdapter12");return S_OK;
 }

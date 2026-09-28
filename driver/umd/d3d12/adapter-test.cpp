@@ -7,7 +7,33 @@
 #include <vector>
 #include "queue-ddi.h"
 #include "fence-ddi.h"
-static HRESULT APIENTRY query(HANDLE,const D3DDDICB_QUERYADAPTERINFO*) {return E_NOTIMPL;}
+static unsigned queryMode;
+static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* request) {
+    assert(adapter==reinterpret_cast<HANDLE>(UINT_PTR(0x1234)));
+    assert(request->PrivateDriverDataSize==BC250_ADAPTER_CAPS_BYTES);
+    auto bytes=static_cast<unsigned char*>(request->pPrivateDriverData);
+    for(unsigned i=0;i<request->PrivateDriverDataSize;++i)assert(bytes[i]==0);
+    if(queryMode==1)return E_ACCESSDENIED;
+    bc250_umd_private caps{};caps.magic=BC250_UMD_PRIVATE_MAGIC;
+    caps.version=BC250_UMD_PRIVATE_VERSION;caps.size=sizeof(caps);
+    caps.submittable_node_mask=1;caps.hw_ip_mask=1u<<AMDGPU_HW_IP_GFX;
+    caps.hw_ip[AMDGPU_HW_IP_GFX].available_rings=1;
+    if(queryMode==2)caps.magic=0;
+    if(queryMode==3)caps.version=2;
+    if(queryMode==4)caps.submittable_node_mask=0;
+    if(queryMode==5)caps.flags=BC250_UMD_F_UNMEASURED;
+    if(queryMode==7)caps.hw_ip[AMDGPU_HW_IP_GFX].available_rings=0;
+    if(queryMode==8)caps.size-=4;
+    if(queryMode==10)caps.hw_ip_mask=0;
+    memcpy(bytes,&caps,sizeof(caps));
+    bc250_adapter_identity id{BC250_ADAPTER_IDENTITY_MAGIC,BC250_ADAPTER_IDENTITY_VERSION,
+        BC250_ADAPTER_IDENTITY_BYTES,0x1234,0x87654321,0};
+    if(queryMode==9)id.reserved=1;
+    if(queryMode==11)id.version+=1;
+    if(queryMode==12)id.size-=4;
+    if(queryMode!=6)memcpy(bytes+BC250_ADAPTER_IDENTITY_OFFSET,&id,sizeof(id));
+    return S_OK;
+}
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
 static unsigned destroys;
@@ -22,7 +48,14 @@ int main(int argc,char** argv) {
     D3D12DDIARG_OPENADAPTER a{};a.pAdapterFuncs=&funcs;
     assert(open(&a)==E_INVALIDARG && !a.hAdapter.pDrvPrivate && !funcs.pfnCreateDevice);
     callbacks.pfnQueryAdapterInfoCb=query;a.pAdapterCallbacks=&callbacks;
+    a.hRTAdapter.handle=reinterpret_cast<HANDLE>(UINT_PTR(0x1234));
+    for(queryMode=1;queryMode<=12;++queryMode){
+        assert(open(&a)==(queryMode==1?E_ACCESSDENIED:E_NOINTERFACE));
+        assert(!a.hAdapter.pDrvPrivate && !funcs.pfnCreateDevice);
+    }
+    queryMode=0;
     assert(open(&a)==S_OK && a.hAdapter.pDrvPrivate);
+    assert(static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate)->contract.luid==0x8765432100001234ULL);
     UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==1);
     UINT64 guard[2]={0xabcdef,0x123456};count=0;
     assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
