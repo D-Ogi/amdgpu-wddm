@@ -67,7 +67,7 @@ HRESULT APIENTRY surface_allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
     a->pAllocationInfo2[0].hAllocation=31; return S_OK;
 }
 HRESULT APIENTRY surface_deallocate(HANDLE,const D3DDDICB_DEALLOCATE2 *a) {
-    check(a->NumAllocations==1 && *a->HandleList==31);
+    check((a->hResource==&identity && !a->NumAllocations) || (a->NumAllocations==1 && *a->HandleList==31));
     check(closingSurface && !closingSurface->mapping.address && !closingSurface->texture.image.image);
     ++surfaceDeallocates; return S_OK;
 }
@@ -221,6 +221,24 @@ int main() {
     const unsigned unmappedBeforeRetention=surfaceUnmaps;
     check(close()==E_UNEXPECTED && surface.texture.retained);
     check(close()==E_UNEXPECTED && surfaceUnmaps==unmappedBeforeRetention && surfaceDeallocates==3);
+    RuntimeSurface adopted; closingSurface=&adopted;
+    RuntimeSurfaceAllocation opened{&identity,31,77};
+    const unsigned allocationsBeforeAdopt=surfaceAllocates;
+    textureDesc.Height=15;
+    check(adopt_runtime_surface(runtime,queue,opened,request.surface,textureDesc,adopted)==E_INVALIDARG);
+    check(opened.allocation==31 && !adopted.owner);
+    textureDesc.Height=16; surfaceFence=0; failSurfaceResident=true;
+    check(adopt_runtime_surface(runtime,queue,opened,request.surface,textureDesc,adopted)==E_OUTOFMEMORY);
+    check(!opened.allocation && adopted.allocation.kernel_resource==77 && adopted.mapping.address);
+    check(surfaceAllocates==allocationsBeforeAdopt);
+    check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==E_PENDING);
+    surfaceFence=5;
+    check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==S_OK);
+    opened={&identity,31,77}; surfaceFence=9; failSurfaceResident=false; remainingRefs=0;
+    check(adopt_runtime_surface(runtime,queue,opened,request.surface,textureDesc,adopted)==S_FALSE);
+    check(finish_runtime_surface(device,imageDispatch,textureDispatch,properties,adopted)==S_OK);
+    check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==S_OK);
+    check(surfaceAllocates==allocationsBeforeAdopt && !opened.runtime_resource);
     auto realDispatch=texture_import_dispatch(importEngine);
     ID3D11Texture2D *wrapped=nullptr;
     info.tiling=VK_IMAGE_TILING_LINEAR;

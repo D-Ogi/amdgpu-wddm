@@ -23,6 +23,11 @@ struct RuntimeSurface {
 // S_FALSE: accepted; finish must be polled before publication. No busy wait.
 HRESULT begin_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,
     const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &);
+// On validation success, consumes allocation even if mapping later fails.
+// Caller retains allocation when validation fails before transfer.
+HRESULT adopt_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,
+    RuntimeSurfaceAllocation &,const BC250_WDDM_ALLOCATION_PRIVATE &,
+    const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface &);
 HRESULT finish_runtime_surface(VkDevice,const RuntimeImageDispatch &,
     const TextureImportDispatch &,const VkPhysicalDeviceMemoryProperties &,RuntimeSurface &);
 // Unbind/release views first. Any non-S_OK means retain the surface and device.

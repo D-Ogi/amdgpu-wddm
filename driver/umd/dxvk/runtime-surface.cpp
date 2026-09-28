@@ -27,6 +27,23 @@ HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &q
     out.phase=SurfacePhase::paging;
     return S_FALSE; // Even completed paging still needs an image and texture.
 }
+HRESULT adopt_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
+    RuntimeSurfaceAllocation &allocation,const BC250_WDDM_ALLOCATION_PRIVATE &metadata,
+    const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
+    if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    if (!runtime.domain.entered() || !runtime.hDevice || !queue.queue || !queue.sync || !queue.cpu ||
+        !allocation.allocation || !allocation.runtime_resource || !WddmSurfaceGeometry(&metadata,0,4) ||
+        desc.Width!=metadata.Width || desc.Height!=metadata.Height || desc.MipLevels!=1 || desc.ArraySize!=1 ||
+        desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality || !matching_format(metadata.Format,desc.Format))
+        return E_INVALIDARG;
+    out.owner=&runtime; out.queue=queue; out.desc=desc;
+    out.pitch=metadata.Pitch; out.bytes=metadata.Size;
+    out.allocation=allocation; allocation={};
+    out.phase=SurfacePhase::failed;
+    HRESULT hr=map_runtime_surface(runtime,queue,out.allocation.allocation,out.bytes,out.mapping);
+    if (FAILED(hr)) return hr;
+    out.phase=SurfacePhase::paging; return S_FALSE;
+}
 HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     const TextureImportDispatch &engine,const VkPhysicalDeviceMemoryProperties &properties,RuntimeSurface &surface) {
     if (!surface.owner || !surface.owner->domain.entered()) return E_INVALIDARG;
