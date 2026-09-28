@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-resource.h"
+#include "diagnostics.h"
 #include <algorithm>
 #include <utility>
 #include <cstring>
@@ -164,7 +165,23 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
             (desc->MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)) {
             RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
             HRESULT hr=convert_runtime_resource(*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),request,texture);
-            if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+            if (FAILED(hr)) {
+                // Record the rejected runtime descriptor, not pointers or memory.
+                // Swap-chain admission must be fixed against the actual request.
+                static std::atomic_uint reports{0};
+                if (reports.fetch_add(1,std::memory_order_relaxed)<8) {
+                    char text[512];
+                    const auto *m=desc->pMipInfoList;
+                    std::snprintf(text,sizeof(text),
+                        "M14 runtime resource rejected hr=%08X handle=%u primary=%u dimension=%u format=%u bind=%08X misc=%08X usage=%u map=%08X mips=%u array=%u samples=%u quality=%u width=%u height=%u\n",
+                        unsigned(hr),runtimeHandle.handle ? 1u : 0u,desc->pPrimaryDesc ? 1u : 0u,
+                        unsigned(desc->ResourceDimension),unsigned(desc->Format),desc->BindFlags,desc->MiscFlags,
+                        unsigned(desc->Usage),desc->MapFlags,desc->MipLevels,desc->ArraySize,
+                        desc->SampleDesc.Count,desc->SampleDesc.Quality,m ? m->TexelWidth : 0u,m ? m->TexelHeight : 0u);
+                    OutputDebugStringA(text);
+                }
+                report_ddi_error(owner,hr); return;
+            }
             RuntimeSurface *surface=nullptr;
             hr=owner.begin_surface(request,texture,surface);
             if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);

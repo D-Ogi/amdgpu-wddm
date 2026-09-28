@@ -1,0 +1,14 @@
+{
+  "exit": 126,
+  "monitor_error": null,
+  "receipt": {
+    "cancelled": false,
+    "console_session": 1,
+    "child_pid": 8944,
+    "root_exit_observed": true,
+    "child_exit": 1,
+    "timed_out": false,
+    "termination_requested": true,
+    "job_empty": true
+  }
+}
