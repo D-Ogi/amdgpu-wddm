@@ -1,0 +1,7 @@
+System runtime/router not witnessed
+At C:\BC250\m14\runtime002\phase.ps1:60 char:96
++ ... uter.dll" -notin $paths){throw 'System runtime/router not witnessed'}
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (System runtime/router not witnessed:String) [], RuntimeException
+    + FullyQualifiedErrorId : System runtime/router not witnessed
+ 
