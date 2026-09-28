@@ -11,7 +11,7 @@ try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
  $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
- $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/external:W0','/MT','/DNOMINMAX',"/external:I$wdk","/external:I$wdk\..\shared")
+ $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/external:W0','/MT','/DNOMINMAX',"/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){
@@ -36,6 +36,10 @@ try {
   if($LASTEXITCODE){throw 'Queue registry build failed'}
   & .\queue-registry-test.exe
   if($LASTEXITCODE){throw 'Queue registry tests failed'}
+  & cl.exe @flags "/I$repo\driver\contract\third_party" "/I$repo\driver\contract\uapi-shim" /Fe:queue-ddi-test.exe "$repo\driver\umd\d3d12\queue-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'Queue DDI build failed'}
+  & .\queue-ddi-test.exe
+  if($LASTEXITCODE){throw 'Queue DDI tests failed'}
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
 Write-Host 'Diagnostic adapter only; no functional device or deployment.'

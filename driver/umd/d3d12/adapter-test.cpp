@@ -5,10 +5,11 @@
 #include <cstring>
 #include <cstdio>
 #include <vector>
+#include "queue-ddi.h"
 static HRESULT APIENTRY query(HANDLE,const D3DDDICB_QUERYADAPTERINFO*) {return E_NOTIMPL;}
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
-static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL*) {return E_NOTIMPL;}
-static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {return E_NOTIMPL;}
+static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
+static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {return S_OK;}
 int main(int argc,char** argv) {
     if(argc!=2)return 2;
     HMODULE dll=LoadLibraryA(argv[1]);assert(dll);
@@ -40,6 +41,12 @@ int main(int argc,char** argv) {
     device.Version=0;assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_NOINTERFACE);
     device.Version=sizeArgs.Version;assert(funcs.pfnCreateDevice(a.hAdapter,&device)==S_OK);
     assert(funcs.pfnCloseAdapter(a.hAdapter)==E_UNEXPECTED);
+    D3D12DDI_DEVICE_FUNCS_CORE_0088 core{};native12::install_queue_entries(core);
+    D3D12DDIARG_CREATECOMMANDQUEUE_0050 qargs{};qargs.QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;
+    SIZE_T qsize=core.pfnCalcPrivateCommandQueueSize(device.hDrvDevice,&qargs);assert(qsize);
+    D3D12DDI_HCOMMANDQUEUE queue{};queue.pDrvPrivate=::operator new(qsize);
+    assert(core.pfnCreateCommandQueue(device.hDrvDevice,&qargs,queue,{})==S_OK);
+    core.pfnDestroyCommandQueue(device.hDrvDevice,queue);::operator delete(queue.pDrvPrivate);
     funcs.pfnDestroyDevice(device.hDrvDevice);::operator delete(storage);
     assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,guard,sizeof(guard),0,{})==E_NOTIMPL);
     assert(guard[1]==0x123456);

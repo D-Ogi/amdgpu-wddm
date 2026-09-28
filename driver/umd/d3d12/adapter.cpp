@@ -5,13 +5,10 @@
 #include <new>
 #include <atomic>
 #include <cstdint>
+#include "device-state.h"
 namespace {
-struct Adapter { D3D12DDI_HRTADAPTER runtime; D3DDDI_ADAPTERCALLBACKS callbacks; std::atomic<unsigned> devices{0}; };
-struct Device {
-    Adapter* adapter;
-    D3D12DDI_HRTDEVICE runtime;
-    D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 callbacks;
-};
+using native12::Adapter;
+using native12::Device;
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
     return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 &&
         (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0092;
