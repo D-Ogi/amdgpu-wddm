@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-draw.h"
 #include "ddi-input-layout.h"
+#include "ddi-raster.h"
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -18,6 +19,7 @@ int main() {
     D3D11_1DDI_DEVICEFUNCS table{};
     install_draw_ddi(table);
     install_input_layout_ddi(table);
+    install_raster_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -36,5 +38,15 @@ int main() {
     table.pfnIaSetInputLayout(h,{});
     table.pfnDestroyElementLayout(h,lh);
     if (errors!=9 || layout.object || owner.runtime().domain.entered()) std::abort();
+    Viewports viewports{};
+    const D3D10_DDI_VIEWPORT viewport{-3.5f,2.25f,128.0f,64.0f,0.2f,0.8f};
+    if (convert_viewports(1,15,&viewport,viewports)!=S_OK || viewports[0].TopLeftX!=-3.5f || viewports[0].MaxDepth!=0.8f) std::abort();
+    if (convert_viewports(1,UINT_MAX,&viewport,viewports)!=E_INVALIDARG || viewports[0].TopLeftX!=-3.5f) std::abort();
+    if (convert_viewports(0,16,nullptr,viewports)!=S_OK || viewports[0].Width!=0) std::abort();
+    if (valid_topology(static_cast<D3D10_DDI_PRIMITIVE_TOPOLOGY>(6)) || !valid_topology(D3D11_DDI_PRIMITIVE_TOPOLOGY_32_CONTROL_POINT_PATCHLIST)) std::abort();
+    table.pfnSetViewports(h,1,0,&viewport);
+    table.pfnSetScissorRects(h,0,0,nullptr);
+    table.pfnIaSetTopology(h,D3D10_DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    if (errors!=12 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

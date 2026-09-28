@@ -101,3 +101,5 @@ These installers intentionally fill only their own implemented entries. They are
 ```powershell
 & .\\bc250-win\\tools\\build\\test-umd-ddi-draw.ps1 -DxvkSource .\\scratch\\m14\\dxvk
 ```
+
+`install_raster_ddi` adds viewport/scissor arrays and primitive topology. Viewport translation preserves fractional and negative coordinates and depth endpoints; bounds checks avoid count+clear overflow. COM setters replace the complete active array, unbinding omitted slots. All base, adjacency and 1-32 control-point patch-list topology values are checked against SDK enum values at compile time before direct conversion. Tests cover translation, empty arrays, overflow rejection and typed DDI error paths; hardware rasterization remains untested on this new UMD.
