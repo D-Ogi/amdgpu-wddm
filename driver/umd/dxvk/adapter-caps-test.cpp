@@ -55,6 +55,20 @@ int main() {
     CHECK(read_adapter_caps(good.maximum,query,result)==E_FAIL && calls==5 &&
           !std::memcmp(&before,&result,sizeof(result)));
     good.options.OutputMergerLogicOp=TRUE;
+    CHECK(adapter_caps_supported(good,good));
+    auto advertised=good;advertised.doubles.DoublePrecisionFloatShaderOps=FALSE;
+    advertised.precision.PixelShaderMinPrecision=0;
+    CHECK(adapter_caps_supported(advertised,good));
+    auto actual=good;actual.doubles.DoublePrecisionFloatShaderOps=FALSE;
+    CHECK(!adapter_caps_supported(good,actual));
+    actual=good;actual.precision.AllOtherShaderStagesMinPrecision=0;
+    CHECK(!adapter_caps_supported(good,actual));
+    actual=good;actual.architecture.TileBasedDeferredRenderer=TRUE;
+    CHECK(!adapter_caps_supported(good,actual));
+    calls=0;CHECK(verify_adapter_caps(good,query)==S_OK && calls==5);
+    advertised=good;advertised.architecture.TileBasedDeferredRenderer=TRUE;
+    calls=0;CHECK(verify_adapter_caps(advertised,query)==DXGI_ERROR_UNSUPPORTED && calls==5);
+    failAt=3;calls=0;CHECK(verify_adapter_caps(good,query)==E_OUTOFMEMORY && calls==3);failAt=0;
     const D3D10_2DDICAPS_TYPE types[]={D3D11DDICAPS_THREADING,D3D11DDICAPS_SHADER,D3D11DDICAPS_3DPIPELINESUPPORT,
         D3D11_1DDICAPS_D3D11_OPTIONS,D3D11_1DDICAPS_ARCHITECTURE_INFO,D3D11_1DDICAPS_SHADER_MIN_PRECISION_SUPPORT};
     const UINT sizes[]={4,4,4,8,4,8};

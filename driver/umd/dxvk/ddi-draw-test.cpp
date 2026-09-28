@@ -651,10 +651,18 @@ int main() {
     createArgs.DXGIBaseDDI.pDXGIDDIBaseFunctions3=&unchangedDxgi;
     BC250_DXVK_ENGINE_FUNCS createFuncs{}; createFuncs.CreateDevice=no_engine;
     BC250_DXVK_SHELL_SERVICES createServices{};
-    auto attemptCreate=[&]() { return create_render_device(createArgs,1,no_instance,createFuncs,D3D_FEATURE_LEVEL_11_0,createServices,failedCleanup); };
+    AdapterCaps advertised{}; advertised.maximum=D3D_FEATURE_LEVEL_11_0;
+    advertised.compute.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x=TRUE;
+    auto attemptCreate=[&]() { return create_render_device(createArgs,1,no_instance,createFuncs,D3D_FEATURE_LEVEL_11_0,createServices,failedCleanup,advertised); };
     createArgs.DXGIBaseDDI.pDXGIDDIBaseFunctions3=nullptr;
     if(attemptCreate()!=E_INVALIDARG || createCount || destroyCount) std::abort();
     createArgs.DXGIBaseDDI.pDXGIDDIBaseFunctions3=&unchangedDxgi;
+    advertised.maximum=D3D_FEATURE_LEVEL_10_0;
+    if(attemptCreate()!=E_INVALIDARG || createCount || destroyCount) std::abort();
+    advertised.maximum=D3D_FEATURE_LEVEL_11_0;
+    advertised.compute.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x=FALSE;
+    if(attemptCreate()!=E_INVALIDARG || createCount || destroyCount) std::abort();
+    advertised.compute.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x=TRUE;
     const UINT negotiatedFlags=createArgs.Flags;
     createArgs.Flags=0;
     if (attemptCreate()!=E_INVALIDARG || createCount || destroyCount || newHandle.owner || failedCleanup.owner ||

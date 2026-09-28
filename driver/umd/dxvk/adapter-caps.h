@@ -42,6 +42,25 @@ template<typename Query> HRESULT read_adapter_caps(D3D_FEATURE_LEVEL maximum,Que
     if (!valid_adapter_caps(caps)) return E_FAIL;
     out=caps;return S_OK;
 }
+// Optional capabilities may be conservatively omitted, but every advertised
+// bit must hold on the engine. Architecture is a property, not an optional bit.
+inline bool adapter_caps_supported(const AdapterCaps &advertised,const AdapterCaps &actual) {
+    if (!valid_adapter_caps(advertised) || !valid_adapter_caps(actual) || actual.maximum<advertised.maximum) return false;
+    return (!advertised.doubles.DoublePrecisionFloatShaderOps || actual.doubles.DoublePrecisionFloatShaderOps) &&
+        (!advertised.compute.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x ||
+          actual.compute.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x) &&
+        (!advertised.options.OutputMergerLogicOp || actual.options.OutputMergerLogicOp) &&
+        (bool(advertised.architecture.TileBasedDeferredRenderer)==bool(actual.architecture.TileBasedDeferredRenderer)) &&
+        !(advertised.precision.PixelShaderMinPrecision&~actual.precision.PixelShaderMinPrecision) &&
+        !(advertised.precision.AllOtherShaderStagesMinPrecision&~actual.precision.AllOtherShaderStagesMinPrecision);
+}
+template<typename Query> HRESULT verify_adapter_caps(const AdapterCaps &advertised,Query &&query) {
+    if (!valid_adapter_caps(advertised)) return E_INVALIDARG;
+    AdapterCaps actual{};
+    HRESULT hr=read_adapter_caps(advertised.maximum,query,actual);
+    if (FAILED(hr)) return hr;
+    return adapter_caps_supported(advertised,actual) ? S_OK : DXGI_ERROR_UNSUPPORTED;
+}
 template<typename T> HRESULT write_adapter_cap(const D3D10_2DDIARG_GETCAPS &args,const T &value) {
     if (!args.pData || args.DataSize!=sizeof(T)) return E_INVALIDARG;
     std::memcpy(args.pData,&value,sizeof(value));return S_OK;

@@ -6,7 +6,7 @@
 namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     PFN_vkGetInstanceProcAddr get,const BC250_DXVK_ENGINE_FUNCS &funcs,D3D_FEATURE_LEVEL level,
-    const BC250_DXVK_SHELL_SERVICES &services,DdiDeviceHandle &failedCleanup) noexcept {
+    const BC250_DXVK_SHELL_SERVICES &services,DdiDeviceHandle &failedCleanup,const AdapterCaps &advertised) noexcept {
     if (failedCleanup.owner) return E_UNEXPECTED;
     if (args.Interface!=D3D11_1_DDI_INTERFACE_VERSION || !args.hDrvDevice.pDrvPrivate || !args.p11_1DeviceFuncs ||
         !args.DXGIBaseDDI.pDXGIDDIBaseFunctions3)
@@ -17,13 +17,29 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     storage->owner=nullptr;
     D3D_FEATURE_LEVEL requested{};
     HRESULT negotiated=requested_feature_level(args.Flags,requested);
-    if (FAILED(negotiated) || requested!=level) return E_INVALIDARG;
+    if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) ||
+        level>advertised.maximum) return E_INVALIDARG;
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;
     if (!owner) return E_OUTOFMEMORY;
     HRESULT hr=E_FAIL,cleanup=S_OK;
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);
-        try { hr=owner->initialize(args,luid,get,funcs,level,services); }
+        try {
+            hr=owner->initialize(args,luid,get,funcs,level,services);
+            if (SUCCEEDED(hr)) {
+                IBc250DxvkDevice3 *capsEngine=nullptr;
+                hr=owner->engine()->QueryInterface(__uuidof(IBc250DxvkDevice3),reinterpret_cast<void **>(&capsEngine));
+                if (SUCCEEDED(hr)) {
+                    if (!capsEngine) hr=E_NOINTERFACE;
+                    else {
+                        struct ReleaseCaps { IBc250DxvkDevice3 *p; ~ReleaseCaps(){p->Release();} } release{capsEngine};
+                        hr=verify_adapter_caps(advertised,[&](D3D_FEATURE_LEVEL maximum,D3D11_FEATURE feature,void *data,UINT size) {
+                            return capsEngine->CheckFeatureSupportAtLevel(maximum,feature,data,size);
+                        });
+                    }
+                }
+            }
+        }
         catch (const std::bad_alloc &) { hr=E_OUTOFMEMORY; }
         catch (...) { hr=E_FAIL; }
         if (FAILED(hr)) {
