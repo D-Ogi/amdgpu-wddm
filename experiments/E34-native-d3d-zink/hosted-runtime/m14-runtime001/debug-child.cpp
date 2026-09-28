@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include <windows.h>
+#include <dbghelp.h>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -22,6 +23,29 @@ static void FaultContext(HANDLE process,DWORD threadId) {
     }else std::printf("CONTEXT_READ_ERROR %lu\n",GetLastError());
     CloseHandle(thread);
 }
+
+static void FaultDump(HANDLE process,DWORD processId,const DEBUG_EVENT &event,const wchar_t *exe,unsigned index) {
+    HANDLE thread=OpenThread(THREAD_GET_CONTEXT|THREAD_QUERY_INFORMATION,FALSE,event.dwThreadId);
+    CONTEXT context{};context.ContextFlags=CONTEXT_ALL;
+    if(!thread || !GetThreadContext(thread,&context)) {
+        std::printf("DUMP_CONTEXT_ERROR %lu\n",GetLastError());if(thread)CloseHandle(thread);return;
+    }
+    CloseHandle(thread);
+    EXCEPTION_RECORD record=event.u.Exception.ExceptionRecord;
+    // Copy only this exception record. Any nested-record pointer belongs to
+    // the child; do not accidentally dereference it in the debugger process.
+    record.ExceptionRecord=nullptr;
+    EXCEPTION_POINTERS pointers{&record,&context};
+    MINIDUMP_EXCEPTION_INFORMATION info{event.dwThreadId,&pointers,FALSE};
+    std::wstring path=exe;path+=L".fault-"+std::to_wstring(processId)+L"-"+std::to_wstring(index)+L".dmp";
+    HANDLE file=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(file==INVALID_HANDLE_VALUE){std::printf("DUMP_CREATE_ERROR %lu\n",GetLastError());return;}
+    // Normal minidump only: stack/context/module information, not full memory.
+    BOOL written=MiniDumpWriteDump(process,processId,file,MiniDumpNormal,&info,nullptr,nullptr);
+    DWORD error=written?0:GetLastError();BOOL flushed=FlushFileBuffers(file);CloseHandle(file);
+    std::printf("DUMP index=%u written=%u flushed=%u error=%lu path=%ls\n",index,unsigned(written),unsigned(flushed),error,path.c_str());
+}
+
 static void Module(HANDLE file,const void *base) {
     wchar_t path[32768]{};
     DWORD count=file?GetFinalPathNameByHandleW(file,path,DWORD(_countof(path)),FILE_NAME_NORMALIZED):0;
@@ -76,6 +100,9 @@ int wmain(int argc,wchar_t **argv) {
     if(!AssignProcessToJobObject(job,process.hProcess) || ResumeThread(process.hThread)==DWORD(-1)){
         TerminateProcess(process.hProcess,125);CloseHandle(process.hThread);CloseHandle(process.hProcess);CloseHandle(job);return 125;
     }
+    wchar_t capture[2]{};
+    const bool dumps=GetEnvironmentVariableW(L"BC250_M14_CAPTURE_DUMP",capture,2)==1 && capture[0]==L'1';
+    unsigned dumpCount=0;
     const ULONGLONG start=GetTickCount64();bool exited=false,initialBreakpoint=true;DWORD code=125;
     while(GetTickCount64()-start<seconds*1000ULL){
         DEBUG_EVENT event{};
@@ -112,6 +139,8 @@ int wmain(int argc,wchar_t **argv) {
             if(initialBreakpoint && exception==EXCEPTION_BREAKPOINT && event.u.Exception.dwFirstChance)initialBreakpoint=false;
             else status=DBG_EXCEPTION_NOT_HANDLED;
             if(!event.u.Exception.dwFirstChance)FaultContext(process.hProcess,event.dwThreadId);
+            if(dumps && dumpCount<3 && (!event.u.Exception.dwFirstChance || exception==0xe06d7363))
+                FaultDump(process.hProcess,process.dwProcessId,event,argv[2],++dumpCount);
             break;
         }
         case EXIT_PROCESS_DEBUG_EVENT:exited=true;code=event.u.ExitProcess.dwExitCode;break;

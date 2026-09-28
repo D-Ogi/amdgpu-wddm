@@ -17,7 +17,7 @@ if($LASTEXITCODE -ne 0){throw 'Selection test build failed'}
 if($LASTEXITCODE -ne 0){throw 'Selection policy test failed'}
 (Get-FileHash "$out\router.dll").Hash
 
-& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /EHsc /std:c++17 /W4 /WX /O2 /MT "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$out\" "/Fe$out\debug-child.exe" "$PSScriptRoot\debug-child.cpp" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64" kernel32.lib
+& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /EHsc /std:c++17 /W4 /WX /O2 /MT "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$out\" "/Fe$out\debug-child.exe" "$PSScriptRoot\debug-child.cpp" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64" kernel32.lib dbghelp.lib
 if($LASTEXITCODE -ne 0){throw 'Debug child build failed'}
 foreach($case in @(@{mode='ok';seconds=5;expected=0},@{mode='fail';seconds=5;expected=7},@{mode='sleep';seconds=1;expected=124},@{mode='tree';seconds=5;expected=0},@{mode='crash';seconds=5;expected=-1073741819})){
  $text=(& "$out\debug-child.exe" $case.seconds "$out\debug-child.exe" --fixture $case.mode | Out-String)
@@ -26,3 +26,12 @@ foreach($case in @(@{mode='ok';seconds=5;expected=0},@{mode='fail';seconds=5;exp
  $text|Set-Content "$out\debug-$($case.mode).txt"
 }
 'PASS debug capture: ANSI/Unicode, successful/failed child, timeout'
+
+$previousCapture=$env:BC250_M14_CAPTURE_DUMP
+try {
+ $env:BC250_M14_CAPTURE_DUMP='1'
+ $dumpText=(& "$out\debug-child.exe" 5 "$out\debug-child.exe" --fixture crash | Out-String)
+ if($LASTEXITCODE -ne -1073741819 -or $dumpText -notmatch 'DUMP index=1 written=1 flushed=1 error=0' -or $dumpText -notmatch 'tree_closed=1'){throw "Minidump fixture failed: $dumpText"}
+ $dumpText | Set-Content "$out\debug-dump.txt"
+} finally { $env:BC250_M14_CAPTURE_DUMP=$previousCapture }
+'PASS opt-in normal minidump and process tree closure'

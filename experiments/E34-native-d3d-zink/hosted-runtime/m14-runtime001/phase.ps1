@@ -32,7 +32,8 @@ if($Phase -eq 'Capture'){
  Check-StopThermal
  $gpu=($Phase -eq 'Gpu')
  Remove-Item Env:BC250_M14_RUNTIME_PROBE -ErrorAction SilentlyContinue
- if($gpu){Write-DurableText "$d\enable" 'M14 process only';$env:BC250_M14_RUNTIME_PROBE='1'}
+ Remove-Item Env:BC250_M14_CAPTURE_DUMP -ErrorAction SilentlyContinue
+ if($gpu){Write-DurableText "$d\enable" 'M14 process only';$env:BC250_M14_RUNTIME_PROBE='1';$env:BC250_M14_CAPTURE_DUMP='1'}
  $env:DXVK_SHADER_CACHE='0';$env:MESA_SHADER_CACHE_DISABLE='true';$env:DXVK_LOG_PATH=$d
  $env:DXVK_LOG_LEVEL='info'
  # Functional debugger run only. Its timings cannot establish the performance bound.
