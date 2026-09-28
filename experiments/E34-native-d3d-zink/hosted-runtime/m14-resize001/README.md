@@ -17,4 +17,4 @@ Any API failure, wrong pixel, missing step, timeout or cleanup uncertainty fails
 The synchronized readback is intentionally a correctness instrument; this does
 not claim performance or no-copy Present or independently measured composition.
 
-Result: not yet run.
+Result: M748 passes on CPU and GPU; all24 pulled images match exact expected colors. CPU171 restored43.030s, task Missing. See evidence/windows/2026-09-28-E34-m14-resize001.

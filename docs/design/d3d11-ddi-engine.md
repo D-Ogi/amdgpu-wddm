@@ -1,7 +1,8 @@
 # Design note: the DXVK engine behind the system D3D10/11 UMD (M14)
 
-Date: 2026-09-28. Status: engine implemented and tested offline; one standalone engine control on unit A (facts
-M725); nothing measured through the Microsoft runtime yet. Scope: the engine `bc250dxvk.dll`, its ABI and its
+Date: 2026-09-28. Status: engine implemented and tested offline; standalone control M725 and native Microsoft
+runtime offscreen/window controls M736-M747 measured on unit A. M747 passes window Present and exact image
+comparison; broad compatibility, composition transport and the performance bound remain open. Scope: the engine `bc250dxvk.dll`, its ABI and its
 known gaps. The shell (the DDI UMD in `driver/umd/dxvk/`) is described in that directory's README. Build recipe:
 [build.md](../build.md#dxvk). Direction: ADR 0017 item 4 (DXVK is the engine), item 7 (5 % bound), item 8
 (threading is a measurement).
