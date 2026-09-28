@@ -24,11 +24,11 @@ int main(int argc,char** argv) {
     UINT64 guard[2]={0xabcdef,0x123456};count=0;
     assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
     assert(count==1 && guard[0]==0xabcdef && guard[1]==0x123456);
-    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==S_OK && guard[0]==D3D12DDI_SUPPORTED_0108 && guard[1]==0x123456);
+    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==S_OK && guard[0]==D3D12DDI_SUPPORTED_0092 && guard[1]==0x123456);
     assert(funcs.pfnCreateDevice(a.hAdapter,nullptr)==E_INVALIDARG);
     D3D12DDIARG_CALCPRIVATEDEVICESIZE sizeArgs{};
     assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
-    sizeArgs.Interface=D3D12DDI_INTERFACE_VERSION_R8;sizeArgs.Version=D3D12DDI_BUILD_VERSION_0108<<16;
+    sizeArgs.Interface=D3D12DDI_INTERFACE_VERSION_R8;sizeArgs.Version=D3D12DDI_BUILD_VERSION_0092<<16;
     SIZE_T size=funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs);assert(size);
     void* storage=::operator new(size);
     D3D12DDIARG_CREATEDEVICE_0003 device{};device.hDrvDevice.pDrvPrivate=storage;

@@ -14,7 +14,7 @@ struct Device {
 };
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
     return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 &&
-        (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0108;
+        (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0092;
 }
 void trace(const char* operation,unsigned long long value=0) noexcept {
     fprintf(stderr,"d3d12-ddi %s %llu\n",operation,value);fflush(stderr);
@@ -49,7 +49,7 @@ HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
     if(!values) return S_OK;
     if(capacity<1) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
     // Diagnostic negotiation target only. Unimplemented capability/table queries remain fail-closed.
-    values[0]=D3D12DDI_SUPPORTED_0108;return S_OK;
+    values[0]=D3D12DDI_SUPPORTED_0092;return S_OK;
 }
 HRESULT APIENTRY caps(D3D12DDI_HADAPTER,const D3D12DDIARG_GETCAPS* a) {
     if(!a || (!a->pData && a->DataSize)) return E_INVALIDARG;
