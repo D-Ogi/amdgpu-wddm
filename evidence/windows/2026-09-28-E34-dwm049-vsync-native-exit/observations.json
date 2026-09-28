@@ -1,0 +1,191 @@
+{
+  "done.json": {
+    "restoration_succeeded": true,
+    "utc": "2026-09-28T04:24:50.6060109Z",
+    "trial_seconds": 125.23049139999999,
+    "success": false,
+    "gpu_pid": 1840,
+    "markers": 8,
+    "measured_seconds": 94.4006551,
+    "failure": "Native client did not complete\r\nAt C:\\BC250\\m13\\dwm-hosted049\\run.ps1:248 char:115\r\n+ ... ConvertFrom-Json).exit -ne 0){throw 'Native client did not complete'}\r\n+                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Native client did not complete:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Native client did not complete\r\n \r\n"
+  },
+  "restored.json": {
+    "before": [
+      {
+        "start": "2026-09-28T04:22:50.0802642Z",
+        "pid": 1840
+      }
+    ],
+    "utc": "2026-09-28T04:24:46.3203275Z",
+    "after": [
+      2440
+    ]
+  },
+  "tdr-events.json": {
+    "boot_after": "2026-09-28T02:44:58.5000000Z",
+    "boot_before": "2026-09-28T02:44:58.5000000Z",
+    "suspect_events": []
+  },
+  "tdr-start.json": {
+    "collect_debug_calls": 0,
+    "source": "current-complete-summary",
+    "reset_calls": 0
+  },
+  "tdr-end.json": {
+    "collect_debug_calls": 0,
+    "source": "current-complete-summary",
+    "reset_calls": 0
+  },
+  "watchdog-done.json": {
+    "restore_error": null,
+    "utc": "2026-09-28T04:24:50.6852572Z",
+    "aborted": false
+  },
+  "collector-done.json": {
+    "utc": "2026-09-28T04:24:51.6657400Z",
+    "samples": 108,
+    "reader_timeout": false
+  },
+  "display-mode.json": {
+    "source": "Win32_VideoController integer refresh, not measured vblank period",
+    "width": 1920,
+    "refresh_hz": 59,
+    "height": 1200
+  },
+  "vsync-start.json": {
+    "enabled": true,
+    "read_failures": 0,
+    "ack_failures": 0,
+    "ticks": 971,
+    "dpc_acks": 0,
+    "ack_age_upper_ms": 118.1018,
+    "old_buffer": 0,
+    "dpc_polls": 971,
+    "notify_age_upper_ms": 118.1018,
+    "read_duration_ms": 142.1203,
+    "read_begin_100ns": 58874312561,
+    "ack_100ns": 58874552746,
+    "no_event": 2897,
+    "sync_failures": 0,
+    "notify_100ns": 58874552746,
+    "deferred": 0,
+    "reports": 955,
+    "read_end_100ns": 58875733764,
+    "flips": 317
+  },
+  "vsync-end.json": {
+    "enabled": true,
+    "read_failures": 0,
+    "ack_failures": 0,
+    "ticks": 6209,
+    "dpc_acks": 8,
+    "ack_age_upper_ms": 120.1018,
+    "old_buffer": 2,
+    "dpc_polls": 6209,
+    "notify_age_upper_ms": 120.1018,
+    "read_duration_ms": 134.1129,
+    "read_begin_100ns": 59748123775,
+    "ack_100ns": 59748263886,
+    "no_event": 15669,
+    "sync_failures": 0,
+    "notify_100ns": 59748263886,
+    "deferred": 3,
+    "reports": 6192,
+    "read_end_100ns": 59749464904,
+    "flips": 4280
+  },
+  "vsync-interval.json": {
+    "ack_hz": 59.944298220004306,
+    "seconds": 87.3811214,
+    "notify_age_lower_ms": -14.0111,
+    "dpc_recovered_ack_observed": true,
+    "pass": true,
+    "skipped": 1,
+    "ack_age_lower_ms": -14.0111,
+    "expected_refresh_hz": 59,
+    "delta": {
+      "reports": 5237,
+      "dpc_acks": 8,
+      "old_buffer": 2,
+      "ticks": 5238,
+      "deferred": 3
+    }
+  },
+  "client-done.json": {
+    "exit": null,
+    "utc": "2026-09-28T04:24:37.3347356Z"
+  },
+  "gpu.bmp-check.json": {
+    "pass": true,
+    "pixels": 40712,
+    "mismatches": 0,
+    "regions": [
+      {
+        "region": "red",
+        "mismatches": 0,
+        "pixels": 1400
+      },
+      {
+        "region": "overlap",
+        "mismatches": 0,
+        "pixels": 6600
+      },
+      {
+        "region": "moving_full_client",
+        "mismatches": 0,
+        "pixels": 32712
+      }
+    ]
+  },
+  "screen.png-check.json": {
+    "pass": true,
+    "pixels": 40712,
+    "mismatches": 0,
+    "regions": [
+      {
+        "region": "red",
+        "mismatches": 0,
+        "pixels": 1400
+      },
+      {
+        "region": "overlap",
+        "mismatches": 0,
+        "pixels": 6600
+      },
+      {
+        "region": "moving_full_client",
+        "mismatches": 0,
+        "pixels": 32712
+      }
+    ]
+  },
+  "final_cpu": {
+    "utc": "2026-09-28T04:26:11.3271896Z",
+    "boot": "2026-09-28T04:44:58.5000000+02:00",
+    "version": "0.7.169.1",
+    "kmd_sha256": "AF715A5641E577E1D3023F22A38026D2E0189802F5E7146C7A868E9CD6D9D987",
+    "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+    "confirmed": {
+      "launch": true,
+      "age_ms": 524,
+      "epoch": 5,
+      "generation": 59886818448,
+      "flags": 15,
+      "completed": 154,
+      "ready_ms": 94019,
+      "flag_names": "Full, Ready, Visible, Confirmed"
+    },
+    "temperature": "06:26:17 Tctl 67.4 C (raw 747B0FEF)\r\n"
+  },
+  "local_artifacts": {
+    "receipts.zip": {
+      "bytes": 20721639,
+      "sha256": "10c6ec856f62cbff3f6f9e252f9c3f18057407f7576441d31b89160ea98f7db7"
+    },
+    "gpu.etl": {
+      "bytes": 171966464,
+      "sha256": "064facec7dee21b6017604a35b1332e490470c6c5c9cc5d325b6032eab3e3015"
+    }
+  }
+}
