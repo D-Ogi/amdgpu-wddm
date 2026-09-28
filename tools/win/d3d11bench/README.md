@@ -147,3 +147,21 @@ A native driver on the system side is a tool check only: its costs sit in differ
 the command building that DXVK does while recording), and it says nothing about the bound.
 
 Bez pracy nie ma kołaczy. (No work, no cake: the bound is measured, not assumed.)
+
+## Window resource lifetime control
+
+`--mode window --scenes resize --size 64x64 --deadline 20` is a functional
+control, excluded from the three performance scenes. It renders three distinct
+exact clear colors and Presents at each of four sizes: requested,65x33,127x79,
+requested again. The twelve pre-Present readbacks must match the expected BGRA
+bytes, including alpha. Optional PAM dumps preserve every frame. An event query
+retires each iteration; before each ResizeBuffers the context state is cleared,
+views/back-buffer/staging references released and commands flushed. Reacquired
+back-buffer dimensions and format must match. CPU/GPU comparison can therefore
+check resizing, identity rotation and old-resource retirement with the same
+workload. It does not verify composed screen pixels or copy-free transport.
+
+The resize scene must be selected alone and requires window mode. Successful
+JSON has three resizes, twelve Presents, twelve pixel checks and four per-size
+records. Failure or deadline never produces a successful scene. Existing scene
+revision2 workloads and their performance comparison are unchanged.

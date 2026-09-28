@@ -726,6 +726,67 @@ bool EndFrame(Target &t, ID3D11DeviceContext *ctx, UINT frame) {
   return true;
 }
 
+// Functional ownership control, deliberately synchronized for exact readback.
+// It does not enter the performance comparisons of draws/fill/shaders.
+bool RunResize(ID3D11Device *dev, ID3D11DeviceContext *ctx, Target &t, const Options &o,
+               std::string &json, std::string &summary) {
+  if (!t.swap || !t.window) return false;
+  const UINT sizes[][2] = {{o.width,o.height},{65,33},{127,79},{o.width,o.height}};
+  const float colors[][4] = {{1,0,0,1},{0,1,0,1},{0,0,1,1}};
+  const uint8_t pixels[][4] = {{0,0,255,255},{0,255,0,255},{255,0,0,255}};
+  D3D11_QUERY_DESC qd = {D3D11_QUERY_EVENT,0};
+  ComPtr<ID3D11Query> retired;
+  if (!Ok(dev->CreateQuery(&qd,&retired),"resize completion query")) return false;
+  std::string steps;
+  for (UINT step=0; step<ARRAYSIZE(sizes); ++step) {
+    if (Expired()) return false;
+    if (step) {
+      // No context binding or retained back-buffer reference may cross ResizeBuffers.
+      ctx->ClearState();
+      t.rtv.Reset(); t.texture.Reset(); t.staging.Reset();
+      ctx->Flush();
+      t.width=sizes[step][0]; t.height=sizes[step][1];
+      if (!SetWindowPos(t.window,nullptr,32,32,int(t.width),int(t.height),SWP_NOZORDER|SWP_NOACTIVATE))
+        return Ok(HRESULT_FROM_WIN32(GetLastError()),"resize window");
+      Pump();
+      if (!Ok(t.swap->ResizeBuffers(2,t.width,t.height,kFormat,0),"ResizeBuffers") ||
+          !Ok(t.swap->GetBuffer(0,IID_PPV_ARGS(&t.texture)),"resized back buffer") ||
+          !Ok(dev->CreateRenderTargetView(t.texture.Get(),nullptr,&t.rtv),"resized RTV") ||
+          !Staging(dev,t.width,t.height,t.staging)) return false;
+    }
+    D3D11_TEXTURE2D_DESC actual{}; t.texture->GetDesc(&actual);
+    if (actual.Width!=t.width || actual.Height!=t.height || actual.Format!=kFormat) return false;
+    std::string frames;
+    for (UINT frame=0; frame<3; ++frame) {
+      if (Expired()) return false;
+      Pump();
+      const UINT color=(step+frame)%3;
+      ctx->ClearRenderTargetView(t.rtv.Get(),colors[color]);
+      ctx->CopyResource(t.staging.Get(),t.texture.Get());
+      if (!EndFrame(t,ctx,frame)) return false;
+      ctx->End(retired.Get()); ctx->Flush();
+      if (!WaitEvent(ctx,retired.Get())) return false;
+      std::string checksum;
+      const std::string name="resize-"+std::to_string(step)+"-"+std::to_string(frame);
+      if (!Checksum(ctx,t.staging.Get(),t.width,t.height,o,name.c_str(),checksum)) return false;
+      uint64_t expected=14695981039346656037ull;
+      for (UINT64 n=0; n<UINT64(t.width)*t.height; ++n)
+        for (uint8_t b:pixels[color]) { expected^=b; expected*=1099511628211ull; }
+      if (checksum!=Hex(expected,16)) {
+        printf("FAIL resize pixels step=%u frame=%u got=%s expected=%s\n",step,frame,checksum.c_str(),Hex(expected,16).c_str());
+        return false;
+      }
+      frames+=(frame ? "," : "")+Quote(checksum);
+    }
+    steps+=(step ? "," : "")+std::string("{\"width\":")+std::to_string(t.width)+
+      ",\"height\":"+std::to_string(t.height)+",\"presents\":3,\"checksums\":["+frames+"]}";
+  }
+  ctx->ClearState(); ctx->Flush();
+  json="{\"name\":\"resize\",\"resizes\":3,\"presents\":12,\"pixel_checks\":12,\"steps\":["+steps+"]}";
+  summary+="PASS resize: 3 ResizeBuffers, 12 Presents and exact color checks\n";
+  return true;
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Runs
 
@@ -1045,7 +1106,7 @@ bool WriteAtomically(const std::wstring &path, const std::string &text) {
 
 const char kUsage[] =
     "d3d11bench.exe --mode window|offscreen [options]\n"
-    "  --scenes LIST     draws,fill,shaders (default: all three)\n"
+    "  --scenes LIST     draws,fill,shaders (default); resize alone in window mode\n"
     "  --size WxH        render size (default 1280x720)\n"
     "  --frames N        measured frames per frame scene (default 300)\n"
     "  --warmup N        unmeasured frames before them (default 30)\n"
@@ -1093,7 +1154,7 @@ bool ParseArgs(int argc, wchar_t **argv, Options &o) {
       while (pos <= list.size()) {
         const size_t comma = std::min(list.find(',', pos), list.size());
         const std::string name = list.substr(pos, comma - pos);
-        if (name != "draws" && name != "fill" && name != "shaders")
+        if (name != "draws" && name != "fill" && name != "shaders" && name != "resize")
           return false;
         o.scenes.push_back(name);
         pos = comma + 1;
@@ -1143,6 +1204,8 @@ bool ParseArgs(int argc, wchar_t **argv, Options &o) {
       return false;
     }
   }
+  if (std::find(o.scenes.begin(),o.scenes.end(),"resize")!=o.scenes.end() && (!o.window || o.scenes.size()!=1))
+    return false;
   return o.modeGiven;
 }
 
@@ -1214,7 +1277,9 @@ int Run(const Options &o) {
     for (const std::string &name : scenes) {
       std::string json;
       bool ok = false;
-      if (name == "shaders") {
+      if (name == "resize") {
+        ok = RunResize(dev.Get(),ctx.Get(),target,o,json,summary);
+      } else if (name == "shaders") {
         ok = RunShaders(dev.Get(), ctx.Get(), o, json, summary);
       } else {
         std::unique_ptr<FrameScene> scene;
