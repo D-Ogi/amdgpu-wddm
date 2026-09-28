@@ -9,7 +9,11 @@ function Get-TrialKey {
  if($gpu.Count -ne 1 -or $gpu[0].Status -ne 'OK'){throw 'Expected healthy BC-250'}
  if((Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data -ne '0.7.171.1'){throw 'KMD171 required'}
  $path='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_Driver).Data
- return Get-Item -LiteralPath $path
+ # The registry provider's Get-Item returns a read-only RegistryKey even under
+ # SYSTEM. Request a writable handle explicitly; retain exact-key admission.
+ $key=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($path.Substring(6),$true)
+ if(!$key){throw 'Cannot open adapter key for writing'}
+ return $key
 }
 function Check-StopThermal {
  if((Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 2).stop){throw 'Owner STOP'}
