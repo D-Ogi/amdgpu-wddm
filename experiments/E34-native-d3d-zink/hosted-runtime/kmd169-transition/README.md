@@ -46,9 +46,22 @@ nested tree and a failed rollback. Actual PnP remains untested.
 
 Still required before launch:
 - Failure injection through the complete runner, including installer timeout.
-- Exact staging manifest, dispatch and fresh lab preflight.
+- Independent scheduled dispatch and fresh lab preflight.
 - A separate bounded GPU trial after the transition has closed successfully.
 
 The transition must not be counted as a successful GPU desktop test. KMD169's
 vector ACK fix has passed local build/quality gates and independent review;
 its runtime effectiveness remains unmeasured.
+
+## Stage preparation
+
+prepare.py requires committed runner sources, validates both package pin sets,
+and creates a fresh local directory. It preserves the sibling script layout,
+copies the tested bounded-child executable and emits a SHA-256 manifest.
+Pass that manifest digest explicitly to launch.ps1 after validating the copied
+entry point on the host/transport side. The manifest is an integrity record,
+not a signature or a security boundary against a hostile administrator.
+
+verify-stage.ps1 rejects changed files, changed manifests, empty file sets and
+paths outside the stage. The candidate phase still validates the driver package
+hashes independently. No network operation occurs during preparation.
