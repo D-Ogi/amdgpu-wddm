@@ -1,6 +1,7 @@
 $ErrorActionPreference='Stop'
 $d='C:\BC250\m13\dwm-hosted048'
 . "$PSScriptRoot\durable.ps1"
+. "$PSScriptRoot\vsync-witness.ps1"
 . "$PSScriptRoot\confirmed-present-start.ps1"
 . "$PSScriptRoot\request-audit-checkpoint.ps1"
 $trialClock=$null
@@ -153,8 +154,7 @@ try {
    $measuredSeconds=$watch.Elapsed.TotalSeconds
    @{utc=[DateTime]::UtcNow.ToString('o');elapsed=$measuredSeconds;pid=$proc.Id;cpu_seconds=$proc.CPU;temperature_c=$temperature;modules=$mods;log_bytes=(Get-Item $log).Length} | ConvertTo-Json -Depth 5 | Set-Content "$d\process-$i-$gpuPid.json"
    if($i -eq 0){
-    & $cli log summary *> "$d\kmd-start.log"
-    if($LASTEXITCODE -ne 0){throw 'Startup GPU Present summary unavailable'}
+    $vsyncStart=Save-KmdVsyncWitness $cli "$d\kmd-start.log" "$d\vsync-start.json"
     $summary=Get-Content "$d\kmd-start.log" -Raw
     $admission=[regex]::Matches($summary,'GPU Present submits([0-9]+) rejected([0-9]+) failed([0-9]+)')
     if(!$admission.Count){throw 'GPU Present admission counters unavailable'}
@@ -211,7 +211,11 @@ try {
    }
   }
   if(!$settled){throw 'Final control freeze/DwmFlush not acknowledged'}
-  & $cli log summary *> "$d\kmd-end.log"
+  $vsyncEnd=Save-KmdVsyncWitness $cli "$d\kmd-end.log" "$d\vsync-end.json"
+  foreach($counter in @('sync_failures','read_failures','ack_failures')){
+   if($vsyncEnd[$counter] -ne $vsyncStart[$counter]){throw "VSync error counter changed: $counter"}
+  }
+  if(!$vsyncEnd.enabled -or $vsyncEnd.ticks -le $vsyncStart.ticks -or $vsyncEnd.reports -le $vsyncStart.reports){throw 'No VSync progress across GPU interval'}
   Save-AuditBoundary "final-capture-start"
   $nativeCaptureStart=[Diagnostics.Stopwatch]::GetTimestamp()
   & $cli fbdump "$d\gpu.bmp" *> "$d\gpu-dump.log"

@@ -1,0 +1,16 @@
+$ErrorActionPreference='Stop'
+. "$PSScriptRoot\vsync-witness.ps1"
+$t=@(
+'wddm summary: vsync enabled, 0 ticks, 98 reported to dxgkrnl',
+'wddm summary: vidpn flip open: 30 hardware flips, 0 refused, 1 hardware vsyncs armed 100 acked 0 refused 2 completion-deferred 1 old-buffer-reports',
+'vsync vector: DPC polls 101 ACKs 3 sync-failures 0',
+'vsync diagnostic: no-event 2 read-fail 0 ack-fail 0',
+'vsync diagnostic: 100ns irq 900000 entry 900000 ack 900000 notify 910000 status 00101104') -join "`n"
+function Must-Reject([scriptblock]$Action){$failed=$false;try{& $Action|Out-Null}catch{$failed=$true};if(!$failed){throw 'False acceptance'}}
+$w=Get-KmdVsyncWitness $t 1000000
+if($w.ticks -ne 100 -or $w.dpc_acks -ne 3 -or $w.ack_age_upper_ms -ne 10 -or $w.notify_age_upper_ms -ne 9){throw 'Counter/clock decoding failed'}
+Must-Reject {Get-KmdVsyncWitness ($t+"`nwddm summary: vsync enabled, 0 ticks, 99 reported to dxgkrnl") 1000000}
+Must-Reject {Get-KmdVsyncWitness ($t -replace 'vsync vector:','missing:') 1000000}
+Must-Reject {Get-KmdVsyncWitness $t 800000}
+Must-Reject {Get-KmdVsyncWitness ($t -replace 'ack 900000','ack 0') 1000000}
+'PASS: KMD169 layout, timestamp bounds, newest-block and missing/future/zero controls'
