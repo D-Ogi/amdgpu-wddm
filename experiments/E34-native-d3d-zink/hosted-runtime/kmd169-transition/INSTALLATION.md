@@ -77,3 +77,9 @@ Capture requires exactly one published INF matching each manifest INF hash befor
 Install reselects the published INF by hash, runs the read-only store inspection, and checks both published and resolved-store INF hashes against the manifest. The native installation helper resolves the input through SetupGetInfDriverStoreLocation and SetupGetInfPublishedName before building its selected driver list. It therefore requests the registered node instead of the external package node observed in M712. Version, disabled-state and stopped-service checks still apply. No lab installation has validated this change yet; E0000217 causality remains unproven.
 
 Local /W4 /WX build and argument/package selection controls pass. Local API source: ref/sdk-api-docs at a4fd3f7e, setupapi/nf-setupapi-setupgetinfpublishednamew.md and nf-setupapi-setupgetinfdriverstorelocationw.md. A bounded exact166-to-exact166 control with preserved verbose SetupAPI settings and a tested recovery route must precede another169 transition.
+
+## Settled startup anchor
+
+The readiness sampler now reads CPU DWM identity and ready health together. Two consecutive valid samples must match both the DWM PID/start set and the KMD generation/epoch, with fresh completed work. Startup escape failures, flags below ready and epoch transitions reset the pair and are retried only within the original deadline. The accepted pair becomes the confirmation anchor. Changes after that point still fail verification. This avoids treating normal mode/visibility invalidations during startup as failures of an already settled interval.
+
+Regression controls cover unavailable escape, epoch3/4/5 startup, a failed sample between equal pairs, and DWM replacement with unchanged health. Existing readiness and confirmation deadline tests remain passing.

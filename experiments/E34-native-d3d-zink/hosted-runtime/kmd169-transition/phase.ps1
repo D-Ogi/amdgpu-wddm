@@ -159,11 +159,11 @@ if($Phase -eq 'Capture'){
     if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}
     Get-KmdReadyHealth $text $abi
    }
-   $startHealth=& $readHealth
-   $ready=Wait-KmdCpuBaseline -Saved $saved -AllowUnconfirmed -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Read $readCpu -Record {
+   $ready=Wait-KmdCpuBaseline -Saved $saved -AllowUnconfirmed -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Read $readCpu -ReadHealth $readHealth -Record {
     param($sample)
-    Write-DurableText "$out\$Receipt-ready-$($sample.attempt).json" ($sample|ConvertTo-Json)
+    Write-DurableText "$out\$Receipt-ready-$($sample.attempt).json" ($sample|ConvertTo-Json -Depth 5)
    }
+   $startHealth=$ready.health
    $observed=$ready.observed
    Write-DurableText "$out\$Receipt-readiness.json" ($ready|ConvertTo-Json -Depth 10)
    $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String

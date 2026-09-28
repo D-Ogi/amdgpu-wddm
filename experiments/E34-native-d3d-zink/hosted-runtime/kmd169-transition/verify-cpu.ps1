@@ -29,22 +29,28 @@ function Assert-KmdCpuBaseline {
 # Two matching process identities with passing module checks avoid accepting a
 # single sample taken while DWM is being replaced. This is not a lifetime promise.
 function Wait-KmdCpuBaseline {
- param($Saved,[scriptblock]$Read,[long]$Deadline,[scriptblock]$Record,
+ param($Saved,[scriptblock]$Read,[long]$Deadline,[scriptblock]$Record,[scriptblock]$ReadHealth,
        [ValidateRange(1,1000)][int]$IntervalMs=250,[switch]$AllowUnconfirmed)
  $attempts=0;$previous=$null;$firstReady=$null
  while([Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline){
   $attempts++;$sampleQpc=[Diagnostics.Stopwatch]::GetTimestamp()
-  $errorText=$null;$identity=$null;$observed=$null
+  $errorText=$null;$identity=$null;$observed=$null;$health=$null
   try {
    $observed=& $Read
    Assert-KmdCpuBaseline $Saved $observed -AllowUnconfirmed:$AllowUnconfirmed
+   if($ReadHealth){
+    $health=& $ReadHealth
+    if($null -eq $health.generation -or $null -eq $health.epoch -or $health.flags -notin @(7,15)){throw 'Health not ready'}
+    Assert-KmdFreshWork $health
+   }
    $identity=(@($observed.dwm|ForEach-Object {"$($_.pid):$($_.start)"}|Sort-Object) -join '|')
-  } catch {$errorText=[string]$_}
+   if($ReadHealth){$identity+="/health:$($health.generation):$($health.epoch)"}
+  } catch {$errorText=[string]$_;$identity=$null}
   $within=[Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline
   if($identity -and $null -eq $firstReady){$firstReady=$sampleQpc}
   $stable=$within -and $identity -and $identity -eq $previous
-  if($Record){& $Record @{attempt=$attempts;qpc=$sampleQpc;identity=$identity;error=$errorText;stable=[bool]$stable}|Out-Null}
-  if($stable){return @{observed=$observed;attempts=$attempts;first_ready_qpc=$firstReady;stable_qpc=[Diagnostics.Stopwatch]::GetTimestamp()}}
+  if($Record){& $Record @{attempt=$attempts;qpc=$sampleQpc;identity=$identity;error=$errorText;health=$health;stable=[bool]$stable}|Out-Null}
+  if($stable){return @{observed=$observed;health=$health;attempts=$attempts;first_ready_qpc=$firstReady;stable_qpc=[Diagnostics.Stopwatch]::GetTimestamp()}}
   $previous=$identity
   $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())*1000/[double][Diagnostics.Stopwatch]::Frequency
   if($remaining -gt 0){Start-Sleep -Milliseconds ([int][Math]::Min($IntervalMs,[Math]::Ceiling($remaining)))}
