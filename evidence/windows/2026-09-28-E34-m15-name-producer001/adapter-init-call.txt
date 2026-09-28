@@ -1,0 +1,14 @@
+001fd000 4c8d8e38080000           lea      r9, [rsi + 0x838]
+001fd007 498bcf                   mov      rcx, r15
+001fd00a 4c8d8618010000           lea      r8, [rsi + 0x118]
+001fd011 488d9620060000           lea      rdx, [rsi + 0x620]
+001fd018 e85be8ffff               call     0x1fb878 ; DpiGetAdapterInfo+0
+001fd01d 4863f8                   movsxd   rdi, eax
+001fd020 85c0                     test     eax, eax
+001fd022 0f89f2feffff             jns      0x1fcf1a
+001fd028 4c8bc7                   mov      r8, rdi
+001fd02b 488bd6                   mov      rdx, rsi
+001fd02e b903000000               mov      ecx, 3
+001fd033 48ff15e640f6ff           call     qword ptr [rip - 0x9bf1a]
+001fd03a 0f1f440000               nop      dword ptr [rax + rax]
+001fd03f e9c7feffff               jmp      0x1fcf0b ; ?Initialize@DXGADAPTER@@QEAAJPEAU_DEVICE_OBJECT@@PEAU_DXGK_ADAPTER_CAPS@@@Z+297
