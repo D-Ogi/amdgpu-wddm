@@ -181,7 +181,7 @@ HRESULT engine_heap_from_memory(DeviceContext* c, const D3D12_HEAP_DESC& desc, c
 void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
                         const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind) noexcept {
     backing_acquire(b);
-    new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, 0};
+    new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, kInitNone, nullptr, nullptr};
     c->live.fetch_add(1);
 }
 
@@ -290,8 +290,13 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     new (hheap.pDrvPrivate) HeapRecord{{Tag::Heap, 0, heap, c}, b};
     c->live.fetch_add(1);
     if (res_desc) {
-        construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, b, 0, desc, rt,
-                           ResourceKind::Committed);
+        auto* record = static_cast<ResourceRecord*>(hres.pDrvPrivate);
+        construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Committed);
+        // A committed render target or depth-stencil texture starts in VK_IMAGE_LAYOUT_UNDEFINED: engine-ddi
+        // discards it before any work of the device runs (queue.cpp, INTEGRATION.md "Committed render targets").
+        if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER &&
+            (desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)))
+            queue_initialization(c, record);
     }
     return S_OK;
 }
@@ -314,6 +319,10 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP 
     if (hres.pDrvPrivate) {
         if (auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c)) {
             Backing* b = r->backing;
+            if (r->kind == ResourceKind::Committed && cancel_initialization(c, r) && b && !b->retained) {
+                b->retained = r->h.engine;              // an initialization batch names it: see Backing::retained
+                r->h.engine = nullptr;
+            }
             release_engine(r->h);
             poison(r->h);
             c->live.fetch_sub(1);
@@ -661,7 +670,7 @@ void backing_release(Backing* b) noexcept {
     if (b->refs.fetch_sub(1) != 1) return;
     DeviceContext* c = b->device;
     PendingRelease* node = b->release_node;
-    node->payload = ReleasePayload{{b->heap, nullptr}, b->imported, b->memory, b->id};
+    node->payload = ReleasePayload{{b->retained, b->heap}, b->imported, b->memory, b->id};  // resource first
     delete b;
     c->release(node);
 }

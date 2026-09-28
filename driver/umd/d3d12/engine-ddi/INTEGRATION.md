@@ -227,10 +227,39 @@ is TRUE (D3D12 has no such flag).
 engine-ddi makes a committed resource as a heap and a resource placed at 0 (above). vkd3d-proton gives a placed
 render target or depth-stencil resource no initial layout transition (`libs/vkd3d/resource.c`, placed resource
 creation, at 7bfcd7f0): D3D12 requires the application to initialize a placed one with a clear, a discard or a
-copy, but not a committed one. A committed render target that is drawn to before it is cleared therefore starts
-in `VK_IMAGE_LAYOUT_UNDEFINED`; the offline harness draw matches word for word either way, and only the validation
-layer reports it. Open: engine-ddi has to initialize committed render targets and depth-stencil resources itself.
-The harness clears its target before the draw.
+copy, but not a committed one. Left alone, a committed render target drawn to before a clear starts in
+`VK_IMAGE_LAYOUT_UNDEFINED` (VVL `VUID-vkCmdBeginRendering-pRenderingInfo-09592`).
+
+engine-ddi therefore initializes them itself, with no engine option (queue.cpp):
+
+- CreateHeapAndResource of a committed texture with ALLOW_RENDER_TARGET or ALLOW_DEPTH_STENCIL queues the
+  resource. Buffers, placed resources and other textures are not queued.
+- The next `execute_command_lists` of the device first records `DiscardResource(resource, NULL)` for everything
+  queued since the last batch on one internal DIRECT list, and submits it before that call's lists. Nothing of the
+  device reaches a resource on the GPU before an ExecuteCommandLists, so the batch is in time. vkd3d-proton does
+  not check the D3D12 state for a discard: every subresource goes from `VK_IMAGE_LAYOUT_UNDEFINED` to the
+  resource's layout.
+- Queue. engine-ddi has no queue of its own: in INLINE mode a queue exists only through the shell's BindQueue with
+  a cookie the shell knows, and admission counts three graphics VkQueues. The batch runs on the executing queue when
+  that is DIRECT, otherwise on a live DIRECT queue of the device. An internal fence is signalled after it, and
+  every engine queue waits for the last signalled value on the GPU before its next lists. Until the device has a
+  DIRECT queue, the resources stay queued.
+- A batch is ordinary work of its queue for the release sequence. A resource destroyed while a batch names it
+  hands its engine resource to its heap memory, which releases it, before the heap, once that work has retired.
+  No batch waits on the CPU: a list whose last batch has not completed is not reused, another one is made.
+- If a batch fails, engine-ddi reports the error through `report_device_error` and makes no further batches.
+
+After the discard the content of a committed render target or depth-stencil resource is undefined, not zero:
+engine-ddi never writes a value into it. Whether the memory arrives zeroed is the kernel's and the shell's matter,
+and it is not measured. The DDI heap flags (`D3D12DDI_HEAP_FLAGS`, d3d12umddi.h) carry no counterpart of the
+API's `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`. The kernel allocation flags have `AllowNotZeroed` (in, WDDM 2.6: zero
+pages are not required) and `Zeroed` (out: the allocation was fulfilled by zero pages); no code in `driver/` sets
+`AllowNotZeroed` at this revision. The KMD implements the paging Fill operations (`driver/kmd/wddm.c`,
+WddmBuildPhysicalFill and WddmBuildVirtualFill) and reports `ZeroInPteSupported`, through which VidMm can initialize
+allocation contents.
+
+Development PC witness: the harness draws into a fresh committed target with no clear, word for word, and VVL
+reports nothing (`tests/test-shaders.cpp`).
 
 ### Offline witness
 

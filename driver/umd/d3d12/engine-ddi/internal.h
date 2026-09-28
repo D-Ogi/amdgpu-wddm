@@ -119,6 +119,8 @@ struct EngineQueue {
     // signalled on fence, bit 0 is set while work has been submitted that no successful signal covers yet.
     std::atomic<uint64_t> state;
     SRWLOCK submit_lock;                        // keeps ExecuteCommandLists and its Signal together
+    uint64_t init_waited;                       // the init_fence value this queue last waited for; submit_lock
+    bool closing;                               // destroy has begun: never borrowed again; DeviceContext::lock
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     std::atomic<uint64_t> harness_completed;    // nonzero: returned instead of the fence value
     std::atomic<bool> harness_fail_signal;      // the next retirement Signal is skipped and fails
@@ -126,6 +128,8 @@ struct EngineQueue {
 };
 // The retirement fence value of a queue (a retirement point of the engine, V8).
 uint64_t completed_value(EngineQueue* queue) noexcept;
+
+struct ResourceRecord;
 
 class DeviceContext {
 public:
@@ -150,6 +154,20 @@ public:
     // last signal). Its work may still use memory released later, so every later release is stuck.
     bool retirement_lost = false;
     ReleaseQueue releases;
+
+    // Initialization of committed render targets and depth-stencil resources (queue.cpp). All guarded by
+    // init_lock, which is taken before lock and before any queue's submit_lock.
+    SRWLOCK init_lock = SRWLOCK_INIT;
+    ResourceRecord* init_head = nullptr;        // waiting for their discard; intrusive through ResourceRecord
+    struct InitList {
+        ID3D12CommandAllocator* allocator;      // DIRECT
+        ID3D12GraphicsCommandList* list;
+        uint64_t value;                         // the init_fence value after its last batch: idle once reached
+    };
+    std::vector<InitList> init_lists;           // grows only while every list still has a batch in flight
+    ID3D12Fence* init_fence = nullptr;          // signalled after each batch, on the queue that ran it
+    uint64_t init_value = 0;                    // the last value signalled on init_fence
+    bool init_broken = false;                   // a batch failed: no further batches
 
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
@@ -205,6 +223,8 @@ struct Backing {
     ImportedMemory memory;
     uint64_t id;
     PendingRelease* release_node;               // allocated with the backing, handed to the release sequence
+    IUnknown* retained;                         // a destroyed committed resource still named by an initialization
+                                                // batch: released with the heap, before it, after retirement
 };
 void backing_acquire(Backing* backing) noexcept;
 void backing_release(Backing* backing) noexcept;
@@ -228,8 +248,23 @@ struct ResourceRecord {
     D3D12_RESOURCE_DESC1 desc;
     D3D12DDI_HRTRESOURCE rt;
     ResourceKind kind;
-    uint32_t reserved;
+    uint32_t init_state;                        // kInitNone, kInitQueued or kInitRecorded; init_lock
+    ResourceRecord* init_prev;                  // DeviceContext's initialization list while kInitQueued
+    ResourceRecord* init_next;
 };
+inline constexpr uint32_t kInitNone = 0;
+inline constexpr uint32_t kInitQueued = 1;
+inline constexpr uint32_t kInitRecorded = 2;    // named by a batch that may still run
+
+// Initialization of committed render targets and depth-stencil resources (queue.cpp). queue_initialization at
+// the create; cancel_initialization at the destroy, before the engine resource is released: it returns true when a
+// batch names the resource, which must then outlive the batch's retirement. flush_initializations runs at the start
+// of execute_command_lists: it submits the pending discards and returns the init_fence value the executing queue
+// must wait for (0: none).
+void queue_initialization(DeviceContext* context, ResourceRecord* resource) noexcept;
+bool cancel_initialization(DeviceContext* context, ResourceRecord* resource) noexcept;
+uint64_t flush_initializations(DeviceContext* context, EngineQueue* queue) noexcept;
+void release_initialization(DeviceContext* context) noexcept;       // context destroy: the internal objects
 
 struct DescriptorHeapRecord {
     RecordHeader h;                             // engine: ID3D12DescriptorHeap
@@ -343,6 +378,7 @@ void harness_set_release_observer(DeviceContext* context, ReleaseObserver observ
 uint32_t harness_pending_releases(DeviceContext* context) noexcept;
 uint32_t harness_stuck_releases(DeviceContext* context) noexcept;
 uint32_t harness_live_objects(DeviceContext* context) noexcept;
+uint32_t harness_pending_initializations(DeviceContext* context) noexcept;
 bool harness_retirement_lost(DeviceContext* context) noexcept;
 // Fault injection: completed_value returns value instead of the fence's (0 turns it off); the next retirement
 // Signal of execute_command_lists is skipped and fails with E_FAIL after the engine's ExecuteCommandLists ran.

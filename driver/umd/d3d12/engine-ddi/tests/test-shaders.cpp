@@ -300,7 +300,12 @@ void test_graphics(Env& env, Device& device) {
     checkf(hr == S_OK, "graphics: CreatePipelineState, graphics (hr %08lx)", static_cast<unsigned long>(hr));
 
     Buffer target, vb, readback;
+    const uint32_t init_before = engine_ddi::harness_pending_initializations(device.context);
     const HRESULT hr_t = create_render_target(env, device, DXGI_FORMAT_R32_UINT, target);
+    const uint32_t init_queued = engine_ddi::harness_pending_initializations(device.context);
+    checkf(hr_t != S_OK || init_queued == init_before + 1,
+           "graphics: the committed render target is queued for its initialization (%u -> %u)", init_before,
+           init_queued);
     const HRESULT hr_v = create_buffer(env, device, HeapKind::Upload, 256, false, vb);
     const HRESULT hr_r = create_buffer(env, device, HeapKind::Readback, UINT64{kPitch} * kSize, false, readback);
     checkf(hr_t == S_OK && hr_v == S_OK && hr_r == S_OK,
@@ -365,12 +370,8 @@ void test_graphics(Env& env, Device& device) {
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_target =
             transition(target, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RENDER_TARGET);
         t.pfnResourceBarrier(rec.hlist(), 1, &to_target);
-        // A full clear to a value the draw must overwrite. It is also the initialization vkd3d-proton requires of a
-        // placed render target (it gives those no initial layout transition), and engine-ddi places its committed
-        // resources too (INTEGRATION.md, "Committed render targets"). Without it the draw still matches, but the
-        // validation layer reports the image in VK_IMAGE_LAYOUT_UNDEFINED.
-        const FLOAT sentinel[4] = {12345.0f, 0.0f, 0.0f, 0.0f};
-        t.pfnClearRenderTargetView(rec.hlist(), rtv, sentinel, 0, nullptr);
+        // No clear: the target is fresh, and engine-ddi initializes it before these lists run (INTEGRATION.md,
+        // "Committed render targets"). The validation layer checks its layout at the draw.
         t.pfnOMSetRenderTargets(rec.hlist(), 1, &rtv, TRUE, nullptr);
         t.pfnDrawInstanced(rec.hlist(), 3, 1, 0, 0);
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
@@ -388,9 +389,12 @@ void test_graphics(Env& env, Device& device) {
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
         checkf(hr == S_OK && !device.shell.list_errors,
-               "graphics: root signature, PSO, root constant, vertex buffer, viewport, barriers, clear, "
+               "graphics: root signature, PSO, root constant, vertex buffer, viewport, barriers, "
                "DrawInstanced(3), copy, execute (hr %08lx)",
                static_cast<unsigned long>(hr));
+        const uint32_t init_after = engine_ddi::harness_pending_initializations(device.context);
+        checkf(init_after == 0, "graphics: execute initialized every queued committed render target (%u left)",
+               init_after);
         wait_queue_idle(env, queue, "graphics");
 
         void* cpu = nullptr;

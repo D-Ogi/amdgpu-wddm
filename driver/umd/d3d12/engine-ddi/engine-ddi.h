@@ -84,7 +84,9 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //      queue's fence reached the recorded value by the queue's final Release; otherwise the record stays
 //      pending for the device's lifetime and counts as live in destroy_device_context.
 //   2. The engine's final Release of its heap (V10 step 2; the resources placed in it were released at their own
-//      destroy). The engine never frees borrowed memory and makes no Vulkan call on it after this Release.
+//      destroy, except a committed resource that an initialization batch still named at its destroy, released
+//      here just before the heap: INTEGRATION.md, "Committed render targets"). The engine never frees borrowed
+//      memory and makes no Vulkan call on it after this Release.
 //   3. free_memory: the shell releases its Vulkan import. engine-ddi calls it exactly once per ImportedMemory and
 //      never retries, whatever it returns. A failure goes to report_device_error, and the shell keeps its record
 //      (with the allocation handle and cookie).
@@ -236,7 +238,10 @@ HRESULT create_engine_queue(DeviceContext* context, const BC250_VKD3D_COMMAND_QU
 void destroy_engine_queue(EngineQueue* queue) noexcept;
 // ExecuteCommandLists (the queue table is the shell's). Everything is submitted to the queue's bound context
 // before this returns (engine INLINE mode), followed by the signal of the queue's retirement fence. A failure is
-// reported through report_device_error and returned.
+// reported through report_device_error and returned. First, when committed render targets or depth-stencil
+// resources were created since the last call, it submits their initialization on this queue if it is DIRECT,
+// otherwise on another live DIRECT engine queue of the device, and this queue waits for it on the GPU
+// (INTEGRATION.md, "Committed render targets").
 HRESULT execute_command_lists(EngineQueue* queue, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept;
 // Present (the DXGI table is the shell's): the runtime allocation behind a resource. The resource must have
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.

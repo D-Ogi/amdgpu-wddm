@@ -137,6 +137,7 @@ template <class T> void release_ref(T*& p) noexcept {
 }
 
 void destroy(DeviceContext* c) noexcept {
+    release_initialization(c);
     release_ref(c->device10);
     release_ref(c->device8);
     release_ref(c->device4);
