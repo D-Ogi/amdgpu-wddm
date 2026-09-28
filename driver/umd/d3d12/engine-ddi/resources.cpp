@@ -3,6 +3,7 @@
 // their tile slots are in tiles.cpp), resource_allocation, object_allocation, and the list slots that move data
 // between resources (L10, L13, L17).
 #include "internal.h"
+#include "format-list.h"
 #include <algorithm>
 
 namespace engine_ddi {
@@ -512,10 +513,22 @@ UINT engine_quality_levels(DeviceContext* c, DXGI_FORMAT format, UINT sample_cou
                : 0;
 }
 
-// The engine's D3D12_FEATURE_FORMAT_SUPPORT answer as D3D12DDI_FORMAT_SUPPORT bits; 0 (no optional capability)
-// when the engine refuses the format, which is never a device error. MULTISAMPLE_RENDERTARGET means a render target
-// or depth-stencil target with some sample count above 1 (d3d12umddi.h), so it stays only while the engine reports
-// quality levels for such a count: then this answer and CheckMultisampleQualityLevels agree.
+// The D3D12DDI_FORMAT_SUPPORT bits the format list allows for format (format-list.h), 0 for a value it does not
+// list: R1_UNORM, the formats DXGI gained after the list (P208, V208, V408, the sampler feedback formats,
+// A4B4G4R4_UNORM) and anything past the enum.
+UINT format_list_allowed(DXGI_FORMAT format) noexcept {
+    for (const FormatListEntry& e : kFormatList)
+        if (e.format == format) return e.allowed;
+    return 0;
+}
+
+// The engine's D3D12_FEATURE_FORMAT_SUPPORT answer as D3D12DDI_FORMAT_SUPPORT bits, limited to the bits the D3D11.3
+// format list allows for the format (an engine answer beyond it, such as SHADER_GATHER on a stencil view, or DISPLAY,
+// which the DDI defines only from version 107 on, is dropped); 0 (no optional capability) when the engine refuses
+// the format, which is never a device error. BLENDABLE needs RENDERTARGET (d3d12umddi.h), and so does the output
+// merger's logic op. MULTISAMPLE_RENDERTARGET means a render target or depth-stencil target with some sample count
+// above 1 (d3d12umddi.h), so it stays only while the engine reports quality levels for such a count: then this
+// answer and CheckMultisampleQualityLevels agree.
 UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
     D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
     if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s)))) return 0;
@@ -545,6 +558,9 @@ UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
     UINT bits = 0;
     for (const Bit& b : one) bits |= (s.Support1 & b.api) ? b.ddi : 0;
     for (const Bit& b : two) bits |= (s.Support2 & b.api) ? b.ddi : 0;
+    bits &= format_list_allowed(format);
+    if (!(bits & D3D12DDI_FORMAT_SUPPORT_RENDERTARGET))
+        bits &= ~static_cast<UINT>(D3D12DDI_FORMAT_SUPPORT_BLENDABLE | D3D12DDI_FORMAT_SUPPORT_OUTPUT_MERGER_LOGIC_OP);
     if (bits & D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET) {
         bool any = false;
         for (UINT n = 2; n <= D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT && !any; n *= 2)
