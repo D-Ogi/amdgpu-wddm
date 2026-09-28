@@ -66,5 +66,17 @@ int main() {
     table.pfnVsSetShader(h,sh); table.pfnPsSetShader(h,{}); table.pfnGsSetShader(h,{});
     table.pfnDestroyShader(h,sh);
     if (errors!=17 || shader.object || owner.runtime().domain.entered()) std::abort();
+    D3D11_1DDIARG_TESSELLATION_IO_SIGNATURES tess{};
+    if (table.pfnCalcPrivateTessellationShaderSize(h,code,&tess)!=sizeof(shader)) std::abort();
+    table.pfnCreateComputeShader(h,code,sh,{});
+    if (shader.stage!=ShaderStage::compute) std::abort();
+    table.pfnCsSetShader(h,{});
+    table.pfnCreateHullShader(h,code,sh,{},&tess);
+    if (shader.stage!=ShaderStage::hull) std::abort();
+    table.pfnHsSetShader(h,{});
+    table.pfnCreateDomainShader(h,code,sh,{},&tess);
+    if (shader.stage!=ShaderStage::domain) std::abort();
+    table.pfnDsSetShader(h,{});
+    if (errors!=23 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
