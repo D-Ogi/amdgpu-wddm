@@ -2,6 +2,8 @@
 #include "adapter-caps.h"
 #include "device-state.h"
 #include "adapter-query-scope.h"
+#include "memory-policy.h"
+#include "ddi-trace.h"
 #include "engine-ddi/engine-ddi.h"
 #include <memory>
 #include <string>
@@ -10,6 +12,7 @@ namespace native12 {
 struct AdapterCapsOwner {
     HMODULE engine{},icd{};
     engine_ddi::AdapterCaps* caps{};
+    D3DKMT_HANDLE unresolved_adapter{};
     AdapterEngineAccess access{};
     ~AdapterCapsOwner() {
         engine_ddi::free_adapter_caps(caps);
@@ -21,6 +24,33 @@ namespace {
 const int module_anchor=0;
 HRESULT APIENTRY refuse_queue(void* count,void*,VkQueue){++*static_cast<unsigned*>(count);return E_NOTIMPL;}
 void APIENTRY no_queue(void* count,void*,VkQueue){++*static_cast<unsigned*>(count);}
+template<class Function> Function system_entry(HMODULE module,const char* name) noexcept {
+    const auto address=GetProcAddress(module,name);Function entry{};
+    static_assert(sizeof(entry)==sizeof(address));std::memcpy(&entry,&address,sizeof(entry));return entry;
+}
+HRESULT apply_memory_policy(Adapter& adapter,AdapterCapsOwner& owner) noexcept {
+    // KMT's OS-visible GPU-MMU capability is supplied by the admitted KMD. Read
+    // it using this adapter's LUID; neither device type nor UMA implies I/O coherence.
+    HMODULE gdi=LoadLibraryExW(L"gdi32.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!gdi)return HRESULT_FROM_WIN32(GetLastError());
+    const MemoryPolicyKmt kmt{
+        system_entry<PFND3DKMT_OPENADAPTERFROMLUID>(gdi,"D3DKMTOpenAdapterFromLuid"),
+        system_entry<PFND3DKMT_QUERYADAPTERINFO>(gdi,"D3DKMTQueryAdapterInfo"),
+        system_entry<PFND3DKMT_CLOSEADAPTER>(gdi,"D3DKMTCloseAdapter")};
+    LUID luid{};std::memcpy(&luid,&adapter.contract.luid,sizeof(luid));
+    bool coherent=false;HRESULT hr=query_memory_policy(luid,kmt,&coherent,&owner.unresolved_adapter);
+    FreeLibrary(gdi);
+    if(hr==S_OK){
+        engine_ddi::MemoryArchitecturePolicy policy{};policy.size=sizeof(policy);
+        policy.io_coherent=coherent?engine_ddi::PolicyBool::True:engine_ddi::PolicyBool::False;
+        hr=engine_ddi::set_memory_architecture_policy(owner.caps,&policy);
+    }
+    if(ddi_trace_enabled()){
+        std::fprintf(stderr,"d3d12-caps host-memory-policy io_coherent=%u unresolved=%u result=%08lx\n",
+            unsigned(coherent),unsigned(owner.unresolved_adapter!=0),static_cast<unsigned long>(hr));std::fflush(stderr);
+    }
+    return hr;
+}
 HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     HMODULE module{};
     if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -55,6 +85,7 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
         BC250_VKD3D_QUEUE_MODE_INLINE,&services,BC250_VKD3D_INSTANCE_MODE_PRIVATE};
     hr=engine_ddi::query_adapter_caps(&funcs,&info,&owner.caps);
     if(SUCCEEDED(hr) && (!scope.completed() || queue_calls))return E_UNEXPECTED;
+    if(SUCCEEDED(hr))hr=apply_memory_policy(adapter,owner);
     if(SUCCEEDED(hr))owner.access={funcs,get};
     return hr;
 }
@@ -67,6 +98,13 @@ HRESULT ensure_caps(Adapter& adapter, AdapterCapsOwner** out) noexcept {
             auto owner=std::make_unique<AdapterCapsOwner>();
             adapter.caps_status=load_caps(adapter,*owner);
             if(SUCCEEDED(adapter.caps_status))adapter.engine_caps=owner.release();
+            else if(owner->unresolved_adapter){
+                // A failed KMT close leaves ownership uncertain. Keep its record
+                // and owners for process teardown; CloseAdapter must not claim
+                // successful cleanup or retry a potentially consumed handle.
+                ++adapter.retained_engines;adapter.engine_caps=owner.release();
+                std::fprintf(stderr,"d3d12-caps unresolved query adapter retained\n");std::fflush(stderr);
+            }
         } catch(const std::bad_alloc&) {adapter.caps_status=E_OUTOFMEMORY;}
     }
     const HRESULT status=adapter.caps_status;

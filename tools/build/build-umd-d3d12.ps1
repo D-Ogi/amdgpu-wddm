@@ -39,6 +39,10 @@ try {
   if($LASTEXITCODE){throw 'Test build failed'}
   & .\adapter-test.exe (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')
   if($LASTEXITCODE){throw 'Adapter tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:memory-policy-test.exe "$repo\driver\umd\d3d12\memory-policy-test.cpp"
+  if($LASTEXITCODE){throw 'Memory policy query test build failed'}
+  & .\memory-policy-test.exe
+  if($LASTEXITCODE){throw 'Memory policy query tests failed'}
   & cl.exe @flags /Fe:queue-context-test.exe "$repo\driver\umd\d3d12\queue-context-test.cpp"
   if($LASTEXITCODE){throw 'Queue context test build failed'}
   & .\queue-context-test.exe
