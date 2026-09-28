@@ -10,6 +10,8 @@
 #include "native-tables.h"
 #include "adapter-caps.h"
 #include "ddi-0092-layout.h"
+#include "ddi-trace.h"
+#include <cstring>
 namespace {
 using native12::Adapter;
 using native12::Device;
@@ -58,6 +60,24 @@ HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
 HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
     if(!h.pDrvPrivate || !a || (!a->pData && a->DataSize)) return E_INVALIDARG;
     HRESULT hr=native12::get_adapter_caps(*static_cast<Adapter*>(h.pDrvPrivate),a);
+    if(hr==S_OK && native12::ddi_trace_enabled()){
+        if(a->Type==D3D12DDICAPS_TYPE_SHADER && a->DataSize==sizeof(D3D12DDI_SHADER_CAPS_0084)){
+            UINT words[16]{};std::memcpy(words,a->pData,sizeof(words));
+            std::fprintf(stderr,"d3d12-caps shader0084 words=");
+            for(auto word:words)std::fprintf(stderr," %08x",word);
+            std::fprintf(stderr,"\n");
+        }
+        if(a->Type==D3D12DDICAPS_TYPE_0011_SHADER_MODELS && a->DataSize==sizeof(D3D12DDI_D3D12_SHADER_MODELS_DATA_0011)){
+            const auto* models=static_cast<const D3D12DDI_D3D12_SHADER_MODELS_DATA_0011*>(a->pData);
+            if(models->pNumShaderModelsSupported){
+                const UINT count=*models->pNumShaderModelsSupported;
+                std::fprintf(stderr,"d3d12-caps shader-models count=%u array=%u values=",count,unsigned(models->pShaderModelsSupported!=nullptr));
+                if(models->pShaderModelsSupported && count<=64)
+                    for(UINT i=0;i<count;++i)std::fprintf(stderr," %08x",unsigned(models->pShaderModelsSupported[i]));
+                std::fprintf(stderr,"\n");
+            }
+        }
+    }
     fprintf(stderr,"d3d12-ddi GetCaps type=%u size=%u info_present=%u result=%08lx\n",
         unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));fflush(stderr);
     return hr;

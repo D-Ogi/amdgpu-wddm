@@ -32,6 +32,32 @@ struct Policy {
     }
 };
 struct SecondPolicy:Policy {};
+struct TracePolicy:Policy {
+    struct Event {Owner* owner;const char* name;std::uint64_t id;HRESULT outcome;bool begin;};
+    inline static Event events[32]{};
+    inline static unsigned count{};
+    inline static std::uint64_t sequence{};
+    template<class Handle> static Owner* resolve(Handle h) noexcept {
+        // A begin record must exist even if resolving the first handle fails.
+        assert(count && events[count-1].begin);
+        return Policy::resolve(h);
+    }
+    static std::uint64_t entry(Owner* owner,const char* name) noexcept {
+        assert(!owner && !current && count<32);
+        const auto id=++sequence;events[count++]={owner,name,id,S_OK,true};return id;
+    }
+    static void leave(Owner* owner,const char* name,std::uint64_t id,HRESULT outcome) noexcept {
+        assert(!current && count<32); // scope restoration precedes leave
+        events[count++]={owner,name,id,outcome,false};
+    }
+    static void paired(const char* name,Owner* owner,HRESULT outcome) {
+        assert(count>=2 && count%2==0);
+        const auto& begin=events[count-2];const auto& end=events[count-1];
+        assert(begin.begin && !end.begin && begin.id==end.id && begin.id==count/2);
+        assert(!begin.owner && end.owner==owner && end.outcome==outcome);
+        assert(!std::strcmp(begin.name,name) && !std::strcmp(end.name,name));
+    }
+};
 using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
 using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
 using Tables=native12::DdiEntryTables<Policy>;
@@ -78,11 +104,15 @@ HRESULT APIENTRY result(D3D12DDI_HDEVICE h,int value) {
     assert(current==static_cast<Owner*>(h.pDrvPrivate));++current->calls;
     if(value==1)throw std::bad_alloc{};
     if(value==2)throw std::runtime_error("test");
+    if(value==3)return E_ACCESSDENIED;
+    if(value==4)return S_OK;
     return S_FALSE;
 }
 struct ResultBinding {static auto original() noexcept{return result;}};
 using ResultThunk=native12::EntryThunk<decltype(&result),ResultBinding,Policy>;
 struct NullBinding {static decltype(&result) original() noexcept{return nullptr;}};
+struct TracedResultBinding:ResultBinding {static constexpr const char* name() noexcept{return "result";}};
+using TracedResult=native12::EntryThunk<decltype(&result),TracedResultBinding,TracePolicy>;
 Core source_core() {
     Core t{};
     t.pfnCheckFormatSupport=Dummy<decltype(t.pfnCheckFormatSupport)>::call;
@@ -348,10 +378,35 @@ int main() {
     assert(a.last_error==E_FAIL && a.failure_in_scope && !current && a.entered==a.left);
     matching_throwing=0;
 
+    // Optional diagnostics preserve the underlying return and pair every path.
+    Core traced_core{};List traced_list{};
+    assert(native12::DdiEntryTables<TracePolicy>::wrap_core(source,&traced_core)==S_OK);
+    assert(native12::DdiEntryTables<TracePolicy>::wrap_list(1,list_source,&traced_list)==S_OK);
+    traced_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&value);
+    TracePolicy::paired("pfnCheckFormatSupport",&a,S_OK);
+    assert(traced_core.pfnCalcPrivateFenceSize(ha,nullptr)==4097);
+    TracePolicy::paired("pfnCalcPrivateFenceSize",&a,S_OK);
+    traced_list.pfnDispatch({&a},2,3,4);
+    TracePolicy::paired("pfnDispatch",&a,S_OK);
+    assert(TracedResult::call(ha,4)==S_OK);TracePolicy::paired("result",&a,S_OK);
+    assert(TracedResult::call(ha,0)==S_FALSE);TracePolicy::paired("result",&a,S_FALSE);
+    assert(TracedResult::call(ha,3)==E_ACCESSDENIED);TracePolicy::paired("result",&a,E_ACCESSDENIED);
+    assert(TracedResult::call(ha,1)==E_OUTOFMEMORY);TracePolicy::paired("result",&a,E_OUTOFMEMORY);
+    assert(TracedResult::call(ha,2)==E_FAIL);TracePolicy::paired("result",&a,E_FAIL);
+    assert(TracedResult::call({},0)==E_INVALIDARG);TracePolicy::paired("result",nullptr,E_INVALIDARG);
+    b.allowed=false;
+    assert(TracedResult::call(hb,0)==E_UNEXPECTED);TracePolicy::paired("result",&b,E_UNEXPECTED);
+    b.allowed=true;
+    assert((native12::EntryThunk<decltype(&result),NullBinding,TracePolicy>::call(ha,0)==E_UNEXPECTED));
+    TracePolicy::paired("unnamed",&a,E_UNEXPECTED);
+    throwing=2;traced_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&value);throwing=0;
+    TracePolicy::paired("pfnCheckFormatSupport",&a,E_FAIL);
+    assert(!current && a.entered==a.left && b.entered==b.left);
+
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});
     call_a.join();call_b.join();refill.join();
     assert(!current && a.entered==a.left && b.entered==b.left);
-    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill and concurrency pass");
+    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired optional tracing and concurrency pass");
 }

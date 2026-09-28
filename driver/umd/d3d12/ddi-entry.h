@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <d3d12umddi.h>
 #include <atomic>
+#include <cstdint>
 #include <new>
 #include <tuple>
 #include <type_traits>
@@ -29,6 +30,44 @@ template<> struct EntryFailureValue<D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS> 
 // scope (or with nullptr owner); it must not invoke unauthorized runtime callbacks.
 // The caller owns handle/device lifetime. No resolver pins arbitrary stale memory.
 // Binding::original() noexcept returns the exact typed original function pointer.
+// Optional paired diagnostics. entry runs before resolving the handle, with a
+// null owner. leave sees the resolved owner (if any) after Scope has unwound;
+// neither hook grants callback authority. Hooks receive no DDI arguments.
+// S_OK for a void/non-status return means the function returned normally only.
+template<class Owner,class Binding,class Policy> class EntryTrace final {
+    static constexpr bool has_entry=requires(Owner* owner,const char* name) {Policy::entry(owner,name);};
+    static constexpr bool has_leave=requires(Owner* owner,const char* name,std::uint64_t id,HRESULT hr) {
+        Policy::leave(owner,name,id,hr);
+    };
+    static_assert(has_entry==has_leave,"DDI tracing requires both entry and leave hooks");
+    static constexpr const char* name() noexcept {
+        if constexpr(requires {Binding::name();}) {
+            static_assert(noexcept(Binding::name()),"binding name must not throw");
+            return Binding::name();
+        } else return "unnamed";
+    }
+    std::uint64_t id_{};
+public:
+    Owner* owner{};
+    HRESULT outcome{E_UNEXPECTED};
+    EntryTrace() noexcept {
+        if constexpr(has_entry) {
+            static_assert(noexcept(Policy::entry(owner,name())),"trace entry must not throw");
+            static_assert(std::is_same_v<decltype(Policy::entry(owner,name())),std::uint64_t>,
+                "trace entry must return uint64_t");
+            id_=Policy::entry(nullptr,name());
+        }
+    }
+    ~EntryTrace() noexcept {
+        if constexpr(has_leave) {
+            static_assert(noexcept(Policy::leave(owner,name(),id_,outcome)),"trace leave must not throw");
+            Policy::leave(owner,name(),id_,outcome);
+        }
+    }
+    EntryTrace(const EntryTrace&)=delete;
+    EntryTrace& operator=(const EntryTrace&)=delete;
+};
+
 template<class Function,class Binding,class Policy> struct EntryThunk;
 template<class R,class... A,class Binding,class Policy>
 struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
@@ -42,23 +81,33 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
     static R APIENTRY call(A... args) noexcept {
         auto first=std::get<0>(std::tuple<A...>(args...));
         static_assert(noexcept(Policy::resolve(first)),"resolve must not throw");
-        auto* owner=Policy::resolve(first);
-        if(!owner) return denied(owner,E_INVALIDARG);
+        using Owner=std::remove_pointer_t<decltype(Policy::resolve(first))>;
+        EntryTrace<Owner,Binding,Policy> trace;
+        auto* owner=Policy::resolve(first);trace.owner=owner;
+        const auto deny=[&](HRESULT hr) noexcept -> R {trace.outcome=hr;return denied(owner,hr);};
+        if(!owner) return deny(E_INVALIDARG);
         using Scope=typename Policy::Scope;
         static_assert(std::is_nothrow_constructible_v<Scope,decltype(*owner)>);
         static_assert(std::is_nothrow_destructible_v<Scope>);
         Scope scope(*owner);
         static_assert(noexcept(scope.entered()),"scope authority query must not throw");
-        if(!scope.entered()) return denied(owner,E_UNEXPECTED);
+        if(!scope.entered()) return deny(E_UNEXPECTED);
         static_assert(noexcept(Binding::original()),"original lookup must not throw");
         auto fn=Binding::original();
-        if(!fn) return denied(owner,E_UNEXPECTED);
+        if(!fn) return deny(E_UNEXPECTED);
         try {
-            return fn(args...);
+            if constexpr(std::is_void_v<R>) {
+                fn(args...);trace.outcome=S_OK;return;
+            } else {
+                R value=fn(args...);
+                if constexpr(std::is_same_v<R,HRESULT>)trace.outcome=value;
+                else trace.outcome=S_OK;
+                return value;
+            }
         } catch(const std::bad_alloc&) {
-            return denied(owner,E_OUTOFMEMORY);
+            return deny(E_OUTOFMEMORY);
         } catch(...) {
-            return denied(owner,E_FAIL);
+            return deny(E_FAIL);
         }
     }
 };
@@ -280,13 +329,19 @@ template<class Policy> class DdiEntryTables final {
         Lock(const Lock&)=delete;
         Lock& operator=(const Lock&)=delete;
     };
-    template<auto Member> struct CoreBinding {
+#define N12_CORE_NAME(m) struct CoreName_##m {static constexpr const char* name() noexcept {return #m;}};
+    NATIVE12_CORE_0088_MEMBERS(N12_CORE_NAME)
+#undef N12_CORE_NAME
+#define N12_LIST_NAME(m) struct ListName_##m {static constexpr const char* name() noexcept {return #m;}};
+    NATIVE12_LIST_0092_MEMBERS(N12_LIST_NAME)
+#undef N12_LIST_NAME
+    template<auto Member,class Name> struct CoreBinding:Name {
         static auto original() noexcept {
             using Fn=std::remove_reference_t<decltype(core_.*Member)>;
             return core_ready_.load(std::memory_order_acquire)?core_.*Member:Fn{};
         }
     };
-    template<unsigned Index,auto Member> struct ListBinding {
+    template<unsigned Index,auto Member,class Name> struct ListBinding:Name {
         static auto original() noexcept {
             using Fn=std::remove_reference_t<decltype(lists_[Index].*Member)>;
             return list_ready_[Index].load(std::memory_order_acquire)?lists_[Index].*Member:Fn{};
@@ -295,7 +350,7 @@ template<class Policy> class DdiEntryTables final {
     template<unsigned Index> static HRESULT wrap_list_at(const List& source,List* out) noexcept {
         if(!out) return E_INVALIDARG;
         List wrapped{};
-#define N12_WRAP_LIST(m) wrapped.m=&EntryThunk<decltype(source.m),ListBinding<Index,&List::m>,Policy>::call;
+#define N12_WRAP_LIST(m) wrapped.m=&EntryThunk<decltype(source.m),ListBinding<Index,&List::m,ListName_##m>,Policy>::call;
         NATIVE12_LIST_0092_MEMBERS(N12_WRAP_LIST)
 #undef N12_WRAP_LIST
 #define N12_VALIDATE_LIST(m) if(!source.m || source.m==wrapped.m) return E_INVALIDARG;
@@ -322,7 +377,7 @@ public:
     static HRESULT wrap_core(const Core& source,Core* out) noexcept {
         if(!out) return E_INVALIDARG;
         Core wrapped{};
-#define N12_WRAP_CORE(m) wrapped.m=&EntryThunk<decltype(source.m),CoreBinding<&Core::m>,Policy>::call;
+#define N12_WRAP_CORE(m) wrapped.m=&EntryThunk<decltype(source.m),CoreBinding<&Core::m,CoreName_##m>,Policy>::call;
         NATIVE12_CORE_0088_MEMBERS(N12_WRAP_CORE)
 #undef N12_WRAP_CORE
 #define N12_VALIDATE_CORE(m) if(!source.m || source.m==wrapped.m) return E_INVALIDARG;

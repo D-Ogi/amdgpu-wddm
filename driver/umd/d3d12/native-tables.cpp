@@ -4,6 +4,7 @@
 #include "device-engine.h"
 #include "device-table.h"
 #include "ddi-entry.h"
+#include "ddi-trace.h"
 #include "fence-ddi.h"
 #include "shell-core-ddi.h"
 #include "native-queue-ddi.h"
@@ -13,6 +14,8 @@ namespace native12 {
 namespace {
 struct EntryPolicy {
     using Scope=DeviceEngineScope;
+    static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
+    static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
     static Device* resolve(D3D12DDI_HDEVICE handle) noexcept {return static_cast<Device*>(handle.pDrvPrivate);}
     static Device* resolve(D3D12DDI_HCOMMANDLIST handle) noexcept {
         return static_cast<Device*>(engine_ddi::command_list_shell(handle));
@@ -46,8 +49,17 @@ const Queue& queue_original() noexcept {
 const Extended& extended_original() noexcept {
     static const Extended table=[]() noexcept {Extended value{};fill_native_extended_table(&value);return value;}();return table;
 }
-template<auto Member> struct QueueBinding {static auto original() noexcept {return queue_original().*Member;}};
-template<auto Member> struct ExtendedBinding {static auto original() noexcept {return extended_original().*Member;}};
+struct QueueName_pfnExecuteCommandLists {static const char* name() noexcept {return "pfnExecuteCommandLists";}};
+struct QueueName_pfnUpdateTileMappings {static const char* name() noexcept {return "pfnUpdateTileMappings";}};
+struct QueueName_pfnCopyTileMappings {static const char* name() noexcept {return "pfnCopyTileMappings";}};
+struct QueueName_pfnSignalFence {static const char* name() noexcept {return "pfnSignalFence";}};
+struct QueueName_pfnWaitForFence {static const char* name() noexcept {return "pfnWaitForFence";}};
+template<auto Member,class Name> struct QueueBinding {static const char* name() noexcept {return Name::name();} static auto original() noexcept {return queue_original().*Member;}};
+struct ExtendedName_pfnGetSupportedExtendedFeatures {static const char* name() noexcept {return "pfnGetSupportedExtendedFeatures";}};
+struct ExtendedName_pfnGetSupportedExtendedFeatureVersions {static const char* name() noexcept {return "pfnGetSupportedExtendedFeatureVersions";}};
+struct ExtendedName_pfnEnableExtendedFeature {static const char* name() noexcept {return "pfnEnableExtendedFeature";}};
+struct ExtendedName_pfnSetExtendedFeatureCallbacks {static const char* name() noexcept {return "pfnSetExtendedFeatureCallbacks";}};
+template<auto Member,class Name> struct ExtendedBinding {static const char* name() noexcept {return Name::name();} static auto original() noexcept {return extended_original().*Member;}};
 }
 HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* output,SIZE_T size,
     UINT number,D3D12DDI_HRTTABLE runtime) noexcept {
@@ -80,7 +92,7 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
     case D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D:{
         if(number || size!=sizeof(Queue))return E_INVALIDARG;
         Queue wrapped{};
-#define WRAP_QUEUE(member) wrapped.member=&EntryThunk<decltype(wrapped.member),QueueBinding<&Queue::member>,EntryPolicy>::call;
+#define WRAP_QUEUE(member) wrapped.member=&EntryThunk<decltype(wrapped.member),QueueBinding<&Queue::member,QueueName_##member>,EntryPolicy>::call;
         WRAP_QUEUE(pfnExecuteCommandLists)
         WRAP_QUEUE(pfnUpdateTileMappings)
         WRAP_QUEUE(pfnCopyTileMappings)
@@ -92,7 +104,7 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
     case D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES:{
         if(number || size!=sizeof(Extended))return E_INVALIDARG;
         Extended wrapped{};
-#define WRAP_EXTENDED(member) wrapped.member=&EntryThunk<decltype(wrapped.member),ExtendedBinding<&Extended::member>,EntryPolicy>::call;
+#define WRAP_EXTENDED(member) wrapped.member=&EntryThunk<decltype(wrapped.member),ExtendedBinding<&Extended::member,ExtendedName_##member>,EntryPolicy>::call;
         WRAP_EXTENDED(pfnGetSupportedExtendedFeatures)
         WRAP_EXTENDED(pfnGetSupportedExtendedFeatureVersions)
         WRAP_EXTENDED(pfnEnableExtendedFeature)
