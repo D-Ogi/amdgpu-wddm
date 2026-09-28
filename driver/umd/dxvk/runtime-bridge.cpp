@@ -339,4 +339,32 @@ HRESULT wait_present_idle(HostBridge &bridge)
    return SUCCEEDED(hr) ? Bc250HostStatus(s) : hr;
 }
 
+HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
+    D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine)
+{
+   auto *device=bridge.device;
+   if (!device || !device->domain.entered() || !device->present_context || !source || !flush)
+      return E_INVALIDARG;
+   if (!device->DXGICallbacks.pfnPresentCb) return E_NOTIMPL;
+   if (FAILED(Bc250HostStatus(&bridge)) || bridge.submission_failed)
+      return DXGI_ERROR_DEVICE_REMOVED;
+   HRESULT hr=flush(engine);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
+   if (FAILED(hr)) return hr;
+   hr=queue_present_wait(bridge);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
+   if (FAILED(hr)) return hr;
+   DXGIDDICB_PRESENT present={};
+   present.hSrcAllocation=source;
+   present.hDstAllocation=destination;
+   present.hContext=device->present_context;
+   present.pDXGIContext=dxgi_context;
+   const HRESULT result=device->DXGICallbacks.pfnPresentCb(device->hDevice,&present);
+   if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge);
+   if (FAILED(result)) return result;
+   hr=signal_present(bridge);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
+   return FAILED(hr) ? hr : result;
+}
+
 }

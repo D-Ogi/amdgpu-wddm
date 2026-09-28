@@ -31,8 +31,10 @@ static HRESULT APIENTRY resident(HANDLE device, D3DDDI_MAKERESIDENT *) {
     require(device==&identity); return E_PENDING;
 }
 void test_present_bridge();
+void test_runtime_present();
 int main() {
     test_present_bridge();
+    test_runtime_present();
     RuntimeDevice device;
     device.hDevice=&identity;
     device.KTCallbacks.pfnAllocateCb=allocate;
@@ -80,4 +82,5 @@ int main() {
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)==static_cast<int32_t>(0xc00002b6u));
     std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, worker denial, teardown\n";
 }
+
 

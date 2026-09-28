@@ -14,6 +14,7 @@ struct RuntimeDevice {
     HANDLE present_context = nullptr;
     D3D10DDI_HRTCORELAYER hRTCoreLayer = {};
     volatile UINT64 *pagingFence = nullptr;
+    DXGI_DDI_BASE_CALLBACKS DXGICallbacks = {};
     D3DDDI_DEVICECALLBACKS KTCallbacks = {};
     D3D10DDI_CORELAYER_DEVICECALLBACKS UMCallbacks = {};
 };
@@ -30,6 +31,9 @@ struct HostBridge {
    D3DKMT_HANDLE present_sync;
    UINT64 present_value, present_waited[16];
 };
+using FlushEngine = HRESULT (*)(void *);
+HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
+    D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine);
 HRESULT queue_present_wait(HostBridge &bridge);
 HRESULT signal_present(HostBridge &bridge);
 // Destruction/readback only. Steady-state Present uses GPU waits above.
