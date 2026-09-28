@@ -8,6 +8,7 @@
 #include "ddi-blend.h"
 #include "ddi-resource.h"
 #include "ddi-buffer-binding.h"
+#include "ddi-transfer.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -33,6 +34,7 @@ int main() {
     install_blend_ddi(table);
     install_resource_ddi(table);
     install_buffer_binding_ddi(table);
+    install_transfer_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -226,5 +228,21 @@ int main() {
     table.pfnDsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
     table.pfnCsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
     if (errors!=50 || owner.runtime().domain.entered()) std::abort();
+    D3D10_DDI_BOX box{4,5,1,24,13,3}; D3D11_BOX cb{}; bool empty=false; UINT cf=99;
+    if (convert_copy_box(&box,cb,empty)!=S_OK || empty || cb.left!=4 || cb.back!=3 || cb.right!=24) std::abort();
+    box.left=-1;
+    if (convert_copy_box(&box,cb,empty)!=E_INVALIDARG || cb.left!=4) std::abort();
+    box.left=box.right;
+    if (convert_copy_box(&box,cb,empty)!=S_OK || !empty) std::abort();
+    if (convert_copy_box(nullptr,cb,empty)!=S_OK || empty) std::abort();
+    if (convert_copy_flags(D3D11_1DDI_COPY_DISCARD|D3D11_1DDI_COPY_TILEABLE,cf)!=S_OK || cf!=D3D11_COPY_DISCARD) std::abort();
+    if (convert_copy_flags(D3D11_1DDI_COPY_NO_OVERWRITE,cf)!=S_OK || cf!=D3D11_COPY_NO_OVERWRITE) std::abort();
+    if (convert_copy_flags(0x80000000,cf)!=E_INVALIDARG || cf!=D3D11_COPY_NO_OVERWRITE) std::abort();
+    if (convert_copy_flags(D3D11_1DDI_COPY_DISCARD|D3D11_1DDI_COPY_NO_OVERWRITE,cf)!=E_INVALIDARG) std::abort();
+    table.pfnResourceCopy(h,rhandle,rhandle);
+    table.pfnResourceCopyRegion(h,rhandle,2,4,5,1,rhandle,1,&box,0);
+    table.pfnResourceUpdateSubresourceUP(h,rhandle,1,nullptr,&payload,4,4,0);
+    table.pfnResourceResolveSubresource(h,rhandle,0,rhandle,1,DXGI_FORMAT_R8G8B8A8_UNORM);
+    if (errors!=54 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
