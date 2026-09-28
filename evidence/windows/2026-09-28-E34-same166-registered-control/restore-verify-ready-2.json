@@ -1,0 +1,15 @@
+{
+    "stable":  true,
+    "attempt":  2,
+    "identity":  "2652:2026-09-28T02:46:01.6091277Z/health:27099748258:5",
+    "error":  null,
+    "health":  {
+                   "flags":  7,
+                   "epoch":  5,
+                   "completed":  4,
+                   "ready_ms":  3720,
+                   "generation":  27099748258,
+                   "age_ms":  3432
+               },
+    "qpc":  27144806293
+}
