@@ -25,7 +25,7 @@ HRESULT APIENTRY deallocate(HANDLE h,const D3DDDICB_DEALLOCATE2 *a) {
 }
 }
 namespace {
-UINT64 pagingCpu=0; unsigned unmaps=0; bool rejectResident=false,rejectUnmap=false;
+UINT64 pagingCpu=0; unsigned unmaps=0; bool rejectResident=false,rejectUnmap=false,immediateResident=false;
 HRESULT APIENTRY createQueue(HANDLE,D3DDDICB_CREATEPAGINGQUEUE *q) { q->hPagingQueue=7; q->hSyncObject=8; q->FenceValueCPUVirtualAddress=&pagingCpu; return S_OK; }
 HRESULT APIENTRY destroyQueue(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE *q) { check(q->hPagingQueue==7); return S_OK; }
 HRESULT APIENTRY mapVa(HANDLE,D3DDDI_MAPGPUVIRTUALADDRESS *m) {
@@ -35,6 +35,7 @@ HRESULT APIENTRY mapVa(HANDLE,D3DDDI_MAPGPUVIRTUALADDRESS *m) {
 HRESULT APIENTRY resident(HANDLE,D3DDDI_MAKERESIDENT *r) {
     check(r->hPagingQueue==7 && r->NumAllocations==1 && *r->AllocationList==41);
     if (rejectResident) return E_OUTOFMEMORY;
+    if (immediateResident) { r->PagingFenceValue=UINT64_MAX; return S_OK; }
     r->PagingFenceValue=9; return E_PENDING;
 }
 HRESULT APIENTRY freeVa(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS *f) {
@@ -46,8 +47,9 @@ unsigned cpuWaits=0; int waitMode=0;
 HRESULT APIENTRY waitPaging(HANDLE,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *w) {
     ++cpuWaits; check(w->ObjectCount==1 && *w->ObjectHandleArray==8 && *w->FenceValueArray==9 && w->hAsyncEvent);
     if (waitMode==3) return E_OUTOFMEMORY;
-    if (waitMode==0) pagingCpu=9;
-    if (waitMode!=2) SetEvent(w->hAsyncEvent);
+    if (waitMode==0 || waitMode==4) pagingCpu=9;
+    if (waitMode==5) pagingCpu=UINT64_MAX;
+    if (waitMode!=2 && waitMode!=4) SetEvent(w->hAsyncEvent);
     return S_OK;
 }
 }
@@ -101,12 +103,16 @@ int main() {
     check(map_runtime_surface(device,queue,41,4097,mapping)==S_FALSE && mapping.fence==9 && mapping.resident);
     pagingCpu=5; check(surface_paging_status(queue,mapping)==S_FALSE && unmap_runtime_surface(device,queue,mapping)==E_PENDING && !unmaps);
     device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=waitPaging;
-    waitMode=1; check(wait_surface_paging(device,queue,mapping,0)==E_FAIL && pagingCpu==5);
-    waitMode=2; check(wait_surface_paging(device,queue,mapping,0)==DXGI_ERROR_DEVICE_HUNG);
+    waitMode=1; check(wait_surface_paging(device,queue,mapping,0)==D3DDDIERR_DEVICEREMOVED && pagingCpu==5);
+    waitMode=2; check(wait_surface_paging(device,queue,mapping,0)==D3DDDIERR_DEVICEREMOVED);
     waitMode=3; check(wait_surface_paging(device,queue,mapping,0)==E_OUTOFMEMORY);
     waitMode=0; check(wait_surface_paging(device,queue,mapping,0)==S_OK && pagingCpu==9 && cpuWaits==4);
     check(wait_surface_paging(device,queue,mapping,0)==S_OK && cpuWaits==4);
     check(wait_surface_paging(device,queue,mapping,10001)==E_INVALIDARG && cpuWaits==4);
+    pagingCpu=5; waitMode=4;
+    check(wait_surface_paging(device,queue,mapping,0)==S_OK && pagingCpu==9 && cpuWaits==5);
+    pagingCpu=5; waitMode=5;
+    check(wait_surface_paging(device,queue,mapping,0)==D3DDDIERR_DEVICEREMOVED && cpuWaits==6);
     pagingCpu=9; rejectUnmap=true;
     check(unmap_runtime_surface(device,queue,mapping)==E_FAIL && mapping.address==65536);
     rejectUnmap=false; check(unmap_runtime_surface(device,queue,mapping)==S_OK && !mapping.address);
@@ -114,6 +120,9 @@ int main() {
     check(map_runtime_surface(device,queue,41,4097,mapping)==E_OUTOFMEMORY && mapping.address==65536 && !mapping.resident && mapping.fence==5);
     pagingCpu=UINT64_MAX; check(surface_paging_status(queue,mapping)==D3DDDIERR_DEVICEREMOVED);
     pagingCpu=5; check(unmap_runtime_surface(device,queue,mapping)==S_OK);
+    rejectResident=false; immediateResident=true;
+    check(map_runtime_surface(device,queue,41,4097,mapping)==S_OK && mapping.fence==5 && mapping.resident);
+    check(unmap_runtime_surface(device,queue,mapping)==S_OK);
     check(destroy_surface_paging_queue(device,queue)==S_OK && !queue.queue && !queue.cpu);
     extendedPrivate=true;
     request.texture={BC250_SURFACE_RESOURCE_MAGIC,3,1,2,64,16,1,1,87,1,0,0,40,0,0,0};

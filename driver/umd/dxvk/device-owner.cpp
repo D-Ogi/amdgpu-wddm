@@ -106,7 +106,9 @@ HRESULT DeviceOwner::finish_surface(RuntimeSurface &surface) {
 HRESULT DeviceOwner::wait_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || closing_ || !owns_surface(surface)) return E_INVALIDARG;
     HRESULT hr=wait_surface_paging(runtime_,surface.queue,surface.mapping);
-    return hr==S_OK ? finish_surface(surface) : hr;
+    if (hr==S_OK) hr=finish_surface(surface);
+    if (hr==D3DDDIERR_DEVICEREMOVED) bridge_.device_lost=true;
+    return hr;
 }
 HRESULT DeviceOwner::close_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || !engine()) return E_INVALIDARG;

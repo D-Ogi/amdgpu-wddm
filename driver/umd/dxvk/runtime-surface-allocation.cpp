@@ -92,8 +92,11 @@ HRESULT map_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queu
     resident.NumAllocations=1; resident.AllocationList=&allocation;
     hr=device.KTCallbacks.pfnMakeResidentCb(device.hDevice,&resident);
     if (FAILED(hr) && hr!=E_PENDING) return hr; // Mapping retained for cleanup.
-    if (resident.PagingFenceValue>out.fence) out.fence=resident.PagingFenceValue;
-    if (hr==E_PENDING && !resident.PagingFenceValue) return E_FAIL;
+    // The output fence is defined only for E_PENDING. S_OK needs no new wait.
+    if (hr==E_PENDING) {
+        if (!resident.PagingFenceValue) return E_FAIL;
+        if (resident.PagingFenceValue>out.fence) out.fence=resident.PagingFenceValue;
+    }
     out.resident=true;
     return surface_paging_status(queue,out); // S_FALSE means accepted, pending.
 }
@@ -109,9 +112,13 @@ HRESULT wait_surface_paging(RuntimeDevice &device,const SurfacePagingQueue &queu
     hr=device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device.hDevice,&wait);
     if (SUCCEEDED(hr)) {
         DWORD result=WaitForSingleObject(event,timeoutMs);
-        hr=result==WAIT_OBJECT_0 ? surface_paging_status(queue,mapping) :
-            result==WAIT_TIMEOUT ? DXGI_ERROR_DEVICE_HUNG : HRESULT_FROM_WIN32(GetLastError());
-        if (hr==S_FALSE) hr=E_FAIL; // Event alone is not proof of a retired fence.
+        if (result==WAIT_OBJECT_0 || result==WAIT_TIMEOUT) {
+            // Completion can race the timeout. Conversely an event alone does
+            // not establish completion. Recheck the monitored fence itself.
+            hr=surface_paging_status(queue,mapping);
+            if (hr==S_FALSE) { MemoryBarrier(); hr=surface_paging_status(queue,mapping); }
+            if (hr==S_FALSE) hr=D3DDDIERR_DEVICEREMOVED;
+        } else hr=HRESULT_FROM_WIN32(GetLastError());
     }
     CloseHandle(event); return hr;
 }
