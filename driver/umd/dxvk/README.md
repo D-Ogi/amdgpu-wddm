@@ -169,3 +169,13 @@ The engine's known pass-through limitation for line/triangle primitives remains
 open; connecting this DDI does not establish full stream-output conformance.
 Host controls exercise declaration translation, invalid bounds, WDK signatures
 and missing-engine error handling. Actual hosted stream-output rendering is pending.
+
+EngineModules provides adapter-owned loader references for explicit local absolute
+engine and ICD DLL paths. Dependencies are searched only in that DLL's directory
+and System32. It validates the complete engine ABI function table, resolves ICD
+GIPA directly, and rolls back partial loads. DeviceOwner retains independent code
+references before opening its Vulkan session; the adapter loader must stay alive
+through that acquisition. No Vulkan instance is created by this loader.
+The loader fixture test covers successful load/close/reopen, second-module failure,
+ABI mismatch, missing function and export failure with cleared state. Connecting
+this component to OpenAdapter/device creation is still pending.
