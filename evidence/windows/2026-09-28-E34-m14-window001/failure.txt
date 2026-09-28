@@ -1,0 +1,3 @@
+Cpu controller entered the ordinary user session.
+Privileged bc250rd temperature read failed opening Bc250Rd with Win32 error5.
+No Cpu.json, Cpu-debug.txt or Gpu.json was produced; the D3D11 client was not launched.
