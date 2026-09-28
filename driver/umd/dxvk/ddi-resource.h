@@ -8,9 +8,10 @@ struct DdiResource {
     D3D10DDIRESOURCE_TYPE dimension;
     // Borrowed identity supplied by the runtime-allocation owner/importer.
     // Zero for ordinary engine-owned resources. Rotation must move this pair
-    // with image storage. No importer is installed yet.
+    // with image storage.
     D3DKMT_HANDLE present_allocation=0;
     UINT present_subresource=0;
+    RuntimeSurface *runtime_surface=nullptr; // DeviceOwner owns; COM object is borrowed.
 };
 struct ResourceDescription {
     D3D10DDIRESOURCE_TYPE dimension{};
