@@ -205,6 +205,10 @@ it. A system driver cannot end the application's process for that, least of all 
   - A recorded command chunk that throws when the engine executes it stops part way. `TakeDeferredError`
     returns `E_FAIL` for that, out of memory or not, and the shell should treat it as device loss.
   - `TakeDeferredError` is an atomic exchange, cheap enough to call after every void DDI entry.
+  - What the shell may report depends on the DDI entry, not on the engine's code. `UpdateSubresourceUP(D3D11_1)`
+    and `Flush(D3D11_1)` accept only `D3DDDIERR_DEVICEREMOVED` through `pfnSetErrorCb`; the runtime treats any
+    other code there as critical. So a deferred `E_OUTOFMEMORY` becomes device removal at those entries. An entry
+    that returns an HRESULT, such as DXGI present, can return it as it is.
 - **Trim.** `TrimMemory` submits pending work, waits for the GPU and frees every empty memory block and the
   shared allocation caches, without the periodic cleanup's timeouts (500 ms period, 20 s per block). DXVK's
   initializer (zeroing and uploads for new resources) keeps its commands, and with them its resources, until
