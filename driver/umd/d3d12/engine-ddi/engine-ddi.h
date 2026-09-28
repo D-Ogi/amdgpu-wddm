@@ -213,16 +213,15 @@ HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T tab
 // Native intake (every create-shader slot): the payload is the bare program with its length in DWORD 1, and
 // register-only signature entries. That the buffer holds exactly pShaderCode[1] DWORDs is an INFERENCE from the
 // SAL annotation _In_reads_(pShaderCode[1]) on D3D12DDIARG_CREATE_SHADER_0026; no runtime payload has been
-// measured. Reads are bounded by it: pShaderCode is checked for null before DWORD 1 is read, a length below 2 is
-// refused, and nothing past the declared length is read. engine-ddi builds no container. It copies the declared
-// length into the shader's private storage (CalcPrivateShaderSize sizes it from the same DWORD 1), logs at most
-// the first four DWORDs that lie within that length, the length and the signature entry counts, and reports
-// E_NOTIMPL through report_device_error. The record holds no engine object. Native pipelines that name such a
-// shader fail with E_NOTIMPL.
-// Harness path, compiled only with AMDGPU_WDDM_ENGINE_DDI_HARNESS: a payload that starts with the "DXBC" magic
-// is taken as a complete DXBC or DXIL container (total size in DWORD 6) and handed to the engine unchanged when
-// a pipeline uses it. That path exists so that pipelines and dispatches can be tested offline; it proves nothing
-// about what the runtime passes.
+// measured. engine-ddi rebuilds the container the engine consumes with shader-container's BuildContainer
+// (shader-container/README.md), which reads no further than that length; hull and domain programs take the
+// Tessellation signatures, the others Standard. The container lives in engine-ddi's own allocation until
+// DestroyShader; the record holds no engine object. A failure is logged and reported through
+// report_device_error (E_NOTIMPL for an unsupported program, E_INVALIDARG for a malformed one, E_OUTOFMEMORY);
+// mesh and amplification programs are E_NOTIMPL. CreatePipelineState passes the container bytes to the engine,
+// names input elements from the vertex program's input signature and stream-output entries from the last stage
+// before rasterization. A stream-output declaration with a gap is refused with E_NOTIMPL while the pinned engine
+// DLL crashes on one (INTEGRATION.md, "Shaders and pipelines").
 
 // ---- Engine parts of shell-owned MIXED slots ---------------------------------------------------------------------
 // Queue (CreateCommandQueue/DestroyCommandQueue are the shell's). The shell creates the WDDM context first. The

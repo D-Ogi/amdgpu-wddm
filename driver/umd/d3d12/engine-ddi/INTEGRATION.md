@@ -205,7 +205,38 @@ a committed DEFAULT and a committed READBACK buffer, and read back through MapHe
 allocations, three `free_memory` calls after their engine heaps, VVL with synchronization validation clean.
 Whether hosted RADV's import of a runtime allocation behaves the same (same storage, `gpu_va`) is for the lab.
 
-Not ready on the device side: native shader intake returns E_NOTIMPL (SLOTS.md). The offline harness exercises
-the device path: copy, compute dispatch, the retirement sentinel and the query slots above (EnginePrivateTest),
-and the RuntimeBacked heaps above, on the development PC with the pinned engine DLL, also under VVL with
-synchronization validation.
+### Shaders and pipelines
+
+The create-shader slots rebuild each program's container with shader-container `BuildContainer` (engine-ddi.h,
+"Shaders"); nothing of the shell is involved. The shell's build links `shader-container.cpp` and
+`dxil-metadata.cpp` through `engine-ddi.lib`, and must not compile them a second time.
+
+Stream output. `StreamOutputSemantic` gives a gap in the declaration (RegisterIndex ~0u) as an entry with a NULL
+SemanticName. The pinned engine DLL (4FFA7493, fork 7bfcd7f0) crashes on one; E6B8168E (branch
+amdgpu-wddm/so-hole-fix, c5d9d85f) takes it. Until the pin moves to an engine that takes gaps
+(`kEngineTakesStreamOutputGaps` in pipelines.cpp), CreatePipelineState refuses a declaration with a gap with
+E_NOTIMPL. How the runtime encodes a gap in the DDI is not measured.
+
+Inferences, none measured against the runtime: CreateGeometryShaderWithStreamOutput may come without a program
+(stream output of the vertex or domain program, as in the D3D11 DDI); a null blend, rasterizer or depth-stencil
+handle means the API default; FrontEnable and BackEnable FALSE leave that face's stencil untouched; ScissorEnable
+is TRUE (D3D12 has no such flag).
+
+### Committed render targets
+
+engine-ddi makes a committed resource as a heap and a resource placed at 0 (above). vkd3d-proton gives a placed
+render target or depth-stencil resource no initial layout transition (`libs/vkd3d/resource.c`, placed resource
+creation, at 7bfcd7f0): D3D12 requires the application to initialize a placed one with a clear, a discard or a
+copy, but not a committed one. A committed render target that is drawn to before it is cleared therefore starts
+in `VK_IMAGE_LAYOUT_UNDEFINED`; the offline harness draw matches word for word either way, and only the validation
+layer reports it. Open: engine-ddi has to initialize committed render targets and depth-stencil resources itself.
+The harness clears its target before the draw.
+
+### Offline witness
+
+The offline harness exercises the device path: copy, compute dispatch, a draw, the retirement sentinel and the
+query slots above (EnginePrivateTest), and the RuntimeBacked heaps above, on the development PC with the pinned
+engine DLL, also under VVL with synchronization validation. The dispatch and the draw use shaders created through
+the DDI slots from containers reduced to the DDI form (a dxc cs_6_0 DXIL program; fxc vs_5_0 and ps_5_0 DXBC
+programs), an element layout by register and DDI state objects. The reduction is the harness's model of the
+runtime, not a measurement; the lab has yet to show the runtime's own payloads.

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Round trip 2: a compute dispatch through the DDI. The root signature goes in as the DDI's parsed description and
 // is serialized by engine-ddi; its RTS0 part must equal, byte for byte, the one dxc embedded in the fixture shader
-// from the same root signature string. The shader goes in on the harness-only container path. A UAV descriptor at
-// slot 3 of a shader-visible heap, a dispatch on a COMPUTE engine queue, a copy to a READBACK buffer and a
-// word-exact compare with what the shader writes: output[i] = i * 2654435761 + seed.
+// from the same root signature string. The shader goes in through CreateComputeShader in the DDI form, its DXIL part
+// alone (test-shaders.cpp), and engine-ddi rebuilds the container the engine compiles. A UAV descriptor at slot 3 of
+// a shader-visible heap, a dispatch on a COMPUTE engine queue, a copy to a READBACK buffer and a word-exact compare
+// with what the shader writes: output[i] = i * 2654435761 + seed.
 #include "harness.h"
 #include "fixture-cs.h"
 #include <cstdio>
@@ -87,16 +88,16 @@ void test_compute(Env& env, Device& device) {
     checkf(hr == S_OK, "compute: CreateRootSignature from the DDI description (hr %08lx)", static_cast<unsigned long>(hr));
     if (hr != S_OK) return;
 
-    // The shader, 4-byte aligned as the runtime's payloads are.
-    std::vector<UINT> code((sizeof(g_engine_test_cs) + 3) / 4, 0);
-    std::memcpy(code.data(), g_engine_test_cs, sizeof(g_engine_test_cs));
-    D3D12DDIARG_CREATE_SHADER_0026 cs_args{};
-    cs_args.hRootSignature = hrs;
-    cs_args.pShaderCode = code.data();
-    void* cs_storage = env.storage.alloc(env.core.pfnCalcPrivateShaderSize(device.h(), &cs_args));
+    // The shader in the DDI form: dxc's DXIL part alone, no signature entries. engine-ddi rebuilds the container.
+    DdiShader cs;
+    const bool stripped = ddi_form(g_engine_test_cs, sizeof(g_engine_test_cs), cs);
+    checkf(stripped && cs.input.empty() && cs.output.empty(),
+           "compute: dxc cs_6_0 container reduced to its DXIL part (%zu DWORDs) and no signature entries", cs.code.size());
+    const uint32_t errors_before = device.shell.device_errors;
+    void* cs_storage = stripped ? create_shader(env, device, env.core.pfnCreateComputeShader, cs, hrs) : nullptr;
     const D3D12DDI_HSHADER hcs{cs_storage};
-    if (cs_storage) env.core.pfnCreateComputeShader(device.h(), &cs_args, hcs);
-    checkf(cs_storage && !device.shell.device_errors, "compute: CreateComputeShader on the harness container path");
+    checkf(cs_storage && device.shell.device_errors == errors_before,
+           "compute: CreateComputeShader takes the DXIL program through the native intake");
 
     D3D12DDIARG_CREATE_PIPELINE_STATE_0075 pso_args{};
     pso_args.hComputeShader = hcs;

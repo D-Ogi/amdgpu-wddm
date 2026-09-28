@@ -373,6 +373,7 @@ int wmain(int argc, wchar_t** argv) {
     if (hr == S_OK) {
         test_copy(env, device);
         test_compute(env, device);
+        test_graphics(env, device);
         test_device_queries(env, device);
         uint32_t live = UINT32_MAX;
         hr = engine_ddi::destroy_device_context(device.context, &live);

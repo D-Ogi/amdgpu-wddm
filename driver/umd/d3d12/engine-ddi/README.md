@@ -90,14 +90,23 @@ Steps 2 to 4 run only on the thread of a DDI call into the owning device while i
 They never run from an engine thread or callback: INLINE mode has no engine threads, and engine-ddi starts none.
 
 **Shaders.**
-- The native intake builds no container. The DDI payload is the bare program with its length in DWORD 1, and
+- The DDI payload is the bare program (DXBC tokens, or the DXIL part) with its length in DWORD 1, and
   register-only signatures. That the buffer holds exactly that many DWORDs is an inference from the SAL
   annotation `_In_reads_(pShaderCode[1])`; no runtime payload has been measured.
-- Reads stay within the declared length: a null check first, then DWORD 1, and a length below 2 is refused.
-  engine-ddi copies the declared length into private storage, logs at most the first four DWORDs inside it, the
-  length and the signature entry counts, and reports E_NOTIMPL.
-- A harness-only path (`AMDGPU_WDDM_ENGINE_DDI_HARNESS`) accepts a complete DXBC or DXIL container, so that
-  pipelines and dispatches can be tested offline. It proves nothing about the runtime payload.
+- Every create-shader slot rebuilds the container the engine compiles with
+  [shader-container](shader-container/README.md) `BuildContainer`, which reads no further than that length:
+  hull and domain programs with the Tessellation signatures, the others with Standard. The container stays in
+  engine-ddi's own allocation until DestroyShader. A failure is logged and reported through
+  `report_device_error`: E_NOTIMPL for a program the reconstruction cannot represent, E_INVALIDARG for a broken
+  payload, E_OUTOFMEMORY. Mesh and amplification programs are E_NOTIMPL.
+- CreatePipelineState gives the engine the container bytes, names input elements from the vertex program's
+  rebuilt input signature (`InputLayoutSemantic`) and stream-output entries from the last stage before
+  rasterization (`StreamOutputSemantic`). The element layout, blend, rasterizer and depth-stencil states keep
+  their descriptions until then. A stream-output declaration with a gap is E_NOTIMPL while the pinned engine
+  DLL crashes on one (INTEGRATION.md).
+- The harness creates a DXIL compute program (dxc) and a DXBC vertex and pixel program (fxc) through these slots,
+  from containers reduced to the DDI form, and checks the dispatch and the draw word for word. The reduction is
+  the harness's model of the runtime, not a measurement.
 
 **Engine parts of shell-owned mixed slots.**
 - `create_engine_queue` and `destroy_engine_queue`: the shell creates the context first, and the engine binds its
@@ -136,6 +145,10 @@ Two clarifications were added after the review:
 
 r3 replaced the r2 caps declarations (`EngineCaps`, `collect_caps`) with `query_adapter_caps`,
 `free_adapter_caps` and `build_caps` over the engine's QueryAdapterCaps answers.
+
+Answer 6 no longer holds: the native intake now rebuilds containers with shader-container, whose offline control
+rebuilt the fxc and dxc containers of eight cases byte for byte before it was wired in. The boundary did not
+change; only the comment on shaders in `engine-ddi.h` did.
 
 ## Gate
 

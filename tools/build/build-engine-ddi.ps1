@@ -55,8 +55,10 @@ $EngineInclude = Split-Path -Parent $engineHeader
 if (-not (Test-Path -LiteralPath (Join-Path $VulkanInclude 'vulkan\vulkan_core.h'))) { throw "$VulkanInclude has no vulkan\vulkan_core.h" }
 Write-Host "engine ABI $($pin.abi_version) $($pin.header_revision): $engineHeader (SHA-256 $headerSha)"
 
+# Object files are named after the source's leaf, so no two sources here may share one.
 $libSources = @('context.cpp', 'caps.cpp', 'queue.cpp', 'commands.cpp', 'resources.cpp', 'descriptors.cpp',
-                'root-signature.cpp', 'pipelines.cpp', 'queries.cpp') | ForEach-Object { Join-Path $src $_ }
+                'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp',
+                'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
 $harnessSources = @(Get-ChildItem -LiteralPath (Join-Path $src 'tests') -Filter '*.cpp' |
     Where-Object { $_.Name -like 'harness*.cpp' -or $_.Name -like 'test-*.cpp' } | ForEach-Object FullName)
 

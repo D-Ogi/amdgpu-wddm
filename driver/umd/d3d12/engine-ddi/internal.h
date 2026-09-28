@@ -244,16 +244,39 @@ struct RootSignatureRecord {
     UINT parameters;
 };
 
-enum ShaderIntake : uint32_t { kIntakeInvalid = 0, kIntakeNative = 1, kIntakeHarnessContainer = 2 };
+// ---- Shaders and graphics state (pipelines.cpp, graphics.cpp). None of these records holds an engine object. ----
+// RecordHeader::flags of a state record whose create reported a failure: pipelines that name it are refused.
+inline constexpr uint32_t kRecordInvalid = 0x1;
+
+struct ShaderObject;                            // pipelines.cpp: the rebuilt container and what pipelines read
 struct ShaderRecord {
-    RecordHeader h;                             // no engine object
-    uint32_t intake;                            // ShaderIntake
-    uint32_t bytes;                             // payload bytes copied after the record
-    uint32_t snapshot[8];                       // first min(bytes, 32) bytes, zero beyond
-    uint32_t inputs, outputs, patch_constants;  // signature entry counts
-    uint32_t reserved;
-    // payload follows
-    const void* payload() const noexcept { return this + 1; }
+    RecordHeader h;
+    ShaderObject* object;                       // engine-ddi's own allocation, freed by DestroyShader; null when the
+                                                // intake failed
+};
+
+struct ElementLayoutRecord {
+    RecordHeader h;
+    UINT count;
+    UINT reserved;
+    // count D3D12DDIARG_INPUT_ELEMENT_DESC follow (CalcPrivateElementLayoutSize sized them)
+    D3D12DDIARG_INPUT_ELEMENT_DESC* elements() noexcept { return reinterpret_cast<D3D12DDIARG_INPUT_ELEMENT_DESC*>(this + 1); }
+    const D3D12DDIARG_INPUT_ELEMENT_DESC* elements() const noexcept {
+        return reinterpret_cast<const D3D12DDIARG_INPUT_ELEMENT_DESC*>(this + 1);
+    }
+};
+struct BlendStateRecord {
+    RecordHeader h;
+    D3D12_BLEND_DESC desc;
+};
+struct DepthStencilStateRecord {
+    RecordHeader h;
+    D3D12_DEPTH_STENCIL_DESC desc;
+    BOOL depth_bounds;                          // DepthBoundsTestEnable (0025): pipelines refuse it, no DDI support
+};
+struct RasterizerStateRecord {
+    RecordHeader h;
+    D3D12_RASTERIZER_DESC desc;
 };
 
 struct PipelineRecord {
@@ -297,6 +320,8 @@ void fill_list_descriptors(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t 
 void fill_core_root_signatures(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_core_pipelines(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_pipelines(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+void fill_core_graphics(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
+void fill_list_graphics(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_queries(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
