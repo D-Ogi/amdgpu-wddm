@@ -12,6 +12,7 @@
 #include "ddi-map.h"
 #include "ddi-rtv.h"
 #include "ddi-dsv.h"
+#include "ddi-uav.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -41,6 +42,7 @@ int main() {
     install_map_ddi(table);
     install_rtv_ddi(table);
     install_dsv_ddi(table);
+    install_uav_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -329,5 +331,35 @@ int main() {
     table.pfnClearDepthStencilView(h,dvh,D3D10_DDI_CLEAR_STENCIL,0.25f,0xa7);
     table.pfnDestroyDepthStencilView(h,dvh);
     if (errors!=72 || depthView.object || owner.runtime().domain.entered()) std::abort();
+    D3D11DDIARG_CREATEUNORDEREDACCESSVIEW uv{}; D3D11_UNORDERED_ACCESS_VIEW_DESC uvout{};
+    uv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; uv.Format=DXGI_FORMAT_UNKNOWN;
+    uv.Buffer={5,17,D3D11_DDI_BUFFER_UAV_FLAG_COUNTER};
+    if (convert_uav(uv,1,1,uvout)!=S_OK || uvout.Buffer.FirstElement!=5 || uvout.Buffer.NumElements!=17 || uvout.Buffer.Flags!=D3D11_BUFFER_UAV_FLAG_COUNTER) std::abort();
+    uv.Buffer.Flags=D3D11_DDI_BUFFER_UAV_FLAG_APPEND;
+    if (convert_uav(uv,1,1,uvout)!=S_OK || uvout.Buffer.Flags!=D3D11_BUFFER_UAV_FLAG_APPEND) std::abort();
+    uv.Buffer.Flags|=D3D11_DDI_BUFFER_UAV_FLAG_RAW;
+    if (convert_uav(uv,1,1,uvout)!=E_INVALIDARG || uvout.Buffer.Flags!=D3D11_BUFFER_UAV_FLAG_APPEND) std::abort();
+    uv.Buffer.Flags=D3D11_DDI_BUFFER_UAV_FLAG_RAW;
+    if (convert_uav(uv,1,1,uvout)!=S_OK || uvout.Buffer.Flags!=D3D11_BUFFER_UAV_FLAG_RAW) std::abort();
+    uv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; uv.Format=DXGI_FORMAT_R32_UINT; uv.Tex2D={2,3,2};
+    if (convert_uav(uv,8,1,uvout)!=S_OK || uvout.ViewDimension!=D3D11_UAV_DIMENSION_TEXTURE2DARRAY ||
+        uvout.Texture2DArray.MipSlice!=2 || uvout.Texture2DArray.FirstArraySlice!=3 || uvout.Texture2DArray.ArraySize!=2) std::abort();
+    if (convert_uav(uv,8,4,uvout)!=E_INVALIDARG) std::abort();
+    uv.Tex2D.FirstArraySlice=UINT_MAX;
+    if (convert_uav(uv,8,1,uvout)!=E_INVALIDARG) std::abort();
+    uv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D; uv.Tex3D={1,2,7};
+    if (convert_uav(uv,1,1,uvout)!=S_OK || uvout.Texture3D.FirstWSlice!=2 || uvout.Texture3D.WSize!=7) std::abort();
+    uv.ResourceDimension=D3D10DDIRESOURCE_TEXTURECUBE;
+    if (convert_uav(uv,6,1,uvout)!=E_INVALIDARG) std::abort();
+    DdiUnorderedAccessView uview{}; D3D11DDI_HUNORDEREDACCESSVIEW uvh{}; uvh.pDrvPrivate=&uview;
+    if (table.pfnCalcPrivateUnorderedAccessViewSize(h,&uv)!=sizeof(uview)) std::abort();
+    table.pfnCreateUnorderedAccessView(h,&uv,uvh,{});
+    const UINT uintClear[4]={1,2,3,4},keepCounter=UINT_MAX;
+    table.pfnClearUnorderedAccessViewUint(h,uvh,uintClear);
+    table.pfnClearUnorderedAccessViewFloat(h,uvh,clearColor);
+    table.pfnCsSetUnorderedAccessViews(h,3,1,&uvh,&keepCounter);
+    table.pfnCopyStructureCount(h,rhandle,12,uvh);
+    table.pfnDestroyUnorderedAccessView(h,uvh);
+    if (errors!=78 || uview.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
