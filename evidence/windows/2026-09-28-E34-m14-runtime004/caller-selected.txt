@@ -1,0 +1,26 @@
+00000001`80029ad0 83c008          add     eax,8
+00000001`80029ad3 483bc3          cmp     rax,rbx
+00000001`80029ad6 75e8            jne     d3d11!CDevice::LLOCompleteLayerConstruction+0xe30 (00000001`80029ac0)
+00000001`80029ad8 4983c008        add     r8,8
+00000001`80029adc e9f0feffff      jmp     d3d11!CDevice::LLOCompleteLayerConstruction+0xd41 (00000001`800299d1)
+00000001`80029ae1 488d83c8050000  lea     rax,[rbx+5C8h]
+00000001`80029ae8 498b0f          mov     rcx,qword ptr [r15]
+00000001`80029aeb 4881c1409f0000  add     rcx,9F40h
+00000001`80029af2 49ba7052d678603664ca mov r10,0CA64366078D65270h
+00000001`80029afc 488d942490060000 lea     rdx,[rsp+690h]
+00000001`80029b04 488b8008030000  mov     rax,qword ptr [rax+308h]
+00000001`80029b0b ff156f911b00    call    qword ptr [d3d11!_guard_xfg_dispatch_icall_fptr (00000001`801e2c80)]
+00000001`80029b11 8b842490060000  mov     eax,dword ptr [rsp+690h]
+00000001`80029b18 3d00000040      cmp     eax,40000000h
+00000001`80029b1d 410f4cc4        cmovl   eax,r12d
+00000001`80029b21 89842490060000  mov     dword ptr [rsp+690h],eax
+00000001`80029b28 0fb68c2498060000 movzx   ecx,byte ptr [rsp+698h]
+00000001`80029b30 80f904          cmp     cl,4
+00000001`80029b33 7309            jae     d3d11!CDevice::LLOCompleteLayerConstruction+0xeae (00000001`80029b3e)
+00000001`80029b35 80f901          cmp     cl,1
+00000001`80029b38 7706            ja      d3d11!CDevice::LLOCompleteLayerConstruction+0xeb0 (00000001`80029b40)
+00000001`80029b3a b101            mov     cl,1
+00000001`80029b3c eb02            jmp     d3d11!CDevice::LLOCompleteLayerConstruction+0xeb0 (00000001`80029b40)
+00000001`80029b3e b104            mov     cl,4
+00000001`80029b40 888c2498060000  mov     byte ptr [rsp+698h],cl
+(00000001`80028c90)   d3d11!CDevice::LLOCompleteLayerConstruction+0xe81   |  (00000001`8002b3d8)   d3d11!CD3D11FormatHelper::GetNumFormats
