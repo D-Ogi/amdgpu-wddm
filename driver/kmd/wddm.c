@@ -1401,13 +1401,33 @@ void WddmDcnVsync(_Inout_ BC250_DEVICE* Device)
         LONG generation;
         InterlockedIncrement(&Device->DcnVsyncDeferred); // completion deferred, not necessarily the vblank
         generation = InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
-        if (generation & 1) return;
-        if (!NT_SUCCESS(DcnReadScanoutAddress(Device, &scanned))) return;
+        if (generation & 1)
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipOddGeneration);
+            InterlockedExchange64(&Device->DcnVsyncSkipOddGenerationTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
+        if (!NT_SUCCESS(DcnReadScanoutAddress(Device, &scanned)))
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipReadFailure);
+            InterlockedExchange64(&Device->DcnVsyncSkipReadFailureTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
         // If the pending bit outlives the address latch, reporting the requested
         // address would still retire the flip early. Only the distinct previous
         // buffer is safe here; a matching address needs the completed path above.
-        if (scanned == (ULONGLONG)InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0)) return;
-        if (InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0) != generation) return;
+        if (scanned == (ULONGLONG)InterlockedCompareExchange64(&wddm->PrimaryAddress.QuadPart, 0, 0))
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipSameAddress);
+            InterlockedExchange64(&Device->DcnVsyncSkipSameAddressTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
+        if (InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0) != generation)
+        {
+            InterlockedIncrement(&Device->DcnVsyncSkipChangedGeneration);
+            InterlockedExchange64(&Device->DcnVsyncSkipChangedGenerationTime, (LONG64)KeQueryInterruptTime());
+            return;
+        }
         data.CrtcVsync.PhysicalAddress.QuadPart = (LONGLONG)scanned;
         InterlockedIncrement(&Device->DcnVsyncOldBufferReports);
     } else {
@@ -1611,6 +1631,15 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred,
              Wddm->Device->DcnVsyncOldBufferReports);
     // Independently sampled counters/times: no interrupt lock and no per-frame logging.
+    // Counters/times are independently sampled, not an atomic incident record.
+    GuardLog("vsync skip: odd %ld read %ld same %ld changed %ld",
+             Wddm->Device->DcnVsyncSkipOddGeneration, Wddm->Device->DcnVsyncSkipReadFailure,
+             Wddm->Device->DcnVsyncSkipSameAddress, Wddm->Device->DcnVsyncSkipChangedGeneration);
+    GuardLog("vsync skip100ns: odd %lld read %lld same %lld changed %lld",
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipOddGenerationTime,0,0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipReadFailureTime,0,0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipSameAddressTime,0,0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncSkipChangedGenerationTime,0,0));
     GuardLog("vsync vector: DPC polls %ld ACKs %ld sync-failures %ld",
              Wddm->Device->DcnVsyncDpcPolls, Wddm->Device->DcnVsyncDpcAcked,
              Wddm->Device->DcnVsyncDpcSyncFailures);

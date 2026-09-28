@@ -186,6 +186,15 @@ typedef struct _BC250_DEVICE {
                                          // BAR5 stays mapped for the whole device start; counted, not assumed impossible)
     volatile LONG DcnVsyncDeferred;      // completion observation deferred (may report the old buffer)
     volatile LONG DcnVsyncOldBufferReports; // vblanks preserved with a distinct observed scanout
+    // Diagnostic-only exits after consuming a VSync ACK; last times use interrupt100ns.
+    volatile LONG DcnVsyncSkipOddGeneration;
+    volatile LONG DcnVsyncSkipReadFailure;
+    volatile LONG DcnVsyncSkipSameAddress;
+    volatile LONG DcnVsyncSkipChangedGeneration;
+    volatile LONG64 DcnVsyncSkipOddGenerationTime;
+    volatile LONG64 DcnVsyncSkipReadFailureTime;
+    volatile LONG64 DcnVsyncSkipSameAddressTime;
+    volatile LONG64 DcnVsyncSkipChangedGenerationTime;
     volatile LONG DcnFlipsHardware;      // SetVidPnSourceAddress flips that reached the M87 write sequence
     volatile LONG DcnLockTimeouts;      // bounded OTG update-lock acknowledgement expired
     volatile LONG DcnFlipRefused;        // SetVidPnSourceAddress translation/range or programming refused
