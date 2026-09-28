@@ -2,12 +2,16 @@
 #include "ddi-present.h"
 namespace bc250::umd {
 namespace {
-struct Submission { IBc250DxvkDevice *engine; ID3D11Resource *resource; UINT subresource; };
+struct Submission { DeviceOwner *owner; ID3D11Resource *resource; UINT subresource; };
 HRESULT submit(void *data) {
     auto &s=*static_cast<Submission *>(data);
     // E3: flush the frame and process deferred optimized pipeline work. Plain
     // context.Flush is insufficient for the engine's frame lifecycle.
-    return s.engine->SubmitForPresent(s.resource,s.subresource);
+    HRESULT hr=s.owner->take_deferred_error(EngineErrorPolicy::allow_out_of_memory);
+    if (FAILED(hr)) return hr;
+    hr=s.owner->engine()->SubmitForPresent(s.resource,s.subresource);
+    const HRESULT deferred=s.owner->take_deferred_error(EngineErrorPolicy::allow_out_of_memory);
+    return FAILED(hr) ? hr : deferred;
 }
 HRESULT APIENTRY rotate(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
     if (!args) return E_INVALIDARG;
@@ -39,7 +43,7 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
             source->present_subresource!=args->SrcSubResourceIndex) return E_INVALIDARG;
         if (destination && (!destination->object || !destination->present_allocation ||
             destination->present_subresource!=args->DstSubResourceIndex)) return E_INVALIDARG;
-        Submission submission{owner.engine(),source->object,args->SrcSubResourceIndex};
+        Submission submission{&owner,source->object,args->SrcSubResourceIndex};
         return ddi_device_status(present_runtime(owner.bridge(),source->present_allocation,
             destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission));
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }

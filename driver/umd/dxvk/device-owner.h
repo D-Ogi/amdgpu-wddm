@@ -3,6 +3,7 @@
 #include "runtime-bridge.h"
 #include "hosted-instance.h"
 #include "engine-session.h"
+#include "engine-error.h"
 #include "runtime-surface.h"
 #include <memory>
 #include <vector>
@@ -24,6 +25,7 @@ public:
         PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
         D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services);
     HRESULT close();
+    HRESULT take_deferred_error(EngineErrorPolicy policy=EngineErrorPolicy::device_removed_only);
     // On any result, a non-null out belongs to this owner and needs close_surface.
     // S_FALSE means paging/import are pending; only finish_surface S_OK is publishable.
     HRESULT begin_surface(const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface *&out);
@@ -44,7 +46,7 @@ public:
     }
     bool has_live_objects() const {
         return !surfaces_.empty() || surface_queue_.queue || surface_queue_.sync || surface_queue_.cpu || runtime_.present_context || bridge_.present_sync || instance_.info().Instance ||
-            session_.device() || session_.must_retain_owner() || device_ || context_ || retained_module_count();
+            session_.device() || session_.must_retain_owner() || engine4_ || device_ || context_ || retained_module_count();
     }
 private:
     HRESULT prepare_surface_import();
@@ -57,9 +59,11 @@ private:
     HostBridge bridge_{};
     HostedInstance instance_;
     EngineSession session_;
+    IBc250DxvkDevice4 *engine4_=nullptr;
     ID3D11Device5 *device_=nullptr;
     ID3D11DeviceContext4 *context_=nullptr;
     HMODULE modules_[3]{};
+    EngineErrorState errors_;
     bool initialized_=false,closing_=false;
 };
 }

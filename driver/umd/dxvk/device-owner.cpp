@@ -41,6 +41,10 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     if (SUCCEEDED(hr)) hr=instance_.open(get,host);
     if (SUCCEEDED(hr)) hr=session_.open(funcs,instance_.info(),level,services);
     if (SUCCEEDED(hr)) {
+        hr=session_.engine()->QueryInterface(__uuidof(IBc250DxvkDevice4),reinterpret_cast<void **>(&engine4_));
+        if (SUCCEEDED(hr) && !engine4_) hr=E_NOINTERFACE;
+    }
+    if (SUCCEEDED(hr)) {
         hr=session_.engine()->GetD3D11Device(__uuidof(ID3D11Device5),reinterpret_cast<void **>(&device_));
         if (SUCCEEDED(hr) && !device_) hr=E_FAIL;
     }
@@ -51,6 +55,12 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     if (FAILED(hr)) { close(); return hr; }
     initialized_=true;
     return S_OK;
+}
+HRESULT DeviceOwner::take_deferred_error(EngineErrorPolicy policy) {
+    if (!runtime_.domain.entered() || !engine4_) return E_UNEXPECTED;
+    const HRESULT hr=errors_.poll([&]() { return engine4_->TakeDeferredError(); },policy);
+    if (hr==DXGI_ERROR_DEVICE_REMOVED) bridge_.device_lost=true;
+    return hr;
 }
 HRESULT DeviceOwner::prepare_surface_import() {
     if (!runtime_.domain.entered() || closing_ || !initialized_ || !session_.device() || !engine()) return E_UNEXPECTED;
@@ -152,6 +162,7 @@ HRESULT DeviceOwner::close() {
     surface_vk_={}; surface_memory_={};
     if (context_) { context_->Release(); context_=nullptr; }
     if (device_) { device_->Release(); device_=nullptr; }
+    if (engine4_) { engine4_->Release(); engine4_=nullptr; }
     hr=session_.close();
     if (FAILED(hr)) return hr;
     for (auto &progress:bridge_.progress) progress={};
@@ -179,7 +190,7 @@ HRESULT DeviceOwner::close() {
         }
     }
     runtime_.DXGICallbacks=nullptr;
-    bridge_={}; bridge_.device=&runtime_; initialized_=false; closing_=false;
+    bridge_={}; bridge_.device=&runtime_; errors_={}; initialized_=false; closing_=false;
     return S_OK;
 }
 }

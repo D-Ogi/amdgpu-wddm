@@ -12,6 +12,8 @@ if ($EnginePath) {
     & "$PSScriptRoot\test-umd-engine-pair.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\engine-pair') -VsInstall $VsInstall -EnginePath $EnginePath -IcdPath $IcdPath
 }
 
+# Deferred-error state and session cleanup must pass for this ABI1.4 shell.
+& "$PSScriptRoot\test-umd-engine-session.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\engine-session') -VsInstall $VsInstall
 # Device-table ABI and capability behavior are promotion gates, not optional
 # manual checks. Run before producing a deployable shell DLL.
 & "$PSScriptRoot\test-umd-ddi-draw.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\ddi-table') -VsInstall $VsInstall

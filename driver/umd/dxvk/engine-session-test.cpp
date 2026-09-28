@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "engine-session.h"
+#include "engine-error.h"
+#include "engine-abi.h"
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -61,13 +63,31 @@ PFN_vkVoidFunction VKAPI_PTR get(VkInstance,const char *name) {
     return nullptr;
 }
 HRESULT APIENTRY engine_create(const BC250_DXVK_DEVICE_CREATE_INFO *c,IBc250DxvkDevice **out) {
-    trace+='E'; check(c->Threading==BC250_DXVK_THREADING_INLINE && c->Device->Features==&features);
+    trace+='E'; check(c->AbiVersion==kRequiredEngineAbi); check(c->Threading==BC250_DXVK_THREADING_INLINE && c->Device->Features==&features);
     check(c->Device->ExtensionNames==extensions && c->Device->QueueFamily==3);
     if (mode==3) return E_FAIL;
     *out=&engine; return S_OK;
 }
 }
 int main() {
+    {
+        EngineErrorState state; unsigned reads=0; HRESULT next=S_OK;
+        auto read=[&]() { ++reads; const HRESULT v=next; next=S_OK; return v; };
+        check(state.poll(read,EngineErrorPolicy::allow_out_of_memory)==S_OK && reads==1);
+        next=E_OUTOFMEMORY;
+        check(state.poll(read,EngineErrorPolicy::allow_out_of_memory)==E_OUTOFMEMORY && reads==2);
+        check(state.poll(read,EngineErrorPolicy::allow_out_of_memory)==S_OK && reads==3);
+        next=E_FAIL;
+        check(state.poll(read,EngineErrorPolicy::allow_out_of_memory)==DXGI_ERROR_DEVICE_REMOVED && reads==4);
+        check(state.poll(read,EngineErrorPolicy::allow_out_of_memory)==DXGI_ERROR_DEVICE_REMOVED && reads==4);
+        EngineErrorState strict;
+        check(strict.poll([] { return E_OUTOFMEMORY; },EngineErrorPolicy::device_removed_only)==DXGI_ERROR_DEVICE_REMOVED);
+        check(strict.poll([] { return S_OK; },EngineErrorPolicy::allow_out_of_memory)==DXGI_ERROR_DEVICE_REMOVED);
+        EngineErrorState invalid;
+        check(invalid.poll([] { return S_FALSE; },EngineErrorPolicy::allow_out_of_memory)==DXGI_ERROR_DEVICE_REMOVED);
+        check(!compatible_engine_abi(0x10003) && compatible_engine_abi(0x10004) &&
+            compatible_engine_abi(0x10005) && !compatible_engine_abi(0x20004));
+    }
     BC250_DXVK_ENGINE_FUNCS funcs{sizeof(funcs),BC250_DXVK_ENGINE_ABI_VERSION,requirements,free_requirements,adapter,engine_create};
     BC250_DXVK_VULKAN_INSTANCE instance{}; instance.Size=sizeof(instance);
     instance.Instance=reinterpret_cast<VkInstance>(1); instance.PhysicalDevice=reinterpret_cast<VkPhysicalDevice>(2);

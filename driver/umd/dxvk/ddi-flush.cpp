@@ -15,7 +15,8 @@ BOOL APIENTRY flush(D3D10DDI_HDEVICE h,UINT flags) {
         if (!owner.device()) { record_failure(owner,E_FAIL); return; }
         auto status=[&]() {
             if (owner.bridge().device_lost || owner.bridge().submission_failed) return HRESULT(DXGI_ERROR_DEVICE_REMOVED);
-            return owner.device()->GetDeviceRemovedReason();
+            const HRESULT removed=owner.device()->GetDeviceRemovedReason();
+            return FAILED(removed) ? removed : owner.take_deferred_error();
         };
         HRESULT hr=status();
         if (FAILED(hr)) { record_failure(owner,hr); return; }

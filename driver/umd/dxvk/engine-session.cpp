@@ -45,7 +45,7 @@ HRESULT EngineSession::open(const BC250_DXVK_ENGINE_FUNCS &funcs,
     device_.Features=requirements_.Features;
     queue(device_.Device,device_.QueueFamily,0,&device_.Queue);
     if (!device_.Queue) { close(); return E_FAIL; }
-    BC250_DXVK_DEVICE_CREATE_INFO info{}; info.Size=sizeof(info); info.AbiVersion=BC250_DXVK_ENGINE_ABI_VERSION;
+    BC250_DXVK_DEVICE_CREATE_INFO info{}; info.Size=sizeof(info); info.AbiVersion=kRequiredEngineAbi;
     info.Instance=&instance_; info.Device=&device_; info.Services=&services_;
     info.FeatureLevel=level; info.Threading=BC250_DXVK_THREADING_INLINE;
     hr=funcs_.CreateDevice(&info,&engine_);

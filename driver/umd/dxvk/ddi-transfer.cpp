@@ -53,7 +53,13 @@ void APIENTRY update(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT sub,const D3
         HRESULT hr=convert_copy_box(box,converted,empty);
         if (SUCCEEDED(hr)) hr=convert_copy_flags(flags,copyFlags);
         if (FAILED(hr) || !d || (!empty && !data)) { report_ddi_error(owner(h),FAILED(hr) ? hr : E_INVALIDARG); return; }
-        if (!empty) c.UpdateSubresource1(d,sub,box ? &converted : nullptr,data,rowPitch,depthPitch,copyFlags);
+        if (!empty) {
+            hr=owner(h).take_deferred_error();
+            if (FAILED(hr)) { report_ddi_error(owner(h),hr); return; }
+            c.UpdateSubresource1(d,sub,box ? &converted : nullptr,data,rowPitch,depthPitch,copyFlags);
+            hr=owner(h).take_deferred_error();
+            if (FAILED(hr)) report_ddi_error(owner(h),hr);
+        }
     });
 }
 void APIENTRY resolve(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE dst,UINT dstSub,
