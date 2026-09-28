@@ -4,17 +4,11 @@ $d='C:\BC250\m14\runtime001'
 if($PSScriptRoot -ine $d){throw 'Unexpected trial directory'}
 . "$d\registration.ps1"
 . "$d\durable.ps1"
-function Get-TrialKey {
- $gpu=@(Get-PnpDevice -Class Display|Where-Object {$_.InstanceId -like 'PCI\VEN_1002&DEV_13FE*'})
- if($gpu.Count -ne 1 -or $gpu[0].Status -ne 'OK'){throw 'Expected healthy BC-250'}
- if((Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data -ne '0.7.171.1'){throw 'KMD171 required'}
- $path='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_Driver).Data
- # The registry provider's Get-Item returns a read-only RegistryKey even under
- # SYSTEM. Request a writable handle explicitly; retain exact-key admission.
- $key=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($path.Substring(6),$true)
- if(!$key){throw 'Cannot open adapter key for writing'}
- return $key
-}
+. "$d\file-routing.ps1"
+$active='C:\BC250\m11\resource-close\bc250d3d.dll'
+$baseline='8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA'
+$manifest=Get-Content "$d\stage-manifest.json" -Raw|ConvertFrom-Json
+$candidate=$manifest.files.'bc250d3d-router.dll'
 function Check-StopThermal {
  if((Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 2).stop){throw 'Owner STOP'}
  $text=& C:\BC250\bc250rd\bc250rd_cli.exe temp 1 1|Out-String
@@ -24,17 +18,16 @@ if($Phase -eq 'Capture'){
  Check-StopThermal
  $raw=& "$d\preflight171.ps1"|Out-String
  Write-DurableText "$d\before.json" $raw
- $key=Get-TrialKey
- $plan=New-M14RegistrationPlan @($key.GetValue('UserModeDriverName')) ([string]$key.GetValueKind('UserModeDriverName'))
- Write-DurableText "$d\registration.json" (@{key=$key.Name;plan=$plan}|ConvertTo-Json -Depth 5)
+ Copy-VerifiedDurable $active "$d\bc250d3d-cpu.dll" $baseline
 }elseif($Phase -in @('Install','Restore')){
- $saved=Get-Content "$d\registration.json" -Raw|ConvertFrom-Json
- $key=Get-TrialKey
- if($key.Name -cne $saved.key){throw 'Adapter key changed'}
- if($Phase -eq 'Install'){Check-StopThermal}
- else{if(Test-Path "$d\enable"){Remove-Item -LiteralPath "$d\enable" -Force}}
- Set-M14Registration $key $saved.plan $Phase
- Write-DurableText "$d\$Phase-registration.json" (@{kind=[string]$key.GetValueKind($saved.plan.name);values=@($key.GetValue($saved.plan.name))}|ConvertTo-Json -Depth 4)
+ if($Phase -eq 'Install'){
+  Check-StopThermal
+  Install-M14FileRoute $active "$d\bc250d3d-cpu.dll" "$d\original-umd.dll" "$d\bc250d3d-router.dll" $baseline $candidate
+ }else{
+  if(Test-Path "$d\enable"){Remove-Item -LiteralPath "$d\enable" -Force}
+  Restore-M14FileRoute $active "$d\bc250d3d-cpu.dll" $baseline $candidate
+ }
+ Write-DurableText "$d\$Phase-file.json" (@{sha256=(Get-FileHash -LiteralPath $active).Hash}|ConvertTo-Json)
 }elseif($Phase -in @('Cpu','Gpu')){
  Check-StopThermal
  $gpu=($Phase -eq 'Gpu')
@@ -57,12 +50,12 @@ if($Phase -eq 'Capture'){
  $result=Get-Content "$d\$Phase.json" -Raw|ConvertFrom-Json
  if($result.result -ne 'measured' -or $result.exit -ne 0 -or $result.d3d11 -ne 'system'){throw 'Runtime result failed'}
  $paths=@($result.modules|ForEach-Object {$_.path})
- if("$env:windir\System32\d3d11.dll" -notin $paths -or "$d\bc250d3d-router.dll" -notin $paths){throw 'System runtime/router not witnessed'}
+ if("$env:windir\System32\d3d11.dll" -notin $paths -or $active -notin $paths){throw 'System runtime/router not witnessed'}
  if($gpu){
   foreach($name in @('bc250d3d11.dll','bc250dxvk.dll','bc250radv.dll')){if("$d\$name" -notin $paths){throw "Missing module $name"}}
   if(@($result.icds).Count -ne 1 -or $result.icds[0].path -ine "$d\bc250radv.dll" -or $result.icds[0].sha256 -ine 'C0CE5DCDEB3B8D399FDA0D7548D78C9E93CAAC87C201285549B441DAC59107A0'){throw 'Wrong GPU ICD'}
  }else{
-  if('C:\BC250\m11\resource-close\bc250d3d.dll' -notin $paths -or @($result.icds).Count){throw 'CPU path not witnessed'}
+  if("$d\bc250d3d-cpu.dll" -notin $paths -or @($result.icds).Count){throw 'CPU path not witnessed'}
   foreach($name in @('bc250d3d11.dll','bc250dxvk.dll','bc250radv.dll')){if("$d\$name" -in $paths){throw 'GPU module in negative selection control'}}
  }
 }elseif($Phase -eq 'Verify'){
@@ -70,6 +63,7 @@ if($Phase -eq 'Capture'){
  Write-DurableText "$d\after.json" $raw
  $before=Get-Content "$d\before.json" -Raw|ConvertFrom-Json;$after=$raw|ConvertFrom-Json
  if($before.boot -ne $after.boot -or $before.confirmed.generation -ne $after.confirmed.generation -or $before.confirmed.epoch -ne $after.confirmed.epoch){throw 'OS/driver generation changed'}
+ if(!(Test-M14RegistrationEqual $before.umd_registration $after.umd_registration) -or !(Test-M14RegistrationEqual $before.icd_registration $after.icd_registration)){throw 'Registration changed'}
  if(($before.dwm|ConvertTo-Json -Depth 5 -Compress) -cne ($after.dwm|ConvertTo-Json -Depth 5 -Compress)){throw 'DWM identity/modules changed'}
 }
 Write-DurableText "$d\$Phase-done.json" (@{phase=$Phase;utc=[DateTime]::UtcNow.ToString('o')}|ConvertTo-Json)

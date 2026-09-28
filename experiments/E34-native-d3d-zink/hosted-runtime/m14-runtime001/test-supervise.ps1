@@ -8,7 +8,7 @@ foreach($bad in @('Capture','Install','Cpu','Gpu','Restore','Verify')){
  $r=Invoke-M14RuntimeTrial $run
  if($bad -eq 'Capture'){Check (($r.phases -join ',') -eq 'Capture') 'Mutation after failed capture'}
  elseif($bad -in @('Install','Cpu','Gpu')){
-  Check ($r.status -eq 'failed-restored' -and $r.registration_restored -and $r.postflight_verified) 'Did not recover failed test'
+  Check ($r.status -eq 'failed-restored' -and $r.baseline_restored -and $r.postflight_verified) 'Did not recover failed test'
   if($bad -ne 'Gpu'){Check ('Gpu' -notin $r.phases) 'GPU admitted without CPU control'}
  }else{Check ($r.status -eq 'recovery-unverified') 'Recovery failure hidden'}
 }

@@ -19,7 +19,7 @@ static HRESULT Forward(const char *entry,void *args) {
     static const bool selected=Selected();
     static HMODULE module=LoadLibraryExW(selected?
         LR"(C:\BC250\m14\runtime001\bc250d3d11.dll)":
-        LR"(C:\BC250\m11\resource-close\bc250d3d.dll)",nullptr,
+        LR"(C:\BC250\m14\runtime001\bc250d3d-cpu.dll)",nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
     if(!module)return E_FAIL;
     auto fn=reinterpret_cast<HRESULT(WINAPI*)(void*)>(GetProcAddress(module,entry));
