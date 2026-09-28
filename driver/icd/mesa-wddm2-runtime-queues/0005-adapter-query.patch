@@ -1,0 +1,168 @@
+--- a/src/util/bc250_host_bootstrap.h
++++ b/src/util/bc250_host_bootstrap.h
+@@ -9,6 +9,17 @@
+ #define BC250_HOST_STYPE 0x42434831u
+ #define BC250_HOST_VERSION 5u
+ #define BC250_HOST_IMPORT_STYPE 0x42434832u
++/* Adapter GetCaps precedes the runtime device callbacks. This instance can
++ * enumerate the real adapter and its queue policy, but cannot create a device.
++ * Use a distinct identity from every device instance; no paging queue is made.
++ */
++#define BC250_HOST_ADAPTER_QUERY_STYPE 0x42434834u
++#define BC250_HOST_ADAPTER_QUERY_VERSION 1u
++struct bc250_host_adapter_query {
++   uint32_t sType;
++   const void *pNext;
++   uint32_t version, size;
++};
+ struct bc250_host_import {
+    uint32_t sType;
+    const void *pNext;
+--- a/src/amd/vulkan/radv_instance.h
++++ b/src/amd/vulkan/radv_instance.h
+@@ -169,6 +169,7 @@
+    struct bc250_host bc250_host;
+    /* The embedder binds every queue to a runtime queue context (draft). */
+    bool bc250_bound_queues;
++   bool bc250_adapter_query;
+ 
+    VkAllocationCallbacks alloc;
+ 
+--- a/src/amd/vulkan/radv_instance.c
++++ b/src/amd/vulkan/radv_instance.c
+@@ -266,6 +266,11 @@
+             return VK_ERROR_INITIALIZATION_FAILED;
+          instance->bc250_host = *host;
+          instance->bc250_host.pNext = NULL;
++      } else if ((uint32_t)ext->sType == BC250_HOST_ADAPTER_QUERY_STYPE) {
++         const struct bc250_host_adapter_query *query = (const void *)ext;
++         if (query->version != BC250_HOST_ADAPTER_QUERY_VERSION || query->size != sizeof(*query))
++            return VK_ERROR_INITIALIZATION_FAILED;
++         instance->bc250_adapter_query = true;
+       } else if ((uint32_t)ext->sType == BC250_HOST_QUEUE_BINDING_STYPE) {
+          const struct bc250_host_queue_binding *binding = (const void *)ext;
+          if (binding->version != BC250_HOST_QUEUE_BINDING_VERSION || binding->size != sizeof(*binding) ||
+@@ -275,6 +280,8 @@
+       }
+    }
+ 
++   if (instance->bc250_adapter_query && !instance->bc250_host.dispatch)
++      return VK_ERROR_INITIALIZATION_FAILED;
+    if (!queue_funcs)
+       return VK_SUCCESS;
+ 
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h
+@@ -36,7 +36,7 @@
+ struct vk_dx_adapter_info;
+ 
+ VkResult radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+-                                  const BITSET_WORD *debug_flags, const struct bc250_host *host, struct radeon_winsys **winsys);
++                                  const BITSET_WORD *debug_flags, const struct bc250_host *host, bool adapter_query, struct radeon_winsys **winsys);
+ 
+ void radv_wddm2_query_allocated(struct radeon_winsys *ws, uint64_t *vram,
+                                 uint64_t *vram_vis, uint64_t *gtt);
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -676,7 +676,9 @@
+    D3DDDI_DESTROYPAGINGQUEUE destroy_paging_queue = {
+       .hPagingQueue = ws->paging_queue_h,
+    };
+-   if (ws->host.dispatch) {
++   if (ws->adapter_query) {
++      status = STATUS_SUCCESS;
++   } else if (ws->host.dispatch) {
+       struct bc250_host_paging paging = { .queue = ws->paging_queue_h };
+       status = ws->host.dispatch(ws->host.userdata, BC250_HOST_DESTROY_PAGING, &paging);
+       fprintf(stderr, "BC250 hosted paging destroy identity=%p queue=%x status=%08x\n", ws->host.identity, paging.queue, status);
+@@ -755,13 +757,15 @@
+ 
+ VkResult
+ radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+-                         const BITSET_WORD *debug_flags, const struct bc250_host *host, struct radeon_winsys **winsys)
++                         const BITSET_WORD *debug_flags, const struct bc250_host *host, bool adapter_query, struct radeon_winsys **winsys)
+ {
+    VkResult result = VK_SUCCESS;
+    struct radv_wddm2_winsys *ws = NULL;
+    NTSTATUS status;
+    fprintf(stderr, "radv_wddm2_winsys_create\n");
+ 
++   if (adapter_query && !host)
++      return VK_ERROR_INITIALIZATION_FAILED;
+    const void *key = host ? host->identity : (void *)1;
+    if (host && memcmp(&host->adapter_luid, &adapter_info->adapter_luid, sizeof(uint64_t)))
+       return VK_ERROR_INCOMPATIBLE_DRIVER;
+@@ -778,6 +782,10 @@
+    struct hash_entry *entry = _mesa_hash_table_search(winsyses, key);
+    if (entry) {
+       ws = (struct radv_wddm2_winsys *)entry->data;
++      if (ws->adapter_query != adapter_query) {
++         result = VK_ERROR_INITIALIZATION_FAILED;
++         goto fail;
++      }
+       ++ws->refcount;
+    }
+    
+@@ -796,6 +804,7 @@
+    ws->refcount = 1;
+    ws->cache_key = key;
+    if (host) ws->host = *host;
++   ws->adapter_query = adapter_query;
+    ws->adapter_luid = adapter_info->adapter_luid;
+    ws->chain_ib = !(BITSET_TEST(debug_flags, RADV_DEBUG_NO_IB_CHAINING));
+    ws->debug_all_bos = !!(BITSET_TEST(debug_flags, RADV_DEBUG_ALL_BOS));
+@@ -868,7 +877,9 @@
+    D3DKMT_CREATEPAGINGQUEUE create_paging_queue = {
+       .hDevice = ws->device_h,
+    };
+-   if (host) {
++   if (adapter_query) {
++      status = STATUS_SUCCESS;
++   } else if (host) {
+       struct bc250_host_paging paging = {0};
+       status = host->dispatch(host->userdata, BC250_HOST_CREATE_PAGING, &paging);
+       create_paging_queue.hPagingQueue = paging.queue;
+--- a/src/amd/vulkan/radv_physical_device.c
++++ b/src/amd/vulkan/radv_physical_device.c
+@@ -2762,7 +2762,8 @@
+    }
+    pdev->wddm2_adapter = *wddm2_adapter;
+    result = radv_wddm2_winsys_create(wddm2_adapter, instance->debug_flags,
+-                                     instance->bc250_host.dispatch ? &instance->bc250_host : NULL, &pdev->ws);
++                                     instance->bc250_host.dispatch ? &instance->bc250_host : NULL,
++                                     instance->bc250_adapter_query, &pdev->ws);
+    if (result != VK_SUCCESS)
+       goto fail;
+    pdev->info = *pdev->ws->query_info(pdev->ws);
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -1353,7 +1353,7 @@
+    const struct radv_physical_device *pdev = radv_device_physical(device);
+    const struct radv_instance *instance = radv_physical_device_instance(pdev);
+    return radv_wddm2_winsys_create(&pdev->wddm2_adapter, instance->debug_flags,
+-                                   instance->bc250_host.dispatch ? &instance->bc250_host : NULL, &device->ws);
++                                   instance->bc250_host.dispatch ? &instance->bc250_host : NULL, false, &device->ws);
+ #else
+    const struct radv_physical_device *pdev = radv_device_physical(device);
+    const struct radv_instance *instance = radv_physical_device_instance(pdev);
+@@ -1466,6 +1466,10 @@
+ {
+    VK_FROM_HANDLE(radv_physical_device, pdev, physicalDevice);
+    struct radv_instance *instance = radv_physical_device_instance(pdev);
++   if (instance->bc250_adapter_query) {
++      *pDevice = VK_NULL_HANDLE;
++      return VK_ERROR_INITIALIZATION_FAILED;
++   }
+    VkResult result;
+    struct radv_device *device;
+ 
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+@@ -53,6 +53,7 @@
+    uint32_t refcount;
+    const void *cache_key;
+    struct bc250_host host;
++   bool adapter_query;
+ 
+    struct radeon_info gpu_info;
+ 

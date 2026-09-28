@@ -56,3 +56,21 @@ The scripted host validates queue identity, dispatch, retirement and ownership.
 It does not validate the public instance parser, public queue locking, device
 admission, native D3D12CreateDevice, hardware execution or game RT. No lab
 installation was performed for this integration.
+
+## Adapter-only capability queries
+
+0005-adapter-query.patch follows the four-patch queue series. It adds private
+instance structure 0x42434834, version 1, for adapter GetCaps before the runtime
+has supplied device callbacks. Enumeration retains the real adapter and queue
+policy but skips the paging queue. vkCreateDevice explicitly refuses this mode;
+its winsys identity cannot be reused by a device instance. No zero handle is
+submitted as a substitute for an owned kernel object.
+
+Candidate 439889E0DCFAFB8C8CC4219B087124BBB9F842171C94C85F0A8FED03BF6E9279
+builds. adapter-query-scope-test accepts the new chain through the actual DLL's
+instance parser and rejects a query structure without a host. That host check
+does not enumerate hardware. The matching shell scope preserves the engine's
+instance extensions and pNext chain and checks closure without device callbacks.
+The adapter-caps-probe asks ABI 1.2 QueryAdapterCaps on the BC-250 through that
+scope; it must run under a bounded process Job. Native runtime wiring and a lab
+measurement remain separate acceptance steps.

@@ -1,8 +1,11 @@
-param([string]$OutputDir,[string]$VsInstall)
+param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanInclude,[string]$EngineInclude)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root=Get-Bc250Root $repo
+if(!$EngineInclude){$EngineInclude=Join-Path $root 'scratch\m15\vkd3d-1.2-src\libs\ddi'}
+if(!$MesaSource){$MesaSource=Join-Path $root 'scratch\m12\mesa-current-src'}
+if(!$VulkanInclude){$VulkanInclude=Join-Path $root 'scratch\m15\vkd3d\khronos\Vulkan-Headers\include'}
 if(!$OutputDir){$OutputDir=Join-Path $root 'scratch\build\d3d12-adapter'}
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir|Out-Null
@@ -64,6 +67,14 @@ try {
   if($LASTEXITCODE){throw 'Memory registry test build failed'}
   & .\memory-registry-test.exe
   if($LASTEXITCODE){throw 'Memory registry tests failed'}
+  & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" /Fe:adapter-query-scope-test.exe "$repo\driver\umd\d3d12\adapter-query-scope-test.cpp"
+  if($LASTEXITCODE){throw 'Adapter query scope test build failed'}
+  & .\adapter-query-scope-test.exe
+  if($LASTEXITCODE){throw 'Adapter query scope tests failed'}
+  & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" "/external:I$EngineInclude" /Fe:adapter-caps-probe.exe "$repo\driver\umd\d3d12\adapter-caps-probe.cpp" /link dxgi.lib
+  if($LASTEXITCODE){throw 'Adapter caps probe build failed'}
+  & .\adapter-caps-probe.exe --help
+  if($LASTEXITCODE){throw 'Adapter caps probe help failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help
