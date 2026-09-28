@@ -16,6 +16,7 @@
 #include "ddi-output.h"
 #include "ddi-srv.h"
 #include "ddi-flush.h"
+#include "ddi-table.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -31,24 +32,7 @@ void APIENTRY error(D3D10DDI_HRTCORELAYER,HRESULT hr) {
 int main() {
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
-    D3D11_1DDI_DEVICEFUNCS table{};
-    install_draw_ddi(table);
-    install_input_layout_ddi(table);
-    install_raster_ddi(table);
-    install_shader_ddi(table);
-    install_sampler_ddi(table);
-    install_fixed_state_ddi(table);
-    install_blend_ddi(table);
-    install_resource_ddi(table);
-    install_buffer_binding_ddi(table);
-    install_transfer_ddi(table);
-    install_map_ddi(table);
-    install_rtv_ddi(table);
-    install_dsv_ddi(table);
-    install_uav_ddi(table);
-    install_output_ddi(table);
-    install_srv_ddi(table);
-    install_flush_ddi(table);
+    auto table=make_render_device_table();
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -433,5 +417,8 @@ int main() {
     if (table.pfnFlush(h,0) || table.pfnFlush(h,D3D11_1DDI_FLUSH_UNLESS_NO_COMMANDS)) std::abort();
     if (errors!=93 || owner.runtime().domain.entered()) std::abort();
     if (table.pfnFlush({},0)) std::abort();
+    D3D10DDI_MAPPED_SUBRESOURCE noOverwrite{&payload,11,22};
+    table.pfnDynamicConstantBufferMapNoOverwrite(h,rhandle,0,D3D10_DDI_MAP_WRITE_NOOVERWRITE,0,&noOverwrite);
+    if (errors!=94 || noOverwrite.pData || noOverwrite.RowPitch || noOverwrite.DepthPitch || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

@@ -51,6 +51,7 @@ void install_map_ddi(D3D11_1DDI_DEVICEFUNCS &t) {
     t.pfnStagingResourceMap=map; t.pfnStagingResourceUnmap=unmap;
     t.pfnDynamicIABufferMapNoOverwrite=map;
     t.pfnDynamicIABufferMapDiscard=map; t.pfnDynamicIABufferUnmap=unmap;
+    t.pfnDynamicConstantBufferMapNoOverwrite=map;
     t.pfnDynamicConstantBufferMapDiscard=map; t.pfnDynamicConstantBufferUnmap=unmap;
     t.pfnDynamicResourceMapDiscard=map; t.pfnDynamicResourceUnmap=unmap;
 }
