@@ -1,0 +1,45 @@
+002526a6 488b4108                 mov      rax, qword ptr [rcx + 8]
+002526aa b93c003e00               mov      ecx, 0x3e003c
+002526af 3b08                     cmp      ecx, dword ptr [rax]
+002526b1 0f855d1cf4ff             jne      0x194314
+002526b7 e95c1cf4ff               jmp      0x194318
+002526bc bd510d0000               mov      ebp, 0xd51
+002526c1 b901000000               mov      ecx, 1
+002526c6 8bd5                     mov      edx, ebp
+002526c8 48ff15b1eaf0ff           call     qword ptr [rip - 0xf154f]
+002526cf 0f1f440000               nop      dword ptr [rax + rax]
+002526d4 488364244000             and      qword ptr [rsp + 0x40], 0
+002526da 4c8d0dbf5fe6ff           lea      r9, [rip - 0x19a041]
+002526e1 488364243800             and      qword ptr [rsp + 0x38], 0
+002526e7 4183c8ff                 or       r8d, 0xffffffff
+002526eb 488364243000             and      qword ptr [rsp + 0x30], 0
+002526f1 ba02000400               mov      edx, 0x40002
+002526f6 488364242800             and      qword ptr [rsp + 0x28], 0
+002526fc 33c9                     xor      ecx, ecx
+002526fe 48896c2420               mov      qword ptr [rsp + 0x20], rbp
+00252703 e8b831dbff               call     0x58c0
+00252708 90                       nop      
+00252709 e93f1cf4ff               jmp      0x19434d
+0025270e bd520d0000               mov      ebp, 0xd52
+00252713 b901000000               mov      ecx, 1
+00252718 8bd5                     mov      edx, ebp
+0025271a 48ff155feaf0ff           call     qword ptr [rip - 0xf15a1]
+00252721 0f1f440000               nop      dword ptr [rax + rax]
+00252726 488364244000             and      qword ptr [rsp + 0x40], 0
+0025272c 4c8d0dcd5fe6ff           lea      r9, [rip - 0x19a033]
+00252733 488364243800             and      qword ptr [rsp + 0x38], 0
+00252739 4183c8ff                 or       r8d, 0xffffffff
+0025273d 488364243000             and      qword ptr [rsp + 0x30], 0
+00252743 ba02000400               mov      edx, 0x40002
+00252748 488364242800             and      qword ptr [rsp + 0x28], 0
+0025274e 33c9                     xor      ecx, ecx
+00252750 48896c2420               mov      qword ptr [rsp + 0x20], rbp
+00252755 e86631dbff               call     0x58c0
+0025275a 90                       nop      
+0025275b e9fb1bf4ff               jmp      0x19435b
+00252760 83fb03                   cmp      ebx, 3
+00252763 750c                     jne      0x252771
+00252765 0f108620020000           movups   xmm0, xmmword ptr [rsi + 0x220]
+0025276c e91c1cf4ff               jmp      0x19438d
+00252771 b80d0000c0               mov      eax, 0xc000000d
+00252776 e9181cf4ff               jmp      0x194393

@@ -1,0 +1,64 @@
+00191af7 4c6364245c               movsxd   r12, dword ptr [rsp + 0x5c]
+00191afc 4183fc50                 cmp      r12d, 0x50
+00191b00 0f8738210000             ja       0x193c3e
+00191b06 488d15f3e4e6ff           lea      rdx, [rip - 0x191b0d]
+00191b0d 428b8ca2e0500a00         mov      ecx, dword ptr [rdx + r12*4 + 0xa50e0]
+00191b15 4803ca                   add      rcx, rdx
+00191b18 ffe1                     jmp      rcx
+00191b1a cc                       int3     
+00191b1b cc                       int3     
+00191b1c cc                       int3     
+00191b1d cc                       int3     
+00191b1e 488bb42498000000         mov      rsi, qword ptr [rsp + 0x98]
+00191b26 8b86a8010000             mov      eax, dword ptr [rsi + 0x1a8]
+00191b2c c1e809                   shr      eax, 9
+00191b2f a801                     test     al, 1
+00191b31 741e                     je       0x191b51
+00191b33 48ff1526e9fcff           call     qword ptr [rip - 0x316da]
+00191b3a 0f1f440000               nop      dword ptr [rax + rax]
+00191b3f 488bc8                   mov      rcx, rax
+00191b42 48ff150fe9fcff           call     qword ptr [rip - 0x316f1]
+00191b49 0f1f440000               nop      dword ptr [rax + rax]
+00191b4e 4c8be8                   mov      r13, rax
+00191b51 448b742468               mov      r14d, dword ptr [rsp + 0x68]
+00191b56 458bc6                   mov      r8d, r14d
+00191b59 498bd7                   mov      rdx, r15
+00191b5c 488b4c2450               mov      rcx, qword ptr [rsp + 0x50]
+00191b61 e88e9cfdff               call     0x16b7f4 ; ?DxgkpQueryRegistry@@YAJPEAVDXGADAPTER@@PEAXI@Z+0
+00191b66 8bf8                     mov      edi, eax
+00191b68 4d85ed                   test     r13, r13
+00191b6b 0f84f2200000             je       0x193c63
+00191b71 498bcd                   mov      rcx, r13
+00191b74 48ff15dde8fcff           call     qword ptr [rip - 0x31723]
+00191b7b 0f1f440000               nop      dword ptr [rax + rax]
+00191b80 488d8c24b8010000         lea      rcx, [rsp + 0x1b8]
+00191b88 e8279de8ff               call     0x1b8b4 ; ??1DXGPAIREDADAPTERSTOPRESETLOCKSHARED@@QEAA@XZ+0
+00191b8d e98c220000               jmp      0x193e1e ; ?DxgkQueryAdapterInfoImpl@@YAJPEBU_D3DKMT_QUERYADAPTERINFO@@EPEAVDXGADAPTER@@@Z+2dbe
+00191b92 448b742468               mov      r14d, dword ptr [rsp + 0x68]
+00191b97 4181fe0c020000           cmp      r14d, 0x20c
+00191b9e 7432                     je       0x191bd2
+00191ba0 bf0d0000c0               mov      edi, 0xc000000d
+00191ba5 498bd6                   mov      rdx, r14
+00191ba8 b903000000               mov      ecx, 3
+00191bad 49c7c00d0000c0           mov      r8, 0xffffffffc000000d
+00191bb4 48ff1565f5fcff           call     qword ptr [rip - 0x30a9b]
+00191bbb 0f1f440000               nop      dword ptr [rax + rax]
+00191bc0 488d8c24b8010000         lea      rcx, [rsp + 0x1b8]
+00191bc8 e8e79ce8ff               call     0x1b8b4 ; ??1DXGPAIREDADAPTERSTOPRESETLOCKSHARED@@QEAA@XZ+0
+00191bcd e94c220000               jmp      0x193e1e ; ?DxgkQueryAdapterInfoImpl@@YAJPEBU_D3DKMT_QUERYADAPTERINFO@@EPEAVDXGADAPTER@@@Z+2dbe
+00191bd2 488b5c2450               mov      rbx, qword ptr [rsp + 0x50]
+00191bd7 488b8b700b0000           mov      rcx, qword ptr [rbx + 0xb70]
+00191bde 498bd7                   mov      rdx, r15
+00191be1 e8be260000               call     0x1942a4 ; ?CopyUmdFileName@ADAPTER_RENDER@@QEBAJPEAU_D3DKMT_UMDFILENAMEINFO@@@Z+0
+00191be6 4863f8                   movsxd   rdi, eax
+00191be9 85c0                     test     eax, eax
+00191beb 0f8972200000             jns      0x193c63
+00191bf1 4c8bcf                   mov      r9, rdi
+00191bf4 4c8bc3                   mov      r8, rbx
+00191bf7 498bd7                   mov      rdx, r15
+00191bfa b904000000               mov      ecx, 4
+00191bff 48ff1532f5fcff           call     qword ptr [rip - 0x30ace]
+00191c06 0f1f440000               nop      dword ptr [rax + rax]
+00191c0b 488d8c24b8010000         lea      rcx, [rsp + 0x1b8]
+00191c13 e89c9ce8ff               call     0x1b8b4 ; ??1DXGPAIREDADAPTERSTOPRESETLOCKSHARED@@QEAA@XZ+0
+00191c18 e901220000               jmp      0x193e1e ; ?DxgkQueryAdapterInfoImpl@@YAJPEBU_D3DKMT_QUERYADAPTERINFO@@EPEAVDXGADAPTER@@@Z+2dbe

@@ -1,0 +1,27 @@
+FUNCTION RVA 1942a4 ?CopyUmdFileName@ADAPTER_RENDER@@QEBAJPEAU_D3DKMT_UMDFILENAMEINFO@@@Z
+001942a4 4053                     push     rbx
+001942a6 4883ec30                 sub      rsp, 0x30
+001942aa 488bda                   mov      rbx, rdx
+001942ad 8b12                     mov      edx, dword ptr [rdx]
+001942af 83fa06                   cmp      edx, 6
+001942b2 733f                     jae      0x1942f3
+001942b4 0f57c0                   xorps    xmm0, xmm0
+001942b7 4c8d442420               lea      r8, [rsp + 0x20]
+001942bc 0f11442420               movups   xmmword ptr [rsp + 0x20], xmm0
+001942c1 e862000000               call     0x194328 ; ?GetUMDFileName@ADAPTER_RENDER@@AEBAJW4_KMTUMDVERSION@@AEAU_UNICODE_STRING@@@Z+0
+001942c6 85c0                     test     eax, eax
+001942c8 7822                     js       0x1942ec
+001942ca 488d4c2420               lea      rcx, [rsp + 0x20]
+001942cf e82c000000               call     0x194300 ; ?IsNullUmdDriver@@YAHAEBU_UNICODE_STRING@@@Z+0
+001942d4 85c0                     test     eax, eax
+001942d6 751b                     jne      0x1942f3
+001942d8 440fb74c2420             movzx    r9d, word ptr [rsp + 0x20]
+001942de 488d4b04                 lea      rcx, [rbx + 4]
+001942e2 4c8b442428               mov      r8, qword ptr [rsp + 0x28]
+001942e7 e80415e7ff               call     0x57f0 ; ?RtlStringCbCopyNW@@YAJPEAG_KPEBG1@Z+0
+001942ec 4883c430                 add      rsp, 0x30
+001942f0 5b                       pop      rbx
+001942f1 c3                       ret      
+001942f2 cc                       int3     
+001942f3 b80d0000c0               mov      eax, 0xc000000d
+001942f8 ebf2                     jmp      0x1942ec ; ?CopyUmdFileName@ADAPTER_RENDER@@QEBAJPEAU_D3DKMT_UMDFILENAMEINFO@@@Z+48
