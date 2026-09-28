@@ -209,8 +209,8 @@ Successful hosted device creation/publication has not yet been validated on GPU.
 
 ClearView forwards texture RTV and UAV clears to the engine, preserving float
 colors and rectangle coordinates. NULL rectangles mean a whole-view clear.
-Buffer RTV ClearView remains an explicit E_NOTIMPL: current engine code only logs
-and returns there, so it must be completed before claiming full ClearView support.
+Buffer RTV ClearView is forwarded with engine fix dd35ce7c (included in the
+fba2c2d2 ABI1.1 candidate). The prior temporary E_NOTIMPL guard has been removed.
 Video views are not exposed. RelocateDeviceFuncs rebuilds the same dispatch table;
 the shell retains no pointer to runtime-owned table storage. Host tests cover view
 type selection, relocation and missing-engine handling, not GPU clear pixels.

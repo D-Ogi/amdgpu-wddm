@@ -18,13 +18,8 @@ void APIENTRY clear(D3D10DDI_HDEVICE h,D3D11DDI_HANDLETYPE type,void *handle,
         auto *view=clear_view_object(type,handle);
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!view || !color) { report_ddi_error(owner,E_INVALIDARG); return; }
-        if (type==D3D10DDI_HT_RENDERTARGETVIEW) {
-            D3D11_RENDER_TARGET_VIEW_DESC desc{};
-            static_cast<ID3D11RenderTargetView *>(view)->GetDesc(&desc);
-            // Engine currently logs and silently returns for buffer RTVs.
-            // Keep this correctness gap explicit until that path is implemented.
-            if (desc.ViewDimension==D3D11_RTV_DIMENSION_BUFFER) { report_ddi_error(owner,E_NOTIMPL); return; }
-        }
+        // Engine ABI1.1 candidate includes buffer-RTV clears (dd35ce7c).
+
         // DDI RECT is the Win32 RECT type. Preserve rectangles and float color
         // values: the engine owns clipping, format conversion and GPU barriers.
         // A NULL rectangle pointer denotes the entire surface in the DDI.
