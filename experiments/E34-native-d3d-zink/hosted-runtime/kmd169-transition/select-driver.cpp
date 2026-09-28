@@ -5,13 +5,22 @@
 #include <cfg.h>
 #include <cstdio>
 #include <cwchar>
-#include <vector>
+#include <string>
 struct DeviceSet {
     HDEVINFO h=INVALID_HANDLE_VALUE;
     ~DeviceSet(){if(h!=INVALID_HANDLE_VALUE)SetupDiDestroyDeviceInfoList(h);}
 };
 static int fail(const char* operation){
     fprintf(stderr,"%s failed: %lu\n",operation,GetLastError());return 1;
+}
+// Encode UTF-16 code units as JSON escapes, including surrogate pairs.
+static std::string jsonPath(const wchar_t* path){
+    std::string result="\"";
+    for(;*path;++path){
+        char encoded[7]={};
+        sprintf_s(encoded,"\\u%04x",unsigned(*path));result+=encoded;
+    }
+    return result+"\"";
 }
 static bool parseVersion(const wchar_t* text,ULONGLONG& value){
     unsigned a=0,b=0,c=0,d=0;wchar_t tail=0;
@@ -24,10 +33,11 @@ static bool disabled(CONFIGRET cr,ULONG status,ULONG problem){
 }
 int wmain(int argc,wchar_t** argv){
     if(argc==2 && wcscmp(argv[1],L"--help")==0){
-        puts("select-driver --inspect INSTANCE ABSOLUTE_INF; or --install-deferred INSTANCE ABSOLUTE_INF EXPECTED_VERSION");return 0;
+        puts("select-driver --inspect INSTANCE ABSOLUTE_INF; --inspect-store INSTANCE PUBLISHED_INF; or --install-deferred INSTANCE ABSOLUTE_INF EXPECTED_VERSION");return 0;
     }
     const bool install=argc==5 && wcscmp(argv[1],L"--install-deferred")==0;
-    if(!install && (argc!=4 || wcscmp(argv[1],L"--inspect")!=0))return 2;
+    const bool store=argc==4 && wcscmp(argv[1],L"--inspect-store")==0;
+    if(!install && !store && (argc!=4 || wcscmp(argv[1],L"--inspect")!=0))return 2;
     ULONGLONG expectedVersion=0;
     if(install && !parseVersion(argv[4],expectedVersion))return 2;
     const wchar_t prefix[]=L"PCI\\VEN_1002&DEV_13FE";
@@ -36,6 +46,15 @@ int wmain(int argc,wchar_t** argv){
     wchar_t inf[MAX_PATH]={};
     const DWORD length=GetFullPathNameW(argv[3],MAX_PATH,inf,nullptr);
     if(!length || length>=MAX_PATH || GetFileAttributesW(inf)==INVALID_FILE_ATTRIBUTES)return fail("INF path");
+    if(store){
+        wchar_t resolved[MAX_PATH]={};
+        // Only published/system INF or Driver Store paths are supported inputs.
+        // This is a lookup, not content matching or package staging.
+        if(!SetupGetInfDriverStoreLocationW(inf,nullptr,nullptr,resolved,MAX_PATH,nullptr))
+            return fail("GetInfDriverStoreLocation");
+        printf("{\"resolved_store_inf\":%s}\n",jsonPath(resolved).c_str());
+        if(wcscpy_s(inf,resolved))return 2;
+    }
     DeviceSet set;set.h=SetupDiCreateDeviceInfoList(nullptr,nullptr);
     if(set.h==INVALID_HANDLE_VALUE)return fail("CreateDeviceInfoList");
     SP_DEVINFO_DATA device={};device.cbSize=sizeof(device);
@@ -55,6 +74,13 @@ int wmain(int argc,wchar_t** argv){
             break;
         }
         ++count;version=driver.DriverVersion;selected=driver;
+        SP_DRVINFO_DETAIL_DATA_W detail={};detail.cbSize=sizeof(detail);
+        // Only static fields are needed. The documented insufficient-buffer
+        // result still populates them; no truncated hardware ID list is read.
+        if(!SetupDiGetDriverInfoDetailW(set.h,&device,&driver,&detail,sizeof(detail),nullptr) &&
+           GetLastError()!=ERROR_INSUFFICIENT_BUFFER)return fail("GetDriverInfoDetail");
+        printf("{\"node_index\":%lu,\"node_inf\":%s,\"section\":%s}\n",
+               index,jsonPath(detail.InfFileName).c_str(),jsonPath(detail.SectionName).c_str());
     }
     ULONG status=0,problem=0;
     const CONFIGRET cr=CM_Get_DevNode_Status(&status,&problem,device.DevInst,0);

@@ -1,0 +1,9 @@
+{
+  "parent_revision": "d20f143",
+  "sha256": {
+    "select-driver.cpp": "fc093b1e52157325ad57db06c5b38a93e65141b52534279fa790ebe9b1068d13",
+    "select-driver.exe": "27d9d1cdaed628ef0a11c99cf23f17c40d80fd7e5c4dba14ea829b40d8a3c245",
+    "inspect-store.ps1": "26fc99e0f52cc678e13e2af7022706ca2f6910562b5aa2c06ad0223e9e504bc9",
+    "inspect-store-bound.ps1": "0a529009dccd8ff13e9fbb6f86461296eab723f2d4c6b36428b3ef90c97a78d5"
+  }
+}

@@ -1,7 +1,7 @@
 # Replacing the forced downgrade path after M711
 
 The existing UpdateDriverForPlugAndPlayDevices path started166 before Configure.
-Do not repeat that assumption. select-driver.cpp is a read-only precursor: open
+Do not repeat that assumption. The --inspect mode in select-driver.cpp is a read-only precursor: open
 the exact devnode, build a compatible-driver list from one INF, require one node,
 and report version plus CM status. It does not call DIF installation or change
 device state. build-select-driver.ps1 builds with SDK26100 and /W4 /WX.
@@ -11,8 +11,7 @@ DI_DONOTCALLCONFIGMG on that device information set, followed by a class-install
 request through SetupDiCallClassInstaller(DIF_INSTALLDEVICE). The default install
 handler is documented not to start the device with that flag. An application must
 not directly call SetupDiInstallDevice, which is reserved for class installers.
-The explicit --install-deferred mode now implements that request. Its runtime
-behavior has not been validated.
+The explicit --install-deferred mode now implements that request. Stage005 rejected both directions with E0000217 (M712); deferred installation is not validated.
 
 After installation, require the expected package identity and a still-disabled
 devnode before restoring saved configuration. Clear any process-local suppression
@@ -48,3 +47,11 @@ Preparation now requires --selector and includes its binary in the stage manifes
 ## Confirmation admission after M712
 
 The runner now rejects confirmation before 60000 ms of readiness, with no completed work, or with a completion older than 15000 ms. Flags 7 alone do not admit confirmation. Generation and epoch are parsed as 64-bit values, matching the CLI. This is a fail-closed guard, not a completed timing redesign: candidate readiness and restored-baseline confirmation still need separate budgeting before another trial. The current runner must not be dispatched as a repaired transition. The deferred installer rejection E0000217 also remains unresolved.
+
+## Read-only node location control (M713)
+
+--inspect-store accepts a published/system INF path or a Driver Store INF path. It resolves the store location before constructing the list. It does not stage or install packages. Every mode now reports the actual node InfFileName and section, using SetupDiGetDriverInfoDetail static fields; ERROR_INSUFFICIENT_BUFFER is accepted only for its documented static-field guarantee.
+
+[SetupGetInfDriverStoreLocation](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupgetinfdriverstorelocationw) does not search by INF contents and must not be passed an arbitrary external INF as though it did. [SetupDiGetDriverInfoDetail](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdriverinfodetailw) defines the static-field behavior. Local SDK26100 declarations were checked first.
+
+M713 observes that a store-path input produces a published system INF node, not necessarily a node retaining the FileRepository path. Admission must compare registered package identity rather than assume string equality with the store path. Installation remains blocked pending a bounded same-package control and repaired recovery timing.
