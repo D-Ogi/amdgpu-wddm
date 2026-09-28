@@ -15,3 +15,17 @@ Build/run from the workspace:
 Current source basis for integration: Mesa UMD revision `71f2e28c1b14f60ecbe11e543279bc76ea0c1237`, hosted contract version 5; WDK 10.0.26100.0. The existing `State.h` defines `SUPPORT_D3D11 0`, and `CreateDevice` accepts D3D10/10.1 interfaces only. FL11 needs an actual D3D11 table, feature/capability negotiation and mapped DXVK operations; changing the support macro is insufficient. Shader DDI input is a token stream plus DDI signatures, so a COM boundary must account for DXBC container construction or expose an engine shader entry that accepts these inputs.
 
 Next integration requirements: agree the versioned engine boundary; wire device creation/destruction and the runtime domain; preserve allocation/import/Present fence ownership; implement resource/shader/state/draw and FL11-specific operations; prove a system-runtime client uses the driver without app-local D3D DLLs. Image/sharing/lifecycle and the ADR performance comparison still require measurement. All lab trials remain bounded to 180 seconds.
+
+## Input-layout translation
+
+`input-layout.cpp` consumes actual WDK `D3D10DDIARG_CREATEELEMENTLAYOUT` entries, preserving their input register numbers, binding slots, resolved offsets and instance divisors (including zero). Binding storage is compacted without renumbering slots. Conflicting per-slot rates/divisors, duplicate registers, invalid bounds/formats and offsets that cannot fit DXVK's packed representation are rejected transactionally. The engine supplies vertex-format lookup/support information; there is no duplicated DXGI format table.
+
+`input-layout-dxvk.h` produces actual `DxvkVertexAttribute` and `DxvkVertexBinding` arrays for the engine. WDK and DXVK headers live in separate translation units: including both exposed conflicting extern-C KMT declarations from DXVK's `util_gdi.h`. The internal data header uses Vulkan types only. This is a compiled adapter component, not a complete or versioned cross-DLL ABI; it is not yet wired into a runtime-loaded DDI table.
+
+```powershell
+& .\bc250-win\tools\build\test-umd-input-layout.ps1 -DxvkSource .\scratch\m14\dxvk
+```
+
+Validated against DXVK `52fe923ca1496c8e44789b613fab8611dfcb5c4a` and WDK 10.0.26100.0 with MSVC C++20, `/W4 /WX` for project code (`/external:W0` for upstream/WDK headers). The test passes the translated data across separate WDK and DXVK units, covering sparse slot31/register17, instance divisor zero, conflicting bindings, overflow/alignment/packing bounds and preservation of output after failure. No GPU operation is exercised by this test.
+
+PROVENANCE: DXVK (github.com/doitsujin/dxvk), zlib; its existing vertex attribute/binding types are included from the external source checkout, not copied into this repository.
