@@ -25,7 +25,7 @@ function Invoke-KmdTransitionArm {
   $budget=Get-KmdChildBudgetMs $elapsed $Arm 30000
   if($budget -le 1000){return @{success=$false;tree_closed=$true;phase=$phase;reason='no-budget'}}
   $receipt=($Arm+'-'+$phase).ToLowerInvariant()
-  $deadline=[Math]::Min($Origin+[long]($(if($Arm -eq 'candidate'){110}else{180})*$Frequency),
+  $deadline=[Math]::Min($Origin+[long]($(if($Arm -eq 'candidate'){110}else{170})*$Frequency),
     [Diagnostics.Stopwatch]::GetTimestamp()+[long]($budget*$Frequency/1000))
   try {
    $result=Invoke-KmdBoundedChild -Tool $Tool -Deadline $deadline -Stdout "$Directory\$receipt.out" -Stderr "$Directory\$receipt.err" -Executable $powershell -Arguments @('-NoProfile','-File',$phaseScript,'-Phase',$phase,'-Arm',$Arm,'-Directory',$Directory,'-Receipt',$receipt)

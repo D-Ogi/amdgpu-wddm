@@ -13,7 +13,7 @@ if(Test-Path $start){throw 'Stage already attempted; inspect its state'}
 $boundary=Get-Content "$out\boundary.json" -Raw|ConvertFrom-Json
 $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
 if($boundary.boot -ne $boot -or $boundary.machine -ne $env:COMPUTERNAME){throw 'Boot/host changed'}
-$limit=if($Arm -eq 'candidate'){110}else{180}
+$limit=if($Arm -eq 'candidate'){110}else{170}
 if($boundary.frequency -ne [Diagnostics.Stopwatch]::Frequency -or [long]$boundary.qpc -le 0){throw 'Invalid monotonic boundary'}
 $elapsed=([Diagnostics.Stopwatch]::GetTimestamp()-[long]$boundary.qpc)/[double]$boundary.frequency
 if($boundary.frequency -ne [Diagnostics.Stopwatch]::Frequency -or $elapsed -lt 0 -or $elapsed -ge $limit){throw 'Stage deadline expired'}

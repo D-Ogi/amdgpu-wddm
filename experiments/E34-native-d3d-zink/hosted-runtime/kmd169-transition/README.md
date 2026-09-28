@@ -9,7 +9,7 @@ package-hashes.json. Both arms retain CPU desktop registration and zero Present 
 phase.ps1 implements capture, disable, install, configure, enable and verification.
 It must run under the sibling kmd168-transition bounded-child helper, never directly.
 The phase rejects an expired monotonic boundary or a changed boot/host. Candidate
-operations stop at 110 seconds; the whole transition has a 180-second deadline.
+operations stop at 110 seconds; the executable work has a 170-second deadline inside the 180-second task limit.
 These checks do not make an uninterruptible kernel operation bounded.
 
 Verification requires the installed SYS, loaded ABI, health, operating clocks,
@@ -31,7 +31,7 @@ test-arm-helper.ps1 exercises the actual native helper with successful, failed
 and hanging child trees; it checks that the timed-out descendant has stopped.
 These are host-only controls, not installation or recovery measurements.
 
-watch.ps1 owns the common QPC boundary and invokes the native watchdog around
+launch.ps1 establishes the common QPC boundary before stage validation; watch.ps1 uses it and invokes the native watchdog around
 worker.ps1. This outer Job Object includes the worker, phase helpers and all their
 children. The watchdog runs independently of the candidate PowerShell process.
 Restoration is admitted only after the outer job is confirmed empty. An unknown
@@ -65,3 +65,10 @@ not a signature or a security boundary against a hostile administrator.
 verify-stage.ps1 rejects changed files, changed manifests, empty file sets and
 paths outside the stage. The candidate phase still validates the driver package
 hashes independently. No network operation occurs during preparation.
+
+The scheduled dispatcher allows one start only. It verifies the action, principal
+and three-minute task limit before creating the durable start-request receipt.
+Candidate time remains110s; restoration ends at170s from launch entry, leaving10s
+before the scheduler limit for startup/closure overhead. This does not guarantee
+that Windows can terminate a thread stuck in the kernel. Incomplete closure is
+recovery-required, never success. Dispatcher runtime validation remains pending.

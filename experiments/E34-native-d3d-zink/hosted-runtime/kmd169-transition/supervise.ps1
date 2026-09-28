@@ -31,7 +31,7 @@ function Invoke-KmdSupervisedTransition {
  if(!(Test-Path "$Directory\mutation-start.json")){
   return @{status='cancelled';reason='no-mutation';restored=$false;candidate_verified=$false}
  }
- if((Get-KmdElapsed $Origin $Frequency) -ge 179){
+ if((Get-KmdElapsed $Origin $Frequency) -ge 169){
   return @{status='recovery-required';reason='no-restore-budget';restored=$false}
  }
  # This witness precedes any rollback and follows proven emptiness of the outer job.
@@ -42,7 +42,7 @@ function Invoke-KmdSupervisedTransition {
  }
  $finished=Get-KmdElapsed $Origin $Frequency
  if($restored.success -isnot [bool] -or !$restored.success -or
-    $restored.tree_closed -isnot [bool] -or !$restored.tree_closed -or $finished -gt 180){
+    $restored.tree_closed -isnot [bool] -or !$restored.tree_closed -or $finished -gt 170){
   return @{status='recovery-required';reason='restore-unverified';restored=$false;elapsed=$finished}
  }
  return @{status='closed';restored=$true;candidate_verified=$candidateValid;elapsed=$finished}
