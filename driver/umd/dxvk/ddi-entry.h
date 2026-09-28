@@ -2,6 +2,8 @@
 #pragma once
 #include "device-owner.h"
 #include <new>
+#include <source_location>
+#include "diagnostics.h"
 namespace bc250::umd {
 struct DdiDeviceHandle { DeviceOwner *owner=nullptr; };
 // API HRESULT values are not the DDI values, even for the same condition.
@@ -20,7 +22,17 @@ inline HRESULT ddi_map_status(HRESULT hr,bool doNotWait) {
     // error critical instead of silently treating it as a legal polling result.
     return ddi_device_status(hr);
 }
-inline void report_ddi_error(DeviceOwner &owner,HRESULT hr) {
+inline void report_ddi_error(DeviceOwner &owner,HRESULT hr,
+    const std::source_location where=std::source_location::current()) {
+    static std::atomic_uint remaining{32};
+    unsigned count=remaining.load(std::memory_order_relaxed);
+    while(count && !remaining.compare_exchange_weak(count,count-1,std::memory_order_relaxed)){}
+    if(count) {
+        char message[768];
+        std::snprintf(message,sizeof(message),"M14 DDI error HRESULT=%08X mapped=%08X line=%u function=%.600s\n",
+            static_cast<unsigned>(hr),static_cast<unsigned>(ddi_device_status(hr)),where.line(),where.function_name());
+        OutputDebugStringA(message);
+    }
     auto &r=owner.runtime();
     if (r.UMCallbacks.pfnSetErrorCb) r.UMCallbacks.pfnSetErrorCb(r.hRTCoreLayer,ddi_device_status(hr));
 }

@@ -72,6 +72,9 @@ bool Ok(HRESULT hr, const char *what) {
   if (SUCCEEDED(hr))
     return true;
   printf("FAIL %s hr=0x%08lx\n", what, static_cast<unsigned long>(hr));
+  char diagnostic[256];
+  snprintf(diagnostic, sizeof(diagnostic), "d3d11bench FAIL %.180s hr=0x%08lx\n", what, static_cast<unsigned long>(hr));
+  OutputDebugStringA(diagnostic);
   return false;
 }
 
