@@ -13,10 +13,11 @@ function ConvertTo-KmdNativeArgument {
  [void]$b.Append('"');return $b.ToString()
 }
 function Invoke-KmdBoundedChild {
- param([string]$Tool,[long]$Deadline,[string]$Stdout,[string]$Stderr,[string]$Executable,[string[]]$Arguments)
+ param([string]$Tool,[long]$Deadline,[string]$Stdout,[string]$Stderr,[string]$Executable,[string[]]$Arguments,[switch]$ActiveConsole)
  $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())/[double][Diagnostics.Stopwatch]::Frequency
  if($remaining -le 1){throw 'Insufficient remaining child budget'}
  $values=@([string]$Deadline,$Stdout,$Stderr,$Executable)+$Arguments
+ if($ActiveConsole){$values=@("--active-console")+$values}
  $si=New-Object Diagnostics.ProcessStartInfo
  $si.FileName=$Tool;$si.UseShellExecute=$false;$si.CreateNoWindow=$true
  $si.RedirectStandardOutput=$true;$si.RedirectStandardError=$true
