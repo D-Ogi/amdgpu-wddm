@@ -66,8 +66,12 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
 2. Same configuration on both paths: identical `DXVK_*`, Vulkan loader and Mesa variables, no `dxvk.conf` unless
    both sides have the same one. `compare.py` refuses runs whose recorded environment differs.
 3. Caches: the engine runs without DXVK's shader cache (it writes no cache file), while per-application DXVK
-   keeps one by default. Set `DXVK_SHADER_CACHE=0` on both sides for the bound; a per-application series with the
-   cache on is a separate number, the price of the missing cache. Both paths also share the ICD's pipeline cache
+   keeps one by default. Set `DXVK_SHADER_CACHE=0` on both sides for the bound. The shaders scene is too small
+   to price the missing cache. On the development PC, 64 variants showed no `total_ms` difference beyond a 30 %
+   run-to-run spread between cache off and a warm cache. The warm cache moved work into creation instead: DXVK
+   looks the shader up in the cache synchronously (`DxvkDevice::createCachedShader`), about 0.09 ms per
+   `CreatePixelShader` against 0.008 ms without the cache, where conversion waits until first use. Price the cache
+   with a title that has many large shaders. Both paths also share the ICD's pipeline cache
    where it has one: either disable it on both sides (`MESA_SHADER_CACHE_DISABLE=true`) or start with one
    discarded run per side. Say which.
 4. At least three runs per side, alternating (per-app, system, per-app, ...), window mode, with the same
