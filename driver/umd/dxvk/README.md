@@ -79,3 +79,15 @@ Controlled Vulkan and engine callbacks validate requirements propagation, queue 
 ```
 
 Controlled ICD callbacks verify the v5 chain, non-first physical-device match, invalid LUID, absent match, duplicate match, bounded enumeration retry, create failure and exact cleanup. This tests bootstrap mechanics; a real hosted ICD and the engine DLL still need integration through the DDI CreateDevice entry. A malformed ICD lacking vkDestroyInstance leaves the handle visible for owner retention rather than silently dropping it.
+
+## DDI device owner
+
+`DeviceOwner::initialize` consumes the actual D3D CreateDevice arguments, copies callback tables, creates the runtime presentation context and connects HostedInstance -> EngineSession -> D3D11 device/immediate-context interfaces. The entry must already hold its RuntimeDomain scope. The owner must live on the heap; a DDI handle should store its pointer, not relocate it. It borrows both DLLs and the runtime and keeps all callback userdata stable.
+
+`close` drains Present while the Vulkan device exists, releases the COM context/device, closes the engine/device, clears now-invalid progress pointers, destroys the instance, then destroys the Present fence/context. Failed cleanup retains the outstanding handle for retry. `has_live_objects` must be checked even after failed initialization: a failed CreateDevice is not permission to free a still-live owner or unload its DLLs.
+
+```powershell
+& .\\bc250-win\\tools\\build\\test-umd-device-owner.ps1 -DxvkSource .\\scratch\\m14\\dxvk
+```
+
+This control compiles all connected components against WDK and the engine ABI, and checks partial initialization rollback and failed context-destruction retention/retry. Successful end-to-end creation of the COM device is not covered by this control; it needs the built DXVK engine. OpenAdapter, DDI table registration and resource operations remain integration work.
