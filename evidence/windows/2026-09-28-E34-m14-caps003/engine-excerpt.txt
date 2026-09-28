@@ -1,0 +1,14 @@
+      caps at 0xb100: doubles 1, compute+raw 1, logic op 1, extended doubles 1, min precision 2/2, TBDR 0
+      typed UAV loads 1, ROVs 1, stencil ref 1, tiled tier 0, min/max filtering 0, conservative tier 3, VP/RT index anywhere 1, shared tier 1
+PASS  TakeDeferredError: nothing recorded after CreateDevice
+PASS  out of memory: CreateBuffer returns E_OUTOFMEMORY, no buffer
+PASS  out of memory: CreateTexture2D returns E_OUTOFMEMORY, no texture
+PASS  out of memory: Map(WRITE_DISCARD) returns E_OUTOFMEMORY with pData NULL
+PASS  out of memory: UpdateSubresource records E_OUTOFMEMORY for TakeDeferredError
+PASS  TakeDeferredError clears what it returned
+PASS  after out of memory: Map and UpdateSubresource succeed, device not removed
+      heap usage MiB: before 0, 256 x 1 MiB buffers 0, released 0, trimmed 0 (1219.5 ms)
+      3: bc250dxvk: TrimMemory: device memory 336 MiB -> 16 MiB
+FAIL  TrimMemory setup: 256 MiB of default buffers show in the driver's heap usage
+FAIL  TrimMemory gives at least 3/4 of the released buffers' memory back to the driver
+PASS  after TrimMemory: no deferred error, device not removed
