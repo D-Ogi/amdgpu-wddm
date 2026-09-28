@@ -1,0 +1,6 @@
+d3d12-ddi OpenAdapter12 0
+d3d12-ddi GetCaps type=1074 size=8 info_present=0 result=E_NOTIMPL
+d3d12-ddi GetCaps type=1007 size=4 info_present=0 result=E_NOTIMPL
+d3d12-ddi GetSupportedVersions 0
+d3d12-ddi GetSupportedVersions 1
+d3d12-ddi CloseAdapter 0

@@ -1,0 +1,6 @@
+{
+    "stdout":  "{\"cancelled\":false,\"console_session\":0,\"child_pid\":6008,\"root_exit_observed\":true,\"child_exit\":0,\"timed_out\":false,\"termination_requested\":true,\"job_empty\":true}\r\n",
+    "stderr":  "",
+    "monitor_error":  null,
+    "exit_code":  0
+}
