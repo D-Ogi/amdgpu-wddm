@@ -52,6 +52,10 @@ try {
   if($LASTEXITCODE){throw 'Allocation request test build failed'}
   & .\allocation-request-test.exe
   if($LASTEXITCODE){throw 'Allocation request tests failed'}
+  & cl.exe @flags /Fe:paging-test.exe "$repo\driver\umd\d3d12\paging-test.cpp"
+  if($LASTEXITCODE){throw 'Paging test build failed'}
+  & .\paging-test.exe
+  if($LASTEXITCODE){throw 'Paging tests failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help

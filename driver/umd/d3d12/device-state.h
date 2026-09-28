@@ -9,6 +9,7 @@ struct Device {
     Adapter* adapter{};
     D3D12DDI_HRTDEVICE runtime{};
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 callbacks{};
+    D3DDDI_DEVICECALLBACKS kernel_callbacks{};
     QueueRegistry queues;
     std::atomic<bool> lost{false};
     void remove() noexcept {

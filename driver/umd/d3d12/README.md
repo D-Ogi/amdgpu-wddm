@@ -80,3 +80,26 @@ The host gates validate request shape and ownership, not native GPU allocation
 or rendering. The shell still needs the allocation registry, completed VA and
 residency operations, GPU-use retirement and same-storage import on the engine's
 VkDevice before these requests are used by native CreateHeapAndResource.
+
+## Paging callback lifetime and pending mappings
+
+CreateDevice now copies the kernel-thunk callback table into its device state.
+The actual-DLL gate clears the caller's table after creation and checks the
+retained function pointer. `paging.h` uses those callbacks with hRTDevice to
+own a paging queue and ordinary writable GPU VA mappings. It exposes an address
+only after the mapping's pending paging fence completes. S_OK mapping results
+do not inherit an undefined asynchronous fence value. The UINT64_MAX fence
+sentinel rejects use after device loss.
+
+Mapping ownership is tied to its paging domain; a different device/domain
+cannot free it. Failed unmap preserves the mapping and blocks queue destruction.
+Invalidating runtime scope clears callbacks and the borrowed CPU fence pointer.
+No destructor retries callbacks. A successful but malformed mapping stays owned
+and unusable, requiring explicit terminal recovery rather than fabricated
+completion. Calls and device teardown must be serialized by integration.
+
+The caller must separately establish residency and GPU-use retirement before
+unmapping; completion of a paging operation is not completion of rendering.
+The mandatory host tests cover pending/ready state, device mismatch, retained
+ownership after failures, synchronous mapping, loss and expired callback scope.
+Native device creation and same-storage Vulkan import remain unverified.

@@ -32,7 +32,7 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     const auto& cb=*a->p12UMCallbacks_0062;
     if(!cb.pfnSetErrorCb || !cb.pfnCreateContextVirtualCb || !cb.pfnDestroyContextCb) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
-    new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb};
+    new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
     ++adapter->devices;return S_OK;
 }
 HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
