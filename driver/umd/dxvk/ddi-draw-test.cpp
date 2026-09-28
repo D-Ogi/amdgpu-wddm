@@ -416,5 +416,17 @@ int main() {
     table.pfnDsSetShaderResources(h,0,0,nullptr); table.pfnCsSetShaderResources(h,0,0,nullptr);
     table.pfnGenMips(h,svh); table.pfnDestroyShaderResourceView(h,svh);
     if (errors!=88 || sview.object || owner.runtime().domain.entered()) std::abort();
+    D3D11_BUFFER_DESC indirectDesc{}; indirectDesc.ByteWidth=64;
+    indirectDesc.MiscFlags=D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    if (!valid_indirect_arguments(indirectDesc,44,sizeof(D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS)) ||
+        valid_indirect_arguments(indirectDesc,48,sizeof(D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS)) ||
+        valid_indirect_arguments(indirectDesc,3,12) || valid_indirect_arguments(indirectDesc,UINT_MAX,12) ||
+        valid_indirect_arguments(indirectDesc,0,0)) std::abort();
+    indirectDesc.MiscFlags=0;
+    if (valid_indirect_arguments(indirectDesc,0,12)) std::abort();
+    table.pfnDrawInstancedIndirect(h,rhandle,16);
+    table.pfnDrawIndexedInstancedIndirect(h,rhandle,20);
+    table.pfnDispatchIndirect(h,rhandle,12);
+    if (errors!=91 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
