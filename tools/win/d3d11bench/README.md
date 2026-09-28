@@ -26,8 +26,11 @@ Output: `<BC250_ROOT>\scratch\build\d3d11bench\d3d11bench.exe`.
 
 Frame scenes render 30 warm-up frames (`--warmup`), then 300 measured ones (`--frames`), and read back the last
 frame for an FNV-1a checksum. Every scene's output is deterministic, so a checksum mismatch between the paths is a
-correctness failure, not noise. The same checksums have been seen on native NVIDIA D3D11 and on DXVK over NVIDIA's
-Vulkan driver.
+correctness failure, not noise. Reference values from the development PC (RTX 4090), the same on native D3D11 and
+on DXVK over NVIDIA's Vulkan driver, default settings, offscreen: draws `5da11354d23bdd01`, fill
+`cd34afa3290da370`, shaders `9ce05937b797b3d3`. They are not yet measured on RADV, and texture filtering may
+legitimately differ between vendors: a mismatch across GPUs is a lead, a mismatch between the two paths on one GPU
+is a failure.
 
 Modes:
 
