@@ -17,6 +17,7 @@
 #include "ddi-srv.h"
 #include "ddi-flush.h"
 #include "ddi-table.h"
+#include "ddi-lifecycle.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
@@ -31,6 +32,8 @@ void APIENTRY error(D3D10DDI_HRTCORELAYER,HRESULT hr) {
     ++errors;
 }
 }
+HRESULT APIENTRY fail_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return E_FAIL; }
+HRESULT APIENTRY pass_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return S_OK; }
 int main() {
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
@@ -458,5 +461,19 @@ int main() {
     if (!table.pfnResourceIsStagingBusy(h,rhandle) || !table.pfnResourceIsStagingBusy({},{})) std::abort();
     table.pfnSetResourceMinLOD(h,rhandle,1.5f);
     if (errors!=100 || owner.runtime().domain.entered()) std::abort();
+    DdiDeviceHandle retiring{new DeviceOwner};
+    DeviceOwner *retained=retiring.owner; expected=retained;
+    retained->runtime().UMCallbacks.pfnSetErrorCb=error;
+    retained->runtime().present_context=&payload;
+    retained->runtime().KTCallbacks.pfnDestroyContextCb=fail_retire;
+    if (retire_device_handle(retiring)!=E_FAIL || retiring.owner!=retained ||
+        !retained->has_live_objects() || retained->runtime().domain.entered() || errors!=101) std::abort();
+    retained->runtime().KTCallbacks.pfnDestroyContextCb=pass_retire;
+    if (retire_device_handle(retiring)!=S_OK || retiring.owner || retire_device_handle(retiring)!=S_OK) std::abort();
+    DdiDeviceHandle emptyDevice{new DeviceOwner}; D3D10DDI_HDEVICE destroyHandle{}; destroyHandle.pDrvPrivate=&emptyDevice;
+    table.pfnDestroyDevice(destroyHandle);
+    if (emptyDevice.owner) std::abort();
+    table.pfnDestroyDevice(destroyHandle); table.pfnDestroyDevice({});
+    expected=&owner;
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
