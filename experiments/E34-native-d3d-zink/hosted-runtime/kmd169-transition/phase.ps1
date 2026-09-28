@@ -1,11 +1,12 @@
 # Must be launched through bounded-child.exe. No standalone blocking-time guarantee.
-param([Parameter(Mandatory)][ValidateSet('Capture','Disable','Install','Configure','Enable','Verify')][string]$Phase,
+param([Parameter(Mandatory)][ValidateSet('Capture','Quiesce','Disable','Install','Configure','Enable','Verify')][string]$Phase,
  [Parameter(Mandatory)][ValidateSet('candidate','restore')][string]$Arm,
  [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Receipt,
  [Parameter(Mandatory)][long]$ChildDeadline)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\verify-cpu.ps1"
+. "$PSScriptRoot\pnp-idle.ps1"
 $directoryPath=[IO.Path]::GetFullPath($Directory)
 if(!$directoryPath.StartsWith('C:\BC250\m13\kmd169-', [StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected trial directory'}
 $out=$directoryPath
@@ -51,8 +52,18 @@ if($Phase -eq 'Capture'){
  if($image.StartsWith('\??\')){$image=$image.Substring(4)}
  $actual=(Get-FileHash -LiteralPath $image).Hash
  if($actual -notin @($manifest.candidate169.'bc250kmd.sys',$manifest.rollback166.'bc250kmd.sys')){throw 'Unknown current SYS'}
+ if($Arm -eq 'restore' -and $Phase -ne 'Quiesce' -and !(Test-Path "$out\restore-admitted.json")){throw 'Missing PnP restore admission'}
+ $pnp=Get-KmdPnpIdle
+ Write-DurableText "$out\$Receipt-pnp.json" ($pnp|ConvertTo-Json -Depth 5)
+ Assert-KmdPnpIdleResult $pnp
  $problem=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
  switch($Phase){
+  'Quiesce' {
+   if($Arm -ne 'restore'){throw 'Quiesce is a restore admission phase'}
+   if($problem -notin @(0,22)){throw 'Device not in a known enabled/disabled state'}
+   if(!(Test-Path "$out\candidate-tree-closed.json")){throw 'Candidate tree closure not witnessed'}
+   Write-DurableText "$out\restore-admitted.json" (@{qpc=[Diagnostics.Stopwatch]::GetTimestamp();problem=$problem;pnp=$pnp}|ConvertTo-Json -Depth 6)
+  }
   'Disable' {
    if($Arm -eq 'candidate' -and ($version -ne '0.7.166.1' -or $actual -ne $manifest.rollback166.'bc250kmd.sys')){throw 'Candidate admission requires exact166'}
    if(!(Test-Path "$out\mutation-start.json")){Write-DurableText "$out\mutation-start.json" (@{qpc=[Diagnostics.Stopwatch]::GetTimestamp()}|ConvertTo-Json)}

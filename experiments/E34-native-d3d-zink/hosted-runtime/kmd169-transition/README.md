@@ -81,3 +81,17 @@ QPC values; they do not claim the desktop remains healthy after the observations
 test-readiness.ps1 covers delayed attachment, restart, persistent mismatch and an
 already expired deadline. The surrounding native helper still bounds a blocked
 OS query; the polling loop alone cannot interrupt one.
+
+Restore now starts with a bounded Quiesce phase. The outer-job witness is named
+candidate-tree-closed.json; only Quiesce can produce restore-admitted.json after
+CMP_WaitNoPendingInstallEvents(0) returns WAIT_OBJECT_0 and the device reports
+problem0 or22. Every subsequent restore phase requires that receipt and repeats
+the pending-install check. Pending, error and unknown statuses fail closed.
+The PnP API call and device queries remain under the native phase timeout.
+
+Contract source: local windows-driver-docs staging110f60ea,
+install/checking-for-in-progress-installations.md; declaration SDK26100
+cfgmgr32.h:4637. This API concerns installation events. It is not an atomic lock
+against a new external installation and does not prove every remove/stop IRP has
+finished. Device-state checks at phase boundaries remain necessary. drvinst PID
+observations are diagnostic, not the quiescence criterion.

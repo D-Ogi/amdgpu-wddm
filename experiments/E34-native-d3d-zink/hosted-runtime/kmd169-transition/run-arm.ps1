@@ -17,7 +17,7 @@ function Invoke-KmdTransitionArm {
  param([ValidateSet('candidate','restore')][string]$Arm,[string]$Directory,[string]$Tool,
        [long]$Origin,[long]$Frequency)
  $phases=if($Arm -eq 'candidate'){@('Capture','Disable','Install','Configure','Enable','Verify')}
-         else{@('Disable','Install','Configure','Enable','Verify')}
+         else{@('Quiesce','Disable','Install','Configure','Enable','Verify')}
  $phaseScript=Join-Path $PSScriptRoot 'phase.ps1'
  $powershell="$env:windir\System32\WindowsPowerShell\v1.0\powershell.exe"
  foreach($phase in $phases){

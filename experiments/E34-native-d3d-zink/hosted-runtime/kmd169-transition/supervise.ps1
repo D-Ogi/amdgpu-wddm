@@ -34,8 +34,9 @@ function Invoke-KmdSupervisedTransition {
  if((Get-KmdElapsed $Origin $Frequency) -ge 169){
   return @{status='recovery-required';reason='no-restore-budget';restored=$false}
  }
- # This witness precedes any rollback and follows proven emptiness of the outer job.
- Write-DurableText "$Directory\restore-admitted.json" (@{closure=$closure;qpc=[Diagnostics.Stopwatch]::GetTimestamp()}|ConvertTo-Json)
+ # Process closure is necessary but not PnP admission. The restore arm first
+ # checks pending OS installations and device state inside a bounded child.
+ Write-DurableText "$Directory\candidate-tree-closed.json" (@{closure=$closure;qpc=[Diagnostics.Stopwatch]::GetTimestamp()}|ConvertTo-Json)
  try{$restored=& $Restore}catch{
   Write-DurableText "$Directory\restore-error.txt" ([string]$_)
   return @{status='recovery-required';reason='restore-exception';restored=$false}

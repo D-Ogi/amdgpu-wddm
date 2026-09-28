@@ -10,7 +10,7 @@ foreach($mode in @('ok','cancel','fail','tree','restore-fail')){
  $frequency=[Diagnostics.Stopwatch]::Frequency;$origin=[Diagnostics.Stopwatch]::GetTimestamp()
  $fixtureMode=if($mode -eq 'restore-fail'){'fail'}else{$mode}
  $result=Invoke-KmdSupervisedTransition -Directory $directory -Tool $Tool -Origin $origin -Frequency $frequency -CandidateSeconds 5 -Worker "$PSScriptRoot\supervisor-fixture.ps1" -WorkerArguments @('-Mode',$fixtureMode,'-Directory',$directory,'-Tool',$Tool) -Restore {
-  if(!(Test-Path "$directory\restore-admitted.json")){throw 'No admission witness'}
+  if(!(Test-Path "$directory\candidate-tree-closed.json")){throw 'No admission witness'}
   if($mode -eq 'tree'){
    $identity=Get-Content "$directory\descendant.json" -Raw|ConvertFrom-Json
    $live=Get-Process -Id $identity.pid -ErrorAction SilentlyContinue
