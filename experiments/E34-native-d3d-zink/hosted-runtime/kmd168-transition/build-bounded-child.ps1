@@ -8,7 +8,7 @@ $out=if($OutDir){$OutDir}else{"$Root\scratch\g0-hosted\bounded-child"}
 New-Item -ItemType Directory -Force $out | Out-Null
 $stem=if($TestPipeHolder){'receipt-pipe-fixture'}else{'bounded-child'}
 $env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
-& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /EHsc /std:c++17 /W4 /WX /O2 /MT /D_CRT_SECURE_NO_WARNINGS "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\winrt" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$out\" "/Fe$out\$stem.exe" "$PSScriptRoot\$stem.cpp" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64" kernel32.lib
+& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /EHsc /std:c++17 /W4 /WX /O2 /MT /D_CRT_SECURE_NO_WARNINGS "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\winrt" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$out\" "/Fe$out\$stem.exe" "$PSScriptRoot\$stem.cpp" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64" kernel32.lib advapi32.lib userenv.lib wtsapi32.lib
 if($LASTEXITCODE -ne 0){throw "Build failed: $LASTEXITCODE"}
 & "$out\$stem.exe" --help
 if($LASTEXITCODE -ne 0){throw 'Probe help check failed'}

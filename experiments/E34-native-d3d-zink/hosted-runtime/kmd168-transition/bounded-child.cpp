@@ -8,6 +8,7 @@ struct Handle {
     HANDLE h=nullptr;
     ~Handle(){if(h && h!=INVALID_HANDLE_VALUE)CloseHandle(h);}
 };
+#include "active-console-child.h"
 static long long now(){LARGE_INTEGER v;QueryPerformanceCounter(&v);return v.QuadPart;}
 static std::wstring quote(const wchar_t* arg){
     std::wstring out=L"\"";unsigned slash=0;
@@ -20,8 +21,10 @@ static std::wstring quote(const wchar_t* arg){
 }
 int wmain(int argc,wchar_t** argv){
     if(argc==2 && std::wstring(argv[1])==L"--help"){
-        puts("bounded-child DEADLINE_QPC STDOUT STDERR EXE [ARGS...]; returns0 only for an empty job and child exit0");return 0;
+        puts("bounded-child [--active-console] DEADLINE_QPC STDOUT STDERR EXE [ARGS...]; returns0 only for an empty job and child exit0; console child writes its own logs");return 0;
     }
+    const bool interactive=argc>1 && std::wstring(argv[1])==L"--active-console";
+    if(interactive){--argc;++argv;}
     if(argc<5)return 125;
     wchar_t* end=nullptr;const long long deadline=_wcstoi64(argv[1],&end,10);
     LARGE_INTEGER freq;QueryPerformanceFrequency(&freq);
@@ -59,15 +62,21 @@ int wmain(int argc,wchar_t** argv){
         DeleteProcThreadAttributeList(startup.lpAttributeList);return 125;
     }
     PROCESS_INFORMATION pi={};
-    const BOOL created=CreateProcessW(argv[4],mutableCommand.data(),nullptr,nullptr,TRUE,
+    DWORD selectedSession=0;
+    const BOOL created=interactive ? createActiveConsoleChild(argv[4],mutableCommand.data(),&pi,selectedSession) :
+        CreateProcessW(argv[4],mutableCommand.data(),nullptr,nullptr,TRUE,
         CREATE_SUSPENDED|CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,
         nullptr,nullptr,&startup.StartupInfo,&pi);
+    const DWORD creationError=created ? ERROR_SUCCESS : GetLastError();
     DeleteProcThreadAttributeList(startup.lpAttributeList);
-    if(!created)return 125;
+    if(!created){std::printf("{\"launch_error\":%lu}\n",creationError);return 125;}
     Handle process,thread;process.h=pi.hProcess;thread.h=pi.hThread;
     if(!AssignProcessToJobObject(job.h,process.h)){
         TerminateProcess(process.h,125);return 125;
     }
+    DWORD childSession=0;
+    if(interactive && (!ProcessIdToSessionId(pi.dwProcessId,&childSession) || childSession!=selectedSession ||
+        WTSGetActiveConsoleSessionId()!=selectedSession)){TerminateJobObject(job.h,125);return 125;}
     if(now()>=workEnd || ResumeThread(thread.h)==DWORD(-1)){TerminateJobObject(job.h,125);return 125;}
     bool observed=false,timedOut=false,empty=false;DWORD childExit=STILL_ACTIVE;
     for(;;){
@@ -83,8 +92,8 @@ int wmain(int argc,wchar_t** argv){
         if(empty || now()>=deadline)break;
         Sleep(10);
     }while(true);
-    printf("{\"child_pid\":%lu,\"root_exit_observed\":%s,\"child_exit\":%lu,\"timed_out\":%s,\"termination_requested\":%s,\"job_empty\":%s}\n",
-        pi.dwProcessId,observed?"true":"false",childExit,timedOut?"true":"false",terminated?"true":"false",empty?"true":"false");
+    printf("{\"console_session\":%lu,\"child_pid\":%lu,\"root_exit_observed\":%s,\"child_exit\":%lu,\"timed_out\":%s,\"termination_requested\":%s,\"job_empty\":%s}\n",
+        selectedSession,pi.dwProcessId,observed?"true":"false",childExit,timedOut?"true":"false",terminated?"true":"false",empty?"true":"false");
     if(!empty)return 125;
     if(timedOut)return 124;
     return observed && childExit==0?0:126;
