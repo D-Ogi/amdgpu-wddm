@@ -40,6 +40,7 @@ What the D3D11 interfaces cannot express goes through `IBc250DxvkDevice`:
 | DXGI present, `RotateResourceIdentities`, `Blt` | `SubmitForPresent`, `RotateResourceIdentities`, `Blt` |
 | DXGI 1.2 `Blt1` with a source rectangle (ABI 1.1) | `IBc250DxvkDevice1::Blt1` |
 | Runtime allocations with a tiling the shell chose, such as LINEAR (ABI 1.2) | `IBc250DxvkDevice2::CreateTexture2DFromImage2` |
+| Adapter-level `GetCaps` answers must hold at every offered level; the device answers only at its own (ABI 1.3) | `IBc250DxvkDevice3::CheckFeatureSupportAtLevel` |
 
 ## The ABI
 
@@ -51,9 +52,10 @@ that collide with the WDK's in one translation unit, so the header uses only `wi
 
 The DLL exports one function, `Bc250DxvkEngineGetFuncs(abiVersion, funcs)`. A major mismatch returns
 `E_NOINTERFACE`. Minor versions only add, and what they add sits behind a new interface or function, so an older
-engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.2 is in force: 1.0 plus
-`IBc250DxvkDevice1` (`Blt1`) and `IBc250DxvkDevice2` (`CreateTexture2DFromImage2`), which the engine device
-answers to `QueryInterface`. The rules E1-E6 are written in the header and are not repeated here:
+engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.3 is in force: 1.0 plus
+`IBc250DxvkDevice1` (`Blt1`), `IBc250DxvkDevice2` (`CreateTexture2DFromImage2`) and `IBc250DxvkDevice3`
+(`CheckFeatureSupportAtLevel`), which the engine device answers to `QueryInterface`. The rules E1-E6 are written
+in the header and are not repeated here:
 - E1 the shell owns VkInstance and VkDevice;
 - E2 threads;
 - E3 submission;
@@ -150,6 +152,26 @@ measurement showing the CPU wait matters.
 - **Blt.** `Blt` and `Blt1` go through `DxvkContext::blitImageView`, which stretches, converts formats and
   resolves. `Blt` takes the whole source subresource; `Blt1` takes a source rectangle, typically a dirty region.
 
+### Feature answers for GetCaps
+
+The runtime asks `GetCaps` at adapter level, before any device exists. A hosted physical device cannot exist
+then: creating its winsys asks the runtime for a paging queue, and that callback belongs to a runtime device.
+So the shell is to answer from its own table for the GPU, and the engine supplies the reference to check it
+against. The shell's adapter entry, table and check are not implemented yet; the reference is.
+- **The reference.** `IBc250DxvkDevice3::CheckFeatureSupportAtLevel` answers as `CheckFeatureSupport` would
+  on an engine device created at another level. The device's own answers are not enough, because DXVK
+  gates several of them on its level: doubles and typed UAV loads from 11_0, ROVs and the stencil
+  reference from 11_1. A device created at 10_0 would contradict a correct table.
+- **The check.** Inside `CreateDevice`, the shell compares its table with the answers at `MaxFeatureLevel`,
+  whatever level the runtime chose for the device.
+- **What the shell does not copy.** Some of DXVK's answers do not map to the caps types of the D3D11.1 DDI
+  interface, the only one the shell lists:
+  - tiled resources, conservative rasterization, viewport and render target array index from any stage,
+    shared resource tier;
+  - threading, which follows E2.
+- **Record.** The engine test prints the record at `MaxFeatureLevel`. A unit A run of the frozen test gives
+  the values for GFX1013.
+
 ### Logging and configuration in a host process
 
 - **Log.** `BC250_DXVK_SHELL_SERVICES::Log` receives DXVK's log lines from the start of `CreateDevice` until the
@@ -215,6 +237,7 @@ it owns instance and device, feeds DDI-form shaders and runtime-style images, an
   signatures the shell passes, against the same program created through the D3D11 API, the path that
   per-application DXVK runs;
 - occlusion and stream-output overflow predication;
+- feature answers at other levels: at the device's own level they equal the device's, byte for byte;
 - the thread of every Vulkan call (E2);
 - no optimized pipeline compiled by a draw, and the deferred ones compiled by `SubmitForPresent`;
 - the Log contract;
