@@ -279,3 +279,13 @@ shared resource/device bindings close atomically; allocation-list cleanup is onl
 for standalone allocations. Failed cleanup preserves state for retry. Mock callback
 tests cover ABI fields, domain, allocation failure and both cleanup forms.
 GPU VA mapping/residency and integration with imported texture creation remain open.
+
+Surface paging now creates a runtime paging queue, maps a page-rounded GPU VA and
+requests residency. Successful asynchronous callbacks (E_PENDING) retain their
+fence values; the maximum map/residency fence governs readiness. Polling reports
+S_FALSE until completion and treats UINT64_MAX as device removal. Import requires
+both completed paging and resident=true. Residency failure preserves mapped VA
+for cleanup. Unmap returns E_PENDING while paging is outstanding and retains state
+on callback failure. Queue destruction requires all mappings/work retired first.
+Mock tests cover later residency fence, failed residency, failed unmap/retry and
+loss sentinel. Device/resource lifecycle integration and lab measurement are pending.

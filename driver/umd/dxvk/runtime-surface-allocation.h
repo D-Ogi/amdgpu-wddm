@@ -16,4 +16,19 @@ struct RuntimeSurfaceRequest {
 HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,RuntimeSurfaceAllocation &);
 // Caller must retire GPU/Present, destroy image wrappers and free its GPU VA first.
 HRESULT deallocate_runtime_surface(RuntimeDevice &,RuntimeSurfaceAllocation &);
-}
+struct SurfacePagingQueue {
+    D3DKMT_HANDLE queue=0,sync=0;
+    const volatile UINT64 *cpu=nullptr;
+};
+struct SurfaceGpuMapping {
+    UINT64 address=0,bytes=0,fence=0;
+    bool resident=false;
+};
+HRESULT create_surface_paging_queue(RuntimeDevice &,SurfacePagingQueue &);
+// All mappings and pending paging work must be retired before queue destruction.
+HRESULT destroy_surface_paging_queue(RuntimeDevice &,SurfacePagingQueue &);
+HRESULT map_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,D3DKMT_HANDLE allocation,UINT64 bytes,SurfaceGpuMapping &);
+// Paging completion only; import additionally requires mapping.resident=true.
+HRESULT surface_paging_status(const SurfacePagingQueue &,const SurfaceGpuMapping &);
+// Only after engine/Present use and paging have retired. E_PENDING preserves VA.
+HRESULT unmap_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,SurfaceGpuMapping &);}

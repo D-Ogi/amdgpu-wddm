@@ -23,6 +23,23 @@ HRESULT APIENTRY deallocate(HANDLE h,const D3DDDICB_DEALLOCATE2 *a) {
     return failFree ? E_FAIL : S_OK;
 }
 }
+namespace {
+UINT64 pagingCpu=0; unsigned unmaps=0; bool rejectResident=false,rejectUnmap=false;
+HRESULT APIENTRY createQueue(HANDLE,D3DDDICB_CREATEPAGINGQUEUE *q) { q->hPagingQueue=7; q->hSyncObject=8; q->FenceValueCPUVirtualAddress=&pagingCpu; return S_OK; }
+HRESULT APIENTRY destroyQueue(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE *q) { check(q->hPagingQueue==7); return S_OK; }
+HRESULT APIENTRY mapVa(HANDLE,D3DDDI_MAPGPUVIRTUALADDRESS *m) {
+    check(m->hPagingQueue==7 && m->hAllocation==41 && m->SizeInPages==2 && m->Protection.Write);
+    m->VirtualAddress=65536; m->PagingFenceValue=5; return E_PENDING;
+}
+HRESULT APIENTRY resident(HANDLE,D3DDDI_MAKERESIDENT *r) {
+    check(r->hPagingQueue==7 && r->NumAllocations==1 && *r->AllocationList==41);
+    if (rejectResident) return E_OUTOFMEMORY;
+    r->PagingFenceValue=9; return E_PENDING;
+}
+HRESULT APIENTRY freeVa(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS *f) {
+    ++unmaps; check(f->BaseAddress==65536 && f->Size==8192); return rejectUnmap ? E_FAIL : S_OK;
+}
+}
 int main() {
     RuntimeDevice device; device.hDevice=&deviceIdentity;
     device.KTCallbacks.pfnAllocateCb=allocate; device.KTCallbacks.pfnDeallocate2Cb=deallocate;
@@ -40,5 +57,20 @@ int main() {
     check(deallocate_runtime_surface(device,surface)==S_OK && deallocates==2);
     request.runtime_resource=nullptr; resourceClose=false;
     check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
+    device.KTCallbacks.pfnCreatePagingQueueCb=createQueue; device.KTCallbacks.pfnDestroyPagingQueueCb=destroyQueue;
+    device.KTCallbacks.pfnMapGpuVirtualAddressCb=mapVa; device.KTCallbacks.pfnMakeResidentCb=resident;
+    device.KTCallbacks.pfnFreeGpuVirtualAddressCb=freeVa;
+    SurfacePagingQueue queue{}; SurfaceGpuMapping mapping{};
+    check(create_surface_paging_queue(device,queue)==S_OK);
+    check(map_runtime_surface(device,queue,41,4097,mapping)==S_FALSE && mapping.fence==9 && mapping.resident);
+    pagingCpu=5; check(surface_paging_status(queue,mapping)==S_FALSE && unmap_runtime_surface(device,queue,mapping)==E_PENDING && !unmaps);
+    pagingCpu=9; rejectUnmap=true;
+    check(unmap_runtime_surface(device,queue,mapping)==E_FAIL && mapping.address==65536);
+    rejectUnmap=false; check(unmap_runtime_surface(device,queue,mapping)==S_OK && !mapping.address);
+    rejectResident=true; pagingCpu=0;
+    check(map_runtime_surface(device,queue,41,4097,mapping)==E_OUTOFMEMORY && mapping.address==65536 && !mapping.resident && mapping.fence==5);
+    pagingCpu=UINT64_MAX; check(surface_paging_status(queue,mapping)==D3DDDIERR_DEVICEREMOVED);
+    pagingCpu=5; check(unmap_runtime_surface(device,queue,mapping)==S_OK);
+    check(destroy_surface_paging_queue(device,queue)==S_OK && !queue.queue && !queue.cpu);
     std::cout << "PASS runtime surface allocation ABI, domain, failure retention and resource-handle close\n";
 }
