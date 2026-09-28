@@ -58,6 +58,25 @@ struct TracePolicy:Policy {
         assert(!std::strcmp(begin.name,name) && !std::strcmp(end.name,name));
     }
 };
+// Observation is independent of paired tracing and accepts only typed slots.
+struct ObservedPolicy:Policy {
+    inline static unsigned observations{};
+    inline static DXGI_FORMAT format_value{DXGI_FORMAT_UNKNOWN};
+    inline static UINT output_value{},samples_value{};
+    inline static D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags_value{};
+    static void observed(Owner* owner,const char* name,D3D12DDI_HDEVICE device,
+            DXGI_FORMAT format,UINT* output) noexcept {
+        assert(owner && current==owner && device.pDrvPrivate==owner && output);
+        assert(!std::strcmp(name,"pfnCheckFormatSupport"));
+        ++observations;format_value=format;output_value=*output;
+    }
+    static void observed(Owner* owner,const char* name,D3D12DDI_HDEVICE device,
+            DXGI_FORMAT format,UINT samples,D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags,UINT* output) noexcept {
+        assert(owner && current==owner && device.pDrvPrivate==owner && output);
+        assert(!std::strcmp(name,"pfnCheckMultisampleQualityLevels"));
+        ++observations;format_value=format;output_value=*output;samples_value=samples;flags_value=flags;
+    }
+};
 using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
 using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
 using Tables=native12::DdiEntryTables<Policy>;
@@ -75,6 +94,12 @@ void APIENTRY format(D3D12DDI_HDEVICE h,DXGI_FORMAT,UINT* out) {
     if(throwing==1)throw std::bad_alloc{};
     if(throwing==2)throw std::runtime_error("test");
     *out=17;
+}
+void APIENTRY multisample(D3D12DDI_HDEVICE h,DXGI_FORMAT,UINT,
+        D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS,UINT* out) {
+    assert(current==static_cast<Owner*>(h.pDrvPrivate));++current->calls;
+    *out=9;
+    if(throwing)throw std::runtime_error("partially written output");
 }
 D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS APIENTRY matching_identifier(D3D12DDI_HDEVICE h,
     D3D12DDI_SERIALIZED_DATA_TYPE type, const D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054* identifier) {
@@ -238,6 +263,7 @@ Core source_core() {
     t.pfnCalcPrivateMeshShaderSize=Dummy<decltype(t.pfnCalcPrivateMeshShaderSize)>::call;
     t.pfnImplicitShaderCacheControl=Dummy<decltype(t.pfnImplicitShaderCacheControl)>::call;
     t.pfnCheckFormatSupport=format;t.pfnCalcPrivateFenceSize=fence_size;
+    t.pfnCheckMultisampleQualityLevels=multisample;
     t.pfnCheckDriverMatchingIdentifier=matching_identifier;
     return t;
 }
@@ -403,10 +429,35 @@ int main() {
     TracePolicy::paired("pfnCheckFormatSupport",&a,E_FAIL);
     assert(!current && a.entered==a.left && b.entered==b.left);
 
+    // Observe the original typed arguments and mutated outputs before unwind.
+    Core observed_core{};
+    assert(native12::DdiEntryTables<ObservedPolicy>::wrap_core(source,&observed_core)==S_OK);
+    value=123;
+    observed_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_R8G8B8A8_UNORM,&value);
+    assert(ObservedPolicy::observations==1 && ObservedPolicy::output_value==17 && value==17);
+    assert(ObservedPolicy::format_value==DXGI_FORMAT_R8G8B8A8_UNORM && !current);
+    constexpr auto msaa_flags=static_cast<D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS>(1);
+    observed_core.pfnCheckMultisampleQualityLevels(ha,DXGI_FORMAT_R16G16_FLOAT,4,msaa_flags,&value);
+    assert(ObservedPolicy::observations==2 && ObservedPolicy::output_value==9 && value==9);
+    assert(ObservedPolicy::format_value==DXGI_FORMAT_R16G16_FLOAT && ObservedPolicy::samples_value==4);
+    assert(ObservedPolicy::flags_value==msaa_flags && !current);
+    // Calls without a matching typed overload continue unchanged.
+    assert(observed_core.pfnCalcPrivateFenceSize(ha,nullptr)==4097 && ObservedPolicy::observations==2);
+    b.allowed=false;value=123;
+    observed_core.pfnCheckFormatSupport(hb,DXGI_FORMAT_UNKNOWN,&value);
+    observed_core.pfnCheckMultisampleQualityLevels({},DXGI_FORMAT_UNKNOWN,2,msaa_flags,&value);
+    assert(ObservedPolicy::observations==2 && value==123);b.allowed=true;
+    throwing=1;observed_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&value);throwing=0;
+    assert(ObservedPolicy::observations==2 && value==123);
+    throwing=2;
+    observed_core.pfnCheckMultisampleQualityLevels(ha,DXGI_FORMAT_UNKNOWN,2,msaa_flags,&value);
+    throwing=0;
+    assert(ObservedPolicy::observations==2 && value==9 && !current && a.entered==a.left);
+
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});
     call_a.join();call_b.join();refill.join();
     assert(!current && a.entered==a.left && b.entered==b.left);
-    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired optional tracing and concurrency pass");
+    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation and concurrency pass");
 }

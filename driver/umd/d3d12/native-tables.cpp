@@ -16,6 +16,21 @@ struct EntryPolicy {
     using Scope=DeviceEngineScope;
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
+    static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT* output) noexcept {
+        if(!ddi_trace_enabled())return;
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        std::fprintf(stderr,"{\"event\":\"ddi-format\",\"name\":\"%s\",\"format\":%u,\"output_present\":%u,\"support\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            name,unsigned(format),unsigned(output!=nullptr),output?*output:0,now.QuadPart,GetCurrentThreadId());
+        std::fflush(stderr);
+    }
+    static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT samples,
+        D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags,UINT* output) noexcept {
+        if(!ddi_trace_enabled())return;
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        std::fprintf(stderr,"{\"event\":\"ddi-msaa\",\"name\":\"%s\",\"format\":%u,\"samples\":%u,\"flags\":%u,\"output_present\":%u,\"levels\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            name,unsigned(format),samples,unsigned(flags),unsigned(output!=nullptr),output?*output:0,now.QuadPart,GetCurrentThreadId());
+        std::fflush(stderr);
+    }
     static Device* resolve(D3D12DDI_HDEVICE handle) noexcept {return static_cast<Device*>(handle.pDrvPrivate);}
     static Device* resolve(D3D12DDI_HCOMMANDLIST handle) noexcept {
         return static_cast<Device*>(engine_ddi::command_list_shell(handle));

@@ -64,6 +64,15 @@ public:
             Policy::leave(owner,name(),id_,outcome);
         }
     }
+    // A separate typed observation hook may inspect selected public outputs.
+    // It runs only after normal return, while the owner's Scope is still active.
+    // The policy must handle nullable outputs and choose what is safe to record.
+    template<class... Args> void observed(Args... args) noexcept {
+        if constexpr(requires {Policy::observed(owner,name(),args...);}) {
+            static_assert(noexcept(Policy::observed(owner,name(),args...)),"observation must not throw");
+            Policy::observed(owner,name(),args...);
+        }
+    }
     EntryTrace(const EntryTrace&)=delete;
     EntryTrace& operator=(const EntryTrace&)=delete;
 };
@@ -97,9 +106,9 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
         if(!fn) return deny(E_UNEXPECTED);
         try {
             if constexpr(std::is_void_v<R>) {
-                fn(args...);trace.outcome=S_OK;return;
+                fn(args...);trace.observed(args...);trace.outcome=S_OK;return;
             } else {
-                R value=fn(args...);
+                R value=fn(args...);trace.observed(args...);
                 if constexpr(std::is_same_v<R,HRESULT>)trace.outcome=value;
                 else trace.outcome=S_OK;
                 return value;
