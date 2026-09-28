@@ -83,3 +83,9 @@ Local /W4 /WX build and argument/package selection controls pass. Local API sour
 The readiness sampler now reads CPU DWM identity and ready health together. Two consecutive valid samples must match both the DWM PID/start set and the KMD generation/epoch, with fresh completed work. Startup escape failures, flags below ready and epoch transitions reset the pair and are retried only within the original deadline. The accepted pair becomes the confirmation anchor. Changes after that point still fail verification. This avoids treating normal mode/visibility invalidations during startup as failures of an already settled interval.
 
 Regression controls cover unavailable escape, epoch3/4/5 startup, a failed sample between equal pairs, and DWM replacement with unchanged health. Existing readiness and confirmation deadline tests remain passing.
+
+## SetupAPI logging support for the pending control
+
+setup-log.ps1 provides read/write/restore of the 64-bit Setup LogLevel DWORD and before/after log-file byte offsets. Start requires a durable save callback before setting 0x0000FFFF; restoration preserves absent versus explicit zero and verifies readback. A conflicting later setting is reported rather than overwritten. No no-flush flag is introduced. Tests use an in-memory backend, not the host or lab registry.
+
+This support is not yet wired into a dispatched control. The control supervisor must restore from the saved receipt after a closed child failure or on success; a finally block in a killable child is insufficient. Missing after receipts or changed/truncated log files must be treated explicitly when extracting the interval. Source: ref/windows-driver-docs/windows-driver-docs-pr/install/setting-setupapi-logging-levels.md, pinned conceptual reference 110f60ea. No logging setting has been changed on the lab by this addition.
