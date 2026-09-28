@@ -44,6 +44,7 @@ struct Options {
   double deadlineSeconds = 120.0;
   std::vector<std::string> scenes;
   std::wstring out;
+  std::wstring dump;
 };
 
 double g_deadline = 0.0;
@@ -165,11 +166,21 @@ std::string StatsJson(const Stats &s) {
          ",\"max\":" + Number(s.max) + "}";
 }
 
-// FNV-1a over the visible bytes of each row, so that row padding never enters the checksum.
-bool Checksum(ID3D11DeviceContext *ctx, ID3D11Texture2D *staging, UINT width, UINT height, std::string &out) {
+bool WriteAtomically(const std::wstring &path, const std::string &text);
+
+// FNV-1a over the visible bytes of each row, so that row padding never enters the checksum. With --dump the
+// same bytes also go to <dir>\<scene>.pam (PAM, RGB_ALPHA, top row first) for imgdiff.py: a checksum only says
+// that two images differ, the image says by how much.
+bool Checksum(ID3D11DeviceContext *ctx, ID3D11Texture2D *staging, UINT width, UINT height, const Options &o,
+              const char *scene, std::string &out) {
   D3D11_MAPPED_SUBRESOURCE m = {};
   if (!Ok(ctx->Map(staging, 0, D3D11_MAP_READ, 0, &m), "map staging"))
     return false;
+  const bool dump = !o.dump.empty();
+  std::string image;
+  if (dump)
+    image = "P7\nWIDTH " + std::to_string(width) + "\nHEIGHT " + std::to_string(height) +
+            "\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n";
   uint64_t h = 14695981039346656037ull;
   for (UINT y = 0; y < height; y++) {
     const uint8_t *row = static_cast<const uint8_t *>(m.pData) + size_t(y) * m.RowPitch;
@@ -177,9 +188,20 @@ bool Checksum(ID3D11DeviceContext *ctx, ID3D11Texture2D *staging, UINT width, UI
       h ^= row[x];
       h *= 1099511628211ull;
     }
+    if (dump) {
+      static_assert(kFormat == DXGI_FORMAT_B8G8R8A8_UNORM, "the dump swaps B and R");
+      for (size_t x = 0; x < size_t(width) * 4; x += 4) {
+        const char rgba[4] = { char(row[x + 2]), char(row[x + 1]), char(row[x]), char(row[x + 3]) };
+        image.append(rgba, 4);
+      }
+    }
   }
   ctx->Unmap(staging, 0);
   out = Hex(h, 16);
+  if (dump && !WriteAtomically(o.dump + L"\\" + std::wstring(scene, scene + strlen(scene)) + L".pam", image)) {
+    printf("FAIL writing the %s image\n", scene);
+    return false;
+  }
   return true;
 }
 
@@ -725,7 +747,7 @@ bool RunFrames(FrameScene &scene, ID3D11Device *dev, ID3D11DeviceContext *ctx, T
   if (Expired())
     return false;
   std::string checksum;
-  if (!Checksum(ctx, t.staging.Get(), t.width, t.height, checksum))
+  if (!Checksum(ctx, t.staging.Get(), t.width, t.height, o, scene.Name(), checksum))
     return false;
   std::vector<double> intervals;
   for (size_t i = 1; i < starts.size(); i++)
@@ -825,7 +847,7 @@ bool RunShaders(ID3D11Device *dev, ID3D11DeviceContext *ctx, const Options &o, s
     return false;
   const double totalMs = NowMs() - start;
   std::string checksum;
-  if (!Checksum(ctx, staging.Get(), kShaderTarget, kShaderTarget, checksum))
+  if (!Checksum(ctx, staging.Get(), kShaderTarget, kShaderTarget, o, "shaders", checksum))
     return false;
   ctx->ClearState();
   json = "{\"name\":\"shaders\",\"shaders\":" + std::to_string(o.shaders) + ",\"total_ms\":" + Number(totalMs) +
@@ -1014,6 +1036,7 @@ const char kUsage[] =
     "  --adapter V[:D]   hexadecimal vendor and optional device id (default: first hardware adapter)\n"
     "  --deadline S      whole-run limit in seconds, at most 170 (default 120)\n"
     "  --out FILE        write the result JSON there instead of standard output\n"
+    "  --dump DIR        also write each scene's checksummed image to DIR\\<scene>.pam (existing directory)\n"
     "Exit: 0 measured, 1 API failure, 2 bad arguments, 3 deadline, 4 device removed.\n"
     "--mode window needs an interactive session with DWM; offscreen runs anywhere.\n";
 
@@ -1089,6 +1112,11 @@ bool ParseArgs(int argc, wchar_t **argv, Options &o) {
       o.deadlineSeconds = double(s);
     } else if (a == L"--out") {
       o.out = v;
+    } else if (a == L"--dump") {
+      o.dump = v;
+      const DWORD attributes = GetFileAttributesW(v);
+      if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY))
+        return false;
     } else {
       return false;
     }

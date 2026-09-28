@@ -32,6 +32,20 @@ on DXVK over NVIDIA's Vulkan driver, default settings, offscreen: draws `5da1135
 legitimately differ between vendors: a mismatch across GPUs is a lead, a mismatch between the two paths on one GPU
 is a failure.
 
+To follow a lead, run both sides with `--dump DIR`: each scene's checksummed image lands in `DIR\<scene>.pam`
+(PAM, RGBA, top row first). Then
+
+```
+python tools\win\d3d11bench\imgdiff.py DIR_A DIR_B [--tolerance N]
+```
+
+prints, per scene, how many pixels differ, the largest difference per channel, the first pixel beyond the
+tolerance and both images' checksums (equal to the `checksum` in the run's JSON, which ties a dump to its run);
+`--diff OUT.pam` on two files writes the difference image. A CPU rasterizer and a GPU may round filtering
+weights and `sin` differently, so the `fill` and `shaders` scenes can differ by a step or two with both
+right, while a wrong draw shows as large differences in whole regions. A tolerance is a judgement recorded with
+the result; it never replaces the same-GPU checksum match of the bound.
+
 Modes:
 
 - `--mode window` renders into a 1280x720 (`--size`) window through a two-buffer `FLIP_DISCARD` swap chain with
