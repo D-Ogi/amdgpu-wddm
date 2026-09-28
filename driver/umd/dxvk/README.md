@@ -349,3 +349,11 @@ devices can therefore report failures safely after adapter closure. Informationa
 and debug engine levels are suppressed. No file logger or resident collector is
 started by this code. Host builds validate the callback ABI; live diagnostic capture
 is still part of the first bounded runtime trial.
+
+## Device-table coverage gate
+
+The shell build runs the DDI host suite before linking the deployable DLL. The suite checks all155 D3D11.1 slots and all15 DXGI1.2 slots; only the reserved MPO filter-range entry may be null. WDK layout size and known counter-info offset are asserted. This gate establishes callable coverage, not GPU correctness.
+
+Hazard notifications defer barriers to DXVK's actual resource use. Convert entries share the Copy implementations as permitted by the WDK. Discard retains contents/backing, which is legal but not a bandwidth optimization; direct flip is explicitly unsupported. Optional debug binaries and the unexposed D3D10 text-filter state do not change execution. Counter queries report no counters. Zero-instance shader-interface binds forward to ordinary binds; nonzero class instances are explicitly rejected, not silently ignored. Dynamic class linkage is therefore not implemented.
+
+Command-list/deferred-context support remains unadvertised (THREADING=0). Their typed entries diagnose unexpected calls once and return failure/zero size or SetError under the runtime domain. They do not claim to implement those features. Tests cover this refusal, domain entry, initialized capability outputs and copy/convert identity. A future threading implementation must replace the refusals and update caps together.

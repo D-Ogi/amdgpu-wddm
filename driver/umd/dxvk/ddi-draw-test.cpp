@@ -37,10 +37,16 @@
 using namespace bc250::umd;
 namespace {
 unsigned errors=0;
+unsigned capabilityErrors=0;
+HRESULT capabilityStatus=S_OK;
 DeviceOwner *expected;
 void APIENTRY error(D3D10DDI_HRTCORELAYER,HRESULT hr) {
     if (hr!=E_FAIL || !expected->runtime().domain.entered()) std::abort();
     ++errors;
+}
+void APIENTRY capability_error(D3D10DDI_HRTCORELAYER,HRESULT hr) {
+    if(!expected->runtime().domain.entered())std::abort();
+    capabilityStatus=hr;++capabilityErrors;
 }
 }
 HRESULT APIENTRY fail_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return E_FAIL; }
@@ -141,6 +147,37 @@ int main() {
         classify_format_support2_result(DXGI_ERROR_DEVICE_REMOVED,0)!=DXGI_ERROR_DEVICE_REMOVED ||
         convert_format_support(D3D11_FORMAT_SUPPORT_SHADER_SAMPLE,0)!=D3D10_DDI_FORMAT_SUPPORT_SHADER_SAMPLE)std::abort();
     auto table=make_render_device_table();
+    static_assert(sizeof(table)==155*sizeof(void *));
+    // Copy representation rather than aliasing function pointers as void**.
+    uintptr_t ddiSlots[155]{};
+    std::memcpy(ddiSlots,&table,sizeof(table));
+    for(auto slot:ddiSlots)if(!slot)std::abort();
+    const auto auditedDxgiTable=make_dxgi_device_table();
+    static_assert(sizeof(auditedDxgiTable)==15*sizeof(void *));
+    uintptr_t dxgiSlots[15]{};std::memcpy(dxgiSlots,&auditedDxgiTable,sizeof(auditedDxgiTable));
+    for(size_t i=0;i<15;++i)
+        if(i!=offsetof(DXGI1_2_DDI_BASE_FUNCTIONS,pfnGetMultiplaneOverlayFilterRange)/sizeof(void *) && !dxgiSlots[i])std::abort();
+    if(auditedDxgiTable.pfnGetMultiplaneOverlayFilterRange)std::abort();
+    if(table.pfnResourceConvert!=table.pfnResourceCopy || table.pfnResourceConvertRegion!=table.pfnResourceCopyRegion)std::abort();
+    table.pfnResourceReadAfterWriteHazard(h,{});
+    table.pfnShaderResourceViewReadAfterWriteHazard(h,{},{});
+    BOOL direct=TRUE;table.pfnCheckDirectFlipSupport(h,{},{},0,&direct);
+    UINT deferredHandleCount=99;table.pfnCheckDeferredContextHandleSizes(h,&deferredHandleCount,nullptr);
+    if(direct || deferredHandleCount || errors)std::abort();
+    owner.runtime().UMCallbacks.pfnSetErrorCb=capability_error;
+    table.pfnCommandListExecute(h,{});
+    if(capabilityErrors!=1 || capabilityStatus!=E_FAIL || owner.runtime().domain.entered())std::abort();
+    if(table.pfnRecycleCreateDeferredContext(h,nullptr)!=E_NOTIMPL ||
+        table.pfnCalcPrivateDeferredContextSize(h,nullptr)!=0)std::abort();
+    table.pfnVsSetShaderWithIfaces(h,{},1,nullptr,nullptr);
+    if(capabilityErrors!=2 || capabilityStatus!=E_NOTIMPL)std::abort();
+    table.pfnVsSetShaderWithIfaces(h,{},0,nullptr,nullptr);
+    if(capabilityErrors!=3 || capabilityStatus!=E_FAIL)std::abort(); // forwarded to absent engine
+    D3D10DDI_COUNTER_TYPE ct{};UINT activeCounters=99,nameLength=99,unitLength=99,descriptionLength=99;
+    table.pfnCheckCounter(h,static_cast<D3D10DDI_QUERY>(0x40000000),&ct,&activeCounters,
+        nullptr,&nameLength,nullptr,&unitLength,nullptr,&descriptionLength);
+    if(capabilityErrors!=4 || capabilityStatus!=E_INVALIDARG || activeCounters || nameLength || unitLength || descriptionLength)std::abort();
+    owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     if(!table.pfnCheckCounterInfo)std::abort();
     D3D10DDI_COUNTER_INFO counterInfo{};
     std::memset(&counterInfo,0xa5,sizeof(counterInfo));

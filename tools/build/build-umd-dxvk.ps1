@@ -7,6 +7,9 @@ $DxvkSource=[IO.Path]::GetFullPath($DxvkSource)
 if (-not $OutputDir) { $OutputDir=Join-Path $root 'scratch\build\umd-dxvk' }
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
+# Device-table ABI and capability behavior are promotion gates, not optional
+# manual checks. Run before producing a deployable shell DLL.
+& "$PSScriptRoot\test-umd-ddi-draw.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\ddi-table') -VsInstall $VsInstall
 $saved=Save-ProcessEnvironment
 try {
     $env:TEMP=$OutputDir; $env:TMP=$OutputDir
