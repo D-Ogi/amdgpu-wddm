@@ -118,6 +118,7 @@ int main() {
         assert(f.registry.create(args, f.rt(0), a) == S_OK);
         assert(f.registry.create(args, f.rt(1), b) == S_OK);
         assert(a.cookie != b.cookie && a.serial != b.serial && f.creates == 2 && f.engine_creates == 2);
+        assert(a.owner == &f.device && b.owner == &f.device && f.registry.owns(a) && f.registry.owns(b));
         BindingProbe probe{&f, native12::QueueEngineState::Live};
         native12::Device foreign;
         assert(f.registry.with_binding(reinterpret_cast<void*>(UINT_PTR{1}), f.device, check_binding, &probe) == E_INVALIDARG);

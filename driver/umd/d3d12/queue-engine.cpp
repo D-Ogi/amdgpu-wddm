@@ -61,7 +61,7 @@ HRESULT QueueEngineRegistry::release_context(QueueEngineOwner* q) noexcept {
 }
 HRESULT QueueEngineRegistry::create(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& args,
     D3D12DDI_HRTCOMMANDQUEUE runtime, QueueEngineSlot& slot) noexcept {
-    if (slot.cookie || slot.serial || !engine_ || !ops_.create || !ops_.execute || !ops_.close || !ops_.check_health)
+    if (slot.cookie || slot.serial || slot.owner || !engine_ || !ops_.create || !ops_.execute || !ops_.close || !ops_.check_health)
         return E_INVALIDARG;
     if (device_.lost.load()) return D3DDDIERR_DEVICEREMOVED;
     HRESULT health = ops_.check_health(ops_.health_cookie);
@@ -122,13 +122,13 @@ HRESULT QueueEngineRegistry::create(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& a
     }
     AcquireSRWLockExclusive(&lock_);
     q->state = QueueEngineState::Live; q->operation_thread = 0;
-    slot = {q, q->serial};
+    slot = {q, q->serial, &device_};
     ReleaseSRWLockExclusive(&lock_);
     return S_OK;
 }
 HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
     const D3D12DDI_HCOMMANDLIST* lists) noexcept {
-    if (!slot.cookie || !slot.serial || (count && !lists)) return E_INVALIDARG;
+    if (slot.owner != &device_ || !slot.cookie || !slot.serial || (count && !lists)) return E_INVALIDARG;
     if (device_.lost.load()) return D3DDDIERR_DEVICEREMOVED;
     AcquireSRWLockExclusive(&lock_);
     auto q = find(slot.cookie, slot.serial);
@@ -146,7 +146,8 @@ HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
     return hr == S_OK && device_.lost.load() ? D3DDDIERR_DEVICEREMOVED : hr;
 }
 HRESULT QueueEngineRegistry::destroy(QueueEngineSlot& slot) noexcept {
-    if (!slot.cookie && !slot.serial) return S_OK;
+    if (!slot.cookie && !slot.serial && !slot.owner) return S_OK;
+    if (slot.owner != &device_) return E_INVALIDARG;
     AcquireSRWLockExclusive(&lock_);
     auto q = slot.serial ? find(slot.cookie, slot.serial) : nullptr;
     if (!q) { ReleaseSRWLockExclusive(&lock_); return E_INVALIDARG; }
@@ -169,6 +170,14 @@ HRESULT QueueEngineRegistry::destroy(QueueEngineSlot& slot) noexcept {
         return pinned ? E_PENDING : FAILED(close_hr) ? close_hr : E_UNEXPECTED;
     }
     return release_context(q);
+}
+bool QueueEngineRegistry::owns(const QueueEngineSlot& slot) noexcept {
+    if (slot.owner != &device_ || !slot.cookie || !slot.serial) return false;
+    AcquireSRWLockShared(&lock_);
+    const auto q = find(slot.cookie, slot.serial);
+    const bool owned = q && q->state != QueueEngineState::Retired;
+    ReleaseSRWLockShared(&lock_);
+    return owned;
 }
 HRESULT QueueEngineRegistry::with_binding(void* cookie, Device& expected_device,
     QueueBindingCallback callback, void* user) noexcept {

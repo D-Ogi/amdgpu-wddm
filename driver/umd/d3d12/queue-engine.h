@@ -33,7 +33,7 @@ struct QueueEngineOps {
     // Native create/execute only. Caller must supply close and check_health/cookie.
     static QueueEngineOps native() noexcept;
 };
-struct QueueEngineSlot { void* cookie{}; UINT64 serial{}; };
+struct QueueEngineSlot { void* cookie{}; UINT64 serial{}; Device* owner{}; };
 struct QueueEngineOwner;
 
 // One per live engine DeviceContext. Device and engine context outlive this
@@ -60,6 +60,9 @@ public:
     HRESULT execute(const QueueEngineSlot& slot, UINT count,
         const D3D12DDI_HCOMMANDLIST* lists) noexcept;
     HRESULT destroy(QueueEngineSlot& slot) noexcept;
+    // Membership/serial check for an already-live runtime private slot. The
+    // runtime still owns storage lifetime; this does not pin arbitrary memory.
+    bool owns(const QueueEngineSlot& slot) noexcept;
 
     // Validates an opaque engine cookie by membership before any dereference.
     // Pins the owner across the callback, which runs outside the registry lock.
