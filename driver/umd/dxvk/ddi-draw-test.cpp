@@ -24,6 +24,7 @@
 #include "ddi-clear-view.h"
 #include "ddi-lifecycle.h"
 #include "ddi-device-create.h"
+#include "ddi-negotiation.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
@@ -600,6 +601,7 @@ int main() {
     const auto originalTable=unchangedTable;
     DdiDeviceHandle newHandle{},failedCleanup{};
     D3D10DDIARG_CREATEDEVICE createArgs{}; createArgs.Interface=D3D11_1_DDI_INTERFACE_VERSION;
+    createArgs.Flags=UINT(D3D11DDI_3DPIPELINELEVEL_11_0)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT;
     createArgs.hDrvDevice.pDrvPrivate=&newHandle; createArgs.p11_1DeviceFuncs=&unchangedTable;
     createArgs.hRTDevice.handle=reinterpret_cast<decltype(createArgs.hRTDevice.handle)>(&createIdentity);
     createArgs.pKTCallbacks=&creationCallbacks; createArgs.pUMCallbacks=&creationUm;
@@ -607,6 +609,11 @@ int main() {
     BC250_DXVK_ENGINE_FUNCS createFuncs{}; createFuncs.CreateDevice=no_engine;
     BC250_DXVK_SHELL_SERVICES createServices{};
     auto attemptCreate=[&]() { return create_render_device(createArgs,1,no_instance,createFuncs,D3D_FEATURE_LEVEL_11_0,createServices,failedCleanup); };
+    const UINT negotiatedFlags=createArgs.Flags;
+    createArgs.Flags=0;
+    if (attemptCreate()!=E_INVALIDARG || createCount || destroyCount || newHandle.owner || failedCleanup.owner ||
+        std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable))) std::abort();
+    createArgs.Flags=negotiatedFlags;
     rejectContext=true;
     if (attemptCreate()!=E_OUTOFMEMORY || createCount!=1 || destroyCount || newHandle.owner || failedCleanup.owner) std::abort();
     rejectContext=false;
@@ -857,5 +864,24 @@ int main() {
     sharedResources[0].runtime_surface=nullptr;
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=E_NOTIMPL || priorityCalls!=1 ||
         resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) std::abort();
+    UINT32 versionCount=0; UINT64 versions[2]={123,456};
+    if (supported_ddi_versions(nullptr,versions)!=E_INVALIDARG ||
+        supported_ddi_versions(&versionCount,nullptr)!=S_OK || versionCount!=1) std::abort();
+    versionCount=0;
+    if (supported_ddi_versions(&versionCount,versions)!=HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) ||
+        versionCount!=0 || versions[0]!=123 || versions[1]!=456) std::abort();
+    versionCount=2;
+    if (supported_ddi_versions(&versionCount,versions)!=S_OK || versionCount!=1 ||
+        versions[0]!=D3D11_1_DDI_SUPPORTED || versions[1]!=456) std::abort();
+    const D3D_FEATURE_LEVEL featureLevels[]={D3D_FEATURE_LEVEL_10_0,D3D_FEATURE_LEVEL_10_1,D3D_FEATURE_LEVEL_11_0,D3D_FEATURE_LEVEL_11_1};
+    for (UINT pipeline=0;pipeline<32;++pipeline) {
+        const UINT flags=((pipeline&7)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT)|
+            ((pipeline&24)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT2)|
+            D3D10DDI_CREATEDEVICE_FLAG_DISABLE_EXTRA_THREAD_CREATION|D3D11DDI_CREATEDEVICE_FLAG_SINGLETHREADED;
+        D3D_FEATURE_LEVEL chosen=D3D_FEATURE_LEVEL_9_1;
+        HRESULT status=requested_feature_level(flags,chosen);
+        if (pipeline<4) { if (status!=S_OK || chosen!=featureLevels[pipeline]) std::abort(); }
+        else if (status!=E_INVALIDARG || chosen!=D3D_FEATURE_LEVEL_9_1) std::abort();
+    }
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

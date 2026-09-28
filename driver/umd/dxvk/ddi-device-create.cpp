@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-device-create.h"
 #include "ddi-table.h"
+#include "ddi-negotiation.h"
 namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     PFN_vkGetInstanceProcAddr get,const BC250_DXVK_ENGINE_FUNCS &funcs,D3D_FEATURE_LEVEL level,
@@ -12,6 +13,9 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     // Runtime private memory need not be initialized. No owner is published
     // until initialization succeeds; failure must leave no dangling handle.
     storage->owner=nullptr;
+    D3D_FEATURE_LEVEL requested{};
+    HRESULT negotiated=requested_feature_level(args.Flags,requested);
+    if (FAILED(negotiated) || requested!=level) return E_INVALIDARG;
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;
     if (!owner) return E_OUTOFMEMORY;
     HRESULT hr=E_FAIL,cleanup=S_OK;
