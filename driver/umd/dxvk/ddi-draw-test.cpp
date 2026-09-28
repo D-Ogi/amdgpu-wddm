@@ -437,5 +437,15 @@ int main() {
     supportOutput=UINT_MAX;
     table.pfnCheckMultisampleQualityLevels(h,DXGI_FORMAT_R8G8B8A8_UNORM,4,&supportOutput);
     if (supportOutput || errors!=96 || owner.runtime().domain.entered()) std::abort();
+    D3D11_BUFFER_DESC soDesc{}; soDesc.ByteWidth=128; soDesc.BindFlags=D3D11_BIND_STREAM_OUTPUT;
+    if (!valid_stream_output_buffer(soDesc,UINT_MAX) || !valid_stream_output_buffer(soDesc,0) ||
+        !valid_stream_output_buffer(soDesc,128) || valid_stream_output_buffer(soDesc,132) ||
+        valid_stream_output_buffer(soDesc,3)) std::abort();
+    soDesc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    if (valid_stream_output_buffer(soDesc,UINT_MAX)) std::abort();
+    const UINT append=UINT_MAX;
+    table.pfnSoSetTargets(h,1,3,&rhandle,&append);
+    table.pfnSoSetTargets(h,0,4,nullptr,nullptr);
+    if (errors!=98 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

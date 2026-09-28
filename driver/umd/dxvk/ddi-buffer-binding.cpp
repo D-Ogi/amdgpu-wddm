@@ -2,6 +2,10 @@
 #include "ddi-buffer-binding.h"
 #include <array>
 namespace bc250::umd {
+bool valid_stream_output_buffer(const D3D11_BUFFER_DESC &desc,UINT offset) {
+    return (desc.BindFlags&D3D11_BIND_STREAM_OUTPUT) &&
+        (offset==UINT_MAX || (offset%4==0 && offset<=desc.ByteWidth));
+}
 HRESULT resource_buffer(D3D10DDI_HRESOURCE handle,ID3D11Buffer *&out) {
     auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
     if (!s) { out=nullptr; return S_OK; }
@@ -21,6 +25,26 @@ void APIENTRY vertex(D3D10DDI_HDEVICE h,UINT first,UINT count,const D3D10DDI_HRE
         HRESULT hr=buffers(first,count,handles,b);
         if (FAILED(hr) || (count && (!strides || !offsets))) { report_ddi_error(owner(h),E_INVALIDARG); return; }
         context.IASetVertexBuffers(first,count,b.data(),strides,offsets);
+    });
+}
+void APIENTRY stream_output(D3D10DDI_HDEVICE h,UINT count,UINT clear,const D3D10DDI_HRESOURCE *handles,const UINT *offsets) {
+    enter_context(h,[&](ID3D11DeviceContext4 &context) {
+        constexpr UINT limit=D3D11_SO_BUFFER_SLOT_COUNT;
+        if (count>limit || clear>limit-count || (count && (!handles || !offsets))) {
+            report_ddi_error(owner(h),E_INVALIDARG); return;
+        }
+        std::array<ID3D11Buffer *,limit> b{};
+        for (UINT i=0;i<count;++i) {
+            HRESULT hr=resource_buffer(handles[i],b[i]);
+            if (FAILED(hr)) { report_ddi_error(owner(h),hr); return; }
+            if (b[i]) {
+                D3D11_BUFFER_DESC desc{}; b[i]->GetDesc(&desc);
+                if (!valid_stream_output_buffer(desc,offsets[i])) { report_ddi_error(owner(h),E_INVALIDARG); return; }
+            }
+        }
+        // COM replaces the complete target set and unbinds omitted slots.
+        // Offsets are bytes; UINT_MAX retains the engine append position.
+        context.SOSetTargets(count,b.data(),offsets);
     });
 }
 void APIENTRY index(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,DXGI_FORMAT format,UINT offset) {
@@ -46,6 +70,7 @@ template<auto Set> void APIENTRY constants(D3D10DDI_HDEVICE h,UINT first,UINT co
 }
 }
 void install_buffer_binding_ddi(D3D11_1DDI_DEVICEFUNCS &t) {
+    t.pfnSoSetTargets=stream_output;
     t.pfnIaSetVertexBuffers=vertex; t.pfnIaSetIndexBuffer=index;
     t.pfnVsSetConstantBuffers=constants<&ID3D11DeviceContext4::VSSetConstantBuffers1>;
     t.pfnPsSetConstantBuffers=constants<&ID3D11DeviceContext4::PSSetConstantBuffers1>;
