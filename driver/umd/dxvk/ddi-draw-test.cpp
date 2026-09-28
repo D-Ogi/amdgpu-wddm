@@ -611,5 +611,30 @@ int main() {
     if (dxgiPresentTable.pfnPresent(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnPresent(&presentArgs)!=E_INVALIDARG) std::abort();
     presentArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
     if (dxgiPresentTable.pfnPresent(&presentArgs)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
+    int rotateIdentity[3]{};
+    DdiResource rotating[3]{}; DXGI_DDI_HRESOURCE rotatingHandles[3]{};
+    for (UINT i=0;i<3;++i) {
+        rotating[i].object=reinterpret_cast<ID3D11Resource *>(&rotateIdentity[i]);
+        rotating[i].present_allocation=31+i; rotating[i].present_subresource=10+i;
+        rotatingHandles[i]=reinterpret_cast<DXGI_DDI_HRESOURCE>(&rotating[i]);
+    }
+    unsigned rotations=0;
+    auto failedRotate=[&](ID3D11Resource *const *objects,UINT count) {
+        ++rotations; if (count!=3 || objects[0]!=rotating[0].object || objects[2]!=rotating[2].object) std::abort();
+        return E_FAIL;
+    };
+    if (rotate_present_resources(rotatingHandles,3,failedRotate)!=E_FAIL || rotations!=1 || rotating[0].present_allocation!=31 || rotating[2].present_subresource!=12) std::abort();
+    auto successfulRotate=[&](ID3D11Resource *const *,UINT) { ++rotations; return S_OK; };
+    if (rotate_present_resources(rotatingHandles,3,successfulRotate)!=S_OK || rotations!=2 ||
+        rotating[0].present_allocation!=32 || rotating[1].present_allocation!=33 || rotating[2].present_allocation!=31 ||
+        rotating[0].present_subresource!=11 || rotating[2].present_subresource!=10 ||
+        rotating[0].object!=reinterpret_cast<ID3D11Resource *>(&rotateIdentity[0])) std::abort();
+    rotatingHandles[1]=rotatingHandles[0];
+    if (rotate_present_resources(rotatingHandles,3,successfulRotate)!=E_INVALIDARG || rotations!=2 ||
+        rotate_present_resources(nullptr,0,successfulRotate)!=E_INVALIDARG) std::abort();
+    DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES rotateArgs{};
+    rotateArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
+    if (dxgiPresentTable.pfnRotateResourceIdentities(nullptr)!=E_INVALIDARG ||
+        dxgiPresentTable.pfnRotateResourceIdentities(&rotateArgs)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

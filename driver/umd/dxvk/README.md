@@ -223,3 +223,12 @@ zero identity and are rejected. Runtime allocation import and ownership, rotatio
 of that identity, and installation of the complete DXGI table remain pending.
 Host tests cover entry validation/domain unwinding and the bridge's submit/wait/
 present/signal order and failures. This is not an end-to-end GPU Present result.
+
+RotateResourceIdentities now validates distinct resources, asks the engine to
+rotate image storage, then rotates the allocation/subresource pairs in the same
+0<-1<-2<-0 direction. COM resource identities stay fixed so existing views follow
+the engine's storage rotation. All temporary allocations precede the engine call;
+failed engine rotation leaves shell metadata unchanged. Future importer-owned image
+lifetime metadata must join this transaction. Host tests exercise three-resource
+success, engine failure, duplicate rejection and DDI domain handling; no live
+swapchain rotation has yet been validated.
