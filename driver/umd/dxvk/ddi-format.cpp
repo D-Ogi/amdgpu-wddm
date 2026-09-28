@@ -88,6 +88,9 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
 }
 void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out) {
     if (out) *out=0;
+    // WDK CheckMultisampleQualityLevels: SampleCount1 always returns1,
+    // including component views and after device removal. No engine query.
+    if(out && count==1){*out=1;return;}
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }

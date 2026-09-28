@@ -167,6 +167,16 @@ int main() {
     for(size_t i=0;i<15;++i)
         if(i!=offsetof(DXGI1_2_DDI_BASE_FUNCTIONS,pfnGetMultiplaneOverlayFilterRange)/sizeof(void *) && !dxgiSlots[i])std::abort();
     if(auditedDxgiTable.pfnGetMultiplaneOverlayFilterRange)std::abort();
+    for(auto singleSampleFormat:{DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,DXGI_FORMAT_X32_TYPELESS_G8X24_UINT,
+        DXGI_FORMAT_R24_UNORM_X8_TYPELESS,DXGI_FORMAT_X24_TYPELESS_G8_UINT,DXGI_FORMAT_R8G8B8A8_UNORM}) {
+        UINT singleQuality=99;
+        table.pfnCheckMultisampleQualityLevels(h,singleSampleFormat,1,&singleQuality);
+        if(singleQuality!=1 || errors)std::abort();
+        owner.bridge().device_lost=true;singleQuality=99;
+        table.pfnCheckMultisampleQualityLevels(h,singleSampleFormat,1,&singleQuality);
+        owner.bridge().device_lost=false;
+        if(singleQuality!=1 || errors)std::abort();
+    }
     if(table.pfnResourceConvert!=table.pfnResourceCopy || table.pfnResourceConvertRegion!=table.pfnResourceCopyRegion)std::abort();
     table.pfnResourceReadAfterWriteHazard(h,{});
     table.pfnShaderResourceViewReadAfterWriteHazard(h,{},{});
