@@ -36,7 +36,7 @@ HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,
 HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
     if (!args) return E_INVALIDARG;
     return entry(args->hDevice,[&](DeviceOwner &owner) {
-        if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_HIGH)
+        if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_AUTO)
             return E_INVALIDARG;
         std::vector<D3DKMT_HANDLE> handles;
         HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles);

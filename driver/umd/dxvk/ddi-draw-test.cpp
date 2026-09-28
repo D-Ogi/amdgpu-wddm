@@ -685,7 +685,7 @@ int main() {
        !dxgiTable.pfnSetResourcePriority || !dxgiTable.pfnQueryResourceResidency ||
        !dxgiTable.pfnRotateResourceIdentities || !dxgiTable.pfnResolveSharedResource ||
        !dxgiTable.pfnOfferResources || !dxgiTable.pfnReclaimResources || !dxgiTable.pfnGetGammaCaps ||
-       !dxgiTable.pfnGetMultiplaneOverlayCaps || !dxgiTable.pfnGetMultiplaneOverlayFilterRange ||
+       !dxgiTable.pfnGetMultiplaneOverlayCaps || dxgiTable.pfnGetMultiplaneOverlayFilterRange ||
        !dxgiTable.pfnCheckMultiplaneOverlaySupport || !dxgiTable.pfnPresentMultiplaneOverlay) std::abort();
     DXGI_GAMMA_CONTROL_CAPABILITIES gamma{}; std::memset(&gamma,0xA5,sizeof(gamma));
     const auto oldGamma=gamma;
@@ -942,6 +942,10 @@ int main() {
     sharedHandles[2]=reinterpret_cast<DXGI_DDI_HRESOURCE>(&sharedResources[2]);
     offerArgs.Priority=static_cast<D3DDDI_OFFER_PRIORITY>(0);
     if(resourceTable.pfnOfferResources(&offerArgs)!=E_INVALIDARG || offerCalls!=2) std::abort();
+    offerArgs.Priority=static_cast<D3DDDI_OFFER_PRIORITY>(D3DDDI_OFFER_PRIORITY_AUTO+1);
+    if(resourceTable.pfnOfferResources(&offerArgs)!=E_INVALIDARG || offerCalls!=2) std::abort();
+    offerArgs.Priority=D3DDDI_OFFER_PRIORITY_AUTO;
+    if(resourceTable.pfnOfferResources(&offerArgs)!=E_FAIL || offerCalls!=2) std::abort(); // accepted, no engine/context
     offerArgs.Priority=D3DDDI_OFFER_PRIORITY_NORMAL;
     if(resourceTable.pfnOfferResources(&offerArgs)!=E_FAIL || offerCalls!=2) std::abort(); // no engine/context
     reclaimArgs.Resources=0; reclaimArgs.pResources=nullptr;

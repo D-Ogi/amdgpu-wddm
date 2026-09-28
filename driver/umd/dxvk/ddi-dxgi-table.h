@@ -15,7 +15,6 @@ inline HRESULT APIENTRY unsupported_gamma(DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS *a
     return DXGI_ERROR_UNSUPPORTED;
 }
 inline HRESULT APIENTRY unsupported_overlay_caps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS *) { return DXGI_ERROR_UNSUPPORTED; }
-inline HRESULT APIENTRY unsupported_overlay_filter(void *) { return DXGI_ERROR_UNSUPPORTED; }
 inline HRESULT APIENTRY unsupported_overlay_check(DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYSUPPORT *) { return DXGI_ERROR_UNSUPPORTED; }
 inline HRESULT APIENTRY unsupported_overlay_present(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *) { return DXGI_ERROR_UNSUPPORTED; }
 inline DXGI1_2_DDI_BASE_FUNCTIONS make_dxgi_device_table() {
@@ -26,7 +25,7 @@ inline DXGI1_2_DDI_BASE_FUNCTIONS make_dxgi_device_table() {
     table.pfnGetGammaCaps=unsupported_gamma;
     // No MPO support is advertised by this KMD. Do not silently report success.
     table.pfnGetMultiplaneOverlayCaps=unsupported_overlay_caps;
-    table.pfnGetMultiplaneOverlayFilterRange=unsupported_overlay_filter;
+    table.pfnGetMultiplaneOverlayFilterRange=nullptr; // Reserved by the DXGI DDI.
     table.pfnCheckMultiplaneOverlaySupport=unsupported_overlay_check;
     table.pfnPresentMultiplaneOverlay=unsupported_overlay_present;
     return table;
