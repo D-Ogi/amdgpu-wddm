@@ -44,6 +44,10 @@ try {
   if($LASTEXITCODE){throw 'Fence DDI test build failed'}
   & .\fence-ddi-test.exe
   if($LASTEXITCODE){throw 'Fence DDI tests failed'}
+  & cl.exe @flags /Fe:allocation-test.exe "$repo\driver\umd\d3d12\allocation-test.cpp"
+  if($LASTEXITCODE){throw 'Allocation ownership test build failed'}
+  & .\allocation-test.exe
+  if($LASTEXITCODE){throw 'Allocation ownership tests failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help
