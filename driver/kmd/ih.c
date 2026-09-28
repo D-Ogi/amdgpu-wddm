@@ -134,7 +134,7 @@ static void Note(_Inout_ BC250_IH_STATS* Ih, _In_ const struct bc250_iv_entry* E
 
 // At DISPATCH_LEVEL. amdgpu_ih_process(): consume up to the write pointer, publish the read pointer, look again. Every
 // vector advances the read pointer whether its source is known or not: an unknown source must not wedge the ring.
-static void Consume(_Inout_ BC250_IH* ih)
+static BOOLEAN Consume(_Inout_ BC250_IH* ih)
 {
     struct amdgpu_device* adev;
     struct bc250_iv_entry entry;
@@ -172,20 +172,37 @@ static void Consume(_Inout_ BC250_IH* ih)
         ih->Stats.Rptr = rptr;
         KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
 
-        if (ih->Active == 0) break;
-        if (rptr == ih->Rptr)
-        {
-            // An empty serviced interrupt still needs the RPTR doorbell to
-            // rearm MSI. A delayed writeback must not strand the next vector.
-            // Matches the empty-pass publication in amdgpu_ih_process; keep
-            // the existing bounded pass and never publish after a read fault.
-            bc250_ih_set_rptr(adev, rptr);
-            break;
-        }
+        if (ih->Active == 0) return FALSE;
         ih->Rptr = rptr;
+        // Publish even an unchanged RPTR: a serviced MSI must be rearmed.
         bc250_ih_set_rptr(adev, rptr);
-        if (budget == 0) break;
+
+        // A vector can arrive between the earlier empty read and publication.
+        // Observe it explicitly instead of assuming rearm is level-triggered.
+        wptr = bc250_ih_get_wptr(adev, &overflowed);
+        if (!NT_SUCCESS(ih->DpcSequence.Fault) || (wptr & 31) != 0 ||
+            (overflowed && (adev->irq.ih.rptr & 31) != 0))
+        {
+            InterlockedExchange(&ih->Active, 0);
+            KeAcquireSpinLockAtDpcLevel(&ih->StatsLock);
+            ih->Stats.DecodeErrors++;
+            KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
+            return FALSE;
+        }
+        if (overflowed)
+        {
+            // get_wptr already acknowledged overflow. Preserve its recovery
+            // position before a later read no longer exposes the overflow bit.
+            ih->Rptr = adev->irq.ih.rptr;
+            KeAcquireSpinLockAtDpcLevel(&ih->StatsLock);
+            ih->Stats.OverflowCount++;
+            ih->Stats.Rptr = ih->Rptr;
+            KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
+        }
+        if (ih->Active == 0 || wptr == ih->Rptr) return FALSE;
+        if (budget == 0 || round + 1 == BC250_IH_DPC_ROUNDS) return TRUE;
     }
+    return FALSE;
 }
 
 // The read pointer and the doorbell are outside the spin lock, so two consumers at once would take vectors twice and
@@ -194,6 +211,7 @@ static void Consume(_Inout_ BC250_IH* ih)
 void IhDpc(_Inout_ BC250_DEVICE* Device)
 {
     BC250_IH* ih = (BC250_IH*)Device->Ih;
+    BOOLEAN pending;
 
     if (ih == NULL || ih->Active == 0) return;
     InterlockedIncrement(&ih->DpcCount);
@@ -206,8 +224,15 @@ void IhDpc(_Inout_ BC250_DEVICE* Device)
             continue;
         }
         InterlockedExchange(&ih->DpcAgain, 0);
-        Consume(ih);
+        pending = Consume(ih);
         InterlockedExchange(&ih->InDpc, 0);
+        if (pending && ih->Active != 0)
+        {
+            // Yield after the work budget. Reusing DpcAgain here would spin in
+            // this invocation instead of returning execution to the scheduler.
+            Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+            return;
+        }
         if (InterlockedExchange(&ih->DpcAgain, 0) == 0 || ih->Active == 0) return;
     }
 }
