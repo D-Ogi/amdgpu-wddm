@@ -32,3 +32,8 @@ unrelated event. Streaming work beyond the budget must return pending; the actua
 IhDpc must release consumer ownership, queue exactly one continuation and return.
 An empty drained invocation must not queue itself. The previous7109741 consumer
 failed the edge pre-publication case before the implementation was changed.
+
+The fast KMD build gate runs this control as `ih-consume` against the selected
+worktree, not the main checkout. Post-publication read fault and misalignment
+must stop with no continuation; a one-shot overflow must retain recovery position
+after its acknowledge clears the overflow indication. There are17 cases.
