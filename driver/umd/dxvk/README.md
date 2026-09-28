@@ -177,8 +177,9 @@ GIPA directly, and rolls back partial loads. DeviceOwner retains independent cod
 references before opening its Vulkan session; the adapter loader must stay alive
 through that acquisition. No Vulkan instance is created by this loader.
 The loader fixture test covers successful load/close/reopen, second-module failure,
-ABI mismatch, missing function and export failure with cleared state. Connecting
-this component to OpenAdapter/device creation is still pending.
+ABI mismatch, missing function and export failure with cleared state. The adapter
+now owns this loader and verifies both configured SHA-256 values before loading.
+Verification holds read handles denying write/delete sharing through LoadLibraryEx.
 
 API-to-DDI status translation is explicit: nonblocking Map busy maps to
 DXGI_DDI_ERR_WASSTILLDRAWING, and DXGI removed/reset/hung/internal-driver status
@@ -219,8 +220,10 @@ The DXGI1.2 Present entry now invokes engine SubmitForPresent through the runtim
 bridge, then GPU fence ordering, PresentCb and present completion signal. It does
 not CPU-wait or read back the frame. An explicit borrowed allocation/subresource
 identity is required on each presented resource; ordinary engine resources have
-zero identity and are rejected. Runtime allocation import and ownership, rotation
-of that identity, and installation of the complete DXGI table remain pending.
+zero identity and are rejected. Runtime allocation import, ownership and rotation
+are integrated. CreateDevice publishes the matched DXGI1.2 table after the engine
+confirms the advertised adapter capabilities. Engine-private Offer/Reclaim and
+residency support remain incomplete; gamma/MPO are not implemented.
 Host tests cover entry validation/domain unwinding and the bridge's submit/wait/
 present/signal order and failures. This is not an end-to-end GPU Present result.
 
@@ -289,3 +292,38 @@ for cleanup. Unmap returns E_PENDING while paging is outstanding and retains sta
 on callback failure. Queue destruction requires all mappings/work retired first.
 Mock tests cover later residency fence, failed residency, failed unmap/retry and
 loss sentinel. Device/resource lifecycle integration and lab measurement are pending.
+
+
+## Loadable UMD boundary
+
+`tools/build/build-umd-dxvk.ps1 -DxvkSource <DXVK tree>` builds `bc250d3d11.dll`
+with `OpenAdapter10_2`. It does not install the DLL, create a deployment configuration,
+or select engine/ICD artifacts. `test-umd-entry.ps1 -DxvkSource <tree> -UmdPath <DLL>`
+loads an isolated copy and exercises the real export with synthetic adapter callbacks;
+this proves loader/negotiation behavior, not system-runtime device creation or GPU work.
+
+The export reads `bc250d3d11.config` only beside its own module. The configuration is
+exactly 108 bytes, little-endian, matching `AdapterConfigRecord` in `adapter-config.h`:
+
+- Eleven 32-bit words: magic `0x4334314d`, version `1`, size `108`, reserved `0`,
+  D3D_FEATURE_LEVEL maximum, doubles Boolean, compute/raw/structured Boolean,
+  logic-op Boolean, tile-based Boolean, pixel minimum-precision flags, other-stage flags.
+- Engine SHA-256 (32 raw bytes), then ICD SHA-256 (32 raw bytes).
+
+The sibling modules are named `bc250dxvk.dll` and `bc250radv.dll`. Zero hashes,
+unknown record versions, invalid Boolean/precision values and inconsistent capability
+records are rejected. Capabilities must be measured from the exact selected pair;
+no gfx1013 defaults are supplied. The configuration's hashes bind the record to those
+files, while the CreateDevice ABI1.3 gate checks the actual feature claims.
+
+Open copies the record, queries the KMD identity trailer, and publishes the adapter
+without creating Vulkan objects. CreateDevice loads the verified siblings and creates
+the hosted device. A KMD with the identity trailer and E26R v3 resource metadata is
+required; deployed KMD170 lacks these additions. Failed initialization never publishes
+either device table. An owner that cannot be cleaned up is retained with its modules;
+CloseAdapter does not reuse invalid runtime callbacks from a failed CreateDevice.
+
+The exported-DLL host test removes its synthetic configuration on success. Its copied
+DLL and synthetic inputs are test artifacts, not a deployment package. A measured
+capability record, exact rebuilt KMD, signed packaging and bounded system-runtime GPU
+validation are still required before promotion.
