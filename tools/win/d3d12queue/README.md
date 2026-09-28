@@ -27,3 +27,68 @@ They do not establish that dxgkrnl refreshes its effective DX12 driver name.
 The trial must query that name through KMT after installation and after restoration;
 a registry readback alone is insufficient. No restart or persistent deployment is
 implicit in this helper.
+
+## Interactive experiments
+
+`--interactive <directory> --deadline <seconds>` uses the BC-250 through the
+system runtime. The directory must already exist and must be new for each run.
+The deadline is at most150 seconds; a separate bounded Job must cover the whole
+process, driver calls and cleanup. The surrounding lab supervisor reserves time
+for restoration within its180-second limit.
+
+Commands are immutable ASCII files, published by `controller.ps1` through a
+flushed temporary file and rename. For example:
+
+```powershell
+.\controller.ps1 -Directory <directory> -Sequence 1 -Command create-device
+```
+
+The file contains `1 create-device` and a newline. The probe writes
+`result-000001.json` with the operation result and current state before accepting
+the next sequence. The controller refuses overwrites and requires the previous
+receipt before publishing the next command.
+
+| Command | Operation |
+| --- | --- |
+| `create-device` | Load System32 D3D12, select the adapter and create an FL11_0 device |
+| `create-queue` | Create one DIRECT queue on that device |
+| `copy` | Upload a deterministic4096-byte pattern, execute a buffer copy, wait for the runtime fence and compare every readback byte |
+| `status` | Read the current device removal reason |
+| `exit` | Finish the session and release objects whose GPU work has retired |
+| `abort` | Request cancellation at an operation boundary or inside the bounded fence wait |
+
+`controller.ps1 -Abort` can publish `abort.request` while an operation is active.
+It does not interrupt a driver callback. The independent Job deadline remains
+necessary if a DDI call does not return. Unretired GPU resources are retained
+through process termination instead of being released as though execution had
+completed.
+
+`trace.jsonl` records flushed API before/after events; each receipt records the
+command sequence, HRESULT, elapsed time, device/queue state and copy result.
+`session.json` is the terminal command summary. Its creation precedes COM
+teardown: it is not proof that the process exited or the Job is empty. Acceptance
+requires the copy oracle, process result, independent Job closure and restoration
+checks together. A successful `exit` or normal void DDI return alone is insufficient.
+
+A session can be replayed against another exact artifact by submitting the same
+commands to a new directory, checking each receipt before proceeding. Preserve
+the original files rather than restarting an attempt in place. Commands steer
+public API operations; driver callback scopes are never suspended for input.
+
+## Compact trace analysis
+
+Enable `AMDGPU_WDDM_DDI_TRACE=1` in the diagnostic UMD process to add paired named
+DDI events and typed format/MSAA observations to stderr. Summarize explicit local
+files with:
+
+```powershell
+python -B summarize_trace.py --runtime-err runtime.err --trace trace.jsonl
+```
+
+The analyzer reports call pairing, returned statuses, durations when a consistent
+QPC frequency is available, and the last allowlisted format/MSAA values. Edge
+counts are explicitly named; a begin and an end contribute two edges. Duplicate,
+unmatched, malformed and untracked records remain visible. Hosted callback IDs
+are device-local, so the analyzer reports their counts without assuming a global
+pairing. Raw text, handles and resource contents are omitted from its bounded
+output. The original trace remains the source of evidence.
