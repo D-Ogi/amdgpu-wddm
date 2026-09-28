@@ -15,11 +15,12 @@ try {
     $includes=@("/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$DxvkSource\src", "/external:I$DxvkSource\include\vulkan\include", "/external:I$DxvkSource\include\spirv\include", "/external:I$DxvkSource\subprojects\dxbc-spirv")
     Push-Location $OutputDir
     try {
-        & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /external:W0 /MD /DNOMINMAX /DWIN32_LEAN_AND_MEAN /DVK_USE_PLATFORM_WIN32_KHR @includes /Fe:input-layout-test.exe "$repo\driver\umd\dxvk\input-layout.cpp" "$repo\driver\umd\dxvk\input-layout-test.cpp" "$repo\driver\umd\dxvk\input-layout-dxvk-test.cpp"
+        & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /external:W0 /MD /DNOMINMAX /DWIN32_LEAN_AND_MEAN /DVK_USE_PLATFORM_WIN32_KHR @includes /Fe:input-layout-test.exe "$repo\driver\umd\dxvk\input-layout.cpp" "$repo\driver\umd\dxvk\engine-input-layout.cpp" "$repo\driver\umd\dxvk\input-layout-test.cpp" "$repo\driver\umd\dxvk\input-layout-dxvk-test.cpp"
         if ($LASTEXITCODE -ne 0) { throw 'Input-layout compilation failed' }
         & .\input-layout-test.exe
         if ($LASTEXITCODE -ne 0) { throw 'Input-layout test failed' }
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }
+
 
 
