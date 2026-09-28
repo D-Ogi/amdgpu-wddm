@@ -22,6 +22,58 @@ HRESULT allocation(DeviceOwner &owner,DXGI_DDI_HRESOURCE handle,D3DKMT_HANDLE &o
         surface->allocation.allocation!=r->present_allocation) return E_INVALIDARG;
     out=surface->allocation.allocation; return S_OK;
 }
+HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,UINT count,
+                         std::vector<D3DKMT_HANDLE> &handles) {
+    if (count && !resources) return E_INVALIDARG;
+    handles.resize(count);
+    for (UINT i=0;i<count;++i) {
+        HRESULT hr=allocation(owner,resources[i],handles[i]);
+        if (FAILED(hr)) return hr;
+        for (UINT j=0;j<i;++j) if (handles[i]==handles[j]) return E_INVALIDARG;
+    }
+    return S_OK;
+}
+HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
+    if (!args) return E_INVALIDARG;
+    return entry(args->hDevice,[&](DeviceOwner &owner) {
+        if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_HIGH)
+            return E_INVALIDARG;
+        std::vector<D3DKMT_HANDLE> handles;
+        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles);
+        if (FAILED(hr) || handles.empty()) return hr;
+        return offer_after_submit(owner.runtime(),handles.data(),args->Resources,args->Priority,[&]() -> HRESULT {
+            if (!owner.context() || !owner.device()) return E_FAIL;
+            auto status=[&]() -> HRESULT {
+                if (owner.bridge().device_lost || owner.bridge().submission_failed) return DXGI_ERROR_DEVICE_REMOVED;
+                return owner.device()->GetDeviceRemovedReason();
+            };
+            HRESULT result=status(); if (FAILED(result)) return result;
+            owner.context()->Flush(); // Engine E3: all prior commands submitted, not a CPU wait.
+            return status();
+        });
+    });
+}
+HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
+    if (!args) return E_INVALIDARG;
+    return entry(args->hDevice,[&](DeviceOwner &owner) {
+        std::vector<D3DKMT_HANDLE> handles;
+        HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles);
+        if (FAILED(hr) || handles.empty()) return hr;
+        auto &runtime=owner.runtime();
+        if (!runtime.KTCallbacks.pfnReclaimAllocationsCb) return E_NOTIMPL;
+        std::vector<BOOL> discarded(args->Resources,FALSE);
+        D3DDDICB_RECLAIMALLOCATIONS request{};
+        // BIND_PRESENT resources must be reclaimed by allocation handle.
+        request.HandleList=handles.data(); request.NumAllocations=args->Resources;
+        request.pDiscarded=discarded.data();
+        hr=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+        if (FAILED(hr)) return hr;
+        // This synchronous callback returns resident allocations. Reclaim2 would
+        // require retaining and waiting its paging fence before further GPU use.
+        if (args->pDiscarded) for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=discarded[i];
+        return hr;
+    });
+}
 HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {
     if (!args) return E_INVALIDARG;
     return entry(args->hDevice,[&](DeviceOwner &owner) {
@@ -99,6 +151,8 @@ HRESULT APIENTRY resolve(DXGI_DDI_ARG_RESOLVESHAREDRESOURCE *args) {
 }
 }
 void install_dxgi_resource_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &table) {
+    table.pfnOfferResources=offer;
+    table.pfnReclaimResources=reclaim;
     table.pfnSetDisplayMode=display_mode;
     table.pfnSetResourcePriority=priority;
     table.pfnQueryResourceResidency=residency;

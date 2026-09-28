@@ -75,6 +75,20 @@ HRESULT APIENTRY no_engine(const BC250_DXVK_DEVICE_CREATE_INFO *,IBc250DxvkDevic
 }
 namespace {
 unsigned priorityCalls=0,residencyCalls=0; int residencyMode=0;
+unsigned offerCalls=0,reclaimCalls=0,submitCalls=0;
+HRESULT residencyChangeResult=S_OK;
+HRESULT APIENTRY runtime_offer(HANDLE h,const D3DDDICB_OFFERALLOCATIONS *p) {
+    if(h!=&createIdentity || !expected->runtime().domain.entered() || !submitCalls || p->pResources ||
+       p->NumAllocations!=3 || p->Priority!=D3DDDI_OFFER_PRIORITY_NORMAL) std::abort();
+    for(UINT i=0;i<3;++i) if(p->HandleList[i]!=61+i) std::abort();
+    ++offerCalls; return residencyChangeResult;
+}
+HRESULT APIENTRY runtime_reclaim(HANDLE h,const D3DDDICB_RECLAIMALLOCATIONS *p) {
+    if(h!=&createIdentity || !expected->runtime().domain.entered() || p->pResources ||
+       p->NumAllocations!=3 || !p->pDiscarded) std::abort();
+    for(UINT i=0;i<3;++i) { if(p->HandleList[i]!=61+i) std::abort(); p->pDiscarded[i]=(i==1); }
+    ++reclaimCalls; return residencyChangeResult;
+}
 unsigned displayModeCalls=0; HRESULT displayModeResult=S_OK;
 HRESULT APIENTRY runtime_display_mode(HANDLE h,D3DDDICB_SETDISPLAYMODE *p) {
     if (h!=&createIdentity || !expected->runtime().domain.entered() ||
@@ -867,6 +881,41 @@ int main() {
         sharedResources[i].runtime_surface=&tracked[i]; sharedResources[i].present_allocation=61+i;
         sharedHandles[i]=reinterpret_cast<DXGI_DDI_HRESOURCE>(&sharedResources[i]);
     }
+    BOOL discarded[3]={9,9,9};
+    DXGI_DDI_ARG_RECLAIMRESOURCES reclaimArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles,discarded,3};
+    DXGI_DDI_ARG_OFFERRESOURCES offerArgs{reclaimArgs.hDevice,sharedHandles,3,D3DDDI_OFFER_PRIORITY_NORMAL};
+    if(!resourceTable.pfnOfferResources || !resourceTable.pfnReclaimResources ||
+       resourceTable.pfnOfferResources(nullptr)!=E_INVALIDARG ||
+       resourceTable.pfnReclaimResources(nullptr)!=E_INVALIDARG ||
+       resourceTable.pfnOfferResources(&offerArgs)!=E_NOTIMPL ||
+       resourceTable.pfnReclaimResources(&reclaimArgs)!=E_NOTIMPL) std::abort();
+    owner.runtime().KTCallbacks.pfnOfferAllocationsCb=runtime_offer;
+    owner.runtime().KTCallbacks.pfnReclaimAllocationsCb=runtime_reclaim;
+    {
+        RuntimeDomain::Scope scope(owner.runtime().domain);
+        const D3DKMT_HANDLE handles[]={61,62,63};
+        auto submit=[&]() { ++submitCalls; return S_OK; };
+        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,[](){return E_FAIL;})!=E_FAIL || offerCalls) std::abort();
+        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,submit)!=S_OK || offerCalls!=1) std::abort();
+        residencyChangeResult=D3DDDIERR_DEVICEREMOVED;
+        if(offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,submit)!=D3DDDIERR_DEVICEREMOVED || offerCalls!=2) std::abort();
+    }
+    if(resourceTable.pfnReclaimResources(&reclaimArgs)!=D3DDDIERR_DEVICEREMOVED || reclaimCalls!=1) std::abort();
+    for(auto value:discarded) if(value!=9) std::abort();
+    residencyChangeResult=S_OK;
+    if(resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaimCalls!=2 || discarded[0] || !discarded[1] || discarded[2]) std::abort();
+    reclaimArgs.pDiscarded=nullptr;
+    if(resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaimCalls!=3) std::abort();
+    sharedHandles[2]=sharedHandles[0];
+    if(resourceTable.pfnReclaimResources(&reclaimArgs)!=E_INVALIDARG || reclaimCalls!=3 ||
+       resourceTable.pfnOfferResources(&offerArgs)!=E_INVALIDARG || offerCalls!=2) std::abort();
+    sharedHandles[2]=reinterpret_cast<DXGI_DDI_HRESOURCE>(&sharedResources[2]);
+    offerArgs.Priority=static_cast<D3DDDI_OFFER_PRIORITY>(0);
+    if(resourceTable.pfnOfferResources(&offerArgs)!=E_INVALIDARG || offerCalls!=2) std::abort();
+    offerArgs.Priority=D3DDDI_OFFER_PRIORITY_NORMAL;
+    if(resourceTable.pfnOfferResources(&offerArgs)!=E_FAIL || offerCalls!=2) std::abort(); // no engine/context
+    reclaimArgs.Resources=0; reclaimArgs.pResources=nullptr;
+    if(resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaimCalls!=3 || owner.runtime().domain.entered()) std::abort();
     DXGI_DDI_ARG_SETDISPLAYMODE modeArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],0};
     if (!resourceTable.pfnSetDisplayMode || resourceTable.pfnSetDisplayMode(nullptr)!=E_INVALIDARG ||
         resourceTable.pfnSetDisplayMode(&modeArgs)!=E_NOTIMPL || displayModeCalls) std::abort();
