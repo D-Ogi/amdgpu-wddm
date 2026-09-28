@@ -221,8 +221,8 @@ void check_layout_sets(const engine_ddi::AdapterCaps* caps, const char* what) {
         const HRESULT hr = get(caps, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets, key, 20);
         check(hr == S_OK && !std::memcmp(&sets, &none, sizeof(none)) && key[0] == D3D12DDI_TL_ROW_MAJOR &&
                   key[1] == static_cast<UINT>(unit) && !layout.SupportsRowMajorTexture,
-              "%s: 1003 TEXTURE_LAYOUT_SETS, DataSize 20, pInfo {ROW_MAJOR, unit %d}: both SubCaps cover no element "
-              "size and Flags NONE, as 1060 has no row-major texture (hr %08lx, SubCaps[0].MaxElementSize %u)",
+              "%s: 1003 TEXTURE_LAYOUT_SETS, DataSize 20, pInfo {ROW_MAJOR, unit %d}: all zero (both SubCaps, Flags "
+              "NONE), as 1060 has no row-major texture (hr %08lx, SubCaps[0].MaxElementSize %u)",
               what, static_cast<int>(unit), static_cast<unsigned long>(hr),
               static_cast<unsigned>(sets.SubCaps[0].MaxElementSize));
     }

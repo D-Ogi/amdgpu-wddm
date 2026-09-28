@@ -418,8 +418,10 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
     case D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS: {
         // *pInfo is UINT[2] {D3D12DDI_TL_ROW_MAJOR, D3D12DDI_FUNCTIONAL_UNIT}, pData D3D12DDI_ROW_MAJOR_LAYOUT_CAPS
         // (H:268-271). ROW_MAJOR is the only layout the query names; the units are COMBINED, COPY_SRC and COPY_DST
-        // (H:259-266). With no row-major texture (1060) every unit gets the zero answer: both SubCaps entries cover
-        // no element size (MaxElementSize 0, the unused entry of cosumd12 CosUmd12Adapter.cpp:345-367) and Flags NONE.
+        // (H:259-266). With no row-major texture (1060) every unit gets the zero answer, Flags NONE. That MaxElementSize
+        // 0 makes an entry cover no element is INFERENCE from the field names (cosumd12 CosUmd12Adapter.cpp:345-367
+        // shows only that an unused entry is zeroed). Whether the entries also bound buffer footprint copies is not
+        // decided by any source; INTEGRATION.md, "Open point on 1003".
         static_assert(!kRowMajorTexture, "claiming row-major textures in 1060 needs real SubCaps in 1003");
         auto* d = payload<D3D12DDI_ROW_MAJOR_LAYOUT_CAPS>(r);
         if (!d) return E_INVALIDARG;
