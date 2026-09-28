@@ -38,6 +38,7 @@ What the D3D11 interfaces cannot express goes through `IBc250DxvkDevice`:
 | Primaries, back buffers and shared resources live in runtime allocations | `GetImageCreateInfo`, `CreateTexture2DFromImage` |
 | DDI resource destruction and `ResourceIsStagingBusy` | `WaitForResourceIdle`, `IsResourceBusy` |
 | DXGI present, `RotateResourceIdentities`, `Blt` | `SubmitForPresent`, `RotateResourceIdentities`, `Blt` |
+| DXGI 1.2 `Blt1` with a source rectangle (ABI 1.1) | `IBc250DxvkDevice1::Blt1` |
 
 ## The ABI
 
@@ -48,8 +49,10 @@ that collide with the WDK's in one translation unit, so the header uses only `wi
 `static_assert`.
 
 The DLL exports one function, `Bc250DxvkEngineGetFuncs(abiVersion, funcs)`. A major mismatch returns
-`E_NOINTERFACE`; minor versions only add. ABI 1.0 is in force. Its rules E1-E6 are written in the header and are
-not repeated here:
+`E_NOINTERFACE`. Minor versions only add, and what they add sits behind a new interface or function, so an older
+engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.1 is in force: 1.0 plus
+`IBc250DxvkDevice1` (`Blt1`), which the engine device answers to `QueryInterface`. The rules E1-E6 are written in
+the header and are not repeated here:
 - E1 the shell owns VkInstance and VkDevice;
 - E2 threads;
 - E3 submission;
@@ -61,7 +64,7 @@ not repeated here:
 
 The runtime enters a device from one thread at a time (the shell does not report
 `D3D11DDICAPS_FREETHREADED`), and runtime callbacks are valid only inside a DDI entry. Hosted RADV reaches
-runtime callbacks from ordinary Vulkan calls (allocation, residency, submission). So in ABI 1.0 the engine makes
+runtime callbacks from ordinary Vulkan calls (allocation, residency, submission). So in ABI 1 the engine makes
 every Vulkan call on the thread inside the engine call ("inline mode"). A host option in `DxvkDevice` then runs
 the work of DXVK's worker threads on the calling thread:
 - the CS thread;
@@ -90,7 +93,36 @@ the input it expects:
 Stream-output entries name output registers. The engine maps each one to the signature element that holds its
 first component, and a gap entry (register `~0u`) becomes a D3D11 declaration entry without a semantic name. A
 stream-output declaration without a geometry program (NULL, vertex or domain code) uses DXVK's pass-through
-geometry shader.
+geometry shader. On the branch it emits every vertex of its input primitive, and linking sets its input and
+output primitive together, so strips stream out as lists, primitives that do not fit are dropped whole, and a
+rasterized stream draws lines and triangles (dxbc-spirv `IoMap::emitGsPassthrough`,
+`LowerIoPass::changeGsPassthroughPrimitiveType`). Upstream emitted one point per primitive.
+
+Upstream `D3D11Device::ComputeShaderKey` read the stream-output digest after `finalize()` had reset the hasher,
+so every shader key carried the same constant there. Shaders with equal bytecode then shared one module whatever
+their declaration, strides or rasterized stream. For the DDI this is the common case, because every stream-output
+shader of one signature arrives as the same container. The branch fixes it.
+
+### Predication
+
+Upstream DXVK's `SetPredication` records the predicate and ignores it. The branch honours it on the immediate
+context, the only context the DDI drives while the shell does not report command lists. Every operation in
+D3D11 spec 20.2 checks the predicate:
+- Draw* and Dispatch*;
+- the clears, ClearView included;
+- the copies, CopyStructureCount and UpdateSubresource;
+- GenerateMips and ResolveSubresource.
+
+The predicate is evaluated on the CPU. A result that is already available is used. Otherwise the engine submits
+and waits for the GPU, except for a predication hint, which may proceed. The operation is skipped when the result
+equals the predicate value.
+
+`CreatePredicate` accepts the stream-output overflow types too. The any-stream overflow predicate reads all four
+streams; upstream read stream 0 only.
+
+Hosted RADV lists `VK_EXT_conditional_rendering`, which could evaluate predicates on the GPU instead of waiting.
+Upstream removed its old implementation in 2020 as broken on several drivers. Nothing here moves to it without a
+measurement showing the CPU wait matters.
 
 ### Runtime allocations and present (E5)
 
@@ -102,7 +134,8 @@ geometry shader.
 - **Rotation.** `RotateResourceIdentities` moves image storage in command order through
   `DxvkContext::rotateImageStorage`. Rotated images are tracked as written again, because `invalidateImage`
   resets their tracking.
-- **Blt.** `Blt` goes through `DxvkContext::blitImageView`, which stretches, converts formats and resolves.
+- **Blt.** `Blt` and `Blt1` go through `DxvkContext::blitImageView`, which stretches, converts formats and
+  resolves. `Blt` takes the whole source subresource; `Blt1` takes a source rectangle, typically a dirty region.
 
 ### Logging and configuration in a host process
 
@@ -144,11 +177,13 @@ import when a destroyed handle's value comes back (ABA).
 
 | Gap | State | Plan |
 |---|---|---|
-| Stream output without a geometry program on line and triangle lists | Upstream DXVK behaviour: the pass-through geometry shader (dxbc-spirv `IoMap::emitGsPassthrough`) emits vertex 0 of each primitive with point output, and linking patches only the input primitive type. Point lists are exact. A line or triangle list streams out one vertex per primitive, and a rasterized stream draws points. DXVK's own `CreateGeometryShaderWithStreamOutput` without code behaves the same. The engine test keeps a tripwire (exactly one exact record from a triangle list), so a fix shows up as a test change. | In dxbc-spirv, emit every input vertex and set the output topology and vertex count at link time, where DXVK patches the input type (`dxvk_shader_ir.cpp`). Not started. |
+| Stream output without a geometry program on adjacency and patch topologies | Points, lines and triangles, lists and strips, are closed (see Shaders from DDI token streams). The pass-through declares point input until linking and cannot drop adjacent vertices, so adjacency is not supported; patches need a domain program. | Implement if a runtime path needs it. |
+| Predication on the GPU | Predicates are honoured by waiting on the CPU when a result is not yet available (see Predication). | Measure the wait on unit A with a title that predicates; move to `VK_EXT_conditional_rendering` only if it matters. |
+| ClearView on buffer render target views | Closed in engine commit dd35ce7c. Upstream DXVK logged an error and cleared nothing. A typed buffer view is cleared in the buffer; otherwise the 1D proxy image is refreshed from the buffer, cleared and copied back. The engine test covers both paths. | None. |
 | Optimized pipelines in inline mode | Closed offline in engine commit 4c5fd822. With graphics pipeline libraries, DXVK draws with a fast-linked pipeline and compiles the optimized variant on a pipeline worker. Inline mode used to run that compile on the drawing thread, which then paid for both. The compile is now queued, and `SubmitForPresent` runs the queue after the frame's submission. It starts compiles for up to `dxvk.inlinePipelineBudget` microseconds (default 2000), so one long compile can exceed the budget. A budget of 0 keeps the fast-linked pipelines. The engine test classifies every graphics pipeline the engine creates. The previous engine fails its check, because its draw compiled the optimized pipeline itself. | Measure on unit A with a real title: warm-up frame times, and how long the queue takes to drain at the default budget. A client that never presents keeps fast-linked pipelines. |
 | Inline execution on CPU-bound work | Measured offline (engine commit ea512f65, development PC, three runs each): `bc250dxvk_engine_test --bench` issues 1000 draws per frame, each with a constant buffer DISCARD and a texture switch, at a frame latency of 3. Inline mode took 346-357 us wall per frame. With DXVK's worker threads it took 184-233 us (switch `BC250DXVK_MEASURE_WORKER_THREADS=1`, which breaks E2 and exists only for this comparison). So the application thread pays roughly 1.5-1.9 times as much per draw inline. A GPU-bound title does not notice; a CPU-bound one can miss the 5 % bound by far. | Two steps. First, the ADR 0017 item 8 measurement on unit A: do the runtime callbacks that hosted RADV uses (allocation, residency, submission) work from a thread that is not inside a DDI entry? If they do, serialize them per device and allow DXVK's workers. If they do not, add a broker mode (a later ABI minor): workers queue the runtime-reaching work, and DDI entries and engine waits service the queue. |
 | On-disk shader cache | Per-application DXVK keeps the dxbc-spirv results of each executable in `%LOCALAPPDATA%\dxvk` (or `DXVK_SHADER_CACHE_PATH`); its writer thread does file I/O only. The engine turns the cache off, to keep a writer thread and cache files out of every process that loads the system driver, DWM included. Every process start therefore translates its shaders again. | Decide with the load-time part of the 5 % comparison; the cache needs no Vulkan call, so E2 does not forbid it. |
-| `Blt` with ROTATE90/270, or into a multisampled destination | `E_NOTIMPL` | Implement when a runtime path needs it. |
+| `Blt` and `Blt1` with ROTATE90/270, or into a multisampled destination | `E_NOTIMPL` | Implement when a runtime path needs it. |
 | 5 % bound against per-application DXVK | Not measured | Needs the shell's positive run through the system runtime. The per-application comparison build is the `per-app` recipe in build.md. |
 
 ## Validation
@@ -157,8 +192,10 @@ import when a destroyed handle's value comes back (ABA).
 it owns instance and device, feeds DDI-form shaders and runtime-style images, and checks the following:
 - pixels;
 - 500 sustained frames under a memory bound;
-- storage rotation and Blt;
-- stream output on point lists, plus the triangle-list tripwire;
+- storage rotation, Blt and Blt1 source rectangles;
+- ClearView on buffer render target views;
+- stream output of points, lines and triangles, and a rasterized stream;
+- occlusion and stream-output overflow predication;
 - the thread of every Vulkan call (E2);
 - no optimized pipeline compiled by a draw, and the deferred ones compiled by `SubmitForPresent`;
 - the Log contract;
