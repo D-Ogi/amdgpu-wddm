@@ -7,7 +7,8 @@
 //
 // The stub's answers are test inputs, not measurements of any GPU. The test checks the calls the runtime made in
 // M768 with their exact sizes (1074 with 8 bytes, 1007 with 4) and the mapping of every other type build_caps
-// answers (INTEGRATION.md, "GetCaps").
+// answers (INTEGRATION.md, "GetCaps"), and the shell's memory architecture policy of 1002 (INTEGRATION.md,
+// "Memory architecture policy").
 #include "engine-ddi.h"
 #include <dxgi1_4.h>
 #include <cstdarg>
@@ -369,6 +370,210 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     }
 }
 
+// ---- Memory architecture policy (1002) ------------------------------------------------------------------------------
+using engine_ddi::MemoryArchitecturePolicy;
+using engine_ddi::PolicyBool;
+using Mem = D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041;
+
+MemoryArchitecturePolicy policy() {
+    MemoryArchitecturePolicy p{};
+    p.size = sizeof(p);
+    return p;
+}
+
+HRESULT get_1002(const engine_ddi::AdapterCaps* caps, Mem& m) {
+    UINT node = 0;
+    std::memset(&m, 0xEE, sizeof(m));
+    return get(caps, D3D12DDICAPS_TYPE_MEMORY_ARCHITECTURE, m, &node);
+}
+
+bool same(const Mem& a, const Mem& b) { return !std::memcmp(&a, &b, sizeof(Mem)); }
+
+// The 1002 answer and the other types around it, byte for byte, before and after policies.
+struct Snapshot {
+    Mem mem;
+    D3D12DDI_ARCHITECTURE_INFO_DATA arch;
+    D3D12DDI_D3D12_OPTIONS_DATA_0089 options;
+};
+bool snapshot(const engine_ddi::AdapterCaps* caps, Snapshot& s) {
+    std::memset(&s, 0xEE, sizeof(s));
+    return get_1002(caps, s.mem) == S_OK && get(caps, D3D12DDICAPS_TYPE_ARCHITECTURE_INFO, s.arch) == S_OK &&
+           get(caps, D3D12DDICAPS_TYPE_D3D12_OPTIONS, s.options) == S_OK;
+}
+bool others_same(const Snapshot& a, const Snapshot& b) {
+    return !std::memcmp(&a.arch, &b.arch, sizeof(a.arch)) && !std::memcmp(&a.options, &b.options, sizeof(a.options));
+}
+
+// Sets p, then reads 1002: S_OK and the answer, or the refusal and the answer that stayed.
+HRESULT apply(engine_ddi::AdapterCaps* caps, const MemoryArchitecturePolicy& p, Mem& m) {
+    const HRESULT hr = engine_ddi::set_memory_architecture_policy(caps, &p);
+    get_1002(caps, m);
+    return hr;
+}
+
+void test_policy_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    // An engine with heap serialization tier 0, so that every field can be overridden alone: UMA TRUE,
+    // CacheCoherentUMA FALSE, heap tier 0 (DDI 0), and the constants IOCoherent FALSE, resource tier 0.
+    Answers a = fl12_0();
+    a.serialization.HeapSerializationTier = D3D12_HEAP_SERIALIZATION_TIER_0;
+    engine_ddi::AdapterCaps* caps = query_stub(a, info, "policy, heap tier 0 engine");
+    if (!caps) return;
+    Snapshot base;
+    const bool base_ok = snapshot(caps, base);
+    check(base_ok && base.mem.UMA == TRUE && base.mem.CacheCoherent == FALSE && base.mem.IOCoherent == FALSE &&
+              base.mem.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0 &&
+              base.mem.ResourceSerializationTier == D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_0,
+          "policy: without a policy 1002 is the engine's answer and the constants (UMA 1, CacheCoherent 0, "
+          "IOCoherent 0, tiers 0 and 0)");
+
+    Mem m;
+    MemoryArchitecturePolicy p = policy();
+    HRESULT hr = apply(caps, p, m);
+    Snapshot after;
+    check(hr == S_OK && same(m, base.mem) && snapshot(caps, after) && others_same(base, after),
+          "policy: an all-Default policy leaves 1002, 1005 and 1006 byte for byte as without a policy");
+
+    // Each field alone; every other field keeps its answer.
+    struct One { const char* what; void (*set)(MemoryArchitecturePolicy&); void (*expect)(Mem&); };
+    const One ones[] = {
+        {"UMA False", [](MemoryArchitecturePolicy& q) { q.uma = PolicyBool::False; }, [](Mem& e) { e.UMA = FALSE; }},
+        {"CacheCoherent True", [](MemoryArchitecturePolicy& q) { q.cache_coherent = PolicyBool::True; },
+         [](Mem& e) { e.CacheCoherent = TRUE; }},
+        {"IOCoherent True", [](MemoryArchitecturePolicy& q) { q.io_coherent = PolicyBool::True; },
+         [](Mem& e) { e.IOCoherent = TRUE; }},
+        {"HeapSerializationTier 0 explicit (the engine's value)",[](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 0}; },
+         [](Mem& e) { e.HeapSerializationTier = D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0; }},
+        {"ResourceSerializationTier 1", [](MemoryArchitecturePolicy& q) { q.resource_serialization_tier = {1, 1}; },
+         [](Mem& e) { e.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_1; }},
+        {"ResourceSerializationTier 2", [](MemoryArchitecturePolicy& q) { q.resource_serialization_tier = {1, 2}; },
+         [](Mem& e) { e.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2; }},
+    };
+    for (const One& one : ones) {
+        p = policy();
+        one.set(p);
+        Mem expected = base.mem;
+        one.expect(expected);
+        hr = apply(caps, p, m);
+        check(hr == S_OK && same(m, expected) && snapshot(caps, after) && others_same(base, after),
+              "policy: %s alone changes that field of 1002 only (UMA %d, CacheCoherent %d, IOCoherent %d, tiers %d %d)",
+              one.what, m.UMA, m.CacheCoherent, m.IOCoherent, static_cast<int>(m.HeapSerializationTier),
+              static_cast<int>(m.ResourceSerializationTier));
+    }
+
+    // Every field explicit, the other way round from the engine where the rules allow it.
+    p = policy();
+    p.uma = PolicyBool::True;
+    p.cache_coherent = PolicyBool::True;
+    p.io_coherent = PolicyBool::True;
+    p.heap_serialization_tier = {1, 1};
+    p.resource_serialization_tier = {1, 2};
+    hr = apply(caps, p, m);
+    check(hr == S_OK && m.UMA == TRUE && m.CacheCoherent == TRUE && m.IOCoherent == TRUE &&
+              m.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 &&
+              m.ResourceSerializationTier == D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2,
+          "policy: every field explicit (UMA, CacheCoherent, IOCoherent TRUE, tiers 1 and 2) is answered as set");
+    const MemoryArchitecturePolicy all_explicit = p;
+    const Mem kept = m;
+
+    // Refusals keep the policy held before (all_explicit).
+    struct Bad { const char* what; void (*set)(MemoryArchitecturePolicy&); };
+    const Bad bads[] = {
+        {"size 0", [](MemoryArchitecturePolicy& q) { q.size = 0; }},
+        {"size + 4", [](MemoryArchitecturePolicy& q) { q.size = sizeof(q) + 4; }},
+        {"UMA 3", [](MemoryArchitecturePolicy& q) { q.uma = static_cast<PolicyBool>(3); }},
+        {"CacheCoherent 3", [](MemoryArchitecturePolicy& q) { q.cache_coherent = static_cast<PolicyBool>(3); }},
+        {"IOCoherent 0xFFFFFFFF", [](MemoryArchitecturePolicy& q) { q.io_coherent = static_cast<PolicyBool>(~0u); }},
+        {"heap tier set 2", [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {2, 0}; }},
+        {"heap tier Default with value 1", [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {0, 1}; }},
+        {"heap tier 2 (undefined at 0092)", [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 2}; }},
+        {"resource tier 3 (undefined at 0092)",
+         [](MemoryArchitecturePolicy& q) { q.resource_serialization_tier = {1, 3}; }},
+        {"CacheCoherent True with UMA False",
+         [](MemoryArchitecturePolicy& q) { q.uma = PolicyBool::False; q.cache_coherent = PolicyBool::True; }},
+        {"heap tier 1 with resource tier Default (0)",
+         [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 1}; }},
+        {"heap tier 1 with resource tier 1",
+         [](MemoryArchitecturePolicy& q) { q.heap_serialization_tier = {1, 1}; q.resource_serialization_tier = {1, 1}; }},
+    };
+    for (const Bad& bad : bads) {
+        p = policy();
+        bad.set(p);
+        hr = apply(caps, p, m);
+        check(hr == E_INVALIDARG && same(m, kept), "policy refused: %s; the policy held before stays (hr %08lx)",
+              bad.what, static_cast<unsigned long>(hr));
+    }
+    check(engine_ddi::set_memory_architecture_policy(nullptr, &all_explicit) == E_INVALIDARG &&
+              engine_ddi::set_memory_architecture_policy(caps, nullptr) == E_INVALIDARG && get_1002(caps, m) == S_OK &&
+              same(m, kept),
+          "policy refused: null caps or null policy");
+
+    // Back to all Default: the answer without a policy again.
+    hr = apply(caps, policy(), m);
+    check(hr == S_OK && same(m, base.mem), "policy: an all-Default policy after others restores the engine's answer");
+    engine_ddi::free_adapter_caps(caps);
+
+    // The rules judge the resulting answer, Defaults resolved against the engine: an engine with cache-coherent UMA
+    // refuses UMA False alone, and accepts IOCoherent alone.
+    a = fl12_0();
+    a.serialization.HeapSerializationTier = D3D12_HEAP_SERIALIZATION_TIER_0;
+    a.architecture.CacheCoherentUMA = TRUE;
+    caps = query_stub(a, info, "policy, cache-coherent UMA engine");
+    if (caps) {
+        Mem before;
+        get_1002(caps, before);
+        p = policy();
+        p.uma = PolicyBool::False;
+        hr = apply(caps, p, m);
+        const bool refused = hr == E_INVALIDARG && same(m, before);
+        p = policy();
+        p.io_coherent = PolicyBool::True;
+        hr = apply(caps, p, m);
+        Mem expected = before;
+        expected.IOCoherent = TRUE;
+        check(refused && hr == S_OK && same(m, expected),
+              "policy: UMA False alone on a cache-coherent UMA engine is refused; IOCoherent True alone is accepted");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // An engine without UMA: IOCoherent True alone is accepted (I/O coherence is not a UMA property).
+    a = fl12_0();
+    a.serialization.HeapSerializationTier = D3D12_HEAP_SERIALIZATION_TIER_0;
+    a.architecture.UMA = FALSE;
+    a.architecture.CacheCoherentUMA = FALSE;
+    caps = query_stub(a, info, "policy, engine without UMA");
+    if (caps) {
+        Mem before;
+        get_1002(caps, before);
+        p = policy();
+        p.io_coherent = PolicyBool::True;
+        hr = apply(caps, p, m);
+        Mem expected = before;
+        expected.IOCoherent = TRUE;
+        check(hr == S_OK && same(m, expected) && !m.UMA && !m.CacheCoherent,
+              "policy: IOCoherent True alone with the engine's UMA FALSE is accepted and changes IOCoherent only");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // The fl12_0 engine reports heap serialization tier 10 (DDI 1) with the constant resource tier 0. Without a policy
+    // that stays as it was; a policy's resulting answer may not keep that pair, whatever field the policy sets.
+    caps = query_stub(fl12_0(), info, "policy, heap tier 10 engine");
+    if (caps) {
+        Mem before;
+        get_1002(caps, before);
+        p = policy();
+        p.io_coherent = PolicyBool::True;
+        hr = apply(caps, p, m);
+        const bool refused = hr == E_INVALIDARG && same(m, before);
+        p.resource_serialization_tier = {1, 2};
+        hr = apply(caps, p, m);
+        check(before.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 && refused && hr == S_OK &&
+                  m.IOCoherent && m.ResourceSerializationTier == D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2,
+              "policy: on a heap tier 1 engine IOCoherent alone is refused (heap tier 1 without resource tier 2) and "
+              "accepted with resource tier 2");
+        engine_ddi::free_adapter_caps(caps);
+    }
+}
+
 // ---- Real engine --------------------------------------------------------------------------------------------------------
 LONG g_services = 0;
 HRESULT APIENTRY bind_queue(void*, void*, VkQueue) { InterlockedIncrement(&g_services); return E_FAIL; }
@@ -486,6 +691,7 @@ int wmain(int argc, wchar_t** argv) {
         info.AbiVersion = kAbi12;
         info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         test_stub(info);
+        test_policy_stub(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

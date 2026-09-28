@@ -2,7 +2,8 @@
 // engine-ddi: D3D12 DDI 0092 slots translated onto the vkd3d-proton engine (amdgpu_wddm_vkd3d.dll).
 //
 // Boundary r3 (2026-09-28): r2 plus the adapter caps path (query_adapter_caps, build_caps answering GetCaps) on
-// engine ABI 1.2 QueryAdapterCaps, after the lab run M768 showed the runtime's first two GetCaps calls. The engine
+// engine ABI 1.2 QueryAdapterCaps, after the lab run M768 showed the runtime's first two GetCaps calls. Added within
+// r3, additively: set_memory_architecture_policy, the shell's policy for GetCaps 1002. The engine
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
@@ -340,6 +341,33 @@ void free_adapter_caps(AdapterCaps* caps) noexcept;
 // never a prefix; a wrong size or a bad pInfo is E_INVALIDARG with nothing written, and a type it does not
 // answer is E_NOTIMPL. Both are logged with the type and the size. Thread-safe: it only reads caps.
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
+
+// Memory architecture policy of GetCaps 1002 (INTEGRATION.md, "Memory architecture policy"). Whether the GPU's
+// accesses to system memory are I/O coherent is host and kernel-driver policy the engine cannot see; so may be UMA,
+// CacheCoherent and the serialization tiers. The shell states that policy per adapter, field by field: Default
+// keeps the answer build_caps gives without a policy, anything else is the explicit answer. A policy with `size`
+// set and every other byte zero is all Default.
+enum class PolicyBool : uint32_t { Default = 0, False = 1, True = 2 };
+struct PolicyTier {
+    uint32_t set;                               // 0: Default, and value must be 0; 1: value is the answer
+    uint32_t value;                             // a value of the field's DDI enum at 0092 (H:6793-6804)
+};
+struct MemoryArchitecturePolicy {
+    uint32_t size;                              // sizeof(MemoryArchitecturePolicy)
+    PolicyBool uma;                             // D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041::UMA
+    PolicyBool cache_coherent;                  // ::CacheCoherent
+    PolicyBool io_coherent;                     // ::IOCoherent
+    PolicyTier heap_serialization_tier;         // ::HeapSerializationTier, D3D12DDI_HEAP_SERIALIZATION_TIER_0041
+    PolicyTier resource_serialization_tier;     // ::ResourceSerializationTier, D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041
+};
+// Replaces caps's memory architecture policy; build_caps applies it to type 1002 and to nothing else. Call it after
+// query_adapter_caps and before the first GetCaps: it writes caps, so it must not run concurrently with build_caps.
+// E_INVALIDARG, with the policy held before kept, for a null argument, a size other than
+// sizeof(MemoryArchitecturePolicy), a PolicyBool or PolicyTier::set out of range, a Default tier with a non-zero
+// value, a tier the 0092 header does not define, or a resulting 1002 answer (every Default resolved against the
+// engine's answers) that the specification calls contradictory: CacheCoherent without UMA, heap serialization
+// tier 1 without resource serialization tier 2. Logged like build_caps's refusals.
+HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases

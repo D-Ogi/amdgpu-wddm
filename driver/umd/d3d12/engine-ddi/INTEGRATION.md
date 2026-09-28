@@ -41,6 +41,8 @@ HRESULT engine_ddi::query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs,
 void engine_ddi::free_adapter_caps(engine_ddi::AdapterCaps* caps) noexcept;
 HRESULT engine_ddi::build_caps(const engine_ddi::AdapterCaps* caps, uint32_t ddi_version,
                                const D3D12DDIARG_GETCAPS* request) noexcept;
+HRESULT engine_ddi::set_memory_architecture_policy(engine_ddi::AdapterCaps* caps,
+                                                   const engine_ddi::MemoryArchitecturePolicy* policy) noexcept;
 ```
 
 1. OpenAdapter12, or at the latest the first GetCaps:
@@ -57,7 +59,9 @@ HRESULT engine_ddi::build_caps(const engine_ddi::AdapterCaps* caps, uint32_t ddi
      device made from this info (V11), so the same info must go to CreateDevice;
    - call `query_adapter_caps` once and keep the result with the adapter. One call is one QueryAdapterCaps batch
      and one VkInstance; no VkDevice is created and no Service is called. On failure there is nothing to answer
-     GetCaps from: fail OpenAdapter12 (or that GetCaps) with the returned HRESULT.
+     GetCaps from: fail OpenAdapter12 (or that GetCaps) with the returned HRESULT;
+   - optionally, before the first GetCaps answers from it, `set_memory_architecture_policy(caps, &policy)`: the
+     shell's answers for 1002 ("Memory architecture policy" below). Without the call 1002 is as in the table.
 2. `pfnGetCaps`: `return engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0092, pCaps);`. build_caps only reads
    `caps` and may run on any thread.
 3. `pfnGetSupportedVersions`: unchanged. It keeps reporting the single entry `D3D12DDI_SUPPORTED_0092`. Because the
@@ -112,9 +116,10 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1004 | | DerivativesInMeshAndAmplificationShaders | FALSE | mesh shaders are not reported (above) |
 | 1004 | | WaveMMATier | NOT_SUPPORTED | the only other tier at 0092 is experimental, H:10436-10439 |
 | 1005 ARCHITECTURE_INFO | `D3D12DDI_ARCHITECTURE_INFO_DATA`, 4, H:2916-2920 | TileBasedDeferredRenderer | TileBasedRenderer | ARCHITECTURE1 |
-| 1002 MEMORY_ARCHITECTURE | `D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041`, 20, H:6806-6814; pInfo NULL or node 0 (H:152-155), else E_INVALIDARG | UMA, CacheCoherent | UMA, CacheCoherentUMA | ARCHITECTURE1 |
-| 1002 | | HeapSerializationTier | 1 when the API tier is 10, else 0 | SERIALIZATION; DDI tiers 0 and 1, H:6793-6797 |
-| 1002 | | IOCoherent, ResourceSerializationTier | FALSE, 0 | no engine answer |
+| 1002 MEMORY_ARCHITECTURE | `D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041`, 20, H:6806-6814; pInfo NULL or node 0 (H:152-155), else E_INVALIDARG | UMA, CacheCoherent | the policy's explicit value; with Default or no policy UMA, CacheCoherentUMA | ARCHITECTURE1, overridden by the shell's memory architecture policy (below) |
+| 1002 | | HeapSerializationTier | the policy's explicit value; with Default or no policy 1 when the API tier is 10, else 0 | SERIALIZATION (DDI tiers 0 and 1, H:6793-6797), overridden by the policy |
+| 1002 | | IOCoherent | the policy's explicit value; with Default or no policy FALSE | no engine answer: host and kernel-driver policy, which the shell's policy states |
+| 1002 | | ResourceSerializationTier | the policy's explicit value; with Default or no policy 0 | no engine answer; overridden by the policy (tier 0: see "Open points" below) |
 | 1009 GPUVA_CAPS | `D3D12DDI_GPUVA_CAPS_0004`, 4, H:250-257; pInfo NULL or node 0 | MaxGPUVirtualAddressBitsPerResource | same value | GPU_VIRTUAL_ADDRESS_SUPPORT |
 | 1060 TEXTURE_LAYOUT | `D3D12DDI_TEXTURE_LAYOUT_CAPS_0026`, 20, H:5525-5536; pInfo NULL, else E_INVALIDARG (no swizzle patterns) | Supports64KStandardSwizzle | StandardSwizzle64KBSupported | OPTIONS |
 | 1060 | | DeviceDependentLayoutCount, DeviceDependentSwizzleCount, SupportsRowMajorTexture, IndexableSwizzlePatterns | 0, 0, FALSE, FALSE | no device-dependent layouts; no 1:1 engine answer for row-major textures |
@@ -126,6 +131,96 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 FEATURE_LEVELS, SHADER_MODEL, ARCHITECTURE1, GPU_VIRTUAL_ADDRESS_SUPPORT, OPTIONS and OPTIONS1 are required:
 `query_adapter_caps` fails with the engine's Result when one is unanswered. The others are optional: an
 unanswered one is logged and its fields report no support.
+
+### Memory architecture policy
+
+Whether GPU accesses to system memory are I/O coherent is decided by the host and the kernel driver (its PTE
+cache bits and its mappings), not by the engine; the shell may also know better than the engine's memory-type scan
+whether the adapter is UMA or cache coherent. `set_memory_architecture_policy` (engine-ddi.h) lets the shell state
+each field of 1002 separately: `PolicyBool` Default, False or True for UMA, CacheCoherent and IOCoherent, and
+`PolicyTier` {set 0, value 0} for Default or {set 1, value} for either serialization tier. `MemoryArchitecturePolicy`
+is 32 bytes and starts with `size`; a policy with `size` set and every other byte zero is all Default. Only 1002
+changes; every other type, and 1002 without a call or with an all-Default policy, stays byte for byte as it was.
+Call it after `query_adapter_caps` and before the first GetCaps; it writes `caps`, so never concurrently with
+`build_caps`. A later call replaces the whole policy. E_INVALIDARG keeps the policy held before: a null argument,
+a `size` other than 32, a PolicyBool or `set` outside the values above, a Default tier with a non-zero value, a
+tier the 0092 header does not define (heap tier above 1, H:6793-6797; resource tier above 2, H:6799-6804), or a
+contradiction below.
+
+Sources: H is `d3d12umddi.h` (WDK 10.0.26100); DDI-ref is `ref\windows-driver-docs-ddi` (@7515063c,
+`wdk-ddi-src/content/d3d12umddi/`) and its merged copy `ref\ddi-display\d3d12umddi.md`; Specs is
+`ref\DirectX-Specs\d3d` (@5a4139be); API-ref is `ref\sdk-api-docs\sdk-api-src\content\d3d12` (@a4fd3f7e); Guides
+is `ref\windows-driver-docs\windows-driver-docs-pr\display` (@110f60ea); win32-docs is `ref\win32-docs\desktop-src`
+(@e103fa4e). Engine sources are the vkd3d-proton fork at the commit engine-abi.json pins.
+
+| Field | Meaning | Source |
+|---|---|---|
+| UMA | the GPU uses the same physical memory as the CPU; the runtime then requests no `_L1` pool | DDI-ref d3d12umddi.md:41637-41639; Specs ResourceHeaps.md:609, :915 |
+| CacheCoherent | cache-coherent UMA, "a special type of GPU UMA design" with CPU and GPU caches integrated; the runtime then maps UPLOAD heaps write-back | DDI-ref d3d12umddi.md:41645-41647; Specs ResourceHeaps.md:611, D3D12GPUUploadHeaps.md:81-88; API-ref ns-d3d12-d3d12_feature_data_architecture1.md:74-77 (the API field is CacheCoherentUMA) |
+| IOCoherent | GPU accesses to cacheable system memory are coherent with the CPU caches; without it the runtime invalidates and flushes CPU caches itself around CPU access | DDI-ref d3d12umddi.md:41641-41643; Specs ResourceHeaps.md:728, :1041, :1043; Guides allocation-usage-tracking.md:53-62; the kernel-side cap is `CacheCoherentMemorySupported`, ddi-display\d3dkmddi.md:22240-22242 |
+| HeapSerializationTier | 0: no hardware support for heap serialization; 1: textures stay observable in their swizzle through overlapping resources (API TIER_10) | H:6793-6797; DDI-ref ne-d3d12umddi-d3d12ddi_heap_serialization_tier_0041.md:44, :48; API-ref ne-d3d12-d3d12_heap_serialization_tier.md |
+| ResourceSerializationTier | 0: "reserved and cannot be used in current designs"; 1: stateless copies; 2: hardware support for heap serialization | H:6799-6804; DDI-ref ne-d3d12umddi-d3d12ddi_resource_serialization_tier_0041.md:44, :48, :52 |
+
+Refused contradictions. They are judged on the resulting 1002 answer, every Default resolved against the engine's
+answers, so a policy that sets one field can be refused because of an engine answer it keeps:
+
+1. CacheCoherent TRUE with UMA FALSE. Specs ResourceHeaps.md:611: "`CacheCoherentUMA` is a special type of GPU UMA
+   design"; the runtime's heap conversions (Specs D3D12GPUUploadHeaps.md:55, :70, :81) know CacheCoherentUMA only
+   under UMA TRUE.
+2. HeapSerializationTier 1 with ResourceSerializationTier other than 2. DDI-ref
+   ne-d3d12umddi-d3d12ddi_heap_serialization_tier_0041.md:48: "The Driver verifier will ensure resource
+   serialization tier 2 in addition to heap serialization tier 1."
+
+Accepted, because no header or specification sentence calls them contradictory:
+
+- IOCoherent TRUE with UMA FALSE. I/O coherence is stated for GPUs in general, discrete ones included: "On x86/x64
+  today, all GPUs must support I/O coherency over PCIe" (Guides allocation-usage-tracking.md:55); Specs
+  ResourceHeaps.md:728 and :1041 set no UMA condition, and the kernel cap is separate from any UMA notion.
+- IOCoherent FALSE with CacheCoherent TRUE: the runtime then does the cache maintenance (ResourceHeaps.md:1041).
+- An explicit ResourceSerializationTier 0: the header defines it (H:6801), and it is today's answer without a policy.
+
+Open points, unchanged here: 1002 without a policy answers ResourceSerializationTier 0, which DDI-ref calls
+reserved; and an engine at API heap serialization tier 10 would give heap tier 1 with resource tier 0 (rule 2).
+The pinned engine answers heap serialization tier 0 unconditionally (vkd3d-proton fork `libs/vkd3d/device.c`,
+D3D12_FEATURE_SERIALIZATION), so only the first applies. Which resource tier engine-ddi can claim is for the
+engine owners to decide.
+
+**The runtime's view and the engine's.** The runtime answers CheckFeatureSupport(ARCHITECTURE, ARCHITECTURE1) and
+SERIALIZATION from 1002 (INFERENCE: 1002 is the only DDI source of these fields), and it turns an application's
+heap type into a CPU page property and memory pool from the same view (Specs D3D12GPUUploadHeaps.md:55-90, API-ref
+nf-d3d12-id3d12device-getcustomheapproperties(uint_d3d12_heap_type).md:79, :105, :131; "will not request `_L1` on
+UMA designs", ResourceHeaps.md:915). DEFAULT stays NOT_AVAILABLE under every combination; UMA only moves its pool
+from L1 to L0, and CacheCoherent turns UPLOAD from WRITE_COMBINE into WRITE_BACK. engine-ddi hands both values of
+`D3D12DDIARG_CREATEHEAP_0001` to the engine as a CUSTOM heap (`heap_desc_of`, resources.cpp). The engine chooses
+Vulkan memory from the CPU page property alone (`vkd3d_select_memory_flags`, `libs/vkd3d/memory.c`: WRITE_BACK
+host-visible and host-cached, WRITE_COMBINE host-visible and host-coherent, NOT_AVAILABLE device-local), not from
+its own UMA answer. That answer (`d3d12_device_is_uma`, `libs/vkd3d/device.c`: every memory type that is not lazily
+allocated is host-visible) reaches this path in one place: `d3d12_device_validate_custom_heap_type`
+(`libs/vkd3d/heap.c`) refuses pool L1 on a device it considers UMA. Per override:
+
+- UMA TRUE over an engine answer FALSE: the runtime asks for L0 only; the engine takes every L0 heap. Correct.
+  Applications may put more textures in CPU-visible CUSTOM heaps (win32-docs direct3d12/default-texture-mapping.md:30),
+  which the engine accepts on any device; a performance question, not a correctness one.
+- UMA FALSE over an engine answer TRUE: the runtime asks for DEFAULT heaps in L1 and the engine refuses every one
+  with E_INVALIDARG. A loud failure, not silent corruption, but it breaks the device: not a usable combination
+  without the engine change below.
+- CacheCoherent TRUE over an engine answer FALSE: UPLOAD heaps arrive WRITE_BACK and get host-cached memory, the
+  kind READBACK heaps get in every configuration already. Correct on the same terms as READBACK.
+- IOCoherent, either way: the engine has no counterpart and needs none; the field changes only whether the runtime
+  does CPU cache maintenance (ResourceHeaps.md:1041). TRUE is correct exactly when the kernel driver's mappings of
+  system memory are cached and coherent for the GPU, which is the shell's premise for setting it.
+- Serialization tiers: lowering a tier below the engine's is safe; raising one claims a behaviour the engine has not
+  claimed, which the runtime and applications may rely on.
+- The engine's own allocations (descriptor heaps, internal buffers) follow its own view; the runtime never sees them.
+
+Engine ABI addition, needed only for UMA FALSE over an engine that considers itself UMA (not implemented): a host
+memory architecture field in `BC250_VKD3D_DEVICE_CREATE_INFO` (ABI 1.3), for example `UINT32 HostMemoryArchitecture`
+with a valid bit and a value bit each for UMA and cache-coherent UMA, that `d3d12_device_is_uma` returns in place
+of its memory-type scan when valid. It would then govern the engine's ARCHITECTURE and ARCHITECTURE1 answers,
+GetCustomHeapProperties and the L1 check of `d3d12_device_validate_custom_heap_type` alike. The shell fills it from
+the same policy it gives `set_memory_architecture_policy`, in the one create info that goes to QueryAdapterCaps and
+CreateDevice (V11). IOCoherent and the serialization tiers need no engine field. An engine-ddi-only alternative
+without an ABI change would be to pass NOT_AVAILABLE L1 heaps to the engine as L0.
 
 ## Device
 

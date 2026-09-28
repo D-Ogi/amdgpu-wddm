@@ -52,6 +52,26 @@ static_assert(std::is_same_v<decltype(&engine_ddi::free_adapter_caps), void (*)(
 static_assert(std::is_same_v<decltype(&engine_ddi::build_caps),
                              HRESULT (*)(const engine_ddi::AdapterCaps*, uint32_t, const D3D12DDIARG_GETCAPS*) noexcept>,
               "build_caps");
+// Added within r3, additively: the shell's memory architecture policy of GetCaps 1002. A zero-initialized policy is
+// all Default; the struct the shell fills has no implicit padding.
+static_assert(std::is_same_v<decltype(&engine_ddi::set_memory_architecture_policy),
+                             HRESULT (*)(engine_ddi::AdapterCaps*, const engine_ddi::MemoryArchitecturePolicy*) noexcept>,
+              "set_memory_architecture_policy");
+static_assert(std::is_same_v<std::underlying_type_t<engine_ddi::PolicyBool>, uint32_t> &&
+                  static_cast<uint32_t>(engine_ddi::PolicyBool::Default) == 0 &&
+                  static_cast<uint32_t>(engine_ddi::PolicyBool::False) == 1 &&
+                  static_cast<uint32_t>(engine_ddi::PolicyBool::True) == 2,
+              "PolicyBool values");
+static_assert(std::is_standard_layout_v<engine_ddi::MemoryArchitecturePolicy> &&
+                  std::is_trivially_copyable_v<engine_ddi::MemoryArchitecturePolicy>,
+              "MemoryArchitecturePolicy layout");
+static_assert(sizeof(engine_ddi::PolicyTier) == 8 && sizeof(engine_ddi::MemoryArchitecturePolicy) == 32 &&
+                  offsetof(engine_ddi::MemoryArchitecturePolicy, heap_serialization_tier) == 16 &&
+                  offsetof(engine_ddi::MemoryArchitecturePolicy, resource_serialization_tier) == 24,
+              "MemoryArchitecturePolicy size and offsets");
+static_assert(sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041) == 20 && D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 == 1 &&
+                  D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2 == 2,
+              "GetCaps 1002 payload and the highest tiers at 0092");
 // Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
 static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,
               "command_list_shell");

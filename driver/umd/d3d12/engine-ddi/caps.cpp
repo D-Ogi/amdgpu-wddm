@@ -2,7 +2,8 @@
 // engine-ddi: the adapter caps path of GetCaps. query_adapter_caps asks the engine once (QueryAdapterCaps, engine
 // ABI 1.2, V11) and keeps its answers; build_caps answers each GetCaps from them. Where each value comes from is
 // the table in INTEGRATION.md ("GetCaps"): a D3D12_FEATURE_* answer of the engine wherever a 1:1 field exists,
-// otherwise a documented constant. Layout references are WDK 10.0.26100 um\d3d12umddi.h ("H:line").
+// otherwise a documented constant; for 1002 the shell's memory architecture policy on top
+// (set_memory_architecture_policy). Layout references are WDK 10.0.26100 um\d3d12umddi.h ("H:line").
 #include "internal.h"
 #include <cstring>
 #include <iterator>
@@ -60,6 +61,7 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
+    MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
 };
 
 namespace {
@@ -185,6 +187,37 @@ void fill_shader(const AdapterCaps& c, D3D12DDI_SHADER_CAPS_0084& s) noexcept {
     s.WaveMMATier = D3D12DDI_WAVE_MMA_TIER_NOT_SUPPORTED;
 }
 
+// 1002 as build_caps answers it: the engine's answers or constants, then the policy's explicit fields.
+D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 memory_architecture(const AdapterCaps& c,
+                                                           const MemoryArchitecturePolicy& p) noexcept {
+    D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 m{};
+    m.UMA = c.architecture.UMA;
+    m.CacheCoherent = c.architecture.CacheCoherentUMA;
+    m.IOCoherent = FALSE;                                   // no engine answer; not claimed without a policy
+    m.HeapSerializationTier = c.serialization.HeapSerializationTier >= D3D12_HEAP_SERIALIZATION_TIER_10
+                                  ? D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1
+                                  : D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0;
+    m.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_0;   // no engine answer
+    if (p.uma != PolicyBool::Default) m.UMA = p.uma == PolicyBool::True;
+    if (p.cache_coherent != PolicyBool::Default) m.CacheCoherent = p.cache_coherent == PolicyBool::True;
+    if (p.io_coherent != PolicyBool::Default) m.IOCoherent = p.io_coherent == PolicyBool::True;
+    if (p.heap_serialization_tier.set)
+        m.HeapSerializationTier = static_cast<D3D12DDI_HEAP_SERIALIZATION_TIER_0041>(p.heap_serialization_tier.value);
+    if (p.resource_serialization_tier.set)
+        m.ResourceSerializationTier =
+            static_cast<D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041>(p.resource_serialization_tier.value);
+    return m;
+}
+
+bool policy_bool_valid(PolicyBool b) noexcept {
+    return b == PolicyBool::Default || b == PolicyBool::False || b == PolicyBool::True;
+}
+
+// set 0 with value 0, or set 1 with a value of the enum (H:6793-6797 ends at _1, H:6799-6804 at _2).
+bool policy_tier_valid(const PolicyTier& t, uint32_t highest) noexcept {
+    return t.set == 0 ? t.value == 0 : t.set == 1 && t.value <= highest;
+}
+
 template <class T> T* payload(const D3D12DDIARG_GETCAPS& r) noexcept {
     if (r.DataSize == sizeof(T) && r.pData) return static_cast<T*>(r.pData);
     log_line("GetCaps type %u: DataSize %u, pData %s; this revision answers only %zu bytes", static_cast<unsigned>(r.Type),
@@ -260,6 +293,40 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
 
 void free_adapter_caps(AdapterCaps* caps) noexcept { delete caps; }
 
+HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept {
+    if (!caps || !policy) return E_INVALIDARG;
+    const MemoryArchitecturePolicy& p = *policy;
+    if (p.size != sizeof(MemoryArchitecturePolicy) || !policy_bool_valid(p.uma) ||
+        !policy_bool_valid(p.cache_coherent) || !policy_bool_valid(p.io_coherent) ||
+        !policy_tier_valid(p.heap_serialization_tier, D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1) ||
+        !policy_tier_valid(p.resource_serialization_tier, D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2)) {
+        log_line("memory architecture policy refused: size %u, UMA %u, CacheCoherent %u, IOCoherent %u, "
+                 "heap tier %u/%u, resource tier %u/%u (set/value)",
+                 p.size, static_cast<unsigned>(p.uma), static_cast<unsigned>(p.cache_coherent),
+                 static_cast<unsigned>(p.io_coherent), p.heap_serialization_tier.set, p.heap_serialization_tier.value,
+                 p.resource_serialization_tier.set, p.resource_serialization_tier.value);
+        return E_INVALIDARG;
+    }
+    // The answer build_caps would give, every Default resolved against the engine's answers; the contradictions
+    // are those of INTEGRATION.md, "Memory architecture policy".
+    const D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 m = memory_architecture(*caps, p);
+    const char* contradiction = nullptr;
+    if (m.CacheCoherent && !m.UMA)
+        contradiction = "CacheCoherent without UMA";
+    else if (m.HeapSerializationTier == D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1 &&
+             m.ResourceSerializationTier != D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_2)
+        contradiction = "heap serialization tier 1 without resource serialization tier 2";
+    if (contradiction) {
+        log_line("memory architecture policy refused: the resulting 1002 answer (UMA %d, CacheCoherent %d, "
+                 "IOCoherent %d, heap tier %d, resource tier %d) has %s",
+                 m.UMA, m.CacheCoherent, m.IOCoherent, static_cast<int>(m.HeapSerializationTier),
+                 static_cast<int>(m.ResourceSerializationTier), contradiction);
+        return E_INVALIDARG;
+    }
+    caps->memory_policy = p;
+    return S_OK;
+}
+
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept {
     if (!caps || !request || ddi_version != kDdiVersion) return E_INVALIDARG;
     const AdapterCaps& c = *caps;
@@ -315,15 +382,7 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
     case D3D12DDICAPS_TYPE_MEMORY_ARCHITECTURE: {
         auto* d = payload<D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041>(r);
         if (!d || !node_zero(r)) return E_INVALIDARG;
-        D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041 m{};
-        m.UMA = c.architecture.UMA;
-        m.CacheCoherent = c.architecture.CacheCoherentUMA;
-        m.IOCoherent = FALSE;                               // no engine answer; not claimed
-        m.HeapSerializationTier = c.serialization.HeapSerializationTier >= D3D12_HEAP_SERIALIZATION_TIER_10
-                                      ? D3D12DDI_HEAP_SERIALIZATION_TIER_0041_1
-                                      : D3D12DDI_HEAP_SERIALIZATION_TIER_0041_0;
-        m.ResourceSerializationTier = D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_0;   // no engine answer
-        *d = m;
+        *d = memory_architecture(c, c.memory_policy);
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_GPUVA_CAPS: {
