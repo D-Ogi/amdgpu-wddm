@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-table.h"
+#include "ddi-format.h"
 #include "ddi-draw.h"
 #include "ddi-input-layout.h"
 #include "ddi-raster.h"
@@ -37,6 +38,7 @@ D3D11_1DDI_DEVICEFUNCS make_render_device_table() {
     install_output_ddi(table);
     install_srv_ddi(table);
     install_flush_ddi(table);
+    install_format_ddi(table);
     return table;
 }
 }

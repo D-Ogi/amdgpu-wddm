@@ -17,6 +17,7 @@
 #include "ddi-srv.h"
 #include "ddi-flush.h"
 #include "ddi-table.h"
+#include "ddi-format.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -420,5 +421,21 @@ int main() {
     D3D10DDI_MAPPED_SUBRESOURCE noOverwrite{&payload,11,22};
     table.pfnDynamicConstantBufferMapNoOverwrite(h,rhandle,0,D3D10_DDI_MAP_WRITE_NOOVERWRITE,0,&noOverwrite);
     if (errors!=94 || noOverwrite.pData || noOverwrite.RowPitch || noOverwrite.DepthPitch || owner.runtime().domain.entered()) std::abort();
+    if (convert_format_support(D3D11_FORMAT_SUPPORT_BLENDABLE,0)) std::abort();
+    const UINT fs=convert_format_support(D3D11_FORMAT_SUPPORT_RENDER_TARGET|D3D11_FORMAT_SUPPORT_BLENDABLE|
+        D3D11_FORMAT_SUPPORT_SHADER_SAMPLE|D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER|D3D11_FORMAT_SUPPORT_BUFFER,
+        D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE|D3D11_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP);
+    const UINT expectedSupport=D3D10_DDI_FORMAT_SUPPORT_RENDERTARGET|D3D10_DDI_FORMAT_SUPPORT_BLENDABLE|
+        D3D10_DDI_FORMAT_SUPPORT_SHADER_SAMPLE|D3D11_1DDI_FORMAT_SUPPORT_VERTEX_BUFFER|
+        D3D11_1DDI_FORMAT_SUPPORT_BUFFER|D3D11_1DDI_FORMAT_SUPPORT_UAV_WRITES|D3D11_1DDI_FORMAT_SUPPORT_OUTPUT_MERGER_LOGIC_OP;
+    if (fs!=expectedSupport || convert_format_support(0,0)) std::abort();
+    // No optional display/video support merely because the engine reports it.
+    if (convert_format_support(D3D11_FORMAT_SUPPORT_DISPLAY,0)) std::abort();
+    UINT supportOutput=UINT_MAX;
+    table.pfnCheckFormatSupport(h,DXGI_FORMAT_R8G8B8A8_UNORM,&supportOutput);
+    if (supportOutput) std::abort();
+    supportOutput=UINT_MAX;
+    table.pfnCheckMultisampleQualityLevels(h,DXGI_FORMAT_R8G8B8A8_UNORM,4,&supportOutput);
+    if (supportOutput || errors!=96 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
