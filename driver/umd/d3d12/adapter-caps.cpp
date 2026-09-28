@@ -43,6 +43,10 @@ HRESULT apply_memory_policy(Adapter& adapter,AdapterCapsOwner& owner) noexcept {
     if(hr==S_OK){
         engine_ddi::MemoryArchitecturePolicy policy{};policy.size=sizeof(policy);
         policy.io_coherent=coherent?engine_ddi::PolicyBool::True:engine_ddi::PolicyBool::False;
+        // Resource tier 0 is reserved by the 0041 DDI. The engine's resource
+        // barriers and copies provide tier 1 stateless-copy semantics; heap
+        // serialization stays at the engine's answer, independently of this.
+        policy.resource_serialization_tier={1,D3D12DDI_RESOURCE_SERIALIZATION_TIER_0041_1};
         hr=engine_ddi::set_memory_architecture_policy(owner.caps,&policy);
     }
     if(ddi_trace_enabled()){
