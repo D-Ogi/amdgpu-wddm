@@ -1,0 +1,23 @@
+diff --git a/src/amd/vulkan/nir/radv_nir_rt_common.c b/src/amd/vulkan/nir/radv_nir_rt_common.c
+index dc8506f..5c50dcb 100644
+--- a/src/amd/vulkan/nir/radv_nir_rt_common.c
++++ b/src/amd/vulkan/nir/radv_nir_rt_common.c
+@@ -409,10 +409,14 @@ static nir_def *
+ build_node_to_addr(const struct radv_compiler_info *compiler_info, nir_builder *b, nir_def *node, bool skip_type_and)
+ {
+    nir_def *addr = skip_type_and ? node : nir_iand_imm(b, node, ~7ull);
+-   addr = nir_ishl_imm(b, addr, 3);
+-   /* Assumes everything is in the top half of address space, which is true in
+-    * GFX9+ for now. */
+-   return compiler_info->ac->gfx_level >= GFX9 ? nir_ior_imm(b, addr, 0xffffull << 48) : addr;
++   if (compiler_info->ac->gfx_level < GFX9)
++      return nir_ishl_imm(b, addr, 3);
++   /* Sign-extend from bit 47 like node_to_addr() in bvh_helpers.h. The amdgpu
++    * winsys places everything in the top half of the address space, the WDDM
++    * winsys in the bottom half; forcing the top 16 bits to one would make a
++    * bottom-half address non-canonical. Bits of the node above the 45-bit
++    * pointer are dropped, as the forced ones used to hide them. */
++   return nir_ishr_imm(b, nir_ishl_imm(b, addr, 19), 16);
+ }
+ 
+ nir_def *
