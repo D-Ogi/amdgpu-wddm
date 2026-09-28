@@ -132,7 +132,30 @@ unanswered one is logged and its fields report no support.
   ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`.
 - Present: `resource_allocation` for the back buffer's runtime allocation.
 
+### Query slots around CreateDevice
+
+Which device slots the runtime calls during D3D12CreateDevice has not been observed: the list below is an
+INFERENCE from the slot types (queries and controls the runtime can call before any object exists). Each gives a
+defined answer and reports no error:
+
+| Slot | Answer |
+|---|---|
+| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format |
+| CheckMultisampleQualityLevels | the engine's MULTISAMPLE_QUALITY_LEVELS for Flags NONE; 0 when the engine refuses; 0 for TILED_RESOURCE (no reserved resource can be created) |
+| GetDescriptorSizeInBytes | the engine's descriptor increment |
+| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data |
+| EnumerateMetaCommands | count 0, S_OK |
+| CheckDriverMatchingIdentifier | UNRECOGNIZED |
+| ImplicitShaderCacheControl | no-op: no driver-managed shader cache is reported (1004) |
+
+Every other engine-ddi slot is implemented (SLOTS.md) or a fail-safe. A void fail-safe whose non-const pointers
+are all `_Out_` zeroes them before it reports E_NOTIMPL: GetMipPacking, CheckSubresourceInfo,
+GetRaytracingAccelerationStructurePrebuildInfo, GetMetaCommandRequiredParameterInfo. The first lab log of
+D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
+
 Not ready on the device side: RuntimeBacked heap creation returns E_NOTIMPL after validating the shell's
 allocation, because ABI 1.2 V10 (`CreateHeapFromMemory` over memory the shell allocates on the engine's
 VkDevice) is not wired yet; native shader intake returns E_NOTIMPL (SLOTS.md). Only the offline harness
-(EnginePrivateTest, engine-owned heaps) exercises the device path, and its round trips are still being added.
+(EnginePrivateTest, engine-owned heaps) exercises the device path: copy, compute dispatch, the retirement
+sentinel and the query slots above pass on the development PC with the pinned engine DLL, also under VVL with
+synchronization validation.

@@ -190,7 +190,8 @@ struct FillInfo {
 // Fills the ENGINE slots and the engine-owned MIXED slots of the core table: heap and resource, command list
 // creation, CheckResourceAllocationHandle. The slot list is engine-ddi/SLOTS.md. Every slot this revision does
 // not implement gets a fail-safe entry: HRESULT slots return E_NOTIMPL, and void slots report E_NOTIMPL through
-// report_device_error. It never touches RUNTIME slots or shell-owned MIXED slots. It fails with E_INVALIDARG if
+// report_device_error; void query slots zero their _Out_ arguments first (INTEGRATION.md, "Query slots around
+// CreateDevice"). It never touches RUNTIME slots or shell-owned MIXED slots. It fails with E_INVALIDARG if
 // table_size is not sizeof(D3D12DDI_DEVICE_FUNCS_CORE_0088).
 HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_size, const FillInfo* info) noexcept;
 // Fills all 70 command-list slots for one uTableNum: 0 is the compute table, 1 the graphics table. Graphics-only

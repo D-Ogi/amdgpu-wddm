@@ -104,5 +104,6 @@ D3D12DDIARG_RESOURCE_BARRIER_0022 transition(const Buffer& buffer, D3D12DDI_RESO
 void test_copy(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_retirement(Env& env);
+void test_device_queries(Env& env, Device& device);
 
 } // namespace harness

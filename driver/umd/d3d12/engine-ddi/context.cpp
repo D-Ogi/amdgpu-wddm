@@ -268,6 +268,22 @@ template <class R, class... A, char Table, size_t Offset> struct FailSafe<R(APIE
             if constexpr (!std::is_void_v<R>) return R{};
         }
     }
+    // A void query slot whose non-const pointer arguments are all _Out_ (checked per slot against the WDK header):
+    // each is zeroed, so the caller never reads what was in its memory before, then E_NOTIMPL is reported.
+    template <class P> static void zero_out(P p) noexcept {
+        if constexpr (std::is_pointer_v<P>) {
+            using T = std::remove_pointer_t<P>;
+            if constexpr (!std::is_const_v<T> && !std::is_void_v<T>) {
+                if (p) *p = T{};
+            }
+        }
+    }
+    static R APIENTRY zeroing(A... args) noexcept {
+        static_assert(std::is_void_v<R>, "zeroing fail-safes are void query slots");
+        note();
+        (zero_out(args), ...);
+        report(E_NOTIMPL, args...);
+    }
     // Graphics-only command-list slot in the compute table.
     static R APIENTRY graphics_only(A... args) noexcept {
         static_assert(std::is_void_v<R>, "command-list slots return void");
@@ -293,16 +309,22 @@ HRESULT APIENTRY enumerate_no_meta_commands(D3D12DDI_HDEVICE, UINT* count, D3D12
     *count = 0;
     return S_OK;
 }
+
+// engine-ddi reports no driver-managed shader cache (1004 DriverManagedShaderCachePresent FALSE, INTEGRATION.md), so
+// there is no cache of engine-ddi's to disable, enable or clear: the control is accepted as a no-op, never an error.
+void APIENTRY no_implicit_shader_cache(D3D12DDI_HDEVICE, D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAGS_0080) {}
 } // namespace
 
 #define ENGINE_DDI_FS(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::slot
 #define ENGINE_DDI_CALC(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::calc
+#define ENGINE_DDI_ZERO(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::zeroing
 
 void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     using T = D3D12DDI_DEVICE_FUNCS_CORE_0088;
 #define FS(m) ENGINE_DDI_FS(t, T, m)
 #define CALC(m) ENGINE_DDI_CALC(t, T, m)
-    FS(pfnCheckFormatSupport); FS(pfnCheckMultisampleQualityLevels); FS(pfnGetMipPacking);
+#define ZERO(m) ENGINE_DDI_ZERO(t, T, m)
+    FS(pfnCheckFormatSupport); ZERO(pfnCheckMultisampleQualityLevels); ZERO(pfnGetMipPacking);
     CALC(pfnCalcPrivateElementLayoutSize); FS(pfnCreateElementLayout); FS(pfnDestroyElementLayout);
     CALC(pfnCalcPrivateBlendStateSize); FS(pfnCreateBlendState); FS(pfnDestroyBlendState);
     CALC(pfnCalcPrivateDepthStencilStateSize); FS(pfnCreateDepthStencilState); FS(pfnDestroyDepthStencilState);
@@ -327,8 +349,8 @@ void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     FS(pfnCopyDescriptors); FS(pfnCopyDescriptorsSimple);
     CALC(pfnCalcPrivateQueryHeapSize); FS(pfnCreateQueryHeap); FS(pfnDestroyQueryHeap);
     CALC(pfnCalcPrivateCommandSignatureSize); FS(pfnCreateCommandSignature); FS(pfnDestroyCommandSignature);
-    FS(pfnCheckResourceVirtualAddress); FS(pfnCheckResourceAllocationInfo); FS(pfnCheckSubresourceInfo);
-    FS(pfnCheckExistingResourceAllocationInfo);
+    FS(pfnCheckResourceVirtualAddress); ZERO(pfnCheckResourceAllocationInfo); ZERO(pfnCheckSubresourceInfo);
+    ZERO(pfnCheckExistingResourceAllocationInfo);
     FS(pfnRetrieveShaderComment); FS(pfnCheckResourceAllocationHandle);
     CALC(pfnCalcPrivatePipelineLibrarySize); FS(pfnCreatePipelineLibrary); FS(pfnDestroyPipelineLibrary);
     FS(pfnAddPipelineStateToLibrary); FS(pfnCalcSerializedLibrarySize); FS(pfnSerializeLibrary);
@@ -336,16 +358,18 @@ void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     FS(pfnCommandRecorderSetCommandPoolAsTarget);
     t->pfnEnumerateMetaCommands = enumerate_no_meta_commands;
     FS(pfnEnumerateMetaCommandParameters); CALC(pfnCalcPrivateMetaCommandSize); FS(pfnCreateMetaCommand);
-    FS(pfnDestroyMetaCommand); FS(pfnGetMetaCommandRequiredParameterInfo);
+    FS(pfnDestroyMetaCommand); ZERO(pfnGetMetaCommandRequiredParameterInfo);
     CALC(pfnCalcPrivateStateObjectSize); FS(pfnCreateStateObject); FS(pfnDestroyStateObject);
-    FS(pfnGetRaytracingAccelerationStructurePrebuildInfo);
+    ZERO(pfnGetRaytracingAccelerationStructurePrebuildInfo);
     t->pfnCheckDriverMatchingIdentifier = unrecognized_identifier;
     FS(pfnGetShaderIdentifier); FS(pfnGetShaderStackSize); FS(pfnGetPipelineStackSize); FS(pfnSetPipelineStackSize);
     CALC(pfnCalcPrivateAddToStateObjectSize); FS(pfnAddToStateObject);
     FS(pfnCreateSamplerFeedbackUnorderedAccessView); FS(pfnCreateAmplificationShader); FS(pfnCreateMeshShader);
-    CALC(pfnCalcPrivateMeshShaderSize); FS(pfnImplicitShaderCacheControl);
+    CALC(pfnCalcPrivateMeshShaderSize);
+    t->pfnImplicitShaderCacheControl = no_implicit_shader_cache;
 #undef FS
 #undef CALC
+#undef ZERO
 }
 
 void fill_list_failsafe(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {

@@ -347,6 +347,7 @@ int wmain(int argc, wchar_t** argv) {
     if (hr == S_OK) {
         test_copy(env, device);
         test_compute(env, device);
+        test_device_queries(env, device);
         uint32_t live = UINT32_MAX;
         hr = engine_ddi::destroy_device_context(device.context, &live);
         checkf(hr == S_OK && live == 0, "destroy_device_context: S_OK with no live object (hr %08lx, live %u)",

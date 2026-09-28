@@ -405,37 +405,78 @@ D3D12DDI_GPU_VIRTUAL_ADDRESS APIENTRY check_resource_virtual_address(D3D12DDI_HD
     return static_cast<ID3D12Resource*>(r->h.engine)->GetGPUVirtualAddress();
 }
 
+// The engine's size and alignment for desc, with desc.Alignment first and 0 if the engine refuses that (a
+// small-alignment request). No additional data: engine-ddi keeps none next to a resource.
+HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
+    D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+    D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+    if (info.SizeInBytes == UINT64_MAX && d0.Alignment) {
+        d0.Alignment = 0;
+        info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+    }
+    if (info.SizeInBytes == UINT64_MAX || info.Alignment > UINT32_MAX) return E_INVALIDARG;
+    out->ResourceDataSize = info.SizeInBytes;
+    out->ResourceDataAlignment = static_cast<UINT32>(info.Alignment);
+    out->Layout = desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ? D3D12DDI_TL_ROW_MAJOR
+                                                                    : static_cast<D3D12DDI_TEXTURE_LAYOUT>(desc.Layout);
+    return S_OK;
+}
+
 void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
                                              D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS, UINT32 alignment_restriction, UINT,
                                              D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) {
+    if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
     DeviceContext* c = resolve(device);
     if (!c) return;
     if (!in || !out) {
         c->report(E_INVALIDARG);
         return;
     }
-    *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
     D3D12_RESOURCE_DESC1 desc{};
     HRESULT hr = to_api_desc(*in, desc);
+    if (SUCCEEDED(hr)) {
+        desc.Alignment = alignment_restriction;
+        hr = allocation_info(c, desc, out);
+    }
     if (FAILED(hr)) {
+        *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
         c->report(hr);
-        return;
     }
-    desc.Alignment = alignment_restriction;
-    const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
-    D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
-    if (info.SizeInBytes == UINT64_MAX && alignment_restriction) {
-        desc.Alignment = 0;                             // a small-alignment request the engine refuses
-        const D3D12_RESOURCE_DESC retry = to_desc0(desc);
-        info = c->device->GetResourceAllocationInfo(0, 1, &retry);
+}
+
+// The same answer for a resource that exists, from the description it was created with (the record's desc,
+// Alignment 0 as at creation). Reserved resources cannot exist in this revision (E_NOTIMPL at creation).
+void APIENTRY check_existing_resource_allocation_info(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE hres,
+                                                      D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) {
+    if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    const HRESULT hr = (r && out) ? allocation_info(c, r->desc, out) : E_INVALIDARG;
+    if (FAILED(hr)) {
+        if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
+        c->report(hr);
     }
-    if (info.SizeInBytes == UINT64_MAX || info.Alignment > UINT32_MAX) {
+}
+
+// The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer, 1:1 for Flags NONE. A format or sample count the
+// engine refuses is 0 levels, as for CheckFormatSupport. TILED_RESOURCE is 0 levels: no reserved resource can be
+// created in this revision, whatever tiled tier the caps pass through (INTEGRATION.md, 1006).
+void APIENTRY check_multisample_quality_levels(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT sample_count,
+                                               D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags, UINT* out) {
+    static_assert(D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE ==
+                      static_cast<int>(D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_TILED_RESOURCE), "MSAA flags");
+    if (out) *out = 0;
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!out) {
         c->report(E_INVALIDARG);
         return;
     }
-    out->ResourceDataSize = info.SizeInBytes;
-    out->ResourceDataAlignment = static_cast<UINT32>(info.Alignment);
-    out->Layout = in->ResourceType == D3D12DDI_RT_BUFFER ? D3D12DDI_TL_ROW_MAJOR : in->Layout;
+    if (flags != D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_NONE) return;
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS q{format, sample_count, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE, 0};
+    if (SUCCEEDED(c->device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &q, sizeof(q))))
+        *out = q.NumQualityLevels;
 }
 
 D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device, D3D10DDI_HRESOURCE hres) {
@@ -699,6 +740,7 @@ HRESULT resource_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HA
 
 void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCheckFormatSupport = check_format_support;
+    t->pfnCheckMultisampleQualityLevels = check_multisample_quality_levels;
     t->pfnCalcPrivateHeapAndResourceSizes = calc_heap_and_resource;
     t->pfnCreateHeapAndResource = create_heap_and_resource_slot;
     t->pfnDestroyHeapAndResource = destroy_heap_and_resource;
@@ -706,6 +748,7 @@ void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnUnmapHeap = unmap_heap;
     t->pfnCheckResourceVirtualAddress = check_resource_virtual_address;
     t->pfnCheckResourceAllocationInfo = check_resource_allocation_info;
+    t->pfnCheckExistingResourceAllocationInfo = check_existing_resource_allocation_info;
     t->pfnCheckResourceAllocationHandle = check_resource_allocation_handle;
 }
 
