@@ -71,6 +71,9 @@ void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     device->queues.discard_device_metadata(retired,active);
     trace("DestroyDevice-unresolved-retired-contexts",retired);
     trace("DestroyDevice-unresolved-active-contexts",active);
+    device->memory.discard_device_metadata(retired,active);
+    trace("DestroyDevice-unresolved-retired-memory",retired);
+    trace("DestroyDevice-unresolved-active-memory",active);
     // These are CPU records only. OS context reclamation remains a lab acceptance gate.
     device->~Device();--adapter->devices;trace("DestroyDevice");
 }

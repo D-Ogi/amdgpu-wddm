@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "queue-registry.h"
+#include "memory-registry.h"
 #include <atomic>
 #include "adapter-contract.h"
 namespace native12 {
@@ -11,6 +12,7 @@ struct Device {
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 callbacks{};
     D3DDDI_DEVICECALLBACKS kernel_callbacks{};
     QueueRegistry queues;
+    MemoryRegistry memory;
     std::atomic<bool> lost{false};
     void remove() noexcept {
         lost.store(true);

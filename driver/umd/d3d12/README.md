@@ -159,3 +159,31 @@ The host gate leaves the fake paging fence unchanged while queuing waits on two
 distinct contexts, verifies the fence handle/value and full-width context,
 checks failure/loss propagation with empty output, and confirms that completed
 mappings need no additional wait. No native GPU execution is claimed.
+
+## Device memory registry
+
+`MemoryRegistry` ties runtime allocation ownership to a paging mapping. Records
+are allocated and linked before the first runtime callback; no tracking allocation
+is needed after the runtime has created a GPU allocation. Keys contain the registry
+identity and a monotonically increasing serial, so another device or a stale key
+cannot resolve a new allocation that reused the same CPU address.
+
+Create accepts allocation plus mapping and may leave paging pending. Snapshot
+returns an allocation/address only after mapping completion. GPU residency and
+Vulkan import are separate integration requirements. Once release starts, snapshots
+are refused. Unmap precedes runtime deallocation; failures retain the record and
+successful steps are not repeated on a later retry in a still-valid runtime scope.
+Call `invalidate_owner` before that scope expires. A failed create cleans up before
+returning, or retains an inaccessible retired record if cleanup also fails.
+
+Runtime callbacks execute outside the registry lock. Same-record operations are
+pinned against simultaneous cleanup, but integration must still serialize operations
+on the shared PagingDomain as its contract requires. Device teardown runs only after
+DDI callers stop, discards CPU metadata without callbacks, and reports unresolved
+active/retired memory counts. This is not a claim of OS reclamation.
+
+The adapter026 host build covers successful allocation/mapping/release, pending
+mapping completion, stale/foreign keys, reentrant registry inspection from callbacks,
+failed unmap/deallocation and retry, create rollback, failed rollback and expired
+owners. The registry is stored in native device state; heap-slot/Vulkan import wiring
+and native runtime execution remain incomplete.
