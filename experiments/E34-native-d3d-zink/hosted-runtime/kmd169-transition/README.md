@@ -20,6 +20,17 @@ The verification receipt does not prove visually correct scanout.
 test-verify-cpu.ps1 exercises the pure acceptance predicate against a CPU witness
 and deliberately incorrect observations. It does not execute PnP or test hardware.
 
+run-arm.ps1 executes the ordered phases through the bounded helper. Each child
+gets at most 30 seconds and cannot extend the shared candidate/restore deadline.
+Only a typed, successful helper receipt plus a phase completion witness advances
+the sequence. A failure with an empty job is distinguished from unknown closure;
+the latter must not permit a concurrent rollback installer.
+
+test-child-closure.ps1 covers missing and contradictory closure receipts.
+test-arm-helper.ps1 exercises the actual native helper with successful, failed
+and hanging child trees; it checks that the timed-out descendant has stopped.
+These are host-only controls, not installation or recovery measurements.
+
 Still required before launch:
 - A supervisor and independent watchdog sharing one monotonic deadline.
 - Proven termination of the candidate process tree before restoration begins.
