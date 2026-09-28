@@ -23,3 +23,29 @@ function Assert-KmdCpuBaseline {
   }
  }
 }
+
+# Two matching process identities with passing module checks avoid accepting a
+# single sample taken while DWM is being replaced. This is not a lifetime promise.
+function Wait-KmdCpuBaseline {
+ param($Saved,[scriptblock]$Read,[long]$Deadline,[scriptblock]$Record,
+       [ValidateRange(1,1000)][int]$IntervalMs=250)
+ $attempts=0;$previous=$null;$firstReady=$null
+ while([Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline){
+  $attempts++;$sampleQpc=[Diagnostics.Stopwatch]::GetTimestamp()
+  $errorText=$null;$identity=$null;$observed=$null
+  try {
+   $observed=& $Read
+   Assert-KmdCpuBaseline $Saved $observed
+   $identity=(@($observed.dwm|ForEach-Object {"$($_.pid):$($_.start)"}|Sort-Object) -join '|')
+  } catch {$errorText=[string]$_}
+  $within=[Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline
+  if($identity -and $null -eq $firstReady){$firstReady=$sampleQpc}
+  $stable=$within -and $identity -and $identity -eq $previous
+  if($Record){& $Record @{attempt=$attempts;qpc=$sampleQpc;identity=$identity;error=$errorText;stable=[bool]$stable}|Out-Null}
+  if($stable){return @{observed=$observed;attempts=$attempts;first_ready_qpc=$firstReady;stable_qpc=[Diagnostics.Stopwatch]::GetTimestamp()}}
+  $previous=$identity
+  $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())*1000/[double][Diagnostics.Stopwatch]::Frequency
+  if($remaining -gt 0){Start-Sleep -Milliseconds ([int][Math]::Min($IntervalMs,[Math]::Ceiling($remaining)))}
+ }
+ throw "CPU DWM readiness deadline expired after $attempts samples"
+}

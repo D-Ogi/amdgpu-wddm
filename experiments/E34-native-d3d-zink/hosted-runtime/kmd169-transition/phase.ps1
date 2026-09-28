@@ -1,7 +1,8 @@
 # Must be launched through bounded-child.exe. No standalone blocking-time guarantee.
 param([Parameter(Mandatory)][ValidateSet('Capture','Disable','Install','Configure','Enable','Verify')][string]$Phase,
  [Parameter(Mandatory)][ValidateSet('candidate','restore')][string]$Arm,
- [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Receipt)
+ [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Receipt,
+ [Parameter(Mandatory)][long]$ChildDeadline)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\verify-cpu.ps1"
@@ -89,18 +90,16 @@ if($Phase -eq 'Capture'){
   }
   'Verify' {
    if($version -ne $expectedVersion -or $actual -ne $manifest.$label.'bc250kmd.sys' -or $gpu.Status -ne 'OK'){throw 'Active identity mismatch'}
-   $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
-   $abi=if($Arm -eq 'candidate'){'0x000700A9'}else{'0x000700A6'}
-   if($LASTEXITCODE -ne 0 -or $health -notmatch "version=$abi flags=15"){throw 'Independent health not ready'}
    $umd=(Get-FileHash C:\BC250\m11\resource-close\bc250d3d.dll).Hash
    $icd=(Get-FileHash C:\BC250\m10\wsi-final\vulkan_radeon.dll).Hash
    if($umd -ne $saved.umd_sha256 -or $icd -ne $saved.icd_sha256){throw 'CPU baseline files changed'}
    & C:\BC250\bc250rd\bc250rd_cli.exe clock-check 1000 820|Out-Null
    if($LASTEXITCODE -ne 0){throw 'Clock control failed'}
    $class='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
+   $ready=Wait-KmdCpuBaseline -Saved $saved -Deadline ($ChildDeadline-[Diagnostics.Stopwatch]::Frequency) -Read {
    $registration=Get-ItemProperty $class
    $parameters=Get-ItemProperty $reg
-   $observed=@{
+   return @{
     umd_registration=@($registration.UserModeDriverName)
     icd_registration=@($registration.VulkanDriverName)
     parameters=$parameters
@@ -110,7 +109,15 @@ if($Phase -eq 'Capture'){
       ForEach-Object {@{name=$_.ModuleName;sha256=(Get-FileHash -LiteralPath $_.FileName).Hash}})}
     })
    }
-   Assert-KmdCpuBaseline $saved $observed
+   } -Record {
+    param($sample)
+    Write-DurableText "$out\$Receipt-ready-$($sample.attempt).json" ($sample|ConvertTo-Json)
+   }
+   $observed=$ready.observed
+   Write-DurableText "$out\$Receipt-readiness.json" ($ready|ConvertTo-Json -Depth 10)
+   $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
+   $abi=if($Arm -eq 'candidate'){'0x000700A9'}else{'0x000700A6'}
+   if($LASTEXITCODE -ne 0 -or $health -notmatch "version=$abi flags=15"){throw 'Independent health not ready'}
    $info=& C:\BC250\m8\bc250kmd_cli.exe info|Out-String
    if($LASTEXITCODE -ne 0 -or $info -notmatch $abi -or $info -notmatch 'FULL WDDM TABLE'){throw 'Loaded KMD identity mismatch'}
    Write-DurableText "$out\$Receipt-cpu.json" ($observed|ConvertTo-Json -Depth 8)

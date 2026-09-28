@@ -28,7 +28,7 @@ function Invoke-KmdTransitionArm {
   $deadline=[Math]::Min($Origin+[long]($(if($Arm -eq 'candidate'){110}else{170})*$Frequency),
     [Diagnostics.Stopwatch]::GetTimestamp()+[long]($budget*$Frequency/1000))
   try {
-   $result=Invoke-KmdBoundedChild -Tool $Tool -Deadline $deadline -Stdout "$Directory\$receipt.out" -Stderr "$Directory\$receipt.err" -Executable $powershell -Arguments @('-NoProfile','-File',$phaseScript,'-Phase',$phase,'-Arm',$Arm,'-Directory',$Directory,'-Receipt',$receipt)
+   $result=Invoke-KmdBoundedChild -Tool $Tool -Deadline $deadline -Stdout "$Directory\$receipt.out" -Stderr "$Directory\$receipt.err" -Executable $powershell -Arguments @('-NoProfile','-File',$phaseScript,'-Phase',$phase,'-Arm',$Arm,'-Directory',$Directory,'-Receipt',$receipt,'-ChildDeadline',[string]$deadline)
   } catch {
    Write-DurableText "$Directory\$receipt-supervisor-error.txt" ([string]$_)
    return @{success=$false;tree_closed=$false;phase=$phase;reason='helper-exception'}

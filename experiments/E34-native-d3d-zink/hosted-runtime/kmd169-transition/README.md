@@ -72,3 +72,12 @@ Candidate time remains110s; restoration ends at170s from launch entry, leaving10
 before the scheduler limit for startup/closure overhead. This does not guarantee
 that Windows can terminate a thread stuck in the kernel. Incomplete closure is
 recovery-required, never success. Dispatcher runtime validation remains pending.
+
+Verify polls DWM attachment within the phase child's deadline, reserving its last
+second for helper termination. Two consecutive valid module observations must
+have identical PID/start-time sets. Enumeration failure or process replacement
+resets that sequence. Per-attempt receipts retain errors and first/stable-ready
+QPC values; they do not claim the desktop remains healthy after the observations.
+test-readiness.ps1 covers delayed attachment, restart, persistent mismatch and an
+already expired deadline. The surrounding native helper still bounds a blocked
+OS query; the polling loop alone cannot interrupt one.
