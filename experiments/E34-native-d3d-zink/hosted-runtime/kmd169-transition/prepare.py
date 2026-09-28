@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--candidate', type=Path, required=True)
     parser.add_argument('--rollback', type=Path, required=True)
     parser.add_argument('--helper', type=Path, required=True)
+    parser.add_argument('--selector', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     dirty = subprocess.check_output(['git', '-C', str(REPO), 'status', '--porcelain', '--', str(HERE), str(HERE.parent / 'kmd168-transition')], text=True)
@@ -44,6 +45,7 @@ def main():
             shutil.copyfile(item, destination / item.name)
     shutil.copyfile(HERE / 'package-hashes.json', args.out / 'package-hashes.json')
     shutil.copyfile(args.helper, args.out / 'bounded-child.exe')
+    shutil.copyfile(args.selector, args.out / 'select-driver.exe')
     files = {f.relative_to(args.out).as_posix(): digest(f) for f in sorted(args.out.rglob('*')) if f.is_file()}
     manifest = {'schema': 1, 'runner_revision': revision, 'files': files}
     path = args.out / 'stage-manifest.json'

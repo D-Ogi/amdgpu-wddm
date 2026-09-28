@@ -73,16 +73,8 @@ if($Phase -eq 'Capture'){
   }
   'Install' {
    if($problem -ne 22){throw 'Install requires disabled adapter'}
-   if($Arm -eq 'candidate'){
-    & pnputil.exe /add-driver "$out\candidate169\bc250kmd.inf" /install|Out-Null
-    if($LASTEXITCODE -ne 0){throw 'Candidate install failed'}
-   }else{
-    $env:TEMP='C:\BC250\tmp';$env:TMP=$env:TEMP
-    Add-Type 'using System;using System.Runtime.InteropServices;public static class KmdRestore169{[DllImport("newdev.dll",CharSet=CharSet.Unicode,SetLastError=true)][return:MarshalAs(UnmanagedType.Bool)]public static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr p,string h,string i,uint f,[MarshalAs(UnmanagedType.Bool)]out bool reboot);}'
-    $reboot=$false
-    if(![KmdRestore169]::UpdateDriverForPlugAndPlayDevicesW([IntPtr]::Zero,$hardware,"$out\rollback166\bc250kmd.inf",1,[ref]$reboot)){throw 'Forced166 restore failed'}
-    if($reboot){throw 'Restore requests reboot; explicit recovery required'}
-   }
+   & "$out\select-driver.exe" --install-deferred $gpu.InstanceId "$out\$label\bc250kmd.inf" $expectedVersion
+   if($LASTEXITCODE -ne 0){throw 'Deferred driver install failed; inspect helper receipt'}
    if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data -ne $expectedVersion){throw 'Installed version mismatch'}
    if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data -ne 22){throw 'Unexpected automatic enable'}
   }

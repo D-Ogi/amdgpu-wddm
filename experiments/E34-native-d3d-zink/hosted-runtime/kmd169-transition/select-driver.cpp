@@ -1,7 +1,8 @@
-// Read-only SetupAPI selection probe. No DIF installation or device state change.
+// Exact-INF probe and explicit deferred installation. --inspect never installs.
 #include <windows.h>
 #include <setupapi.h>
 #include <cfgmgr32.h>
+#include <cfg.h>
 #include <cstdio>
 #include <cwchar>
 #include <vector>
@@ -12,13 +13,26 @@ struct DeviceSet {
 static int fail(const char* operation){
     fprintf(stderr,"%s failed: %lu\n",operation,GetLastError());return 1;
 }
+static bool parseVersion(const wchar_t* text,ULONGLONG& value){
+    unsigned a=0,b=0,c=0,d=0;wchar_t tail=0;
+    if(swscanf_s(text,L"%u.%u.%u.%u%c",&a,&b,&c,&d,&tail,1u)!=4 ||
+       a>65535 || b>65535 || c>65535 || d>65535)return false;
+    value=(ULONGLONG(a)<<48)|(ULONGLONG(b)<<32)|(ULONGLONG(c)<<16)|d;return true;
+}
+static bool disabled(CONFIGRET cr,ULONG status,ULONG problem){
+    return cr==CR_SUCCESS && (status&DN_HAS_PROBLEM) && !(status&DN_STARTED) && problem==CM_PROB_DISABLED;
+}
 int wmain(int argc,wchar_t** argv){
     if(argc==2 && wcscmp(argv[1],L"--help")==0){
-        puts("select-driver --inspect INSTANCE ABSOLUTE_INF; read-only compatible-node selection");return 0;
+        puts("select-driver --inspect INSTANCE ABSOLUTE_INF; or --install-deferred INSTANCE ABSOLUTE_INF EXPECTED_VERSION");return 0;
     }
-    if(argc!=4 || wcscmp(argv[1],L"--inspect")!=0)return 2;
+    const bool install=argc==5 && wcscmp(argv[1],L"--install-deferred")==0;
+    if(!install && (argc!=4 || wcscmp(argv[1],L"--inspect")!=0))return 2;
+    ULONGLONG expectedVersion=0;
+    if(install && !parseVersion(argv[4],expectedVersion))return 2;
     const wchar_t prefix[]=L"PCI\\VEN_1002&DEV_13FE";
-    if(_wcsnicmp(argv[2],prefix,wcslen(prefix))!=0)return 2;
+    if(_wcsnicmp(argv[2],prefix,wcslen(prefix))!=0 ||
+       (argv[2][wcslen(prefix)]!=L'&' && argv[2][wcslen(prefix)]!=L'\\'))return 2;
     wchar_t inf[MAX_PATH]={};
     const DWORD length=GetFullPathNameW(argv[3],MAX_PATH,inf,nullptr);
     if(!length || length>=MAX_PATH || GetFileAttributesW(inf)==INVALID_FILE_ATTRIBUTES)return fail("INF path");
@@ -33,20 +47,44 @@ int wmain(int argc,wchar_t** argv){
     if(wcscpy_s(params.DriverPath,inf))return 2;
     if(!SetupDiSetDeviceInstallParamsW(set.h,&device,&params))return fail("SetDeviceInstallParams");
     if(!SetupDiBuildDriverInfoList(set.h,&device,SPDIT_COMPATDRIVER))return fail("BuildDriverInfoList");
-    DWORD count=0;ULONGLONG version=0;
+    DWORD count=0;ULONGLONG version=0;SP_DRVINFO_DATA_W selected={};
     for(DWORD index=0;;++index){
         SP_DRVINFO_DATA_W driver={};driver.cbSize=sizeof(driver);
         if(!SetupDiEnumDriverInfoW(set.h,&device,SPDIT_COMPATDRIVER,index,&driver)){
             if(GetLastError()!=ERROR_NO_MORE_ITEMS)return fail("EnumDriverInfo");
             break;
         }
-        ++count;version=driver.DriverVersion;
+        ++count;version=driver.DriverVersion;selected=driver;
     }
     ULONG status=0,problem=0;
     const CONFIGRET cr=CM_Get_DevNode_Status(&status,&problem,device.DevInst,0);
-    printf("{\"read_only\":true,\"compatible_nodes\":%lu,\"driver_version\":\"%u.%u.%u.%u\",\"cm_result\":%lu,\"devnode_status\":%lu,\"problem\":%lu}\n",
-        count,unsigned(version>>48),unsigned((version>>32)&0xffff),
+    printf("{\"read_only\":%s,\"compatible_nodes\":%lu,\"driver_version\":\"%u.%u.%u.%u\",\"cm_result\":%lu,\"devnode_status\":%lu,\"problem\":%lu}\n",
+        install?"false":"true",count,unsigned(version>>48),unsigned((version>>32)&0xffff),
         unsigned((version>>16)&0xffff),unsigned(version&0xffff),ULONG(cr),status,problem);
+    fflush(stdout);
+    if(install){
+        if(count!=1 || version!=expectedVersion || !disabled(cr,status,problem)){
+            fputs("Deferred install requires exact version, one node and disabled device\n",stderr);return 3;
+        }
+        if(!SetupDiSetSelectedDriverW(set.h,&device,&selected))return fail("SetSelectedDriver");
+        if(!SetupDiGetDeviceInstallParamsW(set.h,&device,&params))return fail("GetInstallParams before DIF");
+        params.Flags|=DI_DONOTCALLCONFIGMG|DI_QUIETINSTALL;
+        if(!SetupDiSetDeviceInstallParamsW(set.h,&device,&params))return fail("SetInstallParams before DIF");
+        // An application requests class installation, never calls the default handler directly.
+        // SDK26100 contracts: SetupDiCallClassInstaller / DIF_INSTALLDEVICE.
+        if(!SetupDiCallClassInstaller(DIF_INSTALLDEVICE,set.h,&device))return fail("DIF_INSTALLDEVICE");
+        if(!SetupDiGetDeviceInstallParamsW(set.h,&device,&params))return fail("GetInstallParams after DIF");
+        const CONFIGRET after=CM_Get_DevNode_Status(&status,&problem,device.DevInst,0);
+        const bool accepted=disabled(after,status,problem) &&
+            (params.Flags&DI_DONOTCALLCONFIGMG)!=0 &&
+            (params.Flags&(DI_NEEDREBOOT|DI_NEEDRESTART))==0;
+        printf("{\"installed_deferred\":%s,\"install_flags\":%lu,\"cm_result\":%lu,\"devnode_status\":%lu,\"problem\":%lu}\n",
+               accepted?"true":"false",params.Flags,ULONG(after),status,problem);
+        // This process-local information set is destroyed below. No CM state-change
+        // operation is issued while suppression is set. A later stage verifies the
+        // installed SYS/INF, restores configuration and separately enables the device.
+        if(!accepted)return 4;
+    }
     SetupDiDestroyDriverInfoList(set.h,&device,SPDIT_COMPATDRIVER);
     return count==1 && cr==CR_SUCCESS?0:1;
 }

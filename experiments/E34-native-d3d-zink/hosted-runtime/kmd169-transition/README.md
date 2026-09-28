@@ -135,5 +135,5 @@ the final CPU predicate again requires guard0. Configure no longer restores
 UnconfirmedStarts, LastStage or StageHistory from an older snapshot. The
 health-order control reproduces guard1 readiness and rejects stale confirmation.
 
-The other M711 defect, forced installation auto-starting before configuration,
-remains unresolved here. Do not launch another transition on this revision.
+The other M711 defect is addressed by the new deferred installer described in
+INSTALLATION.md. Implementation is present; its runtime behavior remains unverified.

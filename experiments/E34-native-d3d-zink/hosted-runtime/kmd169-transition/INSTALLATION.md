@@ -11,7 +11,8 @@ DI_DONOTCALLCONFIGMG on that device information set, followed by a class-install
 request through SetupDiCallClassInstaller(DIF_INSTALLDEVICE). The default install
 handler is documented not to start the device with that flag. An application must
 not directly call SetupDiInstallDevice, which is reserved for class installers.
-No deferred-install mutation has been implemented or validated yet.
+The explicit --install-deferred mode now implements that request. Its runtime
+behavior has not been validated.
 
 After installation, require the expected package identity and a still-disabled
 devnode before restoring saved configuration. Clear any process-local suppression
@@ -29,5 +30,17 @@ References checked2026-09-28:
 The local conceptual sources and headers were searched first; the API contract
 pages above filled the missing per-function behavior. This is an implementation
 plan, not evidence that the Windows22631 display class installer preserves the
-flag or that hardware can restart successfully. The runner remains unfit for a
-new transition until the replacement is implemented and checked.
+flag or that hardware can restart successfully. The runner uses the replacement in both directions; a review and bounded lab
+rehearsal remain required before treating the new behavior as established.
+
+Admission: exact one compatible node, explicit expected four-component version,
+CR_SUCCESS with DN_HAS_PROBLEM/CM_PROB_DISABLED and without DN_STARTED. Following
+the class-installer call, require suppression retained, no restart-required bits
+and the same disabled-state predicate. Nonzero exits preserve observations and
+stop the phase. The next phase independently checks SYS/package identity before
+restoring configuration. Destroying the process-local information set ends this
+request; explicit enable is issued by a separate process after configuration.
+
+Local validation: native /W4 /WX build and eight invalid-argument controls. These
+prove build/admission behavior, not suppression by the display class installer.
+Preparation now requires --selector and includes its binary in the stage manifest.
