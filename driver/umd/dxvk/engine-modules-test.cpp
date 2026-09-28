@@ -1,16 +1,38 @@
 // SPDX-License-Identifier: MIT
 #include "engine-abi.h"
 #include "engine-modules.h"
+#include "artifact-hash.h"
 #include <cstdlib>
 #include <iostream>
 #include <string>
 using namespace bc250::umd;
 int wmain(int argc,wchar_t **argv) {
-    if (argc!=2) return 2;
+    if (argc!=3 || std::wcslen(argv[2])!=64) return 2;
+    unsigned char digest[32]{};
+    for(unsigned i=0;i<32;++i) {
+        wchar_t pair[]={argv[2][2*i],argv[2][2*i+1],0};wchar_t *end=nullptr;
+        const auto value=std::wcstoul(pair,&end,16);
+        if(end!=pair+2 || value>255) return 2;
+        digest[i]=static_cast<unsigned char>(value);
+    }
+    {
+        VerifiedArtifact artifact;
+        if(artifact.open(argv[1],digest)!=S_OK)std::abort();
+        HANDLE write=CreateFileW(argv[1],GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+            nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+        if(write!=INVALID_HANDLE_VALUE){CloseHandle(write);std::abort();}
+        if(GetLastError()!=ERROR_SHARING_VIOLATION)std::abort();
+    }
     for (const wchar_t *p:std::initializer_list<const wchar_t *>{nullptr,L"",L"x",L"C:",L"C:engine.dll",L"engine.dll",L"\\engine.dll",L"\\\\host\\share\\engine.dll"})
         if (EngineModules::absolute_path(p)) std::abort();
     if (!EngineModules::absolute_path(argv[1])) std::abort();
     EngineModules modules;
+    unsigned char wrong[32]{};
+    if(modules.open(argv[1],argv[1],digest,nullptr)!=E_INVALIDARG || modules.loaded())std::abort();
+    if(modules.open(argv[1],argv[1],wrong,digest)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
+    if(modules.open(argv[1],argv[1],digest,wrong)!=HRESULT_FROM_WIN32(ERROR_CRC) || modules.loaded())std::abort();
+    if(modules.open(argv[1],argv[1],digest,digest)!=S_OK || !modules.loaded())std::abort();
+    modules.close();
     if (modules.open(L"engine.dll",argv[1])!=E_INVALIDARG || modules.loaded()) std::abort();
     if (modules.open(argv[1],argv[1])!=S_OK || !modules.loaded() || !modules.functions().CreateDevice) std::abort();
     if (modules.open(argv[1],argv[1])!=E_UNEXPECTED || !modules.loaded()) std::abort();

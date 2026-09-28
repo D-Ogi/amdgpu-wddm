@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "engine-abi.h"
 #include "engine-modules.h"
+#include "artifact-hash.h"
 #include <cwchar>
 namespace bc250::umd {
 bool EngineModules::absolute_path(const wchar_t *p) {
@@ -15,9 +16,16 @@ void EngineModules::close() {
     if (icd_) { FreeLibrary(icd_); icd_=nullptr; }
     if (engine_) { FreeLibrary(engine_); engine_=nullptr; }
 }
-HRESULT EngineModules::open(const wchar_t *enginePath,const wchar_t *icdPath) {
+HRESULT EngineModules::open(const wchar_t *enginePath,const wchar_t *icdPath,
+    const unsigned char *engineSha256,const unsigned char *icdSha256) {
     if (engine_ || icd_) return E_UNEXPECTED;
     if (!absolute_path(enginePath) || !absolute_path(icdPath)) return E_INVALIDARG;
+    if(bool(engineSha256)!=bool(icdSha256))return E_INVALIDARG;
+    VerifiedArtifact engineFile,icdFile;
+    if(engineSha256) {
+        HRESULT checked=engineFile.open(enginePath,engineSha256);if(FAILED(checked))return checked;
+        checked=icdFile.open(icdPath,icdSha256);if(FAILED(checked))return checked;
+    }
     // Never search the application's current directory or PATH for dependencies.
     constexpr DWORD search=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32;
     engine_=LoadLibraryExW(enginePath,nullptr,search);

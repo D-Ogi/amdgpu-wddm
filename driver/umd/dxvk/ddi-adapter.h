@@ -8,6 +8,8 @@ struct AdapterConfiguration {
     const wchar_t *engine_path;
     const wchar_t *icd_path;
     AdapterCaps caps;
+    unsigned char engine_sha256[32]{};
+    unsigned char icd_sha256[32]{};
 };
 HRESULT open_render_adapter(D3D10DDIARG_OPENADAPTER &,const AdapterConfiguration &) noexcept;
 }

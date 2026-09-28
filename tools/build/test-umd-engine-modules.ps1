@@ -20,7 +20,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Loader fixture compilation failed' }
         & cl.exe @options @includes /Fe:engine-modules-test.exe "$repo\driver\umd\dxvk\engine-modules.cpp" "$repo\driver\umd\dxvk\engine-modules-test.cpp"
         if ($LASTEXITCODE -ne 0) { throw 'Loader compilation failed' }
-        & .\engine-modules-test.exe (Join-Path $OutputDir 'engine-modules-fixture.dll')
+        $fixture=Join-Path $OutputDir 'engine-modules-fixture.dll'
+        & .\engine-modules-test.exe $fixture (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash
         if ($LASTEXITCODE -ne 0) { throw 'Loader test failed' }
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }
