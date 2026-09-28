@@ -29,8 +29,18 @@ int main() {
     BC250_DXVK_ENGINE_FUNCS funcs{};
     BC250_DXVK_SHELL_SERVICES services{};
     DeviceOwner owner;
+    RuntimeSurface *surface=nullptr;
+    RuntimeSurface foreignSurface;
+    RuntimeSurfaceRequest surfaceRequest{};
+    D3D11_TEXTURE2D_DESC1 surfaceDesc{};
+    check(owner.begin_surface(surfaceRequest,surfaceDesc,surface)==E_UNEXPECTED && !surface);
+    check(owner.finish_surface(foreignSurface)==E_INVALIDARG);
+    check(owner.close_surface(foreignSurface)==E_INVALIDARG);
+    check(owner.surface_count()==0 && !owner.has_live_objects());
     check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_UNEXPECTED);
     RuntimeDomain::Scope entry(owner.runtime().domain);
+    check(owner.begin_surface(surfaceRequest,surfaceDesc,surface)==E_UNEXPECTED && !surface);
+    check(owner.finish_surface(foreignSurface)==E_INVALIDARG && owner.close_surface(foreignSurface)==E_INVALIDARG);
     fail_create=true;
     check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
     check(creates==1 && destroys==0 && !owner.runtime().present_context);

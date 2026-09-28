@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "device-owner.h"
+#include <algorithm>
 namespace bc250::umd {
 namespace { void module_anchor() {} }
 HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icdEntry) {
@@ -18,7 +19,7 @@ HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icd
 HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 luid,
     PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
     D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services) {
-    if (!runtime_.domain.entered() || initialized_ || runtime_.present_context || instance_.info().Instance || retained_module_count())
+    if (!runtime_.domain.entered() || initialized_ || closing_ || has_live_objects())
         return E_UNEXPECTED;
     if (!args.pKTCallbacks || !args.pUMCallbacks || !args.DXGIBaseDDI.pDXGIBaseCallbacks || !args.hRTDevice.handle)
         return E_INVALIDARG;
@@ -51,14 +52,75 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     initialized_=true;
     return S_OK;
 }
+HRESULT DeviceOwner::prepare_surface_import() {
+    if (!runtime_.domain.entered() || closing_ || !initialized_ || !session_.device() || !engine()) return E_UNEXPECTED;
+    if (!surface_vk_.create) {
+        const auto &instance=instance_.info();
+        auto gdpa=reinterpret_cast<PFN_vkGetDeviceProcAddr>(instance.GetInstanceProcAddr(instance.Instance,"vkGetDeviceProcAddr"));
+        auto memory=reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties>(instance.GetInstanceProcAddr(instance.Instance,"vkGetPhysicalDeviceMemoryProperties"));
+        if (!gdpa || !memory) return E_NOTIMPL;
+        RuntimeImageDispatch vk{};
+#define LOAD(field,type,name) vk.field=reinterpret_cast<type>(gdpa(session_.device(),name)); if (!vk.field) return E_NOTIMPL
+        LOAD(create,PFN_vkCreateImage,"vkCreateImage");
+        LOAD(destroy,PFN_vkDestroyImage,"vkDestroyImage");
+        LOAD(layout,PFN_vkGetImageSubresourceLayout,"vkGetImageSubresourceLayout");
+        LOAD(memory.requirements,PFN_vkGetImageMemoryRequirements,"vkGetImageMemoryRequirements");
+        LOAD(memory.allocate,PFN_vkAllocateMemory,"vkAllocateMemory");
+        LOAD(memory.bind,PFN_vkBindImageMemory,"vkBindImageMemory");
+        LOAD(memory.free,PFN_vkFreeMemory,"vkFreeMemory");
+#undef LOAD
+        memory(instance.PhysicalDevice,&surface_memory_);
+        surface_vk_=vk;
+    }
+    if (!surface_queue_.queue && !surface_queue_.sync && !surface_queue_.cpu)
+        return create_surface_paging_queue(runtime_,surface_queue_);
+    return surface_queue_.queue && surface_queue_.sync && surface_queue_.cpu ? S_OK : E_UNEXPECTED;
+}
+bool DeviceOwner::owns_surface(const RuntimeSurface &surface) const {
+    for (const auto &p:surfaces_) if (p.get()==&surface) return true;
+    return false;
+}
+HRESULT DeviceOwner::begin_surface(const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface *&out) {
+    if (out) return E_UNEXPECTED;
+    HRESULT hr=prepare_surface_import();
+    if (FAILED(hr)) return hr;
+    auto pending=std::make_unique<RuntimeSurface>();
+    // Register before callbacks: allocation failure cannot orphan ownership.
+    surfaces_.push_back(std::move(pending));
+    out=surfaces_.back().get();
+    return begin_runtime_surface(runtime_,surface_queue_,request,desc,*out);
+}
+HRESULT DeviceOwner::finish_surface(RuntimeSurface &surface) {
+    if (!runtime_.domain.entered() || closing_ || !owns_surface(surface) || !engine()) return E_INVALIDARG;
+    return finish_runtime_surface(session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface_memory_,surface);
+}
+HRESULT DeviceOwner::close_surface(RuntimeSurface &surface) {
+    if (!runtime_.domain.entered() || !engine()) return E_INVALIDARG;
+    auto position=std::find_if(surfaces_.begin(),surfaces_.end(),[&](const auto &p) { return p.get()==&surface; });
+    if (position==surfaces_.end()) return E_INVALIDARG;
+    HRESULT hr=close_runtime_surface(bridge_,session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface);
+    if (hr==S_OK) surfaces_.erase(position);
+    return hr;
+}
 HRESULT DeviceOwner::close() {
     if (!runtime_.domain.entered()) return E_UNEXPECTED;
+    closing_=true;
     if (session_.must_retain_owner()) return E_UNEXPECTED;
     HRESULT hr=S_OK;
     if (session_.device()) {
         hr=wait_present_idle(bridge_);
         if (FAILED(hr) && hr!=D3DDDIERR_DEVICEREMOVED) return hr;
     }
+    // Drop bound views before releasing imported textures, while the engine and
+    // hosted Vulkan device still exist. A pending/failed close retains everything.
+    if (!surfaces_.empty() && context_) context_->ClearState();
+    while (!surfaces_.empty()) {
+        hr=close_surface(*surfaces_.back());
+        if (hr!=S_OK) return hr;
+    }
+    hr=destroy_surface_paging_queue(runtime_,surface_queue_);
+    if (hr!=S_OK) return hr;
+    surface_vk_={}; surface_memory_={};
     if (context_) { context_->Release(); context_=nullptr; }
     if (device_) { device_->Release(); device_=nullptr; }
     hr=session_.close();
@@ -87,7 +149,7 @@ HRESULT DeviceOwner::close() {
             modules_[i]=nullptr;
         }
     }
-    bridge_={}; bridge_.device=&runtime_; initialized_=false;
+    bridge_={}; bridge_.device=&runtime_; initialized_=false; closing_=false;
     return S_OK;
 }
 }
