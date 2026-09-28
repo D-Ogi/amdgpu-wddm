@@ -79,6 +79,10 @@ try {
   if($LASTEXITCODE){throw 'Adapter query scope test build failed'}
   & .\adapter-query-scope-test.exe
   if($LASTEXITCODE){throw 'Adapter query scope tests failed'}
+  & cl.exe @flags /Fe:hosted-instance-test.exe "$repo\driver\umd\d3d12\hosted-instance-test.cpp"
+  if($LASTEXITCODE){throw 'Hosted instance test build failed'}
+  & .\hosted-instance-test.exe
+  if($LASTEXITCODE){throw 'Hosted instance tests failed'}
   & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" "/external:I$EngineInclude" /Fe:adapter-caps-probe.exe "$repo\driver\umd\d3d12\adapter-caps-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Adapter caps probe build failed'}
   & .\adapter-caps-probe.exe --help
