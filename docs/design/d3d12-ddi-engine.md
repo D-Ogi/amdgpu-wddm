@@ -16,9 +16,14 @@ application -> d3d12.dll / d3d12core.dll / dxgi.dll (Microsoft runtime)
             -> hosted RADV (the hosted ICD) -> runtime callbacks -> dxgkrnl -> KMD
 ```
 
-The engine is built from the vkd3d-proton branch `amdgpu-wddm/ddi-engine`. It is upstream vkd3d-proton plus
-the `libs/ddi/` directory (MIT) and one hook in `libs/vkd3d/`. The branch is not published yet; `recipe.json`
-of each build names the commit.
+The engine is built from the vkd3d-proton branch `amdgpu-wddm/ddi-engine`. It is upstream vkd3d-proton plus the
+`libs/ddi/` directory (MIT) and two small changes in `libs/vkd3d/`:
+- the embedder's configuration defaults (see Files, configuration and logging);
+- the optional device extensions that extend `VK_KHR_swapchain` are enabled only together with it. `d3d12core`
+  always requires the swapchain extension. The engine enables no WSI, so its device create info was invalid,
+  as the validation layer reported (`VUID-vkCreateDevice-ppEnabledExtensionNames-01387`).
+
+The branch is not published yet; `recipe.json` of each build names the commit.
 
 ## Where the boundary sits
 
@@ -141,6 +146,11 @@ every check passed:
 
 On the development PC every check passes. The GPU is an RTX 4090 at FL 12_2, SM 6.8, ray tracing tier 1.1.
 The first unit A run is the engine's T1 of the spike.
+
+A build handed to the lab follows the DXVK engine's rule:
+- it comes from a clean tree: `recipe.json` records no modified or untracked entries;
+- it carries two receipts from the development PC, one plain and one with the Khronos validation layer and
+  synchronization validation. Both must pass with no validation messages and no vkd3d-proton error lines.
 
 Nie od razu Kraków zbudowano. (Kraków was not built in a day.) Until the shell exists, the engine answers
 questions about capabilities and nothing else.

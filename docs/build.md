@@ -237,7 +237,7 @@ Both configs build with `-Dbuildtype=release -Denable_tests=false`.
 - `-Denable_ddi_engine=true`, an option that exists only on that branch;
 - `-Db_vscrt=mt`: the engine links the C runtime statically, and the branch's meson refuses anything else for it.
 
-The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and one libvkd3d hook. It is not published yet; each
+The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is not published yet; each
 `recipe.json` names its commit.
 
 `bc250vkd3d_engine_test.exe <bc250vkd3d.dll> [adapter substring] [--icd <driver DLL>]` is the engine's offline
