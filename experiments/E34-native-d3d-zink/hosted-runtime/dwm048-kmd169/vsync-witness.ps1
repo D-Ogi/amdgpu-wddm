@@ -23,14 +23,23 @@ function Get-KmdVsyncWitness {
   ack_age_upper_ms=($ReadEnd100ns-$ack)/10000.0;notify_age_upper_ms=($ReadEnd100ns-$notify)/10000.0
  }
 }
+# API-set contract lists QueryInterruptTime; do not assume a kernel32 export.
+# https://github.com/MicrosoftDocs/sdk-api/blob/docs/sdk-api-src/content/realtimeapiset/nf-realtimeapiset-queryinterrupttime.md
+function Get-KmdInterruptTime {
+ if(!('KmdVsyncClock' -as [type])){Add-Type 'using System;using System.Runtime.InteropServices;public static class KmdVsyncClock{[DllImport("api-ms-win-core-realtime-l1-1-2.dll", ExactSpelling=true)]public static extern void QueryInterruptTime(out ulong time);}' }
+ [uint64]$value=0
+ [KmdVsyncClock]::QueryInterruptTime([ref]$value)
+ if(!$value){throw 'Interrupt clock unavailable'}
+ return $value
+}
 function Save-KmdVsyncWitness {
  param([string]$Cli,[string]$LogPath,[string]$ReceiptPath)
- if(!('KmdVsyncClock' -as [type])){Add-Type 'using System;using System.Runtime.InteropServices;public static class KmdVsyncClock{[DllImport("kernel32.dll")]public static extern void QueryInterruptTime(out ulong time);}' }
+
  [uint64]$begin=0;[uint64]$end=0
- [KmdVsyncClock]::QueryInterruptTime([ref]$begin)
+ $begin=Get-KmdInterruptTime
  & $Cli log summary *> $LogPath
  $code=$LASTEXITCODE
- [KmdVsyncClock]::QueryInterruptTime([ref]$end)
+ $end=Get-KmdInterruptTime
  if($code -ne 0){throw 'VSync summary escape failed'}
  $w=Get-KmdVsyncWitness (Get-Content $LogPath -Raw) $end
  $w.read_begin_100ns=$begin;$w.read_duration_ms=($end-$begin)/10000.0

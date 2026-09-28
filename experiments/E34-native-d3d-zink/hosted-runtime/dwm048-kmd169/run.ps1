@@ -23,6 +23,7 @@ $controlTask='BC250-G0-Composition048'
 $cli='C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'
 Start-Transcript -Path "$d\run.log" -Force | Out-Null
 try {
+ Write-DurableText "$d\clock-admission.json" (@{interrupt_100ns=(Get-KmdInterruptTime);utc=[DateTime]::UtcNow.ToString('o')}|ConvertTo-Json)
  $tdrBegin=[DateTime]::UtcNow
  $tdrBoot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
  $tdrConfig=Get-DwmTdrConfiguration
