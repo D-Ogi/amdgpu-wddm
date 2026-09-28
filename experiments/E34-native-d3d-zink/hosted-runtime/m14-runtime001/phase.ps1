@@ -37,7 +37,10 @@ if($Phase -eq 'Capture'){
  $env:DXVK_SHADER_CACHE='0';$env:MESA_SHADER_CACHE_DISABLE='true';$env:DXVK_LOG_PATH=$d
  $env:DXVK_LOG_LEVEL='info'
  # Functional debugger run only. Its timings cannot establish the performance bound.
- $args=@('25',"$d\d3d11bench.exe",'--mode','offscreen','--adapter','1002:13fe','--size','64x64','--scenes','draws,fill,shaders','--draws','8','--layers','2','--shaders','4','--frames','3','--warmup','0','--deadline','20','--out',"$d\$Phase.json")
+ $imageDir="$d\$Phase-images"
+ if(Test-Path $imageDir){throw 'Existing image directory'}
+ $null=New-Item -ItemType Directory $imageDir
+ $args=@('25',"$d\d3d11bench.exe",'--mode','offscreen','--adapter','1002:13fe','--size','64x64','--scenes','draws,fill,shaders','--draws','8','--layers','2','--shaders','4','--frames','3','--warmup','0','--deadline','20','--out',"$d\$Phase.json",'--dump',$imageDir)
  $child=Start-Process -FilePath "$d\debug-child.exe" -ArgumentList $args -WorkingDirectory $d -WindowStyle Hidden -PassThru -RedirectStandardOutput "$d\$Phase-debug.txt" -RedirectStandardError "$d\$Phase-stderr.txt"
  $null=$child.Handle;$clock=[Diagnostics.Stopwatch]::StartNew();$last=0
  try{
