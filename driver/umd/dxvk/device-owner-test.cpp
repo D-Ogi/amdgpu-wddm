@@ -50,10 +50,11 @@ int main() {
     fail_destroy=true;
     check(FAILED(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)));
     check(creates==3 && destroys==2 && owner.runtime().present_context==&context && owner.has_live_objects());
+    check(owner.runtime().DXGICallbacks==&dxgi);
     check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_UNEXPECTED);
     check(creates==3);
     fail_destroy=false;
-    check(owner.close()==S_OK && destroys==3 && !owner.runtime().present_context);
+    check(owner.close()==S_OK && destroys==3 && !owner.runtime().present_context && !owner.runtime().DXGICallbacks);
     check(owner.close()==S_OK && destroys==3 && !owner.has_live_objects());
     check(owner.retain_code_modules(reinterpret_cast<const void *>(&create),reinterpret_cast<const void *>(&destroy))==S_OK);
     check(owner.retained_module_count()==3 && owner.has_live_objects());

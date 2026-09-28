@@ -29,6 +29,9 @@ HRESULT APIENTRY present(HANDLE h, DXGIDDICB_PRESENT *p) {
     check(p->pDXGIContext==&dxgi && p->BroadcastContextCount==0);
     trace+='P'; return present_result;
 }
+HRESULT APIENTRY alternate_present(HANDLE h,DXGIDDICB_PRESENT *p) {
+    trace+='A'; return present(h,p);
+}
 HRESULT APIENTRY signal(HANDLE h, const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 *p) {
     check(h==&identity && p->ObjectCount==1 && *p->ObjectHandleArray==62);
     check(*p->MonitoredFenceValueArray==1); trace+='S'; return signal_result;
@@ -47,7 +50,7 @@ void test_runtime_present() {
     };
     for (const auto &c:cases) {
         RuntimeDevice d; d.hDevice=&identity; d.present_context=&context;
-        d.DXGICallbacks.pfnPresentCb=present;
+        DXGI_DDI_BASE_CALLBACKS callbacks{}; callbacks.pfnPresentCb=present; d.DXGICallbacks=&callbacks;
         d.KTCallbacks.pfnCreateSynchronizationObject2Cb=create;
         d.KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb=wait;
         d.KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb=signal;
@@ -59,7 +62,27 @@ void test_runtime_present() {
         check(b.device_lost==c.lost);
         check(b.present_value==((SUCCEEDED(c.f)&&SUCCEEDED(c.w)&&SUCCEEDED(c.p)&&SUCCEEDED(c.s)) ? 1u : 0u));
         trace.clear();
-        d.DXGICallbacks.pfnPresentCb=nullptr;
+        callbacks.pfnPresentCb=nullptr;
         check(present_runtime(b,71,72,&dxgi,flush,&b)==E_NOTIMPL && trace.empty());
     }
+    RuntimeDevice d; d.hDevice=&identity; d.present_context=&context;
+    DXGI_DDI_BASE_CALLBACKS callbacks{}; callbacks.pfnPresentCb=present; d.DXGICallbacks=&callbacks;
+    d.KTCallbacks.pfnCreateSynchronizationObject2Cb=create;
+    d.KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb=wait;
+    d.KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb=signal;
+    flush_result=wait_result=present_result=signal_result=S_OK;
+    for (int phase=0;phase<3;++phase) {
+        // Model runtime mutation while no thread is inside the UMD.
+        callbacks.pfnPresentCb=phase==0 ? present : phase==1 ? alternate_present : nullptr;
+        HostBridge b{}; b.device=&d; b.contexts[0]=&render; trace.clear();
+        RuntimeDomain::Scope scope(d.domain);
+        HRESULT hr=present_runtime(b,71,72,&dxgi,flush,&b);
+        check(hr==(phase==2 ? E_NOTIMPL : S_OK));
+        check(trace==(phase==0 ? "FCWPS" : phase==1 ? "FCWAPS" : ""));
+    }
+    d.DXGICallbacks=nullptr;
+    HostBridge absent{}; absent.device=&d;
+    RuntimeDomain::Scope scope(d.domain);
+    check(present_runtime(absent,71,72,&dxgi,flush,&absent)==E_NOTIMPL);
+
 }

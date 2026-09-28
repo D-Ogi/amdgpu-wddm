@@ -55,7 +55,7 @@ HRESULT APIENTRY blt1(DXGI_DDI_ARG_BLT1 *args) {
     } catch (const std::bad_alloc &) { hr=E_OUTOFMEMORY; }
     catch (...) { hr=E_FAIL; }
     if (extended) extended->Release();
-    return hr;
+    return ddi_device_status(hr);
 }
 HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
     if (!args) return E_INVALIDARG;
@@ -70,7 +70,7 @@ HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
         if (FAILED(hr)) return hr;
         // Engine performs conversion/resolve/stretch and submits for PRESENT.
         // It owns barriers; no CPU map or alternate backing surface is used.
-        return owner.engine()->Blt(&operation);
+        return ddi_device_status(owner.engine()->Blt(&operation));
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
 }

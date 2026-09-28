@@ -14,7 +14,8 @@ struct RuntimeDevice {
     HANDLE present_context = nullptr;
     D3D10DDI_HRTCORELAYER hRTCoreLayer = {};
     volatile UINT64 *pagingFence = nullptr;
-    DXGI_DDI_BASE_CALLBACKS DXGICallbacks = {};
+    // Runtime may replace entries between DDI calls; retain its table, not a copy.
+    const DXGI_DDI_BASE_CALLBACKS *DXGICallbacks = nullptr;
     D3DDDI_DEVICECALLBACKS KTCallbacks = {};
     D3D10DDI_CORELAYER_DEVICECALLBACKS UMCallbacks = {};
 };

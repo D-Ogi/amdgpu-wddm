@@ -345,7 +345,7 @@ HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
    auto *device=bridge.device;
    if (!device || !device->domain.entered() || !device->present_context || !source || !flush)
       return E_INVALIDARG;
-   if (!device->DXGICallbacks.pfnPresentCb) return E_NOTIMPL;
+   if (!device->DXGICallbacks || !device->DXGICallbacks->pfnPresentCb) return E_NOTIMPL;
    if (FAILED(Bc250HostStatus(&bridge)) || bridge.submission_failed)
       return DXGI_ERROR_DEVICE_REMOVED;
    HRESULT hr=flush(engine);
@@ -359,7 +359,7 @@ HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
    present.hDstAllocation=destination;
    present.hContext=device->present_context;
    present.pDXGIContext=dxgi_context;
-   const HRESULT result=device->DXGICallbacks.pfnPresentCb(device->hDevice,&present);
+   const HRESULT result=device->DXGICallbacks->pfnPresentCb(device->hDevice,&present);
    if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge);
    if (FAILED(result)) return result;
    hr=signal_present(bridge);

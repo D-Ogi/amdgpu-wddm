@@ -27,6 +27,7 @@
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
+#include <d3d9.h>
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -67,6 +68,10 @@ HRESULT APIENTRY runtime_residency(HANDLE h,const D3DDDICB_QUERYRESIDENCY *p) {
     for (UINT i=0;i<3;++i) {
         if (p->HandleList[i]!=61+i) std::abort();
         p->pResidencyStatus[i]=static_cast<D3DDDI_RESIDENCYSTATUS>(i+1);
+    }
+    if (residencyMode>=3) {
+        for (UINT i=0;i<3;++i) p->pResidencyStatus[i]=D3DDDI_RESIDENCYSTATUS_RESIDENTINGPUMEMORY;
+        if (residencyMode==4) p->pResidencyStatus[1]=D3DDDI_RESIDENCYSTATUS_RESIDENTINSHAREDMEMORY;
     }
     if (residencyMode==2) p->pResidencyStatus[1]=static_cast<D3DDDI_RESIDENCYSTATUS>(42);
     return residencyMode==1 ? E_FAIL : S_OK;
@@ -834,7 +839,7 @@ int main() {
     DXGI_DDI_ARG_SETRESOURCEPRIORITY priorityArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],7};
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 || owner.runtime().domain.entered()) std::abort();
     DXGI_DDI_ARG_QUERYRESOURCERESIDENCY residencyArgs{priorityArgs.hDevice,sharedHandles,statuses,3};
-    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK || residencyCalls!=1 ||
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_NOT_RESIDENT || residencyCalls!=1 ||
         statuses[0]!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || statuses[1]!=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY ||
         statuses[2]!=DXGI_DDI_RESIDENCY_EVICTED_TO_DISK || owner.runtime().domain.entered()) std::abort();
     for (int mode=1;mode<=2;++mode) {
@@ -843,8 +848,12 @@ int main() {
         if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_FAIL) std::abort();
         for (auto value:statuses) if (value!=99) std::abort();
     }
+    residencyMode=3;
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK) std::abort();
+    residencyMode=4;
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_RESIDENT_IN_SHARED_MEMORY) std::abort();
     tracked[1].owner=&foreignRuntime;
-    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_INVALIDARG || residencyCalls!=3) std::abort();
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_INVALIDARG || residencyCalls!=5) std::abort();
     sharedResources[0].runtime_surface=nullptr;
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=E_NOTIMPL || priorityCalls!=1 ||
         resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) std::abort();

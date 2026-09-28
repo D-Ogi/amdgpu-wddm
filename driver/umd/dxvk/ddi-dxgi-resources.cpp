@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-dxgi-resources.h"
+#include <d3d9.h> // S_NOT_RESIDENT / S_RESIDENT_IN_SHARED_MEMORY, DXGI DDI contract.
 namespace bc250::umd {
 namespace {
 template<typename F> HRESULT entry(DXGI_DDI_HDEVICE h,F &&call) noexcept {
@@ -50,16 +51,20 @@ HRESULT APIENTRY residency(DXGI_DDI_ARG_QUERYRESOURCERESIDENCY *args) {
         request.HandleList=handles.data(); request.pResidencyStatus=status.data();
         HRESULT hr=runtime.KTCallbacks.pfnQueryResidencyCb(runtime.hDevice,&request);
         if (FAILED(hr)) return hr;
+        HRESULT aggregate=S_OK;
         for (SIZE_T i=0;i<args->Resources;++i) {
             switch (status[i]) {
             case D3DDDI_RESIDENCYSTATUS_RESIDENTINGPUMEMORY: result[i]=DXGI_DDI_RESIDENCY_FULLY_RESIDENT; break;
-            case D3DDDI_RESIDENCYSTATUS_RESIDENTINSHAREDMEMORY: result[i]=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY; break;
-            case D3DDDI_RESIDENCYSTATUS_NOTRESIDENT: result[i]=DXGI_DDI_RESIDENCY_EVICTED_TO_DISK; break;
+            case D3DDDI_RESIDENCYSTATUS_RESIDENTINSHAREDMEMORY:
+                result[i]=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY;
+                if (aggregate==S_OK) aggregate=S_RESIDENT_IN_SHARED_MEMORY; break;
+            case D3DDDI_RESIDENCYSTATUS_NOTRESIDENT:
+                result[i]=DXGI_DDI_RESIDENCY_EVICTED_TO_DISK; aggregate=S_NOT_RESIDENT; break;
             default: return E_FAIL;
             }
         }
         for (SIZE_T i=0;i<args->Resources;++i) args->pStatus[i]=result[i];
-        return hr;
+        return aggregate;
     });
 }
 HRESULT APIENTRY resolve(DXGI_DDI_ARG_RESOLVESHAREDRESOURCE *args) {

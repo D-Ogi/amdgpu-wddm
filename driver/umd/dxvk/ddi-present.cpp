@@ -17,9 +17,9 @@ HRESULT APIENTRY rotate(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
     RuntimeDomain::Scope scope(owner.runtime().domain);
     try {
         if (!owner.engine()) return E_FAIL;
-        return rotate_present_resources(args->pResources,args->Resources,[&](ID3D11Resource *const *resources,UINT count) {
+        return ddi_device_status(rotate_present_resources(args->pResources,args->Resources,[&](ID3D11Resource *const *resources,UINT count) {
             return owner.engine()->RotateResourceIdentities(resources,count);
-        },&owner.runtime());
+        },&owner.runtime()));
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
 }
@@ -40,8 +40,8 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
         if (destination && (!destination->object || !destination->present_allocation ||
             destination->present_subresource!=args->DstSubResourceIndex)) return E_INVALIDARG;
         Submission submission{owner.engine(),source->object,args->SrcSubResourceIndex};
-        return present_runtime(owner.bridge(),source->present_allocation,
-            destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission);
+        return ddi_device_status(present_runtime(owner.bridge(),source->present_allocation,
+            destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission));
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
 }

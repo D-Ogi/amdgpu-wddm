@@ -30,7 +30,7 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     runtime_.hRTCoreLayer=args.hRTCoreLayer;
     runtime_.KTCallbacks=*args.pKTCallbacks;
     runtime_.UMCallbacks=*args.pUMCallbacks;
-    runtime_.DXGICallbacks=*args.DXGIBaseDDI.pDXGIBaseCallbacks;
+    runtime_.DXGICallbacks=args.DXGIBaseDDI.pDXGIBaseCallbacks;
     D3DDDICB_CREATECONTEXTVIRTUAL create{}; create.EngineAffinity=1;
     HRESULT hr=runtime_.KTCallbacks.pfnCreateContextVirtualCb(runtime_.hDevice,&create);
     if (FAILED(hr)) return hr;
@@ -176,6 +176,7 @@ HRESULT DeviceOwner::close() {
             modules_[i]=nullptr;
         }
     }
+    runtime_.DXGICallbacks=nullptr;
     bridge_={}; bridge_.device=&runtime_; initialized_=false; closing_=false;
     return S_OK;
 }
