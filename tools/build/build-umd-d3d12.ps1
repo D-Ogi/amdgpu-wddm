@@ -24,6 +24,10 @@ try {
   if($LASTEXITCODE){throw 'Test build failed'}
   & .\adapter-test.exe (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')
   if($LASTEXITCODE){throw 'Adapter tests failed'}
+  & cl.exe @flags /Fe:queue-context-test.exe "$repo\driver\umd\d3d12\queue-context-test.cpp"
+  if($LASTEXITCODE){throw 'Queue context test build failed'}
+  & .\queue-context-test.exe
+  if($LASTEXITCODE){throw 'Queue context tests failed'}
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
 Write-Host 'Diagnostic adapter only; no functional device or deployment.'
