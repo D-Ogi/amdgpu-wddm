@@ -35,9 +35,9 @@ move; that method carries over.
    honest failure return; every optional DDI stays absent until an experiment needs it; caps that the target
    version lets the driver claim (and that the runtime would start relying on) are claimed only with evidence.
    Each stage has an experiment with a fresh-boot control on unit A and the boot-loop guard behind it.
-4. **Owner of the work:** the kernel driver's owner (the agent holding KMD changes and their validation at the
-   time, Codex on 2026-09-27), coordinated with the user-mode side because the UMD/KMD private blob and the caps
-   the runtime sees may change shape.
+4. **Owner of the work:** the kernel driver's owner (whoever holds KMD changes and their validation at the
+   time), coordinated with the user-mode side because the UMD/KMD private blob and the caps the runtime sees may
+   change shape.
 
 ## Consequences
 
