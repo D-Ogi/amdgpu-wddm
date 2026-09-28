@@ -13,6 +13,13 @@
 
 namespace interactive {
 using Microsoft::WRL::ComPtr;
+enum class AdapterMode {Invalid,Bc250,Warp};
+inline AdapterMode adapter_mode(const char* text) noexcept {
+    if(!text)return AdapterMode::Invalid;
+    if(!std::strcmp(text,"--interactive"))return AdapterMode::Bc250;
+    if(!std::strcmp(text,"--interactive-warp"))return AdapterMode::Warp;
+    return AdapterMode::Invalid;
+}
 enum class Verb {Invalid,CreateDevice,CreateQueue,Copy,Status,Exit,Abort};
 struct Command {unsigned sequence{};Verb verb{Verb::Invalid};};
 inline const char* name(Verb verb){
@@ -53,6 +60,7 @@ inline bool publish(const std::filesystem::path& path,const std::string& value){
 }
 struct Session {
     std::filesystem::path root;
+    AdapterMode mode{AdapterMode::Bc250};
     ULONGLONG start{},deadline{};
     HANDLE trace{INVALID_HANDLE_VALUE};
     HMODULE runtime{};
@@ -76,18 +84,22 @@ struct Session {
     template<class F> HRESULT api(const char* label,F&& function){event("before",label);HRESULT hr=function();event("after",label,hr);return hr;}
     bool abort_requested() const{return GetFileAttributesW((root/L"abort.request").c_str())!=INVALID_FILE_ATTRIBUTES;}
     HRESULT create_device(){
+        if(mode!=AdapterMode::Bc250 && mode!=AdapterMode::Warp)return E_INVALIDARG;
         if(device)return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         if(!runtime){wchar_t path[MAX_PATH]{};if(!GetSystemDirectoryW(path,MAX_PATH) || wcscat_s(path,L"\\d3d12.dll"))return E_FAIL;
             runtime=LoadLibraryExW(path,nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);if(!runtime)return HRESULT_FROM_WIN32(GetLastError());}
         auto proc=GetProcAddress(runtime,"D3D12CreateDevice");decltype(&D3D12CreateDevice) create=nullptr;
         static_assert(sizeof(create)==sizeof(proc));std::memcpy(&create,&proc,sizeof(create));if(!create)return E_NOINTERFACE;
         factory.Reset();adapter.Reset();HRESULT hr=api("CreateDXGIFactory1",[&]{return CreateDXGIFactory1(IID_PPV_ARGS(&factory));});if(FAILED(hr))return hr;
-        for(UINT index=0;;++index){ComPtr<IDXGIAdapter1> candidate;hr=api("EnumAdapters1",[&]{return factory->EnumAdapters1(index,&candidate);});
+        if(mode==AdapterMode::Warp){
+            hr=api("EnumWarpAdapter",[&]{return factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter));});
+            if(FAILED(hr))return hr;
+        } else for(UINT index=0;;++index){ComPtr<IDXGIAdapter1> candidate;hr=api("EnumAdapters1",[&]{return factory->EnumAdapters1(index,&candidate);});
             if(hr==DXGI_ERROR_NOT_FOUND)break;if(FAILED(hr))return hr;DXGI_ADAPTER_DESC1 desc{};
             hr=api("GetDesc1",[&]{return candidate->GetDesc1(&desc);});if(FAILED(hr))return hr;
             if(desc.VendorId==0x1002 && desc.DeviceId==0x13fe){adapter=candidate;break;}}
         if(!adapter)return DXGI_ERROR_NOT_FOUND;
-        std::puts("runtime=system32/d3d12.dll adapter=BC-250");std::fflush(stdout);
+        std::printf("runtime=system32/d3d12.dll adapter=%s\n",mode==AdapterMode::Warp?"WARP":"BC-250");std::fflush(stdout);
         return api("D3D12CreateDevice FL11_0",[&]{return create(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device));});
     }
     HRESULT create_queue(){
@@ -137,9 +149,10 @@ struct Session {
         return "{\"schema\":1,\"sequence\":"+std::to_string(sequence)+",\"command\":\""+verb+"\",\"success\":"+(SUCCEEDED(hr)?"true":"false")+",\"hr\":\""+hr_text(hr)+"\",\"elapsed_ms\":"+std::to_string(GetTickCount64()-start)+",\"state\":{\"device\":"+(device?"true":"false")+",\"queue\":"+(queue?"true":"false")+"},\"copy_success\":"+(copy_success?"true":"false")+",\"gpu_pending\":"+(pending?"true":"false")+"}\n";
     }
 };
-inline int run(const char* directory,unsigned duration){
-    if(!duration || duration>150)return 2;
-    Session session;session.root=std::filesystem::absolute(directory);session.start=GetTickCount64();session.deadline=session.start+duration*1000ull;
+inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
+    if(!directory || !*directory || !duration || duration>150 ||
+       (mode!=AdapterMode::Bc250 && mode!=AdapterMode::Warp))return 2;
+    Session session;session.mode=mode;session.root=std::filesystem::absolute(directory);session.start=GetTickCount64();session.deadline=session.start+duration*1000ull;
     if(!std::filesystem::is_directory(session.root))return 2;
     if(std::filesystem::exists(session.root/L"session.json"))return 2;
     for(unsigned i=1;i<=64;++i)if(std::filesystem::exists(numbered(session.root,"result",i,"json")))return 2;

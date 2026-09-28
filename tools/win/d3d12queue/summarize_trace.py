@@ -17,7 +17,7 @@ MAX_EXAMPLES = 8
 U64 = (1 << 64) - 1
 API_NAMES = frozenset((
     "create-device", "create-queue", "copy", "status", "exit", "abort",
-    "CreateDXGIFactory1", "EnumAdapters1", "GetDesc1", "GetDeviceRemovedReason",
+    "CreateDXGIFactory1", "EnumAdapters1", "EnumWarpAdapter", "GetDesc1", "GetDeviceRemovedReason",
     "D3D12CreateDevice FL11_0", "CreateCommandQueue DIRECT", "CreateCommittedResource UPLOAD",
     "CreateCommittedResource READBACK", "Map UPLOAD", "Unmap UPLOAD",
     "CreateCommandAllocator", "CreateCommandList", "CopyBufferRegion 4096",

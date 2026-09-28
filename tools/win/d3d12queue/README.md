@@ -31,7 +31,9 @@ implicit in this helper.
 ## Interactive experiments
 
 `--interactive <directory> --deadline <seconds>` uses the BC-250 through the
-system runtime. The directory must already exist and must be new for each run.
+system runtime. Use `--interactive-warp` instead for the same sequence through the WARP software
+control. Neither selection falls back to the other adapter. The directory must
+already exist and must be new for each run.
 The deadline is at most150 seconds; a separate bounded Job must cover the whole
 process, driver calls and cleanup. The surrounding lab supervisor reserves time
 for restoration within its180-second limit.

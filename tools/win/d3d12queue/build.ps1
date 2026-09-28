@@ -46,14 +46,20 @@ Get-Item "$Out\amdgpu_wddm_d3d12_queue.exe" | ForEach-Object { '{0,9}  {1}  sha2
 & "$Out\amdgpu_wddm_d3d12_queue.exe" --invalid
 if ($LASTEXITCODE -ne 2) { throw "Invalid CLI accepted" }
 
-# Pure parser checks do not enumerate adapters or call D3D.
+# Pure command/selection checks do not enumerate adapters or call D3D.
+foreach ($test in @('parser-test','interactive-test')) {
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
-    "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\parser-test.obj",
-    "/Fe$Out\parser-test.exe", (Join-Path $here 'parser-test.cpp'), '/link',
+    "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$test.obj",
+    "/Fe$Out\$test.exe", (Join-Path $here "$test.cpp"), '/link',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'dxgi.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
-if ($LASTEXITCODE -ne 0) { throw 'interactive parser test build failed' }
-& "$Out\parser-test.exe"
-if ($LASTEXITCODE -ne 0) { throw 'interactive parser test failed' }
+if ($LASTEXITCODE -ne 0) { throw "$test build failed" }
+& "$Out\$test.exe"
+if ($LASTEXITCODE -ne 0) { throw "$test failed" }
+}
+
+# Immutable receipt/trace classification is part of the probe artifact gate.
+python -B -m unittest discover -s $here -p test_summary.py
+if ($LASTEXITCODE -ne 0) { throw 'interactive summary tests failed' }
