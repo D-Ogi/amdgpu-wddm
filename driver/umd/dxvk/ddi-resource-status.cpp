@@ -27,8 +27,10 @@ BOOL APIENTRY busy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
         if (!s || !s->object || !owner.engine() || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
         HRESULT hr=owner.device()->GetDeviceRemovedReason();
+        // NoErrors DDI: stop polling a lost device. A subsequent Map reports
+        // removal through its allowed error path; FALSE grants no CPU pointer.
+        if (ddi_device_status(hr)==D3DDDIERR_DEVICEREMOVED || owner.bridge().device_lost || owner.bridge().submission_failed) { result=FALSE; return; }
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
-        if (owner.bridge().device_lost || owner.bridge().submission_failed) { report_ddi_error(owner,DXGI_ERROR_DEVICE_REMOVED); return; }
         UINT count=0; hr=subresource_count(s->object,count);
         if (SUCCEEDED(hr)) hr=query_subresources_idle(count,[&](UINT i) { return owner.engine()->IsResourceBusy(s->object,i); });
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }

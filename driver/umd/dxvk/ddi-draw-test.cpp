@@ -38,6 +38,14 @@ HRESULT APIENTRY pass_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return S_
 int main() {
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
+    if (ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true)!=DXGI_DDI_ERR_WASSTILLDRAWING ||
+        ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,false)!=DXGI_ERROR_WAS_STILL_DRAWING ||
+        ddi_map_status(E_OUTOFMEMORY,true)!=E_OUTOFMEMORY || ddi_map_status(S_OK,false)!=S_OK) std::abort();
+    for (HRESULT loss:{DXGI_ERROR_DEVICE_REMOVED,DXGI_ERROR_DEVICE_RESET,DXGI_ERROR_DEVICE_HUNG,DXGI_ERROR_DRIVER_INTERNAL_ERROR}) {
+        if (ddi_device_status(loss)!=D3DDDIERR_DEVICEREMOVED || ddi_map_status(loss,false)!=D3DDDIERR_DEVICEREMOVED ||
+            query_ddi_status(loss)!=D3DDDIERR_DEVICEREMOVED) std::abort();
+    }
+    if (ddi_device_status(E_INVALIDARG)!=E_INVALIDARG || ddi_device_status(E_FAIL)!=E_FAIL) std::abort();
     auto table=make_render_device_table();
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never

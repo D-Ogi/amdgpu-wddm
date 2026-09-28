@@ -179,3 +179,11 @@ through that acquisition. No Vulkan instance is created by this loader.
 The loader fixture test covers successful load/close/reopen, second-module failure,
 ABI mismatch, missing function and export failure with cleared state. Connecting
 this component to OpenAdapter/device creation is still pending.
+
+API-to-DDI status translation is explicit: nonblocking Map busy maps to
+DXGI_DDI_ERR_WASSTILLDRAWING, and DXGI removed/reset/hung/internal-driver status
+maps to D3DDDIERR_DEVICEREMOVED. QueryGetData checks device status before reading;
+ResourceIsStagingBusy returns FALSE on known device loss without SetErrorCb so a
+following Map can report removal. Unexpected programming failures remain critical,
+as required by the local Microsoft display/handling-errors.md contract; this is
+not yet a complete per-entry error-category audit. Host translation tests passed.

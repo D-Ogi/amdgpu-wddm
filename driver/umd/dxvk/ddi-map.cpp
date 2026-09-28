@@ -29,8 +29,9 @@ void APIENTRY map(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle,UINT subresource,
         HRESULT hr=convert_map(type,flags,mappedType,mappedFlags);
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
         D3D11_MAPPED_SUBRESOURCE result{};
-        hr=context.Map(s->object,subresource,mappedType,mappedFlags,&result);
-        // Preserve WAS_STILL_DRAWING and device-loss errors. Do not retry a
+        hr=ddi_map_status(context.Map(s->object,subresource,mappedType,mappedFlags,&result),
+            (flags & D3D10_DDI_MAP_FLAG_DONOTWAIT)!=0);
+        // Translate API status to DDI status. Do not retry a
         // DO_NOT_WAIT request or expose a stale pointer on failure.
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
         if (!result.pData) { context.Unmap(s->object,subresource); report_ddi_error(owner,E_FAIL); return; }

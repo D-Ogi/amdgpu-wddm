@@ -35,7 +35,7 @@ HRESULT convert_query(const D3D10DDIARG_CREATEQUERY &s,D3D11_QUERY_DESC &d,bool 
     }
     return S_OK;
 }
-HRESULT query_ddi_status(HRESULT hr) { return hr==S_FALSE ? DXGI_DDI_ERR_WASSTILLDRAWING : hr; }
+HRESULT query_ddi_status(HRESULT hr) { return hr==S_FALSE ? DXGI_DDI_ERR_WASSTILLDRAWING : ddi_device_status(hr); }
 namespace {
 DeviceOwner &owner(D3D10DDI_HDEVICE h) { return *static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner; }
 DdiQuery *query(D3D10DDI_HQUERY h) { return static_cast<DdiQuery *>(h.pDrvPrivate); }
@@ -72,6 +72,11 @@ void APIENTRY data(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q,void *out,UINT bytes,UIN
         auto *s=query(q); auto &o=owner(h);
         if (!s || !s->object || (flags & ~UINT(D3D10_DDI_GET_DATA_DO_NOT_FLUSH)) || (!out && bytes)) {
             report_ddi_error(o,E_INVALIDARG); return;
+        }
+        if (o.bridge().device_lost || o.bridge().submission_failed) { report_ddi_error(o,D3DDDIERR_DEVICEREMOVED); return; }
+        if (o.device()) {
+            const HRESULT deviceStatus=o.device()->GetDeviceRemovedReason();
+            if (FAILED(deviceStatus)) { report_ddi_error(o,deviceStatus); return; }
         }
         const UINT f=flags ? D3D11_ASYNC_GETDATA_DONOTFLUSH : 0;
         HRESULT hr;
