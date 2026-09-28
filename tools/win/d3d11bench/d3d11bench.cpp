@@ -4,6 +4,7 @@
 
 #define NOMINMAX
 #include <windows.h>
+#include <bcrypt.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <dxgi1_2.h>
@@ -854,8 +855,49 @@ std::wstring ModulePath(HMODULE module) {
   return path;
 }
 
-std::string ModulesJson(std::string &d3d11Location) {
+// SHA-256 of a file in upper-case hex, as Get-FileHash prints it; empty on any failure.
+std::string FileSha256(const std::wstring &path) {
+  HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                            FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+  if (file == INVALID_HANDLE_VALUE)
+    return std::string();
+  BCRYPT_ALG_HANDLE alg = nullptr;
+  BCRYPT_HASH_HANDLE hash = nullptr;
+  UCHAR digest[32] = {};
+  bool ok = BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0)) &&
+            BCRYPT_SUCCESS(BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0));
+  std::vector<UCHAR> buffer(1u << 20);
+  while (ok) {
+    DWORD read = 0;
+    if (!ReadFile(file, buffer.data(), DWORD(buffer.size()), &read, nullptr))
+      ok = false;
+    else if (!read)
+      break;
+    else
+      ok = BCRYPT_SUCCESS(BCryptHashData(hash, buffer.data(), read, 0));
+  }
+  ok = ok && BCRYPT_SUCCESS(BCryptFinishHash(hash, digest, sizeof(digest), 0));
+  if (hash)
+    BCryptDestroyHash(hash);
+  if (alg)
+    BCryptCloseAlgorithmProvider(alg, 0);
+  CloseHandle(file);
+  std::string hex;
+  for (UCHAR b : digest) {
+    static const char digits[] = "0123456789ABCDEF";
+    hex += digits[b >> 4];
+    hex += digits[b & 15];
+  }
+  return ok ? hex : std::string();
+}
+
+// icds: every loaded Vulkan driver (a module exporting vk_icdGetInstanceProcAddr) with the SHA-256 of its file. On
+// the per-application path the Vulkan loader picks it, and in an elevated process the loader ignores
+// VK_DRIVER_FILES and VK_ICD_FILENAMES; on the system path the UMD loads its own. Only the hash says both paths
+// ran the same driver.
+std::string ModulesJson(std::string &d3d11Location, std::string &icds) {
   const std::wstring exeDir = Lower(Directory(ModulePath(nullptr)));
+  icds = "[]";
   std::vector<HMODULE> modules(1024);
   DWORD needed = 0;
   if (!EnumProcessModules(GetCurrentProcess(), modules.data(), DWORD(modules.size() * sizeof(HMODULE)), &needed))
@@ -864,14 +906,19 @@ std::string ModulesJson(std::string &d3d11Location) {
   static const wchar_t *const names[] = { L"d3d11.dll", L"dxgi.dll", L"d3d10core.dll", L"d3d11on12.dll",
                                           L"vulkan-1.dll", L"d3dcompiler_47.dll" };
   std::string json = "[";
+  icds = "[";
   for (HMODULE m : modules) {
     const std::wstring path = ModulePath(m), lower = Lower(path);
     const std::wstring base = lower.substr(lower.find_last_of(L"\\/") + 1);
-    bool wanted = base.rfind(L"bc250", 0) == 0 || lower.find(L"\\driverstore\\") != std::wstring::npos;
+    const bool icd = GetProcAddress(m, "vk_icdGetInstanceProcAddr") != nullptr;
+    bool wanted = icd || base.rfind(L"bc250", 0) == 0 || lower.find(L"\\driverstore\\") != std::wstring::npos;
     for (const wchar_t *name : names)
       wanted = wanted || base == name;
     if (!wanted)
       continue;
+    if (icd)
+      icds += std::string(icds.size() > 1 ? "," : "") + "{\"path\":" + Quote(Utf8(path)) +
+              ",\"sha256\":" + Quote(FileSha256(path)) + "}";
     if (base == L"d3d11.dll")
       d3d11Location = Directory(lower) == exeDir ? "app-local" : "system";
     WIN32_FILE_ATTRIBUTE_DATA a = {};
@@ -882,6 +929,7 @@ std::string ModulesJson(std::string &d3d11Location) {
       json += ",";
     json += "{\"path\":" + Quote(Utf8(path)) + ",\"bytes\":" + std::to_string(bytes) + "}";
   }
+  icds += "]";
   return json + "]";
 }
 
@@ -1130,8 +1178,8 @@ int Run(const Options &o) {
     result = kDeviceRemoved;
   }
 
-  std::string d3d11Location = "unknown";
-  const std::string modules = ModulesJson(d3d11Location);
+  std::string d3d11Location = "unknown", icds;
+  const std::string modules = ModulesJson(d3d11Location, icds);
   const std::wstring exeDir = Directory(ModulePath(nullptr));
   wchar_t cwd[MAX_PATH] = {};
   GetCurrentDirectoryW(MAX_PATH, cwd);
@@ -1142,7 +1190,8 @@ int Run(const Options &o) {
       ",\"height\":" + std::to_string(o.height) + ",\"feature_level\":" + Quote(LevelName(level)) +
       ",\"frame_latency\":" + std::to_string(latency) + ",\"adapter\":{\"vendor\":" + Quote(Hex(desc.VendorId, 4)) +
       ",\"device\":" + Quote(Hex(desc.DeviceId, 4)) + ",\"description\":" + Quote(Utf8(desc.Description)) +
-      "},\"d3d11\":" + Quote(d3d11Location) + ",\"modules\":" + modules + ",\"environment\":" + EnvironmentJson() +
+      "},\"d3d11\":" + Quote(d3d11Location) + ",\"modules\":" + modules + ",\"icds\":" + icds +
+      ",\"environment\":" + EnvironmentJson() +
       ",\"dxvk_conf\":{\"exe_dir\":" + (FileExists(exeDir + L"\\dxvk.conf") ? "true" : "false") +
       ",\"cwd\":" + (FileExists(std::wstring(cwd) + L"\\dxvk.conf") ? "true" : "false") +
       "},\"scenes\":[" + scenesJson + "],\"elapsed_ms\":" + Number(NowMs() - started) + "}\n";

@@ -63,6 +63,12 @@ def configuration(run):
     return {"environment": run.get("environment", {}), "dxvk_conf": run.get("dxvk_conf", {})}
 
 
+def drivers(run):
+    """SHA-256 of every loaded Vulkan driver. Paths differ between the sides (the loader's registered ICD against
+    the UMD's own copy), so only the file hashes say whether both ran the same driver."""
+    return sorted(icd.get("sha256") or "unknown" for icd in run.get("icds", []))
+
+
 def check_side(runs, label, path):
     if not runs:
         raise InputError(f"{label}: no runs")
@@ -95,6 +101,9 @@ def compare(base, candidate, bound=0.05, check_paths=True, ignore_configuration=
             if configuration(run) != configuration(base[0]):
                 raise InputError(f"{run.get('_file', 'a run')}: environment (DXVK, Vulkan loader, Mesa) or dxvk.conf differs "
                                  f"(same configuration on both paths, or --ignore-configuration)")
+            if drivers(run) != drivers(base[0]):
+                raise InputError(f"{run.get('_file', 'a run')}: loaded Vulkan drivers {drivers(run)} differ from "
+                                 f"{drivers(base[0])} (same ICD file on both paths, or --ignore-configuration)")
 
     rows = []
     for name in reference["scenes"]:
@@ -165,7 +174,8 @@ def main(argv=None):
     parser.add_argument("--any-path", action="store_true",
                         help="do not require app-local d3d11.dll for the base and the system one for the candidate")
     parser.add_argument("--ignore-configuration", action="store_true",
-                        help="compare although DXVK_*, VK_*, MESA_*, RADV_*, ACO_*, BC250_* variables or dxvk.conf differ")
+                        help="compare although DXVK_*, VK_*, MESA_*, RADV_*, ACO_*, BC250_* variables, dxvk.conf or "
+                             "the loaded Vulkan drivers differ")
     args = parser.parse_args(argv)
 
     try:

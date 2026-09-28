@@ -50,7 +50,9 @@ standard output or in `--out FILE` (written atomically):
 - `adapter`: vendor, device and description as DXGI reports them;
 - `d3d11`: `app-local` or `system`, from the path of the `d3d11.dll` the process actually loaded;
 - `modules`: path and size of every loaded graphics module (D3D runtime, DXGI, Vulkan loader, the project's
-  `bc250*` modules, anything from the driver store);
+  `bc250*` modules, anything from the driver store, every Vulkan driver);
+- `icds`: path and SHA-256 of every loaded Vulkan driver, i.e. every module that exports
+  `vk_icdGetInstanceProcAddr`;
 - `environment`: every `DXVK_*`, `VK_*`, `MESA_*`, `RADV_*`, `ACO_*` and `BC250_*` variable;
 - `dxvk_conf`: whether a `dxvk.conf` exists next to the executable or in the working directory;
 - per scene: statistics (count, median, p5, p95, mean, min, max) of `frame_ms` (start of one frame to the start
@@ -65,7 +67,11 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
 ## Protocol for the bound
 
 1. Same unit, same clocks (the lab operating point), same build of the engine and of per-application DXVK from
-   the same DXVK revision, and the same ICD. Record the artifact hashes next to the results.
+   the same DXVK revision, and the same ICD. Record the artifact hashes next to the results. The two paths find
+   the ICD differently: per-application DXVK through the Vulkan loader, which uses the registered driver and, in
+   an elevated process, ignores `VK_DRIVER_FILES` and `VK_ICD_FILENAMES`; the system path through the UMD, which
+   loads its own `bc250radv.dll`. Either register the same file for the loader or run the per-application side
+   unelevated with `VK_DRIVER_FILES`; `compare.py` compares the `icds` hashes and refuses runs that differ.
 2. Same configuration on both paths: identical `DXVK_*`, Vulkan loader and Mesa variables, no `dxvk.conf` unless
    both sides have the same one. `compare.py` refuses runs whose recorded environment differs.
 3. Caches: the engine runs without DXVK's shader cache (it writes no cache file), while per-application DXVK
@@ -94,8 +100,8 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
    | FAIL | change > bound + margin, or the checksums differ |
    | INCONCLUSIVE | anything in between: more or quieter runs are needed |
 
-   Exit 0 when every scene passes, 1 on a failure, 2 on unusable input (different settings, adapter, path or
-   configuration, an incomplete run), 3 when inconclusive. `--any-path` and `--ignore-configuration` exist for
+   Exit 0 when every scene passes, 1 on a failure, 2 on unusable input (different settings, adapter, path,
+   configuration or Vulkan drivers, an incomplete run), 3 when inconclusive. `--any-path` and `--ignore-configuration` exist for
    tool checks and never for a bound verdict. Recording, present and GPU times are printed for diagnosis only.
 
 On a development PC with an NVIDIA GPU, DXVK reports the adapter as AMD unless `DXVK_CONFIG` sets

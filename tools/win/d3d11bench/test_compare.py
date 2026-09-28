@@ -83,6 +83,20 @@ class CompareTest(unittest.TestCase):
         _, code = compare.compare(side([10.0], "app-local"), candidate, ignore_configuration=True)
         self.assertEqual(code, 0)
 
+    def test_drivers_must_match_unless_waived(self):
+        base = side([10.0], "app-local")
+        base[0]["icds"] = [{"path": "C:\\lab\\vulkan_radeon.dll", "sha256": "AA"}]
+        same = side([10.0], "system")
+        same[0]["icds"] = [{"path": "C:\\umd\\bc250radv.dll", "sha256": "AA"}]
+        _, code = compare.compare(base, same)
+        self.assertEqual(code, 0)
+        other = side([10.0], "system")
+        other[0]["icds"] = [{"path": "C:\\umd\\bc250radv.dll", "sha256": "BB"}]
+        with self.assertRaises(compare.InputError):
+            compare.compare(base, other)
+        _, code = compare.compare(base, other, ignore_configuration=True)
+        self.assertEqual(code, 0)
+
     def test_incomplete_run_is_unusable(self):
         failed = side([10.0], "system")
         failed[0]["result"] = "failed"

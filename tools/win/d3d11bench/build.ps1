@@ -48,7 +48,7 @@ $env:INCLUDE = ''; $env:LIB = ''
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d11bench.obj",
     "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
-    'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'kernel32.lib') |
+    'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 
