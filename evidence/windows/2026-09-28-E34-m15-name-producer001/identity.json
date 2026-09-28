@@ -1,0 +1,9 @@
+{
+  "pe": "scratch\\target-binaries\\22631\\dxgkrnl.sys",
+  "sha256": "aaf502ad1d6050c855480ae4057222a6375587de0d77aefbadf9039ef4dd72f9",
+  "pdb": "scratch\\symbols\\dxgkrnl.pdb\\907FD0B67E572F54163D06DFD05487A71\\dxgkrnl.pdb",
+  "pdb_sha256": "77f40fb4415b0a353b4be490e3f2c1abbab644dda823a40a3accc5a18f3f2d89",
+  "codeview_guid_matches": true,
+  "codeview_dbi_age_matches": true,
+  "jump_table_case_1": "0x191b92"
+}

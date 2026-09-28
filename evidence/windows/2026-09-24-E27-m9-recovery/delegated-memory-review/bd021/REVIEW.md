@@ -79,7 +79,7 @@ Do not add a standalone OS restart or Linux trip just for this source review.
 
 ## Proposed append-only DEFECTS comment
 
-- 2026-09-24 Codex: Source review confirms propagation but not the reported failure.
+- 2026-09-24 review: Source review confirms propagation but not the reported failure.
   Linux v6.18 amdgpu_ttm.c:1379-1381 also sets SNOOPED for cached VRAM;
   amdgpu_vram_mgr.c:607-610 limits that cache policy to CPU-connected XGMI.
   Current KMD requests Cached only for GTT and advertises segment CacheCoherent

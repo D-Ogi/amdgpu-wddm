@@ -1,0 +1,49 @@
+002122be 488b5710                 mov      rdx, qword ptr [rdi + 0x10]
+002122c2 488d9f40010000           lea      rbx, [rdi + 0x140]
+002122c9 4c8bc3                   mov      r8, rbx
+002122cc 488bcf                   mov      rcx, rdi
+002122cf 0f1082d8060000           movups   xmm0, xmmword ptr [rdx + 0x6d8]
+002122d6 f30f7f8760020000         movdqu   xmmword ptr [rdi + 0x260], xmm0
+002122de 0f108ae8060000           movups   xmm1, xmmword ptr [rdx + 0x6e8]
+002122e5 f30f7f8f70020000         movdqu   xmmword ptr [rdi + 0x270], xmm1
+002122ed 0f108298060000           movups   xmm0, xmmword ptr [rdx + 0x698]
+002122f4 f30f7f87a0020000         movdqu   xmmword ptr [rdi + 0x2a0], xmm0
+002122fc 0f108ab0060000           movups   xmm1, xmmword ptr [rdx + 0x6b0]
+00212303 f30f7f8fb8020000         movdqu   xmmword ptr [rdi + 0x2b8], xmm1
+0021230b 8b82a8060000             mov      eax, dword ptr [rdx + 0x6a8]
+00212311 8987b0020000             mov      dword ptr [rdi + 0x2b0], eax
+00212317 8b82ac060000             mov      eax, dword ptr [rdx + 0x6ac]
+0021231d 8987b4020000             mov      dword ptr [rdi + 0x2b4], eax
+00212323 8b82c0060000             mov      eax, dword ptr [rdx + 0x6c0]
+00212329 8987c8020000             mov      dword ptr [rdi + 0x2c8], eax
+0021232f 8b82c4060000             mov      eax, dword ptr [rdx + 0x6c4]
+00212335 8987cc020000             mov      dword ptr [rdi + 0x2cc], eax
+0021233b 0f1082f8060000           movups   xmm0, xmmword ptr [rdx + 0x6f8]
+00212342 f30f7f8780020000         movdqu   xmmword ptr [rdi + 0x280], xmm0
+0021234a 0f108a08070000           movups   xmm1, xmmword ptr [rdx + 0x708]
+00212351 4881c228060000           add      rdx, 0x628
+00212358 f30f7f8f90020000         movdqu   xmmword ptr [rdi + 0x290], xmm1
+00212360 e8471b0000               call     0x213eac ; ?InitializeUserModeDriverNames@ADAPTER_RENDER@@AEAAJPEAU_UNICODE_STRING@@0@Z+0
+00212365 85c0                     test     eax, eax
+00212367 0f88d0120000             js       0x21363d
+0021236d 488b5710                 mov      rdx, qword ptr [rdi + 0x10]
+00212371 488db7a0010000           lea      rsi, [rdi + 0x1a0]
+00212378 4881c238060000           add      rdx, 0x638
+0021237f 4c8bc6                   mov      r8, rsi
+00212382 488bcf                   mov      rcx, rdi
+00212385 e8221b0000               call     0x213eac ; ?InitializeUserModeDriverNames@ADAPTER_RENDER@@AEAAJPEAU_UNICODE_STRING@@0@Z+0
+0021238a 85c0                     test     eax, eax
+0021238c 0f88ab120000             js       0x21363d
+00212392 488b5710                 mov      rdx, qword ptr [rdi + 0x10]
+00212396 4c8d8700020000           lea      r8, [rdi + 0x200]
+0021239d 4881c258070000           add      rdx, 0x758
+002123a4 488bcf                   mov      rcx, rdi
+002123a7 e8c4140000               call     0x213870 ; ?InitializeDisplayUserModeDriverNames@ADAPTER_RENDER@@AEAAJPEAU_UNICODE_STRING@@0@Z+0
+002123ac 85c0                     test     eax, eax
+002123ae 0f8863120000             js       0x213617
+002123b4 488b5710                 mov      rdx, qword ptr [rdi + 0x10]
+002123b8 4c8d8710020000           lea      r8, [rdi + 0x210]
+002123bf 4881c268070000           add      rdx, 0x768
+002123c6 488bcf                   mov      rcx, rdi
+002123c9 e8a2140000               call     0x213870 ; ?InitializeDisplayUserModeDriverNames@ADAPTER_RENDER@@AEAAJPEAU_UNICODE_STRING@@0@Z+0
+002123ce 85c0                     test     eax, eax

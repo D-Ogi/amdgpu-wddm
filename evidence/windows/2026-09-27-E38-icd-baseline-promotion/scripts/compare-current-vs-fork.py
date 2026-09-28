@@ -1,4 +1,4 @@
-"""Compare Codex's lab ICD source tree (scratch/m12/mesa-current-src, working tree on 05e6c962, ICD 3508416F)
+"""Compare the lab ICD source tree (scratch/m12/mesa-current-src, working tree on 05e6c962, ICD 3508416F)
 with the fork branch tree at a given commit (worktree wt-radv). Read-only. Normalises CRLF and the
 double-encoded copyright sign. Prints files that differ or exist on one side only, restricted to src/ and
 meson.build, over the union of files either side changed relative to upstream 05e6c962."""

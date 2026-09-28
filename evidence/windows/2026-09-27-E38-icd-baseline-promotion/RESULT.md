@@ -30,7 +30,7 @@ copyright sign normalised.
 | 86 | 82 | 3 (licence headers and one ABI version comment only) | 0 |
 
 Both build directories use the same meson options (debugoptimized, O2, amd only, no LLVM). So FAD08ECB
-(E36), 3508416F (Codex's hosted candidate) and 940ab0eb are the same ICD code from different trees, and
+(E36), 3508416F (the hosted candidate) and 940ab0eb are the same ICD code from different trees, and
 93B1D1FD is that code plus the two E37 commits. The 10 KB size difference between the builds was not
 investigated (probably source paths in assertion strings).
 

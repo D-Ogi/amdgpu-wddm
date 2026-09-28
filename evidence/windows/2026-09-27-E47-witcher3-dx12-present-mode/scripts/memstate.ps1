@@ -1,4 +1,4 @@
-# Read-only memory/system state snapshot (Codex 118): physical, commit, pools, game/DWM process memory, boot and KMD health.
+# Read-only memory/system state snapshot: physical, commit, pools, game/DWM process memory, boot and KMD health.
 # Usage: memstate.ps1 -Tag <name>; writes C:\BC250\m12\witcher3-dx12\memstate-<tag>.json and prints it.
 param([string]$Tag = 'snapshot')
 $ErrorActionPreference = 'Continue'

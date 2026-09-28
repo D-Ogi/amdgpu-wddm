@@ -31,7 +31,7 @@ and a recorded experiment; header presence alone does not authorize use. No raw 
 Proposed current status: TRIAGED, until the explicit documentation policy is adopted. QueryGfxclk
 part is obsolete after M441; do not delete old comment or pretend getter mismatch never existed.
 Proposed append-only comment:
-- 2026-09-24 Codex: Current sources no longer send QueryGfxclk/0x0F; the old raw bc250rd
+- 2026-09-24 review: Current sources no longer send QueryGfxclk/0x0F; the old raw bc250rd
   IOCTL was retired in M441. GetGfxFrequency/0x37 and GetGfxVid/0x38 remain intentional native
   telemetry/readback calls, named in AMD's original header and measured in M22/M441, although
   absent from Linux's Cyan message map. The documented Linux-map-only rule needs an explicit

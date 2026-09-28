@@ -203,9 +203,18 @@ only `vcvars64.bat`, meson, ninja and glslangValidator. The tree must have its s
 
 Both are `-Dbuildtype=release` without D3D8. `ddi-engine` also drops D3D9 and D3D10 and sets
 `-Denable_ddi_engine=true`, an option that exists only on that branch. The branch is upstream DXVK plus
-this project's commits under `src/ddi/` and small host-mode hooks in `src/dxvk/` and `src/d3d11/`. It is not
-published yet; each `recipe.json` names its commit. Branch commits before engine header r7 name the DLL
-`bc250dxvk.dll` and the test `bc250dxvk_engine_test.exe`.
+this project's commits under `src/ddi/` and small host-mode hooks in `src/dxvk/` and `src/d3d11/`. It is
+published at <https://github.com/D-Ogi/dxvk/tree/amdgpu-wddm/ddi-engine>; each `recipe.json` names its commit.
+Branch commits before engine header r7 name the DLL `bc250dxvk.dll` and the test `bc250dxvk_engine_test.exe`.
+
+The branch's `dxbc-spirv` submodule points at <https://github.com/D-Ogi/dxbc-spirv> (branch
+`amdgpu-wddm/ddi-engine`), which carries the pinned commit 253c08ce: geometry shader output stream decoration and
+the pass-through GS fix, not upstream yet.
+
+Before publication the branch was rewritten on 2026-09-28 to replace a private author identity. The trees are
+unchanged, but every commit on top of upstream 52fe923c has a new hash. Recipes and evidence written before that
+date name the old hashes; [dxvk-engine-commit-map.md](dxvk-engine-commit-map.md) maps each one to its published
+commit through the identical tree hash.
 
 `amdgpu_wddm_dxvk_engine_test.exe <amdgpu_wddm_dxvk.dll> [adapter substring]` is the engine's offline positive
 control. It runs on any Vulkan 1.3 GPU, opens no window and exits by itself; exit code 0 means every check
@@ -239,8 +248,9 @@ Both configs build with `-Dbuildtype=release -Denable_tests=false`.
 - `-Denable_ddi_engine=true`, an option that exists only on that branch;
 - `-Db_vscrt=mt`: the engine links the C runtime statically, and the branch's meson refuses anything else for it.
 
-The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is not published yet; each
-`recipe.json` names its commit. Branch commits before a582668d name the DLL `bc250vkd3d.dll` and the test
+The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is published at
+<https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>, together with the draft inline queue mode
+branch `amdgpu-wddm/ddi-engine-inline-wip`; each `recipe.json` names its commit. Branch commits before a582668d name the DLL `bc250vkd3d.dll` and the test
 `bc250vkd3d_engine_test.exe`.
 
 `amdgpu_wddm_vkd3d_engine_test.exe <amdgpu_wddm_vkd3d.dll> [adapter substring] [--icd <driver DLL>]` is the

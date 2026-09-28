@@ -9,7 +9,7 @@ historical measured hardware template and 64-byte firmware ABI remain unchanged.
 
 30773 native-owner, 34 metadata/query and 32 preflight checks pass, as does the
 full WDK build. Two stale-version mutations fail two checks each. Detailed source,
-logs, source hashes and scope are in [the agent report](review/RESULT.md).
+logs, source hashes and scope are in [the review report](review/RESULT.md).
 
 BD-023 is resolved as an explicit documented operation policy for the existing
 measured telemetry getters. QueryGfxclk has no production caller; the retired raw

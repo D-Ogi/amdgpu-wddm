@@ -1,6 +1,6 @@
 # BD-028: host geometry assumptions removed
 
-2026-09-24. Source-only work by Codex memory sub-agent. No production driver edits,
+2026-09-24. Source-only work (local review). No production driver edits,
 lab access, firmware changes, deployment or commit. Existing-ID status stays
 TRIAGED: the host/test subtask is complete, the carve-out/residency epic is not.
 
@@ -103,7 +103,7 @@ fixes limited test coverage and the host bridge's assumed input geometry.
 
 ## Proposed existing-ID comment
 
-- 2026-09-24 Codex: BD-028 host/test subtask completed in source, with frozen
+- 2026-09-24 review: BD-028 host/test subtask completed in source, with frozen
   inputs and logs at scratch/m9/bd028. MC/DCN conversions pass63/78 checks on
   synthetic 8/12/16GiB and varied bases; an injected8GiB clamp is detected.
   QAI bridge now takes explicit geometry, retains the historical8GiB default,

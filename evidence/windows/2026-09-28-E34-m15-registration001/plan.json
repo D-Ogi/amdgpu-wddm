@@ -1,0 +1,17 @@
+{
+    "schema":  1,
+    "name":  "UserModeDriverName",
+    "kind":  "MultiString",
+    "before":  [
+                   "bc250umd.dll",
+                   "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+                   "C:\\BC250\\m11\\resource-close\\bc250d3d.dll"
+               ],
+    "candidate":  "C:\\BC250\\m15\\registration001\\amdgpu_wddm_d3d12.dll",
+    "after":  [
+                  "bc250umd.dll",
+                  "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+                  "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+                  "C:\\BC250\\m15\\registration001\\amdgpu_wddm_d3d12.dll"
+              ]
+}

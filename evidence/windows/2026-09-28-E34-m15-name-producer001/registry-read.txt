@@ -1,0 +1,34 @@
+001fc4f6 0f57c0                   xorps    xmm0, xmm0
+001fc4f9 44882e                   mov      byte ptr [rsi], r13b
+001fc4fc 4c8d4c2430               lea      r9, [rsp + 0x30]
+001fc501 41b819000200             mov      r8d, 0x20019
+001fc507 8d5302                   lea      edx, [rbx + 2]
+001fc50a 498bcf                   mov      rcx, r15
+001fc50d 0f11442438               movups   xmmword ptr [rsp + 0x38], xmm0
+001fc512 e8593f0000               call     0x200470 ; DpiOpenPnpRegistryKey+0
+001fc517 4863d8                   movsxd   rbx, eax
+001fc51a 85c0                     test     eax, eax
+001fc51c 0f880c3f0a00             js       0x2a042e
+001fc522 488d15d752e9ff           lea      rdx, [rip - 0x16ad29]
+001fc529 488d4c2438               lea      rcx, [rsp + 0x38]
+001fc52e 48ff15533df6ff           call     qword ptr [rip - 0x9c2ad]
+001fc535 0f1f440000               nop      dword ptr [rax + rax]
+001fc53a 488b4c2430               mov      rcx, qword ptr [rsp + 0x30]
+001fc53f 4c8d4608                 lea      r8, [rsi + 8]
+001fc543 488d542438               lea      rdx, [rsp + 0x38]
+001fc548 e8c3050000               call     0x1fcb10 ; DxgkRetrieveStringFromRegistry+0
+001fc54d 33db                     xor      ebx, ebx
+001fc54f 488d3dba050000           lea      rdi, [rip + 0x5ba]
+001fc556 85c0                     test     eax, eax
+001fc558 0f881b3f0a00             js       0x2a0479
+001fc55e 448d7b04                 lea      r15d, [rbx + 4]
+001fc562 488d150f52e9ff           lea      rdx, [rip - 0x16adf1]
+001fc569 488d4c2438               lea      rcx, [rsp + 0x38]
+001fc56e 48ff15133df6ff           call     qword ptr [rip - 0x9c2ed]
+001fc575 0f1f440000               nop      dword ptr [rax + rax]
+001fc57a 488b4c2430               mov      rcx, qword ptr [rsp + 0x30]
+001fc57f 4c8d4618                 lea      r8, [rsi + 0x18]
+001fc583 488d542438               lea      rdx, [rsp + 0x38]
+001fc588 e883050000               call     0x1fcb10 ; DxgkRetrieveStringFromRegistry+0
+001fc58d 85c0                     test     eax, eax
+001fc58f 0f88053f0a00             js       0x2a049a

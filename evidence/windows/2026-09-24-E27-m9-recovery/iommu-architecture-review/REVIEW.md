@@ -1,6 +1,6 @@
 # BD-029: graphics IOMMU and DMA-remapping architecture review
 
-2026-09-24, source-only review by Codex memory sub-agent. No production changes, capability/INF changes, firmware changes, lab access, or hardware tests. This is an engineering proposal, not measured IOMMU support. Proposed backlog status: TRIAGED (implementation epic); not FIXED and not merely NEEDS-LAB.
+2026-09-24, source-only review. No production changes, capability/INF changes, firmware changes, lab access, or hardware tests. This is an engineering proposal, not measured IOMMU support. Proposed backlog status: TRIAGED (implementation epic); not FIXED and not merely NEEDS-LAB.
 
 ## Conclusion
 
@@ -123,4 +123,4 @@ No build or production regression test was run because the only deliverable is t
 
 ## Proposed existing-ID comment
 
-- 2026-09-24 Codex: BD-029 triaged in scratch/m9/bd029/REVIEW.md. WDDM graphics remapping uses Dxgkrnl memory objects/ADLs, capability negotiation and exclusive-access quiescence; missing IoGetDmaAdapter or an INF value alone does not establish the current mode. Audited private GTT/dummy, OS aperture, PTE/CPU-PA checks, alias identities and local-MC boundaries. Staged prerequisites and positive nonidentity acceptance controls recorded. No implementation or lab change; support remains unimplemented. Recommend TRIAGED.
+- 2026-09-24 review: BD-029 triaged in scratch/m9/bd029/REVIEW.md. WDDM graphics remapping uses Dxgkrnl memory objects/ADLs, capability negotiation and exclusive-access quiescence; missing IoGetDmaAdapter or an INF value alone does not establish the current mode. Audited private GTT/dummy, OS aperture, PTE/CPU-PA checks, alias identities and local-MC boundaries. Staged prerequisites and positive nonidentity acceptance controls recorded. No implementation or lab change; support remains unimplemented. Recommend TRIAGED.

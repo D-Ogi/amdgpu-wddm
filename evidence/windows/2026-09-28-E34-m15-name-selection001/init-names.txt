@@ -1,0 +1,57 @@
+FUNCTION RVA 213eac ?InitializeUserModeDriverNames@ADAPTER_RENDER@@AEAAJPEAU_UNICODE_STRING@@0@Z
+00213eac 488bc4                   mov      rax, rsp
+00213eaf 48895808                 mov      qword ptr [rax + 8], rbx
+00213eb3 48896818                 mov      qword ptr [rax + 0x18], rbp
+00213eb7 48897020                 mov      qword ptr [rax + 0x20], rsi
+00213ebb 57                       push     rdi
+00213ebc 4156                     push     r14
+00213ebe 4157                     push     r15
+00213ec0 4883ec30                 sub      rsp, 0x30
+00213ec4 0f1002                   movups   xmm0, xmmword ptr [rdx]
+00213ec7 440fb71a                 movzx    r11d, word ptr [rdx]
+00213ecb 33db                     xor      ebx, ebx
+00213ecd 498be8                   mov      rbp, r8
+00213ed0 48895810                 mov      qword ptr [rax + 0x10], rbx
+00213ed4 f30f7f442420             movdqu   xmmword ptr [rsp + 0x20], xmm0
+00213eda 4c8b742428               mov      r14, qword ptr [rsp + 0x28]
+00213edf 4c8bf9                   mov      r15, rcx
+00213ee2 448bcb                   mov      r9d, ebx
+00213ee5 8bfb                     mov      edi, ebx
+00213ee7 8bf3                     mov      esi, ebx
+00213ee9 4d85db                   test     r11, r11
+00213eec 7462                     je       0x213f50
+00213eee 49d1e9                   shr      r9, 1
+00213ef1 4c8d442458               lea      r8, [rsp + 0x58]
+00213ef6 498bd3                   mov      rdx, r11
+00213ef9 4f8d344e                 lea      r14, [r14 + r9*2]
+00213efd 498bce                   mov      rcx, r14
+00213f00 4c89742428               mov      qword ptr [rsp + 0x28], r14
+00213f05 e8e6bce0ff               call     0x1fbf0 ; ?RtlStringCbLengthW@@YAJPEBG_KPEA_K@Z+0
+00213f0a 4863f8                   movsxd   rdi, eax
+00213f0d 85c0                     test     eax, eax
+00213f0f 0f8899550900             js       0x2a94ae
+00213f15 4c8b4c2458               mov      r9, qword ptr [rsp + 0x58]
+00213f1a 6644894c2420             mov      word ptr [rsp + 0x20], r9w
+00213f20 4d3bd9                   cmp      r11, r9
+00213f23 7609                     jbe      0x213f2e
+00213f25 4983c102                 add      r9, 2
+00213f29 4c894c2458               mov      qword ptr [rsp + 0x58], r9
+00213f2e 6644894c2422             mov      word ptr [rsp + 0x22], r9w
+00213f34 ffc6                     inc      esi
+00213f36 0f10442420               movups   xmm0, xmmword ptr [rsp + 0x20]
+00213f3b 410fb7c1                 movzx    eax, r9w
+00213f3f 4c2bd8                   sub      r11, rax
+00213f42 f30f7f4500               movdqu   xmmword ptr [rbp], xmm0
+00213f47 4883c510                 add      rbp, 0x10
+00213f4b 83fe06                   cmp      esi, 6
+00213f4e 7299                     jb       0x213ee9
+00213f50 8bc7                     mov      eax, edi
+00213f52 488b5c2450               mov      rbx, qword ptr [rsp + 0x50]
+00213f57 488b6c2460               mov      rbp, qword ptr [rsp + 0x60]
+00213f5c 488b742468               mov      rsi, qword ptr [rsp + 0x68]
+00213f61 4883c430                 add      rsp, 0x30
+00213f65 415f                     pop      r15
+00213f67 415e                     pop      r14
+00213f69 5f                       pop      rdi
+00213f6a c3                       ret      
+00213f6b cc                       int3     

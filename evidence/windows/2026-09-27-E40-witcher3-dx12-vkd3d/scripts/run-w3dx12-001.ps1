@@ -1,5 +1,5 @@
 # witcher3-dx12-001: first run of The Witcher 3 4.0 DX12 build through vkd3d-proton on the WDDM RADV port.
-# Based on Codex's witcher3-gpu001 (DX11 through DXVK). Differences: bin\x64_dx12, vkd3d-proton d3d12.dll /
+# Based on witcher3-gpu001 (DX11 through DXVK). Differences: bin\x64_dx12, vkd3d-proton d3d12.dll /
 # d3d12core.dll + DXVK dxgi.dll next to the exe (E37 package), registered ICD 93B1D1FD used as is (no manifest
 # change), RADV_EXPERIMENTAL=sparse, three overlay screenshots, user.settings backed up and restored.
 # Bounded: 150 s, STOP flag and temperature every 3 s, game killed at the bound, all files restored in finally.

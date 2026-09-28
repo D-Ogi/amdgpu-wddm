@@ -18,7 +18,8 @@ application -> d3d11.dll / dxgi.dll (Microsoft runtime)
 
 The engine is built from the DXVK branch `amdgpu-wddm/ddi-engine`: upstream DXVK plus the `src/ddi/` directory
 and small host-mode hooks in `src/dxvk/`, `src/d3d11/` and `src/util/log/`. `recipe.json` of each build names
-the commit. The branch is not published yet.
+the commit. The branch is published at <https://github.com/D-Ogi/dxvk/tree/amdgpu-wddm/ddi-engine>; commits
+named before 2026-09-28 map to it through [the commit map](../dxvk-engine-commit-map.md).
 
 ## Where the boundary sits
 
