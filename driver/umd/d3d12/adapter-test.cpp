@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <vector>
 #include "queue-ddi.h"
+#include "fence-ddi.h"
 static HRESULT APIENTRY query(HANDLE,const D3DDDICB_QUERYADAPTERINFO*) {return E_NOTIMPL;}
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
@@ -47,6 +48,15 @@ int main(int argc,char** argv) {
     SIZE_T qsize=core.pfnCalcPrivateCommandQueueSize(device.hDrvDevice,&qargs);assert(qsize);
     D3D12DDI_HCOMMANDQUEUE queue{};queue.pDrvPrivate=::operator new(qsize);
     assert(core.pfnCreateCommandQueue(device.hDrvDevice,&qargs,queue,{})==S_OK);
+    native12::install_fence_entries(core);
+    D3D12DDI_FENCE placement{};placement.FenceValue.BaseAddress=0x200030000ULL;
+    D3D12DDIARG_CREATE_FENCE fa{1,&placement};
+    auto fs=core.pfnCalcPrivateFenceSize(device.hDrvDevice,&fa);assert(fs);
+    D3D12DDI_HFENCE fence{::operator new(fs)};
+    assert(core.pfnCreateFence(device.hDrvDevice,fence,&fa)==S_OK);
+    placement={};
+    assert(static_cast<native12::FenceState*>(fence.pDrvPrivate)->placement.FenceValue.BaseAddress==0x200030000ULL);
+    core.pfnDestroyFence(device.hDrvDevice,fence);::operator delete(fence.pDrvPrivate);
     core.pfnDestroyCommandQueue(device.hDrvDevice,queue);::operator delete(queue.pDrvPrivate);
     assert(destroys==1);
     assert(!static_cast<native12::Device*>(storage)->queues.empty());

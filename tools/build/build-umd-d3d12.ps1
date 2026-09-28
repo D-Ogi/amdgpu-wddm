@@ -40,6 +40,10 @@ try {
   if($LASTEXITCODE){throw 'Queue DDI build failed'}
   & .\queue-ddi-test.exe
   if($LASTEXITCODE){throw 'Queue DDI tests failed'}
+  & cl.exe @flags /Fe:fence-ddi-test.exe "$repo\driver\umd\d3d12\fence-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'Fence DDI test build failed'}
+  & .\fence-ddi-test.exe
+  if($LASTEXITCODE){throw 'Fence DDI tests failed'}
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
 Write-Host 'Diagnostic adapter only; no functional device or deployment.'
