@@ -19,6 +19,7 @@
 #include "ddi-query.h"
 #include "ddi-table.h"
 #include "ddi-present.h"
+#include "ddi-blt.h"
 #include "ddi-clear-view.h"
 #include "ddi-lifecycle.h"
 #include "ddi-device-create.h"
@@ -636,5 +637,27 @@ int main() {
     rotateArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
     if (dxgiPresentTable.pfnRotateResourceIdentities(nullptr)!=E_INVALIDARG ||
         dxgiPresentTable.pfnRotateResourceIdentities(&rotateArgs)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
+    DXGI_DDI_ARG_BLT bltArgs{};
+    bltArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
+    bltArgs.hSrcResource=reinterpret_cast<DXGI_DDI_HRESOURCE>(&rotating[0]);
+    bltArgs.hDstResource=reinterpret_cast<DXGI_DDI_HRESOURCE>(&rotating[1]);
+    bltArgs.SrcSubresource=2; bltArgs.DstSubresource=3;
+    bltArgs.DstLeft=4; bltArgs.DstTop=5; bltArgs.DstRight=24; bltArgs.DstBottom=35;
+    bltArgs.Rotate=DXGI_DDI_MODE_ROTATION_ROTATE180; bltArgs.Flags.Value=15;
+    BC250_DXVK_BLT engineBlt{};
+    if (prepare_blt(bltArgs,engineBlt)!=S_OK || engineBlt.Source!=rotating[0].object || engineBlt.Destination!=rotating[1].object ||
+        engineBlt.SourceSubresource!=2 || engineBlt.DestinationSubresource!=3 || engineBlt.Flags!=15 ||
+        engineBlt.DestinationRect.left!=4 || engineBlt.DestinationRect.bottom!=35 || engineBlt.Rotation!=3) std::abort();
+    bltArgs.DstRight=UINT_MAX;
+    if (prepare_blt(bltArgs,engineBlt)!=E_INVALIDARG || engineBlt.DestinationRect.right!=24) std::abort();
+    bltArgs.DstRight=24; bltArgs.Flags.Value=16;
+    if (prepare_blt(bltArgs,engineBlt)!=E_INVALIDARG) std::abort();
+    bltArgs.Flags.Value=0;
+    for (UINT rotation=0;rotation<=4;++rotation) {
+        bltArgs.Rotate=static_cast<DXGI_DDI_MODE_ROTATION>(rotation);
+        if (prepare_blt(bltArgs,engineBlt)!=S_OK || engineBlt.Rotation!=rotation) std::abort();
+    }
+    install_blt_ddi(dxgiPresentTable);
+    if (dxgiPresentTable.pfnBlt(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnBlt(&bltArgs)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

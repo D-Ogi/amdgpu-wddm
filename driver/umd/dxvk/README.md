@@ -232,3 +232,11 @@ failed engine rotation leaves shell metadata unchanged. Future importer-owned im
 lifetime metadata must join this transaction. Host tests exercise three-resource
 success, engine failure, duplicate rejection and DDI domain handling; no live
 swapchain rotation has yet been validated.
+
+DXGI Blt now translates its source/destination resources, subresources, destination
+rectangle, flags and rotation to the engine Blt ABI. Coordinates must fit signed
+RECT without truncation; reserved flags are rejected. PRESENT uses the engine's
+submit behavior. Engine limitations (90/270-degree rotation and multisampled
+destination) propagate as failures. Blt1 is still missing because its source
+rectangle is absent from the current engine ABI; a whole-source substitute would
+be incorrect. Host descriptor/error tests pass; GPU content validation is pending.
