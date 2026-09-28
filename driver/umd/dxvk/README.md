@@ -240,3 +240,12 @@ submit behavior. Engine limitations (90/270-degree rotation and multisampled
 destination) propagate as failures. Blt1 is still missing because its source
 rectangle is absent from the current engine ABI; a whole-source substitute would
 be incorrect. Host descriptor/error tests pass; GPU content validation is pending.
+
+runtime-image-memory imports a runtime allocation into VkDeviceMemory through the
+existing hosted RADV private pNext contract and binds it to a caller-created image.
+It validates device identity/domain, allocation/VA/size, image requirements and a
+compatible device-local memory type. Failed binding frees the imported Vulkan
+memory wrapper. Image layout/row pitch compatibility, runtime allocation ownership,
+residency and final teardown ordering remain caller responsibilities and are not
+yet integrated with CreateResource. The isolated mock Vulkan test passes; this is
+not yet a measured runtime-image import on the lab.
