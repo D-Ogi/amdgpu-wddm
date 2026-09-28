@@ -75,6 +75,13 @@ HRESULT APIENTRY no_engine(const BC250_DXVK_DEVICE_CREATE_INFO *,IBc250DxvkDevic
 }
 namespace {
 unsigned priorityCalls=0,residencyCalls=0; int residencyMode=0;
+unsigned displayModeCalls=0; HRESULT displayModeResult=S_OK;
+HRESULT APIENTRY runtime_display_mode(HANDLE h,D3DDDICB_SETDISPLAYMODE *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() ||
+        p->hPrimaryAllocation!=61 || p->PrivateDriverFormatAttribute) std::abort();
+    ++displayModeCalls; return displayModeResult;
+}
+
 HRESULT APIENTRY runtime_priority(HANDLE h,D3DDDICB_SETPRIORITY *p) {
     if (h!=&createIdentity || !expected->runtime().domain.entered() || p->hResource || p->NumAllocations!=1 ||
         *p->HandleList!=61 || *p->pPriorities!=7) std::abort();
@@ -860,6 +867,25 @@ int main() {
         sharedResources[i].runtime_surface=&tracked[i]; sharedResources[i].present_allocation=61+i;
         sharedHandles[i]=reinterpret_cast<DXGI_DDI_HRESOURCE>(&sharedResources[i]);
     }
+    DXGI_DDI_ARG_SETDISPLAYMODE modeArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],0};
+    if (!resourceTable.pfnSetDisplayMode || resourceTable.pfnSetDisplayMode(nullptr)!=E_INVALIDARG ||
+        resourceTable.pfnSetDisplayMode(&modeArgs)!=E_NOTIMPL || displayModeCalls) std::abort();
+    owner.runtime().KTCallbacks.pfnSetDisplayModeCb=runtime_display_mode;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=S_OK || displayModeCalls!=1 ||
+        owner.runtime().domain.entered()) std::abort();
+    displayModeResult=DXGI_ERROR_DEVICE_REMOVED;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=D3DDDIERR_DEVICEREMOVED || displayModeCalls!=2) std::abort();
+    displayModeResult=E_INVALIDARG;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=E_INVALIDARG || displayModeCalls!=3) std::abort();
+    modeArgs.SubResourceIndex=1;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=E_INVALIDARG || displayModeCalls!=3) std::abort();
+    modeArgs.SubResourceIndex=0; sharedResources[0].present_subresource=1;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=E_INVALIDARG || displayModeCalls!=3) std::abort();
+    sharedResources[0].present_subresource=0; tracked[0].owner=&foreignRuntime;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=E_INVALIDARG || displayModeCalls!=3) std::abort();
+    tracked[0].owner=&owner.runtime(); tracked[0].phase=SurfacePhase::closing;
+    if (resourceTable.pfnSetDisplayMode(&modeArgs)!=E_INVALIDARG || displayModeCalls!=3) std::abort();
+    tracked[0].phase=SurfacePhase::ready;
     DXGI_DDI_ARG_SETRESOURCEPRIORITY priorityArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],7};
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 || owner.runtime().domain.entered()) std::abort();
     DXGI_DDI_ARG_QUERYRESOURCERESIDENCY residencyArgs{priorityArgs.hDevice,sharedHandles,statuses,3};

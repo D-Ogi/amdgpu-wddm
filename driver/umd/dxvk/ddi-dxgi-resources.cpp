@@ -22,6 +22,23 @@ HRESULT allocation(DeviceOwner &owner,DXGI_DDI_HRESOURCE handle,D3DKMT_HANDLE &o
         surface->allocation.allocation!=r->present_allocation) return E_INVALIDARG;
     out=surface->allocation.allocation; return S_OK;
 }
+HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {
+    if (!args) return E_INVALIDARG;
+    return entry(args->hDevice,[&](DeviceOwner &owner) {
+        D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,args->hResource,handle);
+        if (FAILED(hr)) return hr;
+        auto *resource=reinterpret_cast<DdiResource *>(args->hResource);
+        // Runtime-imported textures currently have exactly one subresource.
+        if (args->SubResourceIndex || resource->present_subresource) return E_INVALIDARG;
+        auto &runtime=owner.runtime();
+        if (!runtime.KTCallbacks.pfnSetDisplayModeCb) return E_NOTIMPL;
+        D3DDDICB_SETDISPLAYMODE request{};
+        request.hPrimaryAllocation=handle;
+        // The runtime/KMD validates primary suitability and programs scanout.
+        // No direct hardware access or CPU frame copy belongs in this entry.
+        return runtime.KTCallbacks.pfnSetDisplayModeCb(runtime.hDevice,&request);
+    });
+}
 HRESULT APIENTRY priority(DXGI_DDI_ARG_SETRESOURCEPRIORITY *args) {
     if (!args) return E_INVALIDARG;
     return entry(args->hDevice,[&](DeviceOwner &owner) {
@@ -82,6 +99,7 @@ HRESULT APIENTRY resolve(DXGI_DDI_ARG_RESOLVESHAREDRESOURCE *args) {
 }
 }
 void install_dxgi_resource_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &table) {
+    table.pfnSetDisplayMode=display_mode;
     table.pfnSetResourcePriority=priority;
     table.pfnQueryResourceResidency=residency;
     table.pfnResolveSharedResource=resolve;
