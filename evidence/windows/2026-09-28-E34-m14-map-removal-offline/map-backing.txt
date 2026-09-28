@@ -1,0 +1,41 @@
+FUNCTION RVA adbf0 ?GetBackingMemorySubresource@?$CResource@UID3D11Resource@@@@QEAA?AUD3D10DDI_MAPPED_SUBRESOURCE@@I@Z
+000adbf0 48895c2408               mov      qword ptr [rsp + 8], rbx
+000adbf5 4889742418               mov      qword ptr [rsp + 0x18], rsi
+000adbfa 4889542410               mov      qword ptr [rsp + 0x10], rdx
+000adbff 57                       push     rdi
+000adc00 4883ec30                 sub      rsp, 0x30
+000adc04 418bf8                   mov      edi, r8d
+000adc07 488bf2                   mov      rsi, rdx
+000adc0a 488bd9                   mov      rbx, rcx
+000adc0d 488b81e0000000           mov      rax, qword ptr [rcx + 0xe0]
+000adc14 4c8b4810                 mov      r9, qword ptr [rax + 0x10]
+000adc18 4d85c9                   test     r9, r9
+000adc1b 750e                     jne      0xadc2b
+000adc1d e83a54ffff               call     0xa305c ; ?AllocateBackingMemory@?$CResource@UID3D11Resource@@@@QEAAXXZ+0
+000adc22 eb07                     jmp      0xadc2b ; ?GetBackingMemorySubresource@?$CResource@UID3D11Resource@@@@QEAA?AUD3D10DDI_MAPPED_SUBRESOURCE@@I@Z+3b
+000adc24 488b442448               mov      rax, qword ptr [rsp + 0x48]
+000adc29 eb48                     jmp      0xadc73 ; ?GetBackingMemorySubresource@?$CResource@UID3D11Resource@@@@QEAA?AUD3D10DDI_MAPPED_SUBRESOURCE@@I@Z+83
+000adc2b 488bd7                   mov      rdx, rdi
+000adc2e 4c8b83e0000000           mov      r8, qword ptr [rbx + 0xe0]
+000adc35 498b4010                 mov      rax, qword ptr [r8 + 0x10]
+000adc39 85ff                     test     edi, edi
+000adc3b 740b                     je       0xadc48
+000adc3d 488d4f01                 lea      rcx, [rdi + 1]
+000adc41 4803c9                   add      rcx, rcx
+000adc44 490304c8                 add      rax, qword ptr [r8 + rcx*8]
+000adc48 4889442420               mov      qword ptr [rsp + 0x20], rax
+000adc4d 4803d2                   add      rdx, rdx
+000adc50 488b8be0000000           mov      rcx, qword ptr [rbx + 0xe0]
+000adc57 8b44d118                 mov      eax, dword ptr [rcx + rdx*8 + 0x18]
+000adc5b 89442428                 mov      dword ptr [rsp + 0x28], eax
+000adc5f 8b44d11c                 mov      eax, dword ptr [rcx + rdx*8 + 0x1c]
+000adc63 8944242c                 mov      dword ptr [rsp + 0x2c], eax
+000adc67 0f10442420               movups   xmm0, xmmword ptr [rsp + 0x20]
+000adc6c f30f7f06                 movdqu   xmmword ptr [rsi], xmm0
+000adc70 488bc6                   mov      rax, rsi
+000adc73 488b5c2440               mov      rbx, qword ptr [rsp + 0x40]
+000adc78 488b742450               mov      rsi, qword ptr [rsp + 0x50]
+000adc7d 4883c430                 add      rsp, 0x30
+000adc81 5f                       pop      rdi
+000adc82 c3                       ret      
+000adc83 cc                       int3     

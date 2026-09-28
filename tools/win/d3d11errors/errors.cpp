@@ -57,12 +57,14 @@ int main(int argc,char **argv) {
             local_module(L"bc250d3d11.dll") && local_module(L"bc250dxvk.dll") && local_module(L"bc250radv.dll") :
             !GetModuleHandleW(L"bc250d3d11.dll") && !GetModuleHandleW(L"bc250dxvk.dll"));
         D3D11_BUFFER_DESC desc{};desc.ByteWidth=1u<<20;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
-        ComPtr<ID3D11Buffer> base,dynamic;
+        ComPtr<ID3D11Buffer> base,dynamic,staging;
         HRESULT setup=device->CreateBuffer(&desc,nullptr,&base);
         auto dynDesc=desc;dynDesc.Usage=D3D11_USAGE_DYNAMIC;dynDesc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
         if (SUCCEEDED(setup)) setup=device->CreateBuffer(&dynDesc,nullptr,&dynamic);
+        auto readDesc=desc;readDesc.Usage=D3D11_USAGE_STAGING;readDesc.BindFlags=0;readDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        if (SUCCEEDED(setup)) setup=device->CreateBuffer(&readDesc,nullptr,&staging);
         HRESULT hr=E_FAIL,recovery=E_FAIL,before=device->GetDeviceRemovedReason(),after=before,sticky=before;
-        bool nullOutput=true;
+        bool nullOutput=true,readNull=true;HRESULT readHr=E_FAIL;
         std::vector<unsigned char> upload(1u<<20,0x5a);
         if (SUCCEEDED(setup)) {
             if (inject) SetEnvironmentVariableA("BC250DXVK_TEST_OOM_NOW","1");
@@ -80,6 +82,12 @@ int main(int argc,char **argv) {
             }
             SetEnvironmentVariableA("BC250DXVK_TEST_OOM_NOW",nullptr);
             after=device->GetDeviceRemovedReason();
+            if (test==1) {
+                D3D11_MAPPED_SUBRESOURCE read{};
+                readHr=context->Map(staging.Get(),0,D3D11_MAP_READ,0,&read);
+                readNull=!read.pData;
+                if (SUCCEEDED(readHr)) context->Unmap(staging.Get(),0);
+            }
             if (test==0 || !inject) {
                 ComPtr<ID3D11Buffer> recovered;recovery=device->CreateBuffer(&desc,nullptr,&recovered);
                 if (SUCCEEDED(recovery) && !recovered) recovery=E_FAIL;
@@ -89,10 +97,17 @@ int main(int argc,char **argv) {
         bool pass=modules && SUCCEEDED(setup) && before==S_OK;
         if (!inject) pass=pass && hr==S_OK && recovery==S_OK && after==S_OK && sticky==S_OK;
         else if (test==0) pass=pass && hr==E_OUTOFMEMORY && nullOutput && recovery==S_OK && after==S_OK && sticky==S_OK;
-        else pass=pass && removed(hr) && removed(after) && sticky==after && (test!=1 || nullOutput);
+        else if (test==1) {
+            // Write-only Map can use runtime backing memory after device removal.
+            // CPU-read Map must expose removal; require both it and the sticky device state.
+            const bool writeResult=(hr==S_OK && !nullOutput) || (removed(hr) && nullOutput);
+            pass=pass && writeResult && removed(after) && sticky==after && removed(readHr) && readNull;
+        } else pass=pass && removed(hr) && removed(after) && sticky==after;
+        if (!inject && test==1) pass=pass && readHr==S_OK && !readNull;
         all=all && pass;
         out<<(test?",":"")<<"{\"case\":\""<<(test==0?"create":test==1?"map":"update")<<"\",\"level\":"<<unsigned(level)
             <<",\"modules\":"<<(modules?"true":"false")<<",\"setup\":"<<unsigned(setup)<<",\"hr\":"<<unsigned(hr)
+            <<",\"read_hr\":"<<unsigned(readHr)<<",\"read_null\":"<<(readNull?"true":"false")
             <<",\"before\":"<<unsigned(before)<<",\"after\":"<<unsigned(after)<<",\"sticky\":"<<unsigned(sticky)
             <<",\"recovery\":"<<unsigned(recovery)<<",\"null_output\":"<<(nullOutput?"true":"false")<<",\"passed\":"<<(pass?"true":"false")<<"}";
         out.flush();
