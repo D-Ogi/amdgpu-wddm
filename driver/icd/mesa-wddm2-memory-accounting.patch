@@ -1,0 +1,141 @@
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.h
+@@ -29,6 +29,7 @@
+ #define RADV_WDDM2_WINSYS_H
+ 
+ #include "util/list.h"
++#include "util/u_atomic.h"
+ #include "util/bc250_host_bootstrap.h"
+ #include "util/simple_mtx.h"
+ #include "util/vma.h"
+@@ -43,6 +44,11 @@
+ 
+ struct radv_wddm2_winsys {
+    struct radeon_winsys base;
++
++   /* Live physical BO bytes, partitioned like the amdgpu winsys. */
++   uint64_t allocated_vram;
++   uint64_t allocated_vram_vis;
++   uint64_t allocated_gtt;
+ 
+    uint32_t refcount;
+    const void *cache_key;
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -583,8 +583,11 @@
+ 
+    switch (value) {
+    case RADEON_ALLOCATED_VRAM:
++      return p_atomic_read(&ws->allocated_vram);
+    case RADEON_ALLOCATED_VRAM_VIS:
++      return p_atomic_read(&ws->allocated_vram_vis);
+    case RADEON_ALLOCATED_GTT:
++      return p_atomic_read(&ws->allocated_gtt);
+    case RADEON_VRAM_USAGE:
+    case RADEON_VRAM_VIS_USAGE:
+    case RADEON_GTT_USAGE: {
+@@ -592,13 +595,10 @@
+          .hAdapter = ws->adapter_h,
+       };
+       switch (value) {
+-      case RADEON_ALLOCATED_VRAM:
+-      case RADEON_ALLOCATED_VRAM_VIS:
+       case RADEON_VRAM_USAGE:
+       case RADEON_VRAM_VIS_USAGE:
+          mem_info.MemorySegmentGroup = D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL;
+          break;
+-      case RADEON_ALLOCATED_GTT:
+       case RADEON_GTT_USAGE:
+          mem_info.MemorySegmentGroup = D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL;
+          break;
+@@ -611,11 +611,6 @@
+          return 0;
+ 
+       switch (value) {
+-      case RADEON_ALLOCATED_VRAM:
+-      case RADEON_ALLOCATED_VRAM_VIS:
+-      case RADEON_ALLOCATED_GTT:
+-         return mem_info.CurrentReservation;
+-
+       case RADEON_VRAM_USAGE:
+       case RADEON_VRAM_VIS_USAGE:
+       case RADEON_GTT_USAGE:
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c
+@@ -600,6 +600,27 @@
+ error_va_reserve:
+    FREE(bo);
+    return result;
++}
++
++/* Match amdgpu's initial-domain accounting. Imported/borrowed BOs without
++ * NO_CPU_ACCESS belong to visible VRAM; virtual reservations have no backing.
++ * Publish only fully constructed BOs. Failed teardown retains its byte charge.
++ */
++static void
++radv_wddm2_bo_account(struct radv_wddm2_winsys *ws, struct radv_wddm2_bo *bo, bool add)
++{
++   if (bo->base.is_virtual)
++      return;
++   const uint64_t bytes = bo->base.size;
++   const uint64_t delta = add ? bytes : (uint64_t)0 - bytes;
++   if (bo->base.initial_domain & RADEON_DOMAIN_VRAM) {
++      if (bo->flags & RADEON_FLAG_NO_CPU_ACCESS)
++         p_atomic_add(&ws->allocated_vram, delta);
++      else
++         p_atomic_add(&ws->allocated_vram_vis, delta);
++   }
++   if (bo->base.initial_domain & RADEON_DOMAIN_GTT)
++      p_atomic_add(&ws->allocated_gtt, delta);
+ }
+ 
+ static VkResult
+@@ -806,6 +827,7 @@
+    if (ws->debug_log_bos)
+       radv_winsys_log_bo(&ws->bo_log, &bo->base, false);
+ 
++   radv_wddm2_bo_account(ws, bo, true);
+    *out_bo = (struct radeon_winsys_bo *)bo;
+    return VK_SUCCESS;
+ 
+@@ -1012,6 +1034,7 @@
+    }
+ 
+    free(pdata);
++   radv_wddm2_bo_account(ws, bo, true);
+    *out_bo = &bo->base;
+    return VK_SUCCESS;
+ 
+@@ -1179,7 +1202,11 @@
+ 
+    radv_wddm2_bo_unmap(_ws, _bo, false);
+ 
+-   if (bo->borrowed) { FREE(bo); return; }
++   if (bo->borrowed) {
++      radv_wddm2_bo_account(ws, bo, false);
++      FREE(bo);
++      return;
++   }
+    if (bo->sparse_high_va) {
+       const D3DKMT_FREEGPUVIRTUALADDRESS high = {
+          .hAdapter = ws->adapter_h,
+@@ -1203,7 +1230,10 @@
+          .AllocationCount = bo->resource_handle ? 0 : 1,
+       };
+       status = BC250_WDDM_CALL(&ws->host, DestroyAllocation2, &destroy);
+-      //assert(NT_SUCCESS(status));
++      if (NT_SUCCESS(status))
++         radv_wddm2_bo_account(ws, bo, false);
++      else
++         fprintf(stderr, "radv: DestroyAllocation2 failed; retaining allocation byte charge\n");
+ 
+       if (ws->debug_all_bos)
+          radv_winsys_bo_list_del(&ws->global_bo_list, &bo->base);
+@@ -1513,6 +1543,7 @@
+    bo->ws=ws; bo->borrowed=true;
+    bo->base.va=va; bo->base.size=size; bo->base.handle=allocation; bo->base.obj_id=allocation;
+    bo->base.initial_domain=RADEON_DOMAIN_VRAM;
++   radv_wddm2_bo_account(ws, bo, true);
+    *out=&bo->base;
+    return VK_SUCCESS;
+ }

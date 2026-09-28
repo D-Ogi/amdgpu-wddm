@@ -1,0 +1,6 @@
+icd: C:\BC250\m14\caps004\bc250radv.dll sha256 CE63E49463786BCF0C68262ED5CF889D07B5AB88E3F91C64260B1F3575B9E392
+      heap usage MiB: before 0, 256 x 1 MiB buffers 0, released 0, trimmed 0 (879.6 ms)
+      3: bc250dxvk: TrimMemory: device memory 336 MiB -> 16 MiB
+FAIL  TrimMemory setup: 256 MiB of default buffers show in the driver's heap usage
+FAIL  TrimMemory gives at least 3/4 of the released buffers' memory back to the driver
+PASS  after TrimMemory: no deferred error, device not removed
