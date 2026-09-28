@@ -18,6 +18,7 @@
 #include "ddi-flush.h"
 #include "ddi-table.h"
 #include "ddi-format.h"
+#include "ddi-resource-status.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -447,5 +448,15 @@ int main() {
     table.pfnSoSetTargets(h,1,3,&rhandle,&append);
     table.pfnSoSetTargets(h,0,4,nullptr,nullptr);
     if (errors!=98 || owner.runtime().domain.entered()) std::abort();
+    UINT queried=0;
+    if (query_subresources_idle(6,[&](UINT i) { ++queried; return i==5 ? S_FALSE : S_OK; })!=S_FALSE || queried!=6) std::abort();
+    queried=0;
+    if (query_subresources_idle(6,[&](UINT i) { ++queried; return i==2 ? E_FAIL : S_OK; })!=E_FAIL || queried!=3) std::abort();
+    queried=0;
+    if (query_subresources_idle(6,[&](UINT) { ++queried; return S_OK; })!=S_OK || queried!=6) std::abort();
+    if (query_subresources_idle(0,[](UINT) { return S_OK; })!=E_INVALIDARG) std::abort();
+    if (!table.pfnResourceIsStagingBusy(h,rhandle) || !table.pfnResourceIsStagingBusy({},{})) std::abort();
+    table.pfnSetResourceMinLOD(h,rhandle,1.5f);
+    if (errors!=100 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
