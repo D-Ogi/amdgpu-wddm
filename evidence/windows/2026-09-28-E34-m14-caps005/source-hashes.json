@@ -1,0 +1,14 @@
+{
+  "src/amd/vulkan/radv_physical_device.c": {
+    "before_normalized_sha256": "1ed7c3f0fb1225341166a8e1dd3b1ed68ad66e36ad6e2f5459b6ecfabf47da44",
+    "after_normalized_sha256": "00d5c5e4d543f4b36f015451af92003d961fb21ea4f528d7d79353c5f46cdfda"
+  },
+  "src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c": {
+    "before_normalized_sha256": "f21c6916b40951429bceb911261981575883b95be78fd95740ebc3f407a931d9",
+    "after_normalized_sha256": "757b295086bf406abaaebe43359262256b414bae90e272c38b475ebfec298fe0"
+  },
+  "src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h": {
+    "before_normalized_sha256": "ba2164e0a1abb5d3d99083f45e4c1f0454584a945cdac15b007b1dcb83a7929f",
+    "after_normalized_sha256": "c0687a1da037714031cb9a125f1ac453282955524b08c55c167a87fffe6794dc"
+  }
+}
