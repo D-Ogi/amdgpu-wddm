@@ -14,6 +14,7 @@
 #include "ddi-dsv.h"
 #include "ddi-uav.h"
 #include "ddi-output.h"
+#include "ddi-srv.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -45,6 +46,7 @@ int main() {
     install_dsv_ddi(table);
     install_uav_ddi(table);
     install_output_ddi(table);
+    install_srv_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -387,5 +389,32 @@ int main() {
     if (prepare_output_bindings(nullptr,0,0,{},ous,nullptr,63,1,63,1,64,ob)!=S_OK || ob.uavs[63]!=ouv.object || ob.counters[63]!=UINT_MAX) std::abort();
     table.pfnSetRenderTargets(h,orts,2,6,od,ous,counts,5,2,5,1);
     if (errors!=79 || owner.runtime().domain.entered()) std::abort();
+    D3D11DDIARG_CREATESHADERRESOURCEVIEW sv{}; D3D11_SHADER_RESOURCE_VIEW_DESC svout{};
+    sv.ResourceDimension=D3D10DDIRESOURCE_TEXTURECUBE; sv.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    sv.TexCube={2,3,6,2};
+    if (convert_srv(sv,24,1,svout)!=S_OK || svout.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURECUBEARRAY ||
+        svout.TextureCubeArray.First2DArrayFace!=6 || svout.TextureCubeArray.NumCubes!=2 || svout.TextureCubeArray.MipLevels!=3) std::abort();
+    sv.TexCube.NumCubes=UINT_MAX;
+    if (convert_srv(sv,24,1,svout)!=E_INVALIDARG || svout.TextureCubeArray.NumCubes!=2) std::abort();
+    sv.TexCube={1,UINT_MAX,0,1};
+    if (convert_srv(sv,6,1,svout)!=S_OK || svout.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURECUBE || svout.TextureCube.MipLevels!=UINT_MAX) std::abort();
+    sv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; sv.Tex2D={0,2,1,3};
+    if (convert_srv(sv,8,4,svout)!=S_OK || svout.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY ||
+        svout.Texture2DMSArray.FirstArraySlice!=2 || svout.Texture2DMSArray.ArraySize!=3) std::abort();
+    sv.Tex2D={2,1,4,3};
+    if (convert_srv(sv,8,1,svout)!=S_OK || svout.Texture2DArray.MostDetailedMip!=2 || svout.Texture2DArray.MipLevels!=4) std::abort();
+    if (convert_srv(sv,8,4,svout)!=E_INVALIDARG) std::abort();
+    sv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; sv.BufferEx={7,19,D3D11_DDI_BUFFEREX_SRV_FLAG_RAW};
+    if (convert_srv(sv,1,1,svout)!=S_OK || svout.BufferEx.FirstElement!=7 || svout.BufferEx.NumElements!=19 || svout.BufferEx.Flags!=D3D11_BUFFEREX_SRV_FLAG_RAW) std::abort();
+    sv.BufferEx.Flags=0x80000000;
+    if (convert_srv(sv,1,1,svout)!=E_INVALIDARG) std::abort();
+    DdiShaderResourceView sview{}; D3D10DDI_HSHADERRESOURCEVIEW svh{}; svh.pDrvPrivate=&sview;
+    if (table.pfnCalcPrivateShaderResourceViewSize(h,&sv)!=sizeof(sview)) std::abort();
+    table.pfnCreateShaderResourceView(h,&sv,svh,{});
+    table.pfnVsSetShaderResources(h,127,1,&svh); table.pfnPsSetShaderResources(h,0,0,nullptr);
+    table.pfnGsSetShaderResources(h,0,0,nullptr); table.pfnHsSetShaderResources(h,0,0,nullptr);
+    table.pfnDsSetShaderResources(h,0,0,nullptr); table.pfnCsSetShaderResources(h,0,0,nullptr);
+    table.pfnGenMips(h,svh); table.pfnDestroyShaderResourceView(h,svh);
+    if (errors!=88 || sview.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
