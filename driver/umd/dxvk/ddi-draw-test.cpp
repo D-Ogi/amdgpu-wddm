@@ -146,6 +146,15 @@ int main() {
         classify_format_support2_result(E_OUTOFMEMORY,0)!=E_OUTOFMEMORY ||
         classify_format_support2_result(DXGI_ERROR_DEVICE_REMOVED,0)!=DXGI_ERROR_DEVICE_REMOVED ||
         convert_format_support(D3D11_FORMAT_SUPPORT_SHADER_SAMPLE,0)!=D3D10_DDI_FORMAT_SUPPORT_SHADER_SAMPLE)std::abort();
+    for(UINT value=0;value<=115;++value) {
+        const auto format=static_cast<DXGI_FORMAT>(value);
+        const bool component=value==21 || value==22 || value==46 || value==47;
+        const UINT input=D3D10_DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET |
+            D3D10_DDI_FORMAT_SUPPORT_MULTISAMPLE_LOAD | D3D10_DDI_FORMAT_SUPPORT_SHADER_SAMPLE;
+        const UINT result=constrain_format_support(format,input);
+        if(depth_stencil_component_view(format)!=component ||
+            result!=(component ? input&~UINT(D3D10_DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET) : input))std::abort();
+    }
     auto table=make_render_device_table();
     static_assert(sizeof(table)==155*sizeof(void *));
     // Copy representation rather than aliasing function pointers as void**.

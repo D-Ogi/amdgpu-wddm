@@ -34,6 +34,22 @@ HRESULT classify_format_support2_result(HRESULT hr,UINT flags) {
     // Preserve unexpected failures and inconsistent nonzero failure output.
     return hr==E_FAIL && !flags ? S_OK : hr;
 }
+bool depth_stencil_component_view(DXGI_FORMAT format) {
+    switch(format) {
+    case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+    case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
+    case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
+    case DXGI_FORMAT_X24_TYPELESS_G8_UINT:return true;
+    default:return false;
+    }
+}
+UINT constrain_format_support(DXGI_FORMAT format,UINT support) {
+    // These SRV-only component formats inherit the Vulkan backing image's
+    // MSAA capability in DXVK, but are not valid D3D render/depth targets.
+    // Keep MULTISAMPLE_LOAD: sampling an MSAA depth/stencil view is valid.
+    if(depth_stencil_component_view(format))support&=~UINT(D3D10_DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
+    return support;
+}
 UINT convert_format_support(UINT s,UINT s2) {
     UINT result=0;
 #define MAP(api,ddi) if (s & api) result|=ddi
@@ -67,7 +83,7 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
         hr=owner.device()->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2,&extra,sizeof(extra));
         hr=classify_format_support2_result(hr,extra.OutFormatSupport2);
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
-        *out=convert_format_support(support,extra.OutFormatSupport2);
+        *out=constrain_format_support(value,convert_format_support(support,extra.OutFormatSupport2));
     });
 }
 void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out) {
@@ -75,7 +91,7 @@ void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out)
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
-        if (!count || count>D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT) return;
+        if (depth_stencil_component_view(value) || !count || count>D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT) return;
         UINT quality=0; HRESULT hr=owner.device()->CheckMultisampleQualityLevels(value,count,&quality);
         if (hr==E_INVALIDARG) return;
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
