@@ -19,6 +19,7 @@
 #include "ddi-query.h"
 #include "ddi-table.h"
 #include "ddi-present.h"
+#include "ddi-dxgi-resources.h"
 #include "ddi-blt.h"
 #include "ddi-clear-view.h"
 #include "ddi-lifecycle.h"
@@ -52,6 +53,24 @@ HRESULT APIENTRY creation_sync(HANDLE,const D3DDDICB_DESTROYSYNCHRONIZATIONOBJEC
 void APIENTRY unexpected_creation_error(D3D10DDI_HRTCORELAYER,HRESULT) { std::abort(); }
 PFN_vkVoidFunction VKAPI_CALL no_instance(VkInstance,const char *) { return nullptr; }
 HRESULT APIENTRY no_engine(const BC250_DXVK_DEVICE_CREATE_INFO *,IBc250DxvkDevice **) { std::abort(); }
+}
+namespace {
+unsigned priorityCalls=0,residencyCalls=0; int residencyMode=0;
+HRESULT APIENTRY runtime_priority(HANDLE h,D3DDDICB_SETPRIORITY *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || p->hResource || p->NumAllocations!=1 ||
+        *p->HandleList!=61 || *p->pPriorities!=7) std::abort();
+    ++priorityCalls; return S_OK;
+}
+HRESULT APIENTRY runtime_residency(HANDLE h,const D3DDDICB_QUERYRESIDENCY *p) {
+    if (h!=&createIdentity || !expected->runtime().domain.entered() || p->hResource || p->NumAllocations!=3) std::abort();
+    ++residencyCalls;
+    for (UINT i=0;i<3;++i) {
+        if (p->HandleList[i]!=61+i) std::abort();
+        p->pResidencyStatus[i]=static_cast<D3DDDI_RESIDENCYSTATUS>(i+1);
+    }
+    if (residencyMode==2) p->pResidencyStatus[1]=static_cast<D3DDDI_RESIDENCYSTATUS>(42);
+    return residencyMode==1 ? E_FAIL : S_OK;
+}
 }
 int main() {
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
@@ -798,5 +817,36 @@ int main() {
     openArgs.PrivateDriverDataSize=sizeof(request.texture); request.texture.BindFlags=UINT32_MAX;
     if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
     if (!table.pfnOpenResource || table.pfnCalcPrivateOpenedResourceSize(h,&openArgs)!=sizeof(DdiResource)) std::abort();
+    DXGI1_2_DDI_BASE_FUNCTIONS resourceTable{}; install_dxgi_resource_ddi(resourceTable);
+    owner.runtime().hDevice=&createIdentity; expected=&owner;
+    owner.runtime().KTCallbacks.pfnSetPriorityCb=runtime_priority;
+    owner.runtime().KTCallbacks.pfnQueryResidencyCb=runtime_residency;
+    RuntimeSurface tracked[3]; DdiResource sharedResources[3]{}; DXGI_DDI_HRESOURCE sharedHandles[3]{};
+    DXGI_DDI_RESIDENCY statuses[3]{};
+    for (UINT i=0;i<3;++i) {
+        tracked[i].owner=&owner.runtime(); tracked[i].phase=SurfacePhase::ready;
+        tracked[i].allocation.allocation=61+i;
+        tracked[i].texture.texture=reinterpret_cast<ID3D11Texture2D *>(&rotateIdentity[i]);
+        sharedResources[i].object=tracked[i].texture.texture;
+        sharedResources[i].runtime_surface=&tracked[i]; sharedResources[i].present_allocation=61+i;
+        sharedHandles[i]=reinterpret_cast<DXGI_DDI_HRESOURCE>(&sharedResources[i]);
+    }
+    DXGI_DDI_ARG_SETRESOURCEPRIORITY priorityArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],7};
+    if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 || owner.runtime().domain.entered()) std::abort();
+    DXGI_DDI_ARG_QUERYRESOURCERESIDENCY residencyArgs{priorityArgs.hDevice,sharedHandles,statuses,3};
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK || residencyCalls!=1 ||
+        statuses[0]!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || statuses[1]!=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY ||
+        statuses[2]!=DXGI_DDI_RESIDENCY_EVICTED_TO_DISK || owner.runtime().domain.entered()) std::abort();
+    for (int mode=1;mode<=2;++mode) {
+        residencyMode=mode;
+        for (auto &value:statuses) value=static_cast<DXGI_DDI_RESIDENCY>(99);
+        if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_FAIL) std::abort();
+        for (auto value:statuses) if (value!=99) std::abort();
+    }
+    tracked[1].owner=&foreignRuntime;
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_INVALIDARG || residencyCalls!=3) std::abort();
+    sharedResources[0].runtime_surface=nullptr;
+    if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=E_NOTIMPL || priorityCalls!=1 ||
+        resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
