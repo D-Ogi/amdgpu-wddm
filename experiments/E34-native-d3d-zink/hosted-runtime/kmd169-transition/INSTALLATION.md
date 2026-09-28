@@ -55,3 +55,9 @@ The runner now rejects confirmation before 60000 ms of readiness, with no comple
 [SetupGetInfDriverStoreLocation](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupgetinfdriverstorelocationw) does not search by INF contents and must not be passed an arbitrary external INF as though it did. [SetupDiGetDriverInfoDetail](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdriverinfodetailw) defines the static-field behavior. Local SDK26100 declarations were checked first.
 
 M713 observes that a store-path input produces a published system INF node, not necessarily a node retaining the FileRepository path. Admission must compare registered package identity rather than assume string equality with the store path. Installation remains blocked pending a bounded same-package control and repaired recovery timing.
+
+## Failed-install observations
+
+Install now writes durable before/after observations of DriverVersion, ProblemCode, published INF, driver key and KMD service state/path. Each field carries readable/value/error, so a removed binding is distinct from problem 0. The before observation must show a stopped KMD service; otherwise no installer call is made. A native nonzero exit or invocation exception is interpreted only after recording the post-call observation. Queries remain inside the phase job deadline; a killed phase can lack the after receipt, which is unknown state, not evidence that the binding survived.
+
+Local fault-injection controls cover native failure, invocation exception, loss of binding data and rejection of a running service. They do not prove recovery or deferred installation succeeds on the lab. The installed package and configuration still require independent verification before enable.

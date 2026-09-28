@@ -7,6 +7,7 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\verify-cpu.ps1"
 . "$PSScriptRoot\pnp-idle.ps1"
+. "$PSScriptRoot\install-observation.ps1"
 . "$PSScriptRoot\package-cleanup.ps1"
 $directoryPath=[IO.Path]::GetFullPath($Directory)
 if(!$directoryPath.StartsWith('C:\BC250\m13\kmd169-', [StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected trial directory'}
@@ -73,8 +74,13 @@ if($Phase -eq 'Capture'){
   }
   'Install' {
    if($problem -ne 22){throw 'Install requires disabled adapter'}
-   & "$out\select-driver.exe" --install-deferred $gpu.InstanceId "$out\$label\bc250kmd.inf" $expectedVersion
-   if($LASTEXITCODE -ne 0){throw 'Deferred driver install failed; inspect helper receipt'}
+   $installObservation=Invoke-KmdObservedInstall -Read {Get-KmdInstallObservation $gpu.InstanceId} -Save {
+    param($stage,$value)
+    Write-DurableText "$out\$Receipt-install-$stage.json" ($value|ConvertTo-Json -Depth 10)
+   } -Install {
+    & "$out\select-driver.exe" --install-deferred $gpu.InstanceId "$out\$label\bc250kmd.inf" $expectedVersion | Out-Host
+    return $LASTEXITCODE
+   }
    if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data -ne $expectedVersion){throw 'Installed version mismatch'}
    if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data -ne 22){throw 'Unexpected automatic enable'}
   }
