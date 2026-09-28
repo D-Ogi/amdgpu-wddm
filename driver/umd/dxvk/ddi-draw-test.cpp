@@ -11,6 +11,7 @@
 #include "ddi-transfer.h"
 #include "ddi-map.h"
 #include "ddi-rtv.h"
+#include "ddi-dsv.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -39,6 +40,7 @@ int main() {
     install_transfer_ddi(table);
     install_map_ddi(table);
     install_rtv_ddi(table);
+    install_dsv_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -301,5 +303,31 @@ int main() {
     FLOAT clearColor[4]={0.1f,0.2f,0.3f,0.4f};
     table.pfnClearRenderTargetView(h,rth,clearColor); table.pfnDestroyRenderTargetView(h,rth);
     if (errors!=69 || rt.object || owner.runtime().domain.entered()) std::abort();
+    D3D11DDIARG_CREATEDEPTHSTENCILVIEW dv{}; D3D11_DEPTH_STENCIL_VIEW_DESC dvout{};
+    dv.Format=DXGI_FORMAT_D24_UNORM_S8_UINT; dv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D;
+    dv.Tex2D={0,2,3}; dv.Flags=D3D11_DDI_CREATE_DSV_READ_ONLY_DEPTH|D3D11_DDI_CREATE_DSV_READ_ONLY_STENCIL;
+    if (convert_dsv(dv,8,4,dvout)!=S_OK || dvout.ViewDimension!=D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY ||
+        dvout.Flags!=(D3D11_DSV_READ_ONLY_DEPTH|D3D11_DSV_READ_ONLY_STENCIL) ||
+        dvout.Texture2DMSArray.FirstArraySlice!=2 || dvout.Texture2DMSArray.ArraySize!=3) std::abort();
+    dv.Flags=D3D11_DDI_CREATE_DSV_READ_ONLY_STENCIL; dv.Tex2D={2,0,1};
+    if (convert_dsv(dv,1,1,dvout)!=S_OK || dvout.ViewDimension!=D3D11_DSV_DIMENSION_TEXTURE2D ||
+        dvout.Flags!=D3D11_DSV_READ_ONLY_STENCIL || dvout.Texture2D.MipSlice!=2) std::abort();
+    if (convert_dsv(dv,1,4,dvout)!=E_INVALIDARG || dvout.Texture2D.MipSlice!=2) std::abort();
+    dv.Flags=0x80000000;
+    if (convert_dsv(dv,1,1,dvout)!=E_INVALIDARG) std::abort();
+    dv.Flags=D3D11_DDI_CREATE_DSV_READ_ONLY_DEPTH; dv.ResourceDimension=D3D10DDIRESOURCE_TEXTURECUBE; dv.TexCube={1,6,6};
+    if (convert_dsv(dv,12,1,dvout)!=S_OK || dvout.ViewDimension!=D3D11_DSV_DIMENSION_TEXTURE2DARRAY ||
+        dvout.Texture2DArray.FirstArraySlice!=6 || dvout.Flags!=D3D11_DSV_READ_ONLY_DEPTH) std::abort();
+    dv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE1D; dv.Tex1D={1,3,2};
+    if (convert_dsv(dv,8,1,dvout)!=S_OK || dvout.ViewDimension!=D3D11_DSV_DIMENSION_TEXTURE1DARRAY ||
+        dvout.Texture1DArray.MipSlice!=1 || dvout.Texture1DArray.ArraySize!=2) std::abort();
+    dv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D;
+    if (convert_dsv(dv,1,1,dvout)!=E_INVALIDARG) std::abort();
+    DdiDepthStencilView depthView{}; D3D10DDI_HDEPTHSTENCILVIEW dvh{}; dvh.pDrvPrivate=&depthView;
+    if (table.pfnCalcPrivateDepthStencilViewSize(h,&dv)!=sizeof(depthView)) std::abort();
+    table.pfnCreateDepthStencilView(h,&dv,dvh,{});
+    table.pfnClearDepthStencilView(h,dvh,D3D10_DDI_CLEAR_STENCIL,0.25f,0xa7);
+    table.pfnDestroyDepthStencilView(h,dvh);
+    if (errors!=72 || depthView.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
