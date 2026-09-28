@@ -14,3 +14,15 @@ Must-Reject {Get-KmdVsyncWitness ($t -replace 'vsync vector:','missing:') 100000
 Must-Reject {Get-KmdVsyncWitness $t 800000}
 Must-Reject {Get-KmdVsyncWitness ($t -replace 'ack 900000','ack 0') 1000000}
 'PASS: KMD169 layout, timestamp bounds, newest-block and missing/future/zero controls'
+$start=@{enabled=$true;sync_failures=0;read_failures=0;ack_failures=0;ticks=100;reports=100;deferred=0;old_buffer=0;dpc_acks=0;read_begin_100ns=10000000}
+$end=@{enabled=$true;sync_failures=0;read_failures=0;ack_failures=0;ticks=6100;reports=6100;deferred=0;old_buffer=0;dpc_acks=1;read_begin_100ns=1010000000;ack_100ns=1009990000;notify_100ns=1009990000}
+$r=Assert-KmdVsyncInterval $start $end
+if($r.ack_hz -ne 60 -or !$r.dpc_recovered_ack_observed){throw 'Positive interval control failed'}
+$bad=$end.Clone();$bad.ack_100ns=1008000000;Must-Reject {Assert-KmdVsyncInterval $start $bad}
+$bad=$end.Clone();$bad.ticks=101;Must-Reject {Assert-KmdVsyncInterval $start $bad}
+$bad=$end.Clone();$bad.sync_failures=1;Must-Reject {Assert-KmdVsyncInterval $start $bad}
+$bad=$end.Clone();$bad.deferred=61;Must-Reject {Assert-KmdVsyncInterval $start $bad}
+$bad=$end.Clone();$bad.reports=6099;Must-Reject {Assert-KmdVsyncInterval $start $bad}
+$bad=$end.Clone();$bad.ticks=99;Must-Reject {Assert-KmdVsyncInterval $start $bad}
+$bad=$end.Clone();$bad.ack_100ns=1010010000;Assert-KmdVsyncInterval $start $bad|Out-Null
+'PASS: interval rate, stale ACK, error, skip, report coverage, regression and during-read controls'

@@ -37,3 +37,29 @@ function Save-KmdVsyncWitness {
  Write-DurableText $ReceiptPath ($w|ConvertTo-Json)
  return $w
 }
+function Assert-KmdVsyncInterval {
+ param($Start,$End,[double]$ExpectedRefreshHz=60)
+ if(!$Start.enabled -or !$End.enabled){throw 'VSync reporting not enabled at both boundaries'}
+ foreach($counter in @('sync_failures','read_failures','ack_failures')){
+  if($End[$counter] -ne $Start[$counter]){throw "VSync error counter changed: $counter"}
+ }
+ $delta=@{}
+ foreach($counter in @('ticks','reports','deferred','old_buffer','dpc_acks')){
+  if($End[$counter] -lt $Start[$counter]){throw "VSync counter regressed: $counter"}
+  $delta[$counter]=[decimal]$End[$counter]-[decimal]$Start[$counter]
+ }
+ $seconds=([decimal]$End.read_begin_100ns-[decimal]$Start.read_begin_100ns)/10000000
+ if($seconds -le 0 -or $ExpectedRefreshHz -le 0){throw 'Invalid VSync interval or expected refresh'}
+ # Read-begin ages are lower bounds: an event during the read yields a negative age.
+ # Retain read-end upper bounds in the original receipts; neither is an atomic snapshot.
+ $ackAge=([decimal]$End.read_begin_100ns-[decimal]$End.ack_100ns)/10000
+ $notifyAge=([decimal]$End.read_begin_100ns-[decimal]$End.notify_100ns)/10000
+ if($ackAge -ge 100 -or $notifyAge -ge 100){throw 'VSync ACK or notification was stale before the final read'}
+ $rate=$delta.ticks/$seconds
+ if($rate -lt 0.95*$ExpectedRefreshHz){throw 'VSync ACK rate below trial acceptance threshold'}
+ $skipped=$delta.deferred-$delta.old_buffer
+ if($skipped -lt 0){throw 'Inconsistent deferred/old-buffer interval; cannot validate independently sampled counters'}
+ if($skipped -gt 0.01*$delta.ticks){throw 'More than one percent of VSync ACKs deferred without old-buffer notification'}
+ if($delta.reports -lt $delta.ticks-$skipped){throw 'VSync notifications do not cover acknowledged interval'}
+ return @{seconds=$seconds;expected_refresh_hz=$ExpectedRefreshHz;ack_hz=$rate;delta=$delta;skipped=$skipped;ack_age_lower_ms=$ackAge;notify_age_lower_ms=$notifyAge;dpc_recovered_ack_observed=($delta.dpc_acks -gt 0);pass=$true}
+}

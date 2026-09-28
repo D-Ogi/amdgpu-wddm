@@ -1,4 +1,5 @@
 """Package exact DWM048 candidates locally; no connection or task launch."""
+import argparse
 import hashlib
 import json
 import shutil
@@ -7,7 +8,7 @@ from pathlib import Path
 source = Path(__file__).resolve().parent
 root = source.parents[4]
 build = root / "scratch/g0-hosted/dwm048"
-out = root / "scratch/g0-hosted/dwm048-package"
+default_out = root / "scratch/g0-hosted/dwm048-package"
 
 def sha(path):
     with path.open("rb") as stream:
@@ -15,6 +16,12 @@ def sha(path):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", type=Path, default=default_out)
+    args = parser.parse_args()
+    out = args.out.resolve()
+    if not out.is_relative_to(root.resolve() / "scratch"):
+        raise SystemExit("Package must stay within workspace scratch")
     if out.exists():
         raise SystemExit("Package exists; preserve it and inspect the original attempt")
     receipt = json.loads((build / "build-receipt.json").read_text())

@@ -2,6 +2,7 @@ $ErrorActionPreference='Stop'
 $d='C:\BC250\m13\dwm-hosted048'
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\vsync-witness.ps1"
+. "$PSScriptRoot\tdr-witness.ps1"
 . "$PSScriptRoot\confirmed-present-start.ps1"
 . "$PSScriptRoot\request-audit-checkpoint.ps1"
 $trialClock=$null
@@ -22,6 +23,15 @@ $controlTask='BC250-G0-Composition048'
 $cli='C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe'
 Start-Transcript -Path "$d\run.log" -Force | Out-Null
 try {
+ $tdrBegin=[DateTime]::UtcNow
+ $tdrBoot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+ $tdrConfig=Get-DwmTdrConfiguration
+ Write-DurableText "$d\tdr-before.json" (@{utc=$tdrBegin.ToString('o');boot=$tdrBoot;values=$tdrConfig}|ConvertTo-Json -Depth 5)
+ Assert-DwmTdrConfiguration $tdrConfig
+ $activeModes=@(Get-CimInstance Win32_VideoController|Where-Object {$_.CurrentHorizontalResolution -gt 0 -and $_.CurrentVerticalResolution -gt 0})
+ if($activeModes.Count -ne 1 -or $activeModes[0].CurrentRefreshRate -le 1){throw 'Expected one active display with known refresh'}
+ $expectedRefreshHz=[double]$activeModes[0].CurrentRefreshRate
+ Write-DurableText "$d\display-mode.json" (@{refresh_hz=$expectedRefreshHz;width=$activeModes[0].CurrentHorizontalResolution;height=$activeModes[0].CurrentVerticalResolution;source='Win32_VideoController integer refresh, not measured vblank period'}|ConvertTo-Json)
  $freshBaseline=& "$d\preflight.ps1"
  Write-DurableText "$d\preflight.json" ($freshBaseline|Out-String)
  if((Invoke-RestMethod http://127.0.0.1:2250/flags -TimeoutSec 3).stop){throw 'Owner STOP'}
@@ -156,6 +166,7 @@ try {
    if($i -eq 0){
     $vsyncStart=Save-KmdVsyncWitness $cli "$d\kmd-start.log" "$d\vsync-start.json"
     $summary=Get-Content "$d\kmd-start.log" -Raw
+    Write-DurableText "$d\tdr-start.json" ((Get-DwmTdrSummary $summary)|ConvertTo-Json)
     $admission=[regex]::Matches($summary,'GPU Present submits([0-9]+) rejected([0-9]+) failed([0-9]+)')
     if(!$admission.Count){throw 'GPU Present admission counters unavailable'}
     $latest=$admission[$admission.Count-1]
@@ -212,10 +223,9 @@ try {
   }
   if(!$settled){throw 'Final control freeze/DwmFlush not acknowledged'}
   $vsyncEnd=Save-KmdVsyncWitness $cli "$d\kmd-end.log" "$d\vsync-end.json"
-  foreach($counter in @('sync_failures','read_failures','ack_failures')){
-   if($vsyncEnd[$counter] -ne $vsyncStart[$counter]){throw "VSync error counter changed: $counter"}
-  }
-  if(!$vsyncEnd.enabled -or $vsyncEnd.ticks -le $vsyncStart.ticks -or $vsyncEnd.reports -le $vsyncStart.reports){throw 'No VSync progress across GPU interval'}
+  $vsyncInterval=Assert-KmdVsyncInterval $vsyncStart $vsyncEnd -ExpectedRefreshHz $expectedRefreshHz
+  Write-DurableText "$d\vsync-interval.json" ($vsyncInterval|ConvertTo-Json -Depth 5)
+  Write-DurableText "$d\tdr-end.json" ((Get-DwmTdrSummary (Get-Content "$d\kmd-end.log" -Raw))|ConvertTo-Json)
   Save-AuditBoundary "final-capture-start"
   $nativeCaptureStart=[Diagnostics.Stopwatch]::GetTimestamp()
   & $cli fbdump "$d\gpu.bmp" *> "$d\gpu-dump.log"
@@ -240,6 +250,10 @@ try {
  } finally {
   & "$d\restore.ps1" -Restart
   $restorationSucceeded=$true
+  $bootAfter=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+  $events=Get-DwmTdrEvents $tdrBegin ([DateTime]::UtcNow)
+  Write-DurableText "$d\tdr-events.json" (@{boot_before=$tdrBoot;boot_after=$bootAfter;suspect_events=$events}|ConvertTo-Json -Depth 6)
+  if($bootAfter -ne $tdrBoot -or $events.Count){$success=$false;throw 'Boot changed or TDR event observed'}
   if($trialClock.Elapsed.TotalSeconds -gt 180){$success=$false;throw 'Overall180-second budget exceeded'}
  }
 } catch {$success=$false;$failure=$_|Out-String;$failure;throw} finally {
