@@ -1,0 +1,2 @@
+d3d12-ddi OpenAdapter12 0
+d3d12-ddi CloseAdapter 0

@@ -17,6 +17,18 @@ static HRESULT APIENTRY query(HANDLE token,const D3DDDICB_QUERYADAPTERINFO* requ
     printf("QueryAdapterInfo status=%08lx bytes=%u\n",static_cast<unsigned long>(status),args.PrivateDriverDataSize);
     return status<0?HRESULT_FROM_NT(status):S_OK;
 }
+static void report_driver_names(){
+    for(unsigned version=KMTUMDVERSION_DX9;version<=KMTUMDVERSION_DX12;++version){
+        D3DKMT_UMDFILENAMEINFO info{};info.Version=static_cast<KMTUMDVERSION>(version);
+        D3DKMT_QUERYADAPTERINFO q{};q.hAdapter=adapterHandle;q.Type=KMTQAITYPE_UMDRIVERNAME;
+        q.pPrivateDriverData=&info;q.PrivateDriverDataSize=sizeof(info);
+        NTSTATUS status=D3DKMTQueryAdapterInfo(&q);
+        info.UmdFileName[MAX_PATH-1]=0;
+        const wchar_t* name=wcsrchr(info.UmdFileName,L'\\');name=name?name+1:info.UmdFileName;
+        printf("UMD name version=%u status=%08lx basename=%ls\n",version,
+            static_cast<unsigned long>(status),status<0?L"<unavailable>":name);
+    }
+}
 static int inspect(const wchar_t* path,LUID luid){
     HMODULE module=LoadLibraryExW(path,nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if(!module){printf("LoadLibrary error=%lu\n",GetLastError());return 1;}
@@ -55,7 +67,7 @@ int wmain(int argc,wchar_t** argv){
     if(!found){puts("BC-250 adapter not found");return 1;}
     D3DKMT_OPENADAPTERFROMLUID request{};request.AdapterLuid=luid;
     NTSTATUS status=D3DKMTOpenAdapterFromLuid(&request);if(status<0)return 1;
-    adapterHandle=request.hAdapter;int result=inspect(argv[1],luid);
+    adapterHandle=request.hAdapter;report_driver_names();int result=inspect(argv[1],luid);
     D3DKMT_CLOSEADAPTER close{};close.hAdapter=adapterHandle;status=D3DKMTCloseAdapter(&close);adapterHandle=0;
     printf("KMT close status=%08lx\n",static_cast<unsigned long>(status));
     if(status<0)result=1;
