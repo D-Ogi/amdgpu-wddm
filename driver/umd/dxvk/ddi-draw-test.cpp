@@ -10,6 +10,7 @@
 #include "ddi-buffer-binding.h"
 #include "ddi-transfer.h"
 #include "ddi-map.h"
+#include "ddi-rtv.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -37,6 +38,7 @@ int main() {
     install_buffer_binding_ddi(table);
     install_transfer_ddi(table);
     install_map_ddi(table);
+    install_rtv_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -270,5 +272,34 @@ int main() {
     table.pfnDynamicResourceUnmap(h,rhandle,0);
     table.pfnDefaultConstantBufferUpdateSubresourceUP(h,rhandle,0,nullptr,&payload,4,4,0);
     if (errors!=66 || owner.runtime().domain.entered()) std::abort();
+    D3D10DDIARG_CREATERENDERTARGETVIEW rv{}; D3D11_RENDER_TARGET_VIEW_DESC rvout{};
+    rv.Format=DXGI_FORMAT_R8G8B8A8_UNORM; rv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D;
+    rv.Tex2D={2,3,2};
+    if (convert_rtv(rv,8,1,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DARRAY ||
+        rvout.Texture2DArray.MipSlice!=2 || rvout.Texture2DArray.FirstArraySlice!=3 || rvout.Texture2DArray.ArraySize!=2) std::abort();
+    if (convert_rtv(rv,8,4,rvout)!=E_INVALIDARG) std::abort();
+    rv.Tex2D.MipSlice=0;
+    if (convert_rtv(rv,8,4,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY ||
+        rvout.Texture2DMSArray.FirstArraySlice!=3 || rvout.Texture2DMSArray.ArraySize!=2) std::abort();
+    rv.Tex2D={0,0,1};
+    if (convert_rtv(rv,1,4,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS) std::abort();
+    rv.ResourceDimension=D3D10DDIRESOURCE_TEXTURECUBE; rv.TexCube={1,6,6};
+    if (convert_rtv(rv,12,1,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DARRAY ||
+        rvout.Texture2DArray.FirstArraySlice!=6 || rvout.Texture2DArray.ArraySize!=6) std::abort();
+    rv.TexCube.FirstArraySlice=UINT_MAX;
+    if (convert_rtv(rv,12,1,rvout)!=E_INVALIDARG || rvout.Texture2DArray.FirstArraySlice!=6) std::abort();
+    rv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D; rv.Tex3D={2,3,4};
+    if (convert_rtv(rv,1,1,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE3D ||
+        rvout.Texture3D.FirstWSlice!=3 || rvout.Texture3D.WSize!=4) std::abort();
+    rv.ResourceDimension=D3D10DDIRESOURCE_BUFFER; rv.Buffer={7,11};
+    if (convert_rtv(rv,1,1,rvout)!=S_OK || rvout.Buffer.FirstElement!=7 || rvout.Buffer.NumElements!=11) std::abort();
+    rv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE1D; rv.Tex1D={3,0,1};
+    if (convert_rtv(rv,1,1,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE1D || rvout.Texture1D.MipSlice!=3) std::abort();
+    DdiRenderTargetView rt{}; D3D10DDI_HRENDERTARGETVIEW rth{}; rth.pDrvPrivate=&rt;
+    if (table.pfnCalcPrivateRenderTargetViewSize(h,&rv)!=sizeof(rt)) std::abort();
+    table.pfnCreateRenderTargetView(h,&rv,rth,{});
+    FLOAT clearColor[4]={0.1f,0.2f,0.3f,0.4f};
+    table.pfnClearRenderTargetView(h,rth,clearColor); table.pfnDestroyRenderTargetView(h,rth);
+    if (errors!=69 || rt.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
