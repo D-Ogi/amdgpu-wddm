@@ -3,6 +3,7 @@
 #include "ddi-input-layout.h"
 #include "ddi-raster.h"
 #include "ddi-shader.h"
+#include "ddi-sampler.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -23,6 +24,7 @@ int main() {
     install_input_layout_ddi(table);
     install_raster_ddi(table);
     install_shader_ddi(table);
+    install_sampler_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -78,5 +80,20 @@ int main() {
     if (shader.stage!=ShaderStage::domain) std::abort();
     table.pfnDsSetShader(h,{});
     if (errors!=23 || owner.runtime().domain.entered()) std::abort();
+    D3D10_DDI_SAMPLER_DESC sampler{};
+    sampler.Filter=D3D10_DDI_FILTER_COMPARISON_ANISOTROPIC;
+    sampler.AddressU=D3D10_DDI_TEXTURE_ADDRESS_BORDER;
+    sampler.MipLODBias=-0.5f; sampler.MaxAnisotropy=16; sampler.MinLOD=2; sampler.MaxLOD=8;
+    sampler.BorderColor[3]=0.75f;
+    const auto sample=convert_sampler(sampler);
+    if (sample.Filter!=D3D11_FILTER_COMPARISON_ANISOTROPIC || sample.AddressU!=D3D11_TEXTURE_ADDRESS_BORDER || sample.MipLODBias!=-0.5f || sample.BorderColor[3]!=0.75f || sample.MaxLOD!=8) std::abort();
+    DdiSampler ss{}; D3D10DDI_HSAMPLER shandle{}; shandle.pDrvPrivate=&ss;
+    if (table.pfnCalcPrivateSamplerSize(h,&sampler)!=sizeof(ss)) std::abort();
+    table.pfnCreateSampler(h,&sampler,shandle,{});
+    table.pfnVsSetSamplers(h,0,1,&shandle); table.pfnPsSetSamplers(h,0,0,nullptr);
+    table.pfnGsSetSamplers(h,0,0,nullptr); table.pfnCsSetSamplers(h,0,0,nullptr);
+    table.pfnHsSetSamplers(h,0,0,nullptr); table.pfnDsSetSamplers(h,0,0,nullptr);
+    table.pfnDestroySampler(h,shandle);
+    if (errors!=31 || ss.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
