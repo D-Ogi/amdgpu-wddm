@@ -1,4 +1,4 @@
-# M14 same-GPU per-app control (not yet run)
+# M14 same-GPU per-app control
 
 Hypothesis: application-local DXVK produces the same three image checksums as
 native runtime011 on the same BC-250 GPU, ICD C0CE and client 84C328CD.
@@ -12,7 +12,9 @@ This directory supplies phase.ps1 instead of the native-route phase script.
 The exact derived scripts and all artifacts must be hashed in stage-manifest.json.
 Use a new one-shot directory C:\BC250\m14\perapp001 and an independent SYSTEM
 supervisor with the existing 180-second task bound and restoration budget.
-No staging or lab execution has happened yet.
+Execution completed: M739 passed in 50.085 seconds; all three GPU images
+match native runtime011 byte for byte. Original ICD restored and task removed.
+See [measured result](../../../../evidence/windows/2026-09-28-E34-m14-perapp001/RESULT.md).
 
 The elevated Vulkan loader previously ignored override environment variables.
 This control therefore temporarily routes the registered ICD file through the
@@ -32,5 +34,5 @@ DWM modules, registration and baseline hashes after restoration.
 
 DXVK source bf14ecca differs from native engine source80352134 only in
 src/ddi/engine_test.cpp and src/ddi/meson.build, not rendering implementation.
-A fresh build receipt must establish the per-app artifact hashes. This control
+The frozen build receipt in control-build.json establishes the per-app hashes. This control
 uses a debugger and is not evidence for the performance bound or window Present.
