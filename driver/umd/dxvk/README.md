@@ -57,3 +57,15 @@ The callback control includes two render queues, exact wait objects/values, fenc
 ## Engine ABI r1 integration
 
 `engine-input-layout.cpp` now calls the engine ABI's `GetVertexFormat` and `CreateInputLayout` with the translated DDI data. It includes the single contract from the external DXVK checkout (`ddi/bc250_dxvk_engine.h`), without copying the ABI header. Static assertions verify size and every field offset of the engine signature-entry and stream-output mirrors against the actual WDK structures. This compilation confirms that the r1 header can coexist with WDK headers; the earlier full-DXVK-header collision remains avoided. Engine method invocation still needs validation against the built engine DLL, not merely the local layout control.
+
+## Engine session lifetime
+
+`EngineSession` creates a Vulkan device from an already-created hosted instance/physical device, using only that instance's `GetInstanceProcAddr`. It queries the engine adapter level and requirements, passes the exact extension/feature chain to vkCreateDevice, obtains the requested queue and calls the ABI factory in inline mode. Requirements, service descriptors and device descriptions stay in the session until the engine is released. Instance extension-name storage, hosted bridge and engine DLL remain caller-owned and must outlive it.
+
+Call `open` and `close` inside the runtime domain. This type has explicit teardown and must not be moved/copied. On nonzero final engine Release, `close` sets `must_retain_owner` and leaves Vulkan and requirement storage intact. The owner must retain the session, instance, runtime bridge and DLL too; it must not destroy the containing device memory. This is a leak containment path, not recovery. Integration into DDI creation/destruction is still outstanding.
+
+```powershell
+& .\\bc250-win\\tools\\build\\test-umd-engine-session.ps1 -DxvkSource .\\scratch\\m14\\dxvk
+```
+
+Controlled Vulkan and engine callbacks validate requirements propagation, queue selection, feature-chain lifetime, failures at requirement validation/Vulkan creation/engine creation, repeated close, and engine Release before Vulkan destruction. The nonzero-Release case verifies retention. No Vulkan work on a physical GPU is performed by this unit control.
