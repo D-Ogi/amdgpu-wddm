@@ -172,7 +172,16 @@ static void Consume(_Inout_ BC250_IH* ih)
         ih->Stats.Rptr = rptr;
         KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
 
-        if (ih->Active == 0 || rptr == ih->Rptr) break;     // stopped, or nothing new
+        if (ih->Active == 0) break;
+        if (rptr == ih->Rptr)
+        {
+            // An empty serviced interrupt still needs the RPTR doorbell to
+            // rearm MSI. A delayed writeback must not strand the next vector.
+            // Matches the empty-pass publication in amdgpu_ih_process; keep
+            // the existing bounded pass and never publish after a read fault.
+            bc250_ih_set_rptr(adev, rptr);
+            break;
+        }
         ih->Rptr = rptr;
         bc250_ih_set_rptr(adev, rptr);
         if (budget == 0) break;

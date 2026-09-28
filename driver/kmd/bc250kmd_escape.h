@@ -29,7 +29,7 @@
 #define BC250_ESCAPE_RUN_CLOCK 19u             // typed SMU telemetry or complete operating-point transaction
 #define BC250_ESCAPE_OBSERVE_DCN 20u       // named, read-only scanout and timing observations
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
-#define BC250_KMD_VERSION 0x000700A6u       // revision 166: synchronized OTG diagnostic samples
+#define BC250_KMD_VERSION 0x000700A8u       // revision 168: rearm MSI after empty IH consumption
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
