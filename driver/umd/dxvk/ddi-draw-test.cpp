@@ -5,6 +5,7 @@
 #include "ddi-shader.h"
 #include "ddi-sampler.h"
 #include "ddi-fixed-state.h"
+#include "ddi-blend.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -27,6 +28,7 @@ int main() {
     install_shader_ddi(table);
     install_sampler_ddi(table);
     install_fixed_state_ddi(table);
+    install_blend_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -139,5 +141,34 @@ int main() {
     table.pfnCreateRasterizerState(h,&raster,rh,{});
     table.pfnSetRasterizerState(h,{}); table.pfnDestroyRasterizerState(h,rh);
     if (errors!=37 || dstate.object || rstate.object || owner.runtime().domain.entered()) std::abort();
+    D3D11_1_DDI_BLEND_DESC blend;
+    std::memset(&blend,0xcc,sizeof(blend));
+    blend.AlphaToCoverageEnable=TRUE; blend.IndependentBlendEnable=FALSE;
+    blend.RenderTarget[0]={TRUE,FALSE,D3D10_DDI_BLEND_SRC_ALPHA,D3D10_DDI_BLEND_INV_SRC_ALPHA,
+        D3D10_DDI_BLEND_OP_ADD,D3D10_DDI_BLEND_ONE,D3D10_DDI_BLEND_ZERO,
+        D3D10_DDI_BLEND_OP_MAX,D3D11_1_DDI_LOGIC_OP_NOOP,0x5};
+    D3D11_BLEND_DESC1 b{};
+    if (convert_blend(blend,b)!=S_OK || !b.AlphaToCoverageEnable || b.IndependentBlendEnable) std::abort();
+    // IndependentBlend=FALSE must ignore poisoned RT1..7 and replicate RT0.
+    for (auto &rt:b.RenderTarget) if (rt.SrcBlend!=D3D11_BLEND_SRC_ALPHA ||
+        rt.DestBlend!=D3D11_BLEND_INV_SRC_ALPHA || rt.BlendOpAlpha!=D3D11_BLEND_OP_MAX || rt.RenderTargetWriteMask!=5) std::abort();
+    blend.IndependentBlendEnable=TRUE;
+    for (auto &rt:blend.RenderTarget) rt=blend.RenderTarget[0];
+    blend.RenderTarget[7].BlendEnable=FALSE; blend.RenderTarget[7].LogicOpEnable=TRUE;
+    blend.RenderTarget[7].LogicOp=D3D11_1_DDI_LOGIC_OP_XOR; blend.RenderTarget[7].RenderTargetWriteMask=0xa;
+    blend.RenderTarget[7].SrcBlend=static_cast<D3D10_DDI_BLEND>(0xcccccccc);
+    if (convert_blend(blend,b)!=S_OK || b.RenderTarget[7].LogicOp!=D3D11_LOGIC_OP_XOR ||
+        b.RenderTarget[7].RenderTargetWriteMask!=0xa || b.RenderTarget[0].RenderTargetWriteMask!=5) std::abort();
+    blend.RenderTarget[7].BlendEnable=TRUE;
+    if (convert_blend(blend,b)!=E_INVALIDARG || b.RenderTarget[7].BlendEnable) std::abort();
+    blend.RenderTarget[7]=blend.RenderTarget[0];
+    blend.RenderTarget[7].SrcBlend=D3D10_DDI_BLEND_ALPHA_FACTOR;
+    if (convert_blend(blend,b)!=E_NOTIMPL) std::abort();
+    DdiBlend bs{}; D3D10DDI_HBLENDSTATE bh{}; bh.pDrvPrivate=&bs;
+    if (table.pfnCalcPrivateBlendStateSize(h,&blend)!=sizeof(bs)) std::abort();
+    table.pfnCreateBlendState(h,&blend,bh,{});
+    const FLOAT factors[4]={0.2f,0.4f,0.6f,0.8f};
+    table.pfnSetBlendState(h,{},factors,0x55555555); table.pfnDestroyBlendState(h,bh);
+    if (errors!=40 || bs.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
