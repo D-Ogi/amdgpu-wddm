@@ -4,6 +4,31 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+
+static void FaultContext(HANDLE process,DWORD threadId) {
+    HANDLE thread=OpenThread(THREAD_GET_CONTEXT|THREAD_QUERY_INFORMATION,FALSE,threadId);
+    if(!thread){std::printf("CONTEXT_OPEN_ERROR %lu\n",GetLastError());return;}
+    CONTEXT context{};context.ContextFlags=CONTEXT_CONTROL|CONTEXT_INTEGER;
+    if(GetThreadContext(thread,&context)) {
+        std::printf("CONTEXT rip=%016llx rsp=%016llx rbp=%016llx rcx=%016llx rdx=%016llx r8=%016llx r9=%016llx\n",
+            context.Rip,context.Rsp,context.Rbp,context.Rcx,context.Rdx,context.R8,context.R9);
+        // Raw stack words, not a reconstructed call chain. Never fabricate zeros.
+        for(unsigned i=0;i<32;++i){
+            const ULONG64 address=context.Rsp+8ULL*i;ULONG64 value=0;SIZE_T read=0;
+            if(ReadProcessMemory(process,reinterpret_cast<const void *>(address),&value,sizeof(value),&read) && read==sizeof(value))
+                std::printf("STACK %016llx %016llx\n",address,value);
+            else {std::printf("STACK_UNREADABLE %016llx error=%lu\n",address,GetLastError());break;}
+        }
+    }else std::printf("CONTEXT_READ_ERROR %lu\n",GetLastError());
+    CloseHandle(thread);
+}
+static void Module(HANDLE file,const void *base) {
+    wchar_t path[32768]{};
+    DWORD count=file?GetFinalPathNameByHandleW(file,path,DWORD(_countof(path)),FILE_NAME_NORMALIZED):0;
+    if(count && count<_countof(path))std::printf("MODULE base=%p path=%ls\n",base,path);
+    else std::printf("MODULE base=%p path_unavailable=1\n",base);
+}
+
 // Short-lived user-mode debugger. No kernel debugger, resident listener or GUI.
 static std::wstring Quote(const wchar_t *arg) {
     std::wstring result=L"\"";size_t slashes=0;
@@ -35,6 +60,7 @@ int wmain(int argc,wchar_t **argv) {
             std::printf("DESCENDANT %lu\n",pi.dwProcessId);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);
         }
         if(!wcscmp(argv[2],L"sleep")){Sleep(10000);return 0;}
+        if(!wcscmp(argv[2],L"crash")){RaiseException(EXCEPTION_ACCESS_VIOLATION,EXCEPTION_NONCONTINUABLE,0,nullptr);return 9;}
         return !wcscmp(argv[2],L"fail")?7:0;
     }
     if(argc<3){std::puts("usage: debug-child seconds executable [arguments...]");return 2;}
@@ -60,10 +86,14 @@ int wmain(int argc,wchar_t **argv) {
         DWORD status=DBG_CONTINUE;
         switch(event.dwDebugEventCode){
         case CREATE_PROCESS_DEBUG_EVENT:
+            Module(event.u.CreateProcessInfo.hFile,event.u.CreateProcessInfo.lpBaseOfImage);
             if(event.u.CreateProcessInfo.hFile)CloseHandle(event.u.CreateProcessInfo.hFile);
             break;
         case CREATE_THREAD_DEBUG_EVENT:break;
-        case LOAD_DLL_DEBUG_EVENT:if(event.u.LoadDll.hFile)CloseHandle(event.u.LoadDll.hFile);break;
+        case LOAD_DLL_DEBUG_EVENT:
+            Module(event.u.LoadDll.hFile,event.u.LoadDll.lpBaseOfDll);
+            if(event.u.LoadDll.hFile)CloseHandle(event.u.LoadDll.hFile);break;
+        case UNLOAD_DLL_DEBUG_EVENT:std::printf("MODULE_UNLOAD base=%p\n",event.u.UnloadDll.lpBaseOfDll);break;
         case OUTPUT_DEBUG_STRING_EVENT:{
             const auto &info=event.u.DebugString;
             // OUTPUT_DEBUG_STRING_INFO length is bytes, including Unicode.
@@ -81,6 +111,7 @@ int wmain(int argc,wchar_t **argv) {
                 event.u.Exception.ExceptionRecord.ExceptionAddress);
             if(initialBreakpoint && exception==EXCEPTION_BREAKPOINT && event.u.Exception.dwFirstChance)initialBreakpoint=false;
             else status=DBG_EXCEPTION_NOT_HANDLED;
+            if(!event.u.Exception.dwFirstChance)FaultContext(process.hProcess,event.dwThreadId);
             break;
         }
         case EXIT_PROCESS_DEBUG_EVENT:exited=true;code=event.u.ExitProcess.dwExitCode;break;
