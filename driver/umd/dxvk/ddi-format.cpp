@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-format.h"
 namespace bc250::umd {
+// WDK CheckFormatSupport permits NOT_SUPPORTED only for this explicit list.
+bool format_allows_not_supported(DXGI_FORMAT format) {
+    switch (format) {
+    case DXGI_FORMAT_A8P8: case DXGI_FORMAT_AI44: case DXGI_FORMAT_AYUV:
+    case DXGI_FORMAT_IA44: case DXGI_FORMAT_NV11: case DXGI_FORMAT_P010:
+    case DXGI_FORMAT_P016: case DXGI_FORMAT_P8: case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM:
+    case DXGI_FORMAT_Y210: case DXGI_FORMAT_Y216: case DXGI_FORMAT_Y410: case DXGI_FORMAT_Y416:
+        return true;
+    default: return false;
+    }
+}
 UINT convert_format_support(UINT s,UINT s2) {
     UINT result=0;
 #define MAP(api,ddi) if (s & api) result|=ddi
@@ -26,7 +37,9 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
         UINT support=0; HRESULT hr=owner.device()->CheckFormatSupport(value,&support);
-        if (hr==E_INVALIDARG) return; // Unsupported/unknown format: no support.
+        if ((hr==E_FAIL || hr==E_INVALIDARG) && format_allows_not_supported(value)) {
+            *out=D3D10_DDI_FORMAT_SUPPORT_NOT_SUPPORTED; return;
+        }
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
         D3D11_FEATURE_DATA_FORMAT_SUPPORT2 extra{value,0};
         hr=owner.device()->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2,&extra,sizeof(extra));
@@ -39,6 +52,7 @@ void APIENTRY samples(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT count,UINT *out)
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!out || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (!count || count>D3D11_MAX_MULTISAMPLE_SAMPLE_COUNT) return;
         UINT quality=0; HRESULT hr=owner.device()->CheckMultisampleQualityLevels(value,count,&quality);
         if (hr==E_INVALIDARG) return;
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }

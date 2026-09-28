@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "engine-abi.h"
 #include "engine-modules.h"
 #include <cstdlib>
 #include <iostream>
@@ -28,7 +29,8 @@ int wmain(int argc,wchar_t **argv) {
         const HRESULT expected=i==3 ? E_FAIL : E_NOINTERFACE;
         if (modules.open(argv[1],argv[1])!=expected || modules.loaded() || modules.functions().CreateDevice) std::abort();
     }
-    mode(0);
+    if (!compatible_engine_abi(0x10001,0x10000) || compatible_engine_abi(0x10000,0x10001) || compatible_engine_abi(0x20000,0x10000)) std::abort();
+    mode(4);
     if (modules.open(argv[1],argv[1])!=S_OK) std::abort();
     modules.close();
     if (!FreeLibrary(fixture)) std::abort();

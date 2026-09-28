@@ -187,3 +187,11 @@ ResourceIsStagingBusy returns FALSE on known device loss without SetErrorCb so a
 following Map can report removal. Unexpected programming failures remain critical,
 as required by the local Microsoft display/handling-errors.md contract; this is
 not yet a complete per-entry error-category audit. Host translation tests passed.
+
+The loader and session accept an engine with the same ABI major and at least the
+shell's minor, while still checking table size and mandatory functions. Loader
+fixture tests include a newer compatible minor and reject an older required minor.
+Cube-array views accept arbitrary first faces within the resource range. Format
+query failures map to NOT_SUPPORTED only for the explicit WDK-permitted list;
+R1_UNORM is not on that list and its engine support remains unresolved. MSAA
+counts outside 1..32 return zero quality levels without an engine error.

@@ -14,6 +14,7 @@ extern "C" __declspec(dllexport) HRESULT APIENTRY Bc250DxvkEngineGetFuncs(UINT32
     if (fixtureMode==1) f->AbiVersion=0;
     if (fixtureMode==2) f->CreateDevice=nullptr;
     if (fixtureMode==3) return E_FAIL;
+    if (fixtureMode==4) f->AbiVersion=BC250_DXVK_ENGINE_ABI_VERSION+1;
     return S_OK;
 }
 extern "C" __declspec(dllexport) PFN_vkVoidFunction VKAPI_CALL vk_icdGetInstanceProcAddr(VkInstance,const char *) { return nullptr; }

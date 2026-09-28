@@ -37,7 +37,7 @@ HRESULT convert_srv(const D3D11DDIARG_CREATESHADERRESOURCEVIEW &s,UINT layers,UI
         d.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE3D; d.Texture3D={s.Tex3D.MostDetailedMip,s.Tex3D.MipLevels}; break;
     case D3D10DDIRESOURCE_TEXTURECUBE: {
         const auto &v=s.TexCube;
-        if (samples!=1 || layers%6 || v.First2DArrayFace%6 || v.First2DArrayFace>=layers ||
+        if (samples!=1 || layers%6 || v.First2DArrayFace>=layers ||
             !v.NumCubes || v.NumCubes>(layers-v.First2DArrayFace)/6) return E_INVALIDARG;
         if (layers==6) { d.ViewDimension=D3D11_SRV_DIMENSION_TEXTURECUBE; d.TextureCube={v.MostDetailedMip,v.MipLevels}; }
         else { d.ViewDimension=D3D11_SRV_DIMENSION_TEXTURECUBEARRAY; d.TextureCubeArray={v.MostDetailedMip,v.MipLevels,v.First2DArrayFace,v.NumCubes}; }

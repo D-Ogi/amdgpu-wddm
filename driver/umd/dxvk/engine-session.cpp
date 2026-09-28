@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "engine-abi.h"
 #include "engine-session.h"
 namespace bc250::umd {
 static HRESULT vk_error(VkResult r) {
@@ -10,7 +11,7 @@ HRESULT EngineSession::open(const BC250_DXVK_ENGINE_FUNCS &funcs,
     const BC250_DXVK_VULKAN_INSTANCE &instance, D3D_FEATURE_LEVEL level,
     const BC250_DXVK_SHELL_SERVICES &services) {
     if (!domain_.entered() || have_requirements_ || device_.Device || engine_ || leaked_) return E_UNEXPECTED;
-    if (funcs.Size<sizeof(funcs) || funcs.AbiVersion!=BC250_DXVK_ENGINE_ABI_VERSION ||
+    if (funcs.Size<sizeof(funcs) || !compatible_engine_abi(funcs.AbiVersion) ||
         !funcs.QueryDeviceRequirements || !funcs.FreeDeviceRequirements || !funcs.GetAdapterInfo || !funcs.CreateDevice ||
         instance.Size<sizeof(instance) || !instance.Instance || !instance.PhysicalDevice || !instance.GetInstanceProcAddr ||
         services.Size<sizeof(services)) return E_INVALIDARG;

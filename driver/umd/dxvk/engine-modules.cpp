@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#include "engine-abi.h"
 #include "engine-modules.h"
 #include <cwchar>
 namespace bc250::umd {
@@ -25,7 +26,7 @@ HRESULT EngineModules::open(const wchar_t *enginePath,const wchar_t *icdPath) {
     if (!getter) { close(); return E_NOINTERFACE; }
     functions_.Size=sizeof(functions_);
     HRESULT hr=getter(BC250_DXVK_ENGINE_ABI_VERSION,&functions_);
-    if (SUCCEEDED(hr) && (functions_.Size<sizeof(functions_) || functions_.AbiVersion!=BC250_DXVK_ENGINE_ABI_VERSION ||
+    if (SUCCEEDED(hr) && (functions_.Size<sizeof(functions_) || !compatible_engine_abi(functions_.AbiVersion) ||
         !functions_.QueryDeviceRequirements || !functions_.FreeDeviceRequirements || !functions_.GetAdapterInfo || !functions_.CreateDevice)) hr=E_NOINTERFACE;
     if (FAILED(hr)) { close(); return hr; }
     icd_=LoadLibraryExW(icdPath,nullptr,search);

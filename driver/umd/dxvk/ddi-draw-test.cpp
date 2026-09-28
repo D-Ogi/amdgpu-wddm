@@ -46,6 +46,9 @@ int main() {
             query_ddi_status(loss)!=D3DDDIERR_DEVICEREMOVED) std::abort();
     }
     if (ddi_device_status(E_INVALIDARG)!=E_INVALIDARG || ddi_device_status(E_FAIL)!=E_FAIL) std::abort();
+    if (!format_allows_not_supported(DXGI_FORMAT_Y410) || !format_allows_not_supported(DXGI_FORMAT_AYUV) ||
+        format_allows_not_supported(DXGI_FORMAT_R1_UNORM) || format_allows_not_supported(DXGI_FORMAT_R8G8B8A8_UNORM) ||
+        format_allows_not_supported(DXGI_FORMAT_FORCE_UINT)) std::abort();
     auto table=make_render_device_table();
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
@@ -396,6 +399,10 @@ int main() {
         svout.TextureCubeArray.First2DArrayFace!=6 || svout.TextureCubeArray.NumCubes!=2 || svout.TextureCubeArray.MipLevels!=3) std::abort();
     sv.TexCube.NumCubes=UINT_MAX;
     if (convert_srv(sv,24,1,svout)!=E_INVALIDARG || svout.TextureCubeArray.NumCubes!=2) std::abort();
+    sv.TexCube={0,1,1,2};
+    if (convert_srv(sv,24,1,svout)!=S_OK || svout.TextureCubeArray.First2DArrayFace!=1 || svout.TextureCubeArray.NumCubes!=2) std::abort();
+    sv.TexCube={0,1,19,1};
+    if (convert_srv(sv,24,1,svout)!=E_INVALIDARG) std::abort();
     sv.TexCube={1,UINT_MAX,0,1};
     if (convert_srv(sv,6,1,svout)!=S_OK || svout.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURECUBE || svout.TextureCube.MipLevels!=UINT_MAX) std::abort();
     sv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; sv.Tex2D={0,2,1,3};
