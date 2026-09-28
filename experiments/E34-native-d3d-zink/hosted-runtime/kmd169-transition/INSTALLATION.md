@@ -46,7 +46,7 @@ Preparation now requires --selector and includes its binary in the stage manifes
 
 ## Confirmation admission after M712
 
-The runner now rejects confirmation before 60000 ms of readiness, with no completed work, or with a completion older than 15000 ms. Flags 7 alone do not admit confirmation. Generation and epoch are parsed as 64-bit values, matching the CLI. This is a fail-closed guard, not a completed timing redesign: candidate readiness and restored-baseline confirmation still need separate budgeting before another trial. The current runner must not be dispatched as a repaired transition. The deferred installer rejection E0000217 also remains unresolved.
+The runner now rejects confirmation before 60000 ms of readiness, with no completed work, or with a completion older than 15000 ms. Flags 7 alone do not admit confirmation. Generation and epoch are parsed as 64-bit values, matching the CLI. Candidate and restore acceptance are separated below. The current runner must not be dispatched as a repaired transition until the installer and recovery path have been validated. The deferred installer rejection E0000217 also remains unresolved.
 
 ## Read-only node location control (M713)
 
@@ -61,3 +61,11 @@ M713 observes that a store-path input produces a published system INF node, not 
 Install now writes durable before/after observations of DriverVersion, ProblemCode, published INF, driver key and KMD service state/path. Each field carries readable/value/error, so a removed binding is distinct from problem 0. The before observation must show a stopped KMD service; otherwise no installer call is made. A native nonzero exit or invocation exception is interpreted only after recording the post-call observation. Queries remain inside the phase job deadline; a killed phase can lack the after receipt, which is unknown state, not evidence that the binding survived.
 
 Local fault-injection controls cover native failure, invocation exception, loss of binding data and rejection of a running service. They do not prove recovery or deferred installation succeeds on the lab. The installed package and configuration still require independent verification before enable.
+
+## Bounded confirmation schedule
+
+Candidate Verify records candidate-ready-only: stable CPU module observations bracketed by the same KMD generation/epoch, exact ABI and fresh completed work. It does not invoke confirmation or claim a health-confirmed candidate. This is admission for a transition rehearsal, not GPU promotion or G0 acceptance.
+
+Restore Verify waits for the unchanged generation/epoch to satisfy full confirmation admission, invokes checked confirmation if needed, then requires a fresh flags15 witness and strict guard0 CPU check. It can use up to 70 seconds inside the original global schedule, ending no later than T+160 seconds. Ten seconds remain for package cleanup under the T+170 work deadline; the outer task cap remains 180 seconds. No deadline is extended or restarted. A late restore start can leave too little time and must remain recovery-required, not accepted. The phase job bounds blocking query calls, while the polling helper also rejects a result returned past its own deadline.
+
+Local tests cover age boundaries, stale work, no work, identity changes and late reads. They establish control behavior only; no new transition has validated this schedule on the lab.

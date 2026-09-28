@@ -137,6 +137,13 @@ if($Phase -eq 'Capture'){
     })
    }
    }
+   $abi=if($Arm -eq 'candidate'){'0x000700A9'}else{'0x000700A6'}
+   $readHealth={
+    $text=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
+    if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}
+    Get-KmdReadyHealth $text $abi
+   }
+   $startHealth=& $readHealth
    $ready=Wait-KmdCpuBaseline -Saved $saved -AllowUnconfirmed -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Read $readCpu -Record {
     param($sample)
     Write-DurableText "$out\$Receipt-ready-$($sample.attempt).json" ($sample|ConvertTo-Json)
@@ -144,13 +151,20 @@ if($Phase -eq 'Capture'){
    $observed=$ready.observed
    Write-DurableText "$out\$Receipt-readiness.json" ($ready|ConvertTo-Json -Depth 10)
    $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
-   $abi=if($Arm -eq 'candidate'){'0x000700A9'}else{'0x000700A6'}
    if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}
    $before=Get-KmdReadyHealth $health $abi
+   Assert-KmdSameHealthStart $startHealth $before
+   if($Arm -eq 'candidate'){Assert-KmdFreshWork $before}
    Write-DurableText "$out\$Receipt-health-before.txt" $health
    $info=& C:\BC250\m8\bc250kmd_cli.exe info|Out-String
    if($LASTEXITCODE -ne 0 -or $info -notmatch $abi -or $info -notmatch 'FULL WDDM TABLE'){throw 'Loaded KMD identity mismatch'}
-   if($before.flags -eq 7){
+   if($Arm -eq 'restore'){
+    $before=Wait-KmdConfirmEligible -Before $startHealth -Read $readHealth -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Record {
+     param($sample)
+     Write-DurableText "$out\$Receipt-health-wait-$($sample.attempt).json" ($sample|ConvertTo-Json -Depth 5)
+    }
+   }
+   if($Arm -eq 'restore' -and $before.flags -eq 7){
     Assert-KmdConfirmEligible $before
     $confirmed=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health confirm $before.generation $before.epoch|Out-String
     if($LASTEXITCODE -ne 0){throw 'Checked health confirmation failed'}
@@ -158,10 +172,14 @@ if($Phase -eq 'Capture'){
     Write-DurableText "$out\$Receipt-health-confirm.txt" $confirmed
    }
    $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
-   if($LASTEXITCODE -ne 0){throw 'Confirmed health read failed'}
-   Assert-KmdConfirmedHealth $before (Get-KmdReadyHealth $health $abi)
+   if($LASTEXITCODE -ne 0){throw 'Final health read failed'}
+   $finalHealth=Get-KmdReadyHealth $health $abi
+   Assert-KmdSameHealthStart $startHealth $finalHealth
+   Assert-KmdFreshWork $finalHealth
+   if($Arm -eq 'restore'){Assert-KmdConfirmedHealth $before $finalHealth}
+   Write-DurableText "$out\$Receipt-health-acceptance.json" (@{scope=$(if($Arm -eq 'candidate'){'candidate-ready-only'}else{'restored-confirmed'});health=$finalHealth}|ConvertTo-Json -Depth 4)
    $observed=& $readCpu
-   Assert-KmdCpuBaseline $saved $observed
+   Assert-KmdCpuBaseline $saved $observed -AllowUnconfirmed:($Arm -eq 'candidate')
    Write-DurableText "$out\$Receipt-cpu.json" ($observed|ConvertTo-Json -Depth 8)
    Write-DurableText "$out\$Receipt-info.txt" $info
    Write-DurableText "$out\$Receipt-health.txt" $health

@@ -22,11 +22,13 @@ function Invoke-KmdTransitionArm {
  $powershell="$env:windir\System32\WindowsPowerShell\v1.0\powershell.exe"
  foreach($phase in $phases){
   $elapsed=Get-KmdElapsed $Origin $Frequency
-  $end=if($Arm -eq 'candidate'){87}else{170}
-  $budget=[int][Math]::Min(30000,[Math]::Max(0,[Math]::Floor(($end-$elapsed)*1000)))
+  # Restore Verify ends by T+160, reserving ten seconds for package cleanup.
+  $end=if($Arm -eq 'candidate'){87}elseif($phase -eq 'Verify'){160}else{170}
+  $phaseCap=if($Arm -eq 'restore' -and $phase -eq 'Verify'){70000}else{30000}
+  $budget=[int][Math]::Min($phaseCap,[Math]::Max(0,[Math]::Floor(($end-$elapsed)*1000)))
   if($budget -le 1000){return @{success=$false;tree_closed=$true;phase=$phase;reason='no-budget'}}
   $receipt=($Arm+'-'+$phase).ToLowerInvariant()
-  $deadline=[Math]::Min($Origin+[long]($(if($Arm -eq 'candidate'){87}else{170})*$Frequency),
+  $deadline=[Math]::Min($Origin+[long]($end*$Frequency),
     [Diagnostics.Stopwatch]::GetTimestamp()+[long]($budget*$Frequency/1000))
   try {
    $result=Invoke-KmdBoundedChild -Tool $Tool -Deadline $deadline -Stdout "$Directory\$receipt.out" -Stderr "$Directory\$receipt.err" -Executable $powershell -Arguments @('-NoProfile','-File',$phaseScript,'-Phase',$phase,'-Arm',$Arm,'-Directory',$Directory,'-Receipt',$receipt,'-ChildDeadline',[string]$deadline)
@@ -47,5 +49,5 @@ function Invoke-KmdTransitionArm {
    return @{success=$false;tree_closed=$true;phase=$phase;reason='completion-witness-invalid'}
   }
  }
- return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified'}
+ return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified';health_scope=$(if($Arm -eq 'candidate'){'candidate-ready-only'}else{'restored-confirmed'})}
 }

@@ -77,3 +77,30 @@ function Assert-KmdConfirmEligible {
   throw 'Health confirmation requires completed work, ready_ms >= 60000 and age_ms <= 15000'
  }
 }
+
+function Assert-KmdSameHealthStart {
+ param($Before,$After)
+ if($After.generation -ne $Before.generation -or $After.epoch -ne $Before.epoch){throw 'Health start changed during verification'}
+}
+function Assert-KmdFreshWork {
+ param($Health)
+ if($null -eq $Health.completed -or $Health.completed -eq 0 -or
+    $null -eq $Health.age_ms -or $Health.age_ms -gt 15000){throw 'No fresh completed work'}
+}
+function Wait-KmdConfirmEligible {
+ param($Before,[scriptblock]$Read,[long]$Deadline,[scriptblock]$Record,
+       [ValidateRange(1,1000)][int]$IntervalMs=500)
+ $attempt=0
+ while([Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline){
+  $attempt++;$sample=& $Read
+  Assert-KmdSameHealthStart $Before $sample
+  $eligible=$true
+  try{Assert-KmdConfirmEligible $sample}catch{$eligible=$false}
+  if($Record){& $Record @{attempt=$attempt;health=$sample;eligible=$eligible;qpc=[Diagnostics.Stopwatch]::GetTimestamp()}|Out-Null}
+  if([Diagnostics.Stopwatch]::GetTimestamp() -ge $Deadline){break}
+  if($eligible){return $sample}
+  $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())*1000/[double][Diagnostics.Stopwatch]::Frequency
+  if($remaining -gt 0){Start-Sleep -Milliseconds ([int][Math]::Min($IntervalMs,[Math]::Ceiling($remaining)))}
+ }
+ throw 'Health confirmation deadline expired; restoration remains unconfirmed'
+}
