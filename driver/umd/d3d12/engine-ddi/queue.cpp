@@ -256,8 +256,8 @@ HRESULT create_engine_queue(DeviceContext* c, const BC250_VKD3D_COMMAND_QUEUE_DE
     return S_OK;
 }
 
-void destroy_engine_queue(EngineQueue* q) noexcept {
-    if (!q) return;
+QueueClose destroy_engine_queue(EngineQueue* q) noexcept {
+    if (!q) return QueueClose::Retired;
     DeviceContext* c = q->context;
     // No initialization batch may borrow the queue from here on, and one that has borrowed it has finished once
     // its submit_lock is free (flush_initializations).
@@ -287,6 +287,7 @@ void destroy_engine_queue(EngineQueue* q) noexcept {
     q->fence->Release();
     delete q;
     c->process_retired();
+    return clean ? QueueClose::Retired : QueueClose::NotRetired;
 }
 
 HRESULT execute_command_lists(EngineQueue* q, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept {

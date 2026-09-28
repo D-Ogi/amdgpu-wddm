@@ -135,7 +135,14 @@ unanswered one is logged and its fields report no support.
   DestroyDevice: `destroy_device_context`; S_FALSE with live objects keeps the context, and then it stays
   registered too.
 - Queues (the queue table is the shell's): after creating the WDDM context, `create_engine_queue`;
-  ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`.
+  ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`, which returns
+  `QueueClose::Retired` when every engine use of the queue is proven retired and `QueueClose::NotRetired`
+  otherwise (removed device, a submission without a successful retirement signal, or a fence short of the last
+  signal at the final Release), whatever the engine's GetDeviceRemovedReason reads. NotRetired also records
+  retirement_lost for the device. Either way engine-ddi has freed the EngineQueue on return and keeps only the
+  device's retirement bookkeeping; the shell must not pass the pointer again. The shell's WDDM context and tokens
+  stay the shell's: after NotRetired the GPU may still use that context, so the shell keeps it, and it never
+  calls back through the destroyed queue's HRTCOMMANDQUEUE.
 - Command lists: a shell slot of the list table (its first argument is the `D3D12DDI_HCOMMANDLIST`, not the
   device) finds its device's shell with `command_list_shell(list)`: `ShellHooks::shell` of the context that created
   the list, or null for storage that holds no live engine-ddi list (before CreateCommandList constructs it, after

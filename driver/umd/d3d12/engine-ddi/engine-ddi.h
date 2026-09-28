@@ -243,8 +243,20 @@ struct EngineQueue;
 HRESULT create_engine_queue(DeviceContext* context, const BC250_VKD3D_COMMAND_QUEUE_DESC* desc, void* queue_cookie,
                             EngineQueue** out) noexcept;
 // Releases the engine queue (its final Release waits for the queue's last submission, engine rule V7), records
-// how far the queue's fence got, and then runs the release sequence for work that has retired.
-void destroy_engine_queue(EngineQueue* queue) noexcept;
+// how far the queue's fence got, and then runs the release sequence for work that has retired. The result says
+// whether every engine use of the queue has retired:
+//   - Retired: the device was not removed, every submission is covered by a successful signal of the queue's
+//     retirement fence, and the fence had reached the last signal when the final Release returned.
+//   - NotRetired: anything else. engine-ddi then records retirement_lost for the device: heap memory released
+//     after this point stays owned for the device's life (the release sequence, step 1). NotRetired depends only
+//     on the queue's own fence and state, never on the engine's GetDeviceRemovedReason, which can read healthy.
+// Ownership, the same for both results: the EngineQueue is freed before the call returns, and the pointer must
+// not be used again. engine-ddi keeps no queue record, only the device's retirement bookkeeping (the queue slot's
+// marks and retirement_lost); the engine queue and its fence have been released. Everything the shell owns (its
+// WDDM context, its tokens) stays the shell's: after NotRetired the GPU may still be using that context. A null
+// queue returns Retired and does nothing.
+enum class QueueClose : uint32_t { Retired = 1, NotRetired = 2 };
+QueueClose destroy_engine_queue(EngineQueue* queue) noexcept;
 // ExecuteCommandLists (the queue table is the shell's). Everything is submitted to the queue's bound context
 // before this returns (engine INLINE mode), followed by the signal of the queue's retirement fence. A failure is
 // reported through report_device_error and returned. First, when committed render targets or depth-stencil

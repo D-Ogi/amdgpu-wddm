@@ -54,12 +54,13 @@ void test_retirement(Env& env) {
            "retirement: a release whose snapshot reads UINT64_MAX is stuck at once (%u pending, %u stuck)",
            engine_ddi::harness_pending_releases(device.context), engine_ddi::harness_stuck_releases(device.context));
 
-    engine_ddi::destroy_engine_queue(queue);
+    const engine_ddi::QueueClose closed = engine_ddi::destroy_engine_queue(queue);
     uint32_t live = 0;
     hr = engine_ddi::destroy_device_context(device.context, &live);
-    checkf(engine_ddi::harness_retirement_lost(device.context) && hr == S_FALSE && live == 2 && !observed.events,
-           "retirement: the queue's destroy loses retirement, and destroy_device_context keeps the context with its two "
-           "stuck releases (hr %08lx, %u live)",
+    checkf(closed == engine_ddi::QueueClose::NotRetired && engine_ddi::harness_retirement_lost(device.context) &&
+               hr == S_FALSE && live == 2 && !observed.events,
+           "retirement: the queue's destroy reports NotRetired and loses retirement, and destroy_device_context keeps "
+           "the context with its two stuck releases (hr %08lx, %u live)",
            static_cast<unsigned long>(hr), live);
     engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
 }

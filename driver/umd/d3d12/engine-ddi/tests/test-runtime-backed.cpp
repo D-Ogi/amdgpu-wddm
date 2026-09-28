@@ -238,7 +238,8 @@ void test_runtime_backed(Env& env) {
            "runtime-backed: each allocation came back through free_memory once, after its engine heap (%u freed, "
            "%u releases)",
            m.frees, observed.with_memory);
-    engine_ddi::destroy_engine_queue(queue);
+    check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+          "runtime-backed: destroy_engine_queue reports Retired");
     engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);

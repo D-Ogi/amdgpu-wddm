@@ -201,7 +201,9 @@ void test_compute(Env& env, Device& device) {
         }
     }
     destroy_recording(env, device, rec);
-    if (queue) engine_ddi::destroy_engine_queue(queue);
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "compute: destroy_engine_queue reports Retired");
     env.core.pfnDestroyDescriptorHeap(device.h(), hheap);
     destroy_buffer(env, device, out);
     destroy_buffer(env, device, readback);

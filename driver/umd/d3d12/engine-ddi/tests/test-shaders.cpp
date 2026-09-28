@@ -428,7 +428,9 @@ void test_graphics(Env& env, Device& device) {
         }
     }
     destroy_recording(env, device, rec);
-    if (queue) engine_ddi::destroy_engine_queue(queue);
+    if (queue)
+        check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
+              "graphics: destroy_engine_queue reports Retired");
     env.core.pfnDestroyDescriptorHeap(device.h(), hheap);
     destroy_buffer(env, device, target);
     destroy_buffer(env, device, vb);

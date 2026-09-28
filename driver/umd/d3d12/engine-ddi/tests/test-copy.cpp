@@ -122,10 +122,11 @@ void test_copy(Env& env, Device& device) {
            "copy: the deferred release ran at a later DDI call, the other two at their destroy, all on the DDI "
            "thread (%zu deferred, %zu immediate, %zu elsewhere)",
            deferred, immediate, wrong_thread);
-    engine_ddi::destroy_engine_queue(queue);
+    const engine_ddi::QueueClose closed = engine_ddi::destroy_engine_queue(queue);
     engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
-    checkf(!engine_ddi::harness_live_objects(device.context) && !engine_ddi::harness_retirement_lost(device.context),
-           "copy: no live object left, retirement never lost (%u live)",
+    checkf(closed == engine_ddi::QueueClose::Retired && !engine_ddi::harness_live_objects(device.context) &&
+               !engine_ddi::harness_retirement_lost(device.context),
+           "copy: destroy_engine_queue reports Retired, no live object left, retirement never lost (%u live)",
            engine_ddi::harness_live_objects(device.context));
 }
 
