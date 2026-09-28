@@ -23,7 +23,8 @@ The engine is built from the vkd3d-proton branch `amdgpu-wddm/ddi-engine`. It is
   always requires the swapchain extension. The engine enables no WSI, so its device create info was invalid,
   as the validation layer reported (`VUID-vkCreateDevice-ppEnabledExtensionNames-01387`).
 
-The branch is not published yet; `recipe.json` of each build names the commit.
+The branch is published at <https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>; `recipe.json` of
+each build names the commit.
 
 ## Where the boundary sits
 
