@@ -1,6 +1,7 @@
 # engine-ddi: D3D12 DDI slots on the vkd3d-proton engine
 
-Status: boundary r3 (2026-09-28): r2 plus the adapter caps path on engine ABI 1.2. The static library
+Status: boundary r3 (2026-09-28): r2 plus the adapter caps path on engine ABI 1.2, and (2026-09-29, additive)
+reserved resources and tile mappings. The static library
 `engine-ddi.lib` builds with `tools/build/build-engine-ddi.ps1`, and [INTEGRATION.md](INTEGRATION.md) says what
 the shell calls and when. The engine ABI header is included by path from the pinned vkd3d-proton fork checkout
 ([engine-abi.json](engine-abi.json)).
@@ -17,7 +18,7 @@ The work is split between engine-ddi and the native12 shell in this directory's 
 - **The shell** keeps the adapter, device state, FillDDITable composition, queues and their WDDM contexts, fences,
   allocation and residency callbacks, the DXGI table, present and registration.
 
-[SLOTS.md](SLOTS.md) lists the owner and phase of every slot: 175 engine-ddi, 28 shell, including the shell's
+[SLOTS.md](SLOTS.md) lists the owner and phase of every slot: 173 engine-ddi, 30 shell, including the shell's
 override of `pfnPresent`.
 
 ## The boundary, in `engine-ddi.h`
@@ -66,6 +67,10 @@ override of `pfnPresent`.
   - in RuntimeBacked, the size and alignment of the import. The engine's `CreateHeapFromMemory` (ABI 1.2 V10)
     checks the Vulkan memory type and refuses one it would not pick for the heap.
 - Aliasing follows D3D12, and aliasing barriers go to the engine unchanged.
+- A reserved resource (neither a heap description nor a base resource) is the engine's CreateReservedResource1
+  or 2 and has no memory of its own: `object_allocation` answers S_FALSE for it. `tiles.cpp` binds its tiles to
+  heap records through the engine queue (`update_tile_mappings`, `copy_tile_mappings`) and fills GetMipPacking
+  and CopyTiles.
 - In RuntimeBacked every heap is an engine heap made by `CreateHeapFromMemory` over the shell's `ImportedMemory`,
   for all three shapes; MapHeap and UnmapHeap go to the engine's V10 MapHeap and UnmapHeap. The offline harness
   round-trips a committed and a placed buffer on imported memory word for word (INTEGRATION.md). Whether the
@@ -114,7 +119,10 @@ They never run from an engine thread or callback: INLINE mode has no engine thre
 - `execute_command_lists`: synchronous; everything is on the bound context on return.
 - `resource_allocation`: gives Present the runtime allocation behind a committed back buffer.
 - `object_allocation`: gives MakeResident and Evict the allocation behind a heap or resource (a placed one: its
-  heap's); descriptor and query heaps are engine-internal and always resident (S_FALSE).
+  heap's); descriptor and query heaps are engine-internal and always resident (S_FALSE), and a reserved resource
+  has no memory of its own (S_FALSE).
+- `update_tile_mappings` and `copy_tile_mappings`: the engine parts of the queue slots Q3 and Q4, on the queue's
+  submission lock, each followed by the queue's retirement signal.
 
 **Caps.**
 - GetCaps comes before any device (lab run M768). `query_adapter_caps` asks the engine once through ABI 1.2
@@ -160,7 +168,8 @@ and no GPU. Without `-NativeOnly` it also builds the harness and runs against th
 2. `engine-ddi-header-test.cpp`, built with the shell's flags (`/std:c++20 /W4 /WX`, SDK `d3d12.h` with WDK
    `d3d12umddi.h`, the Vulkan headers and the engine ABI header). It checks that the header is self-contained,
    boundary revision 3, unique record tags, table sizes 976 and 560, the pinned struct layouts, the signatures of
-   `free_memory`, the caps functions and `pfnCreateHeapAndResource`, and the ABI 1.2 header.
+   `free_memory`, the caps functions, the tile mapping calls against the Q3 and Q4 slot types and
+   `pfnCreateHeapAndResource`, and the ABI 1.2 header.
 3. `engine-ddi.lib` compiled with `/analyze` under the same `/WX`, with no `harness_` symbol in it.
 4. `tests/native-policy-test.cpp`: EnginePrivateTest refused, both tables filled.
 5. `tests/caps-test.cpp` against a stub engine: GetCaps 1074 with 8 bytes and 1007 with 4 bytes, and every

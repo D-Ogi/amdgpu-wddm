@@ -87,7 +87,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1007 3DPIPELINESUPPORT | `D3D12DDI_3DPIPELINELEVEL` itself, 4, H:2922-2933 | the level | L | FEATURE_LEVELS; never above 12_1, H:10373 |
 | 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, 6_6); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_6 gives M; 6_6 is the last release model at 0092 (6_7 is 0093, H:3478-3500) |
 | 1006 D3D12_OPTIONS | `D3D12DDI_D3D12_OPTIONS_DATA_0089`, 124, H:11078-11112 | ResourceBindingTier, ConservativeRasterizationTier, CrossNodeSharingTier, ResourceHeapTier, OutputMergerLogicOp, VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation | same value | OPTIONS; DDI and API enums are equal (static_assert in caps.cpp) |
-| 1006 | | TiledResourcesTier | OPTIONS tier, 4 reported as 3 | OPTIONS; no DDI tier 4 at 0092 (H:709-715). Gap: reserved resources return E_NOTIMPL and CopyTiles is a fail-safe until tiled resources land (P2), although FL12_0 implies tier 2 |
+| 1006 | | TiledResourcesTier | OPTIONS tier, 4 reported as 3 | OPTIONS; no DDI tier 4 at 0092 (H:709-715). Reserved resources, GetMipPacking, CopyTiles and the engine parts of Q3 and Q4 are implemented ("Tiled resources" below); the queue slots need the shell's hook |
 | 1006 | | CopyQueueTimestampQueriesSupported, BarycentricsSupported | same value | OPTIONS3 |
 | 1006 | | ReservedBufferPlacementSupported | MSAA64KBAlignedTextureSupported | OPTIONS4; "Actually just 64KB aligned MSAA support", H:11094 |
 | 1006 | | SRVOnlyTiledResourceTier3 | same value | OPTIONS5 |
@@ -170,7 +170,7 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 |---|---|---|
 | CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format | engine answer |
 | CheckMultisampleQualityLevels, Flags NONE | the engine's MULTISAMPLE_QUALITY_LEVELS; 0 when the engine refuses | engine answer |
-| CheckMultisampleQualityLevels, Flags TILED_RESOURCE | 0 | placeholder: returns 0 (until reserved resources land, P2) |
+| CheckMultisampleQualityLevels, Flags TILED_RESOURCE | the engine's MULTISAMPLE_QUALITY_LEVELS with the TILED_RESOURCE flag; 0 when the engine refuses | engine answer |
 | GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
 | CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data | engine answer |
 | EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
@@ -179,7 +179,7 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 
 Every other engine-ddi slot is implemented (SLOTS.md) or a fail-safe. A void fail-safe whose non-const pointers
 are all `_Out_` zeroes them before it reports E_NOTIMPL, and each of these is a placeholder: returns 0 (the
-E_NOTIMPL report is the difference from the table above): GetMipPacking, CheckSubresourceInfo,
+E_NOTIMPL report is the difference from the table above): CheckSubresourceInfo,
 GetRaytracingAccelerationStructurePrebuildInfo, GetMetaCommandRequiredParameterInfo. The first lab log of
 D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
 
@@ -304,10 +304,62 @@ allocation contents.
 Development PC witness: the harness draws into a fresh committed target with no clear, word for word, and VVL
 reports nothing (`tests/test-shaders.cpp`).
 
+### Tiled resources
+
+A reserved resource is `pfnCreateHeapAndResource` with no heap description, no heap handle and no base resource
+(`ReuseBufferGPUVA` naming none): the INFERENCE of engine-ddi.h, the only shape of that call left for
+CreateReservedResource. engine-ddi creates it with the engine's CreateReservedResource1 (legacy initial state) or
+CreateReservedResource2 (barrier layout, castable formats); it makes no `allocate_memory` call, has a GPU VA and
+no allocation handle, and `object_allocation` answers S_FALSE for it. GetMipPacking (D2) returns the engine's
+packed tail from GetResourceTiling, CopyTiles (L12) goes to the engine list. Both are engine-ddi slots.
+
+Q3 and Q4 are slots of the shell's queue table. The shell hook (in `native-queue-ddi.cpp`, today
+`native_update_tiles` and `native_copy_tiles`, which call `queue_failure`):
+
+```cpp
+HRESULT engine_ddi::update_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE resource, UINT region_count,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,
+    D3D12DDI_HHEAP heap, UINT range_count, const D3D12DDI_TILE_RANGE_FLAGS* range_flags,
+    const UINT* heap_range_starts, const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
+HRESULT engine_ddi::copy_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE dst,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start, D3D12DDI_HRESOURCE src,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start, const D3D12DDI_TILE_REGION_SIZE* size,
+    D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
+```
+
+1. Resolve the `D3D12DDI_HCOMMANDQUEUE` to its `QueueEngineSlot` and device as `native_execute` does.
+2. Call through the registry the way `QueueEngineRegistry::execute` does: the slot goes from Live to Executing,
+   the call gets `slot.engine` followed by the slot's arguments unchanged and in order (the header test pins both
+   signatures against `PFND3D12DDI_UPDATETILEMAPPINGS` and `PFND3D12DDI_COPYTILEMAPPINGS`), then `check_health`,
+   then back to Live. Two `QueueEngineOps` entries next to `execute` keep the registry's test seam.
+3. Result. engine-ddi has already reported any failure through `report_device_error`. E_INVALIDARG is a refused
+   call with nothing bound (unknown flags, a heap range beyond the heap, a resource that is not reserved); any
+   other failure means the queue's retirement signal failed, which the shell treats like a failed
+   `execute_command_lists`.
+
+What engine-ddi does in the call: it takes the queue's submission lock, calls the engine queue's
+UpdateTileMappings or CopyTileMappings (in INLINE mode the engine submits the sparse bind before returning),
+signals the queue's retirement fence and processes retired releases. The heap is the engine heap of the heap
+record; in RuntimeBacked mode that is CreateHeapFromMemory over the shell's import, so the tiles are bound to the
+runtime allocation. Region bounds against the resource are the engine's check (it logs and drops a tile out of
+range).
+
+FL 12_0 needs tiled resources tier 2 from the engine. On unit A the engine reports tier 0 (M769) because hosted
+RADV exposes no sparse binding without `RADV_EXPERIMENTAL=sparse` (M570): the slots work, but on unit A a
+reserved resource fails in the engine until the engine reports a tier. Destroying a heap while a reserved
+resource still maps tiles of it is the application's error in D3D12; engine-ddi does not track mappings.
+
+Development PC witness (harness round trip 6, `tests/test-tiled.cpp`, RuntimeBacked on the stub shell): a
+reserved buffer of 4 tiles and a reserved R32_UINT 256x256 texture mapped from a heap, written by copies and read
+back word for word; one buffer tile remapped to a second heap (the buffer and both heaps checked);
+CopyTileMappings into a second reserved buffer; CopyTiles from the texture to a linear buffer (each tile's texels
+row by row) and on into a second reserved texture, read back as the first. VVL with synchronization validation
+clean.
+
 ### Offline witness
 
 The offline harness exercises the device path: copy, compute dispatch, a draw, the retirement sentinel and the
-query slots above (EnginePrivateTest), and the RuntimeBacked heaps above, on the development PC with the pinned
+query slots above (EnginePrivateTest), and the RuntimeBacked heaps and tiled resources above, on the development PC with the pinned
 engine DLL, also under VVL with synchronization validation. The dispatch and the draw use shaders created through
 the DDI slots from containers reduced to the DDI form (a dxc cs_6_0 DXIL program; fxc vs_5_0 and ps_5_0 DXBC
 programs), an element layout by register and DDI state objects. The reduction is the harness's model of the

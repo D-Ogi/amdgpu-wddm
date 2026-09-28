@@ -19,6 +19,10 @@ are refused with E_NOTIMPL.
 - A placed resource uses its heap's memory and never allocates.
 - The runtime owner in the request is the call's `D3D12DDI_HRTRESOURCE` argument.
 
+A reserved resource (D60 with neither a heap description nor a base resource) makes no `allocate_memory` call; its
+tiles are bound to heaps through Q3 and Q4, whose slots are the shell's (the queue table) and whose engine parts are
+`update_tile_mappings` and `copy_tile_mappings` (INTEGRATION.md, "Tiled resources").
+
 `pfnDestroyHeapAndResource` (D61) hands heap memory to the release sequence of `engine-ddi.h`: `free_memory`
 runs only after GPU retirement, on a DDI thread.
 
@@ -231,8 +235,8 @@ runs only after GPU retirement, on a DDI thread.
 | Q0 | 0x000 | `pfnExecuteCommandLists` | shell; calls execute_command_lists | P0 |
 | Q1 | 0x008 | `pfnUnused` | shell | P4 |
 | Q2 | 0x010 | `pfnUnused2` | shell | P4 |
-| Q3 | 0x018 | `pfnUpdateTileMappings` | engine-ddi | P2 |
-| Q4 | 0x020 | `pfnCopyTileMappings` | engine-ddi | P2 |
+| Q3 | 0x018 | `pfnUpdateTileMappings` | shell; calls update_tile_mappings | P2 |
+| Q4 | 0x020 | `pfnCopyTileMappings` | shell; calls copy_tile_mappings | P2 |
 | Q5 | 0x028 | `pfnSignalFence` | shell | P0 |
 | Q6 | 0x030 | `pfnWaitForFence` | shell | P0 |
 
