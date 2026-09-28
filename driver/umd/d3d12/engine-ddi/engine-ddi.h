@@ -14,10 +14,10 @@
 // Engine ABI: bc250_vkd3d_engine.h r3-draft (ABI 1.2), included by path from the vkd3d-proton fork checkout
 // pinned in engine-abi.json. engine-ddi uses:
 //   - 1.1: CreateDevice in the INLINE queue mode and CreateCommandQueue (queue.cpp);
-//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp), so the engine must be asked for 1.2.
-// Not wired yet: 1.2 V10 CreateHeapFromMemory. RuntimeBacked heap creation still stops after the shell's
-// allocation has been validated and handed back (E_NOTIMPL); V10 takes a VkDeviceMemory the shell allocates on
-// the engine's VkDevice (GetVulkanHandles), and ImportedMemory below has to follow it.
+//   - 1.2 V10 CreateHeapFromMemory, MapHeap and UnmapHeap: RuntimeBacked heaps over the shell's VkDeviceMemory,
+//     and MapHeap/UnmapHeap in both memory modes (resources.cpp);
+//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp).
+// So the engine must be asked for 1.2; create_device_context refuses a function table without these entries.
 #pragma once
 #include <windows.h>
 #include <d3d12.h>
@@ -62,16 +62,18 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //       * D3D12: the offset is a multiple of the resource's placement alignment from the engine's
 //         GetResourceAllocationInfo, and offset + size fits in the heap; the heap's allowed resource categories
 //         (D3D12DDI_HEAP_FLAG_BUFFERS, _NON_RT_DS_TEXTURES, _RT_DS_TEXTURES) include the resource's.
-//       * Vulkan (RuntimeBacked): ImportedMemory::memory_type_index is one of MemoryRequest::memory_type_bits,
-//         which the engine derives from every resource category the heap allows; byte_size covers the request;
-//         the allocation's alignment covers MemoryRequest::alignment. A mismatch hands the memory straight back
-//         through free_memory and fails the create.
+//       * Vulkan (RuntimeBacked): byte_size covers the request, and gpu_va is non-zero and a multiple of
+//         MemoryRequest::alignment. A mismatch hands the memory straight back through free_memory and fails the
+//         create. The memory type is checked by the engine's CreateHeapFromMemory (V10), which refuses a type it
+//         would not pick for the heap; the memory is then handed back the same way and the create fails with the
+//         engine's E_INVALIDARG.
 //   - Aliasing follows D3D12: overlapping placed resources are allowed, only one is active at a time, and
 //     activation is the application's aliasing barrier, discard or clear. engine-ddi passes aliasing barriers to
 //     the engine unchanged and tracks nothing itself.
-//   - First RuntimeBacked slice: dedicated allocations only (committed resources, which include Present back
-//     buffers). Heap-only heaps and placed resources on runtime memory follow the rules above, but return
-//     E_NOTIMPL until the hosted same-storage/VA import is validated.
+//   - RuntimeBacked heaps are engine heaps made by CreateHeapFromMemory over the ImportedMemory, for all three
+//     shapes. Whether hosted RADV's import of a runtime allocation is the same storage at the same GPU virtual
+//     address as the runtime's view is a lab question (not yet measured); the development PC harness allocates the
+//     VkDeviceMemory itself.
 //
 // Release sequence of heap memory, run once when the last user of a heap is destroyed (the heap record and
 // every resource placed in it):
@@ -81,8 +83,8 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //      execute_command_lists. A queue destroyed before retirement is observed resolves its part only if the
 //      queue's fence reached the recorded value by the queue's final Release; otherwise the record stays
 //      pending for the device's lifetime and counts as live in destroy_device_context.
-//   2. The engine's final Release of its heap (and of the heap-wide buffer MapHeap may have created). The engine
-//      never frees borrowed memory.
+//   2. The engine's final Release of its heap (V10 step 2; the resources placed in it were released at their own
+//      destroy). The engine never frees borrowed memory and makes no Vulkan call on it after this Release.
 //   3. free_memory: the shell releases its Vulkan import. engine-ddi calls it exactly once per ImportedMemory and
 //      never retries, whatever it returns. A failure goes to report_device_error, and the shell keeps its record
 //      (with the allocation handle and cookie).
@@ -110,16 +112,23 @@ struct MemoryRequest {
     const D3D12DDIARG_CREATERESOURCE_0088* resource;    // committed: the resource; heap only: null
     uint64_t byte_size;                         // from the engine's allocation info for the resource or heap
     uint64_t alignment;
-    uint32_t memory_type_bits;                  // Vulkan memory types the engine accepts for this heap
+    // Vulkan memory types the engine accepts for this heap, 0 for "not narrowed". Always 0 in r3: engine-ddi has
+    // no Vulkan entry point to compute them, and CreateHeapFromMemory checks the type (INTEGRATION.md says how the
+    // shell picks it).
+    uint32_t memory_type_bits;
     uint32_t reserved;                          // 0
 };
 
 // One runtime allocation that the shell has made and imported. The shell owns it (see the release sequence).
+// The VkDeviceMemory is what engine ABI 1.2 V10 takes: a whole allocation on the engine's VkDevice, allocated with
+// VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT (always, whatever the heap allows), not a dedicated allocation
+// (no VkMemoryDedicatedAllocateInfo, even for a committed resource), and not mapped by the shell while engine-ddi
+// holds it (the engine maps a CPU-visible heap's memory itself, once).
 struct ImportedMemory {
     uint32_t size;                              // sizeof(ImportedMemory)
     uint32_t memory_type_index;                 // index on the engine's physical device
     VkDeviceMemory memory;                      // valid on the engine's VkDevice until free_memory
-    uint64_t byte_size;
+    uint64_t byte_size;                         // its VkMemoryAllocateInfo::allocationSize
     D3DKMT_HANDLE allocation;                   // the kernel allocation from pfnAllocateCb_0022
     uint32_t reserved;                          // 0
     // The GPU virtual address of a completed, validated mapping: filled only after MapGpuVirtualAddress and

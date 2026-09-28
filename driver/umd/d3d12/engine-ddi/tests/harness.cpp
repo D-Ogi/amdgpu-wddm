@@ -123,11 +123,14 @@ bool find_adapter(const wchar_t* filter, LUID& luid) {
 }
 } // namespace
 
-HRESULT open_device(Env& env, Device& device) {
+HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory,
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory) {
     engine_ddi::ContextCreateInfo info{};
     info.size = sizeof(info);
     info.boundary_revision = engine_ddi::kBoundaryRevision;
-    info.memory_mode = engine_ddi::MemoryMode::EnginePrivateTest;
+    info.memory_mode = allocate_memory ? engine_ddi::MemoryMode::RuntimeBacked : engine_ddi::MemoryMode::EnginePrivateTest;
+    info.hooks.allocate_memory = allocate_memory;
+    info.hooks.free_memory = free_memory;
     info.ddi_interface = D3D12DDI_INTERFACE_VERSION_R8;
     info.ddi_version = D3D12DDI_BUILD_VERSION_0092;
     info.engine_device = env.engine;
@@ -184,8 +187,30 @@ HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool
                                              D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
 }
 
+HRESULT create_placed_buffer(Env& env, Device& device, const Buffer& base, UINT64 offset, UINT64 size, Buffer& out) {
+    out = Buffer{};
+    D3D12DDIARG_CREATERESOURCE_0088 res{};
+    res.ReuseBufferGPUVA.BaseAddress.UMD = {base.hres(), offset};
+    res.ResourceType = D3D12DDI_RT_BUFFER;
+    res.Width = size;
+    res.Height = 1;
+    res.DepthOrArraySize = 1;
+    res.MipLevels = 1;
+    res.Format = DXGI_FORMAT_UNKNOWN;
+    res.SampleDesc = {1, 0};
+    res.Layout = D3D12DDI_TL_ROW_MAJOR;
+    res.Flags = D3D12DDI_RESOURCE_FLAG_0003_NONE;
+    res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
+    const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes =
+        env.core.pfnCalcPrivateHeapAndResourceSizes(device.h(), nullptr, &res, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+    out.resource = env.storage.alloc(sizes.Resource);
+    if (!out.resource) return E_OUTOFMEMORY;
+    return env.core.pfnCreateHeapAndResource(device.h(), nullptr, D3D12DDI_HHEAP{}, D3D12DDI_HRTRESOURCE{&out.rt}, &res,
+                                             nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
+}
+
 void destroy_buffer(Env& env, Device& device, Buffer& buffer) {
-    if (buffer.heap) env.core.pfnDestroyHeapAndResource(device.h(), buffer.hheap(), buffer.hres());
+    if (buffer.heap || buffer.resource) env.core.pfnDestroyHeapAndResource(device.h(), buffer.hheap(), buffer.hres());
     buffer.heap = buffer.resource = nullptr;
 }
 
@@ -309,6 +334,7 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     Env env;
+    env.gipa = gipa;
     env.funcs.Size = sizeof(env.funcs);
     HRESULT hr = get_funcs(BC250_VKD3D_ENGINE_ABI_VERSION, &env.funcs);
     checkf(hr == S_OK && env.funcs.CreateDevice && env.funcs.CreateCommandQueue,
@@ -357,6 +383,7 @@ int wmain(int argc, wchar_t** argv) {
                device.shell.device_errors, device.shell.list_errors);
     }
     test_retirement(env);
+    test_runtime_backed(env);
     check(env.storage.canaries_intact(), "private storage: every canary behind the driver's size intact");
     checkf(g_binds >= 1 && g_binds >= g_unbinds, "engine services: %ld BindQueue, %ld UnbindQueue", g_binds, g_unbinds);
     env.engine->Release();

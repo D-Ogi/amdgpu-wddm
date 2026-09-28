@@ -63,11 +63,13 @@ override of `pfnPresent`.
 - Placement is checked before the engine is called, with E_INVALIDARG on any mismatch:
   - the D3D12 placement alignment and heap bounds;
   - the heap's allowed resource categories;
-  - in RuntimeBacked, the Vulkan memory type (one of `memory_type_bits`), size and alignment of the import.
+  - in RuntimeBacked, the size and alignment of the import. The engine's `CreateHeapFromMemory` (ABI 1.2 V10)
+    checks the Vulkan memory type and refuses one it would not pick for the heap.
 - Aliasing follows D3D12, and aliasing barriers go to the engine unchanged.
-- The first RuntimeBacked slice is dedicated allocations only, which covers Present back buffers. Heap-only
-  heaps and placed resources on runtime memory return E_NOTIMPL until the hosted same-storage/VA import is
-  validated.
+- In RuntimeBacked every heap is an engine heap made by `CreateHeapFromMemory` over the shell's `ImportedMemory`,
+  for all three shapes; MapHeap and UnmapHeap go to the engine's V10 MapHeap and UnmapHeap. The offline harness
+  round-trips a committed and a placed buffer on imported memory word for word (INTEGRATION.md). Whether the
+  runtime's own heap shape matches the harness's is still a lab question.
 
 **Release sequence of heap memory.** It runs once, when the last user of a heap has been destroyed.
 1. Retirement. A final COM Release does not prove that the GPU has finished. engine-ddi keeps ownership in a

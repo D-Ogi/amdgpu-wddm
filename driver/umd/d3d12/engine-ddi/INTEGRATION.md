@@ -126,8 +126,14 @@ unanswered one is logged and its fields report no support.
 - FillDDITable: `fill_device_core` and `fill_command_list` (table 0 compute, 1 graphics) first, then the shell's
   own slots over the 18 core slots engine-ddi leaves NULL, and the shell's `pfnPresent`.
 - CreateDevice: the engine's `CreateDevice` with the adapter's create info, then `create_device_context`
-  (`MemoryMode::RuntimeBacked`, the shell's hooks). DestroyDevice: `destroy_device_context`; S_FALSE with live
-  objects keeps the context.
+  (`MemoryMode::RuntimeBacked`, the shell's hooks, the engine's ABI 1.2 function table: it refuses one without
+  CreateHeapFromMemory, MapHeap and UnmapHeap). Ordering: the context is created and registered, so that the
+  shell's `ResolveDevice` returns it for this `D3D12DDI_HDEVICE`, before CreateDevice returns S_OK, and it stays
+  registered and live until DestroyDevice. A failed `create_device_context` fails CreateDevice. Every engine-ddi
+  slot finds its device only through `ResolveDevice`; a slot called while it returns null answers nothing (a query
+  leaves its output zeroed or untouched) and reports no error, because there is no device to report to.
+  DestroyDevice: `destroy_device_context`; S_FALSE with live objects keeps the context, and then it stays
+  registered too.
 - Queues (the queue table is the shell's): after creating the WDDM context, `create_engine_queue`;
   ExecuteCommandLists: `execute_command_lists`; DestroyCommandQueue: `destroy_engine_queue`.
 - Present: `resource_allocation` for the back buffer's runtime allocation.
@@ -135,27 +141,71 @@ unanswered one is logged and its fields report no support.
 ### Query slots around CreateDevice
 
 Which device slots the runtime calls during D3D12CreateDevice has not been observed: the list below is an
-INFERENCE from the slot types (queries and controls the runtime can call before any object exists). Each gives a
-defined answer and reports no error:
+INFERENCE from the slot types (queries and controls the runtime can call before any object exists). Each reports
+no error. "Engine answer" means the value comes from the engine for that query; "exact" means the value is the
+complete answer for what engine-ddi supports; "placeholder: returns 0" marks a zero that stands for a query
+engine-ddi does not resolve yet. A placeholder is not completed integration.
 
-| Slot | Answer |
-|---|---|
-| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format |
-| CheckMultisampleQualityLevels | the engine's MULTISAMPLE_QUALITY_LEVELS for Flags NONE; 0 when the engine refuses; 0 for TILED_RESOURCE (no reserved resource can be created) |
-| GetDescriptorSizeInBytes | the engine's descriptor increment |
-| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data |
-| EnumerateMetaCommands | count 0, S_OK |
-| CheckDriverMatchingIdentifier | UNRECOGNIZED |
-| ImplicitShaderCacheControl | no-op: no driver-managed shader cache is reported (1004) |
+| Slot | Answer | Status |
+|---|---|---|
+| CheckFormatSupport | the engine's FORMAT_SUPPORT, mapped bit by bit; 0 when the engine refuses the format | engine answer |
+| CheckMultisampleQualityLevels, Flags NONE | the engine's MULTISAMPLE_QUALITY_LEVELS; 0 when the engine refuses | engine answer |
+| CheckMultisampleQualityLevels, Flags TILED_RESOURCE | 0 | placeholder: returns 0 (until reserved resources land, P2) |
+| GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
+| CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description; no additional data | engine answer |
+| EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
+| CheckDriverMatchingIdentifier | UNRECOGNIZED | exact: engine-ddi serializes nothing |
+| ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE |
 
 Every other engine-ddi slot is implemented (SLOTS.md) or a fail-safe. A void fail-safe whose non-const pointers
-are all `_Out_` zeroes them before it reports E_NOTIMPL: GetMipPacking, CheckSubresourceInfo,
+are all `_Out_` zeroes them before it reports E_NOTIMPL, and each of these is a placeholder: returns 0 (the
+E_NOTIMPL report is the difference from the table above): GetMipPacking, CheckSubresourceInfo,
 GetRaytracingAccelerationStructurePrebuildInfo, GetMetaCommandRequiredParameterInfo. The first lab log of
 D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
 
-Not ready on the device side: RuntimeBacked heap creation returns E_NOTIMPL after validating the shell's
-allocation, because ABI 1.2 V10 (`CreateHeapFromMemory` over memory the shell allocates on the engine's
-VkDevice) is not wired yet; native shader intake returns E_NOTIMPL (SLOTS.md). Only the offline harness
-(EnginePrivateTest, engine-owned heaps) exercises the device path: copy, compute dispatch, the retirement
-sentinel and the query slots above pass on the development PC with the pinned engine DLL, also under VVL with
+### Heap memory: allocate_memory and free_memory
+
+pfnCreateHeapAndResource with a heap description (committed, or a heap alone) makes one `allocate_memory` call;
+a placed resource (resource description only, `ReuseBufferGPUVA` naming a resource of the heap) makes none.
+engine-ddi then calls the engine's `CreateHeapFromMemory` (ABI 1.2 V10) over the memory, and places a committed
+resource at offset 0. MapHeap and UnmapHeap go to the engine's MapHeap and UnmapHeap: the CPU address of heap
+offset 0, a placed buffer at that address plus its offset.
+
+What `allocate_memory(shell, request, memory)` must deliver on S_OK, in the 48-byte `ImportedMemory`:
+
+| Field | Value |
+|---|---|
+| `size` | `sizeof(ImportedMemory)` |
+| `memory` | one whole `VkDeviceMemory` on the engine's VkDevice (`GetVulkanHandles`): the shell's import of the runtime allocation. Allocated with `VkMemoryAllocateFlagsInfo::flags` = `VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT` always; no `VkMemoryDedicatedAllocateInfo`, even for `kMemoryDedicated`; not mapped by the shell while engine-ddi holds it |
+| `byte_size` | its `VkMemoryAllocateInfo::allocationSize`, at least `request->byte_size` |
+| `memory_type_index` | a type the engine would pick for this heap (below) |
+| `allocation` | the kernel allocation (`pfnAllocateCb_0022`), non-zero; `resource_allocation` and CheckResourceAllocationHandle return it |
+| `gpu_va` | the GPU virtual address of the completed mapping, non-zero and a multiple of `request->alignment` |
+| `reserved` | 0 |
+| `cookie` | the shell's, passed back in `free_memory` |
+
+The memory type. `request->memory_type_bits` is 0 in r3: engine-ddi cannot compute the engine's types. engine-ddi
+turns the DDI heap into a `D3D12_HEAP_TYPE_CUSTOM` heap with the same CPU page property and memory pool, and the
+engine accepts a type that its own choice for that heap would allow (vkd3d-proton `vkd3d_memory_type_supports_heap`:
+the heap's domain and the buffer, sampled-image and render-target type masks of the categories the heap allows,
+host-visible for a CPU-visible heap). The harness picks by the property flags vkd3d-proton selects for the CPU page
+property: WRITE_BACK host-visible and host-cached, WRITE_COMBINE host-visible and host-coherent, NOT_AVAILABLE
+device-local, among the types a buffer can use. A type the engine refuses fails CreateHeapFromMemory with
+E_INVALIDARG; engine-ddi hands the memory back through `free_memory` and the create fails with that code.
+
+Release: engine-ddi.h, "Release sequence of heap memory", is V10's safe order. After every engine queue has
+retired the work submitted before the last destroy (the heap record and each resource placed in it), engine-ddi
+releases the engine heap, then calls `free_memory` once, on a DDI thread. The shell then frees its Vulkan import
+and deallocates the runtime allocation. The engine never frees, clears or zeroes the memory.
+
+Development PC witness (harness round trip 5, `tests/test-runtime-backed.cpp`): a stub shell allocates the memory
+on the engine's VkDevice as above, with stand-in allocation handles. A committed UPLOAD buffer of 128 KiB holds a
+placed buffer at 64 KiB (GPU VA the heap's plus 64 KiB); the placed buffer, filled through MapHeap, is copied into
+a committed DEFAULT and a committed READBACK buffer, and read back through MapHeap word for word. Three
+allocations, three `free_memory` calls after their engine heaps, VVL with synchronization validation clean.
+Whether hosted RADV's import of a runtime allocation behaves the same (same storage, `gpu_va`) is for the lab.
+
+Not ready on the device side: native shader intake returns E_NOTIMPL (SLOTS.md). The offline harness exercises
+the device path: copy, compute dispatch, the retirement sentinel and the query slots above (EnginePrivateTest),
+and the RuntimeBacked heaps above, on the development PC with the pinned engine DLL, also under VVL with
 synchronization validation.

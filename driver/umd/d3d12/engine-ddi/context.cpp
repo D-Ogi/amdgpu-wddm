@@ -165,6 +165,11 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
 #ifndef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     if (info->memory_mode == MemoryMode::EnginePrivateTest) return E_INVALIDARG;
 #endif
+    // Engine ABI 1.2 V10: MapHeap and UnmapHeap in both modes, CreateHeapFromMemory for runtime memory.
+    const BC250_VKD3D_ENGINE_FUNCS& f = *info->engine_funcs;
+    if (f.AbiVersion < BC250_VKD3D_ENGINE_ABI_VERSION || !f.MapHeap || !f.UnmapHeap ||
+        (info->memory_mode == MemoryMode::RuntimeBacked && !f.CreateHeapFromMemory))
+        return E_INVALIDARG;
     if (!hooks_valid(info->hooks, info->memory_mode)) return E_INVALIDARG;
 
     auto* c = make_new<DeviceContext>();
@@ -310,7 +315,8 @@ HRESULT APIENTRY enumerate_no_meta_commands(D3D12DDI_HDEVICE, UINT* count, D3D12
     return S_OK;
 }
 
-// engine-ddi reports no driver-managed shader cache (1004 DriverManagedShaderCachePresent FALSE, INTEGRATION.md), so
+// engine-ddi reports no driver-managed shader cache (1006 D3D12_OPTIONS DriverManagedShaderCachePresent FALSE,
+// d3d12umddi.h D3D12DDI_D3D12_OPTIONS_DATA_0089; INTEGRATION.md), so
 // there is no cache of engine-ddi's to disable, enable or clear: the control is accepted as a no-op, never an error.
 void APIENTRY no_implicit_shader_cache(D3D12DDI_HDEVICE, D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAGS_0080) {}
 } // namespace

@@ -156,17 +156,26 @@ Backing* new_backing(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_0001& desc, 
     b->refs.store(1);
     b->device = c;
     b->heap = heap;
-    InitializeSRWLock(&b->map_lock);
     b->desc = desc;
     b->id = c->next_id.fetch_add(1);
     return b;
 }
 
-// Engine ABI 1.2 dependencies of RuntimeBacked heaps (engine-ddi.h). Absent in ABI 1.1.
-uint32_t engine_memory_type_bits(DeviceContext*, const D3D12DDIARG_CREATEHEAP_0001&) noexcept { return 0; }
-HRESULT engine_heap_from_memory(DeviceContext*, const D3D12_HEAP_DESC&, const ImportedMemory&, ID3D12Heap** heap) noexcept {
+// An engine heap over the shell's memory (engine ABI 1.2 V10). The memory stays the shell's: the engine never
+// frees, clears or maps it beyond the one mapping of a CPU-visible heap, and CreateHeapFromMemory refuses (with
+// E_INVALIDARG, creating nothing) a memory type the engine would not pick for this heap. allocate_memory allocates
+// with VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT always (engine-ddi.h, ImportedMemory), hence the flag.
+HRESULT engine_heap_from_memory(DeviceContext* c, const D3D12_HEAP_DESC& desc, const ImportedMemory& m,
+                                ID3D12Heap** heap) noexcept {
     *heap = nullptr;
-    return E_NOTIMPL;
+    BC250_VKD3D_IMPORTED_MEMORY imported{};
+    imported.Size = sizeof(imported);
+    imported.Memory = m.memory;
+    imported.AllocationSize = m.byte_size;
+    imported.MemoryTypeIndex = m.memory_type_index;
+    imported.Flags = BC250_VKD3D_IMPORTED_MEMORY_FLAG_DEVICE_ADDRESS;
+    return c->funcs.CreateHeapFromMemory(c->device, &imported, &desc, __uuidof(ID3D12Heap),
+                                         reinterpret_cast<void**>(heap));
 }
 
 void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
@@ -202,7 +211,6 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
                 return E_INVALIDARG;
             return E_NOTIMPL;                           // reserved resource: tiled resources (P2)
         }
-        if (c->mode == MemoryMode::RuntimeBacked) return E_NOTIMPL;   // first slice: dedicated allocations only
         const uint64_t offset = base->offset + res_desc->ReuseBufferGPUVA.BaseAddress.UMD.Offset;
         if (offset < base->offset) return E_INVALIDARG;
         ID3D12Resource* engine = nullptr;
@@ -233,16 +241,16 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     bool imported = false;
     if (c->mode == MemoryMode::RuntimeBacked) {
         if (c->lost()) return DXGI_ERROR_DEVICE_REMOVED;
-        if (!res_desc) return E_NOTIMPL;                // first slice: dedicated allocations only
         MemoryRequest request{};
         request.size = sizeof(MemoryRequest);
-        request.flags = kMemoryDedicated | ((heap_desc->Flags & D3D12DDI_HEAP_FLAG_PRIMARY) ? kMemoryPrimary : 0);
+        request.flags = (res_desc ? kMemoryDedicated : 0u) |
+                        ((heap_desc->Flags & D3D12DDI_HEAP_FLAG_PRIMARY) ? kMemoryPrimary : 0u);
         request.rt_owner = rt;
         request.heap = heap_desc;
         request.resource = res_desc;
         request.byte_size = heap_desc->ByteSize;
         request.alignment = std::max<uint64_t>(align, heap_desc->Alignment);
-        request.memory_type_bits = engine_memory_type_bits(c, *heap_desc);
+        request.memory_type_bits = 0;                   // engine-ddi.h, MemoryRequest: the engine checks the type
         hr = import_memory(c, request, &memory);
         if (FAILED(hr)) return hr;
         hr = engine_heap_from_memory(c, hd, memory, &heap);
@@ -334,36 +342,11 @@ HRESULT APIENTRY map_heap(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, void** 
     *data = nullptr;
     auto* h = record_of<HeapRecord>(hheap.pDrvPrivate, Tag::Heap, c);
     if (!h) return E_INVALIDARG;
-    Backing* b = h->backing;
-    if (b->desc.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE) return E_INVALIDARG;
-    AcquireSRWLockExclusive(&b->map_lock);
-    HRESULT hr = S_OK;
-    if (!b->map_count) {
-        if (!b->map_buffer) {
-            // A heap-wide buffer at offset 0; heaps that allow no buffers need an engine entry (gap G3).
-            if (!(b->desc.Flags & D3D12DDI_HEAP_FLAG_BUFFERS)) {
-                hr = E_NOTIMPL;
-            } else {
-                D3D12_RESOURCE_DESC1 desc{};
-                desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-                desc.Width = b->desc.ByteSize;
-                desc.Height = 1;
-                desc.DepthOrArraySize = 1;
-                desc.MipLevels = 1;
-                desc.SampleDesc.Count = 1;
-                desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-                hr = c->device10->CreatePlacedResource2(b->heap, 0, &desc, D3D12_BARRIER_LAYOUT_UNDEFINED, nullptr, 0,
-                                                        nullptr, __uuidof(ID3D12Resource),
-                                                        reinterpret_cast<void**>(&b->map_buffer));
-            }
-        }
-        if (SUCCEEDED(hr)) hr = b->map_buffer->Map(0, nullptr, &b->cpu);
-    }
-    if (SUCCEEDED(hr)) {
-        ++b->map_count;
-        *data = b->cpu;
-    }
-    ReleaseSRWLockExclusive(&b->map_lock);
+    // Engine ABI 1.2 V10: the CPU address of heap offset 0 of a CPU-visible heap that allows buffers, over imported
+    // memory or the engine's own; calls are counted and the address stays valid until the heap is destroyed.
+    void* cpu = nullptr;
+    const HRESULT hr = c->funcs.MapHeap(h->backing->heap, &cpu);
+    if (SUCCEEDED(hr)) *data = cpu;
     return hr;
 }
 
@@ -371,22 +354,8 @@ void APIENTRY unmap_heap(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap) {
     DeviceContext* c = resolve(device);
     if (!c) return;
     auto* h = record_of<HeapRecord>(hheap.pDrvPrivate, Tag::Heap, c);
-    if (!h) {
-        c->report(E_INVALIDARG);
-        return;
-    }
-    Backing* b = h->backing;
-    AcquireSRWLockExclusive(&b->map_lock);
-    if (!b->map_count) {
-        ReleaseSRWLockExclusive(&b->map_lock);
-        c->report(E_INVALIDARG);
-        return;
-    }
-    if (!--b->map_count) {
-        b->map_buffer->Unmap(0, nullptr);
-        b->cpu = nullptr;
-    }
-    ReleaseSRWLockExclusive(&b->map_lock);
+    const HRESULT hr = h ? c->funcs.UnmapHeap(h->backing->heap) : E_INVALIDARG;
+    if (FAILED(hr)) c->report(hr);
 }
 
 D3D12DDI_GPU_VIRTUAL_ADDRESS APIENTRY check_resource_virtual_address(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE hres) {
@@ -691,9 +660,8 @@ void backing_acquire(Backing* b) noexcept { b->refs.fetch_add(1); }
 void backing_release(Backing* b) noexcept {
     if (b->refs.fetch_sub(1) != 1) return;
     DeviceContext* c = b->device;
-    if (b->map_count && b->map_buffer) b->map_buffer->Unmap(0, nullptr);
     PendingRelease* node = b->release_node;
-    node->payload = ReleasePayload{{b->map_buffer, b->heap}, b->imported, b->memory, b->id};
+    node->payload = ReleasePayload{{b->heap, nullptr}, b->imported, b->memory, b->id};
     delete b;
     c->release(node);
 }
@@ -702,7 +670,7 @@ void backing_release(Backing* b) noexcept {
 HRESULT validate_import(const MemoryRequest& request, const ImportedMemory& m) noexcept {
     if (m.size != sizeof(ImportedMemory) || m.reserved || m.memory == VK_NULL_HANDLE || !m.allocation) return E_INVALIDARG;
     if (m.byte_size < request.byte_size) return E_INVALIDARG;
-    // memory_type_bits is 0 until engine ABI 1.2 supplies the engine's accepted types; the check applies then.
+    // memory_type_bits is 0 in r3: the type is checked by CreateHeapFromMemory (engine-ddi.h, MemoryRequest).
     if (request.memory_type_bits && (m.memory_type_index >= 32 || !(request.memory_type_bits & (1u << m.memory_type_index))))
         return E_INVALIDARG;
     if (!m.gpu_va) return E_INVALIDARG;                 // no completed mapping

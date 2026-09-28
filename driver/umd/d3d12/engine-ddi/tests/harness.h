@@ -39,6 +39,7 @@ struct Shell {
     struct Bind { void* list; uint32_t table; };
     std::vector<Bind> binds;
     int table_of(D3D12DDI_HRTCOMMANDLIST list) const;   // -1 if never bound
+    void* memory = nullptr;             // RuntimeBacked: the stub shell's memory state (test-runtime-backed.cpp)
 };
 
 // What D3D12DDI_HDEVICE points at: the shell's device, from which the resolver finds the context.
@@ -50,6 +51,7 @@ inline constexpr uint32_t kShellDeviceMagic = 0x44534844u;
 
 struct Env {
     ID3D12Device* engine = nullptr;     // the harness's own reference
+    PFN_vkGetInstanceProcAddr gipa = nullptr;   // the Vulkan entry the engine device was created with
     BC250_VKD3D_ENGINE_FUNCS funcs{};
     D3D12DDI_DEVICE_FUNCS_CORE_0088 core{};
     D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 lists[2]{};     // [0] compute table, [1] graphics table
@@ -62,8 +64,11 @@ struct Device {
     engine_ddi::DeviceContext* context = nullptr;
     D3D12DDI_HDEVICE h() { return D3D12DDI_HDEVICE{&sd}; }
 };
-// A device context in EnginePrivateTest mode over env.engine, with the recorder hooks.
-HRESULT open_device(Env& env, Device& device);
+// A device context over env.engine with the recorder hooks: EnginePrivateTest mode, or RuntimeBacked with the
+// given memory hooks (their shell argument is &device.shell).
+HRESULT open_device(Env& env, Device& device,
+                    decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory = nullptr,
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory = nullptr);
 
 // ---- Runtime-side helpers ----------------------------------------------------------------------------------------
 enum class HeapKind { Upload, Default, Readback };
@@ -78,6 +83,9 @@ struct Buffer {
     D3D12DDI_HRESOURCE hres() const { return D3D12DDI_HRESOURCE{resource}; }
 };
 HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, Buffer& out);
+// A buffer placed in base's heap at offset bytes from base (resource description only, ReuseBufferGPUVA naming
+// base: engine-ddi.h, placed shape). out.heap stays null; the placed record is destroyed with its hres alone.
+HRESULT create_placed_buffer(Env& env, Device& device, const Buffer& base, UINT64 offset, UINT64 size, Buffer& out);
 void destroy_buffer(Env& env, Device& device, Buffer& buffer);
 
 // One pool, one recorder and one list of the given queue flags, the list reset and open for recording.
@@ -105,5 +113,6 @@ void test_copy(Env& env, Device& device);
 void test_compute(Env& env, Device& device);
 void test_retirement(Env& env);
 void test_device_queries(Env& env, Device& device);
+void test_runtime_backed(Env& env);
 
 } // namespace harness

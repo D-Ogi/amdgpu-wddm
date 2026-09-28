@@ -198,11 +198,7 @@ inline void release_engine(RecordHeader& h) noexcept {
 struct Backing {
     std::atomic<uint32_t> refs;
     DeviceContext* device;
-    ID3D12Heap* heap;                           // one reference
-    ID3D12Resource* map_buffer;                 // heap-wide buffer for MapHeap, created on first map
-    SRWLOCK map_lock;
-    uint32_t map_count;
-    void* cpu;
+    ID3D12Heap* heap;                           // one reference; MapHeap and UnmapHeap go to the engine (V10)
     D3D12DDIARG_CREATEHEAP_0001 desc;
     bool imported;
     bool dedicated;
