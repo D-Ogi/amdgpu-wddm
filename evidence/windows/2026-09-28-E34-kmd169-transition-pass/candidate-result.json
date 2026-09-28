@@ -1,0 +1,7 @@
+{
+    "phase":  "Verify",
+    "tree_closed":  true,
+    "reason":  "verified",
+    "success":  true,
+    "health_scope":  "candidate-ready-only"
+}
