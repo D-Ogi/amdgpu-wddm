@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-surface-allocation.h"
+#include "../../kmd/surface_resource_private.h"
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -51,6 +52,31 @@ HRESULT APIENTRY waitPaging(HANDLE,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFR
 }
 }
 int main() {
+    static_assert(sizeof(BC250_SURFACE_RESOURCE_PRIVATE)==64);
+    BC250_SURFACE_RESOURCE_PRIVATE privateData{};
+    privateData.Magic=BC250_SURFACE_RESOURCE_MAGIC;
+    int shared=-1,cached=-1;
+    for (unsigned version=1;version<=3;++version) {
+        privateData.Version=version;
+        const unsigned size=version==1 ? 12 : version==2 ? 16 : 64;
+        for (unsigned share=0;share<=1;++share) for (unsigned access=0;access<=3;++access) {
+            privateData.Shared=share; privateData.Access=access;
+            check(Bc250SurfaceResourcePolicy(&privateData,size,&shared,&cached));
+            check(shared==int(share) && cached==int(version>1 && share && access==2));
+        }
+        for (unsigned bytes=4;bytes<=68;++bytes) if (bytes!=size)
+            check(!Bc250SurfaceResourcePolicy(&privateData,bytes,&shared,&cached) && !shared && !cached);
+    }
+    privateData.Version=3; privateData.Shared=2;
+    check(!Bc250SurfaceResourcePolicy(&privateData,64,&shared,&cached));
+    privateData.Shared=1; privateData.Access=4;
+    check(!Bc250SurfaceResourcePolicy(&privateData,64,&shared,&cached));
+    privateData.Version=4; privateData.Access=0;
+    check(!Bc250SurfaceResourcePolicy(&privateData,64,&shared,&cached));
+    privateData.Magic=0;
+    check(Bc250SurfaceResourcePolicy(&privateData,64,&shared,&cached) && !shared && !cached);
+    check(Bc250SurfaceResourcePolicy(nullptr,0,&shared,&cached));
+
     RuntimeDevice device; device.hDevice=&deviceIdentity;
     device.KTCallbacks.pfnAllocateCb=allocate; device.KTCallbacks.pfnDeallocate2Cb=deallocate;
     RuntimeSurfaceRequest request{}; request.runtime_resource=&resourceIdentity; request.shared=true; request.cpu_read=true;
