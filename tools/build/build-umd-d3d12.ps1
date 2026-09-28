@@ -32,6 +32,10 @@ try {
   if($LASTEXITCODE){throw 'Queue request build failed'}
   & .\queue-request-test.exe
   if($LASTEXITCODE){throw 'Queue request tests failed'}
+  & cl.exe @flags "/I$repo\driver\contract\third_party" "/I$repo\driver\contract\uapi-shim" /Fe:queue-registry-test.exe "$repo\driver\umd\d3d12\queue-registry-test.cpp"
+  if($LASTEXITCODE){throw 'Queue registry build failed'}
+  & .\queue-registry-test.exe
+  if($LASTEXITCODE){throw 'Queue registry tests failed'}
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
 Write-Host 'Diagnostic adapter only; no functional device or deployment.'
