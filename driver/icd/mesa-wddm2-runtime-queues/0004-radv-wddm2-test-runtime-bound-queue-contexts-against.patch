@@ -1,0 +1,1255 @@
+From b11d411ea518120665a8125140c071aacd9193af Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Mon, 28 Sep 2026 21:03:12 +0200
+Subject: [PATCH 4/4] radv/wddm2: test runtime-bound queue contexts against a
+ scripted host
+
+The test drives the compiled radv_wddm2_cs.c and radv_wddm2_bo.c through
+a host dispatch that hands out contexts, fences and allocations, records
+every call with its thread and bind scope, and fails a chosen call on
+request. It is built outside meson with the compile command of
+radv_wddm2_cs.c; each test runs as its own process.
+
+bind_failure: a failure of the context, the progress fence or the
+companion fence leaves nothing behind, the context goes back through the
+same cookie within the bind, the queue refuses to submit and binds on a
+retry. A lost device, a second bind and an unbind of an unbound queue
+are refused without a host call.
+
+second_queue: two queues hold two contexts and four fences, each context
+created through its own queue's cookie.
+
+signal_wait: queue A signals a fence that queue B waits for on the GPU;
+every call names only the context and progress fence of its queue, and
+reusing a gather slot waits on the queue's own progress fence.
+
+gather_teardown: unbind waits for the last submission, then releases the
+progress fence, the gather BO, the companion fence and the context, in
+that order, inside the unbind; afterwards the queue makes no host call
+and the other queue still submits.
+
+device_loss: unbind on a lost device makes no CPU wait, destroys nothing,
+keeps the context and both fences and reports VK_ERROR_DEVICE_LOST; the
+queue is not bound again, even once the device is back, and destroying
+it makes no host call.
+
+abandon: destroying a bound queue releases its fences and never calls
+through the cookie.
+
+outside_scope: a queue never bound refuses submissions and sparse
+transactions without reaching the host, and no call arrives after the
+last call returned.
+
+internal_queue: the internal queue binds with a NULL cookie and outlives
+an application queue.
+
+sparse: a sparse bind on one queue uses only that queue's context and
+companion fence.
+
+rebind: a queue bound again for another cookie, after its first user
+wrapped the gather slots, gets a new context and new fences and waits
+for nothing of the first user.
+
+review_wait_failure and review_destroy_failure, the reproducers of review
+606 with their checks unchanged: a failed CPU wait destroys no fence and
+keeps the progress fence; a failed operation 7 does not report success and
+keeps the context handle. In both the queue is not bound again and its
+destruction makes no host call.
+
+The tests call the winsys hooks directly. They do not cover the instance
+chain parser, the public bind and unbind entries with their queue lock or
+the queue count admission of vkCreateDevice.
+
+Every test also checks that queue-scoped calls happen only inside the
+bind or unbind of their cookie, on the calling thread, and never name a
+destroyed context or fence.
+---
+ .../tests/radv_wddm2_queue_binding_test.c     | 1179 +++++++++++++++++
+ 1 file changed, 1179 insertions(+)
+ create mode 100644 src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c
+
+diff --git a/src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c b/src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c
+new file mode 100644
+index 00000000000..08e6aff213e
+--- /dev/null
++++ b/src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c
+@@ -0,0 +1,1179 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * Tests of runtime-bound queue contexts in the hosted BC250 winsys
++ * (radv_wddm2_cs.c and radv_wddm2_bo.c, linked as compiled for
++ * vulkan_radeon.dll). A scripted host dispatch stands in for the embedder:
++ * it hands out contexts, fences and allocations, records every call with its
++ * thread and bind scope, and fails a chosen call on request.
++ *
++ * Every test also checks the contract as a whole: queue-scoped operations
++ * only inside the embedder's bind or unbind of that queue and with its
++ * cookie, every call on the test's thread, no call naming a destroyed
++ * context or fence, no device-level context.
++ *
++ * Scope: the tests call the winsys hooks (ctx_create_bindable, ctx_bind,
++ * ctx_unbind, cs_submit, the sparse hooks, ctx_destroy) directly. They do
++ * not cover the instance chain parser (radv_instance.c), the public bind
++ * and unbind entries with their queue lock (radv_queue.c) or the queue
++ * count admission of vkCreateDevice (radv_device.c).
++ *
++ * Built outside meson: compiled with the compile command of radv_wddm2_cs.c
++ * and linked against the radv_wddm2_cs.c and radv_wddm2_bo.c objects and
++ * the vulkan_util, amd_common, mesa_util and mesa_util_c11 libraries.
++ *
++ * Usage: radv_wddm2_queue_binding_test [test], no argument runs all.
++ */
++#undef VK_USE_PLATFORM_WAYLAND_KHR
++#undef VK_USE_PLATFORM_XLIB_KHR
++#undef VK_USE_PLATFORM_XLIB_XRANDR_EXT
++
++#include "winsys/wddm2/radv_wddm2_bo.h"
++#include "winsys/wddm2/radv_wddm2_cs.h"
++#include "winsys/wddm2/radv_wddm2_winsys.h"
++#include "winsys/common/radv_winsys_cs.h"
++#include "vk_wddm2_monitored_fence.h"
++#include "util/bc250_host_bootstrap.h"
++#include "util/macros.h"
++#include "util/u_math.h"
++
++#ifdef Status
++#undef Status
++#endif
++#include <windows.h>
++#include "d3dkmthk.h"
++
++#include <stdarg.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++/* The winsys objects reference these; the tests provide them. BC250_WDDM_CALL
++ * never takes the native path while host.dispatch is set. */
++struct vk_wddm2_dispatch_table;
++struct vk_wddm2_dispatch_table *
++vk_wddm2_dispatch_table_get(void)
++{
++   fprintf(stderr, "native dispatch table requested: test setup error\n");
++   abort();
++}
++
++/* Only the submission path of other WDDM drivers dumps its private data. */
++void
++print_hex_data(FILE *fp, const void *data, uint32_t size)
++{
++   fprintf(stderr, "non-BC250 submission path reached: test setup error\n");
++   abort();
++}
++
++/* The application fences of the tests carry this type. */
++const struct vk_sync_type vk_wddm2_monitored_fence_type = {0};
++
++#define HOST_FAIL        ((int32_t)0xC0000001) /* STATUS_UNSUCCESSFUL */
++#define HOST_UNEXPECTED  ((int32_t)0xC0000002) /* STATUS_NOT_IMPLEMENTED */
++#define DEVICE_H         0x20u
++#define PAGING_QUEUE_H   0x30u
++#define PAGING_FENCE_H   0x34u
++#define MAX_OBJ          256
++#define MAX_EV           4096
++#define LOCK_BYTES       (256 * 1024)
++
++struct obj {
++   uint32_t handle;
++   bool live;
++   bool app;          /* syncs: an application fence of the test */
++   void *cookie;      /* contexts: the cookie they were created with */
++   uint64_t value;    /* syncs: what the fence's CPU mapping shows */
++   void *mem;         /* allocations: Lock2 memory */
++};
++
++struct event {
++   uint32_t op;
++   uint32_t context;  /* the context the call names, 0 if none */
++   uint32_t sync;     /* the first fence it names, 0 if none */
++   uint64_t value;
++   void *cookie;
++   bool in_scope;
++};
++
++static struct {
++   struct obj contexts[MAX_OBJ], syncs[MAX_OBJ], allocs[MAX_OBJ];
++   unsigned n_contexts, n_syncs, n_allocs;
++   struct event ev[MAX_EV];
++   unsigned n_ev;
++   uint64_t next_va;
++
++   /* The fail_nth call of fail_op fails. */
++   uint32_t fail_op;
++   unsigned fail_nth, fail_seen;
++
++   int32_t status;       /* CHECK_STATUS; negative: the device is lost */
++
++   /* The embedder's bind or unbind that is running, set by the tests. */
++   bool in_scope;
++   void *scope_cookie;
++   DWORD thread;
++
++   unsigned queue_op_out_of_scope, cookie_mismatch, wrong_thread;
++   unsigned dead_context, dead_sync, device_contexts, unexpected;
++} h;
++
++static unsigned checks, failures;
++static const char *current;
++
++static void
++check(bool ok, const char *fmt, ...)
++{
++   va_list ap;
++   checks++;
++   if (!ok)
++      failures++;
++   printf("%s %-16s ", ok ? "PASS" : "FAIL", current);
++   va_start(ap, fmt);
++   vprintf(fmt, ap);
++   va_end(ap);
++   printf("\n");
++}
++
++static struct obj *
++find(struct obj *arr, unsigned n, uint32_t handle)
++{
++   for (unsigned i = 0; i < n; i++) {
++      if (arr[i].handle == handle)
++         return &arr[i];
++   }
++   return NULL;
++}
++
++static struct obj *
++new_obj(struct obj *arr, unsigned *n, uint32_t base)
++{
++   if (*n >= MAX_OBJ)
++      abort();
++   struct obj *o = &arr[(*n)++];
++   memset(o, 0, sizeof(*o));
++   o->handle = base + *n;
++   o->live = true;
++   return o;
++}
++
++static unsigned
++live(struct obj *arr, unsigned n, bool app)
++{
++   unsigned count = 0;
++   for (unsigned i = 0; i < n; i++)
++      count += arr[i].live && arr[i].app == app;
++   return count;
++}
++
++static void
++record(uint32_t op, uint32_t context, uint32_t sync, uint64_t value, void *cookie)
++{
++   if (h.n_ev >= MAX_EV)
++      abort();
++   h.ev[h.n_ev++] = (struct event){op, context, sync, value, cookie, h.in_scope};
++}
++
++static void
++use_context(uint32_t handle)
++{
++   struct obj *o = find(h.contexts, h.n_contexts, handle);
++   if (!o || !o->live)
++      h.dead_context++;
++}
++
++static void
++use_sync(uint32_t handle)
++{
++   if (handle == PAGING_FENCE_H)
++      return;
++   struct obj *o = find(h.syncs, h.n_syncs, handle);
++   if (!o || !o->live)
++      h.dead_sync++;
++}
++
++static void
++queue_scope(const struct bc250_host_queue_context *q)
++{
++   if (!h.in_scope || q->queue != h.scope_cookie)
++      h.queue_op_out_of_scope++;
++}
++
++static int32_t
++fake_dispatch(void *userdata, uint32_t op, void *arg)
++{
++   (void)userdata;
++   if (GetCurrentThreadId() != h.thread)
++      h.wrong_thread++;
++   if (h.fail_op == op && ++h.fail_seen == h.fail_nth) {
++      record(op, 0, 0, 0, NULL);
++      return HOST_FAIL;
++   }
++
++   switch (op) {
++   case BC250_HOST_CHECK_STATUS:
++      record(op, 0, 0, 0, NULL);
++      return h.status;
++   case BC250_HOST_REPORT_LOST:
++      record(op, 0, 0, 0, NULL);
++      return 0;
++   case BC250_HOST_PUBLISH_PROGRESS: {
++      const struct bc250_host_progress *p = arg;
++      use_context(p->context);
++      use_sync(p->sync);
++      record(op, p->context, p->sync, p->value, NULL);
++      return 0;
++   }
++   case BC250_HOST_CREATE_QUEUE_CONTEXT: {
++      const struct bc250_host_queue_context *q = arg;
++      D3DKMT_CREATECONTEXTVIRTUAL *c = q->arguments;
++      queue_scope(q);
++      if (c->hDevice != DEVICE_H || c->PrivateDriverDataSize != 80)
++         h.unexpected++;
++      struct obj *o = new_obj(h.contexts, &h.n_contexts, 0x1000);
++      o->cookie = q->queue;
++      c->hContext = o->handle;
++      record(op, o->handle, 0, 0, q->queue);
++      return 0;
++   }
++   case BC250_HOST_DESTROY_QUEUE_CONTEXT: {
++      const struct bc250_host_queue_context *q = arg;
++      const D3DKMT_DESTROYCONTEXT *d = q->arguments;
++      queue_scope(q);
++      struct obj *o = find(h.contexts, h.n_contexts, d->hContext);
++      if (!o || !o->live)
++         h.dead_context++;
++      else if (o->cookie != q->queue)
++         h.cookie_mismatch++;
++      if (o)
++         o->live = false;
++      record(op, d->hContext, 0, 0, q->queue);
++      return 0;
++   }
++   case BC250_HOST_CreateContextVirtual: {
++      D3DKMT_CREATECONTEXTVIRTUAL *c = arg;
++      h.device_contexts++;
++      c->hContext = new_obj(h.contexts, &h.n_contexts, 0x1000)->handle;
++      record(op, c->hContext, 0, 0, NULL);
++      return 0;
++   }
++   case BC250_HOST_DestroyContext: {
++      const D3DKMT_DESTROYCONTEXT *d = arg;
++      h.device_contexts++;
++      record(op, d->hContext, 0, 0, NULL);
++      return 0;
++   }
++   case BC250_HOST_CreateSynchronizationObject2: {
++      D3DKMT_CREATESYNCHRONIZATIONOBJECT2 *c = arg;
++      struct obj *o = new_obj(h.syncs, &h.n_syncs, 0x2000);
++      if (c->hDevice != DEVICE_H || c->Info.Type != D3DDDI_MONITORED_FENCE)
++         h.unexpected++;
++      c->hSyncObject = o->handle;
++      c->Info.MonitoredFence.FenceValueCPUVirtualAddress = &o->value;
++      record(op, 0, o->handle, 0, NULL);
++      return 0;
++   }
++   case BC250_HOST_DestroySynchronizationObject: {
++      const D3DKMT_DESTROYSYNCHRONIZATIONOBJECT *d = arg;
++      use_sync(d->hSyncObject);
++      struct obj *o = find(h.syncs, h.n_syncs, d->hSyncObject);
++      if (o)
++         o->live = false;
++      record(op, 0, d->hSyncObject, 0, NULL);
++      return 0;
++   }
++   case BC250_HOST_WaitForSynchronizationObjectFromCpu: {
++      const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *w = arg;
++      /* The GPU completes what the CPU waits for, and nothing earlier. */
++      for (unsigned i = 0; i < w->ObjectCount; i++) {
++         use_sync(w->ObjectHandleArray[i]);
++         struct obj *o = find(h.syncs, h.n_syncs, w->ObjectHandleArray[i]);
++         if (o && o->value < w->FenceValueArray[i])
++            o->value = w->FenceValueArray[i];
++      }
++      record(op, 0, w->ObjectCount ? w->ObjectHandleArray[0] : 0,
++             w->ObjectCount ? w->FenceValueArray[0] : 0, NULL);
++      if (w->hAsyncEvent)
++         SetEvent(w->hAsyncEvent);
++      return 0;
++   }
++   case BC250_HOST_WaitForSynchronizationObjectFromGpu: {
++      const D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU *w = arg;
++      use_context(w->hContext);
++      for (unsigned i = 0; i < w->ObjectCount; i++)
++         use_sync(w->ObjectHandleArray[i]);
++      record(op, w->hContext, w->ObjectHandleArray[0], w->MonitoredFenceValueArray[0], NULL);
++      return 0;
++   }
++   case BC250_HOST_SignalSynchronizationObjectFromGpu2: {
++      const D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 *s = arg;
++      for (unsigned i = 0; i < s->BroadcastContextCount; i++)
++         use_context(s->BroadcastContextArray[i]);
++      for (unsigned i = 0; i < s->ObjectCount; i++)
++         use_sync(s->ObjectHandleArray[i]);
++      record(op, s->BroadcastContextArray[0], s->ObjectHandleArray[0], s->MonitoredFenceValueArray[0], NULL);
++      return 0;
++   }
++   case BC250_HOST_SubmitCommand: {
++      const D3DKMT_SUBMITCOMMAND *c = arg;
++      for (unsigned i = 0; i < c->BroadcastContextCount; i++)
++         use_context(c->BroadcastContext[i]);
++      record(op, c->BroadcastContext[0], 0, c->Commands, NULL);
++      return 0;
++   }
++   case BC250_HOST_UpdateGpuVirtualAddress: {
++      const D3DKMT_UPDATEGPUVIRTUALADDRESS *u = arg;
++      use_context(u->hContext);
++      use_sync(u->hFenceObject);
++      record(op, u->hContext, u->hFenceObject, u->FenceValue, NULL);
++      return 0;
++   }
++   case BC250_HOST_CreateAllocation2: {
++      D3DKMT_CREATEALLOCATION *c = arg;
++      struct obj *o = new_obj(h.allocs, &h.n_allocs, 0x3000);
++      c->pAllocationInfo2[0].hAllocation = o->handle;
++      record(op, 0, 0, o->handle, NULL);
++      return 0;
++   }
++   case BC250_HOST_DestroyAllocation2: {
++      const D3DKMT_DESTROYALLOCATION2 *d = arg;
++      for (unsigned i = 0; i < d->AllocationCount; i++) {
++         struct obj *o = find(h.allocs, h.n_allocs, d->phAllocationList[i]);
++         if (!o || !o->live) {
++            h.unexpected++;
++            continue;
++         }
++         o->live = false;
++         free(o->mem);
++         o->mem = NULL;
++         record(op, 0, 0, o->handle, NULL);
++      }
++      return 0;
++   }
++   case BC250_HOST_ReserveGpuVirtualAddress: {
++      D3DDDI_RESERVEGPUVIRTUALADDRESS *r = arg;
++      if (r->BaseAddress) {
++         r->VirtualAddress = r->BaseAddress;
++      } else {
++         h.next_va = MAX2(align64(h.next_va, 65536), align64(r->MinimumAddress, 65536));
++         r->VirtualAddress = h.next_va;
++         h.next_va += align64(r->Size, 65536);
++      }
++      record(op, 0, 0, r->VirtualAddress, NULL);
++      return 0;
++   }
++   case BC250_HOST_MapGpuVirtualAddress: {
++      D3DDDI_MAPGPUVIRTUALADDRESS *m = arg;
++      if (m->BaseAddress) {
++         m->VirtualAddress = m->BaseAddress;
++      } else {
++         h.next_va = MAX2(align64(h.next_va, 65536), align64(m->MinimumAddress, 65536));
++         m->VirtualAddress = h.next_va;
++         h.next_va += align64(m->SizeInPages * 4096ull, 65536);
++      }
++      m->PagingFenceValue = 0;
++      record(op, 0, 0, m->VirtualAddress, NULL);
++      return 0;
++   }
++   case BC250_HOST_MakeResident: {
++      D3DDDI_MAKERESIDENT *r = arg;
++      r->PagingFenceValue = 0;
++      record(op, 0, 0, 0, NULL);
++      return 0;
++   }
++   case BC250_HOST_Lock2: {
++      D3DKMT_LOCK2 *l = arg;
++      struct obj *o = find(h.allocs, h.n_allocs, l->hAllocation);
++      if (!o || !o->live) {
++         h.unexpected++;
++         return HOST_FAIL;
++      }
++      if (!o->mem)
++         o->mem = calloc(1, LOCK_BYTES);
++      l->pData = o->mem;
++      record(op, 0, 0, o->handle, NULL);
++      return 0;
++   }
++   case BC250_HOST_FreeGpuVirtualAddress:
++   case BC250_HOST_Evict:
++   case BC250_HOST_Unlock2:
++   case BC250_HOST_GetDeviceState:
++      record(op, 0, 0, 0, NULL);
++      return 0;
++   default:
++      h.unexpected++;
++      record(op, 0, 0, 0, NULL);
++      return HOST_UNEXPECTED;
++   }
++}
++
++static struct radv_wddm2_winsys *
++make_ws(void)
++{
++   memset(&h, 0, sizeof(h));
++   h.thread = GetCurrentThreadId();
++
++   struct radv_wddm2_winsys *ws = calloc(1, sizeof(*ws));
++   ws->bc250 = true;
++   ws->host.sType = BC250_HOST_STYPE;
++   ws->host.version = BC250_HOST_VERSION;
++   ws->host.size = sizeof(ws->host);
++   ws->host.identity = (void *)(uintptr_t)0x1;
++   ws->host.userdata = &h;
++   ws->host.dispatch = fake_dispatch;
++   ws->adapter_h = 0x10;
++   ws->device_h = DEVICE_H;
++   ws->paging_queue_h = PAGING_QUEUE_H;
++   ws->paging_fence_h = PAGING_FENCE_H;
++   ws->gpu_info.pte_fragment_size = 0x200000;
++   ws->gpu_info.gart_page_size = 4096;
++   radv_wddm2_bo_init_functions(ws);
++   radv_wddm2_cs_init_functions(ws);
++   return ws;
++}
++
++/* The embedder's bind and unbind of the queue that cookie names. */
++static VkResult
++bind(struct radv_wddm2_winsys *ws, struct radeon_winsys_ctx *ctx, void *cookie)
++{
++   h.in_scope = true;
++   h.scope_cookie = cookie;
++   VkResult result = ws->base.ctx_bind(ctx, cookie);
++   h.in_scope = false;
++   h.scope_cookie = NULL;
++   return result;
++}
++
++static VkResult
++unbind(struct radv_wddm2_winsys *ws, struct radeon_winsys_ctx *ctx, void *cookie)
++{
++   h.in_scope = true;
++   h.scope_cookie = cookie;
++   VkResult result = ws->base.ctx_unbind(ctx);
++   h.in_scope = false;
++   h.scope_cookie = NULL;
++   return result;
++}
++
++static struct radeon_winsys_ctx *
++new_ctx(struct radv_wddm2_winsys *ws)
++{
++   struct radeon_winsys_ctx *ctx = NULL;
++   if (!ws->base.ctx_create_bindable ||
++       ws->base.ctx_create_bindable(&ws->base, RADEON_CTX_PRIORITY_MEDIUM, &ctx) != VK_SUCCESS) {
++      fprintf(stderr, "ctx_create_bindable failed\n");
++      exit(2);
++   }
++   return ctx;
++}
++
++static struct radv_wddm2_queue *
++gfx(struct radeon_winsys_ctx *ctx)
++{
++   return &radv_wddm2_ctx(ctx)->per_ip[AMD_IP_GFX].queue;
++}
++
++static void
++app_fence(struct vk_wddm2_monitored_fence *fence)
++{
++   memset(fence, 0, sizeof(*fence));
++   fence->base.type = &vk_wddm2_monitored_fence_type;
++   struct obj *o = new_obj(h.syncs, &h.n_syncs, 0x2000);
++   o->app = true;
++   fence->handle = o->handle;
++   fence->value_map = &o->value;
++}
++
++struct fake_cs {
++   struct radv_winsys_cs cs;
++   struct radv_winsys_ib ib;
++};
++
++static struct ac_cmdbuf *
++fake_cs(struct fake_cs *f, struct radeon_winsys_bo *bo, uint64_t va, unsigned cdw)
++{
++   memset(f, 0, sizeof(*f));
++   f->ib.bo = bo;
++   f->ib.va = va;
++   f->ib.cdw = cdw;
++   f->cs.ib_buffers = &f->ib;
++   f->cs.num_ib_buffers = 1;
++   f->cs.hw_ip = AMD_IP_GFX;
++   return &f->cs.base;
++}
++
++static VkResult
++submit(struct radv_wddm2_winsys *ws, struct radeon_winsys_ctx *ctx, unsigned cs_count, struct ac_cmdbuf **cs,
++       uint32_t wait_count, const struct vk_sync_wait *waits, uint32_t signal_count,
++       const struct vk_sync_signal *signals)
++{
++   const struct radv_winsys_submit_info info = {
++      .ip_type = AMD_IP_GFX,
++      .cs_count = cs_count,
++      .cs_array = cs,
++   };
++   return ws->base.cs_submit(ctx, &info, wait_count, waits, signal_count, signals);
++}
++
++static VkResult
++submit_one(struct radv_wddm2_winsys *ws, struct radeon_winsys_ctx *ctx)
++{
++   struct fake_cs f;
++   struct ac_cmdbuf *cs = fake_cs(&f, NULL, 0x100000, 8);
++   return submit(ws, ctx, 1, &cs, 0, NULL, 0, NULL);
++}
++
++static unsigned
++count_op(unsigned from, uint32_t op)
++{
++   unsigned n = 0;
++   for (unsigned i = from; i < h.n_ev; i++)
++      n += h.ev[i].op == op;
++   return n;
++}
++
++static int
++find_op(unsigned from, uint32_t op, uint32_t sync)
++{
++   for (unsigned i = from; i < h.n_ev; i++) {
++      if (h.ev[i].op == op && (!sync || h.ev[i].sync == sync))
++         return (int)i;
++   }
++   return -1;
++}
++
++/* Every call since from that names a context names this one. */
++static bool
++names_only(unsigned from, uint32_t context)
++{
++   for (unsigned i = from; i < h.n_ev; i++) {
++      if (h.ev[i].context && h.ev[i].context != context)
++         return false;
++   }
++   return true;
++}
++
++static bool
++names_sync(unsigned from, uint32_t sync)
++{
++   for (unsigned i = from; i < h.n_ev; i++) {
++      if (h.ev[i].sync == sync)
++         return true;
++   }
++   return false;
++}
++
++static bool
++event_is(int index, uint32_t op, uint32_t context, uint32_t sync, uint64_t value)
++{
++   if (index < 0)
++      return false;
++   const struct event *e = &h.ev[index];
++   return e->op == op && e->context == context && e->sync == sync && e->value == value;
++}
++
++static void
++contract(void)
++{
++   check(!h.queue_op_out_of_scope, "queue-scoped calls only inside the bind or unbind of their cookie (%u outside)",
++         h.queue_op_out_of_scope);
++   check(!h.cookie_mismatch, "every context goes back through the cookie it came from (%u mismatches)",
++         h.cookie_mismatch);
++   check(!h.wrong_thread, "every call on the calling thread (%u on others)", h.wrong_thread);
++   check(!h.dead_context && !h.dead_sync, "no call names a destroyed context or fence (%u, %u)", h.dead_context,
++         h.dead_sync);
++   check(!h.device_contexts, "no device-level context (%u calls)", h.device_contexts);
++   check(!h.unexpected, "no unexpected host call (%u)", h.unexpected);
++}
++
++static void
++test_bind_failure(void)
++{
++   static const struct {
++      uint32_t op;
++      unsigned nth;
++      const char *name;
++      unsigned destroyed_contexts;
++   } steps[] = {
++      {BC250_HOST_CREATE_QUEUE_CONTEXT, 1, "context", 0},
++      {BC250_HOST_CreateSynchronizationObject2, 1, "progress fence", 1},
++      {BC250_HOST_CreateSynchronizationObject2, 2, "companion fence", 1},
++   };
++   void *const cookie = (void *)(uintptr_t)0xA0;
++
++   for (unsigned i = 0; i < ARRAY_SIZE(steps); i++) {
++      struct radv_wddm2_winsys *ws = make_ws();
++      struct radeon_winsys_ctx *ctx = new_ctx(ws);
++      h.fail_op = steps[i].op;
++      h.fail_nth = steps[i].nth;
++
++      VkResult result = bind(ws, ctx, cookie);
++      check(result != VK_SUCCESS, "%s failure fails the bind (%d)", steps[i].name, result);
++      check(!live(h.contexts, h.n_contexts, false) && !live(h.syncs, h.n_syncs, false),
++            "%s failure leaves no context or fence (%u, %u live)", steps[i].name,
++            live(h.contexts, h.n_contexts, false), live(h.syncs, h.n_syncs, false));
++      check(count_op(0, BC250_HOST_DESTROY_QUEUE_CONTEXT) == steps[i].destroyed_contexts,
++            "%s failure destroys the context it created, within the bind (%u)", steps[i].name,
++            count_op(0, BC250_HOST_DESTROY_QUEUE_CONTEXT));
++
++      unsigned mark = h.n_ev;
++      check(submit_one(ws, ctx) == VK_ERROR_VALIDATION_FAILED && h.n_ev == mark,
++            "after a failed bind the queue refuses to submit, with no host call");
++
++      h.fail_op = 0;
++      result = bind(ws, ctx, cookie);
++      check(result == VK_SUCCESS && live(h.contexts, h.n_contexts, false) == 1 &&
++               live(h.syncs, h.n_syncs, false) == 2,
++            "a retry binds: one context, two fences (%d)", result);
++      check(unbind(ws, ctx, cookie) == VK_SUCCESS && !live(h.contexts, h.n_contexts, false) &&
++               !live(h.syncs, h.n_syncs, false),
++            "unbind after the retry releases everything");
++      mark = h.n_ev;
++      ws->base.ctx_destroy(ctx);
++      check(h.n_ev == mark, "destroying the unbound context makes no host call");
++      contract();
++   }
++
++   /* A lost device and a second bind are refused before creating anything. */
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *ctx = new_ctx(ws);
++   h.status = -1;
++   VkResult result = bind(ws, ctx, cookie);
++   check(result == VK_ERROR_DEVICE_LOST && !count_op(0, BC250_HOST_CREATE_QUEUE_CONTEXT) &&
++            !count_op(0, BC250_HOST_CreateSynchronizationObject2),
++         "a lost device is refused before any creation (%d)", result);
++   h.status = 0;
++   check(bind(ws, ctx, cookie) == VK_SUCCESS, "the same queue binds once the device is back");
++   unsigned mark = h.n_ev;
++   check(bind(ws, ctx, cookie) != VK_SUCCESS && h.n_ev == mark, "a bound queue refuses a second bind, no host call");
++   check(unbind(ws, ctx, cookie) == VK_SUCCESS, "unbind");
++   mark = h.n_ev;
++   check(unbind(ws, ctx, cookie) != VK_SUCCESS && h.n_ev == mark, "an unbound queue refuses unbind, no host call");
++   ws->base.ctx_destroy(ctx);
++   contract();
++}
++
++static void
++test_second_queue(void)
++{
++   void *const cookie_a = (void *)(uintptr_t)0xA0, *const cookie_b = (void *)(uintptr_t)0xB0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *a = new_ctx(ws), *b = new_ctx(ws);
++
++   check(bind(ws, a, cookie_a) == VK_SUCCESS && bind(ws, b, cookie_b) == VK_SUCCESS, "both queues bind");
++   struct radv_wddm2_queue *qa = gfx(a), *qb = gfx(b);
++   check(qa->context_h && qb->context_h && qa->context_h != qb->context_h, "each queue has its own context (%x, %x)",
++         qa->context_h, qb->context_h);
++   const uint32_t fences[4] = {qa->bc250_progress.handle, qa->vm_fence.handle, qb->bc250_progress.handle,
++                               qb->vm_fence.handle};
++   bool distinct = true;
++   for (unsigned i = 0; i < 4; i++) {
++      distinct &= fences[i] != 0;
++      for (unsigned j = 0; j < i; j++)
++         distinct &= fences[i] != fences[j];
++   }
++   check(distinct, "each queue has its own progress and companion fences (%x %x %x %x)", fences[0], fences[1],
++         fences[2], fences[3]);
++   check(find(h.contexts, h.n_contexts, qa->context_h)->cookie == cookie_a &&
++            find(h.contexts, h.n_contexts, qb->context_h)->cookie == cookie_b,
++         "each context was created through its own queue's cookie");
++   check(live(h.contexts, h.n_contexts, false) == 2 && live(h.syncs, h.n_syncs, false) == 4,
++         "two queues hold two contexts and four fences, no more");
++
++   check(unbind(ws, a, cookie_a) == VK_SUCCESS && unbind(ws, b, cookie_b) == VK_SUCCESS, "both unbind");
++   ws->base.ctx_destroy(a);
++   ws->base.ctx_destroy(b);
++   check(!live(h.contexts, h.n_contexts, false) && !live(h.syncs, h.n_syncs, false), "nothing left");
++   contract();
++}
++
++static void
++test_signal_wait(void)
++{
++   void *const cookie_a = (void *)(uintptr_t)0xA0, *const cookie_b = (void *)(uintptr_t)0xB0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *a = new_ctx(ws), *b = new_ctx(ws);
++   bind(ws, a, cookie_a);
++   bind(ws, b, cookie_b);
++   struct radv_wddm2_queue *qa = gfx(a), *qb = gfx(b);
++   struct vk_wddm2_monitored_fence f1, f2;
++   app_fence(&f1);
++   app_fence(&f2);
++   struct fake_cs fc;
++   struct ac_cmdbuf *cs = fake_cs(&fc, NULL, 0x100000, 8);
++
++   /* A signals f1. */
++   unsigned mark = h.n_ev;
++   const struct vk_sync_signal signal1 = {.sync = &f1.base, .signal_value = 1};
++   check(submit(ws, a, 1, &cs, 0, NULL, 1, &signal1) == VK_SUCCESS, "A submits and signals f1");
++   int sub = find_op(mark, BC250_HOST_SubmitCommand, 0);
++   int prog = find_op(mark, BC250_HOST_SignalSynchronizationObjectFromGpu2, qa->bc250_progress.handle);
++   int pub = find_op(mark, BC250_HOST_PUBLISH_PROGRESS, 0);
++   int sig = find_op(mark, BC250_HOST_SignalSynchronizationObjectFromGpu2, f1.handle);
++   check(event_is(sub, BC250_HOST_SubmitCommand, qa->context_h, 0, 0x100000), "A's IB goes to A's context");
++   check(event_is(prog, BC250_HOST_SignalSynchronizationObjectFromGpu2, qa->context_h, qa->bc250_progress.handle, 1),
++         "A's progress fence 1 is signalled on A's context");
++   check(event_is(pub, BC250_HOST_PUBLISH_PROGRESS, qa->context_h, qa->bc250_progress.handle, 1),
++         "A's progress is published with A's context and fence");
++   check(event_is(sig, BC250_HOST_SignalSynchronizationObjectFromGpu2, qa->context_h, f1.handle, 1),
++         "f1 is signalled on A's context");
++   check(sub < prog && prog < sig, "order: IB, progress, application signal");
++   check(names_only(mark, qa->context_h) && !names_sync(mark, qb->bc250_progress.handle) &&
++            !names_sync(mark, qb->vm_fence.handle),
++         "A's submission names nothing of B");
++
++   /* B waits for f1 and signals f2. */
++   mark = h.n_ev;
++   const struct vk_sync_wait wait1 = {.sync = &f1.base, .wait_value = 1};
++   const struct vk_sync_signal signal2 = {.sync = &f2.base, .signal_value = 1};
++   check(submit(ws, b, 1, &cs, 1, &wait1, 1, &signal2) == VK_SUCCESS, "B waits for f1, submits, signals f2");
++   int wait = find_op(mark, BC250_HOST_WaitForSynchronizationObjectFromGpu, 0);
++   sub = find_op(mark, BC250_HOST_SubmitCommand, 0);
++   prog = find_op(mark, BC250_HOST_SignalSynchronizationObjectFromGpu2, qb->bc250_progress.handle);
++   sig = find_op(mark, BC250_HOST_SignalSynchronizationObjectFromGpu2, f2.handle);
++   check(event_is(wait, BC250_HOST_WaitForSynchronizationObjectFromGpu, qb->context_h, f1.handle, 1),
++         "B's context waits for f1 on the GPU");
++   check(event_is(sub, BC250_HOST_SubmitCommand, qb->context_h, 0, 0x100000), "B's IB goes to B's context");
++   check(event_is(prog, BC250_HOST_SignalSynchronizationObjectFromGpu2, qb->context_h, qb->bc250_progress.handle, 1),
++         "B's progress starts at 1 on its own fence");
++   check(event_is(sig, BC250_HOST_SignalSynchronizationObjectFromGpu2, qb->context_h, f2.handle, 1),
++         "f2 is signalled on B's context");
++   check(wait < sub && sub < prog && prog < sig, "order: wait, IB, progress, application signal");
++   check(names_only(mark, qb->context_h) && !names_sync(mark, qa->bc250_progress.handle) &&
++            !names_sync(mark, qa->vm_fence.handle),
++         "B's submission names nothing of A");
++   check(!count_op(0, BC250_HOST_WaitForSynchronizationObjectFromCpu), "no CPU wait so far");
++
++   /* Gather slots retire on the queue's own progress fence. The fake GPU
++    * completes nothing on its own, so reusing A's first slot needs a CPU
++    * wait for A's value 1. */
++   for (unsigned i = 1; i < BC250_GATHER_SLOTS; i++)
++      submit_one(ws, a);
++   check(!count_op(0, BC250_HOST_WaitForSynchronizationObjectFromCpu), "A's first %u submissions need no CPU wait",
++         BC250_GATHER_SLOTS);
++   mark = h.n_ev;
++   check(submit_one(ws, a) == VK_SUCCESS, "A's submission %u", BC250_GATHER_SLOTS + 1);
++   int cpu = find_op(mark, BC250_HOST_WaitForSynchronizationObjectFromCpu, 0);
++   check(event_is(cpu, BC250_HOST_WaitForSynchronizationObjectFromCpu, 0, qa->bc250_progress.handle, 1) &&
++            count_op(mark, BC250_HOST_WaitForSynchronizationObjectFromCpu) == 1,
++         "reusing A's first slot waits for A's progress value 1, once");
++   check(names_only(mark, qa->context_h) && !names_sync(mark, qb->bc250_progress.handle),
++         "A's slot reuse never waits on B");
++   mark = h.n_ev;
++   for (unsigned i = 1; i < BC250_GATHER_SLOTS; i++)
++      submit_one(ws, b);
++   check(!count_op(mark, BC250_HOST_WaitForSynchronizationObjectFromCpu),
++         "B's slots are its own: %u submissions, no CPU wait", BC250_GATHER_SLOTS - 1);
++   check(qa->bc250_progress.wait_value == BC250_GATHER_SLOTS + 1 &&
++            qb->bc250_progress.wait_value == BC250_GATHER_SLOTS,
++         "progress values count per queue (A %llu, B %llu)", (unsigned long long)qa->bc250_progress.wait_value,
++         (unsigned long long)qb->bc250_progress.wait_value);
++
++   unbind(ws, a, cookie_a);
++   unbind(ws, b, cookie_b);
++   ws->base.ctx_destroy(a);
++   ws->base.ctx_destroy(b);
++   contract();
++}
++
++static void
++test_gather_teardown(void)
++{
++   void *const cookie_a = (void *)(uintptr_t)0xA0, *const cookie_b = (void *)(uintptr_t)0xB0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *a = new_ctx(ws), *b = new_ctx(ws);
++   bind(ws, a, cookie_a);
++   bind(ws, b, cookie_b);
++   struct radv_wddm2_queue *qa = gfx(a), *qb = gfx(b);
++   const uint32_t a_context = qa->context_h, a_progress = qa->bc250_progress.handle, a_vm = qa->vm_fence.handle;
++
++   /* Two command streams are packed into a gather BO of A's. */
++   struct radeon_winsys_bo *src[2] = {NULL, NULL};
++   for (unsigned i = 0; i < 2; i++)
++      ws->base.buffer_create(&ws->base, 4096, 4096, RADEON_DOMAIN_GTT,
++                             RADEON_FLAG_CPU_ACCESS | RADEON_FLAG_NO_INTERPROCESS_SHARING, 0, 0, NULL, &src[i]);
++   check(src[0] && src[1], "two command BOs");
++   const unsigned allocs_before = live(h.allocs, h.n_allocs, false);
++   struct fake_cs f0, f1;
++   struct ac_cmdbuf *cs[2] = {fake_cs(&f0, src[0], src[0]->va, 16), fake_cs(&f1, src[1], src[1]->va, 16)};
++   check(submit(ws, a, 2, cs, 0, NULL, 0, NULL) == VK_SUCCESS, "A submits two command streams");
++   check(live(h.allocs, h.n_allocs, false) == allocs_before + 1 && qa->bc250_gather[0].bo,
++         "A owns one gather BO");
++   const uint32_t gather = qa->bc250_gather[0].bo->handle;
++
++   /* Unbind: wait for A's last submission, then progress fence, gather
++    * BOs, companion fence, context, all inside the unbind. */
++   unsigned mark = h.n_ev;
++   check(unbind(ws, a, cookie_a) == VK_SUCCESS, "A unbinds");
++   int wait = find_op(mark, BC250_HOST_WaitForSynchronizationObjectFromCpu, 0);
++   int progress = find_op(mark, BC250_HOST_DestroySynchronizationObject, a_progress);
++   int bo = -1;
++   for (unsigned i = mark; i < h.n_ev; i++) {
++      if (h.ev[i].op == BC250_HOST_DestroyAllocation2 && h.ev[i].value == gather)
++         bo = (int)i;
++   }
++   int vm = find_op(mark, BC250_HOST_DestroySynchronizationObject, a_vm);
++   int context = find_op(mark, BC250_HOST_DESTROY_QUEUE_CONTEXT, 0);
++   check(event_is(wait, BC250_HOST_WaitForSynchronizationObjectFromCpu, 0, a_progress, 1),
++         "unbind first waits for A's last submission (progress 1)");
++   check(wait < progress && progress < bo && bo < vm && vm < context,
++         "then releases progress fence, gather BO, companion fence, context (%d %d %d %d %d)", wait, progress, bo,
++         vm, context);
++   check(context >= 0 && h.ev[context].context == a_context && h.ev[context].cookie == cookie_a &&
++            h.ev[context].in_scope,
++         "A's context goes back through A's cookie, inside the unbind");
++   check(live(h.allocs, h.n_allocs, false) == allocs_before && live(h.syncs, h.n_syncs, false) == 2 &&
++            live(h.contexts, h.n_contexts, false) == 1,
++         "only B's context and fences remain");
++
++   /* Nothing names A again. */
++   mark = h.n_ev;
++   check(submit_one(ws, a) == VK_ERROR_VALIDATION_FAILED, "A refuses to submit after unbind");
++   check(ws->base.buffer_virtual_bind_begin(&ws->base, a, AMD_IP_GFX) == VK_ERROR_VALIDATION_FAILED,
++         "A refuses a sparse transaction after unbind");
++   check(ws->base.ctx_wait_idle(a, AMD_IP_GFX, 0), "A is idle after unbind");
++   ws->base.ctx_destroy(a);
++   check(h.n_ev == mark, "after unbind A makes no host call at all");
++
++   /* B is untouched. */
++   mark = h.n_ev;
++   check(submit_one(ws, b) == VK_SUCCESS && names_only(mark, qb->context_h), "B still submits on its own context");
++
++   unbind(ws, b, cookie_b);
++   ws->base.ctx_destroy(b);
++   for (unsigned i = 0; i < 2; i++)
++      ws->base.buffer_destroy(&ws->base, src[i]);
++   check(!live(h.contexts, h.n_contexts, false) && !live(h.syncs, h.n_syncs, false) &&
++            !live(h.allocs, h.n_allocs, false),
++         "nothing left");
++   contract();
++}
++
++static void
++test_device_loss(void)
++{
++   void *const cookie = (void *)(uintptr_t)0xC0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *c = new_ctx(ws);
++   bind(ws, c, cookie);
++   const uint32_t context = gfx(c)->context_h;
++   const uint32_t progress = gfx(c)->bc250_progress.handle, vm = gfx(c)->vm_fence.handle;
++   check(submit_one(ws, c) == VK_SUCCESS, "C submits once; its progress 1 is pending");
++
++   h.status = -1;
++   unsigned mark = h.n_ev;
++   VkResult result = unbind(ws, c, cookie);
++   check(result == VK_ERROR_DEVICE_LOST, "unbind on a lost device reports the unretired submission (%d)", result);
++   check(!count_op(mark, BC250_HOST_WaitForSynchronizationObjectFromCpu), "no CPU wait on a lost device");
++   check(!count_op(mark, BC250_HOST_DestroySynchronizationObject) && !count_op(mark, BC250_HOST_DestroyAllocation2) &&
++            !count_op(mark, BC250_HOST_DESTROY_QUEUE_CONTEXT),
++         "a lost device is not retirement: nothing is destroyed");
++   check(gfx(c)->context_h == context && gfx(c)->bc250_progress.handle == progress && gfx(c)->vm_fence.handle == vm,
++         "the queue keeps its context and both fences");
++   check(find(h.contexts, h.n_contexts, context)->live && live(h.syncs, h.n_syncs, false) == 2, "and they stay live");
++   check(!ws->base.ctx_wait_idle(c, AMD_IP_GFX, 0), "the unbound queue does not report idle");
++
++   h.status = 0;
++   mark = h.n_ev;
++   check(bind(ws, c, cookie) != VK_SUCCESS && h.n_ev == mark,
++         "the queue is not bound again, even once the device is back, with no host call");
++   check(submit_one(ws, c) == VK_ERROR_VALIDATION_FAILED && h.n_ev == mark, "and refuses to submit");
++   ws->base.ctx_destroy(c);
++   check(h.n_ev == mark, "destroying it makes no host call: what it kept is left to the device");
++   contract();
++}
++
++static void
++test_abandon(void)
++{
++   void *const cookie = (void *)(uintptr_t)0xD0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *d = new_ctx(ws);
++   bind(ws, d, cookie);
++   const uint32_t context = gfx(d)->context_h;
++   submit_one(ws, d);
++
++   /* vkDestroyDevice with the queue still bound: the context stays with the
++    * embedder's queue, the device's fences go. */
++   unsigned mark = h.n_ev;
++   ws->base.ctx_destroy(d);
++   bool cookie_used = false;
++   for (unsigned i = mark; i < h.n_ev; i++)
++      cookie_used |= h.ev[i].cookie != NULL;
++   check(!count_op(mark, BC250_HOST_DESTROY_QUEUE_CONTEXT) && !cookie_used,
++         "destroy while bound never calls through the cookie");
++   check(count_op(mark, BC250_HOST_DestroySynchronizationObject) == 2 && !live(h.syncs, h.n_syncs, false),
++         "its fences are released");
++   check(find(h.contexts, h.n_contexts, context)->live, "its context is left to the embedder's queue");
++   contract();
++}
++
++static void
++test_outside_scope(void)
++{
++   void *const cookie = (void *)(uintptr_t)0xE0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *e = new_ctx(ws);
++   struct vk_wddm2_monitored_fence f;
++   app_fence(&f);
++   const struct vk_sync_wait wait = {.sync = &f.base, .wait_value = 1};
++   const struct vk_sync_signal signal = {.sync = &f.base, .signal_value = 2};
++   struct fake_cs fc;
++   struct ac_cmdbuf *cs = fake_cs(&fc, NULL, 0x100000, 8);
++
++   unsigned mark = h.n_ev;
++   check(submit(ws, e, 1, &cs, 1, &wait, 1, &signal) == VK_ERROR_VALIDATION_FAILED,
++         "a queue never bound refuses a submission");
++   check(submit(ws, e, 0, NULL, 0, NULL, 1, &signal) == VK_ERROR_VALIDATION_FAILED,
++         "and a signal-only submission");
++   check(ws->base.buffer_virtual_bind_begin(&ws->base, e, AMD_IP_GFX) == VK_ERROR_VALIDATION_FAILED,
++         "and a sparse transaction");
++   check(ws->base.ctx_wait_idle(e, AMD_IP_GFX, 0), "and is idle");
++   check(h.n_ev == mark, "none of that reaches the host");
++
++   check(bind(ws, e, cookie) == VK_SUCCESS && submit(ws, e, 1, &cs, 0, NULL, 1, &signal) == VK_SUCCESS,
++         "bound, it submits");
++   check(unbind(ws, e, cookie) == VK_SUCCESS, "unbind");
++   mark = h.n_ev;
++   check(submit(ws, e, 1, &cs, 1, &wait, 1, &signal) == VK_ERROR_VALIDATION_FAILED && h.n_ev == mark,
++         "after unbind it refuses again, with no host call");
++
++   /* Nothing arrives after the calls returned: the winsys submits nothing
++    * asynchronously. */
++   mark = h.n_ev;
++   Sleep(100);
++   check(h.n_ev == mark, "no host call after the last call returned (100 ms)");
++   ws->base.ctx_destroy(e);
++   contract();
++}
++
++static void
++test_internal_queue(void)
++{
++   void *const cookie_a = (void *)(uintptr_t)0xA0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *internal = new_ctx(ws), *a = new_ctx(ws);
++
++   check(bind(ws, internal, NULL) == VK_SUCCESS, "the internal queue binds with a NULL cookie");
++   check(bind(ws, a, cookie_a) == VK_SUCCESS, "an application queue binds");
++   const uint32_t internal_context = gfx(internal)->context_h, a_context = gfx(a)->context_h;
++   check(find(h.contexts, h.n_contexts, internal_context)->cookie == NULL &&
++            find(h.contexts, h.n_contexts, a_context)->cookie == cookie_a,
++         "the internal context comes from the NULL cookie, the other from its own");
++
++   unsigned mark = h.n_ev;
++   check(unbind(ws, a, cookie_a) == VK_SUCCESS, "the application queue unbinds");
++   int destroy = find_op(mark, BC250_HOST_DESTROY_QUEUE_CONTEXT, 0);
++   check(event_is(destroy, BC250_HOST_DESTROY_QUEUE_CONTEXT, a_context, 0, 0) && h.ev[destroy].cookie == cookie_a &&
++            count_op(mark, BC250_HOST_DESTROY_QUEUE_CONTEXT) == 1,
++         "only its context goes, through its cookie");
++   check(find(h.contexts, h.n_contexts, internal_context)->live, "the internal context lives on");
++   mark = h.n_ev;
++   check(submit_one(ws, internal) == VK_SUCCESS && names_only(mark, internal_context),
++         "the internal queue still submits on its own context");
++
++   mark = h.n_ev;
++   check(unbind(ws, internal, NULL) == VK_SUCCESS, "the internal queue unbinds last");
++   destroy = find_op(mark, BC250_HOST_DESTROY_QUEUE_CONTEXT, 0);
++   check(event_is(destroy, BC250_HOST_DESTROY_QUEUE_CONTEXT, internal_context, 0, 0) &&
++            h.ev[destroy].cookie == NULL,
++         "its context goes back through the NULL cookie");
++   ws->base.ctx_destroy(internal);
++   ws->base.ctx_destroy(a);
++   check(!live(h.contexts, h.n_contexts, false) && !live(h.syncs, h.n_syncs, false), "nothing left");
++   contract();
++}
++
++static void
++test_sparse(void)
++{
++   void *const cookie_a = (void *)(uintptr_t)0xA0, *const cookie_b = (void *)(uintptr_t)0xB0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *a = new_ctx(ws), *b = new_ctx(ws);
++   bind(ws, a, cookie_a);
++   bind(ws, b, cookie_b);
++   struct radv_wddm2_queue *qa = gfx(a), *qb = gfx(b);
++
++   struct radeon_winsys_bo *parent = NULL, *memory = NULL;
++   ws->base.buffer_create(&ws->base, 65536, 65536, RADEON_DOMAIN_VRAM, RADEON_FLAG_VIRTUAL, 0, 0, NULL, &parent);
++   ws->base.buffer_create(&ws->base, 65536, 65536, RADEON_DOMAIN_VRAM, RADEON_FLAG_NO_INTERPROCESS_SHARING, 0, 0,
++                          NULL, &memory);
++   check(parent && memory, "a sparse buffer and its memory");
++
++   unsigned mark = h.n_ev;
++   check(ws->base.buffer_virtual_bind_begin(&ws->base, b, AMD_IP_GFX) == VK_SUCCESS &&
++            ws->base.buffer_virtual_bind(&ws->base, b, AMD_IP_GFX, parent, 0, 65536, memory, 0) == VK_SUCCESS &&
++            ws->base.buffer_virtual_bind_end(&ws->base, b, AMD_IP_GFX, 0, 0, NULL, true) == VK_SUCCESS,
++         "B binds sparse memory");
++   int boundary = find_op(mark, BC250_HOST_SignalSynchronizationObjectFromGpu2, 0);
++   int update = find_op(mark, BC250_HOST_UpdateGpuVirtualAddress, 0);
++   int wait = find_op(mark, BC250_HOST_WaitForSynchronizationObjectFromGpu, 0);
++   check(event_is(boundary, BC250_HOST_SignalSynchronizationObjectFromGpu2, qb->context_h, qb->vm_fence.handle, 1),
++         "the boundary is signalled on B's context with B's companion fence");
++   check(event_is(update, BC250_HOST_UpdateGpuVirtualAddress, qb->context_h, qb->vm_fence.handle, 1),
++         "the mapping update runs on B's context and B's companion fence");
++   check(event_is(wait, BC250_HOST_WaitForSynchronizationObjectFromGpu, qb->context_h, qb->vm_fence.handle, 2),
++         "B's context waits for the update before later work");
++   check(names_only(mark, qb->context_h) && !names_sync(mark, qa->vm_fence.handle) &&
++            !names_sync(mark, qa->bc250_progress.handle),
++         "nothing of A takes part");
++   check(qa->vm_fence.wait_value == 0 && qb->vm_fence.wait_value == 2, "only B's companion fence advanced");
++
++   unbind(ws, a, cookie_a);
++   unbind(ws, b, cookie_b);
++   ws->base.ctx_destroy(a);
++   ws->base.ctx_destroy(b);
++   ws->base.buffer_destroy(&ws->base, parent);
++   ws->base.buffer_destroy(&ws->base, memory);
++   contract();
++}
++
++static void
++test_rebind(void)
++{
++   void *const cookie_a = (void *)(uintptr_t)0xA0, *const cookie_b = (void *)(uintptr_t)0xB0;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *q = new_ctx(ws);
++
++   /* The first user wraps the gather slots, so the queue ends with a
++    * gather BO, retirement values and a progress value of its own. */
++   check(bind(ws, q, cookie_a) == VK_SUCCESS, "the queue binds for its first user");
++   const uint32_t old_context = gfx(q)->context_h;
++   const uint32_t old_progress = gfx(q)->bc250_progress.handle, old_vm = gfx(q)->vm_fence.handle;
++   struct radeon_winsys_bo *src[2] = {NULL, NULL};
++   for (unsigned i = 0; i < 2; i++)
++      ws->base.buffer_create(&ws->base, 4096, 4096, RADEON_DOMAIN_GTT,
++                             RADEON_FLAG_CPU_ACCESS | RADEON_FLAG_NO_INTERPROCESS_SHARING, 0, 0, NULL, &src[i]);
++   struct fake_cs f0, f1;
++   struct ac_cmdbuf *cs[2] = {fake_cs(&f0, src[0], src[0]->va, 16), fake_cs(&f1, src[1], src[1]->va, 16)};
++   check(submit(ws, q, 2, cs, 0, NULL, 0, NULL) == VK_SUCCESS, "the first user packs a gather BO");
++   for (unsigned i = 1; i <= BC250_GATHER_SLOTS; i++)
++      submit_one(ws, q);
++   unsigned reuse_waits = 0;
++   for (unsigned i = 0; i < h.n_ev; i++)
++      reuse_waits += h.ev[i].op == BC250_HOST_WaitForSynchronizationObjectFromCpu && h.ev[i].sync == old_progress;
++   check(reuse_waits == 1 && gfx(q)->bc250_progress.wait_value == BC250_GATHER_SLOTS + 1,
++         "and wraps the gather slots (%llu submissions, one reuse wait)",
++         (unsigned long long)gfx(q)->bc250_progress.wait_value);
++   check(unbind(ws, q, cookie_a) == VK_SUCCESS && live(h.allocs, h.n_allocs, false) == 2,
++         "unbind releases the gather BO with the rest");
++
++   /* V7: the engine may hand the same VkQueue to another D3D12 queue. */
++   check(bind(ws, q, cookie_b) == VK_SUCCESS, "the same queue binds for another user");
++   struct radv_wddm2_queue *g = gfx(q);
++   check(g->context_h && g->context_h != old_context &&
++            find(h.contexts, h.n_contexts, g->context_h)->cookie == cookie_b,
++         "with a new context, created through the new cookie");
++   check(g->bc250_progress.handle != old_progress && g->vm_fence.handle != old_vm &&
++            !g->bc250_progress.wait_value && !g->vm_fence.wait_value && !g->bc250_gather_index,
++         "new fences, and no fence value or gather slot of the first user");
++   unsigned mark = h.n_ev;
++   check(submit_one(ws, q) == VK_SUCCESS, "the new user submits");
++   check(!count_op(mark, BC250_HOST_WaitForSynchronizationObjectFromCpu),
++         "its first submission waits for nothing of the first user");
++   check(event_is(find_op(mark, BC250_HOST_SignalSynchronizationObjectFromGpu2, g->bc250_progress.handle),
++                  BC250_HOST_SignalSynchronizationObjectFromGpu2, g->context_h, g->bc250_progress.handle, 1),
++         "its progress starts at 1 on its own fence");
++   check(names_only(mark, g->context_h) && !names_sync(mark, old_progress) && !names_sync(mark, old_vm),
++         "nothing names the first user's context or fences");
++
++   check(unbind(ws, q, cookie_b) == VK_SUCCESS, "unbind");
++   ws->base.ctx_destroy(q);
++   for (unsigned i = 0; i < 2; i++)
++      ws->base.buffer_destroy(&ws->base, src[i]);
++   check(!live(h.contexts, h.n_contexts, false) && !live(h.syncs, h.n_syncs, false) &&
++            !live(h.allocs, h.n_allocs, false),
++         "nothing left");
++   contract();
++}
++
++/* The two reproducers of review 606, with their checks unchanged. Each
++ * also checks that the queue keeping objects is not bound again and that
++ * destroying it makes no host call. */
++static void
++test_review_wait_failure(void)
++{
++   void *cookie = (void *)(uintptr_t)0xAA;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *ctx = new_ctx(ws);
++   check(bind(ws, ctx, cookie) == VK_SUCCESS, "bind positive control");
++   check(submit_one(ws, ctx) == VK_SUCCESS, "pending work positive control");
++   h.fail_op = BC250_HOST_WaitForSynchronizationObjectFromCpu;
++   h.fail_nth = 1;
++   unsigned mark = h.n_ev;
++   check(unbind(ws, ctx, cookie) == VK_ERROR_DEVICE_LOST, "failed wait reports loss");
++   check(h.fail_seen == 1, "wait failure was injected");
++   check(!count_op(mark, BC250_HOST_DestroySynchronizationObject),
++         "unretired work retains fences until terminal ownership handoff");
++   check(gfx(ctx)->bc250_progress.handle != 0,
++         "unretired progress ownership is retained");
++
++   h.fail_op = 0;
++   mark = h.n_ev;
++   check(bind(ws, ctx, cookie) != VK_SUCCESS && h.n_ev == mark, "the queue is not bound again, no host call");
++   ws->base.ctx_destroy(ctx);
++   check(h.n_ev == mark, "destroying it makes no host call");
++   contract();
++}
++
++static void
++test_review_destroy_failure(void)
++{
++   void *cookie = (void *)(uintptr_t)0xBB;
++   struct radv_wddm2_winsys *ws = make_ws();
++   struct radeon_winsys_ctx *ctx = new_ctx(ws);
++   check(bind(ws, ctx, cookie) == VK_SUCCESS, "bind positive control");
++   uint32_t context = gfx(ctx)->context_h;
++   h.fail_op = BC250_HOST_DESTROY_QUEUE_CONTEXT;
++   h.fail_nth = 1;
++   VkResult result = unbind(ws, ctx, cookie);
++   check(h.fail_seen == 1 && find(h.contexts, h.n_contexts, context)->live,
++         "destroy failure leaves host context live");
++   check(result != VK_SUCCESS, "failed context destruction must not report success (result=%d)", result);
++   check(gfx(ctx)->context_h == context,
++         "failed context destruction retains ownership pending explicit handoff");
++
++   h.fail_op = 0;
++   unsigned mark = h.n_ev;
++   check(bind(ws, ctx, cookie) != VK_SUCCESS && h.n_ev == mark, "the queue is not bound again, no host call");
++   ws->base.ctx_destroy(ctx);
++   check(h.n_ev == mark, "destroying it makes no host call, through the cookie or otherwise");
++   contract();
++}
++
++static const struct {
++   const char *name;
++   void (*run)(void);
++} tests[] = {
++   {"bind_failure", test_bind_failure},
++   {"second_queue", test_second_queue},
++   {"signal_wait", test_signal_wait},
++   {"gather_teardown", test_gather_teardown},
++   {"device_loss", test_device_loss},
++   {"abandon", test_abandon},
++   {"outside_scope", test_outside_scope},
++   {"internal_queue", test_internal_queue},
++   {"sparse", test_sparse},
++   {"rebind", test_rebind},
++   {"review_wait_failure", test_review_wait_failure},
++   {"review_destroy_failure", test_review_destroy_failure},
++};
++
++int
++main(int argc, char **argv)
++{
++   unsigned run = 0;
++   setvbuf(stdout, NULL, _IONBF, 0);
++   for (unsigned i = 0; i < ARRAY_SIZE(tests); i++) {
++      if (argc > 1 && strcmp(argv[1], tests[i].name))
++         continue;
++      current = tests[i].name;
++      tests[i].run();
++      run++;
++   }
++   if (!run) {
++      fprintf(stderr, "unknown test %s\n", argv[1]);
++      return 2;
++   }
++   printf("tests=%u checks=%u failures=%u\n", run, checks, failures);
++   return failures ? 1 : 0;
++}
