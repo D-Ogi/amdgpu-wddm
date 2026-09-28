@@ -16,6 +16,7 @@
 #include "ddi-output.h"
 #include "ddi-srv.h"
 #include "ddi-flush.h"
+#include "ddi-query.h"
 #include "ddi-table.h"
 #include "ddi-lifecycle.h"
 #include "ddi-format.h"
@@ -475,5 +476,36 @@ int main() {
     if (emptyDevice.owner) std::abort();
     table.pfnDestroyDevice(destroyHandle); table.pfnDestroyDevice({});
     expected=&owner;
+    D3D11_QUERY_DESC queryDesc{}; bool predicate=false;
+    D3D10DDIARG_CREATEQUERY queryArgs{D3D10DDI_QUERY_EVENT,0};
+    if (convert_query(queryArgs,queryDesc,predicate)!=S_OK || queryDesc.Query!=D3D11_QUERY_EVENT || predicate) std::abort();
+    queryArgs.Query=D3D11DDI_QUERY_PIPELINESTATS;
+    if (convert_query(queryArgs,queryDesc,predicate)!=S_OK || queryDesc.Query!=D3D11_QUERY_PIPELINE_STATISTICS) std::abort();
+    queryArgs.Query=D3D10DDI_QUERY_PIPELINESTATS;
+    if (convert_query(queryArgs,queryDesc,predicate)!=S_OK || queryDesc.Query!=D3D11_QUERY_PIPELINE_STATISTICS) std::abort();
+    queryArgs.Query=D3D11DDI_QUERY_STREAMOVERFLOWPREDICATE_STREAM3;
+    if (convert_query(queryArgs,queryDesc,predicate)!=S_OK || !predicate || queryDesc.Query!=D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3) std::abort();
+    queryArgs.Query=D3D10DDI_QUERY_OCCLUSIONPREDICATE; queryArgs.MiscFlags=D3D10DDI_QUERY_MISCFLAG_PREDICATEHINT;
+    if (convert_query(queryArgs,queryDesc,predicate)!=S_OK || !predicate || queryDesc.MiscFlags!=D3D11_QUERY_MISC_PREDICATEHINT) std::abort();
+    queryArgs.Query=D3D10DDI_QUERY_TIMESTAMP;
+    if (convert_query(queryArgs,queryDesc,predicate)!=E_INVALIDARG) std::abort();
+    queryArgs.MiscFlags=2;
+    if (convert_query(queryArgs,queryDesc,predicate)!=E_INVALIDARG) std::abort();
+    queryArgs.Query=D3D10DDI_COUNTER_GPU_IDLE; queryArgs.MiscFlags=0;
+    if (convert_query(queryArgs,queryDesc,predicate)!=E_NOTIMPL) std::abort();
+    if (query_ddi_status(S_FALSE)!=DXGI_DDI_ERR_WASSTILLDRAWING || query_ddi_status(S_OK)!=S_OK || query_ddi_status(E_FAIL)!=E_FAIL) std::abort();
+    DdiQuery queryStorage{}; D3D10DDI_HQUERY queryHandle{}; queryHandle.pDrvPrivate=&queryStorage;
+    if (table.pfnCalcPrivateQuerySize(h,&queryArgs)!=sizeof(DdiQuery)) std::abort();
+    table.pfnCreateQuery(h,&queryArgs,queryHandle,{});
+    table.pfnQueryBegin(h,queryHandle); table.pfnQueryEnd(h,queryHandle);
+    UINT queryResult=0x12345678;
+    auto pendingRead=[](void *p,UINT) { *static_cast<UINT *>(p)=0; return S_FALSE; };
+    if (read_query_result(&queryResult,sizeof(queryResult),pendingRead)!=S_FALSE || queryResult!=0x12345678) std::abort();
+    auto readyRead=[](void *p,UINT) { *static_cast<UINT *>(p)=42; return S_OK; };
+    if (read_query_result(&queryResult,sizeof(queryResult),readyRead)!=S_OK || queryResult!=42) std::abort();
+    queryResult=0x12345678;
+    table.pfnQueryGetData(h,queryHandle,&queryResult,sizeof(queryResult),0);
+    table.pfnSetPredication(h,queryHandle,TRUE); table.pfnDestroyQuery(h,queryHandle);
+    if (errors!=107 || queryStorage.object || queryStorage.predicate || queryResult!=0x12345678 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

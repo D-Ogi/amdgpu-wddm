@@ -149,3 +149,13 @@ The buffer-binding installer now supplies SoSetTargets. It validates stream-outp
 `install_lifecycle_ddi` adds DestroyDevice through `retire_device_handle`. Device handle ownership is a heap-allocated DeviceOwner; successful cleanup deletes it only after its RuntimeDomain scope has unwound. Failed cleanup or remaining live objects reports an error and retains that owner. The helper allows a controlled retry while handle storage remains valid; the VOID DDI callback must tolerate the runtime freeing its handle after return, so failed retirement intentionally leaves the heap allocation alive. DeviceOwner now acquires its own UMD/engine/ICD loader references before creating Vulkan objects and retains them on failed cleanup; the caller must still hold its normal loader reference throughout the call. Local controls inject context-destroy failure, verify retained identity and live context, then retry successfully; null/repeated retirement is harmless. This is not a live GPU teardown test.
 
 DeviceOwner acquires three counted module references from code addresses (the UMD anchor, engine CreateDevice and ICD instance dispatcher). It does not search DLL names. Initialization refuses outstanding references. Close releases references only after engine, Vulkan instance and runtime context/fence cleanup succeeds; partial acquisition failures also retain acquired references until close. The caller owns the normal loader reference while executing the API. The owner control exercises actual loader-reference acquisition using test-module code addresses, failure retention, successful release and rejected reinitialization. This is not yet the full-path engine/ICD loader or a hardware module-lifetime test.
+
+Query DDI now translates the standard event, occlusion, timestamp, pipeline and
+stream-output query families to engine COM queries, including predicate creation
+and binding. D3D10 pipeline statistics are reduced field-by-field from D3D11.
+GetData maps S_FALSE to DXGI_DDI_ERR_WASSTILLDRAWING and stages results until S_OK:
+the engine EVENT implementation can write FALSE while still pending, whereas DDI
+requires an unchanged caller buffer. DONOTFLUSH is forwarded without a shell wait.
+Device-dependent performance counters remain unsupported. Host tests cover mapping,
+pending-buffer preservation and missing-engine error/domain handling; this does
+not yet establish query correctness on the hosted GPU path.

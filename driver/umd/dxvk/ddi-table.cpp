@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-table.h"
+#include "ddi-query.h"
 #include "ddi-lifecycle.h"
 #include "ddi-resource-status.h"
 #include "ddi-format.h"
@@ -23,6 +24,7 @@
 namespace bc250::umd {
 D3D11_1DDI_DEVICEFUNCS make_render_device_table() {
     D3D11_1DDI_DEVICEFUNCS table{};
+    install_query_ddi(table);
     install_draw_ddi(table);
     install_input_layout_ddi(table);
     install_raster_ddi(table);
