@@ -2,6 +2,8 @@
 #include "ddi-draw.h"
 #include "ddi-input-layout.h"
 #include "ddi-raster.h"
+#include "ddi-shader.h"
+#include <cstring>
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -20,6 +22,7 @@ int main() {
     install_draw_ddi(table);
     install_input_layout_ddi(table);
     install_raster_ddi(table);
+    install_shader_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -48,5 +51,20 @@ int main() {
     table.pfnSetScissorRects(h,0,0,nullptr);
     table.pfnIaSetTopology(h,D3D10_DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     if (errors!=12 || owner.runtime().domain.entered()) std::abort();
+    D3D11_1DDIARG_SIGNATURE_ENTRY signature;
+    std::memset(&signature,0xcc,sizeof(signature));
+    signature.SystemValue=D3D10_SB_NAME_POSITION; signature.Register=7; signature.Mask=15;
+    signature.RegisterComponentType=D3D10_SB_REGISTER_COMPONENT_FLOAT32;
+    signature.MinPrecision=D3D11_SB_OPERAND_MIN_PRECISION_DEFAULT;
+    std::vector<BC250_DXVK_SIGNATURE_ENTRY> converted;
+    if (copy_legacy_signature(&signature,1,converted)!=S_OK || converted[0].Stream!=0 || converted[0].Register!=7 || converted[0].Mask!=15) std::abort();
+    if (copy_legacy_signature(nullptr,1,converted)!=E_INVALIDARG || converted.size()!=1) std::abort();
+    DdiShader shader{}; D3D10DDI_HSHADER sh{}; sh.pDrvPrivate=&shader;
+    D3D11_1DDIARG_STAGE_IO_SIGNATURES signatures{}; const UINT code[]={0,2};
+    if (table.pfnCalcPrivateShaderSize(h,code,&signatures)!=sizeof(shader)) std::abort();
+    table.pfnCreateVertexShader(h,code,sh,{},&signatures);
+    table.pfnVsSetShader(h,sh); table.pfnPsSetShader(h,{}); table.pfnGsSetShader(h,{});
+    table.pfnDestroyShader(h,sh);
+    if (errors!=17 || shader.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
