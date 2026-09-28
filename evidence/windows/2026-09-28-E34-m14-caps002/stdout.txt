@@ -1,0 +1,280 @@
+adapter: AMD BC-250 (RADV GFX1013) (api 1.4.363)
+icd: C:\BC250\m14\caps002\bc250radv.dll sha256 C0CE5DCDEB3B8D399FDA0D7548D78C9E93CAAC87C201285549B441DAC59107A0
+driver: radv, Mesa 26.3.0-devel (git-05e6c9622e)
+ok    Bc250DxvkEngineGetFuncs
+ok    GetAdapterInfo
+      MaxFeatureLevel 0xb100, 17.3 ms
+ok    QueryDeviceRequirements
+      36 device extensions, queue family 0, 18.1 ms
+PASS  vkCreateDevice with the engine's requirements
+engine[1]: bc250dxvk: CreateDevice: Physical device not in the imported instance
+PASS  CreateDevice rejects a physical device outside the instance
+PASS  the failed CreateDevice reports its reason through Log, level 1
+engine[2]: D3D11DeviceFeatures: Some formats not supported for resource sharing
+ok    CreateDevice
+      52.9 ms
+PASS  CreateDevice's own lines (device import) reach the shell's Log
+ok    GetD3D11Device
+ok    GetImmediateContext
+PASS  device feature level as requested
+ok    QueryInterface IBc250DxvkDevice3
+PASS  CheckFeatureSupportAtLevel at the device's level: 18 features as the device answers them
+PASS  CheckFeatureSupportAtLevel at MaxFeatureLevel: the GetCaps record
+      caps at 0xb100: doubles 1, compute+raw 1, logic op 1, extended doubles 1, min precision 2/2, TBDR 0
+      typed UAV loads 1, ROVs 1, stencil ref 1, tiled tier 0, min/max filtering 0, conservative tier 3, VP/RT index anywhere 1, shared tier 1
+PASS  CheckFeatureSupportAtLevel 10_0: no doubles below 11_0
+PASS  CheckFeatureSupportAtLevel rejects levels out of range, format queries, NULL data and a wrong size
+PASS  compile VS, strip to tokens and register signatures
+PASS  compile PS, strip to tokens and register signatures
+ok    CreateShader (VS, DDI form)
+ok    CreateShader (PS, DDI form)
+ok    GetVertexFormat R32G32_FLOAT
+ok    GetVertexFormat R32G32B32_FLOAT
+PASS  vertex element sizes 8 and 12
+PASS  GetVertexFormat rejects formats that are not vertex formats (BC1, D32)
+ok    CreateInputLayout (DDI form)
+ok    GetImageCreateInfo
+PASS  TYPELESS target: mutable image with the engine's view format list in pNext
+      view formats: 5, image format 37, usage 0x17, tiling 0
+PASS  GetImageCreateInfo rejects a CPU-accessible texture
+PASS  shell vkCreateImage from GetImageCreateInfo
+PASS  shell allocates and binds device-local memory
+ok    CreateTexture2DFromImage
+ok    CreateRenderTargetView (UNORM view)
+ok    CreateBuffer (vertices)
+ok    CreateTexture2D (staging)
+ok    SubmitForPresent
+      first draw: 1 fast-linked, 0 optimized pipelines; SubmitForPresent: 1 optimized
+PASS  the draw fast-links and compiles no optimized pipeline (inline mode)
+PASS  SubmitForPresent compiles the deferred optimized pipeline
+      IsResourceBusy after submit: idle
+ok    WaitForResourceIdle
+PASS  IsResourceBusy == idle after WaitForResourceIdle
+ok    Map staging (READ)
+      pixels: (0,0)=251,2,2  (61,0)=8,245,2  (0,61)=8,2,245  (63,63)=51,102,153  covered=2016
+PASS  clear colour outside the triangle
+PASS  red near the red vertex (VS input register 1 reaches PS)
+PASS  green near the green vertex
+PASS  blue near the blue vertex
+PASS  covered pixel count matches the half-target triangle
+ok    500 x (clear, draw, SubmitForPresent)
+ok    WaitForResourceIdle after the frames
+      123.3 us per frame (wall, submit-bound), private bytes +0.4 MB
+PASS  private bytes grow by less than 64 MB over 500 frames
+ok    Map staging after the frames
+PASS  last frame has the same clear and triangle
+PASS  the deferred compiles caught up: one optimized pipeline per fast-linked one
+PASS  rotation set: three shell images, textures and RTVs, cleared red, green, blue
+ok    RotateResourceIdentities (3 textures)
+      after rotation: 0,255,0  0,0,255  255,0,0
+PASS  texture i shows the former storage of texture i + 1, the last one that of the first
+PASS  an RTV created before the rotation writes the new storage only
+PASS  rotation rejects a staging texture
+PASS  rotation rejects the same texture twice
+ok    QueryInterface ID3D11DeviceContext1 (buffer ClearView)
+      buffer ClearView R8G8B8A8_UNORM: typed buffer view
+ok    CreateBuffer (buffer render target)
+ok    CreateBuffer (buffer ClearView read-back)
+ok    CreateRenderTargetView (buffer, elements 8..40)
+      buffer ClearView R8G8B8A8_UNORM, two rectangles: 0 mismatching elements
+PASS  ClearView on a buffer RTV writes its rectangles' elements, converted, and nothing else
+      buffer ClearView R8G8B8A8_UNORM, whole view: 0 mismatching elements
+PASS  ClearView on a buffer RTV without rectangles writes the view's elements only
+      buffer ClearView A8_UNORM: typed buffer view
+ok    CreateBuffer (buffer render target)
+ok    CreateBuffer (buffer ClearView read-back)
+ok    CreateRenderTargetView (buffer, elements 8..40)
+      buffer ClearView A8_UNORM, two rectangles: 0 mismatching elements
+PASS  ClearView on a buffer RTV writes its rectangles' elements, converted, and nothing else
+      buffer ClearView A8_UNORM, whole view: 0 mismatching elements
+PASS  ClearView on a buffer RTV without rectangles writes the view's elements only
+      buffer ClearView B5G6R5_UNORM: no buffer render target support, skipped
+ok    QueryInterface ID3D11DeviceContext1
+ok    CreateTexture2D (Blt source, sRGB)
+ok    CreateTexture2D (Blt source staging)
+ok    CreateRenderTargetView (Blt source)
+      Blt source quadrants: 255,0,0  0,255,0  0,0,255  188,188,188
+PASS  Blt source: three colour quadrants and an sRGB-encoded grey one
+ok    Blt: 32x32 sRGB source stretched onto the 64x64 UNORM shell image, presenting
+PASS  stretched Blt moves the encoded values unchanged, quadrant by quadrant
+ok    Blt rotated by 180 degrees
+PASS  180 degrees: each destination quadrant shows the opposite source quadrant
+ok    Blt into a 32x32 destination rectangle, unscaled
+PASS  an unscaled Blt writes its destination rectangle and nothing else
+ok    QueryInterface IBc250DxvkDevice1
+ok    Blt1: the green source quadrant stretched onto 32x32
+PASS  Blt1 stretches its source rectangle onto its destination rectangle and writes nothing else
+ok    Blt1: the lower half of the source, unscaled
+PASS  an unscaled Blt1 moves its source rectangle to its destination rectangle
+ok    Blt1: the upper half of the source, rotated by 180 degrees
+PASS  180 degrees: the content turns within the destination rectangle
+PASS  Blt1 rejects a source rectangle outside the source
+PASS  Blt1 rejects an empty source rectangle
+PASS  Blt1 rejects a source rectangle with a negative corner
+ok    CreateTexture2D (4x Blt source)
+ok    CreateRenderTargetView (4x Blt source)
+ok    Blt resolving a 4x source
+PASS  resolving Blt writes the cleared colour into its rectangle
+ok    Blt between two shell images of one format, scaled down
+PASS  same-format Blt fills its rectangle from the other shell image
+engine[1]: bc250dxvk: Blt: 90 or 270 degree rotation not implemented
+PASS  Blt reports 90 degree rotation as not implemented
+PASS  Blt rejects a rectangle outside the destination
+PASS  Blt rejects a staging source
+PASS  Blt rejects the destination subresource as its own source
+ok    WaitForResourceIdle after the Blt checks
+ok    QueryInterface IBc250DxvkDevice2
+PASS  shell creates and binds a LINEAR image from GetImageCreateInfo, with its own view format list
+PASS  CreateTexture2DFromImage2 rejects another format
+PASS  CreateTexture2DFromImage2 rejects another extent
+PASS  CreateTexture2DFromImage2 rejects a removed usage bit
+PASS  CreateTexture2DFromImage2 rejects a removed flag
+PASS  CreateTexture2DFromImage2 rejects a mutable image without the view format list
+PASS  CreateTexture2DFromImage2 rejects a tiling other than OPTIMAL and LINEAR
+ok    CreateTexture2DFromImage2 (LINEAR)
+PASS  the engine uses the image with LINEAR tiling
+PASS  CreateTexture2DFromImage keeps GetImageCreateInfo's tiling (probe control)
+ok    CreateRenderTargetView (LINEAR image)
+ok    Map staging (LINEAR image)
+      LINEAR image: (0,0)=251,2,2  covered=2016
+PASS  clear and triangle in the LINEAR image as in the first draw
+ok    Blt1 from the LINEAR image
+PASS  Blt1 copies the LINEAR image's triangle and clear
+ok    Blt1 into a rectangle of the LINEAR image
+PASS  Blt1 writes its rectangle of the LINEAR image and nothing else
+ok    WaitForResourceIdle (LINEAR image)
+ok    CreateShader (stream output, no code)
+ok    CreateShader (stream output, VS code)
+ok    CreateShader (stream output, rasterized stream 0)
+PASS  CreateShader rejects stream output with pixel shader code
+ok    CreateBuffer (stream output target)
+ok    CreateBuffer (stream output readback)
+      no code: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      no code: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      no code: record 2 = -1.0 -1.0 0.0 1.0 [-7.0] 0.0 1.0
+PASS  stream output without code captures position, the hole and colour.yz of each point
+      VS code: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      VS code: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      VS code: record 2 = -1.0 -1.0 0.0 1.0 [-7.0] 0.0 1.0
+PASS  stream output with the VS code captures the same records
+      triangle list: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      triangle list: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      triangle list: record 2 = -1.0 -1.0 0.0 1.0 [-7.0] 0.0 1.0
+PASS  a triangle list streams out all three vertices of its triangle
+      triangle strip: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      triangle strip: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      triangle strip: record 2 = -1.0 -1.0 0.0 1.0 [-7.0] 0.0 1.0
+PASS  a triangle strip streams out its triangle (VS code)
+      line list: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      line list: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      line list: record 2 = -7.0 -7.0 -7.0 -7.0 [-7.0] -7.0 -7.0
+PASS  a line list streams out its complete line and drops the lone third vertex
+      line strip: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      line strip: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      line strip: record 2 = -7.0 -7.0 -7.0 -7.0 [-7.0] -7.0 -7.0
+PASS  a line strip's second line does not fit and is dropped whole
+ok    Map staging (control draw)
+      Map staging (control draw): covered=2016
+PASS  control: the draw without a geometry program covers the triangle
+ok    Map staging (rasterized stream)
+      Map staging (rasterized stream): covered=2016
+PASS  the rasterized stream of the pass-through covers the triangle's pixels
+ok    CreatePredicate (occlusion, no samples)
+ok    CreatePredicate (occlusion, triangle)
+ok    predicate FALSE, value FALSE
+      predicate FALSE, value FALSE: 0 pixels changed
+PASS  an occlusion predicate without samples skips the clear and the draw predicated on FALSE
+ok    predicate FALSE, value TRUE
+      predicate FALSE, value TRUE: 4096 pixels changed
+PASS  the same predicate lets them run when predicated on TRUE
+ok    predicate TRUE, value TRUE
+      predicate TRUE, value TRUE: 0 pixels changed
+PASS  an occlusion predicate with samples skips the clear and the draw predicated on TRUE
+ok    predicate TRUE, value FALSE
+      predicate TRUE, value FALSE: 4096 pixels changed
+PASS  the same predicate lets them run when predicated on FALSE
+PASS  GetData reports the two occlusion predicates as FALSE and TRUE
+PASS  GetPredication returns the predicate and value set
+ok    Map (predicated copy)
+PASS  a predicated-off CopyResource writes nothing
+ok    Map (after predicated update)
+PASS  a predicated-off UpdateSubresource writes nothing
+ok    CreatePredicate (SO overflow, any stream)
+ok    CreatePredicate (SO overflow, stream 0)
+      overflowing line strip: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      overflowing line strip: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      overflowing line strip: record 2 = -7.0 -7.0 -7.0 -7.0 [-7.0] -7.0 -7.0
+      fitting triangle list: record 0 = -1.0 1.0 0.0 1.0 [-7.0] 0.0 0.0
+      fitting triangle list: record 1 = 1.0 1.0 0.0 1.0 [-7.0] 1.0 0.0
+      fitting triangle list: record 2 = -1.0 -1.0 0.0 1.0 [-7.0] 0.0 1.0
+ok    overflow predicate, value TRUE
+      overflow predicate, value TRUE: 0 pixels changed
+PASS  an overflowed stream output skips the operations predicated on TRUE
+ok    no-overflow predicate, value TRUE
+      no-overflow predicate, value TRUE: 4096 pixels changed
+PASS  stream output that fits lets them run
+PASS  GetData reports overflow for the strip and none for the list
+      gs output 0: register 0 mask 0xf system value 1, stream 0 (DDI entry: 0)
+      gs output 1: register 1 mask 0x7 system value 0, stream 0 (DDI entry: 0)
+      gs output 2: register 0 mask 0xf system value 0, stream 1 (DDI entry: 0)
+PASS  precondition: stream 1 of the gs_5_0 program reuses an output register of stream 0
+ok    CreateShader (gs_5_0 stream output on streams 0 and 1, signature streams 0)
+ok    CreateBuffer (stream target)
+ok    CreateBuffer (stream readback)
+ok    CreateBuffer (stream target)
+ok    CreateBuffer (stream readback)
+ok    CreateGeometryShaderWithStreamOutput (control, fxc container)
+ok    Map (stream readback)
+      control: stream 0 record 0: -1.0 1.0 0.0 1.0 1.0 0.0 0.0
+      control: stream 0 record 1: 1.0 1.0 0.0 1.0 0.0 1.0 0.0
+      control: stream 0 record 2: -1.0 -1.0 0.0 1.0 0.0 0.0 1.0
+ok    Map (stream readback)
+      control: stream 1 record 0: 3.0 1.0 1.0 4.0
+      control: stream 1 record 1: 1.0 3.0 1.0 6.0
+      control: stream 1 record 2: 1.0 1.0 3.0 4.0
+PASS  control: both streams of the fxc container capture their records
+ok    Map (stream readback)
+      DDI: stream 0 record 0: -1.0 1.0 0.0 1.0 1.0 0.0 0.0
+      DDI: stream 0 record 1: 1.0 1.0 0.0 1.0 0.0 1.0 0.0
+      DDI: stream 0 record 2: -1.0 -1.0 0.0 1.0 0.0 0.0 1.0
+ok    Map (stream readback)
+      DDI: stream 1 record 0: 3.0 1.0 1.0 4.0
+      DDI: stream 1 record 1: 1.0 3.0 1.0 6.0
+      DDI: stream 1 record 2: 1.0 1.0 3.0 4.0
+PASS  stream 0 of the gs_5_0 program captures the position and colour of each point
+PASS  stream 1 captures its own value from the reused register
+      queue lock calls 1144, from other threads 0
+PASS  the engine brackets queue submissions with QueueLock
+PASS  every QueueLock call came from the calling thread (E2)
+PASS  no new thread starts in bc250dxvk.dll
+ok    WaitForResourceIdle before releasing the imported image
+PASS  final engine Release reports no leaked D3D11 references (E4)
+      vkQueueSubmit2                      571 calls, 0 from other threads
+      vkDeviceWaitIdle                      4 calls, 0 from other threads
+      vkWaitSemaphores                    571 calls, 0 from other threads
+      vkGetSemaphoreCounterValue         2144 calls, 0 from other threads
+      vkAllocateMemory                      6 calls, 0 from other threads
+      vkFreeMemory                          6 calls, 0 from other threads
+      vkMapMemory                           5 calls, 0 from other threads
+      vkCreateBuffer                        6 calls, 0 from other threads
+      vkDestroyBuffer                       6 calls, 0 from other threads
+      vkCreateImage                         4 calls, 0 from other threads
+      vkDestroyImage                        4 calls, 0 from other threads
+      vkCreateImageView                     7 calls, 0 from other threads
+      vkCreateGraphicsPipelines            19 calls, 0 from other threads
+      vkCreateComputePipelines              2 calls, 0 from other threads
+      vkAllocateCommandBuffers             15 calls, 0 from other threads
+      vkBeginCommandBuffer               1179 calls, 0 from other threads
+      vkEndCommandBuffer                 1178 calls, 0 from other threads
+      vkResetCommandPool                  572 calls, 0 from other threads
+      6299 hooked Vulkan calls, 0 from other threads
+PASS  the census sees the engine's submissions, allocations and pipelines (control for the hooks)
+PASS  every hooked Vulkan call of the engine ran on the calling thread (E2)
+      315 log lines, 1 at level 1
+PASS  every Log call came from the calling thread (E2)
+PASS  every Log line has level 1-4 and no newline
+PASS  the Blt ROTATE90 rejection arrives through Log, level 1
+ok    GetAdapterInfo after the final Release
+PASS  no Log call after the final Release
+PASS  the log file holds the device-less lines only
+PASSED: 0 failure(s)
