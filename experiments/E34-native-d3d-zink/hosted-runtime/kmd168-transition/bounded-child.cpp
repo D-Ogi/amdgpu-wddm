@@ -41,10 +41,29 @@ int wmain(int argc,wchar_t** argv){
     std::wstring command;
     for(int i=4;i<argc;++i){if(i>4)command+=L' ';command+=quote(argv[i]);}
     std::vector<wchar_t> mutableCommand(command.begin(),command.end());mutableCommand.push_back(0);
-    STARTUPINFOW startup={};startup.cb=sizeof(startup);startup.dwFlags=STARTF_USESTDHANDLES;
-    startup.hStdInput=input.h;startup.hStdOutput=output.h;startup.hStdError=error.h;
+    // Do not leak the helper's receipt pipes into any child or descendant.
+    // Their survival must never make the supervisor wait indefinitely for EOF.
+    STARTUPINFOEXW startup={};startup.StartupInfo.cb=sizeof(startup);
+    startup.StartupInfo.dwFlags=STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput=input.h;startup.StartupInfo.hStdOutput=output.h;
+    startup.StartupInfo.hStdError=error.h;
+    SIZE_T bytes=0;
+    InitializeProcThreadAttributeList(nullptr,1,0,&bytes);
+    if(!bytes)return 125;
+    std::vector<unsigned char> attributes(bytes);
+    startup.lpAttributeList=reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
+    if(!InitializeProcThreadAttributeList(startup.lpAttributeList,1,0,&bytes))return 125;
+    HANDLE inherited[]={input.h,output.h,error.h};
+    if(!UpdateProcThreadAttribute(startup.lpAttributeList,0,PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                                 inherited,sizeof(inherited),nullptr,nullptr)){
+        DeleteProcThreadAttributeList(startup.lpAttributeList);return 125;
+    }
     PROCESS_INFORMATION pi={};
-    if(!CreateProcessW(argv[4],mutableCommand.data(),nullptr,nullptr,TRUE,CREATE_SUSPENDED|CREATE_NO_WINDOW,nullptr,nullptr,&startup,&pi))return 125;
+    const BOOL created=CreateProcessW(argv[4],mutableCommand.data(),nullptr,nullptr,TRUE,
+        CREATE_SUSPENDED|CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,
+        nullptr,nullptr,&startup.StartupInfo,&pi);
+    DeleteProcThreadAttributeList(startup.lpAttributeList);
+    if(!created)return 125;
     Handle process,thread;process.h=pi.hProcess;thread.h=pi.hThread;
     if(!AssignProcessToJobObject(job.h,process.h)){
         TerminateProcess(process.h,125);return 125;

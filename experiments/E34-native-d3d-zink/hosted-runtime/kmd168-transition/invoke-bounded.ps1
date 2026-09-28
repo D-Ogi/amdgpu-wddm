@@ -25,12 +25,21 @@ function Invoke-KmdBoundedChild {
  try{
   if(!$process.Start()){throw 'Bounded helper did not start'}
   $handle=$process.Handle
+  # Drain both pipes concurrently; EOF itself is bounded, not just process exit.
+  $stdoutTask=$process.StandardOutput.ReadToEndAsync()
+  $stderrTask=$process.StandardError.ReadToEndAsync()
   $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())/[double][Diagnostics.Stopwatch]::Frequency
   $wait=[int][math]::Max(0,[math]::Floor($remaining*1000))
   if(!$process.WaitForExit($wait)){
    $process.Kill()
    throw 'Helper deadline exceeded; process-tree closure unconfirmed, recovery required'
   }
-  return @{exit_code=$process.ExitCode;stdout=$process.StandardOutput.ReadToEnd();stderr=$process.StandardError.ReadToEnd()}
+  $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())/[double][Diagnostics.Stopwatch]::Frequency
+  $wait=[int][math]::Max(0,[math]::Floor($remaining*1000))
+  $reads=[Threading.Tasks.Task[]]@($stdoutTask,$stderrTask)
+  if(![Threading.Tasks.Task]::WaitAll($reads,$wait)){
+   throw 'Receipt pipe deadline exceeded; process-tree closure unconfirmed'
+  }
+  return @{exit_code=$process.ExitCode;stdout=$stdoutTask.Result;stderr=$stderrTask.Result}
  }finally{$process.Dispose()}
 }
