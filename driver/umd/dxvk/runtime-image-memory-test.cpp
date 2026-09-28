@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-image-memory.h"
 #include "runtime-texture.h"
+#include "runtime-surface.h"
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -47,6 +48,35 @@ HRESULT wrap_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImage,ID3D11Texture2
 }
 HRESULT wait_texture(void *,ID3D11Texture2D *) { ++waits; return textureWait; }
 ULONG release_texture(ID3D11Texture2D *) { ++releases; return remainingRefs; }
+}
+namespace {
+UINT64 surfaceFence=0;
+RuntimeSurface *closingSurface=nullptr;
+unsigned surfaceAllocates=0,surfaceUnmaps=0,surfaceDeallocates=0;
+bool failSurfaceUnmap=false,failSurfaceResident=false;
+HRESULT APIENTRY surface_allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
+    check(h==&identity); ++surfaceAllocates;
+    a->pAllocationInfo2[0].hAllocation=31; return S_OK;
+}
+HRESULT APIENTRY surface_deallocate(HANDLE,const D3DDDICB_DEALLOCATE2 *a) {
+    check(a->NumAllocations==1 && *a->HandleList==31);
+    check(closingSurface && !closingSurface->mapping.address && !closingSurface->texture.image.image);
+    ++surfaceDeallocates; return S_OK;
+}
+HRESULT APIENTRY surface_map(HANDLE,D3DDDI_MAPGPUVIRTUALADDRESS *m) {
+    check(m->hAllocation==31 && m->SizeInPages==2);
+    m->VirtualAddress=65536; m->PagingFenceValue=5; return E_PENDING;
+}
+HRESULT APIENTRY surface_resident(HANDLE,D3DDDI_MAKERESIDENT *r) {
+    if (failSurfaceResident) return E_OUTOFMEMORY;
+    r->PagingFenceValue=9; return E_PENDING;
+}
+HRESULT APIENTRY surface_unmap(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS *m) {
+    check(m->BaseAddress==65536 && m->Size==8192);
+    check(closingSurface && !closingSurface->texture.texture && !closingSurface->texture.image.image && !closingSurface->texture.image.memory);
+    ++surfaceUnmaps;
+    return failSurfaceUnmap ? E_FAIL : S_OK;
+}
 }
 int main() {
     RuntimeDevice runtime; runtime.hDevice=&identity;
@@ -101,6 +131,49 @@ int main() {
     check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_UNEXPECTED && texture.retained && texture.image.image);
     const unsigned retainedDestroy=imageDestroys;
     check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_UNEXPECTED && imageDestroys==retainedDestroy && releases==2);
+    runtime.KTCallbacks.pfnAllocateCb=surface_allocate;
+    runtime.KTCallbacks.pfnDeallocate2Cb=surface_deallocate;
+    runtime.KTCallbacks.pfnMapGpuVirtualAddressCb=surface_map;
+    runtime.KTCallbacks.pfnMakeResidentCb=surface_resident;
+    runtime.KTCallbacks.pfnFreeGpuVirtualAddressCb=surface_unmap;
+    SurfacePagingQueue queue{7,8,&surfaceFence};
+    RuntimeSurfaceRequest request{};
+    request.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,64,16,256,D3DDDIFMT_A8B8G8R8,8192};
+    textureDesc.Height=16; textureDesc.MipLevels=textureDesc.ArraySize=1;
+    textureDesc.SampleDesc.Count=1; textureDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    RuntimeSurface surface; closingSurface=&surface;
+    auto begin=[&]() { return begin_runtime_surface(runtime,queue,request,textureDesc,surface); };
+    auto finish=[&]() { return finish_runtime_surface(device,imageDispatch,textureDispatch,properties,surface); };
+    auto close=[&]() { return close_runtime_surface(bridge,device,imageDispatch,textureDispatch,surface); };
+    textureDesc.Height=15; check(begin()==E_INVALIDARG && !surfaceAllocates); textureDesc.Height=16;
+    check(begin()==S_FALSE && surfaceAllocates==1 && !surface.texture.texture);
+    check(begin()==E_UNEXPECTED && surfaceAllocates==1);
+    unsigned previousCreates=imageCreates;
+    check(finish()==S_FALSE && imageCreates==previousCreates);
+    surfaceFence=5; check(finish()==S_FALSE && imageCreates==previousCreates);
+    surfaceFence=9; remainingRefs=0;
+    check(finish()==S_OK && surface.phase==SurfacePhase::ready && surface.texture.texture);
+    check(finish()==S_OK && imageCreates==previousCreates+1);
+    textureWait=E_FAIL;
+    check(close()==E_FAIL && !surfaceUnmaps && !surfaceDeallocates);
+    check(finish()==E_UNEXPECTED); // A closing resource cannot be republished.
+    textureWait=S_OK; failSurfaceUnmap=true;
+    check(close()==E_FAIL && !surface.texture.image.image && surface.mapping.address && !surfaceDeallocates);
+    const unsigned releasedOnce=releases;
+    failSurfaceUnmap=false; check(close()==S_OK && surfaceDeallocates==1 && releases==releasedOnce);
+    check(close()==S_OK && surfaceDeallocates==1 && surface.phase==SurfacePhase::empty);
+    surfaceFence=0; failSurfaceResident=true;
+    check(begin()==E_OUTOFMEMORY && surface.mapping.address && !surface.mapping.resident);
+    check(finish()==E_UNEXPECTED && close()==E_PENDING && surfaceDeallocates==1);
+    surfaceFence=5; check(close()==S_OK && surfaceDeallocates==2);
+    failSurfaceResident=false; surfaceFence=9;
+    check(begin()==S_FALSE); textureWrap=E_OUTOFMEMORY;
+    check(finish()==E_OUTOFMEMORY && surface.phase==SurfacePhase::failed);
+    check(close()==S_OK && surfaceDeallocates==3); textureWrap=S_OK;
+    check(begin()==S_FALSE && finish()==S_OK); remainingRefs=1;
+    const unsigned unmappedBeforeRetention=surfaceUnmaps;
+    check(close()==E_UNEXPECTED && surface.texture.retained);
+    check(close()==E_UNEXPECTED && surfaceUnmaps==unmappedBeforeRetention && surfaceDeallocates==3);
     // This test uses synthetic handles only, never an actual allocation/image.
-    std::cout << "PASS private image-memory import descriptor, validation and rollback (mock Vulkan)\n";
+    std::cout << "PASS image import and surface lifecycle: pending paging, teardown order, failure retention (mock callbacks)\n";
 }

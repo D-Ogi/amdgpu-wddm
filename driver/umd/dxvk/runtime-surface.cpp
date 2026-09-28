@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: MIT
+#include "runtime-surface.h"
+namespace bc250::umd {
+static bool matching_format(UINT format,DXGI_FORMAT dxgi) {
+    switch (dxgi) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        return format==D3DDDIFMT_A8B8G8R8;
+    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        return format==D3DDDIFMT_A8R8G8B8;
+    default: return false;
+    }
+}
+HRESULT begin_runtime_surface(RuntimeDevice &runtime,const SurfacePagingQueue &queue,
+    const RuntimeSurfaceRequest &request,const D3D11_TEXTURE2D_DESC1 &desc,RuntimeSurface &out) {
+    if (out.phase!=SurfacePhase::empty || out.owner) return E_UNEXPECTED;
+    if (!runtime.domain.entered() || !queue.queue || !queue.sync || !queue.cpu ||
+        desc.Width!=request.surface.Width || desc.Height!=request.surface.Height ||
+        desc.MipLevels!=1 || desc.ArraySize!=1 || desc.SampleDesc.Count!=1 || desc.SampleDesc.Quality ||
+        !matching_format(request.surface.Format,desc.Format)) return E_INVALIDARG;
+    out.owner=&runtime; out.queue=queue; out.desc=desc;
+    out.pitch=request.surface.Pitch; out.bytes=request.surface.Size;
+    out.phase=SurfacePhase::failed;
+    HRESULT hr=allocate_runtime_surface(runtime,request,out.allocation);
+    if (FAILED(hr)) return hr;
+    hr=map_runtime_surface(runtime,queue,out.allocation.allocation,out.bytes,out.mapping);
+    if (FAILED(hr)) return hr;
+    out.phase=SurfacePhase::paging;
+    return S_FALSE; // Even completed paging still needs an image and texture.
+}
+HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
+    const TextureImportDispatch &engine,const VkPhysicalDeviceMemoryProperties &properties,RuntimeSurface &surface) {
+    if (!surface.owner || !surface.owner->domain.entered()) return E_INVALIDARG;
+    if (surface.phase==SurfacePhase::ready) return S_OK;
+    if (surface.phase!=SurfacePhase::paging || !surface.mapping.resident) return E_UNEXPECTED;
+    HRESULT hr=surface_paging_status(surface.queue,surface.mapping);
+    if (hr==S_FALSE) return hr;
+    surface.phase=SurfacePhase::failed;
+    if (FAILED(hr)) return hr;
+    bc250_host_import imported{};
+    imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=surface.owner->hDevice;
+    imported.allocation=surface.allocation.allocation; imported.va=surface.mapping.address;
+    imported.size=surface.bytes;
+    hr=create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,
+        imported,surface.pitch,surface.texture);
+    if (FAILED(hr)) return hr;
+    surface.phase=SurfacePhase::ready;
+    return S_OK;
+}
+HRESULT close_runtime_surface(HostBridge &bridge,VkDevice device,const RuntimeImageDispatch &vk,
+    const TextureImportDispatch &engine,RuntimeSurface &surface) {
+    if (!bridge.device || !bridge.device->domain.entered()) return E_INVALIDARG;
+    if (surface.phase==SurfacePhase::empty) return S_OK;
+    if (bridge.device!=surface.owner) return E_INVALIDARG;
+    surface.phase=SurfacePhase::closing;
+    HRESULT hr=close_runtime_texture(bridge,device,vk,engine,surface.texture);
+    if (hr!=S_OK) return hr;
+    hr=unmap_runtime_surface(*surface.owner,surface.queue,surface.mapping);
+    if (hr!=S_OK) return hr;
+    hr=deallocate_runtime_surface(*surface.owner,surface.allocation);
+    if (hr!=S_OK) return hr;
+    surface.owner=nullptr; surface.queue={}; surface.desc={}; surface.pitch=0; surface.bytes=0;
+    surface.phase=SurfacePhase::empty;
+    return S_OK;
+}
+}
