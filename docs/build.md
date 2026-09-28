@@ -209,8 +209,7 @@ published yet; each `recipe.json` names its commit.
 `bc250dxvk_engine_test.exe <bc250dxvk.dll> [adapter substring]` is the engine's offline positive control. It
 runs on any Vulkan 1.3 GPU, opens no window and exits by itself; exit code 0 means every check passed. The
 test plays the UMD shell: it owns the Vulkan instance and device, allocates the images and feeds shaders in DDI
-form. It then checks pixels, sustained frames, storage rotation, and the thread of every Vulkan call the engine
-makes.
+form. The checks are listed under Validation in [the engine design note](design/d3d11-ddi-engine.md#validation).
 
 ## KMD and host tests
 
