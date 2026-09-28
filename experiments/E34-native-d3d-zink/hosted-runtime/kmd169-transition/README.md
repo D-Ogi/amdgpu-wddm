@@ -111,3 +111,11 @@ limit180s. The historical166 worker receipt spans20:58:19.939 to20:58:50.840Z
 (about30.9s), but has no complete per-phase timing or worst-case bound. It does
 not establish that80s is sufficient for every healthy rollback. Every phase and
 the final closure remain measured; budget exhaustion is a failed rehearsal.
+
+The receipt-pipe negative control lives in sibling kmd168-transition. Build with
+build-bounded-child.ps1 -TestPipeHolder, then run test-receipt-pipe.ps1. Its helper
+intentionally exits while a finite child retains inherited stdout/stderr. The
+reader must return unknown closure within its deadline while that child is still
+alive; the test then kills its own holder. This exercises the surviving-pipe case,
+not an actual uninterruptible kernel wait. Production bounded-child separately
+uses an explicit three-handle inheritance list.
