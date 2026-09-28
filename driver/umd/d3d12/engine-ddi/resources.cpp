@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// engine-ddi: heaps and resources (D59-D61, D57-D58, D74, D75, D84, D0), resource_allocation, and the list slots
-// that move data between resources (L10, L13, L17).
+// engine-ddi: heaps and resources (D59-D61, D57-D58, D74, D75, D84, D0, D1), reserved resources (the creation;
+// their tile slots are in tiles.cpp), resource_allocation, object_allocation, and the list slots that move data
+// between resources (L10, L13, L17).
 #include "internal.h"
 #include <algorithm>
 
@@ -107,6 +108,31 @@ HRESULT heap_desc_of(const D3D12DDIARG_CREATEHEAP_0001& in, D3D12_HEAP_DESC& out
     return S_OK;
 }
 
+// The initial layout of a create: a buffer's is UNDEFINED. The DDI-only LEGACY_* layouts name a legacy initial state:
+// S_OK and *state for one of them, S_FALSE for a barrier layout the engine takes as it is, E_INVALIDARG for an
+// unknown DDI-only layout.
+HRESULT initial_layout(const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BARRIER_LAYOUT* layout,
+                       D3D12_RESOURCE_STATES* state) noexcept {
+    if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) *layout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
+    if (static_cast<uint32_t>(*layout) < 0x80000000u || *layout == D3D12DDI_BARRIER_LAYOUT_UNDEFINED) return S_FALSE;
+    switch (*layout) {
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_SOURCE: *state = D3D12_RESOURCE_STATE_COPY_SOURCE; return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST: *state = D3D12_RESOURCE_STATE_COPY_DEST; return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_SHADER_RESOURCE:
+        *state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        return S_OK;
+    case D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE:
+        *state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        return S_OK;
+    default: return E_INVALIDARG;
+    }
+}
+
+const D3D12_CLEAR_VALUE* clear_value(const D3D12_RESOURCE_DESC1& desc, const D3D12DDI_CLEAR_VALUES* clear) noexcept {
+    const bool target = desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+    return (clear && target) ? reinterpret_cast<const D3D12_CLEAR_VALUE*>(clear) : nullptr;
+}
+
 // The engine's placed resource at offset in the backing (engine-ddi.h placement rules, D3D12 part).
 HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURCE_DESC1& desc,
               D3D12DDI_BARRIER_LAYOUT layout, const D3D12DDI_CLEAR_VALUES* clear, UINT castable_count,
@@ -118,21 +144,11 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURC
     if (info.SizeInBytes == UINT64_MAX || !info.Alignment) return E_INVALIDARG;
     if (offset % info.Alignment || offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset)
         return E_INVALIDARG;
-    const bool target = desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-    const D3D12_CLEAR_VALUE* cv = (clear && target) ? reinterpret_cast<const D3D12_CLEAR_VALUE*>(clear) : nullptr;
-    if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) layout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
-    if (static_cast<uint32_t>(layout) >= 0x80000000u && layout != D3D12DDI_BARRIER_LAYOUT_UNDEFINED) {
-        // The DDI-only LEGACY_* layouts name a legacy initial state.
-        D3D12_RESOURCE_STATES state;
-        switch (layout) {
-        case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_SOURCE: state = D3D12_RESOURCE_STATE_COPY_SOURCE; break;
-        case D3D12DDI_BARRIER_LAYOUT_LEGACY_COPY_DEST: state = D3D12_RESOURCE_STATE_COPY_DEST; break;
-        case D3D12DDI_BARRIER_LAYOUT_LEGACY_SHADER_RESOURCE:
-            state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-            break;
-        case D3D12DDI_BARRIER_LAYOUT_LEGACY_PIXEL_SHADER_RESOURCE: state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE; break;
-        default: return E_INVALIDARG;
-        }
+    const D3D12_CLEAR_VALUE* cv = clear_value(desc, clear);
+    D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+    const HRESULT legacy = initial_layout(desc, &layout, &state);
+    if (FAILED(legacy)) return legacy;
+    if (legacy == S_OK) {
         if (castable_count) return E_NOTIMPL;           // CreatePlacedResource1 takes no castable formats
         return c->device8->CreatePlacedResource1(b->heap, offset, &desc, state, cv, __uuidof(ID3D12Resource),
                                                  reinterpret_cast<void**>(out));
@@ -140,6 +156,28 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURC
     return c->device10->CreatePlacedResource2(b->heap, offset, &desc, static_cast<D3D12_BARRIER_LAYOUT>(layout), cv,
                                               castable_count, castable, __uuidof(ID3D12Resource),
                                               reinterpret_cast<void**>(out));
+}
+
+// The engine's reserved (tiled) resource: no memory until UpdateTileMappings maps heap tiles into it (tiles.cpp).
+// The engine refuses a reserved texture when its tiled resources tier is 0; a format it cannot make sparse becomes
+// its committed fallback, on which tile mappings are ignored (vkd3d-proton d3d12_resource_create_reserved).
+HRESULT reserve(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BARRIER_LAYOUT layout,
+                const D3D12DDI_CLEAR_VALUES* clear, UINT castable_count, const DXGI_FORMAT* castable,
+                ID3D12Resource** out) noexcept {
+    *out = nullptr;
+    const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+    const D3D12_CLEAR_VALUE* cv = clear_value(desc, clear);
+    D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+    const HRESULT legacy = initial_layout(desc, &layout, &state);
+    if (FAILED(legacy)) return legacy;
+    if (legacy == S_OK) {
+        if (castable_count) return E_NOTIMPL;           // CreateReservedResource1 takes no castable formats
+        return c->device4->CreateReservedResource1(&d0, state, cv, nullptr, __uuidof(ID3D12Resource),
+                                                   reinterpret_cast<void**>(out));
+    }
+    return c->device10->CreateReservedResource2(&d0, static_cast<D3D12_BARRIER_LAYOUT>(layout), cv, nullptr,
+                                                castable_count, castable, __uuidof(ID3D12Resource),
+                                                reinterpret_cast<void**>(out));
 }
 
 // The backing and its release record, allocated together while the create can still fail (internal.h,
@@ -180,7 +218,7 @@ HRESULT engine_heap_from_memory(DeviceContext* c, const D3D12_HEAP_DESC& desc, c
 
 void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
                         const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind) noexcept {
-    backing_acquire(b);
+    if (b) backing_acquire(b);                          // a reserved resource has none
     new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, kInitNone, nullptr, nullptr};
     c->live.fetch_add(1);
 }
@@ -209,8 +247,16 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         if (!base) {
             if (res_desc->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate || hheap.pDrvPrivate)
                 return E_INVALIDARG;
-            return E_NOTIMPL;                           // reserved resource: tiled resources (P2)
+            // Reserved: no heap and no base resource (engine-ddi.h, "Reserved resources"). No memory is allocated.
+            ID3D12Resource* engine = nullptr;
+            HRESULT hr = reserve(c, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
+                                 res_desc->pCastableFormats, &engine);
+            if (FAILED(hr)) return hr;
+            construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, nullptr, 0, desc, rt,
+                               ResourceKind::Reserved);
+            return S_OK;
         }
+        if (!base->backing) return E_INVALIDARG;        // a reserved resource names no heap memory
         const uint64_t offset = base->offset + res_desc->ReuseBufferGPUVA.BaseAddress.UMD.Offset;
         if (offset < base->offset) return E_INVALIDARG;
         ID3D12Resource* engine = nullptr;
@@ -423,7 +469,8 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
 }
 
 // The same answer for a resource that exists, from the description it was created with (the record's desc,
-// Alignment 0 as at creation). Reserved resources cannot exist in this revision (E_NOTIMPL at creation).
+// Alignment 0 as at creation). A reserved resource gets the answer for its description too, although it holds no
+// memory of its own.
 void APIENTRY check_existing_resource_allocation_info(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE hres,
                                                       D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) {
     if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
@@ -437,9 +484,9 @@ void APIENTRY check_existing_resource_allocation_info(D3D12DDI_HDEVICE device, D
     }
 }
 
-// The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer, 1:1 for Flags NONE. A format or sample count the
-// engine refuses is 0 levels, as for CheckFormatSupport. TILED_RESOURCE is 0 levels: no reserved resource can be
-// created in this revision, whatever tiled tier the caps pass through (INTEGRATION.md, 1006).
+// The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer, 1:1 for Flags NONE and TILED_RESOURCE (the values
+// are equal). A format or sample count the engine refuses is 0 levels, as for CheckFormatSupport; so is an unknown
+// flag.
 void APIENTRY check_multisample_quality_levels(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT sample_count,
                                                D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags, UINT* out) {
     static_assert(D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE ==
@@ -451,8 +498,9 @@ void APIENTRY check_multisample_quality_levels(D3D12DDI_HDEVICE device, DXGI_FOR
         c->report(E_INVALIDARG);
         return;
     }
-    if (flags != D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_NONE) return;
-    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS q{format, sample_count, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE, 0};
+    if (flags & ~D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE) return;
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS q{format, sample_count,
+                                                    static_cast<D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS>(flags), 0};
     if (SUCCEEDED(c->device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &q, sizeof(q))))
         *out = q.NumQualityLevels;
 }
@@ -729,6 +777,8 @@ HRESULT object_allocation(DeviceContext* c, D3D12DDI_HANDLE_AND_TYPE object, D3D
         return E_INVALIDARG;
     case D3D12DDI_HT_0012_RESOURCE:
         if (auto* r = record_of<ResourceRecord>(object.Handle, Tag::Resource, c)) {
+            // A reserved resource has no memory of its own: its tiles live in heaps, which are resident as heaps.
+            if (r->kind == ResourceKind::Reserved) return S_FALSE;
             b = r->backing;                             // a placed resource shares its heap's backing
             break;
         }
@@ -740,7 +790,7 @@ HRESULT object_allocation(DeviceContext* c, D3D12DDI_HANDLE_AND_TYPE object, D3D
     default:
         return E_INVALIDARG;
     }
-    if (!b) return E_INVALIDARG;                        // no heap memory (a reserved resource, not creatable yet)
+    if (!b) return E_INVALIDARG;                        // no heap memory
     if (!b->imported) return S_FALSE;                   // EnginePrivateTest memory: no runtime allocation
     *allocation = b->memory.allocation;
     return S_OK;

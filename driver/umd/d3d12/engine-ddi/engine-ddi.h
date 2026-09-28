@@ -76,6 +76,12 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //     shapes. Whether hosted RADV's import of a runtime allocation is the same storage at the same GPU virtual
 //     address as the runtime's view is a lab question (not yet measured); the development PC harness allocates the
 //     VkDeviceMemory itself.
+//   - Reserved (tiled; resource description only, with neither a heap nor a base resource in ReuseBufferGPUVA): the
+//     engine's CreateReservedResource1 (a LEGACY_* initial layout) or CreateReservedResource2. No allocate_memory
+//     call and no heap reference: the resource has no memory until update_tile_mappings binds tiles of heaps into
+//     it, and those heaps keep their own release sequence. That this is the runtime's shape for
+//     CreateReservedResource is an INFERENCE from the DDI (no runtime call logged). The engine creates one only at
+//     tiled resources tier 1 or above.
 //
 // Release sequence of heap memory, run once when the last user of a heap is destroyed (the heap record and
 // every resource placed in it):
@@ -95,9 +101,11 @@ inline constexpr uint32_t kBoundaryRevision = 3;
 //   4. The runtime deallocation, by the shell, on the same thread, within free_memory or after it.
 //   Steps 2 and 3 run only on the thread of a DDI call into the device that owns the memory, while that runtime
 //   device exists: the DDI call that makes the last destroy if the work has already retired, otherwise the first
-//   later DDI call that observes retirement (execute_command_lists, pfnCreateHeapAndResource,
-//   pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from an engine thread or an
-//   engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   later DDI call that observes retirement (execute_command_lists, update_tile_mappings, copy_tile_mappings,
+//   pfnCreateHeapAndResource, pfnDestroyHeapAndResource, destroy_engine_queue, destroy_device_context). Never from
+//   an engine thread or an engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
+//   A tile mapping is queue work like a submission: its call signals the queue's retirement fence after the bind, so
+//   heap memory destroyed after the mapping waits for it.
 enum class MemoryMode : uint32_t { RuntimeBacked = 1, EnginePrivateTest = 2 };
 
 enum MemoryRequestFlags : uint32_t {
@@ -270,6 +278,26 @@ QueueClose destroy_engine_queue(EngineQueue* queue) noexcept;
 // otherwise on another live DIRECT engine queue of the device, and this queue waits for it on the GPU
 // (INTEGRATION.md, "Committed render targets").
 HRESULT execute_command_lists(EngineQueue* queue, UINT count, const D3D12DDI_HCOMMANDLIST* lists) noexcept;
+// Tile mappings. pfnUpdateTileMappings and pfnCopyTileMappings (Q3, Q4) are slots of the shell's queue table, whose
+// first argument is the shell's D3D12DDI_HCOMMANDQUEUE: the shell resolves it to the queue's EngineQueue, as for
+// ExecuteCommandLists, and passes every other argument of the slot unchanged (INTEGRATION.md, "Tiled resources").
+// Each call takes the queue's submission lock, calls the engine queue's UpdateTileMappings or CopyTileMappings (in
+// INLINE mode the engine submits the sparse bind on the queue before it returns), then signals the queue's
+// retirement fence like execute_command_lists does, and is a retirement point. The resources must be reserved
+// resources of the queue's device (resources.cpp); heap is a heap record of that device, and may be null only when
+// every range is NULL or SKIP. The heap's memory is what CreateHeapFromMemory imported (RuntimeBacked), so the tiles
+// are bound to the runtime allocation. What engine-ddi can check it checks first: a malformed call binds nothing,
+// is reported through report_device_error and returns E_INVALIDARG. A failed retirement signal is reported and
+// returned. The engine reports nothing: a tile it cannot map (out of the resource's bounds) is logged and dropped,
+// as in vkd3d-proton.
+HRESULT update_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE resource, UINT region_count,
+                             const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts,
+                             const D3D12DDI_TILE_REGION_SIZE* region_sizes, D3D12DDI_HHEAP heap, UINT range_count,
+                             const D3D12DDI_TILE_RANGE_FLAGS* range_flags, const UINT* heap_range_starts,
+                             const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
+HRESULT copy_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE dst, const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start,
+                           D3D12DDI_HRESOURCE src, const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start,
+                           const D3D12DDI_TILE_REGION_SIZE* size, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
 // Present (the DXGI table is the shell's): the runtime allocation behind a resource. The resource must have
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.
 HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource, D3DKMT_HANDLE* allocation,
@@ -280,7 +308,8 @@ HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
 //   - D3D12DDI_HT_HEAP, D3D12DDI_HT_0012_RESOURCE (committed or placed) of this device: S_OK and the allocation of
 //     the heap memory the object lives in; a placed resource gives its heap's allocation, so a placed resource and
 //     its heap give the same handle, which the shell drops as a duplicate. S_FALSE for such an object without a
-//     runtime allocation (EnginePrivateTest memory, harness only).
+//     runtime allocation (EnginePrivateTest memory, harness only), and for a reserved resource: it has no memory of
+//     its own, and the heaps its tiles are mapped from are made resident as heaps.
 //   - D3D12DDI_HT_DESCRIPTOR_HEAP, D3D12DDI_HT_QUERY_HEAP of this device: S_FALSE. Their memory is engine-internal
 //     and always resident; there is nothing to make resident or evict.
 //   - Any other type, a record of another type or of another device, a destroyed object, a resource without heap

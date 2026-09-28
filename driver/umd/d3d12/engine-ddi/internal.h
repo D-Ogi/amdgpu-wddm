@@ -128,6 +128,9 @@ struct EngineQueue {
 };
 // The retirement fence value of a queue (a retirement point of the engine, V8).
 uint64_t completed_value(EngineQueue* queue) noexcept;
+// Submits lists on the queue followed by the signal of its retirement fence (queue.cpp). With no list it signals
+// the fence after whatever the queue did last, such as a tile mapping (tiles.cpp). The caller holds submit_lock.
+HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* lists) noexcept;
 
 struct ResourceRecord;
 
@@ -240,10 +243,11 @@ struct HeapRecord {
     Backing* backing;
 };
 
-enum class ResourceKind : uint32_t { Committed = 1, Placed = 2 };
+// Reserved: a tiled resource with no heap memory of its own (tiles.cpp maps heaps into it); backing is null.
+enum class ResourceKind : uint32_t { Committed = 1, Placed = 2, Reserved = 3 };
 struct ResourceRecord {
     RecordHeader h;                             // engine: the ID3D12Resource
-    Backing* backing;                           // one reference
+    Backing* backing;                           // one reference; null for a reserved resource
     uint64_t offset;                            // in the backing
     D3D12_RESOURCE_DESC1 desc;
     D3D12DDI_HRTRESOURCE rt;
@@ -361,6 +365,8 @@ void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_queries(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_queries(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+void fill_core_tiles(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
+void fill_list_tiles(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 
 // Graphics-only slot in the compute table: reports E_INVALIDARG through report_list_error.
 bool reject_in_compute_table(const CommandListRecord* list) noexcept;

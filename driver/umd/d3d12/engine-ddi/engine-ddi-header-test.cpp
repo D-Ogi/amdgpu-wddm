@@ -61,6 +61,33 @@ static_assert(std::is_same_v<decltype(&engine_ddi::destroy_engine_queue),
 static_assert(std::is_same_v<decltype(&engine_ddi::object_allocation),
                              HRESULT (*)(engine_ddi::DeviceContext*, D3D12DDI_HANDLE_AND_TYPE, D3DKMT_HANDLE*) noexcept>,
               "object_allocation");
+// Tiled resources, added within r3: the engine parts of the shell's queue slots Q3 and Q4 take the EngineQueue and
+// then exactly the rest of the slot's arguments (PFND3D12DDI_UPDATETILEMAPPINGS, PFND3D12DDI_COPYTILEMAPPINGS).
+static_assert(std::is_same_v<decltype(&engine_ddi::update_tile_mappings),
+                             HRESULT (*)(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE, UINT,
+                                         const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*,
+                                         D3D12DDI_HHEAP, UINT, const D3D12DDI_TILE_RANGE_FLAGS*, const UINT*,
+                                         const UINT*, D3D12DDI_TILE_MAPPING_FLAGS) noexcept>,
+              "update_tile_mappings");
+static_assert(std::is_same_v<PFND3D12DDI_UPDATETILEMAPPINGS,
+                             VOID (APIENTRY*)(D3D12DDI_HCOMMANDQUEUE, D3D12DDI_HRESOURCE, UINT,
+                                              const D3D12DDI_TILED_RESOURCE_COORDINATE*,
+                                              const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_HHEAP, UINT,
+                                              const D3D12DDI_TILE_RANGE_FLAGS*, const UINT*, const UINT*,
+                                              D3D12DDI_TILE_MAPPING_FLAGS)>,
+              "Q3 slot the shell forwards");
+static_assert(std::is_same_v<decltype(&engine_ddi::copy_tile_mappings),
+                             HRESULT (*)(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE,
+                                         const D3D12DDI_TILED_RESOURCE_COORDINATE*, D3D12DDI_HRESOURCE,
+                                         const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*,
+                                         D3D12DDI_TILE_MAPPING_FLAGS) noexcept>,
+              "copy_tile_mappings");
+static_assert(std::is_same_v<PFND3D12DDI_COPYTILEMAPPINGS,
+                             VOID (APIENTRY*)(D3D12DDI_HCOMMANDQUEUE, D3D12DDI_HRESOURCE,
+                                              const D3D12DDI_TILED_RESOURCE_COORDINATE*, D3D12DDI_HRESOURCE,
+                                              const D3D12DDI_TILED_RESOURCE_COORDINATE*,
+                                              const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_TILE_MAPPING_FLAGS)>,
+              "Q4 slot the shell forwards");
 // The engine header this revision is built against is ABI 1.2 (QueryAdapterCaps, V11).
 static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 2u), "engine ABI 1.2 header");
 static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 64, "ABI 1.2 x64 sizes");

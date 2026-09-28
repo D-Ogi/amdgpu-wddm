@@ -430,6 +430,7 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
     fill_core_graphics(table);
     fill_core_commands(table);
     fill_core_queries(table);
+    fill_core_tiles(table);
     return S_OK;
 }
 
@@ -445,6 +446,7 @@ HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T tab
     fill_list_graphics(table, table_index);
     fill_list_commands(table, table_index);
     fill_list_queries(table, table_index);
+    fill_list_tiles(table, table_index);
     return S_OK;
 }
 

@@ -11,6 +11,7 @@ bool valid_queue_type(UINT32 type) noexcept {
     return type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_COMPUTE ||
            type == D3D12_COMMAND_LIST_TYPE_COPY;
 }
+} // namespace
 
 // Submits lists on q followed by the signal of its retirement fence. The caller holds q->submit_lock.
 HRESULT submit_locked(EngineQueue* q, UINT count, ID3D12CommandList* const* lists) noexcept {
@@ -29,7 +30,6 @@ HRESULT submit_locked(EngineQueue* q, UINT count, ID3D12CommandList* const* list
     // On failure bit 0 stays set: releases wait for the queue's next successful signal, never for an older one.
     return hr;
 }
-} // namespace
 
 // ---- Initialization of committed render targets and depth-stencil resources ------------------------------------
 // engine-ddi makes a committed resource as a heap and a resource placed at 0 (resources.cpp). vkd3d-proton gives a
