@@ -36,6 +36,93 @@ static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* re
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
 static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {return E_FAIL;}
+// Exercise the exported DLL boundary, not the in-process composition helpers.
+// Publication alone must not instantiate an engine device or submit GPU work.
+template<class T>
+static void rejected_table(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPTER adapter,
+    D3D12DDI_TABLE_TYPE type,SIZE_T size,UINT number,D3D12DDI_HRTTABLE runtime,
+    HRESULT expected=E_INVALIDARG) {
+    struct Guarded {UINT64 before;T table;UINT64 after;} storage;
+    memset(&storage,0xa5,sizeof(storage));
+    unsigned char snapshot[sizeof(storage)];memcpy(snapshot,&storage,sizeof(storage));
+    assert(funcs.pfnFillDDITable(adapter,type,&storage.table,size,number,runtime)==expected);
+    assert(memcmp(snapshot,&storage,sizeof(storage))==0);
+}
+template<class T>
+static T published_table(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPTER adapter,
+    D3D12DDI_TABLE_TYPE type,UINT number=0,D3D12DDI_HRTTABLE runtime={}) {
+    struct Guarded {UINT64 before;T table;UINT64 after;} storage{};
+    storage.before=0x123456789abcdef0ULL;storage.after=0xfedcba9876543210ULL;
+    assert(funcs.pfnFillDDITable(adapter,type,&storage.table,sizeof(T),number,runtime)==S_OK);
+    assert(storage.before==0x123456789abcdef0ULL && storage.after==0xfedcba9876543210ULL);
+    return storage.table;
+}
+static void publication_tests(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPTER adapter) {
+    using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
+    using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
+    using Queue=D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001;
+    using Extended=D3D12DDI_EXTENDED_FEATURES_FUNCS_0021;
+    constexpr auto coreType=D3D12DDI_TABLE_TYPE_DEVICE_CORE;
+    constexpr auto listType=D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D;
+    constexpr auto queueType=D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D;
+    constexpr auto extendedType=D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES;
+    const D3D12DDI_HRTTABLE runtime[2]={
+        {reinterpret_cast<HANDLE>(UINT_PTR(0x123456780001ULL))},
+        {reinterpret_cast<HANDLE>(UINT_PTR(0x123456780002ULL))}};
+    auto& state=*static_cast<native12::Adapter*>(adapter.pDrvPrivate);
+    assert(!state.list_tables[0].handle && !state.list_tables[1].handle);
+    rejected_table<Core>(funcs,adapter,coreType,sizeof(Core)-1,0,{});
+    rejected_table<Core>(funcs,adapter,coreType,sizeof(Core)+1,0,{});
+    rejected_table<Core>(funcs,adapter,coreType,sizeof(Core),1,{});
+    auto core=published_table<Core>(funcs,adapter,coreType);
+    // Read typed fields from both shell and engine ownership across the table.
+    assert(core.pfnCheckFormatSupport && core.pfnCalcPrivateCommandQueueSize &&
+        core.pfnCreateCommandQueue && core.pfnDestroyCommandQueue &&
+        core.pfnCreateCommandPool && core.pfnCreateCommandList &&
+        core.pfnCreateFence && core.pfnDestroyFence &&
+        core.pfnCalcPrivateHeapAndResourceSizes && core.pfnCreateHeapAndResource &&
+        core.pfnDestroyHeapAndResource && core.pfnMapHeap && core.pfnUnmapHeap &&
+        core.pfnMakeResident && core.pfnEvict && core.pfnQueryNodeMap &&
+        core.pfnGetPresentPrivateDriverDataSize && core.pfnImplicitShaderCacheControl);
+    for(UINT i=0;i<2;++i){
+        rejected_table<List>(funcs,adapter,listType,sizeof(List)-1,i,runtime[i]);
+        rejected_table<List>(funcs,adapter,listType,sizeof(List)+1,i,runtime[i]);
+        rejected_table<List>(funcs,adapter,listType,sizeof(List),i,{});
+        assert(!state.list_tables[i].handle);
+        auto list=published_table<List>(funcs,adapter,listType,i,runtime[i]);
+        assert(list.pfnCloseCommandList && list.pfnResetCommandList &&
+            list.pfnCopyBufferRegion && list.pfnResourceCopy && list.pfnResourceBarrier &&
+            list.pfnPresent && list.pfnDispatch && list.pfnDrawInstanced &&
+            list.pfnSetComputeRootSignature && list.pfnSetGraphicsRootSignature &&
+            list.pfnBarrier && list.pfnOmSetAlphaBlendFactor);
+        assert(state.list_tables[i].handle==runtime[i].handle);
+        auto repeat=published_table<List>(funcs,adapter,listType,i,runtime[i]);
+        assert(repeat.pfnCopyBufferRegion==list.pfnCopyBufferRegion && repeat.pfnPresent==list.pfnPresent);
+        rejected_table<List>(funcs,adapter,listType,sizeof(List),i,runtime[1-i],E_UNEXPECTED);
+        assert(state.list_tables[i].handle==runtime[i].handle);
+    }
+    rejected_table<List>(funcs,adapter,listType,sizeof(List),2,runtime[0]);
+    rejected_table<Queue>(funcs,adapter,queueType,sizeof(Queue)-1,0,{});
+    rejected_table<Queue>(funcs,adapter,queueType,sizeof(Queue)+1,0,{});
+    rejected_table<Queue>(funcs,adapter,queueType,sizeof(Queue),1,{});
+    auto queue=published_table<Queue>(funcs,adapter,queueType);
+    assert(queue.pfnExecuteCommandLists && queue.pfnUpdateTileMappings &&
+        queue.pfnCopyTileMappings && queue.pfnSignalFence && queue.pfnWaitForFence);
+    assert(!queue.pfnUnused && !queue.pfnUnused2);
+    rejected_table<Extended>(funcs,adapter,extendedType,sizeof(Extended)-1,0,{});
+    rejected_table<Extended>(funcs,adapter,extendedType,sizeof(Extended)+1,0,{});
+    rejected_table<Extended>(funcs,adapter,extendedType,sizeof(Extended),1,{});
+    auto extended=published_table<Extended>(funcs,adapter,extendedType);
+    assert(extended.pfnGetSupportedExtendedFeatures && extended.pfnGetSupportedExtendedFeatureVersions &&
+        extended.pfnEnableExtendedFeature && extended.pfnSetExtendedFeatureCallbacks);
+    const D3D12DDI_TABLE_TYPE types[]={coreType,listType,queueType,extendedType};
+    const SIZE_T sizes[]={sizeof(Core),sizeof(List),sizeof(Queue),sizeof(Extended)};
+    for(unsigned i=0;i<4;++i)
+        assert(funcs.pfnFillDDITable(adapter,types[i],nullptr,sizes[i],0,runtime[0])==E_INVALIDARG);
+    rejected_table<Core>(funcs,{},coreType,sizeof(Core),0,{});
+    rejected_table<Core>(funcs,adapter,D3D12DDI_TABLE_TYPE_DXGI,sizeof(Core),0,{},E_NOTIMPL);
+    assert(state.devices.load()==0);
+}
 int main(int argc,char** argv) {
     if(argc!=2)return 2;
     HMODULE dll=LoadLibraryA(argv[1]);assert(dll);
@@ -80,8 +167,9 @@ int main(int argc,char** argv) {
     assert(static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate)->devices.load()==0);
     ::operator delete(storage);
 
-    assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,guard,sizeof(guard),0,{})==E_NOTIMPL);
+    assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,guard,sizeof(guard),0,{})==E_INVALIDARG);
     assert(guard[1]==0x123456);
+    publication_tests(funcs,a.hAdapter);
     assert(funcs.pfnCloseAdapter(a.hAdapter)==S_OK);
-    FreeLibrary(dll);puts("adapter export/negotiation/fail-closed tests passed");return 0;
+    FreeLibrary(dll);puts("adapter export/negotiation/publication/fail-closed tests passed");return 0;
 }

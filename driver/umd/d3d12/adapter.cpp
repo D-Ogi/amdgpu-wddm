@@ -7,6 +7,7 @@
 #include <cstdint>
 #include "device-state.h"
 #include "device-engine.h"
+#include "native-tables.h"
 #include "adapter-caps.h"
 #include "ddi-0092-layout.h"
 namespace {
@@ -33,7 +34,7 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
        !a->p12UMCallbacks_0062 || !a->pKTCallbacks) return E_INVALIDARG;
     const auto& cb=*a->p12UMCallbacks_0062;
     if(!a->hRTDevice.handle || !cb.pfnSetErrorCb || !cb.pfnCreateContextVirtualCb || !cb.pfnDestroyContextCb ||
-       !cb.pfnAllocateCb || !cb.pfnDeallocateCb) return E_INVALIDARG;
+       !cb.pfnAllocateCb || !cb.pfnDeallocateCb || !cb.pfnSetCommandListDDITableCb || !cb.pfnSetCommandListErrorCb) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
     auto device=new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
     HRESULT hr=native12::create_device_engine(*device);
@@ -65,10 +66,11 @@ HRESULT APIENTRY optional_tables(D3D12DDI_HADAPTER h,UINT32* count,D3D12DDI_TABL
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;
     *count=0;trace("GetOptionalDDITables");return S_OK;
 }
-HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER,D3D12DDI_TABLE_TYPE type,void*,SIZE_T size,UINT number,D3D12DDI_HRTTABLE table) {
-    fprintf(stderr,"d3d12-ddi FillDDITable type=%u size=%llu number=%u runtime_table_present=%u result=E_NOTIMPL\n",
-        unsigned(type),static_cast<unsigned long long>(size),number,unsigned(table.handle!=nullptr));fflush(stderr);
-    return E_NOTIMPL;
+HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER h,D3D12DDI_TABLE_TYPE type,void* output,SIZE_T size,UINT number,D3D12DDI_HRTTABLE table) {
+    HRESULT hr=h.pDrvPrivate?native12::fill_native_tables(*static_cast<Adapter*>(h.pDrvPrivate),type,output,size,number,table):E_INVALIDARG;
+    fprintf(stderr,"d3d12-ddi FillDDITable type=%u size=%llu number=%u runtime_table_present=%u result=%08lx\n",
+        unsigned(type),static_cast<unsigned long long>(size),number,unsigned(table.handle!=nullptr),static_cast<unsigned long>(hr));fflush(stderr);
+    return hr;
 }
 void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     if(!h.pDrvPrivate) return;

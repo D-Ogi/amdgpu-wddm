@@ -33,7 +33,7 @@ try {
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" $engineLib
+  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib
   if($LASTEXITCODE){throw 'Adapter build failed'}
   & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
   if($LASTEXITCODE){throw 'Test build failed'}
@@ -99,6 +99,18 @@ try {
   if($LASTEXITCODE){throw 'Hosted queue test build failed'}
   & .\hosted-queue-test.exe
   if($LASTEXITCODE){throw 'Hosted queue tests failed'}
+  & cl.exe @flags /Fe:heap-import-test.exe "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\heap-import-test.cpp"
+  if($LASTEXITCODE){throw 'heap-import test build failed'}
+  & .\heap-import-test.exe
+  if($LASTEXITCODE){throw 'heap-import tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:native-queue-ddi-test.exe "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-queue-ddi-test.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
+  if($LASTEXITCODE){throw 'native-queue-ddi test build failed'}
+  & .\native-queue-ddi-test.exe
+  if($LASTEXITCODE){throw 'native-queue-ddi tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:native-residency-ddi-test.exe "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'native-residency-ddi test build failed'}
+  & .\native-residency-ddi-test.exe
+  if($LASTEXITCODE){throw 'native-residency-ddi tests failed'}
   & cl.exe @flags /Fe:ddi-entry-test.exe "$repo\driver\umd\d3d12\ddi-entry-test.cpp"
   if($LASTEXITCODE){throw 'DDI entry scope test build failed'}
   & .\ddi-entry-test.exe

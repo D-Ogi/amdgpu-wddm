@@ -17,6 +17,8 @@ struct Adapter {
     AdapterCapsOwner* engine_caps{};
     HRESULT caps_status{E_PENDING};
     bool caps_attempted{};
+    SRWLOCK tables_lock=SRWLOCK_INIT;
+    D3D12DDI_HRTTABLE list_tables[2]{};
 };
 struct Device {
     Adapter* adapter{};
