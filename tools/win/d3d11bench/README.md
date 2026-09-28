@@ -87,7 +87,7 @@ standard output or in `--out FILE` (written atomically):
 - `adapter`: vendor, device and description as DXGI reports them;
 - `d3d11`: `app-local` or `system`, from the path of the `d3d11.dll` the process actually loaded;
 - `modules`: path and size of every loaded graphics module (D3D runtime, DXGI, Vulkan loader, the project's
-  `bc250*` modules, anything from the driver store, every Vulkan driver);
+  `bc250*` and `amdgpu_wddm_*` modules, anything from the driver store, every Vulkan driver);
 - `icds`: path and SHA-256 of every loaded Vulkan driver, i.e. every module that exports
   `vk_icdGetInstanceProcAddr`;
 - `environment`: every `DXVK_*`, `VK_*`, `MESA_*`, `RADV_*`, `ACO_*` and `BC250_*` variable;

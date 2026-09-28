@@ -1016,7 +1016,8 @@ std::string ModulesJson(std::string &d3d11Location, std::string &icds) {
     const std::wstring path = ModulePath(m), lower = Lower(path);
     const std::wstring base = lower.substr(lower.find_last_of(L"\\/") + 1);
     const bool icd = GetProcAddress(m, "vk_icdGetInstanceProcAddr") != nullptr;
-    bool wanted = icd || base.rfind(L"bc250", 0) == 0 || lower.find(L"\\driverstore\\") != std::wstring::npos;
+    bool wanted = icd || base.rfind(L"bc250", 0) == 0 || base.rfind(L"amdgpu_wddm_", 0) == 0 ||
+                  lower.find(L"\\driverstore\\") != std::wstring::npos;
     for (const wchar_t *name : names)
       wanted = wanted || base == name;
     if (!wanted)
