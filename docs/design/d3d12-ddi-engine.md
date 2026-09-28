@@ -1,7 +1,7 @@
 # Design note: the vkd3d-proton engine behind a native D3D12 UMD (M15)
 
-Date: 2026-09-28. Status: engine ABI 1.0 implemented and tested offline on the development PC. There is no D3D12
-shell yet and nothing has run on unit A. Scope: the engine `amdgpu_wddm_vkd3d.dll`, its ABI and its known gaps.
+Date: 2026-09-28. Status: engine ABI 1.0 implemented, tested offline on the development PC and run standalone on
+unit A (T1, fact M757). The native D3D12 shell is being built; no DDI device runs on the engine yet. Scope: the engine `amdgpu_wddm_vkd3d.dll`, its ABI and its known gaps.
 Build recipe: [build.md](../build.md#vkd3d-proton). Direction: ADR 0017 item 5 (vkd3d-proton is the default
 engine; FL 12_0 Must, 12_1 Should; a bounded spike first), item 6 (vkd3d-proton stays a separate LGPL DLL) and
 item 7 (no numeric bound for M15 before its first measurement).
@@ -147,7 +147,10 @@ code 0 means every check passed:
 - final `Release` returning 0.
 
 On the development PC every check passes. The GPU is an RTX 4090 at FL 12_2, SM 6.8, ray tracing tier 1.1.
-The first unit A run is the engine's T1 of the spike.
+The engine's T1 on unit A (the frozen 1.0 package under its pre-rename file names, hosted RADV loaded directly)
+passed every check as well: FL 11_1 with tiled resources tier 0, SM 6.8, ray tracing tier 1.1 reported, and a
+descriptor handle increment of 64 where the development PC has 32 (M757). Handles and increments stay opaque:
+nothing may assume a fixed increment.
 
 A build handed to the lab follows the DXVK engine's rule:
 - it comes from a clean tree: `recipe.json` records no modified or untracked entries;
