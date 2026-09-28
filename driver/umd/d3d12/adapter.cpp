@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdint>
 #include "device-state.h"
+#include "adapter-caps.h"
 #include "ddi-0092-layout.h"
 namespace {
 using native12::Adapter;
@@ -39,7 +40,7 @@ HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
     if(!h.pDrvPrivate) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
     if(adapter->devices.load()!=0) return E_UNEXPECTED;
-    delete adapter;trace("CloseAdapter");return S_OK;
+    native12::close_adapter_caps(*adapter);delete adapter;trace("CloseAdapter");return S_OK;
 }
 HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;
@@ -49,11 +50,12 @@ HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
     // Diagnostic negotiation target only. Unimplemented capability/table queries remain fail-closed.
     values[0]=D3D12DDI_SUPPORTED_0092;return S_OK;
 }
-HRESULT APIENTRY caps(D3D12DDI_HADAPTER,const D3D12DDIARG_GETCAPS* a) {
-    if(!a || (!a->pData && a->DataSize)) return E_INVALIDARG;
-    fprintf(stderr,"d3d12-ddi GetCaps type=%u size=%u info_present=%u result=E_NOTIMPL\n",
-        unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr));fflush(stderr);
-    return E_NOTIMPL;
+HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
+    if(!h.pDrvPrivate || !a || (!a->pData && a->DataSize)) return E_INVALIDARG;
+    HRESULT hr=native12::get_adapter_caps(*static_cast<Adapter*>(h.pDrvPrivate),a);
+    fprintf(stderr,"d3d12-ddi GetCaps type=%u size=%u info_present=%u result=%08lx\n",
+        unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));fflush(stderr);
+    return hr;
 }
 HRESULT APIENTRY optional_tables(D3D12DDI_HADAPTER h,UINT32* count,D3D12DDI_TABLE_REQUEST*) {
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;

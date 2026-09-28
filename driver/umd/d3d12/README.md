@@ -4,11 +4,11 @@ PROVENANCE: Microsoft graphics-driver-samples (MIT), revision de4a2161991eda2540
 
 Build with tools/build/build-umd-d3d12.ps1. It builds a separate amdgpu_wddm_d3d12.dll and runs the export-level adapter tests before reporting success. Existing DLLs are retained by hash. No registration or deployment occurs.
 
-This is the first part of the T0 diagnostic shell. It owns a copy of the adapter callbacks, publishes the eight adapter functions and negotiates0092 as its diagnostic target. It does not claim a functional0092 device: GetCaps and FillDDITable return E_NOTIMPL. CalcPrivateDeviceSize and CreateDevice now allocate/construct only the private CPU-side device state for exact R8/build0092; they create no GPU device or queues. Optional table count is0. Unsupported tables are left untouched. There are no engine calls or GPU submissions. The module must not be promoted as a working D3D12 driver.
+This is the first part of the T0 diagnostic shell. It owns a copy of the adapter callbacks, publishes the eight adapter functions and negotiates0092 as its diagnostic target. It does not claim a functional0092 device: GetCaps now maps the engine ABI1.2 adapter policy; FillDDITable still returns E_NOTIMPL. CalcPrivateDeviceSize and CreateDevice now allocate/construct only the private CPU-side device state for exact R8/build0092; they create no GPU device or queues. Optional table count is0. Unsupported tables are left untouched. Adapter queries call the engine without a GPU device or submission. The module must not be promoted as a working D3D12 driver.
 
 The export test loads the actual DLL and checks null arguments, missing callbacks, count-only version query, insufficient capacity without writes, exact version and adjacent sentinel preservation, unsupported version/table rejection, missing callbacks, device creation/destruction and refusal to close an adapter with a live device. /W4 /WX builds and the tests pass on the host. No lab run.
 
-Next: implement measured caps and the version-specific device/queue/fence tables, create contexts through the D3D12 runtime callbacks using hRTCommandQueue, then run tools/win/d3d12queue under the bounded lab harness. Log stderr is pointer-free and flushed at the adapter boundary. Completion of T0 requires actual runtime queue/fence ordering observations; these host tests do not establish that contract.
+Next: validate mapped GetCaps through the system runtime and implement the version-specific device/queue/fence tables, create contexts through the D3D12 runtime callbacks using hRTCommandQueue, then run tools/win/d3d12queue under the bounded lab harness. Log stderr is pointer-free and flushed at the adapter boundary. Completion of T0 requires actual runtime queue/fence ordering observations; these host tests do not establish that contract.
 
 ## Per-queue runtime context ownership
 
@@ -187,3 +187,25 @@ mapping completion, stale/foreign keys, reentrant registry inspection from callb
 failed unmap/deallocation and retry, create rollback, failed rollback and expired
 owners. The registry is stored in native device state; heap-slot/Vulkan import wiring
 and native runtime execution remain incomplete.
+
+## Adapter policy integration
+
+The build now links the native engine-ddi library after its pinned-header,
+/analyze, native-policy and caps gates pass. The recipe runs that sub-build
+under PowerShell7 so expected diagnostic stderr from a negative test is not a
+PowerShell5 NativeCommandError. No harness implementation enters the UMD.
+
+On the first GetCaps, adapter-caps.cpp loads amdgpu_wddm_vkd3d.dll and
+amdgpu_wddm_radv.dll from the UMD's own directory, with only that directory and
+System32 searched for dependencies. A serialized, one-time QueryAdapterCaps
+batch produces the immutable adapter snapshot. It is freed at CloseAdapter
+before either DLL reference is released. Failures are returned and retained
+for that adapter lifetime; no invented capability fallback is used.
+
+The query scope injects bound queues and the adapter-only RADV extension while
+preserving the engine's instance requirements. It rejects device creation and
+unexpected callbacks. M769 measured this physical-query path on unit A, with
+FL11_1/tiled0/binding3/RT1.1 engine answers. These are not native UMD support:
+the mapper suppresses features whose DDI slots are still unimplemented.
+Adapter031 builds and all host gates pass. A fresh system-runtime test of the
+mapped GetCaps remains necessary; device construction and rendering are open.

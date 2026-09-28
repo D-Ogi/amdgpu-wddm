@@ -9,19 +9,27 @@ if(!$VulkanInclude){$VulkanInclude=Join-Path $root 'scratch\m15\vkd3d\khronos\Vu
 if(!$OutputDir){$OutputDir=Join-Path $root 'scratch\build\d3d12-adapter'}
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir|Out-Null
+$engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
+$engineBuild=Join-Path $OutputDir 'engine-ddi'
+$engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly')
+if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
+& pwsh @engineArgs
+if($LASTEXITCODE){throw 'Native engine-ddi build or host gates failed'}
+$engineLib=Join-Path $engineBuild 'engine-ddi.lib'
+if(!(Test-Path -LiteralPath $engineLib)){throw 'Native engine-ddi library missing'}
 $saved=Save-ProcessEnvironment
 try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
  $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
- $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/external:W0','/MT','/DNOMINMAX',"/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/external:W0','/MT','/DNOMINMAX',"/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp"
+  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" $engineLib
   if($LASTEXITCODE){throw 'Adapter build failed'}
   & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
   if($LASTEXITCODE){throw 'Test build failed'}
@@ -81,4 +89,4 @@ try {
   if($LASTEXITCODE){throw 'Adapter KMT probe help failed'}
  } finally {Pop-Location}
 } finally {Restore-ProcessEnvironment $saved}
-Write-Host 'Diagnostic adapter only; no functional device or deployment.'
+Write-Host 'Adapter caps linked; functional device tables and deployment remain separate gates.'
