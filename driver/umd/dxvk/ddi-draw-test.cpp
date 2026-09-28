@@ -27,6 +27,7 @@
 #include "ddi-negotiation.h"
 #include "ddi-dxgi-table.h"
 #include "adapter-identity.h"
+#include "ddi-adapter.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
@@ -1014,5 +1015,41 @@ int main() {
         if (pipeline<4) { if (status!=S_OK || chosen!=featureLevels[pipeline]) std::abort(); }
         else if (status!=E_INVALIDARG || chosen!=D3D_FEATURE_LEVEL_9_1) std::abort();
     }
+    AdapterConfiguration configuration{L"P:/BC-250/scratch/m14/missing-adapter-engine.dll",
+        L"P:/BC-250/scratch/m14/missing-adapter-icd.dll",advertised};
+    D3D10_2DDI_ADAPTERFUNCS adapterTable{};std::memset(&adapterTable,0xA5,sizeof(adapterTable));
+    const auto untouchedAdapterTable=adapterTable;
+    D3DDDI_ADAPTERCALLBACKS adapterCallbacks{};adapterCallbacks.pfnQueryAdapterInfoCb=adapter_query;
+    D3D10DDIARG_OPENADAPTER adapterArgs{};adapterArgs.pAdapterFuncs_2=&adapterTable;
+    adapterArgs.pAdapterCallbacks=&adapterCallbacks;
+    adapterArgs.hRTAdapter.handle=&createIdentity;
+    adapterArgs.hAdapter.pDrvPrivate=&createIdentity;
+    adapterMode=1;
+    if(open_render_adapter(adapterArgs,configuration)!=E_OUTOFMEMORY ||
+       adapterArgs.hAdapter.pDrvPrivate!=&createIdentity ||
+       std::memcmp(&adapterTable,&untouchedAdapterTable,sizeof(adapterTable))) std::abort();
+    adapterMode=2;
+    if(open_render_adapter(adapterArgs,configuration)!=DXGI_ERROR_UNSUPPORTED ||
+       adapterArgs.hAdapter.pDrvPrivate!=&createIdentity ||
+       std::memcmp(&adapterTable,&untouchedAdapterTable,sizeof(adapterTable))) std::abort();
+    adapterMode=0;
+    if(open_render_adapter(adapterArgs,configuration)!=S_OK || adapterArgs.hAdapter.pDrvPrivate==&createIdentity) std::abort();
+    UINT32 adapterVersions=0;
+    if(adapterTable.pfnGetSupportedVersions(adapterArgs.hAdapter,&adapterVersions,nullptr)!=S_OK || adapterVersions!=1) std::abort();
+    D3D11DDI_3DPIPELINESUPPORT_CAPS adapterPipelines{};
+    D3D10_2DDIARG_GETCAPS adapterCapsArgs{};adapterCapsArgs.Type=D3D11DDICAPS_3DPIPELINESUPPORT;
+    adapterCapsArgs.pData=&adapterPipelines;adapterCapsArgs.DataSize=sizeof(adapterPipelines);
+    if(adapterTable.pfnGetCaps(adapterArgs.hAdapter,&adapterCapsArgs)!=S_OK || adapterPipelines.Caps!=7) std::abort();
+    D3D10DDIARG_CALCPRIVATEDEVICESIZE sizeArgs{};sizeArgs.Interface=D3D11_1_DDI_INTERFACE_VERSION;sizeArgs.Flags=createArgs.Flags;
+    if(adapterTable.pfnCalcPrivateDeviceSize(adapterArgs.hAdapter,&sizeArgs)!=sizeof(DdiDeviceHandle)) std::abort();
+    sizeArgs.Version=1u<<16;
+    if(adapterTable.pfnCalcPrivateDeviceSize(adapterArgs.hAdapter,&sizeArgs)) std::abort();
+    // Open and GetCaps work without loading either missing DLL. Only CreateDevice
+    // attempts the load, and its failure cannot publish device function tables.
+    HRESULT missingModules=adapterTable.pfnCreateDevice(adapterArgs.hAdapter,&createArgs);
+    if(SUCCEEDED(missingModules) || newHandle.owner ||
+       std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable)) ||
+       std::memcmp(&unchangedDxgi,&originalDxgi,sizeof(unchangedDxgi))) std::abort();
+    if(adapterTable.pfnCloseAdapter(adapterArgs.hAdapter)!=S_OK) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
