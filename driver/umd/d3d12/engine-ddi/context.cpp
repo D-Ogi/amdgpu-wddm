@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// engine-ddi: device context, resolver, table filling with fail-safes, the release sequence and caps.
+// engine-ddi: device context, resolver, table filling with fail-safes and the release sequence.
 #include "internal.h"
 #include <cstdarg>
 #include <cstdio>
