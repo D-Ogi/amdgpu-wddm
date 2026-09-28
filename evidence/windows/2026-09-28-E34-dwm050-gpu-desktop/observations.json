@@ -1,0 +1,504 @@
+{
+  "done.json": {
+    "restoration_succeeded": true,
+    "utc": "2026-09-28T05:00:07.1822753Z",
+    "trial_seconds": 124.9103526,
+    "success": true,
+    "gpu_pid": 4944,
+    "markers": 8,
+    "measured_seconds": 94.24256439999999,
+    "failure": null
+  },
+  "restored.json": {
+    "before": [
+      {
+        "start": "2026-09-28T04:58:06.5244684Z",
+        "pid": 4944
+      }
+    ],
+    "utc": "2026-09-28T05:00:03.4111346Z",
+    "after": [
+      7632
+    ]
+  },
+  "client-done.json": {
+    "exit": 0,
+    "utc": "2026-09-28T04:59:54.4186496Z"
+  },
+  "collector-done.json": {
+    "utc": "2026-09-28T05:00:07.4302995Z",
+    "samples": 107,
+    "reader_timeout": false
+  },
+  "watchdog-done.json": {
+    "restore_error": null,
+    "utc": "2026-09-28T05:00:07.2868358Z",
+    "aborted": false
+  },
+  "gpu.bmp-check.json": {
+    "pass": true,
+    "pixels": 40712,
+    "mismatches": 0,
+    "regions": [
+      {
+        "region": "red",
+        "mismatches": 0,
+        "pixels": 1400
+      },
+      {
+        "region": "overlap",
+        "mismatches": 0,
+        "pixels": 6600
+      },
+      {
+        "region": "moving_full_client",
+        "mismatches": 0,
+        "pixels": 32712
+      }
+    ]
+  },
+  "screen.png-check.json": {
+    "pass": true,
+    "pixels": 40712,
+    "mismatches": 0,
+    "regions": [
+      {
+        "region": "red",
+        "mismatches": 0,
+        "pixels": 1400
+      },
+      {
+        "region": "overlap",
+        "mismatches": 0,
+        "pixels": 6600
+      },
+      {
+        "region": "moving_full_client",
+        "mismatches": 0,
+        "pixels": 32712
+      }
+    ]
+  },
+  "vsync-start.json": {
+    "enabled": true,
+    "read_failures": 0,
+    "ack_failures": 0,
+    "ticks": 1000,
+    "dpc_acks": 0,
+    "ack_age_upper_ms": 124.1054,
+    "old_buffer": 1,
+    "dpc_polls": 1000,
+    "notify_age_upper_ms": 124.1054,
+    "read_duration_ms": 140.1203,
+    "read_begin_100ns": 80045471752,
+    "ack_100ns": 80045631901,
+    "no_event": 2969,
+    "sync_failures": 0,
+    "skip": {
+      "changed": {
+        "count": 0,
+        "last_100ns": 0
+      },
+      "odd": {
+        "count": 0,
+        "last_100ns": 0
+      },
+      "read": {
+        "count": 0,
+        "last_100ns": 0
+      },
+      "same": {
+        "count": 0,
+        "last_100ns": 0
+      }
+    },
+    "notify_100ns": 80045631901,
+    "deferred": 1,
+    "reports": 829,
+    "read_end_100ns": 80046872955,
+    "flips": 350
+  },
+  "vsync-end.json": {
+    "enabled": true,
+    "read_failures": 0,
+    "ack_failures": 0,
+    "ticks": 6225,
+    "dpc_acks": 3,
+    "ack_age_upper_ms": 110.0946,
+    "old_buffer": 4,
+    "dpc_polls": 6225,
+    "notify_age_upper_ms": 110.0946,
+    "read_duration_ms": 132.1123,
+    "read_begin_100ns": 80916981015,
+    "ack_100ns": 80917201192,
+    "no_event": 15726,
+    "sync_failures": 0,
+    "skip": {
+      "changed": {
+        "count": 0,
+        "last_100ns": 0
+      },
+      "odd": {
+        "count": 0,
+        "last_100ns": 0
+      },
+      "read": {
+        "count": 0,
+        "last_100ns": 0
+      },
+      "same": {
+        "count": 0,
+        "last_100ns": 0
+      }
+    },
+    "notify_100ns": 80917201192,
+    "deferred": 4,
+    "reports": 6054,
+    "read_end_100ns": 80918302138,
+    "flips": 4268
+  },
+  "vsync-interval.json": {
+    "ack_hz": 59.95346488933417,
+    "seconds": 87.1509263,
+    "notify_age_lower_ms": -22.0177,
+    "dpc_recovered_ack_observed": true,
+    "pass": true,
+    "skipped": 0,
+    "ack_age_lower_ms": -22.0177,
+    "expected_refresh_hz": 59,
+    "delta": {
+      "reports": 5225,
+      "dpc_acks": 3,
+      "old_buffer": 3,
+      "ticks": 5225,
+      "deferred": 3
+    }
+  },
+  "tdr-start.json": {
+    "collect_debug_calls": 0,
+    "source": "current-complete-summary",
+    "reset_calls": 0
+  },
+  "tdr-end.json": {
+    "collect_debug_calls": 0,
+    "source": "current-complete-summary",
+    "reset_calls": 0
+  },
+  "tdr-events.json": {
+    "boot_after": "2026-09-28T02:44:58.5000000Z",
+    "boot_before": "2026-09-28T02:44:58.5000000Z",
+    "suspect_events": []
+  },
+  "final_cpu": {
+    "utc": "2026-09-28T05:01:19.4413310Z",
+    "boot": "2026-09-28T04:44:58.5000000+02:00",
+    "version": "0.7.170.1",
+    "kmd_sha256": "67F0241506200D1053E6136ACDEA54F447BA945E65AA11C7EB250B8ECE195503",
+    "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+    "confirmed": {
+      "launch": true,
+      "age_ms": 50,
+      "epoch": 5,
+      "generation": 81058018120,
+      "flags": 15,
+      "completed": 144,
+      "ready_ms": 85004,
+      "flag_names": "Full, Ready, Visible, Confirmed"
+    },
+    "temperature": "07:01:25 Tctl 67.5 C (raw 749B0FEF)\r\n",
+    "dwm": [
+      {
+        "modules": [
+          {
+            "sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+            "name": "bc250d3d.dll"
+          }
+        ],
+        "pid": 7632,
+        "start": "2026-09-28T06:59:57.2664225+02:00"
+      }
+    ]
+  },
+  "dma": {
+    "dwm_pid": 4944,
+    "trace_loss": {
+      "events": 0,
+      "buffers": 0
+    },
+    "matched": 4498,
+    "pending": 0,
+    "unmatched": 0,
+    "duplicate_starts": 0
+  },
+  "present": {
+    "matched": 4274,
+    "checkpoint_count_checked": true,
+    "runtime_maps": 0,
+    "presented_resource_ids": [
+      82,
+      86,
+      90
+    ],
+    "post_boundary_events": 99
+  },
+  "census": {
+    "requests": 24635,
+    "successful": 24635,
+    "failed": 0,
+    "ended": 24627,
+    "live_map_ids": [
+      5,
+      8,
+      11,
+      14,
+      18,
+      1493,
+      1925,
+      2253
+    ],
+    "pending_store_ids": [],
+    "store_checkpoint_counters": true,
+    "interval_store_span_bytes": 1618656,
+    "live_buffer_ids": [
+      5,
+      8,
+      11,
+      14,
+      18,
+      1493,
+      1925,
+      2253
+    ],
+    "crossing_image_maps": []
+  },
+  "copy_observations": {
+    "samples": 82,
+    "software_blits_zero": true,
+    "positive_in_this_run": false,
+    "positive_control_reference": "M702",
+    "reuse": {
+      "scope": "Exact WddmPresentBlit function body comparison; supports reuse of M702 positive instrument control, not a new170 positive blit run.",
+      "equal": true,
+      "sha256_lf": "2dfa9da368c69ce2e5f1ba25e2a75d99b4067bb76a8a1025c3e274395b779726",
+      "sources": {
+        "166": "17989843012e8e2c54de75204418b20e25ab0143",
+        "170": "a3c2d2b"
+      }
+    }
+  },
+  "vsync_whole_adapter": {
+    "vsync_interrupts": 6564,
+    "vsync_dpcs": 6564,
+    "mmio_flips": 4307,
+    "first_us": 3614518.0,
+    "last_us": 115674280.0,
+    "span_s": 112.059762,
+    "median_period_us": 16681.0,
+    "rate_hz": 59.94844433786943,
+    "p99_period_us": 16806.0,
+    "max_gap_us": 1317761.0,
+    "max_gap_at_us": 5282565.0,
+    "max_gap_frames": [
+      24,
+      25
+    ],
+    "gaps_over_factor": 10,
+    "gaps": [
+      {
+        "start_us": 3631194.0,
+        "end_us": 3664567.0,
+        "periods": 2.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 3681226.0,
+        "end_us": 4098292.0,
+        "periods": 25.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 4131650.0,
+        "end_us": 4265060.0,
+        "periods": 8.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 4315097.0,
+        "end_us": 4481904.0,
+        "periods": 10.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 4481904.0,
+        "end_us": 4531945.0,
+        "periods": 3.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 4548627.0,
+        "end_us": 4748797.0,
+        "periods": 12.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 4748797.0,
+        "end_us": 4798835.0,
+        "periods": 3.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 4815517.0,
+        "end_us": 5115757.0,
+        "periods": 18.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 5165804.0,
+        "end_us": 5249213.0,
+        "periods": 5.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      },
+      {
+        "start_us": 5282565.0,
+        "end_us": 6600326.0,
+        "periods": 79.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      }
+    ],
+    "gaps_over_100ms": 6,
+    "gap_factor": 1.5,
+    "expected_minus_observed_vsyncs": 155,
+    "frame_number_discontinuities": 0,
+    "first_frame_discontinuities": [],
+    "scanned_address_changes": 4308,
+    "flip_join": {
+      "joined": 4307,
+      "unretired": 0,
+      "unretired_superseded": 0,
+      "unretired_not_superseded": 0,
+      "unretired_before_last_vsync": 0,
+      "unretired_examples": [],
+      "address_mismatches": 0,
+      "mismatch_examples": [],
+      "duplicate_submit_sequences": 0,
+      "retire_fences_without_flip": 0,
+      "retire_fences_without_flip_first_last_us": null,
+      "latency_us": {
+        "median": 11686.0,
+        "p99": 16473.0,
+        "max": 16838.0
+      },
+      "latency_periods_max": 1.0094119057610456
+    }
+  },
+  "vsync_render_interval": {
+    "vsync_interrupts": 5656,
+    "vsync_dpcs": 5656,
+    "mmio_flips": 4223,
+    "first_us": 12672052.0,
+    "last_us": 107000497.0,
+    "span_s": 94.328445,
+    "median_period_us": 16681.0,
+    "rate_hz": 59.94844433786943,
+    "p99_period_us": 16805.0,
+    "max_gap_us": 17621.0,
+    "max_gap_at_us": 63330887.0,
+    "max_gap_frames": [
+      3426,
+      3427
+    ],
+    "gaps_over_factor": 0,
+    "gaps": [],
+    "gaps_over_100ms": 0,
+    "gap_factor": 1.5,
+    "expected_minus_observed_vsyncs": 0,
+    "frame_number_discontinuities": 0,
+    "first_frame_discontinuities": [],
+    "scanned_address_changes": 4222,
+    "flip_join": {
+      "joined": 4222,
+      "unretired": 1,
+      "unretired_superseded": 0,
+      "unretired_not_superseded": 1,
+      "unretired_before_last_vsync": 0,
+      "unretired_examples": [
+        {
+          "seq": 11092,
+          "at_us": 107006869.0,
+          "to_phys": "1047990476800",
+          "superseded_by": null
+        }
+      ],
+      "address_mismatches": 0,
+      "mismatch_examples": [],
+      "duplicate_submit_sequences": 0,
+      "retire_fences_without_flip": 0,
+      "retire_fences_without_flip_first_last_us": null,
+      "latency_us": {
+        "median": 11729.0,
+        "p99": 16473.0,
+        "max": 16838.0
+      },
+      "latency_periods_max": 1.0094119057610456
+    }
+  },
+  "etw_render_bounds": {
+    "render-start": 12659791.0,
+    "render-end": 107016846.0
+  },
+  "inputs": {
+    "receipts.zip": {
+      "bytes": 21153007,
+      "sha256": "1fc890ed128216aa084e5a6f33599bc213ef85c055bb1033af1cd2405cdc1445"
+    },
+    "gpu.etl": {
+      "bytes": 173015040,
+      "sha256": "3cc56b34131aedd5b8232584746a7fd5b83d82987f416da871d5e0e62f9212c3"
+    },
+    "result/gpu.bmp": {
+      "bytes": 9216054,
+      "sha256": "4f4c6fcb8168b674f5cbbb91459556111503a59ef99eaac3e51faaef2f72b1aa"
+    },
+    "result/screen.png": {
+      "bytes": 2178879,
+      "sha256": "38258d372878d266f43cf7af22ac48c0aefbc2eb20adae609c3a77bda1dddef7"
+    },
+    "result/dwm-4944.log": {
+      "bytes": 45697755,
+      "sha256": "c5bc0d170a558f111c0266ba1d76e7026ccdcdf8c74c6d285214281893892d4b"
+    },
+    "result/events-xperf.csv": {
+      "bytes": 236669200,
+      "sha256": "46a123c576288f43a299a6dfed25516094de1612e5d285e95048dae4e16dfb6f"
+    },
+    "present-etw-joined.json": {
+      "bytes": 627,
+      "sha256": "555278e9c4516ec030918717a52440d3a93218a2eb65c210367fefafee3b8ae0"
+    },
+    "checkpoints.json": {
+      "bytes": 30558466,
+      "sha256": "76635378dbc4794438e1540757a2cc688e5129c626560044d23299060e03035a"
+    }
+  }
+}
