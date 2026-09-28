@@ -60,7 +60,9 @@ HRESULT engine_ddi::build_caps(const engine_ddi::AdapterCaps* caps, uint32_t ddi
 4. `pfnCloseAdapter`: `free_adapter_caps(caps)`.
 
 A caps test on the development PC's GPU with the pinned DLL (`caps-test.exe --engine`) answered 1074 and 1007 with
-12_1, from an engine at FL12_2. The lab's answers depend on the engine's policy on unit A and are not measured yet.
+12_1, from an engine at FL12_2. On unit A, M769 read the engine's own answers through QueryAdapterCaps: FL11_1,
+tiled resources tier 0, binding tier 3, raytracing tier 1.1. With this mapping 1074 and 1007 would report 11_1 and
+1006 no raytracing; that is derived, not yet run through build_caps on unit A.
 
 ### GetCaps mapping
 
