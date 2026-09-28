@@ -37,7 +37,7 @@ if($Phase -eq 'Capture'){
  $env:DXVK_SHADER_CACHE='0';$env:MESA_SHADER_CACHE_DISABLE='true';$env:DXVK_LOG_PATH=$d
  $env:DXVK_LOG_LEVEL='info'
  # Functional debugger run only. Its timings cannot establish the performance bound.
- $args=@('25',"$d\d3d11bench.exe",'--mode','offscreen','--adapter','1002:13fe','--size','64x64','--scenes','draws','--draws','1','--frames','2','--warmup','0','--deadline','20','--out',"$d\$Phase.json")
+ $args=@('25',"$d\d3d11bench.exe",'--mode','offscreen','--adapter','1002:13fe','--size','64x64','--scenes','draws,fill,shaders','--draws','8','--layers','2','--shaders','4','--frames','3','--warmup','0','--deadline','20','--out',"$d\$Phase.json")
  $child=Start-Process -FilePath "$d\debug-child.exe" -ArgumentList $args -WorkingDirectory $d -WindowStyle Hidden -PassThru -RedirectStandardOutput "$d\$Phase-debug.txt" -RedirectStandardError "$d\$Phase-stderr.txt"
  $null=$child.Handle;$clock=[Diagnostics.Stopwatch]::StartNew();$last=0
  try{
@@ -50,6 +50,8 @@ if($Phase -eq 'Capture'){
  }finally{if(!$child.HasExited){$child.Kill();$null=$child.WaitForExit(5000)}}
  $result=Get-Content "$d\$Phase.json" -Raw|ConvertFrom-Json
  if($result.result -ne 'measured' -or $result.exit -ne 0 -or $result.d3d11 -ne 'system'){throw 'Runtime result failed'}
+ . "$d\scene-gate.ps1"
+ if($gpu){Assert-M14Scenes $result (Get-Content "$d\Cpu.json" -Raw|ConvertFrom-Json)}else{Assert-M14Scenes $result}
  $paths=@($result.modules|ForEach-Object {$_.path})
  if("$env:windir\System32\d3d11.dll" -notin $paths -or $active -notin $paths){throw 'System runtime/router not witnessed'}
  if($gpu){

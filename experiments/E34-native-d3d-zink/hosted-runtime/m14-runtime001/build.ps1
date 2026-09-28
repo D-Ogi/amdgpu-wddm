@@ -35,3 +35,5 @@ try {
  $dumpText | Set-Content "$out\debug-dump.txt"
 } finally { $env:BC250_M14_CAPTURE_DUMP=$previousCapture }
 'PASS opt-in normal minidump and process tree closure'
+
+& "$PSScriptRoot\test-scene-gate.ps1"
