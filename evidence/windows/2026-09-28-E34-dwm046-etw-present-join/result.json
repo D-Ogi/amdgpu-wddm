@@ -1,0 +1,18 @@
+{
+  "pid": 7772,
+  "marker": 8,
+  "association": "Unique exact allocation/wait/signal sequence; opaque runtime context is not numerically mapped",
+  "scope": "No independent hardware adapter identity or scanout/no-copy claim",
+  "match": {
+    "matched": 1844,
+    "thread": "6108",
+    "post_boundary_events": 21,
+    "adapter_started_in_trace": true,
+    "other_signal_events": 2059
+  },
+  "inputs_sha256": {
+    "umd_log": "855dbc924ab14e46fb74554aebb7ce5379018e3f1411d916fc78a76af46d92f3",
+    "etw_csv": "92f6d717308fa2d140ff34d7b0bc5c41339e76757664400369e0acf65d196180",
+    "etw_proof": "6fed7b4d8c3824f83667b30fcf393b16dd15f7dbb5d88f465e956d793f99d44a"
+  }
+}
