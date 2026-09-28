@@ -172,6 +172,22 @@ against. The shell's adapter entry, table and check are not implemented yet; the
 - **Record.** The engine test prints the record at `MaxFeatureLevel`. A unit A run of the frozen test gives
   the values for GFX1013.
 
+### Format answers for CheckFormatSupport
+
+The runtime queries format support while it builds the device, before `D3D11CreateDevice` returns. The engine
+answers through `ID3D11Device::CheckFormatSupport` and `CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2)`.
+Both end in DXVK's `D3D11Device::GetFormatSupportFlags`.
+- **The E_FAIL contract.** `GetFormatSupportFlags` returns E_FAIL whenever the requested flag word is zero, after
+  it has written 0 to that word. It does so even for a format that exists (`d3d11_device.cpp`,
+  `return (pFlags1 && flags1) || (pFlags2 && flags2) ? S_OK : E_FAIL`).
+- **SUPPORT2.** A SUPPORT2 query passes no flags1 pointer. So every existing format whose SUPPORT2 word is zero
+  gets E_FAIL: formats that are neither colour attachments (logic op) nor typed-store UAV formats nor shareable,
+  such as the BC formats and the depth formats.
+- **What the shell does.** When SUPPORT has succeeded, a SUPPORT2 E_FAIL means "no SUPPORT2 capabilities".
+  The shell must not pass it to `pfnSetErrorCb`: the runtime takes that as a critical error and removes the
+  device during creation. The DDI's own E_FAIL, "the format does not exist", is reserved for format values that
+  the SDK's `dxgiformat.h` does not define.
+
 ### Logging and configuration in a host process
 
 - **Log.** `BC250_DXVK_SHELL_SERVICES::Log` receives DXVK's log lines from the start of `CreateDevice` until the
