@@ -79,8 +79,7 @@ HRESULT surface_paging_status(const SurfacePagingQueue &queue,const SurfaceGpuMa
 HRESULT map_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queue,D3DKMT_HANDLE allocation,UINT64 bytes,SurfaceGpuMapping &out) {
     if (out.address || out.bytes || out.fence || out.resident) return E_UNEXPECTED;
     if (!device.domain.entered() || !queue.queue || !queue.sync || !queue.cpu || !allocation || !bytes || bytes>UINT64_MAX-4095 ||
-        !device.KTCallbacks.pfnMapGpuVirtualAddressCb || !device.KTCallbacks.pfnMakeResidentCb ||
-        !device.KTCallbacks.pfnFreeGpuVirtualAddressCb) return E_INVALIDARG;
+        !device.KTCallbacks.pfnMapGpuVirtualAddressCb || !device.KTCallbacks.pfnMakeResidentCb) return E_INVALIDARG;
     if (*queue.cpu==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
     const UINT64 rounded=(bytes+4095)&~UINT64(4095);
     D3DDDI_MAPGPUVIRTUALADDRESS map{}; map.hPagingQueue=queue.queue; map.hAllocation=allocation;

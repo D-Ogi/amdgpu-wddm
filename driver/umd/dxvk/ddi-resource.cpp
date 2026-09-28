@@ -98,7 +98,7 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
         input.Usage!=D3D10_DDI_USAGE_DEFAULT || input.MapFlags) return E_NOTIMPL;
     auto ordinary=input; ordinary.pPrimaryDesc=nullptr;
     ordinary.BindFlags&=~UINT(D3D10_DDI_BIND_PRESENT);
-    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_SHARED);
+    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_SHARED|D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT);
     ResourceDescription converted;
     HRESULT hr=convert_resource(ordinary,converted);
     if (FAILED(hr)) return hr;
@@ -169,7 +169,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
             hr=owner.begin_surface(request,texture,surface);
             if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
             if (hr!=S_OK) {
-                if (surface) owner.close_surface(*surface); // Owner retains failed cleanup.
+                if (surface) owner.release_surface_handle(*surface);
                 report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
             }
             s->runtime_surface=surface; s->object=surface->texture.texture;
@@ -222,7 +222,7 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         hr=owner.adopt_surface(allocation,metadata,desc,surface);
         if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
         if (hr!=S_OK) {
-            if (surface) owner.close_surface(*surface);
+            if (surface) owner.release_surface_handle(*surface);
             report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
         }
         s->runtime_surface=surface; s->object=surface->texture.texture;
@@ -234,11 +234,11 @@ void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
         if (s && s->runtime_surface) {
             auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
-            HRESULT hr=owner.close_surface(*s->runtime_surface);
+            HRESULT hr=owner.release_surface_handle(*s->runtime_surface);
             // Runtime private storage may disappear now. DeviceOwner retains any
             // unfinished cleanup independently of this DDI handle.
             *s={};
-            if (hr!=S_OK) report_ddi_error(owner,hr);
+            if (ddi_device_status(hr)==D3DDDIERR_DEVICEREMOVED) report_ddi_error(owner,hr);
         } else if (s && s->object) { s->object->Release(); *s={}; }
     });
 }

@@ -116,6 +116,19 @@ HRESULT DeviceOwner::close_surface(RuntimeSurface &surface) {
     if (hr==S_OK) surfaces_.erase(position);
     return hr;
 }
+HRESULT DeviceOwner::release_surface_handle(RuntimeSurface &surface) {
+    if (!runtime_.domain.entered() || !owns_surface(surface)) return E_INVALIDARG;
+    HRESULT hr=close_surface(surface);
+    if (hr!=S_OK) {
+        // The runtime will invalidate hRTResource after this DDI returns. A
+        // failure must not turn into a callback on that handle during teardown.
+        // Keep backing/device/modules pinned if COM/GPU cleanup is unproven.
+        surface.allocation.runtime_resource=nullptr;
+        surface.phase=SurfacePhase::quarantined;
+        OutputDebugStringA("BC250 M14: resource cleanup failed; owner quarantined before runtime handle invalidation\n");
+    }
+    return hr;
+}
 HRESULT DeviceOwner::close() {
     if (!runtime_.domain.entered()) return E_UNEXPECTED;
     closing_=true;

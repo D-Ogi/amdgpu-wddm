@@ -61,14 +61,16 @@ namespace {
 UINT64 surfaceFence=0;
 RuntimeSurface *closingSurface=nullptr;
 unsigned surfaceAllocates=0,surfaceUnmaps=0,surfaceDeallocates=0;
-bool failSurfaceUnmap=false,failSurfaceResident=false;
+bool failSurfaceDeallocate=false,failSurfaceResident=false;
 HRESULT APIENTRY surface_allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
     check(h==&identity); ++surfaceAllocates;
     a->pAllocationInfo2[0].hAllocation=31; return S_OK;
 }
 HRESULT APIENTRY surface_deallocate(HANDLE,const D3DDDICB_DEALLOCATE2 *a) {
     check((a->hResource==&identity && !a->NumAllocations) || (a->NumAllocations==1 && *a->HandleList==31));
-    check(closingSurface && !closingSurface->mapping.address && !closingSurface->texture.image.image);
+    check(closingSurface && !closingSurface->texture.image.image && !closingSurface->texture.image.memory && !closingSurface->texture.texture);
+    check(!a->Flags.Value);
+    if (failSurfaceDeallocate) return E_FAIL;
     ++surfaceDeallocates; return S_OK;
 }
 HRESULT APIENTRY surface_map(HANDLE,D3DDDI_MAPGPUVIRTUALADDRESS *m) {
@@ -83,7 +85,7 @@ HRESULT APIENTRY surface_unmap(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS *m) {
     check(m->BaseAddress==65536 && m->Size==8192);
     check(closingSurface && !closingSurface->texture.texture && !closingSurface->texture.image.image && !closingSurface->texture.image.memory);
     ++surfaceUnmaps;
-    return failSurfaceUnmap ? E_FAIL : S_OK;
+    std::abort(); // Surface close must never release VA separately from allocation.
 }
 }
 namespace {
@@ -204,14 +206,14 @@ int main() {
     textureWait=E_FAIL;
     check(close()==E_FAIL && !surfaceUnmaps && !surfaceDeallocates);
     check(finish()==E_UNEXPECTED); // A closing resource cannot be republished.
-    textureWait=S_OK; failSurfaceUnmap=true;
+    textureWait=S_OK; failSurfaceDeallocate=true;
     check(close()==E_FAIL && !surface.texture.image.image && surface.mapping.address && !surfaceDeallocates);
     const unsigned releasedOnce=releases;
-    failSurfaceUnmap=false; check(close()==S_OK && surfaceDeallocates==1 && releases==releasedOnce);
+    failSurfaceDeallocate=false; check(close()==S_OK && surfaceDeallocates==1 && releases==releasedOnce);
     check(close()==S_OK && surfaceDeallocates==1 && surface.phase==SurfacePhase::empty);
     surfaceFence=0; failSurfaceResident=true;
     check(begin()==E_OUTOFMEMORY && surface.mapping.address && !surface.mapping.resident);
-    check(finish()==E_UNEXPECTED && close()==E_PENDING && surfaceDeallocates==1);
+    check(finish()==E_UNEXPECTED && close()==S_OK && surfaceDeallocates==2 && !surface.mapping.address && !surfaceUnmaps);
     surfaceFence=5; check(close()==S_OK && surfaceDeallocates==2);
     failSurfaceResident=false; surfaceFence=9;
     check(begin()==S_FALSE); textureWrap=E_OUTOFMEMORY;
@@ -221,6 +223,9 @@ int main() {
     const unsigned unmappedBeforeRetention=surfaceUnmaps;
     check(close()==E_UNEXPECTED && surface.texture.retained);
     check(close()==E_UNEXPECTED && surfaceUnmaps==unmappedBeforeRetention && surfaceDeallocates==3);
+    surface.phase=SurfacePhase::quarantined; surface.allocation.runtime_resource=nullptr;
+    const unsigned beforeQuarantineFree=surfaceDeallocates,beforeQuarantineRelease=releases;
+    check(close()==E_UNEXPECTED && surfaceDeallocates==beforeQuarantineFree && releases==beforeQuarantineRelease);
     RuntimeSurface adopted; closingSurface=&adopted;
     RuntimeSurfaceAllocation opened{&identity,31,77};
     const unsigned allocationsBeforeAdopt=surfaceAllocates;
@@ -231,7 +236,7 @@ int main() {
     check(adopt_runtime_surface(runtime,queue,opened,request.surface,textureDesc,adopted)==E_OUTOFMEMORY);
     check(!opened.allocation && adopted.allocation.kernel_resource==77 && adopted.mapping.address);
     check(surfaceAllocates==allocationsBeforeAdopt);
-    check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==E_PENDING);
+    check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==S_OK && !adopted.mapping.address && !surfaceUnmaps);
     surfaceFence=5;
     check(close_runtime_surface(bridge,device,imageDispatch,textureDispatch,adopted)==S_OK);
     opened={&identity,31,77}; surfaceFence=9; failSurfaceResident=false; remainingRefs=0;

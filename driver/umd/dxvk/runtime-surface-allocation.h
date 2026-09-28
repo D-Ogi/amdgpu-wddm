@@ -16,7 +16,8 @@ struct RuntimeSurfaceRequest {
     bool primary=false,shared=false,cpu_read=false;
 };
 HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,RuntimeSurfaceAllocation &);
-// Caller must retire GPU/Present, destroy image wrappers and free its GPU VA first.
+// Caller must retire engine/Present use and destroy image wrappers first.
+// Deallocate2 flags zero retires all allocation VAs, including pending mappings.
 HRESULT deallocate_runtime_surface(RuntimeDevice &,RuntimeSurfaceAllocation &);
 struct SurfacePagingQueue {
     D3DKMT_HANDLE queue=0,sync=0;

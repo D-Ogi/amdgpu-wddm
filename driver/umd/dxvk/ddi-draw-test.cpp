@@ -776,7 +776,7 @@ int main() {
     runtimeDesc.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D; runtimeDesc.SampleDesc.Count=1;
     runtimeDesc.Usage=D3D10_DDI_USAGE_DEFAULT; runtimeDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
     runtimeDesc.BindFlags=D3D10_DDI_BIND_PRESENT|D3D10_DDI_BIND_RENDER_TARGET;
-    runtimeDesc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED;
+    runtimeDesc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT;
     DXGI_DDI_PRIMARY_DESC primary{}; primary.VidPnSourceId=2; runtimeDesc.pPrimaryDesc=&primary;
     RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 importedDesc{};
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=S_OK ||

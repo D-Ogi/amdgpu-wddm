@@ -3,7 +3,7 @@
 #include "runtime-surface-allocation.h"
 #include "runtime-texture.h"
 namespace bc250::umd {
-enum class SurfacePhase { empty, paging, ready, failed, closing };
+enum class SurfacePhase { empty, paging, ready, failed, closing, quarantined };
 // Explicit close in the owning runtime domain. A failed close retains ownership.
 // The device-owned paging queue must outlive every surface borrowing it.
 struct RuntimeSurface {

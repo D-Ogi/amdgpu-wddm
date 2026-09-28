@@ -67,14 +67,17 @@ HRESULT close_runtime_surface(HostBridge &bridge,VkDevice device,const RuntimeIm
     const TextureImportDispatch &engine,RuntimeSurface &surface) {
     if (!bridge.device || !bridge.device->domain.entered()) return E_INVALIDARG;
     if (surface.phase==SurfacePhase::empty) return S_OK;
+    if (surface.phase==SurfacePhase::quarantined) return E_UNEXPECTED;
     if (bridge.device!=surface.owner) return E_INVALIDARG;
     surface.phase=SurfacePhase::closing;
     HRESULT hr=close_runtime_texture(bridge,device,vk,engine,surface.texture);
     if (hr!=S_OK) return hr;
-    hr=unmap_runtime_surface(*surface.owner,surface.queue,surface.mapping);
-    if (hr!=S_OK) return hr;
+    // Deallocate2 with flags zero owns VA retirement and defers allocation
+    // destruction behind queued work. Explicit FreeGpuVirtualAddress here could
+    // make the address reusable before pending mapping/submission retires.
     hr=deallocate_runtime_surface(*surface.owner,surface.allocation);
     if (hr!=S_OK) return hr;
+    surface.mapping={};
     surface.owner=nullptr; surface.queue={}; surface.desc={}; surface.pitch=0; surface.bytes=0;
     surface.phase=SurfacePhase::empty;
     return S_OK;

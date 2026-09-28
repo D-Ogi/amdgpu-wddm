@@ -32,6 +32,9 @@ public:
     HRESULT finish_surface(RuntimeSurface &);
     HRESULT wait_surface(RuntimeSurface &);
     HRESULT close_surface(RuntimeSurface &);
+    // Final callback opportunity before Create/Open failure or Destroy returns.
+    // Failed cleanup is quarantined; its soon-invalid runtime handle is never reused.
+    HRESULT release_surface_handle(RuntimeSurface &);
     size_t surface_count() const { return surfaces_.size(); }
 
     // Acquire loader references by code address, never by a searched DLL name.
