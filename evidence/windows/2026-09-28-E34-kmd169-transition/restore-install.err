@@ -1,0 +1,7 @@
+Unexpected automatic enable
+At C:\BC250\m13\kmd169-stage004\kmd169-transition\phase.ps1:87 char:108
++ ... Device_ProblemCode).Data -ne 22){throw 'Unexpected automatic enable'}
++                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Unexpected automatic enable:String) [], RuntimeException
+    + FullyQualifiedErrorId : Unexpected automatic enable
+ 
