@@ -69,3 +69,13 @@ Call `open` and `close` inside the runtime domain. This type has explicit teardo
 ```
 
 Controlled Vulkan and engine callbacks validate requirements propagation, queue selection, feature-chain lifetime, failures at requirement validation/Vulkan creation/engine creation, repeated close, and engine Release before Vulkan destruction. The nonzero-Release case verifies retention. No Vulkan work on a physical GPU is performed by this unit control.
+
+## Hosted instance bootstrap
+
+`HostedInstance` chains a copied host-v5 descriptor into vkCreateInstance using the explicitly supplied ICD entry point. It selects the physical device by valid, exact LUID equality with the D3D runtime adapter and rejects absent or ambiguous matches. Enumeration retries VK_INCOMPLETE at most three times. The shell owns the ICD module and callback userdata; they must remain alive through engine/device destruction and instance close. No implicit vulkan-1 loader or fallback adapter is used.
+
+```powershell
+& .\\bc250-win\\tools\\build\\test-umd-hosted-instance.ps1 -DxvkSource .\\scratch\\m14\\dxvk
+```
+
+Controlled ICD callbacks verify the v5 chain, non-first physical-device match, invalid LUID, absent match, duplicate match, bounded enumeration retry, create failure and exact cleanup. This tests bootstrap mechanics; a real hosted ICD and the engine DLL still need integration through the DDI CreateDevice entry. A malformed ICD lacking vkDestroyInstance leaves the handle visible for owner retention rather than silently dropping it.
