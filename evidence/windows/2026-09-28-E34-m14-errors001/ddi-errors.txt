@@ -1,0 +1,6 @@
+DEBUG M14 engine error: Injected out of memory for buffer: 1048576 bytes
+DEBUG M14 DDI error HRESULT=8007000E mapped=8007000E line=227 function=void __cdecl bc250::umd::`anonymous-namespace'::create::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG M14 engine error: Injected out of memory for buffer: 1048576 bytes
+DEBUG M14 DDI error HRESULT=88760870 mapped=88760870 line=38 function=void __cdecl bc250::umd::`anonymous-namespace'::map::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG M14 engine error: Injected out of memory for buffer: 1048576 bytes
+DEBUG M14 DDI error HRESULT=887A0005 mapped=88760870 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::update::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
