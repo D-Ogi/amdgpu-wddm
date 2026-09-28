@@ -1,0 +1,7 @@
+DX12 registration not visible through KMT; runtime probe skipped
+At C:\BC250\m15\registration001\phase.ps1:38 char:100
++ ... d3d12.dll'){throw 'DX12 registration not visible through KMT; runtime ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (DX12 registrati...e probe skipped:String) [], RuntimeException
+    + FullyQualifiedErrorId : DX12 registration not visible through KMT; runtime probe skipped
+ 

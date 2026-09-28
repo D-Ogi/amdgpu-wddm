@@ -1,0 +1,18 @@
+{
+    "status":  "failed-restored",
+    "cpu_verified":  false,
+    "gpu_verified":  false,
+    "baseline_restored":  true,
+    "postflight_verified":  true,
+    "tree_closed":  true,
+    "failed_phase":  "Cpu",
+    "phases":  [
+                   "Capture",
+                   "Install",
+                   "Cpu",
+                   "Restore",
+                   "Verify"
+               ],
+    "elapsed":  22.786104,
+    "interpretation":  "Cpu phase verifies effective DX12 name; Gpu phase is system runtime queue probe, not desktop promotion"
+}

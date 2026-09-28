@@ -1,0 +1,11 @@
+UMD name version=0 status=00000000 basename=bc250umd.dll
+UMD name version=1 status=00000000 basename=bc250d3d.dll
+UMD name version=2 status=00000000 basename=bc250d3d.dll
+UMD name version=3 status=c000000d basename=<unavailable>
+QueryAdapterInfo status=00000000 bytes=1496
+OpenAdapter12 hr=00000000
+QueryAdapterInfo status=00000000 bytes=1496
+identity_match=1 contract_version=3 node_mask=1 gfx_rings=1 flags=7
+CloseAdapter hr=00000000
+KMT close status=00000000
+PASSED (KMT-backed adapter admission only)
