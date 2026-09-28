@@ -1,0 +1,39 @@
+{
+  "tool": "d3d11bench",
+  "format": 1,
+  "result": "measured",
+  "exit": 0,
+  "mode": "window",
+  "width": 64,
+  "height": 64,
+  "feature_level": "10_0",
+  "d3d11": "system",
+  "scenes": [
+    {
+      "name": "draws",
+      "frames": 3,
+      "warmup": 0,
+      "draws": 8,
+      "gpu_disjoint": 0,
+      "gpu_failures": 0,
+      "api_failures": 0,
+      "checksum": "04a2bda0d6017832"
+    },
+    {
+      "name": "fill",
+      "frames": 3,
+      "warmup": 0,
+      "layers": 2,
+      "gpu_disjoint": 0,
+      "gpu_failures": 0,
+      "api_failures": 0,
+      "checksum": "d5bdf85e5b8ec998"
+    },
+    {
+      "name": "shaders",
+      "shaders": 4,
+      "checksum": "ea3dbbf2ef61ae6f"
+    }
+  ],
+  "icd_sha256": []
+}
