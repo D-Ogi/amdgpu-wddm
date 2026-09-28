@@ -270,3 +270,12 @@ retain this owner and device as well. Runtime allocation release is still extern
 Mock tests cover wrap failure, wait failure/retry, successful cleanup and unexpected
 surviving references. DDI resource ownership/rotation integration and GPU validation
 remain pending; no runtime allocation has yet been created by this helper.
+
+runtime-surface-allocation creates LB7A surfaces through pfnAllocateCb with E26R v2
+resource metadata. It reuses the KMD allocation structure and geometry functions,
+rejects primary+CPU-read policy, and supports current 32-bit desktop formats.
+Cleanup uses pfnDeallocate2Cb with the runtime resource handle when present, so
+shared resource/device bindings close atomically; allocation-list cleanup is only
+for standalone allocations. Failed cleanup preserves state for retry. Mock callback
+tests cover ABI fields, domain, allocation failure and both cleanup forms.
+GPU VA mapping/residency and integration with imported texture creation remain open.
