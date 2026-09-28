@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdint>
 #include "device-state.h"
+#include "ddi-0092-layout.h"
 namespace {
 using native12::Adapter;
 using native12::Device;
@@ -50,14 +51,18 @@ HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
 }
 HRESULT APIENTRY caps(D3D12DDI_HADAPTER,const D3D12DDIARG_GETCAPS* a) {
     if(!a || (!a->pData && a->DataSize)) return E_INVALIDARG;
-    trace("GetCaps-unimplemented",a->Type);return E_NOTIMPL;
+    fprintf(stderr,"d3d12-ddi GetCaps type=%u size=%u info_present=%u result=E_NOTIMPL\n",
+        unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr));fflush(stderr);
+    return E_NOTIMPL;
 }
 HRESULT APIENTRY optional_tables(D3D12DDI_HADAPTER h,UINT32* count,D3D12DDI_TABLE_REQUEST*) {
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;
     *count=0;trace("GetOptionalDDITables");return S_OK;
 }
-HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER,D3D12DDI_TABLE_TYPE type,void*,SIZE_T,UINT,D3D12DDI_HRTTABLE) {
-    trace("FillDDITable-unimplemented",type);return E_NOTIMPL;
+HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER,D3D12DDI_TABLE_TYPE type,void*,SIZE_T size,UINT number,D3D12DDI_HRTTABLE table) {
+    fprintf(stderr,"d3d12-ddi FillDDITable type=%u size=%llu number=%u runtime_table_present=%u result=E_NOTIMPL\n",
+        unsigned(type),static_cast<unsigned long long>(size),number,unsigned(table.handle!=nullptr));fflush(stderr);
+    return E_NOTIMPL;
 }
 void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     if(!h.pDrvPrivate) return;
