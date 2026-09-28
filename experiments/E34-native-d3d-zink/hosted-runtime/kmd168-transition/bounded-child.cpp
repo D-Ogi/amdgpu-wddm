@@ -21,10 +21,23 @@ static std::wstring quote(const wchar_t* arg){
 }
 int wmain(int argc,wchar_t** argv){
     if(argc==2 && std::wstring(argv[1])==L"--help"){
-        puts("bounded-child [--active-console] DEADLINE_QPC STDOUT STDERR EXE [ARGS...]; returns0 only for an empty job and child exit0; console child writes its own logs");return 0;
+        puts("bounded-child [--active-console] [--cancel-file PATH] DEADLINE_QPC STDOUT STDERR EXE [ARGS...]; returns0 only for an empty job and child exit0; console child writes its own logs");return 0;
     }
-    const bool interactive=argc>1 && std::wstring(argv[1])==L"--active-console";
-    if(interactive){--argc;++argv;}
+    bool interactive=false;const wchar_t *cancelFile=nullptr;
+    while(argc>1){
+        if(std::wstring(argv[1])==L"--active-console"){
+            if(interactive)return 125;interactive=true;--argc;++argv;
+        }else if(std::wstring(argv[1])==L"--cancel-file"){
+            if(cancelFile || argc<3 || !*argv[2])return 125;
+            cancelFile=argv[2];argc-=2;argv+=2;
+        }else break;
+    }
+    const auto cancelled=[&](){
+        if(!cancelFile)return false;
+        if(GetFileAttributesW(cancelFile)!=INVALID_FILE_ATTRIBUTES)return true;
+        const DWORD error=GetLastError();
+        return error!=ERROR_FILE_NOT_FOUND && error!=ERROR_PATH_NOT_FOUND;
+    };
     if(argc<5)return 125;
     wchar_t* end=nullptr;const long long deadline=_wcstoi64(argv[1],&end,10);
     LARGE_INTEGER freq;QueryPerformanceFrequency(&freq);
@@ -78,24 +91,26 @@ int wmain(int argc,wchar_t** argv){
     DWORD childSession=0;
     if(interactive && (!ProcessIdToSessionId(pi.dwProcessId,&childSession) || childSession!=selectedSession ||
         WTSGetActiveConsoleSessionId()!=selectedSession)){TerminateJobObject(job.h,125);return 125;}
-    if(now()>=workEnd || ResumeThread(thread.h)==DWORD(-1)){TerminateJobObject(job.h,125);return 125;}
-    bool observed=false,timedOut=false,empty=false;DWORD childExit=STILL_ACTIVE;
+    if(now()>=workEnd || (!cancelled() && ResumeThread(thread.h)==DWORD(-1))){TerminateJobObject(job.h,125);return 125;}
+    bool observed=false,timedOut=false,empty=false,wasCancelled=false;DWORD childExit=STILL_ACTIVE;
     for(;;){
+        if(cancelled()){wasCancelled=true;break;}
         if(WaitForSingleObject(process.h,0)==WAIT_OBJECT_0){observed=true;GetExitCodeProcess(process.h,&childExit);break;}
         if(now()>=workEnd){timedOut=true;break;}
         Sleep(10);
     }
     // Even a successful root process cannot leave its descendants resident.
-    const bool terminated=TerminateJobObject(job.h,timedOut?124:125)!=FALSE;
+    const bool terminated=TerminateJobObject(job.h,wasCancelled?123:(timedOut?124:125))!=FALSE;
     do{
         JOBOBJECT_BASIC_ACCOUNTING_INFORMATION info={};
         if(QueryInformationJobObject(job.h,JobObjectBasicAccountingInformation,&info,sizeof(info),nullptr))empty=info.ActiveProcesses==0;
         if(empty || now()>=deadline)break;
         Sleep(10);
     }while(true);
-    printf("{\"console_session\":%lu,\"child_pid\":%lu,\"root_exit_observed\":%s,\"child_exit\":%lu,\"timed_out\":%s,\"termination_requested\":%s,\"job_empty\":%s}\n",
-        selectedSession,pi.dwProcessId,observed?"true":"false",childExit,timedOut?"true":"false",terminated?"true":"false",empty?"true":"false");
+    printf("{\"cancelled\":%s,\"console_session\":%lu,\"child_pid\":%lu,\"root_exit_observed\":%s,\"child_exit\":%lu,\"timed_out\":%s,\"termination_requested\":%s,\"job_empty\":%s}\n",
+        wasCancelled?"true":"false",selectedSession,pi.dwProcessId,observed?"true":"false",childExit,timedOut?"true":"false",terminated?"true":"false",empty?"true":"false");
     if(!empty)return 125;
+    if(wasCancelled)return 123;
     if(timedOut)return 124;
     return observed && childExit==0?0:126;
 }

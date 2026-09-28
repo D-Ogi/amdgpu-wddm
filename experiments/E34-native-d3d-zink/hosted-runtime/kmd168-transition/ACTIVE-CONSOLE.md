@@ -24,3 +24,25 @@ A session test does not establish D3D11 window Present.
 References consulted 2026-09-28:
 - [CreateProcessAsUserW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessasuserw): cross-session handle inheritance is prohibited; desktop and Unicode environment selection.
 - [WTSQueryUserToken](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken): LocalSystem/SeTcbPrivilege and returned primary token ownership.
+
+## Cancellation and separate session ownership
+
+M743 isolates the failed nested case at CreateProcessAsUser. Do not put the
+SYSTEM controller and interactive client into the same Job hierarchy: Windows
+requires same-session membership. Launch the active-console helper directly from
+the SYSTEM supervisor, as measured in M740, and retain its independent deadline.
+
+`--cancel-file PATH` requests cancellation when the file exists or cannot be
+queried for reasons other than missing file/path. The helper terminates its Job,
+waits for it to become empty within the original deadline, and returns123 with
+`cancelled=true`. A pre-existing signal leaves the child suspended until killed.
+No cancellation path means unchanged behavior. Signals are one-shot; use a fresh
+path per phase, do not clear an active signal to resume a consumed attempt.
+
+Invoke-KmdBoundedChild optionally accepts CancelFile and Monitor. A monitor
+exception writes the signal, continues collecting the closure receipt, and
+returns monitor_error. Its caller must reject success when that field is set.
+Monitor callbacks themselves must be bounded; an unbounded callback would delay
+the caller even though the helper independently enforces the child's deadline.
+The intended thermal probe is a separate short bounded SYSTEM process. Never
+use parent-process exit alone as proof that the other session's Job is empty.

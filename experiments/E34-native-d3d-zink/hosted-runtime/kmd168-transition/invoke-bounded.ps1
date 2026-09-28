@@ -13,11 +13,14 @@ function ConvertTo-KmdNativeArgument {
  [void]$b.Append('"');return $b.ToString()
 }
 function Invoke-KmdBoundedChild {
- param([string]$Tool,[long]$Deadline,[string]$Stdout,[string]$Stderr,[string]$Executable,[string[]]$Arguments,[switch]$ActiveConsole)
+ param([string]$Tool,[long]$Deadline,[string]$Stdout,[string]$Stderr,[string]$Executable,[string[]]$Arguments,[switch]$ActiveConsole,[string]$CancelFile,[scriptblock]$Monitor)
+ if($Monitor -and !$CancelFile){throw 'Monitor requires a cancellation path'}
+ $monitorError=$null
  $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())/[double][Diagnostics.Stopwatch]::Frequency
  if($remaining -le 1){throw 'Insufficient remaining child budget'}
  $values=@([string]$Deadline,$Stdout,$Stderr,$Executable)+$Arguments
  if($ActiveConsole){$values=@("--active-console")+$values}
+ if($CancelFile){$values=@("--cancel-file",$CancelFile)+$values}
  $si=New-Object Diagnostics.ProcessStartInfo
  $si.FileName=$Tool;$si.UseShellExecute=$false;$si.CreateNoWindow=$true
  $si.RedirectStandardOutput=$true;$si.RedirectStandardError=$true
@@ -31,7 +34,23 @@ function Invoke-KmdBoundedChild {
   $stderrTask=$process.StandardError.ReadToEndAsync()
   $remaining=($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())/[double][Diagnostics.Stopwatch]::Frequency
   $wait=[int][math]::Max(0,[math]::Floor($remaining*1000))
-  if(!$process.WaitForExit($wait)){
+  if($Monitor){
+   $nextPoll=0L
+   while(!$process.WaitForExit([int][math]::Min(100,$wait))){
+    if([Diagnostics.Stopwatch]::GetTimestamp() -ge $Deadline){
+     $process.Kill();throw 'Helper deadline exceeded; process-tree closure unconfirmed, recovery required'
+    }
+    if(!$monitorError -and [Diagnostics.Stopwatch]::GetTimestamp() -ge $nextPoll){
+     try{& $Monitor | Out-Null}catch{
+      $monitorError=$_.Exception.Message
+      # Request orderly Job termination and still collect the empty-job receipt.
+      [IO.File]::WriteAllText($CancelFile,'monitor cancelled')
+     }
+     $nextPoll=[Diagnostics.Stopwatch]::GetTimestamp()+[long](2*[Diagnostics.Stopwatch]::Frequency)
+    }
+    $wait=[int][math]::Max(0,[math]::Floor(($Deadline-[Diagnostics.Stopwatch]::GetTimestamp())*1000/[double][Diagnostics.Stopwatch]::Frequency))
+   }
+  }elseif(!$process.WaitForExit($wait)){
    $process.Kill()
    throw 'Helper deadline exceeded; process-tree closure unconfirmed, recovery required'
   }
@@ -41,6 +60,6 @@ function Invoke-KmdBoundedChild {
   if(![Threading.Tasks.Task]::WaitAll($reads,$wait)){
    throw 'Receipt pipe deadline exceeded; process-tree closure unconfirmed'
   }
-  return @{exit_code=$process.ExitCode;stdout=$stdoutTask.Result;stderr=$stderrTask.Result}
+  return @{exit_code=$process.ExitCode;stdout=$stdoutTask.Result;stderr=$stderrTask.Result;monitor_error=$monitorError}
  }finally{$process.Dispose()}
 }
