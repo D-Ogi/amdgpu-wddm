@@ -3,6 +3,7 @@
 // see shader-container.h for the contract and the provenance, README.md for the deviations from the D3D11 code.
 
 #include "shader-container.h"
+#include "dxil-metadata.h"
 
 #include <d3dcommon.h>
 
@@ -93,6 +94,10 @@ SysvalName LookupSysval(uint32_t sbName)
     // fxc gives an isoline's density index 0 and its detail index 1 (D3D11 engine code: the reverse).
     case D3D11_SB_NAME_FINAL_LINE_DETAIL_TESSFACTOR:    return { "SV_TessFactor", D3D_NAME_FINAL_LINE_DETAIL_TESSFACTOR, 1 };
     case D3D11_SB_NAME_FINAL_LINE_DENSITY_TESSFACTOR:   return { "SV_TessFactor", D3D_NAME_FINAL_LINE_DENSITY_TESSFACTOR, 0 };
+    // DXIL only (ValidateSignature). A pixel program may read both perspective and linear barycentrics.
+    case D3D12_SB_NAME_BARYCENTRICS:                    return { "SV_Barycentrics", D3D_NAME_BARYCENTRICS, ~0u };
+    case D3D12_SB_NAME_SHADINGRATE:                     return { "SV_ShadingRate", D3D_NAME_SHADINGRATE, 0 };
+    case D3D12_SB_NAME_CULLPRIMITIVE:                   return { "SV_CullPrimitive", D3D_NAME_CULLPRIMITIVE, 0 };
     default:                                            return { nullptr, D3D_NAME_UNDEFINED, 0 };
     }
 }
@@ -113,7 +118,10 @@ struct ProgramInfo
     uint32_t major = 0;
     uint32_t minor = 0;
     uint32_t length = 0;
-    std::vector<OutputDecl> outputs;                // dcl_output* on o#, with the dcl_stream block around them
+    bool dxil = false;
+    // DXBC: dcl_output* on o#, with the dcl_stream block around them. DXIL: the rows of the metadata's output
+    // elements with their streams, filled only to derive streams.
+    std::vector<OutputDecl> outputs;
     std::vector<std::pair<uint32_t, uint32_t>> inputUse;   // (register, mask) of v#, vicp# declarations
     std::vector<std::pair<uint32_t, uint32_t>> patchUse;   // (register, mask) of vpc# declarations
 };
@@ -276,6 +284,7 @@ Result ValidateSignature(const SignatureView& view, SigRole role, const ProgramI
         return Fail(Status::InvalidArgument, std::string(what) + ": entries missing");
 
     bool gsOutput = role == SigRole::Output && program.type == U(D3D10_SB_GEOMETRY_SHADER) && program.major >= 5;
+    const char* dxbc = program.dxil ? nullptr : "exists only in DXIL";
 
     for (UINT i = 0; i < view.count; i++)
     {
@@ -294,23 +303,27 @@ Result ValidateSignature(const SignatureView& view, SigRole role, const ProgramI
             return Fail(Status::InvalidArgument, where + ": mask " + std::to_string(e.Mask));
 
         uint32_t sv = uint32_t(e.SystemValue);
-        if (sv >= U(D3D12_SB_NAME_BARYCENTRICS) && sv <= U(D3D12_SB_NAME_CULLPRIMITIVE))
-            return Fail(Status::Unsupported, where + ": system value " + std::to_string(sv) + " exists only in DXIL");
+        if (dxbc && sv >= U(D3D12_SB_NAME_BARYCENTRICS) && sv <= U(D3D12_SB_NAME_CULLPRIMITIVE))
+            return Fail(Status::Unsupported, where + ": system value " + std::to_string(sv) + " " + dxbc);
         if (sv != U(D3D10_SB_NAME_UNDEFINED) && !LookupSysval(sv).name)
             return Fail(Status::InvalidArgument, where + ": unknown system value " + std::to_string(sv));
 
+        // 16- and 64-bit component types: dxc gives min16float the type FLOAT16 with minimum precision FLOAT_16.
         uint32_t type = uint32_t(e.RegisterComponentType);
-        if (type >= U(D3D10_SB_REGISTER_COMPONENT_UINT16) && type <= U(D3D10_SB_REGISTER_COMPONENT_FLOAT64))
-            return Fail(Status::Unsupported, where + ": component type " + std::to_string(type) + " exists only in DXIL");
+        if (dxbc && type >= U(D3D10_SB_REGISTER_COMPONENT_UINT16) && type <= U(D3D10_SB_REGISTER_COMPONENT_FLOAT64))
+            return Fail(Status::Unsupported, where + ": component type " + std::to_string(type) + " " + dxbc);
         if (type > U(D3D10_SB_REGISTER_COMPONENT_FLOAT64))
             return Fail(Status::InvalidArgument, where + ": unknown component type " + std::to_string(type));
 
         uint32_t precision = uint32_t(e.MinPrecision);
+        bool isFloat = type == U(D3D10_SB_REGISTER_COMPONENT_FLOAT32) || type == U(D3D10_SB_REGISTER_COMPONENT_UNKNOWN)
+            || type == U(D3D10_SB_REGISTER_COMPONENT_FLOAT16);
         bool precisionOk = precision == U(D3D11_SB_OPERAND_MIN_PRECISION_DEFAULT)
-            || ((type == U(D3D10_SB_REGISTER_COMPONENT_FLOAT32) || type == U(D3D10_SB_REGISTER_COMPONENT_UNKNOWN))
-                    && (precision == U(D3D11_SB_OPERAND_MIN_PRECISION_FLOAT_16) || precision == U(D3D11_SB_OPERAND_MIN_PRECISION_FLOAT_2_8)))
-            || (type == U(D3D10_SB_REGISTER_COMPONENT_SINT32) && precision == U(D3D11_SB_OPERAND_MIN_PRECISION_SINT_16))
-            || (type == U(D3D10_SB_REGISTER_COMPONENT_UINT32) && precision == U(D3D11_SB_OPERAND_MIN_PRECISION_UINT_16));
+            || (isFloat && (precision == U(D3D11_SB_OPERAND_MIN_PRECISION_FLOAT_16) || precision == U(D3D11_SB_OPERAND_MIN_PRECISION_FLOAT_2_8)))
+            || ((type == U(D3D10_SB_REGISTER_COMPONENT_SINT32) || type == U(D3D10_SB_REGISTER_COMPONENT_SINT16))
+                    && precision == U(D3D11_SB_OPERAND_MIN_PRECISION_SINT_16))
+            || ((type == U(D3D10_SB_REGISTER_COMPONENT_UINT32) || type == U(D3D10_SB_REGISTER_COMPONENT_UINT16))
+                    && precision == U(D3D11_SB_OPERAND_MIN_PRECISION_UINT_16));
         if (!precisionOk)
             return Fail(Status::InvalidArgument, where + ": minimum precision " + std::to_string(precision)
                     + " with component type " + std::to_string(type));
@@ -339,8 +352,7 @@ struct Named
 std::vector<Named> NameSignature(const Entry* entries, UINT count, bool pixelOutput)
 {
     std::vector<Named> named;
-    uint32_t clipCount = 0;
-    uint32_t cullCount = 0;
+    std::array<uint32_t, 32> counts = {};   // per D3D_NAME below 32, for system values numbered by occurrence
 
     for (UINT i = 0; i < count; i++)
     {
@@ -363,18 +375,14 @@ std::vector<Named> NameSignature(const Entry* entries, UINT count, bool pixelOut
             SysvalName sv = LookupSysval(uint32_t(e.SystemValue));
             n.name = sv.name;
             n.d3dName = sv.d3dName;
-            n.index = sv.index;
-
-            if (sv.d3dName == U(D3D_NAME_CLIP_DISTANCE))
-                n.index = clipCount++;
-            else if (sv.d3dName == U(D3D_NAME_CULL_DISTANCE))
-                n.index = cullCount++;
+            n.index = sv.index == ~0u ? counts[sv.d3dName]++ : sv.index;
         }
         else
         {
-            // gs_5 streams 1 to 3 reuse registers of stream 0. vkd3d-proton resolves stream-output entries by name
-            // and index alone (libs/vkd3d-shader/dxil.c, dxil_output_remap: "TODO: Stream index matching?"), so
-            // those streams get names of their own. Only stream 0 links to a pixel program (libs/vkd3d/state.c,
+            // gs_5 streams 1 to 3 reuse registers of stream 0. vkd3d-proton 7bfcd7f0 resolves stream-output
+            // entries by name and index alone (libs/vkd3d-shader/dxil.c, dxil_output_remap: "TODO: Stream index
+            // matching?"; the fork branch amdgpu-wddm/so-hole-fix compares the stream too), so those streams get
+            // names of their own. Only stream 0 links to a pixel program (libs/vkd3d/state.c,
             // vkd3d_validate_shader_io_signatures), and it keeps BC250_R.
             n.name = e.Stream ? "BC250_S" + std::to_string(e.Stream) + "R" : std::string(RegisterSemantic);
             n.index = e.Register * 4 + FirstComponent(e.Mask);
@@ -388,8 +396,9 @@ std::vector<Named> NameSignature(const Entry* entries, UINT count, bool pixelOut
 
 // The runtime's entries may carry no stream (the D3D11 DDI has none; whether the D3D12 runtime fills Stream is
 // not yet measured). When every entry of a gs_5 output signature says 0, each takes the first dcl_stream block
-// whose output declarations cover its register and components and have not given them to an earlier entry.
-// fxc reuses registers across streams, so the register alone is not enough.
+// whose output declarations cover its register and components and have not given them to an earlier entry (DXIL:
+// the first such metadata output element). The compilers reuse registers across streams, so the register alone is
+// not enough.
 void DeriveOutputStreams(ProgramInfo& program, std::vector<Entry>& entries)
 {
     for (Entry& e : entries)
@@ -409,6 +418,95 @@ void DeriveOutputStreams(ProgramInfo& program, std::vector<Entry>& entries)
             }
         }
     }
+}
+
+// ---- DXIL ------------------------------------------------------------------------------------------------------
+
+// The DXIL part as the DDI passes it: DxilProgramHeader (ProgramVersion, SizeInUint32 counting the whole part),
+// DxilBitcodeHeader ("DXIL", DxilVersion, BitcodeOffset from the "DXIL" magic, BitcodeSize), the bitcode.
+// dxil-spirv reads the same fields (dxil_parser.cpp, parse_dxil).
+Result CheckDxilProgram(const UINT* code, const ProgramInfo& program)
+{
+    std::string version = std::to_string(program.major) + "." + std::to_string(program.minor);
+    if (program.major != 6)
+        return Fail(Status::Unsupported, "shader model " + version);
+    // Kinds 0 to 5 are pixel to compute, as in the tokenized format. 6 and up (libraries, ray tracing, mesh,
+    // amplification, node programs) do not come through CreateShader.
+    if (program.type > U(D3D11_SB_COMPUTE_SHADER))
+        return Fail(Status::Unsupported, "DXIL program kind " + std::to_string(program.type) + ", shader model " + version);
+    if (program.length < 6)
+        return Fail(Status::InvalidArgument, "DXIL program of " + std::to_string(program.length)
+                + " DWORDs, shorter than its header");
+
+    const uint8_t* bitcode;
+    size_t size;
+    if (!dxil::ProgramBitcode(reinterpret_cast<const uint8_t*>(code), size_t(program.length) * 4u, &bitcode, &size))
+        return Fail(Status::InvalidArgument, "DXIL program header: no DXIL magic, or bitcode not within SizeInUint32");
+    return {};
+}
+
+// The signatures in the metadata of a DXIL part of size bytes.
+Result ReadDxilSignatures(const uint8_t* part, size_t size, dxil::Signatures* signatures)
+{
+    const uint8_t* bitcode;
+    size_t bitcodeSize;
+    std::string error = "no DXIL program";
+    if (!dxil::ProgramBitcode(part, size, &bitcode, &bitcodeSize)
+            || !dxil::ReadSignatures(bitcode, bitcodeSize, signatures, &error))
+        return Fail(Status::Unsupported, "DXIL metadata: " + error);
+    return {};
+}
+
+// The rows of the metadata's output elements, in element order: the declarations DeriveOutputStreams takes
+// streams from.
+void DxilOutputDecls(const dxil::Signatures& signatures, ProgramInfo& program)
+{
+    for (const dxil::Element& e : signatures.output)
+    {
+        if (e.startRow < 0 || e.startCol < 0 || e.startCol + e.cols > 4)
+            continue;
+        uint32_t mask = ((1u << e.cols) - 1u) << uint32_t(e.startCol);
+        for (uint32_t r = 0; r < e.rows; r++)
+            program.outputs.push_back({ uint32_t(e.startRow) + r, mask, e.stream, 0 });
+    }
+}
+
+uint32_t Rd32(const uint8_t* p)
+{
+    uint32_t v;
+    std::memcpy(&v, p, 4);
+    return v;
+}
+
+// The semantic of an output entry of a DXIL container, from the metadata of its DXIL part. dxil-spirv passes the
+// stream-output remapper the metadata name and semantic index of each output element (dxil_converter.cpp,
+// emit_stage_output_variables), and vkd3d-proton compares the declaration with those (dxil.c, dxil_output_remap).
+Result DxilOutputSemantic(const Container& container, const Entry& entry, Semantic* semantic)
+{
+    // The DXIL part is the last chunk BuildContainer wrote.
+    const std::vector<uint8_t>& b = container.bytes;
+    uint32_t count = b.size() >= 32 ? Rd32(&b[28]) : 0u;
+    uint64_t offset = count && 32ull + 4ull * count <= b.size() ? Rd32(&b[32 + 4 * (count - 1)]) : ~0ull;
+    if (offset > b.size() || b.size() - offset < 8u || std::memcmp(&b[size_t(offset)], "DXIL", 4)
+            || Rd32(&b[size_t(offset) + 4]) > b.size() - offset - 8u)
+        return Fail(Status::InvalidArgument, "not a container of BuildContainer with a DXIL part");
+
+    dxil::Signatures signatures;
+    if (Result r = ReadDxilSignatures(&b[size_t(offset) + 8], Rd32(&b[size_t(offset) + 4]), &signatures); !r)
+        return r;
+
+    uint32_t first = FirstComponent(entry.Mask);
+    for (const dxil::Element& e : signatures.output)
+    {
+        if (e.startRow < 0 || e.stream != entry.Stream || e.startCol != int32_t(first)
+                || entry.Register < uint32_t(e.startRow) || entry.Register - uint32_t(e.startRow) >= e.rows)
+            continue;
+        semantic->name = e.name;
+        semantic->index = e.indices[entry.Register - uint32_t(e.startRow)];
+        return {};
+    }
+    return Fail(Status::InvalidArgument, "no DXIL output element on register " + std::to_string(entry.Register)
+            + " component " + std::to_string(first) + " stream " + std::to_string(entry.Stream));
 }
 
 void Put32(std::vector<uint8_t>& out, uint32_t value)
@@ -657,26 +755,35 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
                 + std::to_string(desc.codeCapacity) + " readable DWORDs");
 
     // DXIL's program header has the same two DWORDs; its major version is 6 or more.
-    if (program.major >= 6)
-        return Fail(Status::Unsupported, "shader model " + std::to_string(program.major) + "."
-                + std::to_string(program.minor) + ": DXIL is out of scope");
-    if (program.type > U(D3D11_SB_COMPUTE_SHADER))
-        return Fail(Status::InvalidArgument, "program type " + std::to_string(program.type));
-
-    bool sm4 = program.major == 4 && program.minor <= 1;
-    bool sm5 = program.major == 5 && program.minor <= 1;
+    program.dxil = program.major >= 6;
     bool tessellation = program.type == U(D3D11_SB_HULL_SHADER) || program.type == U(D3D11_SB_DOMAIN_SHADER);
-    if (!(sm5 || (sm4 && !tessellation)))
-        return Fail(Status::Unsupported, "program type " + std::to_string(program.type) + " version "
-                + std::to_string(program.major) + "." + std::to_string(program.minor));
+    if (program.dxil)
+    {
+        if (Result r = CheckDxilProgram(desc.code, program); !r)
+            return r;
+    }
+    else
+    {
+        if (program.type > U(D3D11_SB_COMPUTE_SHADER))
+            return Fail(Status::InvalidArgument, "program type " + std::to_string(program.type));
+
+        bool sm4 = program.major == 4 && program.minor <= 1;
+        bool sm5 = program.major == 5 && program.minor <= 1;
+        if (!(sm5 || (sm4 && !tessellation)))
+            return Fail(Status::Unsupported, "program type " + std::to_string(program.type) + " version "
+                    + std::to_string(program.major) + "." + std::to_string(program.minor));
+    }
 
     if (program.type == U(D3D11_SB_COMPUTE_SHADER) && (desc.input.count || desc.output.count || desc.patchConstant.count))
         return Fail(Status::InvalidArgument, "signatures on a compute program");
     if (!tessellation && desc.patchConstant.count)
         return Fail(Status::InvalidArgument, "patch-constant signature outside a hull or domain program");
 
-    if (Result r = ScanProgram(desc.code, &program); !r)
-        return r;
+    // DXIL is not scanned: its signature chunks are not read by the engine's DXIL front end (README), so the
+    // read masks of inputs stay "all components".
+    if (!program.dxil)
+        if (Result r = ScanProgram(desc.code, &program); !r)
+            return r;
 
     if (Result r = ValidateSignature(desc.input, SigRole::Input, program, "input"); !r)
         return r;
@@ -696,6 +803,13 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     std::vector<Entry> output(desc.output.entries, desc.output.entries + desc.output.count);
     if (deriveStreams)
     {
+        if (program.dxil)
+        {
+            dxil::Signatures signatures;
+            if (Result r = ReadDxilSignatures(reinterpret_cast<const uint8_t*>(desc.code), program.length * 4u, &signatures); !r)
+                return r;
+            DxilOutputDecls(signatures, program);
+        }
         DeriveOutputStreams(program, output);
 
         // Derived streams must still name each component once.
@@ -709,14 +823,15 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     std::vector<Named> patchNames = NameSignature(desc.patchConstant.entries, desc.patchConstant.count, false);
 
     std::vector<std::vector<uint8_t>> chunks;
-    chunks.push_back(WriteSignatureChunk("ISG1", inputNames, true, &program.inputUse));
+    chunks.push_back(WriteSignatureChunk("ISG1", inputNames, true, program.dxil ? nullptr : &program.inputUse));
     chunks.push_back(WriteSignatureChunk("OSG1", outputNames, false, nullptr));
     if (tessellation)
-        chunks.push_back(WriteSignatureChunk("PSG1", patchNames, program.type == U(D3D11_SB_DOMAIN_SHADER), &program.patchUse));
+        chunks.push_back(WriteSignatureChunk("PSG1", patchNames, program.type == U(D3D11_SB_DOMAIN_SHADER),
+                program.dxil ? nullptr : &program.patchUse));
 
-    // Program chunk: tag, byte size, the tokens unchanged
+    // Program chunk: tag, byte size, the tokens (or the DXIL part) unchanged
     std::vector<uint8_t> code;
-    PutTag(code, program.major >= 5 ? "SHEX" : "SHDR");
+    PutTag(code, program.dxil ? "DXIL" : program.major >= 5 ? "SHEX" : "SHDR");
     uint32_t codeSize = program.length * uint32_t(sizeof(UINT));
     Put32(code, codeSize);
     const uint8_t* tokens = reinterpret_cast<const uint8_t*>(desc.code);
@@ -749,6 +864,7 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     DxbcChecksum(out.data(), out.size(), &out[4]);
 
     container->programType = program.type;
+    container->dxil = program.dxil;
     for (const Named& n : outputNames)
         container->output.push_back(n.entry);
 
@@ -817,10 +933,14 @@ Result StreamOutputSemantic(const Container& lastStage, const D3D12DDIARG_STREAM
         if (mask & ~entryMask)
             return Fail(Status::InvalidArgument, "stream-output entry spans more than one signature element");
 
-        element->semantic.name = n.name;
-        element->semantic.index = n.index;
         element->startComponent = BYTE(first - FirstComponent(entryMask));
-        return {};
+        if (!lastStage.dxil)
+        {
+            element->semantic.name = n.name;
+            element->semantic.index = n.index;
+            return {};
+        }
+        return DxilOutputSemantic(lastStage, n.entry, &element->semantic);
     }
 
     return Fail(Status::InvalidArgument, "stream-output register " + std::to_string(entry.RegisterIndex)

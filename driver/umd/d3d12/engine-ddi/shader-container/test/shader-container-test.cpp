@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: MIT
 // Offline control for shader-container, on the development PC through the Vulkan loader (no lab, no window).
-//   1. Original containers: fxc output of test/hlsl (build-run.ps1 compiles them with the Windows SDK fxc).
-//   2. Reconstruct: each container is stripped to what the D3D12 DDI gives, the SHEX/SHDR program and
-//      D3D12DDIARG_SIGNATURE_ENTRY_0012 arrays without names, and rebuilt with BuildContainer. Input layouts and
-//      stream-output declarations go the same way: to their DDI form (registers), then back to semantics.
+//   1. Original containers: fxc (shader model 5) and dxc (shader model 6, DXIL, stems "dxil.*") output of
+//      test/hlsl, compiled by build-run.ps1 with the Windows SDK compilers.
+//   2. Reconstruct: each container is stripped to what the D3D12 DDI gives, the program (SHEX/SHDR tokens or the
+//      DXIL part) and D3D12DDIARG_SIGNATURE_ENTRY_0012 arrays without names, and rebuilt with BuildContainer.
+//      Input layouts and stream-output declarations go the same way: to their DDI form (registers), then back to
+//      semantics.
 //   3. Compare: both containers go through the vkd3d-proton engine's ID3D12Device. Rendered pixels,
 //      stream-output buffers and UAV contents must be byte-identical. Two controls map a register wrongly and
 //      must be detected; the unsupported cases must be refused.
 // The DDI form of a signature is this test's model of the runtime (see README.md); it is not measured.
 //
 // Usage: shader-container-test <amdgpu_wddm_vkd3d.dll> <cso directory> <output directory> [adapter substring]
+//            [--so-engine <amdgpu_wddm_vkd3d.dll>]
+// --so-engine runs the stream-output cases on a second engine that accepts holes in the declaration (NULL
+// SemanticName); without it they run on the first engine with the holes left out of both variants.
 
 #define D3D12_TOKENIZED_PROGRAM_FORMAT_HEADER
 
@@ -23,6 +28,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include "bc250_vkd3d_engine.h"
+#include "../dxil-metadata.h"
 #include "../shader-container.h"
 
 #include <algorithm>
@@ -39,6 +45,7 @@
 
 using Microsoft::WRL::ComPtr;
 namespace sc = engine_ddi::shader_container;
+namespace dxil = engine_ddi::shader_container::dxil;
 using Entry = D3D12DDIARG_SIGNATURE_ENTRY_0012;
 using Bytes = std::vector<uint8_t>;
 
@@ -237,7 +244,8 @@ bool Strip(const Bytes& container, DdiShader* s, std::string* why)
     if (!ParseContainer(container, &chunks))
         return *why = "container does not parse", false;
 
-    const Chunk* code = FindChunk(chunks, { "SHEX", "SHDR" });
+    // The DXIL part has the SizeInUint32 of its program header where the tokens have LenTok.
+    const Chunk* code = FindChunk(chunks, { "SHEX", "SHDR", "DXIL" });
     if (!code || code->size < 8 || code->size % 4 || Rd32(code->data + 4) * 4ull != code->size)
         return *why = "no program chunk, or LenTok disagrees with the chunk size", false;
     s->code.resize(code->size / 4);
@@ -302,6 +310,7 @@ struct Engine
     PFN_vkGetInstanceProcAddr gipa = nullptr;
     LUID luid = {};
     BC250_VKD3D_ENGINE_FUNCS funcs = {};
+    bool soGaps = false;    // takes holes (NULL SemanticName) in stream-output declarations
 };
 
 HRESULT CreateEngineDevice(const Engine& e, ComPtr<ID3D12Device>* device)
@@ -325,6 +334,7 @@ struct Gpu
     ComPtr<ID3D12Fence> fence;
     UINT64 value = 0;
     HANDLE event = nullptr;
+    bool soGaps = false;
 
     ~Gpu()
     {
@@ -804,7 +814,7 @@ HRESULT RunGs(Gpu& g, const Variant& v, Outputs* out)
 
     std::vector<D3D12_SO_DECLARATION_ENTRY> so;
     for (const SoElement& e : v.so)
-        if (!e.gap)     // vkd3d-proton 439a96c strdup()s every SemanticName: a hole (NULL) crashes it (README)
+        if (!e.gap || g.soGaps)     // vkd3d-proton 7bfcd7f0 strdup()s every SemanticName: a hole (NULL) crashes it
             so.push_back({ e.stream, e.gap ? nullptr : e.name.c_str(), e.index, e.start, e.count, e.slot });
 
     auto pd = BaseGraphics(rs.Get());
@@ -1054,7 +1064,21 @@ std::vector<CaseDef> Cases()
     c.push_back({ "cs51", "cs_5_1: register spaces",
         { { "cs", "cs51.cs" } }, {}, {}, "",
         [](Gpu& g, const Variant& v, Outputs* o) { return RunCompute(g, v, o, true); } });
-    return c;
+
+    // Each case again with the dxc output of the same source (shader model 6.0, DXIL).
+    std::vector<CaseDef> all;
+    for (const CaseDef& s : c)
+    {
+        all.push_back(s);
+        CaseDef d = s;
+        d.name += "_dxil";
+        for (auto& stage : d.stages)
+            stage.second = "dxil." + stage.second;
+        for (size_t p; (p = d.what.find("_5_")) != std::string::npos;)
+            d.what.replace(p, 4, "_6_0");
+        all.push_back(std::move(d));
+    }
+    return all;
 }
 
 // ---- Building the variants ----------------------------------------------------------------------------------------
@@ -1183,6 +1207,7 @@ bool NonTrivial(const Bytes& b)
 HRESULT RunVariant(const Engine& e, const CaseDef& c, const Variant& v, Outputs* out)
 {
     Gpu g;
+    g.soGaps = e.soGaps;
     HRESULT hr = g.Init(e);
     if (FAILED(hr))
         return hr;
@@ -1222,9 +1247,57 @@ bool Compare(const Outputs& a, const Outputs& b, std::string* diff)
     return true;
 }
 
-void RunCase(const Engine& e, const CaseDef& c, const std::string& csoDir)
+bool IsDxil(const DdiShader& s)
 {
-    printf("\n== %s: %s\n", c.name.c_str(), c.what.c_str());
+    return !s.code.empty() && ((s.code[0] >> 4) & 0xfu) >= 6;
+}
+
+// dxil-metadata against dxc: every entry of dxc's ISG1/OSG1/PSG1 with a register finds the metadata element on its
+// register, first component and stream, with the same name and semantic index.
+bool MetadataMatches(const DdiShader& s, std::string* detail)
+{
+    const uint8_t* bitcode;
+    size_t size;
+    dxil::Signatures md;
+    std::string error = "no DXIL program";
+    if (!dxil::ProgramBitcode(reinterpret_cast<const uint8_t*>(s.code.data()), s.code.size() * 4, &bitcode, &size)
+            || !dxil::ReadSignatures(bitcode, size, &md, &error))
+        return *detail = "metadata does not parse: " + error, false;
+
+    unsigned matched = 0;
+    struct { const std::vector<SigElement>* chunk; const std::vector<dxil::Element>* md; const char* what; } lists[] = {
+        { &s.origInput, &md.input, "input" }, { &s.origOutput, &md.output, "output" },
+        { &s.origPatch, &md.patchConstant, "patch constant" },
+    };
+    for (const auto& list : lists)
+    {
+        for (const SigElement& x : *list.chunk)
+        {
+            if (x.reg == ~0u)
+                continue;
+            uint32_t first = 0;
+            while (first < 4 && !(x.mask & (1u << first)))
+                first++;
+            const dxil::Element* hit = nullptr;
+            for (const dxil::Element& m : *list.md)
+                if (m.startRow >= 0 && x.reg >= uint32_t(m.startRow) && x.reg - uint32_t(m.startRow) < m.rows
+                        && m.startCol == int32_t(first) && m.stream == x.stream)
+                    hit = &m;
+            if (!hit || _stricmp(hit->name.c_str(), x.name.c_str()) || hit->indices[x.reg - uint32_t(hit->startRow)] != x.index)
+                return *detail = std::string(list.what) + " " + x.name + std::to_string(x.index) + " on register "
+                        + std::to_string(x.reg) + (hit ? " is " + hit->name + " in the metadata" : " not in the metadata"), false;
+            matched++;
+        }
+    }
+    *detail = std::to_string(matched) + " entries";
+    return true;
+}
+
+void RunCase(const Engine& mainEngine, const Engine* soEngine, const CaseDef& c, const std::string& csoDir)
+{
+    // Stream-output cases run on the engine that takes holes, when there is one.
+    const Engine& e = !c.so.empty() && soEngine ? *soEngine : mainEngine;
+    printf("\n== %s: %s%s\n", c.name.c_str(), c.what.c_str(), &e == soEngine ? " [stream-output engine]" : "");
     Loaded l;
 
     for (const auto& [stage, stem] : c.stages)
@@ -1233,15 +1306,22 @@ void RunCase(const Engine& e, const CaseDef& c, const std::string& csoDir)
         if (!Check(ReadFile(csoDir + "\\" + stem + ".cso", &bytes), c.name + ": read " + stem + ".cso"))
             return g_rows.push_back({ c.name, c.what, "no input" });
 
-        // The checksum port reproduces fxc's.
+        // The checksum port reproduces the compiler's (fxc; dxc through dxil.dll signing).
         uint8_t digest[16];
         sc::DxbcChecksum(bytes.data(), bytes.size(), digest);
-        Check(bytes.size() > 20 && !std::memcmp(digest, &bytes[4], 16), c.name + ": " + stem + " checksum equals fxc's");
+        Check(bytes.size() > 20 && !std::memcmp(digest, &bytes[4], 16), c.name + ": " + stem + " checksum equals the compiler's");
 
         DdiShader s;
         std::string why;
         if (!Check(Strip(bytes, &s, &why), c.name + ": strip " + stem + (why.empty() ? "" : ": " + why)))
             return g_rows.push_back({ c.name, c.what, "strip failed" });
+
+        if (IsDxil(s))
+        {
+            std::string detail;
+            bool agree = MetadataMatches(s, &detail);
+            Check(agree, c.name + ": " + stem + " dx.entryPoints signatures agree with dxc's ISG1/OSG1/PSG1: " + detail);
+        }
 
         sc::Container rebuilt;
         sc::Result r = sc::BuildContainer(Desc(s), &rebuilt);
@@ -1279,14 +1359,14 @@ void RunCase(const Engine& e, const CaseDef& c, const std::string& csoDir)
         rwMatch(s.origInput, back.origInput, &same, &total);
         if (stage == "ds")
             rwMatch(s.origPatch, back.origPatch, &same, &total);
-        printf("info  %s: %s input read masks equal to fxc's: %u of %u\n", c.name.c_str(), stem.c_str(), same, total);
+        printf("info  %s: %s input read masks equal to the compiler's: %u of %u\n", c.name.c_str(), stem.c_str(), same, total);
 
         l.original[stage] = bytes;
         l.ddi[stage] = std::move(s);
         l.rebuilt[stage] = std::move(rebuilt);
     }
 
-    // A gs_5_0 output signature without streams (as the D3D11 DDI passes it) must give the same container.
+    // A geometry output signature without streams (as the D3D11 DDI passes it) must give the same container.
     if (l.ddi.count("gs"))
     {
         DdiShader zeroed = l.ddi["gs"];
@@ -1294,8 +1374,8 @@ void RunCase(const Engine& e, const CaseDef& c, const std::string& csoDir)
             en.Stream = 0;
         sc::Container derived;
         sc::Result r = sc::BuildContainer(Desc(zeroed), &derived);
-        Check(r && derived.bytes == l.rebuilt["gs"].bytes,
-                c.name + ": gs output streams zeroed, derived from dcl_stream: identical container");
+        Check(r && derived.bytes == l.rebuilt["gs"].bytes, c.name + ": gs output streams zeroed, derived from "
+                + (IsDxil(zeroed) ? "the metadata" : "dcl_stream") + ": identical container" + (r ? "" : " (" + r.detail + ")"));
     }
 
     Variant original;
@@ -1335,12 +1415,12 @@ void RunCase(const Engine& e, const CaseDef& c, const std::string& csoDir)
     LayoutMutation ml;
     SoMutation ms;
     std::string control;
-    if (c.name == "vsps")
+    if (c.name == "vsps" || c.name == "vsps_dxil")
     {
         control = "M1 input layout: COLOR3 and TEXCOORD2 data on each other's register";
         ml = [](std::vector<D3D12DDIARG_INPUT_ELEMENT_DESC>& d) { std::swap(d[1].InputRegister, d[3].InputRegister); };
     }
-    else if (c.name == "gs_streams")
+    else if (c.name == "gs_streams" || c.name == "gs_streams_dxil")
     {
         control = "M2 stream output: TEXCOORD0.yz declared on register 0 (SV_Position) instead of 1";
         ms = [](std::vector<D3D12DDIARG_STREAM_OUTPUT_DECLARATION_ENTRY>& d) { d[1].RegisterIndex = 0; };
@@ -1390,7 +1470,7 @@ void RunRefusals(const std::string& csoDir)
 {
     printf("\n== refusals\n");
     std::map<std::string, DdiShader> s;
-    for (const char* stem : { "vsps.vs", "vsps.ps", "gs.gs", "cs50.cs", "iface.ps" })
+    for (const char* stem : { "vsps.vs", "vsps.ps", "gs.gs", "cs50.cs", "iface.ps", "dxil.vsps.ps" })
     {
         Bytes bytes;
         std::string why;
@@ -1414,8 +1494,10 @@ void RunRefusals(const std::string& csoDir)
     std::vector<Refusal> cases = {
         { "class linkage: fxc ps_5_0 with interfaces (dcl_function_body, dcl_interface, fcall)", sc::Status::Unsupported,
             [&] { return build(s["iface.ps"]); } },
-        { "DXIL program header (ps_6_0 version token)", sc::Status::Unsupported,
-            [&] { DdiShader d; d.code = { 0x00000060u, 4u, 0u, 0u }; return build(d); } },
+        { "DXIL library (lib_6_3 program header, kind 6)", sc::Status::Unsupported,
+            [&] { DdiShader d; d.code = { 0x00060063u, 6u, 0x4C495844u, 0x103u, 16u, 0u }; return build(d); } },
+        { "DXIL BitcodeSize past SizeInUint32", sc::Status::InvalidArgument,
+            [&] { DdiShader d = s["dxil.vsps.ps"]; d.code[5] += 4; return build(d); } },
         { "system value SV_Barycentrics (DXIL only)", sc::Status::Unsupported,
             [&] { DdiShader d = s["vsps.ps"]; Entry e = {}; e.SystemValue = D3D12_SB_NAME_BARYCENTRICS; e.Register = 8;
                   e.Mask = 0x7; e.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_FLOAT32; d.input.push_back(e); return build(d); } },
@@ -1485,34 +1567,54 @@ bool FindAdapter(const char* filter, LUID* luid)
 
 } // namespace
 
+// Loads an engine DLL by its full path; two copies of the same file name from different directories load apart.
+bool LoadEngine(const char* path, PFN_vkGetInstanceProcAddr gipa, Engine* e)
+{
+    char full[MAX_PATH];
+    HMODULE dll = nullptr;
+    if (GetFullPathNameA(path, MAX_PATH, full, nullptr))
+        dll = LoadLibraryExA(full, nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+    auto getFuncs = dll ? reinterpret_cast<PFN_BC250_VKD3D_ENGINE_GET_FUNCS>(
+            reinterpret_cast<void*>(GetProcAddress(dll, BC250_VKD3D_ENGINE_GET_FUNCS_NAME))) : nullptr;
+    e->gipa = gipa;
+    e->funcs.Size = sizeof(e->funcs);
+    return Check(dll && getFuncs && gipa && SUCCEEDED(getFuncs(BC250_VKD3D_ENGINE_ABI_VERSION, &e->funcs))
+            && e->funcs.CreateDevice, std::string("engine loaded, Vulkan loader entry point, GetFuncs: ") + full);
+}
+
 int main(int argc, char** argv)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
+    const char* adapter = nullptr;
+    const char* soPath = nullptr;
+    for (int i = 4; i < argc; i++)
+    {
+        if (!strcmp(argv[i], "--so-engine") && i + 1 < argc)
+            soPath = argv[++i];
+        else
+            adapter = argv[i];
+    }
     if (argc < 4)
     {
-        printf("usage: shader-container-test <amdgpu_wddm_vkd3d.dll> <cso directory> <output directory> [adapter substring]\n");
+        printf("usage: shader-container-test <amdgpu_wddm_vkd3d.dll> <cso directory> <output directory> [adapter substring]"
+               " [--so-engine <amdgpu_wddm_vkd3d.dll>]\n");
         return 2;
     }
     g_out = argv[3];
     CreateDirectoryA(g_out.c_str(), nullptr);
 
-    char full[MAX_PATH];
-    HMODULE dll = nullptr;
-    if (GetFullPathNameA(argv[1], MAX_PATH, full, nullptr))
-        dll = LoadLibraryExA(full, nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     HMODULE vulkan = LoadLibraryW(L"vulkan-1.dll");
-    Engine e;
-    if (vulkan)
-        e.gipa = reinterpret_cast<PFN_vkGetInstanceProcAddr>(reinterpret_cast<void*>(GetProcAddress(vulkan, "vkGetInstanceProcAddr")));
-    auto getFuncs = dll ? reinterpret_cast<PFN_BC250_VKD3D_ENGINE_GET_FUNCS>(
-            reinterpret_cast<void*>(GetProcAddress(dll, BC250_VKD3D_ENGINE_GET_FUNCS_NAME))) : nullptr;
-    e.funcs.Size = sizeof(e.funcs);
-    if (!Check(dll && getFuncs && e.gipa && SUCCEEDED(getFuncs(BC250_VKD3D_ENGINE_ABI_VERSION, &e.funcs)) && e.funcs.CreateDevice,
-            "engine loaded, Vulkan loader entry point, GetFuncs") || !Check(FindAdapter(argc > 4 ? argv[4] : nullptr, &e.luid), "adapter"))
+    auto gipa = vulkan ? reinterpret_cast<PFN_vkGetInstanceProcAddr>(
+            reinterpret_cast<void*>(GetProcAddress(vulkan, "vkGetInstanceProcAddr"))) : nullptr;
+    Engine e, so;
+    if (!LoadEngine(argv[1], gipa, &e) || (soPath && !LoadEngine(soPath, gipa, &so))
+            || !Check(FindAdapter(adapter, &e.luid), "adapter"))
         return 1;
+    so.luid = e.luid;
+    so.soGaps = true;
 
     for (const CaseDef& c : Cases())
-        RunCase(e, c, argv[2]);
+        RunCase(e, soPath ? &so : nullptr, c, argv[2]);
     RunRefusals(argv[2]);
 
     printf("\n%-28s | %-100s | %s\n", "case", "what", "result");
