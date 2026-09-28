@@ -91,7 +91,7 @@ if($Phase -eq 'Capture'){
    $class='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
    New-ItemProperty $class -Name UserModeDriverName -PropertyType MultiString -Value @($saved.umd_registration) -Force|Out-Null
    New-ItemProperty $class -Name VulkanDriverName -PropertyType MultiString -Value @($saved.icd_registration) -Force|Out-Null
-   foreach($item in $saved.parameters.PSObject.Properties){New-ItemProperty $reg -Name $item.Name -Value $item.Value.value -PropertyType $item.Value.kind -Force|Out-Null}
+   foreach($item in $saved.parameters.PSObject.Properties){if($item.Name -in @('UnconfirmedStarts','LastStage','StageHistory')){continue};New-ItemProperty $reg -Name $item.Name -Value $item.Value.value -PropertyType $item.Value.kind -Force|Out-Null}
    Set-DurablePresentGates 0
   }
   'Enable' {
@@ -125,7 +125,7 @@ if($Phase -eq 'Capture'){
    & C:\BC250\bc250rd\bc250rd_cli.exe clock-check 1000 820|Out-Null
    if($LASTEXITCODE -ne 0){throw 'Clock control failed'}
    $class='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
-   $ready=Wait-KmdCpuBaseline -Saved $saved -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Read {
+   $readCpu={
    $registration=Get-ItemProperty $class
    $parameters=Get-ItemProperty $reg
    return @{
@@ -138,7 +138,8 @@ if($Phase -eq 'Capture'){
       ForEach-Object {@{name=$_.ModuleName;sha256=(Get-FileHash -LiteralPath $_.FileName).Hash}})}
     })
    }
-   } -Record {
+   }
+   $ready=Wait-KmdCpuBaseline -Saved $saved -AllowUnconfirmed -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Read $readCpu -Record {
     param($sample)
     Write-DurableText "$out\$Receipt-ready-$($sample.attempt).json" ($sample|ConvertTo-Json)
    }
@@ -146,9 +147,22 @@ if($Phase -eq 'Capture'){
    Write-DurableText "$out\$Receipt-readiness.json" ($ready|ConvertTo-Json -Depth 10)
    $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
    $abi=if($Arm -eq 'candidate'){'0x000700A9'}else{'0x000700A6'}
-   if($LASTEXITCODE -ne 0 -or $health -notmatch "version=$abi flags=15"){throw 'Independent health not ready'}
+   if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}
+   $before=Get-KmdReadyHealth $health $abi
+   Write-DurableText "$out\$Receipt-health-before.txt" $health
    $info=& C:\BC250\m8\bc250kmd_cli.exe info|Out-String
    if($LASTEXITCODE -ne 0 -or $info -notmatch $abi -or $info -notmatch 'FULL WDDM TABLE'){throw 'Loaded KMD identity mismatch'}
+   if($before.flags -eq 7){
+    $confirmed=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health confirm $before.generation $before.epoch|Out-String
+    if($LASTEXITCODE -ne 0){throw 'Checked health confirmation failed'}
+    Assert-KmdConfirmedHealth $before (Get-KmdReadyHealth $confirmed $abi)
+    Write-DurableText "$out\$Receipt-health-confirm.txt" $confirmed
+   }
+   $health=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
+   if($LASTEXITCODE -ne 0){throw 'Confirmed health read failed'}
+   Assert-KmdConfirmedHealth $before (Get-KmdReadyHealth $health $abi)
+   $observed=& $readCpu
+   Assert-KmdCpuBaseline $saved $observed
    Write-DurableText "$out\$Receipt-cpu.json" ($observed|ConvertTo-Json -Depth 8)
    Write-DurableText "$out\$Receipt-info.txt" $info
    Write-DurableText "$out\$Receipt-health.txt" $health

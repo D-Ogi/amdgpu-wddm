@@ -126,3 +126,14 @@ are admitted for restore Disable, rather than stopping before rollback. This is
 an admission policy, not proof that every such failure can recover. Unknown codes
 still require inspection. Local predicate/budget controls pass; actual failed-start
 restoration has not been injected on the lab.
+
+M711 correction: readiness may observe UnconfirmedStarts0/1/2 while requiring the
+same CPU module/registration/gate checks. It then reads the exact ABI and ready
+health7/15, verifies the loaded full WDDM interface, and uses health confirm only
+for the observed generation/epoch. A fresh read must report15 for that same pair;
+the final CPU predicate again requires guard0. Configure no longer restores
+UnconfirmedStarts, LastStage or StageHistory from an older snapshot. The
+health-order control reproduces guard1 readiness and rejects stale confirmation.
+
+The other M711 defect, forced installation auto-starting before configuration,
+remains unresolved here. Do not launch another transition on this revision.

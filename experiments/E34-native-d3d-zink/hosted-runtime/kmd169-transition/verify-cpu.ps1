@@ -1,6 +1,6 @@
 # Pure acceptance check; the caller gathers fresh OS observations.
 function Assert-KmdCpuBaseline {
- param($Saved,$Observed)
+ param($Saved,$Observed,[switch]$AllowUnconfirmed)
  foreach($name in @('umd_registration','icd_registration')) {
   $expected=@($Saved.$name);$actual=@($Observed.$name)
   if(!$expected.Count -or $actual.Count -ne $expected.Count){throw "Registration count mismatch: $name"}
@@ -8,9 +8,11 @@ function Assert-KmdCpuBaseline {
    if([string]::IsNullOrWhiteSpace([string]$actual[$i]) -or $actual[$i] -ine $expected[$i]){throw "Registration mismatch: $name"}
   }
  }
- foreach($name in @('EnableGpuPresentBlit','EnableCddDwmInterop','UnconfirmedStarts')) {
+ foreach($name in @('EnableGpuPresentBlit','EnableCddDwmInterop')) {
   if($null -eq $Observed.parameters.$name -or $Observed.parameters.$name -ne 0){throw "Baseline gate/guard mismatch: $name"}
  }
+ $guard=$Observed.parameters.UnconfirmedStarts
+ if($null -eq $guard -or $guard -notin @(0,1,2) -or (!$AllowUnconfirmed -and $guard -ne 0)){throw 'Unconfirmed start guard mismatch'}
  $desktop=@($Observed.dwm)
  if(!$desktop.Count){throw 'No DWM observed'}
  foreach($process in $desktop) {
@@ -28,14 +30,14 @@ function Assert-KmdCpuBaseline {
 # single sample taken while DWM is being replaced. This is not a lifetime promise.
 function Wait-KmdCpuBaseline {
  param($Saved,[scriptblock]$Read,[long]$Deadline,[scriptblock]$Record,
-       [ValidateRange(1,1000)][int]$IntervalMs=250)
+       [ValidateRange(1,1000)][int]$IntervalMs=250,[switch]$AllowUnconfirmed)
  $attempts=0;$previous=$null;$firstReady=$null
  while([Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline){
   $attempts++;$sampleQpc=[Diagnostics.Stopwatch]::GetTimestamp()
   $errorText=$null;$identity=$null;$observed=$null
   try {
    $observed=& $Read
-   Assert-KmdCpuBaseline $Saved $observed
+   Assert-KmdCpuBaseline $Saved $observed -AllowUnconfirmed:$AllowUnconfirmed
    $identity=(@($observed.dwm|ForEach-Object {"$($_.pid):$($_.start)"}|Sort-Object) -join '|')
   } catch {$errorText=[string]$_}
   $within=[Diagnostics.Stopwatch]::GetTimestamp() -lt $Deadline
@@ -48,4 +50,17 @@ function Wait-KmdCpuBaseline {
   if($remaining -gt 0){Start-Sleep -Milliseconds ([int][Math]::Min($IntervalMs,[Math]::Ceiling($remaining)))}
  }
  throw "CPU DWM readiness deadline expired after $attempts samples"
+}
+
+function Get-KmdReadyHealth {
+ param([string]$Text,[string]$Abi)
+ $pattern='(?m)^health abi=1 version='+[regex]::Escape($Abi)+' flags=(7|15) generation=([0-9]+) epoch=([0-9]+) '
+ $matchesFound=[regex]::Matches($Text,$pattern)
+ if($matchesFound.Count -ne 1){throw 'Expected one ready health witness for exact ABI'}
+ $m=$matchesFound[0]
+ return @{flags=[int]$m.Groups[1].Value;generation=[uint32]$m.Groups[2].Value;epoch=[uint32]$m.Groups[3].Value}
+}
+function Assert-KmdConfirmedHealth {
+ param($Before,$After)
+ if($After.flags -ne 15 -or $After.generation -ne $Before.generation -or $After.epoch -ne $Before.epoch){throw 'Confirmation does not match observed ready start'}
 }
