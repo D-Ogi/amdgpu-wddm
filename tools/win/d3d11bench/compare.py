@@ -29,7 +29,9 @@ INFO = {
     "fill": ("gpu_ms", "record_ms", "present_ms"),
     "shaders": ("create_ms", "draw_ms"),
 }
-RUN_SETTINGS = ("mode", "width", "height", "feature_level")
+# scene_revision: the scenes' shaders and constants (absent in revision 1 results). Checksums of different
+# revisions never match, and their costs are not the same workload.
+RUN_SETTINGS = ("mode", "width", "height", "feature_level", "scene_revision")
 SCENE_SETTINGS = ("frames", "warmup", "draws", "layers", "shaders")
 
 

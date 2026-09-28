@@ -69,6 +69,10 @@ class CompareTest(unittest.TestCase):
         other_mode = [run(10.0, "system", mode="offscreen")]
         with self.assertRaises(compare.InputError):
             compare.compare(side([10.0], "app-local"), other_mode)
+        other_scenes = side([10.0], "system")
+        other_scenes[0]["scene_revision"] = 2   # revision 1 results carry none
+        with self.assertRaises(compare.InputError):
+            compare.compare(side([10.0], "app-local"), other_scenes)
 
     def test_paths_are_checked_unless_waived(self):
         with self.assertRaises(compare.InputError):

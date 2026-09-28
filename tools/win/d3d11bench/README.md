@@ -12,7 +12,7 @@ nothing there gives the system one. `compare.py` holds the two sides against the
 pwsh tools\win\d3d11bench\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget
 ```
 
-The build runs `test_compare.py` first and fails on a failing case, keeps the previous executable under
+The build runs the tests of `compare.py` and `imgdiff.py` first and fails on a failing case, keeps the previous executable under
 `retained\` by its hash, compiles with `/W4 /WX`, checks `--help` and prints the SHA-256 that a lab runner pins.
 Output: `<BC250_ROOT>\scratch\build\d3d11bench\d3d11bench.exe`.
 
@@ -20,17 +20,40 @@ Output: `<BC250_ROOT>\scratch\build\d3d11bench\d3d11bench.exe`.
 
 | Scene | Bound by | Per frame | Gated metric |
 |---|---|---|---|
-| `draws` | application thread | 2000 draws (`--draws`), each with a `Map(WRITE_DISCARD)` of a 32-byte constant buffer, four texture switches per frame | `frame_ms` |
+| `draws` | application thread | 2000 draws (`--draws`), each with a `Map(WRITE_DISCARD)` of a 32-byte constant buffer and one of four textures, read with `Load` | `frame_ms` |
 | `fill` | GPU | 8 blended full-screen layers (`--layers`), each sampling a 512x512 mipmapped texture four times, plus an ALU loop | `frame_ms` |
-| `shaders` | shader and pipeline creation | 64 pixel shader variants (`--shaders`) created and drawn once each onto a 256x256 target | `total_ms` |
+| `shaders` | shader and pipeline creation | 64 pixel shader variants (`--shaders`) created and drawn once each, each into its own tile of a 256x256 target | `total_ms` |
 
 Frame scenes render 30 warm-up frames (`--warmup`), then 300 measured ones (`--frames`), and read back the last
-frame for an FNV-1a checksum. Every scene's output is deterministic, so a checksum mismatch between the paths is a
-correctness failure, not noise. Reference values from the development PC (RTX 4090), the same on native D3D11 and
-on DXVK over NVIDIA's Vulkan driver, default settings, offscreen: draws `5da11354d23bdd01`, fill
-`cd34afa3290da370`, shaders `9ce05937b797b3d3`. They are not yet measured on RADV, and texture filtering may
-legitimately differ between vendors: a mismatch across GPUs is a lead, a mismatch between the two paths on one GPU
-is a failure.
+frame for an FNV-1a checksum. Every scene's output is deterministic, so a checksum mismatch between the two paths on
+one GPU is a correctness failure, not noise.
+
+Across implementations (a CPU rasterizer against a GPU, one vendor against another) the scenes are built to be
+comparable too; this is scene revision 2, `scene_revision` in the result:
+
+- `draws` is exact on every conforming implementation. Vertices snap to chosen positions, no triangle edge passes
+  through a pixel centre, the texel comes from `Load` at the pixel's integer position, and the tint is a 0/1
+  channel mask, so no value needs rounding. Checked on the development PC: native D3D11, DXVK and WARP agree
+  bit for bit at 64x64 and 1280x720, and so does the exact rational model of the scene in `draws_model.py`
+  (`python draws_model.py DIR\draws.pam --draws N` names every pixel that differs from it).
+- `fill` and `shaders` use `sin` and trilinear filtering, which implementations may round differently. Their
+  loops contract, so such differences shrink instead of growing. WARP and the RTX 4090 differ by at most 1 per
+  channel in both. Judge them with `imgdiff.py` and a recorded tolerance.
+
+Revision 1 (results without `scene_revision`) was not comparable across implementations. Its `draws` sampled with
+an interpolated coordinate and used tints whose products were exact halves. Its `fill` iterated a chaotic map, so
+one step of filter weight came out as full-range noise. `compare.py` refuses to mix revisions.
+
+Reference checksums, revision 2, default settings, offscreen, from the development PC:
+
+| Scene | RTX 4090 native and DXVK | WARP (`--adapter warp`) |
+|---|---|---|
+| `draws` | `03a5b8ea7dbea991` | `03a5b8ea7dbea991` |
+| `fill` | `4f7e3b37e1283a07` | `7198ddabd07f3927` |
+| `shaders` | `484089e89be4655d` | `d79df22502a9ef46` |
+
+`--adapter warp` runs Microsoft's software rasterizer. It gives a CPU reference image on any Windows machine,
+never a performance number.
 
 To follow a lead, run both sides with `--dump DIR`: each scene's checksummed image lands in `DIR\<scene>.pam`
 (PAM, RGBA, top row first). Then
@@ -41,10 +64,9 @@ python tools\win\d3d11bench\imgdiff.py DIR_A DIR_B [--tolerance N]
 
 prints, per scene, how many pixels differ, the largest difference per channel, the first pixel beyond the
 tolerance and both images' checksums (equal to the `checksum` in the run's JSON, which ties a dump to its run);
-`--diff OUT.pam` on two files writes the difference image. A CPU rasterizer and a GPU may round filtering
-weights and `sin` differently, so the `fill` and `shaders` scenes can differ by a step or two with both
-right, while a wrong draw shows as large differences in whole regions. A tolerance is a judgement recorded with
-the result; it never replaces the same-GPU checksum match of the bound.
+`--diff OUT.pam` on two files writes the difference image. A wrong draw shows as large differences over whole
+regions: a displaced or missing triangle, or a black `shaders` tile. A tolerance is a judgement recorded with the
+result; it never replaces the same-GPU checksum match of the bound, and never applies to `draws`.
 
 Modes:
 
@@ -60,6 +82,7 @@ A summary on standard output (`SCENE ...` lines, then `PASS` or `FAIL`) and one 
 standard output or in `--out FILE` (written atomically):
 
 - `result` (`measured` or `failed`) and `exit`;
+- `scene_revision`: the scenes' shaders and constants (2; absent in revision 1 results);
 - the settings: `mode`, `width`, `height`, `feature_level`, `frame_latency` and every scene's parameters;
 - `adapter`: vendor, device and description as DXGI reports them;
 - `d3d11`: `app-local` or `system`, from the path of the `d3d11.dll` the process actually loaded;

@@ -30,6 +30,9 @@ constexpr UINT kThrottle = 3;       // frames in flight without a swap chain: DX
 constexpr UINT kTimingSlots = 16;
 constexpr UINT kShaderTarget = 256;
 constexpr double kMaxDeadlineSeconds = 170.0;   // lab trials stay under three minutes
+// The scenes' shaders and constants. 2: images exact (draws) or contracting (fill, shaders) across
+// implementations; results of revision 1 carry no scene_revision.
+constexpr int kSceneRevision = 2;
 
 enum Exit : int { kPass = 0, kApiFailure = 1, kBadArguments = 2, kDeadline = 3, kDeviceRemoved = 4 };
 
@@ -41,6 +44,7 @@ struct Options {
   UINT frames = 300, warmup = 30;
   UINT draws = 2000, layers = 8, shaders = 64;
   UINT vendor = 0, device = 0;
+  bool warp = false;
   double deadlineSeconds = 120.0;
   std::vector<std::string> scenes;
   std::wstring out;
@@ -398,6 +402,14 @@ public:
 
 // CPU-bound: many small draws, each with a constant buffer DISCARD and a texture switch, the pattern that
 // makes the application thread's cost per draw visible.
+//
+// The image is exact on every conforming implementation, so that a checksum compares a CPU rasterizer with a
+// GPU and not only two paths on one GPU: vertices snap to chosen positions and no edge touches a pixel centre
+// (see Init), the texel comes from Load at the pixel's integer position rather than from an interpolated
+// coordinate, and the tint is a 0/1 channel mask, so no product needs rounding and 8-bit texels survive a 16-bit
+// colour export. A wrong constant still shows: it moves a triangle or changes its mask. (Revision 1 sampled with
+// an interpolated uv and tints of (5 + k) / 20: exact .5 products and texel-boundary pixels made its checksum
+// differ between implementations that were all correct.)
 class DrawsScene : public FrameScene {
 public:
   const char *Name() const override { return "draws"; }
@@ -405,20 +417,18 @@ public:
   bool Init(ID3D11Device *dev, const Options &o) override {
     static const char vsSource[] =
         "cbuffer c : register(b0) { float4 place; float4 tint; };\n"
-        "struct O { float4 pos : SV_Position; float4 tint : COLOR; float2 uv : TEXCOORD; };\n"
+        "struct O { float4 pos : SV_Position; float4 tint : COLOR; };\n"
         "O main(uint id : SV_VertexID) {\n"
         "  float2 p = float2(id & 1, id >> 1);\n"
         "  O o;\n"
         "  o.pos = float4(place.xy + p * place.zw, 0, 1);\n"
         "  o.tint = tint;\n"
-        "  o.uv = p;\n"
         "  return o;\n"
         "}\n";
     static const char psSource[] =
         "Texture2D<float4> t : register(t0);\n"
-        "SamplerState s : register(s0);\n"
-        "float4 main(float4 pos : SV_Position, float4 tint : COLOR, float2 uv : TEXCOORD) : SV_Target {\n"
-        "  return t.Sample(s, uv) * tint;\n"
+        "float4 main(float4 pos : SV_Position, float4 tint : COLOR) : SV_Target {\n"
+        "  return t.Load(int3(int2(pos.xy) & 63, 0)) * tint;\n"
         "}\n";
     ComPtr<ID3DBlob> vb, pb;
     if (!Compile(vsSource, "vs_4_0", nullptr, vb) || !Compile(psSource, "ps_4_0", nullptr, pb) ||
@@ -433,20 +443,29 @@ public:
     bd.Usage = D3D11_USAGE_DYNAMIC;
     bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    if (!Ok(dev->CreateBuffer(&bd, nullptr, &m_constants), "draws constants") ||
-        !Sampler(dev, D3D11_FILTER_MIN_MAG_MIP_POINT, D3D11_TEXTURE_ADDRESS_CLAMP, m_sampler) ||
-        !Rasterizer(dev, m_raster))
+    if (!Ok(dev->CreateBuffer(&bd, nullptr, &m_constants), "draws constants") || !Rasterizer(dev, m_raster))
       return false;
     m_data.resize(o.draws);
+    // Placed in pixels, then converted: the corner at (a + 1/4, b + 1/4) and whole-pixel legs whose lengths
+    // differ by an odd number, so no edge ever passes through a pixel centre and the fill rule never decides
+    // (WARP and NVIDIA disagreed on exactly such pixels). The float error of the conversion is far below the
+    // 1/256-pixel snap step, so every vertex snaps to exactly the chosen position.
+    const UINT legX = std::max(2u, (5 * o.width + 64) / 128);
+    UINT legY = std::max(2u, (6 * o.height + 64) / 128);
+    if ((legY - legX) % 2 == 0)
+      legY++;
     for (UINT d = 0; d < o.draws; d++) {
       const uint32_t h = Hash(d + 1);
       Constants &c = m_data[d];
-      c.place[0] = -1.0f + 1.9f * float(h & 1023) / 1023.0f;
-      c.place[1] = -1.0f + 1.9f * float((h >> 10) & 1023) / 1023.0f;
-      c.place[2] = 0.08f;
-      c.place[3] = 0.1f;
+      const double x = double((h & 255) * o.width / 256) + 0.25;           // the right-angle corner, pixels
+      const double y = double(((h >> 8) & 255) * o.height / 256) + 0.25;   // y down
+      c.place[0] = float(x * 2.0 / o.width - 1.0);
+      c.place[1] = float(1.0 - y * 2.0 / o.height);
+      c.place[2] = float(legX * 2.0 / o.width);
+      c.place[3] = float(legY * 2.0 / o.height);
+      const uint32_t mask = 1 + (h >> 16) % 7;   // one to three channels, never black
       for (UINT k = 0; k < 3; k++)
-        c.tint[k] = 0.25f + 0.75f * float((h >> (20 + 4 * k)) & 15) / 15.0f;
+        c.tint[k] = (mask >> k) & 1 ? 1.0f : 0.0f;
       c.tint[3] = 1.0f;
     }
     return true;
@@ -462,11 +481,9 @@ public:
     ctx->IASetInputLayout(nullptr);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ID3D11Buffer *cb = m_constants.Get();
-    ID3D11SamplerState *sampler = m_sampler.Get();
     ctx->VSSetShader(m_vs.Get(), nullptr, 0);
     ctx->VSSetConstantBuffers(0, 1, &cb);
     ctx->PSSetShader(m_ps.Get(), nullptr, 0);
-    ctx->PSSetSamplers(0, 1, &sampler);
     for (size_t d = 0; d < m_data.size(); d++) {
       D3D11_MAPPED_SUBRESOURCE m = {};
       if (FAILED(ctx->Map(cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
@@ -493,13 +510,15 @@ private:
   ComPtr<ID3D11PixelShader> m_ps;
   ComPtr<ID3D11ShaderResourceView> m_views[4];
   ComPtr<ID3D11Buffer> m_constants;
-  ComPtr<ID3D11SamplerState> m_sampler;
   ComPtr<ID3D11RasterizerState> m_raster;
   std::vector<Constants> m_data;
   UINT m_failures = 0;
 };
 
-// GPU-bound: a few blended full-screen layers, each sampling a mipmapped texture four times.
+// GPU-bound: a few blended full-screen layers, each sampling a mipmapped texture four times, plus an ALU loop.
+// The loop contracts (derivative at most 0.5 + 0.07 * 6.28 < 1), so the rounding differences that trilinear
+// filtering and sin legitimately have between implementations shrink instead of growing. (Revision 1 iterated
+// frac(v * 1.37 + sin(v * 6.28 + i)), a chaotic map: one step of filter weight became full-range noise.)
 class FillScene : public FrameScene {
 public:
   const char *Name() const override { return "fill"; }
@@ -514,7 +533,7 @@ public:
         "  float4 a = t.Sample(s, uv) + t.Sample(s, uv * 1.7 + 0.1) + t.Sample(s, uv * 0.6 + 0.3) +\n"
         "             t.Sample(s, uv.yx);\n"
         "  float v = a.x;\n"
-        "  [unroll] for (int i = 0; i < 8; i++) v = frac(v * 1.37 + sin(v * 6.28 + i));\n"
+        "  [unroll] for (int i = 0; i < 8; i++) v = 0.5 * v + 0.25 + 0.07 * sin(v * 6.28 + i);\n"
         "  return float4(a.rgb * 0.25 * v, 0.35);\n"
         "}\n";
     ComPtr<ID3DBlob> pb;
@@ -771,51 +790,49 @@ bool RunFrames(FrameScene &scene, ID3D11Device *dev, ID3D11DeviceContext *ctx, T
 }
 
 // Load cost: the first use of each new pixel shader. Every variant differs in its constants, so each one is
-// translated and gets its own pipeline. The additive blend lets every variant reach the checksum.
+// translated and gets its own pipeline. Each variant draws its own tile of the target, so a variant that did
+// not run leaves a black tile in the checksum, and rounding differences do not pile up the way they did under
+// revision 1's additive blend of all variants. The loop contracts and the output has no frac, whose jumps
+// turned rounding differences into full steps (revision 1).
 bool RunShaders(ID3D11Device *dev, ID3D11DeviceContext *ctx, const Options &o, std::string &json,
                 std::string &summary) {
   static const char psSource[] =
       "float4 main(float4 pos : SV_Position) : SV_Target {\n"
       "  float v = pos.x * K1 + pos.y * K2;\n"
-      "  [unroll] for (int i = 0; i < K3; i++) v = frac(v * 1.37 + sin(v + i));\n"
-      "  return float4(v, frac(v * K1 * 97.0), frac(v * K2 * 89.0), 1) * SCALE;\n"
+      "  [unroll] for (int i = 0; i < K3; i++) v = 0.5 * v + 0.25 + 0.15 * sin(v * 3.0 + i);\n"
+      "  return float4(v, saturate(v * K1 * 97.0), saturate(v * K2 * 89.0), 1);\n"
       "}\n";
   std::vector<ComPtr<ID3DBlob>> blobs(o.shaders);
   for (UINT k = 0; k < o.shaders; k++) {
-    char k1[32], k2[32], k3[16], scale[32];
+    char k1[32], k2[32], k3[16];
     sprintf_s(k1, "%.6f", 0.001 * double(k + 1));
     sprintf_s(k2, "%.6f", 0.0007 * double(k + 3));
     sprintf_s(k3, "%u", 1 + k % 8);
-    sprintf_s(scale, "%.8f", 1.0 / double(o.shaders));
-    const D3D_SHADER_MACRO macros[] = { { "K1", k1 }, { "K2", k2 }, { "K3", k3 }, { "SCALE", scale }, { nullptr, nullptr } };
+    const D3D_SHADER_MACRO macros[] = { { "K1", k1 }, { "K2", k2 }, { "K3", k3 }, { nullptr, nullptr } };
     if (!Compile(psSource, "ps_4_0", macros, blobs[k]))
       return false;
   }
+  UINT tiles = 1;
+  while (tiles * tiles < o.shaders)
+    tiles++;
+  const UINT tile = kShaderTarget / tiles;   // 32 pixels for 64 variants, 8 for the maximum of 1024
   ComPtr<ID3D11VertexShader> vs;
   ComPtr<ID3D11Texture2D> texture, staging;
   ComPtr<ID3D11RenderTargetView> rtv;
   ComPtr<ID3D11RasterizerState> raster;
-  ComPtr<ID3D11BlendState> blend;
   ComPtr<ID3D11Query> idle;
-  D3D11_BLEND_DESC bd = {};
-  D3D11_RENDER_TARGET_BLEND_DESC &rt = bd.RenderTarget[0];
-  rt.BlendEnable = TRUE;
-  rt.SrcBlend = rt.DestBlend = rt.SrcBlendAlpha = rt.DestBlendAlpha = D3D11_BLEND_ONE;
-  rt.BlendOp = rt.BlendOpAlpha = D3D11_BLEND_OP_ADD;
-  rt.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
   const D3D11_QUERY_DESC qd = { D3D11_QUERY_EVENT, 0 };
   if (!FullScreenVs(dev, vs) || !RenderTexture(dev, kShaderTarget, kShaderTarget, texture, rtv) ||
       !Staging(dev, kShaderTarget, kShaderTarget, staging) || !Rasterizer(dev, raster) ||
-      !Ok(dev->CreateBlendState(&bd, &blend), "shaders blend") || !Ok(dev->CreateQuery(&qd, &idle), "idle query"))
+      !Ok(dev->CreateQuery(&qd, &idle), "idle query"))
     return false;
 
   const float clear[4] = { 0, 0, 0, 0 };
   ID3D11RenderTargetView *view = rtv.Get();
   ctx->ClearRenderTargetView(view, clear);
-  Viewport(ctx, kShaderTarget, kShaderTarget);
   ctx->RSSetState(raster.Get());
   ctx->OMSetRenderTargets(1, &view, nullptr);
-  ctx->OMSetBlendState(blend.Get(), nullptr, 0xffffffffu);
+  ctx->OMSetBlendState(nullptr, nullptr, 0xffffffffu);
   ctx->IASetInputLayout(nullptr);
   ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   ctx->VSSetShader(vs.Get(), nullptr, 0);
@@ -835,6 +852,8 @@ bool RunShaders(ID3D11Device *dev, ID3D11DeviceContext *ctx, const Options &o, s
             "variant PS"))
       return false;
     const double t1 = NowMs();
+    const D3D11_VIEWPORT vp = { float(k % tiles * tile), float(k / tiles * tile), float(tile), float(tile), 0, 1 };
+    ctx->RSSetViewports(1, &vp);
     ctx->PSSetShader(shaders[k].Get(), nullptr, 0);
     ctx->Draw(3, 0);
     create[k] = t1 - t0;
@@ -1034,6 +1053,7 @@ const char kUsage[] =
     "  --layers N        full-screen layers per frame in the fill scene (default 8)\n"
     "  --shaders N       pixel shader variants in the shaders scene (default 64)\n"
     "  --adapter V[:D]   hexadecimal vendor and optional device id (default: first hardware adapter)\n"
+    "  --adapter warp    Microsoft's software rasterizer, a CPU reference image on any Windows machine\n"
     "  --deadline S      whole-run limit in seconds, at most 170 (default 120)\n"
     "  --out FILE        write the result JSON there instead of standard output\n"
     "  --dump DIR        also write each scene's checksummed image to DIR\\<scene>.pam (existing directory)\n"
@@ -1100,6 +1120,8 @@ bool ParseArgs(int argc, wchar_t **argv, Options &o) {
     } else if (a == L"--shaders") {
       if (!ParseUint(v, 1, 1024, o.shaders))
         return false;
+    } else if (a == L"--adapter" && !wcscmp(v, L"warp")) {
+      o.warp = true;
     } else if (a == L"--adapter") {
       const wchar_t *colon = wcschr(v, L':');
       const std::wstring vendor = colon ? std::wstring(v, colon) : std::wstring(v);
@@ -1136,7 +1158,7 @@ int Run(const Options &o) {
     return kApiFailure;
   ComPtr<IDXGIAdapter1> adapter;
   DXGI_ADAPTER_DESC1 desc = {};
-  for (UINT n = 0;; n++) {
+  for (UINT n = 0; !o.warp; n++) {
     ComPtr<IDXGIAdapter1> a;
     const HRESULT hr = factory->EnumAdapters1(n, &a);
     if (hr == DXGI_ERROR_NOT_FOUND)
@@ -1154,7 +1176,7 @@ int Run(const Options &o) {
     desc = d;
     break;
   }
-  if (!adapter) {
+  if (!adapter && !o.warp) {
     puts("FAIL no matching hardware adapter");
     return kApiFailure;
   }
@@ -1164,10 +1186,17 @@ int Run(const Options &o) {
   ComPtr<ID3D11Device> dev;
   ComPtr<ID3D11DeviceContext> ctx;
   D3D_FEATURE_LEVEL level = {};
-  if (!Ok(D3D11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, levels, ARRAYSIZE(levels),
-                            D3D11_SDK_VERSION, &dev, &level, &ctx),
+  if (!Ok(D3D11CreateDevice(adapter.Get(), o.warp ? D3D_DRIVER_TYPE_WARP : D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
+                            levels, ARRAYSIZE(levels), D3D11_SDK_VERSION, &dev, &level, &ctx),
           "D3D11CreateDevice"))
     return kApiFailure;
+  if (o.warp) {
+    ComPtr<IDXGIDevice> dxgi;
+    ComPtr<IDXGIAdapter> warpAdapter;
+    if (!Ok(dev.As(&dxgi), "WARP DXGI device") || !Ok(dxgi->GetAdapter(&warpAdapter), "WARP adapter") ||
+        !Ok(warpAdapter.As(&adapter), "WARP adapter1") || !Ok(adapter->GetDesc1(&desc), "WARP adapter description"))
+      return kApiFailure;
+  }
   UINT latency = 0;
   ComPtr<IDXGIDevice1> dxgiDevice1;
   if (SUCCEEDED(dev.As(&dxgiDevice1)))
@@ -1215,7 +1244,8 @@ int Run(const Options &o) {
   wchar_t cwd[MAX_PATH] = {};
   GetCurrentDirectoryW(MAX_PATH, cwd);
   const std::string json =
-      "{\"tool\":\"d3d11bench\",\"format\":1,\"utc\":" + Quote(UtcNow()) + ",\"result\":" +
+      "{\"tool\":\"d3d11bench\",\"format\":1,\"scene_revision\":" + std::to_string(kSceneRevision) +
+      ",\"utc\":" + Quote(UtcNow()) + ",\"result\":" +
       Quote(result == kPass ? "measured" : "failed") + ",\"exit\":" + std::to_string(result) + ",\"mode\":" +
       Quote(o.window ? "window" : "offscreen") + ",\"width\":" + std::to_string(o.width) +
       ",\"height\":" + std::to_string(o.height) + ",\"feature_level\":" + Quote(LevelName(level)) +

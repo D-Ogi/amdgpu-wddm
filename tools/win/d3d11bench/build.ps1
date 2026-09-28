@@ -1,6 +1,6 @@
 # Builds d3d11bench.exe without a WDK or SDK installation: headers and import libraries come from the SDK NuGet
 # packages unpacked under -Kits, the compiler from the installed Visual Studio. Same flow as
-# tools\win\redirblt-probe\build.ps1. The tests of compare.py and imgdiff.py run first; the build ends with --help and a SHA-256 of
+# tools\win\redirblt-probe\build.ps1. The tests of the Python tools run first; the build ends with --help and a SHA-256 of
 # the artifact, the receipt a lab runner pins against.
 #
 #   pwsh tools\win\d3d11bench\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out $env:BC250_ROOT\scratch\build\d3d11bench
@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 $env:PYTHONDONTWRITEBYTECODE = '1'
 & python -m unittest discover -s $here -p 'test_*.py' 2>&1 | ForEach-Object { "$_" } |
     Where-Object { $_ -and $_ -ne 'System.Management.Automation.RemoteException' } | ForEach-Object { Write-Host "  $_" }
-if ($LASTEXITCODE -ne 0) { throw 'compare.py or imgdiff.py tests failed' }
+if ($LASTEXITCODE -ne 0) { throw 'tool tests (compare.py, imgdiff.py, draws_model.py) failed' }
 
 # A reviewed artifact is never lost to a rebuild: the existing binary is kept under retained\ by its full hash.
 $previous = Join-Path $Out 'd3d11bench.exe'
