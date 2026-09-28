@@ -6,9 +6,14 @@
 // builds that filler and refuses the run if these bytes are no longer what it produces.
 // Do not edit umd_caps.c by hand. Regenerate it with that script's -Generate switch.
 #pragma once
+#include "../contract/bc250_adapter_identity.h"
 
 #define UMD_CAPS_BYTES 1472u
 // offsetof(bc250_umd_private, firmware), checked by umd_caps_test.c.
 #define UMD_CAPS_FIRMWARE_OFFSET 1208u
 
 extern const unsigned char umd_caps_blob[UMD_CAPS_BYTES];
+
+#if UMD_CAPS_BYTES != BC250_ADAPTER_IDENTITY_OFFSET
+#error Adapter identity trailer must follow the legacy caps exactly
+#endif

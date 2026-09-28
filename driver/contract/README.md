@@ -417,3 +417,20 @@ to be able to kill the process, and nothing on this PC gets to open a window.
   `driver/kmd/umd_blob.c`. The winsys that fills the blobs is `driver/icd/mesa-wddm2-bc250.patch`.
 - The blob carries no per-process or per-adapter state (GPU VA layout, doorbell assignment,
   paging queue). That is a separate contract and belongs with the M7 memory-manager work.
+
+### Optional adapter identity trailer
+
+Extended UMDRIVERPRIVATE requests of at least 1496 bytes receive the unchanged
+1472-byte v3 caps prefix followed by `bc250_adapter_identity.h` at offset 1472.
+The 24-byte trailer has magic B2AI, version 1, size 24, the two 32-bit LUID words,
+and a zero reserved word. Its LUID comes from the cached
+`DXGK_START_INFO.AdapterLuid` supplied by Windows, not from hardware IDs or an
+application environment variable. Smaller successful queries retain their previous
+prefix-only behavior; no partial trailer is emitted.
+
+Consumers zero-initialize the extended buffer and validate magic, version, size,
+and reserved before using the identity. Older KMDs can return success while leaving
+the trailer untouched; this means unsupported identity transport, not LUID zero.
+The M14 helper preserves its output on callback failure or an invalid trailer.
+This extension requires a rebuilt KMD; it is not present in deployed KMD170.
+Local contract reference: WDK 10.0.26100 `DXGK_START_INFO` in `dispmprt.h`.

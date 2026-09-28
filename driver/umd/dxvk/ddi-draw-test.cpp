@@ -25,6 +25,7 @@
 #include "ddi-lifecycle.h"
 #include "ddi-device-create.h"
 #include "ddi-negotiation.h"
+#include "adapter-identity.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
@@ -44,6 +45,22 @@ HRESULT APIENTRY fail_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return E_
 HRESULT APIENTRY pass_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return S_OK; }
 namespace {
 int createIdentity,createContext; unsigned createCount=0,destroyCount=0;
+unsigned adapterMode=0;
+HRESULT APIENTRY adapter_query(HANDLE h,const D3DDDICB_QUERYADAPTERINFO *q) {
+    if(h!=&createIdentity || q->PrivateDriverDataSize!=BC250_ADAPTER_CAPS_BYTES) std::abort();
+    auto *bytes=static_cast<unsigned char *>(q->pPrivateDriverData);
+    for(unsigned i=0;i<BC250_ADAPTER_CAPS_BYTES;++i) if(bytes[i]) std::abort();
+    if(adapterMode==1) return E_OUTOFMEMORY;
+    if(adapterMode==2) return S_OK; // Old KMD leaves trailer unwritten.
+    bc250_adapter_identity identity{BC250_ADAPTER_IDENTITY_MAGIC,1,24,0x12345678u,0xffffff85u,0};
+    if(adapterMode==3) identity.magic=0;
+    if(adapterMode==4) identity.version=2;
+    if(adapterMode==5) identity.size=20;
+    if(adapterMode==6) identity.reserved=1;
+    std::memcpy(bytes+BC250_ADAPTER_IDENTITY_OFFSET,&identity,sizeof(identity));
+    return S_OK;
+}
+
 bool rejectContext=false,rejectCleanup=false;
 HRESULT APIENTRY creation_context(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
     if (h!=&createIdentity) std::abort(); ++createCount;
@@ -864,6 +881,16 @@ int main() {
     sharedResources[0].runtime_surface=nullptr;
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=E_NOTIMPL || priorityCalls!=1 ||
         resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) std::abort();
+    UINT64 adapterLuid=77;
+    if(query_adapter_identity(nullptr,adapter_query,adapterLuid)!=E_INVALIDARG ||
+        query_adapter_identity(&createIdentity,nullptr,adapterLuid)!=E_INVALIDARG || adapterLuid!=77) std::abort();
+    for(adapterMode=1;adapterMode<=6;++adapterMode) {
+        if(query_adapter_identity(&createIdentity,adapter_query,adapterLuid)!=
+            (adapterMode==1 ? E_OUTOFMEMORY : DXGI_ERROR_UNSUPPORTED) || adapterLuid!=77) std::abort();
+    }
+    adapterMode=0;
+    if(query_adapter_identity(&createIdentity,adapter_query,adapterLuid)!=S_OK ||
+        adapterLuid!=0xffffff8512345678ull) std::abort();
     UINT32 versionCount=0; UINT64 versions[2]={123,456};
     if (supported_ddi_versions(nullptr,versions)!=E_INVALIDARG ||
         supported_ddi_versions(&versionCount,nullptr)!=S_OK || versionCount!=1) std::abort();

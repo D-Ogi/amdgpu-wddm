@@ -2465,6 +2465,18 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         firmware.smc_version=smuVersion;
         RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
         RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
+        // DXGK_START_INFO.AdapterLuid is supplied by dxgkrnl at StartDevice.
+        // Keep old-sized queries byte-compatible; never emit a partial trailer.
+        if (QueryAdapterInfo->OutputDataSize >= BC250_ADAPTER_CAPS_BYTES) {
+            struct bc250_adapter_identity identity = {0};
+            identity.magic = BC250_ADAPTER_IDENTITY_MAGIC;
+            identity.version = BC250_ADAPTER_IDENTITY_VERSION;
+            identity.size = sizeof(identity);
+            identity.luid_low = device->StartInfo.AdapterLuid.LowPart;
+            identity.luid_high = (unsigned int)device->StartInfo.AdapterLuid.HighPart;
+            RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_ADAPTER_IDENTITY_OFFSET,
+                          &identity,sizeof(identity));
+        }
         break;
     }
     default:
