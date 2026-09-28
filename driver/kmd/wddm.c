@@ -132,6 +132,7 @@ typedef struct _BC250_WDDM_KIND {
 } BC250_WDDM_KIND;
 
 #include "gdi_private.h"
+#include "surface_resource_private.h"
 #include "present_range.h"
 C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
 C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
@@ -2434,6 +2435,18 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         firmware.smc_version=smuVersion;
         RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
         RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
+        // DXGK_START_INFO.AdapterLuid is supplied by dxgkrnl at StartDevice.
+        // Keep old-sized queries byte-compatible; never emit a partial trailer.
+        if (QueryAdapterInfo->OutputDataSize >= BC250_ADAPTER_CAPS_BYTES) {
+            struct bc250_adapter_identity identity = {0};
+            identity.magic = BC250_ADAPTER_IDENTITY_MAGIC;
+            identity.version = BC250_ADAPTER_IDENTITY_VERSION;
+            identity.size = sizeof(identity);
+            identity.luid_low = device->StartInfo.AdapterLuid.LowPart;
+            identity.luid_high = (unsigned int)device->StartInfo.AdapterLuid.HighPart;
+            RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_ADAPTER_IDENTITY_OFFSET,
+                          &identity,sizeof(identity));
+        }
         break;
     }
     default:
@@ -2865,22 +2878,10 @@ static void WddmCpuVisibleAllocationFlags(DXGK_ALLOCATIONINFOFLAGS_WDDM2_0* Flag
 static NTSTATUS WddmSurfaceResourcePolicy(const void* Data, UINT Bytes,
                                          BOOLEAN* SharedCpu, BOOLEAN* CachedCpu)
 {
-    const ULONG* words=(const ULONG*)Data;
-    *SharedCpu=FALSE;
-    *CachedCpu=FALSE;
-    if (!Data || Bytes<sizeof(ULONG) || words[0]!=0x52363245ul)
-        return STATUS_SUCCESS; // unrelated private resource ABI / standard allocation
-    if (Bytes<3*sizeof(ULONG) || words[2]>1)
-        return STATUS_INVALID_PARAMETER;
-    if (words[1]==1 && Bytes==3*sizeof(ULONG)) {
-        *SharedCpu=(BOOLEAN)words[2];
-        return STATUS_SUCCESS;
-    }
-    if (words[1]!=2 || Bytes!=4*sizeof(ULONG) || (words[3]&~3ul)!=0)
-        return STATUS_INVALID_PARAMETER;
-    *SharedCpu=(BOOLEAN)words[2];
-    *CachedCpu=(BOOLEAN)(*SharedCpu && (words[3]&2ul)!=0 && (words[3]&1ul)==0);
-    return STATUS_SUCCESS;
+    int shared=0,cached=0;
+    int valid=Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached);
+    *SharedCpu=(BOOLEAN)shared; *CachedCpu=(BOOLEAN)cached;
+    return valid ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
 }
 
 static DXGKDDI_CREATEALLOCATION Bc250WddmCreateAllocation;
