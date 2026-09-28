@@ -1,10 +1,11 @@
-# shader-container: shader containers rebuilt from the D3D12 DDI (prototype, offline)
+# shader-container: shader containers rebuilt from the D3D12 DDI
 
-**Status: prototype, offline only.** Native shader intake stays unsupported: nothing in the D3D12 shell or in
-engine-ddi calls this code, and the engine-ddi shader entry points keep returning `E_NOTIMPL`. This directory
-answers one question before that changes: can the container that the vkd3d-proton engine needs be rebuilt from
-what the D3D12 DDI gives a user-mode driver, so that the engine renders exactly what it renders from the compiler's
-original? For the DXBC and DXIL cases below, on the development PC, it can.
+**Status: engine-ddi's native shader intake.** Every engine-ddi create-shader slot rebuilds its program's container
+with this code, and CreatePipelineState names input elements and stream-output entries with its helpers
+(`../pipelines.cpp`; engine-ddi `INTEGRATION.md`, "Shaders and pipelines"). The container is what the vkd3d-proton
+engine needs, rebuilt from what the D3D12 DDI gives a user-mode driver, so that the engine renders exactly what it
+renders from the compiler's original: for the DXBC and DXIL cases below, on the development PC, it does. The DDI form
+is still a model of the runtime: no runtime payload has been measured.
 
 ## The problem
 
@@ -140,19 +141,19 @@ crashes it; it also matches entries without their stream. Fork branch `amdgpu-wd
 0869138a keeps the NULL as a gap, c5d9d85f matches the stream (with dxil-spirv cf45549d passing it to the
 remapper). Its engine test passes threaded and inline, as 7bfcd7f0 does.
 
-## Calling it
+## How engine-ddi calls it
 
-In `pfnCreateVertexShader` and the other `PFND3D12DDI_CREATE_SHADER_0026` entries, from
+`../pipelines.cpp`, in `pfnCreateVertexShader` and the other `PFND3D12DDI_CREATE_SHADER_0026` entries, from
 `D3D12DDIARG_CREATE_SHADER_0026`: `ProgramDesc{ pShaderCode, pShaderCode[1], { pInputSignature,
 NumInputSignatureEntries }, { pOutputSignature, NumOutputSignatureEntries }, { pPatchConstantSignature,
 NumPatchConstantSignatureEntries } }` (the patch constants from `IOSignatures.Tessellation` for hull and domain
-programs, `IOSignatures.Standard` otherwise), then `BuildContainer(desc, &container)` and the engine's
-`D3D12_SHADER_BYTECODE{ container.bytes.data(), container.bytes.size() }`. The DDI passes no code size: the
+programs, `IOSignatures.Standard` otherwise), then `BuildContainer(desc, &container)`; CreatePipelineState hands the
+engine `D3D12_SHADER_BYTECODE{ container.bytes.data(), container.bytes.size() }`. The DDI passes no code size: the
 capacity is LenTok or SizeInUint32 itself, which the runtime has validated. The entries return `VOID`, so a failed
-`Result` goes to the runtime's error callback as `Result::hresult()`. Keep the `Container` of the last
-pre-rasterization stage for `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` (NULL
-`SemanticName` for `element.gap`) and the vertex input entries for `InputLayoutSemantic(input, InputRegister,
-&semantic)`.
+`Result` is logged and goes to `report_device_error` as `Result::hresult()`. The shader record keeps the
+`Container` and the vertex input entries: `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` of the
+last pre-rasterization stage names stream-output entries (NULL `SemanticName` for `element.gap`, refused while the
+pinned engine crashes on one), and `InputLayoutSemantic(input, InputRegister, &semantic)` names input elements.
 
 ## Files
 

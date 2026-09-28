@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// shader-container: DXBC container reconstruction from the D3D12 DDI shader payload. Prototype, offline only;
-// see shader-container.h for the contract and the provenance, README.md for the deviations from the D3D11 code.
+// shader-container: DXBC container reconstruction from the D3D12 DDI shader payload, engine-ddi's native shader
+// intake; see shader-container.h for the contract and the provenance, README.md for the deviations from the D3D11
+// code.
 
 #include "shader-container.h"
 #include "dxil-metadata.h"

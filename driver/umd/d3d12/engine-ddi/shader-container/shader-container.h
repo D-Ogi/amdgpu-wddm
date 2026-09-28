@@ -2,10 +2,11 @@
 // shader-container: a DXBC container rebuilt from what the D3D12 DDI gives a user-mode driver, so that the
 // vkd3d-proton engine (whose shader front end takes a full container with named signatures) can consume it.
 //
-// PROTOTYPE, OFFLINE ONLY. Native shader intake stays unsupported (engine-ddi README, "Shaders"); nothing in the
-// shell or engine-ddi calls this code. DXBC (shader model 4.x and 5.x) and DXIL (shader model 6.x vertex, hull,
-// domain, geometry, pixel and compute programs); libraries, mesh and amplification programs and state objects are
-// out of scope and refused.
+// engine-ddi's native shader intake: every engine-ddi create-shader slot calls BuildContainer, and
+// CreatePipelineState names input elements and stream-output entries with the two helpers (../pipelines.cpp,
+// engine-ddi.h "Shaders"). DXBC (shader model 4.x and 5.x) and DXIL (shader model 6.x vertex, hull, domain,
+// geometry, pixel and compute programs); libraries, mesh and amplification programs and state objects are out of
+// scope and refused.
 //
 // Input, as read from WDK 10.0.26100 d3d12umddi.h:
 //   - D3D12DDIARG_CREATE_SHADER_0026::pShaderCode, the program, not a container. DXBC: the token stream, VerTok,
