@@ -327,3 +327,13 @@ The exported-DLL host test removes its synthetic configuration on success. Its c
 DLL and synthetic inputs are test artifacts, not a deployment package. A measured
 capability record, exact rebuilt KMD, signed packaging and bounded system-runtime GPU
 validation are still required before promotion.
+
+Initialization diagnostics use OutputDebugStringA: Interface/Version/Flags once
+for each of CalcPrivateDeviceSize and CreateDevice per adapter, plus module-load
+and device-creation failure HRESULTs. Engine errors/warnings use the same channel,
+limited to 64 messages per process and 1024 message characters. The engine callback
+never calls back into the engine/runtime and carries no adapter userdata; retained
+devices can therefore report failures safely after adapter closure. Informational
+and debug engine levels are suppressed. No file logger or resident collector is
+started by this code. Host builds validate the callback ABI; live diagnostic capture
+is still part of the first bounded runtime trial.

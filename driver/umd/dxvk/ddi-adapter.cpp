@@ -2,6 +2,7 @@
 #include "ddi-adapter.h"
 #include "adapter-identity.h"
 #include "ddi-negotiation.h"
+#include "diagnostics.h"
 #include <mutex>
 #include <string>
 #include <memory>
@@ -9,6 +10,7 @@ namespace bc250::umd {
 namespace {
 struct Adapter {
     UINT64 luid=0;
+    std::atomic_uint observations{0};
     AdapterCaps caps{};
     unsigned char engine_sha256[32]{},icd_sha256[32]{};
     std::wstring engine_path,icd_path;
@@ -24,7 +26,10 @@ bool compatible_device(const Adapter &a,UINT interfaceVersion,UINT version,UINT 
 }
 SIZE_T APIENTRY device_size(D3D10DDI_HADAPTER handle,const D3D10DDIARG_CALCPRIVATEDEVICESIZE *args) {
     auto *a=adapter(handle);D3D_FEATURE_LEVEL level{};
-    if (!a || !args || !compatible_device(*a,args->Interface,args->Version,args->Flags,level)) return 0;
+    if (!a || !args) return 0;
+    if(!(a->observations.fetch_or(1,std::memory_order_relaxed)&1))
+        adapter_diagnostic("CalcPrivateDeviceSize",args->Interface,args->Version,args->Flags);
+    if (!compatible_device(*a,args->Interface,args->Version,args->Flags,level)) return 0;
     return sizeof(DdiDeviceHandle);
 }
 HRESULT APIENTRY versions(D3D10DDI_HADAPTER handle,UINT32 *entries,UINT64 *values) {
@@ -37,20 +42,24 @@ HRESULT APIENTRY caps(D3D10DDI_HADAPTER handle,const D3D10_2DDIARG_GETCAPS *args
 }
 HRESULT APIENTRY create(D3D10DDI_HADAPTER handle,D3D10DDIARG_CREATEDEVICE *args) {
     auto *a=adapter(handle);D3D_FEATURE_LEVEL level{};
-    if (!a || !args || !compatible_device(*a,args->Interface,args->Version,args->Flags,level) ||
+    if (!a || !args) return E_INVALIDARG;
+    if(!(a->observations.fetch_or(2,std::memory_order_relaxed)&2))
+        adapter_diagnostic("CreateDevice",args->Interface,args->Version,args->Flags);
+    if (!compatible_device(*a,args->Interface,args->Version,args->Flags,level) ||
         !args->hDrvDevice.pDrvPrivate || !args->p11_1DeviceFuncs || !args->DXGIBaseDDI.pDXGIDDIBaseFunctions3) return E_INVALIDARG;
     static_cast<DdiDeviceHandle *>(args->hDrvDevice.pDrvPrivate)->owner=nullptr;
     try {
         std::lock_guard<std::mutex> lock(a->mutex);
         if (!a->modules.loaded()) {
             HRESULT hr=a->modules.open(a->engine_path.c_str(),a->icd_path.c_str(),a->engine_sha256,a->icd_sha256);
-            if (FAILED(hr)) return hr;
+            if (FAILED(hr)) {failure_diagnostic("module load",hr);return hr;}
         }
         // Allocate retention storage before any callback can create live state.
         a->failed.emplace_back();
-        BC250_DXVK_SHELL_SERVICES services{};services.Size=sizeof(services);
+        BC250_DXVK_SHELL_SERVICES services{};services.Size=sizeof(services);services.Log=engine_diagnostic;
         HRESULT hr=create_render_device(*args,a->luid,a->modules,level,services,a->failed.back(),a->caps);
         if (!a->failed.back().owner) a->failed.pop_back();
+        if(FAILED(hr))failure_diagnostic("CreateDevice",hr);
         return hr;
     } catch (const std::bad_alloc &) {return E_OUTOFMEMORY;}
       catch (...) {return E_FAIL;}
