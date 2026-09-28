@@ -214,3 +214,12 @@ and returns there, so it must be completed before claiming full ClearView suppor
 Video views are not exposed. RelocateDeviceFuncs rebuilds the same dispatch table;
 the shell retains no pointer to runtime-owned table storage. Host tests cover view
 type selection, relocation and missing-engine handling, not GPU clear pixels.
+
+The DXGI1.2 Present entry now invokes engine SubmitForPresent through the runtime
+bridge, then GPU fence ordering, PresentCb and present completion signal. It does
+not CPU-wait or read back the frame. An explicit borrowed allocation/subresource
+identity is required on each presented resource; ordinary engine resources have
+zero identity and are rejected. Runtime allocation import and ownership, rotation
+of that identity, and installation of the complete DXGI table remain pending.
+Host tests cover entry validation/domain unwinding and the bridge's submit/wait/
+present/signal order and failures. This is not an end-to-end GPU Present result.

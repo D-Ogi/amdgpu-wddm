@@ -18,6 +18,7 @@
 #include "ddi-flush.h"
 #include "ddi-query.h"
 #include "ddi-table.h"
+#include "ddi-present.h"
 #include "ddi-clear-view.h"
 #include "ddi-lifecycle.h"
 #include "ddi-device-create.h"
@@ -605,5 +606,10 @@ int main() {
     const unsigned beforeClear=errors;
     table.pfnClearView(h,D3D10DDI_HT_RENDERTARGETVIEW,&clearRtv,regionColor,&clearRect,1);
     if (errors!=beforeClear+1 || owner.runtime().domain.entered()) std::abort();
+    DXGI1_2_DDI_BASE_FUNCTIONS dxgiPresentTable{}; install_present_ddi(dxgiPresentTable);
+    DXGI_DDI_ARG_PRESENT presentArgs{};
+    if (dxgiPresentTable.pfnPresent(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnPresent(&presentArgs)!=E_INVALIDARG) std::abort();
+    presentArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
+    if (dxgiPresentTable.pfnPresent(&presentArgs)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

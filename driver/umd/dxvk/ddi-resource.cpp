@@ -95,7 +95,7 @@ SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { retu
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE) {
     auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
-    if (s) { s->object=nullptr; s->dimension={}; }
+    if (s) *s={};
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }

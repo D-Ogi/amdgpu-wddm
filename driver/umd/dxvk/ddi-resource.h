@@ -3,7 +3,15 @@
 #include "ddi-entry.h"
 #include <vector>
 namespace bc250::umd {
-struct DdiResource { ID3D11Resource *object; D3D10DDIRESOURCE_TYPE dimension; };
+struct DdiResource {
+    ID3D11Resource *object;
+    D3D10DDIRESOURCE_TYPE dimension;
+    // Borrowed identity supplied by the runtime-allocation owner/importer.
+    // Zero for ordinary engine-owned resources. Rotation must move this pair
+    // with image storage. No importer is installed yet.
+    D3DKMT_HANDLE present_allocation=0;
+    UINT present_subresource=0;
+};
 struct ResourceDescription {
     D3D10DDIRESOURCE_TYPE dimension{};
     D3D11_BUFFER_DESC buffer{};
