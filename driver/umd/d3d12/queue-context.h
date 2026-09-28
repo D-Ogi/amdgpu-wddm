@@ -27,11 +27,13 @@ public:
     }
     HRESULT close() noexcept {
         if(!context_) return S_OK;
+        if(!destroy_) return E_UNEXPECTED;
         D3DDDICB_DESTROYCONTEXT args{};args.hContext=context_;
         HRESULT hr=destroy_(runtime_,&args);
         if(SUCCEEDED(hr)) context_=nullptr;
         return hr;
     }
+    void invalidate_runtime() noexcept {runtime_={};create_=nullptr;destroy_=nullptr;}
     HANDLE handle() const noexcept {return context_;}
 };
 }

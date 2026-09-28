@@ -33,24 +33,21 @@ public:
         // Runtime serializes lifetime calls for one queue. Never hold the registry lock across callbacks.
         HRESULT hr=q->context.close();
         AcquireSRWLockExclusive(&lock_);slot.owner=nullptr;
-        if(FAILED(hr)) q->retired=true;
+        if(FAILED(hr)) {q->retired=true;q->context.invalidate_runtime();}
         else {auto link=&head_;while(*link && *link!=q)link=&(*link)->next;if(*link)*link=q->next;}
         ReleaseSRWLockExclusive(&lock_);
         if(SUCCEEDED(hr))delete q;
         return hr;
     }
-    // Called with device lifetime externally serialized, while callback scope is still valid.
-    // Active queues prevent shutdown. Failed contexts stay owned for an explicit retry.
-    HRESULT drain_retired() noexcept {
+    // Only CPU metadata is discarded. The caller must record the unresolved count;
+    // no kernel cleanup is claimed and no retired runtime handle is called again.
+    HRESULT discard_retired_metadata(unsigned& unresolved) noexcept {
+        unresolved=0;
         AcquireSRWLockExclusive(&lock_);
         for(auto q=head_;q;q=q->next) if(!q->retired){ReleaseSRWLockExclusive(&lock_);return E_UNEXPECTED;}
         auto list=head_;head_=nullptr;ReleaseSRWLockExclusive(&lock_);
-        HRESULT result=S_OK;
-        while(list){auto q=list;list=q->next;HRESULT hr=q->context.close();
-            if(SUCCEEDED(hr))delete q;
-            else {result=hr;AcquireSRWLockExclusive(&lock_);q->next=head_;head_=q;ReleaseSRWLockExclusive(&lock_);}
-        }
-        return result;
+        while(list){auto q=list;list=q->next;++unresolved;delete q;}
+        return unresolved?S_FALSE:S_OK;
     }
     bool empty() noexcept {
         AcquireSRWLockShared(&lock_);bool value=!head_;ReleaseSRWLockShared(&lock_);return value;

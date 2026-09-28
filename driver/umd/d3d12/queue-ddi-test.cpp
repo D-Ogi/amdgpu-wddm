@@ -30,7 +30,8 @@ int main(){
     assert(table.pfnCalcPrivateCommandQueueSize(hd,&args)==0);
     failDestroy=false;table.pfnDestroyCommandQueue(hd,b);::operator delete(b.pDrvPrivate);
     assert(!memcmp(&seen,&rb,sizeof(rb)) && !device.queues.empty());
-    assert(device.queues.drain_retired()==S_OK && device.queues.empty());
-    assert(!memcmp(&seen,&ra,sizeof(ra)));
+    unsigned unresolved=0;
+    assert(device.queues.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1 && device.queues.empty());
+    assert(!memcmp(&seen,&rb,sizeof(rb))); // Last callback remains the still-valid B destruction.
     puts("typed queue DDI creation/destruction tests passed");
 }
