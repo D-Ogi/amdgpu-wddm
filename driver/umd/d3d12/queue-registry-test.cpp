@@ -28,5 +28,15 @@ int main(){
     assert(registry.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1 && registry.empty());
     assert(destroys==count); // No callback on a runtime queue whose lifetime has ended.
     assert(registry.destroy(a)==S_OK && registry.discard_retired_metadata(unresolved)==S_OK && !unresolved && destroys==count);
+    assert(registry.create(desc,{},cb,a)==S_OK);
+    assert(registry.create(desc,{},cb,b)==S_OK);
+    failDestroy=true;assert(registry.destroy(a)==E_FAIL);
+    count=destroys;
+    unsigned retired=0,active=0;
+    registry.discard_device_metadata(retired,active);
+    assert(retired==1 && active==1 && registry.empty() && destroys==count);
+    b.owner=nullptr; // Runtime storage is no longer usable after device teardown.
+    registry.discard_device_metadata(retired,active);
+    assert(!retired && !active && destroys==count);
     puts("queue registry failure ownership tests passed");
 }

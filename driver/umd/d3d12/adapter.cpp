@@ -62,6 +62,11 @@ HRESULT APIENTRY fill_table(D3D12DDI_HADAPTER,D3D12DDI_TABLE_TYPE type,void*,SIZ
 void APIENTRY destroy_device(D3D12DDI_HDEVICE h) {
     if(!h.pDrvPrivate) return;
     auto device=static_cast<Device*>(h.pDrvPrivate);auto adapter=device->adapter;
+    unsigned retired=0,active=0;
+    device->queues.discard_device_metadata(retired,active);
+    trace("DestroyDevice-unresolved-retired-contexts",retired);
+    trace("DestroyDevice-unresolved-active-contexts",active);
+    // These are CPU records only. OS context reclamation remains a lab acceptance gate.
     device->~Device();--adapter->devices;trace("DestroyDevice");
 }
 }

@@ -49,6 +49,19 @@ public:
         while(list){auto q=list;list=q->next;++unresolved;delete q;}
         return unresolved?S_FALSE:S_OK;
     }
+    // Terminal device teardown only, after all queue DDI calls have stopped.
+    // Runtime queue storage can already be gone; never dereference slots or call callbacks.
+    void discard_device_metadata(unsigned& retired,unsigned& active) noexcept {
+        retired=active=0;
+        AcquireSRWLockExclusive(&lock_);
+        auto list=head_;head_=nullptr;
+        ReleaseSRWLockExclusive(&lock_);
+        while(list){
+            auto q=list;list=q->next;
+            if(q->retired)++retired;else ++active;
+            q->context.invalidate_runtime();delete q;
+        }
+    }
     bool empty() noexcept {
         AcquireSRWLockShared(&lock_);bool value=!head_;ReleaseSRWLockShared(&lock_);return value;
     }

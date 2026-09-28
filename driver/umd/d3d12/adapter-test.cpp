@@ -9,7 +9,8 @@
 static HRESULT APIENTRY query(HANDLE,const D3DDDICB_QUERYADAPTERINFO*) {return E_NOTIMPL;}
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
-static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {return S_OK;}
+static unsigned destroys;
+static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {++destroys;return E_FAIL;}
 int main(int argc,char** argv) {
     if(argc!=2)return 2;
     HMODULE dll=LoadLibraryA(argv[1]);assert(dll);
@@ -47,7 +48,11 @@ int main(int argc,char** argv) {
     D3D12DDI_HCOMMANDQUEUE queue{};queue.pDrvPrivate=::operator new(qsize);
     assert(core.pfnCreateCommandQueue(device.hDrvDevice,&qargs,queue,{})==S_OK);
     core.pfnDestroyCommandQueue(device.hDrvDevice,queue);::operator delete(queue.pDrvPrivate);
+    assert(destroys==1);
+    assert(!static_cast<native12::Device*>(storage)->queues.empty());
     funcs.pfnDestroyDevice(device.hDrvDevice);::operator delete(storage);
+    assert(destroys==1); // No retry with the expired runtime queue handle.
+
     assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,guard,sizeof(guard),0,{})==E_NOTIMPL);
     assert(guard[1]==0x123456);
     assert(funcs.pfnCloseAdapter(a.hAdapter)==S_OK);
