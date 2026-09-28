@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "old",
+    "pid": 73648,
+    "exit_code": 0,
+    "receipt": "before=-2 after=-2 redirected=0 content=0 invalid_calls=0\n"
+  },
+  {
+    "mode": "new",
+    "pid": 85732,
+    "exit_code": 0,
+    "receipt": "before=-2 after=3 redirected=1 content=1 invalid_calls=0\n"
+  }
+]

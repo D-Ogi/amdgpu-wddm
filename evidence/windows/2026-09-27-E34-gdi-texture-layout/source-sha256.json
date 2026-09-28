@@ -1,0 +1,22 @@
+[
+  {
+    "path": "driver/kmd/dcn_translate.c",
+    "sha256": "1D629EB94972D57513D5BB7305B0E8AB62938A0FA87B910E238021BB53B294A9"
+  },
+  {
+    "path": "driver/kmd/dcn_translate.h",
+    "sha256": "553BF7DD2DB96707FAC301AA03D66D98F8DA315B03A937198BB98CD31479B892"
+  },
+  {
+    "path": "driver/kmd/test/dcn_translate_test.c",
+    "sha256": "43D84E0690D7A316A03C13EBB8B0939F3617EA82B5E895422D35635B2AD7B241"
+  },
+  {
+    "path": "driver/kmd/wddm.c",
+    "sha256": "FF1ED5CFC66DA3A59FD9339E008B9B61C61B66E0B2CEF245EDAF01ABE1E7A107"
+  },
+  {
+    "path": "tools/quality/quick.ps1",
+    "sha256": "65175A10403591BEE5AD327CE5830791400C17483ED9F7B7CF656EADB356259F"
+  }
+]

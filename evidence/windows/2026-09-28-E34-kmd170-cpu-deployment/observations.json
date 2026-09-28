@@ -1,0 +1,100 @@
+{
+  "watch-result.json": {
+    "elapsed": 98.8257185,
+    "restored": false,
+    "logging_restored": true,
+    "candidate_verified": true,
+    "candidate_retained": true,
+    "status": "closed"
+  },
+  "candidate-result.json": {
+    "phase": "Verify",
+    "tree_closed": true,
+    "reason": "verified",
+    "success": true,
+    "health_scope": "candidate-confirmed"
+  },
+  "candidate-verify-health-acceptance.json": {
+    "health": {
+      "flags": 15,
+      "epoch": 5,
+      "completed": 75,
+      "ready_ms": 60163,
+      "generation": 74571373152,
+      "age_ms": 312
+    },
+    "scope": "candidate-confirmed"
+  },
+  "candidate-verify-readiness.json": {
+    "observed": {
+      "dwm": [
+        {
+          "modules": [
+            {
+              "sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+              "name": "bc250d3d.dll"
+            }
+          ],
+          "pid": 2440,
+          "start": "2026-09-28T04:24:40.3004049Z"
+        }
+      ],
+      "umd_registration": [
+        "bc250umd.dll",
+        "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+        "C:\\BC250\\m11\\resource-close\\bc250d3d.dll"
+      ],
+      "parameters": {
+        "UnconfirmedStarts": 1,
+        "EnableCddDwmInterop": 0,
+        "EnableGpuPresentBlit": 0
+      },
+      "icd_registration": [
+        "C:\\BC250\\m10\\wsi-final\\radeon_icd.json"
+      ]
+    },
+    "attempts": 2,
+    "stable_qpc": 74621258426,
+    "health": {
+      "flags": 7,
+      "epoch": 5,
+      "completed": 5,
+      "ready_ms": 3872,
+      "generation": 74571373152,
+      "age_ms": 3536
+    },
+    "first_ready_qpc": 74606725874
+  },
+  "final-selected": {
+    "utc": "2026-09-28T04:51:00.4607251Z",
+    "boot": "2026-09-28T04:44:58.5000000+02:00",
+    "version": "0.7.170.1",
+    "kmd_sha256": "67F0241506200D1053E6136ACDEA54F447BA945E65AA11C7EB250B8ECE195503",
+    "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+    "confirmed": {
+      "launch": true,
+      "age_ms": 1279,
+      "epoch": 5,
+      "generation": 74571373152,
+      "flags": 15,
+      "completed": 157,
+      "ready_ms": 115126,
+      "flag_names": "Full, Ready, Visible, Confirmed"
+    },
+    "temperature": "06:51:06 Tctl 67.1 C (raw 743B0FEF)\r\n",
+    "dwm": [
+      {
+        "modules": [
+          {
+            "sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+            "name": "bc250d3d.dll"
+          }
+        ],
+        "pid": 2440,
+        "start": "2026-09-28T06:24:40.3004049+02:00"
+      }
+    ]
+  },
+  "raw_archive_sha256": "7390855a17726ea0855c34803e524424f88779df395f150f240db6c8642c0ad8"
+}

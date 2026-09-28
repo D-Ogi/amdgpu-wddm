@@ -1,0 +1,87 @@
+From 1dd68127cbc7c9cdc776e4615fbf5e85a76d1f48 Mon Sep 17 00:00:00 2001
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Sun, 27 Sep 2026 07:40:52 +0200
+Subject: [PATCH] wsi: prefer a host-cached memory type for CPU-presented
+ images and log the type
+
+The Win32 CPU present path reads the whole swapchain image back on every
+present. wsi_select_host_memory_type asked for a coherent type only (cached
+only for software devices), which on RADV is the write-combined GTT type;
+reads of that mapping are uncached (E47: 9.2 MB in 19.5 ms). Ask for
+HOST_CACHED with the existing fallback, record the chosen type index on the
+image and write it into the present log header.
+---
+ src/vulkan/wsi/wsi_common.c         | 11 +++++++++--
+ src/vulkan/wsi/wsi_common_private.h |  2 ++
+ src/vulkan/wsi/wsi_common_win32.cpp | 13 +++++++++++++
+ 3 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/src/vulkan/wsi/wsi_common.c b/src/vulkan/wsi/wsi_common.c
+index 1531a285..9e0575ed 100644
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -3099,8 +3099,14 @@ wsi_select_host_memory_type(const struct wsi_device *wsi,
+ {
+    VkMemoryPropertyFlags req_props = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+ 
+-   if (wsi->sw)
+-      req_props |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
++   /* Upstream asks for a cached type only for software devices. On this port
++    * the host type backs the CPU present path of a hardware driver too: the
++    * CPU reads the whole image back on every present, and RADV's first
++    * coherent type is write-combined, whose reads are uncached (E47: 9.2 MB
++    * in 19.5 ms). Prefer cached; wsi_select_memory_type falls back to a
++    * coherent-only type when no cached one exists.
++    */
++   req_props |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+ 
+    return wsi_select_memory_type(wsi, req_props, 0 /* deny_props */, type_bits);
+ }
+@@ -3574,6 +3580,7 @@ wsi_create_cpu_linear_image_mem(const struct wsi_swapchain *chain,
+       __vk_append_struct(&memory_info, &host_ptr_info);
+    }
+ 
++   image->memory_type_index = memory_info.memoryTypeIndex;
+    result = wsi->AllocateMemory(chain->device, &memory_info,
+                                 &chain->alloc, &image->memory);
+    if (result != VK_SUCCESS)
+diff --git a/src/vulkan/wsi/wsi_common_private.h b/src/vulkan/wsi/wsi_common_private.h
+index 44c72c18..e67f1826 100644
+--- a/src/vulkan/wsi/wsi_common_private.h
++++ b/src/vulkan/wsi/wsi_common_private.h
+@@ -161,6 +161,8 @@ enum wsi_swapchain_blit_type {
+ struct wsi_image {
+    VkImage image;
+    VkDeviceMemory memory;
++   /* Memory type chosen for `memory` (CPU linear images), for diagnostics. */
++   uint32_t memory_type_index;
+ 
+    struct {
+       VkBuffer buffer;
+diff --git a/src/vulkan/wsi/wsi_common_win32.cpp b/src/vulkan/wsi/wsi_common_win32.cpp
+index 5393193e..b08bed15 100644
+--- a/src/vulkan/wsi/wsi_common_win32.cpp
++++ b/src/vulkan/wsi/wsi_common_win32.cpp
+@@ -1473,6 +1473,19 @@ wsi_win32_surface_create_swapchain(
+          goto fail;
+    }
+ 
++   /* Witness for the CPU path: which memory type backs the images the CPU
++    * reads on every present (E47: a write-combined type reads at 0.47 GB/s).
++    */
++   if (chain->present_log && !supports_dxgi) {
++      const uint32_t t = chain->images[0].base.memory_type_index;
++      const VkMemoryPropertyFlags props =
++         t < wsi_device->memory_props.memoryTypeCount ?
++         wsi_device->memory_props.memoryTypes[t].propertyFlags : 0;
++      fprintf(chain->present_log, "# chain %p image memory type %u properties 0x%x\n",
++              (void *)chain, t, props);
++      fflush(chain->present_log);
++   }
++
+    *swapchain_out = &chain->base;
+ 
+    return VK_SUCCESS;
+-- 
+2.27.0.windows.1
+

@@ -1,0 +1,57 @@
+{
+  "result": "measured",
+  "exit": 0,
+  "mode": "offscreen",
+  "width": 64,
+  "height": 64,
+  "feature_level": "11_1",
+  "d3d11": "system",
+  "modules": [
+    {
+      "name": "dxgi.dll",
+      "bytes": 1017976
+    },
+    {
+      "name": "d3d11.dll",
+      "bytes": 2476552
+    },
+    {
+      "name": "D3DCOMPILER_47.dll",
+      "bytes": 4050944
+    },
+    {
+      "name": "bc250d3d.dll",
+      "bytes": 107008
+    },
+    {
+      "name": "bc250d3d11.dll",
+      "bytes": 399360
+    },
+    {
+      "name": "bc250dxvk.dll",
+      "bytes": 4386816
+    },
+    {
+      "name": "bc250radv.dll",
+      "bytes": 24263168
+    }
+  ],
+  "icds": [
+    {
+      "name": "bc250radv.dll",
+      "sha256": "C0CE5DCDEB3B8D399FDA0D7548D78C9E93CAAC87C201285549B441DAC59107A0"
+    }
+  ],
+  "scenes": [
+    {
+      "name": "draws",
+      "frames": 2,
+      "warmup": 0,
+      "draws": 1,
+      "checksum": "21f6950fc86132f4",
+      "gpu_disjoint": 0,
+      "gpu_failures": 0,
+      "api_failures": 0
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+ok    export Bc250Vkd3dEngineGetFuncs
+ok    later minor -> E_NOINTERFACE
+ok    other major -> E_NOINTERFACE
+ok    short Size -> E_INVALIDARG
+ok    GetFuncs(1.0) fills the table
+ok    unknown LUID -> E_INVALIDARG, no device
+ok    CreateDevice on the adapter's LUID
+ok    device GetAdapterLuid equals the requested LUID
+ok    a second CreateDevice returns a second device (independent)
+ok    second device final Release returns 0
+ok    CheckFeatureSupport(FEATURE_LEVELS)
+caps: MaxSupportedFeatureLevel b100
+ok    CheckFeatureSupport(D3D12_OPTIONS)
+caps: TiledResourcesTier 0 ResourceBindingTier 3 ROVsSupported 1 ConservativeRasterizationTier 3 TypedUAVLoadAdditionalFormats 1
+caps: HighestShaderModel 68
+caps: RaytracingTier 11
+ok    create UPLOAD, DEFAULT and READBACK buffers (64 KiB)
+ok    GetGPUVirtualAddress nonzero for all three
+ok    create direct queue, allocator, command list and fence
+ok    record copy, barrier, copy
+ok    queue Signal(fence, 1)
+ok    SetEventOnCompletion(1)
+ok    fence reaches 1 within 5 s
+copy: 0 of 16384 words differ
+ok    READBACK equals UPLOAD word for word
+ok    root signature from the DXIL container (UAV table + constant)
+ok    compute PSO from DXIL cs_6_0
+ok    UAV buffer
+ok    shader-visible CBV_SRV_UAV heap (8)
+ok    record dispatch through the table at slot 3
+dispatch: 0 of 16384 words differ
+ok    UAV written by the shader equals the expected pattern
+device final Release: 0
+ok    device final Release returns 0
+PASSED

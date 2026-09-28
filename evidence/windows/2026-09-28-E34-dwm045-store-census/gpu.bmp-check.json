@@ -1,0 +1,22 @@
+{
+    "pass":  true,
+    "pixels":  34600,
+    "mismatches":  0,
+    "regions":  [
+                    {
+                        "region":  "red",
+                        "mismatches":  0,
+                        "pixels":  1400
+                    },
+                    {
+                        "region":  "overlap",
+                        "mismatches":  0,
+                        "pixels":  6600
+                    },
+                    {
+                        "region":  "moving_full_client",
+                        "mismatches":  0,
+                        "pixels":  26600
+                    }
+                ]
+}

@@ -1,6 +1,11 @@
 # ADR 0007: hardware bring-up (M4-M6) runs inside the display-only miniport, driven through gated escapes
 
-Date: 2026-09-21. Status: accepted.
+Date: 2026-09-21. Status: accepted; point 2 narrowed on 2026-09-27. The convention "every gate defaults to 0,
+every install resets it, opening one is an act of an experiment" was right for bring-up. From M12 on the
+driver has validated production paths (full WDDM, MMIO, DCN write and VidPN flip, native PTE copy) that must
+come up by themselves after an install: those gates become configuration with a documented production
+profile and defaults of "on" once a path is validated, the boot-loop guard of ADR 0006 point 3 stays the
+safety net, and the experiment convention keeps applying to paths not yet validated. Points 1, 3 to 6 stand.
 
 ## Context
 

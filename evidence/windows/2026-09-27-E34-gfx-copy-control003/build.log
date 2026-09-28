@@ -1,0 +1,6 @@
+gfx-blt-control.c
+gfx_blt.c
+gfx_copy.c
+blit_plan.c
+Generowanie kodu...
+gfx-blt-control --run|--run-list: five bounded GFX copies; list mode preserves a stripe; hardware required

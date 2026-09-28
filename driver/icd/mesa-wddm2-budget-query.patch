@@ -1,0 +1,55 @@
+--- a/src/amd/vulkan/radv_physical_device.c
++++ b/src/amd/vulkan/radv_physical_device.c
+@@ -3261,7 +3261,12 @@
+ static void
+ radv_query_heap_info(struct radv_physical_device *pdev, struct radeon_winsys_heap_info *heap_info)
+ {
+-   memset(heap_info, 0, sizeof(*heap_info));
++   struct radeon_winsys *ws = pdev->ws;
++   radv_wddm2_query_allocated(ws, &heap_info->allocated_vram,
++                             &heap_info->allocated_vram_vis, &heap_info->allocated_gtt);
++   heap_info->vram_usage = ws->query_value(ws, RADEON_VRAM_USAGE);
++   heap_info->vram_vis_usage = ws->query_value(ws, RADEON_VRAM_VIS_USAGE);
++   heap_info->gtt_usage = ws->query_value(ws, RADEON_GTT_USAGE);
+ }
+ #else
+ static void
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c
+@@ -625,6 +625,26 @@
+    }
+ }
+ 
++void
++radv_wddm2_query_allocated(struct radeon_winsys *base, uint64_t *vram,
++                           uint64_t *vram_vis, uint64_t *gtt)
++{
++   struct radv_wddm2_winsys *source = radv_wddm2_winsys(base);
++   *vram = *vram_vis = *gtt = 0;
++   simple_mtx_lock(&winsys_creation_mutex);
++   if (winsyses) {
++      hash_table_foreach(winsyses, entry) {
++         struct radv_wddm2_winsys *ws = entry->data;
++         if (memcmp(&ws->adapter_luid, &source->adapter_luid, sizeof(LUID)))
++            continue;
++         *vram += p_atomic_read(&ws->allocated_vram);
++         *vram_vis += p_atomic_read(&ws->allocated_vram_vis);
++         *gtt += p_atomic_read(&ws->allocated_gtt);
++      }
++   }
++   simple_mtx_unlock(&winsys_creation_mutex);
++}
++
+ static void
+ radv_wddm2_winsys_destroy(struct radeon_winsys *_ws)
+ {
+--- a/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h
++++ b/src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys_public.h
+@@ -38,4 +38,7 @@
+ VkResult radv_wddm2_winsys_create(const struct vk_dx_adapter_info *adapter_info,
+                                   const BITSET_WORD *debug_flags, const struct bc250_host *host, struct radeon_winsys **winsys);
+ 
++void radv_wddm2_query_allocated(struct radeon_winsys *ws, uint64_t *vram,
++                                uint64_t *vram_vis, uint64_t *gtt);
++
+ #endif /* RADV_WDDM2_WINSYS_PUBLIC_H */

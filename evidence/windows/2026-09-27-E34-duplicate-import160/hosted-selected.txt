@@ -1,0 +1,118 @@
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000016F5A8EAA08 queue=40002100 status=00000000
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000016F5CB37598 queue=80001c40 status=00000000
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=00000268F04C9108 queue=40002100 status=00000000
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+BC250 surface hosted=1 allocation=400027c0 pitch=256 bytes=8192
+BC250 surface hosted=1 allocation=400043c0 pitch=256 bytes=8192
+BC250 surface hosted=1 allocation=40004500 pitch=256 bytes=8192
+BC250 hosted op=4 count=1 hr=00000000
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+BC250 hosted op=4 count=2 hr=00000000
+BC250 hosted op=4 count=1 hr=00000000
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+BC250 hosted op=4 count=2 hr=00000000
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+BC250 hosted op=4 count=1 hr=00000000
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+BC250 hosted op=4 count=2 hr=00000000
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+BC250 surface hosted=1 allocation=40004ac0 pitch=256 bytes=8192
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+BC250 surface hosted=1 allocation=40002c40 pitch=512 bytes=20480
+BC250 surface hosted=1 allocation=40004dc0 pitch=512 bytes=20480
+BC250 surface hosted=1 allocation=40004e40 pitch=512 bytes=20480
+BC250 surface hosted=1 allocation=40004f80 pitch=512 bytes=20480
+BC250 surface hosted=1 allocation=40005000 pitch=512 bytes=20480
+BC250 surface hosted=1 allocation=40002cc0 pitch=512 bytes=20480
+BC250 hosted op=28 count=1 hr=00000000
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=0000016F5CB37598 queue=80001c40 status=00000000
+BC250 hosted op=28 count=1 hr=00000000
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=0000016F5A8EAA08 queue=40002100 status=00000000
+BC250 hosted op=28 count=1 hr=00000000
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=00000268F04C9108 queue=40002100 status=00000000

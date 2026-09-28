@@ -1,0 +1,58 @@
+[
+    {
+        "case":  "ok",
+        "receipt":  {
+                        "console_session":  1,
+                        "child_pid":  3516,
+                        "root_exit_observed":  true,
+                        "child_exit":  0,
+                        "timed_out":  false,
+                        "termination_requested":  true,
+                        "job_empty":  true
+                    },
+        "seconds":  1.6170094,
+        "exit":  0
+    },
+    {
+        "case":  "fail",
+        "receipt":  {
+                        "console_session":  1,
+                        "child_pid":  5368,
+                        "root_exit_observed":  true,
+                        "child_exit":  41,
+                        "timed_out":  false,
+                        "termination_requested":  true,
+                        "job_empty":  true
+                    },
+        "seconds":  0.7391554,
+        "exit":  126
+    },
+    {
+        "case":  "orphan",
+        "receipt":  {
+                        "console_session":  1,
+                        "child_pid":  7044,
+                        "root_exit_observed":  true,
+                        "child_exit":  0,
+                        "timed_out":  false,
+                        "termination_requested":  true,
+                        "job_empty":  true
+                    },
+        "seconds":  1.0786525999999999,
+        "exit":  0
+    },
+    {
+        "case":  "tree",
+        "receipt":  {
+                        "console_session":  1,
+                        "child_pid":  3068,
+                        "root_exit_observed":  false,
+                        "child_exit":  259,
+                        "timed_out":  true,
+                        "termination_requested":  true,
+                        "job_empty":  true
+                    },
+        "seconds":  3.0175389999999997,
+        "exit":  124
+    }
+]

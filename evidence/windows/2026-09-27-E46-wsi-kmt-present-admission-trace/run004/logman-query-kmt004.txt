@@ -1,0 +1,31 @@
+
+Name:                 BC250WSIKmt004
+Status:               Running
+Root Path:            C:\BC250\m12\wsi-kmt-004
+Segment:              Off
+Schedules:            On
+Segment Max Size:     1024 MB
+
+Name:                 BC250WSIKmt004\BC250WSIKmt004
+Type:                 Trace
+Output Location:      C:\BC250\m12\wsi-kmt-004\dxgkrnl.etl
+Append:               Off
+Circular:             Off
+Overwrite:            Off
+Buffer Size:          1024
+Buffers Lost:         0
+Buffers Written:      338
+Buffer Flush Timer:   0
+Clock Type:           Performance
+File Mode:            File
+
+Provider:
+Name:                 Microsoft-Windows-DxgKrnl
+Provider Guid:        {802EC45A-1E99-4B83-9920-87C98277BA9D}
+Level:                5
+KeywordsAll:          0x0
+KeywordsAny:          0xffffffffffffffff (Base,Profiler,References,ForceVsync,Patch,Cdd,Resource,Memory,Dxgkrnl_StatusChangeNotify,DxgKrnl_Power,DriverEvents,LongHaul,StablePower,DefaultOverride,HistoryBuffer,GPUScheduler,DxgKrnl,DxgKrnl_WDI,Miracast,IndirectSwapChain,GPUVA,VidMmWorkerThread,Diagnostics,VirtualGpu,AdapterLock,MixedReality,HardwareSchedulingLog,Present,DxgKrnl_Int,PerfData,AzureTriageLogging,win:ResponseTime,Microsoft-Windows-DxgKrnl/Diagnostic,Microsoft-Windows-DxgKrnl/Performance,Microsoft-Windows-DxgKrnl/Power,Microsoft-Windows-DxgKrnl/Contention,Microsoft-Windows-DxgKrnl-Admin,Microsoft-Windows-DxgKrnl-Operational,0x80000000,0x100000000,0x200000000,0x400000000,0x800000000,0x1000000000,0x2000000000,0x4000000000,0x8000000000,0x10000000000,0x20000000000,0x40000000000,0x80000000000,0x100000000000,0x200000000000,0x400000000000,0x800000000000,0x2000000000000,0x4000000000000,0x8000000000000,0x10000000000000,0x20000000000000,0x40000000000000,0x80000000000000,0x100000000000000,0x200000000000000)
+Properties:           64
+Filter Type:          0
+
+The command completed successfully.

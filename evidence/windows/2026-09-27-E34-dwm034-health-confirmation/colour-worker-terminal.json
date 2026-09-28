@@ -1,0 +1,11 @@
+{
+    "utc":  "2026-09-27T14:01:29.0824004Z",
+    "pid":  5660,
+    "failure":  {
+                    "position":  "At C:\\BC250\\m13\\dwm-hosted034\\wsi-control.ps1:21 char:76\r\n+ ...  -notmatch \u0027version=0x000700A4 flags=15\u0027){throw \u0027KMD164 health gate\u0027}\r\n+                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~",
+                    "message":  "KMD164 health gate",
+                    "error_id":  "KMD164 health gate",
+                    "stack":  "at Snapshot, C:\\BC250\\m13\\dwm-hosted034\\wsi-control.ps1: line 21\r\nat \u003cScriptBlock\u003e, C:\\BC250\\m13\\dwm-hosted034\\wsi-control.ps1: line 39\r\nat \u003cScriptBlock\u003e, C:\\BC250\\m13\\dwm-hosted034\\invoke-recorded-worker.ps1: line 21"
+                },
+    "exit_code":  1
+}

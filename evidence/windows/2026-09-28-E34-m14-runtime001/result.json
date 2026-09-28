@@ -1,0 +1,16 @@
+{
+    "status":  "failed-restored",
+    "cpu_verified":  false,
+    "gpu_verified":  false,
+    "registration_restored":  true,
+    "postflight_verified":  true,
+    "tree_closed":  true,
+    "failed_phase":  "Install",
+    "phases":  [
+                   "Capture",
+                   "Install",
+                   "Restore",
+                   "Verify"
+               ],
+    "elapsed":  20.5061618
+}

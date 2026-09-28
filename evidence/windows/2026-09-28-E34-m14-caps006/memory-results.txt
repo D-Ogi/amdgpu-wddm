@@ -1,0 +1,7 @@
+icd: C:\BC250\m14\caps006\amdgpu_wddm_radv.dll sha256 C38885C50A0A1A77B29281F0BB3D78196BF228765BD22AB93FDBB35ECBB85BCC
+      heap usage MiB: before 80, 256 x 1 MiB buffers 588, released 588, trimmed 17 (1348.8 ms)
+      3: amdgpu_wddm_dxvk: TrimMemory: device memory 336 MiB -> 16 MiB
+PASS  TrimMemory setup: 256 MiB of default buffers show in the driver's heap usage
+PASS  TrimMemory gives at least 3/4 of the released buffers' memory back to the driver
+PASS  after TrimMemory: no deferred error, device not removed
+PASSED: 0 failure(s)

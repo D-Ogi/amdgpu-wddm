@@ -1,0 +1,3 @@
+Unrecognized command line option '--deqp-watchdog-total-time-limit=35'
+Unrecognized command line option '--deqp-watchdog-interval-time-limit=20'
+FATAL ERROR: Failed to parse command line

@@ -1,0 +1,9 @@
+{
+    "active":  "oem133.inf",
+    "candidates":  [
+                       {
+                           "sha256":  "41853146A352A0A079E8A67EC81137E021D344E0E29B19D203F7D16E0A85DE7D",
+                           "name":  "oem134.inf"
+                       }
+                   ]
+}

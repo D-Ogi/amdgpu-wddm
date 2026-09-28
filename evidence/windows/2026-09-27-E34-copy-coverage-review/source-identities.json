@@ -1,0 +1,12 @@
+{
+  "commit": "a0ad8af5ea46b90400d947d82d056f3bd58278c5",
+  "sha256": {
+    "src/gallium/frontends/d3d10umd/DxgiFns.cpp": "b20de5ec3aaffe307557fcfb16744d99fb243d81d92a6e7c34b3f3c4952aa0ed",
+    "src/gallium/frontends/d3d10umd/Device.cpp": "33da3d37c4e8cb9ab2b9a39b0ea234b12c6bce7ab50a51a1bd6b73103a6416bb",
+    "src/gallium/drivers/zink/zink_resource.c": "cfca87813c7fbd04dd27384873eb42929c19b415dfa2e1cd453aaedb0cbbf4d5",
+    "src/gallium/drivers/zink/zink_context.c": "d426b8b2f0aac3c2cac7672093915b29d40009c5519f56d5c528239a00353e9b",
+    "src/gallium/drivers/zink/zink_descriptors.c": "80f54a81bc3c2f7afba768775308c42d00e7a43aaca5375de667a7aafa61e4f4",
+    "src/gallium/auxiliary/util/u_upload_mgr.c": "ff713a582d712eeb621675ac85a367d4e8ff6852ca332325a67a0f247ed5061d",
+    "src/gallium/include/pipe/p_defines.h": "31bca2a8be60297a7f56422b760d95d17ec0230dd555d968d72a010c8c1c5765"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "source": "6c93d74e4876b66e04a39973a2c1e1ebdb9ec418",
+  "parent": "85667a7031e5744439ff5200362cc29afad2de4c",
+  "import": "ba3f4c2",
+  "patch_sha256": "1f08fbf2c386737d2ecaed1101a50c03a997fd7bd9244a10463eb069e734c7ef",
+  "observation_struct_function_and_caps_match_main": true,
+  "full_file_match_not_expected": "isolated160 deliberately excludes unrelated main fence ledger changes; initial equality assertion stopped before build"
+}

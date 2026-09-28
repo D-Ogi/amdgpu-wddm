@@ -29,7 +29,9 @@ static void ExAcquireFastMutex(int* lock){CHECK(!*lock);*lock=1;locks++;}
 static void ExReleaseFastMutex(int* lock){CHECK(*lock==1);*lock=0;}
 typedef struct {int Loaded,PowerSuspended;struct bc250_umd_firmware Firmware;struct {NTSTATUS Fault;} Sequence;} BC250_PSP;
 typedef struct {PUCHAR Data[BC250_FILE_COUNT];ULONG Size[BC250_FILE_COUNT];} BC250_PSP_FILES;
-typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;} BC250_DEVICE;
+typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
+    struct {struct {unsigned int LowPart; int HighPart;} AdapterLuid;} StartInfo;
+} BC250_DEVICE;
 typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
 static NTSTATUS SmuReadFirmwareVersion(int* smu,ULONG* version)
 {(void)smu;smuReads++;*version=smuReady?testSmuVersion:0;return smuReady?STATUS_SUCCESS:STATUS_DEVICE_NOT_READY;}
@@ -90,6 +92,41 @@ int main(int argc,char**argv)
     CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS);
     fw.smc_version=testSmuVersion;memcpy(expected+UMD_CAPS_FIRMWARE_OFFSET,&fw,sizeof(fw));
     CHECK(!memcmp(out,expected,sizeof(out)) && smuReads==2);
+    // The actual QueryAdapterInfo branch preserves the old prefix, writes no
+    // partial identity, and does not overwrite caller-owned bytes after it.
+    {
+        unsigned char extended[BC250_ADAPTER_CAPS_BYTES+8];
+        struct bc250_adapter_identity identity;
+        QUERY extendedQuery={extended,sizeof(extended)};
+        d.StartInfo.AdapterLuid.LowPart=0x12345678u;
+        d.StartInfo.AdapterLuid.HighPart=-123;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));
+        memcpy(&identity,extended+BC250_ADAPTER_IDENTITY_OFFSET,sizeof(identity));
+        CHECK(identity.magic==BC250_ADAPTER_IDENTITY_MAGIC && identity.version==1 &&
+              identity.size==sizeof(identity) && identity.reserved==0);
+        CHECK(identity.luid_low==0x12345678u && identity.luid_high==(unsigned int)-123);
+        for(i=BC250_ADAPTER_CAPS_BYTES;i<sizeof(extended);i++) CHECK(extended[i]==0xA5);
+        for(unsigned int length=UMD_CAPS_BYTES;length<BC250_ADAPTER_CAPS_BYTES;length++) {
+            memset(extended,0xA5,sizeof(extended));extendedQuery.OutputDataSize=length;
+            CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+            CHECK(!memcmp(extended,expected,UMD_CAPS_BYTES));
+            for(i=UMD_CAPS_BYTES;i<sizeof(extended);i++) CHECK(extended[i]==0xA5);
+        }
+        // Exact-size request and a new StartDevice identity must not return
+        // a cached identity from the preceding adapter session.
+        extendedQuery.OutputDataSize=BC250_ADAPTER_CAPS_BYTES;
+        d.StartInfo.AdapterLuid.LowPart=99;d.StartInfo.AdapterLuid.HighPart=12;
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&identity,extended+BC250_ADAPTER_IDENTITY_OFFSET,sizeof(identity));
+        CHECK(identity.magic==BC250_ADAPTER_IDENTITY_MAGIC && identity.luid_low==99 && identity.luid_high==12);
+        smuReady=0;memset(extended,0xA5,sizeof(extended));
+        extendedQuery.OutputDataSize=sizeof(extended);
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_DEVICE_NOT_READY);
+        for(i=0;i<sizeof(extended);i++) CHECK(extended[i]==0xA5);
+        smuReady=1;
+    }
     // A failed/absent owner never substitutes the historic firmware value.
     smuReady=0;memset(out,0xA5,sizeof(out));memcpy(expected,out,sizeof(out));
     CHECK(QueryCaps(&d,&q)==STATUS_DEVICE_NOT_READY && !memcmp(out,expected,sizeof(out)));

@@ -1,0 +1,11 @@
+{
+    "exit_code":  0,
+    "dwm":  [
+                11676
+            ],
+    "boot":  "2026-09-26T18:44:31.5000000+02:00",
+    "health":  "health abi=1 version=0x000700A2 flags=15 generation=640155912730 epoch=5 completed=387 age_ms=890 ready_ms=282059\r\n",
+    "clock":  "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66625 ready=1\r\n",
+    "task_removed":  true,
+    "utc":  "2026-09-27T10:36:07.3224459Z"
+}

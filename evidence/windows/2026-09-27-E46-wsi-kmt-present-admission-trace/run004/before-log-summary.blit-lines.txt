@@ -1,0 +1,47 @@
+2270149  41561.181 wddm summary: presents 188758, flips 188106 of 188161 address calls (188035 arrived above DISPATCH_LEVEL)
+2270150  41561.181 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270151  41561.181 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270152  41561.181 wddm summary: widest blit 1200 rows
+2270153  41561.181 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270210  41566.237 wddm summary: Present                        188764  first at 392
+2270250  41566.237 wddm summary: presents 188764, flips 188112 of 188167 address calls (188041 arrived above DISPATCH_LEVEL)
+2270251  41566.237 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270252  41566.237 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270253  41566.237 wddm summary: widest blit 1200 rows
+2270254  41566.237 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270311  41571.320 wddm summary: Present                        188771  first at 392
+2270351  41571.320 wddm summary: presents 188771, flips 188119 of 188174 address calls (188048 arrived above DISPATCH_LEVEL)
+2270352  41571.320 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270353  41571.320 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270354  41571.320 wddm summary: widest blit 1200 rows
+2270355  41571.320 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270412  41576.371 wddm summary: Present                        188778  first at 392
+2270452  41576.371 wddm summary: presents 188778, flips 188126 of 188181 address calls (188055 arrived above DISPATCH_LEVEL)
+2270453  41576.371 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270454  41576.371 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270455  41576.371 wddm summary: widest blit 1200 rows
+2270456  41576.371 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270513  41581.421 wddm summary: Present                        188784  first at 392
+2270553  41581.421 wddm summary: presents 188784, flips 188132 of 188187 address calls (188061 arrived above DISPATCH_LEVEL)
+2270554  41581.421 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270555  41581.421 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270556  41581.421 wddm summary: widest blit 1200 rows
+2270557  41581.421 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270614  41581.561 wddm summary: Present                        188784  first at 392
+2270654  41581.561 wddm summary: presents 188784, flips 188132 of 188187 address calls (188061 arrived above DISPATCH_LEVEL)
+2270655  41581.561 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270656  41581.561 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270657  41581.561 wddm summary: widest blit 1200 rows
+2270658  41581.561 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270715  41586.477 wddm summary: Present                        188791  first at 392
+2270755  41586.477 wddm summary: presents 188791, flips 188139 of 188194 address calls (188068 arrived above DISPATCH_LEVEL)
+2270756  41586.477 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270757  41586.477 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270758  41586.477 wddm summary: widest blit 1200 rows
+2270759  41586.477 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000
+2270816  41591.025 wddm summary: Present                        188812  first at 392
+2270856  41591.025 wddm summary: presents 188812, flips 188160 of 188215 address calls (188089 arrived above DISPATCH_LEVEL)
+2270857  41591.025 wddm summary: blit gate open, 721 blits, 0 skips, 721 sources translated contiguous
+2270858  41591.025 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback), 525 scanout remaps (0 failed), last blit 27 
+2270859  41591.025 wddm summary: widest blit 1200 rows
+2270860  41591.025 wddm summary: last blit reading 3, 1920x1200 pitch 7680, 1 rectangles, source physical 0x278D9A000

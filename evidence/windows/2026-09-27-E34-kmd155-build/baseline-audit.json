@@ -1,0 +1,47 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "parent": "d7846ec",
+  "imports": [
+    "c1f326d",
+    "9befe71",
+    "6e7830b",
+    "757fae6",
+    "6c3af0f"
+  ],
+  "compared_existing_driver_and_third_party_files": 303,
+  "changed_existing": [
+    "driver/kmd/bc250kmd.inf",
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/dcn_translate.c",
+    "driver/kmd/dcn_translate.h",
+    "driver/kmd/test/dcn_translate_test.c",
+    "driver/kmd/wddm.c"
+  ],
+  "method": "git blob bytes versus candidate, CRLF normalized only",
+  "working_files": {
+    "driver/kmd/bc250kmd.inf": "0f763b482f570e0053419deec3818d3fccd13a28dc0abce16baa0d8c4f125586",
+    "driver/kmd/bc250kmd_escape.h": "5273503fb8d475bef45ee3ee2e53b85f86931ac5a2a79bbeaa59b60981879679",
+    "driver/kmd/dcn_translate.c": "af6c917833ed1151de1bdc053d4fa34f76a26996bdc47871e085c2467448f8f7",
+    "driver/kmd/dcn_translate.h": "cbb68dc664893fbc2b4bc8671635d5f12a1c865bd02ca74bcc8fd5064a03eca4",
+    "driver/kmd/gfx-copy-provenance.md": "0c9e919d24db4f4cd775b2a76b402c338212d5baa64a24c2185ffa38a5a67c71",
+    "driver/kmd/gfx_blt.c": "8c669d0e16caa274a414a4853e2116d78fb4df5e9d22f8b14fda4972f5095891",
+    "driver/kmd/gfx_blt.h": "e9ea8d3e4244734480c350f67d60b31e67645938d425727a15b1eacce00d91b1",
+    "driver/kmd/gfx_copy.c": "884a52dd44920d5b004a88c0786166b2c0c399021b4817e6b0554a7b0956de27",
+    "driver/kmd/gfx_copy.h": "b02186ae29180a2bb644a27840cfb7711bb021ba64d9a348c40dc61c7c83f65f",
+    "driver/kmd/test/dcn_translate_test.c": "73b4aefc1188e3ae033ff3c6bd7fc9fffa9d401650bc626a33ce0e33b9f4b7e8",
+    "driver/kmd/test/gfx_blt_test.c": "06577993e6f011cf2fe7a96d4dfa17408933ea8f64e61ee3239e6b9f45b0cf51",
+    "driver/kmd/test/gfx_copy_test.c": "c51470343f8e9389e7088a4bde2a7e7a8f2596736a0912df6db7a1904b3edd8b",
+    "driver/kmd/wddm.c": "07762bc272f25eb0e5a639845b119fb8e0cf779a35cf4eb3ce1b11418f9cb67e",
+    "experiments/E34-native-d3d-zink/hosted-runtime/engine-present-producer.md": "2374221b8f3dcc2546b39413ae56da1d3cb3a5c9f09792e08792ce17a2968297",
+    "tools/quality/quick.ps1": "65175a10403591bee5ad327ce5830791400c17483ed9f7b7cf656eadb356259f",
+    "driver/kmd/gdi_private.h": "f457e2738c35d155b65541a8e1ca7852a9542716b4b0fc7ddc4fcca31aa296f7",
+    "experiments/E34-native-d3d-zink/hosted-runtime/present-admission-and-gdi-layout.md": "c0471a1826881fe3f0696fca3ed0a15aa4eea1cef4f04a27f154bad8208dcde8"
+  },
+  "patches": {
+    "6c3af0f.patch": "140d5645319a3d2a3a7ebabfb981af71a78c0d422b7296f234d895e802df17e6",
+    "6e7830b.patch": "feb59a1673ec814498be038e498f3a7a7705508ed850924ce5608baeb3e246e0",
+    "757fae6.patch": "173f7247143089ec09e434f01e27f4c3f021b825e6e4b0fec4e90074bcd6a69f",
+    "9befe71.patch": "27c3fbef320f65323b9c0a6bb2520113a6ac61b454e4bbae1c129752d4116da3",
+    "c1f326d.patch": "a12f32c092e5adc85b0305b5b8509e34cc8a991d69d491957a5399e63bf4b944"
+  }
+}

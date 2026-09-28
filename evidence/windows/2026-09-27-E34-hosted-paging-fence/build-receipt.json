@@ -1,0 +1,15 @@
+{
+  "base_commit": "05e6c9622e135ac2aeaf56ec70222642627e2162",
+  "patch_commit": "20562c4d01c8c12307398459d63c6ee6fa714fc1",
+  "baseline_dll": "3508416F7FB6367BC7345970C22603E03DA963A01F4B5C0A1DF1AAAC2D90CF71",
+  "dll": "C0CE5DCDEB3B8D399FDA0D7548D78C9E93CAAC87C201285549B441DAC59107A0",
+  "object": "4EA9B4C6F5FEC32B3BE3889D442A8D9C2C9C22583F319148E3F63E018BE9131C",
+  "source": "1C316FDA8D5480D1B260C5603BEDB6105DFA91F6573A3EA9E5AF49F494B5708B",
+  "changed_from_preserved_source": [
+    "src/amd/vulkan/winsys/wddm2/radv_wddm2_bo.c"
+  ],
+  "previous_modified_entries": 28,
+  "cases": 13,
+  "failures": 0,
+  "lab_deployed": false
+}

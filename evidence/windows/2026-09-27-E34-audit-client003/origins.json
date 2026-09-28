@@ -1,0 +1,393 @@
+{
+  "lifetime": {
+    "events": 89,
+    "requests": 24,
+    "successful": 24,
+    "failed": 0,
+    "ended": 24,
+    "live_map_ids": [],
+    "object_replacements": 0,
+    "staging_successes": 16,
+    "sequenced": true,
+    "checkpoint_count": 17,
+    "last_checkpoint": {
+      "event": "checkpoint",
+      "seq": 81,
+      "time_ns": 2742922992600,
+      "marker": 0,
+      "requests": 24,
+      "successful": 24,
+      "failed": 0,
+      "ended": 16,
+      "pending": 0,
+      "live": 8
+    },
+    "interval_delta": null,
+    "scope": "sequenced event and checkpoint consistency; CPU stores and uninstrumented paths are not measured"
+  },
+  "scopes": [
+    {
+      "begin": {
+        "event": "begin",
+        "id": 1,
+        "tid": 7904,
+        "time_ns": 2742497766800,
+        "origin": "resource_map",
+        "ctx": 2381701242784,
+        "resource": 2381666672960,
+        "level": 0,
+        "usage": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        43
+      ],
+      "copied": false,
+      "end_time_ns": 2742502257000
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 2,
+        "tid": 7904,
+        "time_ns": 2742511165900,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        46
+      ],
+      "copied": true,
+      "copy_time_ns": 2742515065700,
+      "end_time_ns": 2742520786500
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 3,
+        "tid": 7904,
+        "time_ns": 2742554045000,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        49
+      ],
+      "copied": true,
+      "copy_time_ns": 2742554258400,
+      "end_time_ns": 2742554418200
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 4,
+        "tid": 7904,
+        "time_ns": 2742586088100,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        52
+      ],
+      "copied": true,
+      "copy_time_ns": 2742586301700,
+      "end_time_ns": 2742586463600
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 5,
+        "tid": 7904,
+        "time_ns": 2742618118700,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        55
+      ],
+      "copied": true,
+      "copy_time_ns": 2742618496700,
+      "end_time_ns": 2742618631200
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 6,
+        "tid": 7904,
+        "time_ns": 2742650094200,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        58
+      ],
+      "copied": true,
+      "copy_time_ns": 2742650308600,
+      "end_time_ns": 2742650470100
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 7,
+        "tid": 7904,
+        "time_ns": 2742682175500,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        61
+      ],
+      "copied": true,
+      "copy_time_ns": 2742682428700,
+      "end_time_ns": 2742682577600
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 8,
+        "tid": 7904,
+        "time_ns": 2742714199600,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        64
+      ],
+      "copied": true,
+      "copy_time_ns": 2742714416500,
+      "end_time_ns": 2742714564200
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 9,
+        "tid": 7904,
+        "time_ns": 2742746145000,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        67
+      ],
+      "copied": true,
+      "copy_time_ns": 2742746284100,
+      "end_time_ns": 2742746397400
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 10,
+        "tid": 7904,
+        "time_ns": 2742778161600,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        70
+      ],
+      "copied": true,
+      "copy_time_ns": 2742778412500,
+      "end_time_ns": 2742778582100
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 11,
+        "tid": 7904,
+        "time_ns": 2742810183800,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        73
+      ],
+      "copied": true,
+      "copy_time_ns": 2742810560800,
+      "end_time_ns": 2742810673100
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 12,
+        "tid": 7904,
+        "time_ns": 2742842297000,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        76
+      ],
+      "copied": true,
+      "copy_time_ns": 2742842538200,
+      "end_time_ns": 2742842659100
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 13,
+        "tid": 7904,
+        "time_ns": 2742874328600,
+        "origin": "update_subresource",
+        "ctx": 2381701242784,
+        "resource": 2381704030976,
+        "level": 0,
+        "usage": 10,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        79
+      ],
+      "copied": true,
+      "copy_time_ns": 2742874556900,
+      "end_time_ns": 2742874667900
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 14,
+        "tid": 7904,
+        "time_ns": 2742915890600,
+        "origin": "resource_map",
+        "ctx": 2381701242784,
+        "resource": 2381666672960,
+        "level": 0,
+        "usage": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        82
+      ],
+      "copied": false,
+      "end_time_ns": 2742916563900
+    }
+  ],
+  "unmatched_map_ids": [
+    5,
+    8,
+    11,
+    14,
+    15,
+    18,
+    21,
+    36,
+    39,
+    42
+  ],
+  "matched_map_count": 14,
+  "copy_complete_count": 12,
+  "scope": "Direct same-thread map attribution and completed frontend copy calls only; unmatched paths, external writes through ResourceMap and persistent-pointer stores remain unproven."
+}

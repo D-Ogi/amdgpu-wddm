@@ -1,0 +1,18 @@
+{
+  "supervisor": {
+    "error": null,
+    "elapsed": 18.729053099999998,
+    "postflight": true,
+    "passed": true
+  },
+  "job": {
+    "cancelled": false,
+    "console_session": 0,
+    "root_exit_observed": true,
+    "child_exit": 0,
+    "timed_out": false,
+    "termination_requested": true,
+    "job_empty": true
+  },
+  "baseline_unchanged": true
+}

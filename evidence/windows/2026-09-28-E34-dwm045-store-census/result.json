@@ -1,0 +1,73 @@
+{
+  "done": {
+    "restoration_succeeded": true,
+    "utc": "2026-09-27T23:01:20.4831438Z",
+    "trial_seconds": 127.94757399999999,
+    "success": true,
+    "gpu_pid": 6764,
+    "markers": 8,
+    "measured_seconds": 101.83613179999999,
+    "failure": null
+  },
+  "runner": "656bdea",
+  "kmd": "17989843012e8e2c54de75204418b20e25ab0143",
+  "umd": "3484e1f4",
+  "etw": {
+    "dwm_pid": 6764,
+    "trace_loss": {
+      "events": 0,
+      "buffers": 0
+    },
+    "matched": 2186,
+    "pending": 0,
+    "unmatched": 0,
+    "duplicate_starts": 0
+  },
+  "fences": [
+    {
+      "samples": 41,
+      "caught_up": 41,
+      "submitted": 1988,
+      "completed": 1988,
+      "present": 1980
+    }
+  ],
+  "ddi": {
+    "scopes": 18032,
+    "matched_maps": 18032,
+    "unmatched_maps": [
+      5,
+      8,
+      11,
+      14,
+      15,
+      18,
+      22,
+      1286,
+      1565,
+      1850
+    ],
+    "copy_complete": 2707
+  },
+  "store_timing": {
+    "scope": "whole raw log, includes startup and rollback; each interval includes begin logging overhead",
+    "pairs": 34398,
+    "median_ns": 22600.0,
+    "max_ns": 2707800
+  },
+  "closure": {
+    "utc": "2026-09-27T23:03:16.9949855Z",
+    "version": "0.7.166.1",
+    "health": "health abi=1 version=0x000700A6 flags=15 generation=92113106355 epoch=5 completed=196 age_ms=110 ready_ms=128149\r\n",
+    "clock": "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67250 ready=1\r\n",
+    "temperature": "01:03:23 Tctl 67.2 C (raw 745B0FEF)\r\n",
+    "test_processes": []
+  },
+  "sha256": {
+    "dwm-6764.log": "a9e6f50badacf536f1aa04bedf278281463abbba98acc8193bc6f9e2ca2067e1",
+    "gpu.etl": "53adc189a6301078e382f6d7595337b0e4716e8057651926c082cc3474abf70b",
+    "gpu.bmp": "4e4c3133c900a08129907af7474f02f98fd117d0fee1a272fca332553670b341",
+    "screen.png": "13b2a5fc67bc833f7226a79557d74c589b07c5c768281c20b0b9c9b4605df408",
+    "receipts.zip": "b25a26ef06abb21df0084443186c210d8fa5f632d46c3a03fe55e47b12fc3454"
+  }
+}

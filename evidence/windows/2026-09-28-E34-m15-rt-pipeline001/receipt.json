@@ -1,0 +1,29 @@
+{
+  "supervisor": {
+    "error": null,
+    "elapsed": 20.3439816,
+    "postflight": true,
+    "passed": true
+  },
+  "case": {
+    "case": "dEQP-VK.ray_tracing_pipeline.trace_rays_cmds.direct.8_8_1",
+    "exit": 0,
+    "timeout": false,
+    "icd_seen": true,
+    "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+    "temperature": 66.9,
+    "seconds": 3.3111295999999997,
+    "mode": "info",
+    "utc": "2026-09-28T17:26:00.4022457Z"
+  },
+  "job": {
+    "cancelled": false,
+    "console_session": 0,
+    "root_exit_observed": true,
+    "child_exit": 0,
+    "timed_out": false,
+    "termination_requested": true,
+    "job_empty": true
+  },
+  "baseline_unchanged": true
+}

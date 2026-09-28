@@ -1,0 +1,211 @@
+{
+ "artifacts": {
+  "witcher3.exe (bin/x64_dx12)": "609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5, 4.0.0.103190",
+  "vkd3d-proton d3d12.dll / d3d12core.dll": "7B77ED5C / 90B1DAD6 (472989aa, E37 package)",
+  "DXVK dxgi.dll (app-local)": "2E674A56 (3.1.1)",
+  "system dxgi.dll / DComp.DLL loaded by the WSI": "DDC578A2 / 285F0317",
+  "registered ICD": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (E38)",
+  "PresentMon": "PresentMon-2.6.0-x64.exe sha256 b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af (v2.6.0, MIT)",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD unchanged (generation 575721647), CPU DWM 4400, clock 1000 MHz VID 116",
+  "screenshots": "run003 auto-000..006 and run004 auto-000..004 (full scale), manual run003-s1..s3 and run004-s1..s2 (half scale) private in scratch/witcher3/dx12; hashes in capture-hashes.json",
+  "WSI source": "fork amdgpu-wddm/radv-wddm2-kmt-enum c34ab7cd, src/vulkan/wsi/wsi_common_win32.cpp (supports_dxgi needs win32.get_d3d12_command_queue; not set in src/amd/vulkan)"
+ },
+ "files": {
+  "capture-hashes.json": {
+   "sha256": "efc455b2646d30f8a77ebf49fbe77e8d5217f12e20704a14d6da1a21cbf8de3f",
+   "bytes": 1638
+  },
+  "RESULT.md": {
+   "sha256": "d2367737b74b175a28799d9a837c2f2e163f80f9ede762dace63cb38de5459fd",
+   "bytes": 5303
+  },
+  "run003/after-clock.txt": {
+   "sha256": "bf9ff99347df17eb50286d76a233097005f2c7320b41ab2d2166c988c76705dd",
+   "bytes": 152
+  },
+  "run003/after-health.txt": {
+   "sha256": "6dcb1c93e5e4f9990d199f3b830cc4e8f6bdb11ad49706687fa2e7e2b34198b9",
+   "bytes": 230
+  },
+  "run003/before-clock.txt": {
+   "sha256": "b86e727331f56b3090ccb397eb79c1f06b3044fd449f38c273a4115f6793b678",
+   "bytes": 152
+  },
+  "run003/before-health.txt": {
+   "sha256": "e218ddd6346c08108dcc4094200b7b0f1f1704e9e373ecdd3a14af76e91d510d",
+   "bytes": 226
+  },
+  "run003/done-w3dx12-003.json": {
+   "sha256": "66ebabe0d6018edefcd71316357fb4016a777cb43da1789514c62b473a7a762e",
+   "bytes": 67
+  },
+  "run003/dxvk.conf": {
+   "sha256": "b55f3a885dacb414bd00fe58028e0a2a48c31db2135fb63f1ed500738e7e71a7",
+   "bytes": 67
+  },
+  "run003/input-003.log": {
+   "sha256": "5edb8f2457bc87343b77fa699ca7a8b73280bcb8696d0be374ad45f344b17f9c",
+   "bytes": 120
+  },
+  "run003/launch.json": {
+   "sha256": "5210942694b7a90e60f25e1c27a34a24f246fb8e8ffb334c8864fbe01fdbe422",
+   "bytes": 288
+  },
+  "run003/modules.json": {
+   "sha256": "225bf7834485d107bb09cdf26d3a04db64a1c29f2052671b12135eaa3f26dc8e",
+   "bytes": 1207
+  },
+  "run003/presentmon.csv.size": {
+   "sha256": "59c1f6b8b1b83182149c2046e080b37e48f015112a8c6e6f7e6adebe7a2e0242",
+   "bytes": 46
+  },
+  "run003/presentmon.stderr.txt": {
+   "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+   "bytes": 2
+  },
+  "run003/presentmon.stdout.txt": {
+   "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+   "bytes": 2
+  },
+  "run003/result.json": {
+   "sha256": "abb7c25a70683c9f1cf4be7b931094a7bb3f1445748ea33faad5007102699447",
+   "bytes": 186
+  },
+  "run003/run-w3dx12-003.log": {
+   "sha256": "fe41a688b09ad744f476d47af7b4f73d376d0123721ea597387f335c2dfad48b",
+   "bytes": 6293
+  },
+  "run003/vkd3d.log": {
+   "sha256": "87eee87a8edac4b06c474e6001f1ce71a8bc8e086be071d145cfa1c463e8a6ed",
+   "bytes": 17375
+  },
+  "run003/witcher3_dxgi.log": {
+   "sha256": "9475d74d8fd513a14409a588f3cca95ee48f0011351994efcae9977f05eba552",
+   "bytes": 1898
+  },
+  "run004/after-clock.txt": {
+   "sha256": "41e5620e5edbc9fe0643b80fbb14411c5015a4609106bced2c2dd16b595631c3",
+   "bytes": 152
+  },
+  "run004/after-health.txt": {
+   "sha256": "e58ac5dbd8e56a3dedb5033f45c1af2a190406592d5f5c2fe8f892fa199e084c",
+   "bytes": 232
+  },
+  "run004/before-clock.txt": {
+   "sha256": "a0a4a8312935c0e13ff8af0bcdb0952aa839faf249d3dcde9a41f76ad37a21b9",
+   "bytes": 152
+  },
+  "run004/before-health.txt": {
+   "sha256": "310f59dcaa2157ce33aef9c65d0737d5a37a7f27fdb598598eaea6815c84498c",
+   "bytes": 228
+  },
+  "run004/done-w3dx12-004.json": {
+   "sha256": "a0f54bb3faa033e375abdc5ac29dacc8b6e7ae47997daaa4c74af508bda00237",
+   "bytes": 67
+  },
+  "run004/dxvk.conf": {
+   "sha256": "5846083abda0e6e1aa3fc4d427cf546db5acff13079fe88eadf82b1b735e0ac9",
+   "bytes": 67
+  },
+  "run004/input-003-and-004.log": {
+   "sha256": "b6177aec6f683cd9370211813df41184be8fc9cea486f5cfc858e19cf8a53a7e",
+   "bytes": 240
+  },
+  "run004/launch.json": {
+   "sha256": "28868abd6512e75d47100e289f4a85698a53c8713119ead73a8c287b11c1980f",
+   "bytes": 289
+  },
+  "run004/modules.json": {
+   "sha256": "8f6d30415f443935c8840dfd129afc6d56721c8c754a259c2b9c2a36dfff8b97",
+   "bytes": 3272
+  },
+  "run004/presentmon.csv.size": {
+   "sha256": "59c1f6b8b1b83182149c2046e080b37e48f015112a8c6e6f7e6adebe7a2e0242",
+   "bytes": 46
+  },
+  "run004/presentmon.stderr.txt": {
+   "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+   "bytes": 2
+  },
+  "run004/presentmon.stdout.txt": {
+   "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+   "bytes": 2
+  },
+  "run004/result.json": {
+   "sha256": "2ca83bbbf4415f410c354782122930542a0b7f89db4b25143a3c1f476cb18389",
+   "bytes": 186
+  },
+  "run004/run-w3dx12-004.log": {
+   "sha256": "b9d1bd3d039087c82a134be2145a6e89da96e19ed7f61244f82d779ed21a390c",
+   "bytes": 6587
+  },
+  "run004/vkd3d.log": {
+   "sha256": "7ed2d0a8b7679225bc6e1130f7c060139c7e6ac11618d6326678025da400bb86",
+   "bytes": 17376
+  },
+  "run004/witcher3_dxgi.log": {
+   "sha256": "0983b0c9556f4809398bb67f320526477ec00fba7a8e90fc4af79b989da8cae5",
+   "bytes": 1898
+  },
+  "scripts/analyze-presentmon.py": {
+   "sha256": "207a33d1c7daef95ac63608ef3b0ba8609fc42941382c447bd3ec80606a59d22",
+   "bytes": 6957
+  },
+  "scripts/finish-e42.py": {
+   "sha256": "76348c582897d190fa68815d700ba0158848752600244b0be18c9175ccec51a2",
+   "bytes": 4762
+  },
+  "scripts/input-dx12-003.ps1": {
+   "sha256": "729ebf5784367b10209101a798aa14f16c59b5f8312d86e4e7666434fe3ed5d5",
+   "bytes": 3063
+  },
+  "scripts/input-launch-dx12-003.ps1": {
+   "sha256": "5f83439382424085b01b47c57cccddf74259deee20c0c962630b71fa1af37e3d",
+   "bytes": 1214
+  },
+  "scripts/launch-w3dx12-003.ps1": {
+   "sha256": "3ccfbe9b49dd60f302e8886cc7d1594d23ec85b0b7edddf06ba27dccb13721a1",
+   "bytes": 2088
+  },
+  "scripts/launch-w3dx12-004.ps1": {
+   "sha256": "b6696d7ea17883f59525878901a176035a223e41907875a02076195e836ccc3b",
+   "bytes": 2088
+  },
+  "scripts/postcheck-e42.ps1": {
+   "sha256": "4190fa6d92a67014461a733de352d080ac1afeb040731d7366c147901e6d4c4f",
+   "bytes": 1693
+  },
+  "scripts/precheck-003.ps1": {
+   "sha256": "591c67132dd00da70f8f77d6e446343d76f0f0d2696219be37dc9b75c0a1069c",
+   "bytes": 1813
+  },
+  "scripts/presentmon-PROVENANCE.md": {
+   "sha256": "f970d16f539baea467a09bf373281215768bea0f33f703d58957ead0809fcbbe",
+   "bytes": 775
+  },
+  "scripts/pull-003.py": {
+   "sha256": "eb865e3b0defadb6934e4d686be771512e34cba88a738f0aaaff3bb41be07c6a",
+   "bytes": 1609
+  },
+  "scripts/run-w3dx12-003.ps1": {
+   "sha256": "7b385e1b49175ff08a9c73b2c6bb7cfd0fdfd07f0b90fdeb8b08d3ada458a6e7",
+   "bytes": 10586
+  },
+  "scripts/run-w3dx12-004.ps1": {
+   "sha256": "5a0b96fb6b3bc42a51965b441b6e730da8d6f74ab03dbd91ddffdbce2a8b272d",
+   "bytes": 10938
+  },
+  "scripts/status-003.ps1": {
+   "sha256": "b8ed38b63f59656692c9774abe537d1b4159fb521423fb0422791a71b3594444",
+   "bytes": 614
+  },
+  "scripts/stop-003.ps1": {
+   "sha256": "901e5b5aa4302a0ee3781c749ca9c07a2bce7466e297d55c540f30cef7555666",
+   "bytes": 1389
+  },
+  "scripts/worker-w3dx12-003.ps1": {
+   "sha256": "74eeb2e362b8c19bbf9bfb5c1e702055feabadd7b49ccac4f4c9de72bce073f7",
+   "bytes": 381
+  }
+ }
+}

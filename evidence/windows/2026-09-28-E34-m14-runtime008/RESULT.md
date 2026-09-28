@@ -1,0 +1,9 @@
+# M735 - First-chance dump confirms forbidden MSAA claim for component-view format21
+
+Runtime008 sourcec40ae0b6, manifestEE7B717FAECA815CCD8EA03D712987E81DF080C112B1553E5A8AD8A41EE5E981. Full155-entry D3D11 table and mandatory build coverage gate; three opt-in normal user minidumps. Same engine/ICD/config/client and format answers as007. CPU passes; native GPU device creation still887a0020.
+
+First dump unwinds CxxThrowException with return address d3d11+2b196 and CDevice::LLOCompleteLayerConstruction on the next frame. The preceding call is at2b191 inside the block beginning2b170, which constructs _com_error(887a0020). It is not the subsequent block beginning2b196. The branch into2b170 is29f1e, for a reported MULTISAMPLE_RENDERTARGET bit when the runtime marks the child format disallowed. Frame2 preserves R15=8 and R14 points to the format table DWORD21 (0x15). These are dump-backed observations, not only static speculation.
+
+This confirms the runtime's rejection of the component SRV format R32_FLOAT_X8X24_TYPELESS. DXVK derives its MSAA capability from the underlying depth/stencil VkFormat; the shell must restrict attachment claims to the D3D view format. Local Microsoft format table documents render/depth target and multisample RT disallowed, multisample load supported. The analogous component view formats22,46,47 need the same restriction. Typeless parents19/44 and DSVs20/45 must retain their answers. Source correction/testing in progress, not yet a passing GPU run.
+
+Supervisor failed-restored41.5370907s, CPU verified, baseline/postflight/tree closure verified, cleanup true. No DWM/KMD restart. Dumps, full stack and register output remain outside repo in scratch/m14/runtime008-offline (first.dmp, first-stack.txt, throw-site.txt, format-value.txt); full logs in runtime008-ops. Published diagnostic selection excludes dump paths, module records and raw memory. No image or M14 completion claim.

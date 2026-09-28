@@ -1,0 +1,38 @@
+[
+  {
+    "mode": "legacy",
+    "exit": 0,
+    "stdout": "mode=legacy visible=1000 elapsed_us=727610.800\n",
+    "stderr": "",
+    "bytes": 199780,
+    "lines": 1000,
+    "sha256": "18467d03603f677c8fcb9c74bb47c74100a72f58ec04dc69776e4836ce01c887"
+  },
+  {
+    "mode": "default",
+    "exit": 0,
+    "stdout": "mode=default visible=1000 elapsed_us=6886.900\n",
+    "stderr": "",
+    "bytes": 199780,
+    "lines": 1000,
+    "sha256": "18467d03603f677c8fcb9c74bb47c74100a72f58ec04dc69776e4836ce01c887"
+  },
+  {
+    "mode": "closed",
+    "exit": 0,
+    "stdout": "mode=closed visible=1000 elapsed_us=6856.800\n",
+    "stderr": "",
+    "bytes": 199780,
+    "lines": 1000,
+    "sha256": "18467d03603f677c8fcb9c74bb47c74100a72f58ec04dc69776e4836ce01c887"
+  },
+  {
+    "mode": "buffered",
+    "exit": 10,
+    "stdout": "not_visible mode=buffered record=0 got=0 expected=196\n",
+    "stderr": "",
+    "bytes": 0,
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]

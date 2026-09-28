@@ -1,0 +1,10 @@
+{
+    "start_utc":  "2026-09-28T15:25:34.1855514Z",
+    "scope":  "packaged ICD loaded directly (--icd), non-hosted; no DDI",
+    "timeout":  false,
+    "stop":  false,
+    "exit":  0,
+    "temperature":  67,
+    "seconds":  10.5553811,
+    "end_utc":  "2026-09-28T15:25:44.7425891Z"
+}

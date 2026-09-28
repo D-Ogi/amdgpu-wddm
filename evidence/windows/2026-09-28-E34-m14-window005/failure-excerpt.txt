@@ -1,0 +1,3 @@
+DEBUG M14 runtime resource rejected hr=80004001 handle=1 primary=0 dimension=3 format=87 bind=000000A8 misc=00020002 usage=0 map=00000000 mips=1 array=1 samples=1 quality=0 width=64 height=64
+DEBUG d3d11bench FAIL swap chain hr=0x887a0005
+CHILD_EXIT 4 observed=1 tree_closed=1

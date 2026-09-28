@@ -1,0 +1,6 @@
+gfx_ring_capacity_test.c
+bc250_ring_actual.c
+Generowanie kodu...
+GFX ring capacity/fence order: 10025 checks, 0 failures
+gfx_pipeline_test.c
+GFX WDDM actual submit/completion/watchdog: 1598 checks, 0 failures

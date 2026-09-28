@@ -1,0 +1,94 @@
+[
+  {
+    "image": "baseline.bmp",
+    "sha256": "b58b303e18604a516ab9aa3337aa15dd484911c46feff34a0f731c0f043c0b89",
+    "size": [
+      1920,
+      1200
+    ],
+    "regions": [
+      {
+        "region": "red",
+        "bounds": [
+          110,
+          180,
+          145,
+          220
+        ],
+        "pixels": 1400,
+        "mismatches": 0,
+        "rgb_sha256": "ddf9d50e329de3198fc1692c24eb6521e3fa9926c79c07ac55b38bdc3a7b10d5"
+      },
+      {
+        "region": "overlap",
+        "bounds": [
+          180,
+          170,
+          290,
+          230
+        ],
+        "pixels": 6600,
+        "mismatches": 0,
+        "rgb_sha256": "654f3e845da711da50854ccc086bef9e0224518d7d4b8e1e221422bf8a456841"
+      },
+      {
+        "region": "cyan",
+        "bounds": [
+          608,
+          151,
+          792,
+          252
+        ],
+        "pixels": 18584,
+        "mismatches": 0,
+        "rgb_sha256": "acde8d1aa3ce9ad11eda5174ecd370af00421ba0ec3040ca963efe71da06d951"
+      }
+    ]
+  },
+  {
+    "image": "screen.png",
+    "sha256": "39e6065262bb3ccb72226de4c2eb3a010cea7d8c074446a5cd987860c9ffd47a",
+    "size": [
+      1920,
+      1200
+    ],
+    "regions": [
+      {
+        "region": "red",
+        "bounds": [
+          110,
+          180,
+          145,
+          220
+        ],
+        "pixels": 1400,
+        "mismatches": 0,
+        "rgb_sha256": "ddf9d50e329de3198fc1692c24eb6521e3fa9926c79c07ac55b38bdc3a7b10d5"
+      },
+      {
+        "region": "overlap",
+        "bounds": [
+          180,
+          170,
+          290,
+          230
+        ],
+        "pixels": 6600,
+        "mismatches": 0,
+        "rgb_sha256": "654f3e845da711da50854ccc086bef9e0224518d7d4b8e1e221422bf8a456841"
+      },
+      {
+        "region": "cyan",
+        "bounds": [
+          608,
+          151,
+          792,
+          252
+        ],
+        "pixels": 18584,
+        "mismatches": 0,
+        "rgb_sha256": "acde8d1aa3ce9ad11eda5174ecd370af00421ba0ec3040ca963efe71da06d951"
+      }
+    ]
+  }
+]

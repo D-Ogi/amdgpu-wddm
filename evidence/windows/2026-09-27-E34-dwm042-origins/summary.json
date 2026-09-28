@@ -1,0 +1,49 @@
+{
+  "trial_seconds": 125.9286649,
+  "render_observation_seconds": 97.897542,
+  "markers": 8,
+  "image_checks_pixels_each": 40984,
+  "image_checks_mismatches": 0,
+  "dma_pairs": 675,
+  "trace_loss": {
+    "events": 0,
+    "buffers": 0
+  },
+  "ddi_scopes": 7416,
+  "matched_maps": 7416,
+  "unmatched_maps": 10,
+  "copy_complete_total": 1562,
+  "render_image_writes": 1374,
+  "render_origins": {
+    "update_subresource": 1253,
+    "initial_data": 121
+  },
+  "render_completed_copies": 1374,
+  "live_buffers": 8,
+  "desktop_sized": [
+    {
+      "map": 840,
+      "origin": "update_subresource",
+      "copied": true,
+      "box": [
+        1920,
+        1200,
+        1
+      ],
+      "time_ns": 2962153373400
+    }
+  ],
+  "otg_samples": 107,
+  "final": {
+    "utc": "2026-09-27T21:20:10.7190108Z",
+    "version": "0.7.166.1",
+    "kmd_sha256": "AA77E8B34ADF76D90688F146837CDBECB747AB875C75AB0BED00262BE8C936DD",
+    "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157",
+    "health": "health abi=1 version=0x000700A6 flags=15 generation=30665441495 epoch=5 completed=148 age_ms=206 ready_ms=86608\r\n",
+    "clock": "clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=67375 ready=1\r\n",
+    "temperature": "23:20:17 Tctl 67.4 C (raw 747B0FEF)\r\n"
+  },
+  "archive_sha256": "655e4ada4896a2e4a59cf829578c94966e8e44b8c588971aac2276dd3b4240ce",
+  "etl_sha256": "85987a78aa8476d7df072c2785eee6bc93af67b89c6c33c597ad48d36beada70"
+}

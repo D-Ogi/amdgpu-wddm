@@ -31,6 +31,14 @@ int DcnSurfaceBytes(unsigned long Width, unsigned long Height, unsigned long Pit
                     unsigned long long* Bytes);
 unsigned long DcnPrimaryPitch(unsigned long Width);
 
+// LB7A shared-texture layout accepted by the DWM UMD's OpenResource checks.
+int DcnSharedTextureLayout(unsigned long Width, unsigned long Height,
+    unsigned long* Pitch, unsigned long long* Bytes);
+
+// Linear GDI staging; AlignmentShift=2, A8 or 32-bit pixels.
+int DcnStagingLayout(unsigned long Width, unsigned long Height,
+    unsigned long BytesPerPixel, unsigned long* Pitch, unsigned long long* Bytes);
+
 #ifdef __cplusplus
 }
 #endif

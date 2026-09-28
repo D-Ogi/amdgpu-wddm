@@ -1,0 +1,7 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS 4290 independent pixel-oracle cases, padding, invalid geometry and64-bit offsets
+compile-check (kernel flags, same source, no link)
+
+blit_plan_test.exe exit code 0

@@ -1,0 +1,842 @@
+{
+  "baseline-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10478223360,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10478714880,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10479206400,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10488913920,
+        "surface_base": "0x27119a000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10489405440,
+        "surface_base": "0x27119a000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10489896960,
+        "surface_base": "0x27119a000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10490388480,
+        "surface_base": "0x27119a000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10490880000,
+        "surface_base": "0x27119a000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10509803520,
+        "surface_base": "0x27232e000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10510295040,
+        "surface_base": "0x27232e000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10510786560,
+        "surface_base": "0x27232e000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10511278080,
+        "surface_base": "0x27232e000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10511769600,
+        "surface_base": "0x27232e000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10484613120,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10485104640,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10485596160,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10486087680,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10486579200,
+        "surface_base": "0x2708d0000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10487070720,
+        "surface_base": "0x2708d0000"
+      }
+    ]
+  },
+  "dynamic-14-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10496573440,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10497064960,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10497556480,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10515873792,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10516365312,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10547789824,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10548281344,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10548772864,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10549264384,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10549755904,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10501488640,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10501980160,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10502471680,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10502963200,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10503454720,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10503946240,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10522263552,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10522755072,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10523246592,
+        "surface_base": "0x272b50000"
+      }
+    ]
+  },
+  "dynamic-2-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10545332224,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10545823744,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10497556480,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10498048000,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10498539520,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10499031040,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10499522560,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10500014080,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10500505600,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10518822912,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10519314432,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10519805952,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10520297472,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10520788992,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10552213504,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10552705024,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10553196544,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10504929280,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10523246592,
+        "surface_base": "0x272b50000"
+      }
+    ]
+  },
+  "dynamic-20-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10514399232,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10514890752,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10515382272,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10515873792,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10516365312,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10516856832,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10548281344,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10548772864,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10549264384,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10549755904,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10550247424,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10501980160,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10502471680,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10502963200,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10503454720,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10503946240,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10522263552,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10522755072,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10523246592,
+        "surface_base": "0x272b50000"
+      }
+    ]
+  },
+  "dynamic-26-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10545332224,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10545823744,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10546315264,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10546806784,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10547298304,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10547789824,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10499522560,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10500014080,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10518331392,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10518822912,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10519314432,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10519805952,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10551230464,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10551721984,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10552213504,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10552705024,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10553196544,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10504929280,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10505420800,
+        "surface_base": "0x271a50000"
+      }
+    ]
+  },
+  "dynamic-8-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10496573440,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10497064960,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10497556480,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10515873792,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10516365312,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10547789824,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10548281344,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10500014080,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10500505600,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10500997120,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10501488640,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10501980160,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10502471680,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10502963200,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10503454720,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10521772032,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10522263552,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10522755072,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10554179584,
+        "surface_base": "0x2748d0000"
+      }
+    ]
+  },
+  "gpu-dump.log": {
+    "distinct_surface_bases": 3,
+    "mixed_surfaces": true,
+    "bands": [
+      {
+        "first": 0,
+        "last": 63,
+        "address": 10514399232,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 64,
+        "last": 127,
+        "address": 10514890752,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 128,
+        "last": 191,
+        "address": 10515382272,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 192,
+        "last": 255,
+        "address": 10546806784,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 256,
+        "last": 319,
+        "address": 10498539520,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 320,
+        "last": 383,
+        "address": 10499031040,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 384,
+        "last": 447,
+        "address": 10499522560,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 448,
+        "last": 511,
+        "address": 10517839872,
+        "surface_base": "0x272b50000"
+      },
+      {
+        "first": 512,
+        "last": 575,
+        "address": 10549264384,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 576,
+        "last": 639,
+        "address": 10549755904,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 640,
+        "last": 703,
+        "address": 10550247424,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 704,
+        "last": 767,
+        "address": 10550738944,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 768,
+        "last": 831,
+        "address": 10551230464,
+        "surface_base": "0x2748d0000"
+      },
+      {
+        "first": 832,
+        "last": 895,
+        "address": 10502963200,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 896,
+        "last": 959,
+        "address": 10503454720,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 960,
+        "last": 1023,
+        "address": 10503946240,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1024,
+        "last": 1087,
+        "address": 10504437760,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1088,
+        "last": 1151,
+        "address": 10504929280,
+        "surface_base": "0x271a50000"
+      },
+      {
+        "first": 1152,
+        "last": 1199,
+        "address": 10523246592,
+        "surface_base": "0x272b50000"
+      }
+    ]
+  }
+}

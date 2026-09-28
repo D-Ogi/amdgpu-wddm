@@ -1,0 +1,865 @@
+{
+  "scope": "Independent subchecks from a failed overall DWM049 run; does not override M719 failure or establish full G0.",
+  "dwm_pid": 1840,
+  "dma": {
+    "matched": 4510,
+    "pending": 0,
+    "unmatched": 0,
+    "duplicate_starts": 0,
+    "trace_loss": {
+      "events": 0,
+      "buffers": 0
+    }
+  },
+  "present": {
+    "matched": 4286,
+    "post_boundary_events": 99,
+    "checkpoint_count_checked": true,
+    "runtime_map_count": 0,
+    "presented_resource_ids": [
+      86,
+      90,
+      94
+    ]
+  },
+  "vsync": {
+    "vsync_interrupts": 6691,
+    "vsync_dpcs": 6691,
+    "mmio_flips": 4319,
+    "first_us": 3966718.0,
+    "last_us": 115576120.0,
+    "span_s": 111.609402,
+    "median_period_us": 16681.0,
+    "rate_hz": 59.94844433786943,
+    "p99_period_us": 16794.0,
+    "max_gap_us": 33385.0,
+    "max_gap_at_us": 30655600.0,
+    "max_gap_frames": [
+      1601,
+      1602
+    ],
+    "gaps_over_factor": 1,
+    "gaps": [
+      {
+        "start_us": 30655600.0,
+        "end_us": 30688985.0,
+        "periods": 2.0,
+        "frame_jump": 1,
+        "cpus_without_coverage": [],
+        "reading": "reports missing (frame numbers consecutive)"
+      }
+    ],
+    "gaps_over_100ms": 0,
+    "gap_factor": 1.5,
+    "expected_minus_observed_vsyncs": 1,
+    "frame_number_discontinuities": 0,
+    "first_frame_discontinuities": [],
+    "scanned_address_changes": 4320,
+    "flip_join": {
+      "joined": 4319,
+      "unretired": 0,
+      "unretired_superseded": 0,
+      "unretired_not_superseded": 0,
+      "unretired_before_last_vsync": 0,
+      "unretired_examples": [],
+      "address_mismatches": 0,
+      "mismatch_examples": [],
+      "duplicate_submit_sequences": 0,
+      "retire_fences_without_flip": 0,
+      "retire_fences_without_flip_first_last_us": null,
+      "latency_us": {
+        "median": 11570.0,
+        "p99": 16568.0,
+        "max": 16797.0
+      },
+      "latency_periods_max": 1.0069540195431927
+    }
+  },
+  "render_image_origins": {
+    "scope": "Checkpoint-bounded writable image mappings associated with same-thread frontend DDI scopes; mapped extents are not CPU byte counts or final-resource identity.",
+    "render_image_maps": 2113,
+    "unmatched": [],
+    "groups": [
+      {
+        "origin": "update_subresource",
+        "box": [
+          320,
+          240,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 808
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          160,
+          120,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 808
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          920,
+          955,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 73
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          460,
+          1123,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 46
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          27,
+          14,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 33
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          45,
+          14,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 33
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          67,
+          14,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 32
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          80,
+          14,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 32
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          21,
+          14,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 32
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          148,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          156,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          164,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          172,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          180,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          188,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          180,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          188,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          140,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          148,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          156,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          164,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          172,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          180,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          188,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          140,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          148,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          148,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          156,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          164,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          172,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          180,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 5
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          140,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          148,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          156,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          164,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          172,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          156,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          164,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          172,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          180,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          188,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          140,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          264,
+          188,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          140,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 4
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          357,
+          48,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 3
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          117,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 3
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          101,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 3
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          184,
+          133,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 3
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          401,
+          48,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          420,
+          16,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          125,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          133,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          184,
+          141,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          149,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          109,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          184,
+          149,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          184,
+          117,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          149,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          101,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          109,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          141,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 2
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          751,
+          384,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          16,
+          16,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          1233,
+          839,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          184,
+          101,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          2048,
+          1,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          117,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          133,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          117,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          248,
+          109,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          133,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          125,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          125,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          184,
+          125,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          216,
+          141,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          232,
+          133,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      },
+      {
+        "origin": "update_subresource",
+        "box": [
+          200,
+          101,
+          1
+        ],
+        "completed_frontend_copy": true,
+        "count": 1
+      }
+    ]
+  },
+  "inputs": {
+    "gpu.etl": "064facec7dee21b6017604a35b1332e490470c6c5c9cc5d325b6032eab3e3015",
+    "result/dwm-1840.log": "316758113e36c6f68c604b322ea325ffe85500910367b53202ae9d5fe7abd4a6",
+    "result/events-xperf.csv": "7172d4c561d71d8bc294e32893dfaf0e569e8a942b80851906c0a84034c5e6c8",
+    "present-identities.json": "55b821b155143c384552b98d664aa20308f087cf9e33b79dca21993a0ee0e345",
+    "checkpoints.json": "5e512b6a3edaa83d1b6ef208e60765ae909c8cb89e49212ae875082d3408041f",
+    "ddi-origins.json": "c1c18de5d69a1c676272a372e5ba2b64488e606b51aaa71617407e3a4d743503",
+    "present-etw-joined.json": "802d5350447f75fce3652a21c67dcc9f202f54ee4a7ec11ac2119fdade9a0489",
+    "vsync-etw.json": "5fca6c295daccb46f45e8befec58182b87d851d35a27906a7140dac9d95ae341"
+  }
+}

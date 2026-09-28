@@ -1,0 +1,5 @@
+EXCEPTION 80000003 first=1 address=00007FFAD4A0CBC4
+DEBUG M14: CalcPrivateDeviceSize Interface=000B000F Version=0000000A Flags=00000006
+DEBUG M14: CreateDevice Interface=000B000F Version=0000000A Flags=00000006
+DEBUG M14 engine warning: D3D11DeviceFeatures: Some formats not supported for resource sharing
+CHILD_EXIT 0 observed=1 tree_closed=1

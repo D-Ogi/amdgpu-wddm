@@ -1,0 +1,27 @@
+{
+  "positive": {
+    "events": 10,
+    "requests": 4,
+    "successful": 2,
+    "failed": 2,
+    "ended": 2,
+    "live_map_ids": [],
+    "object_replacements": 1,
+    "staging_successes": 1,
+    "scope": "observed event consistency only; missing whole maps and CPU stores are not detected"
+  },
+  "negative_rejections": [
+    "empty",
+    "missing_begin",
+    "missing_result",
+    "duplicate_end",
+    "failed_end",
+    "missing_end",
+    "zero_identity",
+    "duplicate_field",
+    "invalid_event"
+  ],
+  "allow_live_detected": [
+    4294967296
+  ]
+}

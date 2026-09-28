@@ -15,6 +15,8 @@
 #include "umd_caps.h"
 #include "firmware_metadata.h"
 #include "gfx_completion_queue.h"
+#include "gfx_blt.h"
+#include "gfx_copy.h"
 #include "paging_private.h"
 #include <ntstrsafe.h>
 
@@ -129,18 +131,11 @@ typedef struct _BC250_WDDM_KIND {
     volatile LONG FirstSequence;
 } BC250_WDDM_KIND;
 
-// What stage A knows about an allocation. This is our own private data, not the user-mode contract of ADR 0008
-// point 8 (driver/contract/): stage A has no user-mode driver to agree with, and the blob dies with this stage.
-#define BC250_WDDM_ALLOCATION_PRIVATE_MAGIC 0x4137424Cul    // "LB7A"
-typedef struct _BC250_WDDM_ALLOCATION_PRIVATE {
-    ULONG Magic;
-    ULONG Version;
-    ULONG Width;
-    ULONG Height;
-    ULONG Pitch;
-    ULONG Format;                       // D3DDDIFORMAT
-    ULONGLONG Size;
-} BC250_WDDM_ALLOCATION_PRIVATE;
+#include "gdi_private.h"
+#include "surface_resource_private.h"
+#include "present_range.h"
+C_ASSERT(sizeof(BC250_WDDM_ALLOCATION_PRIVATE)==32);
+C_ASSERT(sizeof(BC250_GDI_PRIVATE)==48);
 
 // E26: Present constructs a packet; SubmitCommandVirtual executes it after
 // SetRootPageTable. Never dereference a transient Present rectangle pointer later.
@@ -161,8 +156,11 @@ typedef struct _BC250_WDDM_OBJECT {
     UINT NodeOrdinal;                   // contexts
     ULONGLONG RootPhysical;             // contexts: the root page table VidMm last set, as a physical address; 0 = none
     PAGING_CAPTURE_OWNER Captures;     // contexts: CPU-only plans, released on completion or object teardown
+    HANDLE OwnerDevice;                 // contexts/opened allocations: DDI device identity
+    HANDLE BackingAllocation;           // opened: verified CreateAllocation object, never guessed
     UINT AllocationListSize;            // contexts: what CreateContext answered, i.e. how long a list dxgkrnl keeps for it
     BC250_WDDM_ALLOCATION_PRIVATE Allocation;
+    ULONG GdiType;                      // retained standard-surface contract, zero for legacy LB7A
     // M8: a context or allocation that arrived as a contract blob (umd_blob.c), not the GDI one above.
     // ExAllocatePool2 zeroes these, so a GDI object stays "not UMD" without a store. UmdRequestedVa is
     // recorded and not applied: VidMm places the pages, and the winsys maps the GPU VA itself.
@@ -174,6 +172,20 @@ typedef struct _BC250_WDDM_OBJECT {
     ULONGLONG UmdBytes;
     ULONGLONG UmdRequestedVa;
 } BC250_WDDM_OBJECT;
+
+#define BC250_PRESENT_OBSERVATIONS 16
+// One writer per slot; immutable after Published. Handles are values only.
+// Retained per adapter start, independently of the rolling GuardLog.
+typedef struct _BC250_PRESENT_OBSERVATION {
+    volatile LONG Published;
+    HANDLE Context, OwnerDevice, Handles[2];
+    UINT Flags, Node, ListSize, DmaBytes, PrivateBytes, Offset, SubRects;
+    UINT PhysicalAdapter[2];
+    BOOLEAN UmdContext, SystemContext, ListValid, SnapshotValid;
+    ULONGLONG InterruptTime, Qpc, Va[2];
+    RECT Src, Dst;
+    BC250_WDDM_ALLOCATION_PRIVATE Allocations[2];
+} BC250_PRESENT_OBSERVATION;
 
 // The software VSync. FlipOnVSyncMmIo means dxgkrnl retires a queued flip when the driver reports
 // DXGK_INTERRUPT_CRTC_VSYNC, and nothing else retires it: with MaxQueuedFlipOnVSync = 1 and no report at all, the
@@ -362,10 +374,23 @@ typedef struct _BC250_WDDM {
     UINT PrimarySegment;
 
     // E20 (ADR 0011): the diagnostic CPU blit of a Blt present into the firmware framebuffer, behind EnablePresentBlit.
+    volatile LONG GdiSurfaceTypesLogged;       // first size/fill request per GDI type, bounded to20 lines
     BOOLEAN BlitGate;
+    BOOLEAN HandleIdentityProbe;
+    volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
+    BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
+    BOOLEAN CddDwmInterop; // explicit diagnostic capability, default off and start-latched
+    volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
+    volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
+    volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
+    volatile LONG64 PresentObservationCalls;
+    BC250_PRESENT_OBSERVATION PresentObservations[BC250_PRESENT_OBSERVATIONS];
+    volatile LONG64 DriverCapsInteropReturned[2]; // successful replies, not registry state
+    volatile LONG64 DriverCapsFirstTime[2], DriverCapsLastTime[2]; // interrupt time, 100 ns
+
     volatile LONG Blits;                        // presents copied
     volatile LONG BlitSkips;                    // presents that named no usable source (reason in the log)
-    volatile LONG BlitTranslations;             // sources whose first and last page translated and were contiguous
+    volatile LONG BlitTranslations;             // sources whose complete page range translated contiguously
     // 2026-09-22 (ADR 0011 consequences, facts M100): of Blits, the breakdown by destination. BlitsToFlip +
     // BlitsToFirmware == Blits always; BlitsMapFailed is the subset of BlitsToFirmware that landed there only
     // because the flip surface would not map (a fallback, never a skip - see WddmPresentBlit).
@@ -611,6 +636,16 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
         // it would race the drain and free it twice. The removal and the decision are one critical section.
         KeAcquireSpinLock(&wddm->Lock, &irql);
         if (wddm->Stopping) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
+        if (Object->Magic==BC250_WDDM_MAGIC_ALLOCATION) {
+            LIST_ENTRY* entry;
+            // Invalidate all open snapshots before this pool address can be
+            // reused by a different allocation with identical geometry.
+            for (entry=wddm->Objects.Flink;entry!=&wddm->Objects;entry=entry->Flink) {
+                BC250_WDDM_OBJECT* opened=CONTAINING_RECORD(entry,BC250_WDDM_OBJECT,Link);
+                if (opened->Magic==BC250_WDDM_MAGIC_OPENED && opened->BackingAllocation==Object)
+                    opened->BackingAllocation=NULL;
+            }
+        }
         RemoveEntryList(&Object->Link);
         wddm->ObjectCount--;
         KeReleaseSpinLock(&wddm->Lock, irql);
@@ -636,6 +671,8 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
     BC250_WDDM_NOTIFY* notify = (BC250_WDDM_NOTIFY*)Context;
 
     notify->Device->Dxgk.DxgkCbNotifyInterrupt(notify->Device->Dxgk.DeviceHandle, &notify->Data);
+    if (notify->Data.InterruptType == DXGK_INTERRUPT_CRTC_VSYNC)
+        InterlockedExchange64(&notify->Device->DcnVsyncNotifyTime, (LONG64)KeQueryInterruptTime());
     return TRUE;
 }
 
@@ -947,6 +984,30 @@ static BOOLEAN WddmSubmitHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WD
                  seq, (ULONG)BC250_WDDM_VMID, Context->RootPhysical, GpuVa, Bytes);
     WddmGpuFence(Device);
     return TRUE;
+}
+
+// BGP1 may arrive in a burst when CDD stops pacing to vblank (M659).
+// Idle is not a submission prerequisite: the lower layer admits same-root jobs
+// and reports temporary ring/root-switch pressure. Match the UMD ready-or-busy
+// policy, with a wall-clock deadline and no completion synthesized on failure.
+static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
+    _In_ const BC250_WDDM_OBJECT* Context, ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
+{
+    const ULONGLONG deadline = KeQueryInterruptTime() + 10000ull * BC250_WDDM_SUBMIT_TIMEOUT_MS;
+    LARGE_INTEGER tick;
+    tick.QuadPart = -10000ll;
+    for (;;) {
+        if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
+            WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node)) return TRUE;
+        // Refresh retirement before the terminal retry: a completion can race
+        // the separate ready/busy observations or release the last queue slot.
+        WddmGpuFence(Device);
+        if (!GfxSubmitBusy(Device) || KeQueryInterruptTime() >= deadline) {
+            return (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
+                WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node);
+        }
+        KeDelayExecutionThread(KernelMode, FALSE, &tick);
+    }
 }
 
 // ---- ADR 0008 stage D: node 1's own hardware channel (docs/design/paging-node.md section 5) ---------------------
@@ -1311,25 +1372,29 @@ static void WddmVSyncDpcRoutine(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_
 // WDDM lock orders decisions against stop; DcnVsyncEnable then uses the graphics
 // interrupt-synchronization callback to serialize MMIO and armed state with ISR.
 // The synchronized callback never takes this WDDM lock (one-way lock order).
-static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
+static NTSTATUS WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
 {
     BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     LARGE_INTEGER due;
     BOOLEAN changed = FALSE;
     KIRQL irql;
+    NTSTATUS status = STATUS_SUCCESS;
 
-    if (wddm == NULL) return;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
 
     if (Device->VidPnFlipEnabled)
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
-        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return; }
+        if (wddm->Stopping && On) { KeReleaseSpinLock(&wddm->Lock, irql); return STATUS_DEVICE_NOT_READY; }
         if (On != (Device->DcnVsyncArmed != 0))
-            changed = NT_SUCCESS(DcnVsyncEnable(Device, On));
+        {
+            status = DcnVsyncEnable(Device, On);
+            changed = NT_SUCCESS(status);
+        }
         KeReleaseSpinLock(&wddm->Lock, irql);
         if (changed)
             GuardLog("wddm: hardware vsync %s (OTG0 VUPDATE_NO_LOCK, EnableVidPnFlip)", On ? "on" : "off");
-        return;
+        return status;
     }
 
     due.QuadPart = -((LONGLONG)BC250_WDDM_VSYNC_MS * 10000);
@@ -1338,7 +1403,7 @@ static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     if (wddm->Stopping && On)
     {
         KeReleaseSpinLock(&wddm->Lock, irql);   // the stop does the disarm; nothing may arm behind it
-        return;
+        return STATUS_DEVICE_NOT_READY;
     }
     if (On != wddm->VSyncArmed)
     {
@@ -1348,13 +1413,14 @@ static void WddmVSyncArm(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
         else KeCancelTimer(&wddm->VSyncTimer);
     }
     KeReleaseSpinLock(&wddm->Lock, irql);
-    if (!changed) return;                       // logging stays outside the lock
+    if (!changed) return STATUS_SUCCESS;        // logging stays outside the lock
 
     if (On)
         GuardLog("wddm: software vsync on, %u ms period, target %u", (ULONG)BC250_WDDM_VSYNC_MS,
                  (ULONG)wddm->VSyncTargetId);
     else
         GuardLog("wddm: software vsync off after %ld ticks", wddm->VSyncTicks);
+    return STATUS_SUCCESS;
 }
 
 // display.c's SetVidPnSourceVisibility calls this; it is the earliest point at which a flip can be queued.
@@ -1502,6 +1568,55 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     GuardLog("wddm summary: presents %ld, flips %ld of %ld address calls (%ld arrived above DISPATCH_LEVEL)",
              Wddm->Calls[WddmDdiPresent], Wddm->Flips, Wddm->Calls[WddmDdiSetVidPnSourceAddress],
              Wddm->FlipsAboveDispatch);
+    // Cumulative counters are not bounded by the detailed-log budget. Read
+    // closure after quiescence; individual atomic reads are not one snapshot.
+    GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
+        Wddm->CddDwmInterop,Wddm->GpuPresentGate,Wddm->HandleIdentityProbe);
+    GuardLog("wddm: DRIVERCAPS returned interop0 %lld interop1 %lld",
+        InterlockedCompareExchange64(&Wddm->DriverCapsInteropReturned[0],0,0),
+        InterlockedCompareExchange64(&Wddm->DriverCapsInteropReturned[1],0,0));
+    for (i=0;i<2;i++)
+        GuardLog("wddm: DRIVERCAPS interop%u first100ns%lld last100ns%lld",
+            i,InterlockedCompareExchange64(&Wddm->DriverCapsFirstTime[i],0,0),
+            InterlockedCompareExchange64(&Wddm->DriverCapsLastTime[i],0,0));
+    GuardLog("wddm: Blt observation calls%lld capacity%u",
+        InterlockedCompareExchange64(&Wddm->PresentObservationCalls,0,0),BC250_PRESENT_OBSERVATIONS);
+    for (i=0;i<BC250_PRESENT_OBSERVATIONS;i++) {
+        BC250_PRESENT_OBSERVATION* o=&Wddm->PresentObservations[i];
+        UINT j;
+        // Acquire the immutable payload, skipping a still-active writer.
+        if (!InterlockedCompareExchange(&o->Published,0,0)) continue;
+        GuardLog("wddm: Blt obs%u interrupt100ns%llu qpc%llu",i,o->InterruptTime,o->Qpc);
+        GuardLog("wddm: Blt obs%u ctx%p dev%p flags%x node%u umd%u system%u",
+            i,o->Context,o->OwnerDevice,o->Flags,o->Node,o->UmdContext,o->SystemContext);
+        GuardLog("wddm: Blt obs%u dma%u private%u offset%u rects%u list%u valid%u snapshot%u",
+            i,o->DmaBytes,o->PrivateBytes,o->Offset,o->SubRects,o->ListSize,o->ListValid,o->SnapshotValid);
+        GuardLog("wddm: Blt obs%u src %ld,%ld,%ld,%ld dst %ld,%ld,%ld,%ld",
+            i,o->Src.left,o->Src.top,o->Src.right,o->Src.bottom,
+            o->Dst.left,o->Dst.top,o->Dst.right,o->Dst.bottom);
+        for (j=0;j<2;j++) {
+            const BC250_WDDM_ALLOCATION_PRIVATE* a=&o->Allocations[j];
+            GuardLog("wddm: Blt obs%u side%u handle%p adapter%u va%llX",
+                i,j,o->Handles[j],o->PhysicalAdapter[j],o->Va[j]);
+            if (o->SnapshotValid)
+                GuardLog("wddm: Blt obs%u side%u %ux%u pitch%u fmt%u bytes%llu",
+                    i,j,a->Width,a->Height,a->Pitch,a->Format,a->Size);
+        }
+    }
+    GuardLog("wddm: GPU Present calls%lld records%lld rotate%lld refused%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentCalls,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentRecords,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentRotates,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentRefused,0,0));
+    GuardLog("wddm: GPU Present submits%lld rejected%lld failed%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentSubmits,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSubmitRejected,0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentSubmitFailed,0,0));
+    GuardLog("wddm: GPU Present errors parameter%lld handle%lld color%lld other%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[0],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[1],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[2],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentStatuses[3],0,0));
     GuardLog("wddm summary: blit gate %s, %ld blits, %ld skips, %ld sources translated contiguous", Wddm->BlitGate ? "open" : "closed",
              Wddm->Blits, Wddm->BlitSkips, Wddm->BlitTranslations);
     // 2026-09-22 (ADR 0011 consequences, facts M100): where the copy actually landed. BlitsToFlip should be
@@ -1551,6 +1666,21 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->Device->VidPnFlipEnabled ? "open" : "closed", Wddm->Device->DcnFlipsHardware, Wddm->Device->DcnFlipRefused,
              Wddm->Device->DcnVsyncArmed, Wddm->Device->DcnVsyncTicks, Wddm->Device->DcnVsyncRefused, Wddm->Device->DcnVsyncDeferred,
              Wddm->Device->DcnVsyncOldBufferReports);
+    // Independently sampled counters/times: no interrupt lock and no per-frame logging.
+    GuardLog("vsync vector: DPC polls %ld ACKs %ld sync-failures %ld",
+             Wddm->Device->DcnVsyncDpcPolls, Wddm->Device->DcnVsyncDpcAcked,
+             Wddm->Device->DcnVsyncDpcSyncFailures);
+    GuardLog("vsync diagnostic: irq %ld no-mmio %ld flip-off %ld unarmed %ld",
+             Wddm->Device->InterruptCount, Wddm->Device->DcnVsyncNoMmio,
+             Wddm->Device->DcnVsyncFlipDisabled, Wddm->Device->DcnVsyncUnarmed);
+    GuardLog("vsync diagnostic: no-event %ld read-fail %ld ack-fail %ld",
+             Wddm->Device->DcnVsyncNoEvent, Wddm->Device->DcnVsyncReadFailed, Wddm->Device->DcnVsyncAckFailed);
+    GuardLog("vsync diagnostic: 100ns irq %lld entry %lld ack %lld notify %lld status %08lX",
+             InterlockedCompareExchange64(&Wddm->Device->InterruptLastTime, 0, 0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncEntryTime, 0, 0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncAckTime, 0, 0),
+             InterlockedCompareExchange64(&Wddm->Device->DcnVsyncNotifyTime, 0, 0),
+             (ULONG)Wddm->Device->DcnVsyncLastStatus);
     if (Wddm->ReportFailures != 0)
         GuardLog("wddm summary: *** %ld reports refused by DxgkCbSynchronizeExecution ***", Wddm->ReportFailures);
 
@@ -1584,6 +1714,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
         return;
     }
+    DcnLogVsyncSnapshot(Device);
     WddmSummaryOf(wddm);
     VidMmSummary();
 }
@@ -1636,6 +1767,10 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     InitializeListHead(&wddm->Objects);
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
+    wddm->HandleIdentityProbe = (GuardReadSetting(L"EnableHandleIdentityProbe", 0) == 1);
+    // Start-latched: changing registry values does not enable existing unbound opens.
+    wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
+    wddm->CddDwmInterop = (GuardReadSetting(L"EnableCddDwmInterop", 0) == 1);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
@@ -1682,6 +1817,13 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
              Device->Dxgk.DxgkCbSynchronizeExecution != NULL, Device->Dxgk.DxgkCbNotifyInterrupt != NULL,
              Device->Dxgk.DxgkCbQueueDpc != NULL, Device->Dxgk.DxgkCbNotifyDpc != NULL,
              Device->Dxgk.Size, (ULONG)sizeof(Device->Dxgk));
+    if (wddm->HandleIdentityProbe)
+        GuardLog("wddm: handle callbacks size %u get@%u=%p acquire@%u=%p release@%u=%p",
+            Device->Dxgk.Size,
+            (ULONG)FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbGetHandleData),(void*)Device->Dxgk.DxgkCbGetHandleData,
+            (ULONG)FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbAcquireHandleData),(void*)Device->Dxgk.DxgkCbAcquireHandleData,
+            (ULONG)FIELD_OFFSET(DXGKRNL_INTERFACE,DxgkCbReleaseHandleData),(void*)Device->Dxgk.DxgkCbReleaseHandleData);
+
     return STATUS_SUCCESS;
 Failed:
     // No WDDM object was published and no OS work was accepted. The coordinator
@@ -2098,7 +2240,7 @@ static NTSTATUS WddmQuerySegment4(_In_ const BC250_DEVICE* Device, _In_ const DX
 static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
 {
     DXGK_DRIVERCAPS* caps = (DXGK_DRIVERCAPS*)Query->pOutputData;
-    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
     // A query before a successful start uses the gate-closed node count.
     // Required WDDM/VidMm resource failures now fail StartDevice.
     UINT nodeCount = (wddm != NULL) ? wddm->NodeCount : BC250_WDDM_NODE_COUNT;
@@ -2145,6 +2287,16 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // Not a flag: the header says this field must be >= 2. Four-byte pitch alignment, which is what a 32 bits per
     // pixel surface needs anyway. Zero here would be out of contract, and nothing in the research says so.
     caps->PresentationCaps.AlignmentShift = 2;
+    // An explicit trial setting, independent of producer selection so the
+    // existing CPU diagnostic path can first identify the CDD's actual shapes.
+    // Never infer this capability merely from successful GPU submissions.
+    if (Device->Wddm && ((BC250_WDDM*)Device->Wddm)->CddDwmInterop) {
+        caps->PresentationCaps.DriverSupportsCddDwmInterop = 1;
+        // Match the hosted frontend's maximum shared texture extent (8192).
+        caps->PresentationCaps.MaxTextureWidthShift = 2;
+        caps->PresentationCaps.MaxTextureHeightShift = 2;
+    }
+
 
     // "MultiEngineAware means the driver supports contexts", which a GpuMmu driver must; PreemptionAware needs it
     // set or adapter initialization is halted. A packet scheduler that owns the ring can honestly promise not to
@@ -2183,6 +2335,27 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
 
     // No hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor into the image it presents,
     // exactly as in the display-only build.
+
+    // Successful replies, not merely the gate latched at start. Pre-start
+    // replies have no adapter-owned storage and are identified in the log.
+    if (wddm) {
+        UINT interop=caps->PresentationCaps.DriverSupportsCddDwmInterop ? 1 : 0;
+        LONG64 now=(LONG64)KeQueryInterruptTime(),previous;
+        // Keep chronological bounds even when concurrent replies publish in
+        // reverse order. Each field is atomic, not a transactional snapshot.
+        do {
+            previous=InterlockedCompareExchange64(&wddm->DriverCapsFirstTime[interop],0,0);
+            if (previous && previous<=now) break;
+        } while (InterlockedCompareExchange64(&wddm->DriverCapsFirstTime[interop],now,previous)!=previous);
+        do {
+            previous=InterlockedCompareExchange64(&wddm->DriverCapsLastTime[interop],0,0);
+            if (previous>=now) break;
+        } while (InterlockedCompareExchange64(&wddm->DriverCapsLastTime[interop],now,previous)!=previous);
+        InterlockedIncrement64(&wddm->DriverCapsInteropReturned[interop]);
+    }
+    GuardLog("wddm: DRIVERCAPS reply started%u interop%u extent-shifts%u/%u",
+        wddm!=NULL,caps->PresentationCaps.DriverSupportsCddDwmInterop,
+        caps->PresentationCaps.MaxTextureWidthShift,caps->PresentationCaps.MaxTextureHeightShift);
 
     // What was promised, and into how large a structure: the size says which DXGK_DRIVERCAPS this dxgkrnl thinks
     // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
@@ -2292,6 +2465,18 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         firmware.smc_version=smuVersion;
         RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
         RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
+        // DXGK_START_INFO.AdapterLuid is supplied by dxgkrnl at StartDevice.
+        // Keep old-sized queries byte-compatible; never emit a partial trailer.
+        if (QueryAdapterInfo->OutputDataSize >= BC250_ADAPTER_CAPS_BYTES) {
+            struct bc250_adapter_identity identity = {0};
+            identity.magic = BC250_ADAPTER_IDENTITY_MAGIC;
+            identity.version = BC250_ADAPTER_IDENTITY_VERSION;
+            identity.size = sizeof(identity);
+            identity.luid_low = device->StartInfo.AdapterLuid.LowPart;
+            identity.luid_high = (unsigned int)device->StartInfo.AdapterLuid.HighPart;
+            RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_ADAPTER_IDENTITY_OFFSET,
+                          &identity,sizeof(identity));
+        }
         break;
     }
     default:
@@ -2416,6 +2601,7 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     }
     object = WddmNewContext(parent->Device,(BOOLEAN)pCreateContext->Flags.SystemContext);
     if (object == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    object->OwnerDevice = hDevice;
     object->NodeOrdinal = pCreateContext->NodeOrdinal;
     object->SystemContext = (BOOLEAN)pCreateContext->Flags.SystemContext;
     if (umd)
@@ -2542,9 +2728,9 @@ static SIZE_T Bc250WddmGetRootPageTableSize(_In_ const HANDLE hAdapter, _Inout_ 
 static DXGKDDI_SETROOTPAGETABLE Bc250WddmSetRootPageTable;
 static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETROOTPAGETABLE* pSetPageTable)
 {
-    // Stage A has no VM context to program: the address is recorded in the log and nowhere else. It is not a plain
-    // physical address - D3DGPU_PHYSICAL_ADDRESS is a segment id and an offset into that segment.
-    if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetRootPageTable))
+    BOOLEAN first = WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetRootPageTable);
+    // The OS address is a segment and offset, resolved below for this context.
+    if (first)
         GuardLog("wddm: SetRootPageTable segment %u offset 0x%llX, %u entries", pSetPageTable->Address.SegmentId,
                  pSetPageTable->Address.SegmentOffset, pSetPageTable->NumEntries);
     VidMmSetRootPageTable(pSetPageTable);
@@ -2552,12 +2738,35 @@ static VOID Bc250WddmSetRootPageTable(_In_ const HANDLE hAdapter, _In_ const DXG
     {
         BC250_WDDM_OBJECT* context = WddmObject(pSetPageTable->hContext, BC250_WDDM_MAGIC_CONTEXT);
         ULONGLONG physical = 0;
+        BOOLEAN resolved = FALSE;
 
-        if (context != NULL) context->RootPhysical = VidMmRootPhysical(&pSetPageTable->Address, &physical) ? physical : 0;
+        if (context != NULL) {
+            resolved = VidMmRootPhysical(&pSetPageTable->Address, &physical);
+            context->RootPhysical = resolved ? physical : 0;
+        }
+        if (first && KeGetCurrentIrql() <= DISPATCH_LEVEL)
+            GuardLog("wddm: root binding handle%p ctx%p owner%p resolved%u physical%llX irql%u",
+                pSetPageTable->hContext, (void*)context, context ? (void*)context->OwnerDevice : NULL,
+                (UINT)resolved, physical, (UINT)KeGetCurrentIrql());
     }
 }
 
 // ---- allocations ------------------------------------------------------------------------------------------------
+
+C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE==1);
+C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
+C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
+C_ASSERT(D3DKMDT_GDISURFACE_LOOKUPTABLE==4);
+C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE_CPUVISIBLE_CROSSADAPTER==8);
+static ULONG WddmSurfacePixelBytes(ULONG Format)
+{
+    switch (Format) {
+    case D3DDDIFMT_A8: return 1;
+    case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
+    case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: return 4;
+    default: return 0;
+    }
+}
 
 static DXGKDDI_GETSTANDARDALLOCATIONDRIVERDATA Bc250WddmGetStandardAllocationDriverData;
 static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdapter,
@@ -2565,10 +2774,30 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
 {
     BC250_WDDM* wddm = WddmOf(hAdapter);
     BC250_WDDM_ALLOCATION_PRIVATE private;
+    BC250_GDI_PRIVATE gdi;
+    BC250_GDI_ALLOCATION_POLICY gdiPolicy;
+    UINT privateBytes=sizeof(private);
 
     RtlZeroMemory(&private, sizeof(private));
     private.Magic = BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;
     private.Version = 1;
+
+    // Retain the CDD/DWM allocation contract independently of the shared first-DDI
+    // log budget: primary/shadow requests can exhaust it before a GDI request.
+    // WDK10.0.26100 d3dkmdt.h defines types0..8; all future values share slot9.
+    // Separate the size query from the private-data fill, at most20 lines per start.
+    if (wddm != NULL && pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_GDISURFACE && pData->pCreateGdiSurfaceData != NULL)
+    {
+        ULONG type = (ULONG)pData->pCreateGdiSurfaceData->Type;
+        ULONG slot = type <= 8 ? type : 9;
+        ULONG fill = pData->pAllocationPrivateDriverData != NULL;
+        LONG bit = (LONG)(1u << (slot * 2 + fill));
+        if ((InterlockedOr(&wddm->GdiSurfaceTypesLogged, bit) & bit) == 0)
+            GuardLog("wddm: GDI request type %u flags 0x%08X phase %s %ux%u format %u",
+                     type, pData->pCreateGdiSurfaceData->Flags.Value, fill ? "fill" : "size",
+                     pData->pCreateGdiSurfaceData->Width, pData->pCreateGdiSurfaceData->Height,
+                     (ULONG)pData->pCreateGdiSurfaceData->Format);
+    }
 
     switch (pData->StandardAllocationType)
     {
@@ -2592,6 +2821,11 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
         break;
     case D3DKMDT_STANDARDALLOCATION_GDISURFACE:
         if (pData->pCreateGdiSurfaceData == NULL) return STATUS_INVALID_PARAMETER;
+        if (pData->pCreateGdiSurfaceData->Flags.Value ||
+            !pData->pCreateGdiSurfaceData->Type ||
+            !WddmGdiAllocationPolicy((ULONG)pData->pCreateGdiSurfaceData->Type,0,0,&gdiPolicy))
+            return STATUS_INVALID_PARAMETER;
+        privateBytes=sizeof(gdi);
         private.Width = pData->pCreateGdiSurfaceData->Width;
         private.Height = pData->pCreateGdiSurfaceData->Height;
         private.Format = (ULONG)pData->pCreateGdiSurfaceData->Format;
@@ -2599,12 +2833,22 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     default:
         return STATUS_INVALID_PARAMETER;
     }
-    // Scanout rows are aligned to 256 bytes (64 32-bit pixels). Other CPU
-    // surfaces retain their linear pitch. Extent includes every padded row.
-    if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
-    private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
-        DcnPrimaryPitch(private.Width):private.Width*4;
-    if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
+    // Standard GDI textures are opened by the DWM UMD. Its LB7A OpenResource
+    // contract needs pitch alignment and a four-row-padded allocation, just like
+    // the UMD-created shared textures. Logical Width/Height remain unchanged.
+    // Staging uses its format size and the advertised four-byte row alignment.
+    {
+        if (pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE) {
+            if (!WddmGdiLayout(private.Width,private.Height,(ULONG)pData->pCreateGdiSurfaceData->Type,
+                    WddmSurfacePixelBytes(private.Format),&private.Pitch,&private.Size))
+                return STATUS_INVALID_PARAMETER;
+        } else {
+            if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
+            private.Pitch=pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_SHAREDPRIMARYSURFACE ?
+                DcnPrimaryPitch(private.Width):private.Width*4;
+            if (!DcnSurfaceBytes(private.Width,private.Height,private.Pitch,&private.Size)) return STATUS_INVALID_PARAMETER;
+        }
+    }
     // These are output fields, not just copies in our private LB7A blob.
     // E26 ETW rejected shadow/staging creation when the public pitch was zero.
     if (pData->StandardAllocationType == D3DKMDT_STANDARDALLOCATION_SHADOWSURFACE)
@@ -2617,10 +2861,17 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     // Two passes: a NULL buffer asks only for the size. The resource blob stays empty in stage A.
     if (pData->pAllocationPrivateDriverData != NULL)
     {
-        if (pData->AllocationPrivateDriverDataSize < sizeof(private)) return STATUS_INVALID_PARAMETER;
-        RtlCopyMemory(pData->pAllocationPrivateDriverData, &private, sizeof(private));
+        if (pData->AllocationPrivateDriverDataSize < privateBytes) return STATUS_INVALID_PARAMETER;
+        if (privateBytes==sizeof(gdi)) {
+            RtlZeroMemory(&gdi,sizeof(gdi));
+            gdi.Surface=private;
+            gdi.Magic=BC250_GDI_PRIVATE_MAGIC;
+            gdi.Type=(ULONG)pData->pCreateGdiSurfaceData->Type;
+            gdi.Flags=pData->pCreateGdiSurfaceData->Flags.Value;
+            RtlCopyMemory(pData->pAllocationPrivateDriverData,&gdi,sizeof(gdi));
+        } else RtlCopyMemory(pData->pAllocationPrivateDriverData,&private,sizeof(private));
     }
-    pData->AllocationPrivateDriverDataSize = sizeof(private);
+    pData->AllocationPrivateDriverDataSize = privateBytes;
     pData->pResourcePrivateDriverData = NULL;
     pData->ResourcePrivateDriverDataSize = 0;
 
@@ -2657,22 +2908,10 @@ static void WddmCpuVisibleAllocationFlags(DXGK_ALLOCATIONINFOFLAGS_WDDM2_0* Flag
 static NTSTATUS WddmSurfaceResourcePolicy(const void* Data, UINT Bytes,
                                          BOOLEAN* SharedCpu, BOOLEAN* CachedCpu)
 {
-    const ULONG* words=(const ULONG*)Data;
-    *SharedCpu=FALSE;
-    *CachedCpu=FALSE;
-    if (!Data || Bytes<sizeof(ULONG) || words[0]!=0x52363245ul)
-        return STATUS_SUCCESS; // unrelated private resource ABI / standard allocation
-    if (Bytes<3*sizeof(ULONG) || words[2]>1)
-        return STATUS_INVALID_PARAMETER;
-    if (words[1]==1 && Bytes==3*sizeof(ULONG)) {
-        *SharedCpu=(BOOLEAN)words[2];
-        return STATUS_SUCCESS;
-    }
-    if (words[1]!=2 || Bytes!=4*sizeof(ULONG) || (words[3]&~3ul)!=0)
-        return STATUS_INVALID_PARAMETER;
-    *SharedCpu=(BOOLEAN)words[2];
-    *CachedCpu=(BOOLEAN)(*SharedCpu && (words[3]&2ul)!=0 && (words[3]&1ul)==0);
-    return STATUS_SUCCESS;
+    int shared=0,cached=0;
+    int valid=Bc250SurfaceResourcePolicy(Data,Bytes,&shared,&cached);
+    *SharedCpu=(BOOLEAN)shared; *CachedCpu=(BOOLEAN)cached;
+    return valid ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
 }
 
 static DXGKDDI_CREATEALLOCATION Bc250WddmCreateAllocation;
@@ -2691,6 +2930,8 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         DXGK_ALLOCATIONINFO* info = &pCreateAllocation->pAllocationInfo[i];
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* object;
+        ULONG gdiType=0;
+        BC250_GDI_ALLOCATION_POLICY policy;
 
         if (info->PrivateDriverDataSize == sizeof(BC250_WDDM_ALLOCATION_PRIVATE) && private != NULL &&
             private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC && private->Width == 64 && private->Height == 32)
@@ -2757,7 +2998,11 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         // Stage A can only size an allocation it described itself. An unknown blob is an honest failure: nothing
         // in the never-fail list reaches this DDI, and guessing a size would put VidMm and us out of step.
         if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
-            private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0)
+            private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
+            !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
+            !WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) ||
+            !WddmGdiAllocationPolicy(gdiType,sharedCpu,cachedCpu,&policy) ||
+            (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
         {
             if (WddmFirstCalls(wddm, WddmDdiCreateAllocation))
                 GuardLog("wddm: CreateAllocation %u of %u refused, private data %u bytes", i,
@@ -2773,7 +3018,9 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         object->Allocation = *private;
-
+        object->GdiType=gdiType;
+        // WDK26100: standard texture/staging/lookup surfaces are GPU-only;
+        // CPU staging uses coherent aperture. Legacy type0 keeps its policy.
         info->hAllocation = object;
         info->Size = (SIZE_T)ROUND_TO_PAGES(private->Size);
         // DXGK_ALLOCATIONINFO is an OUT array that nobody promised to zero: every member is written, as both
@@ -2784,19 +3031,15 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         info->pAllocationUsageHint = NULL;
         info->PitchAlignedSize = 0;                     // the aperture segment is not a pitch-aligned one
         info->PreferredSegment.Value = 0;
-        info->PreferredSegment.SegmentId0 = sharedCpu ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
+        info->PreferredSegment.SegmentId0 = policy.Aperture ? BC250_WDDM_SEGMENT_APERTURE : BC250_WDDM_SEGMENT_VRAM;
         info->SupportedReadSegmentSet = BC250_WDDM_SEGMENT_SET(info->PreferredSegment.SegmentId0);
         info->SupportedWriteSegmentSet = info->SupportedReadSegmentSet;
-        info->EvictionSegmentSet = 0;                   // surfaces live in the local segment only; no eviction target
+        info->EvictionSegmentSet = 0;                   // no explicit eviction segment; VidMm owns backing-store eviction
         info->PhysicalAdapterIndex = 0;
         WddmCpuVisibleAllocationFlags(&info->FlagsWddm2);
-        // Linear VRAM blits use physical mappings. System-memory pages are not assumed contiguous.
-        info->FlagsWddm2.AccessedPhysically = !sharedCpu;
-        // Explicit v2 non-primary CPU-read intent only. V1 and standard LB7A
-        // retain Cached=0. System aperture coherency is supplied through VidMm
-        // CacheCoherent PTEs, not by changing local scanout mapping attributes.
-        info->FlagsWddm2.Cached = cachedCpu &&
-            info->PreferredSegment.SegmentId0 == BC250_WDDM_SEGMENT_APERTURE;
+        info->FlagsWddm2.CpuVisible = policy.CpuVisible;
+        info->FlagsWddm2.AccessedPhysically = policy.AccessedPhysically;
+        info->FlagsWddm2.Cached = policy.Cached;
         info->AllocationPriority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
     }
     if (pCreateAllocation->Flags.Resource && pCreateAllocation->hResource == NULL)
@@ -2857,6 +3100,8 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     return STATUS_SUCCESS;
 }
 
+#include "wddm_allocation_identity.inc"
+
 static DXGKDDI_OPENALLOCATIONINFO Bc250WddmOpenAllocation;
 static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DXGKARG_OPENALLOCATION* pOpenAllocation)
 {
@@ -2864,29 +3109,18 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
     UINT i;
 
     if (parent == NULL) return STATUS_INVALID_PARAMETER;
-    // What goes into hDeviceSpecificAllocation comes back in every DXGK_ALLOCATIONLIST entry of a Present or a Render
-    // (facts M82 saw the NULL 0.7.15 put there). 0.7.16 asked DxgkCbGetHandleData(DXGK_HANDLE_ALLOCATION) for the
-    // object CreateAllocation stored and got something else for the CDD's handles (E20 run 003: 0xC00006C0,
-    // 0xC0000000 - "not one of our allocations"); the raw answer is still logged below, for the record. What this
-    // DDI does get, by contract, is the allocation's own private driver data - the blob GetStandardAllocationDriverData
-    // wrote and CreateAllocation validated - so the handle handed out is an object of our own holding a copy of it,
-    // and CloseAllocation frees it again. dxgkrnl closes what it opened, and the stop's sweep frees the rest.
+    // Opened handles are carried back in Present entries. Historical GetHandleData
+    // returned NULL for both CDD LB7A and user BC2A opens; this is not a proven
+    // CDD-specific restriction. Acquire/Release now establishes backing identity;
+    // unresolved opens retain CPU compatibility but fail GPU Present admission.
     for (i = 0; i < pOpenAllocation->NumAllocations; i++)
     {
         DXGK_OPENALLOCATIONINFO* info = &pOpenAllocation->pOpenAllocation[i];
         const BC250_WDDM_ALLOCATION_PRIVATE* private = (const BC250_WDDM_ALLOCATION_PRIVATE*)info->pPrivateDriverData;
         BC250_WDDM_OBJECT* opened = NULL;
-        void* raw = NULL;
+        ULONG gdiType=0;
+        BC250_GDI_ALLOCATION_POLICY policy;
 
-        if (parent->Device->Dxgk.DxgkCbGetHandleData != NULL)
-        {
-            DXGKARGCB_GETHANDLEDATA data;
-
-            data.hObject = info->hAllocation;
-            data.Type = DXGK_HANDLE_ALLOCATION;
-            data.Flags.Value = 0;
-            raw = parent->Device->Dxgk.DxgkCbGetHandleData(&data);
-        }
         if (UmdBlobIsAlloc(info->pPrivateDriverData, info->PrivateDriverDataSize))
         {
             struct umd_alloc_view view;
@@ -2906,15 +3140,24 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
             }
         }
         else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
-            private->Size != 0)
+            private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
+            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) &&
+            WddmGdiAllocationPolicy(gdiType,0,0,&policy))
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
-            if (opened != NULL) opened->Allocation = *private;
+            if (opened != NULL) {
+                opened->Allocation = *private;
+                opened->GdiType=gdiType;
+            }
+        }
+        if (opened != NULL) {
+            opened->OwnerDevice = hDevice;
+            WddmBindHandleIdentity(parent->Device,info,opened,pOpenAllocation->Flags.Value);
         }
         info->hDeviceSpecificAllocation = opened;
         if (parent->Device->Wddm != NULL && ((BC250_WDDM*)parent->Device->Wddm)->Calls[WddmDdiOpenAllocation] < BC250_WDDM_LOG_CALLS)
-            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p (GetHandleData said %p)", i, (ULONG)info->hAllocation,
-                     info->PrivateDriverDataSize, (void*)opened, raw);
+            GuardLog("wddm: OpenAllocation [%u] handle 0x%08X private %u bytes -> %p", i, (ULONG)info->hAllocation,
+                     info->PrivateDriverDataSize, (void*)opened);
     }
     if (WddmFirstCalls((BC250_WDDM*)parent->Device->Wddm, WddmDdiOpenAllocation))
         GuardLog("wddm: OpenAllocation %u allocations flags 0x%08X", pOpenAllocation->NumAllocations, pOpenAllocation->Flags.Value);
@@ -4161,6 +4404,64 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
         InterlockedIncrement(&wddm->PagingVirtualUnmapped);
     }
 
+    // Driver-generated GPU Present must be recognized before UMD BC2S dispatch.
+    // The record is OS-owned private data, with an exact VA/length binding. No
+    // malformed BGP1 can fall through to BC2S or CPU E26P completion.
+    // M656: even a non-UMD Present reports our consumed24-byte private record
+    // as DmaBufferUmdPrivateDataSize. It is not required to be zero here.
+    // Accept exactly the producer's record span, never arbitrary UMD data.
+    if (pSubmitCommand->Flags.Present && pSubmitCommand->pDmaBufferPrivateData != NULL &&
+        pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(ULONG) &&
+        *(const ULONG*)pSubmitCommand->pDmaBufferPrivateData == BC250_GFX_PRESENT_MAGIC)
+    {
+        if (wddm == NULL || !wddm->GpuPresentGate || context == NULL || context->UmdContext ||
+            node != BC250_WDDM_NODE_3D || context->RootPhysical == 0 ||
+            KeGetCurrentIrql() > APC_LEVEL ||
+            !Bc250GfxPresentSubmitMatches(pSubmitCommand->pDmaBufferPrivateData,
+                pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferUmdPrivateDataSize,
+                pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize)) {
+            LONG64 rejected = wddm ? InterlockedIncrement64(&wddm->GpuPresentSubmitRejected) : 0;
+            // DWM026 built valid-looking IB spans but failed admission. Keep the
+            // original checks; expose every input before changing any contract.
+            if (rejected > 0 && rejected <= 16 && KeGetCurrentIrql() <= DISPATCH_LEVEL) {
+                ULONG words[BC250_GFX_PRESENT_RECORD_BYTES / sizeof(ULONG)] = {0};
+                if (pSubmitCommand->DmaBufferPrivateDataSize >= sizeof(words))
+                    RtlCopyMemory(words, pSubmitCommand->pDmaBufferPrivateData, sizeof(words));
+                GuardLog("wddm: GPU Present reject%lld ctx%p fence%llu node%u irql%u",
+                    rejected, (void*)context, pSubmitCommand->SubmissionFenceId,
+                    node, (UINT)KeGetCurrentIrql());
+                GuardLog("wddm: GPU Present reject%lld gate%u umd%u root%llX private%u umdprivate%u",
+                    rejected, (UINT)wddm->GpuPresentGate, context ? (UINT)context->UmdContext : 0,
+                    context ? context->RootPhysical : 0,
+                    pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferUmdPrivateDataSize);
+                GuardLog("wddm: GPU Present reject%lld va%llX bytes%u match%u",
+                    rejected, pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize,
+                    (UINT)Bc250GfxPresentMatches(pSubmitCommand->pDmaBufferPrivateData,
+                        pSubmitCommand->DmaBufferPrivateDataSize, pSubmitCommand->DmaBufferVirtualAddress,
+                        pSubmitCommand->DmaBufferSize));
+                GuardLog("wddm: GPU Present reject%lld words %08X %08X %08X %08X %08X %08X",
+                    rejected, words[0], words[1], words[2], words[3], words[4], words[5]);
+            }
+            return STATUS_INVALID_PARAMETER;
+        }
+        if (WddmSubmitPresentHardware(device,wddm,context,
+                pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
+                pSubmitCommand->SubmissionFenceId,node)) {
+            if (InterlockedIncrement64(&wddm->GpuPresentSubmits)<=16)
+            {
+                GuardLog("wddm: GPU Present submit ctx%p fence%llu va%llX bytes%u",
+                    (void*)context,pSubmitCommand->SubmissionFenceId,
+                    pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize);
+                GuardLog("wddm: GPU Present submitted ctx%p fence%llu root%llX node%u",
+                    (void*)context,pSubmitCommand->SubmissionFenceId,context->RootPhysical,node);
+            }
+            return STATUS_SUCCESS;
+        }
+        InterlockedIncrement64(&wddm->GpuPresentSubmitFailed);
+        WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);
+        return STATUS_SUCCESS; // preserve the existing nonempty-work recovery contract
+    }
+
     // M8. A UMD context's packet is the IB in its BC2S blob, not the DMA buffer a present uses. Handled
     // here, before stage C, so a UMD submit can never fall through onto DmaBufferVirtualAddress. One IB
     // takes the same gated gfx-ring path. Unsupported multi-IB packets are rejected before dispatch.
@@ -4170,8 +4471,10 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     }
 
     // Only driver-built, non-UMD present packets enter the CPU presentation path.
-    // The scheduler has now selected this context's root and made its allocations
-    // resident. Complete the fence only after all copied rows are visible.
+    // The scheduler has selected this context's root. Residency is owned by the
+    // device residency list, not the Present allocation list. CDD/system callers
+    // must retain both surfaces there through completion. Complete the fence only
+    // after all copied rows are visible.
     if (context != NULL && !context->UmdContext && pSubmitCommand->Flags.Present &&
         pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
         pSubmitCommand->pDmaBufferPrivateData != NULL &&
@@ -4442,8 +4745,8 @@ static NTSTATUS Bc250WddmFormatHistoryBuffer(_In_ const HANDLE hContext, _In_ DX
 // E20, H3 (ADR 0011: a diagnostic, never the present path of a game). A Blt present of a GDI context names its
 // source at DXGK_PRESENT_SOURCE_INDEX of pAllocationList (facts M82): our allocation object, once OpenAllocation
 // hands it out, and the surface's GPU virtual address in the context's address space. The source is translated
-// through the context's root (first and last byte: a VRAM allocation is one contiguous range of the segment, so the
-// two must be Size - 1 apart, and the walk proves the tables rather than assuming them), mapped read-only by physical
+// through the context's root, checking every page for contiguous VRAM backing. Endpoints alone do not
+// establish contiguity for allocations without AccessedPhysically. The source is mapped read-only by physical
 // address for this one call - never through BAR0 (facts M32) - and its sub-rectangles are copied into the firmware
 // framebuffer the way display.c's CopyRect does it: clamped to the mode, 4 bytes a pixel, no scaling. Nothing is
 // cached, so no lifetime is shared with DestroyAllocation, and nothing is written except the framebuffer.
@@ -4488,6 +4791,15 @@ static BOOLEAN WddmCopyScanoutRows(PVOID Destination, SIZE_T DestinationBytes, U
     return TRUE;
 }
 
+static int WddmPresentTranslate(void* Context, unsigned long long Va,
+    unsigned long long* Physical, int* System)
+{
+    BOOLEAN system=FALSE;
+    BOOLEAN result=VidMmTranslate(((BC250_WDDM_OBJECT*)Context)->RootPhysical,Va,Physical,&system);
+    *System=system;
+    return result;
+}
+
 static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
     BC250_DEVICE* device = Context->Device;
@@ -4498,7 +4810,7 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     int reading = 0;
     const BC250_WDDM_ALLOCATION_PRIVATE* alloc = NULL;
     ULONGLONG va = 0, first = 0, last = 0;
-    BOOLEAN systemFirst = FALSE, systemLast = FALSE, verbose;
+    BOOLEAN verbose;
     const UCHAR* map;
     PHYSICAL_ADDRESS physical;
     RECT whole;
@@ -4571,15 +4883,13 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     }
     if (why == NULL)
     {
-        if (!VidMmTranslate(Context->RootPhysical, va, &first, &systemFirst) ||
-            !VidMmTranslate(Context->RootPhysical, va + alloc->Size - 1, &last, &systemLast)) why = "source VA does not translate";
-        else if (systemFirst || systemLast) why = "source in system memory";
-        else if (last - first != alloc->Size - 1) why = "source not contiguous";
+        if (!Bc250PresentVramRange(Context,WddmPresentTranslate,va,alloc->Size,&first,&last))
+            why = "source pages not contiguous VRAM";
         else InterlockedIncrement(&wddm->BlitTranslations);
         if (verbose && object != NULL)
             GuardLog("wddm: blit source (reading %d) %p %ux%u pitch %u format %u size 0x%llX va 0x%llX -> 0x%llX .. 0x%llX%s%s", reading,
                      (void*)object, alloc->Width, alloc->Height, alloc->Pitch, alloc->Format, alloc->Size, va, first, last,
-                     (systemFirst || systemLast) ? " SYSTEM" : "", why != NULL ? " REFUSED" : "");
+                     "", why != NULL ? " REFUSED" : "");
     }
     if (why != NULL)
     {
@@ -4632,15 +4942,12 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     {
         BC250_WDDM_OBJECT* destination = WddmListedObject(wddm, (HANDLE)(ULONG_PTR)raw[8], BC250_WDDM_MAGIC_OPENED);
         ULONGLONG dstFirst = 0, dstLast = 0, primaryPhysical = 0;
-        BOOLEAN dstSystemFirst = FALSE, dstSystemLast = FALSE;
         const BC250_WDDM_ALLOCATION_PRIVATE* d = destination ? &destination->Allocation : NULL;
         if (d == NULL || d->Width == 0 || d->Height == 0 || d->Pitch < d->Width * 4ull ||
             d->Size < (ULONGLONG)d->Pitch * d->Height || d->Size > 0x10000000ull ||
             !WddmLinearColorFormat(d->Format) ||
             raw[9] > MAXULONGLONG - d->Size ||
-            !VidMmTranslate(Context->RootPhysical, raw[9], &dstFirst, &dstSystemFirst) ||
-            !VidMmTranslate(Context->RootPhysical, raw[9] + d->Size - 1, &dstLast, &dstSystemLast) ||
-            dstSystemFirst || dstSystemLast || dstLast < dstFirst || dstLast - dstFirst != d->Size - 1 ||
+            !Bc250PresentVramRange(Context,WddmPresentTranslate,raw[9],d->Size,&dstFirst,&dstLast) ||
             (dstFirst < last + 1 && first < dstLast + 1))
         {
             InterlockedIncrement(&wddm->BlitSkips);
@@ -4795,10 +5102,147 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
                  (toFlip ? "flipped surface" : "POST framebuffer"), mapFailed ? " (mapping failed, fell back)" : "");
 }
 
+// Build a complete OS-owned IB. The gate remains diagnostic until CDD/UMD
+// admission, cache ordering and lifecycle have been verified on the exact build.
+static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT* Present)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
+    HANDLE handles[2];
+    BC250_WDDM_ALLOCATION_PRIVATE allocations[2];
+    BC250_BLIT_SURFACE surface[2];
+    BC250_BLIT_RECT src, dst, *dirty=NULL;
+    ULONGLONG va[2], ib=Present->DmaBufferGpuVirtualAddress;
+    ULONG record[BC250_GFX_PRESENT_RECORD_BYTES/sizeof(ULONG)];
+    UINT i,next=Present->MultipassOffset,written=0;
+    BC250_GFX_BLIT_RESULT result;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    // BC2C UMD admission is withheld until source AND destination residency on
+    // that exact submitting device is established. ACQUIRE_MEM is not a wait
+    // for another queue, and an allocation-list entry does not confer residency.
+    if (Context->UmdContext || Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
+        !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
+        (Present->SubRectCnt && !Present->pDstSubRects)) return status;
+    // A malformed available buffer is not exhaustion: retrying an equally
+    // sized buffer cannot repair its alignment or an absent backing pointer.
+    if ((Present->DmaSize && !Present->pDmaBuffer) ||
+        ((ULONG_PTR)Present->pDmaBuffer&3u) ||
+        (Present->DmaBufferPrivateDataSize && !Present->pDmaBufferPrivateData))
+        return status;
+    // DXGKARG_PRESENT reports remaining private bytes, not the context's
+    // original capacity. Exhaustion can legitimately require buffer rotation.
+    // Fresh non-UMD contexts have enough room for both our IB and its record.
+    C_ASSERT(PAGE_SIZE>=64 && !(PAGE_SIZE&31u));
+    C_ASSERT(sizeof(BC250_PRESENT_PACKET)>=BC250_GFX_PRESENT_RECORD_BYTES);
+    if (Present->DmaSize<64 || Present->DmaBufferPrivateDataSize<sizeof(record))
+        return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
+    if (Present->DmaSize&31u) return status;
+    if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize)) return status;
+    for (i=0;i<2;i++) {
+        const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
+            (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
+        if (info->PhysicalAdapterIndex) return status;
+        handles[i]=info->hDeviceSpecificAllocation;
+    }
+    if (!WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,handles,allocations))
+        return STATUS_INVALID_HANDLE;
+    for (i=0;i<2;i++) {
+        const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
+            (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
+        const BC250_WDDM_ALLOCATION_PRIVATE* a=&allocations[i];
+        if (!WddmLinearColorFormat(a->Format)) return STATUS_GRAPHICS_CANNOTCOLORCONVERT;
+        surface[i].Width=a->Width;surface[i].Height=a->Height;surface[i].Pitch=a->Pitch;
+        surface[i].Bytes=a->Size;surface[i].Format=WddmRedFirst(a->Format)?Bc250BltRgba8:Bc250BltBgra8;
+        va[i]=info->AllocationVirtualAddress;
+        if (!va[i] || (va[i]&(PAGE_SIZE-1)) || !a->Size || va[i]>MAXULONGLONG-(a->Size-1)) return status;
+        // The active command allocation must never be a copy source or target.
+        if (ib<=va[i] ? va[i]-ib<Present->DmaSize : ib-va[i]<a->Size) return status;
+    }
+    src.Left=Present->SrcRect.left;src.Top=Present->SrcRect.top;
+    src.Right=Present->SrcRect.right;src.Bottom=Present->SrcRect.bottom;
+    dst.Left=Present->DstRect.left;dst.Top=Present->DstRect.top;
+    dst.Right=Present->DstRect.right;dst.Bottom=Present->DstRect.bottom;
+    if (Present->SubRectCnt) {
+        if (Present->SubRectCnt>MAXULONG/sizeof(*dirty)) return status;
+        dirty=ExAllocatePool2(POOL_FLAG_NON_PAGED,(SIZE_T)Present->SubRectCnt*sizeof(*dirty),BC250_WDDM_TAG);
+        if (!dirty) return STATUS_INSUFFICIENT_RESOURCES;
+        for(i=0;i<Present->SubRectCnt;i++) {
+            dirty[i].Left=Present->pDstSubRects[i].left;dirty[i].Top=Present->pDstSubRects[i].top;
+            dirty[i].Right=Present->pDstSubRects[i].right;dirty[i].Bottom=Present->pDstSubRects[i].bottom;
+        }
+    }
+    result=Bc250EmitGfxPresentBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
+        va[0],va[1],Present->MultipassOffset,&next,Present->pDmaBuffer,Present->DmaSize/4u,&written);
+    if (dirty) ExFreePoolWithTag(dirty,BC250_WDDM_TAG);
+    if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return status;
+    // Consume the entire aligned DMA buffer, one record/IB. This prevents two
+    // Present records being appended while the consumer expects one exact span.
+    if (written!=Present->DmaSize/4u) return status;
+    KeMemoryBarrier();
+    RtlCopyMemory(Present->pDmaBufferPrivateData,record,sizeof(record));
+    Present->pDmaBuffer=(UCHAR*)Present->pDmaBuffer+Present->DmaSize;
+    Present->pDmaBufferPrivateData=(UCHAR*)Present->pDmaBufferPrivateData+sizeof(record);
+    Present->MultipassOffset=next;
+    if (InterlockedIncrement64(&wddm->GpuPresentRecords)<=16) {
+        GuardLog("wddm: GPU Present built ctx%p ib%llX bytes%u next%u more%u",
+            (void*)Context,ib,Present->DmaSize,next,result==Bc250GfxBltMore);
+        GuardLog("wddm: GPU Present build ctx%p owner%p root%llX irql%u",
+            (void*)Context,(void*)Context->OwnerDevice,Context->RootPhysical,(UINT)KeGetCurrentIrql());
+        for (i=0;i<2;i++)
+            GuardLog("wddm: GPU Present surface%u handle%p va%llX %ux%u pitch%u fmt%u bytes%llu",
+                i,handles[i],va[i],allocations[i].Width,allocations[i].Height,
+                allocations[i].Pitch,allocations[i].Format,allocations[i].Size);
+    }
+    return result==Bc250GfxBltMore ? STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER : STATUS_SUCCESS;
+}
+
+// Diagnostic only: no mapping, pixel access or GPU work. Uses the producer's
+// GpuMmu list contract and locked snapshot even when the producer gate is 0.
+static void WddmObservePresent(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Present)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
+    BC250_PRESENT_OBSERVATION* o;
+    LONG64 call;
+    UINT i;
+    if (!wddm || !Present->Flags.Blt ||
+        (!wddm->HandleIdentityProbe && !wddm->CddDwmInterop)) return;
+    call=InterlockedIncrement64(&wddm->PresentObservationCalls);
+    if (call<=0 || call>BC250_PRESENT_OBSERVATIONS) return;
+    o=&wddm->PresentObservations[call-1];
+    o->InterruptTime=KeQueryInterruptTime();
+    o->Qpc=(ULONGLONG)KeQueryPerformanceCounter(NULL).QuadPart;
+    o->Context=Context;o->OwnerDevice=Context->OwnerDevice;
+    o->Flags=Present->Flags.Value;o->Node=Context->NodeOrdinal;
+    o->UmdContext=Context->UmdContext;o->SystemContext=Context->SystemContext;
+    o->ListSize=Context->AllocationListSize;
+    o->DmaBytes=Present->DmaSize;o->PrivateBytes=Present->DmaBufferPrivateDataSize;
+    o->Offset=Present->MultipassOffset;o->SubRects=Present->SubRectCnt;
+    o->Src=Present->SrcRect;o->Dst=Present->DstRect;
+    if (Present->pAllocationInfo && Context->AllocationListSize>DXGK_PRESENT_MAX_INDEX) {
+        for (i=0;i<2;i++) {
+            const DXGK_PRESENTALLOCATIONINFO* a=Present->pAllocationInfo+
+                (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
+            o->Handles[i]=a->hDeviceSpecificAllocation;
+            o->PhysicalAdapter[i]=a->PhysicalAdapterIndex;
+            o->Va[i]=a->AllocationVirtualAddress;
+        }
+        o->ListValid=TRUE;
+        if (!o->PhysicalAdapter[0] && !o->PhysicalAdapter[1])
+            o->SnapshotValid=WddmSnapshotPresentAllocations(wddm,Context->OwnerDevice,
+                o->Handles,o->Allocations);
+    }
+    InterlockedExchange(&o->Published,1);
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
     BC250_WDDM_OBJECT* context = WddmObject(hContext, BC250_WDDM_MAGIC_CONTEXT);
+
+    // A recycled OS private buffer may still contain a previous BGP1. Clear at
+    // producer entry, including early-return/non-Blt paths. Do not clear during
+    // submission: a legal scheduler resubmission must retain the same record.
+    Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
+    if (context) WddmObservePresent(context,pPresent);
 
     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
     // software packet below; its pixels are copied only at SubmitCommandVirtual.
@@ -4842,6 +5286,27 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
         GuardLog("wddm: Present dst (%d,%d)-(%d,%d) src (%d,%d)-(%d,%d) va 0x%llX", pPresent->DstRect.left, pPresent->DstRect.top,
                  pPresent->DstRect.right, pPresent->DstRect.bottom, pPresent->SrcRect.left, pPresent->SrcRect.top,
                  pPresent->SrcRect.right, pPresent->SrcRect.bottom, (ULONGLONG)pPresent->DmaBufferGpuVirtualAddress);
+    }
+    if (context != NULL && pPresent->Flags.Blt &&
+        ((BC250_WDDM*)context->Device->Wddm)->GpuPresentGate) {
+        BC250_WDDM* wddm=(BC250_WDDM*)context->Device->Wddm;
+        UINT before=pPresent->MultipassOffset;
+        LONG64 call=InterlockedIncrement64(&wddm->GpuPresentCalls);
+        NTSTATUS status=WddmBuildGpuPresent(context,pPresent);
+        if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
+            InterlockedIncrement64(&wddm->GpuPresentRotates);
+        else if (!NT_SUCCESS(status)) {
+            UINT kind=status==STATUS_INVALID_PARAMETER ? 0 :
+                status==STATUS_INVALID_HANDLE ? 1 :
+                status==STATUS_GRAPHICS_CANNOTCOLORCONVERT ? 2 : 3;
+            InterlockedIncrement64(&wddm->GpuPresentRefused);
+            InterlockedIncrement64(&wddm->GpuPresentStatuses[kind]);
+        }
+        if (call<=16)
+            GuardLog("wddm: GPU Present call%lld status%x dma%u private%u offset%u->%u",
+                call,(UINT)status,pPresent->DmaSize,pPresent->DmaBufferPrivateDataSize,
+                before,pPresent->MultipassOffset);
+        return status;
     }
     if (context != NULL && !context->UmdContext && pPresent->Flags.Value == 1 &&
         ((BC250_WDDM*)context->Device->Wddm)->BlitGate)
@@ -4977,9 +5442,12 @@ static NTSTATUS Bc250WddmControlInterrupt(_In_ const HANDLE hAdapter, _In_ const
         // otherwise wait on a timer nothing had armed.
         if (wddm != NULL)
         {
-            wddm->VSyncEnabled = EnableInterrupt;
-            if (EnableInterrupt) WddmVSyncArm(device, TRUE);
-        }
+            // Publish enabled reporting only after its timing source is armed.
+            // A failed MMIO/synchronization operation must reach the caller;
+            // retain the previous reporting state so a retry can recover.
+            if (EnableInterrupt) status = WddmVSyncArm(device, TRUE);
+            if (NT_SUCCESS(status)) wddm->VSyncEnabled = EnableInterrupt;
+        } else status = STATUS_DEVICE_NOT_READY;
         break;
     case DXGK_INTERRUPT_DMA_COMPLETED:
         // Always on and not ours to switch off: a submission is completed whether or not anyone asked for it.

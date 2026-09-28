@@ -1,0 +1,9 @@
+# M736 - Native system D3D11 renders on hosted GPU with matching CPU checksum
+
+Runtime009 source3f4e535a, manifest9BF802214B91AFC84AE030D59E82F29AAE349A73700EAC1E3A5C6BF5F25985F1. Changed shell masks MSAA attachment claims/qualities for component SRV formats21/22/46/47; engine253A/ICDC0CE/configEAB1 and clientBC92 unchanged. Full DDI gate and host regression passed before build. No app-local d3d11/dxgi translator DLLs; exact process router temporarily occupies registered UMD path.
+
+Both controls exit0 with measured results. CPU FL10_0 loads system D3D11/DXGI, router and forwarded CPU UMD, no ICD. GPU FL11_1 loads system D3D11/DXGI, router, M14 shell, engine and exactly one ICDC0CE verified in process. Both execute64x64 offscreen draws scene, two frames, one draw, no warmup; both return checksum21f6950fc86132f4 with zero API/query failures or disjoint result. The GPU run contains no DDI error/second-chance exception. This is the first passing native system-runtime M14 rendering control, with matched CPU content.
+
+Supervisor passed41.8848421s, CPU/GPU verified, baseline restored, independent postflight verified, tree closed, cleanup true. CPU171 retained; no KMD or DWM restart. Exact artifact hashes are in artifact-hashes.json. Raw logs and module full paths remain scratch/m14/runtime009-ops; selected records omit environment, timings and full paths. Timings under debugger are not performance evidence.
+
+Scope: tiny offscreen rendering plus readback/checksum. This does not validate a window swapchain, shared/imported resources, all feature-level operations, memory-pressure recovery, title compatibility or the M14 performance criterion. The offscreen readback is a diagnostic, not a zero-copy Present claim. Further implementation/validation remains; no full M14 closure or permanent GPU deployment.

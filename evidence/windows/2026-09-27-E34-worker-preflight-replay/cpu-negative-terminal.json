@@ -1,0 +1,11 @@
+{
+    "utc":  "2026-09-27T13:57:16.6121020Z",
+    "pid":  6664,
+    "failure":  {
+                    "position":  "At C:\\BC250\\m13\\wsi-preflight001\\preflight.ps1:25 char:113\r\n+ ... 4A076CBEA2695DC8044CEF806A6F735E\u0027){throw \u0027Baseline UMD/ICD mismatch\u0027}\r\n+                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+                    "message":  "Baseline UMD/ICD mismatch",
+                    "error_id":  "Baseline UMD/ICD mismatch",
+                    "stack":  "at Snapshot, C:\\BC250\\m13\\wsi-preflight001\\preflight.ps1: line 25\r\nat \u003cScriptBlock\u003e, C:\\BC250\\m13\\wsi-preflight001\\preflight.ps1: line 30\r\nat \u003cScriptBlock\u003e, C:\\BC250\\tmp\\invoke-recorded-worker.ps1: line 21"
+                },
+    "exit_code":  1
+}

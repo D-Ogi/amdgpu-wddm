@@ -1,0 +1,6 @@
+{
+    "phase":  "Verify",
+    "tree_closed":  true,
+    "reason":  "failed-closed",
+    "success":  false
+}

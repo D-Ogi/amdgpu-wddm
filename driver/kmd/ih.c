@@ -39,6 +39,10 @@
 #define BC250_IH_TAG 'hI2B'
 #define BC250_IH_RB_ENABLE 0x00000001ul     // IH_RB_CNTL.RB_ENABLE (osssys_5_0_0_sh_mask.h), for the "is it off" read only
 #define BC250_IH_RB_OVERFLOW_CLEAR 0x80000000ul     // IH_RB_CNTL.WPTR_OVERFLOW_CLEAR, for the plan's model only
+// Identifier reference: Linux include/ivsrcid/dcn/irqsrcs_dcn_1_0.h,
+// DCN_1_0__SRCID__OTG0_IHC_V_UPDATE_NO_LOCK_INTERRUPT; DCE client in soc15_ih_clientid.h.
+#define BC250_IH_DCE_CLIENT 4u
+#define BC250_IH_OTG0_VUPDATE_SOURCE 0x57u
 #define BC250_IH_DPC_ROUNDS 4              // amdgpu_ih_process() looks again after publishing the read pointer
 
 typedef struct _BC250_IH_STATS {
@@ -54,6 +58,7 @@ typedef struct _BC250_IH {
     volatile LONG Active;               // the ring is enabled and the DPC may consume it
     volatile LONG OurInterrupts;        // interrupt routine calls taken as ours
     volatile LONG DpcCount;
+    volatile LONG VsyncPending; // consumed vector may have arrived after the ISR poll
     volatile LONG InDpc;                // one consumer at a time: nothing documented says the DPC is not re-entered
     volatile LONG DpcAgain;             // a DPC that found the consumer busy asks it for another pass
     BC250_SEQUENCE Sequence;            // the escape's
@@ -134,7 +139,7 @@ static void Note(_Inout_ BC250_IH_STATS* Ih, _In_ const struct bc250_iv_entry* E
 
 // At DISPATCH_LEVEL. amdgpu_ih_process(): consume up to the write pointer, publish the read pointer, look again. Every
 // vector advances the read pointer whether its source is known or not: an unknown source must not wedge the ring.
-static void Consume(_Inout_ BC250_IH* ih)
+static BOOLEAN Consume(_Inout_ BC250_IH* ih)
 {
     struct amdgpu_device* adev;
     struct bc250_iv_entry entry;
@@ -165,6 +170,8 @@ static void Consume(_Inout_ BC250_IH* ih)
         while (errors == 0 && rptr != wptr && budget != 0)
         {
             if (bc250_ih_decode(adev, &rptr, &entry) != 0) { errors++; rptr = wptr; break; }
+            if (entry.client_id == BC250_IH_DCE_CLIENT && entry.src_id == BC250_IH_OTG0_VUPDATE_SOURCE)
+                InterlockedExchange(&ih->VsyncPending, 1);
             Note(&ih->Stats, &entry);
             budget--;
         }
@@ -172,11 +179,37 @@ static void Consume(_Inout_ BC250_IH* ih)
         ih->Stats.Rptr = rptr;
         KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
 
-        if (ih->Active == 0 || rptr == ih->Rptr) break;     // stopped, or nothing new
+        if (ih->Active == 0) return FALSE;
         ih->Rptr = rptr;
+        // Publish even an unchanged RPTR: a serviced MSI must be rearmed.
         bc250_ih_set_rptr(adev, rptr);
-        if (budget == 0) break;
+
+        // A vector can arrive between the earlier empty read and publication.
+        // Observe it explicitly instead of assuming rearm is level-triggered.
+        wptr = bc250_ih_get_wptr(adev, &overflowed);
+        if (!NT_SUCCESS(ih->DpcSequence.Fault) || (wptr & 31) != 0 ||
+            (overflowed && (adev->irq.ih.rptr & 31) != 0))
+        {
+            InterlockedExchange(&ih->Active, 0);
+            KeAcquireSpinLockAtDpcLevel(&ih->StatsLock);
+            ih->Stats.DecodeErrors++;
+            KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
+            return FALSE;
+        }
+        if (overflowed)
+        {
+            // get_wptr already acknowledged overflow. Preserve its recovery
+            // position before a later read no longer exposes the overflow bit.
+            ih->Rptr = adev->irq.ih.rptr;
+            KeAcquireSpinLockAtDpcLevel(&ih->StatsLock);
+            ih->Stats.OverflowCount++;
+            ih->Stats.Rptr = ih->Rptr;
+            KeReleaseSpinLockFromDpcLevel(&ih->StatsLock);
+        }
+        if (ih->Active == 0 || wptr == ih->Rptr) return FALSE;
+        if (budget == 0 || round + 1 == BC250_IH_DPC_ROUNDS) return TRUE;
     }
+    return FALSE;
 }
 
 // The read pointer and the doorbell are outside the spin lock, so two consumers at once would take vectors twice and
@@ -185,6 +218,7 @@ static void Consume(_Inout_ BC250_IH* ih)
 void IhDpc(_Inout_ BC250_DEVICE* Device)
 {
     BC250_IH* ih = (BC250_IH*)Device->Ih;
+    BOOLEAN pending;
 
     if (ih == NULL || ih->Active == 0) return;
     InterlockedIncrement(&ih->DpcCount);
@@ -197,10 +231,25 @@ void IhDpc(_Inout_ BC250_DEVICE* Device)
             continue;
         }
         InterlockedExchange(&ih->DpcAgain, 0);
-        Consume(ih);
+        pending = Consume(ih);
         InterlockedExchange(&ih->InDpc, 0);
+        if (pending && ih->Active != 0)
+        {
+            // Yield after the work budget. Reusing DpcAgain here would spin in
+            // this invocation instead of returning execution to the scheduler.
+            Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
+            return;
+        }
         if (InterlockedExchange(&ih->DpcAgain, 0) == 0 || ih->Active == 0) return;
     }
+}
+
+// Consume only the notification latch, never hold the IH stats lock across DCN.
+BOOLEAN IhTakeVsync(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_IH* ih = (BC250_IH*)Device->Ih;
+    if (ih == NULL) return FALSE;
+    return InterlockedExchange(&ih->VsyncPending, 0) != 0 && ih->Active != 0;
 }
 
 // Caller holds GartLock, hardware preparation completed with delivery disabled.
@@ -246,6 +295,7 @@ static NTSTATUS IhPublishAndEnable(BC250_DEVICE* Device, BC250_IH* Ih,
     Ih->Rptr=0;
     KeAcquireSpinLock(&Ih->StatsLock,&irql);
     RtlZeroMemory(&Ih->Stats,sizeof(Ih->Stats));
+    InterlockedExchange(&Ih->VsyncPending,0);
     KeReleaseSpinLock(&Ih->StatsLock,irql);
 
     // The escape's output may not be safe at DIRQL. Record into owned storage

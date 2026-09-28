@@ -1,0 +1,10 @@
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x40001480, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x400019c0, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x40001ec0, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x40002240, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x80000700, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x40002840, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x40002cc0, 640x480)
+wddm2: D3DKMTPresent failed 0xC000000D (window 0000000000370428, source 0x40003080, 640x480)

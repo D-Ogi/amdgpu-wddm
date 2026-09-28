@@ -1,0 +1,86 @@
+{
+ "artifacts": {
+  "witcher3.exe (bin/x64_dx12)": "609BCA7033D02E9F34D446F97E739332CB785E18D51E08476AEB7F30091038D5, 4.0.0.103190",
+  "vkd3d-proton d3d12.dll / d3d12core.dll": "7B77ED5C / 90B1DAD6 (472989aa, E37 package)",
+  "DXVK dxgi.dll": "2E674A56 (3.1.1)",
+  "registered ICD": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (E38)",
+  "System32 vulkan-1.dll": "5C42CA8E",
+  "user.settings before and after": "58327E6D88E3C801FFD56F2472FC68CAF87DAC8F2DA1AA5080B45C9E4B3E4606 (unchanged)",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD unchanged (health 0x00070098 generation 575721647), CPU DWM 5748",
+  "screenshots": "screen-0/1/2.png private (scratch/witcher3/dx12/run001), hashes in run001/capture-hashes.json"
+ },
+ "files": {
+  "RESULT.md": {
+   "sha256": "60602e24b74995c99c9d4b02184bd308cb82e081178fad048dd9989dcc252b90",
+   "bytes": 3909
+  },
+  "run001/after-health.txt": {
+   "sha256": "815e610bff9d7e2853338540c5ce32394c917b1b2af5d07f61215d14bb0445b0",
+   "bytes": 228
+  },
+  "run001/before-clock.txt": {
+   "sha256": "1df7f13bce4baa475436b51dcd7da71e77600ee55a02808fedc332c76ac19e15",
+   "bytes": 152
+  },
+  "run001/before-health.txt": {
+   "sha256": "512dd7b3b0ec5c348fc758e389a80257b39cd7f6d09a659187051e3e49ad066f",
+   "bytes": 226
+  },
+  "run001/capture-hashes.json": {
+   "sha256": "799237ce2a7686624dcf012423431d736a8fad6b20964c8792afc8a6295437f4",
+   "bytes": 266
+  },
+  "run001/done-w3dx12-001.json": {
+   "sha256": "5dfe84808b0f88f8b8d2272625cb802662f791252b548686a66ece5968ccca24",
+   "bytes": 67
+  },
+  "run001/dxvk.conf": {
+   "sha256": "6d9c19a1e90088dea1f77deb34530f78bb85963f2b58edb55038ec72c414de24",
+   "bytes": 24
+  },
+  "run001/launch.json": {
+   "sha256": "e0e4cbe527642e39014512d1c3550fdac3321a5d982ed631e9adb51f1436fbaf",
+   "bytes": 222
+  },
+  "run001/modules.json": {
+   "sha256": "a9ecadd5b168ba15d24f93ffa332984fd5bbca70621fb54330fb1fcc9c725388",
+   "bytes": 1759
+  },
+  "run001/result.json": {
+   "sha256": "2cb7ee982ee7c5d96aaf10e2af68027b4d0a40fb5abcac22c0e664f74b48fb1f",
+   "bytes": 176
+  },
+  "run001/run-w3dx12-001.log": {
+   "sha256": "90948131c85b1090bd889c5f287d3a093606e4fc467107d40d9ca4d4bf596365",
+   "bytes": 3918
+  },
+  "run001/vkd3d.log": {
+   "sha256": "3e6b0bd3edab9dc175cd470366818ac1bddb19e48caf2a954dedb7a7e3e75cfc",
+   "bytes": 15818
+  },
+  "run001/witcher3_dxgi.log": {
+   "sha256": "8de22d6df5599c6572b0b59445153b5aa19851a013be187161492fb9f6889637",
+   "bytes": 1964
+  },
+  "scripts/dx12-precheck.ps1": {
+   "sha256": "4e480a98fc1073d500c6da353bec46273b191331e0a1ac388c8f8a514b40e508",
+   "bytes": 2368
+  },
+  "scripts/launch-w3dx12-001.ps1": {
+   "sha256": "408c13490b9d0715e173e21f986c90be48036e73b9daf3c601437ceec1b1285a",
+   "bytes": 2017
+  },
+  "scripts/poll-w3dx12-001.ps1": {
+   "sha256": "692b4d168a3e42bfa08db1edecd9ccee58bdd95fc692b10e43fad257d2042e6f",
+   "bytes": 1717
+  },
+  "scripts/run-w3dx12-001.ps1": {
+   "sha256": "6e1b40646ea33b38c16e4cb37338b39c5aa1301d1e3121ebe2c5d72d95a97ae7",
+   "bytes": 7742
+  },
+  "scripts/worker-w3dx12-001.ps1": {
+   "sha256": "ed4ef28f5013852ad13cdfd97f260f797f867f729edcdc36df3c69fdec22e856",
+   "bytes": 381
+  }
+ }
+}

@@ -1,0 +1,312 @@
+captures=0
+exit=0
+mode=hosted pid=4500 renderer=C:\BC250\m13\runtime-probe001\bc250d3d_zink.dll
+branch DXBC conditional opcode verified
+case=depth-near mismatches=0/4096 tolerance=0 fnv64=79d66447807a4325
+case=depth-reject-far mismatches=0/4096 tolerance=0 fnv64=79d66447807a4325
+case=stencil-replace mismatches=0/4096 tolerance=0 fnv64=d2bfb75560f4c325
+case=stencil-reject mismatches=0/4096 tolerance=0 fnv64=d2bfb75560f4c325
+case=stencil-accept mismatches=0/4096 tolerance=0 fnv64=14a0420cba6ba325
+case=alpha-blend mismatches=0/4096 tolerance=1 fnv64=0278d51976872325
+case=shader-branch mismatches=0/4096 tolerance=0 fnv64=d3cb42920d2c7325
+case=render-to-texture mismatches=0/4096 tolerance=0 fnv64=d3cb42920d2c7325
+case=batched-scissor-cb-update draws=256 mismatches=0/4096 fnv64=02e630a05dd4a325
+case=batched-vb-cb-discard draws=256 mismatches=0/4096 fnv64=02e630a05dd4a325
+case=batched-indexed-discard draws=256 mismatches=0/4096 fnv64=02e630a05dd4a325
+PASS batched dynamic draw controls: 768 draws, 12288 checked pixels
+PASS native graphics state: 8 cases, 32768 checked pixels
+
+BC250 private Vulkan instance=0000018B56BB4560 screen=0000018B56B9E5C0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40000f80
+allocation handle=0x40001000
+allocation handle=0x40001080
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 private Vulkan instance=0000018B56C26030 screen=0000018B56C18040
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+allocation handle=0x40001e00
+allocation handle=0x40001e80
+allocation handle=0x40001f00
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 D3D device stage 0
+BC250 D3D device stage 1
+BC250 D3D device stage 2
+BC250 private Vulkan instance=0000018B5955D760 screen=0000018B57518EB0
+BC250 zink init stage 0
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x92af
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+BC250 hosted op=1 count=1 hr=00000000
+BC250 hosted paging create identity=0000018B574DCEE8 queue=40002100 status=00000000
+BC250 zink init stage 1
+radv_wddm2_winsys_create
+BC250 hosted op=25 count=1 hr=00000000
+BC250 hosted op=27 count=1 hr=00000000
+BC250 hosted op=27 count=2 hr=00000000
+BC250 hosted op=16 count=1 hr=00000000
+allocation handle=0x80000240
+BC250 hosted op=19 count=1 hr=8000000a
+BC250 hosted op=21 count=1 hr=8000000a
+BC250 hosted op=29 count=1 hr=00000000
+BC250 hosted op=23 count=1 hr=00000000
+BC250 hosted op=16 count=2 hr=00000000
+allocation handle=0x80000200
+BC250 hosted op=19 count=2 hr=8000000a
+BC250 hosted op=21 count=2 hr=8000000a
+BC250 hosted op=29 count=2 hr=00000000
+BC250 hosted op=23 count=2 hr=00000000
+allocation handle=0x40002280
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 zink init stage 2
+BC250 zink init stage 3
+BC250 zink init stage 4
+BC250 zink init stage 5
+BC250 zink init stage 6
+BC250 zink init stage 7
+BC250 zink init stage 8
+BC250 zink init stage 9
+BC250 zink init stage 10
+BC250 zink init stage 11
+BC250 zink init stage 12
+BC250 zink init stage 13
+BC250 zink init stage 14
+BC250 zink init stage 15
+BC250 device screen=0000018B57518EB0 runtime=0000018B574DCEE8
+BC250 D3D device stage 3
+allocation handle=0x80000340
+allocation handle=0x80000300
+allocation handle=0x40002300
+allocation handle=0x40002340
+allocation handle=0x40002380
+allocation handle=0x400023c0
+allocation handle=0x40002400
+allocation handle=0x40002440
+allocation handle=0x80000540
+allocation handle=0x80000500
+allocation handle=0x40002480
+allocation handle=0x400024c0
+allocation handle=0x40002500
+allocation handle=0x40002540
+allocation handle=0x40002580
+allocation handle=0x400025c0
+allocation handle=0x40002600
+allocation handle=0x40002640
+BC250 D3D device stage 4
+BC250 D3D device stage 5
+BC250 D3D device stage 6
+BC250 D3D device stage 7
+BC250 D3D device stage 8
+BC250 destroy private Vulkan instance=0000018B56C26030
+allocation handle=0x400026c0
+allocation handle=0x40002700
+allocation handle=0x40002740
+allocation handle=0x40002780
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=1 image_calls=0 image_request_bytes=0 buffer_calls=8 buffer_request_bytes=1144628 persistent_calls=5
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=1 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=1 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=1 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=1 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=1 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=1 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=1 bytes=32
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=2 image_calls=0 image_request_bytes=0 buffer_calls=8 buffer_request_bytes=1144628 persistent_calls=5
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=2 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=2 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=2 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=2 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=2 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=2 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=1 bytes=32
+allocation handle=0x400027c0
+allocation handle=0x40002800
+allocation handle=0x40002840
+BC250 hosted op=4 count=1 hr=00000000
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x40002880
+bc250: gather capacity=8192 bytes required=5344 ibs=4
+BC250 hosted op=34 count=1 hr=00000000
+BC250 hosted op=33 count=1 hr=00000000
+BC250 hosted op=3 count=1 hr=00000000
+BC250 hosted op=33 count=2 hr=00000000
+allocation handle=0x400028c0
+allocation handle=0x40002900
+allocation handle=0x40002940
+BC250 hosted op=4 count=2 hr=00000000
+allocation handle=0x80000ac0
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=3 image_calls=1 image_request_bytes=16384 buffer_calls=8 buffer_request_bytes=1144628 persistent_calls=5
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=3 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=3 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=3 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=3 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=3 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=3 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=1 bytes=32
+BC250 audit bucket ctx=0000018B595DE1C0 sample=3 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=1 bytes=16384
+allocation handle=0x80000a80
+bc250: gather capacity=4096 bytes required=1056 ibs=2
+BC250 hosted op=34 count=2 hr=00000000
+BC250 hosted op=3 count=2 hr=00000000
+allocation handle=0x80000b40
+allocation handle=0x80000b00
+allocation handle=0x40002980
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=4 image_calls=1 image_request_bytes=16384 buffer_calls=9 buffer_request_bytes=1144660 persistent_calls=5
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=4 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=4 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=4 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=4 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=4 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=4 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=2 bytes=64
+BC250 audit bucket ctx=0000018B595DE1C0 sample=4 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=1 bytes=16384
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=5 image_calls=1 image_request_bytes=16384 buffer_calls=9 buffer_request_bytes=1144660 persistent_calls=5
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=5 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=5 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=5 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=5 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=5 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=5 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=2 bytes=64
+BC250 audit bucket ctx=0000018B595DE1C0 sample=5 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=1 bytes=16384
+allocation handle=0x400029c0
+bc250: gather capacity=4096 bytes required=4032 ibs=4
+allocation handle=0x40002a00
+allocation handle=0x40002a40
+allocation handle=0x40002a80
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=6 image_calls=2 image_request_bytes=32768 buffer_calls=9 buffer_request_bytes=1144660 persistent_calls=5
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=6 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=6 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=4 bytes=96000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=6 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=6 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=6 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=6 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=2 bytes=64
+BC250 audit bucket ctx=0000018B595DE1C0 sample=6 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=2 bytes=32768
+allocation handle=0x40002ac0
+bc250: gather capacity=4096 bytes required=1056 ibs=2
+allocation handle=0x40002b00
+allocation handle=0x40002b40
+allocation handle=0x80000bc0
+allocation handle=0x80000b80
+allocation handle=0x80000e40
+allocation handle=0x80000e00
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=7 image_calls=2 image_request_bytes=32768 buffer_calls=11 buffer_request_bytes=1168692 persistent_calls=6
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=7 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=7 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=5 bytes=120000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=7 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=7 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=7 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=7 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=3 bytes=96
+BC250 audit bucket ctx=0000018B595DE1C0 sample=7 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=2 bytes=32768
+BC250 audit maps ctx=0000018B595DE1C0 final=0 sample=8 image_calls=2 image_request_bytes=32768 buffer_calls=11 buffer_request_bytes=1168692 persistent_calls=6
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=8 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=8 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=5 bytes=120000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=8 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=8 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=8 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=8 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=3 bytes=96
+BC250 audit bucket ctx=0000018B595DE1C0 sample=8 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=2 bytes=32768
+allocation handle=0x80000c40
+bc250: gather capacity=4096 bytes required=4064 ibs=4
+allocation handle=0x80000c00
+bc250: gather capacity=4096 bytes required=1056 ibs=2
+allocation handle=0x80000dc0
+bc250: gather capacity=4096 bytes required=4064 ibs=4
+allocation handle=0x80000d80
+BC250 hosted op=22 count=1 hr=00000000
+BC250 hosted op=24 count=1 hr=00000000
+BC250 hosted op=20 count=1 hr=00000000
+BC250 hosted op=17 count=1 hr=00000000
+bc250: gather capacity=8192 bytes required=4800 ibs=4
+allocation handle=0x40002b80
+BC250 hosted op=22 count=2 hr=00000000
+BC250 hosted op=24 count=2 hr=00000000
+BC250 hosted op=20 count=2 hr=00000000
+BC250 hosted op=17 count=2 hr=00000000
+bc250: gather capacity=20480 bytes required=17696 ibs=4
+allocation handle=0x40002bc0
+bc250: gather capacity=20480 bytes required=16704 ibs=4
+allocation handle=0x40002c00
+bc250: gather capacity=20480 bytes required=19872 ibs=4
+D3D destroy stage 0
+D3D destroy stage 1
+D3D destroy stage 2
+D3D destroy stage 3
+D3D destroy stage 4
+D3D destroy stage 5
+D3D destroy stage 6
+D3D destroy stage 7
+BC250 audit maps ctx=0000018B595DE1C0 final=1 sample=38 image_calls=11 image_request_bytes=180224 buffer_calls=1297 buffer_request_bytes=1226214 persistent_calls=6
+BC250 audit bucket_summary ctx=0000018B595DE1C0 sample=38 overflow=0
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=0 target=0 size=24000x1x1 format=81 bind=8008000 usage=703 box=24000x1x1 runtime=0 user_ptr=0 calls=5 bytes=120000
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=1 target=0 size=4x1x1 format=81 bind=8400 usage=2a box=4x1x1 runtime=0 user_ptr=0 calls=1 bytes=4
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=2 target=0 size=1048576x1x1 format=81 bind=8070 usage=322 box=1048576x1x1 runtime=0 user_ptr=0 calls=1 bytes=1048576
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=3 target=0 size=16x1x1 format=81 bind=8010 usage=2a box=16x1x1 runtime=0 user_ptr=0 calls=1 bytes=16
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=4 target=0 size=32x1x1 format=73 bind=8040 usage=a box=32x1x1 runtime=0 user_ptr=0 calls=264 bytes=8448
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=5 target=2 size=64x64x1 format=84 bind=0 usage=1 box=64x64x1 runtime=0 user_ptr=0 calls=11 bytes=180224
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=6 target=0 size=18x1x1 format=73 bind=8020 usage=22 box=18x1x1 runtime=0 user_ptr=0 calls=1 bytes=18
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=7 target=0 size=32x1x1 format=73 bind=8040 usage=82 box=32x1x1 runtime=0 user_ptr=0 calls=512 bytes=16384
+BC250 audit bucket ctx=0000018B595DE1C0 sample=38 id=8 target=0 size=64x1x1 format=73 bind=8010 usage=82 box=64x1x1 runtime=0 user_ptr=0 calls=512 bytes=32768
+BC250 hosted op=28 count=1 hr=00000000
+BC250 destroy device screen=0000018B57518EB0 runtime=0000018B574DCEE8
+BC250 hosted op=28 count=2 hr=00000000
+BC250 hosted op=26 count=1 hr=00000000
+BC250 destroy private Vulkan instance=0000018B5955D760
+BC250 hosted op=2 count=1 hr=00000000
+BC250 hosted paging destroy identity=0000018B574DCEE8 queue=40002100 status=00000000
+D3D destroy stage 8
+BC250 destroy private Vulkan instance=0000018B56BB4560
+
+[
+    {
+        "Path":  "C:\\BC250\\m13\\hosted-runtime037\\graphics-batch-control.exe",
+        "Hash":  "732DD8DC3866580F47125B52AF82128F0CE8467D8D2570174C14778D4234B43C"
+    },
+    {
+        "Path":  "C:\\BC250\\m13\\runtime-probe001\\bc250d3d_zink.dll",
+        "Hash":  "23F5269CB7EF41AD2BBED8DE178DF4BA0AA8DFBD34023A403650EC2ABC138585"
+    },
+    {
+        "Path":  "C:\\BC250\\m10\\wsi-final\\vulkan_radeon.dll",
+        "Hash":  "7A9970CA37E94D1224FAB40B77BE2FAC4A076CBEA2695DC8044CEF806A6F735E"
+    }
+]
+CPU UMD file restored
+restored=93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D
+DWM before=5748 after=5748
+

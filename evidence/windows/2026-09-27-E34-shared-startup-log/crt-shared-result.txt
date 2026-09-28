@@ -1,0 +1,1 @@
+CRT shared writer positive: live reader content and second logger pass

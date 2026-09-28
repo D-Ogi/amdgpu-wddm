@@ -1,0 +1,6 @@
+gfx-blt-control.c
+gfx_blt.c
+gfx_copy.c
+blit_plan.c
+Generowanie kodu...
+gfx-blt-control --run: five bounded native GFX row-copy controls, hardware required; no display or ICD change

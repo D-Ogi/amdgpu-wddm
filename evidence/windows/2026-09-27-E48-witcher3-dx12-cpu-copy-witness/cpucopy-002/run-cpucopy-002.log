@@ -1,0 +1,50 @@
+start 2026-09-27T08:04:16.9605840+02:00
+temperature_before=66.6
+boot 2026-09-26T18:44:31.5000000+02:00
+dwm_before=4596
+health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=29839 age_ms=414 ready_ms=4872941
+stage A-witness icd_swapped=63AF86CB
+run A-witness-1920x1200 start 2026-09-27T08:04:18.3037574+02:00
+pid=2976
+t=0 tctl=66.6 present_csv_bytes=0
+module 2s C:\BC250\m10\wsi-final\vulkan-1.dll 5C42CA8E
+t=2 tctl=66.6 present_csv_bytes=0
+t=4 tctl=66.6 present_csv_bytes=0
+screenshot A-witness-1920x1200 63FE1DEC90FA
+t=8 tctl=66.6 present_csv_bytes=0
+t=10 tctl=66.6 present_csv_bytes=0
+t=12 tctl=66.6 present_csv_bytes=0
+module 14s C:\BC250\m10\wsi-final\vulkan_radeon.dll 63AF86CB
+t=14 tctl=66.6 present_csv_bytes=211
+t=16 tctl=66.6 present_csv_bytes=4179
+t=18 tctl=66.6 present_csv_bytes=8145
+t=20 tctl=66.8 present_csv_bytes=8145
+t=22 tctl=66.9 present_csv_bytes=12113
+t=24 tctl=66.9 present_csv_bytes=16081
+t=26 tctl=66.9 present_csv_bytes=20049
+t=29 tctl=66.9 present_csv_bytes=20049
+t=31 tctl=66.9 present_csv_bytes=24017
+t=33 tctl=66.9 present_csv_bytes=27985
+t=35 tctl=66.9 present_csv_bytes=31953
+t=37 tctl=67 present_csv_bytes=31953
+t=39 tctl=67 present_csv_bytes=35921
+t=41 tctl=67 present_csv_bytes=39889
+t=43 tctl=67 present_csv_bytes=43857
+t=45 tctl=67.1 present_csv_bytes=43857
+t=47 tctl=67.1 present_csv_bytes=47825
+t=49 tctl=67.1 present_csv_bytes=51793
+run A-witness-1920x1200 exit=0 elapsed=51s
+header: # chain 000001FF5CC70A30 1920x1181 format 44 images 3 path gdi mode 2
+header: # chain 000001FF5CC70A30 image memory type 5 properties 0xe
+
+radv_wddm2_winsys_create
+radv_wddm2_winsys_create
+registered ICD restored to 93B1D1FD
+registered_icd_after=93B1D1FD
+health abi=1 version=0x00070099 flags=15 generation=431166497000 epoch=5 completed=30782 age_ms=754 ready_ms=4926908
+temperature_after=67.1
+dwm_after=4596
+end 2026-09-27T08:05:11.4126950+02:00
+run_exit=0
+
+

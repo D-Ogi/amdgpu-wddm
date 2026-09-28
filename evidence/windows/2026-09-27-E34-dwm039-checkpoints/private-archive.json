@@ -1,0 +1,27 @@
+[
+  {
+    "name": "receipts.zip",
+    "bytes": 19594236,
+    "sha256": "36b3440ca214116db627e91acb9785b9fe633fe5dce88bfc1e6fd22dafd4e424"
+  },
+  {
+    "name": "gpu.etl",
+    "bytes": 78643200,
+    "sha256": "ef79c53acb16eea53c1f4b9dd197c4789e6f56fc05d602f71667c2b12ca9c6a6"
+  },
+  {
+    "name": "baseline.bmp",
+    "bytes": 9216054,
+    "sha256": "e8d9b9adb1da1d1715a7a59c5676f99ed8b85e347c98652827088c05a7f19b95"
+  },
+  {
+    "name": "gpu.bmp",
+    "bytes": 9216054,
+    "sha256": "7b7469d07c45e6280a8cc03a7cc7e3f94d686acdd9e89de51f8a22880a2daeb1"
+  },
+  {
+    "name": "screen.png",
+    "bytes": 2337808,
+    "sha256": "d80480fcb0c32130c38519da364a86bd66ce6b165d9a81e6e8887897204877cc"
+  }
+]

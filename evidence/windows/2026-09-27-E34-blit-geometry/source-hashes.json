@@ -1,0 +1,7 @@
+{
+  "driver/kmd/blit_plan.c": "fb6276bf8b1263904642d329e30f7b62e7f7ba430aed7c046b062ce801cb8147",
+  "driver/kmd/blit_plan.h": "f9980e8ccac1d4b0bd49e4f68b4dd59de767ec0954e2a14a5af62592777fdfb7",
+  "driver/kmd/test/blit_plan_test.c": "61cc983a40316c9f4fa5da1875dc46b1748bb9d98291fa96caa37b703bbe4894",
+  "driver/kmd/test/run_blit_plan.ps1": "335eb05bc03a793d89f07b9baaf73451605645bebf17aa00a86275226ad4858e",
+  "tools/quality/quick.ps1": "371f0c4a4125859e052177b03d1739f3a0508d57ddec1a775bebb9427cb19070"
+}

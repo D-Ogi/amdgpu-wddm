@@ -1,0 +1,7 @@
+{
+  "source_files_checked": 50,
+  "mac_uuid_email_user_path_identity_label_hits": 0,
+  "ipv4_pattern_hit": "OS Version : 10.00.00.00 in trace-stats.txt, not a network address",
+  "full_etl_images_archive": "Retained privately; hashes only here",
+  "selected_audit": "Exact BC250 audit-prefixed lines only; raw full log hash retained"
+}

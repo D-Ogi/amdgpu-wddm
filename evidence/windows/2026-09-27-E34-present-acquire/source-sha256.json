@@ -1,0 +1,41 @@
+{
+  "parent": "9befe712f03911d70d79fbe976fd4ebbff29e6b6",
+  "files": [
+    {
+      "path": "driver/kmd/gfx_copy.c",
+      "sha256": "e2720d6e88b482435fcf12595d9615b3af9f04f5ad993f8f5ba899155e2dbf0d"
+    },
+    {
+      "path": "driver/kmd/gfx_copy.h",
+      "sha256": "2893082a980303ccc91ded7e8c4e77b0f8554c04d54e8d53c5286213a9424ea1"
+    },
+    {
+      "path": "driver/kmd/gfx_blt.c",
+      "sha256": "a6e63acec327f9fa9398c4c24b3e24cd8afd61b7502abeed0279e18059797173"
+    },
+    {
+      "path": "driver/kmd/gfx_blt.h",
+      "sha256": "a939375173b2c70e49fe59f5a551cdfef49baf9401d4f2c21b6c55c3f8ecee38"
+    },
+    {
+      "path": "driver/kmd/wddm.c",
+      "sha256": "e44969a6d1bab4e9052c88692c8f08adff88eb763890423f0be75aeb2200d991"
+    },
+    {
+      "path": "driver/kmd/test/gfx_copy_test.c",
+      "sha256": "9fdbdae6b3ca2178e6070f12a1191f815a6ead0c81c2fc620539667ced54684d"
+    },
+    {
+      "path": "driver/kmd/test/gfx_blt_test.c",
+      "sha256": "d9977bb245ccc0ceda0e491a2d44b28c08df2c3e3f527594835b3191e1896822"
+    },
+    {
+      "path": "driver/shim/bc250_dispatch.c",
+      "sha256": "5038d3060683b9e321aa3a965a05ab5015534ea3ba542689f13b542cc6815961"
+    },
+    {
+      "path": "driver/amdgpu-import/nvd.h",
+      "sha256": "0a4de0b61f8be33d83e7dc1af4b96370898af36d211f296daf018e72820ea0eb"
+    }
+  ]
+}

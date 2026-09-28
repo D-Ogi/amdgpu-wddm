@@ -1,0 +1,2 @@
+   300      0.610 wddm: CreateContext node 0 engine 0x1 flags 0x00000006 private 0
+   301      0.610 wddm: CreateContext answered dma 4096 bytes segment set 0x2, lists 256/0, caps 0x00000001

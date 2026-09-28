@@ -1,0 +1,12 @@
+{
+  "parent": "81825c09311e5bd75438673c6f88d74557ac5b0d",
+  "source_sha256": {
+    "driver/kmd/gfx_blt.c": "77e727c0834e8c69119a2d20746f09ac2fd1ba0fa5ce6545299e7c90f60b1a5c",
+    "driver/kmd/gfx_blt.h": "5726d8f7edafcb44ad6795e842c80d5ce8baad8504eb7b2f89dcf96dc3958f50",
+    "driver/kmd/test/gfx_blt_test.c": "e5725d1c4d0f9aba7eabda9032718fcd1e0c4d74bcfb5ce88a13148a5e539064",
+    "driver/kmd/test/run_gfx_blt.ps1": "6c0a7c4377a9f61fb0fc86fccd4c149ff405bef1cb5a8312c95828d5488c22f8",
+    "driver/kmd/gfx_copy.c": "3aa5c9903923aa81613055d01fd6814941358326e3c7a7b4b6347f495cab9f30",
+    "driver/kmd/blit_plan.c": "fb6276bf8b1263904642d329e30f7b62e7f7ba430aed7c046b062ce801cb8147"
+  },
+  "test_log_sha256": "018cfc7c26f57b6f3877e299224597af9ff2874255d813605fc3b079070830a9"
+}

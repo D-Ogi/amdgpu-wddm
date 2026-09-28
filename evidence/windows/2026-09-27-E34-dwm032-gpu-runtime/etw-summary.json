@@ -1,0 +1,83 @@
+{
+  "dwm_pid": 8548,
+  "trace_loss": {
+    "events": 0,
+    "buffers": 0
+  },
+  "matched": 3372,
+  "pending": 0,
+  "unmatched": 0,
+  "duplicate_starts": 0,
+  "contexts": [
+    {
+      "TimeStamp": "4722265",
+      "hContext": "0xffff810677729dd0",
+      "ContextHandle": "0x00000000400002c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "4743460",
+      "hContext": "0xffff81066dfcab30",
+      "ContextHandle": "0x00000000400005c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "4793782",
+      "hContext": "0xffff810675db1310",
+      "ContextHandle": "0x0000000040000bc0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "6419523",
+      "hContext": "0xffff81067529f9f0",
+      "ContextHandle": "0x0000000040002200",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "6508794",
+      "hContext": "0xffff8106738148d0",
+      "ContextHandle": "0x0000000040003040",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "6616398",
+      "hContext": "0xffff8106738148d0",
+      "ContextHandle": "0x0000000080001fc0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "6699699",
+      "hContext": "0xffff81067529f9f0",
+      "ContextHandle": "0x0000000080002e80",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "6763602",
+      "hContext": "0xffff810673333df0",
+      "ContextHandle": "0x0000000040004a00",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "7428756",
+      "hContext": "0xffff810675cd1dd0",
+      "ContextHandle": "0x00000000800023c0",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    },
+    {
+      "TimeStamp": "9063119",
+      "hContext": "0xffff81067529f9f0",
+      "ContextHandle": "0x0000000040004e40",
+      "NodeOrdinal": "0",
+      "EngineAffinity": "1"
+    }
+  ]
+}

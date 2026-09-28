@@ -14,7 +14,6 @@ and 003 with the pre-M496 baseline hung; run 004 took a minidump; runs 005 (D3DK
 plus the E14 smoke) and 006 (E36 consolidated ICD) measured FL 11_1 with TiledResourcesTier 0 as the only
 gap to 12_1.
 
-Open: repeat with sparse enabled once it leaves the gate (expected 12_1); decide whether the D3DKMT
-enumeration candidate (patches in the evidence directory, local fork branch
-`amdgpu-wddm/radv-wddm2-kmt-enum`) goes to the fork; the WSI D3D12 interop helpers still load DXGI/D3D12 by
-module path.
+Done since: the sparse flag gives 12_1 / tier 4 on the same probe (E39, M570); the D3DKMT enumeration
+candidate is on the fork and became the registered baseline (E38, M569). Open: the WSI D3D12 interop helpers
+still load DXGI/D3D12 by module path.

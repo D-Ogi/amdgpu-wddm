@@ -13,3 +13,6 @@
 tools/diagusb/overlay/** text eol=lf
 # Evidence is stored byte for byte, never normalized
 evidence/** -text
+
+# PAM benchmark captures contain binary pixel payloads.
+*.pam binary

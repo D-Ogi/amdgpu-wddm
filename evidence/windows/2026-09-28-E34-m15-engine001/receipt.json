@@ -1,0 +1,39 @@
+{
+  "supervisor": {
+    "error": null,
+    "elapsed": 22.8286359,
+    "postflight": true,
+    "passed": true
+  },
+  "result": {
+    "start_utc": "2026-09-28T16:22:26.8392620Z",
+    "scope": "D3D12 engine ABI1.0, direct ICD, non-hosted; no native D3D12 DDI",
+    "timeout": false,
+    "stop": false,
+    "exit": 0,
+    "temperature": 66.9,
+    "seconds": 5.6420045,
+    "end_utc": "2026-09-28T16:22:32.4821127Z"
+  },
+  "artifacts": {
+    "engine_sha256": "DD0F97EAFBECA801E338CD1871996DCFFA59E6DF51E2EB7C74F7489F438D68B1",
+    "test_sha256": "969462ACB1053EE4165C2B9E8995ED199FF874E70EB3167EB53FB1A907FFB6C8",
+    "icd_sha256": "C38885C50A0A1A77B29281F0BB3D78196BF228765BD22AB93FDBB35ECBB85BCC"
+  },
+  "job": {
+    "cancelled": false,
+    "console_session": 0,
+    "root_exit_observed": true,
+    "child_exit": 0,
+    "timed_out": false,
+    "termination_requested": true,
+    "job_empty": true
+  },
+  "baseline_unchanged": true,
+  "baseline_hashes": {
+    "kmd_sha256": "65172CA1058A11335F1132644DA844748758E9BE017D5192B5CE1E9B424FEEDF",
+    "umd_sha256": "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+    "icd_sha256": "CF3948D692CAF56FFCFFEA6EBCA5F0E5FDB517FDC55062EFAE389515A373D157"
+  },
+  "descriptor_increment_measured": 64
+}

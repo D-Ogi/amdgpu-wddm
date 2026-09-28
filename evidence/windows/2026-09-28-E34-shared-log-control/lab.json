@@ -1,0 +1,39 @@
+{
+    "dwm_unchanged":  true,
+    "utc":  "2026-09-27T22:54:32.0882096Z",
+    "exe_sha256":  "4DCC403B5005104AA7D3F8DC30350DB72C3A79B4C0FA621E5B30C46B26D5B61F",
+    "results":  [
+                    {
+                        "bytes":  199780,
+                        "lines":  1000,
+                        "sha256":  "18467D03603F677C8FCB9C74BB47C74100A72F58EC04DC69776E4836CE01C887",
+                        "exit":  0,
+                        "mode":  "legacy",
+                        "stdout":  "mode=legacy visible=1000 elapsed_us=2734053.400\r\n"
+                    },
+                    {
+                        "bytes":  199780,
+                        "lines":  1000,
+                        "sha256":  "18467D03603F677C8FCB9C74BB47C74100A72F58EC04DC69776E4836CE01C887",
+                        "exit":  0,
+                        "mode":  "default",
+                        "stdout":  "mode=default visible=1000 elapsed_us=31187.000\r\n"
+                    },
+                    {
+                        "bytes":  199780,
+                        "lines":  1000,
+                        "sha256":  "18467D03603F677C8FCB9C74BB47C74100A72F58EC04DC69776E4836CE01C887",
+                        "exit":  0,
+                        "mode":  "closed",
+                        "stdout":  "mode=closed visible=1000 elapsed_us=28597.000\r\n"
+                    },
+                    {
+                        "bytes":  0,
+                        "lines":  0,
+                        "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+                        "exit":  10,
+                        "mode":  "buffered",
+                        "stdout":  "not_visible mode=buffered record=0 got=0 expected=196\r\n"
+                    }
+                ]
+}

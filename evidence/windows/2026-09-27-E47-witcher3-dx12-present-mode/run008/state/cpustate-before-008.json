@@ -1,0 +1,74 @@
+{
+    "tag":  "before-008",
+    "utc":  "2026-09-27T05:16:52.4422374Z",
+    "counters":  {
+                     "\\system\\processor queue length":  [
+                                                              0,
+                                                              0,
+                                                              0
+                                                          ],
+                     "\\processor information(_total)\\processor frequency":  [
+                                                                                  3194,
+                                                                                  3194,
+                                                                                  3194
+                                                                              ],
+                     "\\processor information(_total)\\% of maximum frequency":  [
+                                                                                     39,
+                                                                                     42,
+                                                                                     42
+                                                                                 ],
+                     "\\memory\\pages/sec":  [
+                                                 0,
+                                                 0,
+                                                 0
+                                             ],
+                     "\\processor(_total)\\% processor time":  [
+                                                                   2.2,
+                                                                   3.9,
+                                                                   1.5
+                                                               ],
+                     "\\processor information(_total)\\% processor performance":  [
+                                                                                      67.3,
+                                                                                      70.3,
+                                                                                      68.1
+                                                                                  ]
+                 },
+    "top_cpu_3s":  [
+                       {
+                           "pid":  4596,
+                           "name":  "dwm",
+                           "cpu_s_per_3s":  0.56
+                       },
+                       {
+                           "pid":  4436,
+                           "name":  "bc250mon",
+                           "cpu_s_per_3s":  0.27
+                       },
+                       {
+                           "pid":  7084,
+                           "name":  "MsMpEng",
+                           "cpu_s_per_3s":  0.17
+                       },
+                       {
+                           "pid":  7428,
+                           "name":  "powershell",
+                           "cpu_s_per_3s":  0.14
+                       },
+                       {
+                           "pid":  4,
+                           "name":  "System",
+                           "cpu_s_per_3s":  0.09
+                       }
+                   ],
+    "defender":  {
+                     "signatures":  "09/26/2026 10:54:02",
+                     "realtime":  true,
+                     "quick_end":  "09/26/2026 13:08:32",
+                     "full_start":  "",
+                     "quick_start":  "09/26/2026 13:08:07",
+                     "scan_age_days":  0,
+                     "full_end":  ""
+                 },
+    "power_plan":  "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)",
+    "uptime_h":  12.5
+}

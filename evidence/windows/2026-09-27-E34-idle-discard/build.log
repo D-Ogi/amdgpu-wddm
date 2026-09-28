@@ -1,0 +1,18 @@
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.21
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+Directory already configured.
+
+Just run your build command (e.g. ninja) and Meson will regenerate as necessary.
+Run "meson setup --reconfigure" to force Meson to regenerate.
+
+If build failures persist, run "meson setup --wipe" to rebuild from scratch
+using the same options as passed when configuring the build.
+ninja: Entering directory `P:\bc-250\scratch\m13-native-zink-build'
+[1/3] Compiling C object src/gallium/drivers/zink/libzink.a.p/zink_resource.c.obj
+[2/3] Linking static target src/gallium/drivers/zink/libzink.a
+[3/3] Linking target src/gallium/targets/d3d10umd/bc250d3d_zink.dll
+   Trwa tworzenie biblioteki src\gallium\targets/d3d10umd\bc250d3d_zink.lib i obiektu src\gallium\targets/d3d10umd\bc250d3d_zink.exp
+

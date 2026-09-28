@@ -1,0 +1,32 @@
+{
+  "source": "0185cb8db7eafade3b243d1f8474fb8613981407",
+  "parent": "150631a8584a5c8c8ae676b09820561d6317438d",
+  "source_clean": true,
+  "artifact": {
+    "name": "bc250d3d_zink.dll",
+    "sha256": "CC82A2D9BAD5534D54B1460B1FF49A1F83ED40CADF8694A5F7C1F87CB02386FD",
+    "bytes": 15182336
+  },
+  "build": "Complete UMD target,17 steps; build.log. No subsequent source changes before commit.",
+  "host_control": {
+    "compiler": "MSVC /MD /std:c11 /O2 /W4 /WX",
+    "threads": 4,
+    "requests": 801,
+    "successful": 401,
+    "failed": 400,
+    "ended": 401,
+    "negative_trace_rejections": 11,
+    "marker_closed_interval": [
+      11,
+      12
+    ],
+    "marker_with_live_map": 99,
+    "final_marker": 100,
+    "limitations": "Exact extracted helper code with stub resource metadata, debug option and monotonic clock; real Mesa atomic/simple_mtx headers and compiled Windows futex implementation. Not GPU map integration."
+  },
+  "linked_mesa_objects": {
+    "scratch\\g0-umd-audit-build\\src\\util\\libmesa_util.a.p\\futex.c.obj": "6C8F8E61CF0C0EE3A4F0C56939CFED190E08B7849DCAEA553BD1A31FD3D69AB2",
+    "scratch\\g0-umd-audit-build\\src\\c11\\impl\\libmesa_util_c11.a.p\\time.c.obj": "8DAA3A0C56C3D2A815255C87FBBC3D8D4EB309D86F4C57319956CCAEF619EAEA"
+  },
+  "lab_deployed": false
+}

@@ -1,0 +1,8 @@
+18978 0000091935 wddm summary: node 0 hardware: 335 submitted, 335 completed, 0 timeouts, 0 refused
+18982 0000091935 wddm summary: node 1 (paging, open): 1814 hardware submitted, 1814 completed, 0 timeouts, 0 refused
+19081 0000091937 wddm summary: vidpn flip open: 322 hardware flips, 0 refused, 1 hardware vsyncs armed 5331 acked 0 refused 0 completion-deferred 0 old-buffer-reports
+19082 0000091937 vsync diagnostic: irq 7461 no-mmio 0 flip-off 0 unarmed 48
+19083 0000091937 vsync diagnostic: no-event 2082 read-fail 0 ack-fail 0
+19084 0000091937 vsync diagnostic: 100ns irq 52551716185 entry 52551716185 ack 52551536026 notify 52551536026 status 00121904
+19086 0000091937 wddm summary: CollectDbgInfo called 1 time(s) since the driver was loaded
+19101 0000091939 wddm: ResetFromTimeout failed: GPU memory access not proven stopped

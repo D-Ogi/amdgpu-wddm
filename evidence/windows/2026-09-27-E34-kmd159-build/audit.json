@@ -1,0 +1,29 @@
+{
+  "baseline": "c3499f1b12dcc57902fdd522c3ad10498abc5620",
+  "parent": "fd8f7d6",
+  "imports": [
+    "df3d7f5"
+  ],
+  "compared_existing_driver_and_third_party_files": 303,
+  "changed_existing": [
+    "driver/kmd/bc250kmd.inf",
+    "driver/kmd/bc250kmd_escape.h",
+    "driver/kmd/dcn_translate.c",
+    "driver/kmd/dcn_translate.h",
+    "driver/kmd/test/dcn_translate_test.c",
+    "driver/kmd/wddm.c"
+  ],
+  "method": "git blob bytes versus candidate, CRLF normalized only",
+  "working_files": {
+    "driver/kmd/bc250kmd.inf": "4446f009a93433687812aea0a9d8642c3e1e4148cae58a8406aa19e03e0a986c",
+    "driver/kmd/bc250kmd_escape.h": "cbdf8daaa0558a18337ae42345b981c467b8f57d7e008417e22734754980d0e1",
+    "driver/kmd/wddm.c": "17bb42f51450d1abecd5427f07d4773761b9920326a2ca0f320ae6189c3f94ac",
+    "tools/quality/quick.ps1": "673f7db92e241b9f73d1478379627c0d5ec20677eba283ec5664c2b1dc788b17",
+    "driver/kmd/test/allocation_identity_test.c": "662de81f10448b47314f80bfaeeb73dc2ec0a5c825ccf715afb42c6cc3087137",
+    "driver/kmd/wddm_allocation_identity.inc": "4ed9ab4ff4865551e7cae9b5ff3bb42504150feb2813fc5c73daf87753b614ef",
+    "tools/quality/allocation_identity.py": "6e64eb15eff5f6a438a5e980c97d1ceca41a1a74551e034d787e3ad449388d8e"
+  },
+  "patches": {
+    "df3d7f5.patch": "1b67263a580e7f0e313eeaa21b71a314e84baca408995ee1acfa1018ea515615"
+  }
+}

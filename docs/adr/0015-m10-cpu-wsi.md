@@ -1,6 +1,9 @@
 # ADR 0015: M10 GPU Vulkan with CPU window presentation
 
-Date: 2026-09-25. Status: accepted; scoped runtime acceptance is M476/E31.
+Date: 2026-09-25. Status: **superseded by [ADR 0018](0018-engine-present-for-vulkan-wsi.md) on 2026-09-27**
+(owner decision: the CPU transport was an M10-only allowance and is not wanted for M12 or later). The CPU
+path survives only as an explicit diagnostic fallback, off by default. Scoped runtime acceptance for M10 was
+M476/E31.
 
 ## Context
 The owner explicitly permits CPU presentation copies for the first visible Vulkan

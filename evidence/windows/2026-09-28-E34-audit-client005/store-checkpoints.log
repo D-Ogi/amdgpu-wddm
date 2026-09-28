@@ -1,0 +1,93 @@
+BC250 audit store event=begin seq=13 store=19 map=15 time_ns=6737300844600 writer=zink_buffer_subdata kind=buffer_subdata offset=0 bytes=4 capacity=4 mapped_offset=0 valid=1
+BC250 audit store event=end seq=14 store=19 time_ns=6737300868600
+BC250 audit store event=begin seq=18 store=23 map=22 time_ns=6737301145600 writer=zink_buffer_subdata kind=buffer_subdata offset=0 bytes=16 capacity=16 mapped_offset=4096 valid=1
+BC250 audit store event=end seq=19 store=23 time_ns=6737301162500
+BC250 audit lifetime event=checkpoint seq=27 time_ns=6737395561600 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=28 time_ns=6737399071400 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=29 time_ns=6737401445100 marker=1 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit store event=begin seq=30 store=46 map=5 time_ns=6737404931200 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=31 store=46 time_ns=6737404975300
+BC250 audit store event=begin seq=32 store=47 map=5 time_ns=6737404992700 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=33 store=47 time_ns=6737405009800
+BC250 audit lifetime event=checkpoint seq=34 time_ns=6737405635000 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=4 stores_ended=4
+BC250 audit lifetime event=checkpoint seq=35 time_ns=6737410621200 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=4 stores_ended=4
+BC250 audit lifetime event=checkpoint seq=36 time_ns=6737443707000 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=4 stores_ended=4
+BC250 audit store event=begin seq=37 store=48 map=8 time_ns=6737444046900 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=38 store=48 time_ns=6737444069000
+BC250 audit store event=begin seq=39 store=49 map=8 time_ns=6737444086100 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=40 store=49 time_ns=6737444103100
+BC250 audit lifetime event=checkpoint seq=41 time_ns=6737444286900 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=6 stores_ended=6
+BC250 audit lifetime event=checkpoint seq=42 time_ns=6737446191300 marker=0 requests=9 successful=9 failed=0 ended=4 pending=0 live=5 stores_begun=6 stores_ended=6
+BC250 audit store event=begin seq=43 store=50 map=11 time_ns=6737479007700 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=44 store=50 time_ns=6737479048800
+BC250 audit store event=begin seq=45 store=51 map=11 time_ns=6737479072100 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=46 store=51 time_ns=6737479089500
+BC250 audit store event=begin seq=49 store=55 map=54 time_ns=6737514761600 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=50 store=55 time_ns=6737514794800
+BC250 audit store event=begin seq=51 store=56 map=54 time_ns=6737514811900 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=52 store=56 time_ns=6737514829200
+BC250 audit store event=begin seq=55 store=60 map=59 time_ns=6737553950000 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=56 store=60 time_ns=6737553983400
+BC250 audit store event=begin seq=57 store=61 map=59 time_ns=6737554000500 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=58 store=61 time_ns=6737554017900
+BC250 audit store event=begin seq=61 store=65 map=64 time_ns=6737588804700 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=62 store=65 time_ns=6737588844400
+BC250 audit store event=begin seq=63 store=66 map=64 time_ns=6737588867100 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=64 store=66 time_ns=6737588884400
+BC250 audit store event=begin seq=65 store=67 map=14 time_ns=6737622603500 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=66 store=67 time_ns=6737622637200
+BC250 audit store event=begin seq=67 store=68 map=14 time_ns=6737622654400 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=68 store=68 time_ns=6737622671300
+BC250 audit store event=begin seq=69 store=69 map=5 time_ns=6737654850100 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=70 store=69 time_ns=6737654884600
+BC250 audit store event=begin seq=71 store=70 map=5 time_ns=6737654901600 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=72 store=70 time_ns=6737654918800
+BC250 audit store event=begin seq=73 store=71 map=8 time_ns=6737686817400 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=74 store=71 time_ns=6737686849700
+BC250 audit store event=begin seq=75 store=72 map=8 time_ns=6737686866600 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=76 store=72 time_ns=6737686883700
+BC250 audit store event=begin seq=77 store=73 map=11 time_ns=6737718760500 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=78 store=73 time_ns=6737718795000
+BC250 audit store event=begin seq=79 store=74 map=11 time_ns=6737718812100 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=80 store=74 time_ns=6737718829400
+BC250 audit store event=begin seq=81 store=75 map=54 time_ns=6737750893800 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=82 store=75 time_ns=6737750928000
+BC250 audit store event=begin seq=83 store=76 map=54 time_ns=6737750945200 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=84 store=76 time_ns=6737750962300
+BC250 audit store event=begin seq=85 store=77 map=59 time_ns=6737782738700 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=86 store=77 time_ns=6737782772700
+BC250 audit store event=begin seq=87 store=78 map=59 time_ns=6737782789700 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=88 store=78 time_ns=6737782806900
+BC250 audit store event=begin seq=89 store=79 map=64 time_ns=6737814742600 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=90 store=79 time_ns=6737814776500
+BC250 audit store event=begin seq=91 store=80 map=64 time_ns=6737814793500 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=92 store=80 time_ns=6737814888200
+BC250 audit store event=begin seq=93 store=81 map=14 time_ns=6737847141200 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=94 store=81 time_ns=6737847203200
+BC250 audit store event=begin seq=95 store=82 map=14 time_ns=6737847240500 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=96 store=82 time_ns=6737847277900
+BC250 audit store event=begin seq=97 store=83 map=5 time_ns=6737881099700 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=98 store=83 time_ns=6737881162000
+BC250 audit store event=begin seq=99 store=84 map=5 time_ns=6737881199700 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=100 store=84 time_ns=6737881236900
+BC250 audit store event=begin seq=101 store=85 map=8 time_ns=6737915132900 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=102 store=85 time_ns=6737915195000
+BC250 audit store event=begin seq=103 store=86 map=8 time_ns=6737915232400 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=104 store=86 time_ns=6737915269800
+BC250 audit lifetime event=checkpoint seq=105 time_ns=6737953298200 marker=2 requests=12 successful=12 failed=0 ended=4 pending=0 live=8 stores_begun=34 stores_ended=34
+BC250 audit lifetime event=checkpoint seq=106 time_ns=6737958886300 marker=3 requests=12 successful=12 failed=0 ended=4 pending=0 live=8 stores_begun=34 stores_ended=34
+BC250 audit store event=begin seq=107 store=87 map=11 time_ns=6737960861300 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=108 store=87 time_ns=6737960968000
+BC250 audit store event=begin seq=109 store=88 map=11 time_ns=6737960994100 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=110 store=88 time_ns=6737961015300
+BC250 audit store event=begin seq=114 store=92 map=59 time_ns=6737973841000 writer=update_separable kind=get_descriptor offset=96 bytes=16 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=115 store=92 time_ns=6737973862000
+BC250 audit store event=begin seq=116 store=93 map=59 time_ns=6737973878600 writer=update_separable kind=get_descriptor offset=0 bytes=96 capacity=24000 mapped_offset=0 valid=1
+BC250 audit store event=end seq=117 store=93 time_ns=6737973895600
+BC250 audit lifetime event=checkpoint seq=121 time_ns=6737979501800 marker=4 requests=14 successful=14 failed=0 ended=6 pending=0 live=8 stores_begun=38 stores_ended=38
+BC250 audit lifetime event=checkpoint seq=122 time_ns=6737984592000 marker=5 requests=14 successful=14 failed=0 ended=6 pending=0 live=8 stores_begun=38 stores_ended=38
+BC250 audit lifetime event=checkpoint seq=129 time_ns=6738020598600 marker=0 requests=16 successful=16 failed=0 ended=8 pending=0 live=8 stores_begun=38 stores_ended=38
+BC250 audit lifetime event=checkpoint seq=160 time_ns=6738399252300 marker=6 requests=26 successful=26 failed=0 ended=18 pending=0 live=8 stores_begun=38 stores_ended=38
+BC250 audit lifetime event=checkpoint seq=161 time_ns=6738403141900 marker=7 requests=26 successful=26 failed=0 ended=18 pending=0 live=8 stores_begun=38 stores_ended=38
+BC250 audit lifetime event=checkpoint seq=165 time_ns=6738409631400 marker=8 requests=27 successful=27 failed=0 ended=19 pending=0 live=8 stores_begun=38 stores_ended=38
+BC250 audit lifetime event=checkpoint seq=166 time_ns=6738429636300 marker=0 requests=27 successful=27 failed=0 ended=19 pending=0 live=8 stores_begun=38 stores_ended=38

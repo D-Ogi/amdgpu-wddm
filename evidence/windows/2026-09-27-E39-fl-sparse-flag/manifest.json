@@ -1,0 +1,65 @@
+{
+ "artifacts": {
+  "registered ICD (no swap)": "93B1D1FDB3E922F74102630DC013EA4BCC258AD7BD52078FCB014187019D738D (E38 baseline, fork c34ab7cd)",
+  "fl-probe.exe": "30F69C0577D35921 (E37, unchanged)",
+  "vkd3d-proton d3d12.dll / d3d12core.dll": "7B77ED5C / 90B1DAD6 (472989aa)",
+  "DXVK dxgi.dll": "2E674A56 (3.1.1)",
+  "System32 vulkan-1.dll": "5C42CA8E (1.4.335.0)",
+  "lab": "unit A, boot 2026-09-26T18:44:31+02:00, KMD unchanged, CPU DWM 8008, no registry or file change",
+  "environment B": "RADV_EXPERIMENTAL=sparse (plus VKD3D_DEBUG=info, DXVK_LOG_LEVEL=info in both runs)"
+ },
+ "files": {
+  "out007/A-default/fl-probe_dxgi.log": {
+   "sha256": "8875df8f9d630f57719eff9c934c1c71d19f20638f61ec76d83591749acf53c9",
+   "bytes": 729
+  },
+  "out007/A-default.json": {
+   "sha256": "a063c58444d4b64f0370d36654f099a680b16ce6d54a5d19d2b3df59ea3fe2f3",
+   "bytes": 1436
+  },
+  "out007/A-default.stderr.txt": {
+   "sha256": "b697311e3af97ebdcfb560c666d3a07ad64902d4592ef9cc6bdc990bb803ff83",
+   "bytes": 3529
+  },
+  "out007/B-sparse/fl-probe_dxgi.log": {
+   "sha256": "8875df8f9d630f57719eff9c934c1c71d19f20638f61ec76d83591749acf53c9",
+   "bytes": 729
+  },
+  "out007/B-sparse.json": {
+   "sha256": "ab48813fc21d54ac237de7bac58b92ded676fd2189b2ed67cde2a536909b4de7",
+   "bytes": 1436
+  },
+  "out007/B-sparse.stderr.txt": {
+   "sha256": "8c28c284aada951616241ebc6590c6f0eb3e29e6217171343c508cd3e36a28e4",
+   "bytes": 3529
+  },
+  "out007/done-fl007.json": {
+   "sha256": "5f52aa6b725966f42855d1ee0772e9558cae60a06f236828845500f694a1307c",
+   "bytes": 67
+  },
+  "out007/run-fl007.log": {
+   "sha256": "96ddb39d873f0045b6c89ab2cbe0f8821280a7221230e82ad9e435aa8be55862",
+   "bytes": 1617
+  },
+  "RESULT.md": {
+   "sha256": "e808d127b93679335e7cb0264b6d1bd6143c0d349e34cb7df45e7e17d177557a",
+   "bytes": 2868
+  },
+  "scripts/launch-fl007.ps1": {
+   "sha256": "b214bce5fb62241fb323fd387fae9d79da5e6b7ce6dd23ca1065a4b61fcb11d4",
+   "bytes": 1785
+  },
+  "scripts/poll-fl007.ps1": {
+   "sha256": "996e46b5b599bc057f89d89584fdf4d74b799bc0ab9158a10c3cb12c1560e766",
+   "bytes": 1037
+  },
+  "scripts/run-fl007.ps1": {
+   "sha256": "5ea74219c549c003a855f235e55ecec4ef130552f4441dbf6260505adc2bb006",
+   "bytes": 4469
+  },
+  "scripts/worker-fl007.ps1": {
+   "sha256": "33b473e3b419c8cf89550e92cc67d25570dcaa2c091f02829493f5c18101d997",
+   "bytes": 359
+  }
+ }
+}

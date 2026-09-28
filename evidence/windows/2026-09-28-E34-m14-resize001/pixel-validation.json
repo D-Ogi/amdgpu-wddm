@@ -1,0 +1,194 @@
+[
+  {
+    "phase": "Cpu",
+    "file": "resize-0-0.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "66537abca4e540d4086543bd3baab4836c3f37f0ac3fd16ec976a15a63cc366a"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-0-1.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "d6c9a6d766c9aeb7952e1746e9989a1aef08873c6c10465f86457302f9ea33b0"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-0-2.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "72168914701fa8af46fa55c52c873bb7ac136a44c29f85120b2a11ff1cef4b37"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-1-0.pam",
+    "width": 65,
+    "height": 33,
+    "exact_color_pixels": 2145,
+    "sha256": "2998ea41b594058d8405effe373afe280997b6c88b2c42493a1e8796e9a359eb"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-1-1.pam",
+    "width": 65,
+    "height": 33,
+    "exact_color_pixels": 2145,
+    "sha256": "e000720631c8cc518ca11eb19d2ec25f58086ffe7e1e0ab8459a110917e3c6f8"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-1-2.pam",
+    "width": 65,
+    "height": 33,
+    "exact_color_pixels": 2145,
+    "sha256": "0e269f037d657306377d12bb65f73e5fd214e83c03f97481dea176b71938bd29"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-2-0.pam",
+    "width": 127,
+    "height": 79,
+    "exact_color_pixels": 10033,
+    "sha256": "693d6be2e826e1bf2f127d628ff767d8bbfd17092a81b3b4e428704de4a27467"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-2-1.pam",
+    "width": 127,
+    "height": 79,
+    "exact_color_pixels": 10033,
+    "sha256": "c80d559fe036591f00b8ca8a85063194120271192a8c6d229ea0ef54da6e9e71"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-2-2.pam",
+    "width": 127,
+    "height": 79,
+    "exact_color_pixels": 10033,
+    "sha256": "6ced70e4014b8a0fca1c856a671a0b4bcea5ae17b7b1b858d5875502e94cb6d4"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-3-0.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "66537abca4e540d4086543bd3baab4836c3f37f0ac3fd16ec976a15a63cc366a"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-3-1.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "d6c9a6d766c9aeb7952e1746e9989a1aef08873c6c10465f86457302f9ea33b0"
+  },
+  {
+    "phase": "Cpu",
+    "file": "resize-3-2.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "72168914701fa8af46fa55c52c873bb7ac136a44c29f85120b2a11ff1cef4b37"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-0-0.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "66537abca4e540d4086543bd3baab4836c3f37f0ac3fd16ec976a15a63cc366a"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-0-1.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "d6c9a6d766c9aeb7952e1746e9989a1aef08873c6c10465f86457302f9ea33b0"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-0-2.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "72168914701fa8af46fa55c52c873bb7ac136a44c29f85120b2a11ff1cef4b37"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-1-0.pam",
+    "width": 65,
+    "height": 33,
+    "exact_color_pixels": 2145,
+    "sha256": "2998ea41b594058d8405effe373afe280997b6c88b2c42493a1e8796e9a359eb"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-1-1.pam",
+    "width": 65,
+    "height": 33,
+    "exact_color_pixels": 2145,
+    "sha256": "e000720631c8cc518ca11eb19d2ec25f58086ffe7e1e0ab8459a110917e3c6f8"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-1-2.pam",
+    "width": 65,
+    "height": 33,
+    "exact_color_pixels": 2145,
+    "sha256": "0e269f037d657306377d12bb65f73e5fd214e83c03f97481dea176b71938bd29"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-2-0.pam",
+    "width": 127,
+    "height": 79,
+    "exact_color_pixels": 10033,
+    "sha256": "693d6be2e826e1bf2f127d628ff767d8bbfd17092a81b3b4e428704de4a27467"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-2-1.pam",
+    "width": 127,
+    "height": 79,
+    "exact_color_pixels": 10033,
+    "sha256": "c80d559fe036591f00b8ca8a85063194120271192a8c6d229ea0ef54da6e9e71"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-2-2.pam",
+    "width": 127,
+    "height": 79,
+    "exact_color_pixels": 10033,
+    "sha256": "6ced70e4014b8a0fca1c856a671a0b4bcea5ae17b7b1b858d5875502e94cb6d4"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-3-0.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "66537abca4e540d4086543bd3baab4836c3f37f0ac3fd16ec976a15a63cc366a"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-3-1.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "d6c9a6d766c9aeb7952e1746e9989a1aef08873c6c10465f86457302f9ea33b0"
+  },
+  {
+    "phase": "Gpu",
+    "file": "resize-3-2.pam",
+    "width": 64,
+    "height": 64,
+    "exact_color_pixels": 4096,
+    "sha256": "72168914701fa8af46fa55c52c873bb7ac136a44c29f85120b2a11ff1cef4b37"
+  }
+]

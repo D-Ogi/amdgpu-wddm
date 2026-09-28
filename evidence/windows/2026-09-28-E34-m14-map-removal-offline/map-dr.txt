@@ -1,0 +1,46 @@
+FUNCTION RVA a9ca0 ?DDI_ResourceMap_DR@CContext@@SAXUD3D10DDI_HDEVICE@@UD3D10DDI_HRESOURCE@@IW4D3D10_DDI_MAP@@IPEAUD3D10DDI_MAPPED_SUBRESOURCE@@@Z
+000a9ca0 48895c2408               mov      qword ptr [rsp + 8], rbx
+000a9ca5 48896c2410               mov      qword ptr [rsp + 0x10], rbp
+000a9caa 4889742418               mov      qword ptr [rsp + 0x18], rsi
+000a9caf 57                       push     rdi
+000a9cb0 4883ec30                 sub      rsp, 0x30
+000a9cb4 488b6ac8                 mov      rbp, qword ptr [rdx - 0x38]
+000a9cb8 488db9c060ffff           lea      rdi, [rcx - 0x9f40]
+000a9cbf 488bcf                   mov      rcx, rdi
+000a9cc2 418bd9                   mov      ebx, r9d
+000a9cc5 418bf0                   mov      esi, r8d
+000a9cc8 e87badf8ff               call     0x34a48 ; ?CompleteContextRemoval@CContext@@QEAAX_N@Z+0
+000a9ccd 83bf800e000000           cmp      dword ptr [rdi + 0xe80], 0
+000a9cd4 754b                     jne      0xa9d21
+000a9cd6 488b87a0000000           mov      rax, qword ptr [rdi + 0xa0]
+000a9cdd 488b88d0040000           mov      rcx, qword ptr [rax + 0x4d0]
+000a9ce4 8b81b8040000             mov      eax, dword ptr [rcx + 0x4b8]
+000a9cea 85c0                     test     eax, eax
+000a9cec 7933                     jns      0xa9d21
+000a9cee 83eb01                   sub      ebx, 1
+000a9cf1 740a                     je       0xa9cfd
+000a9cf3 83eb01                   sub      ebx, 1
+000a9cf6 7429                     je       0xa9d21
+000a9cf8 83eb01                   sub      ebx, 1
+000a9cfb 7524                     jne      0xa9d21
+000a9cfd 488b87d89a0000           mov      rax, qword ptr [rdi + 0x9ad8]
+000a9d04 49ba709a5c16c23640ac     movabs   r10, 0xac4036c2165c9a70
+000a9d0e 488b00                   mov      rax, qword ptr [rax]
+000a9d11 ba70087688               mov      edx, 0x88760870
+000a9d16 488bcf                   mov      rcx, rdi
+000a9d19 ff15618f1300             call     qword ptr [rip + 0x138f61]
+000a9d1f eb1c                     jmp      0xa9d3d ; ?DDI_ResourceMap_DR@CContext@@SAXUD3D10DDI_HDEVICE@@UD3D10DDI_HRESOURCE@@IW4D3D10_DDI_MAP@@IPEAUD3D10DDI_MAPPED_SUBRESOURCE@@@Z+9d
+000a9d21 448bc6                   mov      r8d, esi
+000a9d24 488d542420               lea      rdx, [rsp + 0x20]
+000a9d29 488bcd                   mov      rcx, rbp
+000a9d2c e8bf3e0000               call     0xadbf0 ; ?GetBackingMemorySubresource@?$CResource@UID3D11Resource@@@@QEAA?AUD3D10DDI_MAPPED_SUBRESOURCE@@I@Z+0
+000a9d31 0f1000                   movups   xmm0, xmmword ptr [rax]
+000a9d34 488b442468               mov      rax, qword ptr [rsp + 0x68]
+000a9d39 f30f7f00                 movdqu   xmmword ptr [rax], xmm0
+000a9d3d 488b5c2440               mov      rbx, qword ptr [rsp + 0x40]
+000a9d42 488b6c2448               mov      rbp, qword ptr [rsp + 0x48]
+000a9d47 488b742450               mov      rsi, qword ptr [rsp + 0x50]
+000a9d4c 4883c430                 add      rsp, 0x30
+000a9d50 5f                       pop      rdi
+000a9d51 c3                       ret      
+000a9d52 cc                       int3     

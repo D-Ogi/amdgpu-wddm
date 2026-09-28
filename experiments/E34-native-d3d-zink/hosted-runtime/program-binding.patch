@@ -1,0 +1,37 @@
+--- a/src/gallium/drivers/zink/zink_program.c
++++ b/src/gallium/drivers/zink/zink_program.c
+@@ -2021,6 +2021,17 @@
+       ctx->is_generated_gs_bound = false;
+    }
+ 
++   if (stage < MESA_SHADER_COMPUTE) {
++      if (ctx->curr_program)
++         ctx->gfx_pipeline_state.final_hash ^= ctx->curr_program->last_variant_hash;
++      ctx->curr_program = NULL;
++   }
++   if (stage == MESA_SHADER_FRAGMENT || stage > MESA_SHADER_COMPUTE) {
++      if (ctx->mesh_program)
++         ctx->gfx_pipeline_state.mesh_final_hash ^= ctx->mesh_program->last_variant_hash;
++      ctx->mesh_program = NULL;
++   }
++
+    ctx->gfx_stages[stage] = shader;
+    if (stage < MESA_SHADER_COMPUTE)
+       ctx->gfx_dirty = ctx->gfx_stages[MESA_SHADER_FRAGMENT] && ctx->gfx_stages[MESA_SHADER_VERTEX];
+@@ -2039,16 +2050,6 @@
+       if (shader->info.uses_bindless)
+          zink_descriptors_init_bindless(ctx);
+    } else {
+-      if (stage < MESA_SHADER_COMPUTE) {
+-         if (ctx->curr_program)
+-            ctx->gfx_pipeline_state.final_hash ^= ctx->curr_program->last_variant_hash;
+-         ctx->curr_program = NULL;
+-      }
+-      if (stage == MESA_SHADER_FRAGMENT || stage > MESA_SHADER_COMPUTE) {
+-         if (ctx->mesh_program)
+-            ctx->gfx_pipeline_state.mesh_final_hash ^= ctx->mesh_program->last_variant_hash;
+-         ctx->mesh_program = NULL;
+-      }
+       ctx->shader_stages &= ~BITFIELD_BIT(stage);
+    }
+    /* avoid potential overdraw conflicts */

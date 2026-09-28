@@ -1,0 +1,276 @@
+{
+  "classification": "FAIL",
+  "bd043_causality": "not established",
+  "runs": {
+    "086": {
+      "exit": 0,
+      "textured_images": [
+        [
+          "t0-s0",
+          "0",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t0-s0",
+          "1",
+          "0",
+          "45946e4d9c66a325"
+        ],
+        [
+          "t0-s0",
+          "2",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t0-s0",
+          "3",
+          "0",
+          "45946e4d9c66a325"
+        ],
+        [
+          "t1-s0",
+          "0",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t1-s0",
+          "1",
+          "0",
+          "45946e4d9c66a325"
+        ],
+        [
+          "t1-s0",
+          "2",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t1-s0",
+          "3",
+          "0",
+          "45946e4d9c66a325"
+        ]
+      ],
+      "old_cases": [
+        [
+          "depth-near",
+          "0"
+        ],
+        [
+          "depth-reject-far",
+          "0"
+        ],
+        [
+          "stencil-replace",
+          "0"
+        ],
+        [
+          "stencil-reject",
+          "0"
+        ],
+        [
+          "stencil-accept",
+          "0"
+        ],
+        [
+          "alpha-blend",
+          "0"
+        ],
+        [
+          "shader-branch",
+          "0"
+        ],
+        [
+          "render-to-texture",
+          "0"
+        ]
+      ]
+    },
+    "087": {
+      "exit": 0,
+      "textured_images": [
+        [
+          "t0-s0",
+          "0",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t0-s0",
+          "1",
+          "0",
+          "45946e4d9c66a325"
+        ],
+        [
+          "t0-s0",
+          "2",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t0-s0",
+          "3",
+          "0",
+          "45946e4d9c66a325"
+        ],
+        [
+          "t1-s0",
+          "0",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t1-s0",
+          "1",
+          "0",
+          "45946e4d9c66a325"
+        ],
+        [
+          "t1-s0",
+          "2",
+          "0",
+          "4da4ffd8a1ace325"
+        ],
+        [
+          "t1-s0",
+          "3",
+          "0",
+          "45946e4d9c66a325"
+        ]
+      ],
+      "old_cases": [
+        [
+          "depth-near",
+          "0"
+        ],
+        [
+          "depth-reject-far",
+          "0"
+        ],
+        [
+          "stencil-replace",
+          "0"
+        ],
+        [
+          "stencil-reject",
+          "0"
+        ],
+        [
+          "stencil-accept",
+          "0"
+        ],
+        [
+          "alpha-blend",
+          "0"
+        ],
+        [
+          "shader-branch",
+          "0"
+        ],
+        [
+          "render-to-texture",
+          "0"
+        ]
+      ]
+    },
+    "088": {
+      "exit": -1073740791,
+      "textured_images": [],
+      "old_cases": [
+        [
+          "depth-near",
+          "0"
+        ],
+        [
+          "depth-reject-far",
+          "0"
+        ],
+        [
+          "stencil-replace",
+          "0"
+        ],
+        [
+          "stencil-reject",
+          "0"
+        ],
+        [
+          "stencil-accept",
+          "0"
+        ],
+        [
+          "alpha-blend",
+          "0"
+        ],
+        [
+          "shader-branch",
+          "0"
+        ],
+        [
+          "render-to-texture",
+          "0"
+        ]
+      ]
+    },
+    "089": {
+      "exit": -1073740791,
+      "textured_images": [],
+      "old_cases": [
+        [
+          "depth-near",
+          "0"
+        ],
+        [
+          "depth-reject-far",
+          "0"
+        ],
+        [
+          "stencil-replace",
+          "0"
+        ],
+        [
+          "stencil-reject",
+          "0"
+        ],
+        [
+          "stencil-accept",
+          "0"
+        ],
+        [
+          "alpha-blend",
+          "0"
+        ],
+        [
+          "shader-branch",
+          "0"
+        ],
+        [
+          "render-to-texture",
+          "0"
+        ]
+      ]
+    }
+  },
+  "dump": {
+    "exception": "0xC0000409",
+    "subcode": 7,
+    "assertion": "count != 1",
+    "source": "src/gallium/auxiliary/util/u_inlines.h:83",
+    "stack": [
+      "ucrtbase!abort",
+      "ucrtbase!common_assert_to_message_box<wchar_t>",
+      "pipe_reference_described",
+      "pipe_reference",
+      "zink_batch_reference_program",
+      "zink_update_descriptor_refs",
+      "zink_draw",
+      "zink_draw_vbo",
+      "Draw"
+    ],
+    "program_removed": true,
+    "program_batch_uses": null,
+    "interpretation": "The attempted reference increment reached one, implying a prior count of zero. Root cause and relationship to BD-043 remain under investigation."
+  }
+}

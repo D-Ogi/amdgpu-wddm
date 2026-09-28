@@ -1,0 +1,14 @@
+{
+  "parent": "4633abec937c470e866480859b6a49ed70f5e856",
+  "source_sha256": {
+    "driver/kmd/wddm.c": "6f937daff70aeff1f7dad3a2cb017e649fc3181244142f685156323e20f70ce1",
+    "driver/kmd/gfx_blt.c": "9cf82600ff28e3ed8238c5b960aee46e7c810a07e6d9da895ae562ec62344df5",
+    "driver/kmd/gfx_blt.h": "3047be817611c5006c47b216c9341ce66535c7a71ba89f8c6ee2bf1c6fcc14f3",
+    "driver/kmd/test/gfx_blt_test.c": "1ea9078330148f73c4fb3ea72c27a6a8adb47b77e4c5d8ca7be821401e3aa141"
+  },
+  "log_sha256": {
+    "gfx_blt.c.log": "5aa43027c284fa3022c7b8b5f324ff84d2ec12c783fa56f83eaaf0fb1edacb56",
+    "host-test.log": "608c4148aac0faa427fc6d4327b1508f66207c3ca5ca18cd829b62437801a94f",
+    "wddm.c.log": "9fc6237082b891253bc8bb419ed5dd11d132996265397e08ce265c525f2f8ff0"
+  }
+}

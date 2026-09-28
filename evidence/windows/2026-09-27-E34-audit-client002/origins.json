@@ -1,0 +1,381 @@
+{
+  "lifetime": {
+    "events": 89,
+    "requests": 24,
+    "successful": 24,
+    "failed": 0,
+    "ended": 24,
+    "live_map_ids": [],
+    "object_replacements": 0,
+    "staging_successes": 16,
+    "sequenced": true,
+    "checkpoint_count": 17,
+    "last_checkpoint": {
+      "event": "checkpoint",
+      "seq": 81,
+      "time_ns": 2358435838000,
+      "marker": 0,
+      "requests": 24,
+      "successful": 24,
+      "failed": 0,
+      "ended": 16,
+      "pending": 0,
+      "live": 8
+    },
+    "interval_delta": null,
+    "scope": "sequenced event and checkpoint consistency; CPU stores and uninstrumented paths are not measured"
+  },
+  "scopes": [
+    {
+      "begin": {
+        "event": "begin",
+        "id": 1,
+        "tid": 296,
+        "time_ns": 2357994166000,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568816640,
+        "level": 0,
+        "usage": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        43
+      ],
+      "copied": false,
+      "end_time_ns": 2357998243800
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 2,
+        "tid": 296,
+        "time_ns": 2358010583800,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        46
+      ],
+      "copied": false,
+      "end_time_ns": 2358012766700
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 3,
+        "tid": 296,
+        "time_ns": 2358050823300,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        49
+      ],
+      "copied": false,
+      "end_time_ns": 2358051005700
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 4,
+        "tid": 296,
+        "time_ns": 2358084788500,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        52
+      ],
+      "copied": false,
+      "end_time_ns": 2358084995600
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 5,
+        "tid": 296,
+        "time_ns": 2358118845400,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        55
+      ],
+      "copied": false,
+      "end_time_ns": 2358119046500
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 6,
+        "tid": 296,
+        "time_ns": 2358152888000,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        58
+      ],
+      "copied": false,
+      "end_time_ns": 2358153239800
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 7,
+        "tid": 296,
+        "time_ns": 2358186878000,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        61
+      ],
+      "copied": false,
+      "end_time_ns": 2358187087700
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 8,
+        "tid": 296,
+        "time_ns": 2358220944400,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        64
+      ],
+      "copied": false,
+      "end_time_ns": 2358221142200
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 9,
+        "tid": 296,
+        "time_ns": 2358252919200,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        67
+      ],
+      "copied": false,
+      "end_time_ns": 2358253099000
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 10,
+        "tid": 296,
+        "time_ns": 2358287011000,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        70
+      ],
+      "copied": false,
+      "end_time_ns": 2358287214500
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 11,
+        "tid": 296,
+        "time_ns": 2358318950800,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        73
+      ],
+      "copied": false,
+      "end_time_ns": 2358319075200
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 12,
+        "tid": 296,
+        "time_ns": 2358351067300,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        76
+      ],
+      "copied": false,
+      "end_time_ns": 2358351276200
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 13,
+        "tid": 296,
+        "time_ns": 2358385002200,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568815040,
+        "level": 0,
+        "usage": 2,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        79
+      ],
+      "copied": false,
+      "end_time_ns": 2358385197800
+    },
+    {
+      "begin": {
+        "event": "begin",
+        "id": 14,
+        "tid": 296,
+        "time_ns": 2358428194200,
+        "origin": "resource_map",
+        "ctx": 2633656340768,
+        "resource": 2633568816640,
+        "level": 0,
+        "usage": 1,
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "box_width": 320,
+        "box_height": 240,
+        "box_depth": 1
+      },
+      "maps": [
+        82
+      ],
+      "copied": false,
+      "end_time_ns": 2358428846600
+    }
+  ],
+  "unmatched_map_ids": [
+    5,
+    8,
+    11,
+    14,
+    15,
+    18,
+    21,
+    36,
+    39,
+    42
+  ],
+  "matched_map_count": 14,
+  "copy_complete_count": 0,
+  "scope": "Direct same-thread map attribution and completed frontend copy calls only; unmatched paths, external writes through ResourceMap and persistent-pointer stores remain unproven."
+}

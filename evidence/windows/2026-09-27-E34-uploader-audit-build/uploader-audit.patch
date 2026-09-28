@@ -1,0 +1,123 @@
+diff --git a/src/gallium/auxiliary/util/u_upload_mgr.c b/src/gallium/auxiliary/util/u_upload_mgr.c
+index bd2afdd1..35b50e88 100644
+--- a/src/gallium/auxiliary/util/u_upload_mgr.c
++++ b/src/gallium/auxiliary/util/u_upload_mgr.c
+@@ -34,6 +34,9 @@
+ #include "pipe/p_context.h"
+ #include "util/u_memory.h"
+ #include "util/u_math.h"
++#include "util/u_debug.h"
++#include "util/os_time.h"
++#include <stdio.h>
+ 
+ #include "u_upload_mgr.h"
+ 
+@@ -41,6 +44,12 @@
+ struct u_upload_mgr {
+    struct pipe_context *pipe;
+ 
++   bool bc250_audit;
++   uint64_t bc250_created_ns;
++   uint64_t bc250_generation;
++   uint64_t bc250_allocations;
++   uint64_t bc250_requested_bytes;
++   uint64_t bc250_copy_bytes;
+    unsigned default_size;  /* Minimum size of the upload buffer, in bytes. */
+    unsigned bind;          /* Bitmask of PIPE_BIND_* flags. */
+    enum pipe_resource_usage usage;
+@@ -57,6 +66,25 @@ struct u_upload_mgr {
+ };
+ 
+ 
++/* Diagnostic event stream, disabled by default. Allocation bytes bound newly
++ * handed-out ranges; only copy events measure this helper's own memcpy calls.
++ * Writes made later through returned pointers are not counted here. */
++static void
++bc250_upload_event(struct u_upload_mgr *upload, const char *event,
++                   unsigned offset, unsigned size)
++{
++   if (!upload->bc250_audit)
++      return;
++   fprintf(stderr, "BC250 audit upload event=%s manager=%p created_ns=%llu time_ns=%llu pipe=%p resource=%p generation=%llu bind=%x map_flags=%x capacity=%u offset=%u size=%u allocations=%llu requested_bytes=%llu copy_bytes=%llu\n",
++           event, (void *)upload, (unsigned long long)upload->bc250_created_ns,
++           (unsigned long long)os_time_get_nano(), (void *)upload->pipe,
++           (void *)upload->buffer, (unsigned long long)upload->bc250_generation,
++           upload->bind, upload->map_flags, upload->buffer_size, offset, size,
++           (unsigned long long)upload->bc250_allocations,
++           (unsigned long long)upload->bc250_requested_bytes,
++           (unsigned long long)upload->bc250_copy_bytes);
++}
++
+ struct u_upload_mgr *
+ u_upload_create(struct pipe_context *pipe, unsigned default_size,
+                 unsigned bind, enum pipe_resource_usage usage, unsigned flags)
+@@ -65,6 +93,9 @@ u_upload_create(struct pipe_context *pipe, unsigned default_size,
+    if (!upload)
+       return NULL;
+ 
++   upload->bc250_audit = debug_get_bool_option("BC250_UPLOAD_AUDIT", false);
++   if (upload->bc250_audit)
++      upload->bc250_created_ns = os_time_get_nano();
+    upload->pipe = pipe;
+    upload->default_size = default_size;
+    upload->bind = bind;
+@@ -86,6 +117,7 @@ u_upload_create(struct pipe_context *pipe, unsigned default_size,
+                           PIPE_MAP_FLUSH_EXPLICIT;
+    }
+ 
++   bc250_upload_event(upload, "create", 0, 0);
+    return upload;
+ }
+ 
+@@ -148,6 +180,7 @@ u_upload_unmap(struct u_upload_mgr *upload)
+ static void
+ u_upload_release_buffer(struct u_upload_mgr *upload)
+ {
++   bc250_upload_event(upload, "release", upload->offset, 0);
+    /* Unmap and unreference the upload buffer. */
+    upload_unmap_internal(upload, true);
+    upload->buffer_size = 0;
+@@ -159,6 +192,7 @@ u_upload_destroy(struct u_upload_mgr *upload)
+ {
+    u_upload_release_buffer(upload);
+    pipe_resource_release(upload->pipe, upload->buffer);
++   bc250_upload_event(upload, "destroy", 0, 0);
+    FREE(upload);
+ }
+ 
+@@ -212,6 +246,8 @@ u_upload_alloc_buffer(struct u_upload_mgr *upload, unsigned min_size, struct pip
+ 
+    upload->buffer_size = size;
+    upload->offset = 0;
++   if (upload->bc250_audit) upload->bc250_generation++;
++   bc250_upload_event(upload, "map", 0, size);
+    return size;
+ }
+ 
+@@ -289,6 +325,11 @@ u_upload_alloc(struct u_upload_mgr *upload,
+    *outbuf = upload->buffer;
+ 
+    upload->offset = offset + size;
++   if (upload->bc250_audit) {
++      upload->bc250_allocations++;
++      upload->bc250_requested_bytes += size;
++      bc250_upload_event(upload, "alloc", offset, size);
++   }
+ }
+ 
+ void
+@@ -323,8 +364,13 @@ u_upload_data(struct u_upload_mgr *upload,
+    u_upload_alloc(upload, min_out_offset, size, alignment,
+                   out_offset, outbuf, releasebuf,
+                   (void**)&ptr);
+-   if (ptr)
++   if (ptr) {
+       memcpy(ptr, data, size);
++      if (upload->bc250_audit) {
++         upload->bc250_copy_bytes += size;
++         bc250_upload_event(upload, "copy", *out_offset, size);
++      }
++   }
+ }
+ 
+ void

@@ -1,0 +1,9 @@
+# M731 - Native runtime calls absent counter-information DDI
+
+Runtime004 uses source e30d786d and manifest3EFA6FBC5244BE890FB5383F7AE9E50C4341B2FC22F7EA888AB3AFC886C5A526, unchanged rendering artifacts from runtime003. CPU control passes; GPU repeats access violation at0. Second-chance first raw stack word is00007ffacad29b11. The witnessed d3d11 load base00007ffacad00000 maps that word to RVA29b11. This is not a complete stack unwind.
+
+The exact lab d3d11.dll copied for offline analysis has SHA256 697be4db1e5e3106c61f63363d82cd2ff2a922bb2887a5fd6e23234620b7904a. Cached matching PDB identifies CDevice::LLOCompleteLayerConstruction+0xe81. Immediately preceding instruction sequence fetches table+308h and calls through the XFG dispatch pointer. A compiled offsetof assertion in ddi-draw-test binds308h to D3D11_1DDI_DEVICEFUNCS.pfnCheckCounterInfo. This slot was NULL in the tested UMD. The correlation identifies a concrete missing callback consistent with this fault; the corrected candidate still needs live validation.
+
+Fix62d9cb90 supplies zero counter capabilities, permitted by the WDK CheckCounterInfo contract and matching the engine's lack of hardware performance counters. Host DDI suite passes /W4 /WX, including slot offset, initialized outputs and capability availability after device removal. No GPU performance claim.
+
+Supervisor failed-restored after46.5038521s, CPU verified, baseline/postflight/tree closure verified; cleanup true and task subsequently Missing. Raw material scratch/m14/runtime004-ops and runtime004-offline. These excerpts exclude module paths, registers and all remaining stack words; only diagnostic strings, status and code addresses are published. Offline PE was not a live-memory dump. Source fixture initially built against upstream ref/dxvk failed because it lacks the private ABI; the successful build uses scratch/m14/dxvk at bf14ecca.

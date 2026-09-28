@@ -1,0 +1,213 @@
+{
+  "scope": "Diagnostic shape check, not full-desktop pixel oracle or proof of absence of intermittent artifacts. Components <=64 pixels ignored. CPU baseline is the positive control.",
+  "captures": {
+    "baseline.bmp": {
+      "large_components": [
+        {
+          "pixels": 25236,
+          "bbox": [
+            624,
+            163,
+            840,
+            280
+          ],
+          "fill": 0.9985754985754985
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-14.bmp": {
+      "large_components": [
+        {
+          "pixels": 32676,
+          "bbox": [
+            712,
+            169,
+            944,
+            310
+          ],
+          "fill": 0.9988994864269992
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-14.png": {
+      "large_components": [
+        {
+          "pixels": 32676,
+          "bbox": [
+            712,
+            169,
+            944,
+            310
+          ],
+          "fill": 0.9988994864269992
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-2.bmp": {
+      "large_components": [
+        {
+          "pixels": 25236,
+          "bbox": [
+            744,
+            193,
+            960,
+            310
+          ],
+          "fill": 0.9985754985754985
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-2.png": {
+      "large_components": [
+        {
+          "pixels": 25236,
+          "bbox": [
+            744,
+            193,
+            960,
+            310
+          ],
+          "fill": 0.9985754985754985
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-20.bmp": {
+      "large_components": [
+        {
+          "pixels": 21492,
+          "bbox": [
+            608,
+            151,
+            792,
+            268
+          ],
+          "fill": 0.9983277591973244
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-20.png": {
+      "large_components": [
+        {
+          "pixels": 24964,
+          "bbox": [
+            616,
+            157,
+            816,
+            282
+          ],
+          "fill": 0.99856
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-26.bmp": {
+      "large_components": [
+        {
+          "pixels": 23396,
+          "bbox": [
+            672,
+            199,
+            904,
+            300
+          ],
+          "fill": 0.998463639467395
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-26.png": {
+      "large_components": [
+        {
+          "pixels": 26996,
+          "bbox": [
+            680,
+            205,
+            928,
+            314
+          ],
+          "fill": 0.9986682450429121
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-8.bmp": {
+      "large_components": [
+        {
+          "pixels": 18548,
+          "bbox": [
+            648,
+            181,
+            832,
+            282
+          ],
+          "fill": 0.9980628497632372
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "dynamic-8.png": {
+      "large_components": [
+        {
+          "pixels": 21764,
+          "bbox": [
+            656,
+            187,
+            856,
+            296
+          ],
+          "fill": 0.998348623853211
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "gpu.bmp": {
+      "large_components": [
+        {
+          "pixels": 23396,
+          "bbox": [
+            632,
+            169,
+            864,
+            270
+          ],
+          "fill": 0.998463639467395
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    },
+    "screen.png": {
+      "large_components": [
+        {
+          "pixels": 26996,
+          "bbox": [
+            640,
+            175,
+            888,
+            284
+          ],
+          "fill": 0.9986682450429121
+        }
+      ],
+      "small_component_pixels": 7,
+      "shape_check": true
+    }
+  }
+}

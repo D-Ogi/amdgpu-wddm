@@ -1,0 +1,8 @@
+DIF_INSTALLDEVICE failed: 3758096919
+Deferred driver install failed; inspect helper receipt
+At C:\BC250\m13\kmd169-stage005\kmd169-transition\phase.ps1:77 char:28
++ ... CODE -ne 0){throw 'Deferred driver install failed; inspect helper rec ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Deferred driver... helper receipt:String) [], RuntimeException
+    + FullyQualifiedErrorId : Deferred driver install failed; inspect helper receipt
+ 

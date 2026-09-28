@@ -1,0 +1,3 @@
+BEYOND draws tolerance=0 pixels=4096 differing=13 beyond=13 max_rgba=163,86,67,0 first_beyond=43,8 checksums=04a2bda0d6017832,ba148e83316c6a24
+BEYOND fill tolerance=0 pixels=4096 differing=4091 beyond=4091 max_rgba=80,77,83,0 first_beyond=0,0 checksums=d5bdf85e5b8ec998,73736636b17371e9
+BEYOND shaders tolerance=0 pixels=65536 differing=3589 beyond=3589 max_rgba=2,2,2,0 first_beyond=15,0 checksums=ea3dbbf2ef61ae6f,211d40e09e1c3c64

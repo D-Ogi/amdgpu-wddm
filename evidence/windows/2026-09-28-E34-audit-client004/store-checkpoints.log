@@ -1,0 +1,21 @@
+BC250 audit store event=begin seq=13 store=19 map=15 time_ns=5955212559100 writer=zink_buffer_subdata kind=buffer_subdata offset=0 bytes=4 capacity=4 mapped_offset=0 valid=1
+BC250 audit store event=end seq=14 store=19 time_ns=5955212595500
+BC250 audit store event=begin seq=18 store=23 map=22 time_ns=5955212909200 writer=zink_buffer_subdata kind=buffer_subdata offset=0 bytes=16 capacity=16 mapped_offset=4096 valid=1
+BC250 audit store event=end seq=19 store=23 time_ns=5955212926200
+BC250 audit lifetime event=checkpoint seq=21 time_ns=5955257461300 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=22 time_ns=5955260184000 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=23 time_ns=5955262569900 marker=1 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=24 time_ns=5955265374500 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=25 time_ns=5955267792800 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=26 time_ns=5955300016000 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=27 time_ns=5955300395500 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=28 time_ns=5955302455800 marker=0 requests=7 successful=7 failed=0 ended=2 pending=0 live=5 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=35 time_ns=5955791576100 marker=2 requests=10 successful=10 failed=0 ended=2 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=36 time_ns=5955795230600 marker=3 requests=10 successful=10 failed=0 ended=2 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=40 time_ns=5955811819300 marker=4 requests=11 successful=11 failed=0 ended=3 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=41 time_ns=5955815744000 marker=5 requests=11 successful=11 failed=0 ended=3 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=51 time_ns=5955894500700 marker=0 requests=14 successful=14 failed=0 ended=6 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=79 time_ns=5956238475400 marker=6 requests=23 successful=23 failed=0 ended=15 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=80 time_ns=5956242475000 marker=7 requests=23 successful=23 failed=0 ended=15 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=84 time_ns=5956248732000 marker=8 requests=24 successful=24 failed=0 ended=16 pending=0 live=8 stores_begun=2 stores_ended=2
+BC250 audit lifetime event=checkpoint seq=85 time_ns=5956251636700 marker=0 requests=24 successful=24 failed=0 ended=16 pending=0 live=8 stores_begun=2 stores_ended=2

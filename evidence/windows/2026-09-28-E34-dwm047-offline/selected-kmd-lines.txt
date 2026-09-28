@@ -1,0 +1,14 @@
+ 13825     39.605 vsync snapshot: 100ns begin 148442743322 end 148442743322 valid 1F
+ 13826     39.605 vsync snapshot: frame 000D977B sync 0010D104 control 80011311 lock 00000000 position 075300DF
+ 13870     39.605 wddm summary: submissions 0 physical + 4187 virtual, 9 preemptions, last completed fence 2017
+ 13871     39.605 wddm summary: node 0 hardware: 2017 submitted, 2017 completed, 0 timeouts, 0 refused
+ 13875     39.605 wddm summary: node 1 (paging, open): 2170 hardware submitted, 2170 completed, 0 timeouts, 0 refused
+ 14147     39.609 wddm summary: vsync enabled, 0 ticks, 2182 reported to dxgkrnl
+ 14157     39.609 wddm summary: vidpn flip open: 1230 hardware flips, 0 refused, 1 hardware vsyncs armed 2199 acked 0 refused 1 completion-deferred 0 old-buffer-reports
+ 14158     39.609 vsync diagnostic: irq 6367 no-mmio 0 flip-off 0 unarmed 48
+ 14159     39.609 vsync diagnostic: no-event 4120 read-fail 0 ack-fail 0
+ 14160     39.609 vsync diagnostic: 100ns irq 148421824432 entry 148421824432 ack 148421664284 notify 148421664284 status 00101104
+ 14162     39.609 wddm summary: CollectDbgInfo called 1 time(s) since the driver was loaded
+ 14175     39.611 gfx: submission path failed, no further ring writes this device start (seq 4187 in flight, slot 0x105B)
+ 14176     39.611 gfx: paging submission path failed, no further ring writes this device start (seq 4140 in flight, slot 0x102C)
+ 14177     39.611 wddm: ResetFromTimeout failed: GPU memory access not proven stopped

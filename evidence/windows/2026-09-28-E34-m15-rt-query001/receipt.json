@@ -1,0 +1,118 @@
+{
+  "rt-build001": {
+    "supervisor": {
+      "error": "engine failed or tree closure not verified",
+      "elapsed": 18.7855311,
+      "postflight": true,
+      "passed": false
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": -1,
+      "timeout": false,
+      "icd_seen": false,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 67,
+      "seconds": 0.1618483,
+      "mode": "info,nort",
+      "utc": "2026-09-28T17:10:54.2321918Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 1,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true
+  },
+  "rt-build002": {
+    "supervisor": {
+      "error": "engine failed or tree closure not verified",
+      "elapsed": 20.7099308,
+      "postflight": true,
+      "passed": false
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": 1,
+      "timeout": false,
+      "icd_seen": false,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 67,
+      "seconds": 3.5810926999999997,
+      "mode": "info,nort",
+      "utc": "2026-09-28T17:16:46.2600368Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 1,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true
+  },
+  "rt-build003": {
+    "supervisor": {
+      "error": null,
+      "elapsed": 21.1622319,
+      "postflight": true,
+      "passed": true
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": 1,
+      "timeout": false,
+      "icd_seen": true,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 67,
+      "seconds": 4.0188223,
+      "mode": "info,nort",
+      "utc": "2026-09-28T17:20:21.4947475Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 0,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true
+  },
+  "rt-query001": {
+    "supervisor": {
+      "error": null,
+      "elapsed": 20.3630012,
+      "postflight": true,
+      "passed": true
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": 0,
+      "timeout": false,
+      "icd_seen": true,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 67,
+      "seconds": 3.3634739999999996,
+      "mode": "info",
+      "utc": "2026-09-28T17:22:02.9626410Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 0,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+    "dwm":  [
+                {
+                    "modules":  [
+                                    {
+                                        "sha256":  "8279AC7F6342CD0A31CB96531194CEF4A224A0D010BCEE4B549D9606D5E405EA",
+                                        "name":  "bc250d3d.dll"
+                                    }
+                                ],
+                    "pid":  2652,
+                    "start":  "2026-09-28T02:46:01.6091277Z"
+                }
+            ],
+    "umd_registration":  [
+                             "bc250umd.dll",
+                             "C:\\BC250\\m11\\resource-close\\bc250d3d.dll",
+                             "C:\\BC250\\m11\\resource-close\\bc250d3d.dll"
+                         ],
+    "parameters":  {
+                       "UnconfirmedStarts":  1,
+                       "EnableCddDwmInterop":  0,
+                       "EnableGpuPresentBlit":  0
+                   },
+    "icd_registration":  [
+                             "C:\\BC250\\m10\\wsi-final\\radeon_icd.json"
+                         ]
+}

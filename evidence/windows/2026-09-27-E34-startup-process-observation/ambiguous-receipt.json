@@ -1,0 +1,33 @@
+{
+    "attempt":  1,
+    "elapsed_ms":  33,
+    "sample":  {
+                   "hashes":  [
+
+                              ],
+                   "identity":  null,
+                   "stop":  false,
+                   "create_success":  false,
+                   "ambiguous":  true,
+                   "utc":  "2026-09-27T12:49:07.1996250Z",
+                   "candidates":  [
+                                      {
+                                          "start_utc":  "2026-09-27T12:00:00.0000000Z",
+                                          "pid":  5608,
+                                          "previous":  false
+                                      },
+                                      {
+                                          "start_utc":  "2026-09-27T12:00:01.0000000Z",
+                                          "pid":  5609,
+                                          "previous":  false
+                                      }
+                                  ]
+               },
+    "ready":  false,
+    "missing":  [
+                    "FC8122DF104A91F81A67996329B7E31A20B647E2468C71EADDF12EB763279B91",
+                    "5C814E21F825EA7A9C30B737DB59ACD7F5F7C7C24FF64B92758F3F396096F748",
+                    "00E0FD825D6B61B57225490D94DAC92BA8A4717B48FFA0EF0ACBBA86BB2A385C"
+                ],
+    "first_create_success_utc":  null
+}

@@ -1,0 +1,24 @@
+Number of Processors : 12
+CPU Speed            : 3194 MHz
+OS Version           : 10.00.00.00
+OS Build Number      : 22631
+Clock type           : PerfCounter
+Boot time            : 2026/09/27:10:58:57.5000000
+Native Pointer Size  : 8 (64bit)
+Start time (UTC)     : 2026/09/27:15:13:58.6389437
+End time (UTC)       : 2026/09/27:15:14:07.5496418  (+         0:00:00:08.9106981)
+Total # Lost Buffers : 0
+Total # Lost Events  : 0
+
+Number of Traces     : 1
+
+Trace name: P:\bc-250\scratch\g0-hosted\redirblt-cpu001\gpu.etl
+    Log file mode        :
+    Pointer size         : 8 (64bit)
+    Start time (UTC)     : 2026/09/27:15:13:58.6389437
+    End time (UTC)       : 2026/09/27:15:14:07.5496418  (+         0:00:00:08.9106981)
+    Start time (Local)   : 2026/09/27:17:13:58.6389437
+    End time (Local)     : 2026/09/27:17:14:07.5496418
+    # Lost Buffers       : 0
+    # Lost Events        : 0
+

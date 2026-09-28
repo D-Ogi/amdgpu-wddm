@@ -32,3 +32,15 @@ writes/readbacks, close the import and check device health. Compare the exact
 control on CPU and hosted GPU stacks. The expected forced exit is42 only; other
 exit codes, stale pixels, timeouts or device loss reject the control. This tests
 owner-process cleanup after completed work, not a deliberately stalled GPU.
+
+## Duplicate imports on three devices
+
+Optional fifth argument duplicate (after normal or abrupt) opens the shared
+surface on an additional independent D3D device in the child. At each new
+generation, both imports read the parent's completed write. Close the first
+import, write through the retained third-device import, reopen the first and
+verify all pixels before the parent reads the reply. Closing a generation
+releases both imports before the owner. The required duplicate_reopen witness
+count is ceil(iterations/100). Run101 exchanges to cover two allocation
+generations, comparing baseline and hosted GPU artifacts. This serialized
+control does not claim concurrent destruction safety or GPU fence handoff.

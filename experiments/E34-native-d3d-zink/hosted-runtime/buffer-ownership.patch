@@ -1,0 +1,63 @@
+--- a/src/gallium/frontends/d3d10umd/InputAssembly.cpp
++++ b/src/gallium/frontends/d3d10umd/InputAssembly.cpp
+@@ -39,17 +39,6 @@
+ #include "Debug.h"
+ #include "Format.h"
+ 
+-// Gallium GPU backends may retain a binding without taking another reference.
+-// Notify the context when the frontend drops its old vertex-buffer reference.
+-static void
+-ReferenceVertexBuffer(struct pipe_context *pipe, struct pipe_resource **dst,
+-                      struct pipe_resource *src)
+-{
+-   struct pipe_resource *old = *dst;
+-   *dst = NULL;
+-   pipe_resource_reference(dst, src);
+-   pipe_resource_release(pipe, old);
+-}
+ 
+ 
+ 
+@@ -162,14 +151,14 @@
+             vb->buffer.resource = NULL;
+             vb->is_user_buffer = false;
+          }
+-         ReferenceVertexBuffer(pDevice->pipe, &vb->buffer.resource, resource);
++         pipe_resource_reference(&vb->buffer.resource, resource);
+       }
+       else {
+          pDevice->vertex_strides[StartBuffer + i] = 0;
+          vb->buffer_offset = 0;
+          // GPU backends cannot dereference a CPU dummy vertex pointer.
+          // A zero-stride resource preserves D3D's unbound-input zero value.
+-         ReferenceVertexBuffer(pDevice->pipe, &vb->buffer.resource, pDevice->zero_vertex_buffer);
++         pipe_resource_reference(&vb->buffer.resource, pDevice->zero_vertex_buffer);
+          vb->is_user_buffer = false;
+       }
+    }
+@@ -181,7 +170,7 @@
+       if (!vb->is_user_buffer && !vb->buffer.resource) {
+          pDevice->vertex_strides[i] = 0;
+          vb->buffer_offset = 0;
+-         ReferenceVertexBuffer(pDevice->pipe, &vb->buffer.resource, pDevice->zero_vertex_buffer);
++         pipe_resource_reference(&vb->buffer.resource, pDevice->zero_vertex_buffer);
+          vb->is_user_buffer = false;
+       }
+    }
+--- a/src/gallium/frontends/d3d10umd/Resource.cpp
++++ b/src/gallium/frontends/d3d10umd/Resource.cpp
+@@ -574,7 +574,13 @@
+    free(pResource->transfers);
+    pResource->transfers=NULL;
+ 
+-   pipe_resource_reference(&pResource->resource, NULL);
++   if (pResource->buffer && pResource->resource) {
++      struct pipe_resource *released = pResource->resource;
++      pResource->resource = NULL;
++      pipe_resource_release(pipe, released);
++   } else {
++      pipe_resource_reference(&pResource->resource, NULL);
++   }
+ }
+ 
+ 

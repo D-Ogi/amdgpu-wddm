@@ -1,6 +1,12 @@
 # ADR 0008: the full WDDM miniport (M7) arrives behind a gate, in four stages, each an experiment
 
-Date: 2026-09-21. Status: accepted.
+Date: 2026-09-21. Status: accepted; partly historical on 2026-09-27. Stages A to D of point 6 are done (M7,
+M8). Point 2 (compile at WDDM 2.0) is superseded by [ADR 0019](0019-ddi-interface-version-follows-the-wdk.md):
+the driver moves to the newest DDI version the WDK defines. Point 7 ("until a reset exists, timeouts are
+avoided") has expired: with real applications on the port a TDR must end in a GPU reset, not in a device
+restart; `ResetFromTimeout` still fails on purpose (`driver/kmd/wddm.c`, "GPU memory access not proven
+stopped") and that gap is tracked in the roadmap as a prerequisite for M12's applications, not as an
+accepted state. Points 1, 3 to 5 stand.
 
 ## Context
 

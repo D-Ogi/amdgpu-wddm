@@ -1,0 +1,18 @@
+{
+    "arguments":  [
+                      "--handshake-only",
+                      "--no-open",
+                      "--luid",
+                      "00000000:02BE478F",
+                      "--size",
+                      "641x479",
+                      "--pump",
+                      "500",
+                      "--hold",
+                      "1",
+                      "--handshake-timeout",
+                      "2000",
+                      "--timeout",
+                      "40"
+                  ]
+}

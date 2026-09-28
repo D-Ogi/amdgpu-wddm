@@ -1,0 +1,8 @@
+﻿KMD164 health gate
+At C:\BC250\m13\dwm-hosted034\wsi-control.ps1:21 char:76
++ ...  -notmatch 'version=0x000700A4 flags=15'){throw 'KMD164 health gate'}
++                                               ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (KMD164 health gate:String) [], RuntimeException
+    + FullyQualifiedErrorId : KMD164 health gate
+ 
+

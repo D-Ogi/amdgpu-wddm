@@ -1,0 +1,12 @@
+--- a/src/gallium/drivers/zink/zink_draw.cpp
++++ b/src/gallium/drivers/zink/zink_draw.cpp
+@@ -1132,7 +1132,8 @@
+               const struct pipe_draw_start_count_bias *draws,
+               unsigned num_draws)
+ {
+-   zink_draw<HAS_MULTIDRAW, DYNAMIC_STATE, BATCH_CHANGED, false>(pctx, info, drawid_offset, indirect, draws, num_draws, NULL, 0);
++   /* Diagnostic: re-emit batch-start state without ending the batch. */
++   zink_draw<HAS_MULTIDRAW, DYNAMIC_STATE, true, false>(pctx, info, drawid_offset, indirect, draws, num_draws, NULL, 0);
+ }
+ 
+ template <util_popcnt HAS_POPCNT>

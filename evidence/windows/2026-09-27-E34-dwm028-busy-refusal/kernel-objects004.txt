@@ -1,0 +1,38 @@
+11: kd> .sympath+ P:\bc-250\scratch\g0-hosted\kmd163-final001
+Expanded Symbol search path is: p:\bc-250\scratch\build\bc250kmd;p:\bc-250\scratch\build\bc250rd;srv*p:\bc-250\scratch\symbols*https://msdl.microsoft.com/download/symbols;p:\bc-250\scratch\g0-hosted\kmd163-final001
+
+************* Path validation summary **************
+Response                         Time (ms)     Location
+OK                                             P:\BC-250\scratch\build\bc250kmd
+OK                                             P:\BC-250\scratch\build\bc250rd
+Deferred                                       srv*P:\BC-250\scratch\symbols*https://msdl.microsoft.com/download/symbols
+OK                                             P:\bc-250\scratch\g0-hosted\kmd163-final001
+11: kd> .reload /f bc250kmd.sys
+11: kd> dt bc250kmd!BC250_WDDM ffffd38c0ee97000 GpuPresent* Hw* WatchdogFaulted RefusalPending GfxPending
+   +0x3c6 RefusalPending  : [2]  "???"
+   +0x3d4 WatchdogFaulted : [2]  "???"
+   +0x5f8 GfxPending      : BC250_GFX_COMPLETION_QUEUE
+   +0x6e0 HwPending       : 0 ''
+   +0x6e4 HwSeq           : 0x41
+   +0x6e8 HwFence         : 0x12
+   +0x6ec HwNode          : 0
+   +0x778 HwSubmitted     : 0n18
+   +0x77c HwCompleted     : 0n18
+   +0x780 HwTimeouts      : 0n0
+   +0x784 HwRefused       : 0n0
+   +0x894 GpuPresentGate  : 0x1 ''
+   +0x898 GpuPresentCalls : 0n23
+   +0x8a0 GpuPresentRecords : 0n23
+   +0x8a8 GpuPresentRotates : 0n6
+   +0x8b0 GpuPresentRefused : 0n0
+   +0x8b8 GpuPresentSubmits : 0n18
+   +0x8c0 GpuPresentSubmitRejected : 0n0
+   +0x8c8 GpuPresentSubmitFailed : 0n2
+   +0x8d0 GpuPresentStatuses : [4] 0n0
+11: kd> dt bc250kmd!BC250_GFX ffffd38c0722ad70 Submit*
+   +0x0d4 SubmitGate : 0x1 ''
+   +0x0d8 SubmitFailed : 0n1
+   +0x0e0 SubmitVmid : 1
+   +0x0e4 SubmitInFlight : 0n0
+   +0x0e8 SubmitSeq : 0x41
+   +0x0f0 SubmitAdev : 0xffffd38c`0eea0880 amdgpu_device

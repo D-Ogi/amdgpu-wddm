@@ -1,0 +1,53 @@
+param([string]$OutputDir,[string]$VsInstall)
+$ErrorActionPreference='Stop'
+. "$PSScriptRoot\common.ps1"
+$repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$root=Get-Bc250Root $repo
+if(!$OutputDir){$OutputDir=Join-Path $root 'scratch\build\d3d12-adapter'}
+$OutputDir=[IO.Path]::GetFullPath($OutputDir)
+New-Item -ItemType Directory -Force $OutputDir|Out-Null
+$saved=Save-ProcessEnvironment
+try {
+ $env:TEMP=$OutputDir;$env:TMP=$OutputDir
+ $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
+ $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
+ $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/external:W0','/MT','/DNOMINMAX',"/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ Push-Location $OutputDir
+ try {
+  if(Test-Path amdgpu_wddm_d3d12.dll){
+   $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
+   Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
+  }
+  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp"
+  if($LASTEXITCODE){throw 'Adapter build failed'}
+  & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
+  if($LASTEXITCODE){throw 'Test build failed'}
+  & .\adapter-test.exe (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')
+  if($LASTEXITCODE){throw 'Adapter tests failed'}
+  & cl.exe @flags /Fe:queue-context-test.exe "$repo\driver\umd\d3d12\queue-context-test.cpp"
+  if($LASTEXITCODE){throw 'Queue context test build failed'}
+  & .\queue-context-test.exe
+  if($LASTEXITCODE){throw 'Queue context tests failed'}
+  & cl.exe @flags "/I$repo\driver\contract\third_party" "/I$repo\driver\contract\uapi-shim" /Fe:queue-request-test.exe "$repo\driver\umd\d3d12\queue-request-test.cpp"
+  if($LASTEXITCODE){throw 'Queue request build failed'}
+  & .\queue-request-test.exe
+  if($LASTEXITCODE){throw 'Queue request tests failed'}
+  & cl.exe @flags "/I$repo\driver\contract\third_party" "/I$repo\driver\contract\uapi-shim" /Fe:queue-registry-test.exe "$repo\driver\umd\d3d12\queue-registry-test.cpp"
+  if($LASTEXITCODE){throw 'Queue registry build failed'}
+  & .\queue-registry-test.exe
+  if($LASTEXITCODE){throw 'Queue registry tests failed'}
+  & cl.exe @flags "/I$repo\driver\contract\third_party" "/I$repo\driver\contract\uapi-shim" /Fe:queue-ddi-test.exe "$repo\driver\umd\d3d12\queue-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'Queue DDI build failed'}
+  & .\queue-ddi-test.exe
+  if($LASTEXITCODE){throw 'Queue DDI tests failed'}
+  & cl.exe @flags /Fe:fence-ddi-test.exe "$repo\driver\umd\d3d12\fence-ddi-test.cpp"
+  if($LASTEXITCODE){throw 'Fence DDI test build failed'}
+  & .\fence-ddi-test.exe
+  if($LASTEXITCODE){throw 'Fence DDI tests failed'}
+  & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
+  if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
+  & .\adapter-kmt-probe.exe --help
+  if($LASTEXITCODE){throw 'Adapter KMT probe help failed'}
+ } finally {Pop-Location}
+} finally {Restore-ProcessEnvironment $saved}
+Write-Host 'Diagnostic adapter only; no functional device or deployment.'

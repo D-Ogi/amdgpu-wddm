@@ -1,0 +1,428 @@
+{
+  "scope": "Cumulative full-desktop-sized map requests, not CPU stores. Progress is preceding sampled log context, not an exact map timestamp. Initial positive deltas include preexisting calls.",
+  "snapshots": 488,
+  "last": [
+    {
+      "ctx": "000001319D123070",
+      "sample": 9024,
+      "id": 47,
+      "target": "2",
+      "size": "1920x1200x1",
+      "format": "105",
+      "bind": "8",
+      "usage": "a",
+      "box": "1920x1200x1",
+      "runtime": "0",
+      "user_ptr": "0",
+      "calls": 1,
+      "bytes": 9216000
+    },
+    {
+      "ctx": "000001319D123070",
+      "sample": 9024,
+      "id": 48,
+      "target": "2",
+      "size": "1920x1200x1",
+      "format": "105",
+      "bind": "8",
+      "usage": "a",
+      "box": "86x508x1",
+      "runtime": "0",
+      "user_ptr": "0",
+      "calls": 2,
+      "bytes": 349504
+    },
+    {
+      "ctx": "000001319D123070",
+      "sample": 9024,
+      "id": 91,
+      "target": "2",
+      "size": "1920x1200x1",
+      "format": "105",
+      "bind": "0",
+      "usage": "1",
+      "box": "1920x1200x1",
+      "runtime": "0",
+      "user_ptr": "0",
+      "calls": 5,
+      "bytes": 46080000
+    },
+    {
+      "ctx": "000001319D123070",
+      "sample": 9024,
+      "id": 109,
+      "target": "2",
+      "size": "1920x1200x1",
+      "format": "105",
+      "bind": "8",
+      "usage": "a",
+      "box": "86x85x1",
+      "runtime": "0",
+      "user_ptr": "0",
+      "calls": 4,
+      "bytes": 116960
+    }
+  ],
+  "changes": [
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 64,
+        "id": 47,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "1920x1200x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 1,
+        "bytes": 9216000
+      },
+      "delta_calls": 1,
+      "delta_bytes": 9216000,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16402843",
+        "present": "8",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "11",
+        "completed": "11",
+        "submits": "11"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 64,
+        "id": 48,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "86x508x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 1,
+        "bytes": 174752
+      },
+      "delta_calls": 1,
+      "delta_bytes": 174752,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16402843",
+        "present": "8",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "11",
+        "completed": "11",
+        "submits": "11"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 128,
+        "id": 48,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "86x508x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 2,
+        "bytes": 349504
+      },
+      "delta_calls": 1,
+      "delta_bytes": 174752,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16402843",
+        "present": "8",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "11",
+        "completed": "11",
+        "submits": "11"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 1280,
+        "id": 91,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "0",
+        "usage": "1",
+        "box": "1920x1200x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 1,
+        "bytes": 9216000
+      },
+      "delta_calls": 1,
+      "delta_bytes": 9216000,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16422687",
+        "present": "360",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "363",
+        "completed": "363",
+        "submits": "363"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 3712,
+        "id": 109,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "86x85x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 1,
+        "bytes": 29240
+      },
+      "delta_calls": 1,
+      "delta_bytes": 29240,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16470703",
+        "present": "1140",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "1145",
+        "completed": "1145",
+        "submits": "1145"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 3776,
+        "id": 91,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "0",
+        "usage": "1",
+        "box": "1920x1200x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 2,
+        "bytes": 18432000
+      },
+      "delta_calls": 1,
+      "delta_bytes": 9216000,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16470703",
+        "present": "1140",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "1145",
+        "completed": "1145",
+        "submits": "1145"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 4032,
+        "id": 109,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "86x85x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 2,
+        "bytes": 58480
+      },
+      "delta_calls": 1,
+      "delta_bytes": 29240,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16477859",
+        "present": "1260",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "1267",
+        "completed": "1267",
+        "submits": "1267"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 4096,
+        "id": 109,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "86x85x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 3,
+        "bytes": 87720
+      },
+      "delta_calls": 1,
+      "delta_bytes": 29240,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16477859",
+        "present": "1260",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "1267",
+        "completed": "1267",
+        "submits": "1267"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 4224,
+        "id": 109,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "8",
+        "usage": "a",
+        "box": "86x85x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 4,
+        "bytes": 116960
+      },
+      "delta_calls": 1,
+      "delta_bytes": 29240,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16480000",
+        "present": "1320",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "1327",
+        "completed": "1327",
+        "submits": "1327"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 6336,
+        "id": 91,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "0",
+        "usage": "1",
+        "box": "1920x1200x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 3,
+        "bytes": 27648000
+      },
+      "delta_calls": 1,
+      "delta_bytes": 9216000,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16521562",
+        "present": "1980",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "1987",
+        "completed": "1987",
+        "submits": "1987"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 8640,
+        "id": 91,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "0",
+        "usage": "1",
+        "box": "1920x1200x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 4,
+        "bytes": 36864000
+      },
+      "delta_calls": 1,
+      "delta_bytes": 9216000,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16567281",
+        "present": "2700",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "2709",
+        "completed": "2709",
+        "submits": "2709"
+      }
+    },
+    {
+      "bucket": {
+        "ctx": "000001319D123070",
+        "sample": 9024,
+        "id": 91,
+        "target": "2",
+        "size": "1920x1200x1",
+        "format": "105",
+        "bind": "0",
+        "usage": "1",
+        "box": "1920x1200x1",
+        "runtime": "0",
+        "user_ptr": "0",
+        "calls": 5,
+        "bytes": 46080000
+      },
+      "delta_calls": 1,
+      "delta_bytes": 9216000,
+      "preceding_progress": {
+        "pid": "12852",
+        "device": "00000131975804B8",
+        "tick": "16574937",
+        "present": "2820",
+        "context": "1",
+        "sync": "80002d00",
+        "submitted": "2831",
+        "completed": "2831",
+        "submits": "2831"
+      }
+    }
+  ]
+}

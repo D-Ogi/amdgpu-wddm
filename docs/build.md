@@ -185,6 +185,69 @@ Targets `src/gallium/targets/wgl/libgallium_wgl.dll` and `src/gallium/targets/li
 the DLL C runtime. The recorded build used the RADV ICD's tree; its Zink/WGL patches are the `zink-*.patch`
 files in `experiments/E33-m12-applications/`.
 
+## DXVK
+
+PROVENANCE: DXVK, zlib.
+
+`tools/build/build-dxvk.ps1 -Config <name> -Source <tree> -Build <dir>` works like the Mesa script. The option
+sets are in [`tools/build/dxvk-configs.json`](../tools/build/dxvk-configs.json), and the same `Build Options:`
+gate applies. `recipe.json` also records the submodule commits: DXVK's shader compiler lives in the
+`dxbc-spirv` submodule. `-Reconfigure` re-runs meson on a configured build directory. DXVK needs no WDK headers,
+only `vcvars64.bat`, meson, ninja and glslangValidator. The tree must have its submodules initialized
+(`git submodule update --init --recursive`).
+
+| Config | Source | Targets |
+|---|---|---|
+| `per-app` | upstream DXVK | `d3d11.dll`, `dxgi.dll`, `d3d10core.dll`, `d3d9.dll`: application-local DLLs, the comparison path of the M14 5 % bound (D004) |
+| `ddi-engine` | DXVK branch `amdgpu-wddm/ddi-engine` | `amdgpu_wddm_dxvk.dll`, the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4), and `amdgpu_wddm_dxvk_engine_test.exe` |
+
+Both are `-Dbuildtype=release` without D3D8. `ddi-engine` also drops D3D9 and D3D10 and sets
+`-Denable_ddi_engine=true`, an option that exists only on that branch. The branch is upstream DXVK plus
+this project's commits under `src/ddi/` and small host-mode hooks in `src/dxvk/` and `src/d3d11/`. It is not
+published yet; each `recipe.json` names its commit. Branch commits before engine header r7 name the DLL
+`bc250dxvk.dll` and the test `bc250dxvk_engine_test.exe`.
+
+`amdgpu_wddm_dxvk_engine_test.exe <amdgpu_wddm_dxvk.dll> [adapter substring]` is the engine's offline positive
+control. It runs on any Vulkan 1.3 GPU, opens no window and exits by itself; exit code 0 means every check
+passed. The test plays the UMD shell: it owns the Vulkan instance and device, allocates the images and feeds
+shaders in DDI form. The checks are listed under Validation in
+[the engine design note](design/d3d11-ddi-engine.md#validation).
+
+## vkd3d-proton
+
+PROVENANCE: vkd3d-proton, LGPL-2.1.
+
+`tools/build/build-vkd3d.ps1 -Config <name> -Source <tree> -Build <dir> [-Widl <widl.exe>]` works like the DXVK
+script, with the same `Build Options:` gate and the submodule commits in `recipe.json`. The option sets are in
+[`tools/build/vkd3d-configs.json`](../tools/build/vkd3d-configs.json).
+
+What differs from the DXVK script:
+- vkd3d-proton also needs the IDL compiler `widl`. MSYS2 mingw64 ships one. The script appends its directory to
+  PATH, so nothing else in it shadows the MSVC tools.
+- The script sets CC and CXX to `cl`.
+- The tree must have its submodules initialized: `dxil-spirv` with its own nested submodules, and the Khronos
+  headers.
+
+| Config | Source | Targets |
+|---|---|---|
+| `per-app` | upstream vkd3d-proton | `d3d12.dll`, `d3d12core.dll`: application-local DLLs, the M12 per-application D3D12 path |
+| `ddi-engine` | vkd3d-proton branch `amdgpu-wddm/ddi-engine` | `amdgpu_wddm_vkd3d.dll`, the engine behind the proposed M15 native D3D12 UMD (ADR 0017 item 5), and `amdgpu_wddm_vkd3d_engine_test.exe` |
+
+Both configs build with `-Dbuildtype=release -Denable_tests=false`.
+
+`ddi-engine` adds two options:
+- `-Denable_ddi_engine=true`, an option that exists only on that branch;
+- `-Db_vscrt=mt`: the engine links the C runtime statically, and the branch's meson refuses anything else for it.
+
+The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is not published yet; each
+`recipe.json` names its commit. Branch commits before a582668d name the DLL `bc250vkd3d.dll` and the test
+`bc250vkd3d_engine_test.exe`.
+
+`amdgpu_wddm_vkd3d_engine_test.exe <amdgpu_wddm_vkd3d.dll> [adapter substring] [--icd <driver DLL>]` is the
+engine's offline positive control. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by
+itself; exit code 0 means every check passed. The checks are listed under Validation in
+[the engine design note](design/d3d12-ddi-engine.md#validation).
+
 ## KMD and host tests
 
 ```

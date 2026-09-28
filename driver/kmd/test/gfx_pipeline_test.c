@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "gfx_completion_queue.h"
 #include "bc250_fence_order.h"
+#define KernelMode 0
 #define TRUE 1
 #define FALSE 0
 #define BC250_WDDM_LOG_CALLS 8
@@ -39,7 +40,8 @@ static ULONGLONG mock_now;
 #define EXPECT_LEDGER(v) (ledger==(v))
 #endif
 static unsigned int completed,mock_seq,reported,ledger,reports,failures,bad,checks,dispatches;
-static int refuse, timer,mutex;
+static int refuse, timer,mutex, armed=1, root_wait;
+static unsigned int delays, complete_on_delay;
 static LONGLONG due_time;
 #define CHECK(x) do { ++checks; if (!(x)) { ++bad; printf("FAIL line %u: %s\n",__LINE__,#x); } } while(0)
 static void KeAcquireSpinLock(int* l,KIRQL* i) { (void)l; *i=0; }
@@ -60,7 +62,15 @@ static void WddmRecordFenceLedgerLocked(BC250_WDDM* w,UINT n,ULONGLONG e,UINT f,
 static void WddmRecordCompletionLocked(BC250_WDDM* w,UINT f,UINT n) { (void)w; (void)n; reported=f; }
 static void WddmQueueReport(BC250_WDDM* w) { (void)w; ++reports; }
 static NTSTATUS GfxSubmitIb(BC250_DEVICE* d,ULONG v,ULONGLONG root,ULONGLONG va,ULONG bytes,ULONG* s)
-{ (void)d; (void)v; (void)root; (void)va; (void)bytes; if(refuse)return STATUS_DEVICE_BUSY; *s=++mock_seq; ++dispatches; return 0; }
+{ (void)d; (void)v; (void)root; (void)va; (void)bytes; if(refuse || (root_wait && completed != mock_seq))return STATUS_DEVICE_BUSY; *s=++mock_seq; ++dispatches; return 0; }
+static int GfxSubmitReady(BC250_DEVICE* d) { (void)d; return armed && completed==mock_seq; }
+static int GfxSubmitBusy(BC250_DEVICE* d) { (void)d; return armed && completed!=mock_seq; }
+static void KeDelayExecutionThread(int mode,int alert,LARGE_INTEGER* tick)
+{
+    (void)mode; (void)alert; CHECK(!mutex && tick->QuadPart==-10000);
+    mock_now+=10000; ++delays;
+    if(complete_on_delay && delays==complete_on_delay) completed=mock_seq;
+}
 #include "gfx_pipeline_actual.inc"
 int main(void)
 {
@@ -97,6 +107,31 @@ int main(void)
     w.FenceLedger[0].Epoch=2; completed=mock_seq; WddmGpuFence(&d);
     CHECK(reported==9 && w.HwPending);
 #endif
+    // BGP1 burst: the second job must enter while the first is outstanding.
+    memset(&w,0,sizeof(w)); w.FenceLedger[0].Epoch=1;
+    mock_seq=completed=reported=dispatches=failures=0; mock_now=0;
+    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x4000,128,1,0));
+    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x4000,128,2,0));
+    CHECK(dispatches==2 && reported==0 && delays==0 && w.GfxPending.Count==2);
+    // Root-switch pressure clears only when genuine completion is observed.
+    root_wait=1; complete_on_delay=2;
+    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,3,0));
+    CHECK(delays==2 && dispatches==3 && reported==2 && w.GfxPending.Count==1);
+    root_wait=0; complete_on_delay=0;
+    // Fill remaining completion slots; bounded admission waits for capacity.
+    for(i=4;i<=9;i++) CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0));
+    CHECK(w.GfxPending.Count==7);
+    complete_on_delay=delays+1;
+    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,10,0));
+    CHECK(delays==3 && reported==9 && dispatches==10 && w.GfxPending.Count==1);
+    // No progress: wait is finite, no new dispatch or fabricated retirement.
+    complete_on_delay=0; refuse=1; i=delays;
+    CHECK(!WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,11,0));
+    CHECK(delays-i==BC250_WDDM_SUBMIT_TIMEOUT_MS && reported==9 && dispatches==10);
+    // Closed hardware does not wait or submit even with an outstanding job.
+    armed=0; i=delays;
+    CHECK(!WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,11,0));
+    CHECK(delays==i && reported==9 && dispatches==10);
     printf("GFX WDDM actual submit/completion/watchdog: %u checks, %u failures\n",checks,bad);
     return bad ? 1:0;
 }

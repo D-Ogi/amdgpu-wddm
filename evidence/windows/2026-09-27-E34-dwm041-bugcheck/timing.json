@@ -1,0 +1,12 @@
+{
+  "clock": "KeQueryInterruptTime, 100ns",
+  "log_start": 51654059136,
+  "summary_driver_ms": 91937,
+  "summary_time_approx": 52573429136,
+  "last_isr_time": 52551716185,
+  "last_vsync_ack_time": 52551536026,
+  "last_notify_return_time": 52551536026,
+  "isr_age_seconds_approx": 2.1712951,
+  "ack_age_seconds_approx": 2.189311,
+  "scope": "Independent samples, millisecond log rounding; no MMIO sample during the gap."
+}

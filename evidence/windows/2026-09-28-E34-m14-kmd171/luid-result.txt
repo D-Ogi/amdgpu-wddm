@@ -1,0 +1,9 @@
+{
+    "stdout":  "{\"child_pid\":3984,\"root_exit_observed\":true,\"child_exit\":0,\"timed_out\":false,\"termination_requested\":true,\"job_empty\":true}\r\n",
+    "stderr":  "",
+    "exit_code":  0
+}
+probe: BC-250 is PCI 1002:13fe, UMDRIVERPRIVATE query 1496 bytes, trailer at 1472
+adapter 0: luid high 0x00000000 low 0x032fd8c0, pci 1002:13fe rev 00 (BC-250), trailer magic 0x49413242 version 1 size 24 reserved 0 luid high 0x00000000 low 0x032fd8c0: MATCH
+adapter 1: luid high 0x00000000 low 0x00008ba4, pci 1414:008c rev 00, UMDRIVERPRIVATE ok, no trailer (magic 0x00000000)
+PASS  the BC-250 trailer LUID equals the enumerated LUID

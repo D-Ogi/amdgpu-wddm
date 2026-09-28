@@ -1,0 +1,7 @@
+{
+  "src/gallium/drivers/zink/zink_program.c": {
+    "before_raw_sha256": "a66832a958d41e79b94bae658df7578f297b0f97217d9a1a34ca4ccc68cbd77e",
+    "before_lf_sha256": "e87c4295e22cd83984ffee5209b6a01a67f421b0e695a292629e18f7a993336f",
+    "after_lf_sha256": "76b795c3cadbd3d8126b2672878aa68cface48c276c5e8e5e299f013d62a7091"
+  }
+}

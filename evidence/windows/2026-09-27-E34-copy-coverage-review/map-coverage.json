@@ -1,0 +1,40 @@
+{
+  "scope": "Recorded map requests only; signatures do not prove allocation identity or CPU-store absence.",
+  "snapshots": 154,
+  "runtime_resource_map_observed": false,
+  "user_pointer_map_observed": false,
+  "persistent_image_map_observed": false,
+  "contexts": {
+    "0000019D2F0A7070": {
+      "sample": 9344,
+      "persistent": [
+        {
+          "id": 0,
+          "target": 0,
+          "runtime": 0,
+          "user_ptr": 0,
+          "calls": 7,
+          "bytes": 168000,
+          "ctx": "0000019D2F0A7070",
+          "sample": 9344,
+          "usage": 1795,
+          "bind": 134250496,
+          "size": "24000x1x1"
+        },
+        {
+          "id": 2,
+          "target": 0,
+          "runtime": 0,
+          "user_ptr": 0,
+          "calls": 1,
+          "bytes": 1048576,
+          "ctx": "0000019D2F0A7070",
+          "sample": 9344,
+          "usage": 802,
+          "bind": 32880,
+          "size": "1048576x1x1"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+compile and link (host, no WDK header)
+  Generowanie kodu...
+run
+PASS GFX10 acquire packet, global range, cache operations, short-buffer atomicity
+PASS GFX copy chunks,64-bit addresses,final sync,first RAW wait,capacity/overlap/overflow rejection
+compile-check (kernel flags, same source, no link)
+
+gfx_copy_test.exe exit code 0

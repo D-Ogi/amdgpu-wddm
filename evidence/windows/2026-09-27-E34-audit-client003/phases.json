@@ -1,0 +1,113 @@
+{
+  "phases": {
+    "gpu": {
+      "start_marker": 1,
+      "end_marker": 2,
+      "successful_maps": 3,
+      "image_write_ids": [],
+      "full_frame_write_ids": [],
+      "full_frame_read_ids": []
+    },
+    "gpu_readback": {
+      "start_marker": 3,
+      "end_marker": 4,
+      "successful_maps": 1,
+      "image_write_ids": [],
+      "full_frame_write_ids": [],
+      "full_frame_read_ids": [
+        43
+      ]
+    },
+    "cpu_copy": {
+      "start_marker": 5,
+      "end_marker": 6,
+      "successful_maps": 12,
+      "image_write_ids": [
+        46,
+        49,
+        52,
+        55,
+        58,
+        61,
+        64,
+        67,
+        70,
+        73,
+        76,
+        79
+      ],
+      "full_frame_write_ids": [
+        46,
+        49,
+        52,
+        55,
+        58,
+        61,
+        64,
+        67,
+        70,
+        73,
+        76,
+        79
+      ],
+      "full_frame_read_ids": []
+    },
+    "cpu_readback": {
+      "start_marker": 7,
+      "end_marker": 8,
+      "successful_maps": 1,
+      "image_write_ids": [],
+      "full_frame_write_ids": [],
+      "full_frame_read_ids": [
+        82
+      ]
+    }
+  },
+  "through_marker8": {
+    "events": 80,
+    "requests": 24,
+    "successful": 24,
+    "failed": 0,
+    "ended": 16,
+    "live_map_ids": [
+      5,
+      8,
+      11,
+      14,
+      18,
+      36,
+      39,
+      42
+    ],
+    "object_replacements": 0,
+    "staging_successes": 16,
+    "sequenced": true,
+    "checkpoint_count": 16,
+    "last_checkpoint": {
+      "event": "checkpoint",
+      "seq": 80,
+      "time_ns": 2742920284900,
+      "marker": 8,
+      "requests": 24,
+      "successful": 24,
+      "failed": 0,
+      "ended": 16,
+      "pending": 0,
+      "live": 8
+    },
+    "interval_delta": null,
+    "scope": "sequenced event and checkpoint consistency; CPU stores and uninstrumented paths are not measured"
+  },
+  "known_application_copy_bytes": 3686400,
+  "live_buffer_map_ids": [
+    5,
+    8,
+    11,
+    14,
+    18,
+    36,
+    39,
+    42
+  ],
+  "scope": "small-client positive control only; persistent pointer stores, desktop ownership and full G0 remain separate"
+}

@@ -1,0 +1,22 @@
+{
+  "101": {
+    "exit": 0,
+    "baseline_restore_verified": true,
+    "dwm_pid": 4400
+  },
+  "102": {
+    "exit": 0,
+    "baseline_restore_verified": true,
+    "dwm_pid": 4400
+  },
+  "103": {
+    "exit": 5,
+    "baseline_restore_verified": true,
+    "dwm_pid": 4400
+  },
+  "104": {
+    "exit": 0,
+    "baseline_restore_verified": true,
+    "dwm_pid": 4400
+  }
+}

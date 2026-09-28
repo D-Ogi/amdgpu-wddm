@@ -1,0 +1,12 @@
+   436      0.982 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   458      0.982 wddm: GPU Present calls0 records0 rotate0 refused0
+   459      0.982 wddm: GPU Present submits0 rejected0 failed0
+   525      1.142 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   547      1.142 wddm: GPU Present calls0 records0 rotate0 refused0
+   548      1.142 wddm: GPU Present submits0 rejected0 failed0
+   623      1.343 wddm summary: node 0 hardware: 0 submitted, 0 completed, 0 timeouts, 0 refused
+   645      1.343 wddm: GPU Present calls0 records0 rotate0 refused0
+   646      1.343 wddm: GPU Present submits0 rejected0 failed0
+   885      2.337 wddm summary: node 0 hardware: 9 submitted, 9 completed, 0 timeouts, 0 refused
+   979      2.337 wddm: GPU Present calls9 records9 rotate7 refused0
+   980      2.337 wddm: GPU Present submits9 rejected0 failed0

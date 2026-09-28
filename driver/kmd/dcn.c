@@ -893,6 +893,36 @@ NTSTATUS DcnVsyncEnable(_Inout_ BC250_DEVICE* Device, BOOLEAN On)
     return returned?change.Status:(NT_SUCCESS(change.Status)?STATUS_UNSUCCESSFUL:change.Status);
 }
 
+// Called only by the HardwareAccess, Level Two summary escape. Never from
+// CollectDbgInfo or stop: a mapped BAR alone does not grant hardware access.
+// Samples are sequential and can straddle a scan line/frame; no wait or write.
+void DcnLogVsyncSnapshot(_In_ const BC250_DEVICE* Device)
+{
+    static const ULONG offsets[] = {
+        BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT,
+        BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS,
+        BC250_REG_DMU_OTG0_OTG_CONTROL,
+        BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,
+        BC250_REG_DMU_OTG0_OTG_STATUS_POSITION
+    };
+    ULONG values[RTL_NUMBER_OF(offsets)] = {0};
+    ULONG valid = 0, i;
+    ULONGLONG begin, end;
+
+    if (!Device->VidPnFlipEnabled || Device->Mmio == NULL) return;
+    begin = KeQueryInterruptTime();
+    for (i = 0; i < RTL_NUMBER_OF(offsets); ++i)
+    {
+        NTSTATUS status = MmioDcnRead(Device, offsets[i], &values[i]);
+        if (NT_SUCCESS(status)) valid |= 1u << i;
+        else GuardLog("vsync snapshot: slot %lu read failed %08lX", i, (ULONG)status);
+    }
+    end = KeQueryInterruptTime();
+    GuardLog("vsync snapshot: 100ns begin %llu end %llu valid %02lX", begin, end, valid);
+    GuardLog("vsync snapshot: frame %08lX sync %08lX control %08lX lock %08lX position %08lX",
+             values[0], values[1], values[2], values[3], values[4]);
+}
+
 // pnp.c's Bc250InterruptRoutine calls this on every interrupt this driver's ISR takes, the same shape as ih.c's
 // own IhInterrupt: a no-op (FALSE, nothing read) unless Device->VidPnFlipEnabled and Device->DcnVsyncArmed are
 // both true, which is what makes this inert with the gate closed or nobody listening. DIRQL: MmioDcnRead and
@@ -903,13 +933,22 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
 {
     ULONG status;
 
-    if (Device->Mmio == NULL || !Device->VidPnFlipEnabled || Device->DcnVsyncArmed == 0) return FALSE;
+    InterlockedExchange64(&Device->DcnVsyncEntryTime, (LONG64)KeQueryInterruptTime());
+    if (Device->Mmio == NULL) { InterlockedIncrement(&Device->DcnVsyncNoMmio); return FALSE; }
+    if (!Device->VidPnFlipEnabled) { InterlockedIncrement(&Device->DcnVsyncFlipDisabled); return FALSE; }
+    if (Device->DcnVsyncArmed == 0) { InterlockedIncrement(&Device->DcnVsyncUnarmed); return FALSE; }
     if (!NT_SUCCESS(MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS, &status)))
     {
+        InterlockedIncrement(&Device->DcnVsyncReadFailed);
         InterlockedIncrement(&Device->DcnVsyncRefused);
         return FALSE;
     }
-    if ((status & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) == 0) return FALSE;
+    InterlockedExchange(&Device->DcnVsyncLastStatus, (LONG)status);
+    if ((status & OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_OCCURRED_MASK) == 0)
+    {
+        InterlockedIncrement(&Device->DcnVsyncNoEvent);
+        return FALSE;
+    }
 
     // Acknowledge only our event, preserving unrelated enable fields. The
     // synchronized enable callback cannot interleave this read-modify-write.
@@ -921,13 +960,49 @@ BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device)
     if (!NT_SUCCESS(MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS,
                                    DcnVsyncAckValue(status), TRUE)))
     {
+        InterlockedIncrement(&Device->DcnVsyncAckFailed);
         InterlockedIncrement(&Device->DcnVsyncRefused);
         return FALSE;
     }
+    InterlockedExchange64(&Device->DcnVsyncAckTime, (LONG64)KeQueryInterruptTime());
     InterlockedIncrement(&Device->DcnVsyncTicks);
     InterlockedIncrement(&Device->DcnVsyncAcked);
     Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
     return TRUE;
+}
+
+// A coalesced IH vector can be consumed without another ISR entry. Poll/ACK
+// under the same interrupt lock as ISR and enable/disable read-modify-writes.
+typedef struct _BC250_DCN_VECTOR_POLL {
+    BC250_DEVICE* Device;
+    BOOLEAN Invoked;
+} BC250_DCN_VECTOR_POLL;
+
+static BOOLEAN DcnVsyncVectorSynchronized(_In_ PVOID Context)
+{
+    BC250_DCN_VECTOR_POLL* poll=(BC250_DCN_VECTOR_POLL*)Context;
+    poll->Invoked=TRUE;
+    InterlockedIncrement(&poll->Device->DcnVsyncDpcPolls);
+    if (DcnVsyncInterrupt(poll->Device))
+        InterlockedIncrement(&poll->Device->DcnVsyncDpcAcked);
+    return TRUE; // invocation succeeded even if ISR already cleared the event
+}
+
+void DcnVsyncFromVector(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_DCN_VECTOR_POLL poll;
+    BOOLEAN returned=FALSE;
+    NTSTATUS status;
+    if (Device->Dxgk.DxgkCbSynchronizeExecution==NULL)
+    {
+        InterlockedIncrement(&Device->DcnVsyncDpcSyncFailures);
+        return;
+    }
+    poll.Device=Device;poll.Invoked=FALSE;
+    status=Device->Dxgk.DxgkCbSynchronizeExecution(Device->Dxgk.DeviceHandle,
+        DcnVsyncVectorSynchronized,&poll,0,&returned);
+    if (!NT_SUCCESS(status) || !returned || !poll.Invoked)
+        InterlockedIncrement(&Device->DcnVsyncDpcSyncFailures);
 }
 
 // ---- the present path's own destination once the flip is live (2026-09-22, ADR 0011 consequences) -------------

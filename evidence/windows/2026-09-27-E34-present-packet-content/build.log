@@ -1,0 +1,6 @@
+gfx-blt-control.c
+gfx_blt.c
+gfx_copy.c
+blit_plan.c
+Generowanie kodu...
+gfx-blt-control --run|--run-list|--run-present-list: five bounded copies; Present packet mode uses BC2S transport, not DDI Present

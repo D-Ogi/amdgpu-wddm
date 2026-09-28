@@ -1,0 +1,28 @@
+{
+  "events": 2029,
+  "requests": 801,
+  "successful": 401,
+  "failed": 400,
+  "ended": 400,
+  "live_map_ids": [
+    811
+  ],
+  "object_replacements": 0,
+  "staging_successes": 0,
+  "sequenced": true,
+  "checkpoint_count": 27,
+  "last_checkpoint": {
+    "event": "checkpoint",
+    "seq": 2029,
+    "time_ns": 2029,
+    "marker": 99,
+    "requests": 801,
+    "successful": 401,
+    "failed": 400,
+    "ended": 400,
+    "pending": 0,
+    "live": 1
+  },
+  "interval_delta": null,
+  "scope": "sequenced event and checkpoint consistency; CPU stores and uninstrumented paths are not measured"
+}

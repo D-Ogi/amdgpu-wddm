@@ -1,0 +1,50 @@
+[
+  {
+    "phase": "Cpu",
+    "scene": "draws",
+    "bytes": 16451,
+    "sha256": "70804698721a16009d894871cdc07dcc0cd09d6fce825ac9713fd5018977e2c4",
+    "reference_sha256": "70804698721a16009d894871cdc07dcc0cd09d6fce825ac9713fd5018977e2c4",
+    "exact": true
+  },
+  {
+    "phase": "Cpu",
+    "scene": "fill",
+    "bytes": 16451,
+    "sha256": "c9ff347d5fa18775ac1da47392c80971648bd59193c00ba8571e90343d9e0336",
+    "reference_sha256": "c9ff347d5fa18775ac1da47392c80971648bd59193c00ba8571e90343d9e0336",
+    "exact": true
+  },
+  {
+    "phase": "Cpu",
+    "scene": "shaders",
+    "bytes": 262213,
+    "sha256": "a9300f524aa0195f679b8e92bf433b9e6c4f7e3ed435e62a658f3064e3df904a",
+    "reference_sha256": "a9300f524aa0195f679b8e92bf433b9e6c4f7e3ed435e62a658f3064e3df904a",
+    "exact": true
+  },
+  {
+    "phase": "Gpu",
+    "scene": "draws",
+    "bytes": 16451,
+    "sha256": "f94c6a30fcac4361366f45d4229f4acf5ad7d96bbd454965946ac1c9f03f9ece",
+    "reference_sha256": "f94c6a30fcac4361366f45d4229f4acf5ad7d96bbd454965946ac1c9f03f9ece",
+    "exact": true
+  },
+  {
+    "phase": "Gpu",
+    "scene": "fill",
+    "bytes": 16451,
+    "sha256": "63c8409a1f60c2d50c94e188b27ded444a55be989a3deee4866385d11f4389d5",
+    "reference_sha256": "63c8409a1f60c2d50c94e188b27ded444a55be989a3deee4866385d11f4389d5",
+    "exact": true
+  },
+  {
+    "phase": "Gpu",
+    "scene": "shaders",
+    "bytes": 262213,
+    "sha256": "acc01407a860653d3cf575c272f52be844373a544e2a822110fe96cd3e43cd65",
+    "reference_sha256": "acc01407a860653d3cf575c272f52be844373a544e2a822110fe96cd3e43cd65",
+    "exact": true
+  }
+]

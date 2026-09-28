@@ -1,0 +1,13 @@
+{
+  "receipts.zip": "29fce2711c92faab4db346a379f2233c7ad64db632966f8fb2267e1f842d0d7d",
+  "gpu.etl": "000f7bb5d54fa4186d8f1b6a11ac0a8423e4b8e87f1cf43a91ca7adf9cc72534",
+  "result/events-xperf.csv": "a73f2c555f60b341ce8815a390e6f50776cb6a5ef498100f685ca43cac810b38",
+  "result/dwm-8548.log": "8a33778c4c04f8bd5543f65347b701acf89ecf871fff3a3ba167bf41d38c63d4",
+  "result/kmd-start.log": "3e8d417dffae55e53ec41be8622c18c2463f32d4bd188c0c3418b067e564c5f1",
+  "result/kmd-end.log": "392b5862339eaea087e7746f36f1e765a4bfce78a08439b225a58706058f253b",
+  "verified/etw-proof.json": "8ee5831b3356e9feac5092eb52b4540031b6fd8635cbcfe6e634188b5ad4b06c",
+  "result/map-reconciliation.json": "20716d00cc43e1b00840c7c55e58a96c8796d6ac2b11d180a27d114584a9c0fa",
+  "result/baseline.bmp": "7a8026984836d0e6ddc84847144300e96679a77ecc2c7b46a09b92d678b5a79c",
+  "result/gpu.bmp": "d72286c93dec2aa18ec75201177ed568dc7ea60bd1186a0452f57c97d3936ffd",
+  "result/screen.png": "af3e9cbd37677dd714e11f7ae9c2a31ae124bee69d2ef2c120c9e685fc7a0304"
+}
