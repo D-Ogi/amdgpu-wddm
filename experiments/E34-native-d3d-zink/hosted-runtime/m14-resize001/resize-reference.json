@@ -1,0 +1,48 @@
+{
+  "name": "resize",
+  "resizes": 3,
+  "presents": 12,
+  "pixel_checks": 12,
+  "steps": [
+    {
+      "width": 64,
+      "height": 64,
+      "presents": 3,
+      "checksums": [
+        "d2bfb75560f4c325",
+        "d0530839d87ea325",
+        "79d66447807a4325"
+      ]
+    },
+    {
+      "width": 65,
+      "height": 33,
+      "presents": 3,
+      "checksums": [
+        "335b23cd8081f1ed",
+        "0ef7e4f5d7958413",
+        "212ef14d77b579ab"
+      ]
+    },
+    {
+      "width": 127,
+      "height": 79,
+      "presents": 3,
+      "checksums": [
+        "4149f8301f3fc273",
+        "9f34f112f28bb38b",
+        "30fb0a858c8d5a6d"
+      ]
+    },
+    {
+      "width": 64,
+      "height": 64,
+      "presents": 3,
+      "checksums": [
+        "d2bfb75560f4c325",
+        "d0530839d87ea325",
+        "79d66447807a4325"
+      ]
+    }
+  ]
+}
