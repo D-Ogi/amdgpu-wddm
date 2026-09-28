@@ -5,6 +5,7 @@
 #include "engine-ddi.h"
 #include <cstdio>
 #include <cstring>
+#include <io.h>
 
 namespace {
 int failures = 0;
@@ -30,6 +31,9 @@ template <class T> bool all_filled(const T& table) {
 } // namespace
 
 int main() {
+    // The refusals below log through engine-ddi's stderr sink by design: expected output, sent to stdout in order.
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    _dup2(_fileno(stdout), _fileno(stderr));
     BC250_VKD3D_ENGINE_FUNCS funcs{};
     funcs.Size = sizeof(funcs);
     funcs.AbiVersion = BC250_VKD3D_ENGINE_ABI_VERSION;

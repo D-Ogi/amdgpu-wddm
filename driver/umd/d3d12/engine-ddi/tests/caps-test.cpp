@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cwchar>
+#include <io.h>
 
 namespace {
 int failures = 0;
@@ -459,7 +460,11 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
+    // engine-ddi's log sink is stderr (log_line). The refusals this test provokes log there by design; they are
+    // expected output, not failures, so they go to stdout in order with the ok/FAIL lines. The verdict is the exit
+    // code and the PASSED/FAILED line.
     setvbuf(stdout, nullptr, _IONBF, 0);
+    _dup2(_fileno(stdout), _fileno(stderr));
     const wchar_t* engine = nullptr;
     const wchar_t* adapter = nullptr;
     for (int i = 1; i < argc; ++i) {

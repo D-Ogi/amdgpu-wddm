@@ -71,10 +71,22 @@ try {
                "/I$src")
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
 
+    # A native step's verdict is its exit code. Windows PowerShell 5.1 turns every stderr line of a native command
+    # under 2>&1 into an ErrorRecord, and the script-wide 'Stop' made the first one terminating (NativeCommandError)
+    # although the step had passed. 'Continue' is local to this function and the step's scriptblock. Native stderr
+    # lines (a RemoteException, in 5.1 and pwsh alike) are printed as text in order with stdout; any other error
+    # record, such as a command that does not exist, still fails the step.
     function Invoke-Step([string]$Name, [scriptblock]$Body) {
         Write-Host "== $Name"
-        & $Body 2>&1 | Out-Host
-        if ($LASTEXITCODE) { throw "$Name failed ($LASTEXITCODE)" }
+        $ErrorActionPreference = 'Continue'
+        $global:LASTEXITCODE = 0
+        & $Body 2>&1 | ForEach-Object {
+            if ($_ -isnot [Management.Automation.ErrorRecord]) { $_ }
+            elseif ($_.Exception -is [Management.Automation.RemoteException]) { "$_" }
+            else { throw "$Name failed: $_" }
+        } | Out-Host
+        $code = $global:LASTEXITCODE
+        if ($code) { throw "$Name failed ($code)" }
     }
 
     Push-Location $OutputDir
@@ -135,9 +147,13 @@ try {
             $p = Start-Process -FilePath (Join-Path $OutputDir $Exe) -ArgumentList $argList `
                 -WorkingDirectory $runDir -NoNewWindow -PassThru `
                 -RedirectStandardOutput "$runDir\stdout.txt" -RedirectStandardError "$runDir\stderr.txt"
+            # Windows PowerShell 5.1: unless the process handle is opened while the process runs, ExitCode reads
+            # $null after it exits, and a failed run would pass. A missing exit code fails the run below.
+            $null = $p.Handle
             $timedOut = -not $p.WaitForExit(170000)
             if ($timedOut) { $p.Kill() }
             $p.WaitForExit()
+            $exitCode = $p.ExitCode
         } finally { Restore-ProcessEnvironment $envSaved }
         $stdout = @(Get-Content "$runDir\stdout.txt")
         $stderr = @(Get-Content "$runDir\stderr.txt")
@@ -151,7 +167,7 @@ try {
             vvl               = $WithVvl
             vvl_insert_line   = if ($WithVvl -and $insert.Count) { $insert[0] } else { $null }
             timed_out         = $timedOut
-            exit_code         = $p.ExitCode
+            exit_code         = $exitCode
             result            = ($stdout | Select-String -Pattern '^(PASSED|FAILED)' | Select-Object -Last 1).Line
             fail_lines        = @($stdout | Select-String -Pattern '^FAIL' | ForEach-Object Line)
             ok_count          = @($stdout | Select-String -Pattern '^ok  ' -CaseSensitive).Count
@@ -166,7 +182,9 @@ try {
         $summary | ConvertTo-Json | Set-Content (Join-Path $runDir 'summary.json')
         Get-Content (Join-Path $runDir 'summary.json') | Write-Host
         if ($timedOut) { throw "$Exe ($Tag) timed out" }
-        if ($p.ExitCode) { throw "$Exe ($Tag) failed with exit code $($p.ExitCode)" }
+        if ($null -eq $exitCode) { throw "$Exe ($Tag): exit code unavailable" }
+        if ($exitCode -ne 0) { throw "$Exe ($Tag) failed with exit code $exitCode" }
+        if ($summary.result -ne 'PASSED') { throw "$Exe ($Tag) exited 0 without its PASSED line" }
         if ($WithVvl) {
             if (-not $insert.Count) { throw 'VVL run without the loader line that inserts VK_LAYER_KHRONOS_validation' }
             if ($validation.Count) { throw "VVL run reported $($validation.Count) validation messages" }
