@@ -2,6 +2,7 @@
 #include "ddi-resource.h"
 #include <algorithm>
 #include <utility>
+#include <cstring>
 namespace bc250::umd {
 HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription &out) {
     // Shared/primary ownership belongs to the runtime allocation/import path.
@@ -118,7 +119,37 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,d.Width,d.Height,pitch,format,bytes};
     D3D11_TEXTURE2D_DESC1 result{d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,
         d.Usage,d.BindFlags,d.CPUAccessFlags,d.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+    r.texture={BC250_SURFACE_RESOURCE_MAGIC,BC250_SURFACE_RESOURCE_TEXTURE_VERSION,UINT(r.shared),r.primary ? 1u : 0u,
+        result.Width,result.Height,result.MipLevels,result.ArraySize,UINT(result.Format),result.SampleDesc.Count,
+        result.SampleDesc.Quality,UINT(result.Usage),result.BindFlags,result.CPUAccessFlags,result.MiscFlags,UINT(result.TextureLayout)};
     request=r; desc=result; return S_OK;
+}
+HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_ALLOCATION_PRIVATE &metadata,
+    D3D11_TEXTURE2D_DESC1 &desc) {
+    if (input.NumAllocations!=1 || !input.pOpenAllocationInfo2) return E_NOTIMPL;
+    const auto &a=input.pOpenAllocationInfo2[0];
+    if (!a.hAllocation || !a.pPrivateDriverData || a.PrivateDriverDataSize!=sizeof(metadata) ||
+        !input.pPrivateDriverData || input.PrivateDriverDataSize!=sizeof(BC250_SURFACE_RESOURCE_PRIVATE)) return E_INVALIDARG;
+    BC250_WDDM_ALLOCATION_PRIVATE m{}; BC250_SURFACE_RESOURCE_PRIVATE p{};
+    std::memcpy(&m,a.pPrivateDriverData,sizeof(m)); std::memcpy(&p,input.pPrivateDriverData,sizeof(p));
+    int shared=0,cached=0;
+    if (p.Magic!=BC250_SURFACE_RESOURCE_MAGIC || p.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION ||
+        !Bc250SurfaceResourcePolicy(&p,sizeof(p),&shared,&cached) || !WddmSurfaceGeometry(&m,0,4) ||
+        p.Width!=m.Width || p.Height!=m.Height || p.Width>16384 || p.Height>16384 ||
+        p.MipLevels!=1 || p.ArraySize!=1 || p.SampleCount!=1 || p.SampleQuality ||
+        p.Usage!=D3D11_USAGE_DEFAULT || p.CpuAccessFlags || p.TextureLayout!=D3D11_TEXTURE_LAYOUT_UNDEFINED ||
+        (p.BindFlags&~UINT(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS)) ||
+        (p.MiscFlags&~UINT(D3D11_RESOURCE_MISC_GENERATE_MIPS|D3D11_RESOURCE_MISC_RESOURCE_CLAMP))) return E_INVALIDARG;
+    switch (p.Format) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        if (m.Format!=D3DDDIFMT_A8B8G8R8) return E_INVALIDARG; break;
+    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        if (m.Format!=D3DDDIFMT_A8R8G8B8) return E_INVALIDARG; break;
+    default: return E_NOTIMPL;
+    }
+    D3D11_TEXTURE2D_DESC1 d{p.Width,p.Height,p.MipLevels,p.ArraySize,DXGI_FORMAT(p.Format),
+        {p.SampleCount,p.SampleQuality},D3D11_USAGE(p.Usage),p.BindFlags,p.CpuAccessFlags,p.MiscFlags,D3D11_TEXTURE_LAYOUT(p.TextureLayout)};
+    metadata=m; desc=d; return S_OK;
 }
 namespace {
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { return sizeof(DdiResource); }
@@ -176,6 +207,28 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         else s->dimension=d.dimension;
     });
 }
+SIZE_T APIENTRY opened_size(D3D10DDI_HDEVICE,const D3D10DDIARG_OPENRESOURCE *) { return sizeof(DdiResource); }
+void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
+    D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE runtimeHandle) {
+    auto *s=static_cast<DdiResource *>(handle.pDrvPrivate); if (s) *s={};
+    enter_context(h,[&](ID3D11DeviceContext4 &) {
+        auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
+        if (!s || !args || !runtimeHandle.handle) { report_ddi_error(owner,E_INVALIDARG); return; }
+        BC250_WDDM_ALLOCATION_PRIVATE metadata{}; D3D11_TEXTURE2D_DESC1 desc{};
+        HRESULT hr=decode_open_resource(*args,metadata,desc);
+        if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+        RuntimeSurfaceAllocation allocation{reinterpret_cast<HANDLE>(runtimeHandle.handle),args->pOpenAllocationInfo2[0].hAllocation,args->hKMResource.handle};
+        RuntimeSurface *surface=nullptr;
+        hr=owner.adopt_surface(allocation,metadata,desc,surface);
+        if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
+        if (hr!=S_OK) {
+            if (surface) owner.close_surface(*surface);
+            report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
+        }
+        s->runtime_surface=surface; s->object=surface->texture.texture;
+        s->dimension=D3D10DDIRESOURCE_TEXTURE2D; s->present_allocation=surface->allocation.allocation;
+    });
+}
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
@@ -192,5 +245,6 @@ void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
 }
 void install_resource_ddi(D3D11_1DDI_DEVICEFUNCS &t) {
     t.pfnCalcPrivateResourceSize=size; t.pfnCreateResource=create; t.pfnDestroyResource=destroy;
+    t.pfnCalcPrivateOpenedResourceSize=opened_size; t.pfnOpenResource=open;
 }
 }

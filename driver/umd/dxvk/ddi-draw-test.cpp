@@ -751,5 +751,32 @@ int main() {
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL) std::abort();
     runtimeDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM; runtimeMip.TexelWidth=UINT32_MAX;
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=E_INVALIDARG) std::abort();
+    runtimeMip.TexelWidth=65;
+    const DXGI_FORMAT sharedFormats[]={DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB};
+    D3DDDI_OPENALLOCATIONINFO2 openAllocation{};
+    D3D10DDIARG_OPENRESOURCE openArgs{}; openArgs.NumAllocations=1; openArgs.pOpenAllocationInfo2=&openAllocation;
+    openAllocation.hAllocation=31; openAllocation.pPrivateDriverData=&request.surface; openAllocation.PrivateDriverDataSize=sizeof(request.surface);
+    openArgs.pPrivateDriverData=&request.texture; openArgs.PrivateDriverDataSize=sizeof(request.texture);
+    BC250_WDDM_ALLOCATION_PRIVATE decodedSurface{}; D3D11_TEXTURE2D_DESC1 decodedDesc{};
+    for (auto format:sharedFormats) {
+        runtimeDesc.Format=format;
+        if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=S_OK ||
+            decode_open_resource(openArgs,decodedSurface,decodedDesc)!=S_OK || decodedDesc.Format!=format ||
+            decodedDesc.BindFlags!=importedDesc.BindFlags || decodedDesc.Width!=65 || decodedDesc.Height!=17 ||
+            decodedSurface.Pitch!=512 || decodedSurface.Size!=12288) std::abort();
+    }
+    request.texture.Width=64;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG || decodedDesc.Width!=65) std::abort();
+    request.texture.Width=65; request.texture.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    request.texture.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    for (UINT length=0;length<sizeof(request.texture);++length) {
+        openArgs.PrivateDriverDataSize=length;
+        if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    }
+    openArgs.PrivateDriverDataSize=sizeof(request.texture); request.texture.BindFlags=UINT32_MAX;
+    if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) std::abort();
+    if (!table.pfnOpenResource || table.pfnCalcPrivateOpenedResourceSize(h,&openArgs)!=sizeof(DdiResource)) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

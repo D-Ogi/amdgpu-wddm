@@ -2,6 +2,7 @@
 #pragma once
 #include "runtime-bridge.h"
 #include "../../kmd/gdi_private.h"
+#include "../../kmd/surface_resource_private.h"
 namespace bc250::umd {
 struct RuntimeSurfaceAllocation {
     HANDLE runtime_resource=nullptr;
@@ -9,6 +10,7 @@ struct RuntimeSurfaceAllocation {
 };
 struct RuntimeSurfaceRequest {
     BC250_WDDM_ALLOCATION_PRIVATE surface{};
+    BC250_SURFACE_RESOURCE_PRIVATE texture{}; // Zero means legacy E26R v2.
     HANDLE runtime_resource=nullptr;
     UINT vidpn_source=0;
     bool primary=false,shared=false,cpu_read=false;

@@ -6,12 +6,12 @@
 using namespace bc250::umd;
 namespace {
 int deviceIdentity,resourceIdentity; unsigned allocates=0,deallocates=0;
-bool failAllocate=false,failFree=false,resourceClose=true;
+bool failAllocate=false,failFree=false,resourceClose=true,extendedPrivate=false;
 void check(bool b) { if (!b) std::abort(); }
 HRESULT APIENTRY allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
-    ++allocates; check(h==&deviceIdentity && a->NumAllocations==1 && a->PrivateDriverDataSize==16);
+    ++allocates; check(h==&deviceIdentity && a->NumAllocations==1 && a->PrivateDriverDataSize==(extendedPrivate ? 64u : 16u));
     auto *words=static_cast<const UINT *>(a->pPrivateDriverData);
-    check(words[0]==0x52363245u && words[1]==2 && words[2]==1 && words[3]==2);
+    check(words[0]==0x52363245u && words[1]==(extendedPrivate ? 3u : 2u) && words[2]==1 && words[3]==2);
     auto *s=static_cast<const BC250_WDDM_ALLOCATION_PRIVATE *>(a->pAllocationInfo2[0].pPrivateDriverData);
     check(s->Pitch==256 && s->Size==4096 && !a->pAllocationInfo2[0].Flags.Primary);
     if (failAllocate) return E_OUTOFMEMORY;
@@ -115,5 +115,11 @@ int main() {
     pagingCpu=UINT64_MAX; check(surface_paging_status(queue,mapping)==D3DDDIERR_DEVICEREMOVED);
     pagingCpu=5; check(unmap_runtime_surface(device,queue,mapping)==S_OK);
     check(destroy_surface_paging_queue(device,queue)==S_OK && !queue.queue && !queue.cpu);
+    extendedPrivate=true;
+    request.texture={BC250_SURFACE_RESOURCE_MAGIC,3,1,2,64,16,1,1,87,1,0,0,40,0,0,0};
+    check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
+    request.texture.Width=63;
+    const unsigned beforeInvalidPrivate=allocates;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeInvalidPrivate);
     std::cout << "PASS runtime surface allocation ABI, domain, failure retention and resource-handle close\n";
 }

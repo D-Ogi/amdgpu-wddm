@@ -13,6 +13,13 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8: case D3DDDIFMT_A8B8G8R8: break;
     default: return E_NOTIMPL;
     }
+    auto texture=request.texture;
+    const bool extended=texture.Magic!=0;
+    if (extended && (texture.Magic!=BC250_SURFACE_RESOURCE_MAGIC ||
+        texture.Version!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION || texture.Shared!=UINT(request.shared) ||
+        texture.Access!=((request.primary ? 1u : 0u)|(request.cpu_read ? 2u : 0u)) ||
+        texture.Width!=request.surface.Width || texture.Height!=request.surface.Height)) return E_INVALIDARG;
+    static_assert(sizeof(texture)==64);
     auto surface=request.surface;
     ResourcePrivate group{0x52363245u,2,request.shared ? 1u : 0u,
         (request.primary ? 1u : 0u) | (request.cpu_read ? 2u : 0u)};
@@ -21,7 +28,8 @@ HRESULT allocate_runtime_surface(RuntimeDevice &device,const RuntimeSurfaceReque
     info.Flags.Primary=request.primary; info.VidPnSourceId=request.vidpn_source;
     D3DDDICB_ALLOCATE allocate{};
     allocate.hResource=request.runtime_resource;
-    allocate.pPrivateDriverData=&group; allocate.PrivateDriverDataSize=sizeof(group);
+    allocate.pPrivateDriverData=extended ? static_cast<void *>(&texture) : &group;
+    allocate.PrivateDriverDataSize=extended ? sizeof(texture) : sizeof(group);
     allocate.NumAllocations=1; allocate.pAllocationInfo2=&info;
     HRESULT hr=device.KTCallbacks.pfnAllocateCb(device.hDevice,&allocate);
     if (FAILED(hr)) return hr;
