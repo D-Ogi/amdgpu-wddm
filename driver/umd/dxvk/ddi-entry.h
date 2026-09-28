@@ -18,9 +18,9 @@ inline HRESULT ddi_device_status(HRESULT hr) {
 }
 inline HRESULT ddi_map_status(HRESULT hr,bool doNotWait) {
     if (doNotWait && hr==DXGI_ERROR_WAS_STILL_DRAWING) return DXGI_DDI_ERR_WASSTILLDRAWING;
-    // Busy without DONOTWAIT violates Map's contract. Keep the unexpected
-    // error critical instead of silently treating it as a legal polling result.
-    return ddi_device_status(hr);
+    // ResourceMap permits only DEVICEREMOVED, or WASSTILLDRAWING with DONOTWAIT.
+    // Even allocation failure from WRITE_DISCARD must use the terminal DDI path.
+    return FAILED(hr) ? D3DDDIERR_DEVICEREMOVED : hr;
 }
 inline void report_ddi_error(DeviceOwner &owner,HRESULT hr,
     const std::source_location where=std::source_location::current()) {
