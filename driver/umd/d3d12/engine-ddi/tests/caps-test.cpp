@@ -203,15 +203,19 @@ D3D12DDI_3DPIPELINELEVEL level_1074(const engine_ddi::AdapterCaps* caps, D3D12DD
 }
 
 // 1003 TEXTURE_LAYOUT_SETS (20 bytes, pInfo {D3D12DDI_TL_ROW_MAJOR, unit}) for every functional unit, and 1061
-// SWIZZLE_PATTERN, each against the 1060 answer: no row-major texture means no row-major layout on any unit, and a
-// device-dependent swizzle count of 0 means no swizzle pattern index.
+// SWIZZLE_PATTERN. 1003 states the row-major data of buffers on every unit: entry 0 covers every element size with
+// alignment 1, entry 1 is unused. A device-dependent swizzle count of 0 in 1060 means no swizzle pattern index.
 void check_layout_sets(const engine_ddi::AdapterCaps* caps, const char* what) {
     D3D12DDI_TEXTURE_LAYOUT_CAPS_0026 layout;
     std::memset(&layout, 0xEE, sizeof(layout));
     const HRESULT hr60 = get(caps, D3D12DDICAPS_TYPE_0022_TEXTURE_LAYOUT, layout);
     check(hr60 == S_OK && !layout.SupportsRowMajorTexture && layout.DeviceDependentSwizzleCount == 0,
           "%s: 1060 reports no row-major texture and no device-dependent swizzle pattern", what);
-    const D3D12DDI_ROW_MAJOR_LAYOUT_CAPS none{};
+    D3D12DDI_ROW_MAJOR_LAYOUT_CAPS expected{};
+    expected.SubCaps[0].MaxElementSize = 0xFFFF;
+    expected.SubCaps[0].BaseOffsetAlignment = 1;
+    expected.SubCaps[0].PitchAlignment = 1;
+    expected.SubCaps[0].DepthPitchAlignment = 1;
     const D3D12DDI_FUNCTIONAL_UNIT units[] = {D3D12DDI_FUNCUNIT_COMBINED, D3D12DDI_FUNCUNIT_COPY_SRC,
                                               D3D12DDI_FUNCUNIT_COPY_DST};
     for (const D3D12DDI_FUNCTIONAL_UNIT unit : units) {
@@ -219,10 +223,10 @@ void check_layout_sets(const engine_ddi::AdapterCaps* caps, const char* what) {
         D3D12DDI_ROW_MAJOR_LAYOUT_CAPS sets;
         std::memset(&sets, 0xEE, sizeof(sets));
         const HRESULT hr = get(caps, D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS, sets, key, 20);
-        check(hr == S_OK && !std::memcmp(&sets, &none, sizeof(none)) && key[0] == D3D12DDI_TL_ROW_MAJOR &&
-                  key[1] == static_cast<UINT>(unit) && !layout.SupportsRowMajorTexture,
-              "%s: 1003 TEXTURE_LAYOUT_SETS, DataSize 20, pInfo {ROW_MAJOR, unit %d}: all zero (both SubCaps, Flags "
-              "NONE), as 1060 has no row-major texture (hr %08lx, SubCaps[0].MaxElementSize %u)",
+        check(hr == S_OK && !std::memcmp(&sets, &expected, sizeof(expected)) && key[0] == D3D12DDI_TL_ROW_MAJOR &&
+                  key[1] == static_cast<UINT>(unit),
+              "%s: 1003 TEXTURE_LAYOUT_SETS, DataSize 20, pInfo {ROW_MAJOR, unit %d}: SubCaps[0] 0xFFFF with "
+              "alignments 1, SubCaps[1] zero, Flags NONE (hr %08lx, SubCaps[0].MaxElementSize %u)",
               what, static_cast<int>(unit), static_cast<unsigned long>(hr),
               static_cast<unsigned>(sets.SubCaps[0].MaxElementSize));
     }

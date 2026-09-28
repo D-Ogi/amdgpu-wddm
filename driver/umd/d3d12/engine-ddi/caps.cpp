@@ -100,10 +100,14 @@ D3D12DDI_3DPIPELINELEVEL pipeline_level(D3D_FEATURE_LEVEL level) noexcept {
     }
 }
 
-// 1060 SupportsRowMajorTexture, and with it the whole 1003 answer. The pinned engine creates no texture of layout
+// 1060 SupportsRowMajorTexture. The pinned engine creates no texture of layout
 // ROW_MAJOR (vkd3d-proton fork libs/vkd3d/resource.c, vkd3d_get_image_create_info refuses it with E_NOTIMPL) and
 // reports CrossAdapterRowMajorTextureSupported FALSE (libs/vkd3d/device.c, d3d12_device_caps_init_feature_options).
 constexpr BOOL kRowMajorTexture = FALSE;
+
+// 1003 SubCaps[0]: row-major data in buffers, every element size, alignment 1 (cosumd12's values).
+constexpr UINT16 kRowMajorMaxElementSize = 0xFFFF;
+constexpr UINT16 kRowMajorAlignment = 1;
 
 // 1060 DeviceDependentSwizzleCount: the valid indices of 1061 are 0 through this count - 1 (H:4752-4755).
 constexpr UINT kDeviceDependentSwizzleCount = 0;
@@ -418,11 +422,11 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
     case D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS: {
         // *pInfo is UINT[2] {D3D12DDI_TL_ROW_MAJOR, D3D12DDI_FUNCTIONAL_UNIT}, pData D3D12DDI_ROW_MAJOR_LAYOUT_CAPS
         // (H:268-271). ROW_MAJOR is the only layout the query names; the units are COMBINED, COPY_SRC and COPY_DST
-        // (H:259-266). With no row-major texture (1060) every unit gets the zero answer, Flags NONE. That MaxElementSize
-        // 0 makes an entry cover no element is INFERENCE from the field names (cosumd12 CosUmd12Adapter.cpp:345-367
-        // shows only that an unused entry is zeroed). Whether the entries also bound buffer footprint copies is not
-        // decided by any source; INTEGRATION.md, "Open point on 1003".
-        static_assert(!kRowMajorTexture, "claiming row-major textures in 1060 needs real SubCaps in 1003");
+        // (H:259-266). Buffers are ROW_MAJOR and carry the row-major data of footprint copies, which the engine
+        // does support, so the answer is independent of 1060 SupportsRowMajorTexture. The values are those of
+        // cosumd12 (CosUmd12Adapter.cpp:345-367): entry 0 covers every element size with alignment 1, entry 1 is
+        // unused, Flags NONE. The engine copies through Vulkan buffer-image copies, which need texel alignment only,
+        // and has one copy path, so the three units get the same answer. INTEGRATION.md, "1003 values".
         auto* d = payload<D3D12DDI_ROW_MAJOR_LAYOUT_CAPS>(r);
         if (!d) return E_INVALIDARG;
         const UINT* key = static_cast<const UINT*>(r.pInfo);
@@ -433,8 +437,15 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
                 log_line("GetCaps TEXTURE_LAYOUT_SETS: pInfo NULL, the contract names UINT[2]");
             return E_INVALIDARG;
         }
-        *d = D3D12DDI_ROW_MAJOR_LAYOUT_CAPS{};
-        log_line("GetCaps TEXTURE_LAYOUT_SETS: layout %u, functional unit %u: no row-major layout", key[0], key[1]);
+        D3D12DDI_ROW_MAJOR_LAYOUT_CAPS t{};
+        t.SubCaps[0].MaxElementSize = kRowMajorMaxElementSize;
+        t.SubCaps[0].BaseOffsetAlignment = kRowMajorAlignment;
+        t.SubCaps[0].PitchAlignment = kRowMajorAlignment;
+        t.SubCaps[0].DepthPitchAlignment = kRowMajorAlignment;
+        t.Flags = D3D12DDI_ROW_MAJOR_LAYOUT_FLAG_NONE;
+        *d = t;
+        log_line("GetCaps TEXTURE_LAYOUT_SETS: layout %u, functional unit %u: one entry, alignment %u", key[0], key[1],
+                 static_cast<unsigned>(kRowMajorAlignment));
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_0022_SWIZZLE_PATTERN:

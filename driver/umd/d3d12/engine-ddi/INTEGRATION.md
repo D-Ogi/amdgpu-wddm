@@ -164,7 +164,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1009 GPUVA_CAPS | `D3D12DDI_GPUVA_CAPS_0004`, 4, H:250-257; pInfo NULL or node 0 | MaxGPUVirtualAddressBitsPerResource | same value | GPU_VIRTUAL_ADDRESS_SUPPORT |
 | 1060 TEXTURE_LAYOUT | `D3D12DDI_TEXTURE_LAYOUT_CAPS_0026`, 20, H:5525-5536; pInfo NULL, else E_INVALIDARG (no swizzle patterns) | Supports64KStandardSwizzle | StandardSwizzle64KBSupported | OPTIONS |
 | 1060 | | DeviceDependentLayoutCount, DeviceDependentSwizzleCount, SupportsRowMajorTexture, IndexableSwizzlePatterns | 0, 0, FALSE, FALSE | no device-dependent layouts; the pinned engine creates no ROW_MAJOR texture (vkd3d-proton fork `libs/vkd3d/resource.c`, `vkd3d_get_image_create_info` refuses the layout with E_NOTIMPL) and answers OPTIONS.CrossAdapterRowMajorTextureSupported FALSE (`libs/vkd3d/device.c`, `d3d12_device_caps_init_feature_options`) |
-| 1003 TEXTURE_LAYOUT_SETS | `D3D12DDI_ROW_MAJOR_LAYOUT_CAPS`, 20, H:280-292 (`SubCaps[2]` of `D3D12DDI_ROW_MAJOR_LAYOUT_SUB_CAPS`, four UINT16 each: MaxElementSize, BaseOffsetAlignment, PitchAlignment, DepthPitchAlignment; then `D3D12DDI_ROW_MAJOR_LAYOUT_FLAGS` Flags, H:272-278); `*pInfo` is `UINT[2]` {`D3D12DDI_TL_ROW_MAJOR`, `D3D12DDI_FUNCTIONAL_UNIT`} (H:268-271) | the whole struct, for each of COMBINED, COPY_SRC, COPY_DST (H:259-266) | all zero: both SubCaps entries MaxElementSize 0 and alignments 0, Flags NONE. pInfo NULL, a layout other than ROW_MAJOR (1, H:193) or a unit above COPY_DST: E_INVALIDARG | 1060 SupportsRowMajorTexture FALSE, same reason (one constant in caps.cpp, `kRowMajorTexture`, with a static_assert tying the two). Neither H nor DDI-ref ("Texture layout sets.") documents the fields. That an entry states alignments for elements up to its MaxElementSize, so that MaxElementSize 0 covers no element, is INFERENCE from the field names. cosumd12 (CosUmd12Adapter.cpp:345-367) fills entry 0 (MaxElementSize 0xFFFF, alignments 1) and zeroes entry 1: that shows how an unused entry is encoded, not what an all-zero answer means to the runtime. Whether 1003 also covers buffer footprint copies is undecided ("Open point on 1003" below) |
+| 1003 TEXTURE_LAYOUT_SETS | `D3D12DDI_ROW_MAJOR_LAYOUT_CAPS`, 20, H:280-292 (`SubCaps[2]` of `D3D12DDI_ROW_MAJOR_LAYOUT_SUB_CAPS`, four UINT16 each: MaxElementSize, BaseOffsetAlignment, PitchAlignment, DepthPitchAlignment; then `D3D12DDI_ROW_MAJOR_LAYOUT_FLAGS` Flags, H:272-278); `*pInfo` is `UINT[2]` {`D3D12DDI_TL_ROW_MAJOR`, `D3D12DDI_FUNCTIONAL_UNIT`} (H:268-271) | the whole struct, for each of COMBINED, COPY_SRC, COPY_DST (H:259-266) | SubCaps[0] MaxElementSize 0xFFFF, BaseOffsetAlignment, PitchAlignment and DepthPitchAlignment 1; SubCaps[1] zero; Flags NONE; the same on every unit. pInfo NULL, a layout other than ROW_MAJOR (1, H:193) or a unit above COPY_DST: E_INVALIDARG | the values of cosumd12 for COMBINED (CosUmd12Adapter.cpp:345-367), independent of 1060 SupportsRowMajorTexture; "1003 values" below |
 | 1061 0022_SWIZZLE_PATTERN | `D3D12DDI_SWIZZLE_PATTERN_DESC_0022`, 232, H:4752-4767; `*pInfo` an index 0 through DeviceDependentSwizzleCount - 1 | - | E_INVALIDARG for every request, nothing written | 1060 DeviceDependentSwizzleCount 0: no index exists (constant `kDeviceDependentSwizzleCount`, shared with 1060) |
 | 1057 0030_PROTECTED_RESOURCE_SESSION_SUPPORT | `D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030`, 8, H:13697-13701; NodeIndex (input) 0, else E_INVALIDARG | Support | NONE | engine-ddi refuses protected resource sessions: pfnSetProtectedResourceSession is a fail-safe and resource creation refuses a session handle (resources.cpp) |
 | 1069 EXECUTECOMMANDLISTS_PARALLELISM | BOOL, 4, H:128 | the BOOL | FALSE | not claimed: ExecuteCommandLists is a slot of the shell's queue table |
@@ -178,31 +178,24 @@ FEATURE_LEVELS, SHADER_MODEL, ARCHITECTURE1, GPU_VIRTUAL_ADDRESS_SUPPORT, OPTION
 `query_adapter_caps` fails with the engine's Result when one is unanswered. The others are optional: an
 unanswered one is logged and its fields report no support.
 
-Open point on 1003: whether its entries describe only resources of layout ROW_MAJOR, or also the row-major data
-of a placed subresource footprint in a buffer (CopyTextureRegion through COPY_SRC or COPY_DST). The sources do not
-decide it.
+1003 values. Neither H nor DDI-ref ("Texture layout sets.") documents the fields of 1003, so the answer follows
+the one implementation in the references and what the engine can honour.
 
-- Towards resources: H keys 1003 by a `D3D12DDI_TEXTURE_LAYOUT` value (H:268-271), the enum of the `Layout` of
-  `D3D12DDIARG_CREATERESOURCE_0088` (H:10878), next to which `pRowMajorLayout` gives the RowPitch and SlicePitch of
-  a ROW_MAJOR resource (H:10882-10884, H:398-402), the quantities PitchAlignment and DepthPitchAlignment would
-  constrain. H:259-266 describes the units only as "sampling, rendering, copying" and "Copying on the copy or other
-  engines".
-- Not excluding footprints: API-ref ne-d3d12-d3d12_texture_layout.md:92 says buffers are created ROW_MAJOR "because
-  row-major texture data can be located in them without creating a texture object", so the layout name alone does
-  not rule footprint data out.
-- Footprint copies elsewhere: the specifications give their alignments as fixed API constants,
-  `D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT` 512 and `D3D12_TEXTURE_DATA_PITCH_ALIGNMENT` 256 (Specs
-  ResourceHeaps.md:467-482; SDK d3d12.h:1325, :1327; H:18990-18991), and name one DDI report that relaxes them,
-  1078 UnrestrictedBufferTextureCopyPitchSupported (Specs VulkanOn12.md:165-170). No source names 1003 there.
-
-engine-ddi answers zero on every unit and fills in no footprint alignments, since no source says the runtime reads
-them from 1003. If a lab log shows that it does, the values the engine satisfies are those two constants (the API's
-own footprint alignments; Vulkan requires only texel alignment for buffer-image copies, VulkanOn12.md:165), taken
-from the header, not chosen. Separately, API-ref ns-d3d12-d3d12_feature_data_d3d12_options.md:118 says a device with
-CrossAdapterRowMajorTextureSupported FALSE "only supports copy operations to and from cross-adapter row-major
-textures", which presumes copy support that the engine does not have. No source says whether the runtime accepts
-the all-zero answer; build_caps logs the layout and unit of every 1003 request. If the runtime refuses it for real
-ROW_MAJOR resources, the way forward is ROW_MAJOR support in the engine, not another constant.
+- Buffers are created ROW_MAJOR "because row-major texture data can be located in them without creating a texture
+  object" (API-ref ne-d3d12-d3d12_texture_layout.md:92). 1003 is keyed by that layout (H:268-271), so it is asked of
+  a driver that has buffers, whether or not it has ROW_MAJOR textures. The engine has buffers and copies footprints
+  between buffers and textures; an answer of zero capability was therefore wrong, whatever 1060 says.
+- cosumd12 answers COMBINED with entry 0 MaxElementSize 0xFFFF and alignments 1, entry 1 zero, Flags NONE
+  (CosUmd12Adapter.cpp:345-367). engine-ddi gives the same values. That an entry states the alignments for elements
+  up to its MaxElementSize is INFERENCE from the field names.
+- The engine honours alignment 1: it copies through Vulkan buffer-image copies, which require texel alignment only
+  (Specs VulkanOn12.md:165). The API's own footprint alignments, `D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT` 512 and
+  `D3D12_TEXTURE_DATA_PITCH_ALIGNMENT` 256 (Specs ResourceHeaps.md:467-482, H:18990-18991), are stricter and are
+  relaxed only through 1078.
+- cosumd12 refuses COPY_SRC and COPY_DST with E_NOTIMPL. engine-ddi answers them as COMBINED, since the engine has
+  one copy path for every queue type.
+- ROW_MAJOR textures stay unsupported (1060). If a runtime needs them, the way forward is ROW_MAJOR support in the
+  engine, not another constant.
 
 ### Memory architecture policy
 
