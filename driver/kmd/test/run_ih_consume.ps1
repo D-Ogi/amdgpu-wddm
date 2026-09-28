@@ -5,8 +5,10 @@ $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 if(!$Source){$Source=Join-Path $repo 'driver\kmd\ih.c'}
 $text=Get-Content -LiteralPath $Source -Raw
-$start=$text.IndexOf('static void Consume(')
-$end=$text.IndexOf('// The read pointer and the doorbell',$start)
+$start=$text.IndexOf('static BOOLEAN Consume(')
+if($start -lt 0){$start=$text.IndexOf('static void Consume(')}
+if($text -match '(?m)^<<<<<<<|^=======|^>>>>>>>'){throw 'Unresolved source conflict'}
+$end=$text.IndexOf('// Caller holds GartLock',$start)
 if($start -lt 0 -or $end -le $start){throw 'Consume extraction failed'}
 [IO.File]::WriteAllText((Join-Path $Out 'ih_consume_actual.inc'),$text.Substring($start,$end-$start))
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ih_consume_test.c') -Destination (Join-Path $Out 'test.c') -Force
