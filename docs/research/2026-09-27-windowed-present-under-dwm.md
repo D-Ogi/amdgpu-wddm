@@ -273,7 +273,7 @@ In the table, "CPU copy" means a per-frame CPU copy in steady state.
 | vkd3d-proton `__WARN-LGPL-read-only` | No hits for any of the searched symbols. It relies on the Vulkan driver's WSI. | N/A | grep over `ref\` |
 | VirtualBox WDDM `__WARN-GPL3-read-only` | Loads `D3DKMTPresent` and `OpenAdapterFromHdc` (`VBoxWddmUmHlp\D3DKMT.cpp:77-89`). Its D3D UMD presents through the runtime's `pfnPresentCb` (`m13-notes\zink-behind-d3d10umd.md:388-391`). No redirection-token code found. | N/A | as cited |
 | Microsoft samples (ROS, COS) | `SupportKernelModeCommandBuffer = FALSE` (`graphics-driver-samples\render-only-sample\roskmd\RosKmdAdapter.cpp:1001`). No ICD present code. | N/A | as cited |
-| Wine, ReactOS | Not imported into `ref\`. | N/A | N/A |
+| ReactOS | Not imported into `ref\`. | N/A | N/A |
 | Project fork `wt-radv` | Token-less `D3DKMTPresent(Blt, hWindow)` (E45) | would be 1 GPU blt | `src\vulkan\wsi\wsi_common_win32.cpp:128`, `:884`, `src\amd\vulkan\winsys\wddm2\radv_wddm2_wsi.c:190-195` |
 
 Summary of section 3. No open-source project in `ref\` presents a windowed GPU image to the DWM from a non-runtime
@@ -382,6 +382,6 @@ with M13. [EV] The interop prototype ran: no `Blit_Info`, no redirected-blt hist
   producer or consumer semantics.
 - Whether a non-DWM process may call `D3DKMTGetPresentHistory` usefully. It is listed for ICDs
   (`supporting-opengl-enhancements.md:54-60`) with no semantics.
-- Wine and ReactOS are not imported into `ref\`, so their gdi32/D3DKMT present emulation was not checked.
+- ReactOS is not imported into `ref\`, so its gdi32/D3DKMT present emulation was not checked.
 - [KNOW, unverified here] On Windows 8 and later the DWM is always on, and it holds exclusive ownership of every
   VidPn source through its own swapchain. This is the ownership that the E45 status most likely reports.
