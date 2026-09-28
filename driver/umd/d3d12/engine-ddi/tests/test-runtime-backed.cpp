@@ -171,6 +171,22 @@ void test_runtime_backed(Env& env) {
            "runtime-backed: the placed buffer's GPU VA is its heap's plus 64 KiB (%llx, %llx)",
            static_cast<unsigned long long>(pool_va), static_cast<unsigned long long>(src_va));
 
+    // Residency lookup, as MakeResident will resolve its object list: the committed buffer and its heap, the placed
+    // buffer in that heap (the same allocation), and another committed buffer (its own).
+    auto lookup = [&](void* handle, D3D12DDI_HANDLETYPE type, D3DKMT_HANDLE* out) {
+        return engine_ddi::object_allocation(device.context, D3D12DDI_HANDLE_AND_TYPE{handle, type}, out);
+    };
+    D3DKMT_HANDLE committed = 0, heap = 0, placed = 0, other = 0;
+    const HRESULT hr_c = lookup(pool.resource, D3D12DDI_HT_0012_RESOURCE, &committed);
+    const HRESULT hr_h = lookup(pool.heap, D3D12DDI_HT_HEAP, &heap);
+    const HRESULT hr_p = lookup(src.resource, D3D12DDI_HT_0012_RESOURCE, &placed);
+    const HRESULT hr_o = lookup(gpu.resource, D3D12DDI_HT_0012_RESOURCE, &other);
+    checkf(hr_c == S_OK && hr_h == S_OK && hr_p == S_OK && hr_o == S_OK && committed && heap == committed &&
+               placed == committed && other && other != committed,
+           "runtime-backed: object_allocation gives the committed buffer, its heap and the placed buffer in it one "
+           "allocation, another committed buffer its own (%x %x %x %x)",
+           committed, heap, placed, other);
+
     // The placed buffer's words through MapHeap of its heap, at heap offset 64 KiB; the first 64 KiB get other
     // words, so a copy from the wrong offset cannot match.
     void* cpu = nullptr;

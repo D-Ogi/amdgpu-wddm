@@ -52,6 +52,15 @@ static_assert(std::is_same_v<decltype(&engine_ddi::free_adapter_caps), void (*)(
 static_assert(std::is_same_v<decltype(&engine_ddi::build_caps),
                              HRESULT (*)(const engine_ddi::AdapterCaps*, uint32_t, const D3D12DDIARG_GETCAPS*) noexcept>,
               "build_caps");
+// Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
+static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,
+              "command_list_shell");
+static_assert(std::is_same_v<decltype(&engine_ddi::destroy_engine_queue),
+                             engine_ddi::QueueClose (*)(engine_ddi::EngineQueue*) noexcept>,
+              "destroy_engine_queue");
+static_assert(std::is_same_v<decltype(&engine_ddi::object_allocation),
+                             HRESULT (*)(engine_ddi::DeviceContext*, D3D12DDI_HANDLE_AND_TYPE, D3DKMT_HANDLE*) noexcept>,
+              "object_allocation");
 // The engine header this revision is built against is ABI 1.2 (QueryAdapterCaps, V11).
 static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 2u), "engine ABI 1.2 header");
 static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 64, "ABI 1.2 x64 sizes");

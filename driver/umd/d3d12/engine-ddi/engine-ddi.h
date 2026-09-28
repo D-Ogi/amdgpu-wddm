@@ -135,10 +135,14 @@ struct ImportedMemory {
     uint64_t byte_size;                         // its VkMemoryAllocateInfo::allocationSize
     D3DKMT_HANDLE allocation;                   // the kernel allocation from pfnAllocateCb_0022
     uint32_t reserved;                          // 0
-    // The GPU virtual address of a completed, validated mapping: filled only after MapGpuVirtualAddress and
-    // residency have completed. The address AllocateCb reports may be 0 until then. 0 means "no VA": every use
-    // that needs a VA fails with E_INVALIDARG. In r2 every heap needs one, so allocate_memory output with
-    // gpu_va 0 is handed straight back through free_memory and the create fails with E_INVALIDARG.
+    // The GPU virtual address of a completed, validated mapping: filled only after MapGpuVirtualAddress has
+    // completed. The address AllocateCb reports may be 0 until then. Residency is not required, and the shell must
+    // not make the allocation resident here: a driver with the MakeResident and Evict DDIs creates no allocation
+    // resident (DirectX-Specs d3d/ResourceHeaps.md, "must no longer create allocations ... as resident during
+    // creation"); the runtime makes it resident through pfnMakeResident, which the shell resolves with
+    // object_allocation. 0 means "no VA": every use that needs a VA fails with E_INVALIDARG. Every heap needs
+    // one, so allocate_memory output with gpu_va 0 is handed straight back through free_memory and the create
+    // fails with E_INVALIDARG.
     D3DGPU_VIRTUAL_ADDRESS gpu_va;
     void* cookie;                               // shell-private, passed back unchanged
 };
@@ -270,6 +274,22 @@ HRESULT execute_command_lists(EngineQueue* queue, UINT count, const D3D12DDI_HCO
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.
 HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource, D3DKMT_HANDLE* allocation,
                             uint64_t* offset) noexcept;
+// MakeResident and Evict (the slots are the shell's): the kernel allocation behind one object of the
+// D3D12DDI_HANDLE_AND_TYPE list, whose Handle is the object's pDrvPrivate (INFERENCE: no runtime list has been
+// logged). *allocation is 0 unless S_OK.
+//   - D3D12DDI_HT_HEAP, D3D12DDI_HT_0012_RESOURCE (committed or placed) of this device: S_OK and the allocation of
+//     the heap memory the object lives in; a placed resource gives its heap's allocation, so a placed resource and
+//     its heap give the same handle, which the shell drops as a duplicate. S_FALSE for such an object without a
+//     runtime allocation (EnginePrivateTest memory, harness only).
+//   - D3D12DDI_HT_DESCRIPTOR_HEAP, D3D12DDI_HT_QUERY_HEAP of this device: S_FALSE. Their memory is engine-internal
+//     and always resident; there is nothing to make resident or evict.
+//   - Any other type, a record of another type or of another device, a destroyed object, a resource without heap
+//     memory: E_INVALIDARG. Nothing is reported through report_device_error; the shell decides.
+// Lifetime: it takes no lock and reads only what is fixed at creation (the record's tag and device, the heap
+// memory it holds a reference to). The caller must keep the object alive for the call, as the runtime does for
+// the objects of a MakeResident or Evict call. The handle stays valid while the object lives; the allocation
+// itself is freed only through free_memory, after the last user of the heap memory has gone and retired.
+HRESULT object_allocation(DeviceContext* context, D3D12DDI_HANDLE_AND_TYPE object, D3DKMT_HANDLE* allocation) noexcept;
 
 // ---- Capabilities --------------------------------------------------------------------------------------------------
 // GetCaps arrives before any device (M768: OpenAdapter12, GetCaps 1074, GetCaps 1007, GetSupportedVersions), so

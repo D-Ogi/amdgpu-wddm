@@ -715,6 +715,37 @@ HRESULT resource_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HA
     return S_OK;
 }
 
+HRESULT object_allocation(DeviceContext* c, D3D12DDI_HANDLE_AND_TYPE object, D3DKMT_HANDLE* allocation) noexcept {
+    if (!allocation) return E_INVALIDARG;
+    *allocation = 0;
+    if (!c) return E_INVALIDARG;
+    const Backing* b = nullptr;
+    switch (object.Type) {
+    case D3D12DDI_HT_HEAP:
+        if (auto* h = record_of<HeapRecord>(object.Handle, Tag::Heap, c)) {
+            b = h->backing;
+            break;
+        }
+        return E_INVALIDARG;
+    case D3D12DDI_HT_0012_RESOURCE:
+        if (auto* r = record_of<ResourceRecord>(object.Handle, Tag::Resource, c)) {
+            b = r->backing;                             // a placed resource shares its heap's backing
+            break;
+        }
+        return E_INVALIDARG;
+    case D3D12DDI_HT_DESCRIPTOR_HEAP:
+        return record_of<DescriptorHeapRecord>(object.Handle, Tag::DescriptorHeap, c) ? S_FALSE : E_INVALIDARG;
+    case D3D12DDI_HT_QUERY_HEAP:
+        return record_of<QueryHeapRecord>(object.Handle, Tag::QueryHeap, c) ? S_FALSE : E_INVALIDARG;
+    default:
+        return E_INVALIDARG;
+    }
+    if (!b) return E_INVALIDARG;                        // no heap memory (a reserved resource, not creatable yet)
+    if (!b->imported) return S_FALSE;                   // EnginePrivateTest memory: no runtime allocation
+    *allocation = b->memory.allocation;
+    return S_OK;
+}
+
 void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCheckFormatSupport = check_format_support;
     t->pfnCheckMultisampleQualityLevels = check_multisample_quality_levels;

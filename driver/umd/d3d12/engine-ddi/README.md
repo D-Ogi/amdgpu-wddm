@@ -113,6 +113,8 @@ They never run from an engine thread or callback: INLINE mode has no engine thre
   VkQueue to it through the engine's BindQueue service. engine-ddi adds a retirement fence per queue.
 - `execute_command_lists`: synchronous; everything is on the bound context on return.
 - `resource_allocation`: gives Present the runtime allocation behind a committed back buffer.
+- `object_allocation`: gives MakeResident and Evict the allocation behind a heap or resource (a placed one: its
+  heap's); descriptor and query heaps are engine-internal and always resident (S_FALSE).
 
 **Caps.**
 - GetCaps comes before any device (lab run M768). `query_adapter_caps` asks the engine once through ABI 1.2

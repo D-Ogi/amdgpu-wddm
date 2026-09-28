@@ -225,6 +225,29 @@ a committed DEFAULT and a committed READBACK buffer, and read back through MapHe
 allocations, three `free_memory` calls after their engine heaps, VVL with synchronization validation clean.
 Whether hosted RADV's import of a runtime allocation behaves the same (same storage, `gpu_va`) is for the lab.
 
+### Residency: MakeResident and Evict
+
+The slots (`pfnMakeResident_0001`, `pfnEvict2`) are the shell's; engine-ddi resolves their objects with
+`object_allocation(context, object, &allocation)` (engine-ddi.h has the full contract):
+
+| Object | Result | `allocation` |
+|---|---|---|
+| `D3D12DDI_HT_HEAP`, `D3D12DDI_HT_0012_RESOURCE` (committed or placed) | S_OK | the heap memory's kernel allocation; a placed resource gives its heap's |
+| `D3D12DDI_HT_DESCRIPTOR_HEAP`, `D3D12DDI_HT_QUERY_HEAP` | S_FALSE | 0: engine-internal memory, always resident |
+| anything else, another device's object, a destroyed one | E_INVALIDARG | 0 |
+
+The shell looks up each object, drops duplicates (a placed resource and its heap give the same allocation) and
+issues one `pfnMakeResidentCb` (or `pfnEvictCb`) batch on the runtime's paging queue; an empty batch returns fence 0
+and WaitMask 0. The lookup takes no lock and reads only what is fixed at creation, so it may run concurrently with
+other DDI calls; the runtime keeps the objects of the call alive. The `Handle` of each entry is taken to be the
+object's `pDrvPrivate` (INFERENCE, not logged).
+
+Creation does not make anything resident. With these DDIs present, the driver must not create allocations resident
+(DirectX-Specs `d3d/ResourceHeaps.md`, residency section); `allocate_memory` therefore allocates and maps the GPU
+virtual address only, and `gpu_va` needs the mapping, not residency. The API makes objects resident at creation,
+so the runtime presumably calls `pfnMakeResident` right after CreateHeapAndResource (INFERENCE; the first native
+log settles it).
+
 ### Shaders and pipelines
 
 The create-shader slots rebuild each program's container with shader-container `BuildContainer` (engine-ddi.h,
