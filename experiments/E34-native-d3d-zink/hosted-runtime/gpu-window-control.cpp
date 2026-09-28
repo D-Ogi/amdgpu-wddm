@@ -73,8 +73,10 @@ static bool Receipt(const std::wstring &dir,HWND window,UINT frames,bool frozen,
 }
 int wmain(int argc,wchar_t **argv){
  setvbuf(stdout,nullptr,_IONBF,0);
- if(argc==2&&!wcscmp(argv[1],L"--help")){puts("gpu-window-control.exe EXISTING_FRESH_DIRECTORY (interactive lab only; external router/watchdog required; freeze and stop files; 120s hard process deadline)");return 0;}
- if(argc!=2)return 1;
+ if(argc==2&&!wcscmp(argv[1],L"--help")){puts("gpu-window-control.exe EXISTING_FRESH_DIRECTORY [--lower] (interactive lab only; external router/watchdog required; freeze and stop files; 120s hard process deadline)");return 0;}
+ const bool lower=argc==3&&!wcscmp(argv[2],L"--lower");
+ if(argc!=2&&!lower)return 1;
+ const int windowY=lower?600:300;
  const std::wstring dir=argv[1];
  DWORD attr=GetFileAttributesW(dir.c_str());
  if(attr==INVALID_FILE_ATTRIBUTES||!(attr&FILE_ATTRIBUTE_DIRECTORY))return 2;
@@ -96,7 +98,7 @@ int wmain(int argc,wchar_t **argv){
  if(matches!=1)return 9;
  WNDCLASSW wc={};wc.lpfnWndProc=WindowProc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"BC250GpuWindowControl";
  if(!RegisterClassW(&wc))return 10;
- HWND window=CreateWindowExW(WS_EX_TOPMOST,wc.lpszClassName,L"G0 native GPU composition",WS_POPUP|WS_VISIBLE,600,300,Width,Height,nullptr,nullptr,wc.hInstance,nullptr);
+ HWND window=CreateWindowExW(WS_EX_TOPMOST,wc.lpszClassName,L"G0 native GPU composition",WS_POPUP|WS_VISIBLE,600,windowY,Width,Height,nullptr,nullptr,wc.hInstance,nullptr);
  if(!window)return 11;
  DXGI_SWAP_CHAIN_DESC sd={};sd.BufferDesc.Width=Width;sd.BufferDesc.Height=Height;sd.BufferDesc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
  sd.SampleDesc.Count=1;sd.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;sd.BufferCount=2;sd.OutputWindow=window;sd.Windowed=TRUE;sd.SwapEffect=DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
@@ -113,7 +115,7 @@ int wmain(int argc,wchar_t **argv){
   if(GetFileAttributesW((dir+L"\\stop").c_str())!=INVALID_FILE_ATTRIBUTES){stopped=true;break;}
   bool freeze=GetFileAttributesW((dir+L"\\freeze").c_str())!=INVALID_FILE_ATTRIBUTES;
   if(!frozen){
-   if(!freeze&&!SetWindowPos(window,nullptr,600+static_cast<int>((frames/10)%8)*8,300,Width,Height,SWP_NOZORDER|SWP_NOACTIVATE))return 17;
+   if(!freeze&&!SetWindowPos(window,nullptr,600+static_cast<int>((frames/10)%8)*8,windowY,Width,Height,SWP_NOZORDER|SWP_NOACTIVATE))return 17;
    draw.Draw(ctx.Get(),view.Get(),freeze?0:(frames/10)%2);
    HRESULT hr=swap->Present(1,0);if(hr!=S_OK){printf("FAIL Present hr=%08lx\n",hr);return 18;}
    frames++;
