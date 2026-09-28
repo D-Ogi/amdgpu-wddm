@@ -237,9 +237,10 @@ DXGI Blt now translates its source/destination resources, subresources, destinat
 rectangle, flags and rotation to the engine Blt ABI. Coordinates must fit signed
 RECT without truncation; reserved flags are rejected. PRESENT uses the engine's
 submit behavior. Engine limitations (90/270-degree rotation and multisampled
-destination) propagate as failures. Blt1 is still missing because its source
-rectangle is absent from the current engine ABI; a whole-source substitute would
-be incorrect. Host descriptor/error tests pass; GPU content validation is pending.
+destination) propagate as failures. Blt1 now uses ABI 1.1 IBc250DxvkDevice1 via
+QueryInterface and preserves independent source/destination rectangles. This build
+requires the ABI 1.1 header/engine; no whole-source fallback is used. Host
+descriptor/error tests pass; GPU content validation is pending.
 
 runtime-image-memory imports a runtime allocation into VkDeviceMemory through the
 existing hosted RADV private pNext contract and binds it to a caller-created image.

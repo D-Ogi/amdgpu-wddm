@@ -659,5 +659,20 @@ int main() {
     }
     install_blt_ddi(dxgiPresentTable);
     if (dxgiPresentTable.pfnBlt(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnBlt(&bltArgs)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
+    DXGI_DDI_ARG_BLT1 subBlt{};
+    subBlt.hDevice=bltArgs.hDevice; subBlt.hSrcResource=bltArgs.hSrcResource; subBlt.hDstResource=bltArgs.hDstResource;
+    subBlt.SrcSubresource=2; subBlt.DstSubresource=3;
+    subBlt.SrcLeft=7; subBlt.SrcTop=9; subBlt.SrcRight=17; subBlt.SrcBottom=19;
+    subBlt.DstLeft=20; subBlt.DstTop=30; subBlt.DstRight=40; subBlt.DstBottom=60;
+    subBlt.Flags.Present=1; subBlt.Rotate=DXGI_DDI_MODE_ROTATION_ROTATE180;
+    BC250_DXVK_BLT1 mappedBlt{};
+    if (prepare_blt1(subBlt,mappedBlt)!=S_OK || mappedBlt.SourceRect.left!=7 || mappedBlt.SourceRect.bottom!=19 ||
+        mappedBlt.DestinationRect.left!=20 || mappedBlt.DestinationRect.bottom!=60 || mappedBlt.SourceSubresource!=2 ||
+        mappedBlt.DestinationSubresource!=3 || mappedBlt.Flags!=BC250_DXVK_BLT_PRESENT || mappedBlt.Rotation!=3) std::abort();
+    subBlt.SrcRight=UINT_MAX;
+    if (prepare_blt1(subBlt,mappedBlt)!=E_INVALIDARG || mappedBlt.SourceRect.right!=17) std::abort();
+    subBlt.SrcRight=subBlt.SrcLeft;
+    if (prepare_blt1(subBlt,mappedBlt)!=E_INVALIDARG) std::abort();
+    if (dxgiPresentTable.pfnBlt1(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnBlt1(&subBlt)!=E_FAIL || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

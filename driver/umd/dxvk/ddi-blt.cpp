@@ -20,7 +20,43 @@ HRESULT prepare_blt(const DXGI_DDI_ARG_BLT &a,BC250_DXVK_BLT &out) {
     result.Rotation=UINT(a.Rotate);
     out=result; return S_OK;
 }
-namespace {
+HRESULT prepare_blt1(const DXGI_DDI_ARG_BLT1 &a,BC250_DXVK_BLT1 &out) {
+    if (a.SrcLeft>LONG_MAX || a.SrcTop>LONG_MAX || a.SrcRight>LONG_MAX || a.SrcBottom>LONG_MAX ||
+        a.SrcLeft>=a.SrcRight || a.SrcTop>=a.SrcBottom) return E_INVALIDARG;
+    DXGI_DDI_ARG_BLT base{};
+    base.hDevice=a.hDevice; base.hSrcResource=a.hSrcResource; base.hDstResource=a.hDstResource;
+    base.SrcSubresource=a.SrcSubresource; base.DstSubresource=a.DstSubresource;
+    base.DstLeft=a.DstLeft; base.DstTop=a.DstTop; base.DstRight=a.DstRight; base.DstBottom=a.DstBottom;
+    base.Flags=a.Flags; base.Rotate=a.Rotate;
+    BC250_DXVK_BLT converted{}; HRESULT hr=prepare_blt(base,converted);
+    if (FAILED(hr)) return hr;
+    BC250_DXVK_BLT1 result{};
+    result.Source=converted.Source; result.SourceSubresource=converted.SourceSubresource;
+    result.Destination=converted.Destination; result.DestinationSubresource=converted.DestinationSubresource;
+    result.DestinationRect=converted.DestinationRect; result.Flags=converted.Flags; result.Rotation=converted.Rotation;
+    result.SourceRect={LONG(a.SrcLeft),LONG(a.SrcTop),LONG(a.SrcRight),LONG(a.SrcBottom)};
+    out=result; return S_OK;
+}namespace {
+HRESULT APIENTRY blt1(DXGI_DDI_ARG_BLT1 *args) {
+    if (!args) return E_INVALIDARG;
+    auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
+    if (!storage || !storage->owner) return E_INVALIDARG;
+    auto &owner=*storage->owner;
+    RuntimeDomain::Scope scope(owner.runtime().domain);
+    IBc250DxvkDevice1 *extended=nullptr;
+    HRESULT hr=E_FAIL;
+    try {
+        if (!owner.engine()) return E_FAIL;
+        BC250_DXVK_BLT1 operation{};
+        hr=prepare_blt1(*args,operation);
+        if (FAILED(hr)) return hr;
+        hr=owner.engine()->QueryInterface(__uuidof(IBc250DxvkDevice1),reinterpret_cast<void **>(&extended));
+        if (SUCCEEDED(hr)) hr=extended ? extended->Blt1(&operation) : E_NOINTERFACE;
+    } catch (const std::bad_alloc &) { hr=E_OUTOFMEMORY; }
+    catch (...) { hr=E_FAIL; }
+    if (extended) extended->Release();
+    return hr;
+}
 HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
     if (!args) return E_INVALIDARG;
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
@@ -39,5 +75,5 @@ HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
     catch (...) { return E_FAIL; }
 }
 }
-void install_blt_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &t) { t.pfnBlt=blt; }
+void install_blt_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &t) { t.pfnBlt=blt; t.pfnBlt1=blt1; }
 }
