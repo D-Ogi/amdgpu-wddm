@@ -259,3 +259,14 @@ integer overflow. Failure destroys the image and releases any failed-bind memory
 wrapper. Explicit destroy orders image before memory, after caller-retired GPU use.
 Mock tests cover pitch mismatch, bind failure, success, teardown and oversized
 height. CreateResource integration and GPU validation remain pending.
+
+runtime-texture combines engine GetImageCreateInfo, linear runtime-image import
+and CreateTexture2DFromImage, preserving required flags/usage and format-list chain.
+Teardown first waits for runtime Present and engine resource work, then releases
+the COM texture, destroys the image and frees Vulkan memory. A failed wait keeps
+state for retry; nonzero final Release retains image/memory permanently rather
+than dereferencing a potentially dead texture on a later retry. The adapter must
+retain this owner and device as well. Runtime allocation release is still external.
+Mock tests cover wrap failure, wait failure/retry, successful cleanup and unexpected
+surviving references. DDI resource ownership/rotation integration and GPU validation
+remain pending; no runtime allocation has yet been created by this helper.

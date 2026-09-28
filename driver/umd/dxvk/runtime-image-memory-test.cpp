@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-image-memory.h"
+#include "runtime-texture.h"
 #include <cstdlib>
 #include <iostream>
 using namespace bc250::umd;
@@ -32,6 +33,20 @@ void VKAPI_CALL image_layout(VkDevice,VkImage,const VkImageSubresource *sub,VkSu
     check(sub->aspectMask==VK_IMAGE_ASPECT_COLOR_BIT && !sub->mipLevel && !sub->arrayLayer);
     *out={0,4096,badPitch ? 512u : 256u,0,0};
 }
+}
+namespace {
+HRESULT textureWait=S_OK,textureWrap=S_OK; ULONG remainingRefs=0;
+unsigned waits=0,releases=0;
+HRESULT describe_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImageCreateInfo *i) {
+    *i={VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO}; i->imageType=VK_IMAGE_TYPE_2D; i->format=VK_FORMAT_R8G8B8A8_UNORM;
+    i->extent={64,16,1}; i->mipLevels=i->arrayLayers=1; i->samples=VK_SAMPLE_COUNT_1_BIT;
+    i->usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; i->tiling=VK_IMAGE_TILING_OPTIMAL; return S_OK;
+}
+HRESULT wrap_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImage,ID3D11Texture2D **t) {
+    if (SUCCEEDED(textureWrap)) *t=reinterpret_cast<ID3D11Texture2D *>(uintptr_t(9)); return textureWrap;
+}
+HRESULT wait_texture(void *,ID3D11Texture2D *) { ++waits; return textureWait; }
+ULONG release_texture(ID3D11Texture2D *) { ++releases; return remainingRefs; }
 }
 int main() {
     RuntimeDevice runtime; runtime.hDevice=&identity;
@@ -68,6 +83,24 @@ int main() {
     destroy_runtime_image(device,imageDispatch,importedImage);
     info.extent.height=UINT32_MAX; check(createImage()==E_INVALIDARG && imageCreates==3);
     info.extent.height=16; info.tiling=VK_IMAGE_TILING_OPTIMAL; check(createImage()==E_NOTIMPL && imageCreates==3);
+    TextureImportDispatch textureDispatch{&identity,describe_texture,wrap_texture,wait_texture,release_texture};
+    D3D11_TEXTURE2D_DESC1 textureDesc{}; textureDesc.Width=64;
+    HostBridge bridge{}; bridge.device=&runtime;
+    RuntimeTexture texture{};
+    auto makeTexture=[&]() { return create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,texture); };
+    textureWrap=E_OUTOFMEMORY;
+    check(makeTexture()==E_OUTOFMEMORY && !texture.texture && !texture.image.image);
+    textureWrap=S_OK; check(makeTexture()==S_OK && texture.texture);
+    const unsigned beforeDestroy=imageDestroys;
+    textureWait=E_FAIL;
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_FAIL && !releases && imageDestroys==beforeDestroy);
+    textureWait=S_OK;
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==S_OK && releases==1 && !texture.image.image);
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==S_OK && releases==1);
+    check(makeTexture()==S_OK); remainingRefs=1;
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_UNEXPECTED && texture.retained && texture.image.image);
+    const unsigned retainedDestroy=imageDestroys;
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,texture)==E_UNEXPECTED && imageDestroys==retainedDestroy && releases==2);
     // This test uses synthetic handles only, never an actual allocation/image.
     std::cout << "PASS private image-memory import descriptor, validation and rollback (mock Vulkan)\n";
 }
