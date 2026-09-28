@@ -19,6 +19,7 @@
 #include "ddi-query.h"
 #include "ddi-table.h"
 #include "ddi-lifecycle.h"
+#include "ddi-device-create.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
 #include <cstring>
@@ -35,6 +36,20 @@ void APIENTRY error(D3D10DDI_HRTCORELAYER,HRESULT hr) {
 }
 HRESULT APIENTRY fail_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return E_FAIL; }
 HRESULT APIENTRY pass_retire(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { return S_OK; }
+namespace {
+int createIdentity,createContext; unsigned createCount=0,destroyCount=0;
+bool rejectContext=false,rejectCleanup=false;
+HRESULT APIENTRY creation_context(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
+    if (h!=&createIdentity) std::abort(); ++createCount;
+    if (rejectContext) return E_OUTOFMEMORY;
+    c->hContext=&createContext; return S_OK;
+}
+HRESULT APIENTRY creation_destroy(HANDLE,const D3DDDICB_DESTROYCONTEXT *) { ++destroyCount; return rejectCleanup ? E_FAIL : S_OK; }
+HRESULT APIENTRY creation_sync(HANDLE,const D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT *) { std::abort(); }
+void APIENTRY unexpected_creation_error(D3D10DDI_HRTCORELAYER,HRESULT) { std::abort(); }
+PFN_vkVoidFunction VKAPI_CALL no_instance(VkInstance,const char *) { return nullptr; }
+HRESULT APIENTRY no_engine(const BC250_DXVK_DEVICE_CREATE_INFO *,IBc250DxvkDevice **) { std::abort(); }
+}
 int main() {
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
@@ -548,5 +563,32 @@ int main() {
     if (table.pfnCalcPrivateGeometryShaderWithStreamOutput(h,&soArgs,&soSignatures)!=sizeof(DdiShader)) std::abort();
     table.pfnCreateGeometryShaderWithStreamOutput(h,&soArgs,soHandle,{},&soSignatures);
     if (errors!=108 || soShader.object || soShader.stage!=ShaderStage::geometry || owner.runtime().domain.entered()) std::abort();
+    D3DDDI_DEVICECALLBACKS creationCallbacks{};
+    creationCallbacks.pfnCreateContextVirtualCb=creation_context; creationCallbacks.pfnDestroyContextCb=creation_destroy;
+    creationCallbacks.pfnDestroySynchronizationObjectCb=creation_sync;
+    D3D10DDI_CORELAYER_DEVICECALLBACKS creationUm{}; creationUm.pfnSetErrorCb=unexpected_creation_error;
+    DXGI_DDI_BASE_CALLBACKS creationDxgi{};
+    D3D11_1DDI_DEVICEFUNCS unchangedTable{};
+    std::memset(&unchangedTable,0xA5,sizeof(unchangedTable));
+    const auto originalTable=unchangedTable;
+    DdiDeviceHandle newHandle{},failedCleanup{};
+    D3D10DDIARG_CREATEDEVICE createArgs{}; createArgs.Interface=D3D11_1_DDI_INTERFACE_VERSION;
+    createArgs.hDrvDevice.pDrvPrivate=&newHandle; createArgs.p11_1DeviceFuncs=&unchangedTable;
+    createArgs.hRTDevice.handle=reinterpret_cast<decltype(createArgs.hRTDevice.handle)>(&createIdentity);
+    createArgs.pKTCallbacks=&creationCallbacks; createArgs.pUMCallbacks=&creationUm;
+    createArgs.DXGIBaseDDI.pDXGIBaseCallbacks=&creationDxgi;
+    BC250_DXVK_ENGINE_FUNCS createFuncs{}; createFuncs.CreateDevice=no_engine;
+    BC250_DXVK_SHELL_SERVICES createServices{};
+    auto attemptCreate=[&]() { return create_render_device(createArgs,1,no_instance,createFuncs,D3D_FEATURE_LEVEL_11_0,createServices,failedCleanup); };
+    rejectContext=true;
+    if (attemptCreate()!=E_OUTOFMEMORY || createCount!=1 || destroyCount || newHandle.owner || failedCleanup.owner) std::abort();
+    rejectContext=false;
+    if (attemptCreate()!=E_NOINTERFACE || createCount!=2 || destroyCount!=1 || newHandle.owner || failedCleanup.owner) std::abort();
+    rejectCleanup=true;
+    if (attemptCreate()!=E_NOINTERFACE || !failedCleanup.owner || newHandle.owner || failedCleanup.owner->runtime().domain.entered()) std::abort();
+    if (attemptCreate()!=E_UNEXPECTED || createCount!=3) std::abort();
+    rejectCleanup=false;
+    if (retire_device_handle(failedCleanup)!=S_OK || failedCleanup.owner) std::abort();
+    if (std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable))) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }

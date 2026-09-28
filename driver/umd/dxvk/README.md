@@ -195,3 +195,14 @@ Cube-array views accept arbitrary first faces within the resource range. Format
 query failures map to NOT_SUPPORTED only for the explicit WDK-permitted list;
 R1_UNORM is not on that list and its engine support remains unresolved. MSAA
 counts outside 1..32 return zero quality levels without an engine error.
+
+create_render_device connects the explicit module loader to DeviceOwner bootstrap
+and publishes the rendering function table only after successful initialization.
+It is an internal transaction, not an exported OpenAdapter: capability/version
+negotiation, DXGI table installation and missing mandatory entries still need
+integration before runtime deployment. A failed CreateDevice returns its HRESULT
+without SetErrorCb. If cleanup fails, the adapter receives a retained owner in a
+separate failedCleanup handle, independent of runtime-owned private memory.
+Host tests inject context allocation failure, absent Vulkan instance export and
+failed cleanup/retry, checking the runtime table remains byte-for-byte unchanged.
+Successful hosted device creation/publication has not yet been validated on GPU.
