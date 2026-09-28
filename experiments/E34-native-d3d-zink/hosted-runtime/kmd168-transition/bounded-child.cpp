@@ -62,17 +62,18 @@ int wmain(int argc,wchar_t** argv){
         DeleteProcThreadAttributeList(startup.lpAttributeList);return 125;
     }
     PROCESS_INFORMATION pi={};
-    DWORD selectedSession=0;
-    const BOOL created=interactive ? createActiveConsoleChild(argv[4],mutableCommand.data(),&pi,selectedSession) :
+    DWORD selectedSession=0;const char *launchStage="create_process";
+    const BOOL created=interactive ? createActiveConsoleChild(argv[4],mutableCommand.data(),&pi,selectedSession,launchStage) :
         CreateProcessW(argv[4],mutableCommand.data(),nullptr,nullptr,TRUE,
         CREATE_SUSPENDED|CREATE_NO_WINDOW|EXTENDED_STARTUPINFO_PRESENT,
         nullptr,nullptr,&startup.StartupInfo,&pi);
     const DWORD creationError=created ? ERROR_SUCCESS : GetLastError();
     DeleteProcThreadAttributeList(startup.lpAttributeList);
-    if(!created){std::printf("{\"launch_error\":%lu}\n",creationError);return 125;}
+    if(!created){std::printf("{\"launch_stage\":\"%s\",\"launch_error\":%lu}\n",launchStage,creationError);return 125;}
     Handle process,thread;process.h=pi.hProcess;thread.h=pi.hThread;
     if(!AssignProcessToJobObject(job.h,process.h)){
-        TerminateProcess(process.h,125);return 125;
+        const DWORD assignmentError=GetLastError();TerminateProcess(process.h,125);
+        std::printf("{\"launch_stage\":\"assign_job\",\"launch_error\":%lu}\n",assignmentError);return 125;
     }
     DWORD childSession=0;
     if(interactive && (!ProcessIdToSessionId(pi.dwProcessId,&childSession) || childSession!=selectedSession ||
