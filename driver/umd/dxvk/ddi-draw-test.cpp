@@ -25,6 +25,7 @@
 #include "ddi-lifecycle.h"
 #include "ddi-device-create.h"
 #include "ddi-negotiation.h"
+#include "ddi-dxgi-table.h"
 #include "adapter-identity.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
@@ -637,6 +638,9 @@ int main() {
     D3D11_1DDI_DEVICEFUNCS unchangedTable{};
     std::memset(&unchangedTable,0xA5,sizeof(unchangedTable));
     const auto originalTable=unchangedTable;
+    DXGI1_2_DDI_BASE_FUNCTIONS unchangedDxgi{};
+    std::memset(&unchangedDxgi,0xA5,sizeof(unchangedDxgi));
+    const auto originalDxgi=unchangedDxgi;
     DdiDeviceHandle newHandle{},failedCleanup{};
     D3D10DDIARG_CREATEDEVICE createArgs{}; createArgs.Interface=D3D11_1_DDI_INTERFACE_VERSION;
     createArgs.Flags=UINT(D3D11DDI_3DPIPELINELEVEL_11_0)<<D3D11DDI_CREATEDEVICE_FLAG_3DPIPELINESUPPORT_SHIFT;
@@ -644,9 +648,13 @@ int main() {
     createArgs.hRTDevice.handle=reinterpret_cast<decltype(createArgs.hRTDevice.handle)>(&createIdentity);
     createArgs.pKTCallbacks=&creationCallbacks; createArgs.pUMCallbacks=&creationUm;
     createArgs.DXGIBaseDDI.pDXGIBaseCallbacks=&creationDxgi;
+    createArgs.DXGIBaseDDI.pDXGIDDIBaseFunctions3=&unchangedDxgi;
     BC250_DXVK_ENGINE_FUNCS createFuncs{}; createFuncs.CreateDevice=no_engine;
     BC250_DXVK_SHELL_SERVICES createServices{};
     auto attemptCreate=[&]() { return create_render_device(createArgs,1,no_instance,createFuncs,D3D_FEATURE_LEVEL_11_0,createServices,failedCleanup); };
+    createArgs.DXGIBaseDDI.pDXGIDDIBaseFunctions3=nullptr;
+    if(attemptCreate()!=E_INVALIDARG || createCount || destroyCount) std::abort();
+    createArgs.DXGIBaseDDI.pDXGIDDIBaseFunctions3=&unchangedDxgi;
     const UINT negotiatedFlags=createArgs.Flags;
     createArgs.Flags=0;
     if (attemptCreate()!=E_INVALIDARG || createCount || destroyCount || newHandle.owner || failedCleanup.owner ||
@@ -662,6 +670,19 @@ int main() {
     rejectCleanup=false;
     if (retire_device_handle(failedCleanup)!=S_OK || failedCleanup.owner) std::abort();
     if (std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable))) std::abort();
+    if(std::memcmp(&unchangedDxgi,&originalDxgi,sizeof(unchangedDxgi))) std::abort();
+    const auto dxgiTable=make_dxgi_device_table();
+    if(!dxgiTable.pfnPresent || !dxgiTable.pfnBlt || !dxgiTable.pfnBlt1 || !dxgiTable.pfnSetDisplayMode ||
+       !dxgiTable.pfnSetResourcePriority || !dxgiTable.pfnQueryResourceResidency ||
+       !dxgiTable.pfnRotateResourceIdentities || !dxgiTable.pfnResolveSharedResource ||
+       !dxgiTable.pfnOfferResources || !dxgiTable.pfnReclaimResources || !dxgiTable.pfnGetGammaCaps ||
+       !dxgiTable.pfnGetMultiplaneOverlayCaps || !dxgiTable.pfnGetMultiplaneOverlayFilterRange ||
+       !dxgiTable.pfnCheckMultiplaneOverlaySupport || !dxgiTable.pfnPresentMultiplaneOverlay) std::abort();
+    DXGI_GAMMA_CONTROL_CAPABILITIES gamma{}; std::memset(&gamma,0xA5,sizeof(gamma));
+    const auto oldGamma=gamma;
+    DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS gammaArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),&gamma};
+    if(dxgiTable.pfnGetGammaCaps(&gammaArgs)!=DXGI_ERROR_UNSUPPORTED ||
+       std::memcmp(&gamma,&oldGamma,sizeof(gamma)) || dxgiTable.pfnGetGammaCaps(nullptr)!=E_INVALIDARG) std::abort();
     D3D11_1DDI_DEVICEFUNCS relocated{};
     table.pfnRelocateDeviceFuncs(h,&relocated);
     if (relocated.pfnClearView!=table.pfnClearView || relocated.pfnDraw!=table.pfnDraw ||
