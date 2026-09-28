@@ -31,6 +31,13 @@ struct EntryPolicy {
             name,unsigned(format),samples,unsigned(flags),unsigned(output!=nullptr),output?*output:0,now.QuadPart,GetCurrentThreadId());
         std::fflush(stderr);
     }
+    static void observed(Device* device,const char* name,D3D12DDI_HDEVICE,UINT count,UINT* map) noexcept {
+        if(!ddi_trace_enabled() || !map || !count)return;
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        std::fprintf(stderr,"{\"event\":\"ddi-node-map\",\"name\":\"%s\",\"count\":%u,\"first\":%u,\"lost\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            name,count,map[0],unsigned(device && device->lost.load()),now.QuadPart,GetCurrentThreadId());
+        std::fflush(stderr);
+    }
     static Device* resolve(D3D12DDI_HDEVICE handle) noexcept {return static_cast<Device*>(handle.pDrvPrivate);}
     static Device* resolve(D3D12DDI_HCOMMANDLIST handle) noexcept {
         return static_cast<Device*>(engine_ddi::command_list_shell(handle));

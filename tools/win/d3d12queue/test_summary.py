@@ -90,6 +90,67 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(result["last_msaa"]["levels"], 2)
         self.assertNotIn("SECRET", json.dumps(result))
 
+    def test_caps_and_node_observations_allowlist(self):
+        memory = dict(event="ddi-caps-memory", type=1002, node=0, uma=1,
+                      io_coherent=1, cache_coherent=0, heap_serialization=2,
+                      resource_serialization=3)
+        layout = dict(event="ddi-caps-layout", type=1060, layouts=7, swizzles=4,
+                      standard64k=1, row_major=1, indexable=0)
+        node = dict(event="ddi-node-map", count=1, first=0, lost=0)
+        events = [dict(memory, pointer="SECRET"), dict(layout, payload="SECRET"),
+                  dict(node, handle="SECRET")]
+        result = self.run_summary(events)
+        for key, event in (("last_caps_memory", memory), ("last_caps_layout", layout), ("last_node_map", node)):
+            self.assertEqual(result[key], {k: v for k, v in event.items() if k != "event"})
+            self.assertEqual(result["input"][event["event"]], 1)
+        self.assertNotIn("SECRET", json.dumps(result))
+
+    def test_invalid_caps_do_not_replace_last_valid_observation(self):
+        valid = dict(event="ddi-caps-memory", type=1002, node=0, uma=1,
+                     io_coherent=1, cache_coherent=0, heap_serialization=0,
+                     resource_serialization=0)
+        invalid = [dict(valid, type=1060), dict(valid, node=-1),
+                   dict(valid, node=1 << 32), dict(valid, uma=True),
+                   dict(valid, cache_coherent=2), dict(valid, resource_serialization="0")]
+        missing = valid.copy()
+        del missing["heap_serialization"]
+        result = self.run_summary([valid] + invalid + [missing])
+        self.assertEqual(result["input"]["invalid_schema"], 7)
+        self.assertEqual(result["input"]["ddi-caps-memory"], 1)
+        self.assertEqual(result["last_caps_memory"]["type"], 1002)
+        self.assertEqual(result["last_caps_memory"]["node"], 0)
+        self.assertIsNone(result["last_caps_layout"])
+        self.assertIsNone(result["last_node_map"])
+
+    def test_caps_layout_and_node_flags_are_numeric_bits(self):
+        layout = dict(event="ddi-caps-layout", type=1060, layouts=0xffffffff,
+                      swizzles=0xffffffff, standard64k=0, row_major=1, indexable=1)
+        node = dict(event="ddi-node-map", count=0, first=0, lost=1)
+        result = self.run_summary([layout, node, dict(layout, type=1002),
+                                   dict(layout, row_major=2), dict(node, lost=False),
+                                   dict(node, count=1 << 32)])
+        self.assertEqual(result["input"]["invalid_schema"], 4)
+        self.assertEqual(result["last_caps_layout"]["layouts"], 0xffffffff)
+        self.assertEqual(result["last_node_map"], dict(count=0, first=0, lost=1))
+
+    def test_get_caps_pair_uses_existing_json_schema(self):
+        result = self.run_summary([ddi("begin", name="pfnGetCaps"),
+                                   ddi("end", name="pfnGetCaps", tick=110),
+                                   "other: " + json.dumps(ddi("begin"))])
+        self.assertEqual(result["ddi"]["counts"]["paired"], 1)
+        self.assertEqual(result["ddi"]["name_edges"]["pfnGetCaps"], 2)
+        self.assertEqual(result["input"]["text_lines"], 1)
+        self.assertTrue(result["ddi"]["pairing_complete"])
+
+    def test_many_observations_keep_only_last(self):
+        events = [dict(event="ddi-node-map", count=1, first=index, lost=0,
+                       payload="SECRET") for index in range(2000)]
+        result = self.run_summary(events)
+        self.assertEqual(result["input"]["ddi-node-map"], 2000)
+        self.assertEqual(result["last_node_map"], dict(count=1, first=1999, lost=0))
+        self.assertLess(len(json.dumps(result)), 2000)
+        self.assertNotIn("SECRET", json.dumps(result))
+
     def test_conflicting_or_missing_clock_has_no_duration(self):
         for clocks in ([], [dict(event="clock", frequency=1000), dict(event="clock", frequency=2000)]):
             result = self.run_summary(clocks + [ddi("begin"), ddi("end", tick=200)])

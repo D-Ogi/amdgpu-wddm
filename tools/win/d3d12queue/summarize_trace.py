@@ -15,6 +15,18 @@ MAX_IDS = 50000
 MAX_BUCKETS = 64
 MAX_EXAMPLES = 8
 U64 = (1 << 64) - 1
+# Fixed schemas keep observations bounded and exclude payloads or private pointers.
+OBSERVATIONS = {
+    "ddi-caps-memory": (
+        "last_caps_memory",
+        ("type", "node", "uma", "io_coherent", "cache_coherent", "heap_serialization", "resource_serialization"),
+        ("uma", "io_coherent", "cache_coherent"), 1002),
+    "ddi-caps-layout": (
+        "last_caps_layout",
+        ("type", "layouts", "swizzles", "standard64k", "row_major", "indexable"),
+        ("standard64k", "row_major", "indexable"), 1060),
+    "ddi-node-map": ("last_node_map", ("count", "first", "lost"), ("lost",), None),
+}
 API_NAMES = frozenset((
     "create-device", "create-queue", "copy", "status", "exit", "abort",
     "CreateDXGIFactory1", "EnumAdapters1", "EnumWarpAdapter", "GetDesc1", "GetDeviceRemovedReason",
@@ -88,6 +100,7 @@ def summarize(runtime_err, api_trace=None):
     frequencies = set()
     clock_conflict = False
     last_ddi = last_format = last_msaa = None
+    observations = {schema[0]: None for schema in OBSERVATIONS.values()}
     for obj in records(runtime_err, counts):
         event = obj.get("event")
         if event == "clock":
@@ -133,6 +146,16 @@ def summarize(runtime_err, api_trace=None):
             bump(hosted_ops, str(op))
             if code is not None:
                 bump(hosted_status, code)
+        elif isinstance(event, str) and event in OBSERVATIONS:
+            key, fields, flags, expected_type = OBSERVATIONS[event]
+            selected = {field: integer(obj.get(field), 0xffffffff) for field in fields}
+            if (any(value is None for value in selected.values()) or
+                    any(selected[flag] not in (0, 1) for flag in flags) or
+                    (expected_type is not None and selected["type"] != expected_type)):
+                counts["invalid_schema"] += 1
+                continue
+            observations[key] = selected
+            counts[event] += 1
         elif event in ("ddi-format", "ddi-msaa"):
             fields = ("format", "output_present", "support") if event == "ddi-format" else ("format", "samples", "flags", "output_present", "levels")
             selected = {key: integer(obj.get(key), 0xffffffff) for key in fields}
@@ -183,6 +206,7 @@ def summarize(runtime_err, api_trace=None):
                   hosted=dict(counts=dict(hosted_counts), statuses=dict(hosted_status), operation_edges=dict(hosted_ops),
                               pairing="not_attempted_device_local_ids"),
                   last_format=last_format, last_msaa=last_msaa)
+    result.update(observations)
     if frequency and duration_ticks:
         result["ddi"]["elapsed_ms"] = dict(paired_total=round(sum(duration_ticks) * 1000 / frequency, 6),
                                               paired_max=round(max(duration_ticks) * 1000 / frequency, 6))
