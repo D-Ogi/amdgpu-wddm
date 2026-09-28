@@ -17,7 +17,7 @@ static HRESULT APIENTRY allocate(D3D12DDI_HRTDEVICE device,D3D12DDICB_ALLOCATE_0
 }
 static HRESULT APIENTRY deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DEALLOCATE_0022* a) {
     ++frees;seen=device;assert(a->NumAllocations==1 && *a->HandleList>=100);
-    assert(a->hResource==resource && a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE);
+    assert(!a->hResource && a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE);
     return failFree?E_FAIL:S_OK;
 }
 int main() {

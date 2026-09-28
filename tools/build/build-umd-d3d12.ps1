@@ -48,6 +48,10 @@ try {
   if($LASTEXITCODE){throw 'Allocation ownership test build failed'}
   & .\allocation-test.exe
   if($LASTEXITCODE){throw 'Allocation ownership tests failed'}
+  & cl.exe @flags /Fe:allocation-request-test.exe "$repo\driver\umd\d3d12\allocation-request-test.cpp" "$repo\driver\kmd\umd_blob.c"
+  if($LASTEXITCODE){throw 'Allocation request test build failed'}
+  & .\allocation-request-test.exe
+  if($LASTEXITCODE){throw 'Allocation request tests failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help

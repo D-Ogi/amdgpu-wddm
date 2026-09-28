@@ -13,7 +13,6 @@ class RuntimeAllocation final {
     D3D12DDI_HRTDEVICE runtime_{};
     PFND3D12DDI_ALLOCATE_CB_0022 allocate_{};
     PFND3D12DDI_DEALLOCATE_CB_0022 deallocate_{};
-    HANDLE resource_{};
     D3DKMT_HANDLE allocation_{};
     D3DGPU_VIRTUAL_ADDRESS address_{};
 public:
@@ -35,18 +34,18 @@ public:
         if(FAILED(hr)) return hr;
         if(!info.hAllocation) return E_UNEXPECTED;
         allocation_=info.hAllocation;address_=info.GpuVirtualAddress;
-        resource_=request.hResource;
         return S_OK;
     }
     HRESULT close() noexcept {
         if(!allocation_) return S_OK;
         if(!deallocate_) return E_UNEXPECTED;
         D3D12DDICB_DEALLOCATE_0022 args{};
-        args.hResource=resource_;args.NumAllocations=1;args.HandleList=&allocation_;
+        // Release this allocation only, not the runtime resource group.
+        args.NumAllocations=1;args.HandleList=&allocation_;
         // No ASSUME_NOT_IN_USE: this wrapper does not prove GPU retirement.
         args.Flags=D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
         HRESULT hr=deallocate_(runtime_,&args);
-        if(SUCCEEDED(hr)){allocation_=0;address_=0;resource_=nullptr;}
+        if(SUCCEEDED(hr)){allocation_=0;address_=0;}
         return hr;
     }
     void invalidate_runtime() noexcept {runtime_={};allocate_=nullptr;deallocate_=nullptr;}

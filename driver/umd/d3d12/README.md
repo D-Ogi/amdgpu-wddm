@@ -58,3 +58,25 @@ adapter-kmt-probe.exe is a read-only lab admission check. It enumerates the BC-2
 The DLL build includes ddi-0092-layout.h: x64 static assertions for adapter, core0088, command-list0092, queue0001, extended0021 and callback0062 tables, plus the selected options/shader/architecture payloads. Compilation with WDK10.0.26100 validates the expected sizes. DXGI table selection is deliberately not inferred from byte size; it still needs negotiated interface handling.
 
 GetCaps logs type, DataSize and whether pInfo exists; FillDDITable logs type, size, table number and whether hRTTable exists. Neither prints pointers. They continue returning E_NOTIMPL while the implementation is incomplete. These diagnostics and layout checks do not establish runtime call order or prove that queue Signal/Wait is handled by the runtime. Older capability payload sizes must be mapped with verified layouts before they are accepted.
+
+## Runtime memory request and ownership
+
+`allocation-request.h` owns the BC2A v2 blob and the D3D12 Allocate_0022
+request for one ordinary raw-memory allocation. It preserves the supplied
+runtime owner (including a heap owner), rejects zero/overflowing sizes and
+invalid alignments, and selects explicit GPU-only VRAM, CPU write-combined GTT
+or CPU-cached GTT policy. It does not infer a texture layout, sharing, sparse
+backing, residency or an exact GPU VA. Those require further integration.
+
+The mandatory request test links the actual KMD `umd_blob.c` parser and checks
+all three policies, size rounding, malformed requests and sparse refusal.
+`allocation.h` retains the returned allocation handle after failed release and
+forbids callbacks after runtime invalidation. Deallocation names only that
+allocation through HandleList, never simultaneous resource-group destruction.
+An allocation's reported address may remain zero until an explicit mapping is
+completed; it is not yet an import-ready GPU VA.
+
+The host gates validate request shape and ownership, not native GPU allocation
+or rendering. The shell still needs the allocation registry, completed VA and
+residency operations, GPU-use retirement and same-storage import on the engine's
+VkDevice before these requests are used by native CreateHeapAndResource.
