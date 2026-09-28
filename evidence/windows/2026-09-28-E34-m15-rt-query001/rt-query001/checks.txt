@@ -1,0 +1,7 @@
+    has_image_bvh_intersect_ray = 1
+    has_image_bvh_intersect_ray = 1
+Test case 'dEQP-VK.ray_query.builtin.flow.comp.triangles'..
+  Pass (Pass)
+  Passed:        1/1 (100.0%)
+  Failed:        0/1 (0.0%)
+  Not supported: 0/1 (0.0%)
