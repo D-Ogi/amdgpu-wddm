@@ -16,7 +16,10 @@ MAX_BUCKETS = 64
 MAX_EXAMPLES = 8
 U64 = (1 << 64) - 1
 # Fixed schemas keep observations bounded and exclude payloads or private pointers.
+STATUS_OBSERVATIONS = frozenset(("ddi-caps", "ddi-layout-set"))
 OBSERVATIONS = {
+    "ddi-caps": ("last_caps", ("type", "data_size", "info_present"), ("info_present",), None),
+    "ddi-layout-set": ("last_layout_set", ("layout", "unit"), (), None),
     "ddi-caps-memory": (
         "last_caps_memory",
         ("type", "node", "uma", "io_coherent", "cache_coherent", "heap_serialization", "resource_serialization"),
@@ -154,6 +157,12 @@ def summarize(runtime_err, api_trace=None):
                     (expected_type is not None and selected["type"] != expected_type)):
                 counts["invalid_schema"] += 1
                 continue
+            if event in STATUS_OBSERVATIONS:
+                code = obj.get("status")
+                if not isinstance(code, str) or not re.fullmatch(r"[0-9a-fA-F]{8}", code):
+                    counts["invalid_schema"] += 1
+                    continue
+                selected["status"] = code.lower()
             observations[key] = selected
             counts[event] += 1
         elif event in ("ddi-format", "ddi-msaa"):

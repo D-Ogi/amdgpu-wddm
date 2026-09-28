@@ -90,6 +90,56 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(result["last_msaa"]["levels"], 2)
         self.assertNotIn("SECRET", json.dumps(result))
 
+    def test_get_caps_and_layout_set_last_status(self):
+        result = self.run_summary([
+            dict(event="ddi-caps", type=1002, data_size=28, info_present=0, status="00000000"),
+            dict(event="ddi-caps", type=1003, data_size=20, info_present=1,
+                 status="8000400A", pointer="SECRET"),
+            dict(event="ddi-layout-set", layout=1, unit=0, status="00000000", payload="SECRET")])
+        self.assertEqual(result["last_caps"], dict(type=1003, data_size=20, info_present=1, status="8000400a"))
+        self.assertEqual(result["last_layout_set"], dict(layout=1, unit=0, status="00000000"))
+        self.assertEqual(result["input"]["ddi-caps"], 2)
+        self.assertEqual(result["input"]["ddi-layout-set"], 1)
+        self.assertNotIn("SECRET", json.dumps(result))
+
+    def test_status_observation_invalid_scalars_preserve_previous(self):
+        good = [dict(event="ddi-caps", type=1003, data_size=20, info_present=1, status="80004001"),
+                dict(event="ddi-layout-set", layout=1, unit=0, status="00000000")]
+        for valid in good:
+            invalid = []
+            for field in ("type", "data_size", "info_present") if valid["event"] == "ddi-caps" else ("layout", "unit"):
+                for value in (True, "0", -1, 1 << 32):
+                    invalid.append(dict(valid, **{field: value}))
+                missing = valid.copy()
+                del missing[field]
+                invalid.append(missing)
+            if valid["event"] == "ddi-caps":
+                invalid.append(dict(valid, info_present=2))
+            key = "last_caps" if valid["event"] == "ddi-caps" else "last_layout_set"
+            result = self.run_summary([valid] + invalid)
+            self.assertEqual(result["input"]["invalid_schema"], len(invalid))
+            self.assertEqual(result[key], {k: v for k, v in valid.items() if k != "event"})
+
+    def test_status_observation_rejects_invalid_or_missing_status(self):
+        for event, scalar_fields, key in (
+                ("ddi-caps", dict(type=1003, data_size=20, info_present=1), "last_caps"),
+                ("ddi-layout-set", dict(layout=1, unit=0), "last_layout_set")):
+            valid = dict(event=event, **scalar_fields, status="80004001")
+            invalid = [dict(valid, status=value) for value in
+                       (None, True, 0, "", "0000000", "000000000", "0x00000000", "GGGGGGGG", "00000000\n")]
+            invalid.append(dict(event=event, **scalar_fields))
+            result = self.run_summary([valid] + invalid)
+            self.assertEqual(result["input"]["invalid_schema"], len(invalid))
+            self.assertEqual(result[key]["status"], "80004001")
+            self.assertEqual(result["input"][event], 1)
+
+    def test_many_status_observations_remain_bounded(self):
+        result = self.run_summary([dict(event="ddi-caps", type=index, data_size=20,
+                                       info_present=0, status="00000000") for index in range(2000)])
+        self.assertEqual(result["last_caps"]["type"], 1999)
+        self.assertIsNone(result["last_layout_set"])
+        self.assertLess(len(json.dumps(result)), 2000)
+
     def test_caps_and_node_observations_allowlist(self):
         memory = dict(event="ddi-caps-memory", type=1002, node=0, uma=1,
                       io_coherent=1, cache_coherent=0, heap_serialization=2,

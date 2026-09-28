@@ -7,7 +7,8 @@
 
 namespace native12 {
 // Opt-in for one diagnostic process, sampled once. Names and scalar outcomes
-// only: no DDI arguments, resource contents, handles or private pointers.
+// and selected public scalar request/output fields only: no resource contents,
+// handles or private pointers.
 inline bool ddi_trace_enabled() noexcept {
     static const bool enabled=[]() noexcept {
         char value[2]{};

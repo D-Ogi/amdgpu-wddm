@@ -97,6 +97,16 @@ HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
     }
     fprintf(stderr,"d3d12-ddi GetCaps type=%u size=%u info_present=%u result=%08lx\n",
         unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));fflush(stderr);
+    if(native12::ddi_trace_enabled()){
+        std::fprintf(stderr,"{\"event\":\"ddi-caps\",\"type\":%u,\"data_size\":%u,\"info_present\":%u,\"status\":\"%08lx\"}\n",
+            unsigned(a->Type),a->DataSize,unsigned(a->pInfo!=nullptr),static_cast<unsigned long>(hr));
+        if(a->Type==D3D12DDICAPS_TYPE_TEXTURE_LAYOUT_SETS && a->pInfo && a->DataSize==sizeof(D3D12DDI_ROW_MAJOR_LAYOUT_CAPS)){
+            UINT info[2]{};std::memcpy(info,a->pInfo,sizeof(info));
+            std::fprintf(stderr,"{\"event\":\"ddi-layout-set\",\"layout\":%u,\"unit\":%u,\"status\":\"%08lx\"}\n",
+                info[0],info[1],static_cast<unsigned long>(hr));
+        }
+        std::fflush(stderr);
+    }
     native12::ddi_trace_end("pfnGetCaps",trace_id,hr);return hr;
 }
 HRESULT APIENTRY optional_tables(D3D12DDI_HADAPTER h,UINT32* count,D3D12DDI_TABLE_REQUEST*) {
