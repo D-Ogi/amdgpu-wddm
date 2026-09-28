@@ -484,48 +484,41 @@ void APIENTRY check_existing_resource_allocation_info(D3D12DDI_HDEVICE device, D
     }
 }
 
-// The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer, 1:1 for Flags NONE and TILED_RESOURCE (the values
-// are equal). A format or sample count the engine refuses is 0 levels, as for CheckFormatSupport; so is an unknown
-// flag.
-void APIENTRY check_multisample_quality_levels(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT sample_count,
-                                               D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags, UINT* out) {
-    static_assert(D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE ==
-                      static_cast<int>(D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_TILED_RESOURCE), "MSAA flags");
-    if (out) *out = 0;
-    DeviceContext* c = resolve(device);
-    if (!c) return;
-    if (!out) {
-        c->report(E_INVALIDARG);
-        return;
+// ---- Format queries (D0, D1) --------------------------------------------------------------------------------------
+// The typeless parents: the formats a resource of a cast family is created with. A multisample resource may have one
+// (D3D11.3 functional spec 19.2.2), so its quality levels are the family's although its own support answer is empty.
+bool is_typeless_parent(DXGI_FORMAT f) noexcept {
+    switch (f) {
+    case DXGI_FORMAT_R32G32B32A32_TYPELESS: case DXGI_FORMAT_R32G32B32_TYPELESS:
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS: case DXGI_FORMAT_R32G32_TYPELESS: case DXGI_FORMAT_R32G8X24_TYPELESS:
+    case DXGI_FORMAT_R10G10B10A2_TYPELESS: case DXGI_FORMAT_R8G8B8A8_TYPELESS: case DXGI_FORMAT_R16G16_TYPELESS:
+    case DXGI_FORMAT_R32_TYPELESS: case DXGI_FORMAT_R24G8_TYPELESS: case DXGI_FORMAT_R8G8_TYPELESS:
+    case DXGI_FORMAT_R16_TYPELESS: case DXGI_FORMAT_R8_TYPELESS: case DXGI_FORMAT_BC1_TYPELESS:
+    case DXGI_FORMAT_BC2_TYPELESS: case DXGI_FORMAT_BC3_TYPELESS: case DXGI_FORMAT_BC4_TYPELESS:
+    case DXGI_FORMAT_BC5_TYPELESS: case DXGI_FORMAT_B8G8R8A8_TYPELESS: case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+    case DXGI_FORMAT_BC6H_TYPELESS: case DXGI_FORMAT_BC7_TYPELESS:
+        return true;
+    default:
+        return false;
     }
-    if (flags & ~D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE) return;
-    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS q{format, sample_count,
-                                                    static_cast<D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS>(flags), 0};
-    if (SUCCEEDED(c->device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &q, sizeof(q))))
-        *out = q.NumQualityLevels;
 }
 
-D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device, D3D10DDI_HRESOURCE hres) {
-    DeviceContext* c = resolve(device);
-    if (!c) return 0;
-    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
-    if (!r) {
-        c->report(E_INVALIDARG);
-        return 0;
-    }
-    return (r->backing && r->backing->imported) ? r->backing->memory.allocation : 0;
+// The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer, 0 when the engine refuses the question.
+UINT engine_quality_levels(DeviceContext* c, DXGI_FORMAT format, UINT sample_count,
+                           D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags) noexcept {
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS q{format, sample_count, flags, 0};
+    return SUCCEEDED(c->device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &q, sizeof(q)))
+               ? q.NumQualityLevels
+               : 0;
 }
 
-void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT* out) {
-    DeviceContext* c = resolve(device);
-    if (!c) return;
-    if (!out) {
-        c->report(E_INVALIDARG);
-        return;
-    }
-    *out = 0;
+// The engine's D3D12_FEATURE_FORMAT_SUPPORT answer as D3D12DDI_FORMAT_SUPPORT bits; 0 (no optional capability)
+// when the engine refuses the format, which is never a device error. MULTISAMPLE_RENDERTARGET means a render target
+// or depth-stencil target with some sample count above 1 (d3d12umddi.h), so it stays only while the engine reports
+// quality levels for such a count: then this answer and CheckMultisampleQualityLevels agree.
+UINT engine_format_support(DeviceContext* c, DXGI_FORMAT format) noexcept {
     D3D12_FEATURE_DATA_FORMAT_SUPPORT s{format};
-    if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s)))) return;
+    if (FAILED(c->device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &s, sizeof(s)))) return 0;
     struct Bit { UINT api; UINT ddi; };
     static const Bit one[] = {
         {D3D12_FORMAT_SUPPORT1_BUFFER, D3D12DDI_FORMAT_SUPPORT_BUFFER},
@@ -552,7 +545,61 @@ void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, 
     UINT bits = 0;
     for (const Bit& b : one) bits |= (s.Support1 & b.api) ? b.ddi : 0;
     for (const Bit& b : two) bits |= (s.Support2 & b.api) ? b.ddi : 0;
-    *out = bits;
+    if (bits & D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET) {
+        bool any = false;
+        for (UINT n = 2; n <= D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT && !any; n *= 2)
+            any = engine_quality_levels(c, format, n, D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE) != 0;
+        if (!any) bits &= ~static_cast<UINT>(D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET);
+    }
+    return bits;
+}
+
+// The engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS answer for Flags NONE and TILED_RESOURCE (the values are
+// equal) for a format that can itself be multisampled: one whose CheckFormatSupport answer carries
+// MULTISAMPLE_RENDERTARGET, or a typeless parent, which shares its family's quality levels (D3D11.3 functional spec
+// 19.2.3 (1)). Any other format is 0 levels above 1 sample whatever the engine says: a view-only sibling such as
+// R32_FLOAT_X8X24_TYPELESS answers MULTISAMPLE_LOAD (an SRV of a multisample resource) but is never a multisample
+// resource or target itself (D3D11.3 format list 19.1.4: no 4x, 8x or other-count multisample RenderTarget), while
+// the engine answers it from its depth-stencil family. The format argument is a render-target format (WDK
+// d3d10umddi pfnd3dwddm1_3ddi_checkmultisamplequalitylevels). A format or sample count the engine refuses is 0
+// levels, as for CheckFormatSupport; so is an unknown flag.
+void APIENTRY check_multisample_quality_levels(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT sample_count,
+                                               D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags, UINT* out) {
+    static_assert(D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE ==
+                      static_cast<int>(D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_TILED_RESOURCE), "MSAA flags");
+    if (out) *out = 0;
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!out) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    if (flags & ~D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_TILED_RESOURCE) return;
+    if (sample_count > 1 && !is_typeless_parent(format) &&
+        !(engine_format_support(c, format) & D3D12DDI_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET))
+        return;
+    *out = engine_quality_levels(c, format, sample_count, static_cast<D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS>(flags));
+}
+
+D3DKMT_HANDLE APIENTRY check_resource_allocation_handle(D3D12DDI_HDEVICE device, D3D10DDI_HRESOURCE hres) {
+    DeviceContext* c = resolve(device);
+    if (!c) return 0;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r) {
+        c->report(E_INVALIDARG);
+        return 0;
+    }
+    return (r->backing && r->backing->imported) ? r->backing->memory.allocation : 0;
+}
+
+void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, UINT* out) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!out) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    *out = engine_format_support(c, format);
 }
 
 // ---- Command-list slots -------------------------------------------------------------------------------------------
