@@ -56,6 +56,10 @@ try {
   if($LASTEXITCODE){throw 'Paging test build failed'}
   & .\paging-test.exe
   if($LASTEXITCODE){throw 'Paging tests failed'}
+  & cl.exe @flags /Fe:residency-test.exe "$repo\driver\umd\d3d12\residency-test.cpp"
+  if($LASTEXITCODE){throw 'Residency test build failed'}
+  & .\residency-test.exe
+  if($LASTEXITCODE){throw 'Residency tests failed'}
   & cl.exe @flags /Fe:adapter-kmt-probe.exe "$repo\driver\umd\d3d12\adapter-kmt-probe.cpp" /link dxgi.lib gdi32.lib
   if($LASTEXITCODE){throw 'Adapter KMT probe build failed'}
   & .\adapter-kmt-probe.exe --help

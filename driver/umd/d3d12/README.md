@@ -103,3 +103,37 @@ unmapping; completion of a paging operation is not completion of rendering.
 The mandatory host tests cover pending/ready state, device mismatch, retained
 ownership after failures, synchronous mapping, loss and expired callback scope.
 Native device creation and same-storage Vulkan import remain unverified.
+
+## Native residency callbacks
+
+`residency.h` calls the D3D12 core-layer MakeResident/Evict callbacks with the
+runtime device and runtime paging-queue handles. It sends the complete translated
+allocation list in one callback, without splitting, retries or deduplication of
+residency references. This avoids partial success across multiple batches.
+Allocation ownership and object-to-allocation translation remain the registry's
+responsibility; this helper does not accept arbitrary engine allocations as proof
+of device ownership.
+
+S_OK means ready. E_PENDING remains E_PENDING and carries the runtime queue's
+paging fence; it must not be compared against `PagingDomain`'s separate KT fence.
+E_OUTOFMEMORY preserves the trim amount and ignores the fence output. The helper
+does not trim app resources or retry the failed operation. Malformed successful
+or pending replies produce Unknown state and retain the original callback status
+for diagnosis; integration must stop and resolve ownership rather than reissue
+an operation that may already have incremented residency references.
+
+Eviction is explicit, after the caller retires GPU uses, and propagates callback
+failure. Runtime invalidation prevents further callbacks; destruction makes no
+callback. The mandatory host gate covers pending vs ready, the full-width opaque
+runtime queue, one-call batching, OOM atomic refusal, failure propagation,
+malformed outputs, repeated residency requests and callback lifetime.
+
+Contract sources: WDK/SDK 10.0.26100 `d3d12umddi.h` callback declarations and
+`d3dukmdt.h` residency structures; Microsoft DDI references
+[MakeResidentCb](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dumddi/nc-d3dumddi-pfnd3dddi_makeresidentcb)
+(the DirectX 12 remarks describe atomic OOM refusal and split-batch rollback),
+[native MakeResident callback](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3d12umddi/nc-d3d12umddi-pfnd3d12ddi_makeresident_cb)
+and [native Evict callback](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3d12umddi/nc-d3d12umddi-pfnd3d12ddi_evict_cb).
+These were read from the local Microsoft documentation checkout. The callback
+bridge is host-tested; heap registry integration, runtime fence scheduling and
+native GPU execution are not established by this gate.
