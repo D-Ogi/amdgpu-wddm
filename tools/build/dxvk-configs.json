@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "note": "Meson option sets for build-dxvk.ps1, the only copy it reads. Options are compared with the new meson log's 'Build Options:' line after configure; targets are the ninja targets built and hashed.",
+  "configs": {
+    "per-app": {
+      "description": "Upstream DXVK as application-local d3d11/dxgi/d3d10core/d3d9 DLLs: the per-application comparison path of the M14 5 % bound (D004) and the M12 E33 packages",
+      "options": [
+        "-Dbuildtype=release",
+        "-Denable_d3d8=false"
+      ],
+      "targets": [
+        "src/d3d11/d3d11.dll",
+        "src/dxgi/dxgi.dll",
+        "src/d3d10/d3d10core.dll",
+        "src/d3d9/d3d9.dll"
+      ]
+    },
+    "ddi-engine": {
+      "description": "bc250dxvk.dll, DXVK's D3D10/11 implementation as the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4); needs the amdgpu-wddm/ddi-engine DXVK branch",
+      "options": [
+        "-Dbuildtype=release",
+        "-Denable_d3d8=false",
+        "-Denable_d3d9=false",
+        "-Denable_d3d10=false",
+        "-Denable_ddi_engine=true"
+      ],
+      "targets": [
+        "src/ddi/bc250dxvk.dll",
+        "src/ddi/bc250dxvk_engine_test.exe"
+      ]
+    }
+  }
+}

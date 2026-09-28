@@ -185,6 +185,33 @@ Targets `src/gallium/targets/wgl/libgallium_wgl.dll` and `src/gallium/targets/li
 the DLL C runtime. The recorded build used the RADV ICD's tree; its Zink/WGL patches are the `zink-*.patch`
 files in `experiments/E33-m12-applications/`.
 
+## DXVK
+
+PROVENANCE: DXVK, zlib.
+
+`tools/build/build-dxvk.ps1 -Config <name> -Source <tree> -Build <dir>` works like the Mesa script. The option
+sets are in [`tools/build/dxvk-configs.json`](../tools/build/dxvk-configs.json), and the same `Build Options:`
+gate applies. `recipe.json` also records the submodule commits: DXVK's shader compiler lives in the
+`dxbc-spirv` submodule. `-Reconfigure` re-runs meson on a configured build directory. DXVK needs no WDK headers,
+only `vcvars64.bat`, meson, ninja and glslangValidator. The tree must have its submodules initialized
+(`git submodule update --init --recursive`).
+
+| Config | Source | Targets |
+|---|---|---|
+| `per-app` | upstream DXVK | `d3d11.dll`, `dxgi.dll`, `d3d10core.dll`, `d3d9.dll`: application-local DLLs, the comparison path of the M14 5 % bound (D004) |
+| `ddi-engine` | DXVK branch `amdgpu-wddm/ddi-engine` | `bc250dxvk.dll`, the engine behind the M14 system D3D10/11 DDI UMD (ADR 0017 item 4), and `bc250dxvk_engine_test.exe` |
+
+Both are `-Dbuildtype=release` without D3D8. `ddi-engine` also drops D3D9 and D3D10 and sets
+`-Denable_ddi_engine=true`, an option that exists only on that branch. The branch is upstream DXVK plus
+this project's commits under `src/ddi/` and small host-mode hooks in `src/dxvk/` and `src/d3d11/`. It is not
+published yet; each `recipe.json` names its commit.
+
+`bc250dxvk_engine_test.exe <bc250dxvk.dll> [adapter substring]` is the engine's offline positive control. It
+runs on any Vulkan 1.3 GPU, opens no window and exits by itself; exit code 0 means every check passed. The
+test plays the UMD shell: it owns the Vulkan instance and device, allocates the images and feeds shaders in DDI
+form. It then checks pixels, sustained frames, storage rotation, and the thread of every Vulkan call the engine
+makes.
+
 ## KMD and host tests
 
 ```
