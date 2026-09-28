@@ -31,6 +31,12 @@ foreach($label in @('candidate169','rollback166')){
 }
 if($Phase -eq 'Capture'){
  if($Arm -ne 'candidate'){throw 'Capture only before candidate'}
+ # Package staging is separate; reject before device disable if either is missing.
+ $publishedPackages=@(Get-KmdPublishedPackages)
+ foreach($packageLabel in @('candidate169','rollback166')){
+  $registered=Select-KmdRegisteredPackage $publishedPackages $manifest.$packageLabel.'bc250kmd.inf'
+  Write-DurableText "$out\$Receipt-registered-$packageLabel.json" ($registered|ConvertTo-Json)
+ }
  $raw=& "$PSScriptRoot\preflight166.ps1"|Out-String
  $baseline=$raw|ConvertFrom-Json
  $gpu=@(Get-PnpDevice -Class Display|Where-Object {$_.InstanceId -like 'PCI\VEN_1002&DEV_13FE*'})
@@ -74,11 +80,21 @@ if($Phase -eq 'Capture'){
   }
   'Install' {
    if($problem -ne 22){throw 'Install requires disabled adapter'}
+   $registered=Select-KmdRegisteredPackage @(Get-KmdPublishedPackages) $manifest.$label.'bc250kmd.inf'
+   $publishedInf=Join-Path "$env:windir\INF" $registered.name
+   $inspection=@(& "$out\select-driver.exe" --inspect-store $gpu.InstanceId $publishedInf)
+   if($LASTEXITCODE -ne 0){throw 'Registered INF inspection failed'}
+   Write-DurableText "$out\$Receipt-registered-inspection.jsonl" ($inspection -join "`n")
+   $storeRows=@($inspection|ForEach-Object {$_|ConvertFrom-Json}|Where-Object {$_.resolved_store_inf})
+   if($storeRows.Count -ne 1 -or (Get-FileHash -LiteralPath $storeRows[0].resolved_store_inf).Hash -ne $manifest.$label.'bc250kmd.inf'){
+    throw 'Registered store INF hash mismatch'
+   }
+   if((Get-FileHash -LiteralPath $publishedInf).Hash -ne $manifest.$label.'bc250kmd.inf'){throw 'Published INF changed'}
    $installObservation=Invoke-KmdObservedInstall -Read {Get-KmdInstallObservation $gpu.InstanceId} -Save {
     param($stage,$value)
     Write-DurableText "$out\$Receipt-install-$stage.json" ($value|ConvertTo-Json -Depth 10)
    } -Install {
-    & "$out\select-driver.exe" --install-deferred $gpu.InstanceId "$out\$label\bc250kmd.inf" $expectedVersion | Out-Host
+    & "$out\select-driver.exe" --install-deferred $gpu.InstanceId $publishedInf $expectedVersion | Out-Host
     return $LASTEXITCODE
    }
    if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data -ne $expectedVersion){throw 'Installed version mismatch'}

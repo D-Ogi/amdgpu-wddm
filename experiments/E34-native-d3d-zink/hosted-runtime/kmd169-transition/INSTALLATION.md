@@ -69,3 +69,11 @@ Candidate Verify records candidate-ready-only: stable CPU module observations br
 Restore Verify waits for the unchanged generation/epoch to satisfy full confirmation admission, invokes checked confirmation if needed, then requires a fresh flags15 witness and strict guard0 CPU check. It can use up to 70 seconds inside the original global schedule, ending no later than T+160 seconds. Ten seconds remain for package cleanup under the T+170 work deadline; the outer task cap remains 180 seconds. No deadline is extended or restarted. A late restore start can leave too little time and must remain recovery-required, not accepted. The phase job bounds blocking query calls, while the polling helper also rejects a result returned past its own deadline.
 
 Local tests cover age boundaries, stale work, no work, identity changes and late reads. They establish control behavior only; no new transition has validated this schedule on the lab.
+
+## Registered-package admission
+
+Capture requires exactly one published INF matching each manifest INF hash before any device disable. Package staging is a separate prerequisite, not an implicit operation in Install. No missing-package fallback to an external INF is permitted.
+
+Install reselects the published INF by hash, runs the read-only store inspection, and checks both published and resolved-store INF hashes against the manifest. The native installation helper resolves the input through SetupGetInfDriverStoreLocation and SetupGetInfPublishedName before building its selected driver list. It therefore requests the registered node instead of the external package node observed in M712. Version, disabled-state and stopped-service checks still apply. No lab installation has validated this change yet; E0000217 causality remains unproven.
+
+Local /W4 /WX build and argument/package selection controls pass. Local API source: ref/sdk-api-docs at a4fd3f7e, setupapi/nf-setupapi-setupgetinfpublishednamew.md and nf-setupapi-setupgetinfdriverstorelocationw.md. A bounded exact166-to-exact166 control with preserved verbose SetupAPI settings and a tested recovery route must precede another169 transition.

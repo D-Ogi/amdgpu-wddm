@@ -14,3 +14,12 @@ function Get-KmdPublishedPackages {
   @{name=$_.Name;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash}
  })
 }
+
+function Select-KmdRegisteredPackage {
+ param([array]$Packages,[string]$ExpectedInfHash)
+ if($ExpectedInfHash -notmatch '^[A-Fa-f0-9]{64}$'){throw 'Invalid expected INF hash'}
+ $matching=@($Packages|Where-Object {$_.sha256 -eq $ExpectedInfHash})
+ if($matching.Count -ne 1){throw 'Require exactly one registered INF for expected package; stage before transition'}
+ if($matching[0].name -notmatch '^oem[0-9]+\.inf$'){throw 'Invalid registered INF name'}
+ return $matching[0]
+}

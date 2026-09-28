@@ -46,14 +46,20 @@ int wmain(int argc,wchar_t** argv){
     wchar_t inf[MAX_PATH]={};
     const DWORD length=GetFullPathNameW(argv[3],MAX_PATH,inf,nullptr);
     if(!length || length>=MAX_PATH || GetFileAttributesW(inf)==INVALID_FILE_ATTRIBUTES)return fail("INF path");
-    if(store){
+    if(store || install){
         wchar_t resolved[MAX_PATH]={};
         // Only published/system INF or Driver Store paths are supported inputs.
         // This is a lookup, not content matching or package staging.
         if(!SetupGetInfDriverStoreLocationW(inf,nullptr,nullptr,resolved,MAX_PATH,nullptr))
             return fail("GetInfDriverStoreLocation");
         printf("{\"resolved_store_inf\":%s}\n",jsonPath(resolved).c_str());
-        if(wcscpy_s(inf,resolved))return 2;
+        if(install){
+            wchar_t published[MAX_PATH]={};
+            if(!SetupGetInfPublishedNameW(resolved,published,MAX_PATH,nullptr))
+                return fail("GetInfPublishedName");
+            // Installation uses the registered node witnessed by M713.
+            if(wcscpy_s(inf,published))return 2;
+        }else if(wcscpy_s(inf,resolved))return 2;
     }
     DeviceSet set;set.h=SetupDiCreateDeviceInfoList(nullptr,nullptr);
     if(set.h==INVALID_HANDLE_VALUE)return fail("CreateDeviceInfoList");
