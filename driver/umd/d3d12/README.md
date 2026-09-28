@@ -137,3 +137,25 @@ and [native Evict callback](https://learn.microsoft.com/windows-hardware/drivers
 These were read from the local Microsoft documentation checkout. The callback
 bridge is host-tested; heap registry integration, runtime fence scheduling and
 native GPU execution are not established by this gate.
+
+## Ordering pending mappings on a GPU context
+
+`PagingDomain::address_for_context` obtains a mapping address for subsequent
+submissions on one context. If paging has not completed, it queues
+`pfnWaitForSynchronizationObjectFromGpuCb` using that context and the paging
+queue's monitored fence. It makes no CPU wait. A failed callback returns no
+address; a device-loss sentinel observed during the call also refuses use.
+The context must belong to this device and remain serialized/lifetime-valid
+under the caller's queue registry. The method preserves the full HANDLE.
+
+This does not change `ready`: a CPU observer still sees E_PENDING until the
+paging fence actually advances. Another context needs its own ordering, and
+residency must be established separately. A queued wait is not evidence of GPU
+retirement and does not authorize unmapping or freeing the allocation. The
+current engine import boundary still requires a completed mapping; this helper
+does not silently relax that contract.
+
+The host gate leaves the fake paging fence unchanged while queuing waits on two
+distinct contexts, verifies the fence handle/value and full-width context,
+checks failure/loss propagation with empty output, and confirms that completed
+mappings need no additional wait. No native GPU execution is claimed.
