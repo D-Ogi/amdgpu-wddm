@@ -26,8 +26,17 @@ HRESULT convert_query(const D3D10DDIARG_CREATEQUERY &s,D3D11_QUERY_DESC &d,bool 
 #undef QUERY
     default: return E_NOTIMPL;
     }
-    predicate=d.Query==D3D11_QUERY_OCCLUSION_PREDICATE || d.Query==D3D11_QUERY_SO_OVERFLOW_PREDICATE ||
-        (d.Query>=D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0 && d.Query<=D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3);
+    // COM interleaves statistics and predicate values per stream. An inclusive
+    // range would wrongly classify statistics streams 1..3 as predicates.
+    switch (d.Query) {
+    case D3D11_QUERY_OCCLUSION_PREDICATE:
+    case D3D11_QUERY_SO_OVERFLOW_PREDICATE:
+    case D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0:
+    case D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM1:
+    case D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM2:
+    case D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3: predicate=true; break;
+    default: predicate=false; break;
+    }
     if (s.MiscFlags & ~UINT(D3D10DDI_QUERY_MISCFLAG_PREDICATEHINT)) return E_INVALIDARG;
     if (s.MiscFlags) {
         if (d.Query!=D3D11_QUERY_OCCLUSION_PREDICATE) return E_INVALIDARG;
