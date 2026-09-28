@@ -263,6 +263,8 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
     WddmGpuFencePaging((BC250_DEVICE*)MiniportDeviceContext);
     // ADR 0011 point 3 step 3: the hardware vsync's own report, same shape - a no-op unless Device->DcnVsyncAcked
     // says an interrupt found a real VUPDATE_NO_LOCK event since the last time this ran.
+    if (IhTakeVsync((BC250_DEVICE*)MiniportDeviceContext))
+        DcnVsyncFromVector((BC250_DEVICE*)MiniportDeviceContext);
     WddmDcnVsync((BC250_DEVICE*)MiniportDeviceContext);
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
 }

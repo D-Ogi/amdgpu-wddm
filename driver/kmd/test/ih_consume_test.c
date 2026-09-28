@@ -14,12 +14,14 @@ typedef bool BOOLEAN;
 #define NT_SUCCESS(x) ((x)>=0)
 #define BC250_IH_DPC_ROUNDS 4
 struct amdgpu_device { struct { struct { unsigned ring_size,rptr; } ih; } irq; };
-struct bc250_iv_entry { int unused; };
+struct bc250_iv_entry { unsigned client_id,src_id; };
+#define BC250_IH_DCE_CLIENT 4u
+#define BC250_IH_OTG0_VUPDATE_SOURCE 0x57u
 typedef struct { unsigned OverflowCount, DecodeErrors, Rptr, count; } Stats;
-typedef struct { struct amdgpu_device *DpcAdev; struct { long Fault; } DpcSequence; long Active, InDpc, DpcAgain, DpcCount; unsigned Rptr; int StatsLock; Stats Stats; } BC250_IH;
+typedef struct { struct amdgpu_device *DpcAdev; struct { long Fault; } DpcSequence; long Active, InDpc, DpcAgain, DpcCount, VsyncPending; unsigned Rptr; int StatsLock; Stats Stats; } BC250_IH;
 typedef struct { void *Ih; struct { void (*DxgkCbQueueDpc)(void *); void *DeviceHandle; } Dxgk; } BC250_DEVICE;
 static BC250_IH fixture;
-static unsigned wp, gets, pubs, decodes, queued, fault_read, overflow_read, misalign_read;
+static unsigned wp, gets, pubs, decodes, queued, fault_read, overflow_read, misalign_read, vector_client, vector_source;
 static void queue_dpc(void *p) { (void)p;queued++; }
 static long InterlockedIncrement(long *p) { return ++*p; }
 static long InterlockedCompareExchange(long *p,long v,long expected) { long old=*p;if(old==expected)*p=v;return old; }
@@ -37,7 +39,7 @@ static u32 bc250_ih_get_wptr(struct amdgpu_device *a,bool *overflow) {
     if(preinject){preinject=0;wp=32;}
     return result;
 }
-static int bc250_ih_decode(struct amdgpu_device *a,u32 *r,struct bc250_iv_entry *e) { (void)e;decodes++;if(bad_decode)return -1;*r=(*r+32)%a->irq.ih.ring_size;return 0; }
+static int bc250_ih_decode(struct amdgpu_device *a,u32 *r,struct bc250_iv_entry *e) { e->client_id=vector_client;e->src_id=vector_source;decodes++;if(bad_decode)return -1;*r=(*r+32)%a->irq.ih.ring_size;return 0; }
 static void Note(Stats *s,const struct bc250_iv_entry *e) { (void)e;s->count++; }
 static void bc250_ih_set_rptr(struct amdgpu_device *a,u32 r) {
     a->irq.ih.rptr=r;pubs++;armed=1;if(level && wp!=r){irq_pending=1;armed=0;}if(streaming)wp=(r+32)%a->irq.ih.ring_size;
@@ -46,7 +48,7 @@ static void bc250_ih_set_rptr(struct amdgpu_device *a,u32 r) {
 #include "ih_consume_actual.inc"
 #define CHECK(c) do { if(!(c)) { printf("FAIL line %d: %s\n",__LINE__,#c); return 1; } } while(0)
 static struct amdgpu_device dev;
-static void reset(void) { memset(&dev,0,sizeof(dev));memset(&fixture,0,sizeof(fixture));dev.irq.ih.ring_size=128;fixture.DpcAdev=&dev;fixture.Active=1;wp=gets=pubs=decodes=queued=fault_read=overflow_read=misalign_read=0;armed=irq_pending=inject=bad_decode=streaming=overflow_mode=preinject=level=0; }
+static void reset(void) { memset(&dev,0,sizeof(dev));memset(&fixture,0,sizeof(fixture));dev.irq.ih.ring_size=128;fixture.DpcAdev=&dev;fixture.Active=1;wp=gets=pubs=decodes=queued=fault_read=overflow_read=misalign_read=vector_client=vector_source=0;armed=irq_pending=inject=bad_decode=streaming=overflow_mode=preinject=level=0; }
 int main(void) {
     BC250_DEVICE device;
     device.Ih=&fixture;device.Dxgk.DxgkCbQueueDpc=queue_dpc;device.Dxgk.DeviceHandle=NULL;
@@ -67,5 +69,9 @@ int main(void) {
     reset();fault_read=2;IhDpc(&device);CHECK(!fixture.Active && pubs==1 && queued==0 && fixture.Stats.DecodeErrors==1);
     reset();misalign_read=2;IhDpc(&device);CHECK(!fixture.Active && pubs==1 && queued==0 && fixture.Stats.DecodeErrors==1);
     reset();overflow_read=2;wp=32;Consume(&fixture);CHECK(fixture.Stats.OverflowCount==1 && fixture.Rptr==32 && fixture.Stats.count==3);
+    reset();wp=32;vector_client=4;vector_source=0x57;Consume(&fixture);CHECK(IhTakeVsync(&device));CHECK(!IhTakeVsync(&device));
+    reset();wp=32;vector_client=8;vector_source=0x57;Consume(&fixture);CHECK(!IhTakeVsync(&device));
+    reset();wp=32;vector_client=4;vector_source=0x56;Consume(&fixture);CHECK(!IhTakeVsync(&device));
+    reset();fixture.VsyncPending=1;fixture.Active=0;CHECK(!IhTakeVsync(&device));CHECK(fixture.VsyncPending==0);
     puts("PASS: empty rearm, late arrival, nonempty, wrap, fault, alignment, inactive, decode error, budget, overflow, prepublish edge, prepublish level");return 0;
 }

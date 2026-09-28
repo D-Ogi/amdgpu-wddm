@@ -172,7 +172,7 @@ typedef struct _BC250_DEVICE {
     // Diagnostic samples, not one atomic snapshot. Times are KeQueryInterruptTime
     // (100 ns, clock-tick resolution); zero means no sample since device start.
     volatile LONG64 InterruptLastTime;
-    volatile LONG64 DcnVsyncEntryTime;
+    volatile LONG64 DcnVsyncEntryTime; // latest ISR or synchronized vector poll
     volatile LONG64 DcnVsyncAckTime;
     volatile LONG64 DcnVsyncNotifyTime; // NotifyInterrupt returned, not OS acceptance
     volatile LONG DcnVsyncNoMmio, DcnVsyncFlipDisabled, DcnVsyncUnarmed;
@@ -180,6 +180,7 @@ typedef struct _BC250_DEVICE {
     volatile LONG DcnVsyncLastStatus; // raw OTG_GLOBAL_SYNC_STATUS, valid after a successful read
     volatile LONG DcnVsyncArmed;
     volatile LONG DcnVsyncAcked;
+    volatile LONG DcnVsyncDpcPolls, DcnVsyncDpcAcked, DcnVsyncDpcSyncFailures;
     volatile LONG DcnVsyncTicks;         // every VUPDATE_NO_LOCK event the ISR acknowledged, armed or not
     volatile LONG DcnVsyncRefused;       // MmioDcnRead/MmioDcnWrite failed inside the ISR (should not happen:
                                          // BAR5 stays mapped for the whole device start; counted, not assumed impossible)
@@ -341,6 +342,7 @@ NTSTATUS IhSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
 void IhRemove(_Inout_ BC250_DEVICE* Device);
 BOOLEAN IhInterrupt(_Inout_ BC250_DEVICE* Device);
 void IhDpc(_Inout_ BC250_DEVICE* Device);
+BOOLEAN IhTakeVsync(_Inout_ BC250_DEVICE* Device);
 BOOLEAN IhIsActive(_In_ const BC250_DEVICE* Device);
 void IhEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_IH* Data);
 // PASSIVE_LEVEL; caller supplies nonpaged report storage, retained through completion.
@@ -400,6 +402,7 @@ NTSTATUS DcnReadScanLine(_In_ const BC250_DEVICE* Device, _Out_ BOOLEAN* InBlank
 NTSTATUS DcnVsyncEnable(_Inout_ BC250_DEVICE* Device, BOOLEAN On);
 void DcnLogVsyncSnapshot(_In_ const BC250_DEVICE* Device);
 BOOLEAN DcnVsyncInterrupt(_Inout_ BC250_DEVICE* Device);
+void DcnVsyncFromVector(_Inout_ BC250_DEVICE* Device);
 
 // 2026-09-22 (ADR 0011 consequences, facts M97/M100): the present path's own destination once the flip has
 // moved the scanout away from the firmware's framebuffer. PASSIVE_LEVEL only (MmMapIoSpaceEx/MmUnmapIoSpace);
