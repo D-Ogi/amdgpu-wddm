@@ -94,7 +94,7 @@ Required positive lab control before declaring FIXED/VERIFIED:
    borders/scaling and own modeset are outside this supported path.
 
 Proposed BD-018 append-only comment:
-- 2026-09-24 Codex: FillSignalInfo and its two display.c callers now support reference-derived
+- 2026-09-24 review: FillSignalInfo and its two display.c callers now support reference-derived
   inherited timing: stable OTG totals/blank bounds plus DCN201 reference counter and DP DTO
   ratio; full WDDM refuses missing/unsupported observations instead of inventing nominal60Hz.
   Mode failure propagates with object cleanup.197 host checks pass; PHASE-as-Hz mutation fails4;

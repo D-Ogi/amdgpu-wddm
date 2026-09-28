@@ -41,7 +41,7 @@ Removing the gate by default waits for that evidence.
 ## Limits
 
 Feature level and option tiers only, no rendering, no sparse allocation exercised by the probe beyond
-device creation. Same boot and DLLs as E37. The DWM was Codex's CPU DWM 8008 at the time; irrelevant to a
+device creation. Same boot and DLLs as E37. The DWM was the CPU DWM 8008 at the time; irrelevant to a
 probe without a window.
 
 PROVENANCE: Mesa MIT; vkd3d-proton LGPL-2.1 and DXVK zlib as standalone runtime DLLs next to the probe, no

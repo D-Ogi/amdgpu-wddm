@@ -83,7 +83,7 @@ No bc250kmd.h changes. BD-026 parser gate and unrelated dirty work preserved.
 
 Proposed BD-025 status: FIXED (source/host, not deployed).
 Proposed append-only comment:
-- 2026-09-24 Codex: Confirmed production UMDRIVERPRIVATE returned the historical firmware
+- 2026-09-24 review: Confirmed production UMDRIVERPRIVATE returned the historical firmware
   words from generated umd_caps_blob. It now overlays metadata cached from the exact PSP
   file snapshot only after successful full loading, plus GetSmuVersion queried once through
   the native owner at start. QueryAdapterInfo only copies caches; unloaded/offline/quarantined

@@ -58,7 +58,7 @@ Logs and generated-code helpers: scratch/m9/bd021. No shared status files edited
 
 ## Proposed existing-ID comment
 
-- 2026-09-24 Codex: Added source-only PTE observation counters by level and
+- 2026-09-24 review: Added source-only PTE observation counters by level and
   system/application-local/table-local segment, coherent/noncoherent and encoded
   snoop mismatch. Covers CPU initialization and GPU encoding with per-callback
   aggregation, no cache-policy change. Current routing908035/0; frozen137 with

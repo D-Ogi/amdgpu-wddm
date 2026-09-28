@@ -1,7 +1,7 @@
 # cpucopy-002: copy witness on the Vulkan WSI GDI present path (E47 follow-up, message 056). Candidate 63AF86CB
 # (fork amdgpu-wddm/radv-wddm2-gdi-immediate 6358c3a9 = 50E99A84 plus the blit-buffer memory-type witness in the
 # present-log header and a copy_cycles column = QueryThreadCycleTime around the copy) swapped in place of the
-# registered ICD (E43 method, baseline copy and hash-checked restore in finally), vkcube 900 frames at 1920x1200 (Codex 128 grant: one vkcube size)
+# registered ICD (E43 method, baseline copy and hash-checked restore in finally), vkcube 900 frames at 1920x1200 (one vkcube size)
 # on the CPU present path with the per-present timing log. No PresentMon, no ETW, no UMD/DWM/KMD change.
 $ErrorActionPreference = 'Stop'
 $out = 'C:\BC250\m12\cpucopy-002'

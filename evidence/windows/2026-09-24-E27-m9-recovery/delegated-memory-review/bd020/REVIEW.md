@@ -70,7 +70,7 @@ original report's blanket 'nothing survives ExitBootServices' assertion was meas
 
 ## Proposed append-only comment
 
-- 2026-09-24 Codex: NOT-A-BUG for the reported overlap. GOP report's128KiB text
+- 2026-09-24 review: NOT-A-BUG for the reported overlap. GOP report's128KiB text
   conflicts with its underlying FUN_00004d28:0x20KiB is32KiB. PSP pages occupy
   end-0x19000..end-0x16000, outside end-0x8000..end. Offline parsing of own unitA
   debugfs/VFCT VBIOS confirms vram_usagebyfirmware2.1 start/fw/driver all0. Linux

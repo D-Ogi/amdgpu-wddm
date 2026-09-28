@@ -83,7 +83,7 @@ Registered ICD CF3948D6. Rollback file `vulkan_radeon.93B1D1FD.dll`, older `vulk
 the keep copy `vulkan_radeon.CF3948D6.dll` next to it. `STATE.md` (local) rewritten. Scripts that assert
 the registered hash must expect CF3948D6: the DWM029 runner (`run.ps1`, `cleanup.ps1`, `archive.ps1` under
 `experiments/E34-native-d3d-zink/hosted-runtime/dwm029-gpu-present/`) still names 93B1D1FD and is immutable
-as run; Codex bound its successor to CF3948D6 (agent message 194). The hosted trials' mechanism (7A9970CA
+as run; its successor was bound to CF3948D6. The hosted trials' mechanism (7A9970CA
 copied over the registered path, restore from their own baseline copy) is unaffected. Nothing else changed.
 
 ## Limits

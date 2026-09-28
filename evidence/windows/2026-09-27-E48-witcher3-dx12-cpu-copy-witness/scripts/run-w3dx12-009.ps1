@@ -1,7 +1,7 @@
 # witcher3-dx12-009: candidate ICD 50E99A84 (fork amdgpu-wddm/radv-wddm2-gdi-immediate 1dd68127 = 6661C2D2 tree
 # CF3948D6's tree 2732f9c8 + HOST_CACHED memory type for CPU-presented images and a memory-type witness in the present
 # log header) swapped in place of the registered ICD for the duration of the run, E14 compute smoke as positive control first, then the
-# E43 steered Witcher 3 DX12 run with VKD3D_SWAPCHAIN_PRESENT_MODE=FIFO (host-cached swapchain memory type; bounded 180 s per Codex 123). The finally block restores the
+# E43 steered Witcher 3 DX12 run with VKD3D_SWAPCHAIN_PRESENT_MODE=FIFO (host-cached swapchain memory type; bounded 180 s). The finally block restores the
 # registered file to 93B1D1FD from the copy taken here and verifies the hash. No UMD/DWM/KMD change.
 $ErrorActionPreference = 'Stop'
 $out = 'C:\BC250\m12\witcher3-dx12-009'

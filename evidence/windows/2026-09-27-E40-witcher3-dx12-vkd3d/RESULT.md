@@ -6,7 +6,7 @@ CPU DWM 5748 unchanged, no reboot).
 
 ## Setup (run001/, scripts/)
 
-`scripts/run-w3dx12-001.ps1`, derived from the DX11 run `witcher3-gpu001` (Codex, DXVK d3d11), as an
+`scripts/run-w3dx12-001.ps1`, derived from the DX11 run `witcher3-gpu001` (DXVK d3d11), as an
 interactive scheduled task:
 
 - executable `bin\x64_dx12\witcher3.exe` 609BCA70, version 4.0.0.103190, launched directly (Steam running);

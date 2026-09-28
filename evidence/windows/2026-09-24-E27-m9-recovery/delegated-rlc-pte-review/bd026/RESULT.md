@@ -39,7 +39,7 @@ Validation:
 
 Proposed existing BD-026 status: FIXED (source and host validated, not deployed).
 Proposed append-only comment:
-- 2026-09-24 Codex: Recheck corrects the original description: the shim reads only
+- 2026-09-24 review: Recheck corrects the original description: the shim reads only
   common RLC header fields, not v2.1 extension offsets. The missing version gate could
   admit unsupported layouts while loading only RLC_G. Source now requires the implemented
   v2.0 layout and complete 104-byte header; later layouts need their additional images.

@@ -104,7 +104,7 @@ attributes; DisplayMap/Unmap edits concern bugcheck readiness only.
 
 ## Proposed existing-ID comment
 
-- 2026-09-24 Codex: Rechecked candidate137. Historical M200 POST diagnostic conflict
+- 2026-09-24 review: Rechecked candidate137. Historical M200 POST diagnostic conflict
   is already source-fixed (M201/M202): actual POST selector passes2072checks and
   an always-NC mutation fails2049. Dedicated table storage removes the old broad
   application mapping, but M190 persists for retained NC versus borrowed
