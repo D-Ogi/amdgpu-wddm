@@ -21,7 +21,7 @@ if($LASTEXITCODE -ne 0){throw 'Selection policy test failed'}
 if($LASTEXITCODE -ne 0){throw 'Debug child build failed'}
 foreach($case in @(@{mode='ok';seconds=5;expected=0},@{mode='fail';seconds=5;expected=7},@{mode='sleep';seconds=1;expected=124},@{mode='tree';seconds=5;expected=0})){
  $text=(& "$out\debug-child.exe" $case.seconds "$out\debug-child.exe" --fixture $case.mode | Out-String)
- if($LASTEXITCODE -ne $case.expected -or $text -notmatch 'DEBUG M14 DEBUG STRING CONTROL' -or $text -notmatch 'DEBUG M14 WIDE STRING CONTROL' -or $text -notmatch 'tree_closed=1'){throw "Debug capture control failed: $text"}
+ if($LASTEXITCODE -ne $case.expected -or $text -notmatch 'DEBUG M14 DEBUG STRING CONTROL' -or $text -notmatch 'DEBUG M14 WIDE STRING CONTROL' -or $text -notmatch 'tree_closed=1' -or $text -notmatch 'DEBUG M14 PAGE EDGE CONTROL'){throw "Debug capture control failed: $text"}
  $text|Set-Content "$out\debug-$($case.mode).txt"
 }
 'PASS debug capture: ANSI/Unicode, successful/failed child, timeout'

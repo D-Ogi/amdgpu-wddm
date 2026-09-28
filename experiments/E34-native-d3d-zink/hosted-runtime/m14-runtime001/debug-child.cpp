@@ -19,6 +19,14 @@ int wmain(int argc,wchar_t **argv) {
     if(argc==3 && !wcscmp(argv[1],L"--fixture")){
         OutputDebugStringA("M14 DEBUG STRING CONTROL\n");
         OutputDebugStringW(L"M14 WIDE STRING CONTROL\n");
+        SYSTEM_INFO system{};GetSystemInfo(&system);
+        auto pages=static_cast<unsigned char *>(VirtualAlloc(nullptr,2*system.dwPageSize,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE));
+        if(!pages)return 8;DWORD previous=0;
+        if(!VirtualProtect(pages+system.dwPageSize,system.dwPageSize,PAGE_NOACCESS,&previous))return 8;
+        const wchar_t edge[]=L"M14 PAGE EDGE CONTROL";
+        auto edgeString=reinterpret_cast<wchar_t *>(pages+system.dwPageSize-sizeof(edge));
+        memcpy(edgeString,edge,sizeof(edge));OutputDebugStringW(edgeString);VirtualFree(pages,0,MEM_RELEASE);
+
         if(!wcscmp(argv[2],L"tree")){
             wchar_t exe[MAX_PATH]{};if(!GetModuleFileNameW(nullptr,exe,MAX_PATH))return 8;
             std::wstring child=Quote(exe)+L" --fixture sleep";
@@ -53,16 +61,15 @@ int wmain(int argc,wchar_t **argv) {
         switch(event.dwDebugEventCode){
         case CREATE_PROCESS_DEBUG_EVENT:
             if(event.u.CreateProcessInfo.hFile)CloseHandle(event.u.CreateProcessInfo.hFile);
-            if(event.u.CreateProcessInfo.hProcess!=process.hProcess)CloseHandle(event.u.CreateProcessInfo.hProcess);
-            if(event.u.CreateProcessInfo.hThread!=process.hThread)CloseHandle(event.u.CreateProcessInfo.hThread);
             break;
-        case CREATE_THREAD_DEBUG_EVENT:CloseHandle(event.u.CreateThread.hThread);break;
+        case CREATE_THREAD_DEBUG_EVENT:break;
         case LOAD_DLL_DEBUG_EVENT:if(event.u.LoadDll.hFile)CloseHandle(event.u.LoadDll.hFile);break;
         case OUTPUT_DEBUG_STRING_EVENT:{
             const auto &info=event.u.DebugString;
-            size_t units=info.nDebugStringLength;if(units>2048)units=2048;
+            // OUTPUT_DEBUG_STRING_INFO length is bytes, including Unicode.
+            size_t units=info.nDebugStringLength;if(units>4096)units=4096;
             std::vector<wchar_t> buffer(units+1,0);SIZE_T read=0;
-            if(ReadProcessMemory(process.hProcess,info.lpDebugStringData,buffer.data(),units*(info.fUnicode?2:1),&read)){
+            if(ReadProcessMemory(process.hProcess,info.lpDebugStringData,buffer.data(),units,&read)){
                 if(info.fUnicode)std::printf("DEBUG %ls\n",buffer.data());
                 else std::printf("DEBUG %s\n",reinterpret_cast<const char *>(buffer.data()));
             }else std::printf("DEBUG_READ_ERROR %lu\n",GetLastError());
@@ -93,12 +100,9 @@ int wmain(int argc,wchar_t **argv) {
         DEBUG_EVENT event{};
         if(WaitForDebugEventEx(&event,50)){
             if(event.dwDebugEventCode==LOAD_DLL_DEBUG_EVENT && event.u.LoadDll.hFile)CloseHandle(event.u.LoadDll.hFile);
-            if(event.dwDebugEventCode==CREATE_THREAD_DEBUG_EVENT)CloseHandle(event.u.CreateThread.hThread);
             if(event.dwDebugEventCode==CREATE_PROCESS_DEBUG_EVENT){
                 if(event.u.CreateProcessInfo.hFile)CloseHandle(event.u.CreateProcessInfo.hFile);
-                if(event.u.CreateProcessInfo.hProcess!=process.hProcess)CloseHandle(event.u.CreateProcessInfo.hProcess);
-                if(event.u.CreateProcessInfo.hThread!=process.hThread)CloseHandle(event.u.CreateProcessInfo.hThread);
-            }
+                    }
             if(!ContinueDebugEvent(event.dwProcessId,event.dwThreadId,DBG_CONTINUE))break;
         }else if(GetLastError()!=ERROR_SEM_TIMEOUT)break;
     }
