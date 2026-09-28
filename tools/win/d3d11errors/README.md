@@ -17,5 +17,5 @@ prevent a per-app D3D11 replacement or missing GPU shell from passing.
 Errors001/M753 failed the initial, overly strict write-Map HRESULT expectation.
 The revised read-control oracle follows Microsoft's Map return-value contract and
 static analysis of the exact lab runtime (evidence/windows/2026-09-28-E34-m14-map-removal-offline).
-This revision builds with /W4 /WX; its new lab run is pending. Frozen earlier artifacts
+This revision builds with /W4 /WX and passes errors002/M754 on the lab. Frozen earlier artifacts
 retain their old engine/shell filenames until the coordinated rename is measured.
