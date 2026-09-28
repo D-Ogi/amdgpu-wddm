@@ -4,7 +4,13 @@ namespace bc250::umd {
 TextureImportDispatch texture_import_dispatch(IBc250DxvkDevice &engine) {
     return {&engine,
         [](void *e,const D3D11_TEXTURE2D_DESC1 *d,VkImageCreateInfo *i) { return static_cast<IBc250DxvkDevice *>(e)->GetImageCreateInfo(d,i); },
-        [](void *e,const D3D11_TEXTURE2D_DESC1 *d,VkImage i,ID3D11Texture2D **t) { return static_cast<IBc250DxvkDevice *>(e)->CreateTexture2DFromImage(d,i,t); },
+        [](void *e,const D3D11_TEXTURE2D_DESC1 *d,const VkImageCreateInfo *info,VkImage i,ID3D11Texture2D **t) {
+            IBc250DxvkDevice2 *extended=nullptr;
+            HRESULT hr=static_cast<IBc250DxvkDevice *>(e)->QueryInterface(__uuidof(IBc250DxvkDevice2),reinterpret_cast<void **>(&extended));
+            if (SUCCEEDED(hr)) hr=extended ? extended->CreateTexture2DFromImage2(d,info,i,t) : E_NOINTERFACE;
+            if (extended) extended->Release();
+            return hr;
+        },
         [](void *e,ID3D11Texture2D *t) { return static_cast<IBc250DxvkDevice *>(e)->WaitForResourceIdle(t); },
         [](ID3D11Texture2D *t) { return t->Release(); }};
 }
@@ -21,7 +27,7 @@ HRESULT create_runtime_texture(RuntimeDevice &runtime,VkDevice device,const Runt
     imageInfo.tiling=VK_IMAGE_TILING_LINEAR;
     hr=create_linear_runtime_image(runtime,device,vk,properties,imageInfo,allocation,pitch,VkDeviceSize(desc.Width)*4,out.image);
     if (FAILED(hr)) return hr;
-    hr=engine.wrap(engine.engine,&desc,out.image.image,&out.texture);
+    hr=engine.wrap(engine.engine,&desc,&imageInfo,out.image.image,&out.texture);
     if (FAILED(hr) || !out.texture) {
         if (out.texture) {
             const ULONG refs=engine.release(out.texture); out.texture=nullptr;

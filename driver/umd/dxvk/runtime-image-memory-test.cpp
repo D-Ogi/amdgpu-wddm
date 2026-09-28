@@ -25,8 +25,11 @@ void VKAPI_CALL release(VkDevice,VkDeviceMemory m,const VkAllocationCallbacks *)
 namespace {
 unsigned imageCreates=0,imageDestroys=0;
 bool badPitch=false;
+VkImageCreateInfo createdInfo{};
+const VkFormat viewFormats[]={VK_FORMAT_R8G8B8A8_UNORM,VK_FORMAT_R8G8B8A8_SRGB};
+const VkImageFormatListCreateInfo formatList{VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,nullptr,2,viewFormats};
 VkResult VKAPI_CALL image_create(VkDevice,const VkImageCreateInfo *info,const VkAllocationCallbacks *,VkImage *out) {
-    ++imageCreates; check(info->usage==VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    createdInfo=*info; ++imageCreates; check(info->usage==VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     *out=reinterpret_cast<VkImage>(uintptr_t(2)); return VK_SUCCESS;
 }
 void VKAPI_CALL image_destroy(VkDevice,VkImage,const VkAllocationCallbacks *) { ++imageDestroys; }
@@ -40,10 +43,15 @@ HRESULT textureWait=S_OK,textureWrap=S_OK; ULONG remainingRefs=0;
 unsigned waits=0,releases=0;
 HRESULT describe_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImageCreateInfo *i) {
     *i={VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO}; i->imageType=VK_IMAGE_TYPE_2D; i->format=VK_FORMAT_R8G8B8A8_UNORM;
+    i->pNext=&formatList; i->flags=VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
     i->extent={64,16,1}; i->mipLevels=i->arrayLayers=1; i->samples=VK_SAMPLE_COUNT_1_BIT;
     i->usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; i->tiling=VK_IMAGE_TILING_OPTIMAL; return S_OK;
 }
-HRESULT wrap_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImage,ID3D11Texture2D **t) {
+HRESULT wrap_texture(void *,const D3D11_TEXTURE2D_DESC1 *,const VkImageCreateInfo *info,VkImage,ID3D11Texture2D **t) {
+    check(info && info->tiling==VK_IMAGE_TILING_LINEAR && info->usage==VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    check(info->extent.width==64 && info->extent.height==16);
+    check(info->pNext==&formatList && info->flags==VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT);
+    check(createdInfo.pNext==info->pNext && createdInfo.flags==info->flags && createdInfo.tiling==info->tiling);
     if (SUCCEEDED(textureWrap)) *t=reinterpret_cast<ID3D11Texture2D *>(uintptr_t(9)); return textureWrap;
 }
 HRESULT wait_texture(void *,ID3D11Texture2D *) { ++waits; return textureWait; }
@@ -77,6 +85,45 @@ HRESULT APIENTRY surface_unmap(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS *m) {
     ++surfaceUnmaps;
     return failSurfaceUnmap ? E_FAIL : S_OK;
 }
+}
+namespace {
+#pragma warning(push)
+#pragma warning(disable:4100)
+struct ImportEngine final : IBc250DxvkDevice2 {
+    bool supported=true; unsigned drops=0,wraps=0; HRESULT wrapResult=S_OK;
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void **p) override {
+        check(id==__uuidof(IBc250DxvkDevice2)); *p=nullptr;
+        if (!supported) return E_NOINTERFACE;
+        *p=static_cast<IBc250DxvkDevice2 *>(this); return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override { return 2; }
+    ULONG STDMETHODCALLTYPE Release() override { ++drops; return 1; }
+    HRESULT STDMETHODCALLTYPE GetD3D11Device(REFIID riid, void **device) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetImmediateContext(REFIID riid, void **context) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateShader(const BC250_DXVK_SHADER_DESC *desc, REFIID riid,
+                                                   void **shader) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateInputLayout(const BC250_DXVK_INPUT_LAYOUT *layout,
+                                                        ID3D11InputLayout **inputLayout) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetVertexFormat(DXGI_FORMAT format, VkFormat *vkFormat,
+                                                      UINT *elementSize) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE GetImageCreateInfo(const D3D11_TEXTURE2D_DESC1 *desc,
+                                                         VkImageCreateInfo *info) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateTexture2DFromImage(const D3D11_TEXTURE2D_DESC1 *desc, VkImage image,
+                                                               ID3D11Texture2D **texture) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE WaitForResourceIdle(ID3D11Resource *resource) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE IsResourceBusy(ID3D11Resource *resource, UINT subresource) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE SubmitForPresent(ID3D11Resource *source, UINT subresource) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE RotateResourceIdentities(ID3D11Resource *const *resources, UINT count) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE Blt(const BC250_DXVK_BLT *blt) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE Blt1(const BC250_DXVK_BLT1 *) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE CreateTexture2DFromImage2(const D3D11_TEXTURE2D_DESC1 *d,
+        const VkImageCreateInfo *i,VkImage image,ID3D11Texture2D **t) override {
+        check(d && i && i->tiling==VK_IMAGE_TILING_LINEAR && image); ++wraps;
+        if (SUCCEEDED(wrapResult)) *t=reinterpret_cast<ID3D11Texture2D *>(uintptr_t(9));
+        return wrapResult;
+    }
+} importEngine;
+#pragma warning(pop)
 }
 int main() {
     RuntimeDevice runtime; runtime.hDevice=&identity;
@@ -174,6 +221,17 @@ int main() {
     const unsigned unmappedBeforeRetention=surfaceUnmaps;
     check(close()==E_UNEXPECTED && surface.texture.retained);
     check(close()==E_UNEXPECTED && surfaceUnmaps==unmappedBeforeRetention && surfaceDeallocates==3);
+    auto realDispatch=texture_import_dispatch(importEngine);
+    ID3D11Texture2D *wrapped=nullptr;
+    info.tiling=VK_IMAGE_TILING_LINEAR;
+    check(realDispatch.wrap(realDispatch.engine,&textureDesc,&info,image,&wrapped)==S_OK);
+    check(wrapped && importEngine.wraps==1 && importEngine.drops==1);
+    importEngine.supported=false; wrapped=nullptr;
+    check(realDispatch.wrap(realDispatch.engine,&textureDesc,&info,image,&wrapped)==E_NOINTERFACE);
+    check(!wrapped && importEngine.wraps==1 && importEngine.drops==1);
+    importEngine.supported=true; importEngine.wrapResult=E_INVALIDARG;
+    check(realDispatch.wrap(realDispatch.engine,&textureDesc,&info,image,&wrapped)==E_INVALIDARG);
+    check(!wrapped && importEngine.wraps==2 && importEngine.drops==2);
     // This test uses synthetic handles only, never an actual allocation/image.
     std::cout << "PASS image import and surface lifecycle: pending paging, teardown order, failure retention (mock callbacks)\n";
 }

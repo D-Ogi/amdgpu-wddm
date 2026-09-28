@@ -5,7 +5,7 @@ namespace bc250::umd {
 struct TextureImportDispatch {
     void *engine;
     HRESULT (*describe)(void *,const D3D11_TEXTURE2D_DESC1 *,VkImageCreateInfo *);
-    HRESULT (*wrap)(void *,const D3D11_TEXTURE2D_DESC1 *,VkImage,ID3D11Texture2D **);
+    HRESULT (*wrap)(void *,const D3D11_TEXTURE2D_DESC1 *,const VkImageCreateInfo *,VkImage,ID3D11Texture2D **);
     HRESULT (*wait)(void *,ID3D11Texture2D *);
     ULONG (*release)(ID3D11Texture2D *);
 };
