@@ -102,8 +102,8 @@ They never run from an engine thread or callback: INLINE mode has no engine thre
 - CreatePipelineState gives the engine the container bytes, names input elements from the vertex program's
   rebuilt input signature (`InputLayoutSemantic`) and stream-output entries from the last stage before
   rasterization (`StreamOutputSemantic`). The element layout, blend, rasterizer and depth-stencil states keep
-  their descriptions until then. A stream-output declaration with a gap is E_NOTIMPL while the pinned engine
-  DLL crashes on one (INTEGRATION.md).
+  their descriptions until then. A gap in a stream-output declaration reaches the engine as a NULL
+  SemanticName, which the pinned r4 engine takes (INTEGRATION.md).
 - The harness creates a DXIL compute program (dxc) and a DXBC vertex and pixel program (fxc) through these slots,
   from containers reduced to the DDI form, and checks the dispatch and the draw word for word. The reduction is
   the harness's model of the runtime, not a measurement.

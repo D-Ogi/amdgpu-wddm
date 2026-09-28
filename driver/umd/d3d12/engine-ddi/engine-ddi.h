@@ -11,12 +11,14 @@
 // engine-ddi never reads native12::Device. The shell hands over what it needs through ShellHooks and finds the
 // DeviceContext of a D3D12DDI_HDEVICE through the ResolveDevice hook.
 //
-// Engine ABI: bc250_vkd3d_engine.h r3-draft (ABI 1.2), included by path from the vkd3d-proton fork checkout
+// Engine ABI: bc250_vkd3d_engine.h r4-draft (ABI 1.2), included by path from the vkd3d-proton fork checkout
 // pinned in engine-abi.json. engine-ddi uses:
 //   - 1.1: CreateDevice in the INLINE queue mode and CreateCommandQueue (queue.cpp);
 //   - 1.2 V10 CreateHeapFromMemory, MapHeap and UnmapHeap: RuntimeBacked heaps over the shell's VkDeviceMemory,
 //     and MapHeap/UnmapHeap in both memory modes (resources.cpp);
-//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp).
+//   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp);
+//   - 1.2 r4 V12 InstanceMode: the create info of CreateDevice and QueryAdapterCaps says PRIVATE, so that every
+//     engine device has a VkInstance of its own (INTEGRATION.md, "Adapter: GetCaps").
 // So the engine must be asked for 1.2; create_device_context refuses a function table without these entries.
 #pragma once
 #include <windows.h>
@@ -231,8 +233,8 @@ void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept;
 // report_device_error (E_NOTIMPL for an unsupported program, E_INVALIDARG for a malformed one, E_OUTOFMEMORY);
 // mesh and amplification programs are E_NOTIMPL. CreatePipelineState passes the container bytes to the engine,
 // names input elements from the vertex program's input signature and stream-output entries from the last stage
-// before rasterization. A stream-output declaration with a gap is refused with E_NOTIMPL while the pinned engine
-// DLL crashes on one (INTEGRATION.md, "Shaders and pipelines").
+// before rasterization. A gap in a stream-output declaration goes to the engine as an entry with a NULL
+// SemanticName, which the pinned r4 engine takes (INTEGRATION.md, "Shaders and pipelines").
 
 // ---- Engine parts of shell-owned MIXED slots ---------------------------------------------------------------------
 // Queue (CreateCommandQueue/DestroyCommandQueue are the shell's). The shell creates the WDDM context first. The

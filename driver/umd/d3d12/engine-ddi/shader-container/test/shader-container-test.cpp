@@ -322,6 +322,9 @@ HRESULT CreateEngineDevice(const Engine& e, ComPtr<ID3D12Device>* device)
     info.AdapterLuid = e.luid;
     info.MinimumFeatureLevel = D3D_FEATURE_LEVEL_11_0;
     info.QueueMode = BC250_VKD3D_QUEUE_MODE_THREADED;
+#ifdef BC250_VKD3D_INSTANCE_MODE_PRIVATE
+    info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;  // r4 (V12); the r3 header has no such field
+#endif
     return e.funcs.CreateDevice(&info, __uuidof(ID3D12Device), reinterpret_cast<void**>(device->ReleaseAndGetAddressOf()));
 }
 

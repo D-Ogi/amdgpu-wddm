@@ -124,7 +124,7 @@ bool find_adapter(const wchar_t* filter, LUID& luid) {
 } // namespace
 
 HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory,
-                    decltype(engine_ddi::ShellHooks::free_memory) free_memory) {
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory, ID3D12Device* engine) {
     engine_ddi::ContextCreateInfo info{};
     info.size = sizeof(info);
     info.boundary_revision = engine_ddi::kBoundaryRevision;
@@ -133,7 +133,7 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
     info.hooks.free_memory = free_memory;
     info.ddi_interface = D3D12DDI_INTERFACE_VERSION_R8;
     info.ddi_version = D3D12DDI_BUILD_VERSION_0092;
-    info.engine_device = env.engine;
+    info.engine_device = engine ? engine : env.engine;
     info.engine_funcs = &env.funcs;
     info.hooks.size = sizeof(info.hooks);
     info.hooks.shell = &device.shell;
@@ -290,6 +290,32 @@ D3D12DDIARG_RESOURCE_BARRIER_0022 transition(const Buffer& buffer, D3D12DDI_RESO
     return b;
 }
 
+void test_private_instances(Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create, Device& first) {
+    ID3D12Device* engine = nullptr;
+    HRESULT hr = env.funcs.CreateDevice(&create, __uuidof(ID3D12Device), reinterpret_cast<void**>(&engine));
+    checkf(SUCCEEDED(hr) && engine, "private instances: a second engine device from the same create info (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (FAILED(hr) || !engine) return;
+    Device second;
+    hr = open_device(env, second, nullptr, nullptr, engine);
+    VkInstance a = VK_NULL_HANDLE, b = VK_NULL_HANDLE;
+    VkPhysicalDevice pa = VK_NULL_HANDLE, pb = VK_NULL_HANDLE;
+    VkDevice da = VK_NULL_HANDLE, db = VK_NULL_HANDLE;
+    uint32_t fa = 0, fb = 0;
+    const HRESULT ha = env.funcs.GetVulkanHandles(env.engine, &a, &pa, &da, &fa);
+    const HRESULT hb = env.funcs.GetVulkanHandles(engine, &b, &pb, &db, &fb);
+    checkf(hr == S_OK && first.context && second.context && ha == S_OK && hb == S_OK && a && b && a != b && da != db,
+           "private instances: two live engine-ddi devices report two VkInstances through GetVulkanHandles (%p, %p)",
+           static_cast<void*>(a), static_cast<void*>(b));
+    if (second.context) {
+        uint32_t live = UINT32_MAX;
+        hr = engine_ddi::destroy_device_context(second.context, &live);
+        checkf(hr == S_OK && live == 0, "private instances: the second device context goes (hr %08lx, %u live)",
+               static_cast<unsigned long>(hr), live);
+    }
+    engine->Release();
+}
+
 } // namespace harness
 
 using namespace harness;
@@ -354,8 +380,9 @@ int wmain(int argc, wchar_t** argv) {
     create.MinimumFeatureLevel = D3D_FEATURE_LEVEL_11_0;
     create.QueueMode = BC250_VKD3D_QUEUE_MODE_INLINE;
     create.Services = &services;
+    create.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
     hr = env.funcs.CreateDevice(&create, __uuidof(ID3D12Device), reinterpret_cast<void**>(&env.engine));
-    checkf(SUCCEEDED(hr) && env.engine, "engine CreateDevice in the INLINE queue mode (hr %08lx)",
+    checkf(SUCCEEDED(hr) && env.engine, "engine CreateDevice in the INLINE queue mode, PRIVATE instance (hr %08lx)",
            static_cast<unsigned long>(hr));
     if (FAILED(hr) || !env.engine) return 1;
 
@@ -371,6 +398,7 @@ int wmain(int argc, wchar_t** argv) {
     checkf(hr == S_OK && device.context, "device context in EnginePrivateTest mode (hr %08lx)",
            static_cast<unsigned long>(hr));
     if (hr == S_OK) {
+        test_private_instances(env, create, device);
         test_copy(env, device);
         test_compute(env, device);
         test_graphics(env, device);

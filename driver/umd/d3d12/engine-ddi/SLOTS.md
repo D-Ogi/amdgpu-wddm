@@ -9,9 +9,9 @@ is implemented, its entry is the fail-safe of `engine-ddi.h`; no slot is left NU
 program with its length in DWORD 1, plus register-only signature entries. That the buffer holds exactly that many
 DWORDs is an inference from the SAL annotation `_In_reads_(pShaderCode[1])`, not a measurement. Each create
 rebuilds the container the engine compiles with [shader-container](shader-container/README.md), within that
-length; pipelines name input elements and stream-output entries from the rebuilt signatures. A stream-output
-declaration with a gap is refused with E_NOTIMPL while the pinned engine DLL crashes on one. Mesh and amplification
-programs are refused with E_NOTIMPL.
+length; pipelines name input elements and stream-output entries from the rebuilt signatures, a gap in a
+stream-output declaration as a NULL SemanticName, which the pinned r4 engine takes. Mesh and amplification programs
+are refused with E_NOTIMPL.
 
 `pfnCreateHeapAndResource` (D60):
 - A heap, or a committed resource (dedicated allocation, heap from it, resource placed at 0), makes exactly one

@@ -133,13 +133,14 @@ Mismatch controls, detected for both builds: M1 puts COLOR3 and TEXCOORD2 of vsp
   parts. Shader model 4.x has no engine case yet. How the runtime encodes a stream-output hole in the DDI is not
   measured; the helpers take `RegisterIndex ~0u` with a mask giving its component count.
 
-## Engine finding, fixed on a branch
+## Engine finding, fixed in the r4 engine
 
 Nie ma róży bez kolców (no rose without thorns): 7bfcd7f0 `vkd3d_strdup()`s every stream-output `SemanticName`
 (`libs/vkd3d/state.c`, `vkd3d_shader_transform_feedback_info_dup`), and the NULL that D3D12 uses for a hole
-crashes it; it also matches entries without their stream. Fork branch `amdgpu-wddm/so-hole-fix`, not yet merged:
-0869138a keeps the NULL as a gap, c5d9d85f matches the stream (with dxil-spirv cf45549d passing it to the
-remapper). Its engine test passes threaded and inline, as 7bfcd7f0 does.
+crashes it; it also matches entries without their stream. Fork branch `amdgpu-wddm/so-hole-fix`: 0869138a keeps
+the NULL as a gap, c5d9d85f matches the stream (with dxil-spirv cf45549d passing it to the remapper). Its engine
+test passes threaded and inline, as 7bfcd7f0 does. Both commits are in the r4 engine that engine-ddi pins
+(branch `amdgpu-wddm/ddi-engine-1.2-r4`, d31d6133).
 
 ## How engine-ddi calls it
 
@@ -152,8 +153,8 @@ engine `D3D12_SHADER_BYTECODE{ container.bytes.data(), container.bytes.size() }`
 capacity is LenTok or SizeInUint32 itself, which the runtime has validated. The entries return `VOID`, so a failed
 `Result` is logged and goes to `report_device_error` as `Result::hresult()`. The shader record keeps the
 `Container` and the vertex input entries: `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` of the
-last pre-rasterization stage names stream-output entries (NULL `SemanticName` for `element.gap`, refused while the
-pinned engine crashes on one), and `InputLayoutSemantic(input, InputRegister, &semantic)` names input elements.
+last pre-rasterization stage names stream-output entries (NULL `SemanticName` for `element.gap`, which the pinned
+r4 engine takes), and `InputLayoutSemantic(input, InputRegister, &semantic)` names input elements.
 
 ## Files
 

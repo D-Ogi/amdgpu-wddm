@@ -55,6 +55,10 @@ static_assert(std::is_same_v<decltype(&engine_ddi::build_caps),
 // The engine header this revision is built against is ABI 1.2 (QueryAdapterCaps, V11).
 static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 2u), "engine ABI 1.2 header");
 static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 64, "ABI 1.2 x64 sizes");
+// r4 (V12): the create info carries InstanceMode, which engine-ddi's callers set to PRIVATE.
+static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 48 &&
+                  offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 40 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,
+              "ABI 1.2 r4 create info");
 // The two GetCaps payloads of M768 (d3d12umddi.h 10.0.26100): 1074 is 8 bytes, 1007 is the 4-byte level itself.
 static_assert(sizeof(D3D12DDI_3DPIPELINESUPPORT1_DATA_0081) == 8 && sizeof(D3D12DDI_3DPIPELINELEVEL) == 4,
               "GetCaps 1074 and 1007 payloads");

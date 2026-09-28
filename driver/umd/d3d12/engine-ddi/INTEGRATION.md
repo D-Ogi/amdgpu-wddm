@@ -12,15 +12,18 @@ is `engine-ddi.h`, revision 3.
   `um` and `shared` directories, the engine ABI header's directory and the Vulkan headers below.
 - Engine ABI header, included by path and not vendored into this repository:
   - file `libs/ddi/bc250_vkd3d_engine.h` of the project's vkd3d-proton fork, branch
-    `amdgpu-wddm/ddi-engine-1.2-wip`, commit `7bfcd7f09f078f5c312c34180fc9c51c5b8a0698`;
-  - revision r3-draft, ABI 1.2, NOT FROZEN in the header's own words;
-  - SHA-256 `768692FC98C5A267721AC1EE38C8CD49B6EE776D2BF562955FF292C30D472DC2`;
-  - default checkout `<workspace>\scratch\m15\vkd3d-1.2-src` (`-EngineSource`), the directory
-    `tools/build/build-umd-d3d12.ps1` already uses.
+    `amdgpu-wddm/ddi-engine-1.2-r4`, commit `d31d6133bc3a012817f7cc67c9a51ed4a1a51262`;
+  - revision r4-draft, ABI 1.2, NOT FROZEN in the header's own words; r4 adds the instance mode (V12,
+    `CreateInfo.InstanceMode` at offset 40, CreateInfo 48 bytes on x64) and carries the stream-output gap fix;
+  - SHA-256 `24E42AF7865A6C65D55DC7659E53616E2E597AC80188BA3BE31621C4C250354F`;
+  - default checkout `<workspace>\scratch\m15\vkd3d-1.2-r4-src` (`-EngineSource`, `source_checkout` in the pin).
+    The shell's build must include the same header: `tools/build/build-umd-d3d12.ps1` defaults to the r3
+    checkout `scratch\m15\vkd3d-1.2-src` until it moves.
 - Vulkan headers: `khronos/Vulkan-Headers/include` of the same checkout, submodule commit
   `ee2ec5fd83dafce291024683b50dc89219333076`.
 - Engine DLL: `amdgpu_wddm_vkd3d.dll` built by `tools/build/build-vkd3d.ps1` (config `ddi-engine`) from that
-  commit with no local changes, SHA-256 `4FFA7493DD818E3B3AB0BA3D988AFC05BDBCBC234726EFC52C54CA37890E833C`.
+  commit with no local changes, SHA-256 `ACEAB520B08809FC593F2D1BC9FCE927F8215F2D3E9A32BAD121EA670BAEF435`, in
+  `<workspace>\scratch\m15\engine-1.2-r4-d31d6133` (`engine_dll_dir` in the pin).
 - [engine-abi.json](engine-abi.json) holds these pins. The build script refuses a header, and before a run an
   engine DLL, whose SHA-256 differs. A new header revision means a new pin, a rebuild of both sides, and a new
   engine DLL.
@@ -44,11 +47,14 @@ HRESULT engine_ddi::build_caps(const engine_ddi::AdapterCaps* caps, uint32_t ddi
    - load the engine DLL and call `Bc250Vkd3dEngineGetFuncs(BC250_VKD3D_ENGINE_ABI_VERSION, &funcs)` with
      `funcs.Size = sizeof(funcs)`. The argument must be 1.2: the engine leaves QueryAdapterCaps NULL for a shell
      that asks for 1.1, and `query_adapter_caps` then returns E_INVALIDARG;
-   - fill the `BC250_VKD3D_DEVICE_CREATE_INFO` that CreateDevice will receive: `AbiVersion` 1.2, hosted RADV's
-     `GetInstanceProcAddr`, the `AdapterLuid` hosted RADV reports for this adapter (V2), `MinimumFeatureLevel`
-     `D3D_FEATURE_LEVEL_11_0`, `QueueMode` INLINE and the shell's `Services`. The engine applies the INLINE
-     admission to it (three graphics-family VkQueues in ABI 1.2), and its answers are those of a device made from
-     this info (V11), so the same info must go to CreateDevice;
+   - fill the `BC250_VKD3D_DEVICE_CREATE_INFO` that CreateDevice will receive: `Size`
+     `sizeof(BC250_VKD3D_DEVICE_CREATE_INFO)` (48 with the r4 header), `AbiVersion` 1.2 (`0x00010002`), hosted
+     RADV's `GetInstanceProcAddr`, the `AdapterLuid` hosted RADV reports for this adapter (V2),
+     `MinimumFeatureLevel` `D3D_FEATURE_LEVEL_11_0`, `QueueMode` INLINE, the shell's `Services` and `InstanceMode`
+     `BC250_VKD3D_INSTANCE_MODE_PRIVATE` (V12: hosted RADV binds its runtime identity to the VkInstance, so no
+     device or query may share one; an r3 engine would ignore the field, which the pin rules out). The engine
+     applies the INLINE admission to it (three graphics-family VkQueues in ABI 1.2), and its answers are those of a
+     device made from this info (V11), so the same info must go to CreateDevice;
    - call `query_adapter_caps` once and keep the result with the adapter. One call is one QueryAdapterCaps batch
      and one VkInstance; no VkDevice is created and no Service is called. On failure there is nothing to answer
      GetCaps from: fail OpenAdapter12 (or that GetCaps) with the returned HRESULT.
@@ -226,10 +232,10 @@ The create-shader slots rebuild each program's container with shader-container `
 `dxil-metadata.cpp` through `engine-ddi.lib`, and must not compile them a second time.
 
 Stream output. `StreamOutputSemantic` gives a gap in the declaration (RegisterIndex ~0u) as an entry with a NULL
-SemanticName. The pinned engine DLL (4FFA7493, fork 7bfcd7f0) crashes on one; E6B8168E (branch
-amdgpu-wddm/so-hole-fix, c5d9d85f) takes it. Until the pin moves to an engine that takes gaps
-(`kEngineTakesStreamOutputGaps` in pipelines.cpp), CreatePipelineState refuses a declaration with a gap with
-E_NOTIMPL. How the runtime encodes a gap in the DDI is not measured.
+SemanticName, and CreatePipelineState passes it to the engine. The r4 pin carries the fix (0869138a keeps the NULL
+as a gap, c5d9d85f matches entries by stream); the r3 engine (4FFA7493, fork 7bfcd7f0) crashed on one.
+`kEngineTakesStreamOutputGaps` in pipelines.cpp is true for the pin; false would refuse a gap with E_NOTIMPL. How
+the runtime encodes a gap in the DDI is not measured.
 
 Inferences, none measured against the runtime: CreateGeometryShaderWithStreamOutput may come without a program
 (stream output of the vertex or domain program, as in the D3D11 DDI); a null blend, rasterizer or depth-stencil

@@ -29,10 +29,11 @@ static_assert(D3D12DDI_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF ==
 static_assert(D3D12DDI_PRIMITIVE_TOPOLOGY_TYPE_PATCH == static_cast<int>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH),
               "primitive topology types");
 
-// Engine DLL 4FFA7493 (fork 7bfcd7f0) crashes on a stream-output gap, the NULL SemanticName of a hole; E6B8168E
-// (branch amdgpu-wddm/so-hole-fix, c5d9d85f) takes it. Until the pinned engine is one that takes gaps, a pipeline
-// whose stream-output declaration has a gap is refused with E_NOTIMPL before it reaches the engine.
-constexpr bool kEngineTakesStreamOutputGaps = false;
+// Whether the pinned engine takes a stream-output gap, the NULL SemanticName of a hole. Engine 4FFA7493 (fork
+// 7bfcd7f0, r3) crashed on one; the r4 pin (d31d6133) carries the fix (0869138a, c5d9d85f) and takes it. Set to
+// false for an engine without the fix: a declaration with a gap is then refused with E_NOTIMPL before it reaches
+// the engine.
+constexpr bool kEngineTakesStreamOutputGaps = true;
 
 // What a shader keeps: the rebuilt container; its input signature entries, because the DDI arrays live only during
 // the create and a vertex program's input layout is named at CreatePipelineState; and for

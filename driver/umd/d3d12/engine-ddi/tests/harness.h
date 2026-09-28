@@ -66,11 +66,15 @@ struct Device {
     engine_ddi::DeviceContext* context = nullptr;
     D3D12DDI_HDEVICE h() { return D3D12DDI_HDEVICE{&sd}; }
 };
-// A device context over env.engine with the recorder hooks: EnginePrivateTest mode, or RuntimeBacked with the
-// given memory hooks (their shell argument is &device.shell).
+// A device context over env.engine (or over engine, when given) with the recorder hooks: EnginePrivateTest mode,
+// or RuntimeBacked with the given memory hooks (their shell argument is &device.shell).
 HRESULT open_device(Env& env, Device& device,
                     decltype(engine_ddi::ShellHooks::allocate_memory) allocate_memory = nullptr,
-                    decltype(engine_ddi::ShellHooks::free_memory) free_memory = nullptr);
+                    decltype(engine_ddi::ShellHooks::free_memory) free_memory = nullptr, ID3D12Device* engine = nullptr);
+
+// Engine ABI 1.2 r4 V12: a second engine device from the same PRIVATE create info, with a device context over it
+// while first is live; the two report different VkInstances through GetVulkanHandles.
+void test_private_instances(Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create, Device& first);
 
 // ---- Runtime-side helpers ----------------------------------------------------------------------------------------
 enum class HeapKind { Upload, Default, Readback };

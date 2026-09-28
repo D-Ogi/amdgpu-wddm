@@ -429,6 +429,7 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
     info.MinimumFeatureLevel = D3D_FEATURE_LEVEL_11_0;
     info.QueueMode = BC250_VKD3D_QUEUE_MODE_INLINE;
     info.Services = &services;
+    info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
     engine_ddi::AdapterCaps* caps = nullptr;
     hr = engine_ddi::query_adapter_caps(&funcs, &info, &caps);
     check(hr == S_OK && caps && !g_services,
@@ -483,6 +484,7 @@ int wmain(int argc, wchar_t** argv) {
         BC250_VKD3D_DEVICE_CREATE_INFO info{};
         info.Size = sizeof(info);
         info.AbiVersion = kAbi12;
+        info.InstanceMode = BC250_VKD3D_INSTANCE_MODE_PRIVATE;
         test_stub(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

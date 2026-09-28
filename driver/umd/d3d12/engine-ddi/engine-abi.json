@@ -2,15 +2,17 @@
   "schema": 1,
   "description": "The engine ABI engine-ddi builds against. tools/build/build-engine-ddi.ps1 refuses a header or engine DLL whose SHA-256 differs.",
   "abi_version": "1.2",
-  "header_revision": "r3-draft",
+  "header_revision": "r4-draft",
   "repository": "vkd3d-proton fork of this project",
-  "branch": "amdgpu-wddm/ddi-engine-1.2-wip",
-  "commit": "7bfcd7f09f078f5c312c34180fc9c51c5b8a0698",
+  "branch": "amdgpu-wddm/ddi-engine-1.2-r4",
+  "commit": "d31d6133bc3a012817f7cc67c9a51ed4a1a51262",
+  "source_checkout": "scratch/m15/vkd3d-1.2-r4-src",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
-  "header_sha256": "768692FC98C5A267721AC1EE38C8CD49B6EE776D2BF562955FF292C30D472DC2",
+  "header_sha256": "24E42AF7865A6C65D55DC7659E53616E2E597AC80188BA3BE31621C4C250354F",
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
   "vulkan_headers_commit": "ee2ec5fd83dafce291024683b50dc89219333076",
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
-  "engine_dll_sha256": "4FFA7493DD818E3B3AB0BA3D988AFC05BDBCBC234726EFC52C54CA37890E833C",
-  "engine_dll_recipe": "tools/build/build-vkd3d.ps1, config ddi-engine, source commit 7bfcd7f0 with no local changes"
+  "engine_dll_dir": "scratch/m15/engine-1.2-r4-d31d6133",
+  "engine_dll_sha256": "ACEAB520B08809FC593F2D1BC9FCE927F8215F2D3E9A32BAD121EA670BAEF435",
+  "engine_dll_recipe": "tools/build/build-vkd3d.ps1, config ddi-engine, source commit d31d6133 with no local changes"
 }
