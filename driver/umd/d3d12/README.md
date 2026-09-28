@@ -18,3 +18,9 @@ The caller must invoke close from a valid runtime DDI scope and retain the owner
 
 
 Device state owns a copy of the0062 user-mode callback table and the runtime device handle. The adapter live-device count prevents premature adapter deletion. Runtime-owned private storage is constructed in place and is not freed by the UMD. The version check precedes callback-table access. Logs retain Interface, Version and Flags separately. Exact0092 is the diagnostic target selected from offline analysis of the lab System32 runtime: its FillAPIVersions table contains52 records and ends at R8/build92 (M758). Live negotiation remains unmeasured. GetCaps/FillDDITable still refuse use, so this is not a functional D3D12 device. See evidence/windows/2026-09-28-E34-m15-runtime001.
+
+## KMD context request
+
+queue-request.h constructs the BC2C v2 context blob using driver/contract/bc250_umd_submit.h, so its compile-time layout checks apply here too. The request owns the blob and cannot be copied with a stale pPrivateDriverData pointer. It accepts ordinary3D/compute/copy flag combinations on physical node0 (NodeMask0 or1), routes them to the GFX IP, sets EngineAffinity1, and rejects paging/video, other node masks, scheduling groups and creation options not implemented by this path. Rejection clears the request, preventing reuse of an earlier successful blob.
+
+Mandatory queue-request-test checks the complete blob at the runtime callback boundary, all reserved fields, hardware-queue flags and seven accepted flag combinations, then validates refusal of unsupported nodes/queue classes. The test uses the same QueueContext owner as the forthcoming DDI queue implementation. No real runtime/KMD context has been created by these tests; the public FillDDITable gate remains closed until the required table entries are implemented.
