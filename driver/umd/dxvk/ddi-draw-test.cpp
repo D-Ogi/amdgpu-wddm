@@ -731,6 +731,26 @@ int main() {
         D3D10DDIARG_CREATEQUERY arg{q.ddi,0}; D3D11_QUERY_DESC mapped{}; bool isPredicate=!q.predicate;
         if (convert_query(arg,mapped,isPredicate)!=S_OK || mapped.Query!=q.api || isPredicate!=q.predicate) std::abort();
     }
+    const DXGI_FORMAT unsupportedDefined[]={DXGI_FORMAT_R1_UNORM,DXGI_FORMAT_P208,DXGI_FORMAT_V208,DXGI_FORMAT_V408};
+    for (auto value:unsupportedDefined) {
+        UINT caps=UINT32_MAX;
+        if (classify_format_result(value,E_FAIL,caps)!=S_FALSE || caps ||
+            classify_format_result(value,E_INVALIDARG,caps)!=S_FALSE || caps) std::abort();
+        if (classify_format_result(value,E_OUTOFMEMORY,caps)!=E_OUTOFMEMORY ||
+            classify_format_result(value,DXGI_ERROR_DEVICE_REMOVED,caps)!=DXGI_ERROR_DEVICE_REMOVED) std::abort();
+    }
+    unsigned definedFormats=0,explicitUnsupported=0;
+    for (UINT value=0;value<192;++value) {
+        auto formatValue=static_cast<DXGI_FORMAT>(value); UINT caps=123;
+        HRESULT hr=classify_format_result(formatValue,E_FAIL,caps);
+        if (defined_dxgi_format(formatValue)) {
+            ++definedFormats;
+            if (hr!=S_FALSE) std::abort();
+            if (caps==D3D10_DDI_FORMAT_SUPPORT_NOT_SUPPORTED) ++explicitUnsupported;
+            else if (caps) std::abort();
+        } else if (hr!=E_FAIL || caps!=123) std::abort();
+    }
+    if (definedFormats!=122 || explicitUnsupported!=13 || defined_dxgi_format(DXGI_FORMAT_FORCE_UINT)) std::abort();
     D3D11DDIARG_CREATERESOURCE runtimeDesc{};
     D3D10DDI_MIPINFO runtimeMip{}; runtimeMip.TexelWidth=65; runtimeMip.TexelHeight=17; runtimeMip.TexelDepth=1;
     runtimeDesc.pMipInfoList=&runtimeMip; runtimeDesc.MipLevels=runtimeDesc.ArraySize=1;
