@@ -45,5 +45,12 @@ int main() {
     fail_destroy=false;
     check(owner.close()==S_OK && destroys==3 && !owner.runtime().present_context);
     check(owner.close()==S_OK && destroys==3 && !owner.has_live_objects());
+    check(owner.retain_code_modules(reinterpret_cast<const void *>(&create),reinterpret_cast<const void *>(&destroy))==S_OK);
+    check(owner.retained_module_count()==3 && owner.has_live_objects());
+    check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_UNEXPECTED);
+    owner.runtime().present_context=&context; fail_destroy=true;
+    check(owner.close()==E_FAIL && owner.retained_module_count()==3);
+    fail_destroy=false;
+    check(owner.close()==S_OK && owner.retained_module_count()==0 && !owner.has_live_objects());
     std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry\n";
 }

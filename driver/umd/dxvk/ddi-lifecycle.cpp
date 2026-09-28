@@ -24,7 +24,7 @@ void APIENTRY destroy(D3D10DDI_HDEVICE h) {
     if (handle) (void)retire_device_handle(*handle);
     // Runtime may free handle storage on return. Failed retirement deliberately
     // retains the heap owner rather than invalidating live callback userdata.
-    // DLL lifetime retention belongs to the adapter/module owner integration.
+    // DeviceOwner retains its counted UMD/engine/ICD references on this path.
 }
 }
 void install_lifecycle_ddi(D3D11_1DDI_DEVICEFUNCS &t) { t.pfnDestroyDevice=destroy; }

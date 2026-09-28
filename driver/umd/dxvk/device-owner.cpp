@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: MIT
 #include "device-owner.h"
 namespace bc250::umd {
+namespace { void module_anchor() {} }
+HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icdEntry) {
+    if (!runtime_.domain.entered() || retained_module_count()) return E_UNEXPECTED;
+    if (!engineEntry || !icdEntry) return E_INVALIDARG;
+    const void *entries[]={reinterpret_cast<const void *>(&module_anchor),engineEntry,icdEntry};
+    for (unsigned i=0;i<3;++i) {
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            reinterpret_cast<LPCWSTR>(entries[i]),&modules_[i])) {
+            // Keep any acquired references until close, including on failure.
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+    }
+    return S_OK;
+}
 HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 luid,
     PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
     D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services) {
-    if (!runtime_.domain.entered() || initialized_ || runtime_.present_context || instance_.info().Instance)
+    if (!runtime_.domain.entered() || initialized_ || runtime_.present_context || instance_.info().Instance || retained_module_count())
         return E_UNEXPECTED;
     if (!args.pKTCallbacks || !args.pUMCallbacks || !args.DXGIBaseDDI.pDXGIBaseCallbacks || !args.hRTDevice.handle)
         return E_INVALIDARG;
@@ -22,7 +36,8 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     runtime_.present_context=create.hContext;
     if (!runtime_.present_context) return E_FAIL;
     auto host=host_descriptor(bridge_,luid);
-    hr=instance_.open(get,host);
+    hr=retain_code_modules(reinterpret_cast<const void *>(funcs.CreateDevice),reinterpret_cast<const void *>(get));
+    if (SUCCEEDED(hr)) hr=instance_.open(get,host);
     if (SUCCEEDED(hr)) hr=session_.open(funcs,instance_.info(),level,services);
     if (SUCCEEDED(hr)) {
         hr=session_.engine()->GetD3D11Device(__uuidof(ID3D11Device5),reinterpret_cast<void **>(&device_));
@@ -62,6 +77,15 @@ HRESULT DeviceOwner::close() {
         hr=runtime_.KTCallbacks.pfnDestroyContextCb(runtime_.hDevice,&destroy);
         if (FAILED(hr)) return hr;
         runtime_.present_context=nullptr;
+    }
+    // Both Vulkan and all runtime handles are gone. Release engine and ICD
+    // first, our extra UMD reference last. The caller owns its normal loader
+    // reference while executing this API. Failed close never reaches this.
+    for (int i=2;i>=0;--i) {
+        if (modules_[i]) {
+            if (!FreeLibrary(modules_[i])) return HRESULT_FROM_WIN32(GetLastError());
+            modules_[i]=nullptr;
+        }
     }
     bridge_={}; bridge_.device=&runtime_; initialized_=false;
     return S_OK;
