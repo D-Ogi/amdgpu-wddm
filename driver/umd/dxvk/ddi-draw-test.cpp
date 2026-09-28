@@ -6,6 +6,8 @@
 #include "ddi-sampler.h"
 #include "ddi-fixed-state.h"
 #include "ddi-blend.h"
+#include "ddi-resource.h"
+#include "ddi-buffer-binding.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -29,7 +31,9 @@ int main() {
     install_sampler_ddi(table);
     install_fixed_state_ddi(table);
     install_blend_ddi(table);
-    if (!table.pfnDraw || !table.pfnDispatch || table.pfnCreateResource) std::abort();
+    install_resource_ddi(table);
+    install_buffer_binding_ddi(table);
+    if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
     table.pfnDraw(h,3,7);
@@ -170,5 +174,57 @@ int main() {
     const FLOAT factors[4]={0.2f,0.4f,0.6f,0.8f};
     table.pfnSetBlendState(h,{},factors,0x55555555); table.pfnDestroyBlendState(h,bh);
     if (errors!=40 || bs.object || owner.runtime().domain.entered()) std::abort();
+    D3D11DDIARG_CREATERESOURCE resource{};
+    D3D10DDI_MIPINFO mips[3]={{8,4,2,16,8,4},{4,2,1,8,4,2},{2,1,1,4,2,1}};
+    resource.pMipInfoList=mips; resource.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D;
+    resource.MipLevels=3; resource.ArraySize=1; resource.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    resource.Usage=D3D10_DDI_USAGE_STAGING; resource.MapFlags=D3D10_DDI_CPU_ACCESS_READ;
+    resource.TextureLayout=static_cast<D3DWDDM2_0DDI_TEXTURE_LAYOUT>(0xcccccccc);
+    ResourceDescription rd;
+    if (convert_resource(resource,rd)!=S_OK || rd.texture3d.Width!=8 || rd.texture3d.Height!=4 ||
+        rd.texture3d.Depth!=2 || rd.texture3d.CPUAccessFlags!=D3D11_CPU_ACCESS_READ) std::abort();
+    unsigned payload=7;
+    D3D10_DDIARG_SUBRESOURCE_UP initial[6]{};
+    for (UINT i=0;i<6;++i) initial[i]={&payload,32+i,128+i};
+    resource.pInitialDataUP=initial; resource.ResourceDimension=D3D10DDIRESOURCE_TEXTURE2D;
+    resource.ArraySize=2; resource.SampleDesc={1,0};
+    if (convert_resource(resource,rd)!=S_OK || rd.initial.size()!=6 || rd.initial[5].SysMemPitch!=37 ||
+        rd.initial[3].SysMemSlicePitch!=131 || rd.texture2d.ArraySize!=2) std::abort();
+    resource.MipLevels=1; resource.ArraySize=6; resource.ResourceDimension=D3D10DDIRESOURCE_TEXTURECUBE;
+    mips[0].TexelHeight=8;
+    if (convert_resource(resource,rd)!=S_OK || !(rd.texture2d.MiscFlags&D3D11_RESOURCE_MISC_TEXTURECUBE) ||
+        rd.texture2d.ArraySize!=6 || rd.initial.size()!=6) std::abort();
+    resource.ArraySize=5;
+    if (convert_resource(resource,rd)!=E_INVALIDARG || rd.texture2d.ArraySize!=6) std::abort();
+    resource.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; resource.ArraySize=1;
+    resource.Usage=D3D10_DDI_USAGE_DEFAULT; resource.MapFlags=0;
+    resource.BindFlags=D3D11_DDI_BIND_UNORDERED_ACCESS|D3D10_DDI_BIND_SHADER_RESOURCE;
+    resource.MiscFlags=D3D11_DDI_RESOURCE_MISC_BUFFER_STRUCTURED; resource.ByteStride=4;
+    if (convert_resource(resource,rd)!=S_OK || rd.buffer.BindFlags!=(D3D11_BIND_UNORDERED_ACCESS|D3D11_BIND_SHADER_RESOURCE) ||
+        rd.buffer.MiscFlags!=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED || rd.buffer.StructureByteStride!=4 ||
+        rd.buffer.ByteWidth!=8 || rd.initial.size()!=1) std::abort();
+    resource.BindFlags|=D3D10_DDI_BIND_PRESENT;
+    if (convert_resource(resource,rd)!=E_NOTIMPL) std::abort();
+    resource.BindFlags=0; resource.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED;
+    if (convert_resource(resource,rd)!=E_NOTIMPL) std::abort();
+    resource.MiscFlags=0; resource.MipLevels=UINT_MAX;
+    if (convert_resource(resource,rd)!=E_INVALIDARG) std::abort();
+    DdiResource robj{}; D3D10DDI_HRESOURCE rhandle{}; rhandle.pDrvPrivate=&robj;
+    if (table.pfnCalcPrivateResourceSize(h,&resource)!=sizeof(robj)) std::abort();
+    table.pfnCreateResource(h,&resource,rhandle,{}); table.pfnDestroyResource(h,rhandle);
+    if (errors!=42 || robj.object || owner.runtime().domain.entered()) std::abort();
+    ID3D11Buffer *resolved=nullptr;
+    if (resource_buffer({},resolved)!=S_OK || resolved) std::abort();
+    if (resource_buffer(rhandle,resolved)!=E_INVALIDARG) std::abort();
+    const UINT stride=20,offset=12,firstConstant=16,numConstants=32;
+    table.pfnIaSetVertexBuffers(h,3,1,&rhandle,&stride,&offset);
+    table.pfnIaSetIndexBuffer(h,{},DXGI_FORMAT_R16_UINT,6);
+    table.pfnVsSetConstantBuffers(h,2,1,&rhandle,&firstConstant,&numConstants);
+    table.pfnPsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
+    table.pfnGsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
+    table.pfnHsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
+    table.pfnDsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
+    table.pfnCsSetConstantBuffers(h,0,0,nullptr,nullptr,nullptr);
+    if (errors!=50 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
