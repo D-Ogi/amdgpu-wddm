@@ -73,8 +73,7 @@ before the scheduler limit for startup/closure overhead. This does not guarantee
 that Windows can terminate a thread stuck in the kernel. Incomplete closure is
 recovery-required, never success. Dispatcher runtime validation remains pending.
 
-Verify polls DWM attachment within the phase child's deadline, reserving its last
-second for helper termination. Two consecutive valid module observations must
+Verify polls DWM attachment within the phase child's deadline, reserving five seconds for health/info queries and receipts. Two consecutive valid module observations must
 have identical PID/start-time sets. Enumeration failure or process replacement
 resets that sequence. Per-attempt receipts retain errors and first/stable-ready
 QPC values; they do not claim the desktop remains healthy after the observations.
@@ -84,10 +83,12 @@ OS query; the polling loop alone cannot interrupt one.
 
 Restore now starts with a bounded Quiesce phase. The outer-job witness is named
 candidate-tree-closed.json; only Quiesce can produce restore-admitted.json after
-CMP_WaitNoPendingInstallEvents(0) returns WAIT_OBJECT_0 and the device reports
-problem0 or22. Every subsequent restore phase requires that receipt and repeats
+CMP_WaitNoPendingInstallEvents returns WAIT_OBJECT_0 and the device reports
+problem0,10,22,31 or43. Every subsequent restore phase requires that receipt and repeats
 the pending-install check. Pending, error and unknown statuses fail closed.
-The PnP API call and device queries remain under the native phase timeout.
+The PnP API call waits at most10 seconds, clipped to the remaining child budget
+with a five-second reserve. Its requested and actual wait are recorded. The call
+and device queries remain under the native phase timeout.
 
 Contract source: local windows-driver-docs staging110f60ea,
 install/checking-for-in-progress-installations.md; declaration SDK26100
@@ -119,3 +120,9 @@ reader must return unknown closure within its deadline while that child is still
 alive; the test then kills its own holder. This exercises the surviving-pipe case,
 not an actual uninterruptible kernel wait. Production bounded-child separately
 uses an explicit three-handle inheritance list.
+
+Review199 correction: failed-start (10), failed-add (31) and failed-post-start (43)
+are admitted for restore Disable, rather than stopping before rollback. This is
+an admission policy, not proof that every such failure can recover. Unknown codes
+still require inspection. Local predicate/budget controls pass; actual failed-start
+restoration has not been injected on the lab.

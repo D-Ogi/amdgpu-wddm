@@ -54,14 +54,14 @@ if($Phase -eq 'Capture'){
  $actual=(Get-FileHash -LiteralPath $image).Hash
  if($actual -notin @($manifest.candidate169.'bc250kmd.sys',$manifest.rollback166.'bc250kmd.sys')){throw 'Unknown current SYS'}
  if($Arm -eq 'restore' -and $Phase -ne 'Quiesce' -and !(Test-Path "$out\restore-admitted.json")){throw 'Missing PnP restore admission'}
- $pnp=Get-KmdPnpIdle
+ $pnp=Get-KmdPnpIdle -Deadline $ChildDeadline
  Write-DurableText "$out\$Receipt-pnp.json" ($pnp|ConvertTo-Json -Depth 5)
  Assert-KmdPnpIdleResult $pnp
  $problem=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data
  switch($Phase){
   'Quiesce' {
    if($Arm -ne 'restore'){throw 'Quiesce is a restore admission phase'}
-   if($problem -notin @(0,22)){throw 'Device not in a known enabled/disabled state'}
+   Assert-KmdRestorableProblem $problem
    if(!(Test-Path "$out\candidate-tree-closed.json")){throw 'Candidate tree closure not witnessed'}
    Write-DurableText "$out\restore-admitted.json" (@{qpc=[Diagnostics.Stopwatch]::GetTimestamp();problem=$problem;pnp=$pnp}|ConvertTo-Json -Depth 6)
   }
@@ -125,7 +125,7 @@ if($Phase -eq 'Capture'){
    & C:\BC250\bc250rd\bc250rd_cli.exe clock-check 1000 820|Out-Null
    if($LASTEXITCODE -ne 0){throw 'Clock control failed'}
    $class='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
-   $ready=Wait-KmdCpuBaseline -Saved $saved -Deadline ($ChildDeadline-[Diagnostics.Stopwatch]::Frequency) -Read {
+   $ready=Wait-KmdCpuBaseline -Saved $saved -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Read {
    $registration=Get-ItemProperty $class
    $parameters=Get-ItemProperty $reg
    return @{
