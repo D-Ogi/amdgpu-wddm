@@ -315,6 +315,18 @@ unknown record versions, invalid Boolean/precision values and inconsistent capab
 records are rejected. Capabilities must be measured from the exact selected pair;
 no gfx1013 defaults are supplied. The configuration's hashes bind the record to those
 files, while the CreateDevice ABI1.3 gate checks the actual feature claims.
+Encode an accepted exact-pair measurement with Python 3.11 or later:
+
+```
+python tools/build/write-umd-config.py --caps <accepted-caps.json> --engine <bc250dxvk.dll> --icd <bc250radv.dll> --out <new-package>/bc250d3d11.config
+```
+
+The writer verifies both files against the measured hashes, checks capability
+consistency, and writes the fixed little-endian record. It refuses to overwrite
+an existing configuration. It does not establish that the input measurement was
+valid, sign or install the package, or replace the CreateDevice capability gate.
+Host tests are `python -m unittest discover -s tools/build -p test_write_umd_config.py`;
+set TEMP/TMP to the workspace scratch directory before running them.
 
 Open copies the record, queries the KMD identity trailer, and publishes the adapter
 without creating Vulkan objects. CreateDevice loads the verified siblings and creates
