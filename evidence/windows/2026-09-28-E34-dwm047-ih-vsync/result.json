@@ -1,0 +1,20 @@
+{
+  "source_kmd": "17989843012e8e2c54de75204418b20e25ab0143",
+  "dump_sha256": "95DB5D54B8D2F0A0A7EB775CEA40E92E3DFABBEF8516AEED365C08073FF12B24",
+  "entries": 6387,
+  "consumer_rptr": 204384,
+  "stats_rptr": 204384,
+  "kinds": {
+    "SDMA": 2170,
+    "VUPD": 2200,
+    "EOP": 2017
+  },
+  "overflows": 0,
+  "decode_errors": 0,
+  "isr_calls": 6367,
+  "dpc_calls": 12624,
+  "vsync_ack_count_from_log": 2199,
+  "ring_timestamp_reversals": 0,
+  "tail_nonzero_bytes": 0,
+  "root_cause_proven": false
+}
