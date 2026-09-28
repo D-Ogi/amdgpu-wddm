@@ -30,5 +30,6 @@ HRESULT destroy_surface_paging_queue(RuntimeDevice &,SurfacePagingQueue &);
 HRESULT map_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,D3DKMT_HANDLE allocation,UINT64 bytes,SurfaceGpuMapping &);
 // Paging completion only; import additionally requires mapping.resident=true.
 HRESULT surface_paging_status(const SurfacePagingQueue &,const SurfaceGpuMapping &);
+HRESULT wait_surface_paging(RuntimeDevice &,const SurfacePagingQueue &,const SurfaceGpuMapping &,DWORD timeoutMs=10000);
 // Only after engine/Present use and paging have retired. E_PENDING preserves VA.
 HRESULT unmap_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,SurfaceGpuMapping &);}

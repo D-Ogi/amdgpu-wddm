@@ -40,6 +40,16 @@ HRESULT APIENTRY freeVa(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS *f) {
     ++unmaps; check(f->BaseAddress==65536 && f->Size==8192); return rejectUnmap ? E_FAIL : S_OK;
 }
 }
+namespace {
+unsigned cpuWaits=0; int waitMode=0;
+HRESULT APIENTRY waitPaging(HANDLE,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *w) {
+    ++cpuWaits; check(w->ObjectCount==1 && *w->ObjectHandleArray==8 && *w->FenceValueArray==9 && w->hAsyncEvent);
+    if (waitMode==3) return E_OUTOFMEMORY;
+    if (waitMode==0) pagingCpu=9;
+    if (waitMode!=2) SetEvent(w->hAsyncEvent);
+    return S_OK;
+}
+}
 int main() {
     RuntimeDevice device; device.hDevice=&deviceIdentity;
     device.KTCallbacks.pfnAllocateCb=allocate; device.KTCallbacks.pfnDeallocate2Cb=deallocate;
@@ -64,6 +74,13 @@ int main() {
     check(create_surface_paging_queue(device,queue)==S_OK);
     check(map_runtime_surface(device,queue,41,4097,mapping)==S_FALSE && mapping.fence==9 && mapping.resident);
     pagingCpu=5; check(surface_paging_status(queue,mapping)==S_FALSE && unmap_runtime_surface(device,queue,mapping)==E_PENDING && !unmaps);
+    device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=waitPaging;
+    waitMode=1; check(wait_surface_paging(device,queue,mapping,0)==E_FAIL && pagingCpu==5);
+    waitMode=2; check(wait_surface_paging(device,queue,mapping,0)==DXGI_ERROR_DEVICE_HUNG);
+    waitMode=3; check(wait_surface_paging(device,queue,mapping,0)==E_OUTOFMEMORY);
+    waitMode=0; check(wait_surface_paging(device,queue,mapping,0)==S_OK && pagingCpu==9 && cpuWaits==4);
+    check(wait_surface_paging(device,queue,mapping,0)==S_OK && cpuWaits==4);
+    check(wait_surface_paging(device,queue,mapping,10001)==E_INVALIDARG && cpuWaits==4);
     pagingCpu=9; rejectUnmap=true;
     check(unmap_runtime_surface(device,queue,mapping)==E_FAIL && mapping.address==65536);
     rejectUnmap=false; check(unmap_runtime_surface(device,queue,mapping)==S_OK && !mapping.address);

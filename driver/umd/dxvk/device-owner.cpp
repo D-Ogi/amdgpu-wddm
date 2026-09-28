@@ -94,6 +94,11 @@ HRESULT DeviceOwner::finish_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || closing_ || !owns_surface(surface) || !engine()) return E_INVALIDARG;
     return finish_runtime_surface(session_.device(),surface_vk_,texture_import_dispatch(*engine()),surface_memory_,surface);
 }
+HRESULT DeviceOwner::wait_surface(RuntimeSurface &surface) {
+    if (!runtime_.domain.entered() || closing_ || !owns_surface(surface)) return E_INVALIDARG;
+    HRESULT hr=wait_surface_paging(runtime_,surface.queue,surface.mapping);
+    return hr==S_OK ? finish_surface(surface) : hr;
+}
 HRESULT DeviceOwner::close_surface(RuntimeSurface &surface) {
     if (!runtime_.domain.entered() || !engine()) return E_INVALIDARG;
     auto position=std::find_if(surfaces_.begin(),surfaces_.end(),[&](const auto &p) { return p.get()==&surface; });

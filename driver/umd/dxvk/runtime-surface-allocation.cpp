@@ -90,6 +90,24 @@ HRESULT map_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queu
     out.resident=true;
     return surface_paging_status(queue,out); // S_FALSE means accepted, pending.
 }
+HRESULT wait_surface_paging(RuntimeDevice &device,const SurfacePagingQueue &queue,const SurfaceGpuMapping &mapping,DWORD timeoutMs) {
+    if (!device.domain.entered() || timeoutMs>10000) return E_INVALIDARG;
+    HRESULT hr=surface_paging_status(queue,mapping);
+    if (hr!=S_FALSE) return hr;
+    if (!queue.sync || !device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_NOTIMPL;
+    HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    if (!event) return HRESULT_FROM_WIN32(GetLastError());
+    D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait{};
+    wait.ObjectCount=1; wait.ObjectHandleArray=&queue.sync; wait.FenceValueArray=&mapping.fence; wait.hAsyncEvent=event;
+    hr=device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device.hDevice,&wait);
+    if (SUCCEEDED(hr)) {
+        DWORD result=WaitForSingleObject(event,timeoutMs);
+        hr=result==WAIT_OBJECT_0 ? surface_paging_status(queue,mapping) :
+            result==WAIT_TIMEOUT ? DXGI_ERROR_DEVICE_HUNG : HRESULT_FROM_WIN32(GetLastError());
+        if (hr==S_FALSE) hr=E_FAIL; // Event alone is not proof of a retired fence.
+    }
+    CloseHandle(event); return hr;
+}
 HRESULT unmap_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queue,SurfaceGpuMapping &mapping) {
     if (!device.domain.entered()) return E_INVALIDARG;
     if (!mapping.address) return mapping.bytes ? E_UNEXPECTED : S_OK;

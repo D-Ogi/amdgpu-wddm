@@ -28,6 +28,7 @@ public:
     // S_FALSE means paging/import are pending; only finish_surface S_OK is publishable.
     HRESULT begin_surface(const RuntimeSurfaceRequest &,const D3D11_TEXTURE2D_DESC1 &,RuntimeSurface *&out);
     HRESULT finish_surface(RuntimeSurface &);
+    HRESULT wait_surface(RuntimeSurface &);
     HRESULT close_surface(RuntimeSurface &);
     size_t surface_count() const { return surfaces_.size(); }
 

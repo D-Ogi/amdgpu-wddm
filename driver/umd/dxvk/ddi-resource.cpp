@@ -90,15 +90,66 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     // decoder fields merely because the build uses a newer WDK header.
     out=std::move(d); return S_OK;
 }
+HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE runtimeHandle,
+    RuntimeSurfaceRequest &request,D3D11_TEXTURE2D_DESC1 &desc) {
+    if (!runtimeHandle || input.ResourceDimension!=D3D10DDIRESOURCE_TEXTURE2D ||
+        input.MipLevels!=1 || input.ArraySize!=1 || input.SampleDesc.Count!=1 || input.SampleDesc.Quality ||
+        input.Usage!=D3D10_DDI_USAGE_DEFAULT || input.MapFlags) return E_NOTIMPL;
+    auto ordinary=input; ordinary.pPrimaryDesc=nullptr;
+    ordinary.BindFlags&=~UINT(D3D10_DDI_BIND_PRESENT);
+    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_SHARED);
+    ResourceDescription converted;
+    HRESULT hr=convert_resource(ordinary,converted);
+    if (FAILED(hr)) return hr;
+    const auto &d=converted.texture2d;
+    if (d.Width>16384 || d.Height>16384) return E_INVALIDARG;
+    UINT format;
+    switch (d.Format) {
+    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: format=D3DDDIFMT_A8R8G8B8; break;
+    case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: format=D3DDDIFMT_A8B8G8R8; break;
+    default: return E_NOTIMPL;
+    }
+    RuntimeSurfaceRequest r{};
+    r.runtime_resource=runtimeHandle; r.primary=input.pPrimaryDesc!=nullptr;
+    r.shared=(input.MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)!=0;
+    if (input.pPrimaryDesc) r.vidpn_source=input.pPrimaryDesc->VidPnSourceId;
+    const UINT pitch=(d.Width*4+255)&~255u;
+    const UINT64 bytes=(UINT64(pitch)*((d.Height+3)&~3u)+4095)&~UINT64(4095);
+    r.surface={BC250_WDDM_ALLOCATION_PRIVATE_MAGIC,1,d.Width,d.Height,pitch,format,bytes};
+    D3D11_TEXTURE2D_DESC1 result{d.Width,d.Height,d.MipLevels,d.ArraySize,d.Format,d.SampleDesc,
+        d.Usage,d.BindFlags,d.CPUAccessFlags,d.MiscFlags,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+    request=r; desc=result; return S_OK;
+}
 namespace {
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { return sizeof(DdiResource); }
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
-    D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE) {
+    D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE runtimeHandle) {
     auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
     if (s) *s={};
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
+        if (desc->pPrimaryDesc || (desc->BindFlags&D3D10_DDI_BIND_PRESENT) ||
+            (desc->MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)) {
+            RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
+            HRESULT hr=convert_runtime_resource(*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),request,texture);
+            if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
+            RuntimeSurface *surface=nullptr;
+            hr=owner.begin_surface(request,texture,surface);
+            if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
+            if (hr!=S_OK) {
+                if (surface) owner.close_surface(*surface); // Owner retains failed cleanup.
+                report_ddi_error(owner,FAILED(hr) ? hr : E_FAIL); return;
+            }
+            s->runtime_surface=surface; s->object=surface->texture.texture;
+            s->dimension=D3D10DDIRESOURCE_TEXTURE2D;
+            s->present_allocation=surface->allocation.allocation; s->present_subresource=0;
+            if (desc->pInitialDataUP) {
+                const auto &initial=desc->pInitialDataUP[0];
+                owner.context()->UpdateSubresource(s->object,0,nullptr,initial.pSysMem,initial.SysMemPitch,initial.SysMemSlicePitch);
+            }
+            return;
+        }
         ResourceDescription d;
         HRESULT hr=convert_resource(*desc,d);
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
@@ -128,7 +179,14 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
 void APIENTRY destroy(D3D10DDI_HDEVICE h,D3D10DDI_HRESOURCE handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto *s=static_cast<DdiResource *>(handle.pDrvPrivate);
-        if (s && s->object) { s->object->Release(); s->object=nullptr; }
+        if (s && s->runtime_surface) {
+            auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
+            HRESULT hr=owner.close_surface(*s->runtime_surface);
+            // Runtime private storage may disappear now. DeviceOwner retains any
+            // unfinished cleanup independently of this DDI handle.
+            *s={};
+            if (hr!=S_OK) report_ddi_error(owner,hr);
+        } else if (s && s->object) { s->object->Release(); *s={}; }
     });
 }
 }
