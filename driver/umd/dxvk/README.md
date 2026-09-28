@@ -91,3 +91,13 @@ Controlled ICD callbacks verify the v5 chain, non-first physical-device match, i
 ```
 
 This control compiles all connected components against WDK and the engine ABI, and checks partial initialization rollback and failed context-destruction retention/retry. Successful end-to-end creation of the COM device is not covered by this control; it needs the built DXVK engine. OpenAdapter, DDI table registration and resource operations remain integration work.
+
+## First DDI table entries
+
+`install_draw_ddi` wires Draw, DrawIndexed, both instanced variants, DrawAuto and Dispatch to the engine's immediate context. `install_input_layout_ddi` wires layout size/create/destroy/bind through the engine ABI. The runtime private device handle stores the stable DeviceOwner pointer; each entry establishes its device domain and contains C++ exceptions. Creation errors go through SetErrorCb; child handles hold one engine COM reference. A null layout bind clears the engine binding.
+
+These installers intentionally fill only their own implemented entries. They are not a complete D3D11.1 table, are not advertised through OpenAdapter yet and do not establish FL11 support. Typed table assignment is compiled against WDK. The control calls the entries with an uninitialized owner and verifies error reporting within the domain and restoration on return; successful draw/resource lifetime still require a real engine integration run.
+
+```powershell
+& .\\bc250-win\\tools\\build\\test-umd-ddi-draw.ps1 -DxvkSource .\\scratch\\m14\\dxvk
+```
