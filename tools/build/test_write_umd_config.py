@@ -60,7 +60,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_cli_preserves_existing_and_refuses_missing_input(self):
         caps = self.root / "caps.json"
-        out = self.root / "bc250d3d11.config"
+        out = self.root / "amdgpu_wddm_d3d11.config"
         caps.write_text(json.dumps(self.caps), encoding="utf-8-sig")
         cmd = [sys.executable, str(SCRIPT), "--caps", str(caps), "--engine", str(self.engine),
                "--icd", str(self.icd), "--out", str(out)]

@@ -2,7 +2,7 @@
 #pragma once
 #include "ddi-adapter.h"
 namespace bc250::umd {
-// Little-endian fixed-width deployment record beside bc250d3d11.dll.
+// Little-endian fixed-width deployment record beside amdgpu_wddm_d3d11.dll.
 struct AdapterConfigRecord {
     UINT32 magic,version,size,reserved;
     UINT32 maximum,doubles,compute,logic_op,tile_based,pixel_precision,other_precision;

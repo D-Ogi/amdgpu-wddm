@@ -20,7 +20,7 @@ void write_record(const std::wstring &path,const AdapterConfigRecord &record,DWO
 int wmain(int argc,wchar_t **argv) {
     CHECK(argc==2);
     const std::wstring dll=argv[1];const auto slash=dll.find_last_of(L"\\/");CHECK(slash!=std::wstring::npos);
-    const auto config=dll.substr(0,slash+1)+L"bc250d3d11.config";
+    const auto config=dll.substr(0,slash+1)+L"amdgpu_wddm_d3d11.config";
     DeleteFileW(config.c_str());
     HMODULE module=LoadLibraryExW(dll.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
     CHECK(module);

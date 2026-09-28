@@ -54,8 +54,8 @@ int main(int argc,char **argv) {
         HRESULT create=D3D11CreateDevice(adapter.Get(),D3D_DRIVER_TYPE_UNKNOWN,nullptr,0,levels,3,D3D11_SDK_VERSION,&device,&level,&context);
         if (FAILED(create)) {out<<(test?",":"")<<"{\"create_device\":"<<unsigned(create)<<",\"passed\":false}";all=false;break;}
         const bool modules=system_d3d11() && (inject ?
-            local_module(L"bc250d3d11.dll") && local_module(L"bc250dxvk.dll") && local_module(L"bc250radv.dll") :
-            !GetModuleHandleW(L"bc250d3d11.dll") && !GetModuleHandleW(L"bc250dxvk.dll"));
+            local_module(L"amdgpu_wddm_d3d11.dll") && local_module(L"amdgpu_wddm_dxvk.dll") && local_module(L"amdgpu_wddm_radv.dll") :
+            !GetModuleHandleW(L"amdgpu_wddm_d3d11.dll") && !GetModuleHandleW(L"amdgpu_wddm_dxvk.dll"));
         D3D11_BUFFER_DESC desc{};desc.ByteWidth=1u<<20;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
         ComPtr<ID3D11Buffer> base,dynamic,staging;
         HRESULT setup=device->CreateBuffer(&desc,nullptr,&base);

@@ -19,7 +19,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'UMD entry compilation failed' }
         $isolated=Join-Path $OutputDir 'loader'
         New-Item -ItemType Directory -Force $isolated | Out-Null
-        $testDll=Join-Path $isolated 'bc250d3d11.dll'
+        $testDll=Join-Path $isolated 'amdgpu_wddm_d3d11.dll'
         Copy-Item -LiteralPath $UmdPath -Destination $testDll -Force
         & .\umd-entry-test.exe $testDll
         if ($LASTEXITCODE -ne 0) { throw 'UMD entry test failed' }

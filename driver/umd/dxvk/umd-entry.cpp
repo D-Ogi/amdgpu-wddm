@@ -34,10 +34,10 @@ extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OP
     try {
         std::wstring directory;HRESULT hr=configuration_directory(directory);if(FAILED(hr))return hr;
         bc250::umd::AdapterConfigRecord record{};
-        hr=read_record(directory+L"bc250d3d11.config",record);if(FAILED(hr))return hr;
+        hr=read_record(directory+L"amdgpu_wddm_d3d11.config",record);if(FAILED(hr))return hr;
         bc250::umd::AdapterConfiguration config{};
         hr=bc250::umd::decode_adapter_config(record,config);if(FAILED(hr))return hr;
-        const std::wstring engine=directory+L"bc250dxvk.dll",icd=directory+L"bc250radv.dll";
+        const std::wstring engine=directory+L"amdgpu_wddm_dxvk.dll",icd=directory+L"amdgpu_wddm_radv.dll";
         config.engine_path=engine.c_str();config.icd_path=icd.c_str();
         return bc250::umd::open_render_adapter(*args,config);
     } catch(const std::bad_alloc &) {return E_OUTOFMEMORY;}

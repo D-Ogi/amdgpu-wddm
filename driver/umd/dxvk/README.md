@@ -296,13 +296,13 @@ loss sentinel. Device/resource lifecycle integration and lab measurement are pen
 
 ## Loadable UMD boundary
 
-`tools/build/build-umd-dxvk.ps1 -DxvkSource <DXVK tree>` builds `bc250d3d11.dll`
+`tools/build/build-umd-dxvk.ps1 -DxvkSource <DXVK tree>` builds `amdgpu_wddm_d3d11.dll`
 with `OpenAdapter10_2`. It does not install the DLL, create a deployment configuration,
 or select engine/ICD artifacts. `test-umd-entry.ps1 -DxvkSource <tree> -UmdPath <DLL>`
 loads an isolated copy and exercises the real export with synthetic adapter callbacks;
 this proves loader/negotiation behavior, not system-runtime device creation or GPU work.
 
-The export reads `bc250d3d11.config` only beside its own module. The configuration is
+The export reads `amdgpu_wddm_d3d11.config` only beside its own module. The configuration is
 exactly 108 bytes, little-endian, matching `AdapterConfigRecord` in `adapter-config.h`:
 
 - Eleven 32-bit words: magic `0x4334314d`, version `1`, size `108`, reserved `0`,
@@ -310,15 +310,15 @@ exactly 108 bytes, little-endian, matching `AdapterConfigRecord` in `adapter-con
   logic-op Boolean, tile-based Boolean, pixel minimum-precision flags, other-stage flags.
 - Engine SHA-256 (32 raw bytes), then ICD SHA-256 (32 raw bytes).
 
-The sibling modules are named `bc250dxvk.dll` and `bc250radv.dll`. Zero hashes,
+The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability
 records are rejected. Capabilities must be measured from the exact selected pair;
 no gfx1013 defaults are supplied. The configuration's hashes bind the record to those
-files, while the CreateDevice ABI1.3 gate checks the actual feature claims.
+files, while the CreateDevice ABI1.4 gate checks the actual feature claims.
 Encode an accepted exact-pair measurement with Python 3.11 or later:
 
 ```
-python tools/build/write-umd-config.py --caps <accepted-caps.json> --engine <bc250dxvk.dll> --icd <bc250radv.dll> --out <new-package>/bc250d3d11.config
+python tools/build/write-umd-config.py --caps <accepted-caps.json> --engine <amdgpu_wddm_dxvk.dll> --icd <amdgpu_wddm_radv.dll> --out <new-package>/amdgpu_wddm_d3d11.config
 ```
 
 The writer verifies both files against the measured hashes, checks capability
