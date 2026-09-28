@@ -133,6 +133,13 @@ int main() {
         format_allows_not_supported(DXGI_FORMAT_R1_UNORM) || format_allows_not_supported(DXGI_FORMAT_R8G8B8A8_UNORM) ||
         format_allows_not_supported(DXGI_FORMAT_FORCE_UINT)) std::abort();
     static_assert(offsetof(D3D11_1DDI_DEVICEFUNCS,pfnCheckCounterInfo)==0x308);
+    if(classify_format_support2_result(E_FAIL,0)!=S_OK ||
+        classify_format_support2_result(E_FAIL,1)!=E_FAIL ||
+        classify_format_support2_result(S_OK,0)!=S_OK ||
+        classify_format_support2_result(E_INVALIDARG,0)!=E_INVALIDARG ||
+        classify_format_support2_result(E_OUTOFMEMORY,0)!=E_OUTOFMEMORY ||
+        classify_format_support2_result(DXGI_ERROR_DEVICE_REMOVED,0)!=DXGI_ERROR_DEVICE_REMOVED ||
+        convert_format_support(D3D11_FORMAT_SUPPORT_SHADER_SAMPLE,0)!=D3D10_DDI_FORMAT_SUPPORT_SHADER_SAMPLE)std::abort();
     auto table=make_render_device_table();
     if(!table.pfnCheckCounterInfo)std::abort();
     D3D10DDI_COUNTER_INFO counterInfo{};

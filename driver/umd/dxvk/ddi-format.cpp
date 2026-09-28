@@ -27,6 +27,13 @@ HRESULT classify_format_result(DXGI_FORMAT format,HRESULT hr,UINT &fallback) {
     fallback=format_allows_not_supported(format) ? D3D10_DDI_FORMAT_SUPPORT_NOT_SUPPORTED : 0;
     return S_FALSE;
 }
+HRESULT classify_format_support2_result(HRESULT hr,UINT flags) {
+    // DXVK GetFormatSupportFlags returns E_FAIL when the requested flags2
+    // word is zero, even if flags1 supports the format. This query follows a
+    // successful CheckFormatSupport, so an empty optional word is valid.
+    // Preserve unexpected failures and inconsistent nonzero failure output.
+    return hr==E_FAIL && !flags ? S_OK : hr;
+}
 UINT convert_format_support(UINT s,UINT s2) {
     UINT result=0;
 #define MAP(api,ddi) if (s & api) result|=ddi
@@ -58,6 +65,7 @@ void APIENTRY format(D3D10DDI_HDEVICE h,DXGI_FORMAT value,UINT *out) {
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
         D3D11_FEATURE_DATA_FORMAT_SUPPORT2 extra{value,0};
         hr=owner.device()->CheckFeatureSupport(D3D11_FEATURE_FORMAT_SUPPORT2,&extra,sizeof(extra));
+        hr=classify_format_support2_result(hr,extra.OutFormatSupport2);
         if (FAILED(hr)) { report_ddi_error(owner,hr); return; }
         *out=convert_format_support(support,extra.OutFormatSupport2);
     });

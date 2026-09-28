@@ -1,0 +1,16 @@
+EXCEPTION 80000003 first=1 address=00007FFAD4A0CBC4
+DEBUG M14: CalcPrivateDeviceSize Interface=000B000F Version=0000000A Flags=00000006
+DEBUG M14: CreateDevice Interface=000B000F Version=0000000A Flags=00000006
+DEBUG M14 engine warning: D3D11DeviceFeatures: Some formats not supported for resource sharing
+DEBUG M14 DDI error HRESULT=80004005 mapped=80004005 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::format::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG D3D11: Removing Device.
+DEBUG M14 DDI error HRESULT=80004005 mapped=80004005 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::format::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG M14 DDI error HRESULT=80004005 mapped=80004005 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::format::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG M14 DDI error HRESULT=80004005 mapped=80004005 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::format::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG M14 DDI error HRESULT=80004005 mapped=80004005 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::format::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+DEBUG M14 DDI error HRESULT=80004005 mapped=80004005 line=61 function=void __cdecl bc250::umd::`anonymous-namespace'::format::<lambda_1>::operator ()(struct ID3D11DeviceContext4 &) const
+EXCEPTION e06d7363 first=1 address=00007FFAD1FF055C
+EXCEPTION e06d7363 first=1 address=00007FFAD1FF055C
+EXCEPTION e06d7363 first=1 address=00007FFAD1FF055C
+DEBUG d3d11bench FAIL D3D11CreateDevice hr=0x887a0020
+CHILD_EXIT 1 observed=1 tree_closed=1
