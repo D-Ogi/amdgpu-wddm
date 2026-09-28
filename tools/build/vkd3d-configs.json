@@ -14,7 +14,7 @@
       ]
     },
     "ddi-engine": {
-      "description": "bc250vkd3d.dll, vkd3d-proton's D3D12 device as the engine behind the proposed system D3D12 DDI UMD (G4), and its offline test; needs the amdgpu-wddm/ddi-engine vkd3d-proton branch. Static C runtime, which the branch enforces for the engine",
+      "description": "amdgpu_wddm_vkd3d.dll, vkd3d-proton's D3D12 device as the engine behind the proposed system D3D12 DDI UMD (G4), and its offline test; needs the amdgpu-wddm/ddi-engine vkd3d-proton branch. Static C runtime, which the branch enforces for the engine",
       "options": [
         "-Dbuildtype=release",
         "-Denable_tests=false",
@@ -22,8 +22,8 @@
         "-Db_vscrt=mt"
       ],
       "targets": [
-        "libs/ddi/bc250vkd3d.dll",
-        "libs/ddi/bc250vkd3d_engine_test.exe"
+        "libs/ddi/amdgpu_wddm_vkd3d.dll",
+        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"
       ]
     }
   }

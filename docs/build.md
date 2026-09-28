@@ -231,7 +231,7 @@ What differs from the DXVK script:
 | Config | Source | Targets |
 |---|---|---|
 | `per-app` | upstream vkd3d-proton | `d3d12.dll`, `d3d12core.dll`: application-local DLLs, the M12 per-application D3D12 path |
-| `ddi-engine` | vkd3d-proton branch `amdgpu-wddm/ddi-engine` | `bc250vkd3d.dll`, the engine behind the proposed M15 native D3D12 UMD (ADR 0017 item 5), and `bc250vkd3d_engine_test.exe` |
+| `ddi-engine` | vkd3d-proton branch `amdgpu-wddm/ddi-engine` | `amdgpu_wddm_vkd3d.dll`, the engine behind the proposed M15 native D3D12 UMD (ADR 0017 item 5), and `amdgpu_wddm_vkd3d_engine_test.exe` |
 
 Both configs build with `-Dbuildtype=release -Denable_tests=false`.
 
@@ -240,11 +240,12 @@ Both configs build with `-Dbuildtype=release -Denable_tests=false`.
 - `-Db_vscrt=mt`: the engine links the C runtime statically, and the branch's meson refuses anything else for it.
 
 The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is not published yet; each
-`recipe.json` names its commit.
+`recipe.json` names its commit. Branch commits before a582668d name the DLL `bc250vkd3d.dll` and the test
+`bc250vkd3d_engine_test.exe`.
 
-`bc250vkd3d_engine_test.exe <bc250vkd3d.dll> [adapter substring] [--icd <driver DLL>]` is the engine's offline
-positive control. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by itself; exit
-code 0 means every check passed. The checks are listed under Validation in
+`amdgpu_wddm_vkd3d_engine_test.exe <amdgpu_wddm_vkd3d.dll> [adapter substring] [--icd <driver DLL>]` is the
+engine's offline positive control. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by
+itself; exit code 0 means every check passed. The checks are listed under Validation in
 [the engine design note](design/d3d12-ddi-engine.md#validation).
 
 ## KMD and host tests

@@ -1,7 +1,7 @@
 # Design note: the vkd3d-proton engine behind a native D3D12 UMD (M15)
 
 Date: 2026-09-28. Status: engine ABI 1.0 implemented and tested offline on the development PC. There is no D3D12
-shell yet and nothing has run on unit A. Scope: the engine `bc250vkd3d.dll`, its ABI and its known gaps.
+shell yet and nothing has run on unit A. Scope: the engine `amdgpu_wddm_vkd3d.dll`, its ABI and its known gaps.
 Build recipe: [build.md](../build.md#vkd3d-proton). Direction: ADR 0017 item 5 (vkd3d-proton is the default
 engine; FL 12_0 Must, 12_1 Should; a bounded spike first), item 6 (vkd3d-proton stays a separate LGPL DLL) and
 item 7 (no numeric bound for M15 before its first measurement).
@@ -12,7 +12,7 @@ item 7 (no numeric bound for M15 before its first measurement).
 application -> d3d12.dll / d3d12core.dll / dxgi.dll (Microsoft runtime)
             -> shell: OpenAdapter12, D3D12 DDI tables and handles, runtime callbacks, contexts, residency,
                present; provides hosted RADV's Vulkan entry point
-            -> engine bc250vkd3d.dll: vkd3d-proton's D3D12 device, on its own VkInstance and VkDevice
+            -> engine amdgpu_wddm_vkd3d.dll: vkd3d-proton's D3D12 device, on its own VkInstance and VkDevice
             -> hosted RADV (the hosted ICD) -> runtime callbacks -> dxgkrnl -> KMD
 ```
 
@@ -48,7 +48,9 @@ includes it from the checkout it builds against. It needs only `windows.h` and `
 engine's translation units (vkd3d-proton's own D3D12 headers) and the shell's (SDK `d3d12.h` plus
 `d3d12umddi.h`) can include it.
 
-The DLL exports one function, `Bc250Vkd3dEngineGetFuncs(abiVersion, funcs)`, which fills `CreateDevice`.
+The DLL exports one function, `Bc250Vkd3dEngineGetFuncs(abiVersion, funcs)`, which fills `CreateDevice`. Before
+branch commit a582668d the DLL was `bc250vkd3d.dll`; the header file name and the code identifiers keep their
+BC250 names.
 
 - **Versioning.** The version the shell passes is the version it *requires*: the lowest minor whose additions
   it calls. It is not the version of the header it compiled against. A newer header therefore does not force a
@@ -128,11 +130,11 @@ rows; unit A numbers come from a lab run of the same test.
 
 ## Validation
 
-`bc250vkd3d_engine_test.exe <bc250vkd3d.dll> [adapter substring] [--icd <driver DLL>] [--fl <hex>]` is the
-offline positive control. It plays the shell: it loads a Vulkan driver (the loader, or with `--icd` a driver DLL
-directly through `vk_icdGetInstanceProcAddr`, as the shell loads hosted RADV) and passes its entry point to the
-engine. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by itself; exit code 0 means
-every check passed:
+`amdgpu_wddm_vkd3d_engine_test.exe <amdgpu_wddm_vkd3d.dll> [adapter substring] [--icd <driver DLL>] [--fl <hex>]`
+is the offline positive control. It plays the shell: it loads a Vulkan driver (the loader, or with `--icd` a
+driver DLL directly through `vk_icdGetInstanceProcAddr`, as the shell loads hosted RADV) and passes its entry
+point to the engine. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by itself; exit
+code 0 means every check passed:
 - the export's version rules;
 - an unknown LUID refused with no device created;
 - `CreateDevice` on the adapter's LUID, and `GetAdapterLuid` returning it;

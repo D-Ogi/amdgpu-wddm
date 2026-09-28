@@ -7,9 +7,9 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
 -Config picks the option set from vkd3d-configs.json next to this script (the only copy of those options):
 
   per-app     upstream vkd3d-proton as application-local d3d12.dll and d3d12core.dll (M12)
-  ddi-engine  bc250vkd3d.dll, the engine behind the proposed system D3D12 DDI UMD (G4), and its offline test;
-              needs a checkout of the amdgpu-wddm/ddi-engine vkd3d-proton branch (enable_ddi_engine does not
-              exist upstream)
+  ddi-engine  amdgpu_wddm_vkd3d.dll, the engine behind the proposed system D3D12 DDI UMD (G4), and its offline
+              test; needs a checkout of the amdgpu-wddm/ddi-engine vkd3d-proton branch (enable_ddi_engine does
+              not exist upstream)
 
 The build is a native MSVC build, like the M12 per-application packages: vcvars64.bat, meson from PYTHONPATH,
 ninja and glslang on PATH, CC and CXX set to cl. vkd3d-proton also needs the IDL compiler widl (MSYS2
