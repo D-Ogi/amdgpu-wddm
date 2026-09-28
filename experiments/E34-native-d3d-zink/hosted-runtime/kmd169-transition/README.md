@@ -31,9 +31,20 @@ test-arm-helper.ps1 exercises the actual native helper with successful, failed
 and hanging child trees; it checks that the timed-out descendant has stopped.
 These are host-only controls, not installation or recovery measurements.
 
+watch.ps1 owns the common QPC boundary and invokes the native watchdog around
+worker.ps1. This outer Job Object includes the worker, phase helpers and all their
+children. The watchdog runs independently of the candidate PowerShell process.
+Restoration is admitted only after the outer job is confirmed empty. An unknown
+closure produces recovery-required rather than starting a competing installer.
+A supervisor crash can still prevent automatic restoration; process-tree
+termination alone does not restore a driver, and a kernel hang is not recoverable
+by this mechanism.
+
+test-supervisor.ps1 uses real nested jobs with a mock restoration operation. It
+covers normal closure, pre-mutation cancellation, failure after mutation, a hung
+nested tree and a failed rollback. Actual PnP remains untested.
+
 Still required before launch:
-- A supervisor and independent watchdog sharing one monotonic deadline.
-- Proven termination of the candidate process tree before restoration begins.
 - Failure injection through the complete runner, including installer timeout.
 - Exact staging manifest, dispatch and fresh lab preflight.
 - A separate bounded GPU trial after the transition has closed successfully.
