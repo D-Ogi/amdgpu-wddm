@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$DxvkSource, [string]$OutputDir, [string]$VsInstall)
+param([Parameter(Mandatory)][string]$DxvkSource, [string]$OutputDir, [string]$VsInstall, [string]$EnginePath, [string]$IcdPath)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\common.ps1"
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -7,6 +7,11 @@ $DxvkSource=[IO.Path]::GetFullPath($DxvkSource)
 if (-not $OutputDir) { $OutputDir=Join-Path $root 'scratch\build\umd-dxvk' }
 $OutputDir=[IO.Path]::GetFullPath($OutputDir)
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
+if ([bool]$EnginePath -ne [bool]$IcdPath) { throw 'Supply both EnginePath and IcdPath for pair admission' }
+if ($EnginePath) {
+    & "$PSScriptRoot\test-umd-engine-pair.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\engine-pair') -VsInstall $VsInstall -EnginePath $EnginePath -IcdPath $IcdPath
+}
+
 # Device-table ABI and capability behavior are promotion gates, not optional
 # manual checks. Run before producing a deployable shell DLL.
 & "$PSScriptRoot\test-umd-ddi-draw.ps1" -DxvkSource $DxvkSource -OutputDir (Join-Path $OutputDir 'quality\ddi-table') -VsInstall $VsInstall

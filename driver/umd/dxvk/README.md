@@ -357,3 +357,14 @@ The shell build runs the DDI host suite before linking the deployable DLL. The s
 Hazard notifications defer barriers to DXVK's actual resource use. Convert entries share the Copy implementations as permitted by the WDK. Discard retains contents/backing, which is legal but not a bandwidth optimization; direct flip is explicitly unsupported. Optional debug binaries and the unexposed D3D10 text-filter state do not change execution. Counter queries report no counters. Zero-instance shader-interface binds forward to ordinary binds; nonzero class instances are explicitly rejected, not silently ignored. Dynamic class linkage is therefore not implemented.
 
 Command-list/deferred-context support remains unadvertised (THREADING=0). Their typed entries diagnose unexpected calls once and return failure/zero size or SetError under the runtime domain. They do not claim to implement those features. Tests cover this refusal, domain entry, initialized capability outputs and copy/convert identity. A future threading implementation must replace the refusals and update caps together.
+
+## Exact engine pair admission
+
+`build-umd-dxvk.ps1 -EnginePath <absolute DLL> -IcdPath <absolute DLL>`
+runs the production module-loader admission path before building the shell.
+The probe creates no Vulkan instance/device and records the ABI header, engine
+and ICD SHA256 plus result in `quality/engine-pair/pair-result.json`.
+Use both arguments for a deployment candidate; omitting them is build-only.
+A newer checked-out ABI header can raise the shell requirement even when no
+shell source changed. Keep the header checkout aligned with the staged engine.
+This check establishes export/ABI loading only, not device creation or rendering.
