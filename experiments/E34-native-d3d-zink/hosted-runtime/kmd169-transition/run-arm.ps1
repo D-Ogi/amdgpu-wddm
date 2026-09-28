@@ -17,15 +17,16 @@ function Invoke-KmdTransitionArm {
  param([ValidateSet('candidate','restore')][string]$Arm,[string]$Directory,[string]$Tool,
        [long]$Origin,[long]$Frequency)
  $phases=if($Arm -eq 'candidate'){@('Capture','Disable','Install','Configure','Enable','Verify')}
-         else{@('Quiesce','Disable','Install','Configure','Enable','Verify')}
+         else{@('Quiesce','Disable','Install','Configure','Enable','Verify','CleanupPackage')}
  $phaseScript=Join-Path $PSScriptRoot 'phase.ps1'
  $powershell="$env:windir\System32\WindowsPowerShell\v1.0\powershell.exe"
  foreach($phase in $phases){
   $elapsed=Get-KmdElapsed $Origin $Frequency
-  $budget=Get-KmdChildBudgetMs $elapsed $Arm 30000
+  $end=if($Arm -eq 'candidate'){87}else{170}
+  $budget=[int][Math]::Min(30000,[Math]::Max(0,[Math]::Floor(($end-$elapsed)*1000)))
   if($budget -le 1000){return @{success=$false;tree_closed=$true;phase=$phase;reason='no-budget'}}
   $receipt=($Arm+'-'+$phase).ToLowerInvariant()
-  $deadline=[Math]::Min($Origin+[long]($(if($Arm -eq 'candidate'){110}else{170})*$Frequency),
+  $deadline=[Math]::Min($Origin+[long]($(if($Arm -eq 'candidate'){87}else{170})*$Frequency),
     [Diagnostics.Stopwatch]::GetTimestamp()+[long]($budget*$Frequency/1000))
   try {
    $result=Invoke-KmdBoundedChild -Tool $Tool -Deadline $deadline -Stdout "$Directory\$receipt.out" -Stderr "$Directory\$receipt.err" -Executable $powershell -Arguments @('-NoProfile','-File',$phaseScript,'-Phase',$phase,'-Arm',$Arm,'-Directory',$Directory,'-Receipt',$receipt,'-ChildDeadline',[string]$deadline)
@@ -46,5 +47,5 @@ function Invoke-KmdTransitionArm {
    return @{success=$false;tree_closed=$true;phase=$phase;reason='completion-witness-invalid'}
   }
  }
- return @{success=$true;tree_closed=$true;phase='Verify';reason='verified'}
+ return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified'}
 }

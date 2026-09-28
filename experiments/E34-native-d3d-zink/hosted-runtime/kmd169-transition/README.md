@@ -9,7 +9,7 @@ package-hashes.json. Both arms retain CPU desktop registration and zero Present 
 phase.ps1 implements capture, disable, install, configure, enable and verification.
 It must run under the sibling kmd168-transition bounded-child helper, never directly.
 The phase rejects an expired monotonic boundary or a changed boot/host. Candidate
-operations stop at 110 seconds; the executable work has a 170-second deadline inside the 180-second task limit.
+operations stop at 87 seconds; the executable work has a 170-second deadline inside the 180-second task limit.
 These checks do not make an uninterruptible kernel operation bounded.
 
 Verification requires the installed SYS, loaded ABI, health, operating clocks,
@@ -68,7 +68,7 @@ hashes independently. No network operation occurs during preparation.
 
 The scheduled dispatcher allows one start only. It verifies the action, principal
 and three-minute task limit before creating the durable start-request receipt.
-Candidate time remains110s; restoration ends at170s from launch entry, leaving10s
+Candidate worker limit is90s (inner phases87s); restoration ends at170s from launch entry, leaving10s
 before the scheduler limit for startup/closure overhead. This does not guarantee
 that Windows can terminate a thread stuck in the kernel. Incomplete closure is
 recovery-required, never success. Dispatcher runtime validation remains pending.
@@ -95,3 +95,19 @@ cfgmgr32.h:4637. This API concerns installation events. It is not an atomic lock
 against a new external installation and does not prove every remove/stop IRP has
 finished. Device-state checks at phase boundaries remain necessary. drvinst PID
 observations are diagnostic, not the quiescence criterion.
+
+After restored CPU verification, CleanupPackage identifies published oem*.inf
+files by the exact pinned candidate INF hash. It confirms that the active INF is
+the pinned166 INF, then uses pnputil /delete-driver without /force or /uninstall.
+It refuses an active candidate and checks that no matching candidate INF remains.
+A failure prevents a successful overall closure. The package selector tests do
+not exercise Driver Store removal; that remains part of the lab rehearsal.
+
+This is explicitly a166->169->166 rehearsal. closed+candidate_verified does not
+mean169 is deployed. A subsequent GPU run needs a separate controlled transition.
+
+Budget: candidate outer90s, inner87s, restoration/cleanup ends170s, scheduled task
+limit180s. The historical166 worker receipt spans20:58:19.939 to20:58:50.840Z
+(about30.9s), but has no complete per-phase timing or worst-case bound. It does
+not establish that80s is sufficient for every healthy rollback. Every phase and
+the final closure remain measured; budget exhaustion is a failed rehearsal.

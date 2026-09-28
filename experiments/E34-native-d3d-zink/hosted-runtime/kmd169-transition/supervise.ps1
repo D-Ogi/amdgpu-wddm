@@ -3,7 +3,7 @@
 function Invoke-KmdSupervisedTransition {
  param([string]$Directory,[string]$Tool,[long]$Origin,[long]$Frequency,
        [string]$Worker,[string[]]$WorkerArguments,[scriptblock]$Restore,
-       [ValidateRange(3,110)][int]$CandidateSeconds=110)
+       [ValidateRange(3,90)][int]$CandidateSeconds=90)
  $elapsed=Get-KmdElapsed $Origin $Frequency
  if($elapsed -ge $CandidateSeconds-1){throw 'No candidate launch budget'}
  $deadline=$Origin+[long]($CandidateSeconds*$Frequency)

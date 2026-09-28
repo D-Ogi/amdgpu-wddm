@@ -1,5 +1,5 @@
 # Must be launched through bounded-child.exe. No standalone blocking-time guarantee.
-param([Parameter(Mandatory)][ValidateSet('Capture','Quiesce','Disable','Install','Configure','Enable','Verify')][string]$Phase,
+param([Parameter(Mandatory)][ValidateSet('Capture','Quiesce','Disable','Install','Configure','Enable','Verify','CleanupPackage')][string]$Phase,
  [Parameter(Mandatory)][ValidateSet('candidate','restore')][string]$Arm,
  [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Receipt,
  [Parameter(Mandatory)][long]$ChildDeadline)
@@ -7,6 +7,7 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot\durable.ps1"
 . "$PSScriptRoot\verify-cpu.ps1"
 . "$PSScriptRoot\pnp-idle.ps1"
+. "$PSScriptRoot\package-cleanup.ps1"
 $directoryPath=[IO.Path]::GetFullPath($Directory)
 if(!$directoryPath.StartsWith('C:\BC250\m13\kmd169-', [StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected trial directory'}
 $out=$directoryPath
@@ -15,7 +16,7 @@ if(Test-Path $start){throw 'Stage already attempted; inspect its state'}
 $boundary=Get-Content "$out\boundary.json" -Raw|ConvertFrom-Json
 $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
 if($boundary.boot -ne $boot -or $boundary.machine -ne $env:COMPUTERNAME){throw 'Boot/host changed'}
-$limit=if($Arm -eq 'candidate'){110}else{170}
+$limit=if($Arm -eq 'candidate'){87}else{170}
 if($boundary.frequency -ne [Diagnostics.Stopwatch]::Frequency -or [long]$boundary.qpc -le 0){throw 'Invalid monotonic boundary'}
 $elapsed=([Diagnostics.Stopwatch]::GetTimestamp()-[long]$boundary.qpc)/[double]$boundary.frequency
 if($boundary.frequency -ne [Diagnostics.Stopwatch]::Frequency -or $elapsed -lt 0 -or $elapsed -ge $limit){throw 'Stage deadline expired'}
@@ -98,6 +99,23 @@ if($Phase -eq 'Capture'){
    if(!(Test-Path "$out\$Arm-configure-done.json")){throw 'Missing configuration receipt'}
    & pnputil.exe /enable-device $gpu.InstanceId|Out-Null
    if($LASTEXITCODE -ne 0){throw 'Enable failed'}
+  }
+  'CleanupPackage' {
+   if($Arm -ne 'restore' -or $version -ne '0.7.166.1' -or $actual -ne $manifest.rollback166.'bc250kmd.sys' -or $problem -ne 0){throw 'Package cleanup requires active exact166'}
+   if(!(Test-Path "$out\restore-verify-done.json")){throw 'CPU rollback verification missing'}
+   $activeInf=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverInfPath).Data
+   if($activeInf -notmatch '^oem[0-9]+\.inf$' -or (Get-FileHash -LiteralPath "$env:windir\INF\$activeInf").Hash -ne $manifest.rollback166.'bc250kmd.inf'){throw 'Active rollback INF identity mismatch'}
+   $packages=@(Select-KmdCandidatePackages -Packages @(Get-KmdPublishedPackages) -ExpectedInfHash $manifest.candidate169.'bc250kmd.inf' -ActiveInf $activeInf)
+   Write-DurableText "$out\$Receipt-before.json" (@{active=$activeInf;candidates=$packages}|ConvertTo-Json -Depth 5)
+   foreach($package in $packages){
+    # Recheck immediately before the non-forced removal; never uninstall a device.
+    if((Get-FileHash -LiteralPath "$env:windir\INF\$($package.name)").Hash -ne $manifest.candidate169.'bc250kmd.inf'){throw 'Published INF identity changed'}
+    if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverInfPath).Data -ieq $package.name){throw 'Candidate became active'}
+    & pnputil.exe /delete-driver $package.name|Out-Null
+    if($LASTEXITCODE -ne 0){throw 'Candidate package removal failed'}
+   }
+   $remaining=@(Select-KmdCandidatePackages -Packages @(Get-KmdPublishedPackages) -ExpectedInfHash $manifest.candidate169.'bc250kmd.inf' -ActiveInf $activeInf)
+   if($remaining.Count){throw 'Candidate package remains staged'}
   }
   'Verify' {
    if($version -ne $expectedVersion -or $actual -ne $manifest.$label.'bc250kmd.sys' -or $gpu.Status -ne 'OK'){throw 'Active identity mismatch'}
