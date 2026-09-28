@@ -4,6 +4,7 @@
 #include "ddi-raster.h"
 #include "ddi-shader.h"
 #include "ddi-sampler.h"
+#include "ddi-fixed-state.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -25,6 +26,7 @@ int main() {
     install_raster_ddi(table);
     install_shader_ddi(table);
     install_sampler_ddi(table);
+    install_fixed_state_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -95,5 +97,47 @@ int main() {
     table.pfnHsSetSamplers(h,0,0,nullptr); table.pfnDsSetSamplers(h,0,0,nullptr);
     table.pfnDestroySampler(h,shandle);
     if (errors!=31 || ss.object || owner.runtime().domain.entered()) std::abort();
+    D3D10_DDI_DEPTH_STENCIL_DESC depth{};
+    depth.DepthEnable=TRUE; depth.DepthWriteMask=D3D10_DDI_DEPTH_WRITE_MASK_ALL;
+    depth.DepthFunc=D3D10_DDI_COMPARISON_GREATER;
+    depth.StencilEnable=TRUE; depth.BackEnable=TRUE;
+    depth.StencilReadMask=0x37; depth.StencilWriteMask=0xa5;
+    // Disabled-face fields must not affect fragment acceptance or stencil writes.
+    std::memset(&depth.FrontFace,0xcc,sizeof(depth.FrontFace));
+    depth.BackFace={D3D10_DDI_STENCIL_OP_INCR_SAT,D3D10_DDI_STENCIL_OP_INVERT,
+        D3D10_DDI_STENCIL_OP_REPLACE,D3D10_DDI_COMPARISON_NOT_EQUAL};
+    auto ds=convert_depth_stencil(depth);
+    if (ds.FrontFace.StencilFunc!=D3D11_COMPARISON_ALWAYS ||
+        ds.FrontFace.StencilFailOp!=D3D11_STENCIL_OP_KEEP ||
+        ds.FrontFace.StencilDepthFailOp!=D3D11_STENCIL_OP_KEEP ||
+        ds.FrontFace.StencilPassOp!=D3D11_STENCIL_OP_KEEP ||
+        ds.BackFace.StencilFailOp!=D3D11_STENCIL_OP_INCR_SAT ||
+        ds.BackFace.StencilDepthFailOp!=D3D11_STENCIL_OP_INVERT ||
+        ds.BackFace.StencilPassOp!=D3D11_STENCIL_OP_REPLACE ||
+        ds.BackFace.StencilFunc!=D3D11_COMPARISON_NOT_EQUAL ||
+        ds.StencilReadMask!=0x37 || ds.StencilWriteMask!=0xa5 ||
+        ds.DepthFunc!=D3D11_COMPARISON_GREATER) std::abort();
+    depth.FrontEnable=TRUE; depth.FrontFace=depth.BackFace; depth.BackEnable=FALSE;
+    ds=convert_depth_stencil(depth);
+    if (ds.FrontFace.StencilPassOp!=D3D11_STENCIL_OP_REPLACE || ds.BackFace.StencilFunc!=D3D11_COMPARISON_ALWAYS) std::abort();
+    depth.StencilEnable=FALSE; ds=convert_depth_stencil(depth);
+    if (ds.StencilEnable || ds.FrontFace.StencilPassOp!=D3D11_STENCIL_OP_KEEP) std::abort();
+    D3D11_1_DDI_RASTERIZER_DESC raster{};
+    raster.FillMode=D3D10_DDI_FILL_WIREFRAME; raster.CullMode=D3D10_DDI_CULL_FRONT;
+    raster.FrontCounterClockwise=TRUE; raster.DepthBias=-71; raster.DepthBiasClamp=-0.25f;
+    raster.SlopeScaledDepthBias=1.75f; raster.ScissorEnable=TRUE; raster.ForcedSampleCount=4;
+    auto rs=convert_rasterizer(raster);
+    if (rs.FillMode!=D3D11_FILL_WIREFRAME || rs.CullMode!=D3D11_CULL_FRONT ||
+        !rs.FrontCounterClockwise || rs.DepthBias!=-71 || rs.DepthBiasClamp!=-0.25f ||
+        rs.SlopeScaledDepthBias!=1.75f || !rs.ScissorEnable || rs.ForcedSampleCount!=4) std::abort();
+    DdiDepthStencil dstate{}; D3D10DDI_HDEPTHSTENCILSTATE dh{}; dh.pDrvPrivate=&dstate;
+    DdiRasterizer rstate{}; D3D10DDI_HRASTERIZERSTATE rh{}; rh.pDrvPrivate=&rstate;
+    if (table.pfnCalcPrivateDepthStencilStateSize(h,&depth)!=sizeof(dstate) ||
+        table.pfnCalcPrivateRasterizerStateSize(h,&raster)!=sizeof(rstate)) std::abort();
+    table.pfnCreateDepthStencilState(h,&depth,dh,{});
+    table.pfnSetDepthStencilState(h,{},0xa7); table.pfnDestroyDepthStencilState(h,dh);
+    table.pfnCreateRasterizerState(h,&raster,rh,{});
+    table.pfnSetRasterizerState(h,{}); table.pfnDestroyRasterizerState(h,rh);
+    if (errors!=37 || dstate.object || rstate.object || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
