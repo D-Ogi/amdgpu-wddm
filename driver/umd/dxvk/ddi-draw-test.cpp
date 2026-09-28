@@ -15,6 +15,7 @@
 #include "ddi-uav.h"
 #include "ddi-output.h"
 #include "ddi-srv.h"
+#include "ddi-flush.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -47,6 +48,7 @@ int main() {
     install_uav_ddi(table);
     install_output_ddi(table);
     install_srv_ddi(table);
+    install_flush_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -428,5 +430,8 @@ int main() {
     table.pfnDrawIndexedInstancedIndirect(h,rhandle,20);
     table.pfnDispatchIndirect(h,rhandle,12);
     if (errors!=91 || owner.runtime().domain.entered()) std::abort();
+    if (table.pfnFlush(h,0) || table.pfnFlush(h,D3D11_1DDI_FLUSH_UNLESS_NO_COMMANDS)) std::abort();
+    if (errors!=93 || owner.runtime().domain.entered()) std::abort();
+    if (table.pfnFlush({},0)) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
