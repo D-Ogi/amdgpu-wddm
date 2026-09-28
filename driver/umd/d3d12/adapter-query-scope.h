@@ -19,6 +19,7 @@ class AdapterQueryScope final {
     bc250_host_adapter_query query_{};
     unsigned forbidden_{};
     bool entered_{};
+    bool created_{};
     static int32_t dispatch(void* data,uint32_t operation,void*) noexcept {
         auto& scope=*static_cast<AdapterQueryScope*>(data);
         if(operation==BC250_HOST_CHECK_STATUS)return 0;
@@ -37,6 +38,8 @@ class AdapterQueryScope final {
         auto copy=*info;scope.query_.pNext=copy.pNext;copy.pNext=&scope.host_;
         VkResult result=real(&copy,allocator,out);
         if(result==VK_SUCCESS) {
+            if(!*out){++scope.forbidden_;return VK_ERROR_INITIALIZATION_FAILED;}
+            scope.created_=true;
             scope.instance_=*out;scope.custom_allocator_=allocator!=nullptr;
             if(allocator)scope.allocator_=*allocator;
         }
@@ -83,7 +86,7 @@ public:
         current_=nullptr;
     }
     bool entered() const noexcept{return entered_;}
-    bool completed() const noexcept{return entered_ && !instance_ && !forbidden_;}
+    bool completed() const noexcept{return entered_ && created_ && !instance_ && !forbidden_;}
     PFN_vkGetInstanceProcAddr entry() const noexcept{return entered_?get:nullptr;}
 };
 }

@@ -10,6 +10,7 @@ namespace native12 {
 struct AdapterCapsOwner {
     HMODULE engine{},icd{};
     engine_ddi::AdapterCaps* caps{};
+    AdapterEngineAccess access{};
     ~AdapterCapsOwner() {
         engine_ddi::free_adapter_caps(caps);
         if(icd)FreeLibrary(icd);
@@ -54,11 +55,11 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
         BC250_VKD3D_QUEUE_MODE_INLINE,&services};
     hr=engine_ddi::query_adapter_caps(&funcs,&info,&owner.caps);
     if(SUCCEEDED(hr) && (!scope.completed() || queue_calls))return E_UNEXPECTED;
+    if(SUCCEEDED(hr))owner.access={funcs,get};
     return hr;
 }
-}
-HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) noexcept {
-    if(!request || !request->pData)return E_INVALIDARG;
+HRESULT ensure_caps(Adapter& adapter, AdapterCapsOwner** out) noexcept {
+    *out=nullptr;
     AcquireSRWLockExclusive(&adapter.caps_lock);
     if(!adapter.caps_attempted) {
         adapter.caps_attempted=true;
@@ -73,7 +74,28 @@ HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) no
     ReleaseSRWLockExclusive(&adapter.caps_lock);
     // Adapter lifetime is owned by the runtime; its close follows all GetCaps calls.
     if(FAILED(status))return status;
+    if(!owner || !owner->caps)return E_UNEXPECTED;
+    *out=owner;
+    return S_OK;
+}
+}
+HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) noexcept {
+    if(!request || !request->pData)return E_INVALIDARG;
+    AdapterCapsOwner* owner{};
+    HRESULT hr=ensure_caps(adapter,&owner);
+    if(FAILED(hr))return hr;
     return engine_ddi::build_caps(owner->caps,D3D12DDI_BUILD_VERSION_0092,request);
+}
+HRESULT get_adapter_engine(Adapter& adapter, AdapterEngineAccess* access) noexcept {
+    if(!access)return E_INVALIDARG;
+    *access={};
+    AdapterCapsOwner* owner{};
+    HRESULT hr=ensure_caps(adapter,&owner);
+    if(FAILED(hr))return hr;
+    if(!owner->access.driver_entry || !owner->access.functions.CreateDevice ||
+       !owner->access.functions.GetVulkanHandles)return E_NOINTERFACE;
+    *access=owner->access;
+    return S_OK;
 }
 void close_adapter_caps(Adapter& adapter) noexcept {
     delete adapter.engine_caps;adapter.engine_caps=nullptr;

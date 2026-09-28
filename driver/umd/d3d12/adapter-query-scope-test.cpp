@@ -46,6 +46,9 @@ int main(int argc,char** argv){
     std::puts("actual ICD: adapter-query chain accepted; missing host rejected; no enumeration or device");
   }
     native12::AdapterQueryScope scope(raw,42);assert(scope.entered());
+    // A backend that returned a cached instance without consulting this query's
+    // GIPA has not used this adapter authority, even if it reports query success.
+    assert(!scope.completed());
     native12::AdapterQueryScope nested(raw,42);assert(!nested.entered());
     auto gipa=scope.entry();const char* extension="engine-extension";
     VkInstanceCreateInfo ci{};ci.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;ci.pNext=original_chain;
