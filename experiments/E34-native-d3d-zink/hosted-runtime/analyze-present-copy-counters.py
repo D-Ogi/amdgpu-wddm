@@ -31,7 +31,7 @@ def text(path):
 def read(path):
     return json.loads(text(path))
 
-def analyze(directory):
+def analyze(directory, *, observations_only=False):
     done=read(directory/"done.json")
     if not done["success"] or not done["restoration_succeeded"]:
         raise ValueError("trial not completed/restored")
@@ -69,11 +69,15 @@ def analyze(directory):
         if any(b[k]<a[k] for k in ("blits","skips","translated")):
             raise ValueError("counters decreased")
     positive=latest(text(directory/"closure-driver.log"))
-    if positive["blits"]<=0: raise ValueError("missing CPU rollback positive control")
-    return dict(scope="Observed KMD software-present blits plus audited Zink runtime-map requests; not all CPU writers or final-resource identity proof",start_utc=start["utc"],end_utc=end["utc"],samples=samples,
+    exercised = positive["blits"] > 0
+    if not exercised and not observations_only: raise ValueError("missing CPU rollback positive control")
+    return dict(positive_control_exercised=exercised, acceptance_pass=exercised and all(s["blits"]==0 for s in samples) and not runtime, scope="Observed KMD software-present blits plus audited Zink runtime-map requests; not all CPU writers or final-resource identity proof",start_utc=start["utc"],end_utc=end["utc"],samples=samples,
         observed_software_blits_zero=all(s["blits"]==0 for s in samples),
         runtime_map_ids=runtime,map_requests=count,positive_after_rollback=positive)
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("directory",type=Path)
-    args=parser.parse_args();print(json.dumps(analyze(args.directory),indent=2))
+    parser.add_argument("--observations-only",action="store_true",help="Preserve valid observations even when rollback did not exercise the positive control; never implies acceptance")
+    args=parser.parse_args();result=analyze(args.directory,observations_only=args.observations_only)
+    print(json.dumps(result,indent=2))
+    if not result["acceptance_pass"]: raise SystemExit(2)

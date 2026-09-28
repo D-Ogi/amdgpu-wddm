@@ -11,6 +11,7 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 directory=Path(sys.argv[1]);baseline=m.analyze(directory)
 assert baseline["observed_software_blits_zero"] and not baseline["runtime_map_ids"]
 assert baseline["positive_after_rollback"]["blits"]>0
+assert baseline["acceptance_pass"] and baseline["positive_control_exercised"]
 original=m.text
 cases=[]
 # A real runtime-map record must be reported, not silently excluded.
@@ -22,7 +23,8 @@ def runtime(path):
         assert count==1
     return value
 with patch.object(m,"text",runtime):
-    assert len(m.analyze(directory)["runtime_map_ids"])==1
+    changed=m.analyze(directory)
+    assert len(changed["runtime_map_ids"])==1 and not changed["acceptance_pass"]
 cases.append("injected_runtime_map_detected")
 # Removing CPU positive evidence must reject the purported zero-copy observation.
 def no_positive(path):
@@ -33,6 +35,19 @@ with patch.object(m,"text",no_positive):
     except ValueError: pass
     else: raise AssertionError("missing positive control accepted")
 cases.append("missing_positive_rejected")
+def zero_positive(path):
+    value=original(path)
+    if path.name=="closure-driver.log":
+        value=re.sub(r"\d+ blits,", "0 blits,",value)
+    return value
+with patch.object(m,"text",zero_positive):
+    try:m.analyze(directory)
+    except ValueError:pass
+    else:raise AssertionError("unexercised positive accepted by default")
+    observed=m.analyze(directory,observations_only=True)
+    assert observed["samples"]==baseline["samples"]
+    assert not observed["positive_control_exercised"] and not observed["acceptance_pass"]
+cases.append("unexercised_control_observations_explicitly_fail")
 # Ignore old ring history only by an explicit sequence ordering, not regex first-match.
 line="%d %.3f wddm summary: blit gate open, %d blits, 0 skips, 1 sources translated contiguous"
 assert m.latest((line%(9,2.0,7))+"\n"+(line%(10,3.0,8)))["blits"]==8
