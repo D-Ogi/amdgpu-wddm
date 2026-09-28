@@ -9,9 +9,11 @@ The results are written to the stick and, so that a machine with no network and 
 is still readable, shown on the BC-250's own screen as QR codes. Scan them with a phone, paste the
 text into `decode_qr.py` on the PC.
 
-Nothing here has been run on a real BC-250 yet. Everything below was tested in QEMU, which has no
-AMD GPU, so the probe path itself has only been exercised against a stand-in device (see
-"Testing the MMIO path" below).
+The stick has run on unit A: experiment E01, evidence `evidence/linux/2026-09-21-E01-diagusb-run-001/`, facts M1
+onward in [docs/facts.md](../../docs/facts.md) (M1: the regcalc offsets address the registers they are named
+after, CONFIRMED). It has stayed the lab's Linux reference since. The boot path, the launcher and the QR display
+were tested in QEMU first, with the probe exercised against a stand-in device there (see "Testing the MMIO
+path" below).
 
 ## What it measures
 
@@ -49,6 +51,8 @@ No other register is written, in any mode. `test_only_two_registers_are_ever_wri
 | raw probe only | `noload` | Phase A only, `amdgpu` is never loaded. The two writes above still happen. |
 | strictly read-only | `readonly` | Phase A with no MMIO writes at all, no `amdgpu`. |
 | shell only | `off` | No diagnostics, just a root shell. Use it to look at results from an earlier run. |
+| reference capture | `noload` plus `mmiotrace` | No driver, mmiotrace limited to BAR5; then run `bc250/sweep.py` over SSH. The kernel command line names BAR5's physical address (`lspci`: Region 5). |
+| network only | `network` | Networking and SSH only: no GPU probe, no `amdgpu` (see "Network-only reference capture"). |
 
 ## Build
 
@@ -170,10 +174,10 @@ Wi-Fi is optional and only enabled if the stick was built with `--net`. The ASUS
 extra firmware package. Wired Ethernet is configured by DHCP in any case. The `NET` line above the
 verdict is live: it shows `no address yet` until DHCP succeeds, then `ssh root@<ip> (<interface>)`.
 
-Measured so far, with the real dongle passed through to a QEMU guest: the driver binds, firmware
-30.20.0 loads from the modloop, the scan finds the AP and authentication succeeds. Association,
-the WPA handshake, DHCP and SSH have not been seen working yet (the emulated USB path is too slow
-for the association to start), so treat Wi-Fi as a bonus and the QR codes as the primary channel.
+Measured on unit A (M10): WPA2-PSK association, DHCP and SSH work with the stock Alpine kernel. Before that,
+with the dongle passed through to a QEMU guest, the driver bound, firmware 30.20.0 loaded from the modloop and
+authentication succeeded, but the emulated USB path was too slow for the association. The QR codes stay the
+channel that needs no network at all.
 
 ## Reading the results
 
@@ -202,8 +206,8 @@ Three ways, in order of convenience:
 
 ## Known limitations
 
-- **Nothing has been tested on a real BC-250.** Every statement above about the hardware is an
-  expectation, not a measurement.
+- What has been measured on unit A is in `docs/facts.md` with its evidence (E01 onward); a statement in this
+  README about the hardware without a fact ID is an expectation, not a measurement.
 - Phase A needs the GPU's BAR5 to be unclaimed. If something has bound to the device (the blacklist
   did not take, or a mode was booted that loads `amdgpu` first), the `mmap` fails with `EINVAL` and
   the run says so in `report.json`; phase B still runs. This was reproduced in QEMU against a BAR
@@ -220,13 +224,14 @@ Three ways, in order of convenience:
 - FAT32 on the stick is remounted read-write for the duration of the run. Pulling the power in the
   middle of it can leave the filesystem dirty; the results are flushed with `fsync` plus `sync`
   after every file, so at worst the last file is missing.
-- QEMU proves the boot path, the launcher and the QR display, not the GPU probe.
-- The fixed SSH host key does not work on the stick as built on 2026-09-21 (found in E13): the private
-  key copied from `--net` asks for a passphrase, sshd cannot load it and serves only the RSA and ECDSA
-  keys that `ssh-keygen -A` makes at every boot, so the host key changes with every boot. Until the
-  stick is rebuilt with a key without a passphrase (wishlist L14): confirm the machine behind the
-  address (GPU `1002:13fe`, the stick's kernel command line) and re-learn the key for that boot. Never
-  switch host key checking off.
+- QEMU proves the boot path, the launcher and the QR display, not the GPU probe; the GPU probe has run on
+  unit A (E01).
+- A `--net` host key with a passphrase does not work (found in E13): sshd cannot load it and serves only the
+  RSA and ECDSA keys that `ssh-keygen -A` makes at every boot, so the host key changes with every boot. The
+  unit A stick now carries a separately installed host key without a passphrase, pinned on the client side
+  (E28, M334). A stick built from `build_usb.py` with such a `--net` key still has the old problem: confirm
+  the machine behind the address (GPU `1002:13fe`, the stick's kernel command line) and re-learn the key for
+  that boot. Never switch host key checking off.
 - `bc250.mode=off` ("shell only") starts no network. A session driven over SSH needs `full`, `noload`
   or `readonly`.
 
@@ -239,8 +244,11 @@ drive letter):
 
 - which entry boots: `set default=<n>` in `boot/grub/grub.cfg` (keep the original next to it and
   restore it afterwards);
-- whether the stick boots at all: rename `efi/boot/bootx64.efi` to `bootx64.efi.off` and the firmware
-  goes on to Windows; rename it back for the next Linux session.
+- whether the stick boots at all: rename `efi/boot/bootx64.efi` away and the firmware goes on to Windows;
+  rename it back for the next Linux session. The unit A stick uses `bootx64.off` since E28 to E30 (for
+  example `evidence/linux/2026-09-24-E30-startup-thermal-bios/e30-switch-linux.ps1`); E13 used
+  `bootx64.efi.off`. With either name the firmware went on to Windows; the scripts check the exact name before
+they rename, so use the one the stick actually carries.
 
 After a warm restart (`reboot`) out of the stick, Windows came up with the wired NIC not working
 (E13, once: the Realtek adapter "Not Present", and KDNET sits on the same NIC); after the owner's
@@ -251,4 +259,8 @@ the machine cold.
 
 ### Network-only reference capture
 
-Use the network-only GRUB entry (`bc250.mode=network`) to start the existing SSH/network service without running `diag.py`, its GPU probes, `qrshow.py`, or automatically loading amdgpu. This leaves module loading to the reference-capture script. Unlike `off`, it brings up networking. The current unit A stick uses a separately pinned unencrypted host key prepared through the trusted Windows connection; do not disable SSH host-key checking.
+Use the network-only GRUB entry (`bc250.mode=network`) to start the existing SSH/network service without
+running `diag.py`, its GPU probes, `qrshow.py`, or automatically loading amdgpu. This leaves module loading to
+the reference-capture script. Unlike `off`, it brings up networking. The current unit A stick uses a separately
+pinned unencrypted host key prepared through the trusted Windows connection; do not disable SSH host-key
+checking.

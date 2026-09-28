@@ -107,7 +107,7 @@ at most 170 s) keeps every run inside the lab's three-minute limit.
    the same DXVK revision, and the same ICD. Record the artifact hashes next to the results. The two paths find
    the ICD differently: per-application DXVK through the Vulkan loader, which uses the registered driver and, in
    an elevated process, ignores `VK_DRIVER_FILES` and `VK_ICD_FILENAMES`; the system path through the UMD, which
-   loads its own `bc250radv.dll`. Either register the same file for the loader or run the per-application side
+   loads its own sibling `amdgpu_wddm_radv.dll` (`bc250radv.dll` in shells built before the rename). Either register the same file for the loader or run the per-application side
    unelevated with `VK_DRIVER_FILES`; `compare.py` compares the `icds` hashes and refuses runs that differ.
 2. Same configuration on both paths: identical `DXVK_*`, Vulkan loader and Mesa variables, no `dxvk.conf` unless
    both sides have the same one. `compare.py` refuses runs whose recorded environment differs.
