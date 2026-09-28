@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-table.h"
+#include "ddi-clear-view.h"
 #include "ddi-query.h"
 #include "ddi-lifecycle.h"
 #include "ddi-resource-status.h"
@@ -22,9 +23,21 @@
 #include "ddi-srv.h"
 #include "ddi-flush.h"
 namespace bc250::umd {
+namespace {
+void APIENTRY relocate(D3D10DDI_HDEVICE h,D3D11_1DDI_DEVICEFUNCS *destination) {
+    auto *storage=static_cast<DdiDeviceHandle *>(h.pDrvPrivate);
+    if (!storage || !storage->owner) return;
+    RuntimeDomain::Scope scope(storage->owner->runtime().domain);
+    // The shell caches no runtime table pointer and uses no per-device patches.
+    // Rebuild the same dispatch table at the destination supplied by runtime.
+    if (destination) *destination=make_render_device_table();
+}
+}
 D3D11_1DDI_DEVICEFUNCS make_render_device_table() {
     D3D11_1DDI_DEVICEFUNCS table{};
     install_query_ddi(table);
+    table.pfnRelocateDeviceFuncs=relocate;
+    install_clear_view_ddi(table);
     install_draw_ddi(table);
     install_input_layout_ddi(table);
     install_raster_ddi(table);

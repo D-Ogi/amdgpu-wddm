@@ -18,6 +18,7 @@
 #include "ddi-flush.h"
 #include "ddi-query.h"
 #include "ddi-table.h"
+#include "ddi-clear-view.h"
 #include "ddi-lifecycle.h"
 #include "ddi-device-create.h"
 #include "ddi-format.h"
@@ -590,5 +591,19 @@ int main() {
     rejectCleanup=false;
     if (retire_device_handle(failedCleanup)!=S_OK || failedCleanup.owner) std::abort();
     if (std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable))) std::abort();
+    D3D11_1DDI_DEVICEFUNCS relocated{};
+    table.pfnRelocateDeviceFuncs(h,&relocated);
+    if (relocated.pfnClearView!=table.pfnClearView || relocated.pfnDraw!=table.pfnDraw ||
+        relocated.pfnRelocateDeviceFuncs!=table.pfnRelocateDeviceFuncs || owner.runtime().domain.entered()) std::abort();
+    int viewIdentity=0;
+    DdiRenderTargetView clearRtv{reinterpret_cast<ID3D11RenderTargetView *>(&viewIdentity)};
+    DdiUnorderedAccessView clearUav{reinterpret_cast<ID3D11UnorderedAccessView *>(&viewIdentity)};
+    if (clear_view_object(D3D10DDI_HT_RENDERTARGETVIEW,&clearRtv)!=static_cast<ID3D11View *>(clearRtv.object) ||
+        clear_view_object(D3D11DDI_HT_UNORDEREDACCESSVIEW,&clearUav)!=static_cast<ID3D11View *>(clearUav.object) ||
+        clear_view_object(D3D10DDI_HT_DEPTHSTENCILVIEW,&clearRtv) || clear_view_object(D3D10DDI_HT_RENDERTARGETVIEW,nullptr)) std::abort();
+    FLOAT regionColor[4]{0,0.5f,1,1}; D3D10_DDI_RECT clearRect{2,3,9,11};
+    const unsigned beforeClear=errors;
+    table.pfnClearView(h,D3D10DDI_HT_RENDERTARGETVIEW,&clearRtv,regionColor,&clearRect,1);
+    if (errors!=beforeClear+1 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
