@@ -13,6 +13,7 @@
 #include "ddi-rtv.h"
 #include "ddi-dsv.h"
 #include "ddi-uav.h"
+#include "ddi-output.h"
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -43,6 +44,7 @@ int main() {
     install_rtv_ddi(table);
     install_dsv_ddi(table);
     install_uav_ddi(table);
+    install_output_ddi(table);
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.
@@ -361,5 +363,29 @@ int main() {
     table.pfnCopyStructureCount(h,rhandle,12,uvh);
     table.pfnDestroyUnorderedAccessView(h,uvh);
     if (errors!=78 || uview.object || owner.runtime().domain.entered()) std::abort();
+    OutputBindings ob;
+    // Opaque interface identity tokens: preparation must not call COM or take
+    // ownership. Only the later engine setter can retain the actual objects.
+    int identity[3]{};
+    DdiRenderTargetView ort{reinterpret_cast<ID3D11RenderTargetView *>(&identity[0])};
+    DdiDepthStencilView ods{reinterpret_cast<ID3D11DepthStencilView *>(&identity[1])};
+    DdiUnorderedAccessView ouv{reinterpret_cast<ID3D11UnorderedAccessView *>(&identity[2])};
+    D3D10DDI_HRENDERTARGETVIEW orts[2]{}; orts[0].pDrvPrivate=&ort;
+    D3D10DDI_HDEPTHSTENCILVIEW od{}; od.pDrvPrivate=&ods;
+    D3D11DDI_HUNORDEREDACCESSVIEW ous[2]{}; ous[0].pDrvPrivate=&ouv;
+    const UINT counts[2]={17,UINT_MAX};
+    if (prepare_output_bindings(orts,2,6,od,ous,counts,5,2,5,1,64,ob)!=S_OK ||
+        ob.rtvs[0]!=ort.object || ob.rtvs[1] || ob.dsv!=ods.object || ob.uavFirst!=2 || ob.uavCount!=62 ||
+        ob.uavs[3]!=ouv.object || ob.counters[3]!=17 || ob.counters[4]!=UINT_MAX) std::abort();
+    for (UINT i=0;i<ob.uavCount;++i) if (i!=3 && ob.uavs[i]) std::abort();
+    // All old UAV bindings must be removed on a new RTV-only call.
+    if (prepare_output_bindings(orts,2,0,{},nullptr,nullptr,0,0,0,0,8,ob)!=S_OK || ob.uavCount!=6 || ob.dsv) std::abort();
+    for (UINT i=0;i<ob.uavCount;++i) if (ob.uavs[i] || ob.counters[i]!=UINT_MAX) std::abort();
+    if (prepare_output_bindings(orts,2,UINT_MAX,{},nullptr,nullptr,0,0,0,0,8,ob)!=E_INVALIDARG || ob.uavCount!=6) std::abort();
+    if (prepare_output_bindings(orts,2,0,{},ous,counts,1,2,0,0,8,ob)!=E_INVALIDARG) std::abort();
+    if (prepare_output_bindings(nullptr,0,0,{},ous,counts,63,2,0,0,64,ob)!=E_INVALIDARG) std::abort();
+    if (prepare_output_bindings(nullptr,0,0,{},ous,nullptr,63,1,63,1,64,ob)!=S_OK || ob.uavs[63]!=ouv.object || ob.counters[63]!=UINT_MAX) std::abort();
+    table.pfnSetRenderTargets(h,orts,2,6,od,ous,counts,5,2,5,1);
+    if (errors!=79 || owner.runtime().domain.entered()) std::abort();
     std::cout << "PASS draw DDI signatures and uninitialized-engine error/domain control (no rendering test)\n";
 }
