@@ -41,6 +41,7 @@ What the D3D11 interfaces cannot express goes through `IBc250DxvkDevice`:
 | DXGI 1.2 `Blt1` with a source rectangle (ABI 1.1) | `IBc250DxvkDevice1::Blt1` |
 | Runtime allocations with a tiling the shell chose, such as LINEAR (ABI 1.2) | `IBc250DxvkDevice2::CreateTexture2DFromImage2` |
 | Adapter-level `GetCaps` answers must hold at every offered level; the device answers only at its own (ABI 1.3) | `IBc250DxvkDevice3::CheckFeatureSupportAtLevel` |
+| Void DDI entries report errors through `pfnSetErrorCb`; DXGI `Trim` and memory pressure (ABI 1.4) | `IBc250DxvkDevice4::TakeDeferredError`, `TrimMemory` |
 
 ## The ABI
 
@@ -52,9 +53,10 @@ that collide with the WDK's in one translation unit, so the header uses only `wi
 
 The DLL exports one function, `Bc250DxvkEngineGetFuncs(abiVersion, funcs)`. A major mismatch returns
 `E_NOINTERFACE`. Minor versions only add, and what they add sits behind a new interface or function, so an older
-engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.3 is in force: 1.0 plus
-`IBc250DxvkDevice1` (`Blt1`), `IBc250DxvkDevice2` (`CreateTexture2DFromImage2`) and `IBc250DxvkDevice3`
-(`CheckFeatureSupportAtLevel`), which the engine device answers to `QueryInterface`. The rules E1-E6 are written
+engine answers `E_NOINTERFACE` instead of doing the wrong thing. ABI 1.4 is in force: 1.0 plus
+`IBc250DxvkDevice1` (`Blt1`), `IBc250DxvkDevice2` (`CreateTexture2DFromImage2`), `IBc250DxvkDevice3`
+(`CheckFeatureSupportAtLevel`) and `IBc250DxvkDevice4` (`TrimMemory`, `TakeDeferredError`), which the engine
+device answers to `QueryInterface`. The rules E1-E6 are written
 in the header and are not repeated here:
 - E1 the shell owns VkInstance and VkDevice;
 - E2 threads;
@@ -188,6 +190,33 @@ Both end in DXVK's `D3D11Device::GetFormatSupportFlags`.
   device during creation. The DDI's own E_FAIL, "the format does not exist", is reserved for format values that
   the SDK's `dxgiformat.h` does not define.
 
+### Out of memory, deferred errors and trim (E6, ABI 1.4)
+
+Upstream DXVK returns a null storage when an allocation finds no memory, and at least ten callers dereference
+it. A system driver cannot end the application's process for that, least of all DWM's.
+- **Returned errors.** Plain allocations throw `DxvkOutOfMemoryError`, and so does a Vulkan call that fails with
+  an out-of-memory result. The D3D11 entry points that catch `DxvkError` return `E_OUTOFMEMORY` for it. `Map`
+  catches it too. The new storage is allocated before any state changes, so a failed `Map` leaves nothing
+  mapped.
+- **Deferred errors.** Work that cannot return an error records it on the device.
+  - An `UpdateSubresource` whose staging allocation failed is dropped whole: `TakeDeferredError` returns
+    `E_OUTOFMEMORY`.
+  - A recorded command chunk that throws when the engine executes it stops part way. `TakeDeferredError`
+    returns `E_FAIL` for that, out of memory or not, and the shell should treat it as device loss.
+  - `TakeDeferredError` is an atomic exchange, cheap enough to call after every void DDI entry.
+- **Trim.** `TrimMemory` submits pending work, waits for the GPU and frees every empty memory block and the
+  shared allocation caches, without the periodic cleanup's timeouts (500 ms period, 20 s per block). DXVK's
+  initializer (zeroing and uploads for new resources) keeps its commands, and with them its resources, until
+  the context next records something. A context flush with nothing recorded does not submit them, so the trim
+  does. On the development PC (RTX 4090, not unit A), 256 released 1 MiB default buffers left the driver's heap
+  usage at 627 MiB. `TrimMemory` brought it to 55 MiB in about 15 ms, and the engine's own count went from
+  336 MiB to 16 MiB.
+- **Test switch.** `BC250DXVK_TEST_OOM=1` at device creation arms an injection outside the ABI: plain
+  allocations fail while `BC250DXVK_TEST_OOM_NOW=1` is set in the process. The engine test uses it.
+
+Offer, reclaim and residency priority work on whole allocations. DXVK suballocates, so they need a separate
+design (see Gaps).
+
 ### Logging and configuration in a host process
 
 - **Log.** `BC250_DXVK_SHELL_SERVICES::Log` receives DXVK's log lines from the start of `CreateDevice` until the
@@ -237,6 +266,7 @@ import when a destroyed handle's value comes back (ABA).
 | `Blt` and `Blt1` with ROTATE90/270 | `E_NOTIMPL`. Not reachable: the runtime asks for a rotation only from a driver that can return `DXGI_DDI_ERR_UNSUPPORTED` when it creates a primary, and the shell never does (dxgiddi `BltDXGI` and `Blt1DXGI` remarks). ROTATE180 is implemented anyway. | Implement if the shell ever refuses a primary. The docs define `Rotate` as a counter-clockwise turn of the source. |
 | `Blt` and `Blt1` into a multisampled destination | `E_NOTIMPL` | Implement when a runtime path needs it. |
 | Rendering into LINEAR runtime surfaces | The shell allocates back buffers and other runtime surfaces LINEAR, so a title draws straight into LINEAR images. Per-application DXVK draws into its own OPTIMAL back buffer and copies it once per frame to the presentable image. `bc250dxvk_engine_test --bench-tiling` times both on 1920x1080 RGBA8. On the development PC (RTX 4090, not unit A), clearing and 8 blended full-screen draws took 0.044 ms per frame into OPTIMAL and 0.119-0.133 ms into LINEAR (two runs). The OPTIMAL to LINEAR copy took 0.007 ms, and a 1:1 read took the same time from either tiling. | Run `--bench-tiling` on unit A. If drawing into LINEAR costs more than the copy there, the engine draws back buffers into an OPTIMAL image and copies it into the runtime surface at present, as per-application DXVK does. |
+| Offer, reclaim and residency priority | Not implemented. The runtime offers and reclaims whole resources and expects the UMD to pass the request on to the kernel; DXVK suballocates most resources from shared memory blocks, and hosted RADV has no query from a `VkDeviceMemory` to its kernel allocation. `TrimMemory` covers memory that is already free. | A later ABI minor: a discarded-content placeholder storage for an offered resource, re-created on reclaim, and a hosted query for the allocations behind a resource. Both need an agreed contract with the shell first. |
 | 5 % bound against per-application DXVK | Not measured. The workload and the comparison exist: `tools/win/d3d11bench` (draws, fill and shader-creation scenes; `compare.py` gates each scene on the bound plus the run-to-run spread and on equal output checksums). Its README has the protocol. | Needs the shell's positive run through the system runtime. The per-application side is the `per-app` recipe in build.md, built from the same DXVK revision as the engine. |
 
 ## Validation
@@ -254,6 +284,9 @@ it owns instance and device, feeds DDI-form shaders and runtime-style images, an
   per-application DXVK runs;
 - occlusion and stream-output overflow predication;
 - feature answers at other levels: at the device's own level they equal the device's, byte for byte;
+- injected out of memory: `E_OUTOFMEMORY` from creation and `Map` with nothing left behind, a deferred
+  `E_OUTOFMEMORY` from `UpdateSubresource`, recovery once the injection ends;
+- `TrimMemory` returning at least 3/4 of 256 MiB of released buffers to the driver (`VK_EXT_memory_budget`);
 - the thread of every Vulkan call (E2);
 - no optimized pipeline compiled by a draw, and the deferred ones compiled by `SubmitForPresent`;
 - the Log contract;
