@@ -939,6 +939,25 @@ int main() {
         request.surface.Height!=17 || request.surface.Pitch!=512 || request.surface.Size!=12288 ||
         request.runtime_resource!=&rotateIdentity[0] || importedDesc.Width!=65 || importedDesc.Height!=17 ||
         importedDesc.BindFlags!=D3D11_BIND_RENDER_TARGET || importedDesc.MiscFlags) std::abort();
+    // M746: real window swap-chain descriptor (not a VidPn primary).
+    auto windowDesc=runtimeDesc; windowDesc.pPrimaryDesc=nullptr;
+    windowDesc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    windowDesc.BindFlags=D3D10_DDI_BIND_PRESENT|D3D10_DDI_BIND_RENDER_TARGET|D3D10_DDI_BIND_SHADER_RESOURCE;
+    windowDesc.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE;
+    RuntimeSurfaceRequest windowRequest{}; D3D11_TEXTURE2D_DESC1 windowTexture{};
+    ResourceDescription privateTexture{};
+    if (convert_runtime_resource(windowDesc,&rotateIdentity[0],windowRequest,windowTexture)!=S_OK ||
+        windowRequest.primary || !windowRequest.displayable || !windowRequest.shared ||
+        windowRequest.texture.Access || windowTexture.MiscFlags ||
+        windowTexture.BindFlags!=(D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE) ||
+        convert_resource(windowDesc,privateTexture)!=E_NOTIMPL) std::abort();
+    windowDesc.MiscFlags|=D3D11_1DDI_RESOURCE_MISC_RESTRICT_SHARED_RESOURCE_DRIVER;
+    if (convert_runtime_resource(windowDesc,&rotateIdentity[0],windowRequest,windowTexture)!=E_NOTIMPL) std::abort();
+    windowDesc.MiscFlags=D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE;
+    windowDesc.BindFlags=D3D10_DDI_BIND_RENDER_TARGET;
+    if (convert_resource(windowDesc,privateTexture)!=E_NOTIMPL ||
+        convert_runtime_resource(windowDesc,&rotateIdentity[0],windowRequest,windowTexture)!=S_OK ||
+        windowRequest.primary || windowRequest.shared || !windowRequest.displayable) std::abort();
     runtimeDesc.SampleDesc.Count=4;
     if (convert_runtime_resource(runtimeDesc,&rotateIdentity[0],request,importedDesc)!=E_NOTIMPL) std::abort();
     runtimeDesc.SampleDesc.Count=1; runtimeDesc.Format=DXGI_FORMAT_R16_FLOAT;

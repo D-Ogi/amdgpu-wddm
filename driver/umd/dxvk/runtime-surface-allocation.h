@@ -13,7 +13,9 @@ struct RuntimeSurfaceRequest {
     BC250_SURFACE_RESOURCE_PRIVATE texture{}; // Zero means legacy E26R v2.
     HANDLE runtime_resource=nullptr;
     UINT vidpn_source=0;
-    bool primary=false,shared=false,cpu_read=false;
+    // Displayable uses the same linear LB7A layout; only pPrimaryDesc sets
+    // allocation Flags.Primary and a VidPnSourceId.
+    bool primary=false,shared=false,cpu_read=false,displayable=false;
 };
 HRESULT allocate_runtime_surface(RuntimeDevice &,const RuntimeSurfaceRequest &,RuntimeSurfaceAllocation &);
 // Caller must retire engine/Present use and destroy image wrappers first.

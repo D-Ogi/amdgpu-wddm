@@ -9,7 +9,7 @@ HRESULT convert_resource(const D3D11DDIARG_CREATERESOURCE &s,ResourceDescription
     // Shared/primary ownership belongs to the runtime allocation/import path.
     // Never silently create an engine-private replacement for these resources.
     if (s.pPrimaryDesc || (s.BindFlags & D3D10_DDI_BIND_PRESENT) ||
-        (s.MiscFlags & D3D10_DDI_RESOURCE_MISC_SHARED)) return E_NOTIMPL;
+        (s.MiscFlags & (D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) return E_NOTIMPL;
     if (!s.pMipInfoList || !s.MipLevels || !s.ArraySize) return E_INVALIDARG;
     D3D11_USAGE usage;
     switch(s.Usage) {
@@ -99,7 +99,11 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
         input.Usage!=D3D10_DDI_USAGE_DEFAULT || input.MapFlags) return E_NOTIMPL;
     auto ordinary=input; ordinary.pPrimaryDesc=nullptr;
     ordinary.BindFlags&=~UINT(D3D10_DDI_BIND_PRESENT);
-    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_SHARED|D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT);
+    // DISPLAYABLE is runtime allocation intent, not a COM texture misc flag.
+    // LB7A runtime surfaces already use linear, 256-byte-pitch scanout storage.
+    // A window buffer with no primary descriptor is not a VidPn primary.
+    ordinary.MiscFlags&=~UINT(D3D10_DDI_RESOURCE_MISC_SHARED|D3D10_DDI_RESOURCE_MISC_DISCARD_ON_PRESENT|
+        D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE);
     ResourceDescription converted;
     HRESULT hr=convert_resource(ordinary,converted);
     if (FAILED(hr)) return hr;
@@ -113,6 +117,7 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     }
     RuntimeSurfaceRequest r{};
     r.runtime_resource=runtimeHandle; r.primary=input.pPrimaryDesc!=nullptr;
+    r.displayable=(input.MiscFlags&D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE)!=0;
     r.shared=(input.MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)!=0;
     if (input.pPrimaryDesc) r.vidpn_source=input.pPrimaryDesc->VidPnSourceId;
     const UINT pitch=(d.Width*4+255)&~255u;
@@ -162,7 +167,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
         auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
         if (!s || !desc || !owner.device()) { report_ddi_error(owner,E_INVALIDARG); return; }
         if (desc->pPrimaryDesc || (desc->BindFlags&D3D10_DDI_BIND_PRESENT) ||
-            (desc->MiscFlags&D3D10_DDI_RESOURCE_MISC_SHARED)) {
+            (desc->MiscFlags&(D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE))) {
             RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 texture{};
             HRESULT hr=convert_runtime_resource(*desc,reinterpret_cast<HANDLE>(runtimeHandle.handle),request,texture);
             if (FAILED(hr)) {

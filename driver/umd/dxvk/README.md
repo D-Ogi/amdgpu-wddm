@@ -368,3 +368,10 @@ Use both arguments for a deployment candidate; omitting them is build-only.
 A newer checked-out ABI header can raise the shell requirement even when no
 shell source changed. Keep the header checkout aligned with the staged engine.
 This check establishes export/ABI loading only, not device creation or rendering.
+
+Window swap-chain buffers may carry `DISPLAYABLE_SURFACE` even on the
+D3D11.1 entry (M746). They use runtime LB7A allocation/import, whose linear
+layout and pitch already meet the surface geometry contract. This flag is
+not forwarded as an ordinary COM misc flag and does not imply a VidPn primary;
+only `pPrimaryDesc` supplies primary/source identity. Ordinary private texture
+conversion and unsupported restricted-sharing flags remain rejected.
