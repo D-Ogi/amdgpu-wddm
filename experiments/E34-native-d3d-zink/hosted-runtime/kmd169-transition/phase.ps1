@@ -19,7 +19,7 @@ if(Test-Path $start){throw 'Stage already attempted; inspect its state'}
 $boundary=Get-Content "$out\boundary.json" -Raw|ConvertFrom-Json
 $boot=(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
 if($boundary.boot -ne $boot -or $boundary.machine -ne $env:COMPUTERNAME){throw 'Boot/host changed'}
-$limit=if($Arm -eq 'candidate'){87}else{170}
+$limit=if($Arm -eq 'candidate'){if($mode -eq 'deploy169'){107}else{87}}else{170}
 if($boundary.frequency -ne [Diagnostics.Stopwatch]::Frequency -or [long]$boundary.qpc -le 0){throw 'Invalid monotonic boundary'}
 $elapsed=([Diagnostics.Stopwatch]::GetTimestamp()-[long]$boundary.qpc)/[double]$boundary.frequency
 if($boundary.frequency -ne [Diagnostics.Stopwatch]::Frequency -or $elapsed -lt 0 -or $elapsed -ge $limit){throw 'Stage deadline expired'}
@@ -209,13 +209,14 @@ if($Phase -eq 'Capture'){
    Write-DurableText "$out\$Receipt-health-before.txt" $health
    $info=& C:\BC250\m8\bc250kmd_cli.exe info|Out-String
    if($LASTEXITCODE -ne 0 -or $info -notmatch $abi -or $info -notmatch 'FULL WDDM TABLE'){throw 'Loaded KMD identity mismatch'}
-   if($Arm -eq 'restore'){
+   $requireConfirmed=($Arm -eq 'restore' -or $mode -eq 'deploy169')
+   if($requireConfirmed){
     $before=Wait-KmdConfirmEligible -Before $startHealth -Read $readHealth -Deadline ($ChildDeadline-5*[Diagnostics.Stopwatch]::Frequency) -Record {
      param($sample)
      Write-DurableText "$out\$Receipt-health-wait-$($sample.attempt).json" ($sample|ConvertTo-Json -Depth 5)
     }
    }
-   if($Arm -eq 'restore' -and $before.flags -eq 7){
+   if($requireConfirmed -and $before.flags -eq 7){
     Assert-KmdConfirmEligible $before
     $confirmed=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health confirm $before.generation $before.epoch|Out-String
     if($LASTEXITCODE -ne 0){throw 'Checked health confirmation failed'}
@@ -227,10 +228,10 @@ if($Phase -eq 'Capture'){
    $finalHealth=Get-KmdReadyHealth $health $abi
    Assert-KmdSameHealthStart $startHealth $finalHealth
    Assert-KmdFreshWork $finalHealth
-   if($Arm -eq 'restore'){Assert-KmdConfirmedHealth $before $finalHealth}
-   Write-DurableText "$out\$Receipt-health-acceptance.json" (@{scope=$(if($Arm -eq 'candidate'){'candidate-ready-only'}else{'restored-confirmed'});health=$finalHealth}|ConvertTo-Json -Depth 4)
+   if($requireConfirmed){Assert-KmdConfirmedHealth $before $finalHealth}
+   Write-DurableText "$out\$Receipt-health-acceptance.json" (@{scope=$(if($Arm -eq 'candidate'){if($requireConfirmed){'candidate-confirmed'}else{'candidate-ready-only'}}else{'restored-confirmed'});health=$finalHealth}|ConvertTo-Json -Depth 4)
    $observed=& $readCpu
-   Assert-KmdCpuBaseline $saved $observed -AllowUnconfirmed:($Arm -eq 'candidate')
+   Assert-KmdCpuBaseline $saved $observed -AllowUnconfirmed:(!$requireConfirmed)
    Write-DurableText "$out\$Receipt-cpu.json" ($observed|ConvertTo-Json -Depth 8)
    Write-DurableText "$out\$Receipt-info.txt" $info
    Write-DurableText "$out\$Receipt-health.txt" $health

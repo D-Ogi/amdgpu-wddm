@@ -24,8 +24,8 @@ function Invoke-KmdTransitionArm {
  foreach($phase in $phases){
   $elapsed=Get-KmdElapsed $Origin $Frequency
   # Restore Verify ends by T+160, reserving ten seconds for package cleanup.
-  $end=if($Arm -eq 'candidate'){87}elseif($phase -eq 'Verify'){160}else{170}
-  $phaseCap=if($Arm -eq 'restore' -and $phase -eq 'Verify'){70000}else{30000}
+  $end=if($Arm -eq 'candidate'){if($mode -eq 'deploy169'){107}else{87}}elseif($phase -eq 'Verify'){160}else{170}
+  $phaseCap=if($phase -eq 'Verify' -and ($Arm -eq 'restore' -or $mode -eq 'deploy169')){70000}else{30000}
   $budget=[int][Math]::Min($phaseCap,[Math]::Max(0,[Math]::Floor(($end-$elapsed)*1000)))
   if($budget -le 1000){return @{success=$false;tree_closed=$true;phase=$phase;reason='no-budget'}}
   $receipt=($Arm+'-'+$phase).ToLowerInvariant()
@@ -50,5 +50,5 @@ function Invoke-KmdTransitionArm {
    return @{success=$false;tree_closed=$true;phase=$phase;reason='completion-witness-invalid'}
   }
  }
- return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified';health_scope=$(if($Arm -eq 'candidate'){if($mode -eq 'same166'){'disabled-install-only'}else{'candidate-ready-only'}}else{'restored-confirmed'})}
+ return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified';health_scope=$(if($Arm -eq 'candidate'){if($mode -eq 'same166'){'disabled-install-only'}elseif($mode -eq 'deploy169'){'candidate-confirmed'}else{'candidate-ready-only'}}else{'restored-confirmed'})}
 }

@@ -3,7 +3,7 @@
 function Invoke-KmdSupervisedTransition {
  param([string]$Directory,[string]$Tool,[long]$Origin,[long]$Frequency,
        [string]$Worker,[string[]]$WorkerArguments,[scriptblock]$Restore,
-       [ValidateRange(3,90)][int]$CandidateSeconds=90)
+       [ValidateRange(3,110)][int]$CandidateSeconds=90,[switch]$RetainConfirmedCandidate)
  $elapsed=Get-KmdElapsed $Origin $Frequency
  if($elapsed -ge $CandidateSeconds-1){throw 'No candidate launch budget'}
  $deadline=$Origin+[long]($CandidateSeconds*$Frequency)
@@ -30,6 +30,14 @@ function Invoke-KmdSupervisedTransition {
  }
  if(!(Test-Path "$Directory\mutation-start.json")){
   return @{status='cancelled';reason='no-mutation';restored=$false;candidate_verified=$false}
+ }
+ if($RetainConfirmedCandidate -and $candidateValid){
+  try{
+   $acceptance=Get-Content "$Directory\candidate-verify-health-acceptance.json" -Raw -ErrorAction Stop|ConvertFrom-Json -ErrorAction Stop
+   if(Test-KmdDeploymentAcceptance $candidate $acceptance){
+    return @{status='closed';restored=$false;candidate_verified=$true;candidate_retained=$true;elapsed=(Get-KmdElapsed $Origin $Frequency)}
+   }
+  }catch{Write-DurableText "$Directory\retain-rejected.txt" ([string]$_)}
  }
  if((Get-KmdElapsed $Origin $Frequency) -ge 169){
   return @{status='recovery-required';reason='no-restore-budget';restored=$false}

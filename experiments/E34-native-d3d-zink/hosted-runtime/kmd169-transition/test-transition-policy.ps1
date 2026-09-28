@@ -5,7 +5,7 @@ if(Test-Path $Out){throw 'Fresh output required'}
 New-Item -ItemType Directory $Out|Out-Null
 function Must-Reject([scriptblock]$Action){$failed=$false;try{& $Action|Out-Null}catch{$failed=$true};if(!$failed){throw 'False acceptance'}}
 Must-Reject {Get-KmdTransitionPolicy $Out}
-foreach($mode in @('same166','candidate169')){
+foreach($mode in @('same166','candidate169','deploy169')){
  @{schema=1;mode=$mode}|ConvertTo-Json|Set-Content "$Out\transition-policy.json"
  if((Get-KmdTransitionPolicy $Out) -ne $mode){throw 'Policy lost'}
 }

@@ -103,3 +103,9 @@ This control mode has local syntax/admission validation only. It has not run on 
 ## Readiness receipt projection after M714
 
 CPU observations now project only EnableGpuPresentBlit, EnableCddDwmInterop and UnconfirmedStarts from Get-ItemProperty. Provider metadata (PSDrive/PSProvider and related object graphs) is not serialized. Missing values stay null and fail the existing baseline checks. M715 validates the corrected two-report path on CPU166 in1.535s; it does not retroactively turn M714's automatic verification timeout into a pass.
+
+## Confirmed CPU169 deployment
+
+prepare.py --deploy-candidate selects manifest-covered deploy169, mutually exclusive with the same-package control. It uses the same exact169/166 package pins. Candidate Verify now requires full confirmation admission, checked flags15 and strict CPU guard0, and marks candidate-confirmed. The supervisor retains169 only with a closed worker and both matching confirmed-scope result/health receipts. Normal candidate-ready-only does not authorize retention. Successful deployment reports candidate_retained=true and restored=false, followed by independent logging restoration. Cleanup removes the terminal task, not the active169 package.
+
+This deployment has a110-second outer candidate deadline (107-second phase work), still within the original170-second recovery work and180-second task limit. A failed candidate invokes the166 restore arm; late failures may leave insufficient time for its60-second confirmation and must remain recovery-required. Deadlines never extend. Deployment is a prerequisite for a separate180-second GPU-DWM test; it is not GPU validation or G0 completion. This new policy has not yet run on the lab.

@@ -19,7 +19,9 @@ def main():
     parser.add_argument('--helper', type=Path, required=True)
     parser.add_argument('--selector', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
-    parser.add_argument('--same-package-control', action='store_true')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--same-package-control', action='store_true')
+    modes.add_argument('--deploy-candidate', action='store_true')
     args = parser.parse_args()
     dirty = subprocess.check_output(['git', '-C', str(REPO), 'status', '--porcelain', '--', str(HERE), str(HERE.parent / 'kmd168-transition')], text=True)
     if dirty.strip():
@@ -47,7 +49,7 @@ def main():
         for item in source.glob('*.ps1'):
             shutil.copyfile(item, destination / item.name)
     (args.out / 'package-hashes.json').write_text(json.dumps(pins, indent=2) + '\n')
-    (args.out / 'transition-policy.json').write_text(json.dumps({'schema': 1, 'mode': 'same166' if args.same_package_control else 'candidate169'}) + '\n')
+    (args.out / 'transition-policy.json').write_text(json.dumps({'schema': 1, 'mode': 'same166' if args.same_package_control else ('deploy169' if args.deploy_candidate else 'candidate169')}) + '\n')
     shutil.copyfile(args.helper, args.out / 'bounded-child.exe')
     shutil.copyfile(args.selector, args.out / 'select-driver.exe')
     files = {f.relative_to(args.out).as_posix(): digest(f) for f in sorted(args.out.rglob('*')) if f.is_file()}

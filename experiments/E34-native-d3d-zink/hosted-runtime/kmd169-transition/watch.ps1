@@ -26,8 +26,10 @@ $runLogging={
  $done=Get-Content "$Directory\$name-done.json" -Raw -ErrorAction Stop|ConvertFrom-Json
  return ($done.mode -eq $mode -and [long]$done.qpc -ge $origin -and [long]$done.qpc -lt $deadline)
 }
+$retain=((Get-KmdTransitionPolicy $Directory) -eq 'deploy169')
+$candidateSeconds=if($retain){110}else{90}
 $result=Invoke-KmdLoggedTransition -RunLogging $runLogging -Transition {
- Invoke-KmdSupervisedTransition -Directory $Directory -Tool $Tool -Origin $origin -Frequency $frequency -Worker "$PSScriptRoot\worker.ps1" -WorkerArguments @('-Directory',$Directory,'-Tool',$Tool) -Restore {
+ Invoke-KmdSupervisedTransition -RetainConfirmedCandidate:$retain -CandidateSeconds $candidateSeconds -Directory $Directory -Tool $Tool -Origin $origin -Frequency $frequency -Worker "$PSScriptRoot\worker.ps1" -WorkerArguments @('-Directory',$Directory,'-Tool',$Tool) -Restore {
  Invoke-KmdTransitionArm restore $Directory $Tool $origin $frequency
 }
 }
