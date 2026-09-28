@@ -1,0 +1,104 @@
+{
+  "rt-emulate001": {
+    "supervisor": {
+      "error": null,
+      "elapsed": 20.7935221,
+      "postflight": true,
+      "passed": true
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": 0,
+      "timeout": false,
+      "icd_seen": true,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 66.9,
+      "seconds": 3.5410326,
+      "mode": "info",
+      "experimental": "emulate_rt",
+      "utc": "2026-09-28T17:35:58.1978469Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 0,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true
+  },
+  "rt-isa001": {
+    "supervisor": {
+      "error": null,
+      "elapsed": 23.608338399999997,
+      "postflight": true,
+      "passed": true
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": 0,
+      "timeout": false,
+      "icd_seen": true,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 67,
+      "seconds": 6.5400925999999995,
+      "mode": "info,shaders",
+      "experimental": "",
+      "cache_disabled": true,
+      "utc": "2026-09-28T17:37:38.4693825Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 0,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true,
+    "compiler_witness": {
+      "kind": "ACO print_program after lowering, not binary disassembly",
+      "image_bvh64_intersect_ray_count": 2,
+      "raw_stderr_sha256": "4c7f929c1b53e087d7bf3a88156b198b559a1b621d6afca002b493492f78da1c"
+    }
+  },
+  "rt-isa002": {
+    "supervisor": {
+      "error": null,
+      "elapsed": 27.2424614,
+      "postflight": true,
+      "passed": true
+    },
+    "case": {
+      "case": "dEQP-VK.ray_query.builtin.flow.comp.triangles",
+      "exit": 0,
+      "timeout": false,
+      "icd_seen": true,
+      "icd_sha256": "949669FF9194C6F5A63D4DCB175939AFE7AD0067A084417C0D2207A7CC0C8C0F",
+      "temperature": 67,
+      "seconds": 10.2587137,
+      "mode": "info,shaders",
+      "experimental": "emulate_rt",
+      "cache_disabled": true,
+      "utc": "2026-09-28T17:38:53.6363588Z"
+    },
+    "job": {
+      "cancelled": false,
+      "console_session": 0,
+      "root_exit_observed": true,
+      "child_exit": 0,
+      "timed_out": false,
+      "termination_requested": true,
+      "job_empty": true
+    },
+    "baseline_unchanged": true,
+    "compiler_witness": {
+      "kind": "ACO print_program after lowering, not binary disassembly",
+      "image_bvh64_intersect_ray_count": 0,
+      "raw_stderr_sha256": "f563e06215bbffa821dfbd60a72684d87f776ce81254e45551aa5deddcd5abca"
+    }
+  }
+}
