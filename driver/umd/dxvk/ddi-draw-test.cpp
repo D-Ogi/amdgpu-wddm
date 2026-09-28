@@ -132,7 +132,19 @@ int main() {
     if (!format_allows_not_supported(DXGI_FORMAT_Y410) || !format_allows_not_supported(DXGI_FORMAT_AYUV) ||
         format_allows_not_supported(DXGI_FORMAT_R1_UNORM) || format_allows_not_supported(DXGI_FORMAT_R8G8B8A8_UNORM) ||
         format_allows_not_supported(DXGI_FORMAT_FORCE_UINT)) std::abort();
+    static_assert(offsetof(D3D11_1DDI_DEVICEFUNCS,pfnCheckCounterInfo)==0x308);
     auto table=make_render_device_table();
+    if(!table.pfnCheckCounterInfo)std::abort();
+    D3D10DDI_COUNTER_INFO counterInfo{};
+    std::memset(&counterInfo,0xa5,sizeof(counterInfo));
+    table.pfnCheckCounterInfo(h,&counterInfo);
+    if(counterInfo.LastDeviceDependentCounter || counterInfo.NumSimultaneousCounters ||
+        counterInfo.NumDetectableParallelUnits || errors)std::abort();
+    owner.bridge().device_lost=true;
+    table.pfnCheckCounterInfo(h,&counterInfo);
+    if(counterInfo.LastDeviceDependentCounter || counterInfo.NumSimultaneousCounters ||
+        counterInfo.NumDetectableParallelUnits || errors)std::abort();
+    owner.bridge().device_lost=false;
     if (!table.pfnDraw || !table.pfnDispatch || !table.pfnCreateResource) std::abort();
     // An uninitialized engine must report failure in the device domain, never
     // silently claim a successful draw or dereference a null COM context.

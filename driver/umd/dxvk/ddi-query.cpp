@@ -46,6 +46,12 @@ HRESULT convert_query(const D3D10DDIARG_CREATEQUERY &s,D3D11_QUERY_DESC &d,bool 
 }
 HRESULT query_ddi_status(HRESULT hr) { return hr==S_FALSE ? DXGI_DDI_ERR_WASSTILLDRAWING : ddi_device_status(hr); }
 namespace {
+void APIENTRY counter_info(D3D10DDI_HDEVICE,D3D10DDI_COUNTER_INFO *out) {
+    // This engine exposes no hardware performance counters. WDK explicitly
+    // permits all-zero capability information. It must remain available after
+    // device removal, without accessing a context or reporting DEVICE_REMOVED.
+    if(out)*out={};
+}
 DeviceOwner &owner(D3D10DDI_HDEVICE h) { return *static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner; }
 DdiQuery *query(D3D10DDI_HQUERY h) { return static_cast<DdiQuery *>(h.pDrvPrivate); }
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D10DDIARG_CREATEQUERY *) { return sizeof(DdiQuery); }
@@ -112,6 +118,7 @@ void APIENTRY predication(D3D10DDI_HDEVICE h,D3D10DDI_HQUERY q,BOOL value) {
 }
 }
 void install_query_ddi(D3D11_1DDI_DEVICEFUNCS &t) {
+    t.pfnCheckCounterInfo=counter_info;
     t.pfnCalcPrivateQuerySize=size; t.pfnCreateQuery=create; t.pfnDestroyQuery=destroy;
     t.pfnQueryBegin=issue<true>; t.pfnQueryEnd=issue<false>; t.pfnQueryGetData=data; t.pfnSetPredication=predication;
 }
