@@ -1,5 +1,6 @@
 # Called by the supervisor; not an independent deployment entry point.
 . "$PSScriptRoot\durable.ps1"
+. "$PSScriptRoot\transition-policy.ps1"
 . "$PSScriptRoot\..\kmd168-transition\deadline.ps1"
 . "$PSScriptRoot\..\kmd168-transition\invoke-bounded.ps1"
 function Get-KmdChildClosure {
@@ -16,8 +17,8 @@ function Get-KmdChildClosure {
 function Invoke-KmdTransitionArm {
  param([ValidateSet('candidate','restore')][string]$Arm,[string]$Directory,[string]$Tool,
        [long]$Origin,[long]$Frequency)
- $phases=if($Arm -eq 'candidate'){@('Capture','Disable','Install','Configure','Enable','Verify')}
-         else{@('Quiesce','Disable','Install','Configure','Enable','Verify','CleanupPackage')}
+ $mode=Get-KmdTransitionPolicy $Directory
+ $phases=@(Get-KmdTransitionPhases $Arm $mode)
  $phaseScript=Join-Path $PSScriptRoot 'phase.ps1'
  $powershell="$env:windir\System32\WindowsPowerShell\v1.0\powershell.exe"
  foreach($phase in $phases){
@@ -49,5 +50,5 @@ function Invoke-KmdTransitionArm {
    return @{success=$false;tree_closed=$true;phase=$phase;reason='completion-witness-invalid'}
   }
  }
- return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified';health_scope=$(if($Arm -eq 'candidate'){'candidate-ready-only'}else{'restored-confirmed'})}
+ return @{success=$true;tree_closed=$true;phase=$phases[-1];reason='verified';health_scope=$(if($Arm -eq 'candidate'){if($mode -eq 'same166'){'disabled-install-only'}else{'candidate-ready-only'}}else{'restored-confirmed'})}
 }

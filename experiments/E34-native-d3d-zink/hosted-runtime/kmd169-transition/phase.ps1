@@ -1,10 +1,11 @@
 # Must be launched through bounded-child.exe. No standalone blocking-time guarantee.
-param([Parameter(Mandatory)][ValidateSet('Capture','Quiesce','Disable','Install','Configure','Enable','Verify','CleanupPackage')][string]$Phase,
+param([Parameter(Mandatory)][ValidateSet('Capture','Quiesce','Rebind','Disable','Install','Configure','Enable','Verify','CleanupPackage')][string]$Phase,
  [Parameter(Mandatory)][ValidateSet('candidate','restore')][string]$Arm,
  [Parameter(Mandatory)][string]$Directory,[Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Receipt,
  [Parameter(Mandatory)][long]$ChildDeadline)
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\durable.ps1"
+. "$PSScriptRoot\transition-policy.ps1"
 . "$PSScriptRoot\verify-cpu.ps1"
 . "$PSScriptRoot\pnp-idle.ps1"
 . "$PSScriptRoot\install-observation.ps1"
@@ -12,6 +13,7 @@ $ErrorActionPreference='Stop'
 $directoryPath=[IO.Path]::GetFullPath($Directory)
 if(!$directoryPath.StartsWith('C:\BC250\m13\kmd169-', [StringComparison]::OrdinalIgnoreCase)){throw 'Unexpected trial directory'}
 $out=$directoryPath
+$mode=Get-KmdTransitionPolicy $out
 $start=Join-Path $out "$Receipt-start.json";$done=Join-Path $out "$Receipt-done.json"
 if(Test-Path $start){throw 'Stage already attempted; inspect its state'}
 $boundary=Get-Content "$out\boundary.json" -Raw|ConvertFrom-Json
@@ -52,8 +54,9 @@ if($Phase -eq 'Capture'){
  $hardware=@((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_HardwareIds).Data)[0]
  if($hardware -ne $saved.hardware -or $hardware -notlike 'PCI\VEN_1002&DEV_13FE*'){throw 'Adapter identity changed'}
  $reg='HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
- $version=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data
- $expectedVersion=if($Arm -eq 'candidate'){'0.7.169.1'}else{'0.7.166.1'}
+ $version=$null
+ try{$version=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion -ErrorAction Stop).Data}catch{if($Phase -notin @('Quiesce','Rebind')){throw}}
+ $expectedVersion=if($Arm -eq 'candidate' -and $mode -ne 'same166'){'0.7.169.1'}else{'0.7.166.1'}
  $label=if($Arm -eq 'candidate'){'candidate169'}else{'rollback166'}
  $image=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\bc250kmd').ImagePath
  if($image.StartsWith('\SystemRoot\')){$image=Join-Path $env:windir $image.Substring(12)}
@@ -71,6 +74,26 @@ if($Phase -eq 'Capture'){
    Assert-KmdRestorableProblem $problem
    if(!(Test-Path "$out\candidate-tree-closed.json")){throw 'Candidate tree closure not witnessed'}
    Write-DurableText "$out\restore-admitted.json" (@{qpc=[Diagnostics.Stopwatch]::GetTimestamp();problem=$problem;pnp=$pnp}|ConvertTo-Json -Depth 6)
+  }
+  'Rebind' {
+   if($mode -ne 'same166' -or $Arm -ne 'restore'){throw 'Rebind is only for same166 control recovery'}
+   if($manifest.candidate169.'bc250kmd.sys' -ne $manifest.rollback166.'bc250kmd.sys'){throw 'Same-package control identity mismatch'}
+   # Reuse successful binding only after a completed disabled-install receipt.
+   $reuse=(Test-Path "$out\candidate-install-done.json") -and $version -eq '0.7.166.1' -and $problem -eq 22
+   if(!$reuse){
+    Write-DurableText "$out\$Receipt-fallback-start.json" (@{qpc=[Diagnostics.Stopwatch]::GetTimestamp()}|ConvertTo-Json)
+    $env:TEMP='C:\BC250\tmp';$env:TMP=$env:TEMP
+    Add-Type 'using System;using System.Runtime.InteropServices;public static class Same166Recovery{[DllImport("newdev.dll",CharSet=CharSet.Unicode,SetLastError=true)][return:MarshalAs(UnmanagedType.Bool)]public static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr p,string h,string i,uint f,[MarshalAs(UnmanagedType.Bool)]out bool reboot);}'
+    $reboot=$false
+    $ok=[Same166Recovery]::UpdateDriverForPlugAndPlayDevicesW([IntPtr]::Zero,$saved.hardware,"$out\rollback166\bc250kmd.inf",1,[ref]$reboot)
+    $errorCode=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    Write-DurableText "$out\$Receipt-fallback-result.json" (@{ok=$ok;reboot=$reboot;error=$errorCode;observation=(Get-KmdInstallObservation $gpu.InstanceId)}|ConvertTo-Json -Depth 10)
+    if(!$ok -or $reboot){throw 'Fallback rebind failed or requires explicit reboot recovery'}
+   }
+   & pnputil.exe /disable-device $gpu.InstanceId|Out-Null
+   if($LASTEXITCODE -ne 0){throw 'Recovery disable failed'}
+   if((Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_DriverVersion).Data -ne '0.7.166.1' -or
+      (Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data -ne 22){throw 'Recovery binding/disable not witnessed'}
   }
   'Disable' {
    if($Arm -eq 'candidate' -and ($version -ne '0.7.166.1' -or $actual -ne $manifest.rollback166.'bc250kmd.sys')){throw 'Candidate admission requires exact166'}
@@ -103,8 +126,20 @@ if($Phase -eq 'Capture'){
   'Configure' {
    if($problem -ne 22 -or $version -ne $expectedVersion -or $actual -ne $manifest.$label.'bc250kmd.sys'){throw 'Configure requires expected disabled driver'}
    $class='HKLM:\SYSTEM\CurrentControlSet\Control\Class\'+(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
-   New-ItemProperty $class -Name UserModeDriverName -PropertyType MultiString -Value @($saved.umd_registration) -Force|Out-Null
-   New-ItemProperty $class -Name VulkanDriverName -PropertyType MultiString -Value @($saved.icd_registration) -Force|Out-Null
+   $driverKey=(Get-PnpDeviceProperty -InstanceId $gpu.InstanceId -KeyName DEVPKEY_Device_Driver).Data
+   $classKey=[Microsoft.Win32.Registry]::LocalMachine.OpenSubKey(('SYSTEM\CurrentControlSet\Control\Class\'+$driverKey),$true)
+   if(!$classKey){throw 'Installed class key missing'}
+   try {
+    foreach($entry in @(@('UserModeDriverName','umd_registration'),@('VulkanDriverName','icd_registration'))){
+     $value=[string[]]$saved.($entry[1])
+     if(!$value.Count -or @($value|Where-Object {[string]::IsNullOrWhiteSpace($_)}).Count){throw 'Invalid saved graphics registration'}
+     $classKey.SetValue($entry[0],$value,[Microsoft.Win32.RegistryValueKind]::MultiString)
+     $classKey.Flush()
+     $readback=[string[]]$classKey.GetValue($entry[0])
+     if($classKey.GetValueKind($entry[0]) -ne [Microsoft.Win32.RegistryValueKind]::MultiString -or $readback.Count -ne $value.Count){throw 'Class registration readback mismatch'}
+     for($i=0;$i -lt $value.Count;$i++){if($readback[$i] -cne $value[$i]){throw 'Class registration readback mismatch'}}
+    }
+   }finally{$classKey.Dispose()}
    foreach($item in $saved.parameters.PSObject.Properties){if($item.Name -in @('UnconfirmedStarts','LastStage','StageHistory')){continue};New-ItemProperty $reg -Name $item.Name -Value $item.Value.value -PropertyType $item.Value.kind -Force|Out-Null}
    Set-DurablePresentGates 0
   }
@@ -153,7 +188,7 @@ if($Phase -eq 'Capture'){
     })
    }
    }
-   $abi=if($Arm -eq 'candidate'){'0x000700A9'}else{'0x000700A6'}
+   $abi=if($Arm -eq 'candidate' -and $mode -ne 'same166'){'0x000700A9'}else{'0x000700A6'}
    $readHealth={
     $text=& C:\BC250\m9\candidate07147\client\bc250kmd_cli.exe health read|Out-String
     if($LASTEXITCODE -ne 0){throw 'Independent health query failed'}

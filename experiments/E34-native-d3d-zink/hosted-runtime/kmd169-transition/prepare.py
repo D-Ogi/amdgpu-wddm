@@ -19,13 +19,16 @@ def main():
     parser.add_argument('--helper', type=Path, required=True)
     parser.add_argument('--selector', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--same-package-control', action='store_true')
     args = parser.parse_args()
     dirty = subprocess.check_output(['git', '-C', str(REPO), 'status', '--porcelain', '--', str(HERE), str(HERE.parent / 'kmd168-transition')], text=True)
     if dirty.strip():
         raise SystemExit('Commit runner changes before staging')
     revision = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
     pins = json.loads((HERE / 'package-hashes.json').read_text())
-    packages = {'candidate169': args.candidate, 'rollback166': args.rollback}
+    if args.same_package_control:
+        pins['candidate169'] = dict(pins['rollback166'])
+    packages = {'candidate169': args.rollback if args.same_package_control else args.candidate, 'rollback166': args.rollback}
     for label, source in packages.items():
         for name, expected in pins[label].items():
             if digest(source / name) != expected:
@@ -43,7 +46,8 @@ def main():
         destination.mkdir()
         for item in source.glob('*.ps1'):
             shutil.copyfile(item, destination / item.name)
-    shutil.copyfile(HERE / 'package-hashes.json', args.out / 'package-hashes.json')
+    (args.out / 'package-hashes.json').write_text(json.dumps(pins, indent=2) + '\n')
+    (args.out / 'transition-policy.json').write_text(json.dumps({'schema': 1, 'mode': 'same166' if args.same_package_control else 'candidate169'}) + '\n')
     shutil.copyfile(args.helper, args.out / 'bounded-child.exe')
     shutil.copyfile(args.selector, args.out / 'select-driver.exe')
     files = {f.relative_to(args.out).as_posix(): digest(f) for f in sorted(args.out.rglob('*')) if f.is_file()}
