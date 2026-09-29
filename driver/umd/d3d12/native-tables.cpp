@@ -127,6 +127,10 @@ struct EntryPolicy {
         return static_cast<Device*>(engine_ddi::command_list_shell(handle));
     }
     static Device* resolve(D3D12DDI_HCOMMANDQUEUE handle) noexcept {return resolve_queue_device(handle);}
+    // The identifier and stack size slots of a state object carry no other handle.
+    static Device* resolve(D3D12DDI_HSTATEOBJECT_0054 handle) noexcept {
+        return static_cast<Device*>(engine_ddi::state_object_shell(handle));
+    }
     // Unsupported object-specific slots (e.g. metacommands) never borrow another
     // device's scope. Their creation already refuses in the engine boundary.
     template<class T> static Device* resolve(T) noexcept {return nullptr;}

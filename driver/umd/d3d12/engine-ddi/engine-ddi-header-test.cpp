@@ -78,6 +78,9 @@ static_assert(sizeof(D3D12DDI_MEMORY_ARCHITECTURE_CAPS_0041) == 20 && D3D12DDI_H
 // Shell-facing calls added within r3: the owner of a command list, the queue close result, the residency lookup.
 static_assert(std::is_same_v<decltype(&engine_ddi::command_list_shell), void* (*)(D3D12DDI_HCOMMANDLIST) noexcept>,
               "command_list_shell");
+static_assert(std::is_same_v<decltype(&engine_ddi::state_object_shell),
+                             void* (*)(D3D12DDI_HSTATEOBJECT_0054) noexcept>,
+              "state_object_shell");
 static_assert(std::is_same_v<decltype(&engine_ddi::destroy_engine_queue),
                              engine_ddi::QueueClose (*)(engine_ddi::EngineQueue*) noexcept>,
               "destroy_engine_queue");

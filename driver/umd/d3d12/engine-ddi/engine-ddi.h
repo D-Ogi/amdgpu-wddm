@@ -254,6 +254,14 @@ HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T tab
 // is not being created or destroyed, reads a stable record.
 void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept;
 
+// The owner of a ray tracing state object, for the slots whose only handle is the state object (GetShaderIdentifier,
+// GetShaderStackSize, GetPipelineStackSize, SetPipelineStackSize): ShellHooks::shell of the device context that
+// created it. Null for storage that holds no engine-ddi state object record: not yet constructed by
+// CreateStateObject, or already destroyed by DestroyStateObject. A record left inert by a failed create still names
+// its device; the slots themselves refuse it. Read-only, as command_list_shell. Lifetime: the caller of those slots
+// holds the state object, so its record is neither being created nor destroyed during the call.
+void* state_object_shell(D3D12DDI_HSTATEOBJECT_0054 state_object) noexcept;
+
 // ---- Shaders ---------------------------------------------------------------------------------------------------
 // Native intake (every create-shader slot): the payload is the bare program with its length in DWORD 1, and
 // register-only signature entries. That the buffer holds exactly pShaderCode[1] DWORDs is an INFERENCE from the
