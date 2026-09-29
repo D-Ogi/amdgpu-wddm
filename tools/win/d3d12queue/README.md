@@ -59,6 +59,11 @@ receipt before publishing the next command.
 | `exit` | Finish the session and release objects whose GPU work has retired |
 | `abort` | Request cancellation at an operation boundary or inside the bounded fence wait |
 
+`build.ps1 -Sparse` replaces the `copy` operation: a reserved buffer of four tiles is mapped to tiles
+2 to 5 of a heap with the queue's `UpdateTileMappings`, a pattern goes UPLOAD, reserved buffer,
+READBACK, and all 262144 bytes are compared. Only mapped tiles are written and read. The device must
+report tiled resources. The software control passes this variant (2026-09-29, exit 0).
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained

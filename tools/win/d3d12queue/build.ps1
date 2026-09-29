@@ -15,7 +15,10 @@ param(
     [switch]$Scene,
     # Diagnostic variant: the copy verb opens a window, creates a flip-model swap chain on the queue, presents
     # two cleared frames and resizes the chain. It opens a window: run it on the lab, not unannounced elsewhere.
-    [switch]$Present
+    [switch]$Present,
+    # Diagnostic variant: the copy verb maps a reserved buffer's tiles to a heap on the queue and sends a
+    # pattern through it. The device must report tiled resources (see -RadvExperimental).
+    [switch]$Sparse
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,10 +50,11 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene and Present each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene, Present and Sparse each replace the copy verb; choose one' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 if ($Present) { $variant += '/DINTERACTIVE_PRESENT' }
+if ($Sparse) { $variant += '/DINTERACTIVE_SPARSE' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
