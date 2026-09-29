@@ -55,8 +55,9 @@ HRESULT to_api_desc(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DE
     if (in.ResourceType < D3D12DDI_RT_BUFFER || in.ResourceType > D3D12DDI_RT_TEXTURE3D) return E_INVALIDARG;
     if (in.Layout > D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE) return E_INVALIDARG;
     if (in.pRowMajorLayout) {                           // a custom row-major layout has no API form
-        log_line("resource description: row-major layout given (type %d, RowPitch %u, SlicePitch %u): E_NOTIMPL",
-                 static_cast<int>(in.ResourceType), in.pRowMajorLayout->RowPitch, in.pRowMajorLayout->SlicePitch);
+        // The pointee is not read: it is refused unread, whatever Layout says about its meaning.
+        log_line("resource description: row-major layout given (type %d, layout %d): E_NOTIMPL",
+                 static_cast<int>(in.ResourceType), static_cast<int>(in.Layout));
         return E_NOTIMPL;
     }
     out.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(in.ResourceType);
