@@ -131,7 +131,23 @@ int main(){
  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
  assert(creates==1 && makes_resident==0);
  expected_type=0;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
- resource.ResourceType=D3D12DDI_RT_TEXTURE2D;assert(owner.allocate(&req,&memory)==E_NOTIMPL && !memory.memory);resource.ResourceType=D3D12DDI_RT_BUFFER;
+ // A committed texture on a heap without CPU access is raw memory like a buffer.
+ resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
+ for(const auto flags:{D3D12DDI_HEAP_FLAG_BUFFERS,D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES,D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES}){
+  heap.Flags=flags;events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMI" && memory.memory_type_index==0);
+  assert(owner.free(&memory)==S_OK && events=="AMIVUD");
+ }
+ // Refused before any probe or allocation: a texture that is not the heap's one resource, a texture on a
+ // CPU-visible heap, an unknown resource type, and a heap for buffers that does not allow buffers.
+ heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+ req.flags=0;reject_before_probe();req.flags=engine_ddi::kMemoryDedicated;
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;reject_before_probe();
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;reject_before_probe();
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+ resource.ResourceType=static_cast<D3D12DDI_RESOURCE_TYPE>(0x7f);reject_before_probe();
+ resource.ResourceType=D3D12DDI_RT_BUFFER;reject_before_probe();
+ req.resource=nullptr;reject_before_probe();req.resource=&resource;
+ heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
  req.flags=engine_ddi::kMemoryPrimary;assert(owner.allocate(&req,&memory)==E_NOTIMPL);req.flags=engine_ddi::kMemoryDedicated;
  req.memory_type_bits=2;assert(owner.allocate(&req,&memory)==E_INVALIDARG);req.memory_type_bits=0;
  gpu_address+=4096;events.clear();assert(owner.allocate(&req,&memory)==E_INVALIDARG && events=="AMUD" && !memory.memory);gpu_address-=4096;

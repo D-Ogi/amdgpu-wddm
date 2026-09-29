@@ -75,9 +75,23 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     const auto& heap=*request->heap;
     const unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
         D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
-    if((request->flags&~engine_ddi::kMemoryDedicated) || !(heap.Flags&D3D12DDI_HEAP_FLAG_BUFFERS) ||
-       (unsigned(heap.Flags)&~allowed) || heap.CreationNodeMask>1 || heap.VisibleNodeMask>1 ||
-       (request->resource && request->resource->ResourceType!=D3D12DDI_RT_BUFFER))return E_NOTIMPL;
+    if((request->flags&~engine_ddi::kMemoryDedicated) || (unsigned(heap.Flags)&~allowed) ||
+       heap.CreationNodeMask>1 || heap.VisibleNodeMask>1)return E_NOTIMPL;
+    // The allocation is raw memory; the engine places the buffer or image in it. A texture is admitted
+    // only as the one resource of a heap without CPU access: CPU-visible texture layouts, primaries and
+    // texture-only heaps for later placement each need their own contract.
+    bool texture=false;
+    if(request->resource)switch(request->resource->ResourceType){
+    case D3D12DDI_RT_BUFFER:break;
+    case D3D12DDI_RT_TEXTURE1D:case D3D12DDI_RT_TEXTURE2D:case D3D12DDI_RT_TEXTURE3D:texture=true;break;
+    default:return E_NOTIMPL;
+    }
+    constexpr unsigned textures=D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+    if(texture){
+        if(!(request->flags&engine_ddi::kMemoryDedicated) || !(unsigned(heap.Flags)&(textures|D3D12DDI_HEAP_FLAG_BUFFERS)) ||
+           heap.CPUPageProperty!=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE ||
+           (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE))return E_NOTIMPL;
+    } else if(!(heap.Flags&D3D12DDI_HEAP_FLAG_BUFFERS))return E_NOTIMPL;
     AllocationAccess access{};VkMemoryPropertyFlags want{};
     switch(heap.CPUPageProperty){
     case D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE:access=AllocationAccess::GpuOnly;want=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;break;
