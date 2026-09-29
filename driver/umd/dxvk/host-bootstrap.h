@@ -20,8 +20,15 @@ struct bc250_host_import {
    const void *pNext;
    void *identity;
    uint32_t allocation;
+   /* BC250_HOST_IMPORT_* bits. The field takes the padding that followed allocation, so the size and
+    * every other offset are unchanged; a producer that zero-initialises the struct asks for none. */
+   uint32_t flags;
    uint64_t va, size;
 };
+/* The host answers Lock2 and Unlock2 for this allocation: vkMapMemory may map it. Without the bit a
+ * borrowed allocation is never mapped by the ICD. */
+#define BC250_HOST_IMPORT_CPU_MAP 1u
+#define BC250_HOST_IMPORT_KNOWN_FLAGS BC250_HOST_IMPORT_CPU_MAP
 #define BC250_HOST_CREATE_PAGING 1u
 #define BC250_HOST_DESTROY_PAGING 2u
 #define BC250_HOST_PUBLISH_PROGRESS 3u
