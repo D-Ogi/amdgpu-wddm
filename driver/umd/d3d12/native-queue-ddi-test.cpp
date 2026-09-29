@@ -153,6 +153,14 @@ int main() {
         alignas(native12::QueueEngineSlot) unsigned char storage[sizeof(native12::QueueEngineSlot)+16];
         std::memset(storage,0xcd,sizeof(storage));
         D3D12DDI_HCOMMANDQUEUE q{storage};
+        {   // A refused request keeps its size, leaves storage untouched and reaches no engine.
+            auto refused=args;refused.NodeMask=2;
+            assert(core.pfnCalcPrivateCommandQueueSize(device,&refused)==sizeof(native12::QueueEngineSlot));
+            assert(core.pfnCalcPrivateCommandQueueSize(device,nullptr)==sizeof(native12::QueueEngineSlot));
+            assert(core.pfnCreateCommandQueue(device,&refused,q,f.rt(0))==E_NOTIMPL);
+            for(unsigned char byte:storage)assert(byte==0xcd);
+            assert(f.engine_creates==0 && !f.device.lost);
+        }
         assert(core.pfnCreateCommandQueue(device,&args,q,f.rt(0))==S_OK);
         assert(native12::resolve_queue_device(q)==&f.device);
         auto slot=reinterpret_cast<native12::QueueEngineSlot*>(storage);

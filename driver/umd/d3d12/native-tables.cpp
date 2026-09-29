@@ -9,6 +9,7 @@
 #include "shell-core-ddi.h"
 #include "native-queue-ddi.h"
 #include "native-residency-ddi.h"
+#include <cstring>
 
 namespace native12 {
 namespace {
@@ -24,8 +25,9 @@ struct EntryPolicy {
     using Scope=DeviceEngineScope;
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
+    // Sizes only: other scalar returns can be addresses, which a trace must not carry.
     static void returned(Device*,const char* name,uint64_t id,uint64_t value) noexcept {
-        if(!id)return;
+        if(!id || (std::strncmp(name,"pfnCalcPrivate",14) && std::strcmp(name,"pfnGetDescriptorSizeInBytes")))return;
         std::fprintf(stderr,"{\"event\":\"ddi-return\",\"sequence\":%llu,\"name\":\"%s\",\"value\":%llu}\n",
             static_cast<unsigned long long>(id),name,static_cast<unsigned long long>(value));
         std::fflush(stderr);

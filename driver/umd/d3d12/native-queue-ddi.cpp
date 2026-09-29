@@ -21,12 +21,10 @@ void queue_failure(D3D12DDI_HCOMMANDQUEUE h) noexcept {
     // registry cookie to call the engine; report via the slot's owning device.
     if (auto slot = slot_of(h); slot && slot->owner) slot->owner->remove();
 }
-SIZE_T APIENTRY native_queue_size(D3D12DDI_HDEVICE h, const D3D12DDIARG_CREATECOMMANDQUEUE_0050* args) {
-    if (!args || device_status(h) != S_OK) return 0;
-    auto& device = *static_cast<Device*>(h.pDrvPrivate);
-    if (!engine_context(device) || !engine_queues(device)) return 0;
-    ContextRequest request;
-    return request.prepare(*args) == S_OK ? sizeof(QueueEngineSlot) : 0;
+// Private storage has one fixed size. Sizing does not judge the request or the
+// device; pfnCreateCommandQueue validates both before the first write.
+SIZE_T APIENTRY native_queue_size(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATECOMMANDQUEUE_0050*) {
+    return sizeof(QueueEngineSlot);
 }
 HRESULT APIENTRY native_queue_create(D3D12DDI_HDEVICE h, const D3D12DDIARG_CREATECOMMANDQUEUE_0050* args,
     D3D12DDI_HCOMMANDQUEUE queue, D3D12DDI_HRTCOMMANDQUEUE runtime) {
@@ -35,6 +33,7 @@ HRESULT APIENTRY native_queue_create(D3D12DDI_HDEVICE h, const D3D12DDIARG_CREAT
     auto& device = *static_cast<Device*>(h.pDrvPrivate);
     auto registry = engine_queues(device);
     if (!engine_context(device) || !registry) return E_UNEXPECTED;
+    { ContextRequest probe; hr = probe.prepare(*args); if (hr != S_OK) return hr; }
     auto slot = new(queue.pDrvPrivate) QueueEngineSlot{};
     hr = registry->create(*args, runtime, *slot);
     if (hr != S_OK) slot->~QueueEngineSlot();

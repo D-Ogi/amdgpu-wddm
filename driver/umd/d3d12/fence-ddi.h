@@ -13,9 +13,8 @@ inline HRESULT validate_fence(const D3D12DDIARG_CREATE_FENCE* args) noexcept {
        ~static_cast<unsigned>(D3D12DDI_FENCE_FLAG_BOTTOM_OF_PIPE))return E_INVALIDARG;
     return S_OK;
 }
-// The size never depends on the request: the runtime reserves what this entry
-// returns and calls pfnCreateFence regardless, so a zero here would make the
-// later placement write land outside the reservation. Refusals belong to create.
+// Private storage has one fixed size. Sizing does not judge the request;
+// pfnCreateFence validates it before the first write.
 inline SIZE_T APIENTRY fence_size(D3D12DDI_HDEVICE,const D3D12DDIARG_CREATE_FENCE*) {
     return sizeof(FenceState);
 }
