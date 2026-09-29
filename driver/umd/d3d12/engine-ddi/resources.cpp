@@ -144,17 +144,33 @@ const D3D12_CLEAR_VALUE* clear_value(const D3D12_RESOURCE_DESC1& desc, const D3D
     return (clear && target) ? reinterpret_cast<const D3D12_CLEAR_VALUE*>(clear) : nullptr;
 }
 
-// The engine's placed resource at offset in the backing (engine-ddi.h placement rules, D3D12 part).
-HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURCE_DESC1& desc,
+// The engine's placed resource at offset in the backing (engine-ddi.h placement rules, D3D12 part). The DDI
+// description carries no alignment: an application that asked for a small one (4 KB, or 64 KB for multisampling)
+// and got it from CheckResourceAllocationInfo places the resource at an offset that only that alignment divides.
+// The first of default, 64 KB and 4 KB that the engine grants and the offset satisfies is the resource's, and it
+// is written back into desc for the record.
+HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC1& desc,
               D3D12DDI_BARRIER_LAYOUT layout, const D3D12DDI_CLEAR_VALUES* clear, UINT castable_count,
               const DXGI_FORMAT* castable, ID3D12Resource** out) noexcept {
     *out = nullptr;
     if (!(b->desc.Flags & category_of(desc))) return E_INVALIDARG;
-    const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
-    const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
-    if (info.SizeInBytes == UINT64_MAX || !info.Alignment) return E_INVALIDARG;
-    if (offset % info.Alignment || offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset)
-        return E_INVALIDARG;
+    D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+    D3D12_RESOURCE_ALLOCATION_INFO info{UINT64_MAX, 0};
+    const uint64_t requested = d0.Alignment;
+    const uint64_t candidates[] = {requested, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+                                   D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT};
+    bool fits = false;
+    for (const uint64_t alignment : candidates) {
+        if (alignment && requested && alignment != requested) break;  // an explicit alignment is the only one
+        d0.Alignment = alignment;
+        info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+        if (info.SizeInBytes == UINT64_MAX || !info.Alignment || offset % info.Alignment) continue;
+        if (alignment && info.Alignment != alignment) continue;          // not granted
+        fits = true;
+        break;
+    }
+    if (!fits || offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset) return E_INVALIDARG;
+    desc.Alignment = d0.Alignment;
     const D3D12_CLEAR_VALUE* cv = clear_value(desc, clear);
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
     const HRESULT legacy = initial_layout(desc, &layout, &state);
