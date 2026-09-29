@@ -189,6 +189,48 @@ void test_compute(Env& env, Device& device) {
                static_cast<unsigned long>(hr_b), static_cast<unsigned long>(hr_k));
     }
 
+    // The dispatch once more through a command signature, over the first half of the buffer and with another seed.
+    constexpr UINT kSeedIndirect = 0x1d1ec7u;
+    const D3D12DDI_INDIRECT_ARGUMENT_DESC dispatch_argument{D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH, {}};
+    const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 signature_args{3 * sizeof(UINT), 1, &dispatch_argument, hrs, 1};
+    void* signature_storage = env.storage.alloc(env.core.pfnCalcPrivateCommandSignatureSize(device.h(), &signature_args));
+    const D3D12DDI_HCOMMANDSIGNATURE hsignature{signature_storage};
+    const HRESULT hr_s =
+        signature_storage ? env.core.pfnCreateCommandSignature(device.h(), &signature_args, hsignature) : E_OUTOFMEMORY;
+    Buffer arguments, second;
+    const HRESULT hr_a = create_buffer(env, device, HeapKind::Upload, 256, false, arguments);
+    const HRESULT hr_2 = create_buffer(env, device, HeapKind::Readback, kBytes, false, second);
+    bool indirect = hr_s == S_OK && hr_a == S_OK && hr_2 == S_OK;
+    if (indirect) {
+        void* written = nullptr;
+        indirect = env.core.pfnMapHeap(device.h(), arguments.hheap(), &written) == S_OK && written;
+        if (indirect) {
+            const UINT groups[3] = {kWords / 128, 1, 1};
+            std::memcpy(written, groups, sizeof(groups));
+            env.core.pfnUnmapHeap(device.h(), arguments.hheap());
+        }
+    }
+    checkf(indirect, "compute: command signature of one dispatch, its argument buffer and a second READBACK buffer "
+                     "(hr %08lx %08lx %08lx)",
+           static_cast<unsigned long>(hr_s), static_cast<unsigned long>(hr_a), static_cast<unsigned long>(hr_2));
+    {
+        // Refusals: a type of a later slice, and a root argument without a root signature.
+        D3D12DDI_INDIRECT_ARGUMENT_DESC refused{D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS, {}};
+        D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 refused_args{64, 1, &refused, hrs, 1};
+        void* refused_storage = env.storage.alloc(sizeof(void*) * 8);
+        const HRESULT hr_rays =
+            env.core.pfnCreateCommandSignature(device.h(), &refused_args, D3D12DDI_HCOMMANDSIGNATURE{refused_storage});
+        refused.Type = D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+        refused.Constant = {1, 0, 1};
+        refused_args.hRootSignature = D3D12DDI_HROOTSIGNATURE{};
+        const HRESULT hr_rootless =
+            env.core.pfnCreateCommandSignature(device.h(), &refused_args, D3D12DDI_HCOMMANDSIGNATURE{refused_storage});
+        checkf(hr_rays == E_NOTIMPL && hr_rootless == E_INVALIDARG,
+               "compute: a ray dispatch argument is E_NOTIMPL, a constant without a root signature E_INVALIDARG "
+               "(hr %08lx %08lx)",
+               static_cast<unsigned long>(hr_rays), static_cast<unsigned long>(hr_rootless));
+    }
+
     BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};
     engine_ddi::EngineQueue* queue = nullptr;
     hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
@@ -239,6 +281,26 @@ void test_compute(Env& env, Device& device) {
             clear_src.BaseAddress.UMD = {c.buffer.hres(), 0};
             t.pfnCopyBufferRegion(rec.hlist(), clear_dst, clear_src, kClearBytes);
         }
+        if (indirect) {
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 again =
+                transition(out, D3D12DDI_RESOURCE_STATE_COPY_SOURCE, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS);
+            t.pfnResourceBarrier(rec.hlist(), 1, &again);
+            t.pfnSetDescriptorHeaps(rec.hlist(), 1, heaps);
+            t.pfnSetComputeRootSignature(rec.hlist(), hrs);
+            t.pfnSetPipelineState(rec.hlist(), hpso);
+            t.pfnSetComputeRootDescriptorTable(rec.hlist(), 0, gpu);
+            t.pfnSetComputeRoot32BitConstant(rec.hlist(), 1, kSeedIndirect, 0);
+            D3D12DDIARG_BUFFER_PLACEMENT from{}, no_count{};
+            from.BaseAddress.UMD = {arguments.hres(), 0};
+            t.pfnExecuteIndirect(rec.hlist(), hsignature, 1, from, no_count);
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 done =
+                transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &done);
+            D3D12DDIARG_BUFFER_PLACEMENT second_dst{}, second_src{};
+            second_dst.BaseAddress.UMD = {second.hres(), 0};
+            second_src.BaseAddress.UMD = {out.hres(), 0};
+            t.pfnCopyBufferRegion(rec.hlist(), second_dst, second_src, kBytes);
+        }
         t.pfnCloseCommandList(rec.hlist());
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
@@ -265,6 +327,25 @@ void test_compute(Env& env, Device& device) {
             checkf(false, "compute: MapHeap of the READBACK heap (hr %08lx)", static_cast<unsigned long>(hr));
         }
     }
+    if (indirect && hr == S_OK) {
+        void* second_map = nullptr;
+        const HRESULT hr_m = env.core.pfnMapHeap(device.h(), second.hheap(), &second_map);
+        UINT bad = 0, first = kWords;
+        if (hr_m == S_OK && second_map) {
+            const auto* words = static_cast<const UINT32*>(second_map);
+            for (UINT i = 0; i < kWords; ++i) {
+                if (words[i] != i * 2654435761u + (i < kWords / 2 ? kSeedIndirect : kSeed)) {
+                    if (!bad) first = i;
+                    ++bad;
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), second.hheap());
+        }
+        checkf(hr_m == S_OK && second_map && !bad,
+               "compute: ExecuteIndirect rewrote the first half with its seed and left the second (%u differ, first "
+               "at %u)",
+               bad, first);
+    }
     for (Cleared& c : cleared) {
         if (!c.ready || hr != S_OK) continue;
         void* view_map = nullptr;
@@ -286,6 +367,9 @@ void test_compute(Env& env, Device& device) {
         destroy_buffer(env, device, c.buffer);
         destroy_buffer(env, device, c.back);
     }
+    if (hr_s == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hsignature);
+    destroy_buffer(env, device, arguments);
+    destroy_buffer(env, device, second);
     if (hr_p == S_OK) env.core.pfnDestroyDescriptorHeap(device.h(), hplain);
     env.core.pfnDestroyDescriptorHeap(device.h(), hheap);
     destroy_buffer(env, device, out);

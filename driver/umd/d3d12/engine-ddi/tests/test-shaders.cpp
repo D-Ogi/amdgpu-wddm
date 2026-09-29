@@ -160,7 +160,8 @@ constexpr UINT kPitch = 256;
 // A committed 2D render target (or, by its flags, depth buffer) of one mip in a DEFAULT heap, created in the
 // COMMON layout.
 HRESULT create_render_target(Env& env, Device& device, DXGI_FORMAT format, Buffer& out,
-                             D3D12DDI_RESOURCE_FLAGS_0003 flags = D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET) {
+                             D3D12DDI_RESOURCE_FLAGS_0003 flags = D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET,
+                             UINT samples = 1) {
     out = Buffer{};
     D3D12DDIARG_CREATERESOURCE_0088 res{};
     res.ResourceType = D3D12DDI_RT_TEXTURE2D;
@@ -169,7 +170,7 @@ HRESULT create_render_target(Env& env, Device& device, DXGI_FORMAT format, Buffe
     res.DepthOrArraySize = 1;
     res.MipLevels = 1;
     res.Format = format;
-    res.SampleDesc = {1, 0};
+    res.SampleDesc = {samples, 0};
     res.Layout = D3D12DDI_TL_UNDEFINED;
     res.Flags = flags;
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
@@ -359,6 +360,54 @@ void test_graphics(Env& env, Device& device) {
     const HRESULT hr_d = create_render_target(env, device, DXGI_FORMAT_D32_FLOAT, depth_buffer,
                                               D3D12DDI_RESOURCE_FLAG_0003_DEPTH_STENCIL);
     checkf(hr_d == S_OK, "graphics: 64x64 D32_FLOAT depth buffer (hr %08lx)", static_cast<unsigned long>(hr_d));
+    // Resolve: a 4x target cleared to one colour, resolved by both slots into single-sample textures.
+    constexpr DXGI_FORMAT kResolveFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    const FLOAT resolve_colour[4] = {0.2f, 0.4f, 0.6f, 1.0f};
+    constexpr UINT kResolved = 0xff996633u;             // bytes 0x33 0x66 0x99 0xff
+    Buffer multisampled, resolved[2], resolved_back[2];
+    UINT levels = 0;
+    env.core.pfnCheckMultisampleQualityLevels(device.h(), kResolveFormat, 4, D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAG_NONE,
+                                              &levels);
+    checkf(levels != 0, "graphics: R8G8B8A8_UNORM has quality levels at 4 samples (%u)", levels);
+    bool resolve_ready = levels != 0;
+    if (resolve_ready) {
+        HRESULT hrs_made[5];
+        hrs_made[0] = create_render_target(env, device, kResolveFormat, multisampled,
+                                           D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET, 4);
+        for (UINT i = 0; i < 2; ++i) {
+            hrs_made[1 + i] = create_render_target(env, device, kResolveFormat, resolved[i]);
+            hrs_made[3 + i] =
+                create_buffer(env, device, HeapKind::Readback, UINT64{kPitch} * kSize, false, resolved_back[i]);
+        }
+        for (const HRESULT made : hrs_made) resolve_ready = resolve_ready && made == S_OK;
+        checkf(resolve_ready, "graphics: 4x target, two resolve destinations, two READBACK buffers (hr %08lx %08lx "
+                              "%08lx %08lx %08lx)",
+               static_cast<unsigned long>(hrs_made[0]), static_cast<unsigned long>(hrs_made[1]),
+               static_cast<unsigned long>(hrs_made[2]), static_cast<unsigned long>(hrs_made[3]),
+               static_cast<unsigned long>(hrs_made[4]));
+    }
+    D3D12DDIARG_CREATE_DESCRIPTOR_HEAP_0001 ms_heap_args{D3D12DDI_DESCRIPTOR_HEAP_TYPE_RTV, 1,
+                                                         D3D12DDI_DESCRIPTOR_HEAP_FLAG_NONE, 0};
+    void* ms_heap_storage = env.storage.alloc(env.core.pfnCalcPrivateDescriptorHeapSize(device.h(), &ms_heap_args));
+    const D3D12DDI_HDESCRIPTORHEAP hms_heap{ms_heap_storage};
+    const HRESULT hr_ms_heap =
+        ms_heap_storage ? env.core.pfnCreateDescriptorHeap(device.h(), &ms_heap_args, hms_heap) : E_OUTOFMEMORY;
+    D3D12DDI_CPU_DESCRIPTOR_HANDLE ms_rtv{};
+    if (hr_ms_heap == S_OK) ms_rtv = env.core.pfnGetCPUDescriptorHandleForHeapStart(device.h(), hms_heap);
+    if (resolve_ready && ms_rtv.ptr) {
+        const uint32_t before_view = device.shell.device_errors;
+        D3D12DDIARG_CREATE_RENDER_TARGET_VIEW_0002 ms_view{};
+        ms_view.hDrvResource = multisampled.hres();
+        ms_view.Format = kResolveFormat;
+        ms_view.ResourceDimension = D3D12DDI_RD_TEXTURE2D;
+        ms_view.Tex2D = {0, 0, 1, 0};
+        env.core.pfnCreateRenderTargetView(device.h(), &ms_view, ms_rtv);
+        resolve_ready = device.shell.device_errors == before_view;
+    } else {
+        resolve_ready = false;
+    }
+    checkf(resolve_ready || !levels, "graphics: render target view of the 4x target");
+
     struct ViewHeap {
         D3D12DDI_DESCRIPTOR_HEAP_TYPE type;
         UINT count;
@@ -477,6 +526,33 @@ void test_graphics(Env& env, Device& device) {
         src.BaseAddress.UMD = {target.hres(), 0};
         t.pfnCopyTextureRegion(rec.hlist(), &dst, {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &footprint}, 0, 0, 0,
                                &src, {D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr}, nullptr);
+        if (resolve_ready) {
+            D3D12DDIARG_RESOURCE_BARRIER_0022 before[3] = {
+                transition(multisampled, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RENDER_TARGET),
+                transition(resolved[0], D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RESOLVE_DEST),
+                transition(resolved[1], D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RESOLVE_DEST)};
+            t.pfnResourceBarrier(rec.hlist(), 3, before);
+            t.pfnClearRenderTargetView(rec.hlist(), ms_rtv, resolve_colour, 0, nullptr);
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 to_resolve = transition(
+                multisampled, D3D12DDI_RESOURCE_STATE_RENDER_TARGET, D3D12DDI_RESOURCE_STATE_RESOLVE_SOURCE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &to_resolve);
+            t.pfnResourceResolveSubresource(rec.hlist(), resolved[0].hres(), 0, multisampled.hres(), 0, kResolveFormat);
+            t.pfnResourceResolveSubresourceRegion(rec.hlist(), resolved[1].hres(), 0, 0, 0, multisampled.hres(), 0,
+                                                  nullptr, kResolveFormat, D3D12DDI_RESOLVE_MODE_AVERAGE);
+            const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT resolved_footprint{kResolveFormat, kSize, kSize, 1,
+                                                                                     kPitch, kPitch * kSize};
+            for (UINT i = 0; i < 2; ++i) {
+                const D3D12DDIARG_RESOURCE_BARRIER_0022 after = transition(
+                    resolved[i], D3D12DDI_RESOURCE_STATE_RESOLVE_DEST, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+                t.pfnResourceBarrier(rec.hlist(), 1, &after);
+                D3D12DDIARG_BUFFER_PLACEMENT back{}, from{};
+                back.BaseAddress.UMD = {resolved_back[i].hres(), 0};
+                from.BaseAddress.UMD = {resolved[i].hres(), 0};
+                t.pfnCopyTextureRegion(rec.hlist(), &back,
+                                       {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &resolved_footprint}, 0, 0, 0,
+                                       &from, {D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr}, nullptr);
+            }
+        }
         t.pfnCloseCommandList(rec.hlist());
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
@@ -518,6 +594,28 @@ void test_graphics(Env& env, Device& device) {
         } else {
             checkf(false, "graphics: MapHeap of the READBACK heap (hr %08lx)", static_cast<unsigned long>(hr));
         }
+        for (UINT i = 0; resolve_ready && i < 2; ++i) {
+            void* resolved_map = nullptr;
+            const HRESULT hr_m = env.core.pfnMapHeap(device.h(), resolved_back[i].hheap(), &resolved_map);
+            UINT bad = 0, got = 0;
+            if (hr_m == S_OK && resolved_map) {
+                const auto* bytes = static_cast<const BYTE*>(resolved_map);
+                for (UINT y = 0; y < kSize; ++y) {
+                    for (UINT x = 0; x < kSize; ++x) {
+                        UINT v;
+                        std::memcpy(&v, bytes + SIZE_T{y} * kPitch + SIZE_T{x} * 4, 4);
+                        if (v != kResolved) {
+                            if (!bad) got = v;
+                            ++bad;
+                        }
+                    }
+                }
+                env.core.pfnUnmapHeap(device.h(), resolved_back[i].hheap());
+            }
+            checkf(hr_m == S_OK && resolved_map && !bad,
+                   "graphics: %s wrote %08x to every texel (%u differ, first %08x)",
+                   i ? "ResolveSubresourceRegion" : "ResolveSubresource", kResolved, bad, got);
+        }
     }
     destroy_recording(env, device, rec);
     if (queue)
@@ -526,6 +624,12 @@ void test_graphics(Env& env, Device& device) {
     env.core.pfnDestroyDescriptorHeap(device.h(), hheap);
     for (ViewHeap& v : view_heaps)
         if (v.storage) env.core.pfnDestroyDescriptorHeap(device.h(), D3D12DDI_HDESCRIPTORHEAP{v.storage});
+    if (hr_ms_heap == S_OK) env.core.pfnDestroyDescriptorHeap(device.h(), hms_heap);
+    destroy_buffer(env, device, multisampled);
+    for (UINT i = 0; i < 2; ++i) {
+        destroy_buffer(env, device, resolved[i]);
+        destroy_buffer(env, device, resolved_back[i]);
+    }
     destroy_buffer(env, device, depth_buffer);
     destroy_buffer(env, device, target);
     destroy_buffer(env, device, vb);

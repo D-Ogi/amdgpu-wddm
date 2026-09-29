@@ -6,6 +6,7 @@
 // records into, and ResetCommandList names the recorder. A pool therefore does not know its list type at
 // creation; it creates one engine allocator per list type on first use.
 #include <atomic>
+#include <memory>
 #include "internal.h"
 
 namespace engine_ddi {
@@ -294,7 +295,161 @@ void APIENTRY rs_set_shading_rate_image(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOU
 }
 } // namespace
 
+// ---- Command signatures and indirect execution ---------------------------------------------------------------------
+static_assert(D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DRAW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT == static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW) &&
+              D3D12DDI_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW ==
+                  static_cast<int>(D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW),
+              "indirect argument types");
+
+SIZE_T APIENTRY calc_command_signature(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001*) {
+    return sizeof(CommandSignatureRecord);
+}
+
+// The engine refuses a root signature that no argument needs as well as a missing one, and the DDI does not say
+// whether the runtime sends the handle for a signature of draws alone: it is passed on only when an argument
+// changes root arguments.
+HRESULT APIENTRY create_command_signature(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001* args,
+                                          D3D12DDI_HCOMMANDSIGNATURE h) {
+    DeviceContext* c = resolve(device);
+    if (!c || !args || !h.pDrvPrivate || !args->NumArgumentDescs || !args->pArgumentDescs || !args->ByteStride ||
+        args->NodeMask > 1)
+        return E_INVALIDARG;
+    std::unique_ptr<D3D12_INDIRECT_ARGUMENT_DESC[]> out(new (std::nothrow)
+                                                            D3D12_INDIRECT_ARGUMENT_DESC[args->NumArgumentDescs]{});
+    if (!out) return E_OUTOFMEMORY;
+    bool rooted = false;
+    for (UINT i = 0; i < args->NumArgumentDescs; ++i) {
+        const D3D12DDI_INDIRECT_ARGUMENT_DESC& in = args->pArgumentDescs[i];
+        out[i].Type = static_cast<D3D12_INDIRECT_ARGUMENT_TYPE>(in.Type);
+        switch (in.Type) {
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW:
+            break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW:
+            out[i].VertexBuffer.Slot = in.VertexBuffer.Slot;
+            break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT:
+            out[i].Constant = {in.Constant.RootParameterIndex, in.Constant.DestOffsetIn32BitValues,
+                               in.Constant.Num32BitValuesToSet};
+            rooted = true;
+            break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW:
+            out[i].ConstantBufferView.RootParameterIndex = in.ConstantBufferView.RootParameterIndex;
+            rooted = true;
+            break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW:
+            out[i].ShaderResourceView.RootParameterIndex = in.ShaderResourceView.RootParameterIndex;
+            rooted = true;
+            break;
+        case D3D12DDI_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW:
+            out[i].UnorderedAccessView.RootParameterIndex = in.UnorderedAccessView.RootParameterIndex;
+            rooted = true;
+            break;
+        default:
+            return E_NOTIMPL;                           // ray and mesh dispatch, incrementing constant
+        }
+    }
+    ID3D12RootSignature* root = nullptr;
+    if (rooted) {
+        auto* r = record_of<RootSignatureRecord>(args->hRootSignature.pDrvPrivate, Tag::RootSignature, c);
+        if (!r) return E_INVALIDARG;
+        root = static_cast<ID3D12RootSignature*>(r->h.engine);
+    }
+    const D3D12_COMMAND_SIGNATURE_DESC desc{args->ByteStride, args->NumArgumentDescs, out.get(), 0};
+    ID3D12CommandSignature* signature = nullptr;
+    const HRESULT hr = c->device->CreateCommandSignature(&desc, root, __uuidof(ID3D12CommandSignature),
+                                                         reinterpret_cast<void**>(&signature));
+    if (FAILED(hr)) return hr;
+    if (!signature) return E_UNEXPECTED;
+    new (h.pDrvPrivate) CommandSignatureRecord{{Tag::CommandSignature, 0, signature, c}, args->ByteStride};
+    c->live.fetch_add(1);
+    return S_OK;
+}
+
+void APIENTRY destroy_command_signature(D3D12DDI_HDEVICE device, D3D12DDI_HCOMMANDSIGNATURE h) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    auto* r = record_of<CommandSignatureRecord>(h.pDrvPrivate, Tag::CommandSignature, c);
+    if (!r) {
+        c->report(E_INVALIDARG);
+        return;
+    }
+    release_engine(r->h);
+    poison(r->h);
+    c->live.fetch_sub(1);
+}
+
+// A count buffer is optional: no handle means the maximum count is the count.
+void APIENTRY execute_indirect(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HCOMMANDSIGNATURE h, UINT max_count,
+                               D3D12DDIARG_BUFFER_PLACEMENT arguments, D3D12DDIARG_BUFFER_PLACEMENT count) {
+    CommandListRecord* l = list_of(hlist, "ExecuteIndirect");
+    if (!l) return;
+    DeviceContext* c = l->h.device;
+    auto* s = record_of<CommandSignatureRecord>(h.pDrvPrivate, Tag::CommandSignature, c);
+    auto* a = record_of<ResourceRecord>(arguments.BaseAddress.UMD.hResource.pDrvPrivate, Tag::Resource, c);
+    void* count_handle =count.BaseAddress.UMD.hResource.pDrvPrivate;
+    auto* n = count_handle ? record_of<ResourceRecord>(count_handle, Tag::Resource, c) : nullptr;
+    if (!s || !a || (count_handle && !n)) return c->report_list(l->rt, E_INVALIDARG);
+    l->list()->ExecuteIndirect(static_cast<ID3D12CommandSignature*>(s->h.engine), max_count,
+                               static_cast<ID3D12Resource*>(a->h.engine), arguments.BaseAddress.UMD.Offset,
+                               n ? static_cast<ID3D12Resource*>(n->h.engine) : nullptr,
+                               n ? count.BaseAddress.UMD.Offset : 0);
+}
+
+// ---- Resolves (graphics table) -------------------------------------------------------------------------------------
+void APIENTRY resolve_subresource(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst, UINT dst_subresource,
+                                  D3D12DDI_HRESOURCE src, UINT src_subresource, DXGI_FORMAT format) {
+    CommandListRecord* l = list_of(hlist, "ResourceResolveSubresource");
+    if (!l || reject_in_compute_table(l)) return;
+    DeviceContext* c = l->h.device;
+    auto* d = record_of<ResourceRecord>(dst.pDrvPrivate, Tag::Resource, c);
+    auto* s = record_of<ResourceRecord>(src.pDrvPrivate, Tag::Resource, c);
+    if (!d || !s) return c->report_list(l->rt, E_INVALIDARG);
+    l->list()->ResolveSubresource(static_cast<ID3D12Resource*>(d->h.engine), dst_subresource,
+                                  static_cast<ID3D12Resource*>(s->h.engine), src_subresource, format);
+}
+
+void APIENTRY resolve_subresource_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst, UINT dst_subresource,
+                                         UINT x, UINT y, D3D12DDI_HRESOURCE src, UINT src_subresource,
+                                         D3D12DDI_RECT* rect, DXGI_FORMAT format, D3D12DDI_RESOLVE_MODE mode) {
+    static_assert(D3D12DDI_RESOLVE_MODE_DECOMPRESS == static_cast<int>(D3D12_RESOLVE_MODE_DECOMPRESS) &&
+                  D3D12DDI_RESOLVE_MODE_MIN == static_cast<int>(D3D12_RESOLVE_MODE_MIN) &&
+                  D3D12DDI_RESOLVE_MODE_MAX == static_cast<int>(D3D12_RESOLVE_MODE_MAX) &&
+                  D3D12DDI_RESOLVE_MODE_AVERAGE == static_cast<int>(D3D12_RESOLVE_MODE_AVERAGE),
+                  "resolve modes");
+    static_assert(sizeof(D3D12DDI_RECT) == sizeof(D3D12_RECT), "rectangle");
+    CommandListRecord* l = list_of(hlist, "ResourceResolveSubresourceRegion");
+    if (!l || reject_in_compute_table(l)) return;
+    DeviceContext* c = l->h.device;
+    if (mode > D3D12DDI_RESOLVE_MODE_AVERAGE) return c->report_list(l->rt, E_NOTIMPL);     // sampler feedback
+    auto* d = record_of<ResourceRecord>(dst.pDrvPrivate, Tag::Resource, c);
+    auto* s = record_of<ResourceRecord>(src.pDrvPrivate, Tag::Resource, c);
+    if (!d || !s) return c->report_list(l->rt, E_INVALIDARG);
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
+        l1->ResolveSubresourceRegion(static_cast<ID3D12Resource*>(d->h.engine), dst_subresource, x, y,
+                                     static_cast<ID3D12Resource*>(s->h.engine), src_subresource, rect, format,
+                                     static_cast<D3D12_RESOLVE_MODE>(mode));
+        l1->Release();
+    }
+}
+
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
+    t->pfnCalcPrivateCommandSignatureSize = calc_command_signature;
+    t->pfnCreateCommandSignature = create_command_signature;
+    t->pfnDestroyCommandSignature = destroy_command_signature;
     t->pfnCalcPrivateCommandPoolSize = calc_pool;
     t->pfnCreateCommandPool = create_pool;
     t->pfnDestroyCommandPool = destroy_pool;
@@ -314,7 +469,10 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnSetPredication = set_predication;
     t->pfnSetProtectedResourceSession = set_protected_session;
     t->pfnClearRootArguments = clear_root_arguments;
+    t->pfnExecuteIndirect = execute_indirect;
     if (table_index != 1) return;                       // the compute table keeps its rejections
+    t->pfnResourceResolveSubresource = resolve_subresource;
+    t->pfnResourceResolveSubresourceRegion = resolve_subresource_region;
     t->pfnOMSetDepthBounds = om_set_depth_bounds;
     t->pfnSetSamplePositions = set_sample_positions;
     t->pfnSetViewInstanceMask = set_view_instance_mask;

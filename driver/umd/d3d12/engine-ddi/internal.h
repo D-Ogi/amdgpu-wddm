@@ -360,6 +360,11 @@ struct QueryHeapRecord {
     UINT count;
 };
 
+struct CommandSignatureRecord {
+    RecordHeader h;                             // engine: ID3D12CommandSignature
+    UINT stride;
+};
+
 // ---- Slot groups: each fills its part of the tables -------------------------------------------------------------
 void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_failsafe(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
