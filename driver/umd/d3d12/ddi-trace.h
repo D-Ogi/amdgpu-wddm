@@ -10,14 +10,28 @@ namespace native12 {
 // Opt-in for one diagnostic process, sampled once. Names and scalar outcomes
 // and selected public scalar request/output fields only: no resource contents,
 // handles or private pointers.
-inline bool ddi_trace_enabled() noexcept {
-    static const bool enabled=[]() noexcept {
+// AMDGPU_WDDM_DDI_TRACE: 1 is the full trace on stderr, two lines per call. 2 is failures only, for a
+// process that makes millions of calls: nothing on success, one debugger-output line per failed call
+// or reported device error, and silence after the budget is spent.
+inline int ddi_trace_mode() noexcept {
+    static const int mode=[]() noexcept {
         char value[2]{};
-        return GetEnvironmentVariableA("AMDGPU_WDDM_DDI_TRACE",value,sizeof(value))==1 && value[0]=='1';
+        if(GetEnvironmentVariableA("AMDGPU_WDDM_DDI_TRACE",value,sizeof(value))!=1)return 0;
+        return value[0]=='1'?1:value[0]=='2'?2:0;
     }();
-    return enabled;
+    return mode;
 }
+inline bool ddi_trace_enabled() noexcept {return ddi_trace_mode()==1;}
 inline std::atomic<uint64_t> ddi_trace_sequence{};
+inline std::atomic<int32_t> ddi_failure_budget{4096};
+inline void ddi_failure_note(const char* name,HRESULT outcome) noexcept {
+    if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
+    LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+    char line[192];
+    std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 failure name=%s status=%08lx qpc=%lld thread=%lu\n",
+        name,static_cast<unsigned long>(outcome),now.QuadPart,GetCurrentThreadId());
+    OutputDebugStringA(line);
+}
 // Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a
 // measurement that needs them: one name or several separated by commas. Unset, empty or unknown means none.
 // Read once per process.
@@ -46,6 +60,7 @@ inline bool ddi_experiment(const char* name) noexcept {
     return false;
 }
 inline uint64_t ddi_trace_begin(const char* name) noexcept {
+    if(ddi_trace_mode()==2)return 1;
     if(!ddi_trace_enabled())return 0;
     const auto id=ddi_trace_sequence.fetch_add(1,std::memory_order_relaxed)+1;
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);
@@ -55,6 +70,7 @@ inline uint64_t ddi_trace_begin(const char* name) noexcept {
 }
 inline void ddi_trace_end(const char* name,uint64_t id,HRESULT outcome) noexcept {
     if(!id)return;
+    if(ddi_trace_mode()==2){if(FAILED(outcome))ddi_failure_note(name,outcome);return;}
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);
     std::fprintf(stderr,"{\"event\":\"ddi\",\"edge\":\"end\",\"sequence\":%llu,\"name\":\"%s\",\"qpc\":%lld,\"thread\":%lu,\"status\":\"%08lx\"}\n",
         static_cast<unsigned long long>(id),name,now.QuadPart,GetCurrentThreadId(),static_cast<unsigned long>(outcome));

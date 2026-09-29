@@ -63,7 +63,7 @@ class HostedDispatch final {
     void give_back(D3DKMT_HANDLE handle) noexcept;
     HRESULT update(void* argument) noexcept;
     HRESULT operation(uint32_t op,void* argument) noexcept;
-    HRESULT remove_device() noexcept;
+    HRESULT remove_device(int site=__builtin_LINE()) noexcept;
 public:
     HostedDispatch(bc250::umd::RuntimeDomain& domain,D3D12DDI_HRTDEVICE runtime,
                    const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& user,

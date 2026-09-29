@@ -18,6 +18,7 @@
 namespace native12 {
 namespace {
 void stage(const char* name,HRESULT result) noexcept {
+    if(FAILED(result))ddi_failure_note(name,result);
     std::fprintf(stderr,"d3d12-engine %s result=%08lx\n",name,static_cast<unsigned long>(result));
     std::fflush(stderr);
 }

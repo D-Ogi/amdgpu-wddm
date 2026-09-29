@@ -4,6 +4,7 @@
 #include "memory-registry.h"
 #include <atomic>
 #include "adapter-contract.h"
+#include "ddi-trace.h"
 namespace native12 {
 struct AdapterCapsOwner;
 class DeviceEngine;
@@ -34,6 +35,7 @@ struct Device {
     std::atomic<bool> lost{false};
     void remove() noexcept {
         lost.store(true);
+        ddi_failure_note("device-remove",D3DDDIERR_DEVICEREMOVED);
         if(callbacks.pfnSetErrorCb) callbacks.pfnSetErrorCb(runtime,D3DDDIERR_DEVICEREMOVED);
     }
 };

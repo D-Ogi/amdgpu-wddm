@@ -3,6 +3,8 @@
 #include <d3dkmthk.h>
 #include <new>
 #include <cstring>
+#include <cstdio>
+#include "ddi-trace.h"
 
 namespace native12 {
 namespace {
@@ -155,7 +157,9 @@ HostedDispatch::Sync* HostedDispatch::find_sync(D3DKMT_HANDLE handle) noexcept {
     for(auto sync=syncs_;sync;sync=sync->next)if(sync->handle==handle)return sync;
     return nullptr;
 }
-HRESULT HostedDispatch::remove_device() noexcept {
+HRESULT HostedDispatch::remove_device(int site) noexcept {
+    char name[48];std::snprintf(name,sizeof(name),"hosted-remove-device:%d",site);
+    ddi_failure_note(name,D3DDDIERR_DEVICEREMOVED);
     if(!lost_.exchange(true) && user_.pfnSetErrorCb)user_.pfnSetErrorCb(runtime_,D3DDDIERR_DEVICEREMOVED);
     return D3DDDIERR_DEVICEREMOVED;
 }
