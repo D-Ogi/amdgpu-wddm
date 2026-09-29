@@ -12,22 +12,31 @@ check_caps = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_caps)
 
 
-def entry(size, align, requested=0, samples=1, total=None):
+def entry(size, align, requested=0, samples=1, total=None, fmt='R8G8B8A8_UNORM', width=64):
     e = {'GetResourceAllocationInfo': {'SizeInBytes': size, 'Alignment': align},
-         'desc': {'Alignment': requested, 'SampleCount': samples}}
-    if total is not None:
-        e['GetCopyableFootprints'] = {'TotalBytes': total}
+         'desc': {'Alignment': requested, 'SampleCount': samples, 'Format': fmt, 'Width': width}}
+    if samples == 1:  # the tool records footprints for single-sampled cases only
+        e['GetCopyableFootprints'] = {'TotalBytes': size if total is None else total}
     return e
 
 
-GOOD = {'device': {'allocations': {
-    'buffer_64k': entry(65536, 65536, total=65536),
-    'rgba8_1920x1200_rt': entry(9895936, 65536, total=9216000),
-    'rgba8_1920x1200_rt_msaa4': entry(41943040, 4194304, samples=4),
-    'small_rgba8_64_align4k': entry(16384, 4096, requested=4096, total=16384),
-    'small_rgba8_256_rt_msaa4_align64k': entry(1179648, 65536, requested=65536, samples=4),
-    'small_rgba8_256_align4k_too_large': entry('UINT64_MAX', 65536, requested=4096, total='UINT64_MAX'),
-}}}
+def plausible(name):
+    """A passing answer for any inventory case, shaped like the real 091 answers."""
+    if name == check_caps.SENTINEL:
+        return entry('UINT64_MAX', 65536, requested=4096, total='UINT64_MAX')
+    if name.startswith('buffer_'):
+        width = {'buffer_64k': 65536, 'buffer_16m_uav': 16 << 20, 'buffer_256_align64k': 256}[name]
+        return entry(max(width, 65536), 65536, requested=65536 if name.endswith('align64k') else 0, fmt='UNKNOWN',
+                     width=width)
+    if name.endswith('_align4k'):
+        return entry(16384, 4096, requested=4096)
+    if 'msaa4' in name:
+        requested = 65536 if name.endswith('align64k') else 0
+        return entry(1179648 if requested else 41943040, requested or 4194304, requested=requested, samples=4)
+    return entry(9895936, 65536, total=9216000)
+
+
+GOOD = {'device': {'allocations': {name: plausible(name) for name in check_caps.INVENTORY}}}
 
 
 def with_answer(name, size, align):
@@ -38,6 +47,7 @@ def with_answer(name, size, align):
 
 class CheckCapsTest(unittest.TestCase):
     def test_good_document_passes(self):
+        self.assertEqual(len(GOOD['device']['allocations']), 52)
         self.assertEqual(check_caps.check(GOOD), [])
 
     def test_wrapped_negative_sizes_fail(self):
@@ -48,6 +58,11 @@ class CheckCapsTest(unittest.TestCase):
     def test_buffer_must_be_exact(self):
         failures = check_caps.check(with_answer('buffer_64k', 131072, 65536))
         self.assertEqual(failures, ['buffer_64k: 131072 / 65536, expected exactly 65536 / 65536'])
+
+    def test_buffer_smaller_than_its_width_fails(self):
+        # Codex 817: an aligned positive answer below the buffer's width passed before.
+        failures = check_caps.check(with_answer('buffer_16m_uav', 65536, 65536))
+        self.assertEqual(failures, ['buffer_16m_uav: SizeInBytes 65536 is smaller than the buffer width 16777216'])
 
     def test_default_and_requested_alignment(self):
         self.assertEqual(check_caps.check(with_answer('rgba8_1920x1200_rt_msaa4', 41943040, 65536)),
@@ -65,11 +80,17 @@ class CheckCapsTest(unittest.TestCase):
         failures = check_caps.check(with_answer('small_rgba8_256_align4k_too_large', 262144, 4096))
         self.assertEqual(failures, ['small_rgba8_256_align4k_too_large: SizeInBytes 262144, expected UINT64_MAX'])
 
-    def test_missing_entries_and_section(self):
+    def test_every_inventory_case_is_required(self):
         doc = copy.deepcopy(GOOD)
-        del doc['device']['allocations']['buffer_64k']
-        self.assertEqual(check_caps.check(doc), ['buffer_64k: absent'])
+        del doc['device']['allocations']['rgba16f_128x128x128_3d_uav']
+        self.assertEqual(check_caps.check(doc), ['rgba16f_128x128x128_3d_uav: absent'])
         self.assertEqual(check_caps.check({'device': {}}), ['device.allocations: absent or empty'])
+
+    def test_single_sampled_footprints_are_required(self):
+        doc = copy.deepcopy(GOOD)
+        del doc['device']['allocations']['buffer_16m_uav']['GetCopyableFootprints']
+        self.assertEqual(check_caps.check(doc),
+                         ['buffer_16m_uav: GetCopyableFootprints.TotalBytes None is not a positive size'])
 
     def test_bool_is_not_a_size(self):
         self.assertEqual(check_caps.check(with_answer('rgba8_1920x1200_rt', True, 1)),

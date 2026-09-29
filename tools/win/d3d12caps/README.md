@@ -90,9 +90,11 @@ flag lists, and the count on the last line. Exit code 0 always. Memory budgets a
 python check-caps.py caps.json [caps.json ...]
 ```
 
-checks the allocation answers a game sizes its heaps with: exactly 65536 / 65536 for the 64 KiB buffer, a
-positive size that is a multiple of a power-of-two alignment for every other resource, 64 KiB (4 MiB for MSAA)
-when no alignment was requested and the requested one otherwise, and `UINT64_MAX` for the deliberately invalid
+checks the allocation answers a game sizes its heaps with: every case of the tool's table present (the
+inventory is listed in the script), exactly 65536 / 65536 for the 64 KiB buffer, a positive size that is a
+multiple of a power-of-two alignment for every other resource and at least the width for a buffer, 64 KiB
+(4 MiB for MSAA) when no alignment was requested and the requested one otherwise, a positive footprint total
+for every single-sampled case, and `UINT64_MAX` for the deliberately invalid
 `small_rgba8_256_align4k_too_large`. Exit 0 when every document passes, 1 on a failed check, 2 when a document
 cannot be read. The dump tool's own zero exit proves only that the JSON was written: on the native route every
 size once came back as the negated alignment while no driver call failed. Run the check on each document
