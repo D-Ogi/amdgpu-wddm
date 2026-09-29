@@ -185,6 +185,7 @@ void test_retirement(Env& env);
 void test_device_queries(Env& env, Device& device);
 void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
+void test_small_placement(Env& env);
 void test_linear_primary(Env& env);
 void test_raytracing(Env& env);
 void test_raytracing_pipeline(Env& env);

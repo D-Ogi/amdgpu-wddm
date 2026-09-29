@@ -513,6 +513,7 @@ int wmain(int argc, wchar_t** argv) {
     test_retirement(env);
     test_runtime_backed(env);
     test_tiled(env);
+    test_small_placement(env);
     test_linear_primary(env);
     test_raytracing(env);
     test_raytracing_pipeline(env);

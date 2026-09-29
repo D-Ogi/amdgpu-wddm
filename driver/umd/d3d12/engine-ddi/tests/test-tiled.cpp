@@ -456,4 +456,93 @@ void test_tiled(Env& env) {
            static_cast<unsigned long>(hr), live, device.shell.device_errors, device.shell.list_errors);
 }
 
+// Placed textures that only the small placement alignment admits (native trials 093 and 094: a 16x16 texture at
+// offset 4096 of a pool heap). The DDI description has no alignment; engine-ddi finds the one the offset needs among
+// those the engine grants. Whether the engine grants 4 KB for the description is the device's answer, asked first.
+void test_small_placement(Env& env) {
+    StubMemory m;
+    check(load_stub(env, m), "small placement: GetVulkanHandles and the stub shell's Vulkan entry points");
+    if (!m.address) return;
+    Device device;
+    device.shell.memory = &m;
+    HRESULT hr = open_device(env, device, stub_allocate, stub_free);
+    checkf(hr == S_OK && device.context, "small placement: device context in RuntimeBacked mode (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (hr != S_OK) return;
+    Buffer heap;
+    hr = create_tile_heap(env, device, 1, heap);
+    checkf(hr == S_OK, "small placement: a 64 KiB heap of every category with a buffer over it (hr %08lx)",
+           static_cast<unsigned long>(hr));
+    if (hr != S_OK) return;
+
+    const auto describe = [](UINT edge, D3D12DDI_RESOURCE_FLAGS_0003 flags) {
+        D3D12DDIARG_CREATERESOURCE_0088 res{};
+        res.ResourceType = D3D12DDI_RT_TEXTURE2D;
+        res.Width = edge;
+        res.Height = edge;
+        res.DepthOrArraySize = 1;
+        res.MipLevels = 1;
+        res.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        res.SampleDesc = {1, 0};
+        res.Layout = D3D12DDI_TL_UNDEFINED;
+        res.Flags = flags;
+        res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
+        return res;
+    };
+    const auto place_at = [&](D3D12DDIARG_CREATERESOURCE_0088 res, UINT64 offset, Buffer& out) {
+        out = Buffer{};
+        res.ReuseBufferGPUVA.BaseAddress.UMD = {heap.hres(), offset};
+        const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes = env.core.pfnCalcPrivateHeapAndResourceSizes(
+            device.h(), nullptr, &res, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+        out.resource = env.storage.alloc(sizes.Resource);
+        if (!out.resource) return E_OUTOFMEMORY;
+        const HRESULT result = env.core.pfnCreateHeapAndResource(device.h(), nullptr, D3D12DDI_HHEAP{},
+                                                                 D3D12DDI_HRTRESOURCE{&out.rt}, &res, nullptr,
+                                                                 D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
+        if (FAILED(result)) out.resource = nullptr;
+        return result;
+    };
+    // What the engine answers for the 16x16 texture with the small alignment asked explicitly.
+    D3D12_RESOURCE_DESC probe{};
+    probe.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    probe.Alignment = D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT;
+    probe.Width = 16;
+    probe.Height = 16;
+    probe.DepthOrArraySize = 1;
+    probe.MipLevels = 1;
+    probe.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    probe.SampleDesc = {1, 0};
+    const D3D12_RESOURCE_ALLOCATION_INFO granted = env.engine->GetResourceAllocationInfo(0, 1, &probe);
+    const bool grants = granted.Alignment == D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT &&
+                        granted.SizeInBytes <= D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT;
+    checkf(true, "small placement: the engine %s 4 KiB for a 16x16 R8G8B8A8 texture (%llu bytes aligned to %llu)",
+           grants ? "grants" : "does not grant", static_cast<unsigned long long>(granted.SizeInBytes),
+           static_cast<unsigned long long>(granted.Alignment));
+
+    const uint32_t errors = device.shell.device_errors;
+    Buffer at4k, last, target, large;
+    const HRESULT hr_4k = place_at(describe(16, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), 4096, at4k);
+    const HRESULT hr_last = place_at(describe(16, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), 65536 - 4096, last);
+    const HRESULT expected = grants ? S_OK : E_INVALIDARG;
+    checkf(hr_4k == expected && hr_last == expected,
+           "small placement: a 16x16 texture at offset 4096 and in the heap's last 4 KiB: %s (hr %08lx %08lx)",
+           grants ? "placed" : "refused, the engine grants no 4 KiB", static_cast<unsigned long>(hr_4k),
+           static_cast<unsigned long>(hr_last));
+    // A render target never has the small alignment, and 256x256 does not fit in what is left of 64 KiB.
+    const auto render_target = static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET |
+                                                                         D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE);
+    const HRESULT hr_target = place_at(describe(16, render_target), 4096, target);
+    const HRESULT hr_large = place_at(describe(256, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), 4096, large);
+    checkf(hr_target == E_INVALIDARG && hr_large == E_INVALIDARG,
+           "small placement: a render target at 4096 and a 256x256 texture at 4096 are refused (hr %08lx %08lx)",
+           static_cast<unsigned long>(hr_target), static_cast<unsigned long>(hr_large));
+    for (Buffer* b : {&at4k, &last, &target, &large, &heap}) destroy_buffer(env, device, *b);
+    uint32_t live = UINT32_MAX;
+    hr = engine_ddi::destroy_device_context(device.context, &live);
+    checkf(hr == S_OK && live == 0 && m.frees == m.allocations && !device.shell.list_errors,
+           "small placement: destroy_device_context S_OK with no live object, every allocation freed (hr %08lx, %u "
+           "live, %u of %u freed, %u device errors of which %u before the placements)",
+           static_cast<unsigned long>(hr), live, m.frees, m.allocations, device.shell.device_errors, errors);
+}
+
 } // namespace harness
