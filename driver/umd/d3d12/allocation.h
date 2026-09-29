@@ -2,6 +2,7 @@
 #pragma once
 #include <windows.h>
 #include <d3d12umddi.h>
+#include "ddi-trace.h"
 namespace native12 {
 // One allocation, invoked synchronously from its owning device's DDI thread.
 // The owner must retain this record after failed release and invalidate callbacks
@@ -30,7 +31,23 @@ public:
         // Copy the in/out descriptor. Private-data buffers are borrowed only for
         // this synchronous call and are not retained in the owner record.
         auto args=request;args.pAllocationInfo=&info;
+        // The callback's own edges, after the local checks: what it was given and what it returned.
+        const bool traced=ddi_trace_enabled();
+        if(traced){
+            std::fprintf(stderr,"{\"event\":\"allocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
+                "\"allocations\":%u,\"resource\":%u,\"private_size\":%u,\"info_flags\":%u,\"source\":%u,"
+                "\"info_private_size\":%u,\"thread\":%lu}\n",ddi_experiment_name(),args.NumAllocations,
+                args.hKMResource?1u:0u,args.PrivateDriverDataSize,static_cast<unsigned>(info.Flags),
+                static_cast<unsigned>(info.VidPnSourceId),info.PrivateDriverDataSize,GetCurrentThreadId());
+            std::fflush(stderr);
+        }
         HRESULT hr=allocate_(runtime_,&args);
+        if(traced){
+            std::fprintf(stderr,"{\"event\":\"allocate-callback\",\"edge\":\"end\",\"status\":\"%08lx\","
+                "\"allocation\":%u,\"thread\":%lu}\n",static_cast<unsigned long>(hr),info.hAllocation?1u:0u,
+                GetCurrentThreadId());
+            std::fflush(stderr);
+        }
         if(FAILED(hr)) return hr;
         if(!info.hAllocation) return E_UNEXPECTED;
         allocation_=info.hAllocation;address_=info.GpuVirtualAddress;

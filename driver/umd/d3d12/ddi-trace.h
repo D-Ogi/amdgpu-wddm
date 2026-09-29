@@ -20,15 +20,22 @@ inline bool ddi_trace_enabled() noexcept {
 inline std::atomic<uint64_t> ddi_trace_sequence{};
 // Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names one deviation from the driver's behaviour, for a
 // measurement that needs it. Unset, empty or unknown means none. Read once per process.
-inline bool ddi_experiment(const char* name) noexcept {
+// The name as given, for traces: lower-case letters, digits and hyphens only, else empty.
+inline const char* ddi_experiment_name() noexcept {
     static const struct Value {
         char text[40]{};
         Value() noexcept {
             const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",text,sizeof(text));
             if(!n || n>=sizeof(text))text[0]=0;
+            for(const char* p=text;*p;++p)
+                if(!((*p>='a' && *p<='z') || (*p>='0' && *p<='9') || *p=='-')){text[0]=0;break;}
         }
     } value;
-    return name && value.text[0] && !std::strcmp(value.text,name);
+    return value.text;
+}
+inline bool ddi_experiment(const char* name) noexcept {
+    const char* given=ddi_experiment_name();
+    return name && given[0] && !std::strcmp(given,name);
 }
 inline uint64_t ddi_trace_begin(const char* name) noexcept {
     if(!ddi_trace_enabled())return 0;
