@@ -2,6 +2,7 @@
 #pragma once
 #include <windows.h>
 #include <d3d12.h>
+#include <bcrypt.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 #include <filesystem>
@@ -116,9 +117,23 @@ struct Session {
         HRESULT hr=api("CreateCommittedResource UPLOAD",[&]{return device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&resource,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&upload));});if(FAILED(hr))return hr;
         heap.Type=D3D12_HEAP_TYPE_READBACK;
         hr=api("CreateCommittedResource READBACK",[&]{return device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&resource,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback));});if(FAILED(hr))return hr;
-        void* data=nullptr;D3D12_RANGE empty{0,0};hr=api("Map UPLOAD",[&]{return upload->Map(0,&empty,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
-        for(size_t i=0;i<size;++i)static_cast<unsigned char*>(data)[i]=static_cast<unsigned char>((i*37+11)^(i>>3));
+        // The pattern differs per run and the destination starts as its complement, so bytes left
+        // from an earlier run, or a destination that aliases the source, cannot pass the comparison.
+        unsigned char seed[4]{};
+        if(BCryptGenRandom(nullptr,seed,sizeof(seed),BCRYPT_USE_SYSTEM_PREFERRED_RNG)<0)return E_FAIL;
+        const auto expected=[&seed](size_t i){return static_cast<unsigned char>(((i*37+11)^(i>>3))+seed[i&3]+seed[(i>>7)&3]);};
+        {char label[48]{};sprintf_s(label,"Pattern seed %02x%02x%02x%02x",seed[0],seed[1],seed[2],seed[3]);event("after",label);}
+        void* data=nullptr;D3D12_RANGE empty{0,0};D3D12_RANGE whole{0,size};
+        hr=api("Map READBACK prefill",[&]{return readback->Map(0,&empty,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
+        for(size_t i=0;i<size;++i)static_cast<unsigned char*>(data)[i]=static_cast<unsigned char>(~expected(i));
+        event("before","Unmap READBACK prefill");readback->Unmap(0,&whole);event("after","Unmap READBACK prefill");
+        data=nullptr;hr=api("Map UPLOAD",[&]{return upload->Map(0,&empty,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
+        for(size_t i=0;i<size;++i)static_cast<unsigned char*>(data)[i]=expected(i);
         D3D12_RANGE written{0,size};event("before","Unmap UPLOAD");upload->Unmap(0,&written);event("after","Unmap UPLOAD");
+        data=nullptr;hr=api("Map READBACK before submit",[&]{return readback->Map(0,&whole,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
+        bool untouched=true;for(size_t i=0;i<size;++i)if(static_cast<const unsigned char*>(data)[i]!=static_cast<unsigned char>(~expected(i))){untouched=false;break;}
+        readback->Unmap(0,&empty);event("after","Destination holds complement before submit",untouched?S_OK:E_FAIL);
+        if(!untouched)return E_FAIL;
         hr=api("CreateCommandAllocator",[&]{return device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator));});if(FAILED(hr))return hr;
         hr=api("CreateCommandList",[&]{return device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list));});if(FAILED(hr))return hr;
         hr=api("CreateFence",[&]{return device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));});if(FAILED(hr))return hr;
@@ -141,7 +156,7 @@ struct Session {
         }
         CloseHandle(completed_event);if(FAILED(hr))return hr;
         data=nullptr;D3D12_RANGE range{0,size};hr=api("Map READBACK",[&]{return readback->Map(0,&range,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
-        bool equal=true;for(size_t i=0;i<size;++i)if(static_cast<const unsigned char*>(data)[i]!=static_cast<unsigned char>((i*37+11)^(i>>3))){equal=false;break;}
+        bool equal=true;for(size_t i=0;i<size;++i)if(static_cast<const unsigned char*>(data)[i]!=expected(i)){equal=false;break;}
         event("before","Unmap READBACK");readback->Unmap(0,&empty);event("after","Unmap READBACK");
         hr=equal?S_OK:E_FAIL;event("after","Compare 4096 exact bytes",hr);copy_success=equal;return hr;
     }
