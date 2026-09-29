@@ -42,6 +42,8 @@ param(
     # Test build of -GameLoad only: the render thread keeps tracing this long after its last frame, past the
     # 10 s join bound, so that the session's end with a detached thread can be exercised (0 = off).
     [ValidateRange(0, 30000)][int]$GameLoadRenderHoldMs = 0,
+    # Test build with -GameLoadRenderHoldMs only: throw right after the render thread is detached.
+    [switch]$GameLoadThrowAfterDetach,
     # Back buffer format of -Present: B8G8R8A8_UNORM, or R10G10B10A2_UNORM as a 10-bit swap chain composed on
     # the desktop whatever the monitor's depth.
     [ValidateSet('Bgra8', 'Rgb10a2')][string]$PresentFormat = 'Bgra8'
@@ -81,6 +83,8 @@ if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $Ray
 if ($GameLoadArm -ne 'Both' -and -not $GameLoad) { throw 'GameLoadArm needs GameLoad' }
 if ($GameLoadRenderHoldMs -and -not $GameLoad) { throw 'GameLoadRenderHoldMs needs GameLoad' }
 if ($GameLoadRenderHoldMs) { $variant += "/DINTERACTIVE_GAMELOAD_RENDER_HOLD_MS=$GameLoadRenderHoldMs" }
+if ($GameLoadThrowAfterDetach -and -not $GameLoadRenderHoldMs) { throw 'GameLoadThrowAfterDetach needs GameLoadRenderHoldMs' }
+if ($GameLoadThrowAfterDetach) { $variant += '/DINTERACTIVE_GAMELOAD_THROW_AFTER_DETACH' }
 if ($PresentFormat -ne 'Bgra8' -and -not $Present) { throw 'PresentFormat needs Present' }
 if ($PresentFormat -eq 'Rgb10a2') { $variant += '/DINTERACTIVE_PRESENT_RGB10A2' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }

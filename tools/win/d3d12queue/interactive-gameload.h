@@ -695,7 +695,12 @@ inline HRESULT gameload_run(Session& s){
     board.finish(load_clean);screen.stop.store(true);
     const bool joined=WaitForSingleObject(static_cast<HANDLE>(render.native_handle()),static_cast<DWORD>(render_join_ms))==WAIT_OBJECT_0;
     if(joined){render.join();if(screen.pending)s.pending=true;}
-    else{render.detach();s.pending=true;s.detached=true;s.event("after","Game load render thread did not end; its objects stay for process teardown",HRESULT_FROM_WIN32(WAIT_TIMEOUT));}
+    else{render.detach();s.pending=true;s.detached=true;s.event("after","Game load render thread did not end; its objects stay for process teardown",HRESULT_FROM_WIN32(WAIT_TIMEOUT));
+#ifdef INTERACTIVE_GAMELOAD_THROW_AFTER_DETACH
+        // Test build only: an exception after the detach, as a failed allocation while building a receipt would.
+        throw std::runtime_error("injected after the render thread was detached");
+#endif
+    }
     const bool screen_clean=joined && screen.hr==S_OK && !screen.failures && screen.frames;
     // The terminal milestone is written before the outcome is decided, so that its loss fails the run too.
     log.line("single",0,"-",-1,"load_end",total,0);

@@ -83,6 +83,10 @@ struct Session {
     void set_sequence(unsigned value){AcquireSRWLockExclusive(&trace_lock);sequence=value;ReleaseSRWLockExclusive(&trace_lock);}
     bool trace_failed(){AcquireSRWLockShared(&trace_lock);const bool failed=io_failed;ReleaseSRWLockShared(&trace_lock);return failed;}
     ~Session() noexcept {
+        // A detached thread still holds this Session: an exception that unwinds past the terminal branch of run()
+        // must not destroy it. Record that (event() does not allocate), keep the trace lock and end the process.
+        if(detached){event("after","Session unwound with a detached thread; the process ends",E_ABORT);
+            AcquireSRWLockExclusive(&trace_lock);TerminateProcess(GetCurrentProcess(),3);}
         // An exception while formatting/publishing a receipt must not release
         // resources with unproven GPU retirement during stack unwinding.
         if(pending){list.Detach();allocator.Detach();upload.Detach();readback.Detach();middle.Detach();
