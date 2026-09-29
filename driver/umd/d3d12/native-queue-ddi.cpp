@@ -78,15 +78,26 @@ void APIENTRY native_wait(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATION*
     if (args) args->PhysicalAdapterMask = 0;
     queue_failure(h); // Cross-queue/runtime wait transport has not been implemented.
 }
-void APIENTRY native_update_tiles(D3D12DDI_HCOMMANDQUEUE h, D3D12DDI_HRESOURCE, UINT,
-    const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_HHEAP, UINT,
-    const D3D12DDI_TILE_RANGE_FLAGS*, const UINT*, const UINT*, D3D12DDI_TILE_MAPPING_FLAGS) {
-    queue_failure(h);
+// The tile mappings are one operation of the queue, admitted as an execute is. The engine checks
+// that the resources and the heap are the device's; a refusal or a failure removes the device.
+void APIENTRY native_update_tiles(D3D12DDI_HCOMMANDQUEUE h, D3D12DDI_HRESOURCE resource, UINT region_count,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,
+    D3D12DDI_HHEAP heap, UINT range_count, const D3D12DDI_TILE_RANGE_FLAGS* range_flags,
+    const UINT* heap_range_starts, const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) {
+    auto device = resolve_queue_device(h);
+    if (!device) { queue_failure(h); return; }
+    const HRESULT hr = engine_queues(*device)->update_tiles(*slot_of(h), resource, region_count, region_starts,
+        region_sizes, heap, range_count, range_flags, heap_range_starts, range_tile_counts, flags);
+    if (hr != S_OK) device->remove();
 }
-void APIENTRY native_copy_tiles(D3D12DDI_HCOMMANDQUEUE h, D3D12DDI_HRESOURCE,
-    const D3D12DDI_TILED_RESOURCE_COORDINATE*, D3D12DDI_HRESOURCE,
-    const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_TILE_MAPPING_FLAGS) {
-    queue_failure(h);
+void APIENTRY native_copy_tiles(D3D12DDI_HCOMMANDQUEUE h, D3D12DDI_HRESOURCE dst,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start, D3D12DDI_HRESOURCE src,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start, const D3D12DDI_TILE_REGION_SIZE* size,
+    D3D12DDI_TILE_MAPPING_FLAGS flags) {
+    auto device = resolve_queue_device(h);
+    if (!device) { queue_failure(h); return; }
+    const HRESULT hr = engine_queues(*device)->copy_tiles(*slot_of(h), dst, dst_start, src, src_start, size, flags);
+    if (hr != S_OK) device->remove();
 }
 HRESULT APIENTRY extended_features(D3D12DDI_HDEVICE h, UINT32* count, D3D12DDI_FEATURE_0020*) {
     if (!count) return E_INVALIDARG;

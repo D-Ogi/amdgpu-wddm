@@ -18,7 +18,9 @@ struct QueueEngineOwner {
         const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb) : context(q, cb), runtime(q) {}
 };
 QueueEngineOps QueueEngineOps::native() noexcept {
-    return {engine_ddi::create_engine_queue, engine_ddi::execute_command_lists};
+    QueueEngineOps ops{engine_ddi::create_engine_queue, engine_ddi::execute_command_lists};
+    ops.update_tiles = engine_ddi::update_tile_mappings; ops.copy_tiles = engine_ddi::copy_tile_mappings;
+    return ops;
 }
 QueueEngineRegistry::QueueEngineRegistry(Device& device, engine_ddi::DeviceContext* engine,
     QueueEngineOps ops) noexcept : device_(device), engine_(engine), ops_(ops) {}
@@ -126,9 +128,9 @@ HRESULT QueueEngineRegistry::create(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& a
     ReleaseSRWLockExclusive(&lock_);
     return S_OK;
 }
-HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
-    const D3D12DDI_HCOMMANDLIST* lists) noexcept {
-    if (slot.owner != &device_ || !slot.cookie || !slot.serial || (count && !lists)) return E_INVALIDARG;
+HRESULT QueueEngineRegistry::admit(const QueueEngineSlot& slot, QueueEngineOwner*& queue) noexcept {
+    queue = nullptr;
+    if (slot.owner != &device_ || !slot.cookie || !slot.serial) return E_INVALIDARG;
     if (device_.lost.load()) return D3DDDIERR_DEVICEREMOVED;
     AcquireSRWLockExclusive(&lock_);
     auto q = find(slot.cookie, slot.serial);
@@ -138,12 +140,37 @@ HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
     }
     q->state = QueueEngineState::Executing; q->operation_thread = GetCurrentThreadId();
     ReleaseSRWLockExclusive(&lock_);
-    HRESULT hr = ops_.execute(q->engine, count, lists);
+    queue = q; return S_OK;
+}
+HRESULT QueueEngineRegistry::leave(QueueEngineOwner* q, HRESULT hr) noexcept {
     if (hr == S_OK) hr = ops_.check_health(ops_.health_cookie);
     AcquireSRWLockExclusive(&lock_); q->state = QueueEngineState::Live; q->operation_thread = 0;
     ReleaseSRWLockExclusive(&lock_);
     if (hr != S_OK) { device_.remove(); if (SUCCEEDED(hr)) hr = E_UNEXPECTED; }
     return hr == S_OK && device_.lost.load() ? D3DDDIERR_DEVICEREMOVED : hr;
+}
+HRESULT QueueEngineRegistry::execute(const QueueEngineSlot& slot, UINT count,
+    const D3D12DDI_HCOMMANDLIST* lists) noexcept {
+    if (count && !lists) return E_INVALIDARG;
+    QueueEngineOwner* q; const HRESULT hr = admit(slot, q);
+    return hr != S_OK ? hr : leave(q, ops_.execute(q->engine, count, lists));
+}
+HRESULT QueueEngineRegistry::update_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE resource, UINT region_count,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,
+    D3D12DDI_HHEAP heap, UINT range_count, const D3D12DDI_TILE_RANGE_FLAGS* range_flags,
+    const UINT* heap_range_starts, const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept {
+    if (!ops_.update_tiles) return E_NOTIMPL;
+    QueueEngineOwner* q; const HRESULT hr = admit(slot, q);
+    return hr != S_OK ? hr : leave(q, ops_.update_tiles(q->engine, resource, region_count, region_starts,
+        region_sizes, heap, range_count, range_flags, heap_range_starts, range_tile_counts, flags));
+}
+HRESULT QueueEngineRegistry::copy_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE dst,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start, D3D12DDI_HRESOURCE src,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start, const D3D12DDI_TILE_REGION_SIZE* size,
+    D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept {
+    if (!ops_.copy_tiles) return E_NOTIMPL;
+    QueueEngineOwner* q; const HRESULT hr = admit(slot, q);
+    return hr != S_OK ? hr : leave(q, ops_.copy_tiles(q->engine, dst, dst_start, src, src_start, size, flags));
 }
 HRESULT QueueEngineRegistry::destroy(QueueEngineSlot& slot) noexcept {
     if (!slot.cookie && !slot.serial && !slot.owner) return S_OK;

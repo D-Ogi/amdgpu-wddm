@@ -408,6 +408,34 @@ void test_tiled(Env& env) {
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
         }
     }
+    // 5. What the engine parts refuse binds nothing and is reported once each: a resource that is not reserved, a
+    // heap handle that names no heap, a mapping range without a heap, heap tiles past the heap's end, an unknown
+    // flag; for the copy, a source that is not reserved. The buffer's mapping is read again afterwards.
+    uint32_t refusals = 0;
+    {
+        const uint32_t before = device.shell.device_errors;
+        const UINT first = 0, past = 5;   // tiles 5-8 of an 8-tile heap
+        auto update = [&](D3D12DDI_HRESOURCE r, D3D12DDI_HHEAP h, const UINT* start, UINT flags) {
+            return engine_ddi::update_tile_mappings(queue, r, 1, &origin, &four, h, 1, &none, start, &count4,
+                                                    static_cast<D3D12DDI_TILE_MAPPING_FLAGS>(flags));
+        };
+        const HRESULT not_reserved = update(upload.hres(), heap_a.hheap(), &first, 0);
+        const HRESULT not_a_heap = update(buffer2.hres(), D3D12DDI_HHEAP{upload.hres().pDrvPrivate}, &first, 0);
+        const HRESULT no_heap = update(buffer2.hres(), D3D12DDI_HHEAP{}, &first, 0);
+        const HRESULT past_end = update(buffer2.hres(), heap_a.hheap(), &past, 0);
+        const HRESULT unknown_flag = update(buffer2.hres(), heap_a.hheap(), &first, 0x80);
+        const HRESULT copy_source = engine_ddi::copy_tile_mappings(queue, buffer2.hres(), &origin, upload.hres(), &origin,
+                                                                   &four, D3D12DDI_TILE_MAPPING_FLAG_NONE);
+        refusals = device.shell.device_errors - before;
+        checkf(not_reserved == E_INVALIDARG && not_a_heap == E_INVALIDARG && no_heap == E_INVALIDARG &&
+                   past_end == E_INVALIDARG && unknown_flag == E_INVALIDARG && copy_source == E_INVALIDARG &&
+                   refusals == 6,
+               "tiled: six malformed tile mapping calls are refused and reported once each (%08lx %08lx %08lx %08lx "
+               "%08lx %08lx, %u reports)",
+               static_cast<unsigned long>(not_reserved), static_cast<unsigned long>(not_a_heap),
+               static_cast<unsigned long>(no_heap), static_cast<unsigned long>(past_end),
+               static_cast<unsigned long>(unknown_flag), static_cast<unsigned long>(copy_source), refusals);
+    }
     destroy_recording(env, device, rec);
 
     // Reserved resources first, as an application releases them before their heaps; then every allocation must come
@@ -422,9 +450,9 @@ void test_tiled(Env& env) {
     engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
-    checkf(hr == S_OK && live == 0 && !device.shell.device_errors && !device.shell.list_errors,
-           "tiled: destroy_device_context S_OK with no live object, no error reported (hr %08lx, %u live, %u device, "
-           "%u list errors)",
+    checkf(hr == S_OK && live == 0 && device.shell.device_errors == refusals && !device.shell.list_errors,
+           "tiled: destroy_device_context S_OK with no live object, no error but the refusals' (hr %08lx, %u live, %u "
+           "device, %u list errors)",
            static_cast<unsigned long>(hr), live, device.shell.device_errors, device.shell.list_errors);
 }
 

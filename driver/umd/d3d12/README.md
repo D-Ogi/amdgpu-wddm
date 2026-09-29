@@ -161,9 +161,12 @@ inside them and queues address updates through `HostedDispatch`
 mapping or a reservation, and a runtime answer that would give it two removes
 the device. What is mapped inside a reservation is not recorded. One update
 names one reservation; its backing, range, fence and context are held until
-the runtime callback returns, the imported heaps among them. This is host
-tested only: the queue's tile slots still refuse, so no application reaches it.
-Queue Wait, tiled resources, scheduling groups, offer/reclaim and background
+the runtime callback returns, the imported heaps among them. The queue's
+`pfnUpdateTileMappings` and `pfnCopyTileMappings` are one operation of the
+queue, admitted as an execute is, and hand their arguments unchanged to the
+engine queue. Both are host and harness tested; no run against the system
+runtime has used them.
+Queue Wait, scheduling groups, offer/reclaim and background
 processing are also outside the current shell. A non-null function pointer may
 be an explicit refusal handler, so table publication is not a capability claim.
 See [engine-ddi/SLOTS.md](engine-ddi/SLOTS.md) for the engine boundary's slot map.

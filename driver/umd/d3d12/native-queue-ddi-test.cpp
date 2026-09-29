@@ -27,6 +27,21 @@ HRESULT make_engine(engine_ddi::DeviceContext*, const BC250_VKD3D_COMMAND_QUEUE_
 HRESULT execute_engine(engine_ddi::EngineQueue*, UINT, const D3D12DDI_HCOMMANDLIST*) noexcept;
 HRESULT close_engine(engine_ddi::EngineQueue**) noexcept;
 HRESULT engine_health(void*) noexcept;
+HRESULT update_engine(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE, UINT, const D3D12DDI_TILED_RESOURCE_COORDINATE*,
+    const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_HHEAP, UINT, const D3D12DDI_TILE_RANGE_FLAGS*, const UINT*, const UINT*,
+    D3D12DDI_TILE_MAPPING_FLAGS) noexcept;
+HRESULT copy_engine(engine_ddi::EngineQueue*, D3D12DDI_HRESOURCE, const D3D12DDI_TILED_RESOURCE_COORDINATE*,
+    D3D12DDI_HRESOURCE, const D3D12DDI_TILED_RESOURCE_COORDINATE*, const D3D12DDI_TILE_REGION_SIZE*,
+    D3D12DDI_TILE_MAPPING_FLAGS) noexcept;
+// What a tile call must carry to the engine: the slot's own arguments, null arrays included.
+struct TileArguments {
+    D3D12DDI_HRESOURCE resource{}, source{};
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* starts{}; const D3D12DDI_TILED_RESOURCE_COORDINATE* source_start{};
+    const D3D12DDI_TILE_REGION_SIZE* sizes{};
+    D3D12DDI_HHEAP heap{}; UINT regions{}, ranges{};
+    const D3D12DDI_TILE_RANGE_FLAGS* range_flags{}; const UINT* heap_starts{}; const UINT* counts{};
+    D3D12DDI_TILE_MAPPING_FLAGS flags{};
+};
 struct Fixture {
     native12::Device device;
     native12::QueueEngineRegistry registry;
@@ -34,8 +49,11 @@ struct Fixture {
     unsigned creates{}, closes{}, engine_creates{}, executes{}, engine_destroys{}, errors{};
     bool fail_create{}, fail_engine{}, fail_close{}, lose_destroy{}, fail_execute{}, engine_lost{}, fail_proof{};
     native12::QueueEngineSlot* reentrant_destroy{};
+    TileArguments expected{};
+    unsigned tile_updates{}, tile_copies{};
+    void (*inside_tiles)(Fixture&, void* cookie){};
     Fixture() : registry(device, reinterpret_cast<engine_ddi::DeviceContext*>(this),
-        {make_engine, execute_engine, close_engine, engine_health, this}) {
+        {make_engine, execute_engine, close_engine, engine_health, this, update_engine, copy_engine}) {
         register_fixture(this);
         runtime[0] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x100000011}), false};
         runtime[1] = {this, reinterpret_cast<HANDLE>(UINT_PTR{0x200000022}), false};
@@ -100,6 +118,28 @@ HRESULT execute_engine(engine_ddi::EngineQueue* engine, UINT count, const D3D12D
     BindingProbe probe{f, native12::QueueEngineState::Executing};
     assert(f->registry.with_binding(q->cookie, f->device, check_binding, &probe) == S_OK);
     if (f->reentrant_destroy) assert(f->registry.destroy(*f->reentrant_destroy) == E_PENDING);
+    return f->fail_execute ? E_FAIL : S_OK;
+}
+HRESULT update_engine(engine_ddi::EngineQueue* engine, D3D12DDI_HRESOURCE resource, UINT regions,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* starts, const D3D12DDI_TILE_REGION_SIZE* sizes, D3D12DDI_HHEAP heap,
+    UINT ranges, const D3D12DDI_TILE_RANGE_FLAGS* range_flags, const UINT* heap_starts, const UINT* counts,
+    D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept {
+    auto q = reinterpret_cast<FakeQueue*>(engine); auto f = q->fixture; const auto& e = f->expected;
+    assert(resource.pDrvPrivate == e.resource.pDrvPrivate && regions == e.regions && starts == e.starts &&
+        sizes == e.sizes && heap.pDrvPrivate == e.heap.pDrvPrivate && ranges == e.ranges &&
+        range_flags == e.range_flags && heap_starts == e.heap_starts && counts == e.counts && flags == e.flags);
+    ++f->tile_updates;
+    if (f->inside_tiles) f->inside_tiles(*f, q->cookie);
+    return f->fail_execute ? E_FAIL : S_OK;
+}
+HRESULT copy_engine(engine_ddi::EngineQueue* engine, D3D12DDI_HRESOURCE dst,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start, D3D12DDI_HRESOURCE src,
+    const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start, const D3D12DDI_TILE_REGION_SIZE* size,
+    D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept {
+    auto q = reinterpret_cast<FakeQueue*>(engine); auto f = q->fixture; const auto& e = f->expected;
+    assert(dst.pDrvPrivate == e.resource.pDrvPrivate && dst_start == e.starts && src.pDrvPrivate == e.source.pDrvPrivate &&
+        src_start == e.source_start && size == e.sizes && flags == e.flags);
+    ++f->tile_copies;
     return f->fail_execute ? E_FAIL : S_OK;
 }
 HRESULT close_engine(engine_ddi::EngineQueue** engine) noexcept {
@@ -193,6 +233,28 @@ int main() {
         core.pfnDestroyCommandQueue(device,q);assert(!f.closes && f.engine_destroys==1);
         unsigned unresolved{};assert(f.registry.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1);
     }
+    {   // The tile slots hand the runtime's arguments to the engine queue; a failure removes the device.
+        Fixture f,other;native12::QueueEngineSlot slot{};
+        D3D12DDI_HDEVICE device{&f.device};D3D12DDI_HCOMMANDQUEUE q{&slot};
+        assert(core.pfnCreateCommandQueue(device,&args,q,f.rt(0))==S_OK);
+        int resource{},source{},heap{};
+        const D3D12DDI_TILED_RESOURCE_COORDINATE start{1,2,3,4},source_start{};
+        const D3D12DDI_TILE_REGION_SIZE size{4,FALSE,0,0,0};
+        const D3D12DDI_TILE_RANGE_FLAGS range=D3D12DDI_TILE_RANGE_FLAG_NONE;const UINT heap_start=7,count=4;
+        f.expected={{&resource},{&source},&start,&source_start,&size,{&heap},1,1,&range,&heap_start,&count,
+            D3D12DDI_TILE_MAPPING_FLAG_NO_HAZARD};
+        queue.pfnUpdateTileMappings(q,{&resource},1,&start,&size,{&heap},1,&range,&heap_start,&count,D3D12DDI_TILE_MAPPING_FLAG_NO_HAZARD);
+        queue.pfnCopyTileMappings(q,{&resource},&start,{&source},&source_start,&size,D3D12DDI_TILE_MAPPING_FLAG_NO_HAZARD);
+        assert(f.tile_updates==1 && f.tile_copies==1 && !f.device.lost && !f.executes);
+        auto forged=slot;forged.owner=&other.device;
+        queue.pfnUpdateTileMappings({&forged},{&resource},1,&start,&size,{&heap},1,&range,&heap_start,&count,D3D12DDI_TILE_MAPPING_FLAG_NO_HAZARD);
+        assert(f.tile_updates==1 && !f.device.lost && other.device.lost);
+        f.fail_execute=true;
+        queue.pfnCopyTileMappings(q,{&resource},&start,{&source},&source_start,&size,D3D12DDI_TILE_MAPPING_FLAG_NO_HAZARD);
+        assert(f.tile_copies==2 && f.device.lost);
+        core.pfnDestroyCommandQueue(device,q);
+        unsigned unresolved{};assert(f.registry.discard_retired_metadata(unresolved)==S_FALSE && unresolved==1);
+    }
     {
         Fixture f;native12::QueueEngineSlot slot{};
         D3D12DDI_HDEVICE device{&f.device};D3D12DDI_HCOMMANDQUEUE q{&slot};
@@ -213,5 +275,5 @@ int main() {
         assert(ext.pfnSetExtendedFeatureCallbacks(device,D3D12DDI_TABLE_TYPE_DEVICE_CORE,&core,sizeof(core))==E_NOTIMPL);
         assert(!f.device.lost && !f.engine_creates && !f.creates);
     }
-    std::puts("PASSED: native typed queue create/execute/Signal mask/close, actual registry ownership, foreign fence refusal, deferred Wait and empty extended features; host-only");
+    std::puts("PASSED: native typed queue create/execute/Signal mask/close, actual registry ownership, foreign fence refusal, tile mappings to the engine queue, deferred Wait and empty extended features; host-only");
 }

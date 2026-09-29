@@ -30,7 +30,11 @@ struct QueueEngineOps {
     // can set its own removed reason without invoking a shell callback.
     HRESULT (*check_health)(void*) noexcept{};
     void* health_cookie{};
-    // Native create/execute only. Caller must supply close and check_health/cookie.
+    // The queue's tile mappings. Absent in an engine substitute that has none: the call is then
+    // refused before admission.
+    decltype(&engine_ddi::update_tile_mappings) update_tiles{};
+    decltype(&engine_ddi::copy_tile_mappings) copy_tiles{};
+    // Native create/execute/tile mappings only. Caller must supply close and check_health/cookie.
     static QueueEngineOps native() noexcept;
 };
 struct QueueEngineSlot { void* cookie{}; UINT64 serial{}; Device* owner{}; };
@@ -50,6 +54,11 @@ class QueueEngineRegistry final {
     QueueEngineOwner* find(void* cookie, UINT64 serial) noexcept;
     void erase(QueueEngineOwner*) noexcept;
     HRESULT release_context(QueueEngineOwner*) noexcept;
+    // One operation of a queue at a time: execute and the tile mappings share this admission.
+    // admit: owner, cookie, serial and device health, then Live without pins becomes Executing on
+    // this thread. leave: the engine's health after the call, Live again, a failure removes the device.
+    HRESULT admit(const QueueEngineSlot& slot, QueueEngineOwner*& queue) noexcept;
+    HRESULT leave(QueueEngineOwner* queue, HRESULT result) noexcept;
 public:
     QueueEngineRegistry(Device& device, engine_ddi::DeviceContext* engine,
         QueueEngineOps ops = QueueEngineOps::native()) noexcept;
@@ -59,6 +68,15 @@ public:
         D3D12DDI_HRTCOMMANDQUEUE runtime, QueueEngineSlot& slot) noexcept;
     HRESULT execute(const QueueEngineSlot& slot, UINT count,
         const D3D12DDI_HCOMMANDLIST* lists) noexcept;
+    // Every argument after the slot is the DDI slot's, unchanged, null arrays included.
+    HRESULT update_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE resource, UINT region_count,
+        const D3D12DDI_TILED_RESOURCE_COORDINATE* region_starts, const D3D12DDI_TILE_REGION_SIZE* region_sizes,
+        D3D12DDI_HHEAP heap, UINT range_count, const D3D12DDI_TILE_RANGE_FLAGS* range_flags,
+        const UINT* heap_range_starts, const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
+    HRESULT copy_tiles(const QueueEngineSlot& slot, D3D12DDI_HRESOURCE dst,
+        const D3D12DDI_TILED_RESOURCE_COORDINATE* dst_start, D3D12DDI_HRESOURCE src,
+        const D3D12DDI_TILED_RESOURCE_COORDINATE* src_start, const D3D12DDI_TILE_REGION_SIZE* size,
+        D3D12DDI_TILE_MAPPING_FLAGS flags) noexcept;
     HRESULT destroy(QueueEngineSlot& slot) noexcept;
     // Present: the native context of a live queue, by the slot's cookie and serial as execute takes it.
     // Borrowed for the synchronous DDI call that asked; E_PENDING while the queue executes or is pinned.
