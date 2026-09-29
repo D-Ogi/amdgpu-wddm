@@ -134,6 +134,62 @@ decisive`, with S_OK, and the operation continues; under `--interactive` it fail
 else differs between the two modes. With that, the software control passes this variant with
 `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits, 28 old misses, 24 new misses).
 
+`build.ps1 -GameLoad` replaces the `copy` operation with a game-like load in steps, so that the step at which
+a machine stops is known (a game stopped unit A within a second of loading the UMD, during a burst of kernel
+paging submissions). The steps have fixed totals of 256 MB, 512 MB, 1 GB and 2 GB (one table in
+`interactive-gameload.h`). Each step has two arms with the same total: SMALL, committed DEFAULT buffers of
+64 KB created back to back, and LARGE, committed resources of 64 MB, buffers and RGBA8 4096x3072 textures
+with all 13 mips in turn. `-GameLoadArm Small|Large|Both` (default `Both`, SMALL first) selects the arms. A
+step is skipped with a trace line when `IDXGIAdapter3::QueryVideoMemoryInfo` says the step does not fit the
+local budget beside the current usage; an unknown budget is traced and not checked. Every resource is written
+through the GPU: a pattern of the run's random seed, the resource's id and the word index goes into an UPLOAD
+staging buffer and on with `CopyBufferRegion` or `CopyTextureRegion`, in command lists of at most 1024
+copies, each waited with the bounded fence wait. Then every LARGE resource and every 64th SMALL one, plus the
+last, is read back and compared row by row. The trace counts created, written, fenced, verified and
+mismatched resources apart, as well as bytes touched and bytes verified, allocation failures and
+submissions, with the time of each part. An arm's resources stay alive until its verification is done;
+then they are released and a fence round trip follows before the next arm. The last phase runs four threads
+on the SMALL arm of the 256 MB step, each with its own allocator, list, fence, staging, readback and seed,
+all submitting to the one queue; their trace records carry a `thread` field, and the trace writer takes a
+lock. Single-thread steps may start until 40 s after the operation began and the threads until 50 s (10 s
+and 15 s on the software adapter), never in the last 10 s before the client's deadline; a cut is traced as
+`Game load time budget reached at step N`, and what was created is still written and verified. A step, an
+arm or the thread phase counts as exercised only once it created a resource. The operation succeeds only if
+load actually ran (resources created and a sample verified), every exercised arm verified all its samples
+with no mismatch, and no allocation failed. A run in which the time bound or the budget skipped every arm
+fails with `800700e8` (`Game load incomplete: no load ran`), whatever the screen did. It ends with `Game load:
+steps S of 4, created N, verified M, mismatched X, bytes B, threads T, ..., coverage complete|partial|none,
+arms A of P, steps skipped K, ...`; `partial` means some arms or threads were cut or skipped, and SMALL
+coverage is always the sampled resources only.
+Every milestone (load, step and arm begin and end, every LARGE and every 256th SMALL creation, each
+submission before it executes, each fence, each verification, thread begin and end) is appended to
+`milestones.log` in the session directory with QPC time, step, arm, thread and counts, through a
+write-through handle flushed after each line, so a machine-wide stop leaves the last one on disk.
+
+While the load runs, a render thread shows it as a game would. On the BC-250 it creates a borderless window
+over the primary output (the size of adapter output 0) and a flip-model swap chain on the same queue, in the
+configuration `-Present` proved (`FLIP_DISCARD`, two buffers, the admitted 8-bit format, `Present(1, 0)`),
+and presents one frame per vsync from its own allocators, list and fence. The frame is made of clears only,
+so the back buffer format is one constant (`back_buffer_format`) and nothing else depends on it. The top band
+shows the step in its colour on the left (blue, teal, orange, violet for 256 MB to 2 GB, white for the
+threads) and the arm on the right (light blue SMALL, brown LARGE), and turns green or red for a second at
+the end. Below it a white bar moves with every frame, so a frozen picture shows a still bar. Below that is
+one tile per written batch: yellow when its fence completed, green when its arm verified clean, red for a
+mismatch or a failed allocation. The window, the swap chain and the first Present are milestones (with a
+`_begin` line before each), then every 60th Present; every milestone line carries the Present count and the
+longest interval between two Presents. A failed Present fails the operation and keeps its error. A frame
+executed without a following successful `Signal` (a failed Present or Signal) is never taken as retired on
+the strength of an earlier fence value: the render thread tries one covering `Signal` and a bounded wait,
+and if that does not prove completion its objects stay for process teardown and the session stays pending. Under `--interactive-warp` no
+window is made: the same frames go to an offscreen render target of the same size, paced to 60 per second
+and reported as offscreen frames. The load starts after the first frame (or after 10 s without one); the
+render thread gets 10 s to end after the load, or the session is left pending for process teardown.
+
+The software control passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, coverage complete,
+9 of 9 arms, 65596 resources, 8.3 GB written, no mismatch, 369 offscreen frames at 3440x1440, longest
+interval 44 ms, 11.5 s). With a 10 s client deadline the time bound skips every arm and the operation fails
+with `800700e8`, coverage none.
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained

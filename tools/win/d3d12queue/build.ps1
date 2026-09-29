@@ -32,7 +32,13 @@ param(
     # (a local root constant in the hit group record, a second miss shader from the addition).
     [switch]$RayGrow,
     # Diagnostic variant: the copy verb traces the scene of -RayPipeline through a pipeline made of a collection.
-    [switch]$RayCollection
+    [switch]$RayCollection,
+    # Diagnostic variant: the copy verb runs a game-like load in steps of 256 MB to 2 GB of committed resources,
+    # written and sampled back through the queue, then four threads on the smallest step; milestones.log is
+    # written through to the disk.
+    [switch]$GameLoad,
+    # Arms of -GameLoad: SMALL (64 KB buffers), LARGE (64 MB buffers and textures) or both, SMALL first.
+    [ValidateSet('Small', 'Large', 'Both')][string]$GameLoadArm = 'Both'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,8 +70,9 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection | Where-Object { $_ }).Count -gt 1) {
-    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow and RayCollection each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad | Where-Object { $_ }).Count -gt 1) {
+    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection and GameLoad each replace the copy verb; choose one' }
+if ($GameLoadArm -ne 'Both' -and -not $GameLoad) { throw 'GameLoadArm needs GameLoad' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 if ($Present) { $variant += '/DINTERACTIVE_PRESENT' }
@@ -75,6 +82,7 @@ if ($RayPipeline) { $variant += '/DINTERACTIVE_RAYPIPELINE' }
 if ($RayState) { $variant += '/DINTERACTIVE_RAYSTATE' }
 if ($RayGrow) { $variant += '/DINTERACTIVE_RAYGROW' }
 if ($RayCollection) { $variant += '/DINTERACTIVE_RAYCOLLECTION' }
+if ($GameLoad) { $variant += '/DINTERACTIVE_GAMELOAD', "/DINTERACTIVE_GAMELOAD_ARMS=$(@{Small = 1; Large = 2; Both = 3}[$GameLoadArm])" }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",

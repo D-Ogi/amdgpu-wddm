@@ -11,6 +11,11 @@
 #include <cstring>
 #include <cstdint>
 #include <algorithm>
+#ifdef INTERACTIVE_GAMELOAD
+#include <thread>
+#include <utility>
+#include <vector>
+#endif
 
 namespace interactive {
 using Microsoft::WRL::ComPtr;
@@ -71,6 +76,7 @@ struct Session {
     ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12Fence> fence;
     ComPtr<IUnknown> extra[12];  // objects of a build variant, released with the rest
     unsigned sequence{};bool copy_success{},pending{},io_failed{};
+    SRWLOCK trace_lock=SRWLOCK_INIT;  // event() is also called from the worker threads of -GameLoad
     ~Session() noexcept {
         // An exception while formatting/publishing a receipt must not release
         // resources with unproven GPU retirement during stack unwinding.
@@ -79,10 +85,14 @@ struct Session {
             fence.Detach();queue.Detach();device.Detach();adapter.Detach();factory.Detach();}
     }
 
-    void event(const char* phase,const char* api,HRESULT hr=S_OK){
-        char line[512]{};int length=sprintf_s(line,"{\"sequence\":%u,\"elapsed_ms\":%llu,\"phase\":\"%s\",\"api\":\"%s\",\"hr\":\"%08lx\"}\n",sequence,GetTickCount64()-start,phase,api,static_cast<unsigned long>(hr));
+    // A record of a worker thread names it in a "thread" field; every other record keeps its form.
+    void event(const char* phase,const char* api,HRESULT hr=S_OK,int thread=-1){
+        AcquireSRWLockExclusive(&trace_lock);
+        char line[512]{};int length=thread<0?sprintf_s(line,"{\"sequence\":%u,\"elapsed_ms\":%llu,\"phase\":\"%s\",\"api\":\"%s\",\"hr\":\"%08lx\"}\n",sequence,GetTickCount64()-start,phase,api,static_cast<unsigned long>(hr))
+            :sprintf_s(line,"{\"sequence\":%u,\"elapsed_ms\":%llu,\"thread\":%d,\"phase\":\"%s\",\"api\":\"%s\",\"hr\":\"%08lx\"}\n",sequence,GetTickCount64()-start,thread,phase,api,static_cast<unsigned long>(hr));
         DWORD written=0;if(length<0 || !WriteFile(trace,line,static_cast<DWORD>(length),&written,nullptr) || written!=static_cast<DWORD>(length) || !FlushFileBuffers(trace))io_failed=true;
         std::fputs(line,stdout);std::fflush(stdout);
+        ReleaseSRWLockExclusive(&trace_lock);
     }
     template<class F> HRESULT api(const char* label,F&& function){event("before",label);HRESULT hr=function();event("after",label,hr);return hr;}
     bool abort_requested() const{return GetFileAttributesW((root/L"abort.request").c_str())!=INVALID_FILE_ATTRIBUTES;}
@@ -205,7 +215,7 @@ struct Session {
 };
 #if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) + \
     defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) + defined(INTERACTIVE_RAYSTATE) + \
-    defined(INTERACTIVE_RAYGROW) + defined(INTERACTIVE_RAYCOLLECTION) > 1
+    defined(INTERACTIVE_RAYGROW) + defined(INTERACTIVE_RAYCOLLECTION) + defined(INTERACTIVE_GAMELOAD) > 1
 #error one variant of the copy verb per build
 #endif
 #ifdef INTERACTIVE_DRAW
@@ -226,6 +236,9 @@ struct Session {
 #if defined(INTERACTIVE_RAYPIPELINE) || defined(INTERACTIVE_RAYSTATE) || defined(INTERACTIVE_RAYGROW) || \
     defined(INTERACTIVE_RAYCOLLECTION)
 #include "interactive-raypipeline.h"
+#endif
+#ifdef INTERACTIVE_GAMELOAD
+#include "interactive-gameload.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
@@ -283,6 +296,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=raygrow(session);break;
 #elif defined(INTERACTIVE_RAYCOLLECTION)
         case Verb::Copy:hr=raycollection(session);break;
+#elif defined(INTERACTIVE_GAMELOAD)
+        case Verb::Copy:hr=gameload_run(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif
