@@ -94,3 +94,55 @@ unmatched, malformed and untracked records remain visible. Hosted callback IDs
 are device-local, so the analyzer reports their counts without assuming a global
 pairing. Raw text, handles and resource contents are omitted from its bounded
 output. The original trace remains the source of evidence.
+
+## Receipt-gated command planner
+
+`drive_planner.py` contains a transport-independent planner for an already started
+interactive attempt. It waits for the seeded `create-device` receipt, then plans
+`create-queue`, `copy`, `status`, and `exit`. A failed operation or missing positive
+state witness selects `exit`. Any receipt reporting pending GPU resources permits
+only `exit` or `abort`; their retirement is never assumed.
+
+Import `DriveState` for manual integration, or `drive_loop` for bounded polling:
+
+```python
+import time
+from drive_planner import drive_loop
+
+result = drive_loop(poll, issue, emit, seconds=60,
+                    clock=time.monotonic, sleep=time.sleep,
+                    diagnostic=record_local_error)
+```
+
+`poll(timeout)` returns a complete snapshot: strict boolean `started`,
+`runtime_ready`, `stop`, `cancel`, and `terminal`; a `commands` list of
+`{sequence, command}` objects; and a `receipts` list containing the probe's
+immutable result objects. Receipts include `schema`, `sequence`, `command`,
+`success`, eight-digit hex `hr`, `elapsed_ms`, boolean `state.device` and
+`state.queue`, `copy_success`, and `gpu_pending`. Startup may have no commands or
+receipts while `runtime_ready` is false. Every previously observed receipt must
+remain present and unchanged. Extra receipt fields are discarded.
+
+`issue(sequence, command, timeout)` must enforce its timeout, recheck STOP, invoke
+the immutable controller, and validate its acknowledgement. It raises on refusal
+or uncertain delivery. The planner consumes each action before calling `issue`
+and never retries it. For manual integration, call `state.observe(snapshot)`,
+then `state.issuing(*action)` immediately before delivery. Stop on any exception;
+a refused or terminal planner must not be reused for a new attempt.
+
+The loop accepts a one-to-65-second host budget. Startup and polling consume that
+same budget. In its final two seconds it may replace a planned command with a
+typed `abort`, only after a completed receipt proves the next sequence. STOP or
+cancellation prevents further positive commands. A callback must honor its supplied
+timeout, and logging callbacks must return promptly; this Python loop cannot
+interrupt a stalled transport implementation.
+
+Transport, artifact verification, deployment, STOP acquisition, logs, and process
+supervision stay with the caller. `interactive_terminal_observed` means only that
+a terminal receipt or session marker was observed. It does not establish GPU
+success, process closure, an empty Job, or restoration. Keep the independent
+supervisor and its cleanup checks active.
+
+Run the pure host gate with
+`python -B -m unittest discover -s tools/win/d3d12queue -p test_drive_planner.py`.
+The tests do not load a driver, connect to a target, or launch a process.

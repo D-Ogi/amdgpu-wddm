@@ -61,5 +61,5 @@ if ($LASTEXITCODE -ne 0) { throw "$test failed" }
 }
 
 # Immutable receipt/trace classification is part of the probe artifact gate.
-python -B -m unittest discover -s $here -p test_summary.py
-if ($LASTEXITCODE -ne 0) { throw 'interactive summary tests failed' }
+python -B -m unittest discover -s $here -p 'test_*.py'
+if ($LASTEXITCODE -ne 0) { throw 'interactive planner/summary tests failed' }
