@@ -522,12 +522,30 @@ void test_raytracing(Env& env) {
 //      signature's association naming closest by that mangled name, the only one the engine knows it by, and the
 //      global one naming raygen, miss, that mangled name and miss_far. A dispatch per order writes its own constant on
 //      every hit, the 64 words exact.
+//   7. A collection-only executable: a COLLECTION of the library, then a pipeline with EXISTING_COLLECTION of all its
+//      exports and no DXIL library. The description handed to the engine: the collection's engine object with
+//      NumExports 0, no library, the global root signature associated with raygen, miss and closest, the names the
+//      collection exposed. The same import with an export list is E_NOTIMPL before the engine (temporarily
+//      unsupported, INTEGRATION.md). The executable's record holds one public reference to the collection's engine
+//      object, and the collection's DDI object is destroyed before the executable is used: a dispatch through its
+//      table writes its own constant on every hit and 2 on every miss, the 64 words exact.
+//   8. Growth (D115, D116): a pipeline allowing additions, its identifiers taken and its pipeline stack size set to
+//      4096 above its computed one, grown by fixture-raylib-b listing miss_far. The child's stack size read before any
+//      set is the parent's setting; the child's raygen identifier is the parent's. The description handed to the
+//      engine: grown from the parent's engine object, one library listing one export, the global root signature
+//      associated with miss_far alone. Refused growth, one E_INVALIDARG each and no device error: from a pipeline
+//      without ALLOW_STATE_OBJECT_ADDITIONS (the engine's check, one engine call) and an addition exporting miss (the
+//      bridge's check, no engine call). The child's record holds one public reference to the parent's engine object,
+//      and the parent's DDI object is destroyed before the child is used: a dispatch through a table of the parent's
+//      raygen and hit group identifiers and miss_far's writes its own constant on every hit and miss_far's 3 on every
+//      miss, the 64 words exact.
 // The descriptions are copied by the harness's state object observer immediately before the engine's
-// CreateStateObject (internal.h, harness_set_state_object_observer; the shell's DLL has no observer).
+// CreateStateObject or AddToStateObject (internal.h, harness_set_state_object_observer; the shell's DLL has no
+// observer).
 // state_object_shell, which the shell's entry thunk resolves these slots' device with, names the device's shell for a
 // live state object and for the inert record of a refused create, and nothing once either is destroyed.
-// Then refusals, each one error of the expected HRESULT: a subobject of an unknown type and an existing collection
-// (the create's result), the decoy without a mangled name and the decoy with both of closest's names (no unique name:
+// Then refusals, each one error of the expected HRESULT: a subobject of an unknown type and a ray tracing pipeline
+// named as an existing collection (the create's result, E_INVALIDARG), the decoy without a mangled name and the decoy with both of closest's names (no unique name:
 // E_INVALIDARG and no device error, never broadened),
 // DispatchRays on a closed list and SetPipelineState1 with another device context's state object (one error on the
 // list). The raytracing tier engine-ddi reports stays NOT_SUPPORTED (INTEGRATION.md).
@@ -536,11 +554,15 @@ constexpr UINT32 kRecordValue = 0xB0253C09u;       // the hit group's local root
 constexpr UINT32 kRecordValue2 = 0xB0253C0Au;      // the same in the second pipeline's shader table
 constexpr UINT32 kRecordValue3 = 0xB0253C0Bu;      // and in the third's
 constexpr UINT32 kMixedValues[2] = {0xB0253C0Cu, 0xB0253C0Du};     // and in the two mixed-library pipelines'
+constexpr UINT32 kImportValue = 0xB0253C0Eu;       // and in the collection-only executable's
+constexpr UINT32 kGrowValue = 0xB0253C0Fu;         // and in the grown pipeline's
+constexpr UINT32 kMissFar = 3;                      // what miss_far writes (fixture-raylib-b.hlsl)
 constexpr UINT32 kTrapValue = 0xB0253CFFu;         // a word no shader should read: see the second and third tables
 // The UPLOAD buffer: vertices at 0, the instance at kInstanceOffset, then the shader table, its records 32-byte and its
 // tables 64-byte aligned (D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-// the tables of the later pipelines kTable2, kTable3, kTable4 and kTable5 bytes after the first.
-constexpr UINT64 kUploadBytes = 5120, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096;
+// the tables of the later pipelines kTable2 to kTable7 bytes after the first.
+constexpr UINT64 kUploadBytes = 7168, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
+                 kTable7 = 6144;
 constexpr UINT64 kRaygenOffset = 512, kMissOffset = 576, kHitOffset = 640;
 constexpr UINT64 kRecordBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 constexpr UINT64 kHitStride = 64;                   // identifier, the constants, padding to the record alignment
@@ -551,11 +573,13 @@ static_assert(kRaygenOffset % kTableAlignment == 0 && kMissOffset % kTableAlignm
                   kInstanceOffset + sizeof(D3D12_RAYTRACING_INSTANCE_DESC) <= kRaygenOffset &&
                   kHitOffset + kHitStride <= kTable2 && kTable2 % kTableAlignment == 0 &&
                   kTable3 - kTable2 == kTable2 && kTable4 - kTable3 == kTable2 && kTable5 - kTable4 == kTable2 &&
-                  kTable5 + kHitOffset + kHitStride <= kUploadBytes,
+                  kTable6 - kTable5 == kTable2 && kTable7 - kTable6 == kTable2 &&
+                  kTable7 + kHitOffset + kHitStride <= kUploadBytes,
               "shader table layout");
-constexpr UINT64 kPipelineOutBytes = 5 * 256;      // one 64-word result per pipeline, 256 bytes apart
+constexpr UINT64 kPipelineOutBytes = 7 * 256;      // one 64-word result per pipeline, 256 bytes apart
 constexpr LPCWSTR kRaygenMangled = L"\x01?raygen@@YAXXZ";
 constexpr LPCWSTR kMissMangled = L"\x01?miss@@YAXUPayload@@@Z";
+constexpr LPCWSTR kMissFarMangled = L"\x01?miss_far@@YAXUPayload@@@Z";
 constexpr LPCWSTR kClosestMangled = L"\x01?closest@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z";
 
 void* create_root_signature(Env& env, Device& device, const D3D12DDI_ROOT_SIGNATURE_0013& rs, HRESULT* hr) {
@@ -709,9 +733,105 @@ void add_export_all_library(PipelineDesc& d, const UINT* library_b, bool b_first
     d.library_b = {library_b, 0, nullptr};
     d.subobjects[kDescribed] = {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d.library_b};
     if (b_first) std::swap(d.subobjects[3], d.subobjects[kDescribed]);
-    d.nodes[3] = {L"miss_far", L"\x01?miss_far@@YAXUPayload@@@Z", 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[3] = {L"miss_far", kMissFarMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.summary.NumExportedFunctions = 4;
     d.args.NumSubobjects = kDescribed + 1;
+}
+
+// A collection-only executable in the DDI form: its own configuration, the global root signature, the collection
+// imported whole (NumExports 0), both configurations and no DXIL library; the summary names raygen, miss and closest
+// with the executable's own global root signature and configurations. The collection's local root association for
+// closest is not restated: how the runtime passes an inherited association is not measured (INTEGRATION.md).
+struct ImportDesc {
+    D3D12DDI_STATE_OBJECT_CONFIG_0054 config;
+    D3D12DDI_GLOBAL_ROOT_SIGNATURE_0054 global;
+    D3D12DDI_EXISTING_COLLECTION_DESC_0054 collection;
+    D3D12DDI_RAYTRACING_SHADER_CONFIG_0054 shader_config;
+    D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[6];    // the summary is the sixth
+    const D3D12DDI_STATE_SUBOBJECT_0054* common[3];
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[3];
+    D3D12DDI_FUNCTION_SUMMARY_0054 summary;
+    D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
+};
+void describe_import(ImportDesc& d, void* global, void* collection) {
+    d.config = {D3D12DDI_STATE_OBJECT_FLAG_NONE};
+    d.global = {D3D12DDI_HROOTSIGNATURE{global}};
+    d.collection = {D3D12DDI_HSTATEOBJECT_0054{collection}, 0, nullptr};
+    d.shader_config = {sizeof(UINT32), 2 * sizeof(float)};
+    d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
+    d.subobjects[0] = {D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &d.config};
+    d.subobjects[1] = {D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d.global};
+    d.subobjects[2] = {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &d.collection};
+    d.subobjects[3] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &d.shader_config};
+    d.subobjects[4] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
+    d.subobjects[5] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
+    d.common[0] = &d.subobjects[1];
+    d.common[1] = &d.subobjects[3];
+    d.common[2] = &d.subobjects[4];
+    d.nodes[0] = {L"raygen", kRaygenMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[1] = {L"miss", kMissMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[2] = {L"closest", kClosestMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.summary = {3, d.nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 6, d.subobjects};
+}
+
+// An addition in the DDI form, a description valid on its own (Raytracing.md:3781-3783): a configuration allowing
+// additions, the global root signature, one library listing one export, both configurations, and a summary naming that
+// export with the addition's global root signature and configurations; parent is the state object grown from.
+struct AdditionDesc {
+    D3D12DDI_STATE_OBJECT_CONFIG_0054 config;
+    D3D12DDI_GLOBAL_ROOT_SIGNATURE_0054 global;
+    D3D12DDI_EXPORT_DESC_0054 export_desc;
+    D3D12DDI_DXIL_LIBRARY_DESC_0054 library;
+    D3D12DDI_RAYTRACING_SHADER_CONFIG_0054 shader_config;
+    D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
+    D3D12DDI_STATE_SUBOBJECT_0054 subobjects[6];    // the summary is the sixth
+    const D3D12DDI_STATE_SUBOBJECT_0054* common[3];
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 node;
+    D3D12DDI_FUNCTION_SUMMARY_0054 summary;
+    D3D12DDIARG_ADD_TO_STATE_OBJECT_0072 args;
+};
+void describe_addition(AdditionDesc& d, void* global, const UINT* library, LPCWSTR name, LPCWSTR mangled,
+                       void* parent) {
+    d.config = {D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS};
+    d.global = {D3D12DDI_HROOTSIGNATURE{global}};
+    d.export_desc = {name, nullptr, D3D12DDI_EXPORT_FLAG_NONE};
+    d.library = {library, 1, &d.export_desc};
+    d.shader_config = {sizeof(UINT32), 2 * sizeof(float)};
+    d.pipeline_config = {1, D3D12DDI_RAYTRACING_PIPELINE_FLAG_NONE};
+    d.subobjects[0] = {D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &d.config};
+    d.subobjects[1] = {D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &d.global};
+    d.subobjects[2] = {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d.library};
+    d.subobjects[3] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &d.shader_config};
+    d.subobjects[4] = {D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &d.pipeline_config};
+    d.subobjects[5] = {D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &d.summary};
+    d.common[0] = &d.subobjects[1];
+    d.common[1] = &d.subobjects[3];
+    d.common[2] = &d.subobjects[4];
+    d.node = {name, mangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.summary = {1, &d.node, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 6, d.subobjects, D3D12DDI_HSTATEOBJECT_0054{parent}};
+}
+
+// The public reference count of a record's engine object, read by an AddRef and Release pair. The engine keeps its
+// own internal count for what one state object holds of another (raytracing_pipeline.c:101-121, 2762-2769), so this
+// one counts engine-ddi's references.
+ULONG public_references(void* storage) {
+    IUnknown* object = storage ? engine_ddi::harness_engine_object(storage) : nullptr;
+    if (!object) return 0;
+    const ULONG count = object->AddRef();
+    object->Release();
+    return count - 1;
+}
+
+// A grown state object in fresh private storage; the AddToStateObject result.
+HRESULT add_to_state_object(Env& env, Device& device, const D3D12DDIARG_ADD_TO_STATE_OBJECT_0072& args,
+                            void** storage, int* rt) {
+    *storage = env.storage.alloc(env.core.pfnCalcPrivateAddToStateObjectSize(device.h(), &args));
+    if (!*storage) return E_OUTOFMEMORY;
+    return env.core.pfnAddToStateObject(device.h(), &args, D3D12DDI_HSTATEOBJECT_0054{*storage},
+                                        D3D12DDI_HRTSTATEOBJECT_0054{rt});
 }
 
 // A state object in fresh private storage; the create's result.
@@ -731,10 +851,17 @@ struct Captured {
         const void* root;                       // its root signature, for a global or local root signature
         std::vector<std::wstring> names;        // none: an explicit default
     };
+    struct Import {
+        const void* collection;                 // the engine object
+        UINT exports;                           // NumExports
+    };
     UINT calls = 0;
     bool complete = false;                      // the copy did not run out of memory
+    D3D12_STATE_OBJECT_TYPE type{};
+    const void* parent = nullptr;               // the engine object an addition grows from
     std::vector<const void*> locals;            // the declared local root signatures, in order
     std::vector<UINT> library_exports;          // NumExports of each DXIL library, in order
+    std::vector<Import> imports;                // each EXISTING_COLLECTION, in order
     std::vector<Association> associations;
 };
 
@@ -746,17 +873,23 @@ const void* root_of(const D3D12_STATE_SUBOBJECT& s) noexcept {
     return nullptr;
 }
 
-void capture_state_object(const D3D12_STATE_OBJECT_DESC& desc, void* user) {
+void capture_state_object(const D3D12_STATE_OBJECT_DESC& desc, ID3D12StateObject* parent, void* user) {
     auto& c = *static_cast<Captured*>(user);
     const UINT calls = c.calls + 1;
     c = Captured{};
     c.calls = calls;
+    c.type = desc.Type;
+    c.parent = parent;
     try {
         for (UINT i = 0; i < desc.NumSubobjects; ++i) {
             const D3D12_STATE_SUBOBJECT& s = desc.pSubobjects[i];
             if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE) c.locals.push_back(root_of(s));
             if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY)
                 c.library_exports.push_back(static_cast<const D3D12_DXIL_LIBRARY_DESC*>(s.pDesc)->NumExports);
+            if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION) {
+                const auto& import = *static_cast<const D3D12_EXISTING_COLLECTION_DESC*>(s.pDesc);
+                c.imports.push_back({import.pExistingCollection, import.NumExports});
+            }
             if (s.Type != D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION) continue;
             const auto& a = *static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(s.pDesc);
             Captured::Association copy{a.pSubobjectToAssociate->Type, root_of(*a.pSubobjectToAssociate), {}};
@@ -913,6 +1046,7 @@ void test_raytracing_pipeline(Env& env) {
     // empty local root signature, declared last, as the explicit default that raygen and miss, associated with no
     // local root signature, fall to.
     const void* const local_root = engine_root(rs.local);
+    const void* const rs_global_root = engine_root(rs.global);
     const void* const trap_root = engine_root(rs.trap);
     const void* const decoy_root = engine_root(rs.decoy);
     const Captured seen1 = capture.captured;
@@ -1070,6 +1204,162 @@ void test_raytracing_pipeline(Env& env) {
         if (!ok) return;
     }
 
+    // 7, the collection and the collection-only executable that imports it whole. The collection's DDI object is
+    // destroyed before the executable is used: the executable's record holds the collection's engine object.
+    PipelineDesc gathered;
+    describe(gathered, rs.global, rs.local, library.code.data(), true);
+    gathered.args.Type = D3D12DDI_STATE_OBJECT_TYPE_COLLECTION;
+    void* collection_storage = nullptr;
+    int collection_rt = 0;
+    const HRESULT hr_collection = create_state_object(env, device, gathered.args, &collection_storage, &collection_rt);
+    const bool collection_seen = capture.captured.complete && capture.captured.type == D3D12_STATE_OBJECT_TYPE_COLLECTION;
+    ImportDesc import;
+    describe_import(import, rs.global, collection_storage);
+    void* importer_storage = nullptr;
+    int importer_rt = 0;
+    const ULONG collection_references = public_references(collection_storage);
+    const HRESULT hr_importer =
+        hr_collection == S_OK ? create_state_object(env, device, import.args, &importer_storage, &importer_rt) : E_FAIL;
+    const D3D12DDI_HSTATEOBJECT_0054 himporter{importer_storage};
+    BYTE importer_ids[3][kRecordBytes]{};
+    bool importer_ok = hr_importer == S_OK;
+    for (int i = 0; importer_ok && i < 3; ++i) {
+        const void* id = env.core.pfnGetShaderIdentifier(himporter, id_names[i]);
+        importer_ok = id != nullptr;
+        if (id) std::memcpy(importer_ids[i], id, kRecordBytes);
+    }
+    checkf(hr_collection == S_OK && collection_seen && importer_ok && !device.shell.device_errors,
+           "raytracing pipeline: a COLLECTION of the library, its root signatures, configurations and hit group, then a "
+           "collection-only executable (EXISTING_COLLECTION of all exports, no DXIL library): both creates and three "
+           "identifiers from the executable (hr %08lx %08lx)",
+           static_cast<unsigned long>(hr_collection), static_cast<unsigned long>(hr_importer));
+    // The description handed to the engine: the collection's engine object imported whole, no library, the global
+    // root signature's association naming the three exports by the names the collection exposed.
+    const Captured& import_seen = capture.captured;
+    const void* const collection_engine =
+        collection_storage ? static_cast<ID3D12StateObject*>(engine_ddi::harness_engine_object(collection_storage))
+                           : nullptr;
+    checkf(import_seen.complete && import_seen.type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE &&
+               !import_seen.parent && import_seen.library_exports.empty() && import_seen.imports.size() == 1 &&
+               collection_engine && import_seen.imports[0].collection == collection_engine &&
+               import_seen.imports[0].exports == 0 && import_seen.locals.empty() &&
+               names_are(associated(import_seen, D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, rs_global_root),
+                         {L"raygen", L"miss", L"closest"}),
+           "raytracing pipeline: the description of the collection-only executable handed to the engine: the "
+           "collection's engine object with NumExports 0, no DXIL library, no local root signature, the global root "
+           "signature associated with raygen, miss and closest, the names the collection exposed (%zu imports)",
+           import_seen.imports.size());
+    if (!importer_ok) return;
+    {
+        // A restricted import list: valid input, temporarily unsupported (the pinned engine's deferred import loop,
+        // INTEGRATION.md): E_NOTIMPL before the engine, and no device error.
+        ImportDesc restricted;
+        describe_import(restricted, rs.global, collection_storage);
+        D3D12DDI_EXPORT_DESC_0054 only{L"raygen", nullptr, D3D12DDI_EXPORT_FLAG_NONE};
+        restricted.collection.NumExports = 1;
+        restricted.collection.pExports = &only;
+        const UINT calls = capture.captured.calls;
+        void* storage = nullptr;
+        int rt = 0;
+        const HRESULT hr_restricted = create_state_object(env, device, restricted.args, &storage, &rt);
+        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
+        checkf(hr_restricted == E_NOTIMPL && capture.captured.calls == calls && !device.shell.device_errors,
+               "raytracing pipeline: an import of the collection with an export list: E_NOTIMPL before the engine, "
+               "temporarily unsupported (hr %08lx)",
+               static_cast<unsigned long>(hr_restricted));
+    }
+    const ULONG collection_held = public_references(collection_storage);
+    checkf(collection_references && collection_held == collection_references + 1,
+           "raytracing pipeline: the executable's record holds one reference to the collection's engine object, the "
+           "refused import none (public references %lu, then %lu)",
+           collection_references, collection_held);
+    env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{collection_storage});
+
+    // 8, growth: a pipeline allowing additions, its pipeline stack size set, grown by miss_far; the parent's DDI object
+    // destroyed before the child is used, the child's table holding the parent's identifiers and the new one.
+    PipelineDesc grown_from;
+    describe(grown_from, rs.global, rs.local, library.code.data(), true);
+    grown_from.config.Flags = D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
+    void* parent_storage = nullptr;
+    int parent_rt = 0;
+    const HRESULT hr_parent = create_state_object(env, device, grown_from.args, &parent_storage, &parent_rt);
+    const D3D12DDI_HSTATEOBJECT_0054 hparent{parent_storage};
+    BYTE parent_ids[3][kRecordBytes]{};
+    bool parent_ok = hr_parent == S_OK;
+    for (int i = 0; parent_ok && i < 3; ++i) {
+        const void* id = env.core.pfnGetShaderIdentifier(hparent, id_names[i]);
+        parent_ok = id != nullptr;
+        if (id) std::memcpy(parent_ids[i], id, kRecordBytes);
+    }
+    // A setting no default gives: the engine's computed sizes are small (0 on this development PC, 403).
+    const UINT parent_stack = parent_ok ? env.core.pfnGetPipelineStackSize(hparent) + 4096 : 0;
+    if (parent_ok) env.core.pfnSetPipelineStackSize(hparent, parent_stack);
+    checkf(parent_ok && env.core.pfnGetPipelineStackSize(hparent) == parent_stack && !device.shell.device_errors,
+           "raytracing pipeline: a pipeline allowing additions, three identifiers, its pipeline stack size set to %u "
+           "(hr %08lx)",
+           parent_stack, static_cast<unsigned long>(hr_parent));
+    if (!parent_ok) return;
+    AdditionDesc addition;
+    describe_addition(addition, rs.global, library_b.code.data(), L"miss_far", kMissFarMangled, parent_storage);
+    void* child_storage = nullptr;
+    int child_rt = 0;
+    const ULONG parent_references = public_references(parent_storage);
+    const HRESULT hr_child = add_to_state_object(env, device, addition.args, &child_storage, &child_rt);
+    const D3D12DDI_HSTATEOBJECT_0054 hchild{child_storage};
+    const Captured add_seen = capture.captured;
+    const UINT child_stack = hr_child == S_OK ? env.core.pfnGetPipelineStackSize(hchild) : 0;   // before any set
+    const void* const miss_far_id = hr_child == S_OK ? env.core.pfnGetShaderIdentifier(hchild, L"miss_far") : nullptr;
+    const void* const child_raygen = hr_child == S_OK ? env.core.pfnGetShaderIdentifier(hchild, L"raygen") : nullptr;
+    BYTE miss_far[kRecordBytes]{};
+    if (miss_far_id) std::memcpy(miss_far, miss_far_id, kRecordBytes);
+    checkf(hr_child == S_OK && miss_far_id && child_raygen && !std::memcmp(child_raygen, parent_ids[0], kRecordBytes) &&
+               !device.shell.device_errors,
+           "raytracing pipeline: AddToStateObject with fixture-raylib-b listing miss_far: S_OK, an identifier for "
+           "miss_far, and the parent's raygen identifier unchanged in the child (hr %08lx)",
+           static_cast<unsigned long>(hr_child));
+    checkf(child_stack == parent_stack,
+           "raytracing pipeline: the child's pipeline stack size before any set is the parent's setting, %u (read %u)",
+           parent_stack, child_stack);
+    const void* const parent_engine =
+        static_cast<ID3D12StateObject*>(engine_ddi::harness_engine_object(parent_storage));
+    checkf(add_seen.complete && add_seen.parent == parent_engine && add_seen.imports.empty() &&
+               add_seen.library_exports == std::vector<UINT>{1u} && add_seen.locals.empty() &&
+               names_are(associated(add_seen, D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, rs_global_root),
+                         {L"miss_far"}),
+           "raytracing pipeline: the description of the addition handed to the engine: grown from the parent's engine "
+           "object, one library listing one export, no local root signature, the global root signature associated with "
+           "miss_far alone");
+    if (hr_child != S_OK || !miss_far_id) return;
+    // Refused growth, each one E_INVALIDARG and no device error: from a pipeline created without
+    // ALLOW_STATE_OBJECT_ADDITIONS (the engine's check), and an addition exporting miss, which the parent has (the
+    // bridge's check, before the engine).
+    const auto refused_growth = [&](const char* what, void* from, const UINT* code, LPCWSTR name, LPCWSTR mangled,
+                                    bool reaches_engine) {
+        AdditionDesc bad;
+        describe_addition(bad, rs.global, code, name, mangled, from);
+        const UINT calls = capture.captured.calls;
+        const uint32_t before = device.shell.device_errors;
+        void* storage = nullptr;
+        int rt = 0;
+        const HRESULT hr_bad = add_to_state_object(env, device, bad.args, &storage, &rt);
+        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
+        const UINT engine_calls = capture.captured.calls - calls;
+        checkf(hr_bad == E_INVALIDARG && device.shell.device_errors == before && engine_calls == (reaches_engine ? 1u : 0u),
+               "raytracing pipeline: AddToStateObject %s: 80070057 %s, no device error (hr %08lx, %u engine calls)",
+               what, reaches_engine ? "from the engine" : "before the engine", static_cast<unsigned long>(hr_bad),
+               engine_calls);
+    };
+    refused_growth("from a pipeline without ALLOW_STATE_OBJECT_ADDITIONS", so_storage, library_b.code.data(),
+                   L"miss_far", kMissFarMangled, true);
+    refused_growth("with an export named miss, as the parent's", parent_storage, library.code.data(), L"miss",
+                   kMissMangled, false);
+    const ULONG parent_held = public_references(parent_storage);
+    checkf(parent_references && parent_held == parent_references + 1,
+           "raytracing pipeline: the child's record holds one reference to the parent's engine object, the refused "
+           "growth none (public references %lu, then %lu)",
+           parent_references, parent_held);
+    env.core.pfnDestroyStateObject(device.h(), hparent);
+
     // 3. Vertices, the instance and the shader table, then the list.
     void* cpu = nullptr;
     hr = env.core.pfnMapHeap(device.h(), upload.hheap(), &cpu);
@@ -1108,6 +1398,24 @@ void test_raytracing_pipeline(Env& env) {
         std::memcpy(record, ids3[i], kRecordBytes);
         std::memcpy(record + kRecordBytes, i == 2 ? &kRecordValue3 : &kTrapValue, sizeof(UINT32));
         std::memcpy(record + kRecordBytes + sizeof(UINT32), &kTrapValue, sizeof(UINT32));
+    }
+    // The sixth table, the collection-only executable's; the seventh, the child's: the parent's raygen and hit group
+    // identifiers (taken before the parent was destroyed) and miss_far's in the miss record.
+    const struct {
+        UINT64 table;
+        const BYTE* raygen;
+        const BYTE* miss;
+        const BYTE* hit;
+        UINT32 value;
+    } later_tables[2] = {
+        {kTable6, importer_ids[0], importer_ids[1], importer_ids[2], kImportValue},
+        {kTable7, parent_ids[0], miss_far, parent_ids[2], kGrowValue},
+    };
+    for (const auto& later : later_tables) {
+        std::memcpy(bytes + later.table + kRaygenOffset, later.raygen, kRecordBytes);
+        std::memcpy(bytes + later.table + kMissOffset, later.miss, kRecordBytes);
+        std::memcpy(bytes + later.table + kHitOffset, later.hit, kRecordBytes);
+        std::memcpy(bytes + later.table + kHitOffset + kRecordBytes, &later.value, sizeof(UINT32));
     }
     env.core.pfnUnmapHeap(device.h(), upload.hheap());
 
@@ -1176,6 +1484,18 @@ void test_raytracing_pipeline(Env& env) {
         mixed_rays.HitGroupTable.StartAddress += table;
         t.pfnDispatchRays(rec.hlist(), &mixed_rays);
     }
+    // 7 and 8, the dispatches: the collection-only executable after its collection's destroy, and the child after its
+    // parent's, into the sixth and seventh results.
+    const D3D12DDI_HSTATEOBJECT_0054 later_objects[2] = {himporter, hchild};
+    for (int k = 0; k < 2; ++k) {
+        t.pfnSetPipelineState1(rec.hlist(), later_objects[k]);
+        t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 1280 + 256 * k);
+        D3D12DDIARG_DISPATCH_RAYS_0054 later_rays = rays;
+        later_rays.RayGenerationShaderRecord.StartAddress += later_tables[k].table;
+        later_rays.MissShaderTable.StartAddress += later_tables[k].table;
+        later_rays.HitGroupTable.StartAddress += later_tables[k].table;
+        t.pfnDispatchRays(rec.hlist(), &later_rays);
+    }
     const D3D12DDIARG_RESOURCE_BARRIER_0022 end =
         transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
     t.pfnResourceBarrier(rec.hlist(), 1, &end);
@@ -1235,6 +1555,23 @@ void test_raytracing_pipeline(Env& env) {
                        "name reached closest (%u differ, first at %u)",
                        mp ? "second" : "first", kMixedValues[mp], bad_mixed, first_mixed);
             }
+            UINT32 expected_import[kWords], expected_grown[kWords];
+            for (UINT i = 0; i < kWords; ++i) {
+                expected_import[i] = expected[i] == kRecordValue ? kImportValue : expected[i];
+                expected_grown[i] = expected[i] == kRecordValue ? kGrowValue : kMissFar;
+            }
+            UINT first_import = 0, first_grown = 0;
+            const UINT bad_import = mismatches(words + 1280 / sizeof(UINT32), expected_import, &first_import);
+            const UINT bad_grown = mismatches(words + 1536 / sizeof(UINT32), expected_grown, &first_grown);
+            checkf(bad_import == 0,
+                   "raytracing pipeline: the collection-only executable, used after its collection's DestroyStateObject, "
+                   "writes its 64 expected words, %u hits with %08x and %u misses with %u (%u differ, first at %u)",
+                   hits, kImportValue, kWords - hits, kMiss, bad_import, first_import);
+            checkf(bad_grown == 0,
+                   "raytracing pipeline: the grown pipeline, used after its parent's DestroyStateObject, over a table "
+                   "of the parent's raygen and hit group identifiers and the new miss_far's writes its 64 expected "
+                   "words, %u hits with %08x and %u misses with miss_far's %u (%u differ, first at %u)",
+                   hits, kGrowValue, kWords - hits, kMissFar, bad_grown, first_grown);
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
         }
     }
@@ -1263,9 +1600,9 @@ void test_raytracing_pipeline(Env& env) {
     const D3D12DDI_NODE_MASK_0054 mask{1};
     refused_create("a subobject of an unknown type (4, unused in the DDI)", E_INVALIDARG,
                    {static_cast<D3D12DDI_STATE_SUBOBJECT_TYPE>(4), &mask});
-    const D3D12DDI_EXISTING_COLLECTION_DESC_0054 collection{hso, 0, nullptr};
-    refused_create("an existing collection (not implemented)", E_NOTIMPL,
-                   {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &collection});
+    const D3D12DDI_EXISTING_COLLECTION_DESC_0054 not_collection{hso, 0, nullptr};
+    refused_create("a ray tracing pipeline named as an existing collection", E_INVALIDARG,
+                   {D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &not_collection});
     // The decoy with no mangled name (its only name is the plain one closest also carries), and the decoy with both of
     // closest's names: named by either, the decoy's association would reach closest too. The create is refused
     // instead, before the engine sees it.
@@ -1349,6 +1686,8 @@ void test_raytracing_pipeline(Env& env) {
     env.core.pfnDestroyStateObject(device.h(), hso2);
     env.core.pfnDestroyStateObject(device.h(), hso3);
     for (void* storage : mixed_storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
+    env.core.pfnDestroyStateObject(device.h(), himporter);
+    env.core.pfnDestroyStateObject(device.h(), hchild);
     for (Buffer* b : {&blas, &tlas, &scratch, &out, &readback, &upload}) destroy_buffer(env, device, *b);
     destroy_root_signatures(env, device, rs);
     uint32_t live = UINT32_MAX;

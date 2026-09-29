@@ -158,6 +158,7 @@ void destroy(DeviceContext* c) noexcept {
     release_ref(c->empty_local);
     release_ref(c->device10);
     release_ref(c->device8);
+    release_ref(c->device7);
     release_ref(c->device5);
     release_ref(c->device4);
     release_ref(c->device);
@@ -206,6 +207,9 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
         destroy(c);
         return E_NOINTERFACE;
     }
+    // Optional: only AddToStateObject needs it.
+    if (FAILED(c->device->QueryInterface(__uuidof(ID3D12Device7), reinterpret_cast<void**>(&c->device7))))
+        c->device7 = nullptr;
     c->mode = info->memory_mode;
     c->hooks = info->hooks;
     c->funcs = *info->engine_funcs;

@@ -142,6 +142,7 @@ public:
     ID3D12Device* device = nullptr;             // one reference each
     ID3D12Device4* device4 = nullptr;
     ID3D12Device5* device5 = nullptr;
+    ID3D12Device7* device7 = nullptr;           // null if the engine has none: AddToStateObject answers E_NOTIMPL
     ID3D12Device8* device8 = nullptr;
     ID3D12Device10* device10 = nullptr;
     MemoryMode mode = MemoryMode::RuntimeBacked;
@@ -435,10 +436,11 @@ bool harness_retirement_lost(DeviceContext* context) noexcept;
 void harness_force_completed(EngineQueue* queue, uint64_t value) noexcept;
 void harness_fail_next_signal(EngineQueue* queue) noexcept;
 void harness_set_in_ddi_bound(DeviceContext* context, uint32_t milliseconds) noexcept;
-// Called by CreateStateObject with the API description immediately before the engine's CreateStateObject, on the
-// creating thread; null (the default) calls nothing. The description lives only for the call. Set it before the
-// creates it watches, from the thread that makes them.
-using StateObjectObserver = void (*)(const D3D12_STATE_OBJECT_DESC& desc, void* user);
+// Called by CreateStateObject and AddToStateObject with the API description immediately before the engine's
+// CreateStateObject or AddToStateObject (parent: the engine object grown from, null for a create), on the calling
+// thread; null (the default) calls nothing. The description lives only for the call. Set it before the creates it
+// watches, from the thread that makes them.
+using StateObjectObserver = void (*)(const D3D12_STATE_OBJECT_DESC& desc, ID3D12StateObject* parent, void* user);
 void harness_set_state_object_observer(StateObjectObserver observer, void* user) noexcept;
 #endif
 

@@ -146,7 +146,7 @@ runs only after GPU retirement, on a DDI thread.
 | D113 | 0x388 | `pfnSetPipelineStackSize` | engine-ddi | P3 |
 | D114 | 0x390 | `pfnSetBackgroundProcessingMode` | shell | P4 |
 | D115 | 0x398 | `pfnCalcPrivateAddToStateObjectSize` | engine-ddi | P3 |
-| D116 | 0x3A0 | `pfnAddToStateObject` | engine-ddi | P3 |
+| D116 | 0x3A0 | `pfnAddToStateObject` | engine-ddi; E_NOTIMPL without the engine's ID3D12Device7 | P3 |
 | D117 | 0x3A8 | `pfnCreateSamplerFeedbackUnorderedAccessView` | engine-ddi | P4 |
 | D118 | 0x3B0 | `pfnCreateAmplificationShader` | engine-ddi; E_NOTIMPL (mesh) | P4 |
 | D119 | 0x3B8 | `pfnCreateMeshShader` | engine-ddi; E_NOTIMPL (mesh) | P4 |

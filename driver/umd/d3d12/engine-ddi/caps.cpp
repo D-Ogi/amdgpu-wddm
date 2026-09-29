@@ -168,9 +168,9 @@ void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noe
     // Documented constants (INTEGRATION.md, "GetCaps"). Gated while the DDI slots behind them are fail-safes:
     //   DepthBoundsTestSupported (pfnOMSetDepthBounds), ProgrammableSamplePositionsTier (pfnSetSamplePositions),
     //   WriteBufferImmediateQueueFlags (pfnWriteBufferImmediate), ViewInstancingTier (pfnSetViewInstanceMask and
-    //   graphics pipelines), RaytracingTier (pfnAddToStateObject; the state object description is unmeasured,
-    //   INTEGRATION.md "Ray tracing state objects"), the VRS fields (pfnRSSetShadingRate,
-    //   pfnRSSetShadingRateImage), MeshShaderTier and the mesh fields (pfnDispatchMesh), SamplerFeedbackTier
+    //   graphics pipelines), RaytracingTier (indirect DispatchRays and restricted collection imports refuse; the
+    //   state object description is unmeasured, INTEGRATION.md "Ray tracing state objects"), the VRS fields
+    //   (pfnRSSetShadingRate, pfnRSSetShadingRateImage), MeshShaderTier and the mesh fields (pfnDispatchMesh), SamplerFeedbackTier
     //   (pfnCreateSamplerFeedbackUnorderedAccessView), EnhancedBarriersSupported (pfnBarrier).
     //   RenderPassTier 0: engine-ddi fills no render pass table; the runtime then emulates render passes.
     //   BackgroundProcessingSupported: pfnSetBackgroundProcessingMode is the shell's slot.

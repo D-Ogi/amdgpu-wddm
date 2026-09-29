@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// engine-ddi: ray tracing state objects (D105-D107) and the properties of one (D110-D113), on the engine's
-// ID3D12Device5 and ID3D12StateObjectProperties. SetPipelineState1 and DispatchRays (L63, L64) are in commands.cpp.
+// engine-ddi: ray tracing state objects (D105-D107), the properties of one (D110-D113) and AddToStateObject (D115,
+// D116), on the engine's ID3D12Device5, ID3D12Device7 and ID3D12StateObjectProperties. SetPipelineState1 and
+// DispatchRays (L63, L64) are in commands.cpp.
 //
 // The DDI description is not the API's (H = d3d12umddi.h, A = d3d12.h, 10.0.26100; DirectX-Specs Raytracing.md,
 // "State object DDIs"): subobjects name root signatures by handle, a DXIL library comes without its size, a hit group
@@ -18,7 +19,8 @@
 //   SHADER_EXPORT_SUMMARY  not passed on: one SUBOBJECT_TO_EXPORTS_ASSOCIATION per associated root signature or
 //                          configuration, naming every export the summary gives it by the name resolve_exports
 //                          chooses (a listed name, else a unique unmangled one, else a unique mangled one);
-//   EXISTING_COLLECTION  refused with E_NOTIMPL; any other type with E_INVALIDARG, never passed through.
+//   EXISTING_COLLECTION  the engine object of a live COLLECTION of this device, NumExports 0 only (an export list is
+//                        E_NOTIMPL for now, translate); any other type is E_INVALIDARG, never passed through.
 // INFERENCE until a lab run logs a real description (one line per create, below): that a 0092 driver gets
 // RAYTRACING_PIPELINE_CONFIG as _0075 (H:7731-7732 names both layouts); that pDXILLibrary is a DXIL part, as for
 // shaders, or else a whole container; that the summary's subobject pointers point into pSubobjects (a pointer outside
@@ -45,12 +47,17 @@
 // CreateStateObject returns; the engine deep-copies what it keeps (raytracing_pipeline.c,
 // d3d12_state_object_pipeline_data_defer). Keeping it until DestroyStateObject is a conservative choice, not an engine
 // requirement.
+// An imported collection and a grown parent are different: the runtime keeps a collection's DDI object alive while an
+// importer lives (Raytracing.md:9661) but destroys a parent while its children live (:9667-9669). So a record never
+// points into another record: it holds its own engine references to what it imported or grew from, released at its
+// destroy, and its own copy of the names each exposed (StateObjectTranslation::held and exposed).
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
 #include <climits>
 #include <cstdarg>
 #include <cstdio>
 #include <new>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
@@ -86,6 +93,8 @@ static_assert(D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG ==
                       static_cast<int>(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE) &&
                   D3D12DDI_STATE_SUBOBJECT_TYPE_NODE_MASK == static_cast<int>(D3D12_STATE_SUBOBJECT_TYPE_NODE_MASK) &&
                   D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY == static_cast<int>(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY) &&
+                  D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION ==
+                      static_cast<int>(D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION) &&
                   D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG ==
                       static_cast<int>(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG) &&
                   D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP == static_cast<int>(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP),
@@ -122,12 +131,27 @@ struct StateObjectTranslation {
         D3D12_RAYTRACING_SHADER_CONFIG shader_config;
         D3D12_RAYTRACING_PIPELINE_CONFIG1 pipeline_config;
         D3D12_HIT_GROUP_DESC hit_group;
+        D3D12_EXISTING_COLLECTION_DESC collection;
         D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association;
     };
     std::vector<Desc> descs;                        // one per API subobject
     std::vector<D3D12_STATE_SUBOBJECT> subobjects;  // the DDI's in order, less the summaries, then the associations
     std::vector<LPCWSTR> names;                     // the exports of every association, association after association
     std::vector<sc::Container> libraries;           // the rebuilt DXIL libraries
+    // One engine reference to each imported collection and to the parent of a grown state object, released after the
+    // engine's own object (DestroyStateObject releases that first).
+    std::vector<IUnknown*> held;
+    // The names this state object's shader exports are known to the engine by: the name resolve_exports chose for
+    // each summary export, every hit group's, and what an imported collection or the parent exposed. engine-ddi's own
+    // copies, read by a later import or growth (never a pointer into runtime memory or another record).
+    std::vector<std::wstring> exposed;
+
+    StateObjectTranslation() = default;
+    StateObjectTranslation(const StateObjectTranslation&) = delete;
+    StateObjectTranslation& operator=(const StateObjectTranslation&) = delete;
+    ~StateObjectTranslation() {
+        for (IUnknown* object : held) object->Release();
+    }
 };
 
 namespace {
@@ -204,6 +228,14 @@ ID3D12RootSignature* root_signature(DeviceContext* c, D3D12DDI_HROOTSIGNATURE h)
     return r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr;
 }
 
+// The live COLLECTION of this device an EXISTING_COLLECTION subobject names, or null. The runtime keeps an imported
+// collection's DDI object alive for the whole create (Raytracing.md:9657-9661).
+const StateObjectRecord* collection_of(DeviceContext* c, const void* desc) noexcept {
+    const auto& in = *static_cast<const D3D12DDI_EXISTING_COLLECTION_DESC_0054*>(desc);
+    const auto* r = record_of<StateObjectRecord>(in.hExistingCollection.pDrvPrivate, Tag::StateObject, c);
+    return (r && r->properties && r->h.engine && r->translation && !r->executable) ? r : nullptr;
+}
+
 // The context's empty local root signature (no parameters, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE), created
 // on first use. A real engine object: the engine dereferences a declared root signature (raytracing_pipeline.c:992-1030).
 HRESULT empty_local_root_signature(DeviceContext* c, ID3D12RootSignature** out) noexcept {
@@ -274,16 +306,33 @@ enum Identity : size_t { kAlias, kMangled, kUnmangled, kIdentities };
 // subobjects. An export with one name only goes by it, under the same uniqueness. The listed names of every library
 // count, whatever the other libraries do: a library that exposes every export beside one that lists a mangled name
 // leaves that name the only one the engine knows the listed export by (dxil.c:2367-2407).
-HRESULT resolve_exports(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, std::vector<LPCWSTR>& identity,
+// An imported collection (all of it: pass 1 admits no import list) is a listing source too: the names it exposed at
+// its own create (StateObjectTranslation::exposed), which the engine copies into the importer
+// (raytracing_pipeline.c:2330-2349), never names reconstructed from the summary. parent is the exposed names of the
+// state object an addition grows from: an export of the addition, or a hit group, that carries one of them is
+// E_INVALIDARG (Raytracing.md:3785-3786, exports must not collide), before any engine call; the engine checks none.
+HRESULT resolve_exports(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a,
+                        const std::vector<std::wstring>* parent, std::vector<LPCWSTR>& identity,
                         size_t (&kinds)[kIdentities]) {
-    std::unordered_set<std::wstring_view> aliases;
+    std::unordered_set<std::wstring_view> aliases, inherited;
+    if (parent)
+        for (const std::wstring& name : *parent) inherited.insert(name);
     bool export_all = false;                    // some library exposes every export (NumExports 0)
     for (UINT i = 0; i < a.NumSubobjects; ++i) {
         if (a.pSubobjects[i].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP) {
             // A hit group is an export by its own name, the one the engine matches it by (state_object_common.c:
             // 190-191 looks its associations up by HitGroupExport).
             const auto& group = *static_cast<const D3D12DDI_HIT_GROUP_DESC_0054*>(a.pSubobjects[i].pDesc);
+            if (group.HitGroupExport && inherited.count(group.HitGroupExport)) {
+                log_line("CreateStateObject: subobject %u: a hit group named like an export of the parent", i);
+                return E_INVALIDARG;
+            }
             if (group.HitGroupExport) aliases.insert(group.HitGroupExport);
+            continue;
+        }
+        if (a.pSubobjects[i].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION) {
+            if (const StateObjectRecord* collection = collection_of(c, a.pSubobjects[i].pDesc))
+                for (const std::wstring& name : collection->translation->exposed) aliases.insert(name);
             continue;
         }
         if (a.pSubobjects[i].Type != D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY) continue;
@@ -333,6 +382,10 @@ HRESULT resolve_exports(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, std::vect
         }
         if (!chosen || !taken.insert(chosen).second) {
             log_line("CreateStateObject: summary export %zu: its names are shared with another export", k);
+            return E_INVALIDARG;
+        }
+        if ((plain && inherited.count(plain)) || (mangled && inherited.count(mangled))) {
+            log_line("CreateStateObject: summary export %zu: named like an export of the parent", k);
             return E_INVALIDARG;
         }
         identity[k] = chosen;
@@ -434,14 +487,23 @@ HRESULT translate_one(DeviceContext* c, const D3D12DDI_STATE_SUBOBJECT_0054& s, 
                        in.ClosestHitShaderImport, in.IntersectionShaderImport};
         return S_OK;
     }
+    case D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION: {
+        // The collection's engine object, every export (pass 1 admits no import list); translate takes the reference.
+        const StateObjectRecord* collection = collection_of(c, s.pDesc);
+        if (!collection) return refuse(index, "not a live collection of this device", E_INVALIDARG);
+        d.collection = {static_cast<ID3D12StateObject*>(collection->h.engine), 0, nullptr};
+        text.add("; collection import");
+        return S_OK;
+    }
     default:
         return refuse(index, "not a translated type", E_UNEXPECTED);      // pass 1 let no other type through
     }
 }
 
-// The API description of a, into t. Nothing reaches the engine here.
-HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, StateObjectTranslation& t,
-                  Text& text) noexcept try {
+// The API description of a, into t, with its engine references and exposed names; parent is the live pipeline an
+// addition grows from, read during the call only. Nothing reaches the engine here.
+HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, const StateObjectRecord* parent,
+                  StateObjectTranslation& t, Text& text) noexcept try {
     const UINT n = a.NumSubobjects;
     if (n > kMaxCount || (n && !a.pSubobjects)) {
         log_line("CreateStateObject: %u subobjects, array %s: refused", n, a.pSubobjects ? "given" : "null");
@@ -450,7 +512,7 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     // Pass 1: types, and what the summaries associate.
     std::vector<size_t> counts(n, 0);
     size_t names = 0, exports = 0, unlocal = 0;
-    UINT summaries = 0, libraries = 0, locals = 0;
+    UINT summaries = 0, libraries = 0, locals = 0, imports = 0;
     text.add("; types");
     for (UINT i = 0; i < n; ++i) {
         const D3D12DDI_STATE_SUBOBJECT_0054& s = a.pSubobjects[i];
@@ -467,7 +529,15 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
         case D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE: ++locals; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY: ++libraries; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION:
-            return refuse(i, "an existing collection, not implemented", E_NOTIMPL);
+            if (!collection_of(c, s.pDesc)) return refuse(i, "not a live collection of this device", E_INVALIDARG);
+            // A restricted import list (NumExports != 0) is valid input, temporarily unsupported: the pinned engine
+            // indexes that list with the wrong loop variable for a deferred collection (raytracing_pipeline.c:714-720,
+            // d3d12_state_object_add_collection_deferred). Until an engine with the fix is pinned, only an import of
+            // every export reaches it.
+            if (static_cast<const D3D12DDI_EXISTING_COLLECTION_DESC_0054*>(s.pDesc)->NumExports)
+                return refuse(i, "a restricted import list, temporarily unsupported", E_NOTIMPL);
+            ++imports;
+            break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY: {
             ++summaries;
             const HRESULT hr = count_associations(a, i, counts, names, unlocal);
@@ -481,10 +551,31 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     }
     std::vector<LPCWSTR> identity;
     size_t kinds[kIdentities]{};
-    const HRESULT hr_names = resolve_exports(a, identity, kinds);
+    const HRESULT hr_names =
+        resolve_exports(c, a, parent ? &parent->translation->exposed : nullptr, identity, kinds);
     text.add("; summary %zu exports (by listed name %zu, mangled %zu, unmangled %zu), %zu associated names", exports,
              kinds[kAlias], kinds[kMangled], kinds[kUnmangled], names);
     if (FAILED(hr_names)) return hr_names;
+    // The names the new state object exposes: its summary exports' and hit groups', then what its imports and its
+    // parent expose, each once.
+    std::unordered_set<std::wstring_view> exposed;
+    const auto expose = [&](std::wstring_view name) {
+        if (exposed.insert(name).second) t.exposed.emplace_back(name);
+    };
+    for (LPCWSTR name : identity) expose(name);
+    for (UINT i = 0; i < n; ++i) {
+        const D3D12DDI_STATE_SUBOBJECT_0054& s = a.pSubobjects[i];
+        if (s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP) {
+            if (const LPCWSTR group = static_cast<const D3D12DDI_HIT_GROUP_DESC_0054*>(s.pDesc)->HitGroupExport)
+                expose(group);
+        } else if (s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION) {
+            if (const StateObjectRecord* collection = collection_of(c, s.pDesc))
+                for (const std::wstring& name : collection->translation->exposed) expose(name);
+        }
+    }
+    if (parent)
+        for (const std::wstring& name : parent->translation->exposed) expose(name);
+    t.held.reserve(size_t{imports} + (parent ? 1 : 0));
     size_t targets = 0;                        // counts[i] <= kMaxAssociatedNames, within an association's UINT
     for (size_t k : counts) targets += k ? 1 : 0;
     // An executable pipeline declaring a local root signature, with a summary export associated with none: the empty
@@ -516,8 +607,16 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
             s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY ? &t.libraries[library++] : nullptr;
         const HRESULT hr = translate_one(c, s, i, d, type, container, text);
         if (FAILED(hr)) return hr;
+        if (s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION) {
+            t.held.push_back(d.collection.pExistingCollection);         // within the reserved capacity
+            d.collection.pExistingCollection->AddRef();
+        }
         t.subobjects[out] = {type, &d};
         api[i] = out++;
+    }
+    if (parent) {
+        t.held.push_back(parent->h.engine);
+        parent->h.engine->AddRef();
     }
     std::vector<size_t> cursor(n, 0);
     size_t next = 0;
@@ -552,41 +651,62 @@ SIZE_T APIENTRY calc_state_object(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_STA
     return sizeof(StateObjectRecord);
 }
 
-HRESULT APIENTRY create_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_STATE_OBJECT_0054* args,
-                                     D3D12DDI_HSTATEOBJECT_0054 h, D3D12DDI_HRTSTATEOBJECT_0054 rt) {
-    DeviceContext* c = resolve(device);
-    if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
-    // An inert record first, so that DestroyStateObject is valid whatever happens below.
+// CreateStateObject (grow_from null) and AddToStateObject (the parent's handle): the record in h. An inert record first,
+// so that DestroyStateObject is valid whatever happens below.
+HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& args,
+                      const D3D12DDI_HSTATEOBJECT_0054* grow_from, D3D12DDI_HSTATEOBJECT_0054 h,
+                      D3D12DDI_HRTSTATEOBJECT_0054 rt) noexcept {
     auto* r = new (h.pDrvPrivate) StateObjectRecord{{Tag::StateObject, kRecordInvalid, nullptr, c}, nullptr, nullptr, rt,
                                                     false};
+    const char* const slot = grow_from ? "AddToStateObject" : "CreateStateObject";
     Text text;
-    text.add("type %u, %u subobjects", static_cast<UINT>(args->Type), args->NumSubobjects);
-    const bool executable = args->Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+    text.add("type %u, %u subobjects", static_cast<UINT>(args.Type), args.NumSubobjects);
+    const bool executable = args.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
     HRESULT hr = S_OK;
-    if (!executable && args->Type != D3D12DDI_STATE_OBJECT_TYPE_COLLECTION)
-        hr = args->Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE ? E_NOTIMPL : E_INVALIDARG;   // work graphs
-    else if (!c->device5)
+    const StateObjectRecord* parent = nullptr;
+    if (grow_from) {
+        // A live RAYTRACING_PIPELINE of this device grows into another (Raytracing.md:3781-3787; the engine refuses
+        // any other type, raytracing_pipeline.c:2865-2870). The parent's own flags are the engine's check (:2867).
+        parent = record_of<StateObjectRecord>(grow_from->pDrvPrivate, Tag::StateObject, c);
+        if (!parent || !parent->properties || !parent->translation || !parent->executable) parent = nullptr;
+        text.add("; grows %s", parent ? "a live pipeline" : "no live pipeline of this device");
+        hr = !parent || !executable ? E_INVALIDARG : !c->device7 ? E_NOTIMPL : S_OK;
+    } else if (!executable && args.Type != D3D12DDI_STATE_OBJECT_TYPE_COLLECTION) {
+        hr = args.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE ? E_NOTIMPL : E_INVALIDARG;   // work graphs
+    } else if (!c->device5) {
         hr = E_NOTIMPL;
+    }
     StateObjectTranslation* t = SUCCEEDED(hr) ? make_new<StateObjectTranslation>() : nullptr;
     if (SUCCEEDED(hr) && !t) hr = E_OUTOFMEMORY;
-    if (SUCCEEDED(hr)) hr = translate(c, *args, *t, text);
+    if (SUCCEEDED(hr)) hr = translate(c, args, parent, *t, text);
     ID3D12StateObject* so = nullptr;
     ID3D12StateObjectProperties* properties = nullptr;
     if (SUCCEEDED(hr)) {
-        const D3D12_STATE_OBJECT_DESC desc{static_cast<D3D12_STATE_OBJECT_TYPE>(args->Type),
+        const D3D12_STATE_OBJECT_DESC desc{static_cast<D3D12_STATE_OBJECT_TYPE>(args.Type),
                                            static_cast<UINT>(t->subobjects.size()), t->subobjects.data()};
+        auto* const parent_engine = parent ? static_cast<ID3D12StateObject*>(parent->h.engine) : nullptr;
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
         if (const StateObjectObserver observe = state_object_observer.load())
-            observe(desc, state_object_observer_user.load());
+            observe(desc, parent_engine, state_object_observer_user.load());
 #endif
-        hr = c->device5->CreateStateObject(&desc, __uuidof(ID3D12StateObject), reinterpret_cast<void**>(&so));
+        hr = parent ? c->device7->AddToStateObject(&desc, parent_engine, __uuidof(ID3D12StateObject),
+                                                   reinterpret_cast<void**>(&so))
+                    : c->device5->CreateStateObject(&desc, __uuidof(ID3D12StateObject), reinterpret_cast<void**>(&so));
         if (SUCCEEDED(hr) && !so) hr = E_UNEXPECTED;
         if (SUCCEEDED(hr))
             hr = so->QueryInterface(__uuidof(ID3D12StateObjectProperties), reinterpret_cast<void**>(&properties));
         if (SUCCEEDED(hr) && !properties) hr = E_UNEXPECTED;
     }
+    if (SUCCEEDED(hr) && parent) {
+        // Deviation from bare forwarding: the new state object starts with its parent's pipeline stack size
+        // (Raytracing.md:3777), and the engine gives it the computed default instead (raytracing_pipeline.c:2749-2752,
+        // reached through d3d12_rt_state_object_create at :2846), so the bridge copies the parent's current setting.
+        const UINT64 size = parent->properties->GetPipelineStackSize();
+        properties->SetPipelineStackSize(size);
+        text.add("; parent's pipeline stack size %llu", static_cast<unsigned long long>(size));
+    }
     // One line per create: what the runtime sent (the INFERENCES at the top of this file) and the answer.
-    log_line("CreateStateObject: %s; hr %08lx", text.buffer, static_cast<unsigned long>(hr));
+    log_line("%s: %s; hr %08lx", slot, text.buffer, static_cast<unsigned long>(hr));
     if (FAILED(hr)) {
         if (properties) properties->Release();
         if (so) so->Release();
@@ -600,6 +720,29 @@ HRESULT APIENTRY create_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_
     r->executable = executable;
     c->live.fetch_add(1);
     return S_OK;
+}
+
+HRESULT APIENTRY create_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_STATE_OBJECT_0054* args,
+                                     D3D12DDI_HSTATEOBJECT_0054 h, D3D12DDI_HRTSTATEOBJECT_0054 rt) {
+    DeviceContext* c = resolve(device);
+    if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
+    return create_record(c, *args, nullptr, h, rt);
+}
+
+// ---- D115, D116: AddToStateObject -----------------------------------------------------------------------------------
+SIZE_T APIENTRY calc_add_to_state_object(D3D12DDI_HDEVICE, const D3D12DDIARG_ADD_TO_STATE_OBJECT_0072*) {
+    return sizeof(StateObjectRecord);
+}
+
+// The addition is a description valid on its own (Raytracing.md:3781-3783), translated as a create; the child's record
+// holds engine references only (its parent's among them, translate), nothing of the parent's record: the runtime
+// destroys a parent while its children live (Raytracing.md:9663-9671).
+HRESULT APIENTRY add_to_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_ADD_TO_STATE_OBJECT_0072* args,
+                                     D3D12DDI_HSTATEOBJECT_0054 h, D3D12DDI_HRTSTATEOBJECT_0054 rt) {
+    DeviceContext* c = resolve(device);
+    if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
+    const D3D12DDIARG_CREATE_STATE_OBJECT_0054 addition{args->Type, args->NumSubobjects, args->pSubobjects};
+    return create_record(c, addition, &args->StateObjectToGrowFrom, h, rt);
 }
 
 void APIENTRY destroy_state_object(D3D12DDI_HDEVICE device, D3D12DDI_HSTATEOBJECT_0054 h) {
@@ -674,6 +817,8 @@ void fill_core_state_objects(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnGetShaderStackSize = get_shader_stack_size;
     t->pfnGetPipelineStackSize = get_pipeline_stack_size;
     t->pfnSetPipelineStackSize = set_pipeline_stack_size;
+    t->pfnCalcPrivateAddToStateObjectSize = calc_add_to_state_object;
+    t->pfnAddToStateObject = add_to_state_object;
 }
 
 } // namespace engine_ddi
