@@ -102,7 +102,7 @@ without one predates the suffixes, except 1069, which H:127-130 lists between 10
 | 1012 | 0011_SHADER_MODELS | answered | table below |
 | 1057 | 0030_PROTECTED_RESOURCE_SESSION_SUPPORT | answered | table below |
 | 1058 | 0030_CRYPTO_SESSION_SUPPORT | E_NOTIMPL | deprecated, moved to the video caps (H:112) |
-| 1059 | 0022_CPU_PAGE_TABLE_FALSE_POSITIVES | E_NOTIMPL | the payload is a D3D12DDI_COMMAND_QUEUE_FLAGS per node (H:1431-1434), but neither H nor DDI-ref says what a set flag means, so no answer can be derived; cosumd12 answers COMPUTE with "TODO: What is this?" (CosUmd12Adapter.cpp:369-376) |
+| 1059 | 0022_CPU_PAGE_TABLE_FALSE_POSITIVES | answered | "1059 value" below |
 | 1060 | 0022_TEXTURE_LAYOUT | answered | table below |
 | 1061 | 0022_SWIZZLE_PATTERN | answered: E_INVALIDARG | table below |
 | 1062 | 0023_UMD_BASED_COMMAND_QUEUE_PRIORITY | answered | table below |
@@ -118,9 +118,16 @@ without one predates the suffixes, except 1069, which H:127-130 lists between 10
 | 1077 | OPTIONS_0090 | answered | table below |
 | 1078 | OPTIONS_0091 | answered | table below |
 
-Answered: 18 of the 31 values at 0092 (13 before 1003), 1061 as a refusal by contract. The 13 left E_NOTIMPL are the deprecated
-1000, 1001, 1010, 1058, 1063, 1064 and 1065, the undocumented 1059 and 1066, and 1068, 1070, 1072 and 1073, which
+Answered: 19 of the 31 values at 0092, 1061 as a refusal by contract. The 12 left E_NOTIMPL are the deprecated
+1000, 1001, 1010, 1058, 1063, 1064 and 1065, the undocumented 1066, and 1068, 1070, 1072 and 1073, which
 the runtime reaches only through a capability engine-ddi reports as absent.
+
+1059 value. `*pInfo` is a NodeIndex and pData a `D3D12DDI_COMMAND_QUEUE_FLAGS` of 4 bytes (H:1431-1434). Neither H
+nor DDI-ref says what a set flag means. cosumd12, a compute-only driver, answers COMPUTE, the queue type it has,
+under the comment "TODO: What is this?" (CosUmd12Adapter.cpp:369-376). engine-ddi answers in the same form with
+the queue types it creates: 3D, COMPUTE and COPY. That the answer names the driver's queue types is INFERENCE
+from that one sample. Node 0 only; another node, a NULL pInfo or another DataSize is E_INVALIDARG with nothing
+written.
 
 L below is min(level of FEATURE_LEVELS.MaxSupportedFeatureLevel, 12_1), asked for {11_0, 11_1, 12_0, 12_1, 12_2}.
 The engine-ddi ceiling is 12_1 because 12_2 needs raytracing 1.1, mesh shaders, VRS tier 2 and sampler feedback,

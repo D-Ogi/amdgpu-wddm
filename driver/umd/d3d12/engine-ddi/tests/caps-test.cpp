@@ -310,7 +310,29 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     UINT node0 = 0;
     r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node0, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
     hr = engine_ddi::build_caps(caps, kDdi, &r);
-    check(hr == E_NOTIMPL && untouched(raw, sizeof(raw)), "unanswered type 1059: E_NOTIMPL, nothing written (hr %08lx)",
+    D3D12DDI_COMMAND_QUEUE_FLAGS flags;
+    std::memcpy(&flags, raw, sizeof(flags));
+    check(hr == S_OK && flags == (D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE |
+                                  D3D12DDI_COMMAND_QUEUE_FLAG_COPY) &&
+              untouched(raw + sizeof(flags), sizeof(raw) - sizeof(flags)) && node0 == 0,
+          "1059 CPU_PAGE_TABLE_FALSE_POSITIVES, node 0, 4 bytes: 3D, COMPUTE and COPY (hr %08lx, flags 0x%x)",
+          static_cast<unsigned long>(hr), static_cast<unsigned>(flags));
+    std::memset(raw, 0xEE, sizeof(raw));
+    UINT node1 = 1;
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node1, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    const bool node_refused = hr == E_INVALIDARG && untouched(raw, sizeof(raw));
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, nullptr, raw, sizeof(D3D12DDI_COMMAND_QUEUE_FLAGS)};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    const bool null_refused = hr == E_INVALIDARG && untouched(raw, sizeof(raw));
+    r = {D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES, &node0, raw, 8};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    check(node_refused && null_refused && hr == E_INVALIDARG && untouched(raw, sizeof(raw)),
+          "1059 with node 1, with pInfo NULL and with 8 bytes: E_INVALIDARG, nothing written");
+    BOOL compute_only = FALSE;
+    r = {D3D12DDICAPS_TYPE_0033_ADAPTER_COMPUTE_ONLY, nullptr, raw, sizeof(compute_only)};
+    hr = engine_ddi::build_caps(caps, kDdi, &r);
+    check(hr == E_NOTIMPL && untouched(raw, sizeof(raw)), "unanswered type 1066: E_NOTIMPL, nothing written (hr %08lx)",
           static_cast<unsigned long>(hr));
     r = {D3D12DDICAPS_TYPE_3DPIPELINESUPPORT, nullptr, raw, 4};
     hr = engine_ddi::build_caps(caps, 91, &r);

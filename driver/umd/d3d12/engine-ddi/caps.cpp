@@ -109,6 +109,10 @@ constexpr BOOL kRowMajorTexture = FALSE;
 constexpr UINT16 kRowMajorMaxElementSize = 0xFFFF;
 constexpr UINT16 kRowMajorAlignment = 1;
 
+// 1059: the queue types engine-ddi creates (queue.cpp), in the form of cosumd12's answer.
+constexpr D3D12DDI_COMMAND_QUEUE_FLAGS kEngineQueueFlags = static_cast<D3D12DDI_COMMAND_QUEUE_FLAGS>(
+    D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE | D3D12DDI_COMMAND_QUEUE_FLAG_COPY);
+
 // 1060 DeviceDependentSwizzleCount: the valid indices of 1061 are 0 through this count - 1 (H:4752-4755).
 constexpr UINT kDeviceDependentSwizzleCount = 0;
 
@@ -454,6 +458,24 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         log_line("GetCaps SWIZZLE_PATTERN (DataSize %u, pInfo %s): 1060 reports no device-dependent swizzle pattern",
                  r.DataSize, r.pInfo ? "set" : "null");
         return E_INVALIDARG;
+    case D3D12DDICAPS_TYPE_0022_CPU_PAGE_TABLE_FALSE_POSITIVES: {
+        // *pInfo is a NodeIndex, pData a D3D12DDI_COMMAND_QUEUE_FLAGS (H:1431-1434). No source says what a set flag
+        // means. cosumd12 answers with the queue type it has (COMPUTE, CosUmd12Adapter.cpp:369-376); engine-ddi
+        // answers with the three it has. INFERENCE, INTEGRATION.md "1059 value".
+        auto* d = payload<D3D12DDI_COMMAND_QUEUE_FLAGS>(r);
+        if (!d) return E_INVALIDARG;
+        const UINT* node = static_cast<const UINT*>(r.pInfo);
+        if (!node || *node != 0) {
+            if (node)
+                log_line("GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: node %u, the adapter has node 0 only", *node);
+            else
+                log_line("GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: pInfo NULL, the contract names a NodeIndex");
+            return E_INVALIDARG;
+        }
+        *d = kEngineQueueFlags;
+        log_line("GetCaps CPU_PAGE_TABLE_FALSE_POSITIVES: node 0, flags 0x%x", static_cast<unsigned>(kEngineQueueFlags));
+        return S_OK;
+    }
     case D3D12DDICAPS_TYPE_0030_PROTECTED_RESOURCE_SESSION_SUPPORT: {
         // NodeIndex is an input inside the payload (H:13697-13701). engine-ddi refuses every protected resource
         // session (pfnSetProtectedResourceSession is a fail-safe, resources.cpp refuses a session handle).
