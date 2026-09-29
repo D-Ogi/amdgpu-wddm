@@ -376,6 +376,17 @@ struct CommandSignatureRecord {
     UINT stride;
 };
 
+// Ray tracing state objects (state-objects.cpp). A create that fails leaves an inert record (no engine object,
+// kRecordInvalid), which DestroyStateObject accepts.
+struct StateObjectTranslation;                  // state-objects.cpp: the API description rebuilt for the engine
+struct StateObjectRecord {
+    RecordHeader h;                             // engine: ID3D12StateObject
+    ID3D12StateObjectProperties* properties;    // one reference; null for an inert record
+    StateObjectTranslation* translation;        // engine-ddi's own allocation, freed by DestroyStateObject
+    D3D12DDI_HRTSTATEOBJECT_0054 rt;
+    bool executable;                            // a RAYTRACING_PIPELINE, which SetPipelineState1 takes; not a COLLECTION
+};
+
 // ---- Slot groups: each fills its part of the tables -------------------------------------------------------------
 void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_failsafe(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
@@ -393,6 +404,7 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t tab
 void fill_core_queries(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_queries(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 void fill_core_tiles(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
+void fill_core_state_objects(D3D12DDI_DEVICE_FUNCS_CORE_0088* table) noexcept;
 void fill_list_tiles(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
 
 // Graphics-only slot in the compute table: reports E_INVALIDARG through report_list_error.

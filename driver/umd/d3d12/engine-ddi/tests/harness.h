@@ -117,6 +117,9 @@ void destroy_recording(Env& env, Device& device, Recording& recording);
 // Signals an engine fence of the harness on the engine queue after everything submitted so far and waits for it
 // with a NULL event (the INLINE mode's bounded wait, engine V8).
 bool wait_queue_idle(Env& env, engine_ddi::EngineQueue* queue, const char* what);
+// Whether a fence's completed value shows target reached. UINT64_MAX is what a removed device's fence answers
+// (internal.h, kFenceRemoved): it never proves completion.
+bool fence_reached(UINT64 completed, UINT64 target);
 
 D3D12DDIARG_RESOURCE_BARRIER_0022 transition(const Buffer& buffer, D3D12DDI_RESOURCE_STATES before,
                                              D3D12DDI_RESOURCE_STATES after);
@@ -184,6 +187,7 @@ void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
 void test_linear_primary(Env& env);
 void test_raytracing(Env& env);
+void test_raytracing_pipeline(Env& env);
 // GetCaps 1002 and the shell's memory architecture policy, on query_adapter_caps with the harness's create info.
 void test_memory_policy(const Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create);
 

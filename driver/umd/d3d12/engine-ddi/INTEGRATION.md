@@ -152,7 +152,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | WriteBufferImmediateQueueFlags | NONE | pfnWriteBufferImmediate is a fail-safe |
 | 1006 | | ViewInstancingTier | NOT_SUPPORTED | pfnSetViewInstanceMask is a fail-safe |
 | 1006 | | RenderPassTier | NOT_SUPPORTED | engine-ddi fills no render pass table; the runtime emulates render passes |
-| 1006 | | RaytracingTier | NOT_SUPPORTED | state objects, pfnSetPipelineState1 and pfnDispatchRays are fail-safes; the acceleration structure slots reach the engine ("Acceleration structures" below). `set_diagnostic_raytracing_tier` reports the engine's 1_1 or higher as 1_1 for a measurement, never as a default |
+| 1006 | | RaytracingTier | NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine ("Acceleration structures" and "Ray tracing state objects" below), but pfnAddToStateObject is a fail-safe, existing collections and indirect ray dispatch are refused, and the runtime's state object description is not yet measured. `set_diagnostic_raytracing_tier` reports the engine's 1_1 or higher as 1_1 for a measurement, never as a default |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
 | 1006 | | MeshShaderTier, MeshShaderSupportsFullRangeRenderTargetArrayIndex, MSPrimitivesPipelineStatisticIncludesCulledPrimitives | NOT_SUPPORTED, FALSE, FALSE | pfnDispatchMesh and the mesh shader slots are fail-safes |
 | 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe |
@@ -587,31 +587,123 @@ postbuild descriptions reach the engine in place; the build, emit and copy argum
 parameters. Nothing of the shell is involved.
 
 Refused, reported once on the list (D108: on the device, with the answer zeroed) and not passed on:
-- E_INVALIDARG: a list that is not recording or not DIRECT or COMPUTE, a null argument, an unknown structure type,
-  element layout, geometry type, postbuild type or copy mode, a geometry or source array missing for a nonzero
-  count.
+- E_INVALIDARG: a list that is not recording or not DIRECT or COMPUTE (a bundle, a COPY list), a null argument, an
+  unknown structure type, element layout, geometry type, postbuild type or copy mode, a geometry or source array
+  missing for a nonzero count.
 - E_NOTIMPL: the tools visualization postbuild type, and the visualization, serialize and deserialize copy modes.
   The engine copies by clone and compaction only and writes a zero or nothing for the others
   (`libs/vkd3d/acceleration_structure.c`); engine-ddi serializes nothing.
 
-GPU addresses are the application's, as in every other slot. RaytracingTier stays NOT_SUPPORTED until state
-objects and DispatchRays are implemented; that the runtime passes these arguments as the harness does is INFERENCE.
+GPU addresses are the application's, as in every other slot. RaytracingTier stays NOT_SUPPORTED (the 1006 row
+above); that the runtime passes these arguments as the harness does is INFERENCE.
 
 Development PC witness (harness round trip 8, `tests/test-raytracing.cpp`, RuntimeBacked on the stub shell):
 prebuild answers equal to the engine's own; a bottom level of one triangle, its clone, a top level of one instance
 over each, and a cs_6_5 inline ray query per top level (the top level as a root SRV by address) whose 64 words equal
 the hit pattern computed from the triangle; CURRENT_SIZE at the build and emitted after it, equal and within the
-prebuild maximum. VVL with synchronization validation clean. It is RuntimeBacked because the engine places a
+prebuild maximum; a build on a recording COPY list is one E_INVALIDARG on that list. VVL with synchronization
+validation clean. It is RuntimeBacked because the engine places a
 structure from its address to the end of the VkBuffer behind it (`libs/vkd3d/va_map.c`): in EnginePrivateTest small
 heaps are suballocated from one shared buffer, and the validation layer reports every structure as overlapping the
 buffers after it.
 
+### Ray tracing state objects
+
+D105 CalcPrivateStateObjectSize, D106 CreateStateObject, D107 DestroyStateObject, D110 GetShaderIdentifier, D111
+GetShaderStackSize, D112 GetPipelineStackSize and D113 SetPipelineStackSize are engine-ddi slots on the engine's
+`ID3D12Device5::CreateStateObject` and `ID3D12StateObjectProperties` (state-objects.cpp); L63 SetPipelineState1 and
+L64 DispatchRays go to the engine's `ID3D12GraphicsCommandList4` (commands.cpp, both tables; the dispatch argument
+is the API's `D3D12_DISPATCH_RAYS_DESC`, size, offsets and alignment asserted). Still fail-safes: AddToStateObject
+(D115, D116); refused: a collection as a subobject, work graphs (state object type EXECUTABLE), and indirect ray
+dispatch (the command signature's DISPATCH_RAYS argument).
+
+CreateStateObject rebuilds the API description from the DDI's (d3d12umddi.h 10.0.26100; DirectX-Specs
+Raytracing.md, "State object DDIs"), subobject by subobject:
+- STATE_OBJECT_CONFIG, NODE_MASK (0 or 1), RAYTRACING_SHADER_CONFIG: copied; unknown flags are E_INVALIDARG.
+- GLOBAL_ and LOCAL_ROOT_SIGNATURE: the handle's engine root signature; a null handle or another device's is
+  E_INVALIDARG.
+- DXIL_LIBRARY: `pDXILLibrary` has no size. Its length is the length the payload claims, checked for internal
+  consistency: SizeInUint32 (DWORD 1) of a DXIL part, or the container size (bytes 24 to 27) when it starts with
+  `DXBC`; above 16M DWORDs (64 MiB) it is refused. The internal sizes (part offsets and sizes, the program header, the
+  bitcode offset and size) are validated against it; nothing in the DDI proves the backing extends that far, and
+  readability up to it rests on the runtime. shader-container
+  `BuildLibraryContainer` writes a container of that DXIL part alone (of a container, its DXIL part; RDAT and the
+  rest dropped), which is what the engine's DXIL front end parses (dxil-spirv `parse_container`); program kind 6 is
+  required. The export array is passed in place (layout asserted). The host gate is the harness's lib_6_3 fixture,
+  whose capacity is known; the runtime's own library payload is recorded by the create's log line when first seen.
+- RAYTRACING_PIPELINE_CONFIG: read as `D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075` and passed as the API's
+  RAYTRACING_PIPELINE_CONFIG1.
+- HIT_GROUP: copied field by field, without SummaryFlags.
+- SHADER_EXPORT_SUMMARY: not passed on. For each root signature or configuration the summary associates with an
+  export, one SUBOBJECT_TO_EXPORTS_ASSOCIATION names every export associated with it. An association with a
+  STATE_OBJECT_CONFIG or NODE_MASK adds nothing: they hold for the whole state object. The name that identifies a
+  summary export is resolved once, never broadened: a name a library lists in its export array (an exposed alias,
+  plain or mangled) is kept; otherwise the unmangled name when no other summary export carries it; otherwise the
+  mangled name when no other summary export carries it (an export with one name only goes by it, under the same
+  uniqueness). Anything else is E_INVALIDARG without an engine call: an
+  unresolved or ambiguous identity, an export that is not among the listed ones when every library lists its exports,
+  or two summary exports resolving to the same name. The engine matches an association name against an export's
+  mangled or plain name (`libs/vkd3d/state_object_common.c`, `vkd3d_export_equal`), and a plain name that overloads
+  share would associate with all of them; overloads are told apart by the mangled name (Raytracing.md,
+  D3D12_EXPORT_DESC; the summary node carries both names, "Shader export summary").
+- EXISTING_COLLECTION: E_NOTIMPL. Any other type: E_INVALIDARG, never passed through.
+
+Every count read from the description is bounded: 65536 subobjects, library exports, summary nodes, summary exports in
+all and associations per export, 1M associated names in all. A failed create returns its HRESULT, logs the reason
+and leaves an inert record that DestroyStateObject accepts; nothing is reported through report_device_error. Each
+create logs one line with the subobject types, the library form and length, the pipeline configuration and the
+summary's counts, including how many export names were resolved by listed name, mangled and unmangled name.
+
+Lifetime: what the translated description points at (the rebuilt description, the containers, the association name
+arrays) must stay put until the engine's CreateStateObject returns; the engine deep-copies what it keeps
+(`d3d12_state_object_pipeline_data_defer` and the parse data). engine-ddi keeps its copies until DestroyStateObject;
+that is a conservative choice, not an engine requirement. Names and export arrays of the DDI description are used in
+place: the runtime owns that description (Raytracing.md, "State object DDIs").
+
+Documented, not inferred (DirectX-Specs Raytracing.md 9490-9498, revision 5a4139be): the runtime hands the driver
+subobjects defined in DXIL libraries as plain DDI subobjects (the driver does not find them in the library it gets),
+and converts every association, default associations included, into an explicit list of associations for every
+exported function.
+
+The engine also treats every declared root signature and configuration as a default for all exports (priority
+DECLARED_STATE_OBJECT, `libs/vkd3d/state_object_common.c`). The synthesized associations are explicit and take
+precedence for every export the summary names; an export to which the runtime associated no local root signature
+gets a declared one in the engine.
+
+GetShaderIdentifier answers the engine's pointer (NULL for an unknown export), GetShaderStackSize UINT_MAX for an
+unknown export, and a stack size above UINT_MAX is logged and answered as UINT_MAX (the DDI's type is 32 bits, the
+engine's 64). SetPipelineState1 takes a live RAYTRACING_PIPELINE of the list's device; a collection, a failed
+create's record, a null handle or another device's state object is E_INVALIDARG on the list. Both list slots record
+in DIRECT and COMPUTE lists that are recording only, as the acceleration structure slots.
+
+INFERENCE until a lab run logs a real description (the create's log line is the instrument): that the runtime hands
+over the DDI form the harness builds, in particular that a 0092 driver receives RAYTRACING_PIPELINE_CONFIG as _0075
+(the header names both layouts), that `pDXILLibrary` is a DXIL part with SizeInUint32 as for shaders (a whole
+container is also accepted), and that the summary's subobject pointers point into `pSubobjects` (a pointer elsewhere
+is matched by type and description).
+
+Development PC witness (harness round trip 9, `tests/test-raytracing.cpp`, RuntimeBacked on the stub shell): a dxc
+lib_6_3 library (`tests/fixture-raylib.hlsl`) with raygen, miss and closest, one triangles hit group with a local
+root signature of one 32-bit constant, a global root signature SRV(t0) UAV(u0), in the harness's model of the DDI
+form (DDI types, handles, a summary with per-export subobject pointers, no association subobject). Identifiers of
+32 bytes, not all zero and different for raygen, miss and hit group; stack sizes answered; a shader table in an
+UPLOAD buffer and DispatchRays 8x8 over the scene of round trip 8, every hit writing the local root constant and every
+miss 2, the 64 words exact. The library as a whole container with no export list, plus a decoy local root signature
+(two constants) associated with a second `closest` summary export that shares the plain name and carries a
+different mangled name: the create resolves both by mangled name, and a second dispatch through its own table
+writes its own record constant, 64 words exact (closest took its own association, not the decoy's). The same decoy
+without a mangled name is E_INVALIDARG, never a broadened association; a control build that passed plain names made
+the engine's create fail (8007000e), so the dispatch discriminates. Refusals: an unknown subobject type
+(E_INVALIDARG), an existing collection (E_NOTIMPL), DispatchRays on a closed list and SetPipelineState1 with another
+device context's state object (one E_INVALIDARG on the list). VVL with synchronization validation clean.
+
 ### Offline witness
 
 The offline harness exercises the device path: copy, compute dispatch, a draw, the retirement sentinel and the
-query slots above (EnginePrivateTest), and the RuntimeBacked heaps, tiled resources and acceleration structures
-above, on the development PC with the pinned
+query slots above (EnginePrivateTest), and the RuntimeBacked heaps, tiled resources, acceleration structures and ray
+tracing pipeline above, on the development PC with the pinned
 engine DLL, also under VVL with synchronization validation. The dispatch and the draw use shaders created through
 the DDI slots from containers reduced to the DDI form (a dxc cs_6_0 DXIL program and a cs_6_5 ray query; fxc
-vs_5_0 and ps_5_0 DXBC programs), an element layout by register and DDI state objects. The reduction is the harness's model of the
+vs_5_0 and ps_5_0 DXBC programs), an element layout by register and DDI state objects; the ray tracing pipeline uses
+a dxc lib_6_3 library's DXIL part in a DDI state object description. The reduction is the harness's model of the
 runtime, not a measurement; the lab has yet to show the runtime's own payloads.

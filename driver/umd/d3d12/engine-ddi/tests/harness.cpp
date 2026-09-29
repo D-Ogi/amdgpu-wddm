@@ -359,11 +359,18 @@ bool wait_queue_idle(Env& env, engine_ddi::EngineQueue* queue, const char* what)
     HRESULT hr = env.engine->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), reinterpret_cast<void**>(&fence));
     if (SUCCEEDED(hr)) hr = q->Signal(fence, 1);
     if (SUCCEEDED(hr)) hr = fence->SetEventOnCompletion(1, nullptr);
-    const bool done = SUCCEEDED(hr) && fence->GetCompletedValue() >= 1;
+    const UINT64 completed = SUCCEEDED(hr) ? fence->GetCompletedValue() : 0;
+    const bool done = SUCCEEDED(hr) && fence_reached(completed, 1);
     if (fence) fence->Release();
-    checkf(done, "%s: engine fence signalled on the engine queue completes (SetEventOnCompletion(1, NULL) hr %08lx)",
-           what, static_cast<unsigned long>(hr));
+    checkf(done,
+           "%s: engine fence signalled on the engine queue completes (SetEventOnCompletion(1, NULL) hr %08lx, "
+           "completed value %llu)",
+           what, static_cast<unsigned long>(hr), static_cast<unsigned long long>(completed));
     return done;
+}
+
+bool fence_reached(UINT64 completed, UINT64 target) {
+    return completed != UINT64_MAX && completed >= target;
 }
 
 D3D12DDIARG_RESOURCE_BARRIER_0022 transition(const Buffer& buffer, D3D12DDI_RESOURCE_STATES before,
@@ -480,6 +487,10 @@ int wmain(int argc, wchar_t** argv) {
               engine_ddi::fill_command_list(&env.lists[0], sizeof(env.lists[0]), 0, &fill) == S_OK &&
               engine_ddi::fill_command_list(&env.lists[1], sizeof(env.lists[1]), 1, &fill) == S_OK,
           "core table and both command-list tables filled");
+    // wait_queue_idle once took a removed device's UINT64_MAX for completion.
+    check(fence_reached(1, 1) && fence_reached(7, 1) && !fence_reached(0, 1) && !fence_reached(UINT64_MAX, 1),
+          "wait_queue_idle: a completed value reaches its target only when it is at least the target and not "
+          "UINT64_MAX (a removed device)");
 
     Device device;
     hr = open_device(env, device);
@@ -504,6 +515,7 @@ int wmain(int argc, wchar_t** argv) {
     test_tiled(env);
     test_linear_primary(env);
     test_raytracing(env);
+    test_raytracing_pipeline(env);
     test_memory_policy(env, create);
     check(env.storage.canaries_intact(), "private storage: every canary behind the driver's size intact");
     checkf(g_binds >= 1 && g_binds >= g_unbinds, "engine services: %ld BindQueue, %ld UnbindQueue", g_binds, g_unbinds);

@@ -121,8 +121,9 @@ Mismatch controls, detected for both builds: M1 puts COLOR3 and TEXCOORD2 of vsp
 
 ## Unsupported, and refused
 
-- `Unsupported`: class linkage (no DDI field for `IFCE`, none in D3D12); DXIL libraries, ray tracing, mesh,
-  amplification and node programs (kinds 6 and up), shader models other than 4.0-5.1 and 6.x; DXIL-only system
+- `Unsupported`: class linkage (no DDI field for `IFCE`, none in D3D12); DXIL libraries (kind 6) through
+  `BuildContainer` (they go through `BuildLibraryContainer`, below), ray tracing, mesh, amplification and node
+  programs (kinds 7 and up), shader models other than 4.0-5.1 and 6.x; DXIL-only system
   values and component types in DXBC; a DXIL stream-output lookup whose metadata does not parse.
 - `InvalidArgument`: unknown system value, a stream outside a geometry output or above 3, two entries on the same
   components, a minimum precision that does not fit the type, patch constants outside hull and domain programs,
@@ -155,6 +156,13 @@ capacity is LenTok or SizeInUint32 itself, which the runtime has validated. The 
 `Container` and the vertex input entries: `StreamOutputSemantic(container, pOutputStreamDecl[i], &element)` of the
 last pre-rasterization stage names stream-output entries (NULL `SemanticName` for `element.gap`, which the pinned
 r4 engine takes), and `InputLayoutSemantic(input, InputRegister, &semantic)` names input elements.
+
+`../state-objects.cpp`, in `pfnCreateStateObject`, for each DXIL_LIBRARY subobject:
+`LibraryPayloadDwords(pDXILLibrary)` is the length the payload claims (SizeInUint32 of a DXIL part, or the container
+size of a whole container: which of the two the runtime passes is not measured), bounded there, then
+`BuildLibraryContainer(pDXILLibrary, length, &container)` writes a container of the DXIL part alone, program kind 6
+required, RDAT and the rest of a whole container dropped: the engine's DXIL front end needs only the DXIL part. The
+state object's translation keeps the `Container` until DestroyStateObject.
 
 ## Files
 

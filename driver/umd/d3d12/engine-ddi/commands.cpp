@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: command pools (D29-D32), command recorders (D92-D95), command lists (D36-D38) and the list slots
-// that open and close recording (L0, L1); the acceleration structure slots (D108, L60-L62).
+// that open and close recording (L0, L1); the acceleration structure slots (D108, L60-L62) and the ray dispatch
+// slots (L63, L64).
 //
 // DDI 0040 splits the API's allocator and list: a pool is the API allocator, a recorder names the pool a list
 // records into, and ResetCommandList names the recorder. A pool therefore does not know its list type at
@@ -473,22 +474,26 @@ void APIENTRY resolve_subresource_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_H
     }
 }
 
-// ---- Acceleration structures (D108, L60-L62) -----------------------------------------------------------------------
+// ---- Acceleration structures (D108, L60-L62) and ray dispatch (L63, L64) ------------------------------------------
 // The engine's ID3D12Device5 and ID3D12GraphicsCommandList4 methods. The DDI 0054 structures below have the API's
 // members at the API's offsets (H = d3d12umddi.h, A = d3d12.h, 10.0.26100), so the inputs, the geometry arrays they
 // point to, the prebuild answer and the postbuild descriptions reach the engine in place. The build, emit and copy
 // arguments pack what the API takes as parameters and are unpacked. Instance descriptions are GPU memory, which the
 // engine reads in the API's layout; the DDI's is checked against it too.
 #define ENGINE_DDI_SAME(D, dm, A, am) static_assert(offsetof(D, dm) == offsetof(A, am), #D "::" #dm)
+// A pointer cast also needs the API's alignment, which equal sizes and offsets do not imply.
+#define ENGINE_DDI_ALIGN(D, A) static_assert(alignof(D) == alignof(A), #D " alignment")
 static_assert(std::is_same_v<D3D12DDI_GPU_VIRTUAL_ADDRESS, D3D12_GPU_VIRTUAL_ADDRESS>, "GPU VA");  // H:92, A:1397
 // H:7958-7962, A:14479-14483
 static_assert(sizeof(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE) == sizeof(D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE), "VA+stride");
+ENGINE_DDI_ALIGN(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE, D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE);
 ENGINE_DDI_SAME(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StartAddress, D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StartAddress);
 ENGINE_DDI_SAME(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StrideInBytes, D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StrideInBytes);
 // H:7977-7986, A:14498-14507
 using DdiTriangles = D3D12DDI_RAYTRACING_GEOMETRY_TRIANGLES_DESC_0054;
 using ApiTriangles = D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC;
 static_assert(sizeof(DdiTriangles) == sizeof(ApiTriangles), "triangles");
+ENGINE_DDI_ALIGN(DdiTriangles, ApiTriangles);
 ENGINE_DDI_SAME(DdiTriangles, ColumnMajorTransform3x4, ApiTriangles, Transform3x4);
 ENGINE_DDI_SAME(DdiTriangles, IndexFormat, ApiTriangles, IndexFormat);
 ENGINE_DDI_SAME(DdiTriangles, VertexFormat, ApiTriangles, VertexFormat);
@@ -498,6 +503,7 @@ ENGINE_DDI_SAME(DdiTriangles, IndexBuffer, ApiTriangles, IndexBuffer);
 ENGINE_DDI_SAME(DdiTriangles, VertexBuffer, ApiTriangles, VertexBuffer);
 // H:7988-7996, A:14509-14517
 static_assert(sizeof(D3D12DDI_RAYTRACING_AABB) == sizeof(D3D12_RAYTRACING_AABB), "AABB");
+ENGINE_DDI_ALIGN(D3D12DDI_RAYTRACING_AABB, D3D12_RAYTRACING_AABB);
 ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MinX, D3D12_RAYTRACING_AABB, MinX);
 ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MinY, D3D12_RAYTRACING_AABB, MinY);
 ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MinZ, D3D12_RAYTRACING_AABB, MinZ);
@@ -508,12 +514,14 @@ ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MaxZ, D3D12_RAYTRACING_AABB, MaxZ);
 using DdiAabbs = D3D12DDI_RAYTRACING_GEOMETRY_AABBS_DESC_0054;
 using ApiAabbs = D3D12_RAYTRACING_GEOMETRY_AABBS_DESC;
 static_assert(sizeof(DdiAabbs) == sizeof(ApiAabbs), "AABBs");
+ENGINE_DDI_ALIGN(DdiAabbs, ApiAabbs);
 ENGINE_DDI_SAME(DdiAabbs, AABBCount, ApiAabbs, AABBCount);
 ENGINE_DDI_SAME(DdiAabbs, AABBs, ApiAabbs, AABBs);
 // H:8004-8013, A:14650-14659
 using DdiGeometry = D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054;
 using ApiGeometry = D3D12_RAYTRACING_GEOMETRY_DESC;
 static_assert(sizeof(DdiGeometry) == sizeof(ApiGeometry), "geometry");
+ENGINE_DDI_ALIGN(DdiGeometry, ApiGeometry);
 ENGINE_DDI_SAME(DdiGeometry, Type, ApiGeometry, Type);
 ENGINE_DDI_SAME(DdiGeometry, Flags, ApiGeometry, Flags);
 ENGINE_DDI_SAME(DdiGeometry, Triangles, ApiGeometry, Triangles);
@@ -522,6 +530,7 @@ ENGINE_DDI_SAME(DdiGeometry, AABBs, ApiGeometry, AABBs);
 using DdiInstance = D3D12DDI_RAYTRACING_INSTANCE_DESC_0054;
 using ApiInstance = D3D12_RAYTRACING_INSTANCE_DESC;
 static_assert(sizeof(DdiInstance) == sizeof(ApiInstance) && sizeof(ApiInstance) == 64, "instance");
+ENGINE_DDI_ALIGN(DdiInstance, ApiInstance);
 ENGINE_DDI_SAME(DdiInstance, Transform, ApiInstance, Transform);
 ENGINE_DDI_SAME(DdiInstance, AccelerationStructure, ApiInstance, AccelerationStructure);
 static_assert(offsetof(ApiInstance, AccelerationStructure) == offsetof(ApiInstance, Transform) + sizeof(FLOAT[3][4]) + 8,
@@ -530,6 +539,7 @@ static_assert(offsetof(ApiInstance, AccelerationStructure) == offsetof(ApiInstan
 using DdiInputs = D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054;
 using ApiInputs = D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS;
 static_assert(sizeof(DdiInputs) == sizeof(ApiInputs), "inputs");
+ENGINE_DDI_ALIGN(DdiInputs, ApiInputs);
 ENGINE_DDI_SAME(DdiInputs, Type, ApiInputs, Type);
 ENGINE_DDI_SAME(DdiInputs, Flags, ApiInputs, Flags);
 ENGINE_DDI_SAME(DdiInputs, NumDescs, ApiInputs, NumDescs);
@@ -541,6 +551,7 @@ ENGINE_DDI_SAME(DdiInputs, ppGeometryDescs, ApiInputs, ppGeometryDescs);
 using DdiPostbuild = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC_0054;
 using ApiPostbuild = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC;
 static_assert(sizeof(DdiPostbuild) == sizeof(ApiPostbuild), "postbuild");
+ENGINE_DDI_ALIGN(DdiPostbuild, ApiPostbuild);
 ENGINE_DDI_SAME(DdiPostbuild, DestBuffer, ApiPostbuild, DestBuffer);
 ENGINE_DDI_SAME(DdiPostbuild, InfoType, ApiPostbuild, InfoType);
 // H:8172-8177, A:14683-14688
@@ -550,6 +561,30 @@ static_assert(sizeof(DdiPrebuild) == sizeof(ApiPrebuild), "prebuild");
 ENGINE_DDI_SAME(DdiPrebuild, ResultDataMaxSizeInBytes, ApiPrebuild, ResultDataMaxSizeInBytes);
 ENGINE_DDI_SAME(DdiPrebuild, ScratchDataSizeInBytes, ApiPrebuild, ScratchDataSizeInBytes);
 ENGINE_DDI_SAME(DdiPrebuild, UpdateScratchDataSizeInBytes, ApiPrebuild, UpdateScratchDataSizeInBytes);
+// DispatchRays (L64): H:7964-7975 and 8197-8206, A:14485-14496 and 20894-20903.
+static_assert(sizeof(D3D12DDI_GPU_VIRTUAL_ADDRESS_RANGE) == sizeof(D3D12_GPU_VIRTUAL_ADDRESS_RANGE), "range");
+ENGINE_DDI_ALIGN(D3D12DDI_GPU_VIRTUAL_ADDRESS_RANGE, D3D12_GPU_VIRTUAL_ADDRESS_RANGE);
+ENGINE_DDI_SAME(D3D12DDI_GPU_VIRTUAL_ADDRESS_RANGE, StartAddress, D3D12_GPU_VIRTUAL_ADDRESS_RANGE, StartAddress);
+ENGINE_DDI_SAME(D3D12DDI_GPU_VIRTUAL_ADDRESS_RANGE, SizeInBytes, D3D12_GPU_VIRTUAL_ADDRESS_RANGE, SizeInBytes);
+using DdiRangeStride = D3D12DDI_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE;
+using ApiRangeStride = D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE;
+static_assert(sizeof(DdiRangeStride) == sizeof(ApiRangeStride), "range and stride");
+ENGINE_DDI_ALIGN(DdiRangeStride, ApiRangeStride);
+ENGINE_DDI_SAME(DdiRangeStride, StartAddress, ApiRangeStride, StartAddress);
+ENGINE_DDI_SAME(DdiRangeStride, SizeInBytes, ApiRangeStride, SizeInBytes);
+ENGINE_DDI_SAME(DdiRangeStride, StrideInBytes, ApiRangeStride, StrideInBytes);
+using DdiDispatchRays = D3D12DDIARG_DISPATCH_RAYS_0054;
+using ApiDispatchRays = D3D12_DISPATCH_RAYS_DESC;
+static_assert(sizeof(DdiDispatchRays) == sizeof(ApiDispatchRays), "dispatch rays");
+ENGINE_DDI_ALIGN(DdiDispatchRays, ApiDispatchRays);
+ENGINE_DDI_SAME(DdiDispatchRays, RayGenerationShaderRecord, ApiDispatchRays, RayGenerationShaderRecord);
+ENGINE_DDI_SAME(DdiDispatchRays, MissShaderTable, ApiDispatchRays, MissShaderTable);
+ENGINE_DDI_SAME(DdiDispatchRays, HitGroupTable, ApiDispatchRays, HitGroupTable);
+ENGINE_DDI_SAME(DdiDispatchRays, CallableShaderTable, ApiDispatchRays, CallableShaderTable);
+ENGINE_DDI_SAME(DdiDispatchRays, Width, ApiDispatchRays, Width);
+ENGINE_DDI_SAME(DdiDispatchRays, Height, ApiDispatchRays, Height);
+ENGINE_DDI_SAME(DdiDispatchRays, Depth, ApiDispatchRays, Depth);
+#undef ENGINE_DDI_ALIGN
 #undef ENGINE_DDI_SAME
 // Enumerations: geometry flags H:7934-7939 A:14453-14458, geometry type H:7942-7946 A:14462-14466, instance flags
 // H:7948-7955 A:14469-14476, build flags H:8015-8024 A:14526-14535, copy mode H:8027-8034 A:14539-14546, structure type
@@ -741,6 +776,34 @@ void APIENTRY copy_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
         l4->Release();
     }
 }
+
+// L63. A live ray tracing pipeline of the list's device (state-objects.cpp); a collection, an inert record or another
+// device's state object is refused. The engine resolves its argument without a check, so null never reaches it.
+void APIENTRY set_pipeline_state1(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HSTATEOBJECT_0054 so) {
+    constexpr const char* kSlot = "SetPipelineState1";
+    CommandListRecord* l = list_of(h, kSlot);
+    if (!l) return;
+    const auto* r = record_of<StateObjectRecord>(so.pDrvPrivate, Tag::StateObject, l->h.device);
+    const bool usable = r && r->properties && r->executable;
+    if (refused(l, kSlot, usable ? S_OK : E_INVALIDARG) || !usable) return;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
+        l4->SetPipelineState1(static_cast<ID3D12StateObject*>(r->h.engine));
+        l4->Release();
+    }
+}
+
+// L64. The DDI argument is the API description (asserted above). Indirect dispatch goes through ExecuteIndirect,
+// whose command signatures refuse the ray dispatch argument.
+void APIENTRY dispatch_rays(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_DISPATCH_RAYS_0054* args) {
+    constexpr const char* kSlot = "DispatchRays";
+    CommandListRecord* l = list_of(h, kSlot);
+    if (!l) return;
+    if (refused(l, kSlot, args ? S_OK : E_INVALIDARG) || !args) return;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
+        l4->DispatchRays(reinterpret_cast<const ApiDispatchRays*>(args));
+        l4->Release();
+    }
+}
 } // namespace
 
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
@@ -773,7 +836,9 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnBuildRaytracingAccelerationStructure = build_acceleration_structure;
     t->pfnEmitRaytracingAccelerationStructurePostbuildInfo = emit_postbuild_info;
     t->pfnCopyRaytracingAccelerationStructure = copy_acceleration_structure;
-    if (table_index != 1) return;                       // the compute table keeps its rejections
+    t->pfnSetPipelineState1 = set_pipeline_state1;
+    t->pfnDispatchRays = dispatch_rays;
+    if (table_index != 1) return;                      // the compute table keeps its rejections
     t->pfnResourceResolveSubresource = resolve_subresource;
     t->pfnResourceResolveSubresourceRegion = resolve_subresource_region;
     t->pfnOMSetDepthBounds = om_set_depth_bounds;

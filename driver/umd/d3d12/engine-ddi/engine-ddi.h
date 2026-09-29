@@ -395,9 +395,10 @@ HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitectu
 
 // A diagnostic deviation, off by default: with `report` set, type 1006 answers RaytracingTier 1_1 when the
 // engine's own answer is 1_1 or higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. The
-// tier promises state objects, DispatchRays and more, which are fail-safes here: it is for a measurement of the
-// slots that exist (acceleration structures, inline ray queries) with a client that uses nothing else, never a
-// driver default. Same calling rule as set_memory_architecture_policy. E_INVALIDARG for a null caps.
+// tier promises AddToStateObject, existing collections and indirect ray dispatch, which are a fail-safe or refused
+// here: it is for a measurement of the slots that exist (acceleration structures, inline ray queries, state objects
+// and DispatchRays) with a client that uses nothing else, never a driver default. Same calling rule as
+// set_memory_architecture_policy. E_INVALIDARG for a null caps.
 HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------

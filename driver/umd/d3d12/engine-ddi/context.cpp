@@ -452,6 +452,7 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
     fill_core_commands(table);
     fill_core_queries(table);
     fill_core_tiles(table);
+    fill_core_state_objects(table);
     return S_OK;
 }
 
