@@ -161,7 +161,7 @@ inline HRESULT present(Session& s){
         if(FAILED(hr))break;
         hr=retire(frame_index*2+2);if(FAILED(hr))break;
         // The operator's screenshot needs the frame to stay up: captures come several seconds apart.
-        const ULONGLONG hold=(std::min)(s.deadline,GetTickCount64()+(frame_index?3000:9000));
+        const ULONGLONG hold=(std::min)(s.deadline,GetTickCount64()+(frame_index?2000:5000));
         while(GetTickCount64()<hold && !s.abort_requested()){MSG message{};while(PeekMessageW(&message,window,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}Sleep(20);}
         sprintf_s(label,"Frame %u held",frame_index+1);s.event("after",label);
     }
