@@ -71,6 +71,24 @@ HRESULT create_target(Env& env, Device& device, const Shape& s, Buffer& out) {
 
 constexpr UINT align_up(UINT value, UINT to) { return (value + to - 1) / to * to; }
 
+// What the engine itself answers for the linear image of this shape; 0 when it has none.
+UINT64 engine_alignment(Device& device, const Shape& s) {
+    D3D12_RESOURCE_DESC1 d{};
+    d.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    d.Width = s.width;
+    d.Height = s.height;
+    d.DepthOrArraySize = 1;
+    d.MipLevels = 1;
+    d.Format = s.format;
+    d.SampleDesc = {1, 0};
+    d.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    d.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    BC250_VKD3D_LINEAR_IMAGE_INFO info{};
+    info.Size = sizeof(info);
+    if (FAILED(device.context->funcs.QueryLinearImage(device.context->device, &d, &info))) return 0;
+    return info.MemoryAlignment;
+}
+
 // Creates the primary, clears it, reads it back. Returns false when a later case cannot run.
 bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue* queue, const Shape& s,
                 const FLOAT colour[4], UINT32 expected) {
@@ -92,8 +110,9 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
     const bool asked = m.allocations == allocations + 1;
     const uint32_t want = engine_ddi::kMemoryDedicated | engine_ddi::kMemoryPrimary | engine_ddi::kMemoryLinearSurface;
     const UINT64 rows = UINT64{m.last_row_pitch} * align_up(s.height, 4);
+    const UINT64 queried = engine_alignment(device, s);
     checkf(hr == S_OK && asked && m.last_flags == want && m.last_type_bits && m.last_alignment &&
-               m.last_byte_size == info.ResourceDataSize && m.last_alignment < 65536 &&
+               m.last_byte_size == info.ResourceDataSize && queried && m.last_alignment == queried &&
                m.last_row_pitch >= align_up(s.width, 4) * 4 &&
                !(m.last_row_pitch % 16) && m.last_layout_size && rows <= m.last_byte_size &&
                m.last_layout_size <= m.last_byte_size,
