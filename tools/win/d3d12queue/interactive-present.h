@@ -10,6 +10,16 @@
 // screen: that witness is a screenshot taken by the operator. Every step is traced with its HRESULT so a driver
 // refusal can be placed between DDI records.
 
+// The back buffer format (build.ps1 -PresentFormat). A 10-bit chain is composed onto the desktop like an 8-bit
+// one; the monitor's depth does not enter.
+#ifdef INTERACTIVE_PRESENT_RGB10A2
+inline constexpr DXGI_FORMAT present_format=DXGI_FORMAT_R10G10B10A2_UNORM;
+inline constexpr const char* present_format_name="R10G10B10A2";
+#else
+inline constexpr DXGI_FORMAT present_format=DXGI_FORMAT_B8G8R8A8_UNORM;
+inline constexpr const char* present_format_name="B8G8R8A8";
+#endif
+
 inline LRESULT CALLBACK present_window_proc(HWND window,UINT message,WPARAM w,LPARAM l){return DefWindowProcW(window,message,w,l);}
 
 inline void describe(Session& s,const char* name,ID3D12Resource* resource){
@@ -42,11 +52,12 @@ inline HRESULT present(Session& s){
     s.event("after","CreateWindowEx 256x256");
     ShowWindow(window,SW_SHOWNOACTIVATE);s.event("after","ShowWindow without activation");
 
-    DXGI_SWAP_CHAIN_DESC1 desc{};desc.Width=side;desc.Height=side;desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    DXGI_SWAP_CHAIN_DESC1 desc{};desc.Width=side;desc.Height=side;desc.Format=present_format;
     desc.SampleDesc.Count=1;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=buffers;
     desc.Scaling=DXGI_SCALING_STRETCH;desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
     ComPtr<IDXGISwapChain1> chain1;ComPtr<IDXGISwapChain3> chain;
-    hr=s.api("CreateSwapChainForHwnd FLIP_DISCARD B8G8R8A8 2 buffers",[&]{return s.factory->CreateSwapChainForHwnd(s.queue.Get(),window,&desc,nullptr,nullptr,&chain1);});
+    char create_label[64]{};sprintf_s(create_label,"CreateSwapChainForHwnd FLIP_DISCARD %s 2 buffers",present_format_name);
+    hr=s.api(create_label,[&]{return s.factory->CreateSwapChainForHwnd(s.queue.Get(),window,&desc,nullptr,nullptr,&chain1);});
     if(FAILED(hr)){s.event("after","GetDeviceRemovedReason after swap chain",device->GetDeviceRemovedReason());return hr;}
     hr=s.api("MakeWindowAssociation",[&]{return s.factory->MakeWindowAssociation(window,DXGI_MWA_NO_ALT_ENTER);});if(FAILED(hr))return hr;
     hr=s.api("QueryInterface IDXGISwapChain3",[&]{return chain1.As(&chain);});if(FAILED(hr))return hr;
@@ -88,10 +99,17 @@ inline HRESULT present(Session& s){
     // either neighbour is a correct conversion, so each channel at 0.5 admits 0x7f and 0x80 (half_mask), and
     // the word found is traced.
     constexpr UINT frames=3;
+#ifdef INTERACTIVE_PRESENT_RGB10A2
+    // The 10-bit chain: red in the low ten bits, alpha in the top two. Orange-ish, teal-ish and magenta, with
+    // 0.4 and 0.6 of 1023 at 409.2 and 613.8, so no rounding tie decides a word and each frame differs from the
+    // others in every colour channel it sets.
+    const FLOAT colours[frames][4]{{1.0f,0.4f,0.0f,1.0f},{0.0f,0.6f,0.6f,1.0f},{1.0f,0.0f,1.0f,1.0f}};
+    const UINT32 exact[frames]{0xc00667ffu,0xe6699800u,0xfff003ffu};
+    const auto admitted=[&](UINT frame,UINT32 word){return word==exact[frame];};
+#else
     const FLOAT colours[frames][4]{{1.0f,0.5f,0.0f,1.0f},{0.0f,0.5f,0.5f,1.0f},{1.0f,0.0f,1.0f,1.0f}};
     const UINT32 exact[frames]{0xffff8000u,0xff008080u,0xffff00ffu};
     const UINT32 half_mask[frames]{0x0000ff00u,0x0000ffffu,0u};
-    const ULONGLONG holds[frames]{5000,2000,3000};
     const auto admitted=[&](UINT frame,UINT32 word){
         if((word&~half_mask[frame])!=(exact[frame]&~half_mask[frame]))return false;
         for(UINT shift=0;shift<32;shift+=8){
@@ -100,6 +118,8 @@ inline HRESULT present(Session& s){
         }
         return true;
     };
+#endif
+    const ULONGLONG holds[frames]{5000,2000,3000};
     // One READBACK buffer for a whole back buffer of the first size, used by every frame in turn.
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed{};UINT64 total=0;
     const auto footprint=[&](ID3D12Resource* texture,UINT edge)->HRESULT{
@@ -186,7 +206,7 @@ inline HRESULT present(Session& s){
 
     constexpr UINT resized=128;
     for(auto& buffer:back)buffer.Reset();
-    hr=s.api("ResizeBuffers 128x128",[&]{return chain->ResizeBuffers(buffers,resized,resized,DXGI_FORMAT_B8G8R8A8_UNORM,0);});
+    hr=s.api("ResizeBuffers 128x128",[&]{return chain->ResizeBuffers(buffers,resized,resized,present_format,0);});
     for(UINT i=0;i<buffers && SUCCEEDED(hr);++i){
         char label[48]{};sprintf_s(label,"GetBuffer %u after resize",i);
         hr=s.api(label,[&]{return chain->GetBuffer(i,IID_PPV_ARGS(&back[i]));});if(FAILED(hr))break;
