@@ -14,15 +14,16 @@ static_assert(D3D12DDI_COMMAND_QUEUE_FLAG_3D == 0x1 && D3D12DDI_COMMAND_QUEUE_FL
 
 namespace {
 // Engine list type of a DDI list: bundles by type, the rest by the queue flags. -1 when unsupported.
+// The flags are a mask, read as the queue's create does (queue-engine.cpp): 3D before COMPUTE before COPY.
 int engine_list_type(D3D12DDI_COMMAND_LIST_TYPE type, UINT queue_flags) noexcept {
     if (type == D3D12DDI_COMMAND_LIST_TYPE_BUNDLE) return D3D12_COMMAND_LIST_TYPE_BUNDLE;
     if (type != D3D12DDI_COMMAND_LIST_TYPE_DIRECT) return -1;
-    switch (queue_flags) {
-    case D3D12DDI_COMMAND_QUEUE_FLAG_3D: return D3D12_COMMAND_LIST_TYPE_DIRECT;
-    case D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE: return D3D12_COMMAND_LIST_TYPE_COMPUTE;
-    case D3D12DDI_COMMAND_QUEUE_FLAG_COPY: return D3D12_COMMAND_LIST_TYPE_COPY;
-    default: return -1;
-    }
+    constexpr UINT known = D3D12DDI_COMMAND_QUEUE_FLAG_3D | D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE |
+                           D3D12DDI_COMMAND_QUEUE_FLAG_COPY;
+    if (!queue_flags || (queue_flags & ~known)) return -1;
+    if (queue_flags & D3D12DDI_COMMAND_QUEUE_FLAG_3D) return D3D12_COMMAND_LIST_TYPE_DIRECT;
+    if (queue_flags & D3D12DDI_COMMAND_QUEUE_FLAG_COMPUTE) return D3D12_COMMAND_LIST_TYPE_COMPUTE;
+    return D3D12_COMMAND_LIST_TYPE_COPY;
 }
 
 // ---- Pools -----------------------------------------------------------------------------------------------------
@@ -81,7 +82,10 @@ HRESULT APIENTRY create_recorder(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREA
     DeviceContext* c = resolve(device);
     if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
     if (args->RecorderFlags != D3D12DDI_COMMAND_RECORDER_FLAG_NONE) return E_INVALIDARG;
-    if (engine_list_type(D3D12DDI_COMMAND_LIST_TYPE_DIRECT, args->QueueFlags) < 0) return E_NOTIMPL;
+    if (engine_list_type(D3D12DDI_COMMAND_LIST_TYPE_DIRECT, args->QueueFlags) < 0) {
+        log_line("command recorder refused: queue flags 0x%x", static_cast<unsigned>(args->QueueFlags));
+        return E_NOTIMPL;
+    }
     new (h.pDrvPrivate) CommandRecorderRecord{{Tag::CommandRecorder, 0, nullptr, c}, nullptr, static_cast<UINT>(args->QueueFlags)};
     return S_OK;
 }
@@ -120,7 +124,11 @@ HRESULT APIENTRY create_list(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_C
     DeviceContext* c = resolve(device);
     if (!c || !args || !h.pDrvPrivate) return E_INVALIDARG;
     const int type = engine_list_type(args->Type, args->QueueFlags);
-    if (type < 0) return E_NOTIMPL;
+    if (type < 0) {
+        log_line("command list refused: type %u, queue flags 0x%x", static_cast<unsigned>(args->Type),
+                 static_cast<unsigned>(args->QueueFlags));
+        return E_NOTIMPL;
+    }
     if (args->NodeMask > 1) return E_INVALIDARG;
     // The engine list starts closed; ResetCommandList opens it on the recorder's pool.
     ID3D12GraphicsCommandList* list = nullptr;
