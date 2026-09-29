@@ -10,7 +10,53 @@
 // writes 1 for a hit and 2 for a miss. Builds and dispatch are recorded on one DIRECT list for the session's DIRECT
 // queue. The READBACK buffer starts at a value that is neither 1 nor 2, and every word is compared with the pattern
 // computed on the CPU from the triangle's edges, which keep a margin from every ray.
+//
+// build.ps1 -RayState makes raystate() below the "copy" verb instead: the same state object created and released
+// twice, with no acceleration structure, command list or submission.
 #include "raypipeline-program.h"
+
+// Global root signature: the top level as a root SRV t0 and the output as a root UAV u0, both by address.
+inline HRESULT ray_root_signature(Session& s,ComPtr<ID3D12RootSignature>& root){
+    auto proc=GetProcAddress(s.runtime,"D3D12SerializeRootSignature");
+    decltype(&D3D12SerializeRootSignature) serialize=nullptr;
+    static_assert(sizeof(serialize)==sizeof(proc));std::memcpy(&serialize,&proc,sizeof(serialize));
+    if(!serialize)return E_NOINTERFACE;
+    D3D12_ROOT_PARAMETER parameters[2]{};
+    parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;parameters[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+    parameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_ROOT_SIGNATURE_DESC signature{};signature.NumParameters=2;signature.pParameters=parameters;
+    ComPtr<ID3DBlob> blob,errors;
+    HRESULT hr=s.api("D3D12SerializeRootSignature",[&]{return serialize(&signature,D3D_ROOT_SIGNATURE_VERSION_1_0,&blob,&errors);});if(FAILED(hr))return hr;
+    return s.api("CreateRootSignature",[&]{return s.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root));});
+}
+// One state object: the library's three exports, the hit group, both configs and the global root signature.
+// Without associations the configs and the root signature apply to every export.
+inline HRESULT ray_state_object(Session& s,ID3D12Device5* device5,ID3D12RootSignature* root,ComPtr<ID3D12StateObject>& state){
+    D3D12_EXPORT_DESC exports[3]{{L"raygen",nullptr,D3D12_EXPORT_FLAG_NONE},{L"miss",nullptr,D3D12_EXPORT_FLAG_NONE},
+        {L"closest",nullptr,D3D12_EXPORT_FLAG_NONE}};
+    D3D12_DXIL_LIBRARY_DESC library{{g_raypipeline_lib,sizeof(g_raypipeline_lib)},3,exports};
+    D3D12_HIT_GROUP_DESC group{L"group",D3D12_HIT_GROUP_TYPE_TRIANGLES,nullptr,L"closest",nullptr};
+    D3D12_RAYTRACING_SHADER_CONFIG shader_config{4,8};  // payload one uint, attributes two floats (barycentrics)
+    D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};
+    D3D12_GLOBAL_ROOT_SIGNATURE global{root};
+    const D3D12_STATE_SUBOBJECT subobjects[5]{
+        {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&library},{D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,&group},
+        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,&shader_config},
+        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,&pipeline_config},
+        {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,&global}};
+    const D3D12_STATE_OBJECT_DESC pipeline{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,5,subobjects};
+    return s.api("CreateStateObject RAYTRACING_PIPELINE lib_6_3",[&]{return device5->CreateStateObject(&pipeline,IID_PPV_ARGS(&state));});
+}
+// Identifiers of raygen, miss and the hit group, in that order; they point into the state object.
+inline HRESULT ray_identifiers(Session& s,ID3D12StateObjectProperties* properties,const void* (&identifiers)[3]){
+    const wchar_t* const names[3]{L"raygen",L"miss",L"group"};
+    const char* const labels[3]{"GetShaderIdentifier raygen","GetShaderIdentifier miss","GetShaderIdentifier group"};
+    for(int i=0;i<3;++i){
+        s.event("before",labels[i]);identifiers[i]=properties->GetShaderIdentifier(names[i]);s.event("after",labels[i],identifiers[i]?S_OK:E_FAIL);
+        if(!identifiers[i])return E_FAIL;
+    }
+    return S_OK;
+}
 
 inline HRESULT raypipeline(Session& s){
     if(!s.queue || s.pending || s.copy_success)return E_UNEXPECTED;
@@ -137,48 +183,16 @@ inline HRESULT raypipeline(Session& s){
     s.event("before","Unmap READBACK before submit");s.readback->Unmap(0,&empty);s.event("after","Unmap READBACK before submit");
     s.event("after","Destination holds prefill before submit",untouched?S_OK:E_FAIL);if(!untouched)return E_FAIL;
 
-    // Global root signature: the top level as a root SRV t0 and the output as a root UAV u0, both by address.
-    auto proc=GetProcAddress(s.runtime,"D3D12SerializeRootSignature");
-    decltype(&D3D12SerializeRootSignature) serialize=nullptr;
-    static_assert(sizeof(serialize)==sizeof(proc));std::memcpy(&serialize,&proc,sizeof(serialize));
-    if(!serialize)return E_NOINTERFACE;
-    D3D12_ROOT_PARAMETER parameters[2]{};
-    parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;parameters[0].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
-    parameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[1].ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
-    D3D12_ROOT_SIGNATURE_DESC signature{};signature.NumParameters=2;signature.pParameters=parameters;
-    ComPtr<ID3DBlob> blob,errors;
-    hr=s.api("D3D12SerializeRootSignature",[&]{return serialize(&signature,D3D_ROOT_SIGNATURE_VERSION_1_0,&blob,&errors);});if(FAILED(hr))return hr;
     ComPtr<ID3D12RootSignature> root;
-    hr=s.api("CreateRootSignature",[&]{return device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root));});if(FAILED(hr))return hr;
+    hr=ray_root_signature(s,root);if(FAILED(hr))return hr;
     s.extra[4]=root;
-
-    // One state object: the library's three exports, the hit group, both configs and the global root signature.
-    // Without associations the configs and the root signature apply to every export.
-    D3D12_EXPORT_DESC exports[3]{{L"raygen",nullptr,D3D12_EXPORT_FLAG_NONE},{L"miss",nullptr,D3D12_EXPORT_FLAG_NONE},
-        {L"closest",nullptr,D3D12_EXPORT_FLAG_NONE}};
-    D3D12_DXIL_LIBRARY_DESC library{{g_raypipeline_lib,sizeof(g_raypipeline_lib)},3,exports};
-    D3D12_HIT_GROUP_DESC group{L"group",D3D12_HIT_GROUP_TYPE_TRIANGLES,nullptr,L"closest",nullptr};
-    D3D12_RAYTRACING_SHADER_CONFIG shader_config{4,8};  // payload one uint, attributes two floats (barycentrics)
-    D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};
-    D3D12_GLOBAL_ROOT_SIGNATURE global{root.Get()};
-    const D3D12_STATE_SUBOBJECT subobjects[5]{
-        {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&library},{D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,&group},
-        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,&shader_config},
-        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,&pipeline_config},
-        {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,&global}};
-    const D3D12_STATE_OBJECT_DESC pipeline{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,5,subobjects};
     ComPtr<ID3D12StateObject> state;
-    hr=s.api("CreateStateObject RAYTRACING_PIPELINE lib_6_3",[&]{return device5->CreateStateObject(&pipeline,IID_PPV_ARGS(&state));});if(FAILED(hr))return hr;
+    hr=ray_state_object(s,device5.Get(),root.Get(),state);if(FAILED(hr))return hr;
     s.extra[5]=state;
     ComPtr<ID3D12StateObjectProperties> properties;
     hr=s.api("QueryInterface ID3D12StateObjectProperties",[&]{return state.As(&properties);});if(FAILED(hr))return hr;
-    const wchar_t* const names[3]{L"raygen",L"miss",L"group"};
-    const char* const labels[3]{"GetShaderIdentifier raygen","GetShaderIdentifier miss","GetShaderIdentifier group"};
     const void* identifiers[3]{};
-    for(int i=0;i<3;++i){
-        s.event("before",labels[i]);identifiers[i]=properties->GetShaderIdentifier(names[i]);s.event("after",labels[i],identifiers[i]?S_OK:E_FAIL);
-        if(!identifiers[i])return E_FAIL;
-    }
+    hr=ray_identifiers(s,properties.Get(),identifiers);if(FAILED(hr))return hr;
     data=nullptr;hr=s.api("Map shader table",[&]{return table->Map(0,&empty,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
     std::memset(data,0,table_bytes);
     for(int i=0;i<3;++i)std::memcpy(static_cast<unsigned char*>(data)+i*table_step,identifiers[i],record);
@@ -249,4 +263,53 @@ inline HRESULT raypipeline(Session& s){
     s.event("after",label,exact?S_OK:E_FAIL);
     hr=s.api("GetDeviceRemovedReason",[&]{return device->GetDeviceRemovedReason();});if(FAILED(hr))return hr;
     hr=exact?S_OK:E_FAIL;s.copy_success=exact;return hr;
+}
+
+// Create/destroy control (build.ps1 -RayState). The state object of raypipeline() twice in turn: create it, query its
+// properties, take the three identifiers (32 bytes each, none all zero, no two equal), then release the properties
+// and the state object before the next. Nothing reaches the queue, so every object is released inside the verb and
+// gpu_pending stays false.
+inline HRESULT raystate(Session& s){
+    if(!s.queue || s.pending || s.copy_success)return E_UNEXPECTED;
+    constexpr UINT passes=2;
+    constexpr size_t bytes=D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    ID3D12Device* device=s.device.Get();
+    char label[128]{};
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+    HRESULT hr=s.api("CheckFeatureSupport OPTIONS5",[&]{return device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5,&options5,sizeof(options5));});
+    sprintf_s(label,"Reported RaytracingTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options5.RaytracingTier):0u);
+    s.event("after",label,hr);if(FAILED(hr))return hr;
+    if(options5.RaytracingTier<D3D12_RAYTRACING_TIER_1_0){
+        s.event("after","RaytracingTier below 1.0, no state object attempted",DXGI_ERROR_UNSUPPORTED);return DXGI_ERROR_UNSUPPORTED;}
+    ComPtr<ID3D12Device5> device5;
+    hr=s.api("QueryInterface ID3D12Device5",[&]{return s.device.As(&device5);});if(FAILED(hr))return hr;
+    ComPtr<ID3D12RootSignature> root;
+    hr=ray_root_signature(s,root);if(FAILED(hr))return hr;
+    UINT done=0;
+    for(UINT pass=1;pass<=passes;++pass){
+        ComPtr<ID3D12StateObject> state;
+        hr=ray_state_object(s,device5.Get(),root.Get(),state);if(FAILED(hr))return hr;
+        ComPtr<ID3D12StateObjectProperties> properties;
+        hr=s.api("QueryInterface ID3D12StateObjectProperties",[&]{return state.As(&properties);});if(FAILED(hr))return hr;
+        const void* identifiers[3]{};
+        hr=ray_identifiers(s,properties.Get(),identifiers);if(FAILED(hr))return hr;
+        bool distinct=true;UINT zero=0;
+        for(int i=0;i<3;++i){
+            const auto* id=static_cast<const unsigned char*>(identifiers[i]);
+            zero+=std::all_of(id,id+bytes,[](unsigned char b){return b==0;})?1u:0u;
+            for(int j=0;j<i;++j)if(!std::memcmp(identifiers[i],identifiers[j],bytes))distinct=false;
+        }
+        sprintf_s(label,"Pass %u identifiers %u of 3 nonzero, %s",pass,3-zero,distinct?"all different":"two equal");
+        s.event("after",label,!zero && distinct?S_OK:E_FAIL);if(zero || !distinct)return E_FAIL;
+        // The remaining reference counts are observations; the runtime owns them.
+        s.event("before","Release ID3D12StateObjectProperties");const ULONG kept=properties.Detach()->Release();s.event("after","Release ID3D12StateObjectProperties");
+        sprintf_s(label,"Pass %u properties released, %lu references left",pass,static_cast<unsigned long>(kept));s.event("after",label);
+        s.event("before","Release ID3D12StateObject");const ULONG left=state.Detach()->Release();s.event("after","Release ID3D12StateObject");
+        sprintf_s(label,"Pass %u state object released, %lu references left",pass,static_cast<unsigned long>(left));s.event("after",label);
+        ++done;
+    }
+    hr=s.api("GetDeviceRemovedReason",[&]{return device->GetDeviceRemovedReason();});if(FAILED(hr))return hr;
+    sprintf_s(label,"Ray state %u of %u state objects created and released",done,passes);
+    s.event("after",label,done==passes?S_OK:E_FAIL);
+    s.copy_success=done==passes;return done==passes?S_OK:E_FAIL;
 }

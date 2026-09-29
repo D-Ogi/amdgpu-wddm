@@ -24,7 +24,10 @@ param(
     [switch]$RayQuery,
     # Diagnostic variant: the copy verb builds the same scene and traces it with DispatchRays through a raytracing
     # pipeline state object (raygen, miss and closest hit shaders), comparing the same 64 words.
-    [switch]$RayPipeline
+    [switch]$RayPipeline,
+    # Diagnostic variant: the copy verb creates and releases the state object of -RayPipeline twice, with no
+    # acceleration structure, command list or submission.
+    [switch]$RayState
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,13 +59,14 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene, Present, Sparse, RayQuery and RayPipeline each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline and RayState each replace the copy verb; choose one' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 if ($Present) { $variant += '/DINTERACTIVE_PRESENT' }
 if ($Sparse) { $variant += '/DINTERACTIVE_SPARSE' }
 if ($RayQuery) { $variant += '/DINTERACTIVE_RAYQUERY' }
 if ($RayPipeline) { $variant += '/DINTERACTIVE_RAYPIPELINE' }
+if ($RayState) { $variant += '/DINTERACTIVE_RAYSTATE' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",

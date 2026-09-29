@@ -85,6 +85,16 @@ same 64 words and the same comparison decides. The closest hit shader writes 1, 
 payload starts at 0. Below raytracing tier 1.0 the operation fails before creating anything. The software
 control passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
 
+`build.ps1 -RayState` is the create/destroy control of that state object. The `copy` operation reads the
+raytracing tier, creates the same global root signature, then twice in turn creates the state object from
+`raypipeline-program.h`, queries `ID3D12StateObjectProperties`, takes the raygen, miss and hit group
+identifiers (32 bytes each, none all zero, no two equal) and releases the properties and the state object,
+tracing the reference counts the runtime returns. It builds no acceleration structure, records no command
+list and submits nothing, so `gpu_pending` stays false. Success is traced as `Ray state 2 of 2 state
+objects created and released`. The code shares its root signature, state object and identifier steps with
+`-RayPipeline` in `interactive-raypipeline.h`. The software control passes this variant with
+`-FeatureLevel12_1` (2026-09-29, exit 0).
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained
