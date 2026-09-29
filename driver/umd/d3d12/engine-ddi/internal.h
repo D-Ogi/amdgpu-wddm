@@ -176,6 +176,11 @@ public:
     uint64_t init_value = 0;                    // the last value signalled on init_fence
     bool init_broken = false;                   // a batch failed: no further batches
 
+    // The empty local root signature of ray tracing pipelines (state-objects.cpp): created by the first create that
+    // needs it, one reference, released with the context. Guarded by empty_local_lock, which is taken alone.
+    SRWLOCK empty_local_lock = SRWLOCK_INIT;
+    ID3D12RootSignature* empty_local = nullptr;
+
     uint32_t in_ddi_bound_ms = 2000;            // ReleasePayload::in_ddi; changed by the harness only
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
@@ -430,6 +435,11 @@ bool harness_retirement_lost(DeviceContext* context) noexcept;
 void harness_force_completed(EngineQueue* queue, uint64_t value) noexcept;
 void harness_fail_next_signal(EngineQueue* queue) noexcept;
 void harness_set_in_ddi_bound(DeviceContext* context, uint32_t milliseconds) noexcept;
+// Called by CreateStateObject with the API description immediately before the engine's CreateStateObject, on the
+// creating thread; null (the default) calls nothing. The description lives only for the call. Set it before the
+// creates it watches, from the thread that makes them.
+using StateObjectObserver = void (*)(const D3D12_STATE_OBJECT_DESC& desc, void* user);
+void harness_set_state_object_observer(StateObjectObserver observer, void* user) noexcept;
 #endif
 
 } // namespace engine_ddi

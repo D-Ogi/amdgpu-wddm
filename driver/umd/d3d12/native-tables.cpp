@@ -5,6 +5,7 @@
 #include "device-table.h"
 #include "ddi-entry.h"
 #include "ddi-trace.h"
+#include "entry-owner.h"
 #include "fence-ddi.h"
 #include "shell-core-ddi.h"
 #include "native-queue-ddi.h"
@@ -24,7 +25,7 @@ template<class T> bool trace_input(const T* source,T& destination) noexcept {
     __except(GetExceptionCode()==EXCEPTION_ACCESS_VIOLATION || GetExceptionCode()==EXCEPTION_IN_PAGE_ERROR
              ? EXCEPTION_EXECUTE_HANDLER:EXCEPTION_CONTINUE_SEARCH) {destination={};return false;}
 }
-struct EntryPolicy {
+struct EntryPolicy:EntryOwner<Device> {
     using Scope=DeviceEngineScope;
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
@@ -122,18 +123,9 @@ struct EntryPolicy {
             unsigned(contexts!=nullptr),unsigned(queues!=nullptr),now.QuadPart,GetCurrentThreadId());
         std::fflush(stderr);
     }
-    static Device* resolve(D3D12DDI_HDEVICE handle) noexcept {return static_cast<Device*>(handle.pDrvPrivate);}
-    static Device* resolve(D3D12DDI_HCOMMANDLIST handle) noexcept {
-        return static_cast<Device*>(engine_ddi::command_list_shell(handle));
-    }
+    // Device, command list, state object and the null resolver: entry-owner.h, shared with device-table-test.cpp.
+    using EntryOwner<Device>::resolve;
     static Device* resolve(D3D12DDI_HCOMMANDQUEUE handle) noexcept {return resolve_queue_device(handle);}
-    // The identifier and stack size slots of a state object carry no other handle.
-    static Device* resolve(D3D12DDI_HSTATEOBJECT_0054 handle) noexcept {
-        return static_cast<Device*>(engine_ddi::state_object_shell(handle));
-    }
-    // Unsupported object-specific slots (e.g. metacommands) never borrow another
-    // device's scope. Their creation already refuses in the engine boundary.
-    template<class T> static Device* resolve(T) noexcept {return nullptr;}
     static void failure(Device* device,HRESULT hr) noexcept {
         if(!device)return;
         if(device_engine_entered(*device))report_device_error(*device,hr);

@@ -18,12 +18,17 @@
 // raytracing tier 1.1 on this GPU, the round trip says so in one SKIP line.
 #include "harness.h"
 #include "fixture-raylib.h"
+#include "fixture-raylib-b.h"
 #include "fixture-rayquery.h"
 #include <algorithm>
 #include <climits>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
+#include <initializer_list>
+#include <new>
+#include <string>
 #include <vector>
 
 namespace harness {
@@ -487,7 +492,8 @@ void test_raytracing(Env& env) {
 // ---- Round trip 9: a ray tracing pipeline ----------------------------------------------------------------------------
 // State objects through the DDI (D105-D107, D110-D113), SetPipelineState1 and DispatchRays (L63, L64), over the scene
 // of round trip 8: the fixture library (fixture-raylib.h, lib_6_3) with raygen, miss and closest, one triangles hit
-// group whose local root signature holds one 32-bit constant, and a global root signature SRV(t0) UAV(u0).
+// group whose local root signature holds one 32-bit constant, and a global root signature SRV(t0) UAV(u0) and one
+// 32-bit constant (2, which miss writes).
 //   1. CreateStateObject from the description in the DDI form (describe, below): S_OK and no device error.
 //   2. Shader identifiers of raygen, miss and the hit group: 32 bytes each, not all zero, all three different; stack
 //      sizes of the three answered, UINT_MAX for an unknown export, the pipeline stack size set and read back.
@@ -497,7 +503,29 @@ void test_raytracing(Env& env) {
 //      and its mangled name), with a decoy export that shares the plain name "closest", has a mangled name of its own
 //      and is associated with a second, different local root signature. The associations must name closest by its
 //      mangled name: by the plain one, both local root signatures would reach closest and the engine would give it
-//      none. A second DispatchRays with this pipeline writes its own constant on every hit, the 64 words exact.
+//      none. A second DispatchRays with this pipeline writes its own constant on every hit, the 64 words exact; the
+//      decoy's local root signature has closest's register one word later, where the record holds another value, so
+//      the hits show closest did not take it. The decoy has no DXIL function behind it: this is the naming of the
+//      associations, not a selection among real overloads.
+//      The description handed to the engine (the state object observer, below) associates closest's local root
+//      signature with closest's mangled name alone and the decoy's with the decoy's.
+//   5. An absent local root association stays absent: closest's local root signature is the trap (constants in b0
+//      space1 and b0 space4, which no global parameter has); the summary associates no local root signature with
+//      raygen and miss. The description handed to the engine declares the context's empty local root signature last,
+//      with an association of no export (the explicit default), and associates the trap with closest alone; without
+//      it the engine's declared default, the trap, would reach raygen and miss. The first create's description shows
+//      the same. A third DispatchRays with the empty default in place writes 2 on every miss and the trap's first
+//      constant on every hit, the 64 words exact; the pixels alone do not tell whether raygen and miss took the trap,
+//      whose registers they do not read.
+//   6. Mixed libraries: fixture-raylib listing closest by its mangled name alone, beside fixture-raylib-b with no
+//      export list, in both orders. The description handed to the engine: the libraries in that order, the local root
+//      signature's association naming closest by that mangled name, the only one the engine knows it by, and the
+//      global one naming raygen, miss, that mangled name and miss_far. A dispatch per order writes its own constant on
+//      every hit, the 64 words exact.
+// The descriptions are copied by the harness's state object observer immediately before the engine's
+// CreateStateObject (internal.h, harness_set_state_object_observer; the shell's DLL has no observer).
+// state_object_shell, which the shell's entry thunk resolves these slots' device with, names the device's shell for a
+// live state object and for the inert record of a refused create, and nothing once either is destroyed.
 // Then refusals, each one error of the expected HRESULT: a subobject of an unknown type and an existing collection
 // (the create's result), the decoy without a mangled name and the decoy with both of closest's names (no unique name:
 // E_INVALIDARG and no device error, never broadened),
@@ -506,21 +534,29 @@ void test_raytracing(Env& env) {
 namespace {
 constexpr UINT32 kRecordValue = 0xB0253C09u;       // the hit group's local root constant: the word of a hit
 constexpr UINT32 kRecordValue2 = 0xB0253C0Au;      // the same in the second pipeline's shader table
+constexpr UINT32 kRecordValue3 = 0xB0253C0Bu;      // and in the third's
+constexpr UINT32 kMixedValues[2] = {0xB0253C0Cu, 0xB0253C0Du};     // and in the two mixed-library pipelines'
+constexpr UINT32 kTrapValue = 0xB0253CFFu;         // a word no shader should read: see the second and third tables
 // The UPLOAD buffer: vertices at 0, the instance at kInstanceOffset, then the shader table, its records 32-byte and its
 // tables 64-byte aligned (D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-// the second pipeline's table kTable2 bytes after the first.
-constexpr UINT64 kUploadBytes = 2048, kTable2 = 1024;
+// the tables of the later pipelines kTable2, kTable3, kTable4 and kTable5 bytes after the first.
+constexpr UINT64 kUploadBytes = 5120, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096;
 constexpr UINT64 kRaygenOffset = 512, kMissOffset = 576, kHitOffset = 640;
 constexpr UINT64 kRecordBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-constexpr UINT64 kHitStride = 64;                   // identifier, the constant, padding to the record alignment
+constexpr UINT64 kHitStride = 64;                   // identifier, the constants, padding to the record alignment
 constexpr UINT64 kTableAlignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 static_assert(kRaygenOffset % kTableAlignment == 0 && kMissOffset % kTableAlignment == 0 &&
                   kHitOffset % kTableAlignment == 0 && kHitStride % D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT == 0 &&
-                  kRecordBytes + sizeof(UINT32) <= kHitStride &&
+                  kRecordBytes + 2 * sizeof(UINT32) <= kHitStride && kMissOffset + kHitStride <= kHitOffset &&
                   kInstanceOffset + sizeof(D3D12_RAYTRACING_INSTANCE_DESC) <= kRaygenOffset &&
                   kHitOffset + kHitStride <= kTable2 && kTable2 % kTableAlignment == 0 &&
-                  kTable2 + kHitOffset + kHitStride <= kUploadBytes,
+                  kTable3 - kTable2 == kTable2 && kTable4 - kTable3 == kTable2 && kTable5 - kTable4 == kTable2 &&
+                  kTable5 + kHitOffset + kHitStride <= kUploadBytes,
               "shader table layout");
+constexpr UINT64 kPipelineOutBytes = 5 * 256;      // one 64-word result per pipeline, 256 bytes apart
+constexpr LPCWSTR kRaygenMangled = L"\x01?raygen@@YAXXZ";
+constexpr LPCWSTR kMissMangled = L"\x01?miss@@YAXUPayload@@@Z";
+constexpr LPCWSTR kClosestMangled = L"\x01?closest@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z";
 
 void* create_root_signature(Env& env, Device& device, const D3D12DDI_ROOT_SIGNATURE_0013& rs, HRESULT* hr) {
     D3D12DDIARG_CREATE_ROOT_SIGNATURE_0013 args{};
@@ -531,43 +567,56 @@ void* create_root_signature(Env& env, Device& device, const D3D12DDI_ROOT_SIGNAT
     return storage;
 }
 
-// The pipeline's global root signature SRV(t0) UAV(u0) and its local one, one 32-bit constant in b0 space1; the
-// decoy's local root signature, two constants there.
+// The pipeline's global root signature SRV(t0) UAV(u0) and one 32-bit constant in b0 space2 (parameter 2, miss's
+// value), and its local one, one 32-bit constant in b0 space1; the decoy's local root signature, a constant in b0
+// space3 and then one in b0 space1, so that closest would read the record's next word under it; the trap's, a
+// constant in b0 space1 and one in b0 space4, a register no global parameter has (Raytracing.md:966-968: the local
+// and global root signatures of a shader do not overlap).
 struct RootSignatures {
     void* global = nullptr;
     void* local = nullptr;
     void* decoy = nullptr;
+    void* trap = nullptr;
     HRESULT hr = E_FAIL;
 };
+constexpr UINT kMissParameter = 2;
 RootSignatures create_pipeline_root_signatures(Env& env, Device& device) {
     RootSignatures r;
-    D3D12DDI_ROOT_PARAMETER_0013 params[2]{};
+    D3D12DDI_ROOT_PARAMETER_0013 params[3]{};
     params[0].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_SRV;
     params[0].Descriptor = {0, 0, D3D12DDI_ROOT_DESCRIPTOR_FLAG_0013_NONE};
     params[0].ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
     params[1].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_UAV;
     params[1].Descriptor = {0, 0, D3D12DDI_ROOT_DESCRIPTOR_FLAG_0013_NONE};
     params[1].ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
-    const D3D12DDI_ROOT_SIGNATURE_0013 global{2, params, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_NONE};
+    params[kMissParameter].ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[kMissParameter].Constants = {0, 2, 1};
+    params[kMissParameter].ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
+    const D3D12DDI_ROOT_SIGNATURE_0013 global{3, params, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_NONE};
     D3D12DDI_ROOT_PARAMETER_0013 constant{};
     constant.ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     constant.Constants = {0, 1, 1};
     constant.ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
     const D3D12DDI_ROOT_SIGNATURE_0013 local{1, &constant, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
-    D3D12DDI_ROOT_PARAMETER_0013 two = constant;
-    two.Constants.Num32BitValues = 2;
-    const D3D12DDI_ROOT_SIGNATURE_0013 decoy{1, &two, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
-    HRESULT hr_local = E_FAIL, hr_decoy = E_FAIL;
+    D3D12DDI_ROOT_PARAMETER_0013 decoy_params[2] = {constant, constant};
+    decoy_params[0].Constants.RegisterSpace = 3;
+    const D3D12DDI_ROOT_SIGNATURE_0013 decoy{2, decoy_params, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
+    D3D12DDI_ROOT_PARAMETER_0013 trap_params[2] = {constant, constant};
+    trap_params[1].Constants.RegisterSpace = 4;
+    const D3D12DDI_ROOT_SIGNATURE_0013 trap{2, trap_params, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
+    HRESULT hr_local = E_FAIL, hr_decoy = E_FAIL, hr_trap = E_FAIL;
     r.global = create_root_signature(env, device, global, &r.hr);
     r.local = create_root_signature(env, device, local, &hr_local);
     r.decoy = create_root_signature(env, device, decoy, &hr_decoy);
+    r.trap = create_root_signature(env, device, trap, &hr_trap);
     if (r.hr == S_OK) r.hr = hr_local;
     if (r.hr == S_OK) r.hr = hr_decoy;
+    if (r.hr == S_OK) r.hr = hr_trap;
     return r;
 }
 
 void destroy_root_signatures(Env& env, Device& device, const RootSignatures& r) {
-    for (void* storage : {r.global, r.local, r.decoy})
+    for (void* storage : {r.global, r.local, r.decoy, r.trap})
         if (storage) env.core.pfnDestroyRootSignature(device.h(), D3D12DDI_HROOTSIGNATURE{storage});
 }
 
@@ -585,6 +634,7 @@ struct PipelineDesc {
     D3D12DDI_LOCAL_ROOT_SIGNATURE_0054 local;
     D3D12DDI_EXPORT_DESC_0054 exports[3];
     D3D12DDI_DXIL_LIBRARY_DESC_0054 library;
+    D3D12DDI_DXIL_LIBRARY_DESC_0054 library_b;
     D3D12DDI_RAYTRACING_SHADER_CONFIG_0054 shader_config;
     D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 pipeline_config;
     D3D12DDI_HIT_GROUP_DESC_0054 hit_group;
@@ -593,7 +643,7 @@ struct PipelineDesc {
     const D3D12DDI_STATE_SUBOBJECT_0054* common[3]; // global root signature, shader and pipeline configuration
     const D3D12DDI_STATE_SUBOBJECT_0054* hit[4];    // the same and the local root signature
     const D3D12DDI_STATE_SUBOBJECT_0054* decoy[4];  // the same with the decoy's local root signature
-    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[4];   // raygen, miss, closest; the decoy
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 nodes[4];   // raygen, miss, closest; the decoy or miss_far
     D3D12DDI_FUNCTION_SUMMARY_0054 summary;
     D3D12DDIARG_CREATE_STATE_OBJECT_0054 args;
 };
@@ -625,10 +675,9 @@ void describe(PipelineDesc& d, void* global, void* local, const UINT* library, b
     d.common[1] = d.hit[1] = &d.subobjects[4];
     d.common[2] = d.hit[2] = &d.subobjects[5];
     d.hit[3] = &d.subobjects[2];
-    d.nodes[0] = {L"raygen", L"\x01?raygen@@YAXXZ", 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
-    d.nodes[1] = {L"miss", L"\x01?miss@@YAXUPayload@@@Z", 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
-    d.nodes[2] = {L"closest", L"\x01?closest@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z", 4, d.hit,
-                  D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[0] = {L"raygen", kRaygenMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[1] = {L"miss", kMissMangled, 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.nodes[2] = {L"closest", kClosestMangled, 4, d.hit, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.summary = {3, d.nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     d.args = {D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, kDescribed, d.subobjects};
 }
@@ -650,6 +699,21 @@ void add_decoy(PipelineDesc& d, void* decoy_local, LPCWSTR mangled) {
     d.args.NumSubobjects = kDescribed + 1;
 }
 
+// Mixed libraries, on a description with named exports: the first library lists closest by its mangled name alone,
+// without a rename (Raytracing.md:3497), and the hit group imports it by that name; the ninth subobject is a second
+// library with no export list (fixture-raylib-b.h, every export: miss_far), whose summary export has the global root
+// signature and both configurations. b_first puts the second library ahead of the first in the description.
+void add_export_all_library(PipelineDesc& d, const UINT* library_b, bool b_first) {
+    d.exports[2] = {kClosestMangled, nullptr, D3D12DDI_EXPORT_FLAG_NONE};
+    d.hit_group.ClosestHitShaderImport = kClosestMangled;
+    d.library_b = {library_b, 0, nullptr};
+    d.subobjects[kDescribed] = {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &d.library_b};
+    if (b_first) std::swap(d.subobjects[3], d.subobjects[kDescribed]);
+    d.nodes[3] = {L"miss_far", L"\x01?miss_far@@YAXUPayload@@@Z", 3, d.common, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
+    d.summary.NumExportedFunctions = 4;
+    d.args.NumSubobjects = kDescribed + 1;
+}
+
 // A state object in fresh private storage; the create's result.
 HRESULT create_state_object(Env& env, Device& device, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& args, void** storage,
                             int* rt) {
@@ -657,6 +721,97 @@ HRESULT create_state_object(Env& env, Device& device, const D3D12DDIARG_CREATE_S
     if (!*storage) return E_OUTOFMEMORY;
     return env.core.pfnCreateStateObject(device.h(), &args, D3D12DDI_HSTATEOBJECT_0054{*storage},
                                          D3D12DDI_HRTSTATEOBJECT_0054{rt});
+}
+
+// The API description of the last create that reached the engine, copied by the state object observer
+// (harness_set_state_object_observer) immediately before the engine's CreateStateObject.
+struct Captured {
+    struct Association {
+        D3D12_STATE_SUBOBJECT_TYPE type;        // of the associated subobject
+        const void* root;                       // its root signature, for a global or local root signature
+        std::vector<std::wstring> names;        // none: an explicit default
+    };
+    UINT calls = 0;
+    bool complete = false;                      // the copy did not run out of memory
+    std::vector<const void*> locals;            // the declared local root signatures, in order
+    std::vector<UINT> library_exports;          // NumExports of each DXIL library, in order
+    std::vector<Association> associations;
+};
+
+const void* root_of(const D3D12_STATE_SUBOBJECT& s) noexcept {
+    if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)
+        return static_cast<const D3D12_LOCAL_ROOT_SIGNATURE*>(s.pDesc)->pLocalRootSignature;
+    if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE)
+        return static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(s.pDesc)->pGlobalRootSignature;
+    return nullptr;
+}
+
+void capture_state_object(const D3D12_STATE_OBJECT_DESC& desc, void* user) {
+    auto& c = *static_cast<Captured*>(user);
+    const UINT calls = c.calls + 1;
+    c = Captured{};
+    c.calls = calls;
+    try {
+        for (UINT i = 0; i < desc.NumSubobjects; ++i) {
+            const D3D12_STATE_SUBOBJECT& s = desc.pSubobjects[i];
+            if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE) c.locals.push_back(root_of(s));
+            if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY)
+                c.library_exports.push_back(static_cast<const D3D12_DXIL_LIBRARY_DESC*>(s.pDesc)->NumExports);
+            if (s.Type != D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION) continue;
+            const auto& a = *static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(s.pDesc);
+            Captured::Association copy{a.pSubobjectToAssociate->Type, root_of(*a.pSubobjectToAssociate), {}};
+            for (UINT e = 0; e < a.NumExports; ++e) copy.names.emplace_back(a.pExports[e]);
+            c.associations.push_back(std::move(copy));
+        }
+        c.complete = true;
+    } catch (const std::bad_alloc&) {
+    }
+}
+
+// Installs capture_state_object for its lifetime.
+struct CaptureScope {
+    Captured captured;
+    CaptureScope() noexcept { engine_ddi::harness_set_state_object_observer(capture_state_object, &captured); }
+    ~CaptureScope() { engine_ddi::harness_set_state_object_observer(nullptr, nullptr); }
+    CaptureScope(const CaptureScope&) = delete;
+    CaptureScope& operator=(const CaptureScope&) = delete;
+};
+
+// The engine root signature of a root signature record, as a translated description names it.
+const void* engine_root(void* storage) noexcept {
+    return static_cast<ID3D12RootSignature*>(engine_ddi::harness_engine_object(storage));
+}
+
+// The names the associations of c with a subobject of type (and root, unless null) hand to the engine, in order.
+std::vector<std::wstring> associated(const Captured& c, D3D12_STATE_SUBOBJECT_TYPE type, const void* root) {
+    std::vector<std::wstring> names;
+    for (const Captured::Association& a : c.associations)
+        if (a.type == type && (!root || a.root == root)) names.insert(names.end(), a.names.begin(), a.names.end());
+    return names;
+}
+
+bool names_are(const std::vector<std::wstring>& names, std::initializer_list<LPCWSTR> expected) {
+    if (names.size() != expected.size()) return false;
+    size_t i = 0;
+    for (LPCWSTR name : expected)
+        if (names[i++] != name) return false;
+    return true;
+}
+
+// The local root signatures an explicit default (an association with no export) hands to the engine.
+std::vector<const void*> local_defaults(const Captured& c) {
+    std::vector<const void*> roots;
+    for (const Captured::Association& a : c.associations)
+        if (a.type == D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE && a.names.empty()) roots.push_back(a.root);
+    return roots;
+}
+
+// An export by any of names in a local root signature's association.
+bool locally_associated(const Captured& c, std::initializer_list<LPCWSTR> names) {
+    const std::vector<std::wstring> all = associated(c, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, nullptr);
+    for (LPCWSTR name : names)
+        if (std::find(all.begin(), all.end(), name) != all.end()) return true;
+    return false;
 }
 } // namespace
 
@@ -721,8 +876,8 @@ void test_raytracing_pipeline(Env& env) {
         create_structure_buffer(env, device, tlas_info.ResultDataMaxSizeInBytes, tlas),
         create_buffer(env, device, HeapKind::Default,
                       std::max(blas_info.ScratchDataSizeInBytes, tlas_info.ScratchDataSizeInBytes), true, scratch),
-        create_buffer(env, device, HeapKind::Default, kOutBytes, true, out),
-        create_buffer(env, device, HeapKind::Readback, kOutBytes, false, readback),
+        create_buffer(env, device, HeapKind::Default, kPipelineOutBytes, true, out),
+        create_buffer(env, device, HeapKind::Readback, kPipelineOutBytes, false, readback),
     };
     bool created = upload_va != 0;
     for (HRESULT h : hr_buffers) created = created && h == S_OK;
@@ -743,6 +898,7 @@ void test_raytracing_pipeline(Env& env) {
     const bool stripped = ddi_form(g_fixture_raylib, sizeof(g_fixture_raylib), library);
     PipelineDesc desc;
     describe(desc, rs.global, rs.local, library.code.data(), true);
+    CaptureScope capture;
     void* so_storage = nullptr;
     int so_rt = 0;
     const HRESULT hr_so = rs.hr == S_OK && stripped ? create_state_object(env, device, desc.args, &so_storage, &so_rt)
@@ -753,6 +909,27 @@ void test_raytracing_pipeline(Env& env) {
            "dxc lib_6_3 library's DXIL part (%zu DWORDs, three named exports), shader and pipeline configuration, a "
            "triangles hit group, a summary of three exports and no association (hr %08lx %08lx)",
            library.code.size(), static_cast<unsigned long>(rs.hr), static_cast<unsigned long>(hr_so));
+    // The description the engine received (5): closest's local root signature by the name the library lists, and the
+    // empty local root signature, declared last, as the explicit default that raygen and miss, associated with no
+    // local root signature, fall to.
+    const void* const local_root = engine_root(rs.local);
+    const void* const trap_root = engine_root(rs.trap);
+    const void* const decoy_root = engine_root(rs.decoy);
+    const Captured seen1 = capture.captured;
+    const std::vector<const void*> defaults = local_defaults(seen1);
+    const void* const empty_local = defaults.size() == 1 ? defaults[0] : nullptr;
+    const bool first_ok = seen1.complete && seen1.calls == 1 && local_root && empty_local &&
+                          empty_local != local_root && empty_local != trap_root && empty_local != decoy_root &&
+                          seen1.locals.size() == 2 && seen1.locals[0] == local_root && seen1.locals[1] == empty_local &&
+                          names_are(associated(seen1, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, local_root),
+                                    {L"closest"}) &&
+                          !locally_associated(seen1, {L"raygen", kRaygenMangled, L"miss", kMissMangled});
+    checkf(first_ok,
+           "raytracing pipeline: the description handed to the engine: closest's local root signature associated with "
+           "\"closest\", as the library lists it; raygen and miss in no local root association; one more local root "
+           "signature, declared last, with an association of no export, the explicit default (%u creates seen, %zu "
+           "local root signatures, %zu explicit defaults)",
+           seen1.calls, seen1.locals.size(), defaults.size());
 
     // 2. Identifiers and stack sizes.
     const wchar_t* const id_names[3] = {L"raygen", L"miss", L"hitgroup"};
@@ -805,6 +982,93 @@ void test_raytracing_pipeline(Env& env) {
            "CreateStateObject and three identifiers (hr %08lx)",
            container.size(), static_cast<unsigned long>(hr_so2));
     if (!ids2_ok) return;
+    // The names handed to the engine: closest's local root signature names it by its mangled name alone, the decoy's
+    // names the decoy's mangled name, and no local root association names the plain "closest" both share.
+    const Captured& seen2 = capture.captured;
+    checkf(seen2.complete &&
+               names_are(associated(seen2, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, local_root),
+                         {kClosestMangled}) &&
+               names_are(associated(seen2, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, decoy_root),
+                         {kDecoyMangled}) &&
+               !locally_associated(seen2, {L"closest"}) && local_defaults(seen2) == defaults,
+           "raytracing pipeline: the description of the decoy pipeline handed to the engine: closest's local root "
+           "signature associated with closest's mangled name, the decoy's with the decoy's mangled name, neither with "
+           "the plain \"closest\"; raygen and miss fall to the same empty explicit default");
+
+    // 5, the state object: closest with the trap's local root signature, raygen and miss with none.
+    PipelineDesc trapped;
+    describe(trapped, rs.global, rs.trap, library.code.data(), true);
+    void* so3_storage = nullptr;
+    int so3_rt = 0;
+    const HRESULT hr_so3 = create_state_object(env, device, trapped.args, &so3_storage, &so3_rt);
+    const D3D12DDI_HSTATEOBJECT_0054 hso3{so3_storage};
+    const void* ids3[3]{};
+    bool ids3_ok = hr_so3 == S_OK;
+    for (int i = 0; ids3_ok && i < 3; ++i) {
+        ids3[i] = env.core.pfnGetShaderIdentifier(hso3, id_names[i]);
+        ids3_ok = ids3[i] != nullptr;
+    }
+    checkf(ids3_ok && !device.shell.device_errors,
+           "raytracing pipeline: a local root signature associated with closest alone, raygen and miss associated "
+           "with none: CreateStateObject and three identifiers (hr %08lx)",
+           static_cast<unsigned long>(hr_so3));
+    if (!ids3_ok) return;
+    // The absent association stays absent in what the engine receives: the trap is associated with "closest" alone,
+    // raygen and miss with no local root signature, and the context's one empty local root signature (the object
+    // of the first create) is declared last with an association of no export, the explicit default. Without it the
+    // engine's declared default, the trap, would reach raygen and miss (INTEGRATION.md).
+    const Captured& seen3 = capture.captured;
+    checkf(seen3.complete && seen3.locals.size() == 2 && seen3.locals[0] == trap_root && seen3.locals[1] == empty_local &&
+               local_defaults(seen3) == defaults &&
+               names_are(associated(seen3, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, trap_root), {L"closest"}) &&
+               !locally_associated(seen3, {L"raygen", kRaygenMangled, L"miss", kMissMangled}),
+           "raytracing pipeline: the description of the trap pipeline handed to the engine: the trap associated with "
+           "\"closest\" alone, raygen and miss in no local root association, and the empty local root signature of the "
+           "first create declared last as the explicit default (%zu local root signatures, %zu explicit defaults)",
+           seen3.locals.size(), local_defaults(seen3).size());
+
+    // 6, the state objects: a library listing closest by its mangled name beside one exporting everything, in both
+    // orders. The engine knows a listed export by the listed name alone, with no mangled name (dxil.c, the NumExports
+    // branch), so the association must name closest by that mangled name; by its plain name it would reach no export.
+    DdiShader library_b;
+    const bool stripped_b = ddi_form(g_fixture_raylib_b, sizeof(g_fixture_raylib_b), library_b);
+    PipelineDesc mixed[2];
+    void* mixed_storage[2]{};
+    const void* mixed_ids[2][3]{};
+    for (int mp = 0; mp < 2; ++mp) {
+        describe(mixed[mp], rs.global, rs.local, library.code.data(), true);
+        add_export_all_library(mixed[mp], library_b.code.data(), mp == 1);
+        int mixed_rt = 0;
+        const HRESULT hr_m =
+            stripped_b ? create_state_object(env, device, mixed[mp].args, &mixed_storage[mp], &mixed_rt) : E_FAIL;
+        bool ok = hr_m == S_OK;
+        for (int i = 0; ok && i < 3; ++i) {
+            mixed_ids[mp][i] = env.core.pfnGetShaderIdentifier(D3D12DDI_HSTATEOBJECT_0054{mixed_storage[mp]}, id_names[i]);
+            ok = mixed_ids[mp][i] != nullptr;
+        }
+        checkf(ok && !device.shell.device_errors,
+               "raytracing pipeline: a library listing closest by its mangled name alone %s a library with no export "
+               "list (miss_far): CreateStateObject and three identifiers (hr %08lx)",
+               mp ? "after" : "before", static_cast<unsigned long>(hr_m));
+        // The description handed to the engine, the libraries in this order: the local root signature's association
+        // names closest alone, by the listed mangled name; the global one names every export, the listed ones as
+        // listed and miss_far by its plain name; raygen, miss and miss_far fall to the empty explicit default.
+        const Captured& mixed_seen = capture.captured;
+        const std::vector<UINT> order = mp ? std::vector<UINT>{0u, 3u} : std::vector<UINT>{3u, 0u};
+        const std::vector<std::wstring> global_names =
+            associated(mixed_seen, D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, nullptr);
+        checkf(mixed_seen.complete && mixed_seen.library_exports == order &&
+                   names_are(associated(mixed_seen, D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, local_root),
+                             {kClosestMangled}) &&
+                   names_are(global_names, {L"raygen", L"miss", kClosestMangled, L"miss_far"}) &&
+                   local_defaults(mixed_seen) == defaults,
+               "raytracing pipeline: the description of the mixed-library pipeline, the listing library %s, handed to "
+               "the engine: libraries of %s exports; closest's local root signature associated with the listed "
+               "mangled name alone, the global one with raygen, miss, closest's mangled name and miss_far (%zu names), "
+               "the empty explicit default for the rest",
+               mp ? "second" : "first", mp ? "0 and 3" : "3 and 0", global_names.size());
+        if (!ok) return;
+    }
 
     // 3. Vertices, the instance and the shader table, then the list.
     void* cpu = nullptr;
@@ -826,6 +1090,25 @@ void test_raytracing_pipeline(Env& env) {
     std::memcpy(bytes + kTable2 + kMissOffset, ids2[1], kRecordBytes);
     std::memcpy(bytes + kTable2 + kHitOffset, ids2[2], kRecordBytes);
     std::memcpy(bytes + kTable2 + kHitOffset + kRecordBytes, &kRecordValue2, sizeof(kRecordValue2));
+    // Where the decoy's local root signature has closest's register: closest under it would write this word.
+    std::memcpy(bytes + kTable2 + kHitOffset + kRecordBytes + sizeof(UINT32), &kTrapValue, sizeof(kTrapValue));
+    for (int mp = 0; mp < 2; ++mp) {
+        const UINT64 table = mp ? kTable5 : kTable4;
+        std::memcpy(bytes + table + kRaygenOffset, mixed_ids[mp][0], kRecordBytes);
+        std::memcpy(bytes + table + kMissOffset, mixed_ids[mp][1], kRecordBytes);
+        std::memcpy(bytes + table + kHitOffset, mixed_ids[mp][2], kRecordBytes);
+        std::memcpy(bytes + table + kHitOffset + kRecordBytes, &kMixedValues[mp], sizeof(UINT32));
+    }
+    // The third table: every record carries kTrapValue where the trap's b0 space4 constant lies, the word after the
+    // identifier for raygen and miss, the second for the hit group, whose first is its own constant. No shader reads
+    // b0 space4, and none may read kTrapValue.
+    const UINT64 records3[3] = {kRaygenOffset, kMissOffset, kHitOffset};
+    for (int i = 0; i < 3; ++i) {
+        BYTE* record = bytes + kTable3 + records3[i];
+        std::memcpy(record, ids3[i], kRecordBytes);
+        std::memcpy(record + kRecordBytes, i == 2 ? &kRecordValue3 : &kTrapValue, sizeof(UINT32));
+        std::memcpy(record + kRecordBytes + sizeof(UINT32), &kTrapValue, sizeof(UINT32));
+    }
     env.core.pfnUnmapHeap(device.h(), upload.hheap());
 
     BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};
@@ -857,6 +1140,7 @@ void test_raytracing_pipeline(Env& env) {
     t.pfnSetPipelineState1(rec.hlist(), hso);
     t.pfnSetComputeRootShaderResourceView(rec.hlist(), 0, tlas_va);
     t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va);
+    t.pfnSetComputeRoot32BitConstant(rec.hlist(), kMissParameter, kMiss, 0);
     D3D12DDIARG_DISPATCH_RAYS_0054 rays{};
     rays.RayGenerationShaderRecord = {upload_va + kRaygenOffset, kRecordBytes};
     rays.MissShaderTable = {upload_va + kMissOffset, kRecordBytes, kRecordBytes};
@@ -867,19 +1151,38 @@ void test_raytracing_pipeline(Env& env) {
     t.pfnDispatchRays(rec.hlist(), &rays);
     // 4, the dispatch: the second pipeline over its own table, into the second half of the output.
     t.pfnSetPipelineState1(rec.hlist(), hso2);
-    t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + kOutBytes / 2);
+    t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 256);
     D3D12DDIARG_DISPATCH_RAYS_0054 rays2 = rays;
     rays2.RayGenerationShaderRecord.StartAddress += kTable2;
     rays2.MissShaderTable.StartAddress += kTable2;
     rays2.HitGroupTable.StartAddress += kTable2;
     t.pfnDispatchRays(rec.hlist(), &rays2);
+    // 5, the dispatch: the third pipeline over its own table (records of both words), into the third result.
+    t.pfnSetPipelineState1(rec.hlist(), hso3);
+    t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 512);
+    D3D12DDIARG_DISPATCH_RAYS_0054 rays3 = rays;
+    rays3.RayGenerationShaderRecord = {upload_va + kTable3 + kRaygenOffset, kRecordBytes + 2 * sizeof(UINT32)};
+    rays3.MissShaderTable = {upload_va + kTable3 + kMissOffset, kHitStride, kHitStride};
+    rays3.HitGroupTable.StartAddress += kTable3;
+    t.pfnDispatchRays(rec.hlist(), &rays3);
+    // 6, the dispatches: each mixed-library pipeline over its own table, into the fourth and fifth results.
+    for (int mp = 0; mp < 2; ++mp) {
+        const UINT64 table = mp ? kTable5 : kTable4;
+        t.pfnSetPipelineState1(rec.hlist(), D3D12DDI_HSTATEOBJECT_0054{mixed_storage[mp]});
+        t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 768 + 256 * mp);
+        D3D12DDIARG_DISPATCH_RAYS_0054 mixed_rays = rays;
+        mixed_rays.RayGenerationShaderRecord.StartAddress += table;
+        mixed_rays.MissShaderTable.StartAddress += table;
+        mixed_rays.HitGroupTable.StartAddress += table;
+        t.pfnDispatchRays(rec.hlist(), &mixed_rays);
+    }
     const D3D12DDIARG_RESOURCE_BARRIER_0022 end =
         transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
     t.pfnResourceBarrier(rec.hlist(), 1, &end);
     D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
     dst.BaseAddress.UMD = {readback.hres(), 0};
     src.BaseAddress.UMD = {out.hres(), 0};
-    t.pfnCopyBufferRegion(rec.hlist(), dst, src, kOutBytes);
+    t.pfnCopyBufferRegion(rec.hlist(), dst, src, kPipelineOutBytes);
     t.pfnCloseCommandList(rec.hlist());
     const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
     hr = engine_ddi::execute_command_lists(queue, 1, lists);
@@ -902,12 +1205,36 @@ void test_raytracing_pipeline(Env& env) {
                    hits, kRecordValue, kWords - hits, kMiss, bad, first);
             UINT32 expected2[kWords];
             for (UINT i = 0; i < kWords; ++i) expected2[i] = expected[i] == kRecordValue ? kRecordValue2 : expected[i];
-            const UINT bad2 = mismatches(words + kOutBytes / 2 / sizeof(UINT32), expected2, &first2);
+            const UINT bad2 = mismatches(words + 256 / sizeof(UINT32), expected2, &first2);
             checkf(bad2 == 0,
-                   "raytracing pipeline: the pipeline with the decoy writes its 64 expected words, every hit with its "
-                   "own record's constant %08x: closest took the local root signature associated by its mangled name, "
-                   "not the decoy's (%u differ, first at %u)",
-                   kRecordValue2, bad2, first2);
+                   "raytracing pipeline: the pipeline with the decoy resolved by mangled name writes its 64 expected "
+                   "words, every hit with the word its own local root signature places after the identifier, %08x, not "
+                   "the next one (%08x), where the decoy's has that register; the decoy is a summary export with no DXIL "
+                   "function behind it (%u differ, first at %u)",
+                   kRecordValue2, kTrapValue, bad2, first2);
+            UINT32 expected3[kWords];
+            for (UINT i = 0; i < kWords; ++i) expected3[i] = expected[i] == kRecordValue ? kRecordValue3 : expected[i];
+            const UINT32* words3 = words + 512 / sizeof(UINT32);
+            UINT first3 = 0, trapped_words = 0;
+            const UINT bad3 = mismatches(words3, expected3, &first3);
+            for (UINT i = 0; i < kWords; ++i) trapped_words += words3[i] == kTrapValue ? 1u : 0u;
+            checkf(bad3 == 0,
+                   "raytracing pipeline: the trap pipeline, with the empty explicit default in place, writes its 64 "
+                   "expected words: %u misses the global root constant %u and %u hits the trap's first constant %08x "
+                   "(%u differ, first at %u; %u words %08x)",
+                   kWords - hits, kMiss, hits, kRecordValue3, bad3, first3, trapped_words, kTrapValue);
+            for (int mp = 0; mp < 2; ++mp) {
+                UINT32 expected_mixed[kWords];
+                for (UINT i = 0; i < kWords; ++i)
+                    expected_mixed[i] = expected[i] == kRecordValue ? kMixedValues[mp] : expected[i];
+                UINT first_mixed = 0;
+                const UINT bad_mixed = mismatches(words + (768 + 256 * mp) / sizeof(UINT32), expected_mixed, &first_mixed);
+                checkf(bad_mixed == 0,
+                       "raytracing pipeline: the mixed-library pipeline, the listing library %s, writes its 64 expected "
+                       "words, every hit with closest's local root constant %08x: the association by the listed mangled "
+                       "name reached closest (%u differ, first at %u)",
+                       mp ? "second" : "first", kMixedValues[mp], bad_mixed, first_mixed);
+            }
             env.core.pfnUnmapHeap(device.h(), readback.hheap());
         }
     }
@@ -922,12 +1249,16 @@ void test_raytracing_pipeline(Env& env) {
         void* storage = nullptr;
         int rt = 0;
         const HRESULT hr_bad = create_state_object(env, device, bad.args, &storage, &rt);
-        if (storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
-        checkf(hr_bad == expected_hr && device.shell.device_errors == before,
-               "raytracing pipeline: %s: CreateStateObject answers %08lx (hr %08lx, %u device errors), the record "
-               "destroyed",
+        // The inert record still names its device's shell (engine-ddi.h, state_object_shell), until destroyed.
+        const D3D12DDI_HSTATEOBJECT_0054 h{storage};
+        const bool owner = storage && engine_ddi::state_object_shell(h) == &device.shell;
+        if (storage) env.core.pfnDestroyStateObject(device.h(), h);
+        const bool gone = storage && !engine_ddi::state_object_shell(h);
+        checkf(hr_bad == expected_hr && device.shell.device_errors == before && owner && gone,
+               "raytracing pipeline: %s: CreateStateObject answers %08lx (hr %08lx, %u device errors), the inert "
+               "record's state_object_shell names the device's shell (%s), then none once destroyed (%s)",
                what, static_cast<unsigned long>(expected_hr), static_cast<unsigned long>(hr_bad),
-               device.shell.device_errors - before);
+               device.shell.device_errors - before, owner ? "yes" : "no", gone ? "yes" : "no");
     };
     const D3D12DDI_NODE_MASK_0054 mask{1};
     refused_create("a subobject of an unknown type (4, unused in the DDI)", E_INVALIDARG,
@@ -943,7 +1274,7 @@ void test_raytracing_pipeline(Env& env) {
         const char* what;
     } shared_names[] = {
         {nullptr, "the second without a mangled name"},
-        {L"\x01?closest@@YAXUPayload@@UBuiltInTriangleIntersectionAttributes@@@Z", "both with the same mangled name"},
+        {kClosestMangled, "both with the same mangled name"},
     };
     for (const auto& shape : shared_names) {
         PipelineDesc shared;
@@ -1010,8 +1341,14 @@ void test_raytracing_pipeline(Env& env) {
     destroy_recording(env, device, rec);
     check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
           "raytracing pipeline: destroy_engine_queue reports Retired");
+    const bool live_owner = engine_ddi::state_object_shell(hso) == &device.shell;
     env.core.pfnDestroyStateObject(device.h(), hso);
+    checkf(live_owner && !engine_ddi::state_object_shell(hso),
+           "raytracing pipeline: state_object_shell names the device's shell for a live state object, none after "
+           "DestroyStateObject");
     env.core.pfnDestroyStateObject(device.h(), hso2);
+    env.core.pfnDestroyStateObject(device.h(), hso3);
+    for (void* storage : mixed_storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
     for (Buffer* b : {&blas, &tlas, &scratch, &out, &readback, &upload}) destroy_buffer(env, device, *b);
     destroy_root_signatures(env, device, rs);
     uint32_t live = UINT32_MAX;

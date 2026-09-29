@@ -25,10 +25,19 @@
 // it is matched by type and pDesc). pDXILLibrary has no size (H:7820-7825): the length used is the length the payload
 // claims, checked for internal consistency (shader-container.h, LibraryPayloadDwords).
 //
-// The engine also takes every declared root signature and configuration as a default for all exports (its priority
-// DECLARED_STATE_OBJECT, libs/vkd3d/state_object_common.c); the synthesized associations are explicit and win for each
-// export the summary names. An export to which the runtime associated no local root signature therefore gets a
-// declared one in the engine.
+// The engine also takes every declared root signature and configuration as a default for all exports (engine
+// 66c98e72: raytracing_pipeline.c:992-1030, parsed at priority DECLARED_STATE_OBJECT 4 by :1316-1326; priorities
+// vkd3d_private.h:6502-6508); the synthesized associations are explicit (priority EXPLICIT 6, :1251-1259) and win for
+// each export the summary names. An export the summary associates with no local root signature would get a declared
+// one in the engine (state_object_common.c:111-137 takes the highest priority match), though the runtime resolved
+// its absence (Raytracing.md:9494-9498). So a RAYTRACING_PIPELINE that declares a local root signature and has such
+// an export gets two more API subobjects: the context's empty local root signature (a real engine object, the engine
+// dereferences it) and a SUBOBJECT_TO_EXPORTS_ASSOCIATION of it with no exports, an explicit default (priority
+// EXPLICIT_DEFAULT 5, raytracing_pipeline.c:1257-1259). It outranks every declared default and yields to every
+// explicit association, including a hit group's for its shaders: the engine takes a hit group's association only
+// when its priority is higher than the shader's own (state_object_common.c:176-201). Explicit empty associations per
+// export (priority 6) would tie with a hit group's there and keep the empty one, so the default is the form used.
+// A COLLECTION is left as it is: there an absent association may be an unresolved dependency, not an absence.
 //
 // Lifetime: the runtime owns the DDI description and its bytecode for the life of the state object
 // (Raytracing.md:9555), so names and export arrays are used in place. What engine-ddi rebuilds (the API subobjects,
@@ -138,6 +147,10 @@ constexpr UINT kStateObjectFlags = D3D12DDI_STATE_OBJECT_FLAG_ALLOW_LOCAL_DEPEND
                                    D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
 constexpr UINT kPipelineFlags = D3D12DDI_RAYTRACING_PIPELINE_FLAG_SKIP_TRIANGLES |
                                 D3D12DDI_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+std::atomic<StateObjectObserver> state_object_observer{};
+std::atomic<void*> state_object_observer_user{};
+#endif
 
 // The description line of one create, in a fixed buffer: what does not fit is cut off.
 struct Text {
@@ -191,10 +204,32 @@ ID3D12RootSignature* root_signature(DeviceContext* c, D3D12DDI_HROOTSIGNATURE h)
     return r ? static_cast<ID3D12RootSignature*>(r->h.engine) : nullptr;
 }
 
+// The context's empty local root signature (no parameters, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE), created
+// on first use. A real engine object: the engine dereferences a declared root signature (raytracing_pipeline.c:992-1030).
+HRESULT empty_local_root_signature(DeviceContext* c, ID3D12RootSignature** out) noexcept {
+    AcquireSRWLockExclusive(&c->empty_local_lock);
+    HRESULT hr = S_OK;
+    if (!c->empty_local) {
+        const D3D12DDI_ROOT_SIGNATURE_0013 empty{0, nullptr, 0, nullptr, D3D12DDI_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
+        std::vector<uint8_t> blob;
+        hr = serialize_root_signature(&empty, blob);
+        if (SUCCEEDED(hr))
+            hr = c->device->CreateRootSignature(0, blob.data(), blob.size(), __uuidof(ID3D12RootSignature),
+                                                reinterpret_cast<void**>(&c->empty_local));
+        if (SUCCEEDED(hr) && !c->empty_local) hr = E_UNEXPECTED;
+        if (FAILED(hr)) c->empty_local = nullptr;
+    }
+    *out = c->empty_local;
+    ReleaseSRWLockExclusive(&c->empty_local_lock);
+    if (FAILED(hr)) log_line("CreateStateObject: no empty local root signature (hr %08lx)", static_cast<unsigned long>(hr));
+    return hr;
+}
+
 // Pass 1 over one summary: every export named, every association within the description and of a type that takes
-// one. counts[i] grows by the exports associated with subobject i, total by all of them.
+// one. counts[i] grows by the exports associated with subobject i, total by all of them, unlocal by the exports
+// associated with no local root signature.
 HRESULT count_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, UINT index,
-                           std::vector<size_t>& counts, size_t& total) noexcept {
+                           std::vector<size_t>& counts, size_t& total, size_t& unlocal) noexcept {
     const auto& f = *static_cast<const D3D12DDI_FUNCTION_SUMMARY_0054*>(a.pSubobjects[index].pDesc);
     if (f.NumExportedFunctions > kMaxCount || (f.NumExportedFunctions && !f.pSummaries))
         return refuse(index, "summary export count out of range, or no array", E_INVALIDARG);
@@ -204,6 +239,7 @@ HRESULT count_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, UINT i
             return refuse(index, "summary export without a name", E_INVALIDARG);
         if (node.NumAssociatedSubobjects > kMaxCount || (node.NumAssociatedSubobjects && !node.ppAssociatedSubobjects))
             return refuse(index, "summary association count out of range, or no array", E_INVALIDARG);
+        bool local = false;
         for (UINT k = 0; k < node.NumAssociatedSubobjects; ++k) {
             const UINT target = subobject_index(a, node.ppAssociatedSubobjects[k]);
             if (target == UINT_MAX) return refuse(index, "summary association outside the description", E_INVALIDARG);
@@ -211,9 +247,11 @@ HRESULT count_associations(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, UINT i
             if (kind < 0) return refuse(index, "summary association with a subobject that takes none", E_INVALIDARG);
             if (!kind) continue;
             if (total == kMaxAssociatedNames) return refuse(index, "more associations than the bound", E_INVALIDARG);
+            local = local || a.pSubobjects[target].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
             ++counts[target];
             ++total;
         }
+        if (!local) ++unlocal;
     }
     return S_OK;
 }
@@ -227,28 +265,37 @@ enum Identity : size_t { kAlias, kMangled, kUnmangled, kIdentities };
 // listed name alone, with no mangled name (libs/vkd3d-shader/dxil.c, the NumExports branch). The summary gives both
 // names (H:7843-7850, Raytracing.md:9611-9619) and promises neither unique: overloads share an unmangled name, and one
 // function may be exported several times under renames (Raytracing.md:3497, D3D12_EXPORT_DESC). So, per export:
-//   1. its unmangled or mangled name when a library lists it (an exposed alias, kept as listed);
+//   1. its unmangled or mangled name when a library lists it (an exposed alias, kept as listed) or a hit group
+//      has it as its name;
 //   2. else its unmangled name, when no other export carries that name;
 //   3. else its mangled name, when no other export carries that one;
 // and E_INVALIDARG before any engine call otherwise, or when no library exposes every export and the export is not
 // listed, or when two exports come to one name: a name shared by two exports would associate both, with the other's
-// subobjects. An export with one name only goes by it, under the same uniqueness.
+// subobjects. An export with one name only goes by it, under the same uniqueness. The listed names of every library
+// count, whatever the other libraries do: a library that exposes every export beside one that lists a mangled name
+// leaves that name the only one the engine knows the listed export by (dxil.c:2367-2407).
 HRESULT resolve_exports(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, std::vector<LPCWSTR>& identity,
                         size_t (&kinds)[kIdentities]) {
     std::unordered_set<std::wstring_view> aliases;
-    bool listed_only = false;                   // every library lists its exports
+    bool export_all = false;                    // some library exposes every export (NumExports 0)
     for (UINT i = 0; i < a.NumSubobjects; ++i) {
+        if (a.pSubobjects[i].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP) {
+            // A hit group is an export by its own name, the one the engine matches it by (state_object_common.c:
+            // 190-191 looks its associations up by HitGroupExport).
+            const auto& group = *static_cast<const D3D12DDI_HIT_GROUP_DESC_0054*>(a.pSubobjects[i].pDesc);
+            if (group.HitGroupExport) aliases.insert(group.HitGroupExport);
+            continue;
+        }
         if (a.pSubobjects[i].Type != D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY) continue;
         const auto& library = *static_cast<const D3D12DDI_DXIL_LIBRARY_DESC_0054*>(a.pSubobjects[i].pDesc);
-        if (!library.NumExports || library.NumExports > kMaxCount || !library.pExports) {
-            listed_only = false;
-            break;                              // translate_one refuses a count out of range or a missing array
+        if (!library.NumExports) {
+            export_all = true;
+            continue;
         }
-        listed_only = true;
+        if (library.NumExports > kMaxCount || !library.pExports) continue;  // translate_one refuses these
         for (UINT e = 0; e < library.NumExports; ++e)
             if (library.pExports[e].Name) aliases.insert(library.pExports[e].Name);
     }
-    if (!listed_only) aliases.clear();          // a library exposing every export: its names are the program's
     std::vector<const D3D12DDI_FUNCTION_SUMMARY_NODE_0054*> nodes;
     std::unordered_map<std::wstring_view, size_t> carriers;     // exports carrying each name
     for (UINT i = 0; i < a.NumSubobjects; ++i) {
@@ -274,7 +321,7 @@ HRESULT resolve_exports(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& a, std::vect
             chosen = nullptr;                   // two listed exports in one: ambiguous
         } else if (plain_listed || mangled_listed) {
             chosen = plain_listed ? plain : mangled;
-        } else if (listed_only) {
+        } else if (!export_all) {
             log_line("CreateStateObject: summary export %zu: not among the exports the libraries list", k);
             return E_INVALIDARG;
         } else if (plain && carriers[plain] == 1) {
@@ -402,8 +449,8 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     }
     // Pass 1: types, and what the summaries associate.
     std::vector<size_t> counts(n, 0);
-    size_t names = 0, exports = 0;
-    UINT summaries = 0, libraries = 0;
+    size_t names = 0, exports = 0, unlocal = 0;
+    UINT summaries = 0, libraries = 0, locals = 0;
     text.add("; types");
     for (UINT i = 0; i < n; ++i) {
         const D3D12DDI_STATE_SUBOBJECT_0054& s = a.pSubobjects[i];
@@ -413,17 +460,17 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
         switch (s.Type) {
         case D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE:
-        case D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_NODE_MASK:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG:
         case D3D12DDI_STATE_SUBOBJECT_TYPE_HIT_GROUP: break;
+        case D3D12DDI_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE: ++locals; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY: ++libraries; break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION:
             return refuse(i, "an existing collection, not implemented", E_NOTIMPL);
         case D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY: {
             ++summaries;
-            const HRESULT hr = count_associations(a, i, counts, names);
+            const HRESULT hr = count_associations(a, i, counts, names, unlocal);
             if (FAILED(hr)) return hr;
             exports += static_cast<const D3D12DDI_FUNCTION_SUMMARY_0054*>(s.pDesc)->NumExportedFunctions;
             if (exports > kMaxCount) return refuse(i, "more summary exports than the bound", E_INVALIDARG);
@@ -440,9 +487,19 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     if (FAILED(hr_names)) return hr_names;
     size_t targets = 0;                        // counts[i] <= kMaxAssociatedNames, within an association's UINT
     for (size_t k : counts) targets += k ? 1 : 0;
+    // An executable pipeline declaring a local root signature, with a summary export associated with none: the empty
+    // local root signature and its explicit default association keep the engine's declared default away from it.
+    // Not for a collection, whose absent association may be an unresolved dependency still to be met.
+    ID3D12RootSignature* empty_local = nullptr;
+    if (a.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE && locals && unlocal) {
+        text.add("; %zu exports without a local root signature: empty explicit default", unlocal);
+        const HRESULT hr = empty_local_root_signature(c, &empty_local);
+        if (FAILED(hr)) return hr;
+    }
 
-    // Pass 2: the API subobjects, then one association per associated subobject.
-    const size_t total = size_t{n} - summaries + targets;
+    // Pass 2: the API subobjects, then one association per associated subobject, then the empty local root signature
+    // and its default association.
+    const size_t total = size_t{n} - summaries + targets + (empty_local ? 2 : 0);
     t.descs.resize(total);
     t.subobjects.resize(total);
     t.names.resize(names);
@@ -471,6 +528,15 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
         t.subobjects[out++] = {D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &d};
         cursor[i] = next;
         next += counts[i];
+    }
+    if (empty_local) {
+        StateObjectTranslation::Desc& local = t.descs[out];
+        local.local.pLocalRootSignature = empty_local;
+        const D3D12_STATE_SUBOBJECT* declared = &t.subobjects[out];
+        t.subobjects[out++] = {D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local};
+        StateObjectTranslation::Desc& d = t.descs[out];
+        d.association = {declared, 0, nullptr};         // no exports: an explicit default
+        t.subobjects[out++] = {D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &d};
     }
     size_t named = 0;
     for (UINT i = 0; i < n; ++i)
@@ -509,6 +575,10 @@ HRESULT APIENTRY create_state_object(D3D12DDI_HDEVICE device, const D3D12DDIARG_
     if (SUCCEEDED(hr)) {
         const D3D12_STATE_OBJECT_DESC desc{static_cast<D3D12_STATE_OBJECT_TYPE>(args->Type),
                                            static_cast<UINT>(t->subobjects.size()), t->subobjects.data()};
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+        if (const StateObjectObserver observe = state_object_observer.load())
+            observe(desc, state_object_observer_user.load());
+#endif
         hr = c->device5->CreateStateObject(&desc, __uuidof(ID3D12StateObject), reinterpret_cast<void**>(&so));
         if (SUCCEEDED(hr) && !so) hr = E_UNEXPECTED;
         if (SUCCEEDED(hr))
@@ -588,6 +658,13 @@ void APIENTRY set_pipeline_stack_size(D3D12DDI_HSTATEOBJECT_0054 h, UINT size) {
     if (StateObjectRecord* r = live_state_object(h, "SetPipelineStackSize")) r->properties->SetPipelineStackSize(size);
 }
 } // namespace
+
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+void harness_set_state_object_observer(StateObjectObserver observer, void* user) noexcept {
+    state_object_observer_user.store(user);
+    state_object_observer.store(observer);
+}
+#endif
 
 void fill_core_state_objects(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCalcPrivateStateObjectSize = calc_state_object;

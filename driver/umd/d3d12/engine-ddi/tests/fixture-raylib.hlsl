@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Ray tracing pipeline library of engine-ddi-harness (test-raytracing.cpp), compiled into fixture-raylib.h. The same
 // orthographic rays as fixture-rayquery.hlsl, one per texel of an 8x8 grid; a hit writes the hit group's local root
-// constant, a miss 2, word (y * 8 + x) of the output. One hit group "hitgroup" (triangles, closest hit "closest") is
-// declared by the harness in the state object, not here.
+// constant, a miss the global root constant (2), word (y * 8 + x) of the output. One hit group "hitgroup" (triangles,
+// closest hit "closest") is declared by the harness in the state object, not here.
 RaytracingAccelerationStructure scene : register(t0);
 RWByteAddressBuffer output : register(u0);
 cbuffer Record : register(b0, space1) {        // the local root signature: one 32-bit constant in the hit group record
     uint hit_value;
+};
+cbuffer Global : register(b0, space2) {        // the global root signature: one 32-bit constant, read by miss
+    uint miss_value;
 };
 
 struct Payload {
@@ -28,7 +31,7 @@ void raygen() {
 
 [shader("miss")]
 void miss(inout Payload payload) {
-    payload.value = 2u;
+    payload.value = miss_value;
 }
 
 [shader("closesthit")]

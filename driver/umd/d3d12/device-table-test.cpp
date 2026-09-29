@@ -5,8 +5,12 @@
 #include "device-table.h"
 #include "queue-ddi.h"
 #include "fence-ddi.h"
+#include "ddi-entry.h"
+#include "entry-owner.h"
+#include "engine-ddi/internal.h"        // StateObjectRecord and DeviceContext, to stand in for a created state object
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cstdint>
 #include <type_traits>
@@ -53,6 +57,89 @@ template<class T> bool all_nonzero(const T& table) {
     std::memcpy(words, &table, sizeof(table));
     for (auto word : words) if (!word) return false;
     return true;
+}
+
+// The state object slots (GetShaderIdentifier, GetShaderStackSize, GetPipelineStackSize, SetPipelineStackSize) carry
+// the state object as their only handle. The entry thunk resolves their owner from it through the production
+// overloads of entry-owner.h, which native-tables.cpp's EntryPolicy uses, and the real engine_ddi::state_object_shell;
+// this policy adds no resolver of its own. The originals record that they ran in the owner's scope.
+struct Owner { unsigned calls{}; };
+thread_local Owner* current{};
+unsigned denials{}, stray{};
+HRESULT last_denial{};
+struct StateObjectPolicy : native12::EntryOwner<Owner> {
+    class Scope {
+        Owner* previous_;
+    public:
+        explicit Scope(Owner& owner) noexcept : previous_(current) { current = &owner; }
+        ~Scope() { current = previous_; }
+        bool entered() const noexcept { return true; }
+    };
+    static void failure(Owner*, HRESULT hr) noexcept { ++denials; last_denial = hr; }
+};
+int identifier_marker{};
+void entered() noexcept { if (current) ++current->calls; else ++stray; }
+void* APIENTRY shader_identifier(D3D12DDI_HSTATEOBJECT_0054, LPCWSTR) { entered(); return &identifier_marker; }
+UINT APIENTRY shader_stack_size(D3D12DDI_HSTATEOBJECT_0054, LPCWSTR) { entered(); return 7; }
+UINT APIENTRY pipeline_stack_size(D3D12DDI_HSTATEOBJECT_0054) { entered(); return 9; }
+void APIENTRY set_pipeline_stack_size(D3D12DDI_HSTATEOBJECT_0054, UINT) { entered(); }
+// A failed expectation ends the test with exit code 1 and a FAILED line, never an abort dialog.
+void expect(bool condition, const char* what) {
+    if (condition) return;
+    std::printf("FAILED: state object slots: %s (calls outside a scope %u, denials %u)\n", what, stray, denials);
+    std::exit(1);
+}
+
+// A live record and a failed create's inert one name their device: the four wrapped slots reach the originals in
+// the owner's scope. Storage without a record (zeroed, or poisoned by DestroyStateObject) and a null handle resolve
+// no owner: each slot is denied with E_INVALIDARG before any original runs, and answers null, 0 or nothing.
+void test_state_object_entries(const D3D12DDI_DEVICE_FUNCS_CORE_0088& composed) {
+    auto source = composed;
+    source.pfnGetShaderIdentifier = shader_identifier;
+    source.pfnGetShaderStackSize = shader_stack_size;
+    source.pfnGetPipelineStackSize = pipeline_stack_size;
+    source.pfnSetPipelineStackSize = set_pipeline_stack_size;
+    D3D12DDI_DEVICE_FUNCS_CORE_0088 wrapped{};
+    expect(native12::DdiEntryTables<StateObjectPolicy>::wrap_core(source, &wrapped) == S_OK, "wrap_core");
+    expect(wrapped.pfnGetShaderIdentifier && wrapped.pfnGetShaderStackSize && wrapped.pfnGetPipelineStackSize &&
+           wrapped.pfnSetPipelineStackSize && wrapped.pfnGetShaderIdentifier != shader_identifier,
+           "wrap_core wraps the four slots");
+    if (!wrapped.pfnGetShaderIdentifier || !wrapped.pfnGetShaderStackSize || !wrapped.pfnGetPipelineStackSize ||
+        !wrapped.pfnSetPipelineStackSize) return;       // expect has exited; this tells /analyze so
+
+    Owner owner;
+    engine_ddi::DeviceContext context;          // no engine: state_object_shell reads hooks.shell only
+    context.hooks.shell = &owner;
+    engine_ddi::StateObjectRecord live{{engine_ddi::Tag::StateObject, 0, nullptr, &context}, nullptr, nullptr, {}, true};
+    engine_ddi::StateObjectRecord inert{{engine_ddi::Tag::StateObject, engine_ddi::kRecordInvalid, nullptr, &context},
+                                        nullptr, nullptr, {}, false};
+    for (engine_ddi::StateObjectRecord* record : {&live, &inert}) {
+        const D3D12DDI_HSTATEOBJECT_0054 h{record};
+        const unsigned before = owner.calls;
+        expect(wrapped.pfnGetShaderIdentifier(h, L"raygen") == &identifier_marker, "GetShaderIdentifier reaches the original");
+        expect(wrapped.pfnGetShaderStackSize(h, L"raygen") == 7, "GetShaderStackSize reaches the original");
+        expect(wrapped.pfnGetPipelineStackSize(h) == 9, "GetPipelineStackSize reaches the original");
+        wrapped.pfnSetPipelineStackSize(h, 64);
+        expect(owner.calls == before + 4 && !stray && !current && !denials,
+               "a record naming a device: four originals run in the owner's scope, none denied");
+    }
+
+    engine_ddi::StateObjectRecord destroyed = live;
+    engine_ddi::poison(destroyed.h);
+    alignas(engine_ddi::StateObjectRecord) unsigned char zeroed[sizeof(engine_ddi::StateObjectRecord)]{};
+    for (void* storage : {static_cast<void*>(&destroyed), static_cast<void*>(zeroed), static_cast<void*>(nullptr)}) {
+        const D3D12DDI_HSTATEOBJECT_0054 h{storage};
+        const unsigned before = owner.calls, denied_before = denials;
+        expect(!wrapped.pfnGetShaderIdentifier(h, L"raygen"), "GetShaderIdentifier denied, null");
+        expect(wrapped.pfnGetShaderStackSize(h, L"raygen") == 0, "GetShaderStackSize denied, 0");
+        expect(wrapped.pfnGetPipelineStackSize(h) == 0, "GetPipelineStackSize denied, 0");
+        wrapped.pfnSetPipelineStackSize(h, 64);
+        expect(owner.calls == before && !stray && denials == denied_before + 4 && last_denial == E_INVALIDARG && !current,
+               "no record: four denials with E_INVALIDARG, no original run");
+    }
+    std::puts("PASSED: state object slots through entry-owner.h's production resolvers reach the originals in the owner scope "
+              "for a live and an inert record (state_object_shell), denied with E_INVALIDARG for a destroyed record, zeroed "
+              "storage and a null handle; no runtime/GPU");
 }
 } // namespace
 
@@ -113,4 +200,5 @@ int main() {
         assert(all_nonzero(list) && list.pfnPresent == present);
     }
     std::puts("PASSED: core122/list70x2 composition,18 missing shell entries refused, output preserved on failure; no runtime/GPU");
+    test_state_object_entries(completed);
 }

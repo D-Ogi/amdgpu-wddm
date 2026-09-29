@@ -601,7 +601,8 @@ Development PC witness (harness round trip 8, `tests/test-raytracing.cpp`, Runti
 prebuild answers equal to the engine's own; a bottom level of one triangle, its clone, a top level of one instance
 over each, and a cs_6_5 inline ray query per top level (the top level as a root SRV by address) whose 64 words equal
 the hit pattern computed from the triangle; CURRENT_SIZE at the build and emitted after it, equal and within the
-prebuild maximum; a build on a recording COPY list is one E_INVALIDARG on that list. VVL with synchronization
+prebuild maximum; a build on a recording bundle and one on a recording COPY list are each one E_INVALIDARG on that
+list (build controls; no DispatchRays runs in a bundle or COPY list in the harness). VVL with synchronization
 validation clean. It is RuntimeBacked because the engine places a
 structure from its address to the end of the VkBuffer behind it (`libs/vkd3d/va_map.c`): in EnginePrivateTest small
 heaps are suballocated from one shared buffer, and the validation layer reports every structure as overlapping the
@@ -638,11 +639,13 @@ Raytracing.md, "State object DDIs"), subobject by subobject:
   export, one SUBOBJECT_TO_EXPORTS_ASSOCIATION names every export associated with it. An association with a
   STATE_OBJECT_CONFIG or NODE_MASK adds nothing: they hold for the whole state object. The name that identifies a
   summary export is resolved once, never broadened: a name a library lists in its export array (an exposed alias,
-  plain or mangled) is kept; otherwise the unmangled name when no other summary export carries it; otherwise the
-  mangled name when no other summary export carries it (an export with one name only goes by it, under the same
-  uniqueness). Anything else is E_INVALIDARG without an engine call: an
-  unresolved or ambiguous identity, an export that is not among the listed ones when every library lists its exports,
-  or two summary exports resolving to the same name. The engine matches an association name against an export's
+  plain or mangled) or a hit group's name is kept; otherwise the unmangled name when no other summary export carries
+  it; otherwise the mangled name when no other summary export carries it (an export with one name only goes by it,
+  under the same uniqueness). The listed names of every library count, whatever the others do: the engine knows a
+  listed export by its listed name alone, with a NULL mangled name (`libs/vkd3d-shader/dxil.c:2367-2407`), so a
+  library listing a mangled name keeps it even beside a library with no export list. Anything else is E_INVALIDARG
+  without an engine call: an unresolved or ambiguous identity, an export that is not among the listed ones when no
+  library exports everything, or two summary exports resolving to the same name. The engine matches an association name against an export's
   mangled or plain name (`libs/vkd3d/state_object_common.c`, `vkd3d_export_equal`), and a plain name that overloads
   share would associate with all of them; overloads are told apart by the mangled name (Raytracing.md,
   D3D12_EXPORT_DESC; the summary node carries both names, "Shader export summary").
@@ -665,16 +668,31 @@ subobjects defined in DXIL libraries as plain DDI subobjects (the driver does no
 and converts every association, default associations included, into an explicit list of associations for every
 exported function.
 
-The engine also treats every declared root signature and configuration as a default for all exports (priority
-DECLARED_STATE_OBJECT, `libs/vkd3d/state_object_common.c`). The synthesized associations are explicit and take
-precedence for every export the summary names; an export to which the runtime associated no local root signature
-gets a declared one in the engine.
+The engine also treats every declared root signature and configuration as a default for all exports (engine
+66c98e72: `libs/vkd3d/raytracing_pipeline.c:992-1030`, priority DECLARED_STATE_OBJECT 4 from :1316-1326; priorities
+`libs/vkd3d/vkd3d_private.h:6502-6508`). The synthesized associations are explicit (EXPLICIT 6, :1251-1259) and take
+precedence for every export the summary names. An absent local root association stays absent: when a
+RAYTRACING_PIPELINE declares a local root signature and the summary associates none with some export, the
+translation adds the device context's empty local root signature (a real engine root signature with
+D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE and no parameters, created on first use, released with the context; a
+failure is the create's HRESULT) and a SUBOBJECT_TO_EXPORTS_ASSOCIATION of it with no exports. That is an explicit
+default (EXPLICIT_DEFAULT 5, :1257-1259): it outranks the declared defaults (`state_object_common.c:111-137` takes
+the highest priority match) and yields to every explicit association, a hit group's included, which the engine takes
+for the group's shaders only at a higher priority than theirs (`state_object_common.c:176-201`). Explicit empty
+associations per export (6) would tie with a hit group's there and keep the empty one, so the default is the form
+used. A COLLECTION is left as it is: there an absent association may be an unresolved dependency, not an absence.
+The create's log line counts the exports concerned.
 
 GetShaderIdentifier answers the engine's pointer (NULL for an unknown export), GetShaderStackSize UINT_MAX for an
 unknown export, and a stack size above UINT_MAX is logged and answered as UINT_MAX (the DDI's type is 32 bits, the
 engine's 64). SetPipelineState1 takes a live RAYTRACING_PIPELINE of the list's device; a collection, a failed
 create's record, a null handle or another device's state object is E_INVALIDARG on the list. Both list slots record
-in DIRECT and COMPUTE lists that are recording only, as the acceleration structure slots.
+in DIRECT and COMPUTE lists that are recording only, as the acceleration structure slots; the harness shows the
+closed-list refusal for DispatchRays, and the bundle and COPY refusals only for a build (round trip 8).
+
+The shell's entry thunk enters its device scope from a slot's first handle; for D110-D113 that is the state object,
+and `state_object_shell` answers its owner from the record (the device's ShellHooks::shell for a live record and for
+the inert record of a failed create, null for storage holding no record, such as after DestroyStateObject).
 
 INFERENCE until a lab run logs a real description (the create's log line is the instrument): that the runtime hands
 over the DDI form the harness builds, in particular that a 0092 driver receives RAYTRACING_PIPELINE_CONFIG as _0075
@@ -684,18 +702,45 @@ is matched by type and description).
 
 Development PC witness (harness round trip 9, `tests/test-raytracing.cpp`, RuntimeBacked on the stub shell): a dxc
 lib_6_3 library (`tests/fixture-raylib.hlsl`) with raygen, miss and closest, one triangles hit group with a local
-root signature of one 32-bit constant, a global root signature SRV(t0) UAV(u0), in the harness's model of the DDI
+root signature of one 32-bit constant, a global root signature SRV(t0) UAV(u0) and one 32-bit constant in b0 space2
+(the value miss writes), in the harness's model of the DDI
 form (DDI types, handles, a summary with per-export subobject pointers, no association subobject). Identifiers of
 32 bytes, not all zero and different for raygen, miss and hit group; stack sizes answered; a shader table in an
 UPLOAD buffer and DispatchRays 8x8 over the scene of round trip 8, every hit writing the local root constant and every
 miss 2, the 64 words exact. The library as a whole container with no export list, plus a decoy local root signature
-(two constants) associated with a second `closest` summary export that shares the plain name and carries a
-different mangled name: the create resolves both by mangled name, and a second dispatch through its own table
-writes its own record constant, 64 words exact (closest took its own association, not the decoy's). The same decoy
-without a mangled name is E_INVALIDARG, never a broadened association; a control build that passed plain names made
-the engine's create fail (8007000e), so the dispatch discriminates. Refusals: an unknown subobject type
+(closest's register one word later) associated with a second `closest` summary export that shares the plain name
+and carries a different mangled name: the create resolves both by mangled name, and a second dispatch through its
+own table writes the word closest's own local root signature selects, 64 words exact, not the next word the decoy's
+would select. The decoy has no DXIL function behind it, so this shows the naming of the associations, not a
+selection among real overloads. The description handed to the engine names closest's local root signature's
+association by closest's mangled name alone and the decoy's by the decoy's, neither by the shared plain name. The same
+decoy without a mangled name, or with both of closest's names, is
+E_INVALIDARG, never a broadened association; a control build that passed plain names made the engine's create fail
+(8007000e).
+
+The descriptions are checked on the host: a harness-only observer (`harness_set_state_object_observer`, compiled only
+with `AMDGPU_WDDM_ENGINE_DDI_HARNESS`, null by default) copies the API description immediately before the engine's
+CreateStateObject. Mixed libraries (a second fixture, `tests/fixture-raylib-b.hlsl`, one miss shader `miss_far`): the
+first library lists closest by its mangled name alone, without a rename, beside the second with no export list, in
+both orders. The description handed to the engine has the libraries in that order, closest's listed mangled name alone
+in its local root signature's association, and raygen, miss, that mangled name and `miss_far` in the global one; a
+dispatch per order writes its own record constant, 64 words exact. A control build that dropped the listed names beside
+the export-all library failed both the description check and the create (8007000e, the unmangled `closest`, which the
+engine does not know the listed export by).
+
+An absent local root association: closest's local root signature (the trap) holds its constant in b0 space1 and a
+second one in b0 space4, a register no global parameter has; the summary associates no local root signature with
+raygen and miss. The description handed to the engine declares the context's empty local root signature last with an
+association of no export (the explicit default), the same object for every create of the context, and associates the
+trap with `closest` alone; raygen and miss are in no local root association. A third dispatch with the empty default
+in place writes the global 2 on all 52 misses and the record constant on the 12 hits, 64 words exact. The pixels do
+not discriminate: raygen and miss read none of the trap's registers. A control build without the empty explicit
+default failed the two description checks (no explicit default, one declared local root signature).
+Refusals: an unknown subobject type
 (E_INVALIDARG), an existing collection (E_NOTIMPL), DispatchRays on a closed list and SetPipelineState1 with another
-device context's state object (one E_INVALIDARG on the list). VVL with synchronization validation clean.
+device context's state object (one E_INVALIDARG on the list). `state_object_shell` names the device's shell for a
+live state object and for a refused create's inert record, and nothing once either is destroyed. VVL with
+synchronization validation clean.
 
 ### Offline witness
 
