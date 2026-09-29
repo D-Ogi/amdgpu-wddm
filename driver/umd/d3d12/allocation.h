@@ -15,6 +15,7 @@ class RuntimeAllocation final {
     PFND3D12DDI_ALLOCATE_CB_0022 allocate_{};
     PFND3D12DDI_DEALLOCATE_CB_0022 deallocate_{};
     D3DKMT_HANDLE allocation_{};
+    HANDLE resource_{};                         // the runtime owner the allocation was created with
     D3DGPU_VIRTUAL_ADDRESS address_{};
 public:
     RuntimeAllocation(D3D12DDI_HRTDEVICE runtime,
@@ -35,9 +36,10 @@ public:
         const bool traced=ddi_trace_enabled();
         if(traced){
             std::fprintf(stderr,"{\"event\":\"allocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
-                "\"allocations\":%u,\"resource\":%u,\"private_size\":%u,\"info_flags\":%u,\"source\":%u,"
+                "\"allocations\":%u,\"runtime_resource\":%u,\"kernel_resource\":%u,\"private_size\":%u,"
+                "\"info_flags\":%u,\"source\":%u,"
                 "\"info_private_size\":%u,\"thread\":%lu}\n",ddi_experiment_name(),args.NumAllocations,
-                args.hKMResource?1u:0u,args.PrivateDriverDataSize,static_cast<unsigned>(info.Flags),
+                args.hResource?1u:0u,args.hKMResource?1u:0u,args.PrivateDriverDataSize,static_cast<unsigned>(info.Flags),
                 static_cast<unsigned>(info.VidPnSourceId),info.PrivateDriverDataSize,GetCurrentThreadId());
             std::fflush(stderr);
         }
@@ -50,22 +52,38 @@ public:
         }
         if(FAILED(hr)) return hr;
         if(!info.hAllocation) return E_UNEXPECTED;
-        allocation_=info.hAllocation;address_=info.GpuVirtualAddress;
+        allocation_=info.hAllocation;address_=info.GpuVirtualAddress;resource_=request.hResource;
         return S_OK;
     }
-    HRESULT close() noexcept {
+    // by_resource is a lab measurement only: the release names the runtime owner and no handle.
+    HRESULT close(bool by_resource=false) noexcept {
         if(!allocation_) return S_OK;
         if(!deallocate_) return E_UNEXPECTED;
+        if(by_resource && !resource_) return E_UNEXPECTED;
         D3D12DDICB_DEALLOCATE_0022 args{};
         // Release this allocation only, not the runtime resource group.
-        args.NumAllocations=1;args.HandleList=&allocation_;
+        if(by_resource)args.hResource=resource_;
+        else {args.NumAllocations=1;args.HandleList=&allocation_;}
         // No ASSUME_NOT_IN_USE: this wrapper does not prove GPU retirement.
         args.Flags=D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
+        const bool traced=ddi_trace_enabled();
+        if(traced){
+            std::fprintf(stderr,"{\"event\":\"deallocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
+                "\"resource\":%u,\"owner_known\":%u,\"allocations\":%u,\"flags\":%u,\"thread\":%lu}\n",
+                ddi_experiment_name(),args.hResource?1u:0u,resource_?1u:0u,args.NumAllocations,
+                static_cast<unsigned>(args.Flags),GetCurrentThreadId());
+            std::fflush(stderr);
+        }
         HRESULT hr=deallocate_(runtime_,&args);
-        if(SUCCEEDED(hr)){allocation_=0;address_=0;}
+        if(traced){
+            std::fprintf(stderr,"{\"event\":\"deallocate-callback\",\"edge\":\"end\",\"status\":\"%08lx\","
+                "\"thread\":%lu}\n",static_cast<unsigned long>(hr),GetCurrentThreadId());
+            std::fflush(stderr);
+        }
+        if(SUCCEEDED(hr)){allocation_=0;address_=0;resource_=nullptr;}
         return hr;
     }
-    void invalidate_runtime() noexcept {runtime_={};allocate_=nullptr;deallocate_=nullptr;}
+    void invalidate_runtime() noexcept {runtime_={};allocate_=nullptr;deallocate_=nullptr;resource_=nullptr;}
     D3DKMT_HANDLE handle() const noexcept {return allocation_;}
     D3DGPU_VIRTUAL_ADDRESS address() const noexcept {return address_;}
 };

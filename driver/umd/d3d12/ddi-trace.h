@@ -18,24 +18,32 @@ inline bool ddi_trace_enabled() noexcept {
     return enabled;
 }
 inline std::atomic<uint64_t> ddi_trace_sequence{};
-// Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names one deviation from the driver's behaviour, for a
-// measurement that needs it. Unset, empty or unknown means none. Read once per process.
-// The name as given, for traces: lower-case letters, digits and hyphens only, else empty.
+// Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names deviations from the driver's behaviour, for a
+// measurement that needs them: one name or several separated by commas. Unset, empty or unknown means none.
+// Read once per process.
+// The value as given, for traces: lower-case letters, digits, hyphens and commas only, else empty.
 inline const char* ddi_experiment_name() noexcept {
     static const struct Value {
-        char text[40]{};
+        char text[96]{};
         Value() noexcept {
             const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",text,sizeof(text));
             if(!n || n>=sizeof(text))text[0]=0;
             for(const char* p=text;*p;++p)
-                if(!((*p>='a' && *p<='z') || (*p>='0' && *p<='9') || *p=='-')){text[0]=0;break;}
+                if(!((*p>='a' && *p<='z') || (*p>='0' && *p<='9') || *p=='-' || *p==',')){text[0]=0;break;}
         }
     } value;
     return value.text;
 }
 inline bool ddi_experiment(const char* name) noexcept {
-    const char* given=ddi_experiment_name();
-    return name && given[0] && !std::strcmp(given,name);
+    if(!name || !name[0])return false;
+    const size_t length=std::strlen(name);
+    for(const char* given=ddi_experiment_name();*given;){
+        const char* end=std::strchr(given,',');
+        const size_t size=end?static_cast<size_t>(end-given):std::strlen(given);
+        if(size==length && !std::memcmp(given,name,length))return true;
+        given+=size+(end?1:0);
+    }
+    return false;
 }
 inline uint64_t ddi_trace_begin(const char* name) noexcept {
     if(!ddi_trace_enabled())return 0;

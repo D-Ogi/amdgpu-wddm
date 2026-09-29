@@ -11,6 +11,12 @@ struct Device;
 enum class ImportStage : uint32_t {
     Done,Request,Surface,Probe,MemoryType,PagingQueue,AllocateCallback,Map,MapReady,AddressAlignment,Import
 };
+// Where the latest free() ended, by the same rule.
+enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocate };
+struct FreeReport {
+    FreeStage stage{};
+    bool surface{};
+};
 struct ImportReport {
     ImportStage stage{};
     uint32_t memory_type{UINT32_MAX};
@@ -19,6 +25,7 @@ struct ImportReport {
 class RuntimeHeapImports final {
     struct Record;
     ImportReport report_{};
+    FreeReport free_report_{};
     D3D12DDI_HRTDEVICE runtime_{};
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 callbacks_{};
     D3DDDI_DEVICECALLBACKS kernel_{};
@@ -49,6 +56,7 @@ public:
     HRESULT initialize() noexcept;
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;
     const ImportReport& last_report() const noexcept {return report_;}
+    const FreeReport& last_free_report() const noexcept {return free_report_;}
     HRESULT free(const engine_ddi::ImportedMemory*) noexcept;
     // Only these two operations are provided for RADV's borrowed allocation map.
     bool owns_allocation(D3DKMT_HANDLE) const noexcept;

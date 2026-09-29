@@ -22,6 +22,7 @@ struct RuntimeHeapImports::Record {
     engine_ddi::ImportedMemory imported{};
     Record* next{};
     bool retired{true},locked{},busy{};
+    bool surface{};                             // the allocation of a linear primary
     Record(D3D12DDI_HRTDEVICE d,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb):allocation(d,cb) {}
 };
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
@@ -59,14 +60,20 @@ void RuntimeHeapImports::erase(Record* record) noexcept {
     if(*link){*link=record->next;delete record;}
 }
 HRESULT RuntimeHeapImports::release(Record& record) noexcept {
+    free_report_.surface=record.surface;
     if(!record.retired || record.busy)return E_UNEXPECTED;
     // Engine objects and uses have retired before free() reaches this point.
     // RADV may call Unlock2 from vkFreeMemory; keep the allocation record live.
+    free_report_.stage=FreeStage::VulkanFree;
     if(record.imported.memory){free_(device_,record.imported.memory,nullptr);record.imported.memory=VK_NULL_HANDLE;}
     if(record.locked)return E_UNEXPECTED;
+    free_report_.stage=FreeStage::Unmap;
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping);
     if(hr!=S_OK)return hr;
-    return record.allocation.close();
+    free_report_.stage=FreeStage::Deallocate;
+    hr=record.allocation.close(record.surface && ddi_experiment("resource-deallocate"));
+    if(hr==S_OK)free_report_.stage=FreeStage::Done;
+    return hr;
 }
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
@@ -162,6 +169,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(!paging_open_){paging_open_=true;hr=paging_.open();if(hr!=S_OK)return hr;}
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->next=records_;records_=record;record->busy=true;
+    record->surface=surface;
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);record->busy=false;
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
@@ -194,8 +202,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     return hr;
 }
 HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexcept {
+    free_report_={};free_report_.stage=FreeStage::Request;
     if(!active_ || !domain_.entered())return E_UNEXPECTED;
     if(!memory || memory->size!=sizeof(*memory))return E_INVALIDARG;
+    free_report_.stage=FreeStage::Record;
     auto record=find(memory->allocation);
     if(!record || record!=memory->cookie || record->retired || record->imported.memory!=memory->memory ||
        record->imported.byte_size!=memory->byte_size || record->imported.gpu_va!=memory->gpu_va)return E_INVALIDARG;

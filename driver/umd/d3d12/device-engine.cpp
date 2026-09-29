@@ -140,8 +140,16 @@ class DeviceEngine final {
         return hr;
     }
     static HRESULT APIENTRY free(void* shell,const engine_ddi::ImportedMemory* memory) {
+        const auto trace=ddi_trace_begin("shellFreeMemory");
         auto& device=*static_cast<Device*>(shell);
-        return device.engine && device.engine->imports_?device.engine->imports_->free(memory):E_UNEXPECTED;
+        const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->free(memory):E_UNEXPECTED;
+        if(trace && device.engine && device.engine->imports_){
+            const auto& r=device.engine->imports_->last_free_report();
+            std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"status\":\"%08lx\"}\n",
+                unsigned(r.surface),static_cast<unsigned>(r.stage),static_cast<unsigned long>(hr));
+        }
+        ddi_trace_end("shellFreeMemory",trace,hr);
+        return hr;
     }
 public:
     DeviceEngine(Device& device,const AdapterEngineAccess& access) noexcept
