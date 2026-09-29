@@ -344,6 +344,22 @@ int main(){
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  }
  assert(surfaces==11);
+ {
+  // present-cached: the 16-byte E26R v2 record, shared 1, CPU_READ without the PRIMARY intent bit; the
+  // allocation itself is unchanged (LB7A v1, PRIMARY, no video present source). Default stays v1.
+  AllocationRequest cached;
+  assert(cached.prepare_surface(256,64,1024,D3DDDIFMT_A8R8G8B8,65536,handle<void*>(2),true)==S_OK);
+  assert(cached.args.PrivateDriverDataSize==16);
+  uint32_t e[4];std::memcpy(e,cached.args.pPrivateDriverData,sizeof(e));
+  assert(e[0]==0x52363245u && e[1]==2 && e[2]==1 && e[3]==2);
+  assert(cached.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY && cached.info.VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
+  assert(cached.info.PrivateDriverDataSize==32);
+  AllocationRequest plain;
+  assert(plain.prepare_surface(256,64,1024,D3DDDIFMT_A8R8G8B8,65536,handle<void*>(2))==S_OK);
+  assert(plain.args.PrivateDriverDataSize==12);
+  std::memcpy(e,plain.args.pPrivateDriverData,12);
+  assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
+ }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface under E26R, "
-  "released by its runtime resource inside that resource's DDI only");
+  "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record");
 }

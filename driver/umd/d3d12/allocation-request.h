@@ -16,11 +16,13 @@ struct Lb7aSurface {
 };
 inline constexpr uint32_t kLb7aMagic=0x4137424Cu;
 static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offsetof(Lb7aSurface,size)==24);
-// The E26R v1 resource record, as the kernel driver defines it (driver/kmd/surface_resource_private.h):
-// 12 bytes. The runtime's allocation call accepts the primary with this record and shared 1.
-struct E26rResource { uint32_t magic,version,shared; };
+// The E26R resource record, as the kernel driver defines it (driver/kmd/surface_resource_private.h):
+// v1 is the first 12 bytes (magic, version, shared), v2 adds the CPU access intent word (16 bytes:
+// PRIMARY=1, CPU_READ=2). The runtime's allocation call accepts the primary with v1 and shared 1.
+struct E26rResource { uint32_t magic,version,shared,access; };
 inline constexpr uint32_t kE26rMagic=0x52363245u;
-static_assert(sizeof(E26rResource)==12);
+inline constexpr uint32_t kE26rV1Bytes=12,kE26rCpuRead=2;
+static_assert(sizeof(E26rResource)==16 && offsetof(E26rResource,access)==kE26rV1Bytes);
 // The surface format table's numbers are the SDK's and the WDK's.
 static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
               AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
@@ -78,8 +80,16 @@ struct AllocationRequest final {
     // opener read, under the 12-byte E26R v1 resource record. pitch and size are the bound image's,
     // never chosen here. The allocation is a primary of no video present source: it is composed,
     // not scanned out, so its format is one the surface format table enables for composition.
+    // cpuRead (lab experiment present-cached): the 16-byte v2 record with CPU_READ and without the
+    // PRIMARY intent bit, so the kernel driver gives the shared aperture backing a cached CPU mapping
+    // (M470). The CPU compositor samples this surface on every composition; through the default
+    // write-combined mapping each read is uncached (104: dwm ~33% of the machine in llvmpipe shader
+    // code for a 1280x720 window). The intent bit is left out on purpose: the documented rule against
+    // Cached primaries is about scanout, and this primary has no video present source, while the
+    // deployed compositor UMD offers no direct flip that could scan it out. GPU writes to the
+    // aperture are snooped (CacheCoherent), so a CPU reader stays coherent.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
-                            uint64_t size,HANDLE runtimeOwner=nullptr) noexcept {
+                            uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false) noexcept {
         blob={};surface={};resource={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
@@ -95,8 +105,9 @@ struct AllocationRequest final {
         info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
         info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
         info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;
-        resource.magic=kE26rMagic;resource.version=1;resource.shared=1;
-        args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=sizeof(resource);
+        resource.magic=kE26rMagic;resource.version=cpuRead?2:1;resource.shared=1;
+        resource.access=cpuRead?kE26rCpuRead:0;
+        args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=cpuRead?sizeof(resource):kE26rV1Bytes;
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;
