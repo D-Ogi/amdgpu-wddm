@@ -172,6 +172,10 @@ class DriveState:
         self._planned = None
 
 
+# The longest single poll or command round trip, within the loop's budget.
+CALL_SECONDS = 20
+
+
 def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None):
     """Run callbacks within a 1..65s host budget, with no transport retry.
 
@@ -189,7 +193,8 @@ def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None):
             break
         stage='poll'
         try:
-            snapshot=poll(min(8,remaining))
+            # One round trip to a loaded target has taken more than 8 s; the budget stays the bound.
+            snapshot=poll(min(CALL_SECONDS,remaining))
             action=state.observe(snapshot)
             progress=dict(event='progress',runtime_ready=snapshot['runtime_ready'],stop=snapshot['stop'],cancel=snapshot['cancel'],
                           terminal=snapshot['terminal'],receipts=list(state.receipts.values()))
@@ -213,7 +218,7 @@ def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None):
                 state.issuing(sequence,command)
                 emit(dict(event='issuing',sequence=sequence,command=command))
                 stage='issue'
-                issue(sequence,command,min(8,remaining))
+                issue(sequence,command,min(CALL_SECONDS,remaining))
             sleep(min(0.4,max(0,end-clock())))
         except DriveRefusal as error:
             emit(dict(event='refused',reason=str(error)))
