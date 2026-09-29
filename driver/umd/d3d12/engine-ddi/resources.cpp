@@ -508,6 +508,23 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     }
 }
 
+// Where a subresource lies in its resource's memory, asked after MapHeap. A buffer is one row from the
+// resource's first byte: offset 0, both strides its width, nothing swizzled. The strides are inferred,
+// the header does not define them for a buffer. A texture is not answered yet: no CPU-visible heap
+// holds one here.
+void APIENTRY check_subresource_info(D3D12DDI_HDEVICE device, D3D12DDI_HRESOURCE hres, UINT subresource,
+                                     D3D12DDI_SUBRESOURCE_INFO* out) {
+    if (out) *out = D3D12DDI_SUBRESOURCE_INFO{};
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r || !out) return c->report(E_INVALIDARG);
+    if (r->desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) return c->report(E_NOTIMPL);
+    if (subresource != 0) return c->report(E_INVALIDARG);
+    out->RowStride = r->desc.Width;
+    out->DepthStride = r->desc.Width;
+}
+
 // The same answer for a resource that exists, from the description it was created with (the record's desc,
 // Alignment 0 as at creation). A reserved resource gets the answer for its description too, although it holds no
 // memory of its own.
@@ -909,6 +926,7 @@ void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCheckResourceVirtualAddress = check_resource_virtual_address;
     t->pfnCheckResourceAllocationInfo = check_resource_allocation_info;
     t->pfnCheckExistingResourceAllocationInfo = check_existing_resource_allocation_info;
+    t->pfnCheckSubresourceInfo = check_subresource_info;
     t->pfnCheckResourceAllocationHandle = check_resource_allocation_handle;
 }
 

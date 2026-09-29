@@ -175,6 +175,18 @@ void test_device_queries(Env& env, Device& device) {
                "%llu aligned %llu",
                static_cast<unsigned long long>(info.ResourceDataSize), info.ResourceDataAlignment,
                static_cast<unsigned long long>(expect.SizeInBytes), static_cast<unsigned long long>(expect.Alignment));
+
+        // CheckSubresourceInfo: a buffer is one unswizzled row from offset 0.
+        D3D12DDI_SUBRESOURCE_INFO sub;
+        std::memset(&sub, 0xCD, sizeof(sub));
+        const uint32_t before_sub = device.shell.device_errors;
+        env.core.pfnCheckSubresourceInfo(device.h(), buffer.hres(), 0, &sub);
+        checkf(!sub.Offset && sub.RowStride == 65536 && sub.DepthStride == 65536 && !sub.RowBytePreSwizzleOffset &&
+                   !sub.ColumnPreSwizzleOffset && !sub.DepthPreSwizzleOffset &&
+                   device.shell.device_errors == before_sub,
+               "CheckSubresourceInfo, 64 KiB buffer: offset %llu, strides %llu and %llu, no device error",
+               static_cast<unsigned long long>(sub.Offset), static_cast<unsigned long long>(sub.RowStride),
+               static_cast<unsigned long long>(sub.DepthStride));
         destroy_buffer(env, device, buffer);
     } else {
         checkf(false, "CheckExistingResourceAllocationInfo: DEFAULT buffer (hr %08lx)", static_cast<unsigned long>(hr));
