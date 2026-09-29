@@ -124,6 +124,18 @@ class DeviceEngine final {
         const auto trace=ddi_trace_begin("shellAllocateMemory");
         auto& device=*static_cast<Device*>(shell);
         const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->allocate(request,memory):E_UNEXPECTED;
+        if(trace && request && device.engine && device.engine->imports_){
+            // What was asked and where the import ended; the stage is where it returned, not a cause.
+            const auto& r=device.engine->imports_->last_report();
+            std::fprintf(stderr,"{\"event\":\"shell-memory-request\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
+                "\"memory_type_bits\":%u,\"row_pitch\":%u,\"layout_size\":%llu,\"stage\":%u,\"memory_type\":%u,"
+                "\"held\":%llu,\"address_alignment\":%llu,\"address\":%llu,\"status\":\"%08lx\"}\n",
+                request->flags,static_cast<unsigned long long>(request->byte_size),
+                static_cast<unsigned long long>(request->alignment),request->memory_type_bits,request->surface_row_pitch,
+                static_cast<unsigned long long>(request->surface_layout_size),static_cast<unsigned>(r.stage),r.memory_type,
+                static_cast<unsigned long long>(r.bytes),static_cast<unsigned long long>(r.alignment),
+                static_cast<unsigned long long>(r.address),static_cast<unsigned long>(hr));
+        }
         ddi_trace_end("shellAllocateMemory",trace,hr);
         return hr;
     }

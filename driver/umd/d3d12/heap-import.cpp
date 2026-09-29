@@ -69,6 +69,7 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
 }
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
+    report_={};report_.stage=ImportStage::Request;
     if(!active_ || !domain_.entered() || !initialized_)return E_UNEXPECTED;
     if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || request->reserved2 ||
        !request->byte_size || !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
@@ -129,6 +130,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     }
     AllocationRequest allocation;HRESULT hr=S_OK;uint64_t alignment=0;uint32_t bits=0;
     if(surface){
+        report_.stage=ImportStage::Surface;
         // The image's own requirements, from engine-ddi: no buffer is ever bound to this memory, and
         // the address has to suit the image alone. The description is refused here, before any callback.
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
@@ -136,6 +138,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
             request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle);
         if(FAILED(hr))return hr;
     } else {
+    report_.stage=ImportStage::Probe;
     VkBufferCreateInfo probe_info{};probe_info.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     probe_info.size=request->byte_size;probe_info.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;probe_info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
@@ -147,22 +150,27 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     hr=allocation.prepare(std::max<uint64_t>(request->byte_size,needs.size),alignment,access,request->rt_owner.handle);
     if(FAILED(hr))return hr;
     }
+    report_.stage=ImportStage::MemoryType;report_.bytes=allocation.held;report_.alignment=alignment;
     uint32_t type=UINT32_MAX;
     for(uint32_t i=0;i<properties_.memoryTypeCount;++i)if((bits&(1u<<i)) &&
         (properties_.memoryTypes[i].propertyFlags&want)==want){type=i;break;}
     if(type==UINT32_MAX)return E_INVALIDARG;
+    report_.memory_type=type;report_.stage=ImportStage::PagingQueue;
     if(!paging_open_){paging_open_=true;hr=paging_.open();if(hr!=S_OK)return hr;}
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->next=records_;records_=record;record->busy=true;
+    report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);record->busy=false;
-    if(hr==S_OK)hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);
+    if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
     UINT64 address=0;
     if(hr==S_OK){
+        report_.stage=ImportStage::MapReady;
         const ULONGLONG start=GetTickCount64();
         do {hr=paging_.ready(record->mapping,&address);if(hr!=E_PENDING || GetTickCount64()-start>=2000)break;Sleep(1);}while(true);
     }
-    if(hr==S_OK && (address&(alignment-1)))hr=E_INVALIDARG;
+    if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
     if(hr==S_OK){
+        report_.stage=ImportStage::Import;
         bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
         host.allocation=record->allocation.handle();host.va=address;host.size=allocation.held;
         // The engine maps a CPU-visible heap. dispatch() answers the ICD's Lock2 and Unlock2 for it.
@@ -174,7 +182,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         hr=from_vk(allocate_(device_,&info,nullptr,&record->imported.memory));
         if(hr==S_OK && !record->imported.memory)hr=E_UNEXPECTED;
         if(hr==S_OK){record->imported={sizeof(engine_ddi::ImportedMemory),type,record->imported.memory,
-            host.size,host.allocation,0,address,record};record->retired=false;*out=record->imported;return S_OK;}
+            host.size,host.allocation,0,address,record};record->retired=false;*out=record->imported;
+            report_.stage=ImportStage::Done;return S_OK;}
     }
     // Failed construction transfers nothing to engine-ddi. Pending mapping and
     // cleanup failures remain owned for an explicit later close, never forgotten.

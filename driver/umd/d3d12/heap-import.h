@@ -7,8 +7,18 @@ namespace native12 {
 struct Device;
 // Calls require the owner's serialized DeviceScope, including hosted GIPA and
 // RuntimeDomain scopes. No callback or Vulkan destruction runs in the destructor.
+// Where the latest allocate() ended, for the diagnostic trace: the stage that returned, not a cause.
+enum class ImportStage : uint32_t {
+    Done,Request,Surface,Probe,MemoryType,PagingQueue,AllocateCallback,Map,MapReady,AddressAlignment,Import
+};
+struct ImportReport {
+    ImportStage stage{};
+    uint32_t memory_type{UINT32_MAX};
+    uint64_t bytes{},alignment{},address{};
+};
 class RuntimeHeapImports final {
     struct Record;
+    ImportReport report_{};
     D3D12DDI_HRTDEVICE runtime_{};
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 callbacks_{};
     D3DDDI_DEVICECALLBACKS kernel_{};
@@ -38,6 +48,7 @@ public:
     RuntimeHeapImports& operator=(const RuntimeHeapImports&)=delete;
     HRESULT initialize() noexcept;
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;
+    const ImportReport& last_report() const noexcept {return report_;}
     HRESULT free(const engine_ddi::ImportedMemory*) noexcept;
     // Only these two operations are provided for RADV's borrowed allocation map.
     bool owns_allocation(D3DKMT_HANDLE) const noexcept;
