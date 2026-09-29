@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: MIT
 import copy
+import subprocess
+from unittest.mock import patch
 import unittest
 
 from drive_planner import DRIVE_PLAN, DriveRefusal, DriveState, drive_loop
@@ -282,6 +284,202 @@ class PlannerTests(unittest.TestCase):
         for seconds in (True, 0, 66, float("nan"), float("inf"), "60"):
             with self.assertRaises(ValueError):
                 drive_loop(lambda t: self.fail("unexpected poll"), None, None, seconds, FakeClock(), None)
+
+
+class PollRetryTests(unittest.TestCase):
+    @staticmethod
+    def timeout():
+        return subprocess.TimeoutExpired('PRIVATE_COMMAND', 999,
+                                         output='PRIVATE_STDOUT', stderr='PRIVATE_STDERR')
+
+    def successful_remote(self, fault=None, issue_fault=False):
+        clock = FakeClock()
+        events, diagnostics, issued, polls = [], [], [], []
+        commands = [dict(sequence=1, command='create-device')]
+        receipts = [receipt(1, 'create-device')]
+        def poll(timeout):
+            polls.append(timeout)
+            if fault:
+                alternative = fault(clock, timeout, commands, receipts, len(polls))
+                if alternative is not None:
+                    return alternative
+            return dict(started=True, runtime_ready=True, stop=False, cancel=False,
+                        terminal=False, commands=copy.deepcopy(commands), receipts=copy.deepcopy(receipts))
+        def issue(seq, verb, timeout):
+            issued.append((seq, verb))
+            commands.append(dict(sequence=seq, command=verb))
+            # Simulate successful delivery before a transport acknowledgement is lost.
+            receipts.append(receipt(seq, verb, previous=receipts[-1]))
+            if issue_fault:
+                raise self.timeout()
+        return clock, poll, issue, events, diagnostics, issued, polls
+
+    def run_remote(self, remote, **options):
+        clock, poll, issue, events, diagnostics, _, _ = remote
+        return drive_loop(poll, issue, events.append, 65, clock, clock.sleep,
+                          diagnostics.append, **options)
+
+    def test_lost_copy_poll_recovers_without_reissuing_gpu_command(self):
+        lost = False
+        def fault(clock, timeout, commands, receipts, count):
+            nonlocal lost
+            if len(commands) == 3 and not lost:
+                lost = True
+                clock.sleep(timeout)
+                raise self.timeout()
+        remote = self.successful_remote(fault)
+        result = self.run_remote(remote, retry_poll_timeout=True)
+        clock, _, _, events, diagnostics, issued, polls = remote
+        self.assertEqual(result, 'interactive_terminal_observed')
+        self.assertEqual(issued, list(enumerate(DRIVE_PLAN[1:], 2)))
+        self.assertEqual(sum(verb == 'copy' for _, verb in issued), 1)
+        self.assertEqual(len(diagnostics), 1)
+        timing = diagnostics[0]
+        self.assertTrue(timing['retry'])
+        self.assertEqual(timing['retry_decision'], 'retry')
+        self.assertEqual(timing['timeout_seconds'], 20)
+        self.assertEqual(timing['duration_seconds'], 20)
+        self.assertAlmostEqual(timing['elapsed_seconds'], 20.8)
+        self.assertAlmostEqual(timing['remaining_seconds'], 44.2)
+        self.assertEqual(set(timing), {'stage', 'exception_type', 'category', 'timeout_seconds',
+                                      'duration_seconds', 'elapsed_seconds', 'remaining_seconds',
+                                      'retry', 'retry_decision'})
+        self.assertNotIn('PRIVATE', str(events) + str(diagnostics))
+        self.assertNotIn('999', str(events) + str(diagnostics))
+        self.assertLess(clock.now, 65)
+        self.assertEqual(len(polls), 6)
+
+    def test_retry_exhausted_once_across_successful_polls(self):
+        def fault(clock, timeout, commands, receipts, count):
+            if count in (1, 3):
+                clock.sleep(timeout)
+                raise self.timeout()
+        remote = self.successful_remote(fault)
+        self.assertEqual(self.run_remote(remote, retry_poll_timeout=True), 'transport_or_capture_failed')
+        self.assertEqual(len(remote[6]), 3)
+        self.assertEqual(remote[5], [(2, 'create-queue')])
+        self.assertEqual([d['retry_decision'] for d in remote[4]], ['retry', 'exhausted'])
+        self.assertEqual([d['retry'] for d in remote[4]], [True, False])
+
+    def test_default_off_never_retries_poll(self):
+        def fault(clock, timeout, commands, receipts, count):
+            clock.sleep(timeout)
+            raise self.timeout()
+        remote = self.successful_remote(fault)
+        self.assertEqual(self.run_remote(remote), 'transport_or_capture_failed')
+        self.assertEqual(len(remote[6]), 1)
+        self.assertFalse(remote[5])
+        self.assertEqual(remote[4][0]['retry_decision'], 'disabled')
+
+    def test_original_deadline_caps_retry_timeout(self):
+        clock, calls, events, diagnostics = FakeClock(), [], [], []
+        def poll(timeout):
+            calls.append(timeout)
+            clock.sleep(timeout)
+            raise self.timeout()
+        result = drive_loop(poll, lambda *a: self.fail('unexpected command'), events.append,
+                            25, clock, clock.sleep, diagnostics.append, retry_poll_timeout=True)
+        self.assertEqual(result, 'drive_deadline')
+        self.assertEqual(calls, [20, 5])
+        self.assertEqual(clock.now, 25)
+        self.assertEqual(diagnostics[-1]['remaining_seconds'], 0)
+        self.assertEqual(diagnostics[-1]['retry_decision'], 'deadline')
+        self.assertFalse(diagnostics[-1]['retry'])
+
+    def test_stop_or_cancel_after_retry_only_aborts(self):
+        for flag in ('stop', 'cancel'):
+            with self.subTest(flag=flag):
+                def fault(clock, timeout, commands, receipts, count):
+                    if count == 3:
+                        clock.sleep(timeout)
+                        raise self.timeout()
+                    if count == 4:
+                        return dict(started=True, runtime_ready=True, stop=flag == 'stop',
+                                    cancel=flag == 'cancel', terminal=False,
+                                    commands=copy.deepcopy(commands), receipts=copy.deepcopy(receipts))
+                remote = self.successful_remote(fault)
+                self.assertEqual(self.run_remote(remote, retry_poll_timeout=True), 'stop_observed')
+                self.assertEqual(remote[5], [(2, 'create-queue'), (3, 'copy'), (4, 'abort')])
+
+    def test_malformed_snapshot_after_retry_stops(self):
+        def fault(clock, timeout, commands, receipts, count):
+            if count == 3:
+                clock.sleep(timeout)
+                raise self.timeout()
+            if count == 4:
+                return {'PRIVATE': 'not a snapshot'}
+        remote = self.successful_remote(fault)
+        self.assertEqual(self.run_remote(remote, retry_poll_timeout=True), 'admission_refused')
+        self.assertEqual(remote[5], [(2, 'create-queue'), (3, 'copy')])
+        self.assertNotIn('PRIVATE', str(remote[3]) + str(remote[4]))
+
+    def test_unknown_poll_exceptions_and_refusal_never_retry(self):
+        for error in (TimeoutError('PRIVATE'), ValueError('PRIVATE'), DriveRefusal('controlled_refusal')):
+            with self.subTest(exception=type(error).__name__):
+                def fault(*args):
+                    raise error
+                remote = self.successful_remote(fault)
+                result = self.run_remote(remote, retry_poll_timeout=True)
+                self.assertEqual(result, 'admission_refused' if isinstance(error, DriveRefusal)
+                                 else 'transport_or_capture_failed')
+                self.assertEqual(len(remote[6]), 1)
+                self.assertFalse(remote[5])
+                self.assertNotIn('PRIVATE', str(remote[3]) + str(remote[4]))
+
+    def test_issue_timeout_is_consumed_and_never_retried(self):
+        planner = DriveState()
+        remote = self.successful_remote(issue_fault=True)
+        with patch('drive_planner.DriveState', return_value=planner):
+            self.assertEqual(self.run_remote(remote, retry_poll_timeout=True), 'transport_or_capture_failed')
+        self.assertEqual(remote[5], [(2, 'create-queue')])
+        self.assertEqual(len(remote[6]), 1)
+        self.assertEqual(planner.issued, {2})
+        self.assertEqual(planner.expected[2], 'create-queue')
+        self.assertEqual(remote[4][0]['stage'], 'issue')
+        self.assertNotIn('PRIVATE', str(remote[3]) + str(remote[4]))
+
+    def test_timeout_from_observer_or_emit_is_not_poll_retry(self):
+        for stage in ('observe', 'emit'):
+            with self.subTest(stage=stage):
+                remote = self.successful_remote()
+                clock, poll, issue, events, diagnostics, issued, polls = remote
+                def fail(*args):
+                    raise self.timeout()
+                if stage == 'observe':
+                    with patch.object(DriveState, 'observe', side_effect=fail):
+                        result = self.run_remote(remote, retry_poll_timeout=True)
+                else:
+                    def emit(value):
+                        if value['event'] == 'progress':
+                            fail()
+                        events.append(value)
+                    result = drive_loop(poll, issue, emit, 65, clock, clock.sleep,
+                                        diagnostics.append, retry_poll_timeout=True)
+                self.assertEqual(result, 'transport_or_capture_failed')
+                self.assertEqual(len(polls), 1)
+                self.assertFalse(issued)
+                self.assertEqual(diagnostics[-1]['stage'], stage)
+                self.assertNotIn('PRIVATE', str(events) + str(diagnostics))
+
+    def test_timeout_from_retry_diagnostic_never_retries_poll(self):
+        remote = self.successful_remote(lambda *args: (_ for _ in ()).throw(self.timeout()))
+        clock, poll, issue, events, diagnostics, issued, polls = remote
+        def diagnostic(value):
+            diagnostics.append(value)
+            if len(diagnostics) == 1:
+                raise self.timeout()
+        result = drive_loop(poll, issue, events.append, 65, clock, clock.sleep,
+                            diagnostic, retry_poll_timeout=True)
+        self.assertEqual(result, 'transport_or_capture_failed')
+        self.assertEqual(len(polls), 1)
+        self.assertFalse(issued)
+        self.assertEqual(diagnostics[-1]['stage'], 'poll_timeout_diagnostic')
+
+    def test_retry_option_is_strict_bool(self):
+        for option in (0, 1, None, 'true'):
+            with self.assertRaises(ValueError):
+                drive_loop(lambda t: self.fail('unexpected poll'), None, None, 65,
+                           FakeClock(), None, retry_poll_timeout=option)
 
 
 if __name__ == "__main__":

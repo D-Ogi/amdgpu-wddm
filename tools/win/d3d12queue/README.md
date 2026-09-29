@@ -163,6 +163,22 @@ cancellation prevents further positive commands. A callback must honor its suppl
 timeout, and logging callbacks must return promptly; this Python loop cannot
 interrupt a stalled transport implementation.
 
+The optional keyword `retry_poll_timeout=True` asserts that `poll` is read-only
+and may safely finish remotely after its local transport times out. It permits
+at most one retry of `subprocess.TimeoutExpired` raised directly by `poll`, over
+the entire Drive. It defaults to `False`; existing consumers retain fail-stop
+behavior. The same planner, issued-command history and absolute deadline remain
+in use. Only a fresh, validated snapshot can authorize the next command; STOP
+and cancellation still take precedence. Commands, malformed snapshots, unknown
+errors and failures in observation or logging are never retried. A timed-out
+command delivery stays consumed.
+
+A sanitized `poll_timeout` event and diagnostic record contain the selected
+timeout, measured duration, elapsed and remaining Drive budget, explicit `retry`
+boolean and `retry_decision`. Exception messages, commands, stdout and stderr are
+not logged. Retry does not extend the client or independent supervisor deadline,
+and cannot guarantee normal closure when transport remains unavailable.
+
 Transport, artifact verification, deployment, STOP acquisition, logs, and process
 supervision stay with the caller. `interactive_terminal_observed` means only that
 a terminal receipt or session marker was observed. It does not establish GPU

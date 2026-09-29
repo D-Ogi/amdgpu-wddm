@@ -6,6 +6,7 @@ caller owns immutable attempt admission and the independent process supervisor.
 """
 import math
 import re
+import subprocess
 
 DRIVE_PLAN = ('create-device', 'create-queue', 'copy', 'status', 'exit')
 
@@ -176,17 +177,22 @@ class DriveState:
 CALL_SECONDS = 20
 
 
-def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None):
-    """Run callbacks within a 1..65s host budget, with no transport retry.
+def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None, *, retry_poll_timeout=False):
+    """Run callbacks within a 1..65s host budget; command delivery is never retried.
 
     poll(timeout) returns a complete snapshot; issue(seq, verb, timeout) must
     enforce its timeout, recheck STOP and validate controller acknowledgement.
     emit/diagnostic must be prompt; the independent process supervisor remains
-    mandatory. Callback failures stop this loop and never establish closure.
+    mandatory. Opting in asserts that poll is read-only: at most one direct
+    subprocess.TimeoutExpired from poll may be retried under the same deadline.
+    Other callback failures stop this loop and never establish closure.
     """
     if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 1 <= seconds <= 65:
         raise ValueError('Drive deadline must be 1..65 seconds')
-    state=DriveState();end=clock()+seconds;last_progress=None
+    if type(retry_poll_timeout) is not bool:
+        raise ValueError('retry_poll_timeout must be bool')
+    state=DriveState();started=clock();end=started+seconds;last_progress=None
+    poll_retry_used=False
     while clock()<end:
         remaining=end-clock()
         if remaining<=0:
@@ -194,8 +200,36 @@ def drive_loop(poll, issue, emit, seconds, clock, sleep, diagnostic=None):
         stage='poll'
         try:
             # One round trip to a loaded target has taken more than 8 s; the budget stays the bound.
-            snapshot=poll(min(CALL_SECONDS,remaining))
+            selected_timeout=min(CALL_SECONDS,remaining)
+            poll_started=clock()
+            try:
+                snapshot=poll(selected_timeout)
+            except subprocess.TimeoutExpired:
+                # Only this read-only call is repeatable. Never inspect exception
+                # text, command, output or stderr: these may contain private data.
+                now=clock();left=max(0,end-now)
+                retry=retry_poll_timeout and not poll_retry_used and left>0
+                decision=('disabled' if not retry_poll_timeout else
+                          'deadline' if left<=0 else 'exhausted' if poll_retry_used else 'retry')
+                details=dict(stage='poll',exception_type='TimeoutExpired',category='callback_failure',
+                             timeout_seconds=selected_timeout,duration_seconds=max(0,now-poll_started),
+                             elapsed_seconds=max(0,now-started),remaining_seconds=left,
+                             retry=retry,retry_decision=decision)
+                # Logging/observer failures are outside the retry catch, even
+                # when they also raise TimeoutExpired.
+                stage='poll_timeout_diagnostic'
+                if diagnostic:diagnostic(details)
+                emit(dict(event='poll_timeout',**details))
+                if retry:
+                    poll_retry_used=True
+                    continue
+                if retry_poll_timeout and left<=0:
+                    return 'drive_deadline'
+                emit(dict(event='transport_or_capture_failed',stage='poll',category=details['category']))
+                return 'transport_or_capture_failed'
+            stage='observe'
             action=state.observe(snapshot)
+            stage='emit'
             progress=dict(event='progress',runtime_ready=snapshot['runtime_ready'],stop=snapshot['stop'],cancel=snapshot['cancel'],
                           terminal=snapshot['terminal'],receipts=list(state.receipts.values()))
             if progress!=last_progress:
