@@ -175,14 +175,21 @@ public:
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
-    // Every report is named in the log: the runtime removes the device on it and tells the application
-    // only at its next call, under that call's name.
+    // Every report is logged with thread and time, so it can be placed between the begin and end records
+    // of the entry that made it. A reported error can surface to the application at a later call.
+    static long long report_time() noexcept {
+        LARGE_INTEGER now{};
+        QueryPerformanceCounter(&now);
+        return now.QuadPart;
+    }
     void report(HRESULT hr) const noexcept {
-        log_line("device error reported: %08lx", static_cast<unsigned long>(hr));
+        log_line("device error reported: %08lx (thread %lu, qpc %lld)", static_cast<unsigned long>(hr),
+                 GetCurrentThreadId(), report_time());
         if (hooks.report_device_error) hooks.report_device_error(hooks.shell, hr);
     }
     void report_list(D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) const noexcept {
-        log_line("list error reported: %08lx", static_cast<unsigned long>(hr));
+        log_line("list error reported: %08lx (thread %lu, qpc %lld)", static_cast<unsigned long>(hr),
+                 GetCurrentThreadId(), report_time());
         if (hooks.report_list_error) hooks.report_list_error(hooks.shell, list, hr);
     }
     bool lost() const noexcept { return hooks.is_device_lost && hooks.is_device_lost(hooks.shell); }

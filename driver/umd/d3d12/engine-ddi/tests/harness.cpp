@@ -304,8 +304,10 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
 }
 
 // The state the runtime writes into a list it has reset. The first thirteen calls and their order were
-// observed on a direct list under the system runtime; the arguments were not, so they are the API's
-// documented defaults. The calls after them are the remaining state slots, in no observed order. A list of
+// observed on a direct list under the system runtime; the arguments were not. Scalar values are the API's
+// documented defaults; null pointers and zero counts are this harness's choice of an unbound state. The
+// calls after the thirteenth are the remaining state slots, in no observed order, and the alpha blend
+// factor is an unused-slot exercise rather than reset state. A list of
 // the compute table gets the calls that are legal there. Any error they report fails the recording.
 void write_default_state(Env& env, Device& device, Recording& r) {
     const auto& t = env.lists[r.table];

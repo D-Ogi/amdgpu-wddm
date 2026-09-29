@@ -260,8 +260,8 @@ void APIENTRY clear_root_arguments(D3D12DDI_HCOMMANDLIST h) {
     if (!once.exchange(true)) log_line("ClearRootArguments: no engine operation, root state left as it is");
 }
 
-// The alpha blend factor has no engine call and its cap is not reported, so no pipeline can use it. The
-// value is the runtime's default state and changes nothing.
+// DDI 0092 names this slot, but the alpha factor travels as the fourth component of OMSetBlendFactor
+// (DirectX-Specs, VulkanOn12: the separate entry is unused). Nothing is forwarded from here.
 void APIENTRY om_set_alpha_blend_factor(D3D12DDI_HCOMMANDLIST h, FLOAT) { (void)list_of(h, "OmSetAlphaBlendFactor"); }
 
 // No protected sessions exist here (none can be created), so only "none" is a valid session.
