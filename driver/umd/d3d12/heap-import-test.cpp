@@ -55,7 +55,7 @@ static VkResult VKAPI_CALL memory_allocate(VkDevice d,const VkMemoryAllocateInfo
  auto flags=static_cast<const VkMemoryAllocateFlagsInfo*>(info->pNext);
  assert(flags->sType==VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO && flags->flags==VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
  auto host=static_cast<const bc250_host_import*>(flags->pNext);
- assert(host->sType==BC250_HOST_IMPORT_STYPE && !host->pNext && host->identity==identity && host->allocation==next_allocation);
+ assert(host->sType==BC250_HOST_IMPORT_FLAGS_STYPE && !host->pNext && host->identity==identity && host->allocation==next_allocation);
  assert(host->va==UINT64_C(0x100000000) && host->size==65536);
  // Only a CPU-visible heap asks the ICD to map it; type 0 is the GPU-only policy.
  assert(host->flags==(info->memoryTypeIndex?BC250_HOST_IMPORT_CPU_MAP:0u));

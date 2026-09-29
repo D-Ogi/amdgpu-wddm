@@ -118,7 +118,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     }
     if(hr==S_OK && (address&(alignment-1)))hr=E_INVALIDARG;
     if(hr==S_OK){
-        bc250_host_import host{};host.sType=BC250_HOST_IMPORT_STYPE;host.identity=identity_;
+        bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
         host.allocation=record->allocation.handle();host.va=address;host.size=allocation.blob.alloc_size;
         // The engine maps a CPU-visible heap. dispatch() answers the ICD's Lock2 and Unlock2 for it.
         if(access!=AllocationAccess::GpuOnly)host.flags=BC250_HOST_IMPORT_CPU_MAP;
