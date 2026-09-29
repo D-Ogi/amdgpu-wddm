@@ -64,6 +64,23 @@ struct ObservedPolicy:Policy {
     inline static DXGI_FORMAT format_value{DXGI_FORMAT_UNKNOWN};
     inline static UINT output_value{},samples_value{};
     inline static D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags_value{};
+    inline static unsigned heap_observations{};
+    inline static const D3D12DDIARG_CREATEHEAP_0001* heap_input{};
+    inline static const D3D12DDIARG_CREATERESOURCE_0088* resource_input{};
+    inline static UINT64 heap_bytes{};
+    inline static UINT row_pitch{};
+    inline static bool protected_session{};
+    static void observed(Owner* owner,const char* name,D3D12DDI_HDEVICE device,
+            const D3D12DDIARG_CREATEHEAP_0001* heap,D3D12DDI_HHEAP,D3D12DDI_HRTRESOURCE,
+            const D3D12DDIARG_CREATERESOURCE_0088* resource,const D3D12DDI_CLEAR_VALUES*,
+            D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session,D3D12DDI_HRESOURCE) noexcept {
+        assert(owner && current==owner && device.pDrvPrivate==owner);
+        assert(!std::strcmp(name,"pfnCreateHeapAndResource"));
+        ++heap_observations;heap_input=heap;resource_input=resource;
+        heap_bytes=heap?heap->ByteSize:0;protected_session=session.pDrvPrivate!=nullptr;
+        row_pitch=resource && resource->Layout==D3D12DDI_TL_ROW_MAJOR && resource->pRowMajorLayout
+            ? resource->pRowMajorLayout->RowPitch:0;
+    }
     static void observed(Owner* owner,const char* name,D3D12DDI_HDEVICE device,
             DXGI_FORMAT format,UINT* output) noexcept {
         assert(owner && current==owner && device.pDrvPrivate==owner && output);
@@ -85,6 +102,7 @@ Owner* nested_owner{};
 bool nested{};
 unsigned throwing{};
 unsigned matching_throwing{};
+unsigned heap_throwing{};
 void APIENTRY format(D3D12DDI_HDEVICE h,DXGI_FORMAT,UINT* out) {
     auto* owner=static_cast<Owner*>(h.pDrvPrivate);assert(current==owner);++owner->calls;
     if(nested && owner!=nested_owner) {
@@ -110,6 +128,15 @@ D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS APIENTRY matching_identifier(D3D12DDI
     if(matching_throwing==2)throw std::runtime_error("matching identifier test");
     return D3D12DDI_DRIVER_MATCHING_IDENTIFIER_COMPATIBLE_WITH_DEVICE;
 }
+HRESULT APIENTRY heap_resource(D3D12DDI_HDEVICE device,const D3D12DDIARG_CREATEHEAP_0001*,
+        D3D12DDI_HHEAP,D3D12DDI_HRTRESOURCE,const D3D12DDIARG_CREATERESOURCE_0088*,
+        const D3D12DDI_CLEAR_VALUES*,D3D12DDI_HPROTECTEDRESOURCESESSION_0030,D3D12DDI_HRESOURCE) {
+    assert(current==static_cast<Owner*>(device.pDrvPrivate));++current->calls;
+    if(heap_throwing==1)throw std::bad_alloc{};
+    if(heap_throwing==2)throw std::runtime_error("heap input refused by exception");
+    return E_NOTIMPL;
+}
+static_assert(std::is_same_v<decltype(&heap_resource),PFND3D12DDI_CREATEHEAPANDRESOURCE_0088>);
 void APIENTRY other_format(D3D12DDI_HDEVICE,DXGI_FORMAT,UINT*){}
 SIZE_T APIENTRY fence_size(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATE_FENCE*) {
     assert(current==static_cast<Owner*>(h.pDrvPrivate));++current->calls;return 4097;
@@ -264,6 +291,7 @@ Core source_core() {
     t.pfnImplicitShaderCacheControl=Dummy<decltype(t.pfnImplicitShaderCacheControl)>::call;
     t.pfnCheckFormatSupport=format;t.pfnCalcPrivateFenceSize=fence_size;
     t.pfnCheckMultisampleQualityLevels=multisample;
+    t.pfnCreateHeapAndResource=heap_resource;
     t.pfnCheckDriverMatchingIdentifier=matching_identifier;
     return t;
 }
@@ -453,6 +481,30 @@ int main() {
     observed_core.pfnCheckMultisampleQualityLevels(ha,DXGI_FORMAT_UNKNOWN,2,msaa_flags,&value);
     throwing=0;
     assert(ObservedPolicy::observations==2 && value==9 && !current && a.entered==a.left);
+
+    // Actual 0088 heap slot: a normally returned E_NOTIMPL still observes the
+    // original public inputs, with no changed HRESULT, lost width, or copied handles.
+    D3D12DDIARG_CREATEHEAP_0001 heap{};heap.ByteSize=UINT64{1}<<34;heap.Alignment=65536;
+    D3D12DDIARG_ROW_MAJOR_RESOURCE_LAYOUT row{4096,8192};
+    D3D12DDIARG_CREATERESOURCE_0088 resource{};resource.ResourceType=D3D12DDI_RT_BUFFER;
+    resource.Layout=D3D12DDI_TL_ROW_MAJOR;resource.pRowMajorLayout=&row;resource.Width=4096;
+    assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{&a},{})==E_NOTIMPL);
+    assert(ObservedPolicy::heap_observations==1 && ObservedPolicy::heap_input==&heap && ObservedPolicy::resource_input==&resource);
+    assert(ObservedPolicy::heap_bytes==(UINT64{1}<<34) && ObservedPolicy::row_pitch==4096 && ObservedPolicy::protected_session && !current);
+    assert(observed_core.pfnCreateHeapAndResource(ha,nullptr,{},{},nullptr,nullptr,{},{})==E_NOTIMPL);
+    assert(ObservedPolicy::heap_observations==2 && !ObservedPolicy::heap_input && !ObservedPolicy::resource_input);
+    assert(!ObservedPolicy::heap_bytes && !ObservedPolicy::row_pitch && !ObservedPolicy::protected_session);
+    resource.Layout=D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE;
+    assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_NOTIMPL);
+    assert(ObservedPolicy::heap_observations==3 && !ObservedPolicy::row_pitch);
+    b.allowed=false;
+    assert(observed_core.pfnCreateHeapAndResource(hb,&heap,{},{},&resource,nullptr,{},{})==E_UNEXPECTED);b.allowed=true;
+    assert(observed_core.pfnCreateHeapAndResource({},&heap,{},{},&resource,nullptr,{},{})==E_INVALIDARG);
+    heap_throwing=1;
+    assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_OUTOFMEMORY);
+    heap_throwing=2;
+    assert(observed_core.pfnCreateHeapAndResource(ha,&heap,{},{},&resource,nullptr,{},{})==E_FAIL);heap_throwing=0;
+    assert(ObservedPolicy::heap_observations==3 && !current && a.entered==a.left && b.entered==b.left);
 
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});

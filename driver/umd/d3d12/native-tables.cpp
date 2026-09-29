@@ -12,6 +12,14 @@
 
 namespace native12 {
 namespace {
+// Diagnostics must not turn a normally refused malformed input into a fault.
+// Copy only fixed-size SDK inputs; never follow handles or unbounded arrays.
+template<class T> bool trace_input(const T* source,T& destination) noexcept {
+    if(!source)return false;
+    __try {destination=*source;return true;}
+    __except(GetExceptionCode()==EXCEPTION_ACCESS_VIOLATION || GetExceptionCode()==EXCEPTION_IN_PAGE_ERROR
+             ? EXCEPTION_EXECUTE_HANDLER:EXCEPTION_CONTINUE_SEARCH) {destination={};return false;}
+}
 struct EntryPolicy {
     using Scope=DeviceEngineScope;
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
@@ -36,6 +44,33 @@ struct EntryPolicy {
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
         std::fprintf(stderr,"{\"event\":\"ddi-node-map\",\"name\":\"%s\",\"count\":%u,\"first\":%u,\"lost\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
             name,count,map[0],unsigned(device && device->lost.load()),now.QuadPart,GetCurrentThreadId());
+        std::fflush(stderr);
+    }
+    static void observed(Device*,const char* name,D3D12DDI_HDEVICE,
+        const D3D12DDIARG_CREATEHEAP_0001* heap,D3D12DDI_HHEAP,D3D12DDI_HRTRESOURCE,
+        const D3D12DDIARG_CREATERESOURCE_0088* resource,const D3D12DDI_CLEAR_VALUES*,
+        D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session,D3D12DDI_HRESOURCE) noexcept {
+        if(!ddi_trace_enabled())return;
+        D3D12DDIARG_CREATEHEAP_0001 h{};D3D12DDIARG_CREATERESOURCE_0088 r{};
+        D3D12DDIARG_ROW_MAJOR_RESOURCE_LAYOUT row{};
+        const bool heap_readable=trace_input(heap,h),resource_readable=trace_input(resource,r);
+        const bool row_present=resource_readable && r.pRowMajorLayout;
+        // WDK26100 d3d12umddi.h:10884: pitches are meaningful only for ROW_MAJOR.
+        const bool row_readable=row_present && r.Layout==D3D12DDI_TL_ROW_MAJOR && trace_input(r.pRowMajorLayout,row);
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        std::fprintf(stderr,"{\"event\":\"ddi-create-heap-resource\",\"name\":\"%s\","
+            "\"heap_present\":%u,\"heap_readable\":%u,\"heap_flags\":%u,\"cpu_page\":%u,\"memory_pool\":%u,"
+            "\"bytes\":%llu,\"alignment\":%llu,\"creation_node_mask\":%u,\"visible_node_mask\":%u,"
+            "\"resource_present\":%u,\"resource_readable\":%u,\"resource_type\":%u,\"layout\":%u,"
+            "\"width\":%llu,\"height\":%u,\"depth\":%u,\"mips\":%u,\"resource_flags\":%u,\"num_castable_formats\":%u,"
+            "\"row_major_present\":%u,\"row_major_readable\":%u,\"row_pitch\":%u,\"slice_pitch\":%u,"
+            "\"protected_session_present\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            name,unsigned(heap!=nullptr),unsigned(heap_readable),unsigned(h.Flags),unsigned(h.CPUPageProperty),unsigned(h.MemoryPool),
+            static_cast<unsigned long long>(h.ByteSize),static_cast<unsigned long long>(h.Alignment),h.CreationNodeMask,h.VisibleNodeMask,
+            unsigned(resource!=nullptr),unsigned(resource_readable),unsigned(r.ResourceType),unsigned(r.Layout),
+            static_cast<unsigned long long>(r.Width),r.Height,unsigned(r.DepthOrArraySize),unsigned(r.MipLevels),unsigned(r.Flags),r.NumCastableFormats,
+            unsigned(row_present),unsigned(row_readable),row.RowPitch,row.SlicePitch,unsigned(session.pDrvPrivate!=nullptr),
+            now.QuadPart,GetCurrentThreadId());
         std::fflush(stderr);
     }
     static Device* resolve(D3D12DDI_HDEVICE handle) noexcept {return static_cast<Device*>(handle.pDrvPrivate);}

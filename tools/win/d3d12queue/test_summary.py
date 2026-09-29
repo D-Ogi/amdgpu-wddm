@@ -206,6 +206,32 @@ class SummaryTests(unittest.TestCase):
             result = self.run_summary(clocks + [ddi("begin"), ddi("end", tick=200)])
             self.assertNotIn("elapsed_ms", result["ddi"])
 
+    def test_heap_observation_widths_flags_and_allowlist(self):
+        event = "ddi-create-heap-resource"
+        fields = summary.OBSERVATIONS[event][1]
+        valid = dict.fromkeys(fields, 0)
+        valid.update(event=event, heap_present=1, heap_readable=1, bytes=1 << 40,
+                     alignment=65536, resource_present=1, resource_readable=1,
+                     resource_type=1, layout=1, width=(1 << 64)-1)
+        invalid = [dict(valid, bytes=1 << 64), dict(valid, width=-1),
+                   dict(valid, row_pitch=1 << 32), dict(valid, heap_readable=True),
+                   dict(valid, row_major_present=2), dict(valid, num_castable_formats="0")]
+        missing = valid.copy()
+        del missing["slice_pitch"]
+        result = self.run_summary([dict(valid, handle="SECRET", pointer="SECRET")] + invalid + [missing])
+        self.assertEqual(result["last_heap_resource"], {k: v for k, v in valid.items() if k != "event"})
+        self.assertEqual(result["input"]["invalid_schema"], len(invalid)+1)
+        self.assertEqual(result["input"][event], 1)
+        self.assertNotIn("SECRET", json.dumps(result))
+
+    def test_shell_allocation_pair_is_explicitly_named(self):
+        result = self.run_summary([ddi("begin", name="shellAllocateMemory"),
+                                   ddi("end", name="shellAllocateMemory", tick=110, code="80004001")])
+        self.assertEqual(result["ddi"]["counts"]["paired"], 1)
+        self.assertTrue(result["ddi"]["pairing_complete"])
+        self.assertEqual(result["ddi"]["last"]["name"], "shellAllocateMemory")
+        self.assertIsNone(summary.ddi_name("shellArbitraryPayload"))
+
     def test_api_trace(self):
         result = self.run_summary([], [dict(sequence=1, elapsed_ms=10, phase="after",
                                                api="D3D12CreateDevice FL11_0", hr="80004001", pointer="SECRET")])

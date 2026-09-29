@@ -17,6 +17,7 @@ MAX_EXAMPLES = 8
 U64 = (1 << 64) - 1
 # Fixed schemas keep observations bounded and exclude payloads or private pointers.
 STATUS_OBSERVATIONS = frozenset(("ddi-caps", "ddi-layout-set"))
+OBSERVATION_U64 = {"ddi-create-heap-resource": frozenset(("bytes", "alignment", "width"))}
 OBSERVATIONS = {
     "ddi-caps": ("last_caps", ("type", "data_size", "info_present"), ("info_present",), None),
     "ddi-layout-set": ("last_layout_set", ("layout", "unit"), (), None),
@@ -29,6 +30,14 @@ OBSERVATIONS = {
         ("type", "layouts", "swizzles", "standard64k", "row_major", "indexable"),
         ("standard64k", "row_major", "indexable"), 1060),
     "ddi-node-map": ("last_node_map", ("count", "first", "lost"), ("lost",), None),
+    "ddi-create-heap-resource": (
+        "last_heap_resource",
+        ("heap_present", "heap_readable", "heap_flags", "cpu_page", "memory_pool", "bytes", "alignment",
+         "creation_node_mask", "visible_node_mask", "resource_present", "resource_readable", "resource_type",
+         "layout", "width", "height", "depth", "mips", "resource_flags", "num_castable_formats",
+         "row_major_present", "row_major_readable", "row_pitch", "slice_pitch", "protected_session_present"),
+        ("heap_present", "heap_readable", "resource_present", "resource_readable", "row_major_present",
+         "row_major_readable", "protected_session_present"), None),
 }
 API_NAMES = frozenset((
     "create-device", "create-queue", "copy", "status", "exit", "abort",
@@ -53,7 +62,7 @@ def status(value):
 
 
 def ddi_name(value):
-    return value if isinstance(value, str) and re.fullmatch(r"pfn[A-Za-z0-9_]{1,90}", value) else None
+    return value if isinstance(value, str) and (value == "shellAllocateMemory" or re.fullmatch(r"pfn[A-Za-z0-9_]{1,90}", value)) else None
 
 
 def bump(counter, key):
@@ -151,7 +160,8 @@ def summarize(runtime_err, api_trace=None):
                 bump(hosted_status, code)
         elif isinstance(event, str) and event in OBSERVATIONS:
             key, fields, flags, expected_type = OBSERVATIONS[event]
-            selected = {field: integer(obj.get(field), 0xffffffff) for field in fields}
+            wide = OBSERVATION_U64.get(event, ())
+            selected = {field: integer(obj.get(field), U64 if field in wide else 0xffffffff) for field in fields}
             if (any(value is None for value in selected.values()) or
                     any(selected[flag] not in (0, 1) for flag in flags) or
                     (expected_type is not None and selected["type"] != expected_type)):

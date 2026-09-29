@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "device-engine.h"
 #include "device-state.h"
+#include "ddi-trace.h"
 #include "adapter-caps.h"
 #include "hosted-dispatch.h"
 #include "hosted-instance.h"
@@ -120,8 +121,11 @@ class DeviceEngine final {
         device.callbacks.pfnSetCommandListDDITableCb(list,table);return S_OK;
     }
     static HRESULT APIENTRY allocate(void* shell,const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* memory) {
+        const auto trace=ddi_trace_begin("shellAllocateMemory");
         auto& device=*static_cast<Device*>(shell);
-        return device.engine && device.engine->imports_?device.engine->imports_->allocate(request,memory):E_UNEXPECTED;
+        const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->allocate(request,memory):E_UNEXPECTED;
+        ddi_trace_end("shellAllocateMemory",trace,hr);
+        return hr;
     }
     static HRESULT APIENTRY free(void* shell,const engine_ddi::ImportedMemory* memory) {
         auto& device=*static_cast<Device*>(shell);
