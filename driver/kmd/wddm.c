@@ -2820,15 +2820,14 @@ C_ASSERT(D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE==2);
 C_ASSERT(D3DKMDT_GDISURFACE_STAGING==3);
 C_ASSERT(D3DKMDT_GDISURFACE_LOOKUPTABLE==4);
 C_ASSERT(D3DKMDT_GDISURFACE_TEXTURE_CPUVISIBLE_CROSSADAPTER==8);
-static ULONG WddmSurfacePixelBytes(ULONG Format)
-{
-    switch (Format) {
-    case D3DDDIFMT_A8: return 1;
-    case D3DDDIFMT_A8R8G8B8: case D3DDDIFMT_X8R8G8B8:
-    case D3DDDIFMT_A8B8G8R8: case D3DDDIFMT_X8B8G8R8: return 4;
-    default: return 0;
-    }
-}
+// The shared format table and surface_format.h are plain integers; these tie them to the WDK's D3DDDIFORMAT.
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A8R8G8B8==D3DDDIFMT_A8R8G8B8);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_X8R8G8B8==D3DDDIFMT_X8R8G8B8);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A2B10G10R10==D3DDDIFMT_A2B10G10R10);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A8B8G8R8==D3DDDIFMT_A8B8G8R8);
+C_ASSERT(AMDGPU_WDDM_D3DDDI_A16B16G16R16F==D3DDDIFMT_A16B16G16R16F);
+C_ASSERT(BC250_FORMAT_A8==D3DDDIFMT_A8);
+C_ASSERT(BC250_FORMAT_X8B8G8R8==D3DDDIFMT_X8B8G8R8);
 
 static DXGKDDI_GETSTANDARDALLOCATIONDRIVERDATA Bc250WddmGetStandardAllocationDriverData;
 static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdapter,
@@ -2902,7 +2901,7 @@ static NTSTATUS Bc250WddmGetStandardAllocationDriverData(_In_ const HANDLE hAdap
     {
         if (pData->StandardAllocationType==D3DKMDT_STANDARDALLOCATION_GDISURFACE) {
             if (!WddmGdiLayout(private.Width,private.Height,(ULONG)pData->pCreateGdiSurfaceData->Type,
-                    WddmSurfacePixelBytes(private.Format),&private.Pitch,&private.Size))
+                    WddmSurfaceFormatBpp(private.Format,BC250_SURFACE_GDI),&private.Pitch,&private.Size))
                 return STATUS_INVALID_PARAMETER;
         } else {
             if (!private.Width || private.Width>MAXULONG/4) return STATUS_INVALID_PARAMETER;
@@ -3062,7 +3061,7 @@ static NTSTATUS Bc250WddmCreateAllocation(_In_ const HANDLE hAdapter, _Inout_ DX
         if (private == NULL || info->PrivateDriverDataSize < sizeof(*private) ||
             private->Magic != BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || private->Size == 0 ||
             !WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) ||
-            !WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) ||
+            !WddmSurfaceAdmitted(private,gdiType) ||
             !WddmGdiAllocationPolicy(gdiType,sharedCpu,cachedCpu,&policy) ||
             (gdiType==D3DKMDT_GDISURFACE_STAGING_CPUVISIBLE && !g_ApertureOffered))
         {
@@ -3203,7 +3202,7 @@ static NTSTATUS Bc250WddmOpenAllocation(_In_ const HANDLE hDevice, _In_ const DX
         }
         else if (private != NULL && info->PrivateDriverDataSize >= sizeof(*private) && private->Magic == BC250_WDDM_ALLOCATION_PRIVATE_MAGIC &&
             private->Size != 0 && WddmGdiPrivate(private,info->PrivateDriverDataSize,&gdiType) &&
-            WddmSurfaceGeometry(private,gdiType,WddmSurfacePixelBytes(private->Format)) &&
+            WddmSurfaceAdmitted(private,gdiType) &&
             WddmGdiAllocationPolicy(gdiType,0,0,&policy))
         {
             opened = WddmNewObject(parent->Device, BC250_WDDM_MAGIC_OPENED);
@@ -5434,7 +5433,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
             BC250_WDDM_OBJECT* allocation=WddmObject(pSetVidPnSourceAddress->hAllocation,BC250_WDDM_MAGIC_ALLOCATION);
             if (!allocation || allocation->UmdAlloc || allocation->Allocation.Width!=device->Post.Width ||
                 allocation->Allocation.Height!=device->Post.Height ||
-                (allocation->Allocation.Format!=D3DDDIFMT_A8R8G8B8 && allocation->Allocation.Format!=D3DDDIFMT_X8R8G8B8) ||
+                WddmSurfaceFormatBpp(allocation->Allocation.Format,BC250_SURFACE_SCANOUT)!=4 ||
                 !DcnSurfaceBytes(allocation->Allocation.Width,allocation->Allocation.Height,allocation->Allocation.Pitch,&bytes) ||
                 bytes>allocation->Allocation.Size) status=STATUS_INVALID_PARAMETER;
             else { pitch=allocation->Allocation.Pitch; status=STATUS_SUCCESS; }
