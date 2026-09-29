@@ -24,6 +24,12 @@ struct EntryPolicy {
     using Scope=DeviceEngineScope;
     static uint64_t entry(Device*,const char* name) noexcept {return ddi_trace_begin(name);}
     static void leave(Device*,const char* name,uint64_t id,HRESULT outcome) noexcept {ddi_trace_end(name,id,outcome);}
+    static void returned(Device*,const char* name,uint64_t id,uint64_t value) noexcept {
+        if(!id)return;
+        std::fprintf(stderr,"{\"event\":\"ddi-return\",\"sequence\":%llu,\"name\":\"%s\",\"value\":%llu}\n",
+            static_cast<unsigned long long>(id),name,static_cast<unsigned long long>(value));
+        std::fflush(stderr);
+    }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT* output) noexcept {
         if(!ddi_trace_enabled())return;
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);

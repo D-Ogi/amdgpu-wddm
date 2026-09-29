@@ -73,6 +73,13 @@ public:
             Policy::observed(owner,name(),args...);
         }
     }
+    // Sizes and counts are not statuses: a policy may record the returned number.
+    void returned(std::uint64_t value) noexcept {
+        if constexpr(requires {Policy::returned(owner,name(),id_,value);}) {
+            static_assert(noexcept(Policy::returned(owner,name(),id_,value)),"return record must not throw");
+            Policy::returned(owner,name(),id_,value);
+        }
+    }
     EntryTrace(const EntryTrace&)=delete;
     EntryTrace& operator=(const EntryTrace&)=delete;
 };
@@ -110,7 +117,10 @@ struct EntryThunk<R(APIENTRY*)(A...),Binding,Policy> {
             } else {
                 R value=fn(args...);trace.observed(args...);
                 if constexpr(std::is_same_v<R,HRESULT>)trace.outcome=value;
-                else trace.outcome=S_OK;
+                else {
+                    trace.outcome=S_OK;
+                    if constexpr(std::is_integral_v<R>)trace.returned(static_cast<std::uint64_t>(value));
+                }
                 return value;
             }
         } catch(const std::bad_alloc&) {

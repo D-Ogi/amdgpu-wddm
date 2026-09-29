@@ -90,7 +90,7 @@ int main() {
     assert(core.pfnCalcPrivateCommandQueueSize == native12::queue_size);
     assert(core.pfnCreateFence == native12::fence_create);
     D3D12DDIARG_CREATE_FENCE invalid_fence{};
-    assert(core.pfnCalcPrivateFenceSize({}, &invalid_fence) == 0);
+    assert(core.pfnCalcPrivateFenceSize({}, &invalid_fence) == sizeof(native12::FenceState));
     // Alias-safe: all input reads finish before the output commit.
     auto alias = shell;
     assert(compose_core_0092(&alias, sizeof(alias), alias, info) == S_OK && equal(alias, core));
