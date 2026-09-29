@@ -17,6 +17,9 @@ struct Adapter {
     AdapterCapsOwner* engine_caps{};
     HRESULT caps_status{E_PENDING};
     bool caps_attempted{};
+    // BC250_HOST_POLICY_* of every hosted instance of this adapter. Written once, under caps_lock, before
+    // the capability query; a device exists only after that query succeeded.
+    UINT32 instance_policy{};
     SRWLOCK tables_lock=SRWLOCK_INIT;
     D3D12DDI_HRTTABLE list_tables[2]{};
 };

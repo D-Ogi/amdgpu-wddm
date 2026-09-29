@@ -22,6 +22,7 @@ private:
     bc250_host host_{};
     bc250_host_queue_funcs queues_{};
     bc250_host_queue_binding binding_{};
+    bc250_host_policy policy_{};
 
     bool valid() const noexcept {
         return real_ && host_.adapter_luid && host_.identity && host_.dispatch;
@@ -40,10 +41,10 @@ private:
         self->queues_={};self->queues_.size=sizeof(self->queues_);
         // The engine's original chain and enabled extension list remain intact.
         auto copy=*info;
-        self->binding_.pNext=copy.pNext;copy.pNext=&self->host_;
+        self->policy_.pNext=copy.pNext;copy.pNext=&self->host_;
         VkInstance created=VK_NULL_HANDLE;
         VkResult result=fn(&copy,allocator,&created);
-        self->binding_.pNext=nullptr;
+        self->policy_.pNext=nullptr;
         if(result==VK_SUCCESS && created) {
             self->instance_.store(created);
             if(!self->queues_.bind || !self->queues_.unbind) {
@@ -83,10 +84,12 @@ private:
         return self->real_(instance,name);
     }
 public:
+    // policy_flags is the adapter's resolved instance policy, the one its capability query was given.
     HostedInstanceBootstrap(PFN_vkGetInstanceProcAddr real,uint64_t luid,void* identity,
-            void* userdata,Dispatch dispatch) noexcept : real_(real) {
+            void* userdata,Dispatch dispatch,uint32_t policy_flags) noexcept : real_(real) {
         queues_.size=sizeof(queues_);
-        binding_={BC250_HOST_QUEUE_BINDING_STYPE,nullptr,BC250_HOST_QUEUE_BINDING_VERSION,sizeof(binding_),&queues_};
+        policy_={BC250_HOST_POLICY_STYPE,nullptr,BC250_HOST_POLICY_VERSION,sizeof(policy_),policy_flags,0};
+        binding_={BC250_HOST_QUEUE_BINDING_STYPE,&policy_,BC250_HOST_QUEUE_BINDING_VERSION,sizeof(binding_),&queues_};
         host_={BC250_HOST_STYPE,&binding_,BC250_HOST_VERSION,sizeof(host_),luid,identity,userdata,dispatch};
     }
     HostedInstanceBootstrap(const HostedInstanceBootstrap&)=delete;

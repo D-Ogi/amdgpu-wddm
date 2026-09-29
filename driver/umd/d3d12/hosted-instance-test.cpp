@@ -32,7 +32,12 @@ VKAPI_ATTR VkResult VKAPI_CALL create(const VkInstanceCreateInfo* info,const VkA
     assert(host->adapter_luid==42 && host->dispatch(host->userdata,BC250_HOST_CHECK_STATUS,nullptr)==0);
     auto binding=static_cast<const bc250_host_queue_binding*>(host->pNext);
     assert(binding->sType==BC250_HOST_QUEUE_BINDING_STYPE && binding->version==BC250_HOST_QUEUE_BINDING_VERSION);
-    assert(binding->pNext==&original_chain); // no adapter-query structure is injected
+    // No adapter-query structure is injected. Each owner's policy is its own.
+    auto policy=static_cast<const bc250_host_policy*>(binding->pNext);
+    assert(policy->sType==BC250_HOST_POLICY_STYPE && policy->version==BC250_HOST_POLICY_VERSION);
+    assert(policy->size==sizeof(bc250_host_policy) && policy->size==32 && !policy->reserved);
+    assert(policy->flags==(expected_identity==&owner_a?BC250_HOST_POLICY_SPARSE:0u));
+    assert(policy->pNext==&original_chain);
     assert(binding->funcs->size==sizeof(bc250_host_queue_funcs));
     binding->funcs->bind=omit_bind?nullptr:bind;binding->funcs->unbind=unbind;
     if(recursive_create) {
@@ -60,7 +65,7 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL raw(VkInstance instance,const char* nam
 using Bootstrap=native12::HostedInstanceBootstrap;
 }
 int main() {
-    Bootstrap a(raw,42,&owner_a,&owner_a,dispatch),b(raw,42,&owner_b,&owner_b,dispatch);
+    Bootstrap a(raw,42,&owner_a,&owner_a,dispatch,BC250_HOST_POLICY_SPARSE),b(raw,42,&owner_b,&owner_b,dispatch,0);
     assert(a.closed() && !a.entry() && !a.queue_functions_ready());
     const char* extension="engine-extension";
     VkInstanceCreateInfo ci{};ci.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;ci.pNext=&original_chain;
@@ -117,12 +122,12 @@ int main() {
     // Destroying the owner must never destroy an instance that may have children.
     expected_identity=&owner_a;expected_instance=instance_a;
     {
-        Bootstrap retained(raw,42,&owner_a,&owner_a,dispatch);Bootstrap::Scope scope(retained);
+        Bootstrap retained(raw,42,&owner_a,&owner_a,dispatch,BC250_HOST_POLICY_SPARSE);Bootstrap::Scope scope(retained);
         auto make=reinterpret_cast<PFN_vkCreateInstance>(scope.entry()(VK_NULL_HANDLE,"vkCreateInstance"));
         VkInstance instance{};assert(make(&ci,&allocator,&instance)==VK_SUCCESS && !retained.closed());
     }
     assert(destroys==3);destroy(instance_a,&allocator); // fake ICD cleanup, outside the destroyed owner
     assert(destroys==4 && creates==5);
-    Bootstrap invalid(raw,0,&owner_a,&owner_a,dispatch);Bootstrap::Scope denied(invalid);assert(!denied.entered());
+    Bootstrap invalid(raw,0,&owner_a,&owner_a,dispatch,0);Bootstrap::Scope denied(invalid);assert(!denied.entered());
     std::puts("hosted instance: chain, per-owner scopes, device forwarding, queue functions and explicit lifetime pass");
 }

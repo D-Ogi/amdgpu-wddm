@@ -74,3 +74,24 @@ instance extensions and pNext chain and checks closure without device callbacks.
 The adapter-caps-probe asks ABI 1.2 QueryAdapterCaps on the BC-250 through that
 scope; it must run under a bounded process Job. Native runtime wiring and a lab
 measurement remain separate acceptance steps.
+
+## Instance policy of the host
+
+0006-instance-policy.patch follows 0005. It adds private instance structure
+0x42434836, version 1, `bc250_host_policy`, chained next to `bc250_host`. With
+the structure present the host alone decides on sparse binding for that
+instance: after the environment is parsed the sparse bit of the experimental
+flags is cleared and set again only for `BC250_HOST_POLICY_SPARSE`, the other
+bits stay the environment's, and `radv_sparse_enabled` refuses for a host that
+said off. The null-PRT condition and `RADV_QUEUE_DISABLE=sparse` still veto. A
+host that chains no policy, such as the D3D11 shell, behaves as before, so the
+version of `bc250_host` does not change. An unknown flag, a nonzero reserved
+field, another version or size, a second policy in the chain and a policy
+without a host fail instance creation.
+
+Candidate 6A2660DCFC835108622A97FA9A15558F0F6A2646928035C8ABADB6FC3BFC882E
+builds. adapter-query-scope-test runs those acceptances and refusals through the
+actual DLL's instance parser; the previous candidate, which ignores the
+structure, fails the same test at the first refusal. That host check does not
+enumerate hardware: what the policy does to the reported features is not shown
+by it.

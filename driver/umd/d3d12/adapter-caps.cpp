@@ -3,6 +3,7 @@
 #include "device-state.h"
 #include "adapter-query-scope.h"
 #include "memory-policy.h"
+#include "instance-policy.h"
 #include "ddi-trace.h"
 #include "engine-ddi/engine-ddi.h"
 #include <memory>
@@ -27,6 +28,39 @@ void APIENTRY no_queue(void* count,void*,VkQueue){++*static_cast<unsigned*>(coun
 template<class Function> Function system_entry(HMODULE module,const char* name) noexcept {
     const auto address=GetProcAddress(module,name);Function entry{};
     static_assert(sizeof(entry)==sizeof(address));std::memcpy(&entry,&address,sizeof(entry));return entry;
+}
+const char* source_name(SparsePolicySource source) noexcept {
+    switch(source){
+    case SparsePolicySource::Default:return "default";
+    case SparsePolicySource::RegistryOn:return "registry-on";
+    case SparsePolicySource::RegistryOff:return "registry-off";
+    case SparsePolicySource::Invalid:return "invalid";
+    default:return "unreadable";
+    }
+}
+HRESULT resolve_instance_policy(Adapter& adapter,AdapterCapsOwner& owner) noexcept {
+    // The adapter's software key holds the off switch. It is read once, before the capability query, and
+    // the answer stays with the adapter: a later edit of the key reaches neither its query nor its devices.
+    adapter.instance_policy=0;
+    HMODULE gdi=LoadLibraryExW(L"gdi32.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!gdi)return HRESULT_FROM_WIN32(GetLastError());
+    const MemoryPolicyKmt kmt{
+        system_entry<PFND3DKMT_OPENADAPTERFROMLUID>(gdi,"D3DKMTOpenAdapterFromLuid"),
+        system_entry<PFND3DKMT_QUERYADAPTERINFO>(gdi,"D3DKMTQueryAdapterInfo"),
+        system_entry<PFND3DKMT_CLOSEADAPTER>(gdi,"D3DKMTCloseAdapter")};
+    LUID luid{};std::memcpy(&luid,&adapter.contract.luid,sizeof(luid));
+    SparsePolicy policy{};
+    const HRESULT hr=query_sparse_policy(luid,kmt,&policy,&owner.unresolved_adapter);
+    FreeLibrary(gdi);
+    if(hr==S_OK && policy.sparse)adapter.instance_policy|=BC250_HOST_POLICY_SPARSE;
+    const bool unexpected=hr!=S_OK || policy.source==SparsePolicySource::Invalid ||
+                          policy.source==SparsePolicySource::Unreadable;
+    if(unexpected || ddi_trace_enabled()){
+        std::fprintf(stderr,"d3d12-caps instance-policy sparse=%u source=%s status=%08lx unresolved=%u result=%08lx\n",
+            unsigned(policy.sparse),source_name(policy.source),static_cast<unsigned long>(policy.status),
+            unsigned(owner.unresolved_adapter!=0),static_cast<unsigned long>(hr));std::fflush(stderr);
+    }
+    return hr;
 }
 HRESULT apply_memory_policy(Adapter& adapter,AdapterCapsOwner& owner) noexcept {
     // KMT's OS-visible GPU-MMU capability is supplied by the admitted KMD. Read
@@ -79,7 +113,8 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     constexpr UINT32 abi=BC250_VKD3D_ENGINE_ABI_VERSION;
     HRESULT hr=getter(abi,&funcs);if(FAILED(hr))return hr;
     if(funcs.Size<sizeof(funcs) || (funcs.AbiVersion>>16)!=1 || funcs.AbiVersion<abi || !funcs.QueryAdapterCaps)return E_NOINTERFACE;
-    AdapterQueryScope scope(get,adapter.contract.luid);if(!scope.entered())return E_UNEXPECTED;
+    hr=resolve_instance_policy(adapter,owner);if(FAILED(hr))return hr;
+    AdapterQueryScope scope(get,adapter.contract.luid,adapter.instance_policy);if(!scope.entered())return E_UNEXPECTED;
     // These are admission-only placeholders. QueryAdapterCaps cannot call them;
     // the device path will use its own live runtime services, never these.
     unsigned queue_calls=0;

@@ -43,6 +43,10 @@ try {
   if($LASTEXITCODE){throw 'Memory policy query test build failed'}
   & .\memory-policy-test.exe
   if($LASTEXITCODE){throw 'Memory policy query tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:instance-policy-test.exe "$repo\driver\umd\d3d12\instance-policy-test.cpp"
+  if($LASTEXITCODE){throw 'Instance policy query test build failed'}
+  & .\instance-policy-test.exe
+  if($LASTEXITCODE){throw 'Instance policy query tests failed'}
   & cl.exe @flags /Fe:queue-context-test.exe "$repo\driver\umd\d3d12\queue-context-test.cpp"
   if($LASTEXITCODE){throw 'Queue context test build failed'}
   & .\queue-context-test.exe

@@ -165,7 +165,8 @@ public:
       :device_(device),adapter_(*device.adapter),access_(access),
        dispatch_(domain_,device.runtime,device.callbacks,device.kernel_callbacks,
                  {this,nullptr,queue_dispatch,borrow_backing,return_backing}),
-       bootstrap_(access.driver_entry,device.adapter->contract.luid,this,this,dispatch) {
+       bootstrap_(access.driver_entry,device.adapter->contract.luid,this,this,dispatch,
+                  device.adapter->instance_policy) {
         services_={sizeof(services_),this,bind,unbind};
         lock_ready_=InitializeCriticalSectionEx(&entry_lock_,0,0)!=FALSE;
     }

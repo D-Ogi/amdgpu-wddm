@@ -12,7 +12,8 @@ HRESULT APIENTRY bind(void*,void*,VkQueue){++queue_calls;return E_NOTIMPL;}
 void APIENTRY unbind(void*,void*,VkQueue){++queue_calls;}
 }
 int wmain(int argc,wchar_t** argv) {
-    if(argc!=3){std::puts("adapter-caps-probe absolute-engine-DLL absolute-ICD-DLL; no device, external watchdog required");return argc==2 && !wcscmp(argv[1],L"--help")?0:2;}
+    const bool sparse=argc==4 && !wcscmp(argv[3],L"sparse");
+    if(argc!=3 && !sparse){std::puts("adapter-caps-probe absolute-engine-DLL absolute-ICD-DLL [sparse]; no device, external watchdog required");return argc==2 && !wcscmp(argv[1],L"--help")?0:2;}
     for(int i=1;i<3;++i)if(wcslen(argv[i])<4 || argv[i][1]!=L':' || argv[i][2]!=L'\\')return 2;
     using Microsoft::WRL::ComPtr;
     ComPtr<IDXGIFactory1> factory;HRESULT hr=CreateDXGIFactory1(IID_PPV_ARGS(&factory));if(FAILED(hr))return 1;
@@ -33,7 +34,7 @@ int wmain(int argc,wchar_t** argv) {
     bool ok=false;
     if(getter && get && SUCCEEDED(getter(BC250_VKD3D_ENGINE_ABI_VERSION,&funcs)) && funcs.QueryAdapterCaps){
         UINT64 identity{};std::memcpy(&identity,&luid,sizeof(luid));
-        native12::AdapterQueryScope scope(get,identity);
+        native12::AdapterQueryScope scope(get,identity,sparse?BC250_HOST_POLICY_SPARSE:0u);
         BC250_VKD3D_SHELL_SERVICES services{sizeof(services),nullptr,bind,unbind};
         BC250_VKD3D_DEVICE_CREATE_INFO info{sizeof(info),BC250_VKD3D_ENGINE_ABI_VERSION,scope.entry(),luid,D3D_FEATURE_LEVEL_11_0,BC250_VKD3D_QUEUE_MODE_INLINE,&services,BC250_VKD3D_INSTANCE_MODE_PRIVATE};
         const D3D_FEATURE_LEVEL levels[]={D3D_FEATURE_LEVEL_12_2,D3D_FEATURE_LEVEL_12_1,D3D_FEATURE_LEVEL_12_0,D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};

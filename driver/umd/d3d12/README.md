@@ -30,6 +30,19 @@ lifetime. The query bootstrap permits adapter enumeration and refuses device
 creation or unexpected runtime work. `GetCaps` maps this snapshot through the
 engine boundary, suppressing features whose DDI support is absent.
 
+Before that query the shell resolves the adapter's instance policy once and
+chains it, as `bc250_host_policy`, into the query instance and into every device
+instance, so both are given the same answer. The policy decides on sparse
+binding in the hosted ICD, which the reported tiled resources tier and feature
+level 12_0 and above depend on; the process environment is not asked. Sparse
+binding is on unless the DWORD `AmdgpuWddmSparseBinding` in the adapter's
+software key is 0. A value other than 0 or 1, or a key that cannot be asked,
+resolves to off and is reported on stderr. The key is read through
+`QueryAdapterInfo`, so a later edit reaches neither a cached adapter nor its
+devices. An ICD that predates the structure ignores it and reports no sparse
+binding. The default is a lab default: its cost, a null-PRT load fixup in
+every pipeline and one more queue context per device, is not measured yet.
+
 `CreateDevice` copies the runtime callback tables and constructs a real engine
 device in INLINE mode with a private Vulkan instance. The hosted bootstrap
 preserves the engine's instance chain, supplies a device identity and checks that
