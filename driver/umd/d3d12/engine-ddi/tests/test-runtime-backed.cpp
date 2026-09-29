@@ -40,6 +40,11 @@ HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* req
     StubMemory& m = stub_of(shell);
     ++m.allocations;
     m.last_byte_size = request->byte_size;
+    m.last_flags = request->flags;
+    m.last_type_bits = request->memory_type_bits;
+    m.last_alignment = request->alignment;
+    m.last_row_pitch = request->surface_row_pitch;
+    m.last_layout_size = request->surface_layout_size;
     m.dedicated += (request->flags & engine_ddi::kMemoryDedicated) ? 1u : 0u;
     VkBufferCreateInfo probe_info{};
     probe_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -51,7 +56,9 @@ HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* req
     if (m.create_buffer(m.device, &probe_info, nullptr, &probe) != VK_SUCCESS) return E_OUTOFMEMORY;
     VkMemoryRequirements needs{};
     m.requirements(m.device, probe, &needs);
-    const uint32_t type = pick_type(m, needs.memoryTypeBits, request->heap->CPUPageProperty);
+    // A request that names memory types (the linear surface) gets one of them.
+    const uint32_t allowed = request->memory_type_bits ? request->memory_type_bits : UINT32_MAX;
+    const uint32_t type = pick_type(m, needs.memoryTypeBits & allowed, request->heap->CPUPageProperty);
 
     VkMemoryAllocateFlagsInfo flags{};
     flags.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;

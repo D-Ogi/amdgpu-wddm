@@ -31,6 +31,7 @@ void check(bool ok, const char* format, ...) {
 
 constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0092;
 constexpr uint32_t kAbi12 = (1u << 16) | 2u;
+constexpr uint32_t kAbi = BC250_VKD3D_ENGINE_ABI_VERSION;   // what the shell asks the engine for
 
 template <class T> HRESULT get(const engine_ddi::AdapterCaps* caps, D3D12DDICAPS_TYPE type, T& data,
                                void* info = nullptr, UINT size = sizeof(T)) {
@@ -705,9 +706,9 @@ int test_engine(const wchar_t* path, const wchar_t* adapter) {
     }
     BC250_VKD3D_ENGINE_FUNCS funcs{};
     funcs.Size = sizeof(funcs);
-    HRESULT hr = get_funcs(kAbi12, &funcs);
-    check(hr == S_OK && funcs.AbiVersion >= kAbi12 && funcs.QueryAdapterCaps,
-          "GetFuncs(1.2) fills QueryAdapterCaps (hr %08lx, engine ABI %u.%u)", static_cast<unsigned long>(hr),
+    HRESULT hr = get_funcs(kAbi, &funcs);
+    check(hr == S_OK && funcs.AbiVersion >= kAbi && funcs.QueryAdapterCaps,
+          "GetFuncs fills QueryAdapterCaps (hr %08lx, engine ABI %u.%u)", static_cast<unsigned long>(hr),
           funcs.AbiVersion >> 16, funcs.AbiVersion & 0xFFFFu);
     if (hr != S_OK) return 1;
 

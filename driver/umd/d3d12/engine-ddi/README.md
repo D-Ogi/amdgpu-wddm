@@ -1,7 +1,7 @@
 # engine-ddi: D3D12 DDI slots on the vkd3d-proton engine
 
-Status: boundary r3 (2026-09-28): r2 plus the adapter caps path on engine ABI 1.2, and (2026-09-29, additive)
-reserved resources and tile mappings. The static library
+Status: boundary r4 (2026-09-29): r3 (the adapter caps path, reserved resources and tile mappings) plus the
+linear primary on engine ABI 1.3. The static library
 `engine-ddi.lib` builds with `tools/build/build-engine-ddi.ps1`, and [INTEGRATION.md](INTEGRATION.md) says what
 the shell calls and when. The engine ABI header is included by path from the pinned vkd3d-proton fork checkout
 ([engine-abi.json](engine-abi.json)).

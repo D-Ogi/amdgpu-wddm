@@ -159,6 +159,11 @@ struct StubMemory {
     uint32_t allocations = 0;
     uint32_t dedicated = 0;
     uint64_t last_byte_size = 0;                // byte_size of the latest request
+    uint32_t last_flags = 0;                    // and its other fields
+    uint32_t last_type_bits = 0;
+    uint64_t last_alignment = 0;
+    uint32_t last_row_pitch = 0;
+    uint64_t last_layout_size = 0;
     uint32_t frees = 0;
     D3DKMT_HANDLE next_allocation = 0x40000000u;
 };
@@ -174,6 +179,7 @@ void test_retirement(Env& env);
 void test_device_queries(Env& env, Device& device);
 void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
+void test_linear_primary(Env& env);
 // GetCaps 1002 and the shell's memory architecture policy, on query_adapter_caps with the harness's create info.
 void test_memory_policy(const Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create);
 

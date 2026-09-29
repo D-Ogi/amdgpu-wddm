@@ -149,7 +149,7 @@ public:
         HostedInstanceBootstrap::Scope hosted(bootstrap_);
         if(!hosted.entered())return E_UNEXPECTED;
         BC250_VKD3D_DEVICE_CREATE_INFO info{};
-        info.Size=sizeof(info);info.AbiVersion=0x10002;
+        info.Size=sizeof(info);info.AbiVersion=BC250_VKD3D_ENGINE_ABI_VERSION;
         info.GetInstanceProcAddr=hosted.entry();
         std::memcpy(&info.AdapterLuid,&adapter_.contract.luid,sizeof(info.AdapterLuid));
         info.MinimumFeatureLevel=D3D_FEATURE_LEVEL_11_0;

@@ -266,6 +266,8 @@ struct ResourceRecord {
     uint32_t init_state;                        // kInitNone, kInitQueued or kInitRecorded; init_lock
     ResourceRecord* init_prev;                  // DeviceContext's initialization list while kInitQueued
     ResourceRecord* init_next;
+    uint32_t linear_row_pitch;                  // bytes; 0 unless the image is the linear primary
+    uint64_t linear_size;                       // the size of its backing as asked of the shell
 };
 inline constexpr uint32_t kInitNone = 0;
 inline constexpr uint32_t kInitQueued = 1;

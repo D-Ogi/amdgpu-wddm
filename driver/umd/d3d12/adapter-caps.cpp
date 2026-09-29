@@ -76,9 +76,9 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     auto get=reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(owner.icd,"vk_icdGetInstanceProcAddr"));
     if(!getter || !get)return E_NOINTERFACE;
     BC250_VKD3D_ENGINE_FUNCS funcs{};funcs.Size=sizeof(funcs);
-    constexpr UINT32 abi=0x10002;
+    constexpr UINT32 abi=BC250_VKD3D_ENGINE_ABI_VERSION;
     HRESULT hr=getter(abi,&funcs);if(FAILED(hr))return hr;
-    if(funcs.Size<sizeof(funcs) || (funcs.AbiVersion>>16)!=1 || (funcs.AbiVersion&0xffff)<2 || !funcs.QueryAdapterCaps)return E_NOINTERFACE;
+    if(funcs.Size<sizeof(funcs) || (funcs.AbiVersion>>16)!=1 || funcs.AbiVersion<abi || !funcs.QueryAdapterCaps)return E_NOINTERFACE;
     AdapterQueryScope scope(get,adapter.contract.luid);if(!scope.entered())return E_UNEXPECTED;
     // These are admission-only placeholders. QueryAdapterCaps cannot call them;
     // the device path will use its own live runtime services, never these.

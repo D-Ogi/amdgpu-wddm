@@ -167,9 +167,11 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
     if (info->memory_mode == MemoryMode::EnginePrivateTest) return E_INVALIDARG;
 #endif
     // Engine ABI 1.2 V10: MapHeap and UnmapHeap in both modes, CreateHeapFromMemory for runtime memory.
+    // 1.3 V13: the linear image entries, which only runtime memory uses.
     const BC250_VKD3D_ENGINE_FUNCS& f = *info->engine_funcs;
     if (f.AbiVersion < BC250_VKD3D_ENGINE_ABI_VERSION || !f.MapHeap || !f.UnmapHeap ||
-        (info->memory_mode == MemoryMode::RuntimeBacked && !f.CreateHeapFromMemory))
+        (info->memory_mode == MemoryMode::RuntimeBacked &&
+         (!f.CreateHeapFromMemory || !f.QueryLinearImage || !f.CreateLinearPlacedResource)))
         return E_INVALIDARG;
     if (!hooks_valid(info->hooks, info->memory_mode)) return E_INVALIDARG;
 

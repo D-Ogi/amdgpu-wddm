@@ -172,6 +172,124 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURC
                                               reinterpret_cast<void**>(out));
 }
 
+// ---- The linear primary (engine ABI 1.3 V13) ----------------------------------------------------------------------
+// A committed texture on a heap with D3D12DDI_HEAP_FLAG_PRIMARY is what the desktop compositor opens and reads by
+// row pitch, so its image has linear tiling. Only the PRIMARY flags select this: the heap's at the create and the
+// optimization flag at CheckResourceAllocationInfo. No description becomes linear by its shape.
+struct LinearSurface {
+    BC250_VKD3D_LINEAR_IMAGE_INFO info;
+    uint64_t backing_size;
+};
+
+inline constexpr uint32_t kLinearMaxEdge = 8192;
+inline constexpr uint64_t kLinearPage = 4096;
+
+DXGI_FORMAT srgb_sibling(DXGI_FORMAT f) noexcept {
+    switch (f) {
+    case DXGI_FORMAT_B8G8R8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    default: return DXGI_FORMAT_UNKNOWN;
+    }
+}
+
+// The descriptions the linear primary exists for. The engine's image has the format's own compatibility list, so
+// castable formats beyond the format and its sRGB sibling are not these.
+bool linear_primary_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
+    const DXGI_FORMAT sibling = srgb_sibling(desc.Format);
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || sibling == DXGI_FORMAT_UNKNOWN) return false;
+    if (!desc.Width || desc.Width > kLinearMaxEdge || !desc.Height || desc.Height > kLinearMaxEdge) return false;
+    if (desc.DepthOrArraySize != 1 || desc.MipLevels != 1 || desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality)
+        return false;
+    if (desc.Layout != D3D12_TEXTURE_LAYOUT_UNKNOWN && desc.Layout != D3D12_TEXTURE_LAYOUT_ROW_MAJOR) return false;
+    if (desc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL | D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER |
+                      D3D12_RESOURCE_FLAG_VIDEO_DECODE_REFERENCE_ONLY | D3D12_RESOURCE_FLAG_VIDEO_ENCODE_REFERENCE_ONLY |
+                      D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE))
+        return false;
+    for (UINT i = 0; i < in.NumCastableFormats; ++i)
+        if (in.pCastableFormats[i] != desc.Format && in.pCastableFormats[i] != sibling) return false;
+    return true;
+}
+
+// The description the engine is asked about and creates: the linear request is the call, not the layout field.
+D3D12_RESOURCE_DESC1 linear_desc(D3D12_RESOURCE_DESC1 desc) noexcept {
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Alignment = 0;
+    return desc;
+}
+
+// What the engine's linear image of desc needs, before any memory exists, and the size of the backing: enough for
+// the image's memory requirement and for a reader that takes pitch * (height rounded up to 4) bytes.
+HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
+    *out = LinearSurface{};
+    if (!c->funcs.QueryLinearImage) return E_NOTIMPL;
+    const D3D12_RESOURCE_DESC1 d = linear_desc(desc);
+    BC250_VKD3D_LINEAR_IMAGE_INFO info{};
+    info.Size = sizeof(info);
+    const HRESULT hr = c->funcs.QueryLinearImage(c->device, &d, &info);
+    if (FAILED(hr)) {
+        log_line("linear primary: the engine has no linear image for format %d, %llux%u: %08lx",
+                 static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,
+                 static_cast<unsigned long>(hr));
+        return hr;
+    }
+    const uint64_t width4 = (desc.Width + 3) & ~3ull;
+    const uint64_t height4 = (static_cast<uint64_t>(desc.Height) + 3) & ~3ull;
+    if (info.Offset || !info.RowPitch || info.RowPitch > UINT32_MAX || info.RowPitch % 16 ||
+        info.RowPitch < width4 * 4 || !info.MemorySize || !info.MemoryAlignment || !info.MemoryTypeBits ||
+        info.MemoryAlignment > UINT32_MAX || (info.MemoryAlignment & (info.MemoryAlignment - 1)) ||
+        info.LayoutSize > info.MemorySize) {
+        log_line("linear primary: layout not usable (offset %llu, pitch %llu, layout %llu, memory %llu, alignment "
+                 "%llu, types %08x)",
+                 static_cast<unsigned long long>(info.Offset), static_cast<unsigned long long>(info.RowPitch),
+                 static_cast<unsigned long long>(info.LayoutSize), static_cast<unsigned long long>(info.MemorySize),
+                 static_cast<unsigned long long>(info.MemoryAlignment), info.MemoryTypeBits);
+        return E_NOTIMPL;
+    }
+    // pitch <= UINT32_MAX and height4 <= 8192: the product cannot overflow 64 bits.
+    const uint64_t rows = info.RowPitch * height4;
+    const uint64_t need = std::max<uint64_t>(rows, info.MemorySize);
+    if (need > UINT32_MAX - kLinearPage) return E_NOTIMPL; // the surface description has 32-bit fields
+    out->info = info;
+    out->backing_size = (need + kLinearPage - 1) & ~(kLinearPage - 1);
+    return S_OK;
+}
+
+// The linear image at offset 0 of the backing. The bound image must be the one the query described: the memory was
+// sized, typed and described to the shell from that answer.
+HRESULT place_linear(DeviceContext* c, Backing* b, const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BARRIER_LAYOUT layout,
+                     const D3D12DDI_CLEAR_VALUES* clear, const LinearSurface& surface, ID3D12Resource** out) noexcept {
+    *out = nullptr;
+    if (!c->funcs.CreateLinearPlacedResource) return E_NOTIMPL;
+    const D3D12_RESOURCE_DESC1 d = linear_desc(desc);
+    D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+    const HRESULT legacy = initial_layout(desc, &layout, &state);
+    if (FAILED(legacy)) return legacy;
+    // A barrier layout has no state form here. The engine keeps a linear image in one Vulkan layout whatever
+    // the initial state, so COMMON stands for it.
+    BC250_VKD3D_LINEAR_IMAGE_INFO bound{};
+    bound.Size = sizeof(bound);
+    ID3D12Resource* engine = nullptr;
+    const HRESULT hr = c->funcs.CreateLinearPlacedResource(c->device, b->heap, 0, &d, static_cast<UINT32>(state),
+                                                           clear_value(desc, clear), __uuidof(ID3D12Resource),
+                                                           reinterpret_cast<void**>(&engine), &bound);
+    if (FAILED(hr)) return hr;
+    if (!engine) return E_UNEXPECTED;
+    const BC250_VKD3D_LINEAR_IMAGE_INFO& q = surface.info;
+    if (bound.Offset != q.Offset || bound.RowPitch != q.RowPitch || bound.LayoutSize != q.LayoutSize ||
+        bound.MemorySize != q.MemorySize || bound.MemoryAlignment != q.MemoryAlignment ||
+        bound.MemoryTypeBits != q.MemoryTypeBits) {
+        log_line("linear primary: the bound image differs from the query (pitch %llu/%llu, layout %llu/%llu, memory "
+                 "%llu/%llu)",
+                 static_cast<unsigned long long>(bound.RowPitch), static_cast<unsigned long long>(q.RowPitch),
+                 static_cast<unsigned long long>(bound.LayoutSize), static_cast<unsigned long long>(q.LayoutSize),
+                 static_cast<unsigned long long>(bound.MemorySize), static_cast<unsigned long long>(q.MemorySize));
+        engine->Release();
+        return E_FAIL;
+    }
+    *out = engine;
+    return S_OK;
+}
+
 // The engine's reserved (tiled) resource: no memory until UpdateTileMappings maps heap tiles into it (tiles.cpp).
 // The engine refuses a reserved texture when its tiled resources tier is 0; a format it cannot make sparse becomes
 // its committed fallback, on which tile mappings are ignored (vkd3d-proton d3d12_resource_create_reserved).
@@ -236,7 +354,8 @@ HRESULT engine_heap_from_memory(DeviceContext* c, const D3D12_HEAP_DESC& desc, c
 void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
                         const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind) noexcept {
     if (b) backing_acquire(b);                          // a reserved resource has none
-    new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, kInitNone, nullptr, nullptr};
+    new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, kInitNone, nullptr, nullptr,
+                           0, 0};
     c->live.fetch_add(1);
 }
 
@@ -290,18 +409,44 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     D3D12DDIARG_CREATEHEAP_0001 sized = *heap_desc;
     heap_desc = &sized;
     uint64_t need = 0, align = 0;
+    LinearSurface surface{};
+    // The linear primary: a failure of the query fails the create, no other tiling takes its place.
+    const bool linear = res_desc && c->mode == MemoryMode::RuntimeBacked &&
+                        (sized.Flags & D3D12DDI_HEAP_FLAG_PRIMARY) &&
+                        sized.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE &&
+                        linear_primary_shape(desc, *res_desc);
     if (res_desc) {
         if (!(sized.Flags & category_of(desc))) return E_INVALIDARG;
-        const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
-        const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
-        if (info.SizeInBytes == UINT64_MAX || !info.SizeInBytes) return E_INVALIDARG;
-        need = info.SizeInBytes;
-        align = info.Alignment;
+        if (linear) {
+            const HRESULT query = query_linear_primary(c, desc, &surface);
+            if (FAILED(query)) return query;
+            need = surface.backing_size;
+            align = surface.info.MemoryAlignment;
+            if (sized.ByteSize != kSizeOfResource && sized.ByteSize < need)
+                log_line("linear primary: the heap has %llu bytes, the surface needs %llu",
+                         static_cast<unsigned long long>(sized.ByteSize), static_cast<unsigned long long>(need));
+        } else {
+            const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+            const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+            if (info.SizeInBytes == UINT64_MAX || !info.SizeInBytes) return E_INVALIDARG;
+            need = info.SizeInBytes;
+            align = info.Alignment;
+        }
         if (sized.ByteSize == kSizeOfResource) {
             sized.ByteSize = need;                      // committed: the heap is as large as its one resource
             log_line("heap: ByteSize left to the resource, %llu bytes", static_cast<unsigned long long>(need));
         }
         if (sized.ByteSize < need) return E_INVALIDARG;
+        if (linear) {
+            // The heap is the surface: as large as the memory asked of the shell, whatever the runtime gave
+            // beyond it, and with the default heap alignment, whatever alignment the runtime handed back.
+            if (sized.ByteSize != need || sized.Alignment)
+                log_line("linear primary: heap of %llu bytes aligned to %llu becomes %llu bytes, default alignment",
+                         static_cast<unsigned long long>(sized.ByteSize),
+                         static_cast<unsigned long long>(sized.Alignment), static_cast<unsigned long long>(need));
+            sized.ByteSize = need;
+            sized.Alignment = 0;
+        }
     } else if (sized.ByteSize == kSizeOfResource) {
         log_line("heap: ByteSize left to a resource, but the heap has none");
         return E_INVALIDARG;
@@ -325,6 +470,13 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         request.byte_size = heap_desc->ByteSize;
         request.alignment = std::max<uint64_t>(align, heap_desc->Alignment);
         request.memory_type_bits = 0;                   // engine-ddi.h, MemoryRequest: the engine checks the type
+        if (linear) {
+            request.flags |= kMemoryLinearSurface;
+            request.alignment = align;
+            request.memory_type_bits = surface.info.MemoryTypeBits;
+            request.surface_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
+            request.surface_layout_size = surface.info.LayoutSize;
+        }
         hr = import_memory(c, request, &memory);
         if (FAILED(hr)) {
             log_line("heap: the shell's memory request failed: %08lx", static_cast<unsigned long>(hr));
@@ -357,8 +509,9 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
 
     ID3D12Resource* engine = nullptr;
     if (res_desc) {
-        hr = place(c, b, 0, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
-                   res_desc->pCastableFormats, &engine);
+        hr = linear ? place_linear(c, b, desc, res_desc->InitialBarrierLayout, clear, surface, &engine)
+                    : place(c, b, 0, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
+                            res_desc->pCastableFormats, &engine);
         if (FAILED(hr)) {
             backing_release(b);
             return hr;
@@ -370,6 +523,10 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     if (res_desc) {
         auto* record = static_cast<ResourceRecord*>(hres.pDrvPrivate);
         construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Committed);
+        if (linear) {
+            record->linear_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
+            record->linear_size = surface.backing_size;
+        }
         // A committed render target or depth-stencil texture starts in VK_IMAGE_LAYOUT_UNDEFINED: engine-ddi
         // discards it before any work of the device runs (queue.cpp, INTEGRATION.md "Committed render targets").
         if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER &&
@@ -486,8 +643,23 @@ HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RE
     return S_OK;
 }
 
+// The answer for the linear primary: the backing's size. The alignment is a heap alignment of D3D12, which the
+// runtime may hand back as the heap's: the image's own, smaller one goes to the shell with the memory request.
+HRESULT linear_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
+                               D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
+    LinearSurface surface{};
+    const HRESULT hr = query_linear_primary(c, desc, &surface);
+    if (FAILED(hr)) return hr;
+    out->ResourceDataSize = surface.backing_size;
+    out->ResourceDataAlignment = static_cast<UINT32>(
+        std::max<uint64_t>(surface.info.MemoryAlignment, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT));
+    out->Layout = static_cast<D3D12DDI_TEXTURE_LAYOUT>(desc.Layout);
+    return S_OK;
+}
+
 void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATERESOURCE_0088* in,
-                                             D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS, UINT32 alignment_restriction, UINT,
+                                             D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS optimization,
+                                             UINT32 alignment_restriction, UINT,
                                              D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) {
     if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
     DeviceContext* c = resolve(device);
@@ -498,9 +670,15 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
     }
     D3D12_RESOURCE_DESC1 desc{};
     HRESULT hr = to_api_desc(*in, desc);
+    if (SUCCEEDED(hr) && in->NumCastableFormats && !in->pCastableFormats) hr = E_INVALIDARG;
     if (SUCCEEDED(hr)) {
-        desc.Alignment = alignment_restriction;
-        hr = allocation_info(c, desc, out);
+        if (c->mode == MemoryMode::RuntimeBacked && (optimization & D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY) &&
+            linear_primary_shape(desc, *in)) {
+            hr = linear_allocation_info(c, desc, out);
+        } else {
+            desc.Alignment = alignment_restriction;
+            hr = allocation_info(c, desc, out);
+        }
     }
     if (FAILED(hr)) {
         *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
@@ -534,7 +712,9 @@ void APIENTRY check_existing_resource_allocation_info(D3D12DDI_HDEVICE device, D
     DeviceContext* c = resolve(device);
     if (!c) return;
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
-    const HRESULT hr = (r && out) ? allocation_info(c, r->desc, out) : E_INVALIDARG;
+    const HRESULT hr = !(r && out) ? E_INVALIDARG
+                       : r->linear_row_pitch ? linear_allocation_info(c, r->desc, out)
+                                             : allocation_info(c, r->desc, out);
     if (FAILED(hr)) {
         if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
         c->report(hr);

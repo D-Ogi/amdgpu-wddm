@@ -12,18 +12,21 @@ is `engine-ddi.h`, revision 3.
   `um` and `shared` directories, the engine ABI header's directory and the Vulkan headers below.
 - Engine ABI header, included by path and not vendored into this repository:
   - file `libs/ddi/bc250_vkd3d_engine.h` of the project's vkd3d-proton fork, branch
-    `amdgpu-wddm/ddi-engine-1.2-r4`, commit `d31d6133bc3a012817f7cc67c9a51ed4a1a51262`;
-  - revision r4-draft, ABI 1.2, NOT FROZEN in the header's own words; r4 adds the instance mode (V12,
-    `CreateInfo.InstanceMode` at offset 40, CreateInfo 48 bytes on x64) and carries the stream-output gap fix;
-  - SHA-256 `24E42AF7865A6C65D55DC7659E53616E2E597AC80188BA3BE31621C4C250354F`;
-  - default checkout `<workspace>\scratch\m15\vkd3d-1.2-r4-src` (`-EngineSource`, `source_checkout` in the pin).
+    `amdgpu-wddm/ddi-engine-1.3`, commit `66c98e7246c024964e97b05575de0cacdfefdee7`;
+  - revision r5-draft, ABI 1.3, NOT FROZEN in the header's own words; r4 added the instance mode (V12,
+    `CreateInfo.InstanceMode` at offset 40, CreateInfo 48 bytes on x64), r5 adds linear images (V13,
+    `QueryLinearImage` and `CreateLinearPlacedResource`, function table 80 bytes on x64);
+  - SHA-256 `9F77137FA26FBD1BA840BCB25B2B8BA998720E76A893B68327882085A9672AED`;
+  - default checkout `<workspace>\scratch\m15\vkd3d-1.3-src` (`-EngineSource`, `source_checkout` in the pin).
     The shell's build must include the same header: `tools/build/build-umd-d3d12.ps1` defaults to the r3
     checkout `scratch\m15\vkd3d-1.2-src` until it moves.
 - Vulkan headers: `khronos/Vulkan-Headers/include` of the same checkout, submodule commit
   `ee2ec5fd83dafce291024683b50dc89219333076`.
 - Engine DLL: `amdgpu_wddm_vkd3d.dll` built by `tools/build/build-vkd3d.ps1` (config `ddi-engine`) from that
-  commit with no local changes, SHA-256 `ACEAB520B08809FC593F2D1BC9FCE927F8215F2D3E9A32BAD121EA670BAEF435`, in
-  `<workspace>\scratch\m15\engine-1.2-r4-d31d6133` (`engine_dll_dir` in the pin).
+  commit with no local changes, SHA-256 `D8BB19C34D33C1F4D25E96C56CFD924B533A010A7AD6596B692F08ED8DCA0317`, in
+  `<workspace>\scratch\m15\engine-1.3-r5-66c98e72` (`engine_dll_dir` in the pin). This engine refuses a command
+  signature that changes state on a device without device generated commands (E_NOTIMPL at the create)
+  instead of creating one that executes nothing.
 - [engine-abi.json](engine-abi.json) holds these pins. The build script refuses a header, and before a run an
   engine DLL, whose SHA-256 differs. A new header revision means a new pin, a rebuild of both sides, and a new
   engine DLL.
@@ -47,10 +50,11 @@ HRESULT engine_ddi::set_memory_architecture_policy(engine_ddi::AdapterCaps* caps
 
 1. OpenAdapter12, or at the latest the first GetCaps:
    - load the engine DLL and call `Bc250Vkd3dEngineGetFuncs(BC250_VKD3D_ENGINE_ABI_VERSION, &funcs)` with
-     `funcs.Size = sizeof(funcs)`. The argument must be 1.2: the engine leaves QueryAdapterCaps NULL for a shell
-     that asks for 1.1, and `query_adapter_caps` then returns E_INVALIDARG;
+     `funcs.Size = sizeof(funcs)`. The argument is `BC250_VKD3D_ENGINE_ABI_VERSION` (1.3): the engine leaves the
+     entries of a later minor NULL for a shell that asks for an earlier one, and `query_adapter_caps` and
+     `create_device_context` then return E_INVALIDARG;
    - fill the `BC250_VKD3D_DEVICE_CREATE_INFO` that CreateDevice will receive: `Size`
-     `sizeof(BC250_VKD3D_DEVICE_CREATE_INFO)` (48 with the r4 header), `AbiVersion` 1.2 (`0x00010002`), hosted
+     `sizeof(BC250_VKD3D_DEVICE_CREATE_INFO)` (48 since the r4 header), `AbiVersion` 1.3 (`0x00010003`), hosted
      RADV's `GetInstanceProcAddr`, the `AdapterLuid` hosted RADV reports for this adapter (V2),
      `MinimumFeatureLevel` `D3D_FEATURE_LEVEL_11_0`, `QueueMode` INLINE, the shell's `Services` and `InstanceMode`
      `BC250_VKD3D_INSTANCE_MODE_PRIVATE` (V12: hosted RADV binds its runtime identity to the VkInstance, so no
@@ -357,6 +361,35 @@ a placed resource (resource description only, `ReuseBufferGPUVA` naming a resour
 engine-ddi then calls the engine's `CreateHeapFromMemory` (ABI 1.2 V10) over the memory, and places a committed
 resource at offset 0. MapHeap and UnmapHeap go to the engine's MapHeap and UnmapHeap: the CPU address of heap
 offset 0, a placed buffer at that address plus its offset.
+
+The linear primary (boundary r4, engine ABI 1.3 V13). A committed texture on a heap with
+`D3D12DDI_HEAP_FLAG_PRIMARY` is what a reader outside the engine opens and reads by row pitch. When its
+description is one the surface exists for (2D, one mip, one layer, one sample, B8G8R8A8_UNORM or
+R8G8B8A8_UNORM, at most 8192 on an edge, heap without CPU access, castable formats none beyond the format and its
+sRGB sibling), engine-ddi:
+
+1. asks the engine what the linear image needs (`QueryLinearImage`), before any memory exists;
+2. sizes the backing: the larger of the image's memory size and row pitch times the height rounded up to 4,
+   rounded up to 4 KiB. A runtime heap smaller than that is E_INVALIDARG; a larger one, or one with an alignment,
+   becomes the backing's size with the default heap alignment;
+3. makes the one `allocate_memory` call with `kMemoryDedicated | kMemoryPrimary | kMemoryLinearSurface`,
+   `byte_size` the backing's, `alignment` and `memory_type_bits` the image's, and the surface fields
+   (`surface_row_pitch`, `surface_layout_size`). The shell describes the allocation to the kernel from these and
+   from the resource description, and imports it with one of the named memory types;
+4. creates the heap over the memory and the image at offset 0 (`CreateLinearPlacedResource`), and fails the
+   create with E_FAIL if the bound image is not the one step 1 described.
+
+A failure of step 1 fails the create: no other tiling takes the surface's place. A PRIMARY heap whose
+description is none of the above is asked of the shell as before, with `kMemoryPrimary` alone, and the shell
+decides. `pfnCheckResourceAllocationInfo` answers the backing's size and a 64 KiB alignment when the runtime
+passes `D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY` with such a description, and
+`pfnCheckExistingResourceAllocationInfo` the same for a resource created this way. Only these two PRIMARY flags
+select the surface; no description becomes linear by its shape.
+
+Development PC witness (harness round trip 7, `tests/test-linear-primary.cpp`, RuntimeBacked on the stub shell):
+256x256 B8G8R8A8_UNORM and 127x79 R8G8B8A8_UNORM primaries are created, cleared through a render target view,
+copied to a READBACK buffer and compared texel by texel. What a reader of the memory itself sees is not
+established by that: the copy goes through the image.
 
 Heap size left to the resource. H and DDI-ref give `D3D12DDIARG_CREATEHEAP_0001::ByteSize` as "Size of the heap,
 in bytes" (H:319-328) and define no special value. engine-ddi treats a ByteSize of UINT64_MAX as "no size given":

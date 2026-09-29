@@ -5,6 +5,8 @@
 // engine ABI 1.2 QueryAdapterCaps, after the lab run M768 showed the runtime's first two GetCaps calls. Added within
 // r3, additively: set_memory_architecture_policy, the shell's policy for GetCaps 1002. The engine
 // side owns this directory; INTEGRATION.md lists what the shell calls and when.
+// Boundary r4 (2026-09-29): the linear primary. MemoryRequest grows by the surface fields and
+// kMemoryLinearSurface, and memory_type_bits is filled for such a request; engine ABI 1.3.
 // The shell (namespace native12) owns everything else:
 //   - the adapter, device state and FillDDITable composition;
 //   - queues and their WDDM contexts, fences and queue Signal/Wait;
@@ -12,15 +14,16 @@
 // engine-ddi never reads native12::Device. The shell hands over what it needs through ShellHooks and finds the
 // DeviceContext of a D3D12DDI_HDEVICE through the ResolveDevice hook.
 //
-// Engine ABI: bc250_vkd3d_engine.h r4-draft (ABI 1.2), included by path from the vkd3d-proton fork checkout
+// Engine ABI: bc250_vkd3d_engine.h r5-draft (ABI 1.3), included by path from the vkd3d-proton fork checkout
 // pinned in engine-abi.json. engine-ddi uses:
 //   - 1.1: CreateDevice in the INLINE queue mode and CreateCommandQueue (queue.cpp);
 //   - 1.2 V10 CreateHeapFromMemory, MapHeap and UnmapHeap: RuntimeBacked heaps over the shell's VkDeviceMemory,
 //     and MapHeap/UnmapHeap in both memory modes (resources.cpp);
 //   - 1.2 V11 QueryAdapterCaps: the adapter caps of GetCaps (caps.cpp);
 //   - 1.2 r4 V12 InstanceMode: the create info of CreateDevice and QueryAdapterCaps says PRIVATE, so that every
-//     engine device has a VkInstance of its own (INTEGRATION.md, "Adapter: GetCaps").
-// So the engine must be asked for 1.2; create_device_context refuses a function table without these entries.
+//     engine device has a VkInstance of its own (INTEGRATION.md, "Adapter: GetCaps");
+//   - 1.3 V13 QueryLinearImage and CreateLinearPlacedResource: the linear primary (resources.cpp).
+// So the engine must be asked for 1.3; create_device_context refuses a function table without these entries.
 #pragma once
 #include <windows.h>
 #include <d3d12.h>
@@ -31,7 +34,7 @@
 
 namespace engine_ddi {
 
-inline constexpr uint32_t kBoundaryRevision = 3;
+inline constexpr uint32_t kBoundaryRevision = 4;
 
 // ---- Memory policy -----------------------------------------------------------------------------------------
 // RuntimeBacked is the only mode of the native driver. The memory of every heap, and of every committed
@@ -112,6 +115,11 @@ enum class MemoryMode : uint32_t { RuntimeBacked = 1, EnginePrivateTest = 2 };
 enum MemoryRequestFlags : uint32_t {
     kMemoryDedicated = 0x1,                     // committed resource: the memory backs exactly this resource
     kMemoryPrimary = 0x2,                       // D3D12DDI_HEAP_FLAG_PRIMARY was set
+    // The memory backs one linear image at offset 0 (engine ABI 1.3 V13), which a consumer outside the engine
+    // reads by row pitch: the surface fields are filled, memory_type_bits is the image's and alignment is the
+    // image's alone. Set only together with kMemoryDedicated and kMemoryPrimary. A primary without it is a
+    // description engine-ddi cannot make linear; the shell decides what becomes of it.
+    kMemoryLinearSurface = 0x4,
 };
 
 struct MemoryRequest {
@@ -125,11 +133,17 @@ struct MemoryRequest {
     const D3D12DDIARG_CREATERESOURCE_0088* resource;    // committed: the resource; heap only: null
     uint64_t byte_size;                         // from the engine's allocation info for the resource or heap
     uint64_t alignment;
-    // Vulkan memory types the engine accepts for this heap, 0 for "not narrowed". Always 0 in r3: engine-ddi has
-    // no Vulkan entry point to compute them, and CreateHeapFromMemory checks the type (INTEGRATION.md says how the
-    // shell picks it).
+    // Vulkan memory types the engine accepts for this heap, 0 for "not narrowed": CreateHeapFromMemory checks
+    // the type then (INTEGRATION.md says how the shell picks it). With kMemoryLinearSurface it is the
+    // memoryTypeBits of the image, and the shell picks one of them.
     uint32_t memory_type_bits;
     uint32_t reserved;                          // 0
+    // kMemoryLinearSurface only, otherwise 0. The image's width, height and format are the resource's;
+    // byte_size is at least surface_row_pitch * (height rounded up to 4) and at least the image's memory size,
+    // rounded up to 4 KiB.
+    uint32_t surface_row_pitch;                 // bytes, VkSubresourceLayout::rowPitch; a multiple of 16
+    uint32_t reserved2;                         // 0
+    uint64_t surface_layout_size;               // VkSubresourceLayout::size
 };
 
 // One runtime allocation that the shell has made and imported. The shell owns it (see the release sequence).

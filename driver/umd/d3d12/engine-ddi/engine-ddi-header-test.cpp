@@ -24,7 +24,7 @@ constexpr bool tags_unique() {
     }
     return true;
 }
-static_assert(engine_ddi::kBoundaryRevision == 3, "boundary r3");
+static_assert(engine_ddi::kBoundaryRevision == 4, "boundary r4");
 static_assert(tags_unique(), "record tags must be unique and distinct from None/Poisoned");
 static_assert(sizeof(D3D12DDI_DEVICE_FUNCS_CORE_0088) == 976, "core table 0088");
 static_assert(sizeof(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092) == 560, "command list table 0092");
@@ -34,7 +34,10 @@ static_assert(alignof(engine_ddi::RecordHeader) == alignof(void*), "record heade
 static_assert(std::is_standard_layout_v<engine_ddi::MemoryRequest>, "MemoryRequest layout");
 static_assert(std::is_standard_layout_v<engine_ddi::ImportedMemory>, "ImportedMemory layout");
 static_assert(std::is_standard_layout_v<engine_ddi::ShellHooks>, "ShellHooks layout");
-static_assert(sizeof(engine_ddi::MemoryRequest) == 56, "MemoryRequest size");
+static_assert(sizeof(engine_ddi::MemoryRequest) == 72 &&
+                  offsetof(engine_ddi::MemoryRequest, surface_row_pitch) == 56 &&
+                  offsetof(engine_ddi::MemoryRequest, surface_layout_size) == 64,
+              "MemoryRequest size (r4: the linear surface)");
 static_assert(offsetof(engine_ddi::ImportedMemory, gpu_va) == 32, "ImportedMemory.gpu_va offset");
 static_assert(sizeof(engine_ddi::ImportedMemory) == 48, "ImportedMemory size");
 static_assert(sizeof(engine_ddi::ShellHooks) == 64, "ShellHooks size");
@@ -108,9 +111,11 @@ static_assert(std::is_same_v<PFND3D12DDI_COPYTILEMAPPINGS,
                                               const D3D12DDI_TILED_RESOURCE_COORDINATE*,
                                               const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_TILE_MAPPING_FLAGS)>,
               "Q4 slot the shell forwards");
-// The engine header this revision is built against is ABI 1.2 (QueryAdapterCaps, V11).
-static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 2u), "engine ABI 1.2 header");
-static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 64, "ABI 1.2 x64 sizes");
+// The engine header this revision is built against is ABI 1.3 (linear images, V13).
+static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 3u), "engine ABI 1.3 header");
+static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 80 &&
+                  sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,
+              "ABI 1.3 x64 sizes");
 // r4 (V12): the create info carries InstanceMode, which engine-ddi's callers set to PRIVATE.
 static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 48 &&
                   offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 40 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,

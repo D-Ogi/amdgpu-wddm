@@ -30,7 +30,7 @@ static_assert(D3D12DDI_PRIMITIVE_TOPOLOGY_TYPE_PATCH == static_cast<int>(D3D12_P
               "primitive topology types");
 
 // Whether the pinned engine takes a stream-output gap, the NULL SemanticName of a hole. Engine 4FFA7493 (fork
-// 7bfcd7f0, r3) crashed on one; the r4 pin (d31d6133) carries the fix (0869138a, c5d9d85f) and takes it. Set to
+// 7bfcd7f0, r3) crashed on one; the pin since r4 (d31d6133) carries the fix (0869138a, c5d9d85f) and takes it. Set to
 // false for an engine without the fix: a declaration with a gap is then refused with E_NOTIMPL before it reaches
 // the engine.
 constexpr bool kEngineTakesStreamOutputGaps = true;
