@@ -66,9 +66,8 @@ void test_copy(Env& env, Device& device) {
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_dest =
             transition(gpu, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_COPY_DEST);
         t.pfnResourceBarrier(rec.hlist(), 1, &to_dest);
-        dst.BaseAddress.UMD = {gpu.hres(), 0};
-        src.BaseAddress.UMD = {upload.hres(), 0};
-        t.pfnCopyBufferRegion(rec.hlist(), dst, src, kBytes);
+        // Whole-resource copy up, region copy down: both buffers have the same size.
+        t.pfnResourceCopy(rec.hlist(), gpu.hres(), upload.hres());
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
             transition(gpu, D3D12DDI_RESOURCE_STATE_COPY_DEST, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
         t.pfnResourceBarrier(rec.hlist(), 1, &to_source);
@@ -79,7 +78,7 @@ void test_copy(Env& env, Device& device) {
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
         checkf(hr == S_OK && !device.shell.list_errors,
-               "copy: barrier, two CopyBufferRegion, Close and execute_command_lists (hr %08lx)",
+               "copy: barrier, ResourceCopy, CopyBufferRegion, Close and execute_command_lists (hr %08lx)",
                static_cast<unsigned long>(hr));
 
         // Hold retirement back (the fence looks stuck at the empty submission's 1), destroy the upload buffer

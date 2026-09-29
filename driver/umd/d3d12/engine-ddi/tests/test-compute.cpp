@@ -144,6 +144,51 @@ void test_compute(Env& env, Device& device) {
     env.core.pfnCreateUnorderedAccessView(device.h(), &uav, cpu);
     checkf(!device.shell.device_errors, "compute: raw R32_TYPELESS buffer UAV at slot %u", kSlot);
 
+    // Two small typed buffers for the view clears, one per value type, each read back on its own. The clear takes
+    // the view twice, as the API requires: a CPU handle in a heap that is not shader visible and the GPU handle of
+    // an equal descriptor in the bound heap.
+    D3D12DDIARG_CREATE_DESCRIPTOR_HEAP_0001 plain_args{D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2,
+                                                       D3D12DDI_DESCRIPTOR_HEAP_FLAG_NONE, 0};
+    void* plain_storage = env.storage.alloc(env.core.pfnCalcPrivateDescriptorHeapSize(device.h(), &plain_args));
+    const D3D12DDI_HDESCRIPTORHEAP hplain{plain_storage};
+    const HRESULT hr_p = plain_storage ? env.core.pfnCreateDescriptorHeap(device.h(), &plain_args, hplain) : E_OUTOFMEMORY;
+    const D3D12DDI_CPU_DESCRIPTOR_HANDLE plain =
+        hr_p == S_OK ? env.core.pfnGetCPUDescriptorHandleForHeapStart(device.h(), hplain) : D3D12DDI_CPU_DESCRIPTOR_HANDLE{};
+    checkf(hr_p == S_OK && plain.ptr, "compute: CBV_SRV_UAV heap of 2 that is not shader visible (hr %08lx)",
+           static_cast<unsigned long>(hr_p));
+    constexpr UINT kClearWords = 1024;
+    constexpr UINT64 kClearBytes = UINT64{kClearWords} * 4;
+    constexpr UINT kClearUint = 0xC1EA4BADu;
+    struct Cleared {
+        DXGI_FORMAT format;
+        UINT slot;
+        UINT32 expected;
+        Buffer buffer, back;
+        D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu;
+        D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu;
+        bool ready;
+    } cleared[2] = {{DXGI_FORMAT_R32_UINT, 0, kClearUint, {}, {}, {}, {}, false},
+                    {DXGI_FORMAT_R32_FLOAT, 1, 0x3f800000u, {}, {}, {}, {}, false}};
+    for (Cleared& c : cleared) {
+        const HRESULT hr_b = create_buffer(env, device, HeapKind::Default, kClearBytes, true, c.buffer);
+        const HRESULT hr_k = create_buffer(env, device, HeapKind::Readback, kClearBytes, false, c.back);
+        c.cpu = {plain.ptr + SIZE_T{c.slot} * increment};
+        const D3D12DDI_CPU_DESCRIPTOR_HANDLE visible{cpu.ptr - SIZE_T{kSlot} * increment + SIZE_T{c.slot} * increment};
+        c.gpu = {gpu.ptr - UINT64{kSlot} * increment + UINT64{c.slot} * increment};
+        if (hr_b == S_OK && hr_k == S_OK && plain.ptr) {
+            D3D12DDIARG_CREATE_UNORDERED_ACCESS_VIEW_0002 view{};
+            view.hDrvResource = c.buffer.hres();
+            view.Format = c.format;
+            view.ResourceDimension = D3D12DDI_RD_BUFFER;
+            view.Buffer.NumElements = kClearWords;
+            env.core.pfnCreateUnorderedAccessView(device.h(), &view, c.cpu);
+            env.core.pfnCopyDescriptorsSimple(device.h(), 1, visible, c.cpu, D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            c.ready = !device.shell.device_errors;
+        }
+        checkf(c.ready, "compute: typed buffer and view for the clear at slot %u (hr %08lx %08lx)", c.slot,
+               static_cast<unsigned long>(hr_b), static_cast<unsigned long>(hr_k));
+    }
+
     BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_COMPUTE, 0, 0, 0};
     engine_ddi::EngineQueue* queue = nullptr;
     hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
@@ -174,6 +219,26 @@ void test_compute(Env& env, Device& device) {
         dst.BaseAddress.UMD = {readback.hres(), 0};
         src.BaseAddress.UMD = {out.hres(), 0};
         t.pfnCopyBufferRegion(rec.hlist(), dst, src, kBytes);
+        for (Cleared& c : cleared) {
+            if (!c.ready) continue;
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 clear_begin =
+                transition(c.buffer, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS);
+            t.pfnResourceBarrier(rec.hlist(), 1, &clear_begin);
+            if (c.format == DXGI_FORMAT_R32_UINT) {
+                const UINT values[4] = {kClearUint, 0, 0, 0};
+                t.pfnClearUnorderedAccessViewUint(rec.hlist(), c.gpu, c.cpu, c.buffer.hres(), values, 0, nullptr);
+            } else {
+                const FLOAT values[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+                t.pfnClearUnorderedAccessViewFloat(rec.hlist(), c.gpu, c.cpu, c.buffer.hres(), values, 0, nullptr);
+            }
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 clear_end =
+                transition(c.buffer, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &clear_end);
+            D3D12DDIARG_BUFFER_PLACEMENT clear_dst{}, clear_src{};
+            clear_dst.BaseAddress.UMD = {c.back.hres(), 0};
+            clear_src.BaseAddress.UMD = {c.buffer.hres(), 0};
+            t.pfnCopyBufferRegion(rec.hlist(), clear_dst, clear_src, kClearBytes);
+        }
         t.pfnCloseCommandList(rec.hlist());
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
@@ -200,10 +265,28 @@ void test_compute(Env& env, Device& device) {
             checkf(false, "compute: MapHeap of the READBACK heap (hr %08lx)", static_cast<unsigned long>(hr));
         }
     }
+    for (Cleared& c : cleared) {
+        if (!c.ready || hr != S_OK) continue;
+        void* view_map = nullptr;
+        const HRESULT hr_m = env.core.pfnMapHeap(device.h(), c.back.hheap(), &view_map);
+        UINT bad = 0;
+        if (hr_m == S_OK && view_map) {
+            const auto* words = static_cast<const UINT32*>(view_map);
+            for (UINT i = 0; i < kClearWords; ++i) bad += words[i] != c.expected;
+            env.core.pfnUnmapHeap(device.h(), c.back.hheap());
+        }
+        checkf(hr_m == S_OK && view_map && !bad, "compute: view clear at slot %u wrote %08x to every word (%u differ)",
+               c.slot, c.expected, bad);
+    }
     destroy_recording(env, device, rec);
     if (queue)
         check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
               "compute: destroy_engine_queue reports Retired");
+    for (Cleared& c : cleared) {
+        destroy_buffer(env, device, c.buffer);
+        destroy_buffer(env, device, c.back);
+    }
+    if (hr_p == S_OK) env.core.pfnDestroyDescriptorHeap(device.h(), hplain);
     env.core.pfnDestroyDescriptorHeap(device.h(), hheap);
     destroy_buffer(env, device, out);
     destroy_buffer(env, device, readback);

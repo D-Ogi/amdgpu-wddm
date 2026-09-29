@@ -762,6 +762,36 @@ void APIENTRY copy_texture_region(D3D12DDI_HCOMMANDLIST hlist, const D3D12DDIARG
     l->list()->CopyTextureRegion(&d, x, y, z, &s, box ? &b : nullptr);
 }
 
+void APIENTRY resource_copy(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE dst, D3D12DDI_HRESOURCE src) {
+    CommandListRecord* l = list_of(hlist, "ResourceCopy");
+    if (!l) return;
+    ID3D12Resource* d = engine_resource(l, dst);
+    ID3D12Resource* s = engine_resource(l, src);
+    if (!d || !s) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    l->list()->CopyResource(d, s);
+}
+
+// No argument structure means the whole resource.
+void APIENTRY discard_resource(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HRESOURCE resource,
+                               const D3D12DDIARG_DISCARD_RESOURCE_0003* args) {
+    CommandListRecord* l = list_of(hlist, "DiscardResource");
+    if (!l) return;
+    ID3D12Resource* r = engine_resource(l, resource);
+    if (!r || (args && args->NumRects && !args->pRects)) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    if (!args) {
+        l->list()->DiscardResource(r, nullptr);
+        return;
+    }
+    const D3D12_DISCARD_REGION region{args->NumRects, args->pRects, args->FirstSubresource, args->NumSubresources};
+    l->list()->DiscardResource(r, &region);
+}
+
 void APIENTRY resource_barrier(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDIARG_RESOURCE_BARRIER_0022* in) {
     CommandListRecord* l = list_of(hlist, "ResourceBarrier");
     if (!l) return;
@@ -933,6 +963,8 @@ void fill_core_resources(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
 void fill_list_resources(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexcept {
     t->pfnCopyBufferRegion = copy_buffer_region;
     t->pfnCopyTextureRegion = copy_texture_region;
+    t->pfnResourceCopy = resource_copy;
+    t->pfnDiscardResource = discard_resource;
     t->pfnResourceBarrier = resource_barrier;
 }
 

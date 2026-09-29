@@ -464,6 +464,36 @@ void APIENTRY clear_rtv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HAN
     l->list()->ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE{view.ptr}, color, rect_count, rects);
 }
 
+// The view's GPU handle, its CPU handle and the resource pass through as the runtime gave them.
+template <class Value, class Clear>
+void clear_uav(D3D12DDI_HCOMMANDLIST hlist, const char* slot, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
+               D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu, D3D12DDI_HRESOURCE resource, const Value* values, UINT rect_count,
+               const D3D12DDI_RECT* rects, Clear clear) {
+    CommandListRecord* l = list_of(hlist, slot);
+    if (!l) return;
+    ResourceRecord* r = view_resource(l->h.device, resource);
+    if (!r || !cpu.ptr || !values || (rect_count && !rects)) {
+        l->h.device->report_list(l->rt, E_INVALIDARG);
+        return;
+    }
+    (l->list()->*clear)(D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr}, D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr},
+                        static_cast<ID3D12Resource*>(r->h.engine), values, rect_count, rects);
+}
+
+void APIENTRY clear_uav_uint(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
+                             D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu, D3D12DDI_HRESOURCE resource, const UINT values[4],
+                             UINT rect_count, const D3D12DDI_RECT* rects) {
+    clear_uav(hlist, "ClearUnorderedAccessViewUint", gpu, cpu, resource, values, rect_count, rects,
+              &ID3D12GraphicsCommandList::ClearUnorderedAccessViewUint);
+}
+
+void APIENTRY clear_uav_float(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_GPU_DESCRIPTOR_HANDLE gpu,
+                              D3D12DDI_CPU_DESCRIPTOR_HANDLE cpu, D3D12DDI_HRESOURCE resource, const FLOAT values[4],
+                              UINT rect_count, const D3D12DDI_RECT* rects) {
+    clear_uav(hlist, "ClearUnorderedAccessViewFloat", gpu, cpu, resource, values, rect_count, rects,
+              &ID3D12GraphicsCommandList::ClearUnorderedAccessViewFloat);
+}
+
 // The DDI passes the clear flags as a plain UINT. INFERENCE: the bits are the API's (depth 1, stencil 2); any
 // other bit, or none, is refused rather than guessed.
 void APIENTRY clear_dsv(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_CPU_DESCRIPTOR_HANDLE view, UINT flags, FLOAT depth,
@@ -499,6 +529,8 @@ void fill_core_descriptors(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
 
 void fill_list_descriptors(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
     t->pfnSetDescriptorHeaps = set_descriptor_heaps;
+    t->pfnClearUnorderedAccessViewUint = clear_uav_uint;
+    t->pfnClearUnorderedAccessViewFloat = clear_uav_float;
     if (table_index == 1) {                                          // the compute table keeps its rejection
         t->pfnClearRenderTargetView = clear_rtv;
         t->pfnClearDepthStencilView = clear_dsv;

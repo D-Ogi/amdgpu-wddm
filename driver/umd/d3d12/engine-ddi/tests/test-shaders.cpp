@@ -456,6 +456,10 @@ void test_graphics(Env& env, Device& device) {
             const D3D12DDIARG_RESOURCE_BARRIER_0022 to_depth =
                 transition(depth_buffer, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_DEPTH_WRITE);
             t.pfnResourceBarrier(rec.hlist(), 1, &to_depth);
+            // Whole resource without an argument structure, then the first subresource by one.
+            t.pfnDiscardResource(rec.hlist(), depth_buffer.hres(), nullptr);
+            const D3D12DDIARG_DISCARD_RESOURCE_0003 first_subresource{0, nullptr, 0, 1};
+            t.pfnDiscardResource(rec.hlist(), depth_buffer.hres(), &first_subresource);
             t.pfnClearDepthStencilView(rec.hlist(), dsv, 1, 1.0f, 0, 0, nullptr);
         }
         // No clear: the target is fresh, and engine-ddi initializes it before these lists run (INTEGRATION.md,
