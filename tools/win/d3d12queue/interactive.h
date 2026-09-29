@@ -101,7 +101,11 @@ struct Session {
             if(desc.VendorId==0x1002 && desc.DeviceId==0x13fe){adapter=candidate;break;}}
         if(!adapter)return DXGI_ERROR_NOT_FOUND;
         std::printf("runtime=system32/d3d12.dll adapter=%s\n",mode==AdapterMode::Warp?"WARP":"BC-250");std::fflush(stdout);
+#ifdef INTERACTIVE_FEATURE_LEVEL_12_1
+        hr=api("D3D12CreateDevice FL12_1",[&]{return create(adapter.Get(),D3D_FEATURE_LEVEL_12_1,IID_PPV_ARGS(&device));});
+#else
         hr=api("D3D12CreateDevice FL11_0",[&]{return create(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device));});
+#endif
         if(SUCCEEDED(hr))observe_features();
         return hr;
     }
