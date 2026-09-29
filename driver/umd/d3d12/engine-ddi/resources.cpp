@@ -449,9 +449,18 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
                 log_line("linear primary: the heap has %llu bytes, the surface needs %llu",
                          static_cast<unsigned long long>(sized.ByteSize), static_cast<unsigned long long>(need));
         } else {
-            const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
-            const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+            // A heap alignment below the default is the small placement alignment the resource was granted: its
+            // size is the one for that alignment (a 16 KB texture in a 16 KB heap), and place() picks it again.
+            D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+            if (sized.Alignment && sized.Alignment < D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT)
+                d0.Alignment = sized.Alignment;
+            D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+            if (info.SizeInBytes == UINT64_MAX && d0.Alignment) {
+                d0.Alignment = 0;
+                info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+            }
             if (info.SizeInBytes == UINT64_MAX || !info.SizeInBytes) return E_INVALIDARG;
+            desc.Alignment = d0.Alignment;              // the image is placed with the alignment its memory has
             need = info.SizeInBytes;
             align = info.Alignment;
         }
