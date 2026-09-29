@@ -15,7 +15,7 @@ static UINT64 completed=10;
 static UINT64 gpu_address=UINT64_C(0x100000000);
 static D3DKMT_HANDLE next_allocation=50;
 static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false;
-static unsigned creates=0,makes_resident=0;
+static unsigned creates=0,makes_resident=0,probes=0;
 static uint32_t expected_type=0;
 static void* identity=handle<void*>(0x5432);
 static RuntimeHeapImports* imports;
@@ -25,6 +25,9 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
  assert(a->NumAllocations==1);auto blob=static_cast<const bc250_umd_alloc_private*>(a->pAllocationInfo->pPrivateDriverData);
  assert(blob->alloc_size==65536 && blob->phys_alignment==65536);
  assert(blob->preferred_heap==uint32_t(expected_type?AMDGPU_GEM_DOMAIN_GTT:AMDGPU_GEM_DOMAIN_VRAM));
+ assert(blob->gem_flags==(expected_type==0?uint64_t(AMDGPU_GEM_CREATE_NO_CPU_ACCESS):
+     expected_type==1?uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED|AMDGPU_GEM_CREATE_CPU_GTT_USWC):
+     uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)));
  events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
 }
 static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLOCATE_0022* a){assert(a->NumAllocations==1);events+='D';return S_OK;}
@@ -36,16 +39,17 @@ static HRESULT APIENTRY make_cb(HANDLE,D3DDDI_MAKERESIDENT*){++makes_resident;re
 static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){a->pData=mapped;events+='L';return S_OK;}
 static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return S_OK;}
 static void VKAPI_CALL memory_properties(VkPhysicalDevice d,VkPhysicalDeviceMemoryProperties* out){
- assert(d==handle<VkPhysicalDevice>(3));*out={};out->memoryTypeCount=3;
+ assert(d==handle<VkPhysicalDevice>(3));*out={};out->memoryTypeCount=4;
  out->memoryTypes[0].propertyFlags=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
  out->memoryTypes[1].propertyFlags=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
  out->memoryTypes[2].propertyFlags=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+ out->memoryTypes[3].propertyFlags=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 }
 static VkResult VKAPI_CALL buffer_create(VkDevice d,const VkBufferCreateInfo* info,const VkAllocationCallbacks*,VkBuffer* out){
- assert(d==handle<VkDevice>(4) && info->size==4096 && (info->usage&VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));*out=handle<VkBuffer>(7);return VK_SUCCESS;
+ assert(d==handle<VkDevice>(4) && info->size==4096 && (info->usage&VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));++probes;*out=handle<VkBuffer>(7);return VK_SUCCESS;
 }
 static void VKAPI_CALL buffer_destroy(VkDevice,VkBuffer,const VkAllocationCallbacks*){}
-static void VKAPI_CALL buffer_requirements(VkDevice,VkBuffer,VkMemoryRequirements* out){*out={65536,65536,7};}
+static void VKAPI_CALL buffer_requirements(VkDevice,VkBuffer,VkMemoryRequirements* out){*out={65536,65536,15};}
 static VkResult VKAPI_CALL memory_allocate(VkDevice d,const VkMemoryAllocateInfo* info,const VkAllocationCallbacks*,VkDeviceMemory* out){
  assert(d==handle<VkDevice>(4) && info->allocationSize==65536 && info->memoryTypeIndex==expected_type);
  auto flags=static_cast<const VkMemoryAllocateFlagsInfo*>(info->pNext);
@@ -88,6 +92,41 @@ int main(){
  assert(owner.free(&memory)==S_OK);assert(events==(expected_type?"AMILVNUD":"AMIVUD"));unlock_on_free=false;
  assert(!owner.owns_allocation(memory.allocation) && owner.free(&memory)==E_INVALIDARG);
  }
+ // Both CPU-visible L0 policies accept the explicit coherent flag, including
+ // heaps allowing every resource category. Actual non-buffer resources still fail.
+ heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|
+     D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE);
+ heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ for(expected_type=1;expected_type<=2;++expected_type){
+  heap.CPUPageProperty=expected_type==1?D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMI" && memory.memory_type_index==expected_type);
+  assert(owner.free(&memory)==S_OK && events=="AMIVUD");
+ }
+ // A cached, visible type alone cannot fulfill COHERENT_SYSTEMWIDE. Nor can it
+ // fulfill the existing upload policy, which already requires HOST_COHERENT.
+ req.memory_type_bits=1u<<3;events.clear();const auto before_allocation=next_allocation;
+ assert(owner.allocate(&req,&memory)==E_INVALIDARG && !memory.memory && events.empty() && next_allocation==before_allocation);
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+ assert(owner.allocate(&req,&memory)==E_INVALIDARG && !memory.memory && events.empty() && next_allocation==before_allocation);
+ heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;expected_type=3;
+ assert(owner.allocate(&req,&memory)==S_OK && events=="AMI" && memory.memory_type_index==3);
+ assert(owner.free(&memory)==S_OK && events=="AMIVUD");req.memory_type_bits=0;
+ const auto coherent_flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE);
+ heap.Flags=coherent_flags;
+ auto reject_before_probe=[&](){
+  const auto old_probes=probes;const auto old_allocation=next_allocation;events.clear();
+  assert(owner.allocate(&req,&memory)==E_NOTIMPL && !memory.memory && events.empty());
+  assert(probes==old_probes && next_allocation==old_allocation);
+ };
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;reject_before_probe();
+ heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
+ heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;reject_before_probe();
+ heap.MemoryPool=static_cast<D3D12DDI_MEMORY_POOL>(2);reject_before_probe();heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ heap.CreationNodeMask=2;reject_before_probe();heap.CreationNodeMask=1;
+ heap.VisibleNodeMask=2;reject_before_probe();heap.VisibleNodeMask=1;
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(coherent_flags)|0x80000000u);reject_before_probe();
+ resource.ResourceType=D3D12DDI_RT_TEXTURE2D;heap.Flags=coherent_flags;reject_before_probe();resource.ResourceType=D3D12DDI_RT_BUFFER;
+ heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
  assert(creates==1 && makes_resident==0);
  expected_type=0;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
  resource.ResourceType=D3D12DDI_RT_TEXTURE2D;assert(owner.allocate(&req,&memory)==E_NOTIMPL && !memory.memory);resource.ResourceType=D3D12DDI_RT_BUFFER;
@@ -101,5 +140,5 @@ int main(){
  pending=true;completed=10;events.clear();assert(owner.allocate(&req,&memory)==E_PENDING && !memory.memory && events=="AM");
  completed=20;pending=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMUDP");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- assert(makes_resident==0);std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, exact private import, borrowed map, ordered cleanup, pending retention, no residency");
+ assert(makes_resident==0);std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency");
 }

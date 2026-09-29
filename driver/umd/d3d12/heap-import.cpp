@@ -73,7 +73,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || !request->byte_size ||
        !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
     const auto& heap=*request->heap;
-    const unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+    const unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
+        D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
     if((request->flags&~engine_ddi::kMemoryDedicated) || !(heap.Flags&D3D12DDI_HEAP_FLAG_BUFFERS) ||
        (unsigned(heap.Flags)&~allowed) || heap.CreationNodeMask>1 || heap.VisibleNodeMask>1 ||
        (request->resource && request->resource->ResourceType!=D3D12DDI_RT_BUFFER))return E_NOTIMPL;
@@ -83,6 +84,13 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     case D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:access=AllocationAccess::CpuWriteCombined;want=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;break;
     case D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK:access=AllocationAccess::CpuCached;want=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_CACHED_BIT;break;
     default:return E_NOTIMPL;
+    }
+    if(heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE){
+        // The admitted adapter supplies coherent GTT CPU mappings. Limit this
+        // promise to CPU-visible system memory and require the same property
+        // on the Vulkan type importing that runtime allocation.
+        if(heap.MemoryPool!=D3D12DDI_MEMORY_POOL_L0 || access==AllocationAccess::GpuOnly)return E_NOTIMPL;
+        want|=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     }
     VkBufferCreateInfo probe_info{};probe_info.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     probe_info.size=request->byte_size;probe_info.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
