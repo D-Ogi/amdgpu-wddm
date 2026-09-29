@@ -193,8 +193,18 @@ int main(){
  assert(owner.free(&memory)==E_FAIL && events=="AMIVUD" && owner.owns_allocation(memory.allocation));
  assert(owner.last_free_report().stage==FreeStage::Deallocate && !owner.last_free_report().owner_expired);
  events.clear();assert(owner.close_after_engine_retirement()==E_FAIL && events=="D" && owner.owns_allocation(memory.allocation));
+ // Owned for its cleanup, but retired: it is no backing for a new view.
+ assert(!owner.borrow_backing(memory.allocation));
  fail_deallocate=false;events.clear();
  assert(owner.close_after_engine_retirement()==S_OK && events=="DP" && !owner.owns_allocation(memory.allocation));
+ // Backing lent to a runtime callback: its release waits for every return and changes nothing before.
+ events.clear();assert(owner.allocate(&req,&memory)==S_OK && !owner.borrow_backing(memory.allocation+1));
+ assert(owner.borrow_backing(memory.allocation) && owner.borrow_backing(memory.allocation));
+ assert(owner.free(&memory)==E_PENDING && events=="AMI");owner.return_backing(memory.allocation);
+ assert(owner.free(&memory)==E_PENDING && events=="AMI");owner.return_backing(memory.allocation);
+ owner.return_backing(memory.allocation);assert(owner.borrow_backing(memory.allocation));owner.return_backing(memory.allocation);
+ assert(owner.free(&memory)==S_OK && events=="AMIVUD" && !owner.borrow_backing(memory.allocation));
+ events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  // The linear primary: all three flags on a PRIMARY heap. The memory type is one of the image's, no
  // buffer is probed, the address needs the image's alignment only, and the kernel gets the LB7A
  // description with the image's pitch and the backing's size.

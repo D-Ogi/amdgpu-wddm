@@ -154,6 +154,15 @@ no runtime callback in either form, keeps the allocation in its record and
 reports the device error. Other imported heap memory is released by handle
 list with the same two flags, after the engine has retired its uses. The
 hosted driver's own allocations are internal ones and keep flags NONE.
+
+The hosted driver reserves address ranges, maps zero pages and allocations
+inside them and queues address updates through `HostedDispatch`
+(`hosted-sparse-test.cpp`). An extent has one owner, an allocation's ordinary
+mapping or a reservation, and a runtime answer that would give it two removes
+the device. What is mapped inside a reservation is not recorded. One update
+names one reservation; its backing, range, fence and context are held until
+the runtime callback returns, the imported heaps among them. This is host
+tested only: the queue's tile slots still refuse, so no application reaches it.
 Queue Wait, tiled resources, scheduling groups, offer/reclaim and background
 processing are also outside the current shell. A non-null function pointer may
 be an explicit refusal handler, so table publication is not a capability claim.

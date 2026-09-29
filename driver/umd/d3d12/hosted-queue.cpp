@@ -8,7 +8,8 @@ struct HostedQueue::Call {HostedQueue* self;Alias* alias;uint32_t op;void* argum
 HostedQueue::HostedQueue(bc250::umd::RuntimeDomain& domain,QueueEngineRegistry& registry,Device& device) noexcept
     :domain_(domain),registry_(registry),device_(device),runtime_device_(device.runtime.handle),
     submit_(device.kernel_callbacks.pfnSubmitCommandCb),wait_(device.kernel_callbacks.pfnWaitForSynchronizationObjectFromGpuCb),
-    signal_(device.kernel_callbacks.pfnSignalSynchronizationObjectFromGpu2Cb) {}
+    signal_(device.kernel_callbacks.pfnSignalSynchronizationObjectFromGpu2Cb),
+    update_(device.kernel_callbacks.pfnUpdateGpuVirtualAddressCb) {}
 HostedQueue::Alias* HostedQueue::find(uint32_t token) noexcept {
     if(!token || (token&0x80000000u))return nullptr;
     for(auto& alias:aliases_)if(alias.cookie && alias.token==token)return &alias;
@@ -52,7 +53,8 @@ HRESULT HostedQueue::invoke(uint32_t op,void* argument) noexcept {
     }else if(op==BC250_HOST_SubmitCommand){
         const auto& a=*static_cast<D3DKMT_SUBMITCOMMAND*>(payload);
         if(a.BroadcastContextCount!=1)return E_NOTIMPL;token=a.BroadcastContext[0];
-    }else return E_NOTIMPL;
+    }else if(op==BC250_HOST_UpdateGpuVirtualAddress)token=static_cast<D3DKMT_UPDATEGPUVIRTUALADDRESS*>(payload)->hContext;
+    else return E_NOTIMPL;
 
     Alias* alias=nullptr;
     AcquireSRWLockExclusive(&lock_);
@@ -124,6 +126,15 @@ HRESULT APIENTRY HostedQueue::pinned(void* user,const QueueBindingView* view){
         b.BroadcastContextCount=1;b.BroadcastContext[0]=view->context;b.NumPrimaries=a.NumPrimaries;
         for(UINT i=0;i<a.NumPrimaries;++i)b.WrittenPrimaries[i]=a.WrittenPrimaries[i];
         return self.submit_?self.submit_(self.runtime_device_,&b):E_NOTIMPL;
+    }
+    if(call.op==BC250_HOST_UpdateGpuVirtualAddress){
+        // HostedDispatch has admitted the extents, the backing and the fence, and holds them.
+        const auto& a=*static_cast<D3DKMT_UPDATEGPUVIRTUALADDRESS*>(call.argument);
+        if(a.Flags.Value)return E_NOTIMPL;
+        if(!a.NumOperations || !a.Operations || !a.hFenceObject || a.Reserved0 || a.Reserved1)return E_INVALIDARG;
+        D3DDDICB_UPDATEGPUVIRTUALADDRESS b{};b.hContext=view->context;b.hFenceObject=a.hFenceObject;
+        b.NumOperations=a.NumOperations;b.Operations=a.Operations;b.FenceValue=a.FenceValue;
+        return self.update_?self.update_(self.runtime_device_,&b):E_NOTIMPL;
     }
     return E_NOTIMPL;
 }

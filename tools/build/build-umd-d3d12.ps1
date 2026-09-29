@@ -95,6 +95,10 @@ try {
   if($LASTEXITCODE){throw 'Hosted dispatch test build failed'}
   & .\hosted-dispatch-test.exe
   if($LASTEXITCODE){throw 'Hosted dispatch tests failed'}
+  & cl.exe @flags /Fe:hosted-sparse-test.exe "$repo\driver\umd\d3d12\hosted-sparse-test.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp"
+  if($LASTEXITCODE){throw 'Hosted sparse test build failed'}
+  & .\hosted-sparse-test.exe
+  if($LASTEXITCODE){throw 'Hosted sparse tests failed'}
   & cl.exe @flags /analyze /analyze:external- /Fe:queue-engine-test.exe "$repo\driver\umd\d3d12\queue-engine-test.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" $engineLib
   if($LASTEXITCODE){throw 'Queue engine test build failed'}
   & .\queue-engine-test.exe

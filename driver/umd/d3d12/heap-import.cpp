@@ -22,6 +22,7 @@ struct RuntimeHeapImports::Record {
     engine_ddi::ImportedMemory imported{};
     Record* next{};
     bool retired{true},locked{},busy{};
+    unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
     bool surface{};                             // the allocation of a linear primary
     bool authority{};                           // its runtime resource's DDI is running
     bool destroyed{};                           // that DDI destroys the resource
@@ -56,6 +57,15 @@ RuntimeHeapImports::Record* RuntimeHeapImports::find(D3DKMT_HANDLE handle) const
 }
 bool RuntimeHeapImports::owns_allocation(D3DKMT_HANDLE handle) const noexcept {
     return active_ && domain_.entered() && find(handle)!=nullptr;
+}
+bool RuntimeHeapImports::borrow_backing(D3DKMT_HANDLE handle) noexcept {
+    if(!active_ || !domain_.entered())return false;
+    auto record=find(handle);
+    if(!record || record->retired || record->busy || record->surface || !record->imported.memory)return false;
+    ++record->borrowed;return true;
+}
+void RuntimeHeapImports::return_backing(D3DKMT_HANDLE handle) noexcept {
+    if(auto record=find(handle);record && record->borrowed)--record->borrowed;
 }
 void RuntimeHeapImports::erase(Record* record) noexcept {
     auto link=&records_;while(*link && *link!=record)link=&(*link)->next;
@@ -234,6 +244,8 @@ HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexc
     auto record=find(memory->allocation);
     if(!record || record!=memory->cookie || record->retired || record->imported.memory!=memory->memory ||
        record->imported.byte_size!=memory->byte_size || record->imported.gpu_va!=memory->gpu_va)return E_INVALIDARG;
+    // A runtime callback that names this import as backing is in flight below this call.
+    if(record->borrowed)return E_PENDING;
     record->retired=true;HRESULT hr=release(*record);if(hr==S_OK)erase(record);return hr;
 }
 HRESULT RuntimeHeapImports::dispatch(uint32_t op,void* argument) noexcept {

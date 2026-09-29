@@ -12,10 +12,17 @@ namespace native12 {
 // Device-owned internal paging and null-cookie contexts use KT callbacks directly.
 // Non-null queue cookies require the root's validated queue-registry hook.
 using HostedOperation = HRESULT (*)(void*,uint32_t,void*) noexcept;
+// Backing of another owner on this device (an imported heap). borrow admits only an allocation that
+// is complete, not retired and not in a callback, and holds it against release until give_back.
+// One give_back per admitted borrow; the same handle may be borrowed more than once.
+using HostedBorrow = bool (*)(void*,D3DKMT_HANDLE) noexcept;
+using HostedReturn = void (*)(void*,D3DKMT_HANDLE) noexcept;
 struct HostedDispatchHooks {
     void* userdata{};
     HostedOperation paging{};
     HostedOperation queue{};
+    HostedBorrow borrow{};
+    HostedReturn give_back{};
 };
 
 // Device-lifetime owner for internal ICD allocations. The caller serializes
@@ -23,10 +30,14 @@ struct HostedDispatchHooks {
 // thread around every engine operation. Domain is permission, not a lock.
 // No destructor callback, KMT fallback, fabricated runtime queue, or successful
 // response for an unsupported operation. Internal KT callbacks take hRTDevice;
-// application queue hooks must use their real runtime queue ownership. Ordinary
-// allocation mappings only: sparse reservation/update and external imports refuse.
+// application queue hooks must use their real runtime queue ownership.
+// Address ranges have two owners: an allocation's ordinary mapping and a reservation. No extent
+// belongs to both. What is mapped inside a reservation is not recorded: the bridge checks extents
+// and handles when a call is admitted and holds them only for the length of the runtime callback.
+// Update admits MAP, MAP_PROTECT and UNMAP of one reservation per call; COPY and DoNotWait refuse.
 class HostedDispatch final {
     struct Allocation;
+    struct Reservation;
     struct Sync;
     bc250::umd::RuntimeDomain& domain_;
     D3D12DDI_HRTDEVICE runtime_{};
@@ -34,6 +45,7 @@ class HostedDispatch final {
     D3DDDI_DEVICECALLBACKS kernel_{};
     HostedDispatchHooks hooks_{};
     Allocation* allocations_{};
+    Reservation* reservations_{};
     Sync* syncs_{};
     Sync* find_sync(D3DKMT_HANDLE handle) noexcept;
     struct Context {HANDLE handle{};uint32_t token{};bool busy{};bc250_host_progress progress{};};
@@ -45,6 +57,11 @@ class HostedDispatch final {
     std::atomic<bool> lost_{false};
     bool active_{true};
     Allocation* find(D3DKMT_HANDLE handle) noexcept;
+    Reservation* containing(UINT64 base,UINT64 bytes) noexcept;
+    bool owned(UINT64 base,UINT64 bytes,const void* except) const noexcept;
+    bool borrow(D3DKMT_HANDLE handle) noexcept;
+    void give_back(D3DKMT_HANDLE handle) noexcept;
+    HRESULT update(void* argument) noexcept;
     HRESULT operation(uint32_t op,void* argument) noexcept;
     HRESULT remove_device() noexcept;
 public:
@@ -58,7 +75,7 @@ public:
     // Explicit identity must equal the identity used for imports by the embedder.
     bc250_host descriptor(uint64_t adapter_luid,void* identity) noexcept;
     // Terminal metadata release only, after all calls/workers stop. Returns the
-    // unresolved allocation/context/paging/sync count; does not claim OS allocation reclamation.
+    // unresolved allocation/reservation/context/paging/sync count; does not claim OS allocation reclamation.
     unsigned discard_metadata() noexcept;
     bool lost() const noexcept {return lost_.load();}
 };

@@ -84,6 +84,14 @@ class DeviceEngine final {
         if(FAILED(result))self.binding_failed_=true;
         stage("UnbindQueue",result);
     }
+    static bool borrow_backing(void* owner,D3DKMT_HANDLE handle) noexcept {
+        auto& self=*static_cast<DeviceEngine*>(owner);
+        return self.active_ && self.imports_ && self.imports_->borrow_backing(handle);
+    }
+    static void return_backing(void* owner,D3DKMT_HANDLE handle) noexcept {
+        auto& self=*static_cast<DeviceEngine*>(owner);
+        if(self.imports_)self.imports_->return_backing(handle);
+    }
     static HRESULT queue_dispatch(void* owner,uint32_t op,void* arg) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
         return self.active_ && self.queue_bridge_?HostedQueue::dispatch(self.queue_bridge_.get(),op,arg):E_NOTIMPL;
@@ -155,7 +163,8 @@ class DeviceEngine final {
 public:
     DeviceEngine(Device& device,const AdapterEngineAccess& access) noexcept
       :device_(device),adapter_(*device.adapter),access_(access),
-       dispatch_(domain_,device.runtime,device.callbacks,device.kernel_callbacks,{this,nullptr,queue_dispatch}),
+       dispatch_(domain_,device.runtime,device.callbacks,device.kernel_callbacks,
+                 {this,nullptr,queue_dispatch,borrow_backing,return_backing}),
        bootstrap_(access.driver_entry,device.adapter->contract.luid,this,this,dispatch) {
         services_={sizeof(services_),this,bind,unbind};
         lock_ready_=InitializeCriticalSectionEx(&entry_lock_,0,0)!=FALSE;

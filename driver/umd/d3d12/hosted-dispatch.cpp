@@ -5,10 +5,32 @@
 #include <cstring>
 
 namespace native12 {
+namespace {
+constexpr UINT64 kPage=4096,kGranule=65536;
+bool extent(UINT64 base,UINT64 bytes) noexcept {
+    return base && bytes && !(base&(kPage-1)) && !(bytes&(kPage-1)) && base<=UINT64_MAX-bytes;
+}
+bool overlap(UINT64 a,UINT64 a_bytes,UINT64 b,UINT64 b_bytes) noexcept {return a<b+b_bytes && b<a+a_bytes;}
+// A backed page is readable, or readable and writable: nothing else may be asked for it.
+bool backed_protection(const D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE& p) noexcept {
+    return !p.Zero && !p.NoAccess && !p.SystemUseOnly && !p.Reserved;
+}
+bool unbacked_protection(const D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE& p) noexcept {
+    D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE zero{},none{};zero.Zero=1;none.NoAccess=1;
+    return p.Value==zero.Value || p.Value==none.Value;
+}
+}
+struct HostedDispatch::Reservation {
+    Reservation* next{};
+    UINT64 base{},bytes{};                      // base 0: the reserve callback has not answered
+    unsigned borrowed{};                        // runtime callbacks in flight inside this range
+    bool busy{};                                // its own reserve or free callback is in flight
+};
 struct HostedDispatch::Allocation {
     RuntimeAllocation owner;
     Allocation* next{};
     UINT64 va{},bytes{};
+    unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
     bool busy{},locked{};
     Allocation(D3D12DDI_HRTDEVICE runtime,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb)
         :owner(runtime,cb) {}
@@ -29,6 +51,7 @@ unsigned HostedDispatch::discard_metadata() noexcept {
     while(allocations_){auto record=allocations_;allocations_=record->next;
         if(record->owner.handle())++unresolved;
         record->owner.invalidate_runtime();delete record;}
+    while(reservations_){auto range=reservations_;reservations_=range->next;++unresolved;delete range;}
     for(auto& ctx:contexts_){if(ctx.handle)++unresolved;ctx={};}
     while(syncs_){auto sync=syncs_;syncs_=sync->next;if(sync->handle)++unresolved;delete sync;}
     if(paging_.queue)++unresolved;paging_={};
@@ -39,6 +62,93 @@ HostedDispatch::Allocation* HostedDispatch::find(D3DKMT_HANDLE handle) noexcept 
     for(auto record=allocations_;record;record=record->next)
         if(record->owner.handle()==handle)return record;
     return nullptr;
+}
+HostedDispatch::Reservation* HostedDispatch::containing(UINT64 base,UINT64 bytes) noexcept {
+    for(auto range=reservations_;range;range=range->next)
+        if(range->base && base>=range->base && bytes<=range->bytes && base-range->base<=range->bytes-bytes)return range;
+    return nullptr;
+}
+bool HostedDispatch::owned(UINT64 base,UINT64 bytes,const void* except) const noexcept {
+    for(auto range=reservations_;range;range=range->next)
+        if(range!=except && range->base && overlap(base,bytes,range->base,range->bytes))return true;
+    for(auto record=allocations_;record;record=record->next)
+        if(record!=except && record->va && overlap(base,bytes,record->va,record->bytes))return true;
+    return false;
+}
+bool HostedDispatch::borrow(D3DKMT_HANDLE handle) noexcept {
+    if(auto record=find(handle)){if(record->busy)return false;++record->borrowed;return true;}
+    return handle && hooks_.borrow && hooks_.give_back && hooks_.borrow(hooks_.userdata,handle);
+}
+void HostedDispatch::give_back(D3DKMT_HANDLE handle) noexcept {
+    // A borrowed record cannot be destroyed, so the owner found here is the one that lent it.
+    if(auto record=find(handle)){if(record->borrowed)--record->borrowed;return;}
+    if(hooks_.give_back)hooks_.give_back(hooks_.userdata,handle);
+}
+HRESULT HostedDispatch::update(void* argument) noexcept {
+    const auto& a=*static_cast<const D3DKMT_UPDATEGPUVIRTUALADDRESS*>(argument);
+    // The runtime queues wait(FenceValue), the updates and signal(FenceValue+1).
+    if(!a.NumOperations || !a.Operations || a.Reserved0 || a.Reserved1 || !a.FenceValue ||
+       a.FenceValue>=UINT64_MAX-1)return E_INVALIDARG;
+    if(a.Flags.Value)return E_NOTIMPL;
+    auto sync=find_sync(a.hFenceObject);
+    if(!sync || sync->busy || sync->type!=D3DDDI_MONITORED_FENCE)return E_INVALIDARG;
+    auto ctx=context(a.hContext);
+    if(ctx && ctx->busy)return E_INVALIDARG;
+    if(!ctx && !hooks_.queue)return E_NOTIMPL;
+    Reservation* range=nullptr;
+    auto backing=[&](const D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION& op) noexcept ->D3DKMT_HANDLE {
+        return op.OperationType==D3DDDI_UPDATEGPUVIRTUALADDRESS_MAP?op.Map.hAllocation:
+            op.OperationType==D3DDDI_UPDATEGPUVIRTUALADDRESS_MAP_PROTECT?op.MapProtect.hAllocation:0;
+    };
+    for(UINT i=0;i<a.NumOperations;++i){
+        const auto& op=a.Operations[i];UINT64 base=0,bytes=0,offset=0,part=0;bool backed=true;
+        switch(op.OperationType){
+        case D3DDDI_UPDATEGPUVIRTUALADDRESS_MAP:
+            base=op.Map.BaseAddress;bytes=op.Map.SizeInBytes;
+            offset=op.Map.AllocationOffsetInBytes;part=op.Map.AllocationSizeInBytes;break;
+        case D3DDDI_UPDATEGPUVIRTUALADDRESS_MAP_PROTECT:
+            base=op.MapProtect.BaseAddress;bytes=op.MapProtect.SizeInBytes;
+            offset=op.MapProtect.AllocationOffsetInBytes;part=op.MapProtect.AllocationSizeInBytes;
+            if(!backed_protection(op.MapProtect.Protection))return E_INVALIDARG;
+            break;
+        case D3DDDI_UPDATEGPUVIRTUALADDRESS_UNMAP:
+            base=op.Unmap.BaseAddress;bytes=op.Unmap.SizeInBytes;backed=false;
+            if(!unbacked_protection(op.Unmap.Protection))return E_INVALIDARG;
+            break;
+        default:return E_NOTIMPL;
+        }
+        if(!extent(base,bytes))return E_INVALIDARG;
+        auto found=containing(base,bytes);
+        if(!found || found->busy || (range && found!=range))return E_INVALIDARG;
+        range=found;
+        // A part of 0 stands for the whole extent; a smaller part repeats over it.
+        if(backed && (!backing(op) || (offset&(kPage-1)) || (part&(kPage-1)) || part>bytes ||
+           (part && bytes%part) || offset>UINT64_MAX-(part?part:bytes)))return E_INVALIDARG;
+    }
+    // Everything the callback names is held until it returns: a call that re-enters the bridge
+    // cannot release the backing, the range, the fence or the context under it.
+    for(UINT i=0;i<a.NumOperations;++i){
+        const auto handle=backing(a.Operations[i]);
+        if(handle && !borrow(handle)){
+            for(UINT j=0;j<i;++j)if(const auto held=backing(a.Operations[j]))give_back(held);
+            return E_INVALIDARG;
+        }
+    }
+    ++range->borrowed;sync->busy=true;
+    HRESULT hr;
+    if(ctx){
+        // The callback's request is not the kernel's: full context handle, other field widths.
+        D3DDDICB_UPDATEGPUVIRTUALADDRESS b{};b.hContext=ctx->handle;b.hFenceObject=a.hFenceObject;
+        b.NumOperations=a.NumOperations;b.Operations=a.Operations;b.FenceValue=a.FenceValue;
+        ctx->busy=true;
+        hr=kernel_.pfnUpdateGpuVirtualAddressCb?kernel_.pfnUpdateGpuVirtualAddressCb(runtime_.handle,&b):E_NOTIMPL;
+        ctx->busy=false;
+    }else hr=hooks_.queue(hooks_.userdata,BC250_HOST_UpdateGpuVirtualAddress,argument);
+    sync->busy=false;--range->borrowed;
+    for(UINT i=0;i<a.NumOperations;++i)if(const auto held=backing(a.Operations[i]))give_back(held);
+    // S_OK is admission to the queue, not completion. Any other success is not a defined answer.
+    if(SUCCEEDED(hr) && hr!=S_OK)return remove_device();
+    return hr;
 }
 HostedDispatch::Sync* HostedDispatch::find_sync(D3DKMT_HANDLE handle) noexcept {
     if(!handle)return nullptr;
@@ -153,7 +263,8 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     }
     case BC250_HOST_DESTROY_PAGING:{
         if(hooks_.paging)return hooks_.paging(hooks_.userdata,op,argument);
-        if(!paging_.queue || static_cast<bc250_host_paging*>(argument)->queue!=paging_.queue || allocations_)return E_INVALIDARG;
+        if(!paging_.queue || static_cast<bc250_host_paging*>(argument)->queue!=paging_.queue || allocations_ ||
+           reservations_)return E_INVALIDARG;
         D3DDDI_DESTROYPAGINGQUEUE b{};b.hPagingQueue=paging_.queue;
         HRESULT hr=KT_CALL(DestroyPagingQueue,&b);if(hr==S_OK)paging_={};return hr;
     }
@@ -182,10 +293,39 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     case BC250_HOST_PUBLISH_PROGRESS:case BC250_HOST_CREATE_QUEUE_CONTEXT:case BC250_HOST_DESTROY_QUEUE_CONTEXT:
     case BC250_HOST_CreateContextVirtual:case BC250_HOST_DestroyContext:
     case BC250_HOST_WaitForSynchronizationObjectFromGpu:case BC250_HOST_SignalSynchronizationObjectFromGpu:
-    case BC250_HOST_SignalSynchronizationObjectFromGpu2:case BC250_HOST_SubmitCommand:case BC250_HOST_UpdateGpuVirtualAddress:
+    case BC250_HOST_SignalSynchronizationObjectFromGpu2:case BC250_HOST_SubmitCommand:
     case BC250_HOST_CreateHwQueue:case BC250_HOST_DestroyHwQueue:case BC250_HOST_SubmitCommandToHwQueue:
     case BC250_HOST_SubmitWaitForSyncObjectsToHwQueue:case BC250_HOST_SubmitSignalSyncObjectsToHwQueue:
         return internal_queue(op,argument);
+    case BC250_HOST_UpdateGpuVirtualAddress:return update(argument);
+    case BC250_HOST_ReserveGpuVirtualAddress:{
+        auto& a=*static_cast<D3DDDI_RESERVEGPUVIRTUALADDRESS*>(argument);
+        const bool fixed=a.BaseAddress!=0;
+        // Reserved0 and Reserved1 are the obsolete reservation type and driver protection.
+        if(!a.Size || (a.Size&(kGranule-1)) || (a.BaseAddress&(kGranule-1)) || a.Reserved0 || a.Reserved1)return E_INVALIDARG;
+        if(fixed){
+            if(a.BaseAddress>UINT64_MAX-a.Size || owned(a.BaseAddress,a.Size,nullptr))return E_INVALIDARG;
+        }else if((a.MinimumAddress&(kGranule-1)) || (a.MaximumAddress&(kGranule-1)) ||
+                 (a.MaximumAddress && (a.MaximumAddress<=a.MinimumAddress ||
+                  a.MaximumAddress-a.MinimumAddress<a.Size)))return E_INVALIDARG;
+        auto range=new(std::nothrow) Reservation;if(!range)return E_OUTOFMEMORY;
+        // Tracking storage exists before the runtime may reserve anything.
+        range->busy=true;range->next=reservations_;reservations_=range;
+        D3DDDI_RESERVEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.MinimumAddress=a.MinimumAddress;
+        b.MaximumAddress=a.MaximumAddress;b.Size=a.Size;
+        HRESULT hr=KT_CALL(ReserveGpuVirtualAddress,&b);range->busy=false;
+        if(FAILED(hr)){
+            auto link=&reservations_;while(*link!=range)link=&(*link)->next;*link=range->next;delete range;return hr;
+        }
+        // The runtime holds a reservation now, whatever it answered: the record stays.
+        const UINT64 va=b.VirtualAddress;
+        const bool placed=va && !(va&(kGranule-1)) && va<=UINT64_MAX-a.Size &&
+            (fixed?va==a.BaseAddress:(va>=a.MinimumAddress && (!a.MaximumAddress || va+a.Size<=a.MaximumAddress)));
+        const bool free_extent=placed && !owned(va,a.Size,range);
+        range->base=va;range->bytes=a.Size;
+        if(hr!=S_OK || !free_extent)return remove_device();
+        a.VirtualAddress=va;a.PagingFenceValue=b.PagingFenceValue;return S_OK;
+    }
     case BC250_HOST_CreateAllocation2:{
         auto& a=*static_cast<D3DKMT_CREATEALLOCATION*>(argument);
         auto flags=a.Flags;flags.CreateResource=0;flags.NonSecure=0;
@@ -213,25 +353,62 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     case BC250_HOST_DestroyAllocation2:{
         auto& a=*static_cast<D3DKMT_DESTROYALLOCATION2*>(argument);
         if(a.hResource || a.Flags.Value || a.AllocationCount!=1 || !a.phAllocationList)return E_INVALIDARG;
-        auto record=find(a.phAllocationList[0]);if(!record || record->busy || record->locked || record->va)return E_INVALIDARG;
+        auto record=find(a.phAllocationList[0]);
+        if(!record || record->busy || record->borrowed || record->locked || record->va)return E_INVALIDARG;
         record->busy=true;HRESULT hr=record->owner.close();record->busy=false;
         if(SUCCEEDED(hr)){auto link=&allocations_;while(*link!=record)link=&(*link)->next;*link=record->next;delete record;}
         return hr;
     }
     case BC250_HOST_MapGpuVirtualAddress:{
-        auto& a=*static_cast<D3DDDI_MAPGPUVIRTUALADDRESS*>(argument);auto record=find(a.hAllocation);
-        if(!record || record->busy || record->va || !a.SizeInPages || a.SizeInPages>UINT64_MAX/4096)return E_INVALIDARG;
+        auto& a=*static_cast<D3DDDI_MAPGPUVIRTUALADDRESS*>(argument);
+        if(!a.SizeInPages || a.SizeInPages>UINT64_MAX/kPage)return E_INVALIDARG;
         if(!hooks_.paging && (!paging_.queue || a.hPagingQueue!=paging_.queue))return E_INVALIDARG;
+        const UINT64 bytes=a.SizeInPages*kPage;
+        Reservation* range=nullptr;
+        if(a.BaseAddress){
+            if(!extent(a.BaseAddress,bytes))return E_INVALIDARG;
+            range=containing(a.BaseAddress,bytes);
+            // An extent that leaves its reservation, or enters one from outside, has no owner.
+            if(!range && owned(a.BaseAddress,bytes,nullptr))return E_INVALIDARG;
+        }
+        if(range){
+            // A view inside a reservation: zero pages, or an allocation whose own ordinary
+            // mapping, if it has one, is not touched. One allocation may have many such views.
+            if(range->busy)return E_INVALIDARG;
+            const bool zero=!a.hAllocation;
+            if(zero){
+                D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE only{};only.Zero=1;
+                if(a.Protection.Value!=only.Value || a.OffsetInPages || a.DriverProtection)return E_INVALIDARG;
+            }else if(!backed_protection(a.Protection) || a.OffsetInPages>UINT64_MAX/kPage-a.SizeInPages ||
+                     !borrow(a.hAllocation))return E_INVALIDARG;
+            ++range->borrowed;
+            HRESULT hr=KT_CALL(MapGpuVirtualAddress,&a);
+            --range->borrowed;if(!zero)give_back(a.hAllocation);
+            if((hr==S_OK || hr==E_PENDING) && (a.VirtualAddress!=a.BaseAddress ||
+               (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX))))return remove_device();
+            return hr;
+        }
+        auto record=find(a.hAllocation);
+        if(!record || record->busy || record->va)return E_INVALIDARG;
         record->busy=true;HRESULT hr=KT_CALL(MapGpuVirtualAddress,&a);record->busy=false;
-        if(hr==S_OK || hr==E_PENDING){record->va=a.VirtualAddress;record->bytes=a.SizeInPages*4096;
-            if(!record->va || (record->va&4095) || record->va>UINT64_MAX-record->bytes ||
+        if(hr==S_OK || hr==E_PENDING){record->va=a.VirtualAddress;record->bytes=bytes;
+            if(!extent(record->va,bytes) || (a.BaseAddress && record->va!=a.BaseAddress) || owned(record->va,bytes,record) ||
                (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX)))return remove_device();}
         return hr;
     }
     case BC250_HOST_FreeGpuVirtualAddress:{
         auto& a=*static_cast<D3DKMT_FREEGPUVIRTUALADDRESS*>(argument);Allocation* record=nullptr;
+        for(auto range=reservations_;range;range=range->next){
+            if(!range->base || range->base!=a.BaseAddress || range->bytes!=a.Size)continue;
+            if(range->busy || range->borrowed)return E_INVALIDARG;
+            // Frees the range and every view inside it; updates still queued for it are ignored.
+            D3DDDICB_FREEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.Size=a.Size;
+            range->busy=true;HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);range->busy=false;
+            if(hr==S_OK){auto link=&reservations_;while(*link!=range)link=&(*link)->next;*link=range->next;delete range;}
+            return hr;
+        }
         for(auto r=allocations_;r;r=r->next)if(r->va && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
-        if(!record || record->busy || record->locked)return E_INVALIDARG;
+        if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
         D3DDDICB_FREEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.Size=a.Size;
         record->busy=true;HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);record->busy=false;
         if(hr==S_OK){record->va=record->bytes=0;}return hr;

@@ -21,7 +21,7 @@ struct Fixture {
  RuntimeQueue runtime[2];
  native12::QueueEngineSlot slots[2]{};
  UINT tokens[2]{};
- unsigned creates{},destroys{},submits{},waits{},signals{};
+ unsigned creates{},destroys{},submits{},waits{},signals{},updates{};
  bool fail_submit{},reentrant{};
  Fixture():registry(device,reinterpret_cast<engine_ddi::DeviceContext*>(this),{make,execute,close,healthy,this}){
   runtime[0]={this,reinterpret_cast<HANDLE>(UINT64_C(0x100000001))};runtime[1]={this,reinterpret_cast<HANDLE>(UINT64_C(0x200000002))};
@@ -37,6 +37,9 @@ struct Fixture {
    if(f->reentrant){
     D3DKMT_DESTROYCONTEXT d{};d.hContext=f->tokens[index];bc250_host_queue_context w{f->slots[index].cookie,&d};
     assert(native12::HostedQueue::dispatch(f->bridge.get(),BC250_HOST_DESTROY_QUEUE_CONTEXT,&w)==E_PENDING);
+   D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION op{};D3DKMT_UPDATEGPUVIRTUALADDRESS u{};u.hContext=f->tokens[index];
+   u.hFenceObject=71;u.NumOperations=1;u.Operations=&op;u.FenceValue=9;
+   assert(native12::HostedQueue::dispatch(f->bridge.get(),BC250_HOST_UpdateGpuVirtualAddress,&u)==E_PENDING && f->updates==index);
     assert(f->registry.destroy(f->slots[index])==E_PENDING && f->slots[index].cookie);
    }
    return f->fail_submit?E_FAIL:S_OK;};
@@ -45,6 +48,10 @@ struct Fixture {
   device.kernel_callbacks.pfnSignalSynchronizationObjectFromGpu2Cb=[](HANDLE h,const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2* a)->HRESULT{
    auto f=static_cast<Fixture*>(h);assert(a->BroadcastContextCount==1 && (a->BroadcastContextArray[0]==f->runtime[0].context || a->BroadcastContextArray[0]==f->runtime[1].context));
    assert(a->ObjectCount==1 && a->ObjectHandleArray[0]==71 && a->MonitoredFenceValueArray[0]==9);++f->signals;return S_OK;};
+  device.kernel_callbacks.pfnUpdateGpuVirtualAddressCb=[](HANDLE h,const D3DDDICB_UPDATEGPUVIRTUALADDRESS* a)->HRESULT{
+   auto f=static_cast<Fixture*>(h);assert(a->hContext==f->runtime[0].context || a->hContext==f->runtime[1].context);
+   assert(a->hFenceObject==71 && a->NumOperations==2 && a->Operations && a->FenceValue==9 && !a->Reserved0 && !a->Reserved1 && !a->Flags.Value);
+   ++f->updates;return S_OK;};
   bridge=std::make_unique<native12::HostedQueue>(domain,registry,device);
  }
 };
@@ -78,6 +85,13 @@ int main(){
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_WaitForSynchronizationObjectFromGpu,&wait)==S_OK);
   D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal{};signal.BroadcastContextCount=1;signal.BroadcastContextArray=&f.tokens[i];signal.ObjectCount=1;signal.ObjectHandleArray=&object;signal.MonitoredFenceValueArray=&value;
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==S_OK);
+  // The update names the queue by its token; the runtime gets the queue's full context.
+  D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION ops[2]{};D3DKMT_UPDATEGPUVIRTUALADDRESS update{};update.hContext=f.tokens[i];
+  update.hFenceObject=object;update.NumOperations=2;update.Operations=ops;update.FenceValue=value;
+  assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_UpdateGpuVirtualAddress,&update)==S_OK && f.updates==i+1);
+  update.Flags.DoNotWait=1;assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_UpdateGpuVirtualAddress,&update)==E_NOTIMPL);
+  update.Flags.Value=0;update.NumOperations=0;
+  assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_UpdateGpuVirtualAddress,&update)==E_INVALIDARG && f.updates==i+1);
   assert(completed==0); // Accepted callback requests are not fabricated GPU completion.
   bc250_host_progress progress{f.tokens[i],object,value,&completed};
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_PUBLISH_PROGRESS,&progress)==S_OK);
@@ -92,9 +106,12 @@ int main(){
  f.fail_submit=true;assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SubmitCommand,&submit)==E_FAIL);f.fail_submit=false;
  assert(f.registry.destroy(f.slots[0])==S_OK && f.destroys==1);
  unsigned prior=f.submits;assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SubmitCommand,&submit)==E_INVALIDARG && f.submits==prior);
+ {D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION op{};D3DKMT_UPDATEGPUVIRTUALADDRESS stale{};stale.hContext=f.tokens[0];stale.hFenceObject=object;
+  stale.NumOperations=1;stale.Operations=&op;stale.FenceValue=value;
+  assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_UpdateGpuVirtualAddress,&stale)==E_INVALIDARG && f.updates==2);}
  submit.BroadcastContext[0]=0x80000001u;assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SubmitCommand,&submit)==E_INVALIDARG);
  assert(f.registry.destroy(f.slots[1])==S_OK && f.destroys==2);
  unsigned unresolved=99;assert(f.registry.discard_retired_metadata(unresolved)==S_OK && !unresolved);
  assert(f.bridge->discard_metadata()==0 && wrong.discard_metadata()==0);
- std::puts("PASS hosted application queues: two real registry owners, full-width KT context transport, alias-only close, reentrant pin safety, failed callback, wrong device/thread, stale token, no fabricated fence completion");
+ std::puts("PASS hosted application queues: two real registry owners, full-width KT context transport, alias-only close, reentrant pin safety, failed callback, wrong device/thread, stale token, no fabricated fence completion, address update by token");
 }

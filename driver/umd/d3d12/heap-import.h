@@ -72,6 +72,11 @@ public:
     void end_owner_scope() noexcept;
     // Only these two operations are provided for RADV's borrowed allocation map.
     bool owns_allocation(D3DKMT_HANDLE) const noexcept;
+    // Backing for a view inside a reserved address range. Admits only an import the engine holds:
+    // complete, not retired, not in a callback, not a linear primary. Until every admitted borrow
+    // is returned, free() of that import answers E_PENDING and changes nothing.
+    bool borrow_backing(D3DKMT_HANDLE) noexcept;
+    void return_backing(D3DKMT_HANDLE) noexcept;
     HRESULT dispatch(uint32_t operation,void* argument) noexcept;
     // Frees only records already retired by free(), or never handed to engine.
     // An active imported heap makes close fail; no GPU retirement is invented.
