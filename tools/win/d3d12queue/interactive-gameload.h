@@ -568,6 +568,12 @@ struct Screen {
                     trace(chain?"Game load first Present":"Game load first offscreen frame");SetEvent(ready);}
                 else if(frames%60==0)note(chain?"present":"frame",value);
             }
+#ifdef INTERACTIVE_GAMELOAD_RENDER_HOLD_MS
+            // Test build only: outlive the join bound while still tracing, as a render thread stuck in a driver
+            // call would, so that the session must end without closing the trace under it.
+            for(const ULONGLONG until=GetTickCount64()+INTERACTIVE_GAMELOAD_RENDER_HOLD_MS;GetTickCount64()<until;Sleep(250))
+                trace("Game load test hold of the render thread");
+#endif
             // Every frame retires before its objects are released. A frame executed without a following Signal
             // (a failed Present, a failed Signal) is not covered by an earlier fence value: it gets a covering
             // Signal now if the queue takes one, and otherwise everything stays for process teardown. The first
@@ -689,7 +695,7 @@ inline HRESULT gameload_run(Session& s){
     board.finish(load_clean);screen.stop.store(true);
     const bool joined=WaitForSingleObject(static_cast<HANDLE>(render.native_handle()),static_cast<DWORD>(render_join_ms))==WAIT_OBJECT_0;
     if(joined){render.join();if(screen.pending)s.pending=true;}
-    else{render.detach();s.pending=true;s.event("after","Game load render thread did not end; its objects stay for process teardown",HRESULT_FROM_WIN32(WAIT_TIMEOUT));}
+    else{render.detach();s.pending=true;s.detached=true;s.event("after","Game load render thread did not end; its objects stay for process teardown",HRESULT_FROM_WIN32(WAIT_TIMEOUT));}
     const bool screen_clean=joined && screen.hr==S_OK && !screen.failures && screen.frames;
     // The terminal milestone is written before the outcome is decided, so that its loss fails the run too.
     log.line("single",0,"-",-1,"load_end",total,0);

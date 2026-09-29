@@ -39,6 +39,9 @@ param(
     [switch]$GameLoad,
     # Arms of -GameLoad: SMALL (64 KB buffers), LARGE (64 MB buffers and textures) or both, SMALL first.
     [ValidateSet('Small', 'Large', 'Both')][string]$GameLoadArm = 'Both',
+    # Test build of -GameLoad only: the render thread keeps tracing this long after its last frame, past the
+    # 10 s join bound, so that the session's end with a detached thread can be exercised (0 = off).
+    [ValidateRange(0, 30000)][int]$GameLoadRenderHoldMs = 0,
     # Back buffer format of -Present: B8G8R8A8_UNORM, or R10G10B10A2_UNORM as a 10-bit swap chain composed on
     # the desktop whatever the monitor's depth.
     [ValidateSet('Bgra8', 'Rgb10a2')][string]$PresentFormat = 'Bgra8'
@@ -76,6 +79,8 @@ if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
 if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad | Where-Object { $_ }).Count -gt 1) {
     throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection and GameLoad each replace the copy verb; choose one' }
 if ($GameLoadArm -ne 'Both' -and -not $GameLoad) { throw 'GameLoadArm needs GameLoad' }
+if ($GameLoadRenderHoldMs -and -not $GameLoad) { throw 'GameLoadRenderHoldMs needs GameLoad' }
+if ($GameLoadRenderHoldMs) { $variant += "/DINTERACTIVE_GAMELOAD_RENDER_HOLD_MS=$GameLoadRenderHoldMs" }
 if ($PresentFormat -ne 'Bgra8' -and -not $Present) { throw 'PresentFormat needs Present' }
 if ($PresentFormat -eq 'Rgb10a2') { $variant += '/DINTERACTIVE_PRESENT_RGB10A2' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }

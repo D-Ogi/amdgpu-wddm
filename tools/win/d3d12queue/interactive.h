@@ -76,8 +76,12 @@ struct Session {
     ComPtr<ID3D12Resource> upload,readback,middle;ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12Fence> fence;
     ComPtr<IUnknown> extra[12];  // objects of a build variant, released with the rest
-    unsigned sequence{};bool copy_success{},pending{},io_failed{};
+    // detached: a thread that may still call event() outlived its command; no further command runs after it.
+    unsigned sequence{};bool copy_success{},pending{},io_failed{},detached{};
     SRWLOCK trace_lock=SRWLOCK_INIT;  // event() is also called from the worker threads of -GameLoad
+    // sequence and io_failed are shared with those threads: the command loop writes and reads them under the lock.
+    void set_sequence(unsigned value){AcquireSRWLockExclusive(&trace_lock);sequence=value;ReleaseSRWLockExclusive(&trace_lock);}
+    bool trace_failed(){AcquireSRWLockShared(&trace_lock);const bool failed=io_failed;ReleaseSRWLockShared(&trace_lock);return failed;}
     ~Session() noexcept {
         // An exception while formatting/publishing a receipt must not release
         // resources with unproven GPU retirement during stack unwinding.
@@ -268,7 +272,7 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
     }
     HRESULT terminal=S_OK;const char* reason="exit";bool finished=false;
     for(unsigned seq=1;seq<=64 && !finished;++seq){
-        session.sequence=seq;const auto command_path=numbered(session.root,"command",seq,"txt");
+        session.set_sequence(seq);const auto command_path=numbered(session.root,"command",seq,"txt");
         while(GetFileAttributesW(command_path.c_str())==INVALID_FILE_ATTRIBUTES && GetTickCount64()<session.deadline && !session.abort_requested())Sleep(25);
         if(session.abort_requested()){terminal=HRESULT_FROM_WIN32(ERROR_CANCELLED);reason="abort";break;}
         if(GetTickCount64()>=session.deadline){terminal=HRESULT_FROM_WIN32(WAIT_TIMEOUT);reason="deadline";break;}
@@ -307,9 +311,17 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Abort:hr=HRESULT_FROM_WIN32(ERROR_CANCELLED);terminal=hr;reason="abort";finished=true;break;
         default:break;}
         session.event("after",name(command.verb),hr);
-        if(!publish(numbered(session.root,"result",seq,"json"),session.result(name(command.verb),hr)) || session.io_failed){terminal=E_FAIL;reason="io-failure";break;}
+        if(!publish(numbered(session.root,"result",seq,"json"),session.result(name(command.verb),hr)) || session.trace_failed()){terminal=E_FAIL;reason="io-failure";break;}
+        if(session.detached){terminal=HRESULT_FROM_WIN32(WAIT_TIMEOUT);reason="detached-thread";break;}
     }
     if(!publish(session.root/L"session.json",session.result(reason,terminal)))terminal=E_FAIL;
+    if(session.detached){
+        // The detached thread may still write the trace, so the handle is never closed: this thread takes the
+        // lock and keeps it. TerminateProcess, not ExitProcess: no DLL detach code runs after a thread that may
+        // have been cut inside a driver call.
+        session.event("after","Session ends with a detached thread; the trace stays open until process teardown",terminal);
+        AcquireSRWLockExclusive(&session.trace_lock);TerminateProcess(GetCurrentProcess(),3);
+    }
     CloseHandle(session.trace);session.trace=INVALID_HANDLE_VALUE;
     // Pending GPU work retains resources until process teardown. Do not call
     // Release on resources whose GPU retirement was not proven.

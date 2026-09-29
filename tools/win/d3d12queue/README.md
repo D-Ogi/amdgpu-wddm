@@ -183,7 +183,16 @@ the strength of an earlier fence value: the render thread tries one covering `Si
 and if that does not prove completion its objects stay for process teardown and the session stays pending. Under `--interactive-warp` no
 window is made: the same frames go to an offscreen render target of the same size, paced to 60 per second
 and reported as offscreen frames. The load starts after the first frame (or after 10 s without one); the
-render thread gets 10 s to end after the load, or the session is left pending for process teardown.
+render thread gets 10 s to end after the load, or the session is left pending for process teardown. That
+timeout ends the session: the copy receipt is published, then `session.json` with reason `detached-thread`
+(hr `WAIT_TIMEOUT`), and no further command runs (the controller refuses one on a terminal session). The
+trace is never closed under the detached thread: the main thread records the end, takes the trace lock and
+ends the process with `TerminateProcess` (exit code 3), so no DLL detach code runs after a thread that may be
+stuck in a driver call. `build.ps1 -GameLoadRenderHoldMs <ms>` makes a test build whose render thread keeps
+tracing that long after its last frame; with 15000 on WARP (SMALL arm, 2026-09-29) the copy failed pending,
+the session ended `detached-thread` with exit code 3, the status command was refused and all 253 trace lines
+were complete, the last one the session end; the same source without the hold passed its five commands with
+exit code 0.
 
 The software control passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, coverage complete,
 9 of 9 arms, 65596 resources, 8.3 GB written, no mismatch, 369 offscreen frames at 3440x1440, longest
