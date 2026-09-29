@@ -141,7 +141,8 @@ HRESULT APIENTRY create_list(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_C
     const uint32_t table =
         (type == D3D12_COMMAND_LIST_TYPE_DIRECT || type == D3D12_COMMAND_LIST_TYPE_BUNDLE) ? 1u : 0u;
     auto* r = new (h.pDrvPrivate)
-        CommandListRecord{{Tag::CommandList, 0, list, c}, rt, static_cast<D3D12_COMMAND_LIST_TYPE>(type), table};
+        CommandListRecord{{Tag::CommandList, 0, list, c}, rt, static_cast<D3D12_COMMAND_LIST_TYPE>(type), table,
+                          false};
     // The hook runs with no engine-ddi lock held (engine-ddi.h, hooks).
     hr = c->hooks.bind_list_table(c->hooks.shell, rt, table);
     if (FAILED(hr)) {
@@ -170,7 +171,9 @@ void APIENTRY close_list(D3D12DDI_HCOMMANDLIST h) {
     CommandListRecord* l = list_of(h, "CloseCommandList");
     if (!l) return;
     HRESULT hr = l->list()->Close();
+    // A list whose Close failed is not a closed list: it stays what it was.
     if (FAILED(hr)) l->h.device->report_list(l->rt, hr);
+    else l->recording = false;
 }
 
 void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMANDLIST_0040* args) {
@@ -197,6 +200,7 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
     }
     HRESULT hr = l->list()->Reset(a, nullptr);
     if (FAILED(hr)) c->report_list(l->rt, hr);
+    else l->recording = true;
 }
 
 // ---- List state the runtime sets on every list ---------------------------------------------------------------------
@@ -250,6 +254,28 @@ void APIENTRY set_view_instance_mask(D3D12DDI_HCOMMANDLIST h, UINT mask) {
         l1->Release();
     }
 }
+
+// ---- L15 pfnExecuteBundle ---------------------------------------------------------------------------------------
+// The engine replays the bundle's commands into the parent at this call, so the bundle must be closed and the
+// parent recording. Both DIRECT lists and bundles are bound to the graphics table: the types are checked here,
+// a bundle executed from a bundle would otherwise be dropped by the engine without a word.
+void APIENTRY execute_bundle(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HCOMMANDLIST hbundle) {
+    CommandListRecord* l = list_of(h, "ExecuteBundle");
+    if (!l) return;
+    auto* b = record_of<CommandListRecord>(hbundle.pDrvPrivate, Tag::CommandList, l->h.device);
+    if (l->type != D3D12_COMMAND_LIST_TYPE_DIRECT || !l->recording || !b ||
+        b->type != D3D12_COMMAND_LIST_TYPE_BUNDLE || b->recording) {
+        log_line("ExecuteBundle: refused (parent type %d recording %d, bundle %s)", static_cast<int>(l->type),
+                 l->recording ? 1 : 0, !b ? "unknown" : b->recording ? "recording" : "not a bundle");
+        return l->h.device->report_list(l->rt, E_INVALIDARG);
+    }
+    l->list()->ExecuteBundle(b->list());
+}
+
+// ---- L49 pfnSetMarker -------------------------------------------------------------------------------------------
+// Accepted and dropped: a compatibility answer, not marker support. What the UINT64 means to a consumer of
+// markers is not established here, and nothing reaches the engine.
+void APIENTRY set_marker(D3D12DDI_HCOMMANDLIST h, UINT64) { (void)list_of(h, "SetMarker"); }
 
 // Seen once, in the state the runtime writes into a list it has just reset. There the engine's Reset has
 // already cleared every root binding, so nothing is left to do. The engine has no call that clears the
@@ -469,6 +495,8 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnSetPredication = set_predication;
     t->pfnSetProtectedResourceSession = set_protected_session;
     t->pfnClearRootArguments = clear_root_arguments;
+    t->pfnSetMarker = set_marker;
+    if (table_index == 1) t->pfnExecuteBundle = execute_bundle;
     t->pfnExecuteIndirect = execute_indirect;
     if (table_index != 1) return;                       // the compute table keeps its rejections
     t->pfnResourceResolveSubresource = resolve_subresource;

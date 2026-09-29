@@ -179,7 +179,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1061 0022_SWIZZLE_PATTERN | `D3D12DDI_SWIZZLE_PATTERN_DESC_0022`, 232, H:4752-4767; `*pInfo` an index 0 through DeviceDependentSwizzleCount - 1 | - | E_INVALIDARG for every request, nothing written | 1060 DeviceDependentSwizzleCount 0: no index exists (constant `kDeviceDependentSwizzleCount`, shared with 1060) |
 | 1057 0030_PROTECTED_RESOURCE_SESSION_SUPPORT | `D3D12DDI_PROTECTED_RESOURCE_SESSION_SUPPORT_DATA_0030`, 8, H:13697-13701; NodeIndex (input) 0, else E_INVALIDARG | Support | NONE | engine-ddi refuses protected resource sessions: pfnSetProtectedResourceSession is a fail-safe and resource creation refuses a session handle (resources.cpp) |
 | 1069 EXECUTECOMMANDLISTS_PARALLELISM | BOOL, 4, H:128 | the BOOL | FALSE | not claimed: ExecuteCommandLists is a slot of the shell's queue table |
-| 1071 0073_SUPPORT_BATCHED_MARKERS | BOOL, 4, H:131 | the BOOL | FALSE | "Indicates whether UMD supports batched markers" (DDI-ref); pfnSetMarker is a fail-safe |
+| 1071 0073_SUPPORT_BATCHED_MARKERS | BOOL, 4, H:131 | the BOOL | FALSE | "Indicates whether UMD supports batched markers" (DDI-ref); pfnSetMarker accepts and drops the legacy marker |
 | 1062 UMD_BASED_COMMAND_QUEUE_PRIORITY | `D3D12DDICAPS_UMD_BASED_COMMAND_QUEUE_PRIORITY_DATA_0023`, 4, H:5140-5143 | SupportedQueueFlagsForGlobalRealtimeQueues | NONE | no realtime queues |
 | 1067 HARDWARE_SCHEDULING_CAPS | `D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050`, 4, H:7004-7008 | ComputeQueuesPer3DQueue | 0 | "0 means don't use scheduling groups", H:7007 |
 | 1077 OPTIONS_0090 | `D3D12DDI_OPTIONS_DATA_0090`, 4, H:11127-11131 | RelaxedFormatCastingSupported | same value | OPTIONS12 |

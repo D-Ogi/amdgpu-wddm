@@ -38,6 +38,7 @@ struct Shell {
     uint32_t list_errors = 0;
     HRESULT last_device_error = S_OK;
     HRESULT last_list_error = S_OK;
+    void* last_list = nullptr;          // runtime handle of the list the latest list error named
     struct Bind { void* list; uint32_t table; };
     std::vector<Bind> binds;
     int table_of(D3D12DDI_HRTCOMMANDLIST list) const;   // -1 if never bound
@@ -98,7 +99,8 @@ HRESULT create_heap_alone(Env& env, Device& device, HeapKind kind, UINT64 heap_b
 HRESULT create_placed_buffer(Env& env, Device& device, const Buffer& base, UINT64 offset, UINT64 size, Buffer& out);
 void destroy_buffer(Env& env, Device& device, Buffer& buffer);
 
-// One pool, one recorder and one list of the given queue flags, the list reset and open for recording.
+// One pool, one recorder and one list of the given queue flags, the list reset and open for recording. A DIRECT
+// list gets the runtime's default state; a bundle gets none, most of that state is not legal in a bundle.
 struct Recording {
     void* pool = nullptr;
     void* recorder = nullptr;
@@ -108,7 +110,8 @@ struct Recording {
     D3D12DDI_HCOMMANDLIST hlist() const { return D3D12DDI_HCOMMANDLIST{list}; }
     D3D12DDI_HRTCOMMANDLIST rtlist() { return D3D12DDI_HRTCOMMANDLIST{&rt}; }
 };
-HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out);
+HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out,
+                       D3D12DDI_COMMAND_LIST_TYPE type = D3D12DDI_COMMAND_LIST_TYPE_DIRECT);
 void destroy_recording(Env& env, Device& device, Recording& recording);
 
 // Signals an engine fence of the harness on the engine queue after everything submitted so far and waits for it

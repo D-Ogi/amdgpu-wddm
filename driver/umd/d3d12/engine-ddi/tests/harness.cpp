@@ -72,10 +72,11 @@ void APIENTRY report_device_error(void* shell, HRESULT hr) {
     std::printf("     shell: device error %08lx\n", static_cast<unsigned long>(hr));
 }
 
-void APIENTRY report_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST, HRESULT hr) {
+void APIENTRY report_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) {
     auto* s = static_cast<Shell*>(shell);
     ++s->list_errors;
     s->last_list_error = hr;
+    s->last_list = list.handle;
     std::printf("     shell: command list error %08lx\n", static_cast<unsigned long>(hr));
 }
 
@@ -258,7 +259,8 @@ void destroy_buffer(Env& env, Device& device, Buffer& buffer) {
 
 void write_default_state(Env& env, Device& device, Recording& r);
 
-HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out) {
+HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out,
+                       D3D12DDI_COMMAND_LIST_TYPE type) {
     out = Recording{};
     D3D12DDIARG_CREATE_COMMAND_POOL_0040 pool{D3D12DDI_COMMAND_POOL_FLAG_NONE};
     out.pool = env.storage.alloc(env.core.pfnCalcPrivateCommandPoolSize(device.h(), &pool));
@@ -280,7 +282,7 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
     env.core.pfnCommandRecorderSetCommandPoolAsTarget(device.h(), D3D12DDI_HCOMMANDRECORDER_0040{out.recorder},
                                                       D3D12DDI_HCOMMANDPOOL_0040{out.pool});
     D3D12DDIARG_CREATE_COMMAND_LIST_0040 list{};
-    list.Type = D3D12DDI_COMMAND_LIST_TYPE_DIRECT;
+    list.Type = type;
     list.QueueFlags = queue_flags;
     list.ID = 1;
     list.CommandListFlags = D3D12DDI_COMMAND_LIST_FLAG_NONE;
@@ -299,7 +301,7 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
     D3D12DDIARG_RESETCOMMANDLIST_0040 reset{D3D12DDI_HCOMMANDRECORDER_0040{out.recorder}, 1,
                                            D3D12DDI_COMMAND_LIST_FLAG_NONE};
     env.lists[out.table].pfnResetCommandList(out.hlist(), &reset);
-    write_default_state(env, device, out);
+    if (type != D3D12DDI_COMMAND_LIST_TYPE_BUNDLE) write_default_state(env, device, out);
     return S_OK;
 }
 

@@ -493,7 +493,7 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
     case D3D12DDICAPS_TYPE_0073_SUPPORT_BATCHED_MARKERS: {
         auto* d = payload<BOOL>(r);                         // pData = BOOL (H:131)
         if (!d) return E_INVALIDARG;
-        *d = FALSE;                                         // pfnSetMarker is a fail-safe; no marker batching
+        *d = FALSE;                                         // no marker batching; pfnSetMarker accepts and drops
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_0023_UMD_BASED_COMMAND_QUEUE_PRIORITY: {

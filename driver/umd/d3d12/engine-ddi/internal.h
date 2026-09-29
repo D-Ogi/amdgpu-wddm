@@ -360,6 +360,7 @@ struct CommandListRecord {
     D3D12DDI_HRTCOMMANDLIST rt;
     D3D12_COMMAND_LIST_TYPE type;
     uint32_t table;                             // 0 compute table, 1 graphics table
+    bool recording;                             // between a Reset and a Close that both succeeded
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 

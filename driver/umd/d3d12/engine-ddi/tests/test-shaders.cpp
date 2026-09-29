@@ -199,6 +199,161 @@ struct Vertex {
     float x, y;
     UINT tag;
 };
+
+// ExecuteBundle (L15) and SetMarker (L49) with the objects of test_graphics, after its list has run: the target is
+// in COPY_SOURCE, the queue idle, and closed is that DIRECT list, closed and still alive.
+//
+// The engine replays a bundle's commands through the parent's own methods at ExecuteBundle (bundle.c,
+// d3d12_bundle_execute), so the replayed draw sees the parent's state at that call: root signature, root constant,
+// scissor and render target. Viewports, scissors, render targets and barriers are not recorded into a bundle at all
+// (dropped with a warning), so the bundle holds the pipeline, the topology, the vertex buffer and the draw. It
+// leaves the root signature to the parent, whose root constant stays bound through the replay. The one bundle runs
+// twice over a target cleared to zero, each time under its own scissor half and root constant, so a missing
+// execution leaves zeros and a swapped one the other seed in its half. The expected value is the one the direct
+// draw of test_graphics has just proven, with its seed replaced: the comparison with a direct draw.
+void test_bundles(Env& env, Device& device, engine_ddi::EngineQueue* queue, D3D12DDI_HROOTSIGNATURE hrs,
+                  D3D12DDI_HPIPELINESTATE hpso, D3D12DDI_GPU_VIRTUAL_ADDRESS vb_va, const Buffer& target,
+                  const Buffer& readback, D3D12DDI_CPU_DESCRIPTOR_HANDLE rtv, const Recording& closed) {
+    const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t = env.lists[1];
+    constexpr UINT kSeeds[2] = {0xA11CE000u, 0x0B0B0000u};     // left half, right half; neither is kSeed
+    const uint32_t device_before = device.shell.device_errors;
+    const uint32_t list_before = device.shell.list_errors;
+
+    Recording bundle, nested, parent;
+    const HRESULT hr_b =
+        open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, bundle, D3D12DDI_COMMAND_LIST_TYPE_BUNDLE);
+    const HRESULT hr_n =
+        open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, nested, D3D12DDI_COMMAND_LIST_TYPE_BUNDLE);
+    const HRESULT hr_p = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, parent);
+    const bool opened = hr_b == S_OK && hr_n == S_OK && hr_p == S_OK && bundle.table == 1 && nested.table == 1 &&
+                        parent.table == 1 && device.shell.list_errors == list_before;
+    checkf(opened, "bundles: two BUNDLE lists and a DIRECT list reset on the graphics table (hr %08lx %08lx %08lx)",
+           static_cast<unsigned long>(hr_b), static_cast<unsigned long>(hr_n), static_cast<unsigned long>(hr_p));
+
+    // Each refusal must report E_INVALIDARG once, on the list whose slot was called; the count is then put back so
+    // that the harness's closing "no list error" keeps its meaning.
+    const auto refused = [&](Recording& on, const Recording& source, const char* what) {
+        const uint32_t before = device.shell.list_errors;
+        device.shell.last_list_error = S_OK;
+        device.shell.last_list = nullptr;
+        t.pfnExecuteBundle(on.hlist(), source.hlist());
+        checkf(device.shell.list_errors == before + 1 && device.shell.last_list_error == E_INVALIDARG &&
+                   device.shell.last_list == on.rtlist().handle,
+               "bundles: ExecuteBundle refuses %s with one E_INVALIDARG on the calling list (%u errors, last %08lx)",
+               what, device.shell.list_errors - before, static_cast<unsigned long>(device.shell.last_list_error));
+        device.shell.list_errors = before;
+    };
+
+    if (opened) {
+        const D3D12DDI_VERTEX_BUFFER_VIEW vbv{vb_va, 3 * sizeof(Vertex), sizeof(Vertex)};
+        t.pfnSetPipelineState(bundle.hlist(), hpso);
+        t.pfnIaSetTopology(bundle.hlist(), D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        t.pfnIASetVertexBuffers(bundle.hlist(), 0, 1, &vbv);
+        t.pfnDrawInstanced(bundle.hlist(), 3, 1, 0, 0);
+
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_target =
+            transition(target, D3D12DDI_RESOURCE_STATE_COPY_SOURCE, D3D12DDI_RESOURCE_STATE_RENDER_TARGET);
+        t.pfnResourceBarrier(parent.hlist(), 1, &to_target);
+        const FLOAT zero[4] = {};
+        t.pfnClearRenderTargetView(parent.hlist(), rtv, zero, 0, nullptr);
+        t.pfnOMSetRenderTargets(parent.hlist(), 1, &rtv, TRUE, nullptr);
+        const D3D12DDI_VIEWPORT viewport{0.0f, 0.0f, static_cast<FLOAT>(kSize), static_cast<FLOAT>(kSize), 0.0f, 1.0f};
+        t.pfnRsSetViewports(parent.hlist(), 1, &viewport);
+        t.pfnSetGraphicsRootSignature(parent.hlist(), hrs);
+
+        refused(parent, bundle, "a bundle still recording");
+        t.pfnCloseCommandList(bundle.hlist());
+        checkf(device.shell.list_errors == list_before,
+               "bundles: the bundle closes after SetPipelineState, IaSetTopology, IASetVertexBuffers, DrawInstanced(3)");
+        refused(parent, closed, "a closed DIRECT list as the bundle");
+        refused(nested, bundle, "a bundle as the parent");
+        t.pfnCloseCommandList(nested.hlist());
+        checkf(device.shell.list_errors == list_before, "bundles: the refused bundle parent still closes");
+
+        // A closed bundle of a second device context over the same engine device.
+        Device other;
+        Recording foreign;
+        HRESULT hr_o = open_device(env, other);
+        if (hr_o == S_OK)
+            hr_o = open_recording(env, other, D3D12DDI_COMMAND_QUEUE_FLAG_3D, foreign, D3D12DDI_COMMAND_LIST_TYPE_BUNDLE);
+        if (hr_o == S_OK) t.pfnCloseCommandList(foreign.hlist());
+        checkf(hr_o == S_OK && !other.shell.list_errors && !other.shell.device_errors,
+               "bundles: a second device context with a closed bundle of its own (hr %08lx)",
+               static_cast<unsigned long>(hr_o));
+        if (hr_o == S_OK) refused(parent, foreign, "a bundle of another device context");
+        destroy_recording(env, other, foreign);
+        if (other.context) {
+            uint32_t live = UINT32_MAX;
+            hr_o = engine_ddi::destroy_device_context(other.context, &live);
+            checkf(hr_o == S_OK && live == 0 && !other.shell.list_errors,
+                   "bundles: the second device context goes (hr %08lx, %u live)", static_cast<unsigned long>(hr_o),
+                   live);
+        }
+
+        t.pfnSetMarker(parent.hlist(), 0xB0250B0Du);
+        checkf(device.shell.list_errors == list_before && device.shell.device_errors == device_before,
+               "bundles: SetMarker on the recording parent reports nothing");
+        for (UINT half = 0; half < 2; ++half) {
+            const D3D12DDI_RECT scissor{static_cast<LONG>(half * kSize / 2), 0, static_cast<LONG>((half + 1) * kSize / 2),
+                                        static_cast<LONG>(kSize)};
+            t.pfnRsSetScissorRects(parent.hlist(), 1, &scissor);
+            t.pfnSetGraphicsRoot32BitConstant(parent.hlist(), 0, kSeeds[half], 0);
+            t.pfnExecuteBundle(parent.hlist(), bundle.hlist());
+        }
+        const D3D12DDIARG_RESOURCE_BARRIER_0022 to_source =
+            transition(target, D3D12DDI_RESOURCE_STATE_RENDER_TARGET, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+        t.pfnResourceBarrier(parent.hlist(), 1, &to_source);
+        const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT footprint{DXGI_FORMAT_R32_UINT, kSize, kSize, 1, kPitch,
+                                                                        kPitch * kSize};
+        D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
+        dst.BaseAddress.UMD = {readback.hres(), 0};
+        src.BaseAddress.UMD = {target.hres(), 0};
+        t.pfnCopyTextureRegion(parent.hlist(), &dst, {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &footprint}, 0,
+                               0, 0, &src, {D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr}, nullptr);
+        t.pfnCloseCommandList(parent.hlist());
+        checkf(device.shell.list_errors == list_before,
+               "bundles: parent records clear, two scissor halves and root constants each with ExecuteBundle, copy");
+        refused(parent, bundle, "a closed parent");
+
+        const D3D12DDI_HCOMMANDLIST lists[] = {parent.hlist()};
+        const HRESULT hr = engine_ddi::execute_command_lists(queue, 1, lists);
+        checkf(hr == S_OK && device.shell.list_errors == list_before, "bundles: execute the parent (hr %08lx)",
+               static_cast<unsigned long>(hr));
+        wait_queue_idle(env, queue, "bundles");
+
+        void* cpu = nullptr;
+        const HRESULT hr_m = env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu);
+        UINT bad[2] = {}, first_x = 0, first_y = 0, got = 0, want = 0;
+        if (hr_m == S_OK && cpu) {
+            const auto* bytes = static_cast<const BYTE*>(cpu);
+            for (UINT y = 0; y < kSize; ++y) {
+                for (UINT x = 0; x < kSize; ++x) {
+                    UINT v;
+                    std::memcpy(&v, bytes + SIZE_T{y} * kPitch + SIZE_T{x} * 4, 4);
+                    const UINT half = x < kSize / 2 ? 0 : 1;
+                    const UINT expected = kSeeds[half] ^ kTag ^ ((y << 16) | x) ^ (3u << 8) ^ 0x51u;
+                    if (v != expected) {
+                        if (!bad[0] && !bad[1]) {
+                            first_x = x;
+                            first_y = y;
+                            got = v;
+                            want = expected;
+                        }
+                        ++bad[half];
+                    }
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), readback.hheap());
+        }
+        checkf(hr_m == S_OK && cpu && !bad[0] && !bad[1],
+               "bundles: left half is the direct draw's value with seed %08x, right half with seed %08x (%u and %u "
+               "differ; first (%u,%u) %08x, expected %08x)",
+               kSeeds[0], kSeeds[1], bad[0], bad[1], first_x, first_y, got, want);
+    }
+    destroy_recording(env, device, parent);
+    destroy_recording(env, device, nested);
+    destroy_recording(env, device, bundle);
+}
 } // namespace
 
 void test_graphics(Env& env, Device& device) {
@@ -616,6 +771,7 @@ void test_graphics(Env& env, Device& device) {
                    "graphics: %s wrote %08x to every texel (%u differ, first %08x)",
                    i ? "ResolveSubresourceRegion" : "ResolveSubresource", kResolved, bad, got);
         }
+        test_bundles(env, device, queue, hrs, hpso, vb_va, target, readback, rtv, rec);
     }
     destroy_recording(env, device, rec);
     if (queue)
