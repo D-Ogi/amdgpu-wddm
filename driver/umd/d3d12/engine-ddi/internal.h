@@ -13,6 +13,8 @@ namespace engine_ddi {
 
 // One line on stderr, prefixed "engine-ddi: ". The native build has no other log sink yet.
 void log_line(const char* format, ...) noexcept;
+// A refusal: the same line, also on the debugger's output. A game's stderr goes nowhere, and refusals are rare.
+void log_refusal(const char* format, ...) noexcept;
 
 // A value-initialized T on the heap, or null. Written out rather than new (std::nothrow) T{}, whose value
 // initialization /analyze models before the null check (C28182).

@@ -17,6 +17,18 @@ void log_line(const char* format, ...) noexcept {
     std::fprintf(stderr, "engine-ddi: %s\n", text);
 }
 
+void log_refusal(const char* format, ...) noexcept {
+    char text[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    std::fprintf(stderr, "engine-ddi: %s\n", text);
+    char line[540];
+    std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s\n", text);
+    OutputDebugStringA(line);
+}
+
 // ---- Release sequence ------------------------------------------------------------------------------------------
 void ReleaseQueue::add(PendingRelease* node) noexcept {
     node->next = head_;

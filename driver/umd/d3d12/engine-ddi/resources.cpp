@@ -567,10 +567,28 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
         return E_NOTIMPL;
     }
     const HRESULT hr = create_heap_and_resource(c, heap_desc, hheap, rt, res_desc, clear, hres);
-    if (FAILED(hr))
-        log_line("CreateHeapAndResource: %08lx (heap description %s, resource description %s, castable formats %u)",
-                 static_cast<unsigned long>(hr), heap_desc ? "given" : "none", res_desc ? "given" : "none",
-                 res_desc ? res_desc->NumCastableFormats : 0u);
+    if (FAILED(hr)) {
+        // The call's shape (which of heap only, committed, placed or reserved) and both descriptions: which
+        // shape the runtime uses for which API call is otherwise unlogged (engine-ddi.h).
+        const D3D12DDIARG_CREATEHEAP_0001 h = heap_desc ? *heap_desc : D3D12DDIARG_CREATEHEAP_0001{};
+        const D3D12DDIARG_CREATERESOURCE_0088* r = res_desc;
+        log_refusal("CreateHeapAndResource: %08lx; heap description %s (%llu bytes, alignment %llu, flags 0x%x, "
+                    "pool %u, cpu page %u), heap handle %s; resource description %s (type %u, %llux%u, depth %u, "
+                    "mips %u, format %u, samples %u, layout %u, flags 0x%x, castable %u), base resource %s, "
+                    "offset %llu",
+                    static_cast<unsigned long>(hr), heap_desc ? "given" : "none",
+                    static_cast<unsigned long long>(h.ByteSize), static_cast<unsigned long long>(h.Alignment),
+                    static_cast<unsigned>(h.Flags), static_cast<unsigned>(h.MemoryPool),
+                    static_cast<unsigned>(h.CPUPageProperty), hheap.pDrvPrivate ? "given" : "none",
+                    r ? "given" : "none", r ? static_cast<unsigned>(r->ResourceType) : 0u,
+                    r ? static_cast<unsigned long long>(r->Width) : 0ull, r ? r->Height : 0u,
+                    r ? static_cast<unsigned>(r->DepthOrArraySize) : 0u, r ? static_cast<unsigned>(r->MipLevels) : 0u,
+                    r ? static_cast<unsigned>(r->Format) : 0u, r ? r->SampleDesc.Count : 0u,
+                    r ? static_cast<unsigned>(r->Layout) : 0u, r ? static_cast<unsigned>(r->Flags) : 0u,
+                    r ? r->NumCastableFormats : 0u,
+                    r && r->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate ? "given" : "none",
+                    r ? static_cast<unsigned long long>(r->ReuseBufferGPUVA.BaseAddress.UMD.Offset) : 0ull);
+    }
     return hr;
 }
 
