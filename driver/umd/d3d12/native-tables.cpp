@@ -10,6 +10,8 @@
 #include "native-queue-ddi.h"
 #include "native-residency-ddi.h"
 #include "present-outputs.h"
+#include "heap-import.h"
+#include <atomic>
 #include <cstring>
 
 namespace native12 {
@@ -139,6 +141,31 @@ engine_ddi::DeviceContext* APIENTRY resolve_engine(D3D12DDI_HDEVICE handle) {
     return device && device_engine_entered(*device)?engine_context(*device):nullptr;
 }
 UINT APIENTRY present_private_size(D3D12DDI_HDEVICE,const D3D12DDIARG_PRESENT_0001*) {return 0;}
+// The two resource DDIs are engine-ddi's, run inside the owner scope of the shell's imports: a linear
+// primary is released by its runtime resource only while that resource's own DDI is running.
+using CoreTable=D3D12DDI_DEVICE_FUNCS_CORE_0088;
+std::atomic<decltype(CoreTable{}.pfnCreateHeapAndResource)> engine_create_resource{};
+std::atomic<decltype(CoreTable{}.pfnDestroyHeapAndResource)> engine_destroy_resource{};
+HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDIARG_CREATEHEAP_0001* heap,
+    D3D12DDI_HHEAP driver_heap,D3D12DDI_HRTRESOURCE runtime,const D3D12DDIARG_CREATERESOURCE_0088* resource,
+    const D3D12DDI_CLEAR_VALUES* clear,D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session,
+    D3D12DDI_HRESOURCE driver_resource) {
+    const auto engine=engine_create_resource.load();
+    const auto device=static_cast<Device*>(handle.pDrvPrivate);
+    if(!engine || !device)return E_UNEXPECTED;
+    OwnerScope scope(engine_imports(*device),0);
+    return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
+}
+void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP heap,D3D12DDI_HRESOURCE resource) {
+    const auto engine=engine_destroy_resource.load();
+    const auto device=static_cast<Device*>(handle.pDrvPrivate);
+    if(!engine || !device){if(device)report_device_error(*device,E_UNEXPECTED);return;}
+    D3DKMT_HANDLE primary=0;
+    // Not a linear primary, or no resource at all: the scope names no record.
+    if(resource.pDrvPrivate && engine_ddi::present_allocation(engine_context(*device),resource,&primary)!=S_OK)primary=0;
+    OwnerScope scope(engine_imports(*device),primary);
+    engine(handle,heap,resource);
+}
 // The surface's allocation and the queue's context go back to the runtime, which makes the kernel call.
 // stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 0 done.
 HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12DDIARG_PRESENT_0001* args,
@@ -216,6 +243,11 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         install_shell_core_entries(shell);install_native_residency_entries(shell);
         shell.pfnGetPresentPrivateDriverDataSize=present_private_size;
         HRESULT hr=compose_core_0092(&original,sizeof(original),shell,fill);if(hr!=S_OK)return hr;
+        if(!original.pfnCreateHeapAndResource || !original.pfnDestroyHeapAndResource)return E_UNEXPECTED;
+        engine_create_resource.store(original.pfnCreateHeapAndResource);
+        engine_destroy_resource.store(original.pfnDestroyHeapAndResource);
+        original.pfnCreateHeapAndResource=create_heap_and_resource;
+        original.pfnDestroyHeapAndResource=destroy_heap_and_resource;
         hr=DdiEntryTables<EntryPolicy>::wrap_core(original,&wrapped);if(hr!=S_OK)return hr;
         *static_cast<Core*>(output)=wrapped;return S_OK;
     }

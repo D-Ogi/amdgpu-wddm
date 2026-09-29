@@ -142,6 +142,17 @@ DXGI table publication is not implemented. Present private data size is zero.
 The Present handler returns the allocation of one presented surface and the
 context of its queue, and refuses every other shape; composition of what it
 returns is not validated.
+
+A presentable surface (a linear primary) is allocated with the LB7A v1
+description under the E26R v1 resource record. It is released by its runtime
+resource, with ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY, and only inside the
+`pfnCreateHeapAndResource` or `pfnDestroyHeapAndResource` call of that
+resource (the owner scope in `heap-import.h`). The destroy waits up to two
+seconds for the work submitted before it. A release that reaches the shell
+after that call has returned frees the Vulkan import and the mapping, makes
+no runtime callback in either form, keeps the allocation in its record and
+reports the device error. Other allocations are released by handle list, as
+before.
 Queue Wait, tiled resources, scheduling groups, offer/reclaim and background
 processing are also outside the current shell. A non-null function pointer may
 be an explicit refusal handler, so table publication is not a capability claim.

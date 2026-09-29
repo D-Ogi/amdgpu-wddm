@@ -10,6 +10,10 @@ namespace native12 {
 // GPU retirement, residency and Vulkan import remain the caller's responsibility.
 // Contract: WDK 10.0.26100 d3d12umddi.h ALLOCATE/DEALLOCATE_0022;
 // hKMResource is reserved. This helper does not interpret it as a resource handle.
+// Handle names this allocation alone. Owner names the runtime resource the allocation was created
+// with and no handle: the caller has proven that the resource's uses have retired and that the
+// resource's own DDI is running, which this wrapper cannot know.
+enum class ReleaseForm { Handle, Owner };
 class RuntimeAllocation final {
     D3D12DDI_HRTDEVICE runtime_{};
     PFND3D12DDI_ALLOCATE_CB_0022 allocate_{};
@@ -55,17 +59,23 @@ public:
         allocation_=info.hAllocation;address_=info.GpuVirtualAddress;resource_=request.hResource;
         return S_OK;
     }
-    // by_resource is a lab measurement only: the release names the runtime owner and no handle.
-    HRESULT close(bool by_resource=false) noexcept {
+    HRESULT close(ReleaseForm form=ReleaseForm::Handle) noexcept {
         if(!allocation_) return S_OK;
         if(!deallocate_) return E_UNEXPECTED;
+        const bool by_resource=form==ReleaseForm::Owner;
         if(by_resource && !resource_) return E_UNEXPECTED;
         D3D12DDICB_DEALLOCATE_0022 args{};
-        // Release this allocation only, not the runtime resource group.
-        if(by_resource)args.hResource=resource_;
-        else {args.NumAllocations=1;args.HandleList=&allocation_;}
-        // No ASSUME_NOT_IN_USE: this wrapper does not prove GPU retirement.
-        args.Flags=D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
+        if(by_resource){
+            // A resident object's allocation (DirectX-Specs, ResourceHeaps.md, "Resident Object
+            // Destruction Requirements"): not in use, destroyed before the call returns.
+            args.hResource=resource_;
+            args.Flags=static_cast<D3D12DDI_DEALLOCATE_FLAGS_0022>(
+                D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE|D3D12DDI_DEALLOCATE_FLAGS_0022_SYNCHRONOUS_DESTROY);
+        } else {
+            // This allocation only. No ASSUME_NOT_IN_USE: this wrapper does not prove GPU retirement.
+            args.NumAllocations=1;args.HandleList=&allocation_;
+            args.Flags=D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
+        }
         const bool traced=ddi_trace_enabled();
         if(traced){
             std::fprintf(stderr,"{\"event\":\"deallocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","
@@ -84,6 +94,9 @@ public:
         return hr;
     }
     void invalidate_runtime() noexcept {runtime_={};allocate_=nullptr;deallocate_=nullptr;resource_=nullptr;}
+    // The runtime resource is gone or going: the allocation stays owned, the owner is never named again.
+    void revoke_owner() noexcept {resource_=nullptr;}
+    bool owner_known() const noexcept {return resource_!=nullptr;}
     D3DKMT_HANDLE handle() const noexcept {return allocation_;}
     D3DGPU_VIRTUAL_ADDRESS address() const noexcept {return address_;}
 };

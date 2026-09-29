@@ -14,7 +14,7 @@ static std::string events;
 static UINT64 completed=10;
 static UINT64 gpu_address=UINT64_C(0x100000000);
 static D3DKMT_HANDLE next_allocation=50;
-static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false;
+static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false,fail_deallocate=false;
 static unsigned surfaces=0;
 static unsigned long surface_format=0;
 static unsigned creates=0,makes_resident=0,probes=0;
@@ -24,10 +24,14 @@ static RuntimeHeapImports* imports;
 static char mapped[65536];
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
- assert(a->NumAllocations==1 && !a->pPrivateDriverData && !a->PrivateDriverDataSize);
+ assert(a->NumAllocations==1);
  if(a->pAllocationInfo->PrivateDriverDataSize==32){
-  // The primary: the 32-byte LB7A v1 description alone, PRIMARY, no video present source.
-  // Read as the words on the wire, not through the producer's own structure.
+  // The primary: the 32-byte LB7A v1 description, PRIMARY, no video present source, under the
+  // 12-byte E26R v1 record with shared 1. Read as the words on the wire, not through the
+  // producer's own structures.
+  assert(a->pPrivateDriverData && a->PrivateDriverDataSize==12);
+  uint32_t e[3];std::memcpy(e,a->pPrivateDriverData,sizeof(e));
+  assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
   uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
   assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==256 && w[3]==64 && w[4]==1024);
   assert(w[5]==surface_format && w[6]==65536 && w[7]==0);
@@ -35,6 +39,7 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
   assert(a->pAllocationInfo->VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
   ++surfaces;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
  }
+ assert(!a->pPrivateDriverData && !a->PrivateDriverDataSize);
  assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && !a->pAllocationInfo->VidPnSourceId);
  assert(a->pAllocationInfo->PrivateDriverDataSize==sizeof(bc250_umd_alloc_private));
  auto blob=static_cast<const bc250_umd_alloc_private*>(a->pAllocationInfo->pPrivateDriverData);
@@ -45,7 +50,14 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
      uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)));
  events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
 }
-static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLOCATE_0022* a){assert(a->NumAllocations==1);events+='D';return S_OK;}
+// D: by handle list. R: by the runtime resource, with the resident object's two flags.
+static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLOCATE_0022* a){
+ if(a->hResource){
+  assert(a->hResource==handle<void*>(2) && !a->NumAllocations && !a->HandleList && unsigned(a->Flags)==3u);
+  events+='R';return fail_deallocate?E_FAIL:S_OK;
+ }
+ assert(a->NumAllocations==1 && a->HandleList && a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE);events+='D';return S_OK;
+}
 static HRESULT APIENTRY paging_create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){assert(d==handle<void*>(1));++creates;a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&completed;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE*){events+='P';return S_OK;}
 static HRESULT APIENTRY map_cb(HANDLE d,D3DDDI_MAPGPUVIRTUALADDRESS* a){assert(d==handle<void*>(1) && a->SizeInPages==16);events+='M';a->VirtualAddress=gpu_address;a->PagingFenceValue=20;return pending?E_PENDING:S_OK;}
@@ -188,12 +200,24 @@ int main(){
   engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=primary;s.byte_size=65536;s.alignment=128;
   s.memory_type_bits=1;s.surface_row_pitch=1024;s.surface_layout_size=65536;expected_type=0;
   surface_format=D3DDDIFMT_A8R8G8B8;events.clear();
-  assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.memory_type_index==0 && memory.byte_size==65536);
-  assert(owner.free(&memory)==S_OK && events=="AMIVUD" && probes==old_probes && surfaces==old_surfaces+1);
-  // A page-aligned address is enough for it; raw memory above needed 64 KiB.
+  // Created in one resource DDI, released in the one that destroys it: by the runtime resource.
+  {OwnerScope create(&owner,0);
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.memory_type_index==0 && memory.byte_size==65536);}
+  {OwnerScope destroy(&owner,memory.allocation);
+   assert(owner.free(&memory)==S_OK && events=="AMIVUR" && probes==old_probes && surfaces==old_surfaces+1);
+   assert(!owner.last_free_report().owner_expired && owner.last_free_report().surface);}
+  assert(!owner.owns_allocation(memory.allocation));
+  // A page-aligned address is enough for it; raw memory above needed 64 KiB. Handed back inside
+  // the DDI that created it, as after an import the engine refuses.
   gpu_address+=4096;target.Format=DXGI_FORMAT_R8G8B8A8_UNORM;surface_format=D3DDDIFMT_A8B8G8R8;events.clear();
-  assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.gpu_va==gpu_address);
-  gpu_address-=4096;memory_va_bias=4096;assert(owner.free(&memory)==S_OK && events=="AMIVUD");memory_va_bias=0;
+  {OwnerScope create(&owner,0);
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.gpu_va==gpu_address);
+   gpu_address-=4096;memory_va_bias=4096;assert(owner.free(&memory)==S_OK && events=="AMIVUR");memory_va_bias=0;}
+  // Construction that fails after the allocation releases it in the same DDI, by the same form.
+  {OwnerScope create(&owner,0);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;surface_format=D3DDDIFMT_A8R8G8B8;
+   events.clear();fail_import=true;
+   assert(owner.allocate(&s,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMIUR");fail_import=false;}
+  target.Format=DXGI_FORMAT_R8G8B8A8_UNORM;surface_format=D3DDDIFMT_A8B8G8R8;
   // The image's memory types are the only ones: type 0 is not among these.
   s.memory_type_bits=2;events.clear();assert(owner.allocate(&s,&memory)==E_INVALIDARG && events.empty());s.memory_type_bits=1;
   auto refused=[&](HRESULT expected){
@@ -228,6 +252,50 @@ int main(){
  pending=true;completed=10;events.clear();assert(owner.allocate(&req,&memory)==E_PENDING && !memory.memory && events=="AM");
  completed=20;pending=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMUDP");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- assert(makes_resident==0);assert(surfaces==2);
- std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface");
+ assert(makes_resident==0);assert(surfaces==3);
+ // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
+ // reach the runtime again, in either form. A second owner, so that the first one's closure above
+ // stays what it was.
+ {
+  RuntimeHeapImports late(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity);
+  assert(late.initialize()==S_OK);
+  constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
+  D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
+  target.DepthOrArraySize=1;target.MipLevels=1;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.SampleDesc={1,0};
+  heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY);
+  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;
+  engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=primary;s.byte_size=65536;s.alignment=128;
+  s.memory_type_bits=1;s.surface_row_pitch=1024;s.surface_layout_size=65536;expected_type=0;
+  surface_format=D3DDDIFMT_A8R8G8B8;
+  engine_ddi::ImportedMemory first{},second{},third{};
+  // 1. The release callback fails inside the resource's DDI; the later cleanup makes no callback.
+  events.clear();{OwnerScope create(&late,0);assert(late.allocate(&s,&first)==S_OK);}
+  {OwnerScope destroy(&late,first.allocation);fail_deallocate=true;
+   assert(late.free(&first)==E_FAIL && events=="AMIVUR");fail_deallocate=false;}
+  events.clear();assert(late.close_after_engine_retirement()==kOwnerExpired && events.empty());
+  assert(late.last_free_report().owner_expired && late.owns_allocation(first.allocation));
+  // 2. The work retires only after the resource's DDI has returned: the release comes from a later
+  // DDI, here the destruction of another primary, and names neither owner.
+  events.clear();{OwnerScope create(&late,0);assert(late.allocate(&s,&second)==S_OK);}
+  {OwnerScope create(&late,0);assert(late.allocate(&s,&third)==S_OK);}
+  {OwnerScope destroy(&late,second.allocation);}
+  events.clear();
+  {OwnerScope destroy(&late,third.allocation);
+   assert(late.free(&second)==kOwnerExpired && events=="VU" && late.last_free_report().owner_expired);
+   assert(late.free(&third)==S_OK && events=="VUVUR");}
+  assert(late.owns_allocation(second.allocation) && !late.owns_allocation(third.allocation));
+  // Outside any resource DDI the same holds.
+  events.clear();{OwnerScope create(&late,0);assert(late.allocate(&s,&third)==S_OK);}
+  events.clear();assert(late.free(&third)==kOwnerExpired && events=="VU");
+  // 3. Construction fails and its release fails: the record stays, without an owner.
+  events.clear();{OwnerScope create(&late,0);fail_import=true;fail_deallocate=true;
+   assert(late.allocate(&s,&memory)==E_OUTOFMEMORY && events=="AMIUR");fail_import=false;fail_deallocate=false;}
+  events.clear();assert(late.close_after_engine_retirement()==kOwnerExpired && events.empty());
+  // Four allocations stay owned, and the paging queue with them.
+  assert(late.discard_metadata()==5 && events.empty());
+  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ }
+ assert(surfaces==8);
+ std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface under E26R, "
+  "released by its runtime resource inside that resource's DDI only");
 }

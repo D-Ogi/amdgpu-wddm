@@ -16,7 +16,11 @@ enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocat
 struct FreeReport {
     FreeStage stage{};
     bool surface{};
+    bool owner_expired{};                       // a linear primary outside its resource's own DDI
 };
+// A linear primary's release reached the shell outside the DDI of its runtime resource. No runtime
+// callback was made; the allocation stays owned by its record until the device's metadata goes.
+inline constexpr HRESULT kOwnerExpired=HRESULT_FROM_WIN32(ERROR_INVALID_OWNER);
 struct ImportReport {
     ImportStage stage{};
     uint32_t memory_type{UINT32_MAX};
@@ -43,7 +47,7 @@ class RuntimeHeapImports final {
     PFN_vkDestroyBuffer destroy_buffer_{};
     PFN_vkGetBufferMemoryRequirements requirements_{};
     Record* records_{};
-    bool active_{true},initialized_{},paging_open_{};
+    bool active_{true},initialized_{},paging_open_{},owner_scope_{};
     Record* find(D3DKMT_HANDLE) const noexcept;
     HRESULT release(Record&) noexcept;
     void erase(Record*) noexcept;
@@ -58,6 +62,12 @@ public:
     const ImportReport& last_report() const noexcept {return report_;}
     const FreeReport& last_free_report() const noexcept {return free_report_;}
     HRESULT free(const engine_ddi::ImportedMemory*) noexcept;
+    // The owner scope: the span of one pfnCreateHeapAndResource or pfnDestroyHeapAndResource. Only
+    // inside it may a linear primary be released, by its runtime resource: one created in this span,
+    // or the one the span destroys (its allocation handle, 0 for any other resource). Leaving the
+    // span takes the authority from every record, whatever happened inside. Spans do not nest.
+    void begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept;
+    void end_owner_scope() noexcept;
     // Only these two operations are provided for RADV's borrowed allocation map.
     bool owns_allocation(D3DKMT_HANDLE) const noexcept;
     HRESULT dispatch(uint32_t operation,void* argument) noexcept;
@@ -67,5 +77,15 @@ public:
     // Terminal CPU metadata release. Invalidates all runtime authority, does not
     // free outstanding Vulkan/kernel objects, and reports their retained owners.
     unsigned discard_metadata() noexcept;
+};
+class OwnerScope final {
+    RuntimeHeapImports* imports_{};
+public:
+    OwnerScope(RuntimeHeapImports* imports,D3DKMT_HANDLE destroyed) noexcept:imports_(imports) {
+        if(imports_)imports_->begin_owner_scope(destroyed);
+    }
+    ~OwnerScope() noexcept {if(imports_)imports_->end_owner_scope();}
+    OwnerScope(const OwnerScope&)=delete;
+    OwnerScope& operator=(const OwnerScope&)=delete;
 };
 }

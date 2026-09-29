@@ -145,8 +145,9 @@ class DeviceEngine final {
         const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->free(memory):E_UNEXPECTED;
         if(trace && device.engine && device.engine->imports_){
             const auto& r=device.engine->imports_->last_free_report();
-            std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"status\":\"%08lx\"}\n",
-                unsigned(r.surface),static_cast<unsigned>(r.stage),static_cast<unsigned long>(hr));
+            std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
+                "\"status\":\"%08lx\"}\n",unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
+                static_cast<unsigned long>(hr));
         }
         ddi_trace_end("shellFreeMemory",trace,hr);
         return hr;
@@ -162,6 +163,7 @@ public:
     ~DeviceEngine(){if(lock_ready_)DeleteCriticalSection(&entry_lock_);}
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
     QueueEngineRegistry* queues() const noexcept {return queues_.get();}
+    RuntimeHeapImports* imports() const noexcept {return imports_.get();}
     bool entered() const noexcept {return active_ && domain_.entered() && bootstrap_.entry()!=nullptr;}
     HRESULT open() noexcept {
         if(!lock_ready_)return E_OUTOFMEMORY;
@@ -265,6 +267,7 @@ void destroy_device_engine(Device& device) noexcept {
 }
 engine_ddi::DeviceContext* engine_context(Device& device) noexcept {return device.engine?device.engine->context():nullptr;}
 QueueEngineRegistry* engine_queues(Device& device) noexcept {return device.engine?device.engine->queues():nullptr;}
+RuntimeHeapImports* engine_imports(Device& device) noexcept {return device.engine?device.engine->imports():nullptr;}
 bool device_engine_entered(Device& device) noexcept {return device.engine && device.engine->entered();}
 void report_device_error(Device& device,HRESULT hr) noexcept {
     stage("DDI-error",hr);

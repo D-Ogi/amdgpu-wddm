@@ -23,6 +23,8 @@ struct RuntimeHeapImports::Record {
     Record* next{};
     bool retired{true},locked{},busy{};
     bool surface{};                             // the allocation of a linear primary
+    bool authority{};                           // its runtime resource's DDI is running
+    bool destroyed{};                           // that DDI destroys the resource
     Record(D3D12DDI_HRTDEVICE d,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb):allocation(d,cb) {}
 };
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
@@ -71,9 +73,31 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;
-    hr=record.allocation.close(record.surface && ddi_experiment("resource-deallocate"));
+    if(record.surface){
+        // By the runtime resource, inside that resource's own DDI, or not at all: neither a saved
+        // owner in a later DDI nor the other form.
+        if(!record.authority || !record.allocation.owner_known()){free_report_.owner_expired=true;return kOwnerExpired;}
+        hr=record.allocation.close(ReleaseForm::Owner);
+    } else hr=record.allocation.close();
     if(hr==S_OK)free_report_.stage=FreeStage::Done;
     return hr;
+}
+void RuntimeHeapImports::begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept {
+    if(!active_)return;
+    owner_scope_=true;
+    if(auto record=find(destroyed);record && record->surface && record->allocation.owner_known()){
+        record->authority=true;record->destroyed=true;
+    }
+}
+void RuntimeHeapImports::end_owner_scope() noexcept {
+    owner_scope_=false;
+    for(auto record=records_;record;record=record->next){
+        if(!record->authority)continue;
+        record->authority=false;
+        // A record still here after its resource's destruction, or after a creation that handed
+        // nothing to the engine, has no runtime resource any more.
+        if(record->destroyed || record->retired)record->allocation.revoke_owner();
+    }
 }
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
@@ -143,9 +167,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // the address has to suit the image alone. The description is refused here, before any callback.
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
         hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
-            request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
-            ddi_experiment("plain-primary")?SurfaceVariant::Plain:
-            ddi_experiment("shared-primary")?SurfaceVariant::Shared:SurfaceVariant::Default);
+            request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle);
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;
@@ -169,7 +191,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(!paging_open_){paging_open_=true;hr=paging_.open();if(hr!=S_OK)return hr;}
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->next=records_;records_=record;record->busy=true;
-    record->surface=surface;
+    record->surface=surface;record->authority=surface && owner_scope_;
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);record->busy=false;
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}

@@ -9,10 +9,12 @@ namespace native12 {
 struct Device;
 class DeviceEngine;
 class QueueEngineRegistry;
+class RuntimeHeapImports;
 HRESULT create_device_engine(Device&) noexcept;
 void destroy_device_engine(Device&) noexcept;
 engine_ddi::DeviceContext* engine_context(Device&) noexcept;
 QueueEngineRegistry* engine_queues(Device&) noexcept;
+RuntimeHeapImports* engine_imports(Device&) noexcept;
 bool device_engine_entered(Device&) noexcept;
 void report_device_error(Device&,HRESULT) noexcept;
 
