@@ -210,7 +210,8 @@ int main() {
             return f.registry.copy_tiles(s, e.resource, e.starts, e.source, e.source_start, e.sizes, e.flags);
         };
         assert(update(slot) == S_OK && copy(slot) == S_OK && f.tile_updates == 1 && f.tile_copies == 1);
-        // Defaults of the API travel as they are: no starts, no sizes, no heap, no ranges.
+        // Null pointers are handed on as null. The substitute accepts anything: whether the engine takes
+        // this mapping is not shown here.
         const auto full = f.expected;
         f.expected = {{&resource}, {}, nullptr, nullptr, nullptr, {}, 1, 1, &range, nullptr, nullptr, D3D12DDI_TILE_MAPPING_FLAG_NONE};
         assert(update(slot) == S_OK && f.tile_updates == 2);

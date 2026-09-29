@@ -301,8 +301,10 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     case BC250_HOST_ReserveGpuVirtualAddress:{
         auto& a=*static_cast<D3DDDI_RESERVEGPUVIRTUALADDRESS*>(argument);
         const bool fixed=a.BaseAddress!=0;
-        // Reserved0 and Reserved1 are the obsolete reservation type and driver protection.
-        if(!a.Size || (a.Size&(kGranule-1)) || (a.BaseAddress&(kGranule-1)) || a.Reserved0 || a.Reserved1)return E_INVALIDARG;
+        // Reserved0, Reserved1 and Reserved2 are the obsolete reservation type, driver protection
+        // and paging fence.
+        if(!a.Size || (a.Size&(kGranule-1)) || (a.BaseAddress&(kGranule-1)) || a.Reserved0 || a.Reserved1 ||
+           a.Reserved2)return E_INVALIDARG;
         if(fixed){
             if(a.BaseAddress>UINT64_MAX-a.Size || owned(a.BaseAddress,a.Size,nullptr))return E_INVALIDARG;
         }else if((a.MinimumAddress&(kGranule-1)) || (a.MaximumAddress&(kGranule-1)) ||
@@ -392,7 +394,11 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(!record || record->busy || record->va)return E_INVALIDARG;
         record->busy=true;HRESULT hr=KT_CALL(MapGpuVirtualAddress,&a);record->busy=false;
         if(hr==S_OK || hr==E_PENDING){record->va=a.VirtualAddress;record->bytes=bytes;
-            if(!extent(record->va,bytes) || (a.BaseAddress && record->va!=a.BaseAddress) || owned(record->va,bytes,record) ||
+            // Without a fixed base the answer lies inside the limits that were asked for.
+            const bool outside=!a.BaseAddress && extent(record->va,bytes) && (record->va<a.MinimumAddress ||
+                (a.MaximumAddress && (a.MaximumAddress<bytes || record->va>a.MaximumAddress-bytes)));
+            if(!extent(record->va,bytes) || (a.BaseAddress && record->va!=a.BaseAddress) || outside ||
+               owned(record->va,bytes,record) ||
                (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX)))return remove_device();}
         return hr;
     }

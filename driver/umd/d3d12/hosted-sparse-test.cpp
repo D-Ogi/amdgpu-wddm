@@ -5,6 +5,7 @@
 #include <d3dkmthk.h>
 #include <cassert>
 #include <cstdio>
+#include <initializer_list>
 using native12::HostedDispatch;
 namespace {
 HANDLE const device_handle=reinterpret_cast<HANDLE>(UINT64_C(0x1234567887654321));
@@ -110,7 +111,8 @@ int main(){
  r.Size=0x100000;r.BaseAddress=kLow+4096;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0);
  r.BaseAddress=0;r.Reserved0=1;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0);
  r.Reserved0=0;r.Reserved1=1;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0);
- r.Reserved1=0;r.MaximumAddress=kLow+65536;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0 && !reserves);
+ r.Reserved1=0;r.Reserved2=1;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0);
+ r.Reserved2=0;r.MaximumAddress=kLow+65536;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0 && !reserves);
  r.MaximumAddress=kHigh;
  // A failed callback leaves no record: the extent it might have named cannot be freed.
  reserve_result=E_FAIL;reserve_answer=kLow;assert(call(BC250_HOST_ReserveGpuVirtualAddress,&r)<0 && reserves==1);
@@ -224,6 +226,30 @@ int main(){
  assert(call(BC250_HOST_DESTROY_PAGING,&paging)<0 && !bridge.lost() && !errors);
  assert(bridge.discard_metadata()==4); // reservation, context, fence, paging queue
 
+ // An ordinary mapping placed by the runtime outside the limits that were asked for: past the maximum,
+ // below the minimum, and with its end past the maximum.
+ auto removed_by_map=[&](UINT64 answer){
+  HostedDispatch other(domain,{device_handle},um,kt,hooks);const unsigned before=errors;
+  bc250_host_paging p{};assert(HostedDispatch::dispatch(&other,BC250_HOST_CREATE_PAGING,&p)==0);
+  D3DDDI_ALLOCATIONINFO2 i{};unsigned data=1;i.pPrivateDriverData=&data;i.PrivateDriverDataSize=sizeof(data);
+  D3DKMT_CREATEALLOCATION c{};c.NumAllocations=1;c.pAllocationInfo2=&i;
+  assert(HostedDispatch::dispatch(&other,BC250_HOST_CreateAllocation2,&c)==0);
+  D3DDDI_MAPGPUVIRTUALADDRESS a{};a.hPagingQueue=9;a.hAllocation=i.hAllocation;a.SizeInPages=2;
+  a.MinimumAddress=UINT64_C(0x400000000);a.MaximumAddress=UINT64_C(0x400010000);map_answer=answer;
+  const bool refused=HostedDispatch::dispatch(&other,BC250_HOST_MapGpuVirtualAddress,&a)<0;map_answer=0;
+  const bool lost=refused && other.lost() && errors==before+1;other.discard_metadata();return lost;
+ };
+ {   // the same request answered inside its limits is an ordinary mapping
+  HostedDispatch other(domain,{device_handle},um,kt,hooks);
+  bc250_host_paging p{};assert(HostedDispatch::dispatch(&other,BC250_HOST_CREATE_PAGING,&p)==0);
+  D3DDDI_ALLOCATIONINFO2 i{};unsigned data=1;i.pPrivateDriverData=&data;i.PrivateDriverDataSize=sizeof(data);
+  D3DKMT_CREATEALLOCATION c{};c.NumAllocations=1;c.pAllocationInfo2=&i;
+  assert(HostedDispatch::dispatch(&other,BC250_HOST_CreateAllocation2,&c)==0);
+  D3DDDI_MAPGPUVIRTUALADDRESS a{};a.hPagingQueue=9;a.hAllocation=i.hAllocation;a.SizeInPages=2;
+  a.MinimumAddress=UINT64_C(0x400000000);a.MaximumAddress=UINT64_C(0x400010000);map_answer=UINT64_C(0x40000e000);
+  assert(HostedDispatch::dispatch(&other,BC250_HOST_MapGpuVirtualAddress,&a)==0x103 && !other.lost());map_answer=0;
+  other.discard_metadata();
+ }
  // Answers of the runtime that would give one extent two owners remove the device.
  auto removed_by=[&](void (*arrange)(HostedDispatch&)){
   HostedDispatch other(domain,{device_handle},um,kt,hooks);const unsigned before=errors;
@@ -255,6 +281,7 @@ int main(){
   assert(HostedDispatch::dispatch(&b,BC250_HOST_CreateAllocation2,&c)==0);
   D3DDDI_MAPGPUVIRTUALADDRESS a{};a.hPagingQueue=9;a.hAllocation=i.hAllocation;a.SizeInPages=1;map_answer=kLow+0x1000;
   assert(HostedDispatch::dispatch(&b,BC250_HOST_MapGpuVirtualAddress,&a)<0);})); // placed inside a reservation
+ for(const UINT64 answer:{UINT64_C(0x500000000),UINT64_C(0x3ffff0000),UINT64_C(0x40000f000)})assert(removed_by_map(answer));
  std::puts("PASS hosted sparse: reserve and its answers, zero and backed views, shared backing with its own mapping, "
            "free by exact extent with retry, update admission, holds across reentry and failure, queue route, closure count");
 }

@@ -410,7 +410,7 @@ void test_tiled(Env& env) {
     }
     // 5. What the engine parts refuse binds nothing and is reported once each: a resource that is not reserved, a
     // heap handle that names no heap, a mapping range without a heap, heap tiles past the heap's end, an unknown
-    // flag; for the copy, a source that is not reserved. The buffer's mapping is read again afterwards.
+    // flag; for the copy, a source that is not reserved. What the refusals left in GPU memory is not read.
     uint32_t refusals = 0;
     {
         const uint32_t before = device.shell.device_errors;
