@@ -67,13 +67,13 @@ struct Session {
     HMODULE runtime{};
     ComPtr<IDXGIFactory4> factory;ComPtr<IDXGIAdapter1> adapter;
     ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
-    ComPtr<ID3D12Resource> upload,readback;ComPtr<ID3D12CommandAllocator> allocator;
+    ComPtr<ID3D12Resource> upload,readback,middle;ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12Fence> fence;
     unsigned sequence{};bool copy_success{},pending{},io_failed{};
     ~Session() noexcept {
         // An exception while formatting/publishing a receipt must not release
         // resources with unproven GPU retirement during stack unwinding.
-        if(pending){list.Detach();allocator.Detach();upload.Detach();readback.Detach();
+        if(pending){list.Detach();allocator.Detach();upload.Detach();readback.Detach();middle.Detach();
             fence.Detach();queue.Detach();device.Detach();adapter.Detach();factory.Detach();}
     }
 
@@ -114,13 +114,17 @@ struct Session {
         char label[64]{};
         D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
         HRESULT hr=device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS,&options,sizeof(options));
-        sprintf_s(label,"Reported TiledResourcesTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options.TiledResourcesTier):0u);event("after",label,hr);
-        sprintf_s(label,"Reported ResourceBindingTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options.ResourceBindingTier):0u);event("after",label,hr);
-        sprintf_s(label,"Reported ConservativeRasterizationTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options.ConservativeRasterizationTier):0u);event("after",label,hr);
+        if(FAILED(hr))event("after","Options query failed",hr);
+        else{
+            sprintf_s(label,"Reported TiledResourcesTier %u",static_cast<unsigned>(options.TiledResourcesTier));event("after",label,hr);
+            sprintf_s(label,"Reported ResourceBindingTier %u",static_cast<unsigned>(options.ResourceBindingTier));event("after",label,hr);
+            sprintf_s(label,"Reported ConservativeRasterizationTier %u",static_cast<unsigned>(options.ConservativeRasterizationTier));event("after",label,hr);
+        }
         const D3D_FEATURE_LEVEL requested[]{D3D_FEATURE_LEVEL_12_1,D3D_FEATURE_LEVEL_12_0,D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};
         D3D12_FEATURE_DATA_FEATURE_LEVELS levels{};levels.NumFeatureLevels=4;levels.pFeatureLevelsRequested=requested;
         hr=device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS,&levels,sizeof(levels));
-        sprintf_s(label,"Reported MaxSupportedFeatureLevel %04x",SUCCEEDED(hr)?static_cast<unsigned>(levels.MaxSupportedFeatureLevel):0u);event("after",label,hr);
+        if(FAILED(hr))event("after","Feature level query failed",hr);
+        else{sprintf_s(label,"Reported MaxSupportedFeatureLevel %04x",static_cast<unsigned>(levels.MaxSupportedFeatureLevel));event("after",label,hr);}
     }
     HRESULT create_queue(){
         if(!device)return E_UNEXPECTED;if(queue)return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
@@ -142,6 +146,10 @@ struct Session {
         if(BCryptGenRandom(nullptr,seed,sizeof(seed),BCRYPT_USE_SYSTEM_PREFERRED_RNG)<0)return E_FAIL;
         const auto expected=[&seed](size_t i){return static_cast<unsigned char>(((i*37+11)^(i>>3))+seed[i&3]+seed[(i>>7)&3]);};
         {char label[48]{};sprintf_s(label,"Pattern seed %02x%02x%02x%02x",seed[0],seed[1],seed[2],seed[3]);event("after",label);}
+#ifdef INTERACTIVE_DEFAULT_HEAP
+        heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        hr=api("CreateCommittedResource DEFAULT",[&]{return device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&resource,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&middle));});if(FAILED(hr))return hr;
+#endif
         void* data=nullptr;D3D12_RANGE empty{0,0};D3D12_RANGE whole{0,size};
         hr=api("Map READBACK prefill",[&]{return readback->Map(0,&empty,&data);});if(FAILED(hr))return hr;if(!data)return E_POINTER;
         for(size_t i=0;i<size;++i)static_cast<unsigned char*>(data)[i]=static_cast<unsigned char>(~expected(i));
@@ -156,7 +164,17 @@ struct Session {
         hr=api("CreateCommandAllocator",[&]{return device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator));});if(FAILED(hr))return hr;
         hr=api("CreateCommandList",[&]{return device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list));});if(FAILED(hr))return hr;
         hr=api("CreateFence",[&]{return device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence));});if(FAILED(hr))return hr;
+#ifdef INTERACTIVE_DEFAULT_HEAP
+        // The bytes can reach READBACK only through GPU memory that has no CPU mapping.
+        event("before","CopyBufferRegion UPLOAD to DEFAULT");list->CopyBufferRegion(middle.Get(),0,upload.Get(),0,size);event("after","CopyBufferRegion UPLOAD to DEFAULT");
+        D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barrier.Transition.pResource=middle.Get();
+        barrier.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;barrier.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+        event("before","ResourceBarrier COPY_DEST to COPY_SOURCE");list->ResourceBarrier(1,&barrier);event("after","ResourceBarrier COPY_DEST to COPY_SOURCE");
+        event("before","CopyBufferRegion DEFAULT to READBACK");list->CopyBufferRegion(readback.Get(),0,middle.Get(),0,size);event("after","CopyBufferRegion DEFAULT to READBACK");
+#else
         event("before","CopyBufferRegion 4096");list->CopyBufferRegion(readback.Get(),0,upload.Get(),0,size);event("after","CopyBufferRegion 4096");
+#endif
         hr=api("Close CommandList",[&]{return list->Close();});if(FAILED(hr))return hr;
         ID3D12CommandList* commands[]={list.Get()};pending=true;
         event("before","ExecuteCommandLists");queue->ExecuteCommandLists(1,commands);event("after","ExecuteCommandLists");
@@ -199,6 +217,15 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
     session.event("after","Process RADV_EXPERIMENTAL=" INTERACTIVE_TEXT(INTERACTIVE_RADV_EXPERIMENTAL),
         SetEnvironmentVariableA("RADV_EXPERIMENTAL",INTERACTIVE_TEXT(INTERACTIVE_RADV_EXPERIMENTAL))?S_OK:HRESULT_FROM_WIN32(GetLastError()));
 #endif
+    {   // What the hosted ICD will read, in every build: absent, or the bounded text.
+        char value[40]{};char label[80]{};SetLastError(ERROR_SUCCESS);
+        const DWORD length=GetEnvironmentVariableA("RADV_EXPERIMENTAL",value,sizeof(value));
+        if(!length && GetLastError()==ERROR_ENVVAR_NOT_FOUND)strcpy_s(label,"Effective RADV_EXPERIMENTAL absent");
+        else if(length>=sizeof(value))strcpy_s(label,"Effective RADV_EXPERIMENTAL longer than 39");
+        else{for(char& c:value)if(c && !((c>='a' && c<='z') || (c>='0' && c<='9') || c==',' || c=='_'))c='?';
+            sprintf_s(label,"Effective RADV_EXPERIMENTAL=%s",value);}
+        session.event("after",label);
+    }
     HRESULT terminal=S_OK;const char* reason="exit";bool finished=false;
     for(unsigned seq=1;seq<=64 && !finished;++seq){
         session.sequence=seq;const auto command_path=numbered(session.root,"command",seq,"txt");
@@ -225,7 +252,7 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
     // Pending GPU work retains resources until process teardown. Do not call
     // Release on resources whose GPU retirement was not proven.
     if(session.pending)ExitProcess(3);
-    if(session.runtime){session.list.Reset();session.allocator.Reset();session.upload.Reset();session.readback.Reset();session.fence.Reset();session.queue.Reset();session.device.Reset();session.adapter.Reset();session.factory.Reset();FreeLibrary(session.runtime);session.runtime=nullptr;}
+    if(session.runtime){session.list.Reset();session.allocator.Reset();session.upload.Reset();session.readback.Reset();session.middle.Reset();session.fence.Reset();session.queue.Reset();session.device.Reset();session.adapter.Reset();session.factory.Reset();FreeLibrary(session.runtime);session.runtime=nullptr;}
     return FAILED(terminal)?3:0;
 }
 }

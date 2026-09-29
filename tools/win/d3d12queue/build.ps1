@@ -5,7 +5,9 @@ param(
     # Diagnostic variant: value of RADV_EXPERIMENTAL the client sets in its own process.
     [ValidatePattern('^[a-z0-9_]*$')][string]$RadvExperimental = '',
     # Diagnostic variant: request feature level 12_1 instead of 11_0 at device creation.
-    [switch]$FeatureLevel12_1
+    [switch]$FeatureLevel12_1,
+    # Diagnostic variant: UPLOAD -> DEFAULT -> READBACK with a transition barrier in between.
+    [switch]$DefaultHeap
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +38,7 @@ if (Test-Path -LiteralPath $previous) {
 $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
+if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
