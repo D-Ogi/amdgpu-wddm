@@ -213,6 +213,36 @@ void test_compute(Env& env, Device& device) {
     checkf(indirect, "compute: command signature of one dispatch, its argument buffer and a second READBACK buffer "
                      "(hr %08lx %08lx %08lx)",
            static_cast<unsigned long>(hr_s), static_cast<unsigned long>(hr_a), static_cast<unsigned long>(hr_2));
+    // A signature that changes state: a root constant, then the dispatch. The engine needs device generated
+    // commands for it and refuses the signature without them (E_NOTIMPL); created, it has to execute: the
+    // first quarter of the buffer with the seed from the argument buffer.
+    constexpr UINT kSeedRooted = 0x0c0ffeeu;
+    constexpr UINT kRootedOffset = 64;
+    D3D12DDI_INDIRECT_ARGUMENT_DESC rooted_arguments[2]{};
+    rooted_arguments[0].Type = D3D12DDI_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+    rooted_arguments[0].Constant = {1, 0, 1};
+    rooted_arguments[1].Type = D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+    const D3D12DDIARG_CREATE_COMMAND_SIGNATURE_0001 rooted_args{4 * sizeof(UINT), 2, rooted_arguments, hrs, 1};
+    void* rooted_storage = env.storage.alloc(env.core.pfnCalcPrivateCommandSignatureSize(device.h(), &rooted_args));
+    const D3D12DDI_HCOMMANDSIGNATURE hrooted{rooted_storage};
+    const HRESULT hr_rooted =
+        rooted_storage ? env.core.pfnCreateCommandSignature(device.h(), &rooted_args, hrooted) : E_OUTOFMEMORY;
+    Buffer third;
+    const HRESULT hr_3 = hr_rooted == S_OK ? create_buffer(env, device, HeapKind::Readback, kBytes, false, third) : E_ABORT;
+    bool rooted = indirect && hr_rooted == S_OK && hr_3 == S_OK;
+    if (rooted) {
+        void* written = nullptr;
+        rooted = env.core.pfnMapHeap(device.h(), arguments.hheap(), &written) == S_OK && written;
+        if (rooted) {
+            const UINT values[4] = {kSeedRooted, kWords / 256, 1, 1};
+            std::memcpy(static_cast<BYTE*>(written) + kRootedOffset, values, sizeof(values));
+            env.core.pfnUnmapHeap(device.h(), arguments.hheap());
+        }
+    }
+    checkf(hr_rooted == E_NOTIMPL || (hr_rooted == S_OK && (rooted || !indirect)),
+           "compute: command signature of a root constant and a dispatch: %s (hr %08lx %08lx)",
+           hr_rooted == E_NOTIMPL ? "refused, the device has no device generated commands" : "created",
+           static_cast<unsigned long>(hr_rooted), static_cast<unsigned long>(hr_3));
     {
         // Refusals: a type of a later slice, and a root argument without a root signature.
         D3D12DDI_INDIRECT_ARGUMENT_DESC refused{D3D12DDI_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS, {}};
@@ -301,6 +331,27 @@ void test_compute(Env& env, Device& device) {
             second_src.BaseAddress.UMD = {out.hres(), 0};
             t.pfnCopyBufferRegion(rec.hlist(), second_dst, second_src, kBytes);
         }
+        if (rooted) {
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 again =
+                transition(out, D3D12DDI_RESOURCE_STATE_COPY_SOURCE, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS);
+            t.pfnResourceBarrier(rec.hlist(), 1, &again);
+            t.pfnSetDescriptorHeaps(rec.hlist(), 1, heaps);
+            t.pfnSetComputeRootSignature(rec.hlist(), hrs);
+            t.pfnSetPipelineState(rec.hlist(), hpso);
+            t.pfnSetComputeRootDescriptorTable(rec.hlist(), 0, gpu);
+            // Not the seed: the one the dispatch uses comes from the argument buffer.
+            t.pfnSetComputeRoot32BitConstant(rec.hlist(), 1, ~kSeedRooted, 0);
+            D3D12DDIARG_BUFFER_PLACEMENT from{}, no_count{};
+            from.BaseAddress.UMD = {arguments.hres(), kRootedOffset};
+            t.pfnExecuteIndirect(rec.hlist(), hrooted, 1, from, no_count);
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 done =
+                transition(out, D3D12DDI_RESOURCE_STATE_UNORDERED_ACCESS, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &done);
+            D3D12DDIARG_BUFFER_PLACEMENT third_dst{}, third_src{};
+            third_dst.BaseAddress.UMD = {third.hres(), 0};
+            third_src.BaseAddress.UMD = {out.hres(), 0};
+            t.pfnCopyBufferRegion(rec.hlist(), third_dst, third_src, kBytes);
+        }
         t.pfnCloseCommandList(rec.hlist());
         const D3D12DDI_HCOMMANDLIST lists[] = {rec.hlist()};
         hr = engine_ddi::execute_command_lists(queue, 1, lists);
@@ -346,6 +397,26 @@ void test_compute(Env& env, Device& device) {
                "at %u)",
                bad, first);
     }
+    if (rooted && hr == S_OK) {
+        void* third_map = nullptr;
+        const HRESULT hr_m = env.core.pfnMapHeap(device.h(), third.hheap(), &third_map);
+        UINT bad = 0, first = kWords;
+        if (hr_m == S_OK && third_map) {
+            const auto* words = static_cast<const UINT32*>(third_map);
+            for (UINT i = 0; i < kWords; ++i) {
+                const UINT seed = i < kWords / 4 ? kSeedRooted : i < kWords / 2 ? kSeedIndirect : kSeed;
+                if (words[i] != i * 2654435761u + seed) {
+                    if (!bad) first = i;
+                    ++bad;
+                }
+            }
+            env.core.pfnUnmapHeap(device.h(), third.hheap());
+        }
+        checkf(hr_m == S_OK && third_map && !bad,
+               "compute: ExecuteIndirect with a root constant rewrote the first quarter with the seed of its "
+               "argument buffer and left the rest (%u differ, first at %u)",
+               bad, first);
+    }
     for (Cleared& c : cleared) {
         if (!c.ready || hr != S_OK) continue;
         void* view_map = nullptr;
@@ -368,6 +439,8 @@ void test_compute(Env& env, Device& device) {
         destroy_buffer(env, device, c.back);
     }
     if (hr_s == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hsignature);
+    if (hr_rooted == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hrooted);
+    if (hr_3 == S_OK) destroy_buffer(env, device, third);
     destroy_buffer(env, device, arguments);
     destroy_buffer(env, device, second);
     if (hr_p == S_OK) env.core.pfnDestroyDescriptorHeap(device.h(), hplain);
