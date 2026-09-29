@@ -2,17 +2,25 @@
 #pragma once
 #include "allocation.h"
 #include "../../contract/bc250_umd_submit.h"
-#include "../../kmd/gdi_private.h"
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 namespace native12 {
 enum class AllocationAccess { GpuOnly, CpuWriteCombined, CpuCached };
+// The LB7A v1 allocation description on the wire, as the kernel driver defines it
+// (driver/kmd/gdi_private.h, BC250_WDDM_ALLOCATION_PRIVATE): 32 bytes, little endian.
+struct Lb7aSurface {
+    uint32_t magic,version,width,height,pitch,format; // format: D3DDDIFORMAT
+    uint64_t size;
+};
+inline constexpr uint32_t kLb7aMagic=0x4137424Cu;
+static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offsetof(Lb7aSurface,size)==24);
 // Non-sparse, non-shared memory: raw (prepare), or one linear surface that a reader
 // outside the engine opens by its LB7A description (prepare_surface). Storage is
 // owned so callback pointers cannot dangle.
 struct AllocationRequest final {
     bc250_umd_alloc_private blob{};
-    BC250_WDDM_ALLOCATION_PRIVATE surface{};
+    Lb7aSurface surface{};
     uint64_t held{};                            // what the allocation holds: mapped and imported
     D3D12DDI_ALLOCATION_INFO_0022 info{};
     D3D12DDICB_ALLOCATE_0022 args{};
@@ -61,10 +69,9 @@ struct AllocationRequest final {
         const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
         if(pitch<width4*4 || !size || (size&4095) || size>0xfffff000ull || size<uint64_t(pitch)*height4)
             return E_INVALIDARG;
-        static_assert(sizeof(surface)==32);
-        surface.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;surface.Version=1;
-        surface.Width=width;surface.Height=height;surface.Pitch=pitch;
-        surface.Format=static_cast<unsigned long>(format);surface.Size=size;
+        surface.magic=kLb7aMagic;surface.version=1;
+        surface.width=width;surface.height=height;surface.pitch=pitch;
+        surface.format=static_cast<uint32_t>(format);surface.size=size;
         info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
         info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
         info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;

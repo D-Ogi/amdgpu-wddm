@@ -25,11 +25,12 @@ static char mapped[65536];
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
  assert(a->NumAllocations==1 && !a->pPrivateDriverData && !a->PrivateDriverDataSize);
- if(a->pAllocationInfo->PrivateDriverDataSize==sizeof(BC250_WDDM_ALLOCATION_PRIVATE)){
+ if(a->pAllocationInfo->PrivateDriverDataSize==32){
   // The primary: the 32-byte LB7A v1 description alone, PRIMARY, no video present source.
-  auto s=static_cast<const BC250_WDDM_ALLOCATION_PRIVATE*>(a->pAllocationInfo->pPrivateDriverData);
-  assert(s->Magic==0x4137424Cul && s->Version==1 && s->Width==256 && s->Height==64 && s->Pitch==1024);
-  assert(s->Format==surface_format && s->Size==65536);
+  // Read as the words on the wire, not through the producer's own structure.
+  uint32_t w[8];std::memcpy(w,a->pAllocationInfo->pPrivateDriverData,sizeof(w));
+  assert(w[0]==0x4137424Cu && w[1]==1 && w[2]==256 && w[3]==64 && w[4]==1024);
+  assert(w[5]==surface_format && w[6]==65536 && w[7]==0);
   assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
   assert(a->pAllocationInfo->VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
   ++surfaces;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
