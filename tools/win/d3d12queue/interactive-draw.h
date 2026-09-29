@@ -64,6 +64,8 @@ inline HRESULT draw(Session& s){
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed{};UINT rows=0;UINT64 row_bytes=0,total=0;
     s.event("before","GetCopyableFootprints");device->GetCopyableFootprints(&texture,0,1,0,&placed,&rows,&row_bytes,&total);s.event("after","GetCopyableFootprints");
     if(rows!=side || row_bytes!=side*4ull || placed.Offset!=0 || placed.Footprint.RowPitch<side*4 || !total || total>(1u<<20))return E_UNEXPECTED;
+    // The CPU loops below address row y at y * RowPitch: the last word must lie inside the reported total.
+    if(UINT64{side-1}*placed.Footprint.RowPitch+UINT64{side}*4>total)return E_UNEXPECTED;
     const UINT pitch=placed.Footprint.RowPitch;
 
     struct Vertex {float x,y;UINT32 tag;};static_assert(sizeof(Vertex)==12);

@@ -12,6 +12,9 @@
 //   3     y < 32    0.75   C0000000   fails everywhere
 //   4     y >= 32   0.4    D0000000   passes only where draw 1 remains, so the depth of draw 2 was written
 //
+// The vertex buffer holds the four triangles in another order than the draws (slots 1, 3, 0, 2) and only the
+// index buffer names the right one, so a draw that ignored the indices would use another draw's tag and depth.
+//
 // Every word is computed on the CPU and compared; nothing depends on another renderer's output.
 #include "scene-programs.h"
 
@@ -99,6 +102,8 @@ inline HRESULT scene(Session& s){
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT placed{};UINT rows=0;UINT64 row_bytes=0,total=0;
     s.event("before","GetCopyableFootprints");device->GetCopyableFootprints(&texture,0,1,0,&placed,&rows,&row_bytes,&total);s.event("after","GetCopyableFootprints");
     if(rows!=side || row_bytes!=side*4ull || placed.Offset!=0 || placed.Footprint.RowPitch<side*4 || !total || total>(1u<<20))return E_UNEXPECTED;
+    // The CPU loops below address row y at y * RowPitch: the last word must lie inside the reported total.
+    if(UINT64{side-1}*placed.Footprint.RowPitch+UINT64{side}*4>total)return E_UNEXPECTED;
     const UINT pitch=placed.Footprint.RowPitch;
 
     struct Vertex {float x,y,z;UINT32 tag;};static_assert(sizeof(Vertex)==16);
@@ -109,13 +114,13 @@ inline HRESULT scene(Session& s){
         {0.75f,0xC0000000u,{0,0,static_cast<LONG>(side),static_cast<LONG>(half)}},
         {0.4f,0xD0000000u,{0,static_cast<LONG>(half),static_cast<LONG>(side),static_cast<LONG>(side)}}};
     Vertex corners[12]{};UINT16 indices[12]{};
+    constexpr UINT slot_of[4]{1,3,0,2};
     for(UINT pass=0;pass<4;++pass){
-        corners[pass*3+0]={-1.0f,-1.0f,passes[pass].z,passes[pass].tag};
-        corners[pass*3+1]={-1.0f,3.0f,passes[pass].z,passes[pass].tag};
-        corners[pass*3+2]={3.0f,-1.0f,passes[pass].z,passes[pass].tag};
-        // Indices name the corners in reverse, so a draw that ignored them would still cover the target but
-        // an index fetch of the wrong width or offset would not.
-        for(UINT corner=0;corner<3;++corner)indices[pass*3+corner]=static_cast<UINT16>(pass*3+2-corner);
+        const UINT first=slot_of[pass]*3;
+        corners[first+0]={-1.0f,-1.0f,passes[pass].z,passes[pass].tag};
+        corners[first+1]={-1.0f,3.0f,passes[pass].z,passes[pass].tag};
+        corners[first+2]={3.0f,-1.0f,passes[pass].z,passes[pass].tag};
+        for(UINT corner=0;corner<3;++corner)indices[pass*3+corner]=static_cast<UINT16>(first+2-corner);
     }
     const UINT64 vertex_offset=(total+15)&~15ull,index_offset=vertex_offset+sizeof(corners);
     const UINT64 upload_bytes=index_offset+sizeof(indices);
