@@ -319,6 +319,13 @@ void test_graphics(Env& env, Device& device) {
     D3D12DDI_CPU_DESCRIPTOR_HANDLE rtv{};
     if (hr_h == S_OK) rtv = env.core.pfnGetCPUDescriptorHandleForHeapStart(device.h(), hheap);
     checkf(hr_h == S_OK && rtv.ptr, "graphics: RTV heap of 1 (hr %08lx)", static_cast<unsigned long>(hr_h));
+    if (hr_h == S_OK) {
+        // The runtime asks every heap for its GPU handle, also one that is not shader visible.
+        const auto reported = device.shell.device_errors;
+        const D3D12DDI_GPU_DESCRIPTOR_HANDLE none = env.core.pfnGetGPUDescriptorHandleForHeapStart(device.h(), hheap);
+        checkf(!none.ptr && device.shell.device_errors == reported,
+               "graphics: RTV heap has a zero GPU handle and asking for it reports no error");
+    }
 
     // Vertices: one triangle over the whole target.
     D3D12DDI_GPU_VIRTUAL_ADDRESS vb_va = 0;

@@ -85,10 +85,12 @@ D3D12DDI_GPU_DESCRIPTOR_HANDLE APIENTRY gpu_start(D3D12DDI_HDEVICE device, D3D12
     DeviceContext* c = resolve(device);
     if (!c) return {};
     auto* r = record_of<DescriptorHeapRecord>(h.pDrvPrivate, Tag::DescriptorHeap, c);
-    if (!r || !r->gpu.ptr) {
-        c->report(E_INVALIDARG);                        // unknown heap, or not shader visible
+    if (!r) {
+        c->report(E_INVALIDARG);
         return {};
     }
+    // The runtime asks for every heap it creates. A heap that is not shader visible has no GPU handle:
+    // the answer is zero and no error.
     return {r->gpu.ptr};
 }
 
