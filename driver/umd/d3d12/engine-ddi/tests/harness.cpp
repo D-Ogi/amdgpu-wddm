@@ -297,6 +297,15 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
     D3D12DDIARG_RESETCOMMANDLIST_0040 reset{D3D12DDI_HCOMMANDRECORDER_0040{out.recorder}, 1,
                                            D3D12DDI_COMMAND_LIST_FLAG_NONE};
     env.lists[out.table].pfnResetCommandList(out.hlist(), &reset);
+    // The runtime then writes its default state. Predication is the slot it was seen to reach on a direct
+    // list; the others are the API's defaults for state a reset list carries.
+    const auto& t = env.lists[out.table];
+    t.pfnSetPredication(out.hlist(), D3D12DDI_HRESOURCE{nullptr}, 0, D3D12DDI_PREDICATION_OP_EQUAL_ZERO);
+    t.pfnSetProtectedResourceSession(out.hlist(), D3D12DDI_HPROTECTEDRESOURCESESSION_0030{nullptr});
+    if (out.table == 1) {
+        t.pfnSetSamplePositions(out.hlist(), 0, 0, nullptr);
+        t.pfnSetViewInstanceMask(out.hlist(), 0);
+    }
     return S_OK;
 }
 

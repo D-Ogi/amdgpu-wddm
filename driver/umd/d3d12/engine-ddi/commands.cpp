@@ -196,6 +196,86 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
     HRESULT hr = l->list()->Reset(a, nullptr);
     if (FAILED(hr)) c->report_list(l->rt, hr);
 }
+
+// ---- List state the runtime sets on every list ---------------------------------------------------------------------
+// The runtime writes its default state into a list it has reset, through these slots among others, whatever
+// the caps say about the feature. Each forwards to the engine list, which owns the feature check.
+template <class I> I* list_as(CommandListRecord* l) noexcept {
+    I* out = nullptr;
+    if (FAILED(l->list()->QueryInterface(__uuidof(I), reinterpret_cast<void**>(&out)))) {
+        l->h.device->report_list(l->rt, E_NOINTERFACE);
+        return nullptr;
+    }
+    return out;
+}
+
+void APIENTRY set_predication(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOURCE hres, UINT64 offset,
+                              D3D12DDI_PREDICATION_OP op) {
+    CommandListRecord* l = list_of(h, "SetPredication");
+    if (!l) return;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, l->h.device);
+    if (hres.pDrvPrivate && !r) return l->h.device->report_list(l->rt, E_INVALIDARG);
+    l->list()->SetPredication(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr, r ? offset : 0,
+                              static_cast<D3D12_PREDICATION_OP>(op));
+}
+
+void APIENTRY om_set_depth_bounds(D3D12DDI_HCOMMANDLIST h, FLOAT low, FLOAT high) {
+    CommandListRecord* l = list_of(h, "OMSetDepthBounds");
+    if (!l) return;
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
+        l1->OMSetDepthBounds(low, high);
+        l1->Release();
+    }
+}
+
+void APIENTRY set_sample_positions(D3D12DDI_HCOMMANDLIST h, UINT per_pixel, UINT pixels,
+                                   D3D12DDI_SAMPLE_POSITION* positions) {
+    static_assert(sizeof(D3D12DDI_SAMPLE_POSITION) == sizeof(D3D12_SAMPLE_POSITION), "sample position");
+    CommandListRecord* l = list_of(h, "SetSamplePositions");
+    if (!l) return;
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
+        l1->SetSamplePositions(per_pixel, pixels, reinterpret_cast<D3D12_SAMPLE_POSITION*>(positions));
+        l1->Release();
+    }
+}
+
+void APIENTRY set_view_instance_mask(D3D12DDI_HCOMMANDLIST h, UINT mask) {
+    CommandListRecord* l = list_of(h, "SetViewInstanceMask");
+    if (!l) return;
+    if (auto* l1 = list_as<ID3D12GraphicsCommandList1>(l)) {
+        l1->SetViewInstanceMask(mask);
+        l1->Release();
+    }
+}
+
+// No protected sessions exist here (none can be created), so only "none" is a valid session.
+void APIENTRY set_protected_session(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session) {
+    CommandListRecord* l = list_of(h, "SetProtectedResourceSession");
+    if (l && session.pDrvPrivate) l->h.device->report_list(l->rt, E_NOTIMPL);
+}
+
+void APIENTRY rs_set_shading_rate(D3D12DDI_HCOMMANDLIST h, D3D12DDI_SHADING_RATE_0062 rate,
+                                  const D3D12DDI_SHADING_RATE_COMBINER_0062* combiners) {
+    static_assert(sizeof(D3D12DDI_SHADING_RATE_COMBINER_0062) == sizeof(D3D12_SHADING_RATE_COMBINER), "combiner");
+    CommandListRecord* l = list_of(h, "RSSetShadingRate");
+    if (!l) return;
+    if (auto* l5 = list_as<ID3D12GraphicsCommandList5>(l)) {
+        l5->RSSetShadingRate(static_cast<D3D12_SHADING_RATE>(rate),
+                             reinterpret_cast<const D3D12_SHADING_RATE_COMBINER*>(combiners));
+        l5->Release();
+    }
+}
+
+void APIENTRY rs_set_shading_rate_image(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HRESOURCE hres) {
+    CommandListRecord* l = list_of(h, "RSSetShadingRateImage");
+    if (!l) return;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, l->h.device);
+    if (hres.pDrvPrivate && !r) return l->h.device->report_list(l->rt, E_INVALIDARG);
+    if (auto* l5 = list_as<ID3D12GraphicsCommandList5>(l)) {
+        l5->RSSetShadingRateImage(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr);
+        l5->Release();
+    }
+}
 } // namespace
 
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
@@ -215,6 +295,13 @@ void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
 void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexcept {
     t->pfnCloseCommandList = close_list;
     t->pfnResetCommandList = reset_list;
+    t->pfnSetPredication = set_predication;
+    t->pfnOMSetDepthBounds = om_set_depth_bounds;
+    t->pfnSetSamplePositions = set_sample_positions;
+    t->pfnSetViewInstanceMask = set_view_instance_mask;
+    t->pfnSetProtectedResourceSession = set_protected_session;
+    t->pfnRSSetShadingRate = rs_set_shading_rate;
+    t->pfnRSSetShadingRateImage = rs_set_shading_rate_image;
 }
 
 } // namespace engine_ddi
