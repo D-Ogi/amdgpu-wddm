@@ -203,7 +203,8 @@ struct Session {
         return "{\"schema\":1,\"sequence\":"+std::to_string(sequence)+",\"command\":\""+verb+"\",\"success\":"+(SUCCEEDED(hr)?"true":"false")+",\"hr\":\""+hr_text(hr)+"\",\"elapsed_ms\":"+std::to_string(GetTickCount64()-start)+",\"state\":{\"device\":"+(device?"true":"false")+",\"queue\":"+(queue?"true":"false")+"},\"copy_success\":"+(copy_success?"true":"false")+",\"gpu_pending\":"+(pending?"true":"false")+"}\n";
     }
 };
-#if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) > 1
+#if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) + \
+    defined(INTERACTIVE_RAYQUERY) > 1
 #error one variant of the copy verb per build
 #endif
 #ifdef INTERACTIVE_DRAW
@@ -217,6 +218,9 @@ struct Session {
 #endif
 #ifdef INTERACTIVE_SPARSE
 #include "interactive-sparse.h"
+#endif
+#ifdef INTERACTIVE_RAYQUERY
+#include "interactive-rayquery.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
@@ -264,6 +268,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=present(session);break;
 #elif defined(INTERACTIVE_SPARSE)
         case Verb::Copy:hr=sparse(session);break;
+#elif defined(INTERACTIVE_RAYQUERY)
+        case Verb::Copy:hr=rayquery(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif

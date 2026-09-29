@@ -64,6 +64,16 @@ receipt before publishing the next command.
 READBACK, and all 262144 bytes are compared. Only mapped tiles are written and read. The device must
 report tiled resources. The software control passes this variant (2026-09-29, exit 0).
 
+`build.ps1 -RayQuery` replaces the `copy` operation with the scene of engine-ddi's `test-raytracing.cpp`
+through `ID3D12Device5` and `ID3D12GraphicsCommandList4`: a bottom level of one triangle and a top level of
+one instance are built on one DIRECT list, then the cs_6_5 inline ray query of `rayquery.hlsl`
+(`rayquery-program.h`, the same DXIL bytes as the harness fixture) writes 64 words, 1 for a hit and 2 for a
+miss, through a root SRV and a root UAV by address. The READBACK buffer starts at a value that is neither;
+every word is compared with the pattern computed on the CPU, which must hold both hits and misses. The
+trace records the reported raytracing tier, the prebuild sizes and the bottom level's GPU address. Below
+raytracing tier 1.1 the operation fails before creating anything. The software control passes this variant
+with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained

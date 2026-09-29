@@ -18,7 +18,10 @@ param(
     [switch]$Present,
     # Diagnostic variant: the copy verb maps a reserved buffer's tiles to a heap on the queue and sends a
     # pattern through it. The device must report tiled resources (see -RadvExperimental).
-    [switch]$Sparse
+    [switch]$Sparse,
+    # Diagnostic variant: the copy verb builds a bottom and a top level acceleration structure on the queue and
+    # compares the 64 words of an inline ray query program. The device must report raytracing tier 1.1.
+    [switch]$RayQuery
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,11 +53,12 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene, Present and Sparse each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse, $RayQuery | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene, Present, Sparse and RayQuery each replace the copy verb; choose one' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 if ($Present) { $variant += '/DINTERACTIVE_PRESENT' }
 if ($Sparse) { $variant += '/DINTERACTIVE_SPARSE' }
+if ($RayQuery) { $variant += '/DINTERACTIVE_RAYQUERY' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
