@@ -913,8 +913,9 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     case D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED: {
         const auto* f = static_cast<const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
-        if (static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
-            return E_NOTIMPL;                           // the API derives the slice pitch
+        if (f->PhysicalDepth > 1 &&
+            static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
+            return E_NOTIMPL;                           // the API derives the slice pitch; one slice has none
         const UINT bs = block_size(f->Format);
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
@@ -925,7 +926,8 @@ HRESULT copy_location(CommandListRecord* l, const D3D12DDIARG_BUFFER_PLACEMENT* 
     case D3D12DDI_RL_PLACED_VIRTUAL_SUBRESOURCE_PITCHED: {
         const auto* f = static_cast<const D3D12DDIARG_VIRTUAL_SUBRESOURCE_PITCHED_LAYOUT*>(r.pLayout);
         if (!f) return E_INVALIDARG;
-        if (static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
+        if (f->PhysicalDepth > 1 &&
+            static_cast<uint64_t>(f->SlicePitch) != static_cast<uint64_t>(f->Pitch) * f->PhysicalHeight)
             return E_NOTIMPL;
         out.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         out.PlacedFootprint.Offset = p->BaseAddress.UMD.Offset;
