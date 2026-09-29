@@ -4,6 +4,7 @@
 // between resources (L10, L13, L17).
 #include "internal.h"
 #include "format-list.h"
+#include "../../../contract/amdgpu_wddm_surface_format.h"
 #include <algorithm>
 
 namespace engine_ddi {
@@ -203,19 +204,19 @@ struct LinearSurface {
 inline constexpr uint32_t kLinearMaxEdge = 8192;
 inline constexpr uint64_t kLinearPage = 4096;
 
-DXGI_FORMAT srgb_sibling(DXGI_FORMAT f) noexcept {
-    switch (f) {
-    case DXGI_FORMAT_B8G8R8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    case DXGI_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-    default: return DXGI_FORMAT_UNKNOWN;
-    }
+// The storage formats a linear primary may have: the rows of the surface format table the compositor may open
+// (driver/contract/amdgpu_wddm_surface_format.h), which the shell and the kernel driver admit by the same table.
+const AMDGPU_WDDM_SURFACE_FORMAT* composed_format(DXGI_FORMAT f) noexcept {
+    return amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(f)),
+                                     AMDGPU_WDDM_SURFACE_COMPOSED);
 }
 
 // The descriptions the linear primary exists for. The engine's image has the format's own compatibility list, so
-// castable formats beyond the format and its sRGB sibling are not these.
+// castable formats beyond the format and its sRGB sibling, where the format has one, are not these.
 bool linear_primary_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CREATERESOURCE_0088& in) noexcept {
-    const DXGI_FORMAT sibling = srgb_sibling(desc.Format);
-    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || sibling == DXGI_FORMAT_UNKNOWN) return false;
+    const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || !row) return false;
+    const auto sibling = static_cast<DXGI_FORMAT>(row->dxgi_srgb);
     if (!desc.Width || desc.Width > kLinearMaxEdge || !desc.Height || desc.Height > kLinearMaxEdge) return false;
     if (desc.DepthOrArraySize != 1 || desc.MipLevels != 1 || desc.SampleDesc.Count != 1 || desc.SampleDesc.Quality)
         return false;
@@ -225,7 +226,9 @@ bool linear_primary_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CR
                       D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE))
         return false;
     for (UINT i = 0; i < in.NumCastableFormats; ++i)
-        if (in.pCastableFormats[i] != desc.Format && in.pCastableFormats[i] != sibling) return false;
+        if (in.pCastableFormats[i] != desc.Format &&
+            (sibling == DXGI_FORMAT_UNKNOWN || in.pCastableFormats[i] != sibling))
+            return false;
     return true;
 }
 
@@ -240,7 +243,8 @@ D3D12_RESOURCE_DESC1 linear_desc(D3D12_RESOURCE_DESC1 desc) noexcept {
 // the image's memory requirement and for a reader that takes pitch * (height rounded up to 4) bytes.
 HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, LinearSurface* out) noexcept {
     *out = LinearSurface{};
-    if (!c->funcs.QueryLinearImage) return E_NOTIMPL;
+    const AMDGPU_WDDM_SURFACE_FORMAT* row = composed_format(desc.Format);
+    if (!c->funcs.QueryLinearImage || !row) return E_NOTIMPL;
     const D3D12_RESOURCE_DESC1 d = linear_desc(desc);
     BC250_VKD3D_LINEAR_IMAGE_INFO info{};
     info.Size = sizeof(info);
@@ -254,7 +258,7 @@ HRESULT query_linear_primary(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
     const uint64_t width4 = (desc.Width + 3) & ~3ull;
     const uint64_t height4 = (static_cast<uint64_t>(desc.Height) + 3) & ~3ull;
     if (info.Offset || !info.RowPitch || info.RowPitch > UINT32_MAX || info.RowPitch % 16 ||
-        info.RowPitch < width4 * 4 || !info.MemorySize || !info.MemoryAlignment || !info.MemoryTypeBits ||
+        info.RowPitch < width4 * row->bytes_per_pixel || !info.MemorySize || !info.MemoryAlignment || !info.MemoryTypeBits ||
         info.MemoryAlignment > UINT32_MAX || (info.MemoryAlignment & (info.MemoryAlignment - 1)) ||
         info.LayoutSize > info.MemorySize) {
         log_line("linear primary: layout not usable (offset %llu, pitch %llu, layout %llu, memory %llu, alignment "

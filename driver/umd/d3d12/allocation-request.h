@@ -2,6 +2,7 @@
 #pragma once
 #include "allocation.h"
 #include "../../contract/bc250_umd_submit.h"
+#include "../../contract/amdgpu_wddm_surface_format.h"
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -20,6 +21,16 @@ static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offs
 struct E26rResource { uint32_t magic,version,shared; };
 inline constexpr uint32_t kE26rMagic=0x52363245u;
 static_assert(sizeof(E26rResource)==12);
+// The surface format table's numbers are the SDK's and the WDK's.
+static_assert(AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT==DXGI_FORMAT_R16G16B16A16_FLOAT &&
+              AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM==DXGI_FORMAT_R10G10B10A2_UNORM &&
+              AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM==DXGI_FORMAT_R8G8B8A8_UNORM &&
+              AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM_SRGB==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
+              AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM==DXGI_FORMAT_B8G8R8A8_UNORM &&
+              AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM_SRGB==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+static_assert(AMDGPU_WDDM_D3DDDI_A8R8G8B8==D3DDDIFMT_A8R8G8B8 && AMDGPU_WDDM_D3DDDI_X8R8G8B8==D3DDDIFMT_X8R8G8B8 &&
+              AMDGPU_WDDM_D3DDDI_A2B10G10R10==D3DDDIFMT_A2B10G10R10 && AMDGPU_WDDM_D3DDDI_A8B8G8R8==D3DDDIFMT_A8B8G8R8 &&
+              AMDGPU_WDDM_D3DDDI_A16B16G16R16F==D3DDDIFMT_A16B16G16R16F);
 // Non-sparse, non-shared memory: raw (prepare), or one linear surface that a reader
 // outside the engine opens by its LB7A description (prepare_surface). Storage is
 // owned so callback pointers cannot dangle.
@@ -66,15 +77,17 @@ struct AllocationRequest final {
     // The primary: the 32-byte LB7A v1 description, which the kernel driver and the compositor's
     // opener read, under the 12-byte E26R v1 resource record. pitch and size are the bound image's,
     // never chosen here. The allocation is a primary of no video present source: it is composed,
-    // not scanned out.
+    // not scanned out, so its format is one the surface format table enables for composition.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
                             uint64_t size,HANDLE runtimeOwner=nullptr) noexcept {
         blob={};surface={};resource={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
-        if(format!=D3DDDIFMT_A8R8G8B8 && format!=D3DDDIFMT_A8B8G8R8)return E_NOTIMPL;
+        const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
+                                                  AMDGPU_WDDM_SURFACE_COMPOSED);
+        if(!row)return E_NOTIMPL;
         if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
         const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
-        if(pitch<width4*4 || !size || (size&4095) || size>0xfffff000ull || size<uint64_t(pitch)*height4)
+        if(pitch<width4*row->bytes_per_pixel || !size || (size&4095) || size>0xfffff000ull || size<uint64_t(pitch)*height4)
             return E_INVALIDARG;
         surface.magic=kLb7aMagic;surface.version=1;
         surface.width=width;surface.height=height;surface.pitch=pitch;

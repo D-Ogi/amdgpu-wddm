@@ -231,6 +231,12 @@ int main(){
   {OwnerScope create(&owner,0);
    assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.gpu_va==gpu_address);
    gpu_address-=4096;memory_va_bias=4096;assert(owner.free(&memory)==S_OK && events=="AMIVUR");memory_va_bias=0;}
+  // A 10-bit swap chain is four bytes a pixel as well and composed the same way, whatever the monitor's
+  // depth: the kernel gets its D3DDDIFORMAT, A2B10G10R10 (the DXGI name counts from the low bits).
+  target.Format=DXGI_FORMAT_R10G10B10A2_UNORM;surface_format=D3DDDIFMT_A2B10G10R10;events.clear();
+  {OwnerScope create(&owner,0);
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMI");
+   assert(owner.free(&memory)==S_OK && events=="AMIVUR");}
   // Construction that fails after the allocation releases it in the same DDI, by the same form.
   {OwnerScope create(&owner,0);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;surface_format=D3DDDIFMT_A8R8G8B8;
    events.clear();fail_import=true;
@@ -243,8 +249,9 @@ int main(){
    assert(owner.allocate(&s,&memory)==expected && !memory.memory && events.empty() && next_allocation==before);
   };
   // Refused before any callback: a description the surface does not exist for, and one that the
-  // reader's rules do not admit.
-  target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  // reader's rules do not admit. FP16 is a row the format table knows and does not enable yet.
+  target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;refused(E_NOTIMPL);
+  target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
   target.MipLevels=2;refused(E_NOTIMPL);target.MipLevels=1;
   target.SampleDesc.Count=4;refused(E_NOTIMPL);target.SampleDesc.Count=1;
   target.DepthOrArraySize=2;refused(E_NOTIMPL);target.DepthOrArraySize=1;
@@ -270,7 +277,7 @@ int main(){
  pending=true;completed=10;events.clear();assert(owner.allocate(&req,&memory)==E_PENDING && !memory.memory && events=="AM");
  completed=20;pending=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMUDP");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- assert(makes_resident==0);assert(surfaces==3);
+ assert(makes_resident==0);assert(surfaces==4);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.
@@ -336,7 +343,7 @@ int main(){
   assert(late.discard_metadata()==5 && events.empty());
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  }
- assert(surfaces==10);
+ assert(surfaces==11);
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface under E26R, "
   "released by its runtime resource inside that resource's DDI only");
 }

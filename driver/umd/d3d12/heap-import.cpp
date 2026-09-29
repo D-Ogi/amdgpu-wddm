@@ -136,11 +136,12 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
            heap.CPUPageProperty!=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE || !r ||
            r->ResourceType!=D3D12DDI_RT_TEXTURE2D || r->DepthOrArraySize!=1 || r->MipLevels!=1 ||
            r->SampleDesc.Count!=1 || r->SampleDesc.Quality || r->Width>UINT32_MAX)return E_NOTIMPL;
-        switch(r->Format){
-        case DXGI_FORMAT_B8G8R8A8_UNORM:surface_format=D3DDDIFMT_A8R8G8B8;break;
-        case DXGI_FORMAT_R8G8B8A8_UNORM:surface_format=D3DDDIFMT_A8B8G8R8;break;
-        default:return E_NOTIMPL;
-        }
+        // The storage formats the compositor may open, from the one table the kernel driver and the
+        // compositor's UMD read as well.
+        const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi(unsigned(r->Format)),
+                                                  AMDGPU_WDDM_SURFACE_COMPOSED);
+        if(!row)return E_NOTIMPL;
+        surface_format=static_cast<D3DDDIFORMAT>(row->d3dddi);
         if(!request->memory_type_bits || !request->surface_row_pitch || !request->surface_layout_size ||
            request->surface_layout_size>request->byte_size)return E_INVALIDARG;
     }

@@ -250,6 +250,9 @@ void test_linear_primary(Env& env) {
     // B8G8R8A8 in memory is blue first, R8G8B8A8 red first: the same word for both clears below.
     round_trip(env, device, m, queue, Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM}, first, 0xff336699u);
     round_trip(env, device, m, queue, Shape{127, 79, DXGI_FORMAT_R8G8B8A8_UNORM}, second, 0xff336699u);
+    // A 10-bit swap chain's storage, four bytes as well: red in the low ten bits, alpha in the top two. 0.2, 0.4
+    // and 0.6 of 1023 are 204.6, 409.2 and 613.8, so no rounding tie decides the word.
+    round_trip(env, device, m, queue, Shape{200, 120, DXGI_FORMAT_R10G10B10A2_UNORM}, first, 0xe66664cdu);
     // The runtime's heap may be larger than the surface, carry the answer's alignment and allow every
     // category: the memory request and the engine's heap are the surface's all the same.
     {
