@@ -9,7 +9,10 @@ param(
     # Diagnostic variant: UPLOAD -> DEFAULT -> READBACK with a transition barrier in between.
     [switch]$DefaultHeap,
     # Diagnostic variant: the copy verb draws one triangle to an offscreen target and compares every word.
-    [switch]$Draw
+    [switch]$Draw,
+    # Diagnostic variant: the copy verb draws four indexed triangles with a depth buffer and a source texture
+    # bound through a descriptor table, and compares every word.
+    [switch]$Scene
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,7 +44,9 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
+if ($Draw -and $Scene) { throw 'Draw and Scene both replace the copy verb; choose one' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
+if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",

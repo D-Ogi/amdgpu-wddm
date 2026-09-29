@@ -69,7 +69,7 @@ struct Session {
     ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
     ComPtr<ID3D12Resource> upload,readback,middle;ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12Fence> fence;
-    ComPtr<IUnknown> extra[3];   // objects of a build variant, released with the rest
+    ComPtr<IUnknown> extra[8];   // objects of a build variant, released with the rest
     unsigned sequence{};bool copy_success{},pending{},io_failed{};
     ~Session() noexcept {
         // An exception while formatting/publishing a receipt must not release
@@ -203,8 +203,14 @@ struct Session {
         return "{\"schema\":1,\"sequence\":"+std::to_string(sequence)+",\"command\":\""+verb+"\",\"success\":"+(SUCCEEDED(hr)?"true":"false")+",\"hr\":\""+hr_text(hr)+"\",\"elapsed_ms\":"+std::to_string(GetTickCount64()-start)+",\"state\":{\"device\":"+(device?"true":"false")+",\"queue\":"+(queue?"true":"false")+"},\"copy_success\":"+(copy_success?"true":"false")+",\"gpu_pending\":"+(pending?"true":"false")+"}\n";
     }
 };
+#if defined(INTERACTIVE_DRAW) && defined(INTERACTIVE_SCENE)
+#error one variant of the copy verb per build
+#endif
 #ifdef INTERACTIVE_DRAW
 #include "interactive-draw.h"
+#endif
+#ifdef INTERACTIVE_SCENE
+#include "interactive-scene.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
@@ -244,8 +250,10 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         switch(command.verb){
         case Verb::CreateDevice:hr=session.create_device();break;
         case Verb::CreateQueue:hr=session.create_queue();break;
-#ifdef INTERACTIVE_DRAW
+#if defined(INTERACTIVE_DRAW)
         case Verb::Copy:hr=draw(session);break;
+#elif defined(INTERACTIVE_SCENE)
+        case Verb::Copy:hr=scene(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif
