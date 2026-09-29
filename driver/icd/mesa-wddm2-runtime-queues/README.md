@@ -85,13 +85,17 @@ flags is cleared and set again only for `BC250_HOST_POLICY_SPARSE`, the other
 bits stay the environment's, and `radv_sparse_enabled` refuses for a host that
 said off. The null-PRT condition and `RADV_QUEUE_DISABLE=sparse` still veto. A
 host that chains no policy, such as the D3D11 shell, behaves as before, so the
-version of `bc250_host` does not change. An unknown flag, a nonzero reserved
+version of `bc250_host` does not change. Both decisions are inline functions of
+the contract header, `bc250_host_policy_sparse_bit` and
+`bc250_host_policy_sparse_refused`, which the shell's host test runs over every
+combination of presence, flag and environment. An unknown flag, a nonzero reserved
 field, another version or size, a second policy in the chain and a policy
 without a host fail instance creation.
 
-Candidate 6A2660DCFC835108622A97FA9A15558F0F6A2646928035C8ABADB6FC3BFC882E
+Candidate 51BC39532BED9AB228D3CBFF22D9D3161191700FD281C585EEC4738BFD72BE8D
 builds. adapter-query-scope-test runs those acceptances and refusals through the
-actual DLL's instance parser; the previous candidate, which ignores the
+actual DLL's instance parser; the candidate before the patch, which ignores the
 structure, fails the same test at the first refusal. That host check does not
 enumerate hardware: what the policy does to the reported features is not shown
-by it.
+by it. An ICD without the patch keeps its environment behaviour under a shell
+that chains the policy, so the host's off is a guarantee only with this patch.

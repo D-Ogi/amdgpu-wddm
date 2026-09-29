@@ -47,10 +47,11 @@ int main(){
  answer_size=0;assert(resolved(false,Source::Invalid));answer_size=sizeof(DWORD);
  answer_status=D3DDDI_QUERYREGISTRY_STATUS_BUFFER_OVERFLOW;assert(resolved(false,Source::Invalid));
  answer_status=D3DDDI_QUERYREGISTRY_STATUS_MAX;assert(resolved(false,Source::Invalid));
- // No such value, in either of the two ways the system can say so: the default, on. What the output
- // fields hold then is not read.
- answer_status=D3DDDI_QUERYREGISTRY_STATUS_FAIL;answer_value=0;assert(resolved(true,Source::Default));
+ // The payload's FAIL does not say that the value is missing: off, whatever the output fields hold.
+ answer_status=D3DDDI_QUERYREGISTRY_STATUS_FAIL;answer_value=1;assert(resolved(false,Source::Unreadable));
+ answer_value=0;assert(resolved(false,Source::Unreadable));
  answer_status=D3DDDI_QUERYREGISTRY_STATUS_SUCCESS;
+ // The system names the value as not found: the default, on. The output fields are not read.
  query_status=static_cast<NTSTATUS>(0xc0000034u);assert(resolved(true,Source::Default));
  // A key that cannot be asked: off, and the call itself succeeds. The answer's fields are not read.
  answer_value=1;
@@ -72,5 +73,6 @@ int main(){
  assert(query_sparse_policy(expected,kmt,&policy,&unresolved)==E_UNEXPECTED && !policy.sparse && unresolved==0x12345678);
  close_status=0;
  assert(resolved(true,Source::RegistryOn));
- std::puts("PASS instance policy: value 1 on, 0 off, absent on, invalid or unreadable off, close failure hands the adapter over");
+ std::puts("PASS instance policy: value 1 on, 0 off, named not found on, invalid, failed or unreadable off, "
+           "close failure hands the adapter over");
 }

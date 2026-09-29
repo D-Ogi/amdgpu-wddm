@@ -1,10 +1,9 @@
 --- a/src/util/bc250_host_bootstrap.h
 +++ b/src/util/bc250_host_bootstrap.h
-@@ -22,6 +22,20 @@
-    uint32_t sType;
+@@ -23,6 +23,31 @@
     const void *pNext;
     uint32_t version, size;
-+};
+ };
 +/* Policy of the host for this instance. Chained next to struct bc250_host; a host that does not chain
 + * it leaves every decision where it was. With the structure present the host alone decides on sparse
 + * binding: BC250_HOST_POLICY_SPARSE turns it on, its absence turns it off, and the process environment
@@ -18,9 +17,21 @@
 +   const void *pNext;
 +   uint32_t version, size;
 +   uint32_t flags, reserved;
- };
++};
++/* The sparse bit of an instance's experimental flags: the host's when it chained a policy, the
++ * environment's otherwise. */
++static inline int bc250_host_policy_sparse_bit(int present, uint32_t flags, int environment)
++{
++   return present ? (flags & BC250_HOST_POLICY_SPARSE) != 0 : environment != 0;
++}
++/* A host that said off holds against sparse support the winsys reports of its own. */
++static inline int bc250_host_policy_sparse_refused(int present, uint32_t flags)
++{
++   return present && !(flags & BC250_HOST_POLICY_SPARSE);
++}
  struct bc250_host_import {
     uint32_t sType;
+    const void *pNext;
 --- a/src/amd/vulkan/radv_instance.h
 +++ b/src/amd/vulkan/radv_instance.h
 @@ -170,6 +170,9 @@
@@ -59,14 +70,16 @@
        return VK_ERROR_INITIALIZATION_FAILED;
     if (!queue_funcs)
        return VK_SUCCESS;
-@@ -334,6 +342,12 @@
+@@ -334,6 +342,14 @@
     parse_debug_bitset(os_get_option("RADV_DEBUG"), radv_debug_options, instance->debug_flags);
     instance->perftest_flags = parse_debug_string(os_get_option("RADV_PERFTEST"), radv_perftest_options);
     instance->experimental_flags = parse_debug_string(os_get_option("RADV_EXPERIMENTAL"), radv_experimental_options);
 +   /* A host with a policy decides on sparse binding for its instance; the other bits stay the environment's. */
-+   if (instance->bc250_policy) {
++   {
++      const int sparse = bc250_host_policy_sparse_bit(instance->bc250_policy, instance->bc250_policy_flags,
++                                                      !!(instance->experimental_flags & RADV_EXPERIMENTAL_SPARSE));
 +      instance->experimental_flags &= ~RADV_EXPERIMENTAL_SPARSE;
-+      if (instance->bc250_policy_flags & BC250_HOST_POLICY_SPARSE)
++      if (sparse)
 +         instance->experimental_flags |= RADV_EXPERIMENTAL_SPARSE;
 +   }
     instance->trap_excp_flags = parse_debug_string(os_get_option("RADV_TRAP_HANDLER_EXCP"), radv_trap_excp_options);
@@ -81,7 +94,7 @@
 +      return false;
 +
 +   /* The host's off holds even where the winsys reports sparse support of its own. */
-+   if (instance->bc250_policy && !(instance->bc250_policy_flags & BC250_HOST_POLICY_SPARSE))
++   if (bc250_host_policy_sparse_refused(instance->bc250_policy, instance->bc250_policy_flags))
        return false;
  
     return pdev->info.has_sparse || (instance->experimental_flags & RADV_EXPERIMENTAL_SPARSE);

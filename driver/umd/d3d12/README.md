@@ -35,12 +35,14 @@ chains it, as `bc250_host_policy`, into the query instance and into every device
 instance, so both are given the same answer. The policy decides on sparse
 binding in the hosted ICD, which the reported tiled resources tier and feature
 level 12_0 and above depend on; the process environment is not asked. Sparse
-binding is on unless the DWORD `AmdgpuWddmSparseBinding` in the adapter's
-software key is 0. A value other than 0 or 1, or a key that cannot be asked,
-resolves to off and is reported on stderr. The key is read through
+binding is on when the DWORD `AmdgpuWddmSparseBinding` in the adapter's
+software key is 1 or the system names that value as not found, and off when it
+is 0. Any other value, an unspecified failure of the query or a key that cannot
+be asked resolves to off and is reported on stderr. The key is read through
 `QueryAdapterInfo`, so a later edit reaches neither a cached adapter nor its
-devices. An ICD that predates the structure ignores it and reports no sparse
-binding. The default is a lab default: its cost, a null-PRT load fixup in
+devices. The guarantee holds for an ICD that recognizes the structure: an older
+one ignores it and keeps its environment behaviour, so reported features alone
+do not show that the policy was read. The default is a lab default: its cost, a null-PRT load fixup in
 every pipeline and one more queue context per device, is not measured yet.
 
 `CreateDevice` copies the runtime callback tables and constructs a real engine

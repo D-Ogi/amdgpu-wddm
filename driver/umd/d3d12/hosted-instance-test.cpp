@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "hosted-instance.h"
+#include <cstddef>
 #include <cassert>
 #include <cstdio>
 #include <thread>
@@ -65,6 +66,17 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL raw(VkInstance instance,const char* nam
 using Bootstrap=native12::HostedInstanceBootstrap;
 }
 int main() {
+    // The decision the ICD takes from a policy, by the contract's own functions: presence and value are
+    // separate. Without a policy the environment decides, with one the host does, either way.
+    static_assert(sizeof(bc250_host_policy)==32 && offsetof(bc250_host_policy,flags)==24);
+    for(int environment=0;environment<2;++environment){
+        assert(bc250_host_policy_sparse_bit(0,0,environment)==environment);
+        assert(bc250_host_policy_sparse_bit(0,BC250_HOST_POLICY_SPARSE,environment)==environment);
+        assert(bc250_host_policy_sparse_bit(1,0,environment)==0);
+        assert(bc250_host_policy_sparse_bit(1,BC250_HOST_POLICY_SPARSE,environment)==1);
+    }
+    assert(!bc250_host_policy_sparse_refused(0,0) && !bc250_host_policy_sparse_refused(0,BC250_HOST_POLICY_SPARSE));
+    assert(bc250_host_policy_sparse_refused(1,0) && !bc250_host_policy_sparse_refused(1,BC250_HOST_POLICY_SPARSE));
     Bootstrap a(raw,42,&owner_a,&owner_a,dispatch,BC250_HOST_POLICY_SPARSE),b(raw,42,&owner_b,&owner_b,dispatch,0);
     assert(a.closed() && !a.entry() && !a.queue_functions_ready());
     const char* extension="engine-extension";
