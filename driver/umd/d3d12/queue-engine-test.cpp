@@ -124,6 +124,14 @@ int main() {
         assert(f.registry.with_binding(reinterpret_cast<void*>(UINT_PTR{1}), f.device, check_binding, &probe) == E_INVALIDARG);
         assert(f.registry.with_binding(a.cookie, foreign, check_binding, &probe) == E_INVALIDARG);
         assert(f.registry.with_binding(nullptr, f.device, check_binding, &probe) == E_INVALIDARG);
+        HANDLE context = nullptr;
+        assert(f.registry.present_context(a, &context) == S_OK && context == f.runtime[0].context);
+        assert(f.registry.present_context(b, &context) == S_OK && context == f.runtime[1].context);
+        assert(f.registry.present_context(a, nullptr) == E_INVALIDARG);
+        auto other = a; other.owner = &foreign;
+        assert(f.registry.present_context(other, &context) == E_INVALIDARG && !context);
+        other = a; ++other.serial;
+        assert(f.registry.present_context(other, &context) == E_INVALIDARG && !context);
         f.reentrant_destroy = &a;
         assert(f.registry.execute(a, 0, nullptr) == S_OK && a.cookie);
         f.reentrant_destroy = nullptr;
@@ -132,7 +140,11 @@ int main() {
         assert(f.registry.execute(stale, 0, nullptr) == E_INVALIDARG);
         unsigned unresolved = 99;
         assert(f.registry.discard_retired_metadata(unresolved) == E_PENDING && !unresolved);
+        const auto gone = a;
         assert(f.registry.destroy(a) == S_OK && !a.cookie && !a.serial && f.closes == 1);
+        context = f.runtime[1].context;
+        assert(f.registry.present_context(gone, &context) == E_INVALIDARG && !context);
+        assert(f.registry.present_context(a, &context) == E_INVALIDARG && !context);
         assert(f.registry.destroy(b) == S_OK && f.closes == 2 && f.engine_destroys == 2);
         assert(f.registry.destroy(b) == S_OK && f.closes == 2);
         assert(f.registry.discard_retired_metadata(unresolved) == S_OK && !unresolved);

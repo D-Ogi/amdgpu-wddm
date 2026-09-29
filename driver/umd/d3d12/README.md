@@ -138,8 +138,10 @@ succeeded; error callbacks and GPU completion must be examined separately.
 Adapter negotiation, engine startup, hosted callbacks and teardown have their
 own diagnostics.
 
-DXGI table publication and presentation are not implemented. Present private
-data size is zero, but the Present handler explicitly reports unsupported work.
+DXGI table publication is not implemented. Present private data size is zero.
+The Present handler returns the allocation of one presented surface and the
+context of its queue, and refuses every other shape; composition of what it
+returns is not validated.
 Queue Wait, tiled resources, scheduling groups, offer/reclaim and background
 processing are also outside the current shell. A non-null function pointer may
 be an explicit refusal handler, so table publication is not a capability claim.

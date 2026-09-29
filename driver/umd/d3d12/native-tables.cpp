@@ -9,6 +9,7 @@
 #include "shell-core-ddi.h"
 #include "native-queue-ddi.h"
 #include "native-residency-ddi.h"
+#include "present-outputs.h"
 #include <cstring>
 
 namespace native12 {
@@ -138,11 +139,49 @@ engine_ddi::DeviceContext* APIENTRY resolve_engine(D3D12DDI_HDEVICE handle) {
     return device && device_engine_entered(*device)?engine_context(*device):nullptr;
 }
 UINT APIENTRY present_private_size(D3D12DDI_HDEVICE,const D3D12DDIARG_PRESENT_0001*) {return 0;}
-void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE,
-    const D3D12DDIARG_PRESENT_0001*,D3D12DDI_PRESENT_0051* result,
+// The surface's allocation and the queue's context go back to the runtime, which makes the kernel call.
+// stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 0 done.
+HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDQUEUE queue,const D3D12DDIARG_PRESENT_0001* args,
+    D3D12DDI_PRESENT_0051* result,D3D12DDI_PRESENT_CONTEXTS_0051* contexts,
+    D3D12DDI_PRESENT_HWQUEUES_0051* queues,unsigned& stage) noexcept {
+    stage=1;
+    HRESULT hr=check_present(args,result,contexts);if(hr!=S_OK)return hr;
+    PresentSources from;
+    stage=2;
+    hr=queue_present_context(queue,device,&from.context);if(hr!=S_OK)return hr;
+    stage=3;
+    const auto engine=engine_context(device);
+    // A linear primary of this device only: the one kind of surface a reader outside the engine can open.
+    hr=engine_ddi::present_allocation(engine,args->phSurfacesToPresent[0].hSurface,&from.source);
+    if(hr!=S_OK)return hr;
+    if(args->hDstResource.pDrvPrivate){
+        stage=4;
+        hr=engine_ddi::present_allocation(engine,args->hDstResource,&from.destination);
+        if(hr!=S_OK)return hr;
+    }
+    stage=5;
+    hr=fill_present(from,result,contexts,queues);
+    if(hr==S_OK)stage=0;
+    return hr;
+}
+void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
+    const D3D12DDIARG_PRESENT_0001* args,D3D12DDI_PRESENT_0051* result,
     D3D12DDI_PRESENT_CONTEXTS_0051* contexts,D3D12DDI_PRESENT_HWQUEUES_0051* queues) {
+    const auto device=EntryPolicy::resolve(list);
+    unsigned stage=1;
+    // Every output given is zero before anything is validated, and again after a refusal.
     if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};
-    if(auto device=EntryPolicy::resolve(list))report_device_error(*device,E_NOTIMPL);
+    const HRESULT hr=device?present_outputs(*device,queue,args,result,contexts,queues,stage):E_INVALIDARG;
+    if(hr!=S_OK){if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};}
+    if(ddi_trace_enabled()){
+        std::fprintf(stderr,"{\"event\":\"present-outputs\",\"stage\":%u,\"status\":\"%08lx\","
+            "\"source\":%u,\"destination\":%u,\"context\":%u,\"thread\":%lu}\n",stage,
+            static_cast<unsigned long>(hr),unsigned(hr==S_OK && result->BroadcastSrcAllocation[0]!=0),
+            unsigned(hr==S_OK && result->BroadcastDstAllocation[0]!=0),
+            unsigned(hr==S_OK && contexts->hContext!=nullptr),GetCurrentThreadId());
+        std::fflush(stderr);
+    }
+    if(hr!=S_OK && device)report_device_error(*device,hr);
 }
 using Queue=D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001;
 using Extended=D3D12DDI_EXTENDED_FEATURES_FUNCS_0021;

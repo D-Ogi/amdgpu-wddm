@@ -171,6 +171,21 @@ HRESULT QueueEngineRegistry::destroy(QueueEngineSlot& slot) noexcept {
     }
     return release_context(q);
 }
+HRESULT QueueEngineRegistry::present_context(const QueueEngineSlot& slot, HANDLE* context) noexcept {
+    if (!context) return E_INVALIDARG;
+    *context = nullptr;
+    if (slot.owner != &device_ || !slot.cookie || !slot.serial) return E_INVALIDARG;
+    if (device_.lost.load()) return D3DDDIERR_DEVICEREMOVED;
+    AcquireSRWLockShared(&lock_);
+    const auto q = find(slot.cookie, slot.serial);
+    HRESULT hr = !q ? E_INVALIDARG : (q->state != QueueEngineState::Live || q->pins) ? E_PENDING : S_OK;
+    if (hr == S_OK) {
+        *context = q->context.handle();
+        if (!*context) hr = E_UNEXPECTED;
+    }
+    ReleaseSRWLockShared(&lock_);
+    return hr;
+}
 bool QueueEngineRegistry::owns(const QueueEngineSlot& slot) noexcept {
     if (slot.owner != &device_ || !slot.cookie || !slot.serial) return false;
     AcquireSRWLockShared(&lock_);

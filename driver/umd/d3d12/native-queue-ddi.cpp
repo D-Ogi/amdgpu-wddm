@@ -112,6 +112,12 @@ Device* resolve_queue_device(D3D12DDI_HCOMMANDQUEUE h) noexcept {
     auto registry = engine_queues(*slot->owner);
     return registry && registry->owns(*slot) ? slot->owner : nullptr;
 }
+HRESULT queue_present_context(D3D12DDI_HCOMMANDQUEUE h, Device& expected, HANDLE* context) noexcept {
+    if (!context) return E_INVALIDARG;
+    *context = nullptr;
+    if (resolve_queue_device(h) != &expected) return E_INVALIDARG;
+    return engine_queues(expected)->present_context(*slot_of(h), context);
+}
 void install_native_queue_entries(D3D12DDI_DEVICE_FUNCS_CORE_0088& table) noexcept {
     table.pfnCalcPrivateCommandQueueSize = native_queue_size;
     table.pfnCreateCommandQueue = native_queue_create;

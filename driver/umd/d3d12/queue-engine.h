@@ -60,6 +60,9 @@ public:
     HRESULT execute(const QueueEngineSlot& slot, UINT count,
         const D3D12DDI_HCOMMANDLIST* lists) noexcept;
     HRESULT destroy(QueueEngineSlot& slot) noexcept;
+    // Present: the native context of a live queue, by the slot's cookie and serial as execute takes it.
+    // Borrowed for the synchronous DDI call that asked; E_PENDING while the queue executes or is pinned.
+    HRESULT present_context(const QueueEngineSlot& slot, HANDLE* context) noexcept;
     // Membership/serial check for an already-live runtime private slot. The
     // runtime still owns storage lifetime; this does not pin arbitrary memory.
     bool owns(const QueueEngineSlot& slot) noexcept;

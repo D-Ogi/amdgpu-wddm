@@ -127,6 +127,10 @@ try {
   if($LASTEXITCODE){throw 'Device table composition test build failed'}
   & .\device-table-test.exe
   if($LASTEXITCODE){throw 'Device table composition tests failed'}
+  & cl.exe @flags /analyze /analyze:external- /Fe:present-outputs-test.exe "$repo\driver\umd\d3d12\present-outputs-test.cpp"
+  if($LASTEXITCODE){throw 'Present outputs test build failed'}
+  & .\present-outputs-test.exe
+  if($LASTEXITCODE){throw 'Present outputs tests failed'}
   & cl.exe @flags /analyze /analyze:external- /Fe:shell-core-ddi-test.exe "$repo\driver\umd\d3d12\shell-core-ddi-test.cpp"
   if($LASTEXITCODE){throw 'Shell core DDI test build failed'}
   & .\shell-core-ddi-test.exe
