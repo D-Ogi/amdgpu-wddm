@@ -49,7 +49,11 @@ HRESULT to_api_desc(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DE
     out = D3D12_RESOURCE_DESC1{};
     if (in.ResourceType < D3D12DDI_RT_BUFFER || in.ResourceType > D3D12DDI_RT_TEXTURE3D) return E_INVALIDARG;
     if (in.Layout > D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE) return E_INVALIDARG;
-    if (in.pRowMajorLayout) return E_NOTIMPL;           // a custom row-major layout has no API form
+    if (in.pRowMajorLayout) {                           // a custom row-major layout has no API form
+        log_line("resource description: row-major layout given (type %d, RowPitch %u, SlicePitch %u): E_NOTIMPL",
+                 static_cast<int>(in.ResourceType), in.pRowMajorLayout->RowPitch, in.pRowMajorLayout->SlicePitch);
+        return E_NOTIMPL;
+    }
     out.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(in.ResourceType);
     out.Width = in.Width;
     out.Height = in.Height;
@@ -150,7 +154,10 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, const D3D12_RESOURC
     const HRESULT legacy = initial_layout(desc, &layout, &state);
     if (FAILED(legacy)) return legacy;
     if (legacy == S_OK) {
-        if (castable_count) return E_NOTIMPL;           // CreatePlacedResource1 takes no castable formats
+        if (castable_count) {                           // CreatePlacedResource1 takes no castable formats
+            log_line("placed resource: %u castable formats with a legacy initial state: E_NOTIMPL", castable_count);
+            return E_NOTIMPL;
+        }
         return c->device8->CreatePlacedResource1(b->heap, offset, &desc, state, cv, __uuidof(ID3D12Resource),
                                                  reinterpret_cast<void**>(out));
     }
@@ -172,7 +179,10 @@ HRESULT reserve(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc, D3D12DDI_BAR
     const HRESULT legacy = initial_layout(desc, &layout, &state);
     if (FAILED(legacy)) return legacy;
     if (legacy == S_OK) {
-        if (castable_count) return E_NOTIMPL;           // CreateReservedResource1 takes no castable formats
+        if (castable_count) {                           // CreateReservedResource1 takes no castable formats
+            log_line("reserved resource: %u castable formats with a legacy initial state: E_NOTIMPL", castable_count);
+            return E_NOTIMPL;
+        }
         return c->device4->CreateReservedResource1(&d0, state, cv, nullptr, __uuidof(ID3D12Resource),
                                                    reinterpret_cast<void**>(out));
     }
@@ -299,9 +309,13 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         request.alignment = std::max<uint64_t>(align, heap_desc->Alignment);
         request.memory_type_bits = 0;                   // engine-ddi.h, MemoryRequest: the engine checks the type
         hr = import_memory(c, request, &memory);
-        if (FAILED(hr)) return hr;
+        if (FAILED(hr)) {
+            log_line("heap: the shell's memory request failed: %08lx", static_cast<unsigned long>(hr));
+            return hr;
+        }
         hr = engine_heap_from_memory(c, hd, memory, &heap);
         if (FAILED(hr)) {
+            log_line("heap: the engine refused the heap over the supplied memory: %08lx", static_cast<unsigned long>(hr));
             // Nothing uses the memory yet: hand it straight back (engine-ddi.h, exactly once).
             ReleasePayload payload{{nullptr, nullptr}, true, memory, 0};
             run_release(c->hooks, payload);
@@ -356,8 +370,16 @@ HRESULT APIENTRY create_heap_and_resource_slot(D3D12DDI_HDEVICE device, const D3
     DeviceContext* c = resolve(device);
     if (!c) return E_INVALIDARG;
     c->process_retired();
-    if (session.pDrvPrivate) return E_NOTIMPL;           // protected resource sessions
-    return create_heap_and_resource(c, heap_desc, hheap, rt, res_desc, clear, hres);
+    if (session.pDrvPrivate) {                          // protected resource sessions
+        log_line("CreateHeapAndResource: protected resource session given: E_NOTIMPL");
+        return E_NOTIMPL;
+    }
+    const HRESULT hr = create_heap_and_resource(c, heap_desc, hheap, rt, res_desc, clear, hres);
+    if (FAILED(hr))
+        log_line("CreateHeapAndResource: %08lx (heap description %s, resource description %s, castable formats %u)",
+                 static_cast<unsigned long>(hr), heap_desc ? "given" : "none", res_desc ? "given" : "none",
+                 res_desc ? res_desc->NumCastableFormats : 0u);
+    return hr;
 }
 
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP hheap, D3D12DDI_HRESOURCE hres) {
