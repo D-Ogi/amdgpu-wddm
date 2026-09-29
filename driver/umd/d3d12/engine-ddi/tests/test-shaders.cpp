@@ -157,8 +157,10 @@ constexpr UINT kSeed = 0x5eed1234;
 constexpr UINT kTag = 0xB0250000;
 constexpr UINT kPitch = 256;
 
-// A committed 2D render target of one mip in a DEFAULT heap, created in the COMMON layout.
-HRESULT create_render_target(Env& env, Device& device, DXGI_FORMAT format, Buffer& out) {
+// A committed 2D render target (or, by its flags, depth buffer) of one mip in a DEFAULT heap, created in the
+// COMMON layout.
+HRESULT create_render_target(Env& env, Device& device, DXGI_FORMAT format, Buffer& out,
+                             D3D12DDI_RESOURCE_FLAGS_0003 flags = D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET) {
     out = Buffer{};
     D3D12DDIARG_CREATERESOURCE_0088 res{};
     res.ResourceType = D3D12DDI_RT_TEXTURE2D;
@@ -169,7 +171,7 @@ HRESULT create_render_target(Env& env, Device& device, DXGI_FORMAT format, Buffe
     res.Format = format;
     res.SampleDesc = {1, 0};
     res.Layout = D3D12DDI_TL_UNDEFINED;
-    res.Flags = D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET;
+    res.Flags = flags;
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
     env.core.pfnCheckResourceAllocationInfo(device.h(), &res, D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_NONE, 0, 1, &info);
@@ -320,7 +322,7 @@ void test_graphics(Env& env, Device& device) {
     if (hr_h == S_OK) rtv = env.core.pfnGetCPUDescriptorHandleForHeapStart(device.h(), hheap);
     checkf(hr_h == S_OK && rtv.ptr, "graphics: RTV heap of 1 (hr %08lx)", static_cast<unsigned long>(hr_h));
     if (hr_h == S_OK) {
-        // The runtime asks every heap for its GPU handle, also one that is not shader visible.
+        // The runtime was seen asking a render target view heap for its GPU handle.
         const auto reported = device.shell.device_errors;
         const D3D12DDI_GPU_DESCRIPTOR_HANDLE none = env.core.pfnGetGPUDescriptorHandleForHeapStart(device.h(), hheap);
         checkf(!none.ptr && device.shell.device_errors == reported,
@@ -351,6 +353,79 @@ void test_graphics(Env& env, Device& device) {
     env.core.pfnCreateRenderTargetView(device.h(), &rtv_args, rtv);
     checkf(device.shell.device_errors == errors_before, "graphics: render target view");
 
+    // The other descriptor kinds: a depth view, a texture view, a null constant buffer view, a sampler and a
+    // descriptor copy. The draw below does not read them; the depth view is cleared in the list.
+    Buffer depth_buffer;
+    const HRESULT hr_d = create_render_target(env, device, DXGI_FORMAT_D32_FLOAT, depth_buffer,
+                                              D3D12DDI_RESOURCE_FLAG_0003_DEPTH_STENCIL);
+    checkf(hr_d == S_OK, "graphics: 64x64 D32_FLOAT depth buffer (hr %08lx)", static_cast<unsigned long>(hr_d));
+    struct ViewHeap {
+        D3D12DDI_DESCRIPTOR_HEAP_TYPE type;
+        UINT count;
+        void* storage;
+        D3D12DDI_CPU_DESCRIPTOR_HANDLE start;
+    } view_heaps[3] = {{D3D12DDI_DESCRIPTOR_HEAP_TYPE_DSV, 1, nullptr, {}},
+                       {D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 3, nullptr, {}},
+                       {D3D12DDI_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1, nullptr, {}}};
+    bool heaps_made = true;
+    for (ViewHeap& v : view_heaps) {
+        D3D12DDIARG_CREATE_DESCRIPTOR_HEAP_0001 a{v.type, v.count, D3D12DDI_DESCRIPTOR_HEAP_FLAG_NONE, 0};
+        void* storage = env.storage.alloc(env.core.pfnCalcPrivateDescriptorHeapSize(device.h(), &a));
+        if (storage && env.core.pfnCreateDescriptorHeap(device.h(), &a, D3D12DDI_HDESCRIPTORHEAP{storage}) == S_OK) {
+            v.storage = storage;
+            v.start = env.core.pfnGetCPUDescriptorHandleForHeapStart(device.h(), D3D12DDI_HDESCRIPTORHEAP{storage});
+        }
+        heaps_made = heaps_made && v.storage && v.start.ptr;
+    }
+    checkf(heaps_made, "graphics: DSV, CBV_SRV_UAV and SAMPLER heaps");
+    const D3D12DDI_CPU_DESCRIPTOR_HANDLE dsv = view_heaps[0].start;
+    if (heaps_made && hr_d == S_OK && hr_t == S_OK) {
+        const auto reported = device.shell.device_errors;
+        D3D12DDIARG_CREATE_DEPTH_STENCIL_VIEW dsv_args{};
+        dsv_args.hDrvResource = depth_buffer.hres();
+        dsv_args.Format = DXGI_FORMAT_D32_FLOAT;
+        dsv_args.ResourceDimension = D3D12DDI_RD_TEXTURE2D;
+        dsv_args.Tex2D = {0, 0, 1};
+        env.core.pfnCreateDepthStencilView(device.h(), &dsv_args, dsv);
+        checkf(device.shell.device_errors == reported, "graphics: depth stencil view");
+
+        const UINT step = env.core.pfnGetDescriptorSizeInBytes(device.h(), D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        const D3D12DDI_CPU_DESCRIPTOR_HANDLE first = view_heaps[1].start;
+        const D3D12DDI_CPU_DESCRIPTOR_HANDLE second{first.ptr + step}, third{first.ptr + 2 * SIZE_T{step}};
+        D3D12DDIARG_CREATE_SHADER_RESOURCE_VIEW_0002 srv_args{};
+        srv_args.hDrvResource = target.hres();
+        srv_args.Format = DXGI_FORMAT_R32_UINT;
+        srv_args.ResourceDimension = D3D12DDI_RD_TEXTURE2D;
+        srv_args.Shader4ComponentMapping = D3D12DDI_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_args.Tex2D = {0, 0, 1, 1, 0, 0.0f};
+        env.core.pfnCreateShaderResourceView(device.h(), &srv_args, first);
+        checkf(step && device.shell.device_errors == reported, "graphics: shader resource view of the target");
+        const D3D12DDI_CONSTANT_BUFFER_VIEW_DESC cbv_args{};
+        env.core.pfnCreateConstantBufferView(device.h(), &cbv_args, second);
+        checkf(device.shell.device_errors == reported, "graphics: null constant buffer view");
+        env.core.pfnCopyDescriptorsSimple(device.h(), 1, third, first, D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        const UINT one = 1;
+        env.core.pfnCopyDescriptors(device.h(), 1, &third, &one, 1, &first, nullptr,
+                                    D3D12DDI_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        checkf(device.shell.device_errors == reported, "graphics: descriptor copies, simple and ranged");
+
+        D3D12DDI_SAMPLER_DESC sampler{};
+        sampler.Filter = D3D12DDI_FILTER_MIN_MAG_MIP_POINT;
+        sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12DDI_TEXTURE_ADDRESS_MODE_CLAMP;
+        sampler.MaxAnisotropy = 1;
+        sampler.ComparisonFunc = D3D12DDI_COMPARISON_FUNC_NEVER;
+        sampler.MaxLOD = 1000.0f;
+        const D3D12DDIARG_CREATE_SAMPLER sampler_args{&sampler};
+        env.core.pfnCreateSampler(device.h(), &sampler_args, view_heaps[2].start);
+        checkf(device.shell.device_errors == reported, "graphics: sampler");
+
+        env.core.pfnCreateShaderResourceView(device.h(), nullptr, first);
+        env.core.pfnCreateDepthStencilView(device.h(), &dsv_args, D3D12DDI_CPU_DESCRIPTOR_HANDLE{});
+        checkf(device.shell.device_errors == reported + 2,
+               "graphics: a view without arguments and a view without a destination are each reported");
+        device.shell.device_errors = reported;
+    }
+
     BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
     engine_ddi::EngineQueue* queue = nullptr;
     hr = engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue);
@@ -377,6 +452,12 @@ void test_graphics(Env& env, Device& device) {
         const D3D12DDIARG_RESOURCE_BARRIER_0022 to_target =
             transition(target, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RENDER_TARGET);
         t.pfnResourceBarrier(rec.hlist(), 1, &to_target);
+        if (heaps_made && hr_d == S_OK) {
+            const D3D12DDIARG_RESOURCE_BARRIER_0022 to_depth =
+                transition(depth_buffer, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_DEPTH_WRITE);
+            t.pfnResourceBarrier(rec.hlist(), 1, &to_depth);
+            t.pfnClearDepthStencilView(rec.hlist(), dsv, 1, 1.0f, 0, 0, nullptr);
+        }
         // No clear: the target is fresh, and engine-ddi initializes it before these lists run (INTEGRATION.md,
         // "Committed render targets"). The validation layer checks its layout at the draw.
         t.pfnOMSetRenderTargets(rec.hlist(), 1, &rtv, TRUE, nullptr);
@@ -439,6 +520,9 @@ void test_graphics(Env& env, Device& device) {
         check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
               "graphics: destroy_engine_queue reports Retired");
     env.core.pfnDestroyDescriptorHeap(device.h(), hheap);
+    for (ViewHeap& v : view_heaps)
+        if (v.storage) env.core.pfnDestroyDescriptorHeap(device.h(), D3D12DDI_HDESCRIPTORHEAP{v.storage});
+    destroy_buffer(env, device, depth_buffer);
     destroy_buffer(env, device, target);
     destroy_buffer(env, device, vb);
     destroy_buffer(env, device, readback);
