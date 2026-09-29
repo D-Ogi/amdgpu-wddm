@@ -26,8 +26,8 @@ typedef struct {
  int ActiveSubmissions[2],CompletionPending[2],PreemptionPending[2];
  int RefusalPending[2],RejectedPending[2],WatchdogFaulted[2];
  int PrimaryNeedsRestore;
- int VSyncArmed,VSyncEnabled,VSyncTimer,SubmitTimer,PagingSubmitTimer;
- int SubmitDpc,PagingSubmitDpc,VSyncDpc,ReportDpc;
+ int VSyncArmed,VSyncEnabled,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
+ int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
  LARGE_INTEGER VSyncLast,VSyncFrequency;
  // Independent owner identities and fence history must survive byte for byte.
  void *Objects,*Aperture,*CaptureOwner;
@@ -71,9 +71,9 @@ int main(void){
  const size_t arrays[]={offsetof(BC250_WDDM,ActiveSubmissions),offsetof(BC250_WDDM,CompletionPending),offsetof(BC250_WDDM,PreemptionPending),offsetof(BC250_WDDM,RefusalPending),offsetof(BC250_WDDM,RejectedPending),offsetof(BC250_WDDM,WatchdogFaulted)};
  setup(&d,&w);before=w;
  CHECK(WddmSuspendRetained(&d)==0 && w.Stopping && w.RetainedPowerPause && w.PrimaryNeedsRestore);
- CHECK(d.Wddm==&w && !d.DcnVsyncArmed && flushes==2 && cancels==3 && removes==4);
+ CHECK(d.Wddm==&w && !d.DcnVsyncArmed && flushes==2 && cancels==4 && removes==5); // KMD172: + paging drain timer
  retained(&w,&before);
- CHECK(WddmSuspendRetained(&d)==0 && cancels==3 && removes==4);
+ CHECK(WddmSuspendRetained(&d)==0 && cancels==4 && removes==5);
  gfxReady=0;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY && w.Stopping);gfxReady=1;
  pagingReady=0;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY && w.Stopping);pagingReady=1;
  d.SourceVisible=1;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY);d.SourceVisible=0;

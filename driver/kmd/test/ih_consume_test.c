@@ -41,6 +41,12 @@ static u32 bc250_ih_get_wptr(struct amdgpu_device *a,bool *overflow) {
 }
 static int bc250_ih_decode(struct amdgpu_device *a,u32 *r,struct bc250_iv_entry *e) { e->client_id=vector_client;e->src_id=vector_source;decodes++;if(bad_decode)return -1;*r=(*r+32)%a->irq.ih.ring_size;return 0; }
 static void Note(Stats *s,const struct bc250_iv_entry *e) { (void)e;s->count++; }
+/* hang.c's progress recorders: interlocked stores with no effect on the consumer's control flow. */
+typedef long LONG;
+static unsigned progress_passes,progress_requeues;
+#define ProgressEnter(site) ((void)0)
+#define ProgressExit(site,value) ((void)(value))
+#define ProgressIhDone(passes,requeued) (progress_passes+=(passes),progress_requeues+=(requeued)!=0)
 static void bc250_ih_set_rptr(struct amdgpu_device *a,u32 r) {
     a->irq.ih.rptr=r;pubs++;armed=1;if(level && wp!=r){irq_pending=1;armed=0;}if(streaming)wp=(r+32)%a->irq.ih.ring_size;
     if(inject) { inject=0;wp=32;irq_pending=armed;armed=0; }
@@ -65,7 +71,9 @@ int main(void) {
     reset();preinject=1;Consume(&fixture);CHECK(fixture.Stats.count==1 || irq_pending);
     reset();preinject=1;level=1;Consume(&fixture);CHECK(fixture.Stats.count==1 || irq_pending);
     reset();streaming=1;wp=32;IhDpc(&device);CHECK(queued==1 && decodes==4 && fixture.InDpc==0);
+    CHECK(progress_passes==1 && progress_requeues==1);   /* the progress exit sees the budget yield */
     reset();IhDpc(&device);CHECK(queued==0 && pubs==1 && fixture.InDpc==0);
+    CHECK(progress_passes==2 && progress_requeues==1);   /* and the ordinary return, without a yield */
     reset();fault_read=2;IhDpc(&device);CHECK(!fixture.Active && pubs==1 && queued==0 && fixture.Stats.DecodeErrors==1);
     reset();misalign_read=2;IhDpc(&device);CHECK(!fixture.Active && pubs==1 && queued==0 && fixture.Stats.DecodeErrors==1);
     reset();overflow_read=2;wp=32;Consume(&fixture);CHECK(fixture.Stats.OverflowCount==1 && fixture.Rptr==32 && fixture.Stats.count==3);

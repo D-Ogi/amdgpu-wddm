@@ -14,8 +14,8 @@ typedef struct LIST_ENTRY {struct LIST_ENTRY *Flink,*Blink;} LIST_ENTRY;
 typedef struct BC250_PAGING_JOB {struct BC250_PAGING_JOB*Next;} BC250_PAGING_JOB;
 typedef struct {LIST_ENTRY Link;} BC250_WDDM_OBJECT;
 typedef struct {
-    int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer;
-    int SubmitDpc,PagingSubmitDpc,VSyncDpc,ReportDpc;
+    int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
+    int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
     long LastCompletedFence,VSyncTicks;
     BC250_PAGING_JOB *PagingHead,*PagingTail;
     LIST_ENTRY Objects;
@@ -24,6 +24,7 @@ typedef struct {
     BC250_WDDM *Wddm;
     int Smu,Started,ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm,SystemDisplayReady;
     volatile long DcnVsyncArmed;
+    BOOLEAN InheritedSignalValid;
     BOOLEAN PostDisplayStopAttempted;
     NTSTATUS PostDisplayStopStatus;
     void *Framebuffer;
@@ -68,6 +69,8 @@ static int IsListEmpty(LIST_ENTRY*h){return h->Flink==h;}
 static LIST_ENTRY*RemoveHeadList(LIST_ENTRY*h){LIST_ENTRY*e=h->Flink;h->Flink=e->Flink;h->Flink->Blink=h;return e;}
 static void WddmReleaseCaptures(BC250_WDDM_OBJECT*o){(void)o;CHECK(model.restores==1);}
 static void ExFreePoolWithTag(void*p,int tag){(void)p;(void)tag;CHECK(model.restores==1 && model.vidmm==1);model.objects++;}
+static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   /* KMD172: before any teardown */
+static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardStage(int s){(void)s;}
 static void GuardLogKeep(void){}
 static void SmuOwnerStop(int*s){(void)s;model.smu++;}

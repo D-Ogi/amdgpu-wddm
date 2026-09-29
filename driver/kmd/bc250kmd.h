@@ -49,6 +49,7 @@
 #include "paging_capture.h"
 #include "smu.h"
 #include "start_health.h"
+#include "progress.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
 
@@ -309,6 +310,24 @@ void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above);
 ULONG GuardLogRead(ULONG From, _Out_writes_to_(Max, return) struct _BC250_LOG_LINE* Lines, ULONG Max,
                    _Out_ ULONG* Next);
 void GuardLogKeep(void);                                        // the ring into a file under C:\BC250\kmdlog; PASSIVE_LEVEL
+// Where the ring and its cursor live, for hang.c's dump pages. Static storage: no lock, any IRQL.
+void GuardLogDumpRegion(_Outptr_ const void** Ring, _Out_ SIZE_T* RingBytes, _Outptr_ const void** Cursor);
+
+// hang.c: progress records and the test-only hang detector (docs/design/hang-detector.md). The recorders take no
+// lock, allocate nothing, touch no register and never log: callable at any IRQL, the interrupt routine's included.
+extern BC250_PROGRESS g_Bc250Progress;
+void ProgressEnter(BC250_PROGRESS_SITE_ID Site);
+void ProgressEnterInput(BC250_PROGRESS_SITE_ID Site, LONG Input);
+void ProgressExit(BC250_PROGRESS_SITE_ID Site, LONG Value);
+void ProgressIhVector(ULONG ClientId, ULONG SourceId);
+void ProgressIhDone(ULONG Passes, BOOLEAN Requeued);
+void ProgressDrainDone(ULONG Iterations, ULONG Retired, ULONG Exit);   // Exit: PAGING_DRAIN_EXIT
+// PASSIVE_LEVEL, serialized by dxgkrnl's PnP and power calls (Level Three). Start after the WDDM state exists and
+// the device is marked started; Stop before any of it goes. Stop is idempotent. Pause/Resume bracket power changes.
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorStart(_In_ const BC250_DEVICE* Device);
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorStop(void);
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorPause(void);
+_IRQL_requires_(PASSIVE_LEVEL) void HangDetectorResume(void);
 
 // mmio.c
 NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device);

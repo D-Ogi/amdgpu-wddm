@@ -25,6 +25,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
+    HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
     StartHealthRemove(device);
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
@@ -126,6 +127,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     *NumberOfVideoPresentSources = 1;
     *NumberOfChildren = 1;
     InterlockedExchange(&device->RetainedPowerPhase,0);
+    // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
+    HangDetectorStart(device);
     GuardStage(StageStartDone);
     return STATUS_SUCCESS;
 
@@ -140,6 +143,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
+    HangDetectorStop();     // first: a stop may legitimately wait, and the detector must not judge it
     StartHealthClose(device);
     GuardStage(StageStopEnter);
     device->InheritedSignalValid=FALSE;
@@ -246,16 +250,19 @@ BOOLEAN Bc250InterruptRoutine(_In_ const PVOID MiniportDeviceContext, _In_ ULONG
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     BOOLEAN ih, vsync;
 
+    ProgressEnter(ProgressSiteIsr);     // interlocked stores only (hang.c): allowed at DIRQL
     InterlockedExchange64(&device->InterruptLastTime, (LONG64)KeQueryInterruptTime());
     InterlockedIncrement(&device->InterruptCount);
     InterlockedExchange(&device->LastMessageNumber, (LONG)MessageNumber);
     ih = IhInterrupt(device);
     vsync = DcnVsyncInterrupt(device);
+    ProgressExit(ProgressSiteIsr, (LONG)MessageNumber);
     return ih || vsync;
 }
 
 void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
 {
+    ProgressEnter(ProgressSiteDeviceDpc);
     IhDpc((BC250_DEVICE*)MiniportDeviceContext);
     WddmGpuFence((BC250_DEVICE*)MiniportDeviceContext); // stage C: the vectors are consumed, the fence memory says whose they were
     // ADR 0008 stage D: node 1's own poll, unconditional like the one above - which vector woke this DPC does not
@@ -267,6 +274,7 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
         DcnVsyncFromVector((BC250_DEVICE*)MiniportDeviceContext);
     WddmDcnVsync((BC250_DEVICE*)MiniportDeviceContext);
     WddmDpc((BC250_DEVICE*)MiniportDeviceContext);      // returns at once unless the full table is in use
+    ProgressExit(ProgressSiteDeviceDpc, 0);
 }
 
 NTSTATUS Bc250QueryChildRelations(_In_ const PVOID MiniportDeviceContext,
@@ -326,8 +334,15 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
                             _In_ DEVICE_POWER_STATE DevicePowerState, _In_ POWER_ACTION ActionType)
 {
     BC250_DEVICE* device=(BC250_DEVICE*)MiniportDeviceContext;
-    if (DeviceUid==DISPLAY_ADAPTER_HW_ID && device->FullWddm && device->Started)
-        return GpuSetPowerRetained(device,DevicePowerState,ActionType);
+    if (DeviceUid==DISPLAY_ADAPTER_HW_ID && device->FullWddm && device->Started) {
+        NTSTATUS status;
+        // The hang detector judges a started device in D0 only. A failed transition down leaves it paused:
+        // silence is the safe side of a diagnostic that bugchecks.
+        if (DevicePowerState!=PowerDeviceD0) HangDetectorPause();
+        status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
+        if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) HangDetectorResume();
+        return status;
+    }
     // Display-only/initial PnP handling retains its existing ownership boundary.
     if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0) {
         StartHealthClose(device);
@@ -338,5 +353,6 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
 
 void Bc250Unload(void)
 {
+    HangDetectorStop();     // its thread and DPC run this image's code: joined before the image goes
     GuardCleanup();
 }

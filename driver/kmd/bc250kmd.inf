@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 09/28/2026,0.7.171.0
+DriverVer   = 09/29/2026,0.7.172.1
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -129,6 +129,10 @@ HKR, Parameters, EnableGpuSubmit,   0x00010001, 0
 ; EnableGpuSubmit's own preconditions (EnableGfx, EnableIh); closed by every install, like every gate above.
 HKR, Parameters, EnablePagingNode,  0x00010001, 0
 HKR, Parameters, EnablePresentBlit, 0x00010001, 0
+; Test-only hang bugcheck (hang.c, docs/design/hang-detector.md). 1 arms it at the next device start; it bugchecks
+; the machine on purpose when no ordinary thread has run for HangBugcheckSeconds (5..60, default 10, left unset
+; here). Closed by every install, like every gate above.
+HKR, Parameters, EnableHangBugcheck, 0x00010001, 0
 ; The log ring into a file under C:\BC250\kmdlog at every device stop (guard.c GuardLogKeep). A synchronous file
 ; write in a PnP stop, so disabled by default. Preserve an explicitly enabled capture across
 ; an upgrade: AddReg may run before the old driver stops. DWORD | NOCLOBBER affects only logging.

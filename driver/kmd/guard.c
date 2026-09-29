@@ -263,6 +263,14 @@ ULONG GuardLogSequence(void)
     return g_LogNext;
 }
 
+// For the bugcheck callback's dump pages (hang.c): names storage, reads none of it, so no lock at HIGH_LEVEL.
+void GuardLogDumpRegion(_Outptr_ const void** Ring, _Out_ SIZE_T* RingBytes, _Outptr_ const void** Cursor)
+{
+    *Ring = g_Log;
+    *RingBytes = sizeof(g_Log);
+    *Cursor = &g_LogNext;
+}
+
 // Under the lock, so that Total and Lost are the same moment: a reader that saw a total from before a wrap and a
 // lost count from after it would compute a gap that never existed.
 void GuardLogStats(_Out_ ULONG* Total, _Out_ ULONG* Lost, _Out_ ULONG* Above)

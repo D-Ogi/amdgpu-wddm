@@ -37,6 +37,9 @@ the documented DDI; no code from Microsoft's MS-PL sample.
   User mode confirms a good start by writing 0: `bc250mon`'s `KmdProvider` does it by itself once the desktop
   has been up for 60 s and `LastStage` has reached 61, and by hand it is `bc250kmd_cli confirm`
   (`tools/win/bc250kmd_cli`) or `mon.py action kmd.confirm`. Installing the package resets it.
+- **Hang evidence** (0.7.172). `g_Bc250Progress` records entries and exits of the ISR, DPCs and submission
+  paths, and `EnableHangBugcheck=1` arms a test-only detector that bugchecks with `0xBC250BAD` when ordinary
+  threads stop running. Default off. See `docs/design/hang-detector.md`.
 - **Breadcrumbs.** `LastStage` (a `BC250_STAGE` number) and `StageHistory` in the same key are written and
   flushed at every step of start-up and at the first commit and first present. After a hang and a power
   cycle they say how far the driver got. `bc250mon`'s bc250kmd panel and `bc250kmd_cli stages` read them and

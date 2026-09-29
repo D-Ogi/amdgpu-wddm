@@ -1059,7 +1059,9 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     // invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
     if (Vmid != 0)
     {
+        ProgressEnter(ProgressSiteVmFlush);
         result = bc250_gmc_set_vmid_pd(Adev, Vmid, RootPhysical, 0);
+        ProgressExit(ProgressSiteVmFlush, (LONG)result);
         GuardLog("gfx: VMID %lu root 0x%llX flush -> %d", Vmid, RootPhysical, result);
         if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
             return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_DEVICE_HARDWARE_ERROR : Gfx->Sequence.Fault;
@@ -1116,6 +1118,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
     ULONG vram, gtt;
 
     *Seq = 0;
+    ProgressEnter(ProgressSiteGfxSubmit);   // before GartLock: a wait for it counts as inside
     // PASSIVE_LEVEL only, because of this: DxgkDdiSubmitCommandVirtual is annotated PASSIVE_LEVEL
     // (d3dkmddi.h) and DxgkDdiSubmitCommand is not, which is exactly why the paging path may not come here.
     ExAcquireFastMutex(&Device->GartLock);
@@ -1134,6 +1137,7 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
         adev->backend = previousBackend;
     }
     ExReleaseFastMutex(&Device->GartLock);
+    ProgressExit(ProgressSiteGfxSubmit, (LONG)*Seq);
     return status;
 }
 
@@ -3279,13 +3283,16 @@ NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, 
                           ULONGLONG Start, ULONG ByteCount, BOOLEAN VirtualAddress, _Out_ ULONG* Seq)
 {
     NTSTATUS result;
+    ProgressEnter(ProgressSitePagingSubmit);
     if (GfxAccessAcquire(Device) == NULL)
     {
         *Seq = 0;
+        ProgressExit(ProgressSitePagingSubmit, 0);
         return STATUS_DEVICE_NOT_READY;
     }
     result = GfxSubmitPagingAccess(Device, PrivateData, PrivateBytes, Start, ByteCount, VirtualAddress, Seq);
     GfxAccessRelease(Device);
+    ProgressExit(ProgressSitePagingSubmit, (LONG)*Seq);
     return result;
 }
 

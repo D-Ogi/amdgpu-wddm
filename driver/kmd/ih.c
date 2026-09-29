@@ -114,6 +114,7 @@ static void Note(_Inout_ BC250_IH_STATS* Ih, _In_ const struct bc250_iv_entry* E
     BC250_ESCAPE_IV* last = &Ih->Last[Ih->LastNext];
     ULONG i;
 
+    ProgressIhVector(Entry->client_id, Entry->src_id);   // lock-free, for a dump (hang.c); Kinds is the escape's
     Ih->EntryCount++;
     for (i = 0; i < Ih->KindCount; i++)
         if (Ih->Kinds[i].ClientId == Entry->client_id && Ih->Kinds[i].SourceId == Entry->src_id) break;
@@ -218,30 +219,38 @@ static BOOLEAN Consume(_Inout_ BC250_IH* ih)
 void IhDpc(_Inout_ BC250_DEVICE* Device)
 {
     BC250_IH* ih = (BC250_IH*)Device->Ih;
-    BOOLEAN pending;
+    BOOLEAN pending, requeued = FALSE;
+    ULONG passes = 0;
 
     if (ih == NULL || ih->Active == 0) return;
     InterlockedIncrement(&ih->DpcCount);
+    // KMD172: the returns of this loop became breaks, so that one progress exit records every way out. The passes
+    // count shows the DpcAgain handoff: each restart is a fresh Consume budget within this one invocation.
+    ProgressEnter(ProgressSiteIhDpc);
     for (;;)
     {
         if (InterlockedCompareExchange(&ih->InDpc, 1, 0) != 0)
         {
             InterlockedExchange(&ih->DpcAgain, 1);
-            if (ih->InDpc != 0) return;
+            if (ih->InDpc != 0) break;
             continue;
         }
         InterlockedExchange(&ih->DpcAgain, 0);
         pending = Consume(ih);
+        passes++;
         InterlockedExchange(&ih->InDpc, 0);
         if (pending && ih->Active != 0)
         {
             // Yield after the work budget. Reusing DpcAgain here would spin in
             // this invocation instead of returning execution to the scheduler.
             Device->Dxgk.DxgkCbQueueDpc(Device->Dxgk.DeviceHandle);
-            return;
+            requeued = TRUE;
+            break;
         }
-        if (InterlockedExchange(&ih->DpcAgain, 0) == 0 || ih->Active == 0) return;
+        if (InterlockedExchange(&ih->DpcAgain, 0) == 0 || ih->Active == 0) break;
     }
+    ProgressIhDone(passes, requeued);
+    ProgressExit(ProgressSiteIhDpc, (LONG)passes);
 }
 
 // Consume only the notification latch, never hold the IH stats lock across DCN.
