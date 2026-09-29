@@ -132,11 +132,16 @@ int main(){
  assert(creates==1 && makes_resident==0);
  expected_type=0;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
  // A committed texture on a heap without CPU access is raw memory like a buffer.
- resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
+ for(const auto type:{D3D12DDI_RT_TEXTURE1D,D3D12DDI_RT_TEXTURE2D,D3D12DDI_RT_TEXTURE3D})
  for(const auto flags:{D3D12DDI_HEAP_FLAG_BUFFERS,D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES,D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES}){
+  resource.ResourceType=type;
   heap.Flags=flags;events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMI" && memory.memory_type_index==0);
   assert(owner.free(&memory)==S_OK && events=="AMIVUD");
  }
+ resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
+ // System-wide coherence alone refuses an otherwise admitted texture.
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)|unsigned(D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE));
+ reject_before_probe();
  // Refused before any probe or allocation: a texture that is not the heap's one resource, a texture on a
  // CPU-visible heap, an unknown resource type, and a heap for buffers that does not allow buffers.
  heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
