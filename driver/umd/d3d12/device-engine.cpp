@@ -111,6 +111,7 @@ class DeviceEngine final {
     }
     static void APIENTRY report_list_error(void* shell,D3D12DDI_HRTCOMMANDLIST list,HRESULT hr) {
         auto& device=*static_cast<Device*>(shell);
+        ddi_failure_note("list-error",hr);
         if(device_engine_entered(device) && device.callbacks.pfnSetCommandListErrorCb)
             device.callbacks.pfnSetCommandListErrorCb(list,hr);
         else report_device_error(device,hr);

@@ -33,7 +33,7 @@ try {
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"
   }
-  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib
+  & cl.exe @flags /LD /Fe:amdgpu_wddm_d3d12.dll "$repo\driver\umd\d3d12\adapter.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\native-queue-ddi.cpp" "$repo\driver\umd\d3d12\native-residency-ddi.cpp" "$repo\driver\umd\d3d12\native-tables.cpp" $engineLib /link /MAP:amdgpu_wddm_d3d12.map
   if($LASTEXITCODE){throw 'Adapter build failed'}
   & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
   if($LASTEXITCODE){throw 'Test build failed'}
