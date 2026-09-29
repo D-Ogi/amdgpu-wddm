@@ -5,6 +5,7 @@
 // DDI 0040 splits the API's allocator and list: a pool is the API allocator, a recorder names the pool a list
 // records into, and ResetCommandList names the recorder. A pool therefore does not know its list type at
 // creation; it creates one engine allocator per list type on first use.
+#include <atomic>
 #include "internal.h"
 
 namespace engine_ddi {
@@ -198,8 +199,9 @@ void APIENTRY reset_list(D3D12DDI_HCOMMANDLIST h, const D3D12DDIARG_RESETCOMMAND
 }
 
 // ---- List state the runtime sets on every list ---------------------------------------------------------------------
-// The runtime writes its default state into a list it has reset, through these slots among others, whatever
-// the caps say about the feature. Each forwards to the engine list, which owns the feature check.
+// The runtime writes default state into a list it has reset. SetPredication was seen there; the others are
+// answered ahead of need. Each forwards to the engine list, which owns the feature check. Forwarding is
+// not support: the caps of these features stay as they are.
 template <class I> I* list_as(CommandListRecord* l) noexcept {
     I* out = nullptr;
     if (FAILED(l->list()->QueryInterface(__uuidof(I), reinterpret_cast<void**>(&out)))) {
@@ -248,6 +250,20 @@ void APIENTRY set_view_instance_mask(D3D12DDI_HCOMMANDLIST h, UINT mask) {
     }
 }
 
+// Seen once, in the state the runtime writes into a list it has just reset. There the engine's Reset has
+// already cleared every root binding, so nothing is left to do. The engine has no call that clears the
+// arguments of a list in use: a null signature unbinds the signature and keeps the arguments. Whether the
+// runtime ever asks for that is not known; until it is, the slot changes nothing and says so once.
+void APIENTRY clear_root_arguments(D3D12DDI_HCOMMANDLIST h) {
+    if (!list_of(h, "ClearRootArguments")) return;
+    static std::atomic<bool> once{false};
+    if (!once.exchange(true)) log_line("ClearRootArguments: no engine operation, root state left as it is");
+}
+
+// The alpha blend factor has no engine call and its cap is not reported, so no pipeline can use it. The
+// value is the runtime's default state and changes nothing.
+void APIENTRY om_set_alpha_blend_factor(D3D12DDI_HCOMMANDLIST h, FLOAT) { (void)list_of(h, "OmSetAlphaBlendFactor"); }
+
 // No protected sessions exist here (none can be created), so only "none" is a valid session.
 void APIENTRY set_protected_session(D3D12DDI_HCOMMANDLIST h, D3D12DDI_HPROTECTEDRESOURCESESSION_0030 session) {
     CommandListRecord* l = list_of(h, "SetProtectedResourceSession");
@@ -292,16 +308,19 @@ void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnDestroyCommandList = destroy_list;
 }
 
-void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexcept {
+void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
     t->pfnCloseCommandList = close_list;
     t->pfnResetCommandList = reset_list;
     t->pfnSetPredication = set_predication;
+    t->pfnSetProtectedResourceSession = set_protected_session;
+    t->pfnClearRootArguments = clear_root_arguments;
+    if (table_index != 1) return;                       // the compute table keeps its rejections
     t->pfnOMSetDepthBounds = om_set_depth_bounds;
     t->pfnSetSamplePositions = set_sample_positions;
     t->pfnSetViewInstanceMask = set_view_instance_mask;
-    t->pfnSetProtectedResourceSession = set_protected_session;
     t->pfnRSSetShadingRate = rs_set_shading_rate;
     t->pfnRSSetShadingRateImage = rs_set_shading_rate_image;
+    t->pfnOmSetAlphaBlendFactor = om_set_alpha_blend_factor;
 }
 
 } // namespace engine_ddi

@@ -175,10 +175,14 @@ public:
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
+    // Every report is named in the log: the runtime removes the device on it and tells the application
+    // only at its next call, under that call's name.
     void report(HRESULT hr) const noexcept {
+        log_line("device error reported: %08lx", static_cast<unsigned long>(hr));
         if (hooks.report_device_error) hooks.report_device_error(hooks.shell, hr);
     }
     void report_list(D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) const noexcept {
+        log_line("list error reported: %08lx", static_cast<unsigned long>(hr));
         if (hooks.report_list_error) hooks.report_list_error(hooks.shell, list, hr);
     }
     bool lost() const noexcept { return hooks.is_device_lost && hooks.is_device_lost(hooks.shell); }

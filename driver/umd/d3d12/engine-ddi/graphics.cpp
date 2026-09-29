@@ -349,7 +349,10 @@ void APIENTRY so_set_targets(D3D12DDI_HCOMMANDLIST hlist, UINT start, UINT count
     CommandListRecord* l = list_of(hlist, "SOSetTargets");
     if (!l) return;
     if (start >= D3D12_SO_BUFFER_SLOT_COUNT || count > D3D12_SO_BUFFER_SLOT_COUNT - start) return invalid(l);
-    l->list()->SOSetTargets(start, count, reinterpret_cast<const D3D12_STREAM_OUTPUT_BUFFER_VIEW*>(views));
+    // No views unbinds the slots. The engine reads the array without checking it, so it gets empty views.
+    const D3D12_STREAM_OUTPUT_BUFFER_VIEW none[D3D12_SO_BUFFER_SLOT_COUNT]{};
+    l->list()->SOSetTargets(start, count,
+                            views ? reinterpret_cast<const D3D12_STREAM_OUTPUT_BUFFER_VIEW*>(views) : none);
 }
 
 void APIENTRY om_set_render_targets(D3D12DDI_HCOMMANDLIST hlist, UINT count, const D3D12DDI_CPU_DESCRIPTOR_HANDLE* rtvs,

@@ -398,12 +398,13 @@ void APIENTRY destroy_pipeline(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINESTATE 
 void APIENTRY set_pipeline_state(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HPIPELINESTATE h) {
     CommandListRecord* l = list_of(hlist, "SetPipelineState");
     if (!l) return;
+    // No pipeline is a state of its own: a reset list starts with it, and the runtime writes it as default.
     auto* p = record_of<PipelineRecord>(h.pDrvPrivate, Tag::PipelineState, l->h.device);
-    if (!p) {
+    if (h.pDrvPrivate && !p) {
         l->h.device->report_list(l->rt, E_INVALIDARG);
         return;
     }
-    l->list()->SetPipelineState(static_cast<ID3D12PipelineState*>(p->h.engine));
+    l->list()->SetPipelineState(p ? static_cast<ID3D12PipelineState*>(p->h.engine) : nullptr);
 }
 
 void APIENTRY set_compute_root_signature(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_HROOTSIGNATURE h) {

@@ -256,6 +256,8 @@ void destroy_buffer(Env& env, Device& device, Buffer& buffer) {
     buffer.heap = buffer.resource = nullptr;
 }
 
+void write_default_state(Env& env, Device& device, Recording& r);
+
 HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS queue_flags, Recording& out) {
     out = Recording{};
     D3D12DDIARG_CREATE_COMMAND_POOL_0040 pool{D3D12DDI_COMMAND_POOL_FLAG_NONE};
@@ -297,16 +299,47 @@ HRESULT open_recording(Env& env, Device& device, D3D12DDI_COMMAND_QUEUE_FLAGS qu
     D3D12DDIARG_RESETCOMMANDLIST_0040 reset{D3D12DDI_HCOMMANDRECORDER_0040{out.recorder}, 1,
                                            D3D12DDI_COMMAND_LIST_FLAG_NONE};
     env.lists[out.table].pfnResetCommandList(out.hlist(), &reset);
-    // The runtime then writes its default state. Predication is the slot it was seen to reach on a direct
-    // list; the others are the API's defaults for state a reset list carries.
-    const auto& t = env.lists[out.table];
-    t.pfnSetPredication(out.hlist(), D3D12DDI_HRESOURCE{nullptr}, 0, D3D12DDI_PREDICATION_OP_EQUAL_ZERO);
-    t.pfnSetProtectedResourceSession(out.hlist(), D3D12DDI_HPROTECTEDRESOURCESESSION_0030{nullptr});
-    if (out.table == 1) {
-        t.pfnSetSamplePositions(out.hlist(), 0, 0, nullptr);
-        t.pfnSetViewInstanceMask(out.hlist(), 0);
-    }
+    write_default_state(env, device, out);
     return S_OK;
+}
+
+// The state the runtime writes into a list it has reset. The first thirteen calls and their order were
+// observed on a direct list under the system runtime; the arguments were not, so they are the API's
+// documented defaults. The calls after them are the remaining state slots, in no observed order. A list of
+// the compute table gets the calls that are legal there. Any error they report fails the recording.
+void write_default_state(Env& env, Device& device, Recording& r) {
+    const auto& t = env.lists[r.table];
+    const bool graphics = r.table == 1;
+    const uint32_t device_before = device.shell.device_errors;
+    const uint32_t list_before = device.shell.list_errors;
+    const FLOAT blend[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    t.pfnSetPipelineState(r.hlist(), D3D12DDI_HPIPELINESTATE{nullptr});
+    if (graphics) t.pfnIaSetTopology(r.hlist(), D3D12DDI_PRIMITIVE_TOPOLOGY_UNDEFINED);
+    t.pfnSetDescriptorHeaps(r.hlist(), 0, nullptr);
+    if (graphics) {
+        t.pfnIASetVertexBuffers(r.hlist(), 0, D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT, nullptr);
+        t.pfnIASetIndexBuffer(r.hlist(), nullptr);
+        t.pfnSOSetTargets(r.hlist(), 0, D3D12_SO_BUFFER_SLOT_COUNT, nullptr);
+        t.pfnOMSetRenderTargets(r.hlist(), 0, nullptr, FALSE, nullptr);
+        t.pfnRsSetViewports(r.hlist(), 0, nullptr);
+        t.pfnRsSetScissorRects(r.hlist(), 0, nullptr);
+        t.pfnOmSetBlendFactor(r.hlist(), blend);
+        t.pfnOmSetStencilRef(r.hlist(), 0);
+    }
+    t.pfnSetPredication(r.hlist(), D3D12DDI_HRESOURCE{nullptr}, 0, D3D12DDI_PREDICATION_OP_EQUAL_ZERO);
+    t.pfnClearRootArguments(r.hlist());
+    t.pfnSetProtectedResourceSession(r.hlist(), D3D12DDI_HPROTECTEDRESOURCESESSION_0030{nullptr});
+    if (graphics) {
+        t.pfnOMSetDepthBounds(r.hlist(), 0.0f, 1.0f);
+        t.pfnSetSamplePositions(r.hlist(), 0, 0, nullptr);
+        t.pfnSetViewInstanceMask(r.hlist(), 0);
+        t.pfnRSSetShadingRate(r.hlist(), D3D12DDI_SHADING_RATE_0062_1X1, nullptr);
+        t.pfnRSSetShadingRateImage(r.hlist(), D3D12DDI_HRESOURCE{nullptr});
+        t.pfnOmSetAlphaBlendFactor(r.hlist(), 1.0f);
+    }
+    checkf(device.shell.device_errors == device_before && device.shell.list_errors == list_before,
+           "default state of a reset list, table %u: no device or list error (%u device, %u list)", r.table,
+           device.shell.device_errors - device_before, device.shell.list_errors - list_before);
 }
 
 void destroy_recording(Env& env, Device& device, Recording& r) {
