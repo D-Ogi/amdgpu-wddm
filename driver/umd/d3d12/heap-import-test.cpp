@@ -291,11 +291,34 @@ int main(){
   events.clear();{OwnerScope create(&late,0);fail_import=true;fail_deallocate=true;
    assert(late.allocate(&s,&memory)==E_OUTOFMEMORY && events=="AMIUR");fail_import=false;fail_deallocate=false;}
   events.clear();assert(late.close_after_engine_retirement()==kOwnerExpired && events.empty());
+  // 4. A resource DDI entered inside another one is refused before its engine call and leaves the
+  // outer scope as it was: the outer destroy still releases its primary, the outer create still
+  // gives authority to what it allocates.
+  {
+   engine_ddi::ImportedMemory outer{};unsigned inner_calls=0,outer_calls=0;
+   events.clear();{OwnerScope create(&late,0);assert(!create.refused() && late.allocate(&s,&outer)==S_OK);}
+   events.clear();
+   assert(destroy_in_owner_scope(&late,outer.allocation,[&]() noexcept {
+    ++outer_calls;
+    assert(create_in_owner_scope(&late,[&]() noexcept {++inner_calls;return S_OK;})==E_UNEXPECTED);
+    assert(destroy_in_owner_scope(&late,outer.allocation,[&]() noexcept {++inner_calls;})==E_UNEXPECTED);
+    assert(late.free(&outer)==S_OK && events=="VUR");
+   })==S_OK && outer_calls==1 && !inner_calls && !late.owns_allocation(outer.allocation));
+   events.clear();
+   assert(create_in_owner_scope(&late,[&]() noexcept {
+    ++outer_calls;
+    assert(destroy_in_owner_scope(&late,0,[&]() noexcept {++inner_calls;})==E_UNEXPECTED);
+    assert(late.allocate(&s,&outer)==S_OK && late.free(&outer)==S_OK && events=="AMIVUR");
+    return S_OK;
+   })==S_OK && outer_calls==2 && !inner_calls);
+   // Without imports there is no scope to refuse: the engine call runs.
+   assert(create_in_owner_scope(nullptr,[&]() noexcept {++inner_calls;return S_FALSE;})==S_FALSE && inner_calls==1);events.clear();
+  }
   // Four allocations stay owned, and the paging queue with them.
   assert(late.discard_metadata()==5 && events.empty());
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  }
- assert(surfaces==8);
+ assert(surfaces==10);
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface under E26R, "
   "released by its runtime resource inside that resource's DDI only");
 }

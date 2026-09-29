@@ -82,14 +82,16 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
     if(hr==S_OK)free_report_.stage=FreeStage::Done;
     return hr;
 }
-void RuntimeHeapImports::begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept {
-    if(!active_)return;
+bool RuntimeHeapImports::begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept {
+    if(!active_ || owner_scope_)return false;
     owner_scope_=true;
     if(auto record=find(destroyed);record && record->surface && record->allocation.owner_known()){
         record->authority=true;record->destroyed=true;
     }
+    return true;
 }
 void RuntimeHeapImports::end_owner_scope() noexcept {
+    if(!owner_scope_)return;
     owner_scope_=false;
     for(auto record=records_;record;record=record->next){
         if(!record->authority)continue;

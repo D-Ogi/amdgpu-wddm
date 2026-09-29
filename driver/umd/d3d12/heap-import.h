@@ -65,8 +65,10 @@ public:
     // The owner scope: the span of one pfnCreateHeapAndResource or pfnDestroyHeapAndResource. Only
     // inside it may a linear primary be released, by its runtime resource: one created in this span,
     // or the one the span destroys (its allocation handle, 0 for any other resource). Leaving the
-    // span takes the authority from every record, whatever happened inside. Spans do not nest.
-    void begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept;
+    // span takes the authority from every record, whatever happened inside. Spans do not nest: a
+    // second begin while one is open is refused (false) and changes nothing, and only the caller
+    // whose begin was admitted may end.
+    bool begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept;
     void end_owner_scope() noexcept;
     // Only these two operations are provided for RADV's borrowed allocation map.
     bool owns_allocation(D3DKMT_HANDLE) const noexcept;
@@ -80,12 +82,28 @@ public:
 };
 class OwnerScope final {
     RuntimeHeapImports* imports_{};
+    bool entered_{};
 public:
     OwnerScope(RuntimeHeapImports* imports,D3DKMT_HANDLE destroyed) noexcept:imports_(imports) {
-        if(imports_)imports_->begin_owner_scope(destroyed);
+        entered_=imports_ && imports_->begin_owner_scope(destroyed);
     }
-    ~OwnerScope() noexcept {if(imports_)imports_->end_owner_scope();}
+    ~OwnerScope() noexcept {if(entered_)imports_->end_owner_scope();}
     OwnerScope(const OwnerScope&)=delete;
     OwnerScope& operator=(const OwnerScope&)=delete;
+    // Imports exist and did not admit this scope: the resource DDI must not run.
+    bool refused() const noexcept {return imports_ && !entered_;}
 };
+// The two resource DDIs, as the shell's table runs them: the engine's entry inside an owner scope,
+// and not at all when the scope is refused.
+template<class Engine> HRESULT create_in_owner_scope(RuntimeHeapImports* imports,Engine&& engine) noexcept {
+    OwnerScope scope(imports,0);
+    if(scope.refused())return E_UNEXPECTED;
+    return engine();
+}
+template<class Engine> HRESULT destroy_in_owner_scope(RuntimeHeapImports* imports,D3DKMT_HANDLE primary,
+                                                      Engine&& engine) noexcept {
+    OwnerScope scope(imports,primary);
+    if(scope.refused())return E_UNEXPECTED;
+    engine();return S_OK;
+}
 }

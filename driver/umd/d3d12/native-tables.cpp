@@ -153,8 +153,10 @@ HRESULT APIENTRY create_heap_and_resource(D3D12DDI_HDEVICE handle,const D3D12DDI
     const auto engine=engine_create_resource.load();
     const auto device=static_cast<Device*>(handle.pDrvPrivate);
     if(!engine || !device)return E_UNEXPECTED;
-    OwnerScope scope(engine_imports(*device),0);
-    return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
+    // A resource DDI entered from inside another one of this device is refused before the engine runs.
+    return create_in_owner_scope(engine_imports(*device),[&]() noexcept {
+        return engine(handle,heap,driver_heap,runtime,resource,clear,session,driver_resource);
+    });
 }
 void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP heap,D3D12DDI_HRESOURCE resource) {
     const auto engine=engine_destroy_resource.load();
@@ -163,8 +165,9 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE handle,D3D12DDI_HHEAP h
     D3DKMT_HANDLE primary=0;
     // Not a linear primary, or no resource at all: the scope names no record.
     if(resource.pDrvPrivate && engine_ddi::present_allocation(engine_context(*device),resource,&primary)!=S_OK)primary=0;
-    OwnerScope scope(engine_imports(*device),primary);
-    engine(handle,heap,resource);
+    // Refused: nothing is destroyed, the objects stay with the device, and the device error says so.
+    const HRESULT hr=destroy_in_owner_scope(engine_imports(*device),primary,[&]() noexcept {engine(handle,heap,resource);});
+    if(hr!=S_OK)report_device_error(*device,hr);
 }
 // The surface's allocation and the queue's context go back to the runtime, which makes the kernel call.
 // stage: 1 arguments, 2 queue, 3 surface, 4 destination, 5 outputs, 0 done.
