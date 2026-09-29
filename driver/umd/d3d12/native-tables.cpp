@@ -81,6 +81,44 @@ struct EntryPolicy {
             now.QuadPart,GetCurrentThreadId());
         std::fflush(stderr);
     }
+    static void observed(Device*,const char* name,D3D12DDI_HDEVICE,const D3D12DDIARG_CREATERESOURCE_0088* resource,
+        D3D12DDI_RESOURCE_OPTIMIZATION_FLAGS optimization,UINT32 alignment_restriction,UINT visible_nodes,
+        D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* output) noexcept {
+        if(!ddi_trace_enabled())return;
+        D3D12DDIARG_CREATERESOURCE_0088 r{};D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info{};
+        const bool resource_readable=trace_input(resource,r),output_readable=trace_input(output,info);
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        std::fprintf(stderr,"{\"event\":\"ddi-allocation-info\",\"name\":\"%s\",\"optimization\":%u,\"alignment_restriction\":%u,"
+            "\"visible_node_mask\":%u,\"resource_readable\":%u,\"resource_type\":%u,\"layout\":%u,\"format\":%u,"
+            "\"width\":%llu,\"height\":%u,\"depth\":%u,\"mips\":%u,\"samples\":%u,\"resource_flags\":%u,"
+            "\"output_readable\":%u,\"data_size\":%llu,\"data_alignment\":%llu,\"qpc\":%lld,\"thread\":%lu}\n",
+            name,unsigned(optimization),alignment_restriction,visible_nodes,unsigned(resource_readable),
+            unsigned(r.ResourceType),unsigned(r.Layout),unsigned(r.Format),static_cast<unsigned long long>(r.Width),r.Height,
+            unsigned(r.DepthOrArraySize),unsigned(r.MipLevels),r.SampleDesc.Count,unsigned(r.Flags),
+            unsigned(output_readable),static_cast<unsigned long long>(info.ResourceDataSize),
+            static_cast<unsigned long long>(info.ResourceDataAlignment),now.QuadPart,GetCurrentThreadId());
+        std::fflush(stderr);
+    }
+    // Fixed-size fields only: no surface array, rectangle, private data or handle is followed or printed.
+    static void observed(Device*,const char* name,D3D12DDI_HCOMMANDLIST,D3D12DDI_HCOMMANDQUEUE queue,
+        const D3D12DDIARG_PRESENT_0001* args,D3D12DDI_PRESENT_0051* result,
+        D3D12DDI_PRESENT_CONTEXTS_0051* contexts,D3D12DDI_PRESENT_HWQUEUES_0051* queues) noexcept {
+        if(!ddi_trace_enabled())return;
+        D3D12DDIARG_PRESENT_0001 a{};
+        const bool readable=trace_input(args,a);
+        LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+        std::fprintf(stderr,"{\"event\":\"ddi-present\",\"name\":\"%s\",\"args_readable\":%u,\"queue_present\":%u,"
+            "\"surfaces\":%u,\"surfaces_present\":%u,\"destination_present\":%u,\"destination_subresource\":%u,"
+            "\"flags\":%u,\"flip_interval\":%u,\"vidpn_source\":%u,\"dirty_rects\":%u,\"private_size\":%u,"
+            "\"private_present\":%u,\"optimize_for_composition\":%u,\"result_present\":%u,\"contexts_present\":%u,"
+            "\"hwqueues_present\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+            name,unsigned(readable),unsigned(queue.pDrvPrivate!=nullptr),a.SurfacesToPresent,
+            unsigned(a.phSurfacesToPresent!=nullptr),unsigned(a.hDstResource.pDrvPrivate!=nullptr),a.DstSubResourceIndex,
+            unsigned(a.Flags.Value),unsigned(a.FlipInterval),unsigned(a.VidPnSourceID),a.DirtyRects,a.PrivateDriverDataSize,
+            unsigned(a.pPrivateDriverData!=nullptr),unsigned(a.OptimizeForComposition),unsigned(result!=nullptr),
+            unsigned(contexts!=nullptr),unsigned(queues!=nullptr),now.QuadPart,GetCurrentThreadId());
+        std::fflush(stderr);
+    }
     static Device* resolve(D3D12DDI_HDEVICE handle) noexcept {return static_cast<Device*>(handle.pDrvPrivate);}
     static Device* resolve(D3D12DDI_HCOMMANDLIST handle) noexcept {
         return static_cast<Device*>(engine_ddi::command_list_shell(handle));
