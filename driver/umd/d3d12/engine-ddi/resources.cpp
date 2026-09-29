@@ -1065,7 +1065,7 @@ void backing_release(Backing* b) noexcept {
     if (b->refs.fetch_sub(1) != 1) return;
     DeviceContext* c = b->device;
     PendingRelease* node = b->release_node;
-    node->payload = ReleasePayload{{b->retained, b->heap}, b->imported, b->memory, b->id};  // resource first
+    node->payload = ReleasePayload{{b->retained, b->heap}, b->imported, b->memory, b->id, b->linear};  // resource first
     delete b;
     c->release(node);
 }

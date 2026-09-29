@@ -35,6 +35,9 @@ struct ReleasePayload {
     bool has_memory;
     ImportedMemory memory;
     uint64_t id;
+    // The memory of a linear primary: the shell may release it only inside the destroy that ends it, so
+    // that destroy waits for retirement, within in_ddi_bound_ms, instead of recording the release at once.
+    bool in_ddi = false;
 };
 
 // One pending release. It is allocated together with the heap it belongs to, while creation can still fail, so
@@ -172,6 +175,7 @@ public:
     uint64_t init_value = 0;                    // the last value signalled on init_fence
     bool init_broken = false;                   // a batch failed: no further batches
 
+    uint32_t in_ddi_bound_ms = 2000;            // ReleasePayload::in_ddi; changed by the harness only
     ReleaseObserver observer = nullptr;         // harness only
     void* observer_user = nullptr;
 
@@ -196,7 +200,9 @@ public:
 
     // Hands a release to the release sequence. Under the lock it takes one snapshot of every queue: a queue whose
     // retirement fence has not reached the work submitted before the call gets a mark. With no mark it runs the
-    // release now, outside the lock; otherwise it records the node. Never allocates.
+    // release now, outside the lock; otherwise it records the node. Never allocates. A payload with in_ddi
+    // takes the snapshot again, with the lock released in between, until no mark is left or in_ddi_bound_ms
+    // have passed; after the bound the device error is reported and the node is recorded like any other.
     void release(PendingRelease* node) noexcept;
     // Runs the release sequence for everything that has retired (a retirement point).
     void process_retired() noexcept;
@@ -409,6 +415,7 @@ bool harness_retirement_lost(DeviceContext* context) noexcept;
 // Signal of execute_command_lists is skipped and fails with E_FAIL after the engine's ExecuteCommandLists ran.
 void harness_force_completed(EngineQueue* queue, uint64_t value) noexcept;
 void harness_fail_next_signal(EngineQueue* queue) noexcept;
+void harness_set_in_ddi_bound(DeviceContext* context, uint32_t milliseconds) noexcept;
 #endif
 
 } // namespace engine_ddi

@@ -70,11 +70,14 @@ void DeviceContext::notify(const ReleasePayload& payload, bool deferred, HRESULT
 // marks are resolved under the same lock (destroy_engine_queue), so no queue is missed or counted twice. Engine
 // calls (GetCompletedValue) happen under the lock; hooks never do.
 void DeviceContext::release(PendingRelease* node) noexcept {
+    node->next = nullptr;
+    bool recorded = false;
+    bool late = false;
+    const ULONGLONG began = GetTickCount64();
+again:
     node->mask = 0;
     node->stuck = false;
-    node->next = nullptr;
     for (uint64_t& mark : node->marks) mark = 0;
-    bool recorded = false;
     AcquireSRWLockExclusive(&lock);
     node->stuck = retirement_lost;
     for (uint32_t s = 0; s < kMaxEngineQueues; ++s) {
@@ -94,6 +97,14 @@ void DeviceContext::release(PendingRelease* node) noexcept {
     }
     const bool stuck = node->stuck;
     const uint64_t id = node->payload.id;
+    if (node->payload.in_ddi && node->payload.has_memory && !stuck && node->mask) {
+        if (GetTickCount64() - began < in_ddi_bound_ms) {
+            ReleaseSRWLockExclusive(&lock);             // never wait with the lock held
+            Sleep(1);
+            goto again;
+        }
+        late = true;
+    }
     if (stuck || node->mask) {
         releases.add(node);                                 // from here on another thread may retire the node
         live.fetch_add(1);
@@ -104,6 +115,12 @@ void DeviceContext::release(PendingRelease* node) noexcept {
     if (stuck)
         log_line("release %llu: retirement cannot be proven (removed device or lost queue); memory stays owned",
                  static_cast<unsigned long long>(id));
+    if (late) {
+        log_line("release %llu: the work before this destroy did not retire in %u ms; the memory's release "
+                 "leaves its DDI",
+                 static_cast<unsigned long long>(id), in_ddi_bound_ms);
+        report(HRESULT_FROM_WIN32(ERROR_TIMEOUT));
+    }
     if (recorded) return;
     const ReleasePayload payload = node->payload;
     delete node;
@@ -458,6 +475,7 @@ void harness_set_release_observer(DeviceContext* c, ReleaseObserver observer, vo
     c->observer_user = user;
 }
 uint32_t harness_pending_releases(DeviceContext* c) noexcept { return c->pending.load(); }
+void harness_set_in_ddi_bound(DeviceContext* c, uint32_t milliseconds) noexcept { c->in_ddi_bound_ms = milliseconds; }
 uint32_t harness_stuck_releases(DeviceContext* c) noexcept {
     AcquireSRWLockShared(&c->lock);
     const auto n = static_cast<uint32_t>(c->releases.stuck());

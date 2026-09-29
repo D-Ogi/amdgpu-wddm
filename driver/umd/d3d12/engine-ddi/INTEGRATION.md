@@ -431,6 +431,13 @@ retired the work submitted before the last destroy (the heap record and each res
 releases the engine heap, then calls `free_memory` once, on a DDI thread. The shell then frees its Vulkan import
 and deallocates the runtime allocation. The engine never frees, clears or zeroes the memory.
 
+The memory of a linear primary is released inside the destroy that ends it: that destroy takes the snapshot
+again, with engine-ddi's lock released in between, until the work has retired or 2000 ms have passed. Past the
+bound it reports ERROR_TIMEOUT through `report_device_error` and records the release like any other; the
+shell then gets `free_memory` from a later DDI call, where it must not name the runtime resource any more.
+Harness witness: `tests/test-linear-primary.cpp` (a destroy that waits 40 ms and frees in the same call, a
+destroy past a 30 ms bound, ordinary memory that does not wait).
+
 Development PC witness (harness round trip 5, `tests/test-runtime-backed.cpp`): a stub shell allocates the memory
 on the engine's VkDevice as above, with stand-in allocation handles. A committed UPLOAD buffer of 128 KiB holds a
 placed buffer at 64 KiB (GPU VA the heap's plus 64 KiB); the placed buffer, filled through MapHeap, is copied into

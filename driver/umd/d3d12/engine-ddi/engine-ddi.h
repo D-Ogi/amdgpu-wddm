@@ -110,6 +110,11 @@ inline constexpr uint32_t kBoundaryRevision = 4;
 //   an engine thread or an engine callback: the engine has no threads in INLINE mode, and engine-ddi creates none.
 //   A tile mapping is queue work like a submission: its call signals the queue's retirement fence after the bind, so
 //   heap memory destroyed after the mapping waits for it.
+//   The memory of a linear primary (kMemoryLinearSurface) is the exception to "the first later DDI call": the
+//   shell may release it to the runtime only inside the pfnDestroyHeapAndResource that ends it. That destroy
+//   therefore waits for retirement, at most 2000 ms and without engine-ddi's lock held. When the bound passes,
+//   ERROR_TIMEOUT (as an HRESULT) goes to report_device_error and the release is recorded like any other: its
+//   free_memory then comes from a later DDI call, where the shell frees its import and keeps the allocation.
 enum class MemoryMode : uint32_t { RuntimeBacked = 1, EnginePrivateTest = 2 };
 
 enum MemoryRequestFlags : uint32_t {

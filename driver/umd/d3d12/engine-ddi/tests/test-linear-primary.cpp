@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <thread>
+#include <vector>
 
 namespace harness {
 namespace {
@@ -72,6 +74,13 @@ HRESULT create_target(Env& env, Device& device, const Shape& s, Buffer& out) {
 }
 
 constexpr UINT align_up(UINT value, UINT to) { return (value + to - 1) / to * to; }
+
+struct Observed {
+    std::vector<engine_ddi::ReleaseEvent> events;
+};
+void observe(void* user, const engine_ddi::ReleaseEvent* event) {
+    static_cast<Observed*>(user)->events.push_back(*event);
+}
 
 // What the engine itself answers for the linear image of this shape; 0 when it has none.
 UINT64 engine_alignment(Device& device, const Shape& s) {
@@ -298,15 +307,83 @@ void test_linear_primary(Env& env) {
                static_cast<unsigned long>(hr));
     }
 
+    // The primary's memory goes back inside its own destroy: the destroy waits for the work before it.
+    uint32_t expected_errors = 0;
+    {
+        Observed observed;
+        engine_ddi::harness_set_release_observer(device.context, observe, &observed);
+        const Shape shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM};
+        Buffer waited, late, other;
+        hr = create_target(env, device, shape, waited);
+        if (hr == S_OK) {
+            // The work retires 40 ms into the destroy.
+            engine_ddi::harness_force_completed(queue, 1);
+            std::thread retire([&] {
+                Sleep(40);
+                engine_ddi::harness_force_completed(queue, 0);
+            });
+            const ULONGLONG began = GetTickCount64();
+            destroy_buffer(env, device, waited);
+            const ULONGLONG took = GetTickCount64() - began;
+            retire.join();
+            checkf(observed.events.size() == 1 && !observed.events[0].deferred && observed.events[0].had_memory &&
+                       observed.events[0].free_result == S_OK && took >= 15 && took < 2000 &&
+                       !engine_ddi::harness_pending_releases(device.context) && !device.shell.device_errors,
+                   "linear primary: a destroy before retirement waits and frees inside the same call (%zu events, "
+                   "%llu ms, %u pending)",
+                   observed.events.size(), static_cast<unsigned long long>(took),
+                   engine_ddi::harness_pending_releases(device.context));
+        } else {
+            checkf(false, "linear primary: the primary for the waiting destroy (hr %08lx)", static_cast<unsigned long>(hr));
+        }
+        observed.events.clear();
+        hr = create_target(env, device, shape, late);
+        const HRESULT hr_other = create_target(env, device, Shape{64, 64, DXGI_FORMAT_B8G8R8A8_UNORM, 1, false}, other);
+        if (hr == S_OK && hr_other == S_OK) {
+            // The work does not retire within the bound: the error is reported, nothing is freed in this call.
+            engine_ddi::harness_set_in_ddi_bound(device.context, 30);
+            engine_ddi::harness_force_completed(queue, 1);
+            destroy_buffer(env, device, late);
+            expected_errors = 1;
+            checkf(observed.events.empty() && engine_ddi::harness_pending_releases(device.context) == 1 &&
+                       device.shell.device_errors == 1 && device.shell.last_device_error == HRESULT_FROM_WIN32(ERROR_TIMEOUT),
+                   "linear primary: past the bound the destroy reports ERROR_TIMEOUT and records the release "
+                   "(%zu events, %u pending, %u errors, last %08lx)",
+                   observed.events.size(), engine_ddi::harness_pending_releases(device.context),
+                   device.shell.device_errors, static_cast<unsigned long>(device.shell.last_device_error));
+            // Ordinary memory destroyed before retirement is recorded at once, as before.
+            const ULONGLONG began = GetTickCount64();
+            destroy_buffer(env, device, other);
+            checkf(GetTickCount64() - began < 25 && engine_ddi::harness_pending_releases(device.context) == 2 &&
+                       observed.events.empty(),
+                   "linear primary: ordinary memory does not wait (%u pending)",
+                   engine_ddi::harness_pending_releases(device.context));
+            engine_ddi::harness_force_completed(queue, 0);
+            engine_ddi::harness_set_in_ddi_bound(device.context, 2000);
+            Buffer next;
+            hr = create_target(env, device, shape, next);      // any DDI call is a retirement point
+            size_t deferred = 0;
+            for (const engine_ddi::ReleaseEvent& e : observed.events) deferred += e.deferred ? 1 : 0;
+            checkf(deferred == 2 && !engine_ddi::harness_pending_releases(device.context),
+                   "linear primary: both recorded releases ran at the next DDI call (%zu deferred, %u pending)",
+                   deferred, engine_ddi::harness_pending_releases(device.context));
+            if (hr == S_OK) destroy_buffer(env, device, next);
+        } else {
+            checkf(false, "linear primary: the resources for the late destroy (hr %08lx %08lx)",
+                   static_cast<unsigned long>(hr), static_cast<unsigned long>(hr_other));
+        }
+        engine_ddi::harness_set_release_observer(device.context, nullptr, nullptr);
+    }
+
     checkf(m.frees == m.allocations, "linear primary: each allocation came back through free_memory (%u of %u)",
            m.frees, m.allocations);
     check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired,
           "linear primary: destroy_engine_queue reports Retired");
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
-    checkf(hr == S_OK && live == 0 && !device.shell.device_errors && !device.shell.list_errors,
-           "linear primary: destroy_device_context S_OK with no live object, no error reported (hr %08lx, %u live, "
-           "%u device errors)",
+    checkf(hr == S_OK && live == 0 && device.shell.device_errors == expected_errors && !device.shell.list_errors,
+           "linear primary: destroy_device_context S_OK with no live object, no error but the timeout's (hr %08lx, "
+           "%u live, %u device errors)",
            static_cast<unsigned long>(hr), live, device.shell.device_errors);
 }
 
