@@ -170,10 +170,14 @@ void test_device_queries(Env& env, Device& device) {
         std::memset(&info, 0xCD, sizeof(info));
         env.core.pfnCheckExistingResourceAllocationInfo(device.h(), buffer.hres(), &info);
         checkf(info.ResourceDataSize == expect.SizeInBytes && info.ResourceDataAlignment == expect.Alignment &&
-                   info.Layout == D3D12DDI_TL_ROW_MAJOR && !info.AdditionalDataSize && !info.AdditionalDataHeaderSize,
-               "CheckExistingResourceAllocationInfo, 64 KiB UAV buffer: %llu bytes aligned %u, row major, the engine's "
+                   info.Layout == D3D12DDI_TL_ROW_MAJOR && !info.AdditionalDataSize && !info.AdditionalDataHeaderSize &&
+                   info.AdditionalDataHeaderAlignment == info.ResourceDataAlignment &&
+                   info.AdditionalDataAlignment == info.ResourceDataAlignment,
+               "CheckExistingResourceAllocationInfo, 64 KiB UAV buffer: %llu bytes aligned %u, row major, no additional "
+               "data but its alignments the resource's (%u, %u; a zero wraps the runtime's answer), the engine's "
                "%llu aligned %llu",
                static_cast<unsigned long long>(info.ResourceDataSize), info.ResourceDataAlignment,
+               info.AdditionalDataHeaderAlignment, info.AdditionalDataAlignment,
                static_cast<unsigned long long>(expect.SizeInBytes), static_cast<unsigned long long>(expect.Alignment));
 
         // CheckSubresourceInfo: a buffer is one unswizzled row from offset 0.

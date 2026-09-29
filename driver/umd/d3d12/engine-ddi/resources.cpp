@@ -644,8 +644,18 @@ D3D12DDI_GPU_VIRTUAL_ADDRESS APIENTRY check_resource_virtual_address(D3D12DDI_HD
     return static_cast<ID3D12Resource*>(r->h.engine)->GetGPUVirtualAddress();
 }
 
+// No additional data: engine-ddi keeps none next to a resource. Its alignments still name a power of two, the
+// resource's own: the runtime aligns its API answer up to them, and a zero wraps it (GetResourceAllocationInfo
+// answered 0xFFFFFFFFFFFF0000 for every description while CreateCommittedResource, which does not, worked).
+void no_additional_data(D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
+    out->AdditionalDataHeaderSize = 0;
+    out->AdditionalDataSize = 0;
+    out->AdditionalDataHeaderAlignment = out->ResourceDataAlignment;
+    out->AdditionalDataAlignment = out->ResourceDataAlignment;
+}
+
 // The engine's size and alignment for desc, with desc.Alignment first and 0 if the engine refuses that (a
-// small-alignment request). No additional data: engine-ddi keeps none next to a resource.
+// small-alignment request).
 HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
     D3D12_RESOURCE_DESC d0 = to_desc0(desc);
     D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
@@ -658,6 +668,7 @@ HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RE
     out->ResourceDataAlignment = static_cast<UINT32>(info.Alignment);
     out->Layout = desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ? D3D12DDI_TL_ROW_MAJOR
                                                                     : static_cast<D3D12DDI_TEXTURE_LAYOUT>(desc.Layout);
+    no_additional_data(out);
     return S_OK;
 }
 
@@ -672,6 +683,7 @@ HRESULT linear_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& des
     out->ResourceDataAlignment = static_cast<UINT32>(
         std::max<uint64_t>(surface.info.MemoryAlignment, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT));
     out->Layout = static_cast<D3D12DDI_TEXTURE_LAYOUT>(desc.Layout);
+    no_additional_data(out);
     return S_OK;
 }
 
