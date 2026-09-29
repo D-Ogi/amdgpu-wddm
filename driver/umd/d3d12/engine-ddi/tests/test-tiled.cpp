@@ -44,8 +44,9 @@ void observe(void* user, const engine_ddi::ReleaseEvent* event) {
 }
 
 // A DEFAULT heap that allows every resource category (resource heap tier 2), with a buffer over all of it: one
-// CreateHeapAndResource call, one allocate_memory.
-HRESULT create_tile_heap(Env& env, Device& device, UINT tiles, Buffer& out) {
+// CreateHeapAndResource call, one allocate_memory. heap_bytes, when given, is the heap's size; the buffer keeps
+// whole tiles.
+HRESULT create_tile_heap(Env& env, Device& device, UINT tiles, Buffer& out, UINT64 heap_bytes = 0) {
     out = Buffer{};
     D3D12DDIARG_CREATERESOURCE_0088 res{};
     res.ResourceType = D3D12DDI_RT_BUFFER;
@@ -59,7 +60,7 @@ HRESULT create_tile_heap(Env& env, Device& device, UINT tiles, Buffer& out) {
     res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
     const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, D3D12_HEAP_TYPE_DEFAULT);
     D3D12DDIARG_CREATEHEAP_0001 heap{};
-    heap.ByteSize = res.Width;
+    heap.ByteSize = heap_bytes ? heap_bytes : res.Width;
     heap.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
     heap.CPUPageProperty = static_cast<D3D12DDI_CPU_PAGE_PROPERTY>(props.CPUPageProperty - 1);
     heap.MemoryPool = static_cast<D3D12DDI_MEMORY_POOL>(props.MemoryPoolPreference - 1);
@@ -469,11 +470,17 @@ void test_small_placement(Env& env) {
     checkf(hr == S_OK && device.context, "small placement: device context in RuntimeBacked mode (hr %08lx)",
            static_cast<unsigned long>(hr));
     if (hr != S_OK) return;
-    Buffer heap;
+    // A 64 KiB heap, and one of 68 KiB whose tail past 64 KiB holds a small texture but not a default-sized one.
+    Buffer heap, tail;
     hr = create_tile_heap(env, device, 1, heap);
-    checkf(hr == S_OK, "small placement: a 64 KiB heap of every category with a buffer over it (hr %08lx)",
-           static_cast<unsigned long>(hr));
-    if (hr != S_OK) return;
+    const HRESULT hr_tail = create_tile_heap(env, device, 1, tail, kTile + 4096);
+    checkf(hr == S_OK && hr_tail == S_OK,
+           "small placement: heaps of 64 and 68 KiB of every category with a buffer over each (hr %08lx %08lx)",
+           static_cast<unsigned long>(hr), static_cast<unsigned long>(hr_tail));
+    if (hr != S_OK || hr_tail != S_OK) {
+        for (Buffer* b : {&heap, &tail}) destroy_buffer(env, device, *b);
+        return;
+    }
 
     const auto describe = [](UINT edge, D3D12DDI_RESOURCE_FLAGS_0003 flags) {
         D3D12DDIARG_CREATERESOURCE_0088 res{};
@@ -489,9 +496,9 @@ void test_small_placement(Env& env) {
         res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_COMMON;
         return res;
     };
-    const auto place_at = [&](D3D12DDIARG_CREATERESOURCE_0088 res, UINT64 offset, Buffer& out) {
+    const auto place_in = [&](const Buffer& base, D3D12DDIARG_CREATERESOURCE_0088 res, UINT64 offset, Buffer& out) {
         out = Buffer{};
-        res.ReuseBufferGPUVA.BaseAddress.UMD = {heap.hres(), offset};
+        res.ReuseBufferGPUVA.BaseAddress.UMD = {base.hres(), offset};
         const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes = env.core.pfnCalcPrivateHeapAndResourceSizes(
             device.h(), nullptr, &res, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
         out.resource = env.storage.alloc(sizes.Resource);
@@ -501,6 +508,9 @@ void test_small_placement(Env& env) {
                                                                  D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
         if (FAILED(result)) out.resource = nullptr;
         return result;
+    };
+    const auto place_at = [&](D3D12DDIARG_CREATERESOURCE_0088 res, UINT64 offset, Buffer& out) {
+        return place_in(heap, res, offset, out);
     };
     // What the engine answers for the 16x16 texture with the small alignment asked explicitly.
     D3D12_RESOURCE_DESC probe{};
@@ -514,20 +524,32 @@ void test_small_placement(Env& env) {
     probe.SampleDesc = {1, 0};
     const D3D12_RESOURCE_ALLOCATION_INFO granted = env.engine->GetResourceAllocationInfo(0, 1, &probe);
     const bool grants = granted.Alignment == D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT &&
-                        granted.SizeInBytes <= D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT;
+                        granted.SizeInBytes && granted.SizeInBytes != UINT64_MAX;
     checkf(true, "small placement: the engine %s 4 KiB for a 16x16 R8G8B8A8 texture (%llu bytes aligned to %llu)",
            grants ? "grants" : "does not grant", static_cast<unsigned long long>(granted.SizeInBytes),
            static_cast<unsigned long long>(granted.Alignment));
+    // Placed where only the small alignment admits the offset or only its size fits: S_OK exactly when the engine
+    // grants it and the granted size fits from the offset to the heap's end.
+    const auto expect = [&](UINT64 offset, UINT64 heap_bytes) {
+        return grants && granted.SizeInBytes <= heap_bytes - offset ? S_OK : E_INVALIDARG;
+    };
 
     const uint32_t errors = device.shell.device_errors;
-    Buffer at4k, last, target, large;
+    Buffer at4k, last, fitted, target, large;
     const HRESULT hr_4k = place_at(describe(16, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), 4096, at4k);
-    const HRESULT hr_last = place_at(describe(16, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), 65536 - 4096, last);
-    const HRESULT expected = grants ? S_OK : E_INVALIDARG;
-    checkf(hr_4k == expected && hr_last == expected,
-           "small placement: a 16x16 texture at offset 4096 and in the heap's last 4 KiB: %s (hr %08lx %08lx)",
-           grants ? "placed" : "refused, the engine grants no 4 KiB", static_cast<unsigned long>(hr_4k),
-           static_cast<unsigned long>(hr_last));
+    const HRESULT hr_last = place_at(describe(16, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), kTile - 4096, last);
+    checkf(hr_4k == expect(4096, kTile) && hr_last == expect(kTile - 4096, kTile),
+           "small placement: a 16x16 texture at offset 4096 and in the heap's last 4 KiB (hr %08lx %08lx, expected "
+           "%08lx %08lx)",
+           static_cast<unsigned long>(hr_4k), static_cast<unsigned long>(hr_last),
+           static_cast<unsigned long>(expect(4096, kTile)), static_cast<unsigned long>(expect(kTile - 4096, kTile)));
+    // At 64 KiB of the 68 KiB heap the default alignment admits the offset but its size does not fit: the smaller
+    // candidate must still be tried (the fit is checked per candidate, 0f281dde).
+    const HRESULT hr_fitted = place_in(tail, describe(16, D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE), kTile, fitted);
+    checkf(hr_fitted == expect(kTile, kTile + 4096),
+           "small placement: a 16x16 texture at 64 KiB of a 68 KiB heap, where only the small size fits (hr %08lx, "
+           "expected %08lx)",
+           static_cast<unsigned long>(hr_fitted), static_cast<unsigned long>(expect(kTile, kTile + 4096)));
     // A render target never has the small alignment, and 256x256 does not fit in what is left of 64 KiB.
     const auto render_target = static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET |
                                                                          D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE);
@@ -536,7 +558,7 @@ void test_small_placement(Env& env) {
     checkf(hr_target == E_INVALIDARG && hr_large == E_INVALIDARG,
            "small placement: a render target at 4096 and a 256x256 texture at 4096 are refused (hr %08lx %08lx)",
            static_cast<unsigned long>(hr_target), static_cast<unsigned long>(hr_large));
-    for (Buffer* b : {&at4k, &last, &target, &large, &heap}) destroy_buffer(env, device, *b);
+    for (Buffer* b : {&at4k, &last, &fitted, &target, &large, &heap, &tail}) destroy_buffer(env, device, *b);
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
     checkf(hr == S_OK && live == 0 && m.frees == m.allocations && !device.shell.list_errors,
