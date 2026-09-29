@@ -147,7 +147,45 @@ HRESULT open_device(Env& env, Device& device, decltype(engine_ddi::ShellHooks::a
 }
 
 // ---- Runtime-side helpers ----------------------------------------------------------------------------------------
+namespace {
+HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, UINT64 heap_bytes,
+                            Buffer& out);
+} // namespace
+
 HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, Buffer& out) {
+    return create_buffer_sized(env, device, kind, size, uav, 0, out);
+}
+
+HRESULT create_buffer_in_heap_of(Env& env, Device& device, HeapKind kind, UINT64 size, UINT64 heap_bytes, Buffer& out) {
+    return create_buffer_sized(env, device, kind, size, false, heap_bytes, out);
+}
+
+HRESULT create_heap_alone(Env& env, Device& device, HeapKind kind, UINT64 heap_bytes, Buffer& out) {
+    out = Buffer{};
+    static const D3D12_HEAP_TYPE types[] = {D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_READBACK};
+    const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, types[static_cast<int>(kind)]);
+    D3D12DDIARG_CREATEHEAP_0001 heap{};
+    heap.ByteSize = heap_bytes;
+    heap.Alignment = 64 * 1024;
+    heap.CPUPageProperty = static_cast<D3D12DDI_CPU_PAGE_PROPERTY>(props.CPUPageProperty - 1);
+    heap.MemoryPool = static_cast<D3D12DDI_MEMORY_POOL>(props.MemoryPoolPreference - 1);
+    heap.Flags = D3D12DDI_HEAP_FLAG_BUFFERS;
+    heap.CreationNodeMask = 1;
+    heap.VisibleNodeMask = 1;
+    const D3D12DDI_HEAP_AND_RESOURCE_SIZES sizes =
+        env.core.pfnCalcPrivateHeapAndResourceSizes(device.h(), &heap, nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{});
+    out.heap = env.storage.alloc(sizes.Heap);
+    if (!out.heap) return E_OUTOFMEMORY;
+    const HRESULT hr = env.core.pfnCreateHeapAndResource(device.h(), &heap, out.hheap(), D3D12DDI_HRTRESOURCE{&out.rt},
+                                                         nullptr, nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{},
+                                                         D3D12DDI_HRESOURCE{});
+    if (FAILED(hr)) out.heap = nullptr;                 // nothing was constructed: nothing to destroy
+    return hr;
+}
+
+namespace {
+HRESULT create_buffer_sized(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, UINT64 heap_bytes,
+                            Buffer& out) {
     out = Buffer{};
     D3D12DDIARG_CREATERESOURCE_0088 res{};
     res.ResourceType = D3D12DDI_RT_BUFFER;
@@ -170,7 +208,7 @@ HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool
     static const D3D12_HEAP_TYPE types[] = {D3D12_HEAP_TYPE_UPLOAD, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_READBACK};
     const D3D12_HEAP_PROPERTIES props = env.engine->GetCustomHeapProperties(0, types[static_cast<int>(kind)]);
     D3D12DDIARG_CREATEHEAP_0001 heap{};
-    heap.ByteSize = info.ResourceDataSize;
+    heap.ByteSize = heap_bytes ? heap_bytes : info.ResourceDataSize;
     heap.Alignment = info.ResourceDataAlignment;
     heap.CPUPageProperty = static_cast<D3D12DDI_CPU_PAGE_PROPERTY>(props.CPUPageProperty - 1);
     heap.MemoryPool = static_cast<D3D12DDI_MEMORY_POOL>(props.MemoryPoolPreference - 1);
@@ -183,9 +221,13 @@ HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool
     out.heap = env.storage.alloc(sizes.Heap);
     out.resource = env.storage.alloc(sizes.Resource);
     if (!out.heap || !out.resource) return E_OUTOFMEMORY;
-    return env.core.pfnCreateHeapAndResource(device.h(), &heap, out.hheap(), D3D12DDI_HRTRESOURCE{&out.rt}, &res, nullptr,
-                                             D3D12DDI_HPROTECTEDRESOURCESESSION_0030{}, out.hres());
+    const HRESULT hr = env.core.pfnCreateHeapAndResource(device.h(), &heap, out.hheap(), D3D12DDI_HRTRESOURCE{&out.rt},
+                                                         &res, nullptr, D3D12DDI_HPROTECTEDRESOURCESESSION_0030{},
+                                                         out.hres());
+    if (FAILED(hr) && heap_bytes) out.heap = out.resource = nullptr;    // refused by size: nothing was constructed
+    return hr;
 }
+} // namespace
 
 HRESULT create_placed_buffer(Env& env, Device& device, const Buffer& base, UINT64 offset, UINT64 size, Buffer& out) {
     out = Buffer{};

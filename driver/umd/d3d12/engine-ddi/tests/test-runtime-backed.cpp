@@ -39,6 +39,7 @@ uint32_t pick_type(const StubMemory& m, uint32_t buffer_types, D3D12DDI_CPU_PAGE
 HRESULT APIENTRY stub_allocate(void* shell, const engine_ddi::MemoryRequest* request, engine_ddi::ImportedMemory* out) {
     StubMemory& m = stub_of(shell);
     ++m.allocations;
+    m.last_byte_size = request->byte_size;
     m.dedicated += (request->flags & engine_ddi::kMemoryDedicated) ? 1u : 0u;
     VkBufferCreateInfo probe_info{};
     probe_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -155,6 +156,32 @@ void test_runtime_backed(Env& env) {
            static_cast<unsigned long>(hr_pool), static_cast<unsigned long>(hr_src), static_cast<unsigned long>(hr_gpu),
            static_cast<unsigned long>(hr_dst), m.allocations);
     if (hr_pool != S_OK || hr_src != S_OK || hr_gpu != S_OK || hr_dst != S_OK) return;
+
+    // A heap ByteSize of UINT64_MAX with a resource: the heap gets the size the resource needs, and neither the
+    // memory request nor the engine sees UINT64_MAX. Without a resource, and for a heap too small, E_INVALIDARG
+    // before any memory request.
+    {
+        Buffer sized, alone, tight;
+        const uint32_t before = m.allocations;
+        const HRESULT hr_sized = create_buffer_in_heap_of(env, device, HeapKind::Upload, 4096, UINT64_MAX, sized);
+        const uint64_t asked = m.last_byte_size;
+        const uint32_t after = m.allocations;
+        void* cpu = nullptr;
+        const HRESULT hr_map = hr_sized == S_OK ? env.core.pfnMapHeap(device.h(), sized.hheap(), &cpu) : E_ABORT;
+        if (hr_map == S_OK) env.core.pfnUnmapHeap(device.h(), sized.hheap());
+        checkf(hr_sized == S_OK && after == before + 1 && asked == kBytes && hr_map == S_OK && cpu,
+               "runtime-backed: committed UPLOAD buffer of 4096 bytes with heap ByteSize UINT64_MAX: one memory "
+               "request of 64 KiB, heap maps (hr %08lx, map %08lx, %llu bytes asked)",
+               static_cast<unsigned long>(hr_sized), static_cast<unsigned long>(hr_map),
+               static_cast<unsigned long long>(asked));
+        if (hr_sized == S_OK) destroy_buffer(env, device, sized);
+        const HRESULT hr_alone = create_heap_alone(env, device, HeapKind::Upload, UINT64_MAX, alone);
+        const HRESULT hr_small = create_buffer_in_heap_of(env, device, HeapKind::Upload, 4 * kBytes, kBytes, tight);
+        checkf(hr_alone == E_INVALIDARG && hr_small == E_INVALIDARG && m.allocations == after,
+               "runtime-backed: a heap alone with ByteSize UINT64_MAX and a heap smaller than its resource: "
+               "E_INVALIDARG, no memory request (hr %08lx %08lx)",
+               static_cast<unsigned long>(hr_alone), static_cast<unsigned long>(hr_small));
+    }
     const D3D12DDI_GPU_VIRTUAL_ADDRESS pool_va = env.core.pfnCheckResourceVirtualAddress(device.h(), pool.hres());
     const D3D12DDI_GPU_VIRTUAL_ADDRESS src_va = env.core.pfnCheckResourceVirtualAddress(device.h(), src.hres());
     checkf(pool_va && src_va == pool_va + kBytes,
@@ -240,7 +267,8 @@ void test_runtime_backed(Env& env) {
     destroy_buffer(env, device, pool);
     destroy_buffer(env, device, gpu);
     destroy_buffer(env, device, dst);
-    checkf(m.frees == 3 && observed.with_memory == 3 && observed.freed_ok == 3,
+    // Four allocations: the three buffers above and the one whose heap size was left to the resource.
+    checkf(m.frees == 4 && observed.with_memory == 4 && observed.freed_ok == 4,
            "runtime-backed: each allocation came back through free_memory once, after its engine heap (%u freed, "
            "%u releases)",
            m.frees, observed.with_memory);

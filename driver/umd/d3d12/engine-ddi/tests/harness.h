@@ -89,6 +89,10 @@ struct Buffer {
     D3D12DDI_HRESOURCE hres() const { return D3D12DDI_HRESOURCE{resource}; }
 };
 HRESULT create_buffer(Env& env, Device& device, HeapKind kind, UINT64 size, bool uav, Buffer& out);
+// The same with the heap's ByteSize given by the caller instead of taken from the allocation info.
+HRESULT create_buffer_in_heap_of(Env& env, Device& device, HeapKind kind, UINT64 size, UINT64 heap_bytes, Buffer& out);
+// A heap alone, for buffers, of heap_bytes.
+HRESULT create_heap_alone(Env& env, Device& device, HeapKind kind, UINT64 heap_bytes, Buffer& out);
 // A buffer placed in base's heap at offset bytes from base (resource description only, ReuseBufferGPUVA naming
 // base: engine-ddi.h, placed shape). out.heap stays null; the placed record is destroyed with its hres alone.
 HRESULT create_placed_buffer(Env& env, Device& device, const Buffer& base, UINT64 offset, UINT64 size, Buffer& out);
@@ -154,6 +158,7 @@ struct StubMemory {
     PFN_vkGetBufferDeviceAddress address = nullptr;
     uint32_t allocations = 0;
     uint32_t dedicated = 0;
+    uint64_t last_byte_size = 0;                // byte_size of the latest request
     uint32_t frees = 0;
     D3DKMT_HANDLE next_allocation = 0x40000000u;
 };

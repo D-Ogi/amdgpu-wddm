@@ -358,6 +358,19 @@ engine-ddi then calls the engine's `CreateHeapFromMemory` (ABI 1.2 V10) over the
 resource at offset 0. MapHeap and UnmapHeap go to the engine's MapHeap and UnmapHeap: the CPU address of heap
 offset 0, a placed buffer at that address plus its offset.
 
+Heap size left to the resource. H and DDI-ref give `D3D12DDIARG_CREATEHEAP_0001::ByteSize` as "Size of the heap,
+in bytes" (H:319-328) and define no special value. engine-ddi treats a ByteSize of UINT64_MAX as "no size given":
+
+- with a resource description (committed), the heap gets the SizeInBytes of the engine's GetResourceAllocationInfo
+  for that resource, the same size pfnCheckResourceAllocationInfo reported;
+- without one (a heap alone), E_INVALIDARG: nothing says how large the heap is;
+- a placed resource has no heap description and is not affected.
+
+engine-ddi works on its own copy of the heap description. `MemoryRequest::heap` points at that copy, so
+`request->heap->ByteSize` and `request->byte_size` are the same concrete size, and neither `allocate_memory` nor
+the engine's `CreateHeapFromMemory` ever receives UINT64_MAX. A given ByteSize smaller than the resource needs is
+E_INVALIDARG as before. The other heap fields, the flags included, pass through unchanged.
+
 What `allocate_memory(shell, request, memory)` must deliver on S_OK, in the 48-byte `ImportedMemory`:
 
 | Field | Value |

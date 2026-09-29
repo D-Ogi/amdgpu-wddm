@@ -42,6 +42,11 @@ static_assert(D3D12DDI_RESOURCE_BARRIER_FLAG_BEGIN_ONLY == static_cast<int>(D3D1
               "barrier flags");
 
 namespace {
+// A heap ByteSize that names no size. H and DDI-ref give ByteSize as "Size of the heap, in bytes" and define no
+// such value; engine-ddi accepts it only together with a resource description, as the size that resource needs
+// (INTEGRATION.md, "Heap size left to the resource").
+constexpr uint64_t kSizeOfResource = UINT64_MAX;
+
 constexpr uint32_t kCategoryMask =
     D3D12DDI_HEAP_FLAG_BUFFERS | D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES | D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
 
@@ -279,19 +284,30 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         return S_OK;
     }
     if (!hheap.pDrvPrivate) return E_INVALIDARG;
-    D3D12_HEAP_DESC hd{};
-    HRESULT hr = heap_desc_of(*heap_desc, hd);
-    if (FAILED(hr)) return hr;
+    // The heap description as engine-ddi uses it from here on: a copy, so that a ByteSize of kSizeOfResource can be
+    // replaced by a size. Neither the memory request nor the engine ever sees kSizeOfResource.
+    D3D12DDIARG_CREATEHEAP_0001 sized = *heap_desc;
+    heap_desc = &sized;
     uint64_t need = 0, align = 0;
     if (res_desc) {
-        if (!(heap_desc->Flags & category_of(desc))) return E_INVALIDARG;
+        if (!(sized.Flags & category_of(desc))) return E_INVALIDARG;
         const D3D12_RESOURCE_DESC d0 = to_desc0(desc);
         const D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
-        if (info.SizeInBytes == UINT64_MAX) return E_INVALIDARG;
+        if (info.SizeInBytes == UINT64_MAX || !info.SizeInBytes) return E_INVALIDARG;
         need = info.SizeInBytes;
         align = info.Alignment;
-        if (heap_desc->ByteSize < need) return E_INVALIDARG;
+        if (sized.ByteSize == kSizeOfResource) {
+            sized.ByteSize = need;                      // committed: the heap is as large as its one resource
+            log_line("heap: ByteSize left to the resource, %llu bytes", static_cast<unsigned long long>(need));
+        }
+        if (sized.ByteSize < need) return E_INVALIDARG;
+    } else if (sized.ByteSize == kSizeOfResource) {
+        log_line("heap: ByteSize left to a resource, but the heap has none");
+        return E_INVALIDARG;
     }
+    D3D12_HEAP_DESC hd{};
+    HRESULT hr = heap_desc_of(sized, hd);
+    if (FAILED(hr)) return hr;
 
     ID3D12Heap* heap = nullptr;
     ImportedMemory memory{};
