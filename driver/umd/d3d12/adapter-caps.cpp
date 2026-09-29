@@ -125,6 +125,13 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
     hr=engine_ddi::query_adapter_caps(&funcs,&info,&owner.caps);
     if(SUCCEEDED(hr) && (!scope.completed() || queue_calls))return E_UNEXPECTED;
     if(SUCCEEDED(hr))hr=apply_memory_policy(adapter,owner);
+    // Lab diagnostic: the raytracing tier is reported for a measurement of the acceleration structure slots
+    // and inline ray queries, while state objects and DispatchRays still refuse.
+    if(SUCCEEDED(hr) && ddi_experiment("raytracing-tier")){
+        hr=engine_ddi::set_diagnostic_raytracing_tier(owner.caps,true);
+        std::fprintf(stderr,"d3d12-caps experiment raytracing-tier result=%08lx\n",static_cast<unsigned long>(hr));
+        std::fflush(stderr);
+    }
     if(SUCCEEDED(hr))owner.access={funcs,get};
     return hr;
 }

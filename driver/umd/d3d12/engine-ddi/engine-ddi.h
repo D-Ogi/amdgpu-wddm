@@ -393,6 +393,13 @@ struct MemoryArchitecturePolicy {
 // tier 1 without resource serialization tier 2. Logged like build_caps's refusals.
 HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept;
 
+// A diagnostic deviation, off by default: with `report` set, type 1006 answers RaytracingTier 1_1 when the
+// engine's own answer is 1_1 or higher, and NOT_SUPPORTED otherwise; the engine's answer is never raised. The
+// tier promises state objects, DispatchRays and more, which are fail-safes here: it is for a measurement of the
+// slots that exist (acceleration structures, inline ray queries) with a client that uses nothing else, never a
+// driver default. Same calling rule as set_memory_architecture_policy. E_INVALIDARG for a null caps.
+HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept;
+
 // ---- Private storage records ------------------------------------------------------------------------------------
 // Every engine-ddi object starts with this header, constructed in the runtime-owned storage. Destroy releases
 // what the record holds (or hands heap memory to the release sequence) and sets `tag` to Poisoned. The storage

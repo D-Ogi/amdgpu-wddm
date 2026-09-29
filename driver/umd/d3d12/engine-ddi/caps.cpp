@@ -65,6 +65,7 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
+    bool diagnostic_raytracing;                 // false until set_diagnostic_raytracing_tier
 };
 
 namespace {
@@ -175,7 +176,11 @@ void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noe
     //   DriverManagedShaderCachePresent: engine-ddi keeps no driver-managed shader cache.
     //   Deterministic64KBUndefinedSwizzle: no engine answer exists; not claimed.
     o.RenderPassTier = D3D12DDI_RENDER_PASS_TIER_NOT_SUPPORTED;
-    o.RaytracingTier = D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
+    // The diagnostic deviation of set_diagnostic_raytracing_tier: the engine's 1_1 or higher as 1_1, never more
+    // than the engine says.
+    o.RaytracingTier = c.diagnostic_raytracing && c.options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1
+                           ? D3D12DDI_RAYTRACING_TIER_1_1
+                           : D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
     o.VariableShadingRateTier = D3D12DDI_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
     o.MeshShaderTier = D3D12DDI_MESH_SHADER_TIER_NOT_SUPPORTED;
     o.SamplerFeedbackTier = D3D12DDI_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
@@ -311,6 +316,14 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
 }
 
 void free_adapter_caps(AdapterCaps* caps) noexcept { delete caps; }
+
+HRESULT set_diagnostic_raytracing_tier(AdapterCaps* caps, bool report) noexcept {
+    if (!caps) return E_INVALIDARG;
+    caps->diagnostic_raytracing = report;
+    log_line("diagnostic raytracing tier %s (engine tier %d)", report ? "on" : "off",
+             static_cast<int>(caps->options5.RaytracingTier));
+    return S_OK;
+}
 
 HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitecturePolicy* policy) noexcept {
     if (!caps || !policy) return E_INVALIDARG;
