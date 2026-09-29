@@ -74,6 +74,17 @@ trace records the reported raytracing tier, the prebuild sizes and the bottom le
 raytracing tier 1.1 the operation fails before creating anything. The software control passes this variant
 with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
 
+`build.ps1 -RayPipeline` traces the same scene with `DispatchRays` instead of an inline query. One
+`CreateStateObject` call makes a raytracing pipeline from the DXIL library of `raypipeline.hlsl`
+(`raypipeline-program.h`, lib_6_3, exports `raygen`, `miss` and `closest`), a triangle hit group, a shader
+config (4-byte payload, 8-byte attributes), a pipeline config with recursion depth 1 and the global root
+signature of the ray query variant; there is no local root signature, collection or `AddToStateObject`. The
+identifiers of raygen, miss and the hit group from `ID3D12StateObjectProperties` fill a shader table in
+UPLOAD memory at 64-byte steps; `SetPipelineState1` and `DispatchRays` 8x8 on the DIRECT list write the
+same 64 words and the same comparison decides. The closest hit shader writes 1, the miss shader 2, and the
+payload starts at 0. Below raytracing tier 1.0 the operation fails before creating anything. The software
+control passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained

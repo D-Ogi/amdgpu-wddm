@@ -204,7 +204,7 @@ struct Session {
     }
 };
 #if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) + \
-    defined(INTERACTIVE_RAYQUERY) > 1
+    defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) > 1
 #error one variant of the copy verb per build
 #endif
 #ifdef INTERACTIVE_DRAW
@@ -221,6 +221,9 @@ struct Session {
 #endif
 #ifdef INTERACTIVE_RAYQUERY
 #include "interactive-rayquery.h"
+#endif
+#ifdef INTERACTIVE_RAYPIPELINE
+#include "interactive-raypipeline.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
@@ -270,6 +273,8 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=sparse(session);break;
 #elif defined(INTERACTIVE_RAYQUERY)
         case Verb::Copy:hr=rayquery(session);break;
+#elif defined(INTERACTIVE_RAYPIPELINE)
+        case Verb::Copy:hr=raypipeline(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif
