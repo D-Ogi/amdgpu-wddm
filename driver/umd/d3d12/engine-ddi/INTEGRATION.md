@@ -152,7 +152,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | WriteBufferImmediateQueueFlags | NONE | pfnWriteBufferImmediate is a fail-safe |
 | 1006 | | ViewInstancingTier | NOT_SUPPORTED | pfnSetViewInstanceMask is a fail-safe |
 | 1006 | | RenderPassTier | NOT_SUPPORTED | engine-ddi fills no render pass table; the runtime emulates render passes |
-| 1006 | | RaytracingTier | NOT_SUPPORTED | state objects and pfnDispatchRays are fail-safes |
+| 1006 | | RaytracingTier | NOT_SUPPORTED | state objects, pfnSetPipelineState1 and pfnDispatchRays are fail-safes; the acceleration structure slots reach the engine ("Acceleration structures" below) |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
 | 1006 | | MeshShaderTier, MeshShaderSupportsFullRangeRenderTargetArrayIndex, MSPrimitivesPipelineStatisticIncludesCulledPrimitives | NOT_SUPPORTED, FALSE, FALSE | pfnDispatchMesh and the mesh shader slots are fail-safes |
 | 1006 | | SamplerFeedbackTier | NOT_SUPPORTED | pfnCreateSamplerFeedbackUnorderedAccessView is a fail-safe |
@@ -351,7 +351,7 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 Every other engine-ddi slot is implemented (SLOTS.md) or a fail-safe. A void fail-safe whose non-const pointers
 are all `_Out_` zeroes them before it reports E_NOTIMPL, and each of these is a placeholder: returns 0 (the
 E_NOTIMPL report is the difference from the table above): CheckSubresourceInfo,
-GetRaytracingAccelerationStructurePrebuildInfo, GetMetaCommandRequiredParameterInfo. The first lab log of
+GetMetaCommandRequiredParameterInfo. The first lab log of
 D3D12CreateDevice on the native path (the engine-ddi log line "fail-safe slot D+0x... called") settles the list.
 
 ### Heap memory: allocate_memory and free_memory
@@ -576,11 +576,42 @@ CopyTileMappings into a second reserved buffer; CopyTiles from the texture to a 
 row by row) and on into a second reserved texture, read back as the first. VVL with synchronization validation
 clean.
 
+### Acceleration structures
+
+D108 GetRaytracingAccelerationStructurePrebuildInfo, L60 BuildRaytracingAccelerationStructure, L61
+EmitRaytracingAccelerationStructurePostbuildInfo and L62 CopyRaytracingAccelerationStructure are engine-ddi slots
+on the engine's `ID3D12Device5` and `ID3D12GraphicsCommandList4` (commands.cpp); the list slots are in both tables.
+The DDI 0054 structures have the API's members at the API's offsets (static_asserts in commands.cpp against
+d3d12umddi.h and d3d12.h of 10.0.26100), so the inputs, the geometry descriptions, the prebuild answer and the
+postbuild descriptions reach the engine in place; the build, emit and copy arguments are unpacked into the API's
+parameters. Nothing of the shell is involved.
+
+Refused, reported once on the list (D108: on the device, with the answer zeroed) and not passed on:
+- E_INVALIDARG: a list that is not recording or not DIRECT or COMPUTE, a null argument, an unknown structure type,
+  element layout, geometry type, postbuild type or copy mode, a geometry or source array missing for a nonzero
+  count.
+- E_NOTIMPL: the tools visualization postbuild type, and the visualization, serialize and deserialize copy modes.
+  The engine copies by clone and compaction only and writes a zero or nothing for the others
+  (`libs/vkd3d/acceleration_structure.c`); engine-ddi serializes nothing.
+
+GPU addresses are the application's, as in every other slot. RaytracingTier stays NOT_SUPPORTED until state
+objects and DispatchRays are implemented; that the runtime passes these arguments as the harness does is INFERENCE.
+
+Development PC witness (harness round trip 8, `tests/test-raytracing.cpp`, RuntimeBacked on the stub shell):
+prebuild answers equal to the engine's own; a bottom level of one triangle, its clone, a top level of one instance
+over each, and a cs_6_5 inline ray query per top level (the top level as a root SRV by address) whose 64 words equal
+the hit pattern computed from the triangle; CURRENT_SIZE at the build and emitted after it, equal and within the
+prebuild maximum. VVL with synchronization validation clean. It is RuntimeBacked because the engine places a
+structure from its address to the end of the VkBuffer behind it (`libs/vkd3d/va_map.c`): in EnginePrivateTest small
+heaps are suballocated from one shared buffer, and the validation layer reports every structure as overlapping the
+buffers after it.
+
 ### Offline witness
 
 The offline harness exercises the device path: copy, compute dispatch, a draw, the retirement sentinel and the
-query slots above (EnginePrivateTest), and the RuntimeBacked heaps and tiled resources above, on the development PC with the pinned
+query slots above (EnginePrivateTest), and the RuntimeBacked heaps, tiled resources and acceleration structures
+above, on the development PC with the pinned
 engine DLL, also under VVL with synchronization validation. The dispatch and the draw use shaders created through
-the DDI slots from containers reduced to the DDI form (a dxc cs_6_0 DXIL program; fxc vs_5_0 and ps_5_0 DXBC
-programs), an element layout by register and DDI state objects. The reduction is the harness's model of the
+the DDI slots from containers reduced to the DDI form (a dxc cs_6_0 DXIL program and a cs_6_5 ray query; fxc
+vs_5_0 and ps_5_0 DXBC programs), an element layout by register and DDI state objects. The reduction is the harness's model of the
 runtime, not a measurement; the lab has yet to show the runtime's own payloads.

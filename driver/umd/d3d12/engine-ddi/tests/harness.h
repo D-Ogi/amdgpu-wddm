@@ -183,6 +183,7 @@ void test_device_queries(Env& env, Device& device);
 void test_runtime_backed(Env& env);
 void test_tiled(Env& env);
 void test_linear_primary(Env& env);
+void test_raytracing(Env& env);
 // GetCaps 1002 and the shell's memory architecture policy, on query_adapter_caps with the harness's create info.
 void test_memory_policy(const Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create);
 

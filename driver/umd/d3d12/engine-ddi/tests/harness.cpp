@@ -503,6 +503,7 @@ int wmain(int argc, wchar_t** argv) {
     test_runtime_backed(env);
     test_tiled(env);
     test_linear_primary(env);
+    test_raytracing(env);
     test_memory_policy(env, create);
     check(env.storage.canaries_intact(), "private storage: every canary behind the driver's size intact");
     checkf(g_binds >= 1 && g_binds >= g_unbinds, "engine services: %ld BindQueue, %ld UnbindQueue", g_binds, g_unbinds);

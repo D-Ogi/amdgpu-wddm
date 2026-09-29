@@ -157,6 +157,7 @@ void destroy(DeviceContext* c) noexcept {
     release_initialization(c);
     release_ref(c->device10);
     release_ref(c->device8);
+    release_ref(c->device5);
     release_ref(c->device4);
     release_ref(c->device);
     delete c;
@@ -197,6 +198,7 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
     c->device = info->engine_device;
     c->device->AddRef();
     HRESULT hr = c->device->QueryInterface(__uuidof(ID3D12Device4), reinterpret_cast<void**>(&c->device4));
+    if (SUCCEEDED(hr)) hr = c->device->QueryInterface(__uuidof(ID3D12Device5), reinterpret_cast<void**>(&c->device5));
     if (SUCCEEDED(hr)) hr = c->device->QueryInterface(__uuidof(ID3D12Device8), reinterpret_cast<void**>(&c->device8));
     if (SUCCEEDED(hr)) hr = c->device->QueryInterface(__uuidof(ID3D12Device10), reinterpret_cast<void**>(&c->device10));
     if (FAILED(hr)) {

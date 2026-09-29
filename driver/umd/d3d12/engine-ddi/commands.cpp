@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 // engine-ddi: command pools (D29-D32), command recorders (D92-D95), command lists (D36-D38) and the list slots
-// that open and close recording (L0, L1).
+// that open and close recording (L0, L1); the acceleration structure slots (D108, L60-L62).
 //
 // DDI 0040 splits the API's allocator and list: a pool is the API allocator, a recorder names the pool a list
 // records into, and ResetCommandList names the recorder. A pool therefore does not know its list type at
 // creation; it creates one engine allocator per list type on first use.
 #include <atomic>
 #include <memory>
+#include <type_traits>
 #include "internal.h"
 
 namespace engine_ddi {
@@ -472,6 +473,276 @@ void APIENTRY resolve_subresource_region(D3D12DDI_HCOMMANDLIST hlist, D3D12DDI_H
     }
 }
 
+// ---- Acceleration structures (D108, L60-L62) -----------------------------------------------------------------------
+// The engine's ID3D12Device5 and ID3D12GraphicsCommandList4 methods. The DDI 0054 structures below have the API's
+// members at the API's offsets (H = d3d12umddi.h, A = d3d12.h, 10.0.26100), so the inputs, the geometry arrays they
+// point to, the prebuild answer and the postbuild descriptions reach the engine in place. The build, emit and copy
+// arguments pack what the API takes as parameters and are unpacked. Instance descriptions are GPU memory, which the
+// engine reads in the API's layout; the DDI's is checked against it too.
+#define ENGINE_DDI_SAME(D, dm, A, am) static_assert(offsetof(D, dm) == offsetof(A, am), #D "::" #dm)
+static_assert(std::is_same_v<D3D12DDI_GPU_VIRTUAL_ADDRESS, D3D12_GPU_VIRTUAL_ADDRESS>, "GPU VA");  // H:92, A:1397
+// H:7958-7962, A:14479-14483
+static_assert(sizeof(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE) == sizeof(D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE), "VA+stride");
+ENGINE_DDI_SAME(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StartAddress, D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StartAddress);
+ENGINE_DDI_SAME(D3D12DDI_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StrideInBytes, D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE, StrideInBytes);
+// H:7977-7986, A:14498-14507
+using DdiTriangles = D3D12DDI_RAYTRACING_GEOMETRY_TRIANGLES_DESC_0054;
+using ApiTriangles = D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC;
+static_assert(sizeof(DdiTriangles) == sizeof(ApiTriangles), "triangles");
+ENGINE_DDI_SAME(DdiTriangles, ColumnMajorTransform3x4, ApiTriangles, Transform3x4);
+ENGINE_DDI_SAME(DdiTriangles, IndexFormat, ApiTriangles, IndexFormat);
+ENGINE_DDI_SAME(DdiTriangles, VertexFormat, ApiTriangles, VertexFormat);
+ENGINE_DDI_SAME(DdiTriangles, IndexCount, ApiTriangles, IndexCount);
+ENGINE_DDI_SAME(DdiTriangles, VertexCount, ApiTriangles, VertexCount);
+ENGINE_DDI_SAME(DdiTriangles, IndexBuffer, ApiTriangles, IndexBuffer);
+ENGINE_DDI_SAME(DdiTriangles, VertexBuffer, ApiTriangles, VertexBuffer);
+// H:7988-7996, A:14509-14517
+static_assert(sizeof(D3D12DDI_RAYTRACING_AABB) == sizeof(D3D12_RAYTRACING_AABB), "AABB");
+ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MinX, D3D12_RAYTRACING_AABB, MinX);
+ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MinY, D3D12_RAYTRACING_AABB, MinY);
+ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MinZ, D3D12_RAYTRACING_AABB, MinZ);
+ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MaxX, D3D12_RAYTRACING_AABB, MaxX);
+ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MaxY, D3D12_RAYTRACING_AABB, MaxY);
+ENGINE_DDI_SAME(D3D12DDI_RAYTRACING_AABB, MaxZ, D3D12_RAYTRACING_AABB, MaxZ);
+// H:7998-8002, A:14519-14523
+using DdiAabbs = D3D12DDI_RAYTRACING_GEOMETRY_AABBS_DESC_0054;
+using ApiAabbs = D3D12_RAYTRACING_GEOMETRY_AABBS_DESC;
+static_assert(sizeof(DdiAabbs) == sizeof(ApiAabbs), "AABBs");
+ENGINE_DDI_SAME(DdiAabbs, AABBCount, ApiAabbs, AABBCount);
+ENGINE_DDI_SAME(DdiAabbs, AABBs, ApiAabbs, AABBs);
+// H:8004-8013, A:14650-14659
+using DdiGeometry = D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054;
+using ApiGeometry = D3D12_RAYTRACING_GEOMETRY_DESC;
+static_assert(sizeof(DdiGeometry) == sizeof(ApiGeometry), "geometry");
+ENGINE_DDI_SAME(DdiGeometry, Type, ApiGeometry, Type);
+ENGINE_DDI_SAME(DdiGeometry, Flags, ApiGeometry, Flags);
+ENGINE_DDI_SAME(DdiGeometry, Triangles, ApiGeometry, Triangles);
+ENGINE_DDI_SAME(DdiGeometry, AABBs, ApiGeometry, AABBs);
+// H:8042-8050, A:14640-14648. The four bit-fields share the two UINTs between Transform and AccelerationStructure.
+using DdiInstance = D3D12DDI_RAYTRACING_INSTANCE_DESC_0054;
+using ApiInstance = D3D12_RAYTRACING_INSTANCE_DESC;
+static_assert(sizeof(DdiInstance) == sizeof(ApiInstance) && sizeof(ApiInstance) == 64, "instance");
+ENGINE_DDI_SAME(DdiInstance, Transform, ApiInstance, Transform);
+ENGINE_DDI_SAME(DdiInstance, AccelerationStructure, ApiInstance, AccelerationStructure);
+static_assert(offsetof(ApiInstance, AccelerationStructure) == offsetof(ApiInstance, Transform) + sizeof(FLOAT[3][4]) + 8,
+              "instance bit-fields");
+// H:8058-8070, A:14661-14673
+using DdiInputs = D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054;
+using ApiInputs = D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS;
+static_assert(sizeof(DdiInputs) == sizeof(ApiInputs), "inputs");
+ENGINE_DDI_SAME(DdiInputs, Type, ApiInputs, Type);
+ENGINE_DDI_SAME(DdiInputs, Flags, ApiInputs, Flags);
+ENGINE_DDI_SAME(DdiInputs, NumDescs, ApiInputs, NumDescs);
+ENGINE_DDI_SAME(DdiInputs, DescsLayout, ApiInputs, DescsLayout);
+ENGINE_DDI_SAME(DdiInputs, InstanceDescs, ApiInputs, InstanceDescs);
+ENGINE_DDI_SAME(DdiInputs, pGeometryDescs, ApiInputs, pGeometryDescs);
+ENGINE_DDI_SAME(DdiInputs, ppGeometryDescs, ApiInputs, ppGeometryDescs);
+// H:8143-8147, A:14571-14575
+using DdiPostbuild = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC_0054;
+using ApiPostbuild = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC;
+static_assert(sizeof(DdiPostbuild) == sizeof(ApiPostbuild), "postbuild");
+ENGINE_DDI_SAME(DdiPostbuild, DestBuffer, ApiPostbuild, DestBuffer);
+ENGINE_DDI_SAME(DdiPostbuild, InfoType, ApiPostbuild, InfoType);
+// H:8172-8177, A:14683-14688
+using DdiPrebuild = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_0054;
+using ApiPrebuild = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO;
+static_assert(sizeof(DdiPrebuild) == sizeof(ApiPrebuild), "prebuild");
+ENGINE_DDI_SAME(DdiPrebuild, ResultDataMaxSizeInBytes, ApiPrebuild, ResultDataMaxSizeInBytes);
+ENGINE_DDI_SAME(DdiPrebuild, ScratchDataSizeInBytes, ApiPrebuild, ScratchDataSizeInBytes);
+ENGINE_DDI_SAME(DdiPrebuild, UpdateScratchDataSizeInBytes, ApiPrebuild, UpdateScratchDataSizeInBytes);
+#undef ENGINE_DDI_SAME
+// Enumerations: geometry flags H:7934-7939 A:14453-14458, geometry type H:7942-7946 A:14462-14466, instance flags
+// H:7948-7955 A:14469-14476, build flags H:8015-8024 A:14526-14535, copy mode H:8027-8034 A:14539-14546, structure type
+// H:8036-8040 A:14549-14553, elements layout H:8052-8056 A:14556-14560, postbuild type H:8072-8078 A:14563-14569.
+static_assert(D3D12DDI_RAYTRACING_GEOMETRY_FLAG_OPAQUE == static_cast<int>(D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE) &&
+                  D3D12DDI_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION ==
+                      static_cast<int>(D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION) &&
+                  D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES == static_cast<int>(D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES) &&
+                  D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS ==
+                      static_cast<int>(D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS),
+              "geometry flags and types");
+static_assert(D3D12DDI_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE ==
+                      static_cast<int>(D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE) &&
+                  D3D12DDI_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE ==
+                      static_cast<int>(D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE) &&
+                  D3D12DDI_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE == static_cast<int>(D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE) &&
+                  D3D12DDI_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE ==
+                      static_cast<int>(D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE),
+              "instance flags");
+static_assert(D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_MINIMIZE_MEMORY ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_MINIMIZE_MEMORY) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE),
+              "build flags");
+static_assert(D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_VISUALIZATION_DECODE_FOR_TOOLS ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_VISUALIZATION_DECODE_FOR_TOOLS) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE),
+              "copy modes");
+static_assert(D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL) &&
+                  D3D12DDI_ELEMENTS_LAYOUT_ARRAY == static_cast<int>(D3D12_ELEMENTS_LAYOUT_ARRAY) &&
+                  D3D12DDI_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS == static_cast<int>(D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS),
+              "structure types and element layouts");
+static_assert(D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_TOOLS_VISUALIZATION ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_TOOLS_VISUALIZATION) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION) &&
+                  D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_CURRENT_SIZE ==
+                      static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_CURRENT_SIZE),
+              "postbuild info types");
+
+namespace {
+const ApiInputs* api(const DdiInputs* in) noexcept { return reinterpret_cast<const ApiInputs*>(in); }
+
+// What the engine would read from the CPU: a known structure type and element layout, and for a bottom level every
+// geometry description of a known type. GPU addresses are the application's, as for every other slot.
+bool valid_inputs(const DdiInputs& in) noexcept {
+    const bool array = in.DescsLayout == D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+    if (!array && in.DescsLayout != D3D12DDI_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS) return false;
+    if (in.Type == D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL) return true;
+    if (in.Type != D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL) return false;
+    if (in.NumDescs && (array ? !in.pGeometryDescs : !in.ppGeometryDescs)) return false;
+    for (UINT i = 0; i < in.NumDescs; ++i) {
+        const DdiGeometry* g = array ? &in.pGeometryDescs[i] : in.ppGeometryDescs[i];
+        if (!g || (g->Type != D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES &&
+                   g->Type != D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS))
+            return false;
+    }
+    return true;
+}
+
+// The engine writes the three sizes it knows (acceleration_structure.c, write_postbuild_info) and a zero for the
+// tools visualization, which is refused here rather than answered with that zero.
+HRESULT postbuild_type(D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_TYPE type) noexcept {
+    switch (type) {
+    case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE:
+    case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION:
+    case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_CURRENT_SIZE: return S_OK;
+    case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_TOOLS_VISUALIZATION: return E_NOTIMPL;
+    default: return E_INVALIDARG;
+    }
+}
+
+// D3D12 records these commands in DIRECT and COMPUTE lists that are recording; the engine list of a closed list
+// must not see them. A refusal is logged and reported once on the list, and nothing reaches the engine.
+bool refused(const CommandListRecord* l, const char* slot, HRESULT hr) noexcept {
+    const bool list_ok = l->recording && (l->type == D3D12_COMMAND_LIST_TYPE_DIRECT ||
+                                          l->type == D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    if (list_ok && SUCCEEDED(hr)) return false;
+    if (list_ok) log_line("%s: refused (%08lx)", slot, static_cast<unsigned long>(hr));
+    else log_line("%s: refused (list type %d recording %d)", slot, static_cast<int>(l->type), l->recording ? 1 : 0);
+    l->h.device->report_list(l->rt, list_ok ? hr : E_INVALIDARG);
+    return true;
+}
+
+// D108. Void, so a refusal zeroes the answer and reports E_INVALIDARG through report_device_error.
+void APIENTRY get_prebuild_info(D3D12DDI_HDEVICE device, const DdiInputs* inputs, DdiPrebuild* info) {
+    if (info) *info = DdiPrebuild{};
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!inputs || !info || !valid_inputs(*inputs)) {
+        log_line("GetRaytracingAccelerationStructurePrebuildInfo: refused (inputs %s, info %s)",
+                 inputs ? "given" : "null", info ? "given" : "null");
+        return c->report(E_INVALIDARG);
+    }
+    c->device5->GetRaytracingAccelerationStructurePrebuildInfo(api(inputs), reinterpret_cast<ApiPrebuild*>(info));
+}
+
+// L60. The DDI argument is the API description followed by the postbuild descriptions.
+void APIENTRY build_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
+                                           const D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054* args) {
+    constexpr const char* kSlot = "BuildRaytracingAccelerationStructure";
+    CommandListRecord* l = list_of(h, kSlot);
+    if (!l) return;
+    HRESULT hr = E_INVALIDARG;
+    if (args && valid_inputs(args->Inputs) && (!args->NumPostbuildInfoDescs || args->pPostbuildInfoDescs)) {
+        hr = S_OK;
+        for (UINT i = 0; SUCCEEDED(hr) && i < args->NumPostbuildInfoDescs; ++i)
+            hr = postbuild_type(args->pPostbuildInfoDescs[i].InfoType);
+    }
+    if (refused(l, kSlot, hr) || !args) return;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc{};
+    desc.DestAccelerationStructureData = args->DestAccelerationStructureData;
+    desc.Inputs = *api(&args->Inputs);
+    desc.SourceAccelerationStructureData = args->SourceAccelerationStructureData;
+    desc.ScratchAccelerationStructureData = args->ScratchAccelerationStructureData;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
+        l4->BuildRaytracingAccelerationStructure(&desc, args->NumPostbuildInfoDescs,
+                                                 args->NumPostbuildInfoDescs
+                                                     ? reinterpret_cast<const ApiPostbuild*>(args->pPostbuildInfoDescs)
+                                                     : nullptr);
+        l4->Release();
+    }
+}
+
+// L61. With no source structure there is nothing to write, and the engine is not called.
+void APIENTRY emit_postbuild_info(D3D12DDI_HCOMMANDLIST h,
+                                  const D3D12DDIARG_EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_0054* args) {
+    constexpr const char* kSlot = "EmitRaytracingAccelerationStructurePostbuildInfo";
+    CommandListRecord* l = list_of(h, kSlot);
+    if (!l) return;
+    HRESULT hr = E_INVALIDARG;
+    if (args && (!args->NumSourceAccelerationStructures || args->pSourceAccelerationStructureData))
+        hr = postbuild_type(args->Desc.InfoType);
+    if (refused(l, kSlot, hr) || !args || !args->NumSourceAccelerationStructures ||
+        !args->pSourceAccelerationStructureData)
+        return;
+    const ApiPostbuild desc{args->Desc.DestBuffer,
+                            static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_TYPE>(args->Desc.InfoType)};
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
+        l4->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, args->NumSourceAccelerationStructures,
+                                                             args->pSourceAccelerationStructureData);
+        l4->Release();
+    }
+}
+
+// L62. The engine copies by clone and compaction only (acceleration_structure.c, convert_copy_mode) and drops the
+// other modes with a log line; they are refused here with E_NOTIMPL (engine-ddi serializes nothing:
+// CheckDriverMatchingIdentifier answers UNRECOGNIZED).
+void APIENTRY copy_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
+                                          const D3D12DDIARG_COPY_RAYTRACING_ACCELERATION_STRUCTURE_0054* args) {
+    constexpr const char* kSlot = "CopyRaytracingAccelerationStructure";
+    CommandListRecord* l = list_of(h, kSlot);
+    if (!l) return;
+    HRESULT hr = E_INVALIDARG;
+    if (args) {
+        switch (args->Mode) {
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE:
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT: hr = S_OK; break;
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_VISUALIZATION_DECODE_FOR_TOOLS:
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE:
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE: hr = E_NOTIMPL; break;
+        default: break;
+        }
+    }
+    if (refused(l, kSlot, hr) || !args) return;
+    if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l)) {
+        l4->CopyRaytracingAccelerationStructure(args->DestAccelerationStructureData, args->SourceAccelerationStructureData,
+                                                static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE>(args->Mode));
+        l4->Release();
+    }
+}
+} // namespace
+
 void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCalcPrivateCommandSignatureSize = calc_command_signature;
     t->pfnCreateCommandSignature = create_command_signature;
@@ -487,6 +758,7 @@ void fill_core_commands(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCalcPrivateCommandListSize = calc_list;
     t->pfnCreateCommandList = create_list;
     t->pfnDestroyCommandList = destroy_list;
+    t->pfnGetRaytracingAccelerationStructurePrebuildInfo = get_prebuild_info;
 }
 
 void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
@@ -498,6 +770,9 @@ void fill_list_commands(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnSetMarker = set_marker;
     if (table_index == 1) t->pfnExecuteBundle = execute_bundle;
     t->pfnExecuteIndirect = execute_indirect;
+    t->pfnBuildRaytracingAccelerationStructure = build_acceleration_structure;
+    t->pfnEmitRaytracingAccelerationStructurePostbuildInfo = emit_postbuild_info;
+    t->pfnCopyRaytracingAccelerationStructure = copy_acceleration_structure;
     if (table_index != 1) return;                       // the compute table keeps its rejections
     t->pfnResourceResolveSubresource = resolve_subresource;
     t->pfnResourceResolveSubresourceRegion = resolve_subresource_region;

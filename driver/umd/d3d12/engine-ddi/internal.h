@@ -141,6 +141,7 @@ class DeviceContext {
 public:
     ID3D12Device* device = nullptr;             // one reference each
     ID3D12Device4* device4 = nullptr;
+    ID3D12Device5* device5 = nullptr;
     ID3D12Device8* device8 = nullptr;
     ID3D12Device10* device10 = nullptr;
     MemoryMode mode = MemoryMode::RuntimeBacked;
