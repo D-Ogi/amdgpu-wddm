@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 
 namespace native12 {
 // Opt-in for one diagnostic process, sampled once. Names and scalar outcomes
@@ -17,6 +18,18 @@ inline bool ddi_trace_enabled() noexcept {
     return enabled;
 }
 inline std::atomic<uint64_t> ddi_trace_sequence{};
+// Lab diagnostic switch: AMDGPU_WDDM_D3D12_EXPERIMENT names one deviation from the driver's behaviour, for a
+// measurement that needs it. Unset, empty or unknown means none. Read once per process.
+inline bool ddi_experiment(const char* name) noexcept {
+    static const struct Value {
+        char text[40]{};
+        Value() noexcept {
+            const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_D3D12_EXPERIMENT",text,sizeof(text));
+            if(!n || n>=sizeof(text))text[0]=0;
+        }
+    } value;
+    return name && value.text[0] && !std::strcmp(value.text,name);
+}
 inline uint64_t ddi_trace_begin(const char* name) noexcept {
     if(!ddi_trace_enabled())return 0;
     const auto id=ddi_trace_sequence.fetch_add(1,std::memory_order_relaxed)+1;

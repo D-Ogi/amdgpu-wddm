@@ -60,8 +60,9 @@ struct AllocationRequest final {
     // The primary: the 32-byte LB7A v1 description alone, which the kernel driver and the
     // compositor's opener read. pitch and size are the bound image's, never chosen here.
     // The allocation is a primary of no video present source: it is composed, not scanned out.
+    // primary false is a lab measurement only: the same description without the PRIMARY flag.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
-                            uint64_t size,HANDLE runtimeOwner=nullptr) noexcept {
+                            uint64_t size,HANDLE runtimeOwner=nullptr,bool primary=true) noexcept {
         blob={};surface={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         if(format!=D3DDDIFMT_A8R8G8B8 && format!=D3DDDIFMT_A8B8G8R8)return E_NOTIMPL;
@@ -73,8 +74,10 @@ struct AllocationRequest final {
         surface.width=width;surface.height=height;surface.pitch=pitch;
         surface.format=static_cast<uint32_t>(format);surface.size=size;
         info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
-        info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
-        info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;
+        if(primary){
+            info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
+            info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;
+        }
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
         return S_OK;
