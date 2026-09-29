@@ -134,7 +134,7 @@ class DeviceEngine final {
         const auto trace=ddi_trace_begin("shellAllocateMemory");
         auto& device=*static_cast<Device*>(shell);
         const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->allocate(request,memory):E_UNEXPECTED;
-        if(trace && request && device.engine && device.engine->imports_){
+        if(trace && ddi_trace_enabled() && request && device.engine && device.engine->imports_){
             // What was asked and where the import ended; the stage is where it returned, not a cause.
             const auto& r=device.engine->imports_->last_report();
             std::fprintf(stderr,"{\"event\":\"shell-memory-request\",\"flags\":%u,\"bytes\":%llu,\"alignment\":%llu,"
@@ -153,7 +153,7 @@ class DeviceEngine final {
         const auto trace=ddi_trace_begin("shellFreeMemory");
         auto& device=*static_cast<Device*>(shell);
         const HRESULT hr=device.engine && device.engine->imports_?device.engine->imports_->free(memory):E_UNEXPECTED;
-        if(trace && device.engine && device.engine->imports_){
+        if(trace && ddi_trace_enabled() && device.engine && device.engine->imports_){
             const auto& r=device.engine->imports_->last_free_report();
             std::fprintf(stderr,"{\"event\":\"shell-memory-free\",\"surface\":%u,\"stage\":%u,\"owner_expired\":%u,"
                 "\"status\":\"%08lx\"}\n",unsigned(r.surface),static_cast<unsigned>(r.stage),unsigned(r.owner_expired),
