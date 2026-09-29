@@ -15,12 +15,21 @@ struct Lb7aSurface {
 };
 inline constexpr uint32_t kLb7aMagic=0x4137424Cu;
 static_assert(sizeof(Lb7aSurface)==32 && offsetof(Lb7aSurface,pitch)==16 && offsetof(Lb7aSurface,size)==24);
+// The E26R v1 resource record, as the kernel driver defines it (driver/kmd/surface_resource_private.h):
+// 12 bytes, shared 1 asks for CPU-shared backing.
+struct E26rResource { uint32_t magic,version,shared; };
+inline constexpr uint32_t kE26rMagic=0x52363245u;
+static_assert(sizeof(E26rResource)==12);
+// Default is the driver's description. The others are lab measurements only: Plain drops the PRIMARY
+// flag and its source, Shared adds the E26R record to the default.
+enum class SurfaceVariant { Default, Plain, Shared };
 // Non-sparse, non-shared memory: raw (prepare), or one linear surface that a reader
 // outside the engine opens by its LB7A description (prepare_surface). Storage is
 // owned so callback pointers cannot dangle.
 struct AllocationRequest final {
     bc250_umd_alloc_private blob{};
     Lb7aSurface surface{};
+    E26rResource resource{};
     uint64_t held{};                            // what the allocation holds: mapped and imported
     D3D12DDI_ALLOCATION_INFO_0022 info{};
     D3D12DDICB_ALLOCATE_0022 args{};
@@ -29,7 +38,7 @@ struct AllocationRequest final {
     AllocationRequest& operator=(const AllocationRequest&)=delete;
     HRESULT prepare(uint64_t bytes,uint64_t alignment,AllocationAccess access,
                     HANDLE runtimeOwner=nullptr) noexcept {
-        blob={};surface={};info={};args={};held=0;
+        blob={};surface={};resource={};info={};args={};held=0;
         constexpr uint64_t page=4096;
         // Do not silently shrink an engine requirement or overflow rounding.
         if(!bytes || alignment<page || (alignment&(alignment-1)) ||
@@ -60,10 +69,10 @@ struct AllocationRequest final {
     // The primary: the 32-byte LB7A v1 description alone, which the kernel driver and the
     // compositor's opener read. pitch and size are the bound image's, never chosen here.
     // The allocation is a primary of no video present source: it is composed, not scanned out.
-    // primary false is a lab measurement only: the same description without the PRIMARY flag.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
-                            uint64_t size,HANDLE runtimeOwner=nullptr,bool primary=true) noexcept {
-        blob={};surface={};info={};args={};held=0;
+                            uint64_t size,HANDLE runtimeOwner=nullptr,
+                            SurfaceVariant variant=SurfaceVariant::Default) noexcept {
+        blob={};surface={};resource={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         if(format!=D3DDDIFMT_A8R8G8B8 && format!=D3DDDIFMT_A8B8G8R8)return E_NOTIMPL;
         if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
@@ -74,9 +83,13 @@ struct AllocationRequest final {
         surface.width=width;surface.height=height;surface.pitch=pitch;
         surface.format=static_cast<uint32_t>(format);surface.size=size;
         info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
-        if(primary){
+        if(variant!=SurfaceVariant::Plain){
             info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
             info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;
+        }
+        if(variant==SurfaceVariant::Shared){
+            resource.magic=kE26rMagic;resource.version=1;resource.shared=1;
+            args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=sizeof(resource);
         }
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
         held=size;
