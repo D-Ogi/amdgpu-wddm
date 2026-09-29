@@ -15,6 +15,8 @@ static UINT64 completed=10;
 static UINT64 gpu_address=UINT64_C(0x100000000);
 static D3DKMT_HANDLE next_allocation=50;
 static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false;
+static unsigned surfaces=0;
+static unsigned long surface_format=0;
 static unsigned creates=0,makes_resident=0,probes=0;
 static uint32_t expected_type=0;
 static void* identity=handle<void*>(0x5432);
@@ -22,7 +24,19 @@ static RuntimeHeapImports* imports;
 static char mapped[65536];
 static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_0022* a){
  assert(d.handle==handle<void*>(1) && a->hResource==handle<void*>(2) && !a->hKMResource);
- assert(a->NumAllocations==1);auto blob=static_cast<const bc250_umd_alloc_private*>(a->pAllocationInfo->pPrivateDriverData);
+ assert(a->NumAllocations==1 && !a->pPrivateDriverData && !a->PrivateDriverDataSize);
+ if(a->pAllocationInfo->PrivateDriverDataSize==sizeof(BC250_WDDM_ALLOCATION_PRIVATE)){
+  // The primary: the 32-byte LB7A v1 description alone, PRIMARY, no video present source.
+  auto s=static_cast<const BC250_WDDM_ALLOCATION_PRIVATE*>(a->pAllocationInfo->pPrivateDriverData);
+  assert(s->Magic==0x4137424Cul && s->Version==1 && s->Width==256 && s->Height==64 && s->Pitch==1024);
+  assert(s->Format==surface_format && s->Size==65536);
+  assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY);
+  assert(a->pAllocationInfo->VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
+  ++surfaces;events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
+ }
+ assert(a->pAllocationInfo->Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && !a->pAllocationInfo->VidPnSourceId);
+ assert(a->pAllocationInfo->PrivateDriverDataSize==sizeof(bc250_umd_alloc_private));
+ auto blob=static_cast<const bc250_umd_alloc_private*>(a->pAllocationInfo->pPrivateDriverData);
  assert(blob->alloc_size==65536 && blob->phys_alignment==65536);
  assert(blob->preferred_heap==uint32_t(expected_type?AMDGPU_GEM_DOMAIN_GTT:AMDGPU_GEM_DOMAIN_VRAM));
  assert(blob->gem_flags==(expected_type==0?uint64_t(AMDGPU_GEM_CREATE_NO_CPU_ACCESS):
@@ -34,7 +48,8 @@ static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLO
 static HRESULT APIENTRY paging_create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){assert(d==handle<void*>(1));++creates;a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&completed;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE*){events+='P';return S_OK;}
 static HRESULT APIENTRY map_cb(HANDLE d,D3DDDI_MAPGPUVIRTUALADDRESS* a){assert(d==handle<void*>(1) && a->SizeInPages==16);events+='M';a->VirtualAddress=gpu_address;a->PagingFenceValue=20;return pending?E_PENDING:S_OK;}
-static HRESULT APIENTRY unmap_cb(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){assert(a->BaseAddress==gpu_address && a->Size==65536);events+='U';return fail_free?E_FAIL:S_OK;}
+static UINT64 memory_va_bias=0;
+static HRESULT APIENTRY unmap_cb(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){assert(a->BaseAddress==gpu_address+memory_va_bias && a->Size==65536);events+='U';return fail_free?E_FAIL:S_OK;}
 static HRESULT APIENTRY make_cb(HANDLE,D3DDDI_MAKERESIDENT*){++makes_resident;return E_FAIL;}
 static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){a->pData=mapped;events+='L';return S_OK;}
 static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return S_OK;}
@@ -56,7 +71,7 @@ static VkResult VKAPI_CALL memory_allocate(VkDevice d,const VkMemoryAllocateInfo
  assert(flags->sType==VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO && flags->flags==VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT);
  auto host=static_cast<const bc250_host_import*>(flags->pNext);
  assert(host->sType==BC250_HOST_IMPORT_FLAGS_STYPE && !host->pNext && host->identity==identity && host->allocation==next_allocation);
- assert(host->va==UINT64_C(0x100000000) && host->size==65536);
+ assert(host->va==gpu_address && host->size==65536);
  // Only a CPU-visible heap asks the ICD to map it; type 0 is the GPU-only policy.
  assert(host->flags==(info->memoryTypeIndex?BC250_HOST_IMPORT_CPU_MAP:0u));
  events+='I';if(fail_import)return VK_ERROR_OUT_OF_DEVICE_MEMORY;
@@ -159,9 +174,59 @@ int main(){
  events.clear();fail_import=true;assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMIUD");fail_import=false;
  events.clear();assert(owner.allocate(&req,&memory)==S_OK);fail_free=true;assert(owner.free(&memory)==E_FAIL && events=="AMIVU");
  fail_free=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMIVUUDP");
+ // The linear primary: all three flags on a PRIMARY heap. The memory type is one of the image's, no
+ // buffer is probed, the address needs the image's alignment only, and the kernel gets the LB7A
+ // description with the image's pitch and the backing's size.
+ {
+  const auto old_probes=probes;const auto old_surfaces=surfaces;
+  constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
+  D3D12DDIARG_CREATERESOURCE_0088 target{};target.ResourceType=D3D12DDI_RT_TEXTURE2D;target.Width=256;target.Height=64;
+  target.DepthOrArraySize=1;target.MipLevels=1;target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;target.SampleDesc={1,0};
+  heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY);
+  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;
+  engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=primary;s.byte_size=65536;s.alignment=128;
+  s.memory_type_bits=1;s.surface_row_pitch=1024;s.surface_layout_size=65536;expected_type=0;
+  surface_format=D3DDDIFMT_A8R8G8B8;events.clear();
+  assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.memory_type_index==0 && memory.byte_size==65536);
+  assert(owner.free(&memory)==S_OK && events=="AMIVUD" && probes==old_probes && surfaces==old_surfaces+1);
+  // A page-aligned address is enough for it; raw memory above needed 64 KiB.
+  gpu_address+=4096;target.Format=DXGI_FORMAT_R8G8B8A8_UNORM;surface_format=D3DDDIFMT_A8B8G8R8;events.clear();
+  assert(owner.allocate(&s,&memory)==S_OK && events=="AMI" && memory.gpu_va==gpu_address);
+  gpu_address-=4096;memory_va_bias=4096;assert(owner.free(&memory)==S_OK && events=="AMIVUD");memory_va_bias=0;
+  // The image's memory types are the only ones: type 0 is not among these.
+  s.memory_type_bits=2;events.clear();assert(owner.allocate(&s,&memory)==E_INVALIDARG && events.empty());s.memory_type_bits=1;
+  auto refused=[&](HRESULT expected){
+   const auto before=next_allocation;events.clear();
+   assert(owner.allocate(&s,&memory)==expected && !memory.memory && events.empty() && next_allocation==before);
+  };
+  // Refused before any callback: a description the surface does not exist for, and one that the
+  // reader's rules do not admit.
+  target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+  target.MipLevels=2;refused(E_NOTIMPL);target.MipLevels=1;
+  target.SampleDesc.Count=4;refused(E_NOTIMPL);target.SampleDesc.Count=1;
+  target.DepthOrArraySize=2;refused(E_NOTIMPL);target.DepthOrArraySize=1;
+  heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;refused(E_NOTIMPL);
+  heap.Flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_PRIMARY);
+  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;refused(E_NOTIMPL);
+  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+  s.flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary;refused(E_NOTIMPL);
+  s.flags=engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;refused(E_NOTIMPL);s.flags=primary;
+  s.memory_type_bits=0;refused(E_INVALIDARG);s.memory_type_bits=1;
+  s.surface_row_pitch=0;refused(E_INVALIDARG);s.surface_row_pitch=1000;refused(E_INVALIDARG);
+  s.surface_row_pitch=1008;refused(E_INVALIDARG);s.surface_row_pitch=1024;
+  s.byte_size=61440;s.surface_layout_size=61440;refused(E_INVALIDARG);
+  s.byte_size=65537;refused(E_INVALIDARG);s.byte_size=65536;s.surface_layout_size=65536;
+  s.surface_layout_size=65537;refused(E_INVALIDARG);s.surface_layout_size=65536;
+  target.Width=8193;refused(E_INVALIDARG);target.Width=256;
+  s.reserved2=1;refused(E_INVALIDARG);s.reserved2=0;
+  // Raw memory carries no surface fields.
+  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;s=req;s.surface_row_pitch=1024;refused(E_INVALIDARG);
+  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
+ }
  // A genuinely pending mapping times out without import or premature release.
  pending=true;completed=10;events.clear();assert(owner.allocate(&req,&memory)==E_PENDING && !memory.memory && events=="AM");
  completed=20;pending=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMUDP");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- assert(makes_resident==0);std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency");
+ assert(makes_resident==0);assert(surfaces==2);
+ std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface");
 }

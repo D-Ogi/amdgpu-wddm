@@ -2,14 +2,18 @@
 #pragma once
 #include "allocation.h"
 #include "../../contract/bc250_umd_submit.h"
+#include "../../kmd/gdi_private.h"
 #include <cstdint>
 #include <limits>
 namespace native12 {
 enum class AllocationAccess { GpuOnly, CpuWriteCombined, CpuCached };
-// Non-sparse, non-shared raw memory. Texture metadata/Present surfaces require
-// a separate contract. Storage is owned so callback pointers cannot dangle.
+// Non-sparse, non-shared memory: raw (prepare), or one linear surface that a reader
+// outside the engine opens by its LB7A description (prepare_surface). Storage is
+// owned so callback pointers cannot dangle.
 struct AllocationRequest final {
     bc250_umd_alloc_private blob{};
+    BC250_WDDM_ALLOCATION_PRIVATE surface{};
+    uint64_t held{};                            // what the allocation holds: mapped and imported
     D3D12DDI_ALLOCATION_INFO_0022 info{};
     D3D12DDICB_ALLOCATE_0022 args{};
     AllocationRequest()=default;
@@ -17,7 +21,7 @@ struct AllocationRequest final {
     AllocationRequest& operator=(const AllocationRequest&)=delete;
     HRESULT prepare(uint64_t bytes,uint64_t alignment,AllocationAccess access,
                     HANDLE runtimeOwner=nullptr) noexcept {
-        blob={};info={};args={};
+        blob={};surface={};info={};args={};held=0;
         constexpr uint64_t page=4096;
         // Do not silently shrink an engine requirement or overflow rounding.
         if(!bytes || alignment<page || (alignment&(alignment-1)) ||
@@ -42,6 +46,30 @@ struct AllocationRequest final {
         // VA is mapped separately through the runtime; no exact-VA promise here.
         info.pPrivateDriverData=&blob;info.PrivateDriverDataSize=sizeof(blob);
         args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
+        held=rounded;
+        return S_OK;
+    }
+    // The primary: the 32-byte LB7A v1 description alone, which the kernel driver and the
+    // compositor's opener read. pitch and size are the bound image's, never chosen here.
+    // The allocation is a primary of no video present source: it is composed, not scanned out.
+    HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
+                            uint64_t size,HANDLE runtimeOwner=nullptr) noexcept {
+        blob={};surface={};info={};args={};held=0;
+        constexpr uint32_t edge=8192;
+        if(format!=D3DDDIFMT_A8R8G8B8 && format!=D3DDDIFMT_A8B8G8R8)return E_NOTIMPL;
+        if(!width || width>edge || !height || height>edge || !pitch || (pitch&15))return E_INVALIDARG;
+        const uint64_t width4=(uint64_t(width)+3)&~3ull,height4=(uint64_t(height)+3)&~3ull;
+        if(pitch<width4*4 || !size || (size&4095) || size>0xfffff000ull || size<uint64_t(pitch)*height4)
+            return E_INVALIDARG;
+        static_assert(sizeof(surface)==32);
+        surface.Magic=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC;surface.Version=1;
+        surface.Width=width;surface.Height=height;surface.Pitch=pitch;
+        surface.Format=static_cast<unsigned long>(format);surface.Size=size;
+        info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
+        info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
+        info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;
+        args.hResource=runtimeOwner;args.NumAllocations=1;args.pAllocationInfo=&info;
+        held=size;
         return S_OK;
     }
 };

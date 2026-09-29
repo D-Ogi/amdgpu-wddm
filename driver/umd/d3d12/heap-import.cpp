@@ -70,13 +70,34 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
     if(!active_ || !domain_.entered() || !initialized_)return E_UNEXPECTED;
-    if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || !request->byte_size ||
-       !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
+    if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || request->reserved2 ||
+       !request->byte_size || !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
     const auto& heap=*request->heap;
-    const unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
+    // The linear primary is the one request with more than kMemoryDedicated: all three flags, on a
+    // heap that says PRIMARY. A primary that engine-ddi could not make linear has no surface here.
+    constexpr uint32_t surface_flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
+    const bool surface=request->flags==surface_flags;
+    unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
         D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
-    if((request->flags&~engine_ddi::kMemoryDedicated) || (unsigned(heap.Flags)&~allowed) ||
+    if(surface)allowed|=D3D12DDI_HEAP_FLAG_PRIMARY;
+    if((!surface && (request->flags&~engine_ddi::kMemoryDedicated)) || (unsigned(heap.Flags)&~allowed) ||
        heap.CreationNodeMask>1 || heap.VisibleNodeMask>1)return E_NOTIMPL;
+    if(!surface && (request->surface_row_pitch || request->surface_layout_size))return E_INVALIDARG;
+    D3DDDIFORMAT surface_format=D3DDDIFMT_UNKNOWN;
+    if(surface){
+        const auto* r=request->resource;
+        if(!(heap.Flags&D3D12DDI_HEAP_FLAG_PRIMARY) || (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE) ||
+           heap.CPUPageProperty!=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE || !r ||
+           r->ResourceType!=D3D12DDI_RT_TEXTURE2D || r->DepthOrArraySize!=1 || r->MipLevels!=1 ||
+           r->SampleDesc.Count!=1 || r->SampleDesc.Quality || r->Width>UINT32_MAX)return E_NOTIMPL;
+        switch(r->Format){
+        case DXGI_FORMAT_B8G8R8A8_UNORM:surface_format=D3DDDIFMT_A8R8G8B8;break;
+        case DXGI_FORMAT_R8G8B8A8_UNORM:surface_format=D3DDDIFMT_A8B8G8R8;break;
+        default:return E_NOTIMPL;
+        }
+        if(!request->memory_type_bits || !request->surface_row_pitch || !request->surface_layout_size ||
+           request->surface_layout_size>request->byte_size)return E_INVALIDARG;
+    }
     // The allocation is raw memory; the engine places the buffer or image in it. A texture is admitted
     // only as the one resource of a heap without CPU access: CPU-visible texture layouts, primaries and
     // texture-only heaps for later placement each need their own contract.
@@ -106,25 +127,35 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         if(heap.MemoryPool!=D3D12DDI_MEMORY_POOL_L0 || access==AllocationAccess::GpuOnly)return E_NOTIMPL;
         want|=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     }
+    AllocationRequest allocation;HRESULT hr=S_OK;uint64_t alignment=0;uint32_t bits=0;
+    if(surface){
+        // The image's own requirements, from engine-ddi: no buffer is ever bound to this memory, and
+        // the address has to suit the image alone. The description is refused here, before any callback.
+        bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
+        hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
+            request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle);
+        if(FAILED(hr))return hr;
+    } else {
     VkBufferCreateInfo probe_info{};probe_info.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     probe_info.size=request->byte_size;probe_info.usage=VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT|
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT|VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;probe_info.sharingMode=VK_SHARING_MODE_EXCLUSIVE;
-    VkBuffer probe{};HRESULT hr=from_vk(create_buffer_(device_,&probe_info,nullptr,&probe));if(FAILED(hr))return hr;
+    VkBuffer probe{};hr=from_vk(create_buffer_(device_,&probe_info,nullptr,&probe));if(FAILED(hr))return hr;
     if(!probe)return E_UNEXPECTED;
     VkMemoryRequirements needs{};requirements_(device_,probe,&needs);destroy_buffer_(device_,probe,nullptr);
-    uint32_t bits=needs.memoryTypeBits;if(request->memory_type_bits)bits&=request->memory_type_bits;
+    bits=needs.memoryTypeBits;if(request->memory_type_bits)bits&=request->memory_type_bits;
+    alignment=std::max<uint64_t>(65536,std::max<uint64_t>(request->alignment,needs.alignment));
+    hr=allocation.prepare(std::max<uint64_t>(request->byte_size,needs.size),alignment,access,request->rt_owner.handle);
+    if(FAILED(hr))return hr;
+    }
     uint32_t type=UINT32_MAX;
     for(uint32_t i=0;i<properties_.memoryTypeCount;++i)if((bits&(1u<<i)) &&
         (properties_.memoryTypes[i].propertyFlags&want)==want){type=i;break;}
     if(type==UINT32_MAX)return E_INVALIDARG;
-    const uint64_t alignment=std::max<uint64_t>(65536,std::max<uint64_t>(request->alignment,needs.alignment));
-    AllocationRequest allocation;hr=allocation.prepare(std::max<uint64_t>(request->byte_size,needs.size),alignment,access,request->rt_owner.handle);
-    if(FAILED(hr))return hr;
     if(!paging_open_){paging_open_=true;hr=paging_.open();if(hr!=S_OK)return hr;}
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
     record->next=records_;records_=record;record->busy=true;
     hr=record->allocation.open(allocation.args);record->busy=false;
-    if(hr==S_OK)hr=paging_.map(record->allocation.handle(),allocation.blob.alloc_size,record->mapping);
+    if(hr==S_OK)hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);
     UINT64 address=0;
     if(hr==S_OK){
         const ULONGLONG start=GetTickCount64();
@@ -133,7 +164,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     if(hr==S_OK && (address&(alignment-1)))hr=E_INVALIDARG;
     if(hr==S_OK){
         bc250_host_import host{};host.sType=BC250_HOST_IMPORT_FLAGS_STYPE;host.identity=identity_;
-        host.allocation=record->allocation.handle();host.va=address;host.size=allocation.blob.alloc_size;
+        host.allocation=record->allocation.handle();host.va=address;host.size=allocation.held;
         // The engine maps a CPU-visible heap. dispatch() answers the ICD's Lock2 and Unlock2 for it.
         if(access!=AllocationAccess::GpuOnly)host.flags=BC250_HOST_IMPORT_CPU_MAP;
         VkMemoryAllocateFlagsInfo flags{};flags.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
