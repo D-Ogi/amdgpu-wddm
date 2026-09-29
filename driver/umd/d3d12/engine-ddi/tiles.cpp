@@ -168,7 +168,9 @@ HRESULT update_tile_mappings(EngineQueue* q, D3D12DDI_HRESOURCE hres, UINT regio
     DeviceContext* c = q->context;
     ResourceRecord* r = reserved_of(hres, c);
     const HeapRecord* h = hheap.pDrvPrivate ? record_of<HeapRecord>(hheap.pDrvPrivate, Tag::Heap, c) : nullptr;
-    HRESULT hr = (!r || (hheap.pDrvPrivate && !h) || (region_count && !region_starts && region_count != 1) ||
+    // The memory of a linear primary holds that image alone: no tile is mapped from it.
+    HRESULT hr = (!r || (hheap.pDrvPrivate && !h) || (h && h->backing->linear) ||
+                  (region_count && !region_starts && region_count != 1) ||
                   (static_cast<UINT>(flags) & ~static_cast<UINT>(D3D12DDI_TILE_MAPPING_FLAG_NO_HAZARD)))
                      ? E_INVALIDARG
                      : check_ranges(h ? h->backing : nullptr,

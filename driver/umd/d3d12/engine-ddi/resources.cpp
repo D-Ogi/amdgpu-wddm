@@ -393,6 +393,10 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             return S_OK;
         }
         if (!base->backing) return E_INVALIDARG;        // a reserved resource names no heap memory
+        if (base->backing->linear) {
+            log_line("placed: the base is a linear primary, its memory holds that image alone");
+            return E_INVALIDARG;
+        }
         const uint64_t offset = base->offset + res_desc->ReuseBufferGPUVA.BaseAddress.UMD.Offset;
         if (offset < base->offset) return E_INVALIDARG;
         ID3D12Resource* engine = nullptr;
@@ -454,6 +458,15 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     D3D12_HEAP_DESC hd{};
     HRESULT hr = heap_desc_of(sized, hd);
     if (FAILED(hr)) return hr;
+    if (linear) {
+        // The heap holds this one image at offset 0 and nothing beside it: the engine is told the image's
+        // category alone, whatever else the runtime's flags allow. The shell still sees the runtime's.
+        const uint32_t category = category_of(desc);
+        hd.Flags = D3D12_HEAP_FLAG_NONE;
+        if (category != D3D12DDI_HEAP_FLAG_BUFFERS) hd.Flags |= D3D12_HEAP_FLAG_DENY_BUFFERS;
+        if (category != D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES) hd.Flags |= D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
+        if (category != D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES) hd.Flags |= D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
+    }
 
     ID3D12Heap* heap = nullptr;
     ImportedMemory memory{};
@@ -484,7 +497,11 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         }
         hr = engine_heap_from_memory(c, hd, memory, &heap);
         if (FAILED(hr)) {
-            log_line("heap: the engine refused the heap over the supplied memory: %08lx", static_cast<unsigned long>(hr));
+            log_line("heap: the engine refused the heap over the supplied memory: %08lx (heap flags %x, %llu bytes, "
+                     "alignment %llu, memory of %llu bytes, type %u)",
+                     static_cast<unsigned long>(hr), static_cast<unsigned>(hd.Flags),
+                     static_cast<unsigned long long>(hd.SizeInBytes), static_cast<unsigned long long>(hd.Alignment),
+                     static_cast<unsigned long long>(memory.byte_size), memory.memory_type_index);
             // Nothing uses the memory yet: hand it straight back (engine-ddi.h, exactly once).
             ReleasePayload payload{{nullptr, nullptr}, true, memory, 0};
             run_release(c->hooks, payload);
@@ -506,6 +523,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     b->imported = imported;
     b->memory = memory;
     b->dedicated = res_desc != nullptr;
+    b->linear = linear;
 
     ID3D12Resource* engine = nullptr;
     if (res_desc) {

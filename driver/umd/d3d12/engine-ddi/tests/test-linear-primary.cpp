@@ -19,6 +19,7 @@ struct Shape {
     bool primary = true;
     UINT64 heap_bytes = 0;                      // 0: what CheckResourceAllocationInfo answers
     bool heap_alignment = false;                // the heap takes the answer's alignment as well
+    bool every_category = false;                // the heap allows buffers and both kinds of texture
 };
 
 D3D12DDIARG_CREATERESOURCE_0088 description(const Shape& s) {
@@ -57,6 +58,7 @@ HRESULT create_target(Env& env, Device& device, const Shape& s, Buffer& out) {
     heap.CPUPageProperty = D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
     heap.MemoryPool = D3D12DDI_MEMORY_POOL_L1;
     heap.Flags = D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
+    if (s.every_category) heap.Flags |= D3D12DDI_HEAP_FLAG_BUFFERS | D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES;
     if (s.primary) heap.Flags |= D3D12DDI_HEAP_FLAG_PRIMARY;
     heap.CreationNodeMask = 1;
     heap.VisibleNodeMask = 1;
@@ -103,7 +105,7 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
            s.width, s.height, static_cast<unsigned long long>(info.ResourceDataSize), info.ResourceDataAlignment,
            static_cast<unsigned long long>(tiled.ResourceDataSize), tiled.ResourceDataAlignment);
 
-    Buffer target, readback;
+    Buffer target, readback, beside;
     const uint32_t allocations = m.allocations;
     const uint32_t init_before = engine_ddi::harness_pending_initializations(device.context);
     HRESULT hr = create_target(env, device, s, target);
@@ -124,6 +126,10 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
     if (hr != S_OK) return false;
     checkf(engine_ddi::harness_pending_initializations(device.context) == init_before + 1,
            "linear primary %ux%u: queued for its initialization", s.width, s.height);
+
+    hr = create_placed_buffer(env, device, target, 0, 4096, beside);
+    checkf(hr == E_INVALIDARG, "linear primary %ux%u: a buffer placed on the primary's memory: E_INVALIDARG (hr %08lx)",
+           s.width, s.height, static_cast<unsigned long>(hr));
 
     D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 existing{};
     env.core.pfnCheckExistingResourceAllocationInfo(device.h(), target.hres(), &existing);
@@ -231,19 +237,21 @@ void test_linear_primary(Env& env) {
     // B8G8R8A8 in memory is blue first, R8G8B8A8 red first: the same word for both clears below.
     round_trip(env, device, m, queue, Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM}, first, 0xff336699u);
     round_trip(env, device, m, queue, Shape{127, 79, DXGI_FORMAT_R8G8B8A8_UNORM}, second, 0xff336699u);
-    // The runtime's heap may be larger than the surface and carry the answer's alignment: the memory request
-    // and the engine's heap are the surface's all the same.
+    // The runtime's heap may be larger than the surface, carry the answer's alignment and allow every
+    // category: the memory request and the engine's heap are the surface's all the same.
     {
         Shape wide{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM};
         wide.heap_bytes = 1024 * 1024;
         wide.heap_alignment = true;
+        wide.every_category = true;
         Shape exact = wide;
         exact.heap_bytes = 0;
         const UINT64 surface_bytes = allocation_info(env, device, exact).ResourceDataSize;
         Buffer roomy;
         hr = create_target(env, device, wide, roomy);
         checkf(hr == S_OK && surface_bytes && m.last_byte_size == surface_bytes,
-               "linear primary: a heap of 1 MiB with the answer's alignment: created, %llu bytes asked of the shell "
+               "linear primary: a heap of 1 MiB for every category with the answer's alignment: created, %llu bytes "
+               "asked of the shell "
                "(hr %08lx)",
                static_cast<unsigned long long>(m.last_byte_size), static_cast<unsigned long>(hr));
         if (hr == S_OK) destroy_buffer(env, device, roomy);

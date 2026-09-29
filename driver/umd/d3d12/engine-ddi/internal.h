@@ -234,6 +234,7 @@ struct Backing {
     D3D12DDIARG_CREATEHEAP_0001 desc;
     bool imported;
     bool dedicated;
+    bool linear;                                // the memory of one linear primary: nothing else is placed on it
     ImportedMemory memory;
     uint64_t id;
     PendingRelease* release_node;               // allocated with the backing, handed to the release sequence
