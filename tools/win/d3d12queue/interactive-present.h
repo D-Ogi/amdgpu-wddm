@@ -82,6 +82,9 @@ inline HRESULT present(Session& s){
 
     // Frame 1 is opaque orange, frame 2 opaque teal (R, G, B, A as the clear takes them).
     const FLOAT colours[buffers][4]{{1.0f,0.5f,0.0f,1.0f},{0.0f,0.5f,0.5f,1.0f}};
+    // Each Present status is kept as returned: a success code other than S_OK (occluded, for one) is traced and
+    // the frame is still retired, but it does not count as a presented frame.
+    HRESULT presented[buffers]{E_PENDING,E_PENDING};
     for(UINT frame_index=0;frame_index<buffers && SUCCEEDED(hr);++frame_index){
         const UINT current=chain->GetCurrentBackBufferIndex();
         {char label[48]{};sprintf_s(label,"Frame %u back buffer index %u",frame_index+1,current);s.event("after",label,current<buffers?S_OK:E_UNEXPECTED);}
@@ -103,7 +106,7 @@ inline HRESULT present(Session& s){
         hr=retire(frame_index*2+1);if(FAILED(hr))break;
         char label[32]{};sprintf_s(label,"Present %u interval 1",frame_index+1);
         s.pending=true;
-        hr=s.api(label,[&]{return chain->Present(1,0);});
+        hr=s.api(label,[&]{return chain->Present(1,0);});presented[frame_index]=hr;
         const HRESULT removed=device->GetDeviceRemovedReason();
         s.event("after","GetDeviceRemovedReason after Present",removed);
         if(SUCCEEDED(hr) && FAILED(removed))hr=removed;
@@ -127,6 +130,8 @@ inline HRESULT present(Session& s){
     const HRESULT removed=device->GetDeviceRemovedReason();
     s.event("after","GetDeviceRemovedReason after resize",removed);
     if(SUCCEEDED(hr) && FAILED(removed))hr=removed;
-    s.event("after","Two frames presented and chain resized",hr);
-    s.copy_success=SUCCEEDED(hr);return hr;
+    if(SUCCEEDED(hr))for(const HRESULT status:presented)if(status!=S_OK){hr=E_FAIL;break;}
+    {char label[96]{};sprintf_s(label,"Present statuses %08lx %08lx",static_cast<unsigned long>(presented[0]),static_cast<unsigned long>(presented[1]));s.event("after",label,hr);}
+    s.event("after","Two frames presented with S_OK and chain resized",hr);
+    s.copy_success=hr==S_OK;return hr;
 }
