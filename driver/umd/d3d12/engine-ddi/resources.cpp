@@ -110,7 +110,9 @@ HRESULT heap_desc_of(const D3D12DDIARG_CREATEHEAP_0001& in, D3D12_HEAP_DESC& out
     out.Properties.MemoryPoolPreference = static_cast<D3D12_MEMORY_POOL>(in.MemoryPool + 1);
     out.Properties.CreationNodeMask = 1;
     out.Properties.VisibleNodeMask = 1;
-    out.Alignment = in.Alignment;
+    // A heap for a resource granted a small placement alignment comes with that alignment (4 KB), which a D3D12 heap
+    // description does not take: the engine heap gets the default, a stricter one the heap's offset 0 satisfies.
+    out.Alignment = in.Alignment < D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT ? 0 : in.Alignment;
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
     if (!(in.Flags & D3D12DDI_HEAP_FLAG_BUFFERS)) flags |= D3D12_HEAP_FLAG_DENY_BUFFERS;
     if (!(in.Flags & D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)) flags |= D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
@@ -166,10 +168,11 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
         info = c->device->GetResourceAllocationInfo(0, 1, &d0);
         if (info.SizeInBytes == UINT64_MAX || !info.Alignment || offset % info.Alignment) continue;
         if (alignment && info.Alignment != alignment) continue;          // not granted
+        if (offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset) continue;  // a smaller may fit
         fits = true;
         break;
     }
-    if (!fits || offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset) return E_INVALIDARG;
+    if (!fits) return E_INVALIDARG;
     desc.Alignment = d0.Alignment;
     const D3D12_CLEAR_VALUE* cv = clear_value(desc, clear);
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
