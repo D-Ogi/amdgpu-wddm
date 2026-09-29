@@ -69,11 +69,13 @@ struct Session {
     ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
     ComPtr<ID3D12Resource> upload,readback,middle;ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12Fence> fence;
+    ComPtr<IUnknown> extra[3];   // objects of a build variant, released with the rest
     unsigned sequence{};bool copy_success{},pending{},io_failed{};
     ~Session() noexcept {
         // An exception while formatting/publishing a receipt must not release
         // resources with unproven GPU retirement during stack unwinding.
         if(pending){list.Detach();allocator.Detach();upload.Detach();readback.Detach();middle.Detach();
+            for(auto& object:extra)object.Detach();
             fence.Detach();queue.Detach();device.Detach();adapter.Detach();factory.Detach();}
     }
 
@@ -201,6 +203,9 @@ struct Session {
         return "{\"schema\":1,\"sequence\":"+std::to_string(sequence)+",\"command\":\""+verb+"\",\"success\":"+(SUCCEEDED(hr)?"true":"false")+",\"hr\":\""+hr_text(hr)+"\",\"elapsed_ms\":"+std::to_string(GetTickCount64()-start)+",\"state\":{\"device\":"+(device?"true":"false")+",\"queue\":"+(queue?"true":"false")+"},\"copy_success\":"+(copy_success?"true":"false")+",\"gpu_pending\":"+(pending?"true":"false")+"}\n";
     }
 };
+#ifdef INTERACTIVE_DRAW
+#include "interactive-draw.h"
+#endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
     if(!directory || !*directory || !duration || duration>150 ||
        (mode!=AdapterMode::Bc250 && mode!=AdapterMode::Warp))return 2;
@@ -239,7 +244,11 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         switch(command.verb){
         case Verb::CreateDevice:hr=session.create_device();break;
         case Verb::CreateQueue:hr=session.create_queue();break;
+#ifdef INTERACTIVE_DRAW
+        case Verb::Copy:hr=draw(session);break;
+#else
         case Verb::Copy:hr=session.copy();break;
+#endif
         case Verb::Status:hr=session.device?session.api("GetDeviceRemovedReason",[&]{return session.device->GetDeviceRemovedReason();}):S_OK;break;
         case Verb::Exit:hr=S_OK;finished=true;break;
         case Verb::Abort:hr=HRESULT_FROM_WIN32(ERROR_CANCELLED);terminal=hr;reason="abort";finished=true;break;
@@ -252,7 +261,7 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
     // Pending GPU work retains resources until process teardown. Do not call
     // Release on resources whose GPU retirement was not proven.
     if(session.pending)ExitProcess(3);
-    if(session.runtime){session.list.Reset();session.allocator.Reset();session.upload.Reset();session.readback.Reset();session.middle.Reset();session.fence.Reset();session.queue.Reset();session.device.Reset();session.adapter.Reset();session.factory.Reset();FreeLibrary(session.runtime);session.runtime=nullptr;}
+    if(session.runtime){session.list.Reset();session.allocator.Reset();session.upload.Reset();session.readback.Reset();session.middle.Reset();for(auto& object:session.extra)object.Reset();session.fence.Reset();session.queue.Reset();session.device.Reset();session.adapter.Reset();session.factory.Reset();FreeLibrary(session.runtime);session.runtime=nullptr;}
     return FAILED(terminal)?3:0;
 }
 }

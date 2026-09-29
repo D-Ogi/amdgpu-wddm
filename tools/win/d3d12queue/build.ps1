@@ -7,7 +7,9 @@ param(
     # Diagnostic variant: request feature level 12_1 instead of 11_0 at device creation.
     [switch]$FeatureLevel12_1,
     # Diagnostic variant: UPLOAD -> DEFAULT -> READBACK with a transition barrier in between.
-    [switch]$DefaultHeap
+    [switch]$DefaultHeap,
+    # Diagnostic variant: the copy verb draws one triangle to an offscreen target and compares every word.
+    [switch]$Draw
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,6 +41,7 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
+if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
