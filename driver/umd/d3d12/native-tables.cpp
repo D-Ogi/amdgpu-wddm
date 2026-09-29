@@ -37,6 +37,11 @@ struct EntryPolicy:EntryOwner<Device> {
         std::fflush(stderr);
     }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT* output) noexcept {
+        if(ddi_trace_mode()==2){
+            char line[128];std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 format name=%s format=%u support=%08x
+",name,unsigned(format),output?*output:0);
+            ddi_mode2_note(line);return;
+        }
         if(!ddi_trace_enabled())return;
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
         std::fprintf(stderr,"{\"event\":\"ddi-format\",\"name\":\"%s\",\"format\":%u,\"output_present\":%u,\"support\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
@@ -45,6 +50,11 @@ struct EntryPolicy:EntryOwner<Device> {
     }
     static void observed(Device*,const char* name,D3D12DDI_HDEVICE,DXGI_FORMAT format,UINT samples,
         D3D12DDI_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags,UINT* output) noexcept {
+        if(ddi_trace_mode()==2){
+            char line[128];std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 msaa format=%u samples=%u flags=%u levels=%u
+",unsigned(format),samples,unsigned(flags),output?*output:0);
+            ddi_mode2_note(line);return;
+        }
         if(!ddi_trace_enabled())return;
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
         std::fprintf(stderr,"{\"event\":\"ddi-msaa\",\"name\":\"%s\",\"format\":%u,\"samples\":%u,\"flags\":%u,\"output_present\":%u,\"levels\":%u,\"qpc\":%lld,\"thread\":%lu}\n",

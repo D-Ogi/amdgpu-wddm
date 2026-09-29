@@ -59,6 +59,11 @@ inline bool ddi_experiment(const char* name) noexcept {
     }
     return false;
 }
+// A formatted line of the failures-only mode, under the same budget.
+inline void ddi_mode2_note(const char* text) noexcept {
+    if(ddi_trace_mode()!=2 || ddi_failure_budget.fetch_sub(1,std::memory_order_relaxed)<=0)return;
+    OutputDebugStringA(text);
+}
 inline uint64_t ddi_trace_begin(const char* name) noexcept {
     if(ddi_trace_mode()==2)return 1;
     if(!ddi_trace_enabled())return 0;
@@ -70,7 +75,7 @@ inline uint64_t ddi_trace_begin(const char* name) noexcept {
 }
 inline void ddi_trace_end(const char* name,uint64_t id,HRESULT outcome) noexcept {
     if(!id)return;
-    if(ddi_trace_mode()==2){if(FAILED(outcome))ddi_failure_note(name,outcome);return;}
+    if(ddi_trace_mode()==2){if(FAILED(outcome) && outcome!=E_PENDING)ddi_failure_note(name,outcome);return;}
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);
     std::fprintf(stderr,"{\"event\":\"ddi\",\"edge\":\"end\",\"sequence\":%llu,\"name\":\"%s\",\"qpc\":%lld,\"thread\":%lu,\"status\":\"%08lx\"}\n",
         static_cast<unsigned long long>(id),name,now.QuadPart,GetCurrentThreadId(),static_cast<unsigned long>(outcome));
