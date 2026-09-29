@@ -27,7 +27,12 @@ param(
     [switch]$RayPipeline,
     # Diagnostic variant: the copy verb creates and releases the state object of -RayPipeline twice, with no
     # acceleration structure, command list or submission.
-    [switch]$RayState
+    [switch]$RayState,
+    # Diagnostic variant: the copy verb traces the scene of -RayPipeline through a pipeline grown by AddToStateObject
+    # (a local root constant in the hit group record, a second miss shader from the addition).
+    [switch]$RayGrow,
+    # Diagnostic variant: the copy verb traces the scene of -RayPipeline through a pipeline made of a collection.
+    [switch]$RayCollection
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,7 +64,8 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState | Where-Object { $_ }).Count -gt 1) { throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline and RayState each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection | Where-Object { $_ }).Count -gt 1) {
+    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow and RayCollection each replace the copy verb; choose one' }
 if ($Draw) { $variant += '/DINTERACTIVE_DRAW' }
 if ($Scene) { $variant += '/DINTERACTIVE_SCENE' }
 if ($Present) { $variant += '/DINTERACTIVE_PRESENT' }
@@ -67,6 +73,8 @@ if ($Sparse) { $variant += '/DINTERACTIVE_SPARSE' }
 if ($RayQuery) { $variant += '/DINTERACTIVE_RAYQUERY' }
 if ($RayPipeline) { $variant += '/DINTERACTIVE_RAYPIPELINE' }
 if ($RayState) { $variant += '/DINTERACTIVE_RAYSTATE' }
+if ($RayGrow) { $variant += '/DINTERACTIVE_RAYGROW' }
+if ($RayCollection) { $variant += '/DINTERACTIVE_RAYCOLLECTION' }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",

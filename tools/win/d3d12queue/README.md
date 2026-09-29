@@ -95,6 +95,45 @@ objects created and released`. The code shares its root signature, state object 
 `-RayPipeline` in `interactive-raypipeline.h`. The software control passes this variant with
 `-FeatureLevel12_1` (2026-09-29, exit 0).
 
+`build.ps1 -RayCollection` traces the scene of `-RayPipeline` through a pipeline built from a collection.
+A `COLLECTION` state object holds the library, the hit group, both configs and the global root signature,
+so it is self-contained. The executable `RAYTRACING_PIPELINE` has no library of its own: it holds only
+that collection (`NumExports` 0, all of its exports), the global root signature and the pipeline config.
+The application's reference to the collection is released, with the count the runtime returns traced,
+once the pipeline exists. Identifiers, shader table, `DispatchRays` and the 64-word comparison are those of
+`-RayPipeline`; success is traced as `Ray collection 64 of 64 words equal, ...`. The software control
+passes this variant with `-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits).
+
+`build.ps1 -RayGrow` traces the scene through a pipeline grown by `AddToStateObject`, which needs raytracing
+tier 1.1. The parent state object allows additions (`STATE_OBJECT_CONFIG`) and holds the library of
+`raygrow.hlsl`, a triangle hit group whose local root signature (one 32-bit constant, b0 in space 1) is
+associated with it by name, both configs and the global root signature. The client takes the parent's
+raygen, miss and hit group identifiers, reads the parent's default pipeline stack size and sets it 1024
+bytes higher, and reads it back. Through `ID3D12Device7`, the addition then brings the miss shader
+`miss_new` of `raygrow-miss.hlsl`; it also allows additions and is valid on its own, with the same configs
+and global root signature. The DXR specification says the child starts with the parent's stack size, so
+the child's `GetPipelineStackSize`, read before any set on it, must equal the parent's value or the
+operation fails. `GetShaderStackSize` of raygen is traced for both. The four identifiers must be nonzero
+and pairwise different. The parent's identifiers are copied while it is alive; then the parent loses every
+application reference, properties first, and no session slot ever holds it. The trace shows the boundary
+in order: `Parent identifiers copied`, `Parent properties released`, `Parent state object released`,
+then `SetPipelineState1 child` and `DispatchRays` on a list that only ever bound the child. The reference
+counts are traced as observations. The shader table is built from the copied bytes and holds the parent's raygen, two miss records (the parent's miss at index 0, the child's `miss_new` at
+index 1) and the parent's hit group record, whose identifier is followed by the local constant 0x00C0FFEE.
+The ray generation shader picks the miss index from the column's parity, so the expected words are that
+constant for a hit, 2 for a miss in an even column and 3 in an odd one. Success is traced as `Ray grow 64
+of 64 words equal, H hits, M2 old misses, M3 new misses, ...`.
+
+The stack size check is strict only on the BC-250 (`--interactive`). The DXR specification says, in
+`d3d/Raytracing.md` of microsoft/DirectX-Specs at `5a4139be`, line 3777: "The new state object starts off
+with the same [pipeline stack size](#pipeline-stack) setting as the previous." The software adapter was
+observed on 2026-09-29 to start the child at 0 against that rule: every stack size it reports is 0 except
+the parent's value after the set, so the child answers 0 where the parent reads back 1024. Under
+`--interactive-warp` the mismatch is therefore traced with both values and `software adapter: not
+decisive`, with S_OK, and the operation continues; under `--interactive` it fails the operation. Nothing
+else differs between the two modes. With that, the software control passes this variant with
+`-FeatureLevel12_1` (2026-09-29, exit 0, 12 hits, 28 old misses, 24 new misses).
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained

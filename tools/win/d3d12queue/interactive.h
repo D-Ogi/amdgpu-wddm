@@ -69,7 +69,7 @@ struct Session {
     ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
     ComPtr<ID3D12Resource> upload,readback,middle;ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList> list;ComPtr<ID3D12Fence> fence;
-    ComPtr<IUnknown> extra[8];   // objects of a build variant, released with the rest
+    ComPtr<IUnknown> extra[12];  // objects of a build variant, released with the rest
     unsigned sequence{};bool copy_success{},pending{},io_failed{};
     ~Session() noexcept {
         // An exception while formatting/publishing a receipt must not release
@@ -204,7 +204,8 @@ struct Session {
     }
 };
 #if defined(INTERACTIVE_DRAW) + defined(INTERACTIVE_SCENE) + defined(INTERACTIVE_PRESENT) + defined(INTERACTIVE_SPARSE) + \
-    defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) + defined(INTERACTIVE_RAYSTATE) > 1
+    defined(INTERACTIVE_RAYQUERY) + defined(INTERACTIVE_RAYPIPELINE) + defined(INTERACTIVE_RAYSTATE) + \
+    defined(INTERACTIVE_RAYGROW) + defined(INTERACTIVE_RAYCOLLECTION) > 1
 #error one variant of the copy verb per build
 #endif
 #ifdef INTERACTIVE_DRAW
@@ -222,7 +223,8 @@ struct Session {
 #ifdef INTERACTIVE_RAYQUERY
 #include "interactive-rayquery.h"
 #endif
-#if defined(INTERACTIVE_RAYPIPELINE) || defined(INTERACTIVE_RAYSTATE)
+#if defined(INTERACTIVE_RAYPIPELINE) || defined(INTERACTIVE_RAYSTATE) || defined(INTERACTIVE_RAYGROW) || \
+    defined(INTERACTIVE_RAYCOLLECTION)
 #include "interactive-raypipeline.h"
 #endif
 inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterMode::Bc250){
@@ -277,6 +279,10 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
         case Verb::Copy:hr=raypipeline(session);break;
 #elif defined(INTERACTIVE_RAYSTATE)
         case Verb::Copy:hr=raystate(session);break;
+#elif defined(INTERACTIVE_RAYGROW)
+        case Verb::Copy:hr=raygrow(session);break;
+#elif defined(INTERACTIVE_RAYCOLLECTION)
+        case Verb::Copy:hr=raycollection(session);break;
 #else
         case Verb::Copy:hr=session.copy();break;
 #endif
