@@ -50,13 +50,13 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
      uint64_t(AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)));
  events+='A';a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
 }
-// D: by handle list. R: by the runtime resource, with the resident object's two flags.
+// D: by handle list. R: by the runtime resource. Both with the resident object's two flags.
 static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLOCATE_0022* a){
  if(a->hResource){
   assert(a->hResource==handle<void*>(2) && !a->NumAllocations && !a->HandleList && unsigned(a->Flags)==3u);
   events+='R';return fail_deallocate?E_FAIL:S_OK;
  }
- assert(a->NumAllocations==1 && a->HandleList && a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE);events+='D';return S_OK;
+ assert(a->NumAllocations==1 && a->HandleList && unsigned(a->Flags)==3u);events+='D';return fail_deallocate?E_FAIL:S_OK;
 }
 static HRESULT APIENTRY paging_create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){assert(d==handle<void*>(1));++creates;a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&completed;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE*){events+='P';return S_OK;}
@@ -187,6 +187,14 @@ int main(){
  events.clear();fail_import=true;assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMIUD");fail_import=false;
  events.clear();assert(owner.allocate(&req,&memory)==S_OK);fail_free=true;assert(owner.free(&memory)==E_FAIL && events=="AMIVU");
  fail_free=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMIVUUDP");
+ // The runtime refuses the release by handle list: the record and its allocation stay, and the later
+ // cleanup asks again with the same flags, without a second Vulkan free or unmap.
+ events.clear();assert(owner.allocate(&req,&memory)==S_OK);fail_deallocate=true;
+ assert(owner.free(&memory)==E_FAIL && events=="AMIVUD" && owner.owns_allocation(memory.allocation));
+ assert(owner.last_free_report().stage==FreeStage::Deallocate && !owner.last_free_report().owner_expired);
+ events.clear();assert(owner.close_after_engine_retirement()==E_FAIL && events=="D" && owner.owns_allocation(memory.allocation));
+ fail_deallocate=false;events.clear();
+ assert(owner.close_after_engine_retirement()==S_OK && events=="DP" && !owner.owns_allocation(memory.allocation));
  // The linear primary: all three flags on a PRIMARY heap. The memory type is one of the image's, no
  // buffer is probed, the address needs the image's alignment only, and the kernel gets the LB7A
  // description with the image's pitch and the backing's size.

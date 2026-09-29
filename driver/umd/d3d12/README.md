@@ -151,8 +151,9 @@ resource (the owner scope in `heap-import.h`). The destroy waits up to two
 seconds for the work submitted before it. A release that reaches the shell
 after that call has returned frees the Vulkan import and the mapping, makes
 no runtime callback in either form, keeps the allocation in its record and
-reports the device error. Other allocations are released by handle list, as
-before.
+reports the device error. Other imported heap memory is released by handle
+list with the same two flags, after the engine has retired its uses. The
+hosted driver's own allocations are internal ones and keep flags NONE.
 Queue Wait, tiled resources, scheduling groups, offer/reclaim and background
 processing are also outside the current shell. A non-null function pointer may
 be an explicit refusal handler, so table publication is not a capability claim.

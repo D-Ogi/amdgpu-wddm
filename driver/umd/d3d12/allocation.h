@@ -14,6 +14,9 @@ namespace native12 {
 // with and no handle: the caller has proven that the resource's uses have retired and that the
 // resource's own DDI is running, which this wrapper cannot know.
 enum class ReleaseForm { Handle, Owner };
+// Retired: the caller has proven that no GPU work uses the allocation. Only then does the release
+// carry ASSUME_NOT_IN_USE and SYNCHRONOUS_DESTROY. Owner is never released otherwise.
+enum class Retirement { Unknown, Retired };
 class RuntimeAllocation final {
     D3D12DDI_HRTDEVICE runtime_{};
     PFND3D12DDI_ALLOCATE_CB_0022 allocate_{};
@@ -59,23 +62,20 @@ public:
         allocation_=info.hAllocation;address_=info.GpuVirtualAddress;resource_=request.hResource;
         return S_OK;
     }
-    HRESULT close(ReleaseForm form=ReleaseForm::Handle) noexcept {
+    HRESULT close(ReleaseForm form=ReleaseForm::Handle,Retirement retirement=Retirement::Unknown) noexcept {
         if(!allocation_) return S_OK;
         if(!deallocate_) return E_UNEXPECTED;
         const bool by_resource=form==ReleaseForm::Owner;
-        if(by_resource && !resource_) return E_UNEXPECTED;
+        if(by_resource && (!resource_ || retirement!=Retirement::Retired)) return E_UNEXPECTED;
         D3D12DDICB_DEALLOCATE_0022 args{};
-        if(by_resource){
-            // A resident object's allocation (DirectX-Specs, ResourceHeaps.md, "Resident Object
-            // Destruction Requirements"): not in use, destroyed before the call returns.
-            args.hResource=resource_;
-            args.Flags=static_cast<D3D12DDI_DEALLOCATE_FLAGS_0022>(
-                D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE|D3D12DDI_DEALLOCATE_FLAGS_0022_SYNCHRONOUS_DESTROY);
-        } else {
-            // This allocation only. No ASSUME_NOT_IN_USE: this wrapper does not prove GPU retirement.
-            args.NumAllocations=1;args.HandleList=&allocation_;
-            args.Flags=D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
-        }
+        if(by_resource)args.hResource=resource_;
+        else {args.NumAllocations=1;args.HandleList=&allocation_;}  // this allocation only
+        // A resident object's allocation (DirectX-Specs, ResourceHeaps.md, "Resident Object
+        // Destruction Requirements"): not in use, destroyed before the call returns. Without the
+        // caller's proof of retirement the flags stay NONE.
+        args.Flags=retirement==Retirement::Retired?static_cast<D3D12DDI_DEALLOCATE_FLAGS_0022>(
+            D3D12DDI_DEALLOCATE_FLAGS_0022_ASSUME_NOT_IN_USE|D3D12DDI_DEALLOCATE_FLAGS_0022_SYNCHRONOUS_DESTROY):
+            D3D12DDI_DEALLOCATE_FLAGS_0022_NONE;
         const bool traced=ddi_trace_enabled();
         if(traced){
             std::fprintf(stderr,"{\"event\":\"deallocate-callback\",\"edge\":\"begin\",\"experiment\":\"%s\","

@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 static unsigned allocations,frees;
-static bool failAllocation,failFree,byOwner;
+static bool failAllocation,failFree,byOwner,retired;
 static D3D12DDI_HRTDEVICE seen{};
 static HANDLE resource=reinterpret_cast<HANDLE>(UINT_PTR(77));
 static HRESULT APIENTRY allocate(D3D12DDI_HRTDEVICE device,D3D12DDICB_ALLOCATE_0022* a) {
@@ -25,7 +25,7 @@ static HRESULT APIENTRY deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DE
         return failFree?E_FAIL:S_OK;
     }
     assert(a->NumAllocations==1 && *a->HandleList>=100);
-    assert(!a->hResource && a->Flags==D3D12DDI_DEALLOCATE_FLAGS_0022_NONE);
+    assert(!a->hResource && unsigned(a->Flags)==(retired?3u:0u));
     return failFree?E_FAIL:S_OK;
 }
 int main() {
@@ -49,14 +49,20 @@ int main() {
         using native12::ReleaseForm;
         native12::RuntimeAllocation owned(device,cb);assert(owned.open(args)==S_OK && owned.owner_known());
         byOwner=true;failFree=true;count=frees;
-        assert(owned.close(ReleaseForm::Owner)==E_FAIL && owned.handle() && owned.owner_known() && frees==count+1);
-        failFree=false;assert(owned.close(ReleaseForm::Owner)==S_OK && !owned.handle() && !owned.owner_known());
+        using native12::Retirement;
+        // The owner form without the proof of retirement makes no callback.
+        assert(owned.close(ReleaseForm::Owner)==E_UNEXPECTED && owned.handle() && frees==count);
+        assert(owned.close(ReleaseForm::Owner,Retirement::Retired)==E_FAIL && owned.handle() && owned.owner_known() && frees==count+1);
+        failFree=false;assert(owned.close(ReleaseForm::Owner,Retirement::Retired)==S_OK && !owned.handle() && !owned.owner_known());
         // Without its owner the allocation stays, and the owner form makes no callback.
         native12::RuntimeAllocation expired(device,cb);assert(expired.open(args)==S_OK);
         const auto kept=expired.handle();expired.revoke_owner();count=frees;
-        assert(!expired.owner_known() && expired.close(ReleaseForm::Owner)==E_UNEXPECTED);
+        assert(!expired.owner_known() && expired.close(ReleaseForm::Owner,Retirement::Retired)==E_UNEXPECTED);
         assert(expired.handle()==kept && frees==count);
         byOwner=false;
+        // The handle form with the proof carries both flags; without it, none (checked above).
+        retired=true;assert(expired.close(ReleaseForm::Handle,Retirement::Retired)==S_OK && !expired.handle() && frees==count+1);
+        retired=false;
     }
     cb.pfnDeallocateCb=nullptr;native12::RuntimeAllocation bad(device,cb);count=allocations;
     assert(bad.open(args)==E_INVALIDARG && allocations==count);

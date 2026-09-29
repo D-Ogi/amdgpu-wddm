@@ -64,7 +64,8 @@ void RuntimeHeapImports::erase(Record* record) noexcept {
 HRESULT RuntimeHeapImports::release(Record& record) noexcept {
     free_report_.surface=record.surface;
     if(!record.retired || record.busy)return E_UNEXPECTED;
-    // Engine objects and uses have retired before free() reaches this point.
+    // Engine objects and uses have retired before free() reaches this point; a record of a failed
+    // construction was never used. Every release below therefore carries the proof of retirement.
     // RADV may call Unlock2 from vkFreeMemory; keep the allocation record live.
     free_report_.stage=FreeStage::VulkanFree;
     if(record.imported.memory){free_(device_,record.imported.memory,nullptr);record.imported.memory=VK_NULL_HANDLE;}
@@ -77,8 +78,8 @@ HRESULT RuntimeHeapImports::release(Record& record) noexcept {
         // By the runtime resource, inside that resource's own DDI, or not at all: neither a saved
         // owner in a later DDI nor the other form.
         if(!record.authority || !record.allocation.owner_known()){free_report_.owner_expired=true;return kOwnerExpired;}
-        hr=record.allocation.close(ReleaseForm::Owner);
-    } else hr=record.allocation.close();
+        hr=record.allocation.close(ReleaseForm::Owner,Retirement::Retired);
+    } else hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
     if(hr==S_OK)free_report_.stage=FreeStage::Done;
     return hr;
 }
