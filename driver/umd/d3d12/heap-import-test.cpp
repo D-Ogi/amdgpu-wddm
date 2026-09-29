@@ -359,7 +359,21 @@ int main(){
   assert(plain.args.PrivateDriverDataSize==12);
   std::memcpy(e,plain.args.pPrivateDriverData,12);
   assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
+  assert(plain.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY && plain.info.VidPnSourceId==D3DDDI_ID_UNINITIALIZED);
+  // present-noprimary: the same LB7A v1 surface under the same record, as an ordinary allocation.
+  AllocationRequest ordinary;
+  assert(ordinary.prepare_surface(256,64,1024,D3DDDIFMT_A8R8G8B8,65536,handle<void*>(2),false,false)==S_OK);
+  assert(ordinary.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && ordinary.info.VidPnSourceId==0);
+  assert(ordinary.info.PrivateDriverDataSize==32 && ordinary.args.PrivateDriverDataSize==12);
+  std::memcpy(e,ordinary.args.pPrivateDriverData,12);
+  assert(e[0]==0x52363245u && e[1]==1 && e[2]==1);
+  // Both experiments: the v2 CPU_READ record on an ordinary allocation.
+  AllocationRequest both;
+  assert(both.prepare_surface(256,64,1024,D3DDDIFMT_A8R8G8B8,65536,handle<void*>(2),true,false)==S_OK);
+  assert(both.info.Flags==D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE && both.args.PrivateDriverDataSize==16);
+  std::memcpy(e,both.args.pPrivateDriverData,sizeof(e));
+  assert(e[0]==0x52363245u && e[1]==2 && e[2]==1 && e[3]==2);
  }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, ordered cleanup, pending retention, no residency, linear primary as an LB7A surface under E26R, "
-  "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record");
+  "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation");
 }

@@ -80,16 +80,20 @@ struct AllocationRequest final {
     // opener read, under the 12-byte E26R v1 resource record. pitch and size are the bound image's,
     // never chosen here. The allocation is a primary of no video present source: it is composed,
     // not scanned out, so its format is one the surface format table enables for composition.
-    // cpuRead (lab experiment present-cached): the 16-byte v2 record with CPU_READ and without the
-    // PRIMARY intent bit, so the kernel driver gives the shared aperture backing a cached CPU mapping
-    // (M470). The CPU compositor samples this surface on every composition; through the default
-    // write-combined mapping each read is uncached (104: dwm ~33% of the machine in llvmpipe shader
-    // code for a 1280x720 window). The intent bit is left out on purpose: the documented rule against
-    // Cached primaries is about scanout, and this primary has no video present source, while the
-    // deployed compositor UMD offers no direct flip that could scan it out. GPU writes to the
-    // aperture are snooped (CacheCoherent), so a CPU reader stays coherent.
+    // Two lab experiments change this for the CPU compositor, which reads the surface on every
+    // composition (104: dwm ~33% of the machine in llvmpipe shader code for a 1280x720 window; 107:
+    // its streaming shadow copy of the default surface runs at ~92 MiB/s in DWM, where the same
+    // copy of a non-primary E26R v1 aperture surface ran at ~3.3 GiB/s in wc-read).
+    // cpuRead (present-cached): the 16-byte v2 record with CPU_READ and without the PRIMARY intent
+    // bit, so the kernel driver asks for a cached CPU mapping of the shared aperture backing (M470).
+    // On a primary dxgkrnl refuses that (105: CreateHeapAndResource E_INVALIDARG). No document we hold
+    // limits the rule against Cached primaries to scanout.
+    // primary=false (present-noprimary): the allocation is not a primary; whether the runtime and a
+    // windowed flip-model Present accept that is what the experiment measures.
+    // GPU writes to the aperture are snooped (CacheCoherent), so a cached CPU reader stays coherent.
     HRESULT prepare_surface(uint32_t width,uint32_t height,uint32_t pitch,D3DDDIFORMAT format,
-                            uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false) noexcept {
+                            uint64_t size,HANDLE runtimeOwner=nullptr,bool cpuRead=false,
+                            bool primary=true) noexcept {
         blob={};surface={};resource={};info={};args={};held=0;
         constexpr uint32_t edge=8192;
         const auto* row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(uint32_t(format)),
@@ -103,8 +107,8 @@ struct AllocationRequest final {
         surface.width=width;surface.height=height;surface.pitch=pitch;
         surface.format=static_cast<uint32_t>(format);surface.size=size;
         info.pPrivateDriverData=&surface;info.PrivateDriverDataSize=sizeof(surface);
-        info.Flags=D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY;
-        info.VidPnSourceId=D3DDDI_ID_UNINITIALIZED;
+        info.Flags=primary?D3D12DDI_ALLOCATION_INFO_FLAGS_0022_PRIMARY:D3D12DDI_ALLOCATION_INFO_FLAGS_0022_NONE;
+        info.VidPnSourceId=primary?D3DDDI_ID_UNINITIALIZED:0;
         resource.magic=kE26rMagic;resource.version=cpuRead?2:1;resource.shared=1;
         resource.access=cpuRead?kE26rCpuRead:0;
         args.pPrivateDriverData=&resource;args.PrivateDriverDataSize=cpuRead?sizeof(resource):kE26rV1Bytes;

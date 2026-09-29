@@ -182,7 +182,7 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         bits=request->memory_type_bits;alignment=std::max<uint64_t>(4096,request->alignment);
         hr=allocation.prepare_surface(static_cast<uint32_t>(request->resource->Width),request->resource->Height,
             request->surface_row_pitch,surface_format,request->byte_size,request->rt_owner.handle,
-            ddi_experiment("present-cached"));
+            ddi_experiment("present-cached"),!ddi_experiment("present-noprimary"));
         if(FAILED(hr))return hr;
     } else {
     report_.stage=ImportStage::Probe;
