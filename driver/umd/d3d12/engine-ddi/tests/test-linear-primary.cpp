@@ -127,6 +127,10 @@ bool round_trip(Env& env, Device& device, StubMemory& m, engine_ddi::EngineQueue
     checkf(engine_ddi::harness_pending_initializations(device.context) == init_before + 1,
            "linear primary %ux%u: queued for its initialization", s.width, s.height);
 
+    D3DKMT_HANDLE presented = 0;
+    hr = engine_ddi::present_allocation(device.context, target.hres(), &presented);
+    checkf(hr == S_OK && presented, "linear primary %ux%u: present_allocation gives its allocation (hr %08lx)",
+           s.width, s.height, static_cast<unsigned long>(hr));
     hr = create_placed_buffer(env, device, target, 0, 4096, beside);
     checkf(hr == E_INVALIDARG, "linear primary %ux%u: a buffer placed on the primary's memory: E_INVALIDARG (hr %08lx)",
            s.width, s.height, static_cast<unsigned long>(hr));
@@ -268,7 +272,14 @@ void test_linear_primary(Env& env) {
                "linear primary: the same description without the PRIMARY flag asks for ordinary memory (hr %08lx, "
                "flags %x)",
                static_cast<unsigned long>(hr), plain_flags);
-        if (hr == S_OK) destroy_buffer(env, device, plain);
+        if (hr == S_OK) {
+            D3DKMT_HANDLE none = 1;
+            const HRESULT refused = engine_ddi::present_allocation(device.context, plain.hres(), &none);
+            checkf(refused == E_INVALIDARG && !none,
+                   "linear primary: present_allocation refuses the texture that is not a primary (hr %08lx)",
+                   static_cast<unsigned long>(refused));
+            destroy_buffer(env, device, plain);
+        }
 
         hr = create_target(env, device, Shape{256, 256, DXGI_FORMAT_B8G8R8A8_UNORM, 2}, mipped);
         checkf(m.last_flags == (engine_ddi::kMemoryDedicated | engine_ddi::kMemoryPrimary) && !m.last_row_pitch,

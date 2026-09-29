@@ -327,7 +327,7 @@ without an ABI change would be to pass NOT_AVAILABLE L1 heaps to the engine as L
   so it is called from a slot of that list or while the shell knows the list is neither being created nor
   destroyed; the runtime serializes the calls of one list. The core slots start with the `D3D12DDI_HDEVICE` and need
   nothing of this kind.
-- Present: `resource_allocation` for the back buffer's runtime allocation.
+- Present: `present_allocation` for the back buffer's runtime allocation; it admits a linear primary only.
 
 ### Query slots around CreateDevice
 

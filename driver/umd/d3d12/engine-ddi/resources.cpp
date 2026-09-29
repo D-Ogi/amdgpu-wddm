@@ -1110,6 +1110,19 @@ HRESULT resource_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HA
     return S_OK;
 }
 
+HRESULT present_allocation(DeviceContext* c, D3D12DDI_HRESOURCE hres, D3DKMT_HANDLE* allocation) noexcept {
+    if (!allocation) return E_INVALIDARG;
+    *allocation = 0;
+    if (!c) return E_INVALIDARG;
+    auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
+    if (!r || c->mode != MemoryMode::RuntimeBacked || r->kind != ResourceKind::Committed || !r->backing ||
+        !r->backing->imported || !r->backing->linear || r->offset || !r->linear_row_pitch ||
+        !r->backing->memory.allocation)
+        return E_INVALIDARG;
+    *allocation = r->backing->memory.allocation;
+    return S_OK;
+}
+
 HRESULT object_allocation(DeviceContext* c, D3D12DDI_HANDLE_AND_TYPE object, D3DKMT_HANDLE* allocation) noexcept {
     if (!allocation) return E_INVALIDARG;
     *allocation = 0;

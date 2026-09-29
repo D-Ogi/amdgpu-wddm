@@ -317,6 +317,11 @@ HRESULT copy_tile_mappings(EngineQueue* queue, D3D12DDI_HRESOURCE dst, const D3D
 // been created in RuntimeBacked mode as a committed resource (a dedicated allocation), or the call fails.
 HRESULT resource_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource, D3DKMT_HANDLE* allocation,
                             uint64_t* offset) noexcept;
+// Present: the runtime allocation of a surface that can be presented, which is a linear primary of this
+// device: one image from the first byte of its allocation. E_INVALIDARG for any other resource, and
+// *allocation is 0 unless S_OK.
+HRESULT present_allocation(DeviceContext* context, D3D12DDI_HRESOURCE resource,
+                           D3DKMT_HANDLE* allocation) noexcept;
 // MakeResident and Evict (the slots are the shell's): the kernel allocation behind one object of the
 // D3D12DDI_HANDLE_AND_TYPE list, whose Handle is the object's pDrvPrivate (INFERENCE: no runtime list has been
 // logged). *allocation is 0 unless S_OK.
