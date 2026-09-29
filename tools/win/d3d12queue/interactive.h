@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <algorithm>
 #ifdef INTERACTIVE_GAMELOAD
+#include <atomic>
 #include <thread>
 #include <utility>
 #include <vector>

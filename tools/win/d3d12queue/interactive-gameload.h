@@ -132,7 +132,7 @@ public:
     Milestones(const Milestones&)=delete;Milestones& operator=(const Milestones&)=delete;
     ~Milestones(){if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);}
     DWORD open_error() const{return error;}
-    bool failed() const{return lost;}
+    bool failed() const{return lost.load();}
     const Board* board{};   // Present count and longest interval, when a screen runs
     void line(const char* phase,unsigned step,const char* arm,int thread,const char* what,const Counts& c,UINT64 fence){
         LARGE_INTEGER now{};QueryPerformanceCounter(&now);
@@ -151,7 +151,7 @@ public:
         ReleaseSRWLockExclusive(&lock);
     }
 private:
-    HANDLE file{INVALID_HANDLE_VALUE};DWORD error{};bool lost{};
+    HANDLE file{INVALID_HANDLE_VALUE};DWORD error{};std::atomic<bool> lost{};  // read without the lock by failed()
     SRWLOCK lock=SRWLOCK_INIT;LARGE_INTEGER frequency{},origin{};
 };
 struct Item {ComPtr<ID3D12Resource> resource;UINT64 id{};unsigned tile{tile_limit};bool texture{},sampled{};};
@@ -691,6 +691,8 @@ inline HRESULT gameload_run(Session& s){
     if(joined){render.join();if(screen.pending)s.pending=true;}
     else{render.detach();s.pending=true;s.event("after","Game load render thread did not end; its objects stay for process teardown",HRESULT_FROM_WIN32(WAIT_TIMEOUT));}
     const bool screen_clean=joined && screen.hr==S_OK && !screen.failures && screen.frames;
+    // The terminal milestone is written before the outcome is decided, so that its loss fails the run too.
+    log.line("single",0,"-",-1,"load_end",total,0);
     const bool clean=load_clean && screen_clean && !log.failed();
     sprintf_s(label,"Game load: steps %u of %u, created %llu, verified %llu, mismatched %llu, bytes %llu, threads %u, %s %llu, "
         "longest present interval %llu ms, coverage %s, arms %u of %u, steps skipped %u, verified bytes %llu, allocation failures %llu, "
@@ -701,7 +703,6 @@ inline HRESULT gameload_run(Session& s){
     const HRESULT hr=clean?S_OK:FAILED(result)?result:joined && FAILED(screen.hr)?screen.hr:E_FAIL;
     s.event("after",label,hr);
     if(log.failed())s.event("after","Game load milestones.log write failed",E_FAIL);
-    log.line("single",0,"-",-1,"load_end",total,0);
     if(joined)delete shared;   // otherwise the render thread may still use it
     s.copy_success=clean;return hr;
 }
