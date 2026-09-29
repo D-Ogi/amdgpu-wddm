@@ -101,7 +101,22 @@ struct Session {
             if(desc.VendorId==0x1002 && desc.DeviceId==0x13fe){adapter=candidate;break;}}
         if(!adapter)return DXGI_ERROR_NOT_FOUND;
         std::printf("runtime=system32/d3d12.dll adapter=%s\n",mode==AdapterMode::Warp?"WARP":"BC-250");std::fflush(stdout);
-        return api("D3D12CreateDevice FL11_0",[&]{return create(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device));});
+        hr=api("D3D12CreateDevice FL11_0",[&]{return create(adapter.Get(),D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device));});
+        if(SUCCEEDED(hr))observe_features();
+        return hr;
+    }
+    // Observation only: what the runtime reports. No result of these queries changes a receipt.
+    void observe_features(){
+        char label[64]{};
+        D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+        HRESULT hr=device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS,&options,sizeof(options));
+        sprintf_s(label,"Reported TiledResourcesTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options.TiledResourcesTier):0u);event("after",label,hr);
+        sprintf_s(label,"Reported ResourceBindingTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options.ResourceBindingTier):0u);event("after",label,hr);
+        sprintf_s(label,"Reported ConservativeRasterizationTier %u",SUCCEEDED(hr)?static_cast<unsigned>(options.ConservativeRasterizationTier):0u);event("after",label,hr);
+        const D3D_FEATURE_LEVEL requested[]{D3D_FEATURE_LEVEL_12_1,D3D_FEATURE_LEVEL_12_0,D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};
+        D3D12_FEATURE_DATA_FEATURE_LEVELS levels{};levels.NumFeatureLevels=4;levels.pFeatureLevelsRequested=requested;
+        hr=device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS,&levels,sizeof(levels));
+        sprintf_s(label,"Reported MaxSupportedFeatureLevel %04x",SUCCEEDED(hr)?static_cast<unsigned>(levels.MaxSupportedFeatureLevel):0u);event("after",label,hr);
     }
     HRESULT create_queue(){
         if(!device)return E_UNEXPECTED;if(queue)return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
@@ -173,6 +188,13 @@ inline int run(const char* directory,unsigned duration,AdapterMode mode=AdapterM
     for(unsigned i=1;i<=64;++i)if(std::filesystem::exists(numbered(session.root,"result",i,"json")))return 2;
     session.trace=CreateFileW((session.root/L"trace.jsonl").c_str(),GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(session.trace==INVALID_HANDLE_VALUE)return 2;
+#ifdef INTERACTIVE_RADV_EXPERIMENTAL
+    // Diagnostic build only: the hosted ICD reads this from the process environment.
+#define INTERACTIVE_TEXT2(token) #token
+#define INTERACTIVE_TEXT(token) INTERACTIVE_TEXT2(token)
+    session.event("after","Process RADV_EXPERIMENTAL=" INTERACTIVE_TEXT(INTERACTIVE_RADV_EXPERIMENTAL),
+        SetEnvironmentVariableA("RADV_EXPERIMENTAL",INTERACTIVE_TEXT(INTERACTIVE_RADV_EXPERIMENTAL))?S_OK:HRESULT_FROM_WIN32(GetLastError()));
+#endif
     HRESULT terminal=S_OK;const char* reason="exit";bool finished=false;
     for(unsigned seq=1;seq<=64 && !finished;++seq){
         session.sequence=seq;const auto command_path=numbered(session.root,"command",seq,"txt");

@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory)][string]$Kits,
     [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\build\amdgpu_wddm_d3d12_queue",
-    [string]$KitVersion = '10.0.26100.0'
+    [string]$KitVersion = '10.0.26100.0',
+    # Diagnostic variant: value of RADV_EXPERIMENTAL the client sets in its own process.
+    [ValidatePattern('^[a-z0-9_]*$')][string]$RadvExperimental = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,7 +32,8 @@ if (Test-Path -LiteralPath $previous) {
 }
 
 $env:INCLUDE = ''; $env:LIB = ''
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+$variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
+& $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
     "/Fe$Out\amdgpu_wddm_d3d12_queue.exe", (Join-Path $here 'queue.cpp'), '/link',
