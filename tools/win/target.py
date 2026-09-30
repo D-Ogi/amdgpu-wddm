@@ -85,8 +85,12 @@ def answers(address, port, timeout):
     the lab for five minutes twice on 2026-09-30 (OpenSSH/Operational: "drop connection ... penalty:
     connections without attempting authentication"). Hence the address cache below: probe rarely."""
     try:
-        with socket.create_connection((address, int(port)), timeout=float(timeout)):
-            return True
+        with socket.create_connection((address, int(port)), timeout=float(timeout)) as s:
+            # An sshd sends its identification line at once. A stale DHCP lease can hand a listed address to
+            # another device that accepts port 22 and closes at key exchange (2026-09-30, after an AC cycle);
+            # accepting alone is not an answer.
+            s.settimeout(float(timeout))
+            return s.recv(64).startswith(b"SSH-")
     except OSError:
         return False
 
