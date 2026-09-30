@@ -135,7 +135,9 @@ Zink/WGL and OpenCL through clvk (ADR 0016); no relicensing.
 Nothing above changes a criterion in this file. The M13 row's list of routes and
 ADR 0009's candidate list are what was known on 2026-09-21; ADR 0017 amends them.
 M14 and M15 are proposed numbers, not milestones of this file; they enter the
-table only with exit criteria, by a later amendment. Deployment state stays in
+table only with exit criteria, by a later amendment. The reconciled statement of what
+remains in M13, M14 and M15, with the proposed exit criteria M14.1-M14.8 and M15.1-M15.10, is
+[m15-reconciliation.md](m15-reconciliation.md) (2026-09-30). Deployment state stays in
 workspace `STATE.md`, verified results in `facts.md`. The direction is worked out
 in the owner's working notes outside this repository; only accepted content and
 the owner's decisions enter here, through ADRs.
