@@ -17,8 +17,8 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 
 ## Limits for our experiments
 
-- GPU clock and voltage stay at firmware defaults until M5 is reached. If ever changed: not above 1500 MHz / 900 mV without a written reason in the experiment.
-- SMU messages: only those the Linux `cyan_skillfish_ppt.c` sends, with the same argument ranges.
+- GPU clock and voltage: only the points of the DPM table in `docs/design/dpm.md` (1000 MHz / 820 mV to 2000 MHz / 1000 mV), which is the written reason for going above 1500 MHz / 900 mV (owner decision 2026-09-30). Nothing above 1000 mV. Thermal: no raise at 85 C, the floor at 90 C.
+- SMU messages: only those the Linux `cyan_skillfish_ppt.c` sends, with the same argument ranges. The KMD enforces its own allowlist (GetSmuVersion, RequestGfxclk, GetGfxFrequency, GetGfxVid, ForceGfxVid; `bc250_clock_message_allowed`).
 - No writes to SPI flash, CMOS or UEFI variables from our code.
 
 ## Dev setup
