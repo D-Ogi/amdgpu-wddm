@@ -31,7 +31,7 @@
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
 #define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
 #define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
-#define BC250_KMD_VERSION 0x000700B2u       // revision 178: DPM raise readback waits for the ramping clock (docs/design/dpm.md)
+#define BC250_KMD_VERSION 0x000700B3u       // revision 179: CU mode checks power gating after the RLC stage (docs/design/cu-mode.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u

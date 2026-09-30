@@ -47,6 +47,26 @@ The sequence, per shader array under `GRBM_GFX_INDEX`:
      `bc250_rlc_start()` sets on every RLC start (`gfx_v10_0_rlc_smu_handshake_cntl`: SMU handshake off, GFXOFF
      disabled; AMD's header calls it `RESERVED2`). From 0.7.176 the guard tests the enables only. The whole value
      is still logged and reported by the escape, with its enables next to it in the log.
+   - At this stage `STATIC_PER_WGP_PG_ENABLE` alone is accepted (0.7.179). The constants stage runs before the RLC
+     stage, as in amdgpu (`gfx_v10_0_hw_init()`: `constants_init`, then `rlc_resume`). On a cold start it meets
+     the RLC the PSP started during the firmware load (fact M35), which leaves `RLC_PG_CNTL = 0x8`. E11 measured
+     0x8 from the load through the constants stage and 0 after the RLC stage
+     (`evidence/windows/2026-09-21-E11-run-001`, `sweep-GC-loaded` to `-s4`, then `-s5`).
+   - Pre-driver sweeps under Linux read 0 (E21 `sweep-pre.log`, E03 `sweep-before`), so the firmware before
+     the PSP load is not the source.
+   - A warm device restart reloads nothing and meets our own `0x00800000`. 0.7.176 therefore took 40 on a warm
+     restart (to40-1) and refused it with reason 6 at the next cold boot (06:14Z, 2026-09-30).
+   - Any other enable at this stage is a state nobody has measured there, and 40 is still refused before
+     anything is written.
+   - **After the RLC stage** (`bc250_cu_mode_after_rlc()`, called at the end of `bc250_gfx_rlc_resume()`):
+     amdgpu's "disable PG" write (`RLC_PG_CNTL = 0`, then our bit 23) has run. With 40 applied and any PG enable
+     still on, every SA goes back to stock, the same verified way as a failed readback. The reason is
+     `POWER_GATING`, and the durable fallback follows. The value is logged next to the stage value; the escape's
+     `RlcPgCntl` stays the stage value.
+   - Clearing the enables ourselves at the constants stage was not chosen. It would mean writing `RLC_PG_CNTL`
+     under the running, PSP-started RLC before `rlc_stop`, a write amdgpu never makes.
+   - The reference writes at the same point, so a cold boot under Linux meets the same state if Linux's PSP load
+     behaves like ours (wishlist L16, unmeasured). Its `RLC_PG_CNTL = 0` is a `umr` reading after init.
 2. **Read the entry values.** On the first start of a boot they are stock. A later start in the same boot
    takes stock from a volatile registry record (`Parameters\CuModeBoot`, gone at reboot), because the
    registers may still hold our own writes.

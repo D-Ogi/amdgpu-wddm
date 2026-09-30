@@ -396,9 +396,10 @@ static void test_apply(void)
 	run(&hw, 40, 0x1, NULL, NULL);
 	CHECK_EQ(hw.applied, 24); CHECK_EQ(hw.reason, BC250_CU_REASON_INVALID_DISABLE); CHECK_EQ(m.banked_writes, 0);
 
-	/* RLC power gating on, each enable alone: 40 refused, nothing written. */
+	/* RLC power gating on at the constants stage with an enable the PSP load does not leave: 40
+	 * refused, nothing written, alone and next to the static one. */
 	{
-		static const unsigned int enables[] = { 0x1, 0x4, 0x8, 0x10 };
+		static const unsigned int enables[] = { 0x1, 0x4, 0x10, 0x1 | 0x8, 0x4 | 0x8, 0x10 | 0x8 };
 		unsigned int e;
 
 		for (e = 0; e < sizeof(enables) / sizeof(enables[0]); e++) {
@@ -414,13 +415,75 @@ static void test_apply(void)
 	}
 	CHECK_EQ(bc250_cu_pg_enables(0xFFFFFFFFu), 0x1Du);
 
-	/* What unit A reads under KMD 175 (to40 of 2026-09-30): only bit 23, set by our own RLC start
-	 * (SMU handshake off). Not a PG enable: 40 applies, and the value is still reported whole. */
+	/* A warm device restart on unit A (KMD 175 and 176, 2026-09-30): only bit 23, set by our own RLC
+	 * start (SMU handshake off). Not a PG enable: 40 applies, and after the RLC stage stays. */
 	model_reset(STOCK_CC, STOCK_SPI);
 	m.pg_cntl = 0x00800000u;
 	run(&hw, 40, 0, NULL, NULL);
 	CHECK_EQ(hw.applied, 40); CHECK_EQ(hw.reason, BC250_CU_REASON_NONE); CHECK_EQ(hw.rlc_pg_cntl, 0x00800000u);
+	CHECK(!hw.after_rlc_ran);
+	bc250_cu_mode_after_rlc(g_adev, &hw, select_se_sh);
+	CHECK(hw.after_rlc_ran); CHECK_EQ(hw.rlc_pg_cntl_after, 0x00800000u);
+	CHECK_EQ(hw.applied, 40); CHECK_EQ(hw.reason, BC250_CU_REASON_NONE); CHECK_EQ(m.banked_writes, 8);
 	check_registers(FULL_CC, FULL_SPI);
+	check_broadcast_left();
+
+	/* A cold start (E11: the PSP-started RLC leaves 0x8 until the RLC stage writes 0): 40 applies at
+	 * the constants stage, and holds because the RLC stage turned PG off. */
+	model_reset(STOCK_CC, STOCK_SPI);
+	m.pg_cntl = 0x8;
+	run(&hw, 40, 0, NULL, NULL);
+	CHECK_EQ(hw.applied, 40); CHECK_EQ(hw.reason, BC250_CU_REASON_NONE); CHECK_EQ(hw.rlc_pg_cntl, 0x8);
+	check_registers(FULL_CC, FULL_SPI);
+	m.pg_cntl = 0x00800000u;
+	bc250_cu_mode_after_rlc(g_adev, &hw, select_se_sh);
+	CHECK_EQ(hw.applied, 40); CHECK_EQ(hw.reason, BC250_CU_REASON_NONE); CHECK_EQ(hw.rlc_pg_cntl_after, 0x00800000u);
+	CHECK_EQ(m.banked_writes, 8);
+	check_registers(FULL_CC, FULL_SPI);
+	check_broadcast_left();
+
+	/* The same, but an enable is still on after the RLC stage: every SA back to stock, verified,
+	 * reason POWER_GATING. Each enable alone. */
+	{
+		static const unsigned int after[] = { 0x1, 0x4, 0x8, 0x10 };
+		unsigned int e;
+
+		for (e = 0; e < sizeof(after) / sizeof(after[0]); e++) {
+			model_reset(STOCK_CC, STOCK_SPI);
+			m.pg_cntl = 0x8;
+			run(&hw, 40, 0, NULL, NULL);
+			CHECK_EQ(hw.applied, 40);
+			m.pg_cntl = after[e] | 0x00800000u;
+			bc250_cu_mode_after_rlc(g_adev, &hw, select_se_sh);
+			CHECK_EQ(hw.applied, 24); CHECK_EQ(hw.reason, BC250_CU_REASON_POWER_GATING);
+			CHECK_EQ(hw.rlc_pg_cntl, 0x8); CHECK_EQ(hw.rlc_pg_cntl_after, after[e] | 0x00800000u);
+			CHECK_EQ(m.banked_writes, 16); CHECK(hw.consistent);
+			for (k = 0; k < SA; k++) CHECK_EQ(hw.active_wgps[k], 0x7);
+			check_registers(STOCK_CC, STOCK_SPI);
+			check_broadcast_left();
+			CHECK(bc250_cu_hardware_fallback(40, hw.applied));
+		}
+	}
+
+	/* ...and stock does not read back either: unknown, as for a failed readback. */
+	model_reset(STOCK_CC, STOCK_SPI);
+	m.pg_cntl = 0x8;
+	run(&hw, 40, 0, NULL, NULL);
+	m.pg_cntl = 0x1;
+	m.stuck_spi_sa = 2;
+	bc250_cu_mode_after_rlc(g_adev, &hw, select_se_sh);
+	CHECK_EQ(hw.applied, 0); CHECK_EQ(hw.reason, BC250_CU_REASON_RESTORE_FAILED); CHECK(!hw.consistent);
+	CHECK_EQ(hw.active_wgps[1], 0x1F);
+	check_broadcast_left();
+
+	/* After the RLC stage with 24 applied or the stage refused: read only, whatever PG says. */
+	model_reset(STOCK_CC, STOCK_SPI);
+	m.pg_cntl = 0x8;
+	run(&hw, 24, 0, NULL, NULL);
+	m.pg_cntl = 0x1D;
+	bc250_cu_mode_after_rlc(g_adev, &hw, select_se_sh);
+	CHECK(hw.after_rlc_ran); CHECK_EQ(hw.applied, 24); CHECK_EQ(hw.reason, BC250_CU_REASON_NONE);
+	CHECK_EQ(m.banked_writes, 0);
 	check_broadcast_left();
 
 	/* Stock the reference never saw: refused, nothing written. */

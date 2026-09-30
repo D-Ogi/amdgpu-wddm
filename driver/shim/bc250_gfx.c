@@ -716,6 +716,12 @@ int bc250_gfx_rlc_resume(struct amdgpu_device *adev)
 
 	bc250_rlc_start(adev, adev->gfx.pp_gfxoff);
 
+	/* Not amdgpu: the BC-250 CU mode checks power gating here, in the state the part runs in. On a
+	 * cold start the constants stage met the PSP-started RLC's static per-WGP PG (fact M35, E11);
+	 * the "disable PG" write above is what turns it off. A replay has no hook. */
+	if (adev->gfx.cu_mode_rlc_hook)
+		adev->gfx.cu_mode_rlc_hook(adev, adev->gfx.cu_mode_ctx, bc250_select_se_sh);
+
 	return 0;
 }
 

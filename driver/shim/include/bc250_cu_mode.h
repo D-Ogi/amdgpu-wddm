@@ -18,7 +18,8 @@
  *   bc250_cu_targets() ...   the register values of one shader array, and the CU bitmap amdgpu
  *                            would derive from what the registers read back
  *   bc250_cu_mode_apply()    the register sequence, through the shim's RREG32/WREG32, called from
- *                            bc250_get_cu_tcc_info() where the reference writes
+ *                            bc250_get_cu_tcc_info() where the reference writes, and its check
+ *                            bc250_cu_mode_after_rlc() at the end of the RLC stage
  */
 #ifndef BC250_CU_MODE_H
 #define BC250_CU_MODE_H
@@ -38,7 +39,8 @@ enum bc250_cu_reason {
 	BC250_CU_REASON_PENDING_UNCONFIRMED = 3,/* an earlier start applied 40 and never confirmed it */
 	BC250_CU_REASON_REGISTRY = 4,		/* the pending mark could not be made durable */
 	BC250_CU_REASON_NOT_THIS_DEVICE = 5,	/* PCI id is not 1002:13FE */
-	BC250_CU_REASON_POWER_GATING = 6,	/* an RLC_PG_CNTL power-gating enable is set (bc250_cu_pg_enables) */
+	BC250_CU_REASON_POWER_GATING = 6,	/* RLC power gating on: an enable other than the PSP load's static
+						 * one at the constants stage, or any after the RLC stage */
 	BC250_CU_REASON_STOCK_UNEXPECTED = 7,	/* stock CC and SPI disagree, or SPI names absent WGPs */
 	BC250_CU_REASON_READBACK = 8,		/* a written value did not read back: stock restored */
 	BC250_CU_REASON_RESTORE_FAILED = 9,	/* ...and stock did not read back either */
@@ -86,8 +88,10 @@ void bc250_cu_decide(const struct bc250_cu_request *req, struct bc250_cu_decisio
 int bc250_cu_hardware_fallback(unsigned int requested_mode, unsigned int applied_mode);
 
 /* The power-gating enables of an RLC_PG_CNTL value: GFX_POWER_GATING_ENABLE, DYN_PER_WGP_PG_ENABLE,
- * STATIC_PER_WGP_PG_ENABLE and GFX_PIPELINE_PG_ENABLE. 40 is refused (POWER_GATING) when any is set.
- * The other bits are not enables; bit 23, which our RLC start sets (SMU handshake off), is one. */
+ * STATIC_PER_WGP_PG_ENABLE and GFX_PIPELINE_PG_ENABLE. 40 does not run with any of them on after the
+ * RLC stage (bc250_cu_mode_after_rlc); at the constants stage only STATIC_PER_WGP_PG_ENABLE is
+ * accepted, the state the PSP-started RLC leaves on a cold start (fact M35, E11: 0x8). The other bits
+ * are not enables; bit 23, which our RLC start sets (SMU handshake off), is one. */
 unsigned int bc250_cu_pg_enables(unsigned int rlc_pg_cntl);
 
 /* ---- register values and the CU bitmap ------------------------------------------------------- */
@@ -137,7 +141,9 @@ struct bc250_cu_mode_hw {
 	unsigned int	entry_cc[BC250_CU_SA_MAX], entry_spi[BC250_CU_SA_MAX];
 	unsigned int	target_cc[BC250_CU_SA_MAX], target_spi[BC250_CU_SA_MAX];
 	unsigned int	cc[BC250_CU_SA_MAX], user[BC250_CU_SA_MAX], spi[BC250_CU_SA_MAX];
-	unsigned int	rlc_pg_cntl, rlc_aon_wgp_mask;
+	unsigned int	rlc_pg_cntl, rlc_aon_wgp_mask;	/* at the constants stage */
+	int		after_rlc_ran;			/* bc250_cu_mode_after_rlc() ran for this stage run */
+	unsigned int	rlc_pg_cntl_after;		/* after the RLC stage: what 40 runs with */
 	/* per SA: what the CC view and the SPI view count, and the union the caps report. The union
 	 * is the safe side: scratch is sized for at least every CU that can receive a wave. */
 	unsigned int	active_wgps[BC250_CU_SA_MAX];
@@ -153,5 +159,11 @@ typedef void (*bc250_cu_select_fn)(struct amdgpu_device *adev, unsigned int se, 
  * on any mismatch, leave GRBM_GFX_INDEX broadcasting. `select` is the shim's gfx_v10_0_select_se_sh
  * transcription, passed in so that there is one copy of it. */
 void bc250_cu_mode_apply(struct amdgpu_device *adev, void *ctx, bc250_cu_select_fn select);
+
+/* For the end of bc250_gfx_rlc_resume(), after amdgpu's "disable PG" write and the RLC start: reads
+ * RLC_PG_CNTL again. If 40 was applied and a PG enable is still on, every SA goes back to stock,
+ * verified as in bc250_cu_mode_apply(), with reason POWER_GATING (RESTORE_FAILED if stock does not
+ * read back). Nothing is written otherwise. */
+void bc250_cu_mode_after_rlc(struct amdgpu_device *adev, void *ctx, bc250_cu_select_fn select);
 
 #endif

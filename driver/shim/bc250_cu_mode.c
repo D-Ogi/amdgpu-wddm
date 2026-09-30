@@ -26,6 +26,13 @@
 				 RLC_PG_CNTL__DYN_PER_WGP_PG_ENABLE_MASK | \
 				 RLC_PG_CNTL__STATIC_PER_WGP_PG_ENABLE_MASK | \
 				 RLC_PG_CNTL__GFX_PIPELINE_PG_ENABLE_MASK)
+/* The one enable the constants stage may meet: the RLC the PSP starts during the firmware load (fact
+ * M35) leaves STATIC_PER_WGP_PG_ENABLE on (E11: RLC_PG_CNTL 0x8 from the load through the constants
+ * stage, 0 after the RLC stage), and amdgpu's own RLC stage, which follows in the same hw_init, turns
+ * every PG enable off. So a cold start sees 0x8 here, a warm restart our own 0x00800000. What 40 runs
+ * with is checked after the RLC stage (bc250_cu_mode_after_rlc). Any other enable at the constants
+ * stage is a state nobody measured there, and 40 is refused before anything is written. */
+#define RLC_PG_ENTRY_ALLOWED	RLC_PG_CNTL__STATIC_PER_WGP_PG_ENABLE_MASK
 
 static unsigned int wgp_mask(unsigned int wgps)
 {
@@ -240,6 +247,22 @@ static void stock_targets(struct bc250_cu_mode_hw *hw)
 	}
 }
 
+/* What the registers read back: per SA the union of the CC and SPI views, and whether they agree. */
+static void publish(struct bc250_cu_mode_hw *hw)
+{
+	unsigned int k;
+
+	hw->consistent = 1;
+	for (k = 0; k < hw->sa_count; k++) {
+		unsigned int by_cc = bc250_cu_active_wgps_cc(hw->cc[k], hw->user[k], hw->wgps_per_sa);
+		unsigned int by_spi = bc250_cu_active_wgps_spi(hw->spi[k], hw->wgps_per_sa);
+
+		hw->active_wgps[k] = by_cc | by_spi;
+		if (by_cc != by_spi)
+			hw->consistent = 0;
+	}
+}
+
 void bc250_cu_mode_apply(struct amdgpu_device *adev, void *ctx, bc250_cu_select_fn select)
 {
 	struct bc250_cu_mode_hw *hw = (struct bc250_cu_mode_hw *)ctx;
@@ -252,6 +275,8 @@ void bc250_cu_mode_apply(struct amdgpu_device *adev, void *ctx, bc250_cu_select_
 	hw->wrote = 0;
 	hw->applied = 0;
 	hw->consistent = 0;
+	hw->after_rlc_ran = 0;
+	hw->rlc_pg_cntl_after = 0;
 	hw->se_count = adev->gfx.config.max_shader_engines;
 	hw->sh_per_se = adev->gfx.config.max_sh_per_se;
 	hw->sa_count = hw->se_count * hw->sh_per_se;
@@ -287,8 +312,9 @@ void bc250_cu_mode_apply(struct amdgpu_device *adev, void *ctx, bc250_cu_select_
 	mode = hw->mode == BC250_CU_MODE_FULL ? BC250_CU_MODE_FULL : BC250_CU_MODE_STOCK;
 	reason = BC250_CU_REASON_NONE;
 	/* Static per-WGP PG is the one that would act on SPI_PG_ENABLE_STATIC_WGP_MASK; with every
-	 * enable off that mask only selects where the SPI dispatches. */
-	if (mode == BC250_CU_MODE_FULL && bc250_cu_pg_enables(hw->rlc_pg_cntl) != 0)
+	 * enable off that mask only selects where the SPI dispatches. Here only the PSP load's static
+	 * enable may be on (RLC_PG_ENTRY_ALLOWED); bc250_cu_mode_after_rlc() wants all of them off. */
+	if (mode == BC250_CU_MODE_FULL && (bc250_cu_pg_enables(hw->rlc_pg_cntl) & ~RLC_PG_ENTRY_ALLOWED) != 0)
 		reason = BC250_CU_REASON_POWER_GATING;
 	for (k = 0; k < hw->sa_count && reason == BC250_CU_REASON_NONE; k++)
 		reason = bc250_cu_targets(mode, (hw->disable >> (k * BC250_CU_WGP_MAX)) & wgp_mask(BC250_CU_WGP_MAX),
@@ -319,13 +345,30 @@ void bc250_cu_mode_apply(struct amdgpu_device *adev, void *ctx, bc250_cu_select_
 
 	hw->reason = reason;
 	hw->applied = reason == BC250_CU_REASON_RESTORE_FAILED ? 0 : mode;
-	hw->consistent = 1;
-	for (k = 0; k < hw->sa_count; k++) {
-		unsigned int by_cc = bc250_cu_active_wgps_cc(hw->cc[k], hw->user[k], hw->wgps_per_sa);
-		unsigned int by_spi = bc250_cu_active_wgps_spi(hw->spi[k], hw->wgps_per_sa);
+	publish(hw);
+}
 
-		hw->active_wgps[k] = by_cc | by_spi;
-		if (by_cc != by_spi)
-			hw->consistent = 0;
+void bc250_cu_mode_after_rlc(struct amdgpu_device *adev, void *ctx, bc250_cu_select_fn select)
+{
+	struct bc250_cu_mode_hw *hw = (struct bc250_cu_mode_hw *)ctx;
+	unsigned int k, have_cc[BC250_CU_SA_MAX], have_spi[BC250_CU_SA_MAX];
+
+	if (hw == NULL || select == NULL)
+		return;
+	hw->rlc_pg_cntl_after = RREG32_SOC15(GC, 0, mmRLC_PG_CNTL);
+	hw->after_rlc_ran = 1;
+	if (!hw->ran || hw->applied != BC250_CU_MODE_FULL || bc250_cu_pg_enables(hw->rlc_pg_cntl_after) == 0)
+		return;
+	/* The RLC stage wrote RLC_PG_CNTL = 0 and power gating is on anyway: 40 does not run like
+	 * this. Back to the firmware's pair on every SA, the same verified way as a failed readback. */
+	stock_targets(hw);
+	for (k = 0; k < hw->sa_count; k++) {
+		have_cc[k] = hw->cc[k];
+		have_spi[k] = hw->spi[k];
 	}
+	hw->reason = write_and_verify(adev, hw, select, have_cc, have_spi) ?
+		     BC250_CU_REASON_RESTORE_FAILED : BC250_CU_REASON_POWER_GATING;
+	select(adev, 0xffffffff, 0xffffffff, 0xffffffff);
+	hw->applied = hw->reason == BC250_CU_REASON_RESTORE_FAILED ? 0 : BC250_CU_MODE_STOCK;
+	publish(hw);
 }

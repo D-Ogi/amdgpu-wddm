@@ -99,6 +99,26 @@ static void CuModeHook(struct amdgpu_device* adev, void* ctx,
                  (ULONG)s->Hw.applied, (ULONG)s->Hw.reason, (ULONG)s->Hw.wrote);
 }
 
+// Runs at the end of the RLC stage, under the same conditions as CuModeHook. The check that 40 does not
+// run with power gating on (bc250_cu_mode_after_rlc); it writes only to undo a 40 that would.
+static void CuModeRlcHook(struct amdgpu_device* adev, void* ctx,
+                          void (*select)(struct amdgpu_device* adev, u32 se, u32 sh, u32 instance))
+{
+    BC250_CU_MODE_STATE* s = CONTAINING_RECORD(ctx, BC250_CU_MODE_STATE, Hw);
+    BC250_SEQUENCE* sequence = (BC250_SEQUENCE*)adev->backend;
+    ULONG applied = s->Hw.applied;
+    KIRQL irql;
+    if (sequence == NULL || sequence->Plan) return;
+    bc250_cu_mode_after_rlc(adev, &s->Hw, (bc250_cu_select_fn)select);
+    KeAcquireSpinLock(&s->SnapLock, &irql);
+    s->Snap = s->Hw;
+    KeReleaseSpinLock(&s->SnapLock, irql);
+    if (s->Hw.applied != applied)
+        GuardLog("cumode: after the RLC stage RLC_PG_CNTL 0x%08X (PG enables 0x%X): %lu CUs undone, applied %lu reason %lu",
+                 s->Hw.rlc_pg_cntl_after, bc250_cu_pg_enables(s->Hw.rlc_pg_cntl_after), applied,
+                 (ULONG)s->Hw.applied, (ULONG)s->Hw.reason);
+}
+
 static BOOLEAN QueryPresent(PCWSTR Name, unsigned int* Value)
 {
     ULONG value = 0;
@@ -226,6 +246,7 @@ void CuModePrepare(BC250_DEVICE* Device)
     if (NT_SUCCESS(status) && adev != NULL) {
         adev->gfx.cu_mode_ctx = &s->Hw;
         adev->gfx.cu_mode_hook = CuModeHook;
+        adev->gfx.cu_mode_rlc_hook = CuModeRlcHook;
         s->Installed = TRUE;
     }
     ExReleaseFastMutex(&Device->GartLock);
@@ -279,9 +300,11 @@ void CuModeFinish(BC250_DEVICE* Device)
         s->Hw.have_stock = 1;
         s->Hw.mode = applied == BC250_CU_MODE_FULL ? BC250_CU_MODE_FULL : BC250_CU_MODE_STOCK;
         ExReleaseFastMutex(&Device->GartLock);
-        GuardLog("cumode: applied %lu CUs (%lu counted), reason %lu, consistent %u, wrote %u, RLC_PG_CNTL 0x%08X (PG enables 0x%X)",
+        GuardLog("cumode: applied %lu CUs (%lu counted), reason %lu, consistent %u, wrote %u, RLC_PG_CNTL 0x%08X (PG enables 0x%X), "
+                 "after the RLC stage %s0x%08X (PG enables 0x%X)",
                  applied, info.active, reason, (ULONG)hw.consistent, (ULONG)hw.wrote, hw.rlc_pg_cntl,
-                 bc250_cu_pg_enables(hw.rlc_pg_cntl));
+                 bc250_cu_pg_enables(hw.rlc_pg_cntl), hw.after_rlc_ran ? "" : "(not run) ", hw.rlc_pg_cntl_after,
+                 bc250_cu_pg_enables(hw.rlc_pg_cntl_after));
         GuardLog("cumode: SA0-3 CC 0x%08X 0x%08X 0x%08X 0x%08X SPI 0x%X 0x%X 0x%X 0x%X",
                  hw.cc[0], hw.cc[1], hw.cc[2], hw.cc[3], hw.spi[0], hw.spi[1], hw.spi[2], hw.spi[3]);
     } else {
