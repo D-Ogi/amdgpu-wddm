@@ -99,3 +99,49 @@ structure, fails the same test at the first refusal. That host check does not
 enumerate hardware: what the policy does to the reported features is not shown
 by it. An ICD without the patch keeps its environment behaviour under a shell
 that chains the policy, so the host's off is a guarantee only with this patch.
+
+## CPU maps of host allocations
+
+0007-host-import-cpu-map.patch follows 0006; it touches other files, and in the
+lab tree it was applied before 0006 (either order applies). It gives
+`bc250_host_import` a flags field under sType 0x42434835, in the padding after
+the allocation handle, so the x64 size of 48 bytes and every other offset stay
+unchanged; an import under the old sType has no flags. With
+`BC250_HOST_IMPORT_CPU_MAP` the host answers Lock2 and Unlock2 for that
+allocation and vkMapMemory may map it: the first map locks it once, a second map
+returns the same pointer without a host call, and destruction unlocks without
+destroying the borrowed allocation. Without the bit a borrowed allocation is
+never mapped by the ICD. The patch adds one host test case (thirteen in all).
+
+Candidate F43FD08CC5A3320007215F40760ACF432FA887FEB1CC855ECEEA5E36CB55D549
+builds from the series without 0006; with 0006 on top the candidate is 51BC3953
+above.
+
+## Waiting for the queue before a preamble is replaced
+
+0008-preamble-wait.patch follows 0007. `radv_update_preamble_cs` replaces the
+queue's scratch, ring and descriptor buffers and preamble streams when a
+submission needs larger ones, and destroyed the old objects at once. On Linux
+the kernel defers the release until the GPU is done; the WDDM2 winsys evicts,
+frees the virtual address and destroys the allocation immediately, while the
+previous submission may still write its scratch. The patch waits for the
+queue's submitted work (`ctx_wait_idle`) before it destroys the replaced objects
+and keeps them, with a line on stderr, if that wait fails: a leak instead of a
+fault. `radv_wddm2_ctx_wait_idle` now also waits for the queue's progress fence
+after the last submission. Callers pass the queue's context and ring; a follower
+queue passes its leader's.
+
+The change answers two lab bugchecks 0x116 during a DX12 session with ray
+tracing: both dumps show a burst of no-retry write faults on 65 contiguous GPU
+pages of the application's VMID during the paging operation that followed the
+running job. That the faulting pages were a replaced scratch buffer is inferred
+from the timing and the code path, not read from the dump. With the patch the
+same session ran to its bound without a fault or a TDR.
+
+Candidate D672813F87B39CAB0DAFA41AD699C15F785D97DFBDF416B0516966D951E84F27
+(an incremental rebuild over 51BC3953) builds; the host tests pass thirteen
+cases with 241 checks and no failure. The wait can block a submission for up to
+the winsys wait bound when older work waits on a later CPU signal; that case has
+no test yet. Other winsys paths that destroy objects the GPU may still use are
+not audited by this patch. Kto się śpieszy, ten się diabłu cieszy (the devil
+rejoices at the one in a hurry): freeing early is how the 0x116 got in.
