@@ -243,6 +243,8 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
         // A durably confirmed start also confirms its 40 CU request (cumode.c). Its own failure is
         // logged there and costs only a fallback at the next start, never this confirmation.
         if (NT_SUCCESS(status)) (void)CuModeConfirm(Device,"start-health");
+        // The same for a DPM start (dpm.c).
+        if (NT_SUCCESS(status)) (void)DpmConfirm(Device,"start-health");
     }
     if (confirm) StartHealthLeave(Device);
     ExReleaseRundownProtection(&h->Readers);

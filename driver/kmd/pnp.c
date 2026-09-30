@@ -12,6 +12,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
     StartHealthInitialize(device);
     CuModeInitialize(device);
+    DpmInitialize(device);
     SmuOwnerInitialize(&device->Smu);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
@@ -27,6 +28,7 @@ NTSTATUS Bc250RemoveDevice(_In_ const PVOID MiniportDeviceContext)
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
     HangDetectorStop();     // idempotent; a remove without a stop still joins the thread and the timer
+    DpmStop(device);        // idempotent, like the detector: its thread runs this image's code
     StartHealthRemove(device);
     DisplayUnmapFramebuffer(device);
     IhRemove(device);
@@ -131,6 +133,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     InterlockedExchange(&device->RetainedPowerPhase,0);
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
     HangDetectorStart(device);
+    // After it: the governor starts from the floor the start set, and never fails the start (dpm.c).
+    DpmStart(device);
     GuardStage(StageStartDone);
     return STATUS_SUCCESS;
 
@@ -149,6 +153,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     StartHealthClose(device);
     GuardStage(StageStopEnter);
     device->InheritedSignalValid=FALSE;
+    DpmStop(device);        // the floor while the owner is still online, then no governor tick
     SmuOwnerStop(&device->Smu); // join clients before any engine/translation teardown
     device->SystemDisplayReady=FALSE;
     device->PostDisplayStopAttempted=FALSE;
@@ -340,14 +345,15 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
         NTSTATUS status;
         // The hang detector judges a started device in D0 only. A failed transition down leaves it paused:
         // silence is the safe side of a diagnostic that bugchecks.
-        if (DevicePowerState!=PowerDeviceD0) HangDetectorPause();
+        if (DevicePowerState!=PowerDeviceD0) { HangDetectorPause(); DpmPause(device); }
         status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
-        if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) HangDetectorResume();
+        if (DevicePowerState==PowerDeviceD0 && NT_SUCCESS(status)) { DpmResume(device); HangDetectorResume(); }
         return status;
     }
     // Display-only/initial PnP handling retains its existing ownership boundary.
     if (DeviceUid==DISPLAY_ADAPTER_HW_ID && DevicePowerState!=PowerDeviceD0) {
         StartHealthClose(device);
+        DpmStop(device);
         SmuOwnerStop(&device->Smu);
     }
     return STATUS_SUCCESS;

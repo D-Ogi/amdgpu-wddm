@@ -995,8 +995,9 @@ static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
         if (!bc250_fence_reached(observed, Seq)) return FALSE;
         // Store the outstanding sequence, not a boolean. An old DPC may not
         // clear a newer producer's marker after observing an earlier fence.
-        if (pending && bc250_fence_reached(observed, (ULONG)pending))
-            (void)InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending);
+        if (pending && bc250_fence_reached(observed, (ULONG)pending) &&
+            InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
+            DpmBusyEnd(&Device->Dpm);     // the ring went idle: the DPM governor's busy share (dpm.h)
     }
     return TRUE;
 }
@@ -1097,6 +1098,7 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     }
 
     Gfx->SubmitVmid = Vmid;
+    DpmBusyBegin(&Device->Dpm);     // committed: the ring is busy from here (dpm.h)
     if (InterlockedIncrement(&Gfx->PipelineSamples) <= 16) {
         ULONG observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
         GuardLog("gfx: pipeline queued seq%lu prior%lu observed_after_doorbell%lu overlap%u",

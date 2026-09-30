@@ -51,6 +51,7 @@
 #include "start_health.h"
 #include "progress.h"
 #include "cumode.h"
+#include "dpm.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
 
@@ -103,6 +104,7 @@ typedef struct _BC250_VISIBILITY_EVENT {
 typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_STATE StartHealth;
     BC250_CU_MODE_STATE CuMode;        // cumode.c: 24 or 40 CUs, the boot guard, what the caps report
+    BC250_DPM_STATE Dpm;               // dpm.c: the load-driven clock governor, its guard and telemetry
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -278,6 +280,18 @@ void CuModeFinish(BC250_DEVICE* Device);
 NTSTATUS CuModeConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void CuModeRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CU_MODE* Data, BOOLEAN Admin, ULONG EscapeFlags);
 void CuModePatchCaps(BC250_DEVICE* Device, _Inout_updates_bytes_(Bytes) PVOID Caps, ULONG Bytes);
+
+// dpm.c
+struct _BC250_ESCAPE_DPM;
+void DpmInitialize(BC250_DEVICE* Device);
+void DpmStart(BC250_DEVICE* Device);
+void DpmStop(BC250_DEVICE* Device);
+void DpmPause(BC250_DEVICE* Device);
+void DpmResume(BC250_DEVICE* Device);
+void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
+NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+void DpmLogSummary(BC250_DEVICE* Device);
+void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULONG EscapeFlags);
 NTSTATUS GuardConfirmStartDurable(void);
 
 

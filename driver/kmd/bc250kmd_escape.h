@@ -30,7 +30,8 @@
 #define BC250_ESCAPE_OBSERVE_DCN 20u       // named, read-only scanout and timing observations
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
 #define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
-#define BC250_KMD_VERSION 0x000700AEu       // revision 174: CU mode 24/40 with a boot guard (docs/design/cu-mode.md)
+#define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
+#define BC250_KMD_VERSION 0x000700AFu       // revision 175: load-driven DPM up to 2000 MHz (docs/design/dpm.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -137,6 +138,43 @@ typedef struct _BC250_ESCAPE_CU_MODE {
     unsigned long long ExpectedGeneration;  // in, CONFIRM
     unsigned long Reserved[2];
 } BC250_ESCAPE_CU_MODE; // 184 bytes on Windows, ABI 1
+
+// DPM (driver/kmd/dpm.c, docs/design/dpm.md). Adapter-owned software snapshot the governor publishes
+// every tick: no BAR access, no SMU message, so both operations take NoAdapterSynchronization=1 and
+// every other D3DDDI_ESCAPEFLAGS bit zero. READ is open to every caller. CONFIRM needs an
+// administrator, the Generation a READ of this start returned, and a start-health READY adapter; it
+// clears the pending mark of a DPM start, which a later start would otherwise treat as a crash.
+// Mode is BC250_DPM_MODE_*, Reason enum bc250_dpm_reason, Throttle enum bc250_dpm_throttle
+// (driver/shim/include/bc250_dpm.h). CurrentMHz/CurrentMv are the level the governor committed;
+// ObservedMHz/ObservedVid the SMU's readback, at most a second old (FLAG_CLOCK).
+#define BC250_DPM_ABI 1u
+#define BC250_DPM_OP_READ 0u
+#define BC250_DPM_OP_CONFIRM 1u
+#define BC250_DPM_FLAG_RUNNING 1u            // the governor thread runs (fixed-lab too: it samples and logs)
+#define BC250_DPM_FLAG_GOVERNING 2u          // mode DPM and not given up: it changes the clock
+#define BC250_DPM_FLAG_PENDING 4u            // DPM, not confirmed: a restart now falls back to fixed-lab
+#define BC250_DPM_FLAG_CONFIRMED 8u          // DPM, confirmed (this start or an earlier one)
+#define BC250_DPM_FLAG_PAUSED 16u            // a power transition holds the governor
+#define BC250_DPM_FLAG_STABLE 32u            // SetStablePowerState(TRUE): pinned to the floor
+#define BC250_DPM_FLAG_SESSION 64u           // DpmSession is on disk: this start is above the floor now or was lately
+#define BC250_DPM_FLAG_TEMPERATURE 128u      // TemperatureMc is this tick's reading
+#define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
+typedef struct _BC250_ESCAPE_DPM {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Mode, Requested, Reason, Throttle;
+    unsigned long MaxMHz, CapMHz, TargetMHz, WantMHz;   // setting, thermal cap, last applied, load demand
+    unsigned long CurrentMHz, CurrentMv, ObservedMHz, ObservedVid;
+    long TemperatureMc;
+    unsigned long BusyPermille, BusyAvgPermille;         // last tick, exponential average
+    unsigned long Raises, Lowers, ThermalEvents, Errors, Resyncs;
+    unsigned long long Ticks;
+    unsigned long long BusyTime100ns;                    // GFX ring busy since the governor started
+    unsigned long long UptimeMs;                         // since the governor started
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in, CONFIRM
+    unsigned long Reserved[2];
+} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
 
 // Read-only diagnostics, not an atomic hardware snapshot. Require administrator,
 // HardwareAccess=1 and every other D3DDDI_ESCAPEFLAGS bit zero: Level Two keeps

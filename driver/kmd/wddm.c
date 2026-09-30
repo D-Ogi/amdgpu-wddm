@@ -1775,6 +1775,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         return;
     }
     DcnLogVsyncSnapshot(Device);
+    DpmLogSummary(Device);
     WddmSummaryOf(wddm);
     VidMmSummary();
 }
@@ -4740,14 +4741,14 @@ static NTSTATUS Bc250WddmCollectDbgInfo(_In_ const HANDLE hAdapter, _In_ const D
 // Required next to CalibrateGpuClock: the lab's dxgkrnl (10.0.22621.6199) refuses a render adapter whose table is
 // "compiled against WDDM2_0_M2_2_1 or greater, but does not fill in the pfnCalibrateGpuClock or
 // pfnSetStablePowerState DDI" (facts M64; E16 run 003 stopped at a point consistent with that check, which is
-// not the same as having seen it fail). What it asks for - clocks
-// that do not move while a profiler looks - is what this part has anyway: one fixed clock, set once by the startup
-// task (1000 MHz), and no power management in the driver. So there is nothing to do, and the DDI returns nothing.
+// not the same as having seen it fail). What it asks for - clocks that do not move while a profiler looks - is the
+// lab floor (1000 MHz): fixed-lab never leaves it, and the DPM governor pins itself there while this is on (dpm.c).
 static DXGKDDI_SETSTABLEPOWERSTATE Bc250WddmSetStablePowerState;
 static VOID Bc250WddmSetStablePowerState(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETSTABLEPOWERSTATE* pArgs)
 {
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiSetStablePowerState))
-        GuardLog("wddm: SetStablePowerState enabled %u (clocks are fixed: nothing to do)", pArgs->Enabled ? 1u : 0u);
+        GuardLog("wddm: SetStablePowerState enabled %u (the DPM governor pins the floor)", pArgs->Enabled ? 1u : 0u);
+    DpmSetStable((BC250_DEVICE*)hAdapter, pArgs->Enabled ? TRUE : FALSE);
 }
 
 static DXGKDDI_CALIBRATEGPUCLOCK Bc250WddmCalibrateGpuClock;
