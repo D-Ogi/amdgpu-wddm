@@ -434,8 +434,19 @@ int wmain(int argc, wchar_t** argv) {
         return 2;
     }
 
-    // The shell's loads: an absolute path, dependencies from the DLL's own directory and System32 only.
+    // The engine keeps its disk shader cache in %LOCALAPPDATA%\amdgpu-wddm\vkd3d. The harness points LOCALAPPDATA
+    // at localappdata beside itself, before the engine's first device reads it, so no run writes to the profile;
+    // without that directory the cache is off (VKD3D_SHADER_CACHE_PATH=0).
     wchar_t full[MAX_PATH];
+    const DWORD self = GetModuleFileNameW(nullptr, full, MAX_PATH);
+    wchar_t* slash = self && self < MAX_PATH ? std::wcsrchr(full, L'\\') : nullptr;
+    if (slash && wcscpy_s(slash + 1, MAX_PATH - (slash + 1 - full), L"localappdata") == 0 &&
+        (CreateDirectoryW(full, nullptr) || GetLastError() == ERROR_ALREADY_EXISTS))
+        SetEnvironmentVariableW(L"LOCALAPPDATA", full);
+    else
+        SetEnvironmentVariableW(L"VKD3D_SHADER_CACHE_PATH", L"0");
+
+    // The shell's loads: an absolute path, dependencies from the DLL's own directory and System32 only.
     HMODULE engine_dll = nullptr;
     if (GetFullPathNameW(engine_path, MAX_PATH, full, nullptr))
         engine_dll = LoadLibraryExW(full, nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -518,6 +529,7 @@ int wmain(int argc, wchar_t** argv) {
     test_raytracing(env);
     test_raytracing_pipeline(env);
     test_memory_policy(env, create);
+    test_disk_cache(env, create, engine_dll);
     check(env.storage.canaries_intact(), "private storage: every canary behind the driver's size intact");
     checkf(g_binds >= 1 && g_binds >= g_unbinds, "engine services: %ld BindQueue, %ld UnbindQueue", g_binds, g_unbinds);
     env.engine->Release();

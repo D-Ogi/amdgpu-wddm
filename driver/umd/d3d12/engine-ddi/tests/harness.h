@@ -191,5 +191,7 @@ void test_raytracing(Env& env);
 void test_raytracing_pipeline(Env& env);
 // GetCaps 1002 and the shell's memory architecture policy, on query_adapter_caps with the harness's create info.
 void test_memory_policy(const Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create);
+// The engine's disk shader cache in INLINE: concurrent pipeline creation, no engine thread, whole archives.
+void test_disk_cache(Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create, HMODULE engine_dll);
 
 } // namespace harness
