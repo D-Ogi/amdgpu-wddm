@@ -279,8 +279,9 @@ void CuModeFinish(BC250_DEVICE* Device)
         s->Hw.have_stock = 1;
         s->Hw.mode = applied == BC250_CU_MODE_FULL ? BC250_CU_MODE_FULL : BC250_CU_MODE_STOCK;
         ExReleaseFastMutex(&Device->GartLock);
-        GuardLog("cumode: applied %lu CUs (%lu counted), reason %lu, consistent %u, wrote %u, RLC_PG_CNTL 0x%08X",
-                 applied, info.active, reason, (ULONG)hw.consistent, (ULONG)hw.wrote, hw.rlc_pg_cntl);
+        GuardLog("cumode: applied %lu CUs (%lu counted), reason %lu, consistent %u, wrote %u, RLC_PG_CNTL 0x%08X (PG enables 0x%X)",
+                 applied, info.active, reason, (ULONG)hw.consistent, (ULONG)hw.wrote, hw.rlc_pg_cntl,
+                 bc250_cu_pg_enables(hw.rlc_pg_cntl));
         GuardLog("cumode: SA0-3 CC 0x%08X 0x%08X 0x%08X 0x%08X SPI 0x%X 0x%X 0x%X 0x%X",
                  hw.cc[0], hw.cc[1], hw.cc[2], hw.cc[3], hw.spi[0], hw.spi[1], hw.spi[2], hw.spi[3]);
     } else {

@@ -38,8 +38,15 @@ imported sequence is byte for byte what it was.
 The sequence, per shader array under `GRBM_GFX_INDEX`:
 
 1. **Precondition.** Read `RLC_PG_CNTL` and `RLC_PG_ALWAYS_ON_WGP_MASK`; both are only read.
-   - 40 is refused unless `RLC_PG_CNTL` reads 0. The reference measured 0; power gating would decide on its
-     own which WGPs have power.
+   - 40 is refused (`POWER_GATING`) when a power-gating enable of `RLC_PG_CNTL` is set:
+     `GFX_POWER_GATING_ENABLE`, `DYN_PER_WGP_PG_ENABLE`, `STATIC_PER_WGP_PG_ENABLE` or
+     `GFX_PIPELINE_PG_ENABLE` (masks from `gc_10_1_0_sh_mask.h`). With one on, power gating would decide on its
+     own which WGPs have power; static per-WGP PG is the one that acts on `SPI_PG_ENABLE_STATIC_WGP_MASK`.
+   - The other bits are not enables. KMD 0.7.174/175 refused on any non-zero value, as the reference measured 0
+     under Linux. Unit A reads `0x00800000` (to40 of 2026-09-30, KMD 175): bit 23 alone, which our own
+     `bc250_rlc_start()` sets on every RLC start (`gfx_v10_0_rlc_smu_handshake_cntl`: SMU handshake off, GFXOFF
+     disabled; AMD's header calls it `RESERVED2`). From 0.7.176 the guard tests the enables only. The whole value
+     is still logged and reported by the escape, with its enables next to it in the log.
 2. **Read the entry values.** On the first start of a boot they are stock. A later start in the same boot
    takes stock from a volatile registry record (`Parameters\CuModeBoot`, gone at reboot), because the
    registers may still hold our own writes.
@@ -54,8 +61,8 @@ The sequence, per shader array under `GRBM_GFX_INDEX`:
    - If stock does not read back either, the result is `RESTORE_FAILED` and the applied mode is 0 (unknown).
 5. **Broadcast.** Leave `GRBM_GFX_INDEX` broadcasting.
 
-`RLC_PG_ALWAYS_ON_WGP_MASK` is not written. The reference writes `0x1F` to it, but with power gating off
-(`RLC_PG_CNTL = 0`) it should not matter. Its meaning across shader arrays is also not documented where we can
+`RLC_PG_ALWAYS_ON_WGP_MASK` is not written. The reference writes `0x1F` to it, but with every power-gating
+enable off it should not matter (unit A reads `0x3` there). Its meaning across shader arrays is also not documented where we can
 read it.
 
 All five registers are in the Gfx allow table (`gen_regs.py`); `cu_mode_test.c` fails if the sequence touches
@@ -174,7 +181,7 @@ default.
 
 | Step | Action | Pass |
 |---|---|---|
-| 1 | Deploy KMD 0.7.174 by the usual live disable/enable; start-health CONFIRM | `cumode status`: applied 24, reason none, `valid`, no `wrote`; stock CC `0xFFF80000` and SPI `0x7` on all four SAs; `RLC_PG_CNTL` 0. If stock SPI reads `0xFFFF` at stage 4, stop: 40 would be refused (`STOCK_UNEXPECTED`), and the write point needs rethinking |
+| 1 | Deploy KMD 0.7.174 by the usual live disable/enable; start-health CONFIRM | `cumode status`: applied 24, reason none, `valid`, no `wrote`; stock CC `0xFFF80000` and SPI `0x7` on all four SAs; no power-gating enable in `RLC_PG_CNTL` (0.7.176 and later: `0x00800000` passes). If stock SPI reads `0xFFFF` at stage 4, stop: 40 would be refused (`STOCK_UNEXPECTED`), and the write point needs rethinking |
 | 2 | `bc250kmd_cli read 0x0935C` and `0x089BC` (SE0/SA0 after init); `cumode status` temperature | `0x7`, `0xFFF80000`; temperature below 85 C |
 | 3 | `cumode set 40`, then reboot (or `cumode restart-device` for the warm-path trial) | the command returns 0; `CuMode` 40 |
 | 4 | `cumode status` after the start | applied 40, counted 40, `PENDING`, `consistent`, `wrote`; CC `0xFFE00000`, SPI `0x1F` on all SAs; `bc250kmd_cli read 0x0935C` still `0x1F` after the full init |

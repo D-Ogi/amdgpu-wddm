@@ -38,7 +38,7 @@ enum bc250_cu_reason {
 	BC250_CU_REASON_PENDING_UNCONFIRMED = 3,/* an earlier start applied 40 and never confirmed it */
 	BC250_CU_REASON_REGISTRY = 4,		/* the pending mark could not be made durable */
 	BC250_CU_REASON_NOT_THIS_DEVICE = 5,	/* PCI id is not 1002:13FE */
-	BC250_CU_REASON_POWER_GATING = 6,	/* RLC_PG_CNTL is not 0: the reference measured 0 */
+	BC250_CU_REASON_POWER_GATING = 6,	/* an RLC_PG_CNTL power-gating enable is set (bc250_cu_pg_enables) */
 	BC250_CU_REASON_STOCK_UNEXPECTED = 7,	/* stock CC and SPI disagree, or SPI names absent WGPs */
 	BC250_CU_REASON_READBACK = 8,		/* a written value did not read back: stock restored */
 	BC250_CU_REASON_RESTORE_FAILED = 9,	/* ...and stock did not read back either */
@@ -84,6 +84,11 @@ void bc250_cu_decide(const struct bc250_cu_request *req, struct bc250_cu_decisio
  * the pending mark goes, CuMode goes to 24 and the reason is kept. Pure bookkeeping, for symmetry
  * with bc250_cu_decide() and so that the host test sees the same rule the driver runs. */
 int bc250_cu_hardware_fallback(unsigned int requested_mode, unsigned int applied_mode);
+
+/* The power-gating enables of an RLC_PG_CNTL value: GFX_POWER_GATING_ENABLE, DYN_PER_WGP_PG_ENABLE,
+ * STATIC_PER_WGP_PG_ENABLE and GFX_PIPELINE_PG_ENABLE. 40 is refused (POWER_GATING) when any is set.
+ * The other bits are not enables; bit 23, which our RLC start sets (SMU handshake off), is one. */
+unsigned int bc250_cu_pg_enables(unsigned int rlc_pg_cntl);
 
 /* ---- register values and the CU bitmap ------------------------------------------------------- */
 

@@ -19,6 +19,13 @@
 #define USER_INACTIVE_SHIFT	GC_USER_SHADER_ARRAY_CONFIG__INACTIVE_WGPS__SHIFT
 #define SPI_WGP_MASK		SPI_PG_ENABLE_STATIC_WGP_MASK__WGP_MASK_MASK
 #define SPI_WGP_SHIFT		SPI_PG_ENABLE_STATIC_WGP_MASK__WGP_MASK__SHIFT
+/* The RLC_PG_CNTL bits that switch power gating on. The rest of the register is not an enable: our
+ * own bc250_rlc_start() sets bit 23 (Linux: SMU handshake disable, RESERVED2 in AMD's header) on
+ * every RLC start, and KMD 175 refused 40 on exactly that value, 0x00800000, with PG off. */
+#define RLC_PG_ENABLES		(RLC_PG_CNTL__GFX_POWER_GATING_ENABLE_MASK | \
+				 RLC_PG_CNTL__DYN_PER_WGP_PG_ENABLE_MASK | \
+				 RLC_PG_CNTL__STATIC_PER_WGP_PG_ENABLE_MASK | \
+				 RLC_PG_CNTL__GFX_PIPELINE_PG_ENABLE_MASK)
 
 static unsigned int wgp_mask(unsigned int wgps)
 {
@@ -87,6 +94,11 @@ void bc250_cu_decide(const struct bc250_cu_request *req, struct bc250_cu_decisio
 		return;
 	}
 	out->mark_pending = 1;
+}
+
+unsigned int bc250_cu_pg_enables(unsigned int rlc_pg_cntl)
+{
+	return rlc_pg_cntl & (unsigned int)RLC_PG_ENABLES;
 }
 
 int bc250_cu_hardware_fallback(unsigned int requested_mode, unsigned int applied_mode)
@@ -274,7 +286,9 @@ void bc250_cu_mode_apply(struct amdgpu_device *adev, void *ctx, bc250_cu_select_
 
 	mode = hw->mode == BC250_CU_MODE_FULL ? BC250_CU_MODE_FULL : BC250_CU_MODE_STOCK;
 	reason = BC250_CU_REASON_NONE;
-	if (mode == BC250_CU_MODE_FULL && hw->rlc_pg_cntl != 0)
+	/* Static per-WGP PG is the one that would act on SPI_PG_ENABLE_STATIC_WGP_MASK; with every
+	 * enable off that mask only selects where the SPI dispatches. */
+	if (mode == BC250_CU_MODE_FULL && bc250_cu_pg_enables(hw->rlc_pg_cntl) != 0)
 		reason = BC250_CU_REASON_POWER_GATING;
 	for (k = 0; k < hw->sa_count && reason == BC250_CU_REASON_NONE; k++)
 		reason = bc250_cu_targets(mode, (hw->disable >> (k * BC250_CU_WGP_MAX)) & wgp_mask(BC250_CU_WGP_MAX),

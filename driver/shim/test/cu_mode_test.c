@@ -396,12 +396,31 @@ static void test_apply(void)
 	run(&hw, 40, 0x1, NULL, NULL);
 	CHECK_EQ(hw.applied, 24); CHECK_EQ(hw.reason, BC250_CU_REASON_INVALID_DISABLE); CHECK_EQ(m.banked_writes, 0);
 
-	/* RLC power gating on: 40 refused, nothing written. */
+	/* RLC power gating on, each enable alone: 40 refused, nothing written. */
+	{
+		static const unsigned int enables[] = { 0x1, 0x4, 0x8, 0x10 };
+		unsigned int e;
+
+		for (e = 0; e < sizeof(enables) / sizeof(enables[0]); e++) {
+			model_reset(STOCK_CC, STOCK_SPI);
+			m.pg_cntl = enables[e] | 0x00800000u;
+			run(&hw, 40, 0, NULL, NULL);
+			CHECK_EQ(hw.applied, 24); CHECK_EQ(hw.reason, BC250_CU_REASON_POWER_GATING);
+			CHECK_EQ(m.banked_writes, 0);
+			CHECK_EQ(hw.rlc_pg_cntl, enables[e] | 0x00800000u);
+			check_registers(STOCK_CC, STOCK_SPI);
+			check_broadcast_left();
+		}
+	}
+	CHECK_EQ(bc250_cu_pg_enables(0xFFFFFFFFu), 0x1Du);
+
+	/* What unit A reads under KMD 175 (to40 of 2026-09-30): only bit 23, set by our own RLC start
+	 * (SMU handshake off). Not a PG enable: 40 applies, and the value is still reported whole. */
 	model_reset(STOCK_CC, STOCK_SPI);
-	m.pg_cntl = 1;
+	m.pg_cntl = 0x00800000u;
 	run(&hw, 40, 0, NULL, NULL);
-	CHECK_EQ(hw.applied, 24); CHECK_EQ(hw.reason, BC250_CU_REASON_POWER_GATING); CHECK_EQ(m.banked_writes, 0);
-	check_registers(STOCK_CC, STOCK_SPI);
+	CHECK_EQ(hw.applied, 40); CHECK_EQ(hw.reason, BC250_CU_REASON_NONE); CHECK_EQ(hw.rlc_pg_cntl, 0x00800000u);
+	check_registers(FULL_CC, FULL_SPI);
 	check_broadcast_left();
 
 	/* Stock the reference never saw: refused, nothing written. */

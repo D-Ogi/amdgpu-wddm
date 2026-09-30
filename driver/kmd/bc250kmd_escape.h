@@ -31,7 +31,7 @@
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
 #define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
 #define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
-#define BC250_KMD_VERSION 0x000700AFu       // revision 175: load-driven DPM, 1500 MHz default, 2000 MHz ceiling (docs/design/dpm.md)
+#define BC250_KMD_VERSION 0x000700B0u       // revision 176: CU mode power-gating guard tests the PG enables only (docs/design/cu-mode.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
