@@ -199,6 +199,38 @@ The software control passes this variant with `-FeatureLevel12_1` (2026-09-29, e
 interval 44 ms, 11.5 s). With a 10 s client deadline the time bound skips every arm and the operation fails
 with `800700e8`, coverage none.
 
+`build.ps1 -ResetChurn` replaces the `copy` operation with multithreaded command list churn
+(`interactive-resetchurn.h`). It makes, without a game, the traffic under which trial 172 lost the device in a
+RADV callback during `ResetCommandList` (a buffer object's address freed on one thread and mapped on another), and
+checks on the way that every draw reads the constants the CPU gave it. `-ResetChurnThreads` (default 4, 1 to 8)
+recording threads each own one allocator and one list. Per batch each thread resets its allocator and its list
+and records `-ResetChurnDraws` (default 1024) draws of one pixel, each after `SetGraphicsRoot32BitConstants`
+with 32 values and `SetGraphicsRootConstantBufferView` into its UPLOAD ring, so that RADV's upload buffer object
+and command stream grow by doubling within the list and free what they grew out of at the next reset. RADV keeps
+its largest objects across resets, so a thread replaces its allocator after every `-ResetChurnRenew` lists
+(default 2, 0 never) and releases the old one in the middle of the next recording, after a draw chosen from the
+run's seed, so that one thread's frees land among the others' resets and maps. The main thread executes each
+batch's lists in one `ExecuteCommandLists`, signals a fence and waits for it, then reads
+`GetDeviceRemovedReason`; a removal ends the run with `Reset churn device removed at batch B: reason R`. Each
+draw's pixel program copies the 32 root constants and the 16 CBV words into its own 192-byte slot of a UAV
+buffer (slot index = root constant 0), which the list copies to READBACK; after the fence the main thread
+compares every word with what the recording thread wrote. Every word is unique to seed, thread, batch, draw and
+word; the UPLOAD ring is mapped once and has two regions used in turn, a region being written only after the
+fence of the batch that last read it. The first 16 mismatches are traced as `Reset churn mismatch thread T
+batch B draw D root|cbv word W, readback offset O, upload offset U|none, expected E, actual A, actual is ...`,
+naming where the actual value came from when this run wrote it in the last four batches. Batches start until
+`-ResetChurnSeconds` (default 20, 1 to 140) after the operation began, never in the last 10 s before the
+client's deadline, and at most `-ResetChurnBatches` (default 2000) of them; progress is traced every 50
+batches. The run ends with `Reset churn: batches N of P, threads T, draws per list D, lists L, draws X, words W,
+mismatches M, mismatched draws K, removals R, record failures F, renewals A, resets S, time budget
+reached|not reached, E ms, batch ms mean ... max ..., record ..., submit ..., verify ...` and succeeds only when
+a batch ran, every word compared equal, no thread failed and the device was not removed. The default of 20 s
+fits the lab runner as it is (client deadline 70 s, Drive 65 s, copy command about 17 s after the client
+starts); a longer run needs a longer client deadline, watcher budget and Drive first. `resetchurn-test`
+checks the value oracle with the same parameters. The software control passes this variant with
+`-FeatureLevel12_1` (2026-09-30, exit 0, 333 batches in 20 s, 1332 lists, 1363968 draws, 65470464 words
+compared, no mismatch, 664 allocator renewals, batch mean 59 ms).
+
 `controller.ps1 -Abort` can publish `abort.request` while an operation is active.
 It does not interrupt a driver callback. The independent Job deadline remains
 necessary if a DDI call does not return. Unretired GPU resources are retained
@@ -234,6 +266,12 @@ unmatched, malformed and untracked records remain visible. Hosted callback IDs
 are device-local, so the analyzer reports their counts without assuming a global
 pairing. Raw text, handles and resource contents are omitted from its bounded
 output. The original trace remains the source of evidence.
+
+Trace lines of the `-ResetChurn` variant count under one `Reset churn` name. Its typed lines (start, progress,
+thread end, mismatch, removal, summary) are parsed into named fields under `api.reset_churn`, with at most
+`MAX_EXAMPLES` mismatch and failure examples, and a `criterion`: `pass` needs the summary line with status 0,
+at least one batch, no mismatch, removal, record failure or other failing line, and no malformed typed line;
+`fail` lists what went wrong; anything else is `incomplete` with its reasons.
 
 ## Receipt-gated command planner
 

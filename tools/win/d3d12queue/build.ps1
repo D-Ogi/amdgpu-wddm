@@ -47,6 +47,21 @@ param(
     [ValidateRange(0, 4)][int]$GameLoadSingleSteps = 4,
     # Test build with -GameLoadRenderHoldMs only: throw right after the render thread is detached.
     [switch]$GameLoadThrowAfterDetach,
+    # Diagnostic variant: the copy verb runs recording threads that reset their allocators and lists every batch,
+    # record draws with root constants and root CBVs, and replace their allocators in turn; the main thread executes
+    # each batch with a fence round trip and compares every constant the draws read back. No window.
+    [switch]$ResetChurn,
+    # -ResetChurn: recording threads, each with its own list and allocator.
+    [ValidateRange(1, 8)][int]$ResetChurnThreads = 4,
+    # -ResetChurn: most batches (one list per thread each).
+    [ValidateRange(1, 100000)][int]$ResetChurnBatches = 2000,
+    # -ResetChurn: batches start until this many seconds after the copy verb began, never in the last 10 s before the
+    # client's deadline. 20 fits the lab runner as it is (client deadline 70 s, Drive 65 s).
+    [ValidateRange(1, 140)][int]$ResetChurnSeconds = 20,
+    # -ResetChurn: draws per list.
+    [ValidateRange(16, 4096)][int]$ResetChurnDraws = 1024,
+    # -ResetChurn: lists an allocator records before a new one replaces it; 0 keeps one allocator per thread.
+    [ValidateRange(0, 64)][int]$ResetChurnRenew = 2,
     # Back buffer format of -Present: B8G8R8A8_UNORM, or R10G10B10A2_UNORM as a 10-bit swap chain composed on
     # the desktop whatever the monitor's depth.
     [ValidateSet('Bgra8', 'Rgb10a2')][string]$PresentFormat = 'Bgra8'
@@ -81,8 +96,10 @@ $env:INCLUDE = ''; $env:LIB = ''
 $variant = @(); if ($RadvExperimental) { $variant = @("/DINTERACTIVE_RADV_EXPERIMENTAL=$RadvExperimental") }
 if ($FeatureLevel12_1) { $variant += '/DINTERACTIVE_FEATURE_LEVEL_12_1' }
 if ($DefaultHeap) { $variant += '/DINTERACTIVE_DEFAULT_HEAP' }
-if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad | Where-Object { $_ }).Count -gt 1) {
-    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection and GameLoad each replace the copy verb; choose one' }
+if (@($Draw, $Scene, $Present, $Sparse, $RayQuery, $RayPipeline, $RayState, $RayGrow, $RayCollection, $GameLoad, $ResetChurn | Where-Object { $_ }).Count -gt 1) {
+    throw 'Draw, Scene, Present, Sparse, RayQuery, RayPipeline, RayState, RayGrow, RayCollection, GameLoad and ResetChurn each replace the copy verb; choose one' }
+foreach ($name in 'ResetChurnThreads', 'ResetChurnBatches', 'ResetChurnSeconds', 'ResetChurnDraws', 'ResetChurnRenew') {
+    if ($PSBoundParameters.ContainsKey($name) -and -not $ResetChurn) { throw "$name needs ResetChurn" } }
 if ($GameLoadArm -ne 'Both' -and -not $GameLoad) { throw 'GameLoadArm needs GameLoad' }
 if ($GameLoadRenderHoldMs -and -not $GameLoad) { throw 'GameLoadRenderHoldMs needs GameLoad' }
 if ($GameLoadRenderHoldMs) { $variant += "/DINTERACTIVE_GAMELOAD_RENDER_HOLD_MS=$GameLoadRenderHoldMs" }
@@ -102,6 +119,12 @@ if ($RayCollection) { $variant += '/DINTERACTIVE_RAYCOLLECTION' }
 if ($GameLoad) { $variant += '/DINTERACTIVE_GAMELOAD', "/DINTERACTIVE_GAMELOAD_ARMS=$(@{Small = 1; Large = 2; Both = 3}[$GameLoadArm])" }
 if ($GameLoadSingleSteps -ne 4 -and -not $GameLoad) { throw 'GameLoadSingleSteps needs GameLoad' }
 if ($GameLoad) { $variant += "/DINTERACTIVE_GAMELOAD_SINGLE_STEPS=$GameLoadSingleSteps" }
+# resetchurn-test checks the oracle with the same values as the client; without -ResetChurn, with the defaults.
+$churn = @()
+if ($ResetChurn) { $churn = @("/DINTERACTIVE_RESETCHURN_THREADS=$ResetChurnThreads",
+    "/DINTERACTIVE_RESETCHURN_BATCHES=$ResetChurnBatches", "/DINTERACTIVE_RESETCHURN_SECONDS=$ResetChurnSeconds",
+    "/DINTERACTIVE_RESETCHURN_DRAWS=$ResetChurnDraws", "/DINTERACTIVE_RESETCHURN_RENEW=$ResetChurnRenew")
+    $variant += @('/DINTERACTIVE_RESETCHURN') + $churn }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",
@@ -119,8 +142,8 @@ Get-Item "$Out\amdgpu_wddm_d3d12_queue.exe" | ForEach-Object { '{0,9}  {1}  sha2
 if ($LASTEXITCODE -ne 2) { throw "Invalid CLI accepted" }
 
 # Pure command/selection checks do not enumerate adapters or call D3D.
-foreach ($test in @('parser-test','interactive-test')) {
-& $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
+foreach ($test in @('parser-test','interactive-test','resetchurn-test')) {
+& $cl @(@(if ($test -eq 'resetchurn-test') { $churn }) + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$test.obj",
     "/Fe$Out\$test.exe", (Join-Path $here "$test.cpp"), '/link',

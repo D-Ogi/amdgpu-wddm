@@ -240,6 +240,119 @@ class SummaryTests(unittest.TestCase):
         self.assertNotIn("names", result["api"])
         self.assertNotIn("SECRET", json.dumps(result))
 
+    CHURN_START = ("Reset churn seed 0123456789abcdef, threads 4, batches 2000, starts until 20000 ms, draws per list 1024, "
+                   "renew 2, root words 32, cbv words 16, ring regions 2")
+
+    @staticmethod
+    def churn(api, hr="00000000", phase="after", elapsed=100, thread=None):
+        value = dict(sequence=3, elapsed_ms=elapsed, phase=phase, api=api, hr=hr)
+        if thread is not None:
+            value["thread"] = thread
+        return value
+
+    @staticmethod
+    def churn_summary(batches=600, mismatches=0, removals=0, failures=0, budget="reached"):
+        return (f"Reset churn: batches {batches} of 2000, threads 4, draws per list 1024, lists {batches * 4}, "
+                f"draws {batches * 4096}, words {batches * 4096 * 48}, mismatches {mismatches}, mismatched draws {min(mismatches, 1)}, "
+                f"removals {removals}, record failures {failures}, renewals {batches * 2}, resets {batches * 2}, "
+                f"time budget {budget}, 20012 ms, batch ms mean 33 max 71, record 12, submit 15, verify 6")
+
+    def test_reset_churn_pass(self):
+        trace = [self.churn("copy", phase="before"), self.churn(self.CHURN_START),
+                 self.churn("Reset churn CreateRootSignature", phase="before"), self.churn("Reset churn CreateRootSignature"),
+                 self.churn("Reset churn CreateCommandAllocator", phase="before", thread=2),
+                 self.churn("Reset churn CreateCommandAllocator", thread=2), self.churn("Reset churn setup done"),
+                 self.churn("Reset churn progress: batch 550, lists 2200, mismatches 0, 18500 ms")]
+        trace += [self.churn(f"Reset churn thread {t} end: lists 600, renewals 300, resets 300", thread=t) for t in range(4)]
+        trace += [self.churn(self.churn_summary()), self.churn("copy")]
+        churn = self.run_summary([], trace)["api"]
+        self.assertNotIn("invalid_schema", churn["input"])
+        self.assertEqual(churn["name_edges"]["Reset churn"], 12)
+        self.assertEqual(churn["last"]["api"], "copy")
+        churn = churn["reset_churn"]
+        self.assertEqual(churn["criterion"], "pass")
+        self.assertEqual(churn["reasons"], [])
+        self.assertEqual(churn["config"]["seed"], "0123456789abcdef")
+        self.assertEqual(churn["config"]["draws_per_list"], 1024)
+        self.assertEqual(churn["summary"]["batches"], 600)
+        self.assertEqual(churn["summary"]["words"], 600 * 4096 * 48)
+        self.assertEqual(churn["summary"]["time_budget"], "reached")
+        self.assertEqual(churn["summary"]["hr"], "00000000")
+        self.assertEqual(churn["last_progress"]["batch"], 550)
+        self.assertEqual(churn["thread_ends"]["3"], dict(lists=600, renewals=300, resets=300))
+        self.assertEqual(churn["counts"]["other"], 5)
+        self.assertNotIn("failures", churn["counts"])
+
+    def test_reset_churn_removal(self):
+        removed = "887a0005"
+        trace = [self.churn(self.CHURN_START), self.churn("Reset churn setup done"),
+                 self.churn("Reset churn batch 12 thread 3: ResetCommandList", hr=removed, thread=3),
+                 self.churn("Reset churn batch 12: recording failed on thread 3", hr=removed),
+                 self.churn(f"Reset churn device removed at batch 12: reason {removed}", hr=removed),
+                 self.churn(self.churn_summary(batches=12, removals=1, failures=1, budget="not reached"), hr=removed)]
+        churn = self.run_summary([], trace)["api"]["reset_churn"]
+        self.assertEqual(churn["criterion"], "fail")
+        self.assertEqual(churn["removal"], dict(batch=12, reason=removed))
+        self.assertEqual(churn["reasons"], ["device_removed", "record_failure", "failure_lines", "status"])
+        self.assertEqual(churn["failure_examples"][0], dict(api="Reset churn batch 12 thread 3: ResetCommandList", hr=removed))
+        self.assertEqual(churn["counts"]["failures"], 2)
+        # A removal line alone fails the run even when the process never wrote its summary.
+        churn = self.run_summary([], trace[:1] + trace[4:5])["api"]["reset_churn"]
+        self.assertEqual(churn["criterion"], "fail")
+        self.assertEqual(churn["reasons"], ["device_removed", "no_summary"])
+
+    def test_reset_churn_mismatches_are_parsed_and_bounded(self):
+        head = "Reset churn mismatch thread 2 batch 42 draw 7 cbv word 3, readback offset 1484, upload offset 1804, expected 1a2b3c4d, actual "
+        sources = ["5e6f7a8b, actual is from thread 1 batch 40 draw 9 root word 31", "00000007, actual is a slot index",
+                   "deadbeef, actual is unknown"]
+        trace = [self.churn(self.CHURN_START)]
+        trace += [self.churn(head + sources[i % 3], hr="80004005") for i in range(3 * summary.MAX_EXAMPLES)]
+        trace.append(self.churn("Reset churn mismatch thread 0 batch 1 draw 0 root word 0, readback offset 0, upload offset none, "
+                                "expected 00000000, actual 00000005, actual is a slot index", hr="80004005"))
+        churn = self.run_summary([], trace)["api"]["reset_churn"]
+        self.assertEqual(churn["counts"]["mismatch"], 3 * summary.MAX_EXAMPLES + 1)
+        self.assertEqual(len(churn["mismatch_examples"]), summary.MAX_EXAMPLES)
+        first = churn["mismatch_examples"][0]
+        self.assertEqual(first, dict(thread=2, batch=42, draw=7, part="cbv", word=3, readback_offset=1484, upload_offset=1804,
+                                     expected="1a2b3c4d", actual="5e6f7a8b",
+                                     source=dict(kind="run", thread=1, batch=40, draw=9, part="root", word=31)))
+        self.assertEqual(churn["mismatch_examples"][1]["source"], dict(kind="slot_index"))
+        self.assertEqual(churn["mismatch_examples"][2]["source"], dict(kind="unknown"))
+        self.assertEqual(churn["criterion"], "fail")
+        self.assertEqual(churn["reasons"], ["mismatch", "no_summary"])
+        self.assertNotIn("failures", churn["counts"])
+        self.assertLess(len(json.dumps(churn)), 6000)
+
+    def test_reset_churn_incomplete_without_summary(self):
+        trace = [self.churn(self.CHURN_START), self.churn("Reset churn setup done"),
+                 self.churn("Reset churn progress: batch 50, lists 200, mismatches 0, 1700 ms")]
+        churn = self.run_summary([], trace)["api"]["reset_churn"]
+        self.assertEqual(churn["criterion"], "incomplete")
+        self.assertEqual(churn["reasons"], ["no_summary"])
+        self.assertIsNone(churn["summary"])
+        # Mismatches reported by progress alone are enough to fail.
+        trace.append(self.churn("Reset churn progress: batch 100, lists 400, mismatches 3, 3400 ms", hr="80004005"))
+        self.assertEqual(self.run_summary([], trace)["api"]["reset_churn"]["reasons"], ["mismatch", "no_summary"])
+
+    def test_reset_churn_malformed_lines_block_a_pass(self):
+        malformed = ["Reset churn: batches many of 2000", "Reset churn mismatch thread 1",
+                     "Reset churn device removed at batch 12: reason 887A0005",
+                     "Reset churn progress: batch 99999999999999999999999, lists 1, mismatches 0, 1 ms",
+                     "Reset churn thread 1 end: lists 1", self.CHURN_START + " extra"]
+        trace = [self.churn(self.CHURN_START)] + [self.churn(text) for text in malformed] + [self.churn(self.churn_summary())]
+        trace += [self.churn("Reset churnX"), self.churn("Reset churn " + "x" * 600)]
+        result = self.run_summary([], trace)["api"]
+        self.assertEqual(result["input"]["invalid_schema"], 2)
+        churn = result["reset_churn"]
+        self.assertEqual(churn["counts"]["malformed"], len(malformed))
+        self.assertEqual(churn["criterion"], "incomplete")
+        self.assertEqual(churn["reasons"], ["malformed_lines"])
+        self.assertIsNone(churn["removal"])
+        self.assertIsNone(churn["last_progress"])
+        self.assertEqual(churn["thread_ends"], {})
+        # Other runs carry no reset churn section.
+        self.assertNotIn("reset_churn", self.run_summary([], [self.churn("copy")])["api"])
+
     def test_output_and_tracking_bounds(self):
         events = ["{SECRET" + "x" * summary.MAX_LINE]
         events += [ddi("begin", seq=i+1, name="pfnSynthetic"+str(i)) for i in range(2000)]

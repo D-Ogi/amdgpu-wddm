@@ -49,6 +49,40 @@ API_NAMES = frozenset((
     "SetEventOnCompletion 1", "WaitForFence bounded", "GetCompletedValue",
     "Map READBACK", "Unmap READBACK", "Compare 4096 exact bytes",
 ))
+# Reset churn variant (interactive-resetchurn.h): its labels carry numbers, so they share one name bucket and the
+# typed lines below are parsed into named fields. A line that starts like a typed line but does not match it whole is
+# malformed and never counts towards a pass.
+RESET_CHURN = "Reset churn"
+MAX_LABEL = 200
+_U = r"\d{1,20}"
+RESET_CHURN_LINES = tuple((kind, re.compile(prefix), re.compile(pattern.replace("{U}", _U))) for kind, prefix, pattern in (
+    ("start", r"Reset churn seed ",
+     r"Reset churn seed (?P<seed>[0-9a-f]{16}), threads (?P<threads>{U}), batches (?P<batches>{U}), "
+     r"starts until (?P<starts_until_ms>{U}) ms, draws per list (?P<draws_per_list>{U}), renew (?P<renew>{U}), "
+     r"root words (?P<root_words>{U}), cbv words (?P<cbv_words>{U}), ring regions (?P<ring_regions>{U})"),
+    ("summary", r"Reset churn: ",
+     r"Reset churn: batches (?P<batches>{U}) of (?P<planned>{U}), threads (?P<threads>{U}), "
+     r"draws per list (?P<draws_per_list>{U}), lists (?P<lists>{U}), draws (?P<draws>{U}), words (?P<words>{U}), "
+     r"mismatches (?P<mismatches>{U}), mismatched draws (?P<mismatched_draws>{U}), removals (?P<removals>{U}), "
+     r"record failures (?P<record_failures>{U}), renewals (?P<renewals>{U}), resets (?P<resets>{U}), "
+     r"time budget (?P<time_budget>reached|not reached), (?P<elapsed_ms>{U}) ms, batch ms mean (?P<batch_ms_mean>{U}) "
+     r"max (?P<batch_ms_max>{U}), record (?P<record_ms_mean>{U}), submit (?P<submit_ms_mean>{U}), "
+     r"verify (?P<verify_ms_mean>{U})"),
+    ("removal", r"Reset churn device removed",
+     r"Reset churn device removed at batch (?P<batch>{U}): reason (?P<reason>[0-9a-f]{8})"),
+    ("mismatch", r"Reset churn mismatch ",
+     r"Reset churn mismatch thread (?P<thread>{U}) batch (?P<batch>{U}) draw (?P<draw>{U}) (?P<part>root|cbv) "
+     r"word (?P<word>{U}), readback offset (?P<readback_offset>{U}), upload offset (?P<upload_offset>none|{U}), "
+     r"expected (?P<expected>[0-9a-f]{8}), actual (?P<actual>[0-9a-f]{8}), actual is (?P<source>a slot index|unknown|"
+     r"from thread (?P<source_thread>{U}) batch (?P<source_batch>{U}) draw (?P<source_draw>{U}) "
+     r"(?P<source_part>root|cbv) word (?P<source_word>{U}))"),
+    ("progress", r"Reset churn progress",
+     r"Reset churn progress: batch (?P<batch>{U}), lists (?P<lists>{U}), mismatches (?P<mismatches>{U}), "
+     r"(?P<elapsed_ms>{U}) ms"),
+    ("thread_end", r"Reset churn thread \d",
+     r"Reset churn thread (?P<thread>{U}) end: lists (?P<lists>{U}), renewals (?P<renewals>{U}), resets (?P<resets>{U})"),
+))
+RESET_CHURN_TEXT = frozenset(("seed", "reason", "expected", "actual", "part", "time_budget"))
 
 
 def integer(value, maximum=U64):
@@ -70,6 +104,97 @@ def bump(counter, key):
     if key not in counter and len(counter) >= MAX_BUCKETS:
         key = "other"
     counter[key] += 1
+
+
+def reset_churn_name(name):
+    return isinstance(name, str) and len(name) <= 512 and (name.startswith(RESET_CHURN + " ") or name.startswith(RESET_CHURN + ":"))
+
+
+def reset_churn_fields(match):
+    fields = {}
+    for key, value in match.groupdict().items():
+        if value is None or key.startswith("source"):
+            continue
+        if key in RESET_CHURN_TEXT:
+            fields[key] = value
+        elif key == "upload_offset" and value == "none":
+            fields[key] = None
+        elif integer(int(value)) is None:
+            return None
+        else:
+            fields[key] = int(value)
+    source = match.groupdict().get("source")
+    if source is not None:
+        if source.startswith("from "):
+            numbers = [int(match.group("source_" + key)) for key in ("thread", "batch", "draw", "word")]
+            if any(integer(number) is None for number in numbers):
+                return None
+            fields["source"] = dict(kind="run", thread=numbers[0], batch=numbers[1], draw=numbers[2],
+                                    part=match.group("source_part"), word=numbers[3])
+        else:
+            fields["source"] = dict(kind="slot_index" if source == "a slot index" else "unknown")
+    return fields
+
+
+def reset_churn_record(state, name, phase, code):
+    counts = state["counts"]
+    counts["lines"] += 1
+    for kind, prefix, pattern in RESET_CHURN_LINES:
+        if not prefix.match(name):
+            continue
+        match = pattern.fullmatch(name)
+        fields = reset_churn_fields(match) if match else None
+        if fields is None:
+            counts["malformed"] += 1
+            return
+        counts[kind] += 1
+        if kind == "start":
+            state["config"] = fields
+        elif kind == "summary":
+            fields["hr"] = code
+            state["summary"] = fields
+        elif kind == "removal":
+            if state["removal"] is None:
+                state["removal"] = fields
+        elif kind == "mismatch":
+            if len(state["mismatch_examples"]) < MAX_EXAMPLES:
+                state["mismatch_examples"].append(fields)
+        elif kind == "progress":
+            state["last_progress"] = fields
+        else:
+            ends, thread = state["thread_ends"], str(fields.pop("thread"))
+            if thread in ends or len(ends) < MAX_BUCKETS:
+                ends[thread] = fields
+            else:
+                counts["untracked_thread_ends"] += 1
+        return
+    counts["other"] += 1
+    if phase == "after" and code != "00000000":
+        counts["failures"] += 1
+        if len(state["failure_examples"]) < MAX_EXAMPLES:
+            state["failure_examples"].append(dict(api=name[:MAX_LABEL], hr=code))
+
+
+def reset_churn_result(state):
+    # Pass needs the final summary line with status 0, a batch, and nothing wrong anywhere else in the trace.
+    counts, final, progress = state["counts"], state["summary"], state["last_progress"]
+    failed = []
+    if state["removal"] is not None or (final and final["removals"]):
+        failed.append("device_removed")
+    if counts["mismatch"] or (final and final["mismatches"]) or (progress and progress["mismatches"]):
+        failed.append("mismatch")
+    if final and final["record_failures"]:
+        failed.append("record_failure")
+    if counts["failures"]:
+        failed.append("failure_lines")
+    if final and final["hr"] != "00000000":
+        failed.append("status")
+    open_items = [reason for reason, present in (("no_summary", final is None), ("no_batches", final is not None and not final["batches"]),
+                                                  ("malformed_lines", counts["malformed"])) if present]
+    criterion = "fail" if failed else "incomplete" if open_items else "pass"
+    return dict(counts=dict(counts), config=state["config"], summary=final, removal=state["removal"], last_progress=progress,
+                thread_ends=state["thread_ends"], mismatch_examples=state["mismatch_examples"],
+                failure_examples=state["failure_examples"], criterion=criterion, reasons=failed + open_items)
 
 
 def records(path, counts):
@@ -232,18 +357,26 @@ def summarize(runtime_err, api_trace=None):
     if api_trace is not None:
         api_counts, api_statuses, api_names, read_counts = Counter(), Counter(), Counter(), Counter()
         last = None
+        churn = dict(counts=Counter(), config=None, summary=None, removal=None, last_progress=None, thread_ends={},
+                     mismatch_examples=[], failure_examples=[])
         for obj in records(api_trace, read_counts):
             phase, name = obj.get("phase"), obj.get("api")
             code, seq, elapsed = status(obj.get("hr")), integer(obj.get("sequence")), integer(obj.get("elapsed_ms"))
-            if phase not in ("before", "after") or not isinstance(name, str) or name not in API_NAMES or code is None or seq is None or elapsed is None:
+            churn_line = reset_churn_name(name)
+            if phase not in ("before", "after") or not isinstance(name, str) or (name not in API_NAMES and not churn_line) or code is None or seq is None or elapsed is None:
                 read_counts["invalid_schema"] += 1
                 continue
             api_counts[phase] += 1
-            bump(api_names, name)
+            bucket = RESET_CHURN if churn_line else name
+            bump(api_names, bucket)
             if phase == "after":
                 bump(api_statuses, code)
-            last = dict(sequence=seq, api=name, phase=phase, hr=code, elapsed_ms=elapsed)
+            last = dict(sequence=seq, api=bucket, phase=phase, hr=code, elapsed_ms=elapsed)
+            if churn_line:
+                reset_churn_record(churn, name, phase, code)
         result["api"] = dict(input=dict(read_counts), counts=dict(api_counts), statuses=dict(api_statuses), name_edges=dict(api_names), last=last)
+        if churn["counts"]["lines"]:
+            result["api"]["reset_churn"] = reset_churn_result(churn)
     return result
 
 
