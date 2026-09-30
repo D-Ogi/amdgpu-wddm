@@ -1152,6 +1152,93 @@ static int Log(const WCHAR *fromText, int summary)
 static const char *const g_JournalKind[] = { "?", "update-cpu", "update-gpu", "vfill", "vtransfer", "flush-tlb",
                                              "destroy", "transfer", "fill" };
 
+static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long i)
+{
+    const BC250_PAGING_JOURNAL_RECORD *r = &journal->Records[i];
+    const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
+    printf("%8llu %14.6f %-10s L%lu i%-3lu n%-3lu v%-3lu va 0x%012llX alloc 0x%016llX off 0x%llX dma 0x%llX "
+           "fence %lu seq %lu flags 0x%lX%s\n",
+           journal->Next - journal->Returned + i, (double)r->Time / 1e7, kind, r->Level, r->Index, r->Count,
+           r->Valid, r->Va, r->Allocation, r->Offset, r->Dma, r->Fence, r->Seq, r->Flags,
+           (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "");
+}
+
+// One escape: the records from `from`, printed; returns the driver's Next (the index to ask for next), or 0 on a
+// refusal, which the caller has already reported when `report` is set.
+static int JournalPage(BC250_ESCAPE_PAGING_JOURNAL *journal, unsigned long long from, int report)
+{
+    NTSTATUS status;
+
+    memset(journal, 0, sizeof(*journal));
+    journal->Magic = BC250_ESCAPE_MAGIC;
+    journal->Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
+    journal->From = from;
+    if (SendEscape(BC250_DEFAULT_HWID, journal, sizeof(*journal), &status)) return 1;
+    if (!NT_SUCCESS(status)) { if (report) PrintStatus("D3DKMTEscape", status); return 1; }
+    if (journal->Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { if (report) printf("refused: caller is not an administrator\n"); return 3; }
+    if (journal->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
+        if (report) printf("refused: this driver build has no paging journal (0.7.179 or older)\n");
+        return 3;
+    }
+    if (journal->Status != BC250_ESCAPE_STATUS_DONE) {
+        if (report) printf("refused: driver status %lu, NTSTATUS 0x%08lX %s\n", journal->Status, journal->NtStatus,
+                           StatusName((NTSTATUS)journal->NtStatus));
+        return 3;
+    }
+    return 0;
+}
+
+// journal follow SECONDS [MS]: one process, one adapter handle, one escape per interval, printing the records the
+// KMD added since the previous read (the first read only positions the cursor at Next). The trial sampler that
+// spawned a fresh bc250kmd_cli every second alongside the present heartbeat left the lab's sshd accepting
+// nothing for as long as it ran (2026-09-30, trial 152 and scratch\dpm\test-shape.sh); a single long process
+// like `dpm N MS` never did. A liveness line every 30 s, a summary at the end.
+static int JournalFollow(const WCHAR *secondsText, const WCHAR *msText)
+{
+    static BC250_ESCAPE_PAGING_JOURNAL journal;
+    unsigned long long from, printed = 0, lost = 0;
+    unsigned long seconds, ms = 1000, reads = 0;
+    ULONGLONG start, lastLive;
+    WCHAR *end;
+    int rc;
+
+    seconds = wcstoul(secondsText, &end, 10);
+    if (*end || seconds == 0 || seconds > 86400) { fprintf(stderr, "journal follow SECONDS [MS]: SECONDS 1..86400\n"); return 2; }
+    if (msText != NULL) {
+        ms = wcstoul(msText, &end, 10);
+        if (*end || ms < 50 || ms > 60000) { fprintf(stderr, "journal follow SECONDS [MS]: MS 50..60000\n"); return 2; }
+    }
+    rc = JournalPage(&journal, ~0ull, 1);
+    if (rc) return rc;
+    from = journal.Next;
+    printf("journal follow: %lu s every %lu ms from record %llu (%llu written so far, ring of %lu, table %s)\n",
+           seconds, ms, from, journal.Total, journal.Capacity,
+           (journal.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM" : "display-only");
+    fflush(stdout);
+    start = lastLive = GetTickCount64();
+    for (;;) {
+        ULONGLONG now = GetTickCount64();
+        if (now - start >= (ULONGLONG)seconds * 1000ull) break;
+        rc = JournalPage(&journal, from, 0);
+        if (rc) { printf("journal follow: escape failed (%d) at read %lu\n", rc, reads + 1); fflush(stdout); return rc; }
+        reads++;
+        lost += journal.Lost;
+        for (unsigned long i = 0; i < journal.Returned && i < BC250_PAGING_JOURNAL_MAX; i++) PrintJournalRecord(&journal, i);
+        printed += journal.Returned;
+        if (journal.Next > from) from = journal.Next;
+        if (journal.Returned == BC250_PAGING_JOURNAL_MAX) continue;   // a burst: drain it before sleeping
+        if (now - lastLive >= 30000ull) {
+            printf("journal follow: t=%llu s reads %lu printed %llu lost %llu next %llu\n",
+                   (now - start) / 1000ull, reads, printed, lost, from);
+            lastLive = now;
+        }
+        fflush(stdout);
+        Sleep(ms);
+    }
+    printf("journal follow: done, %lu reads, %llu records printed, %llu lost to the ring, next %llu\n", reads, printed, lost, from);
+    return 0;
+}
+
 static int Journal(const WCHAR *fromText)
 {
     static BC250_ESCAPE_PAGING_JOURNAL journal;     // 4.6 KB: a static, like the log's
@@ -1190,13 +1277,7 @@ static int Journal(const WCHAR *fromText)
                    (journal.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM" : "display-only");
         first = 0;
         for (unsigned long i = 0; i < journal.Returned && i < BC250_PAGING_JOURNAL_MAX; i++) {
-            const BC250_PAGING_JOURNAL_RECORD *r = &journal.Records[i];
-            const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
-            printf("%8llu %14.6f %-10s L%lu i%-3lu n%-3lu v%-3lu va 0x%012llX alloc 0x%016llX off 0x%llX dma 0x%llX "
-                   "fence %lu seq %lu flags 0x%lX%s\n",
-                   journal.Next - journal.Returned + i, (double)r->Time / 1e7, kind, r->Level, r->Index, r->Count,
-                   r->Valid, r->Va, r->Allocation, r->Offset, r->Dma, r->Fence, r->Seq, r->Flags,
-                   (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "");
+            PrintJournalRecord(&journal, i);
             printed++;
         }
         if (journal.Returned == 0 || journal.Next <= from) break;   // the end, or a driver that is not moving on
@@ -1371,6 +1452,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
                         "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
+                        "       bc250kmd_cli journal follow SECONDS [MS]  (one process printing new records every MS, default 1000)\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -1399,6 +1481,8 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 4) return Dpm(argc, argv);
     if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
+    if (!_wcsicmp(argv[1], L"journal") && argc >= 4 && argc <= 5 && !_wcsicmp(argv[2], L"follow"))
+        return JournalFollow(argv[3], argc == 5 ? argv[4] : NULL);
     if (!_wcsicmp(argv[1], L"journal") && argc <= 3) return Journal(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
