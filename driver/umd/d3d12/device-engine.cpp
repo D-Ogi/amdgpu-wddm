@@ -53,11 +53,17 @@ class DeviceEngine final {
         auto& self=*static_cast<DeviceEngine*>(owner);
         if(!self.active_)return static_cast<int32_t>(0xc000000du);
         const auto sequence=++self.callback_sequence_;
-        LARGE_INTEGER start{},end{};QueryPerformanceCounter(&start);
         // Start/end pairs reveal an unfinished callback without stopping the
         // kernel. IDs are local to this device; no handles/private payload.
-        std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"begin\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
-            sequence,operation,start.QuadPart,GetCurrentThreadId());std::fflush(stderr);
+        // Full trace mode only: a game makes thousands of these callbacks per frame, and the
+        // unconditional formatting cost 15 % of this module's main-thread samples (native 164).
+        const bool traced=ddi_trace_enabled();
+        LARGE_INTEGER start{},end{};
+        if(traced){
+            QueryPerformanceCounter(&start);
+            std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"begin\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"thread\":%lu}\n",
+                sequence,operation,start.QuadPart,GetCurrentThreadId());std::fflush(stderr);
+        }
         int32_t result;
         bool heap=false;
         if(self.imports_ && argument && (operation==BC250_HOST_Lock2 || operation==BC250_HOST_Unlock2)){
@@ -69,6 +75,7 @@ class DeviceEngine final {
             const HRESULT hr=self.imports_->dispatch(operation,argument);
             result=hr==S_OK?0:static_cast<int32_t>(hr==E_OUTOFMEMORY?0xc0000017u:hr==E_INVALIDARG?0xc000000du:0xc0000001u);
         } else result=HostedDispatch::dispatch(&self.dispatch_,operation,argument);
+        if(!traced)return result;
         QueryPerformanceCounter(&end);
         std::fprintf(stderr,"{\"event\":\"hosted-callback\",\"edge\":\"end\",\"sequence\":%llu,\"op\":%u,\"qpc\":%lld,\"status\":\"%08x\"}\n",
             sequence,operation,end.QuadPart,static_cast<unsigned>(result));

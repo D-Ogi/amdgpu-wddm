@@ -2,6 +2,7 @@
 #include "native-queue-ddi.h"
 #include "device-engine.h"
 #include "fence-ddi.h"
+#include "ddi-trace.h"
 #include <cstdint>
 #include <cstdio>
 #include <new>
@@ -71,8 +72,9 @@ void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATIO
     // INLINE Execute must already have submitted all work on that same context.
     // No separate engine fence, CPU fence write or extra GPU submission occurs.
     args->PhysicalAdapterMask = 1;
-    std::fprintf(stderr, "d3d12-ddi SignalFence runtime-context mask=1 value=%llu\n",
-        static_cast<unsigned long long>(args->Value));
+    if (ddi_trace_enabled())
+        std::fprintf(stderr, "d3d12-ddi SignalFence runtime-context mask=1 value=%llu\n",
+            static_cast<unsigned long long>(args->Value));
 }
 void APIENTRY native_wait(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATION* args) {
     if (args) args->PhysicalAdapterMask = 0;
