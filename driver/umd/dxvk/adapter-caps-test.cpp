@@ -156,5 +156,9 @@ int main() {
     auto fl12_0=fl12;fl12_0.maximum=D3D_FEATURE_LEVEL_12_0;
     CHECK(get_adapter_caps(fl12_0,pipelineArgs)==S_OK && pipeline12.Caps==0x8F);
     unknown.Type=D3DWDDM2_2DDICAPS_SHADERCACHE;CHECK(get_adapter_caps(fl12,unknown)==E_NOTIMPL && marker==99);
+    // The system runtime asks type 151 of an FL12 adapter (fl12native002). WDK 10.0.26100 defines no caps type
+    // 151 (d3d10umddi.h jumps from SWIZZLE_PATTERN 150 to OPTIONS3 152), so there is no layout to fill: it stays
+    // E_NOTIMPL with the output untouched, and the runtime created the FL12_1 device regardless.
+    unknown.Type=static_cast<D3D10_2DDICAPS_TYPE>(151);CHECK(get_adapter_caps(fl12,unknown)==E_NOTIMPL && marker==99);
     std::puts("PASS adapter caps level, failure atomicity, size and field mapping controls, FL12 caps and WDDM 2.0 queries");
 }

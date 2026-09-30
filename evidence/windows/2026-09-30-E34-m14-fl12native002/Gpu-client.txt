@@ -1,0 +1,18 @@
+adapter 1002:13FE BC-250 GPU (bc250kmd, display-only, lab build)
+FEATURE_LEVEL 0xC100
+ok   device feature level at or above --min
+OPTIONS1 TiledResourcesTier=2 MinMaxFiltering=1 ClearViewDepthOnly=1 MapOnDefaultBuffers=1
+OPTIONS2 PSStencilRef=1 TypedUAVLoadAdditionalFormats=1 ROVs=1 ConservativeTier=3 TiledResourcesTier=3 MapOnDefaultTextures=1 StandardSwizzle=0 UMA=0
+OPTIONS3 VPAndRTArrayIndexFromAnyShader=1
+ok   tiled resources tier 2 or higher, OPTIONS1 consistent with OPTIONS2
+ok   FL12_0: typed UAV additional formats
+ok   FL12_1: ROVs and conservative rasterization
+tiling tiles=2 shape=128x128x1 packed=0 subresource0=2x1x1
+ok   GetResourceTiling: two 128x128 tiles, no packed mips
+ok   draw into mapped tile, unmapped tile reads zero
+ok   UpdateTiles into newly mapped tile 1
+ok   CopyTiles tile 0 to a linear buffer
+ok   CopyTileMappings alias reads the same tiles
+ok   contents kept across ResizeTilePool
+ok   device not removed
+PASSED: 0 failure(s)

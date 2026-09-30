@@ -212,6 +212,11 @@ The branch's `dxbc-spirv` submodule points at <https://github.com/D-Ogi/dxbc-spi
 (253c08ce, not upstream yet). On 2026-09-30 both branches merged their upstream (DXVK 3d01f88b pins dxbc-spirv
 f241996e); recipes built before that name the earlier pins.
 
+The FL12 engine (header r8: GetAdapterInfo reports up to FL12_1, no interface change) is one commit on top of that
+merge, published as the separate branch
+[`amdgpu-wddm/ddi-engine-fl12`](https://github.com/D-Ogi/dxvk/tree/amdgpu-wddm/ddi-engine-fl12) at 0c187731 and
+not yet merged into `amdgpu-wddm/ddi-engine`. Its `amdgpu_wddm_dxvk.dll` 8E9B3187 is the engine of M770.
+
 Before publication the branch was rewritten on 2026-09-28 to replace a private author identity. The trees are
 unchanged, but every commit on top of upstream 52fe923c has a new hash. Recipes and evidence written before that
 date name the old hashes; [dxvk-engine-commit-map.md](dxvk-engine-commit-map.md) maps each one to its published
