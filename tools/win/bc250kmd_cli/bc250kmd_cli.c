@@ -1141,6 +1141,74 @@ static int Log(const WCHAR *fromText, int summary)
     return 0;
 }
 
+// ---- journal: the paging journal (BC250_ESCAPE_GET_PAGING_JOURNAL, docs/design/paging-journal.md) ---------------
+//
+// "journal [from]" prints the driver's paging journal from record index `from` (default: the oldest record still
+// held), one line per record: index, driver time in seconds since boot (interrupt time), kind, page table
+// level/index/count/valid entries, the GPU VA, the allocation handle, the offset or byte count, the position in
+// the paging buffer, the OS fence and the SDMA sequence that carried it.
+
+static const char *const g_JournalKind[] = { "?", "update-cpu", "update-gpu", "vfill", "vtransfer", "flush-tlb",
+                                             "destroy", "transfer", "fill" };
+
+static int Journal(const WCHAR *fromText)
+{
+    static BC250_ESCAPE_PAGING_JOURNAL journal;     // 4.6 KB: a static, like the log's
+    unsigned long long from = 0, printed = 0;
+    int first = 1;
+    NTSTATUS status;
+    WCHAR *end;
+
+    if (fromText != NULL) {
+        from = _wcstoui64(fromText, &end, 10);
+        if (*end || fromText[0] == L'-') {
+            fprintf(stderr, "journal [from], where from is a decimal record index, not %ls\n", fromText);
+            return 2;
+        }
+    }
+    for (;;) {
+        memset(&journal, 0, sizeof(journal));
+        journal.Magic = BC250_ESCAPE_MAGIC;
+        journal.Command = BC250_ESCAPE_GET_PAGING_JOURNAL;
+        journal.From = from;
+        if (SendEscape(BC250_DEFAULT_HWID, &journal, sizeof(journal), &status)) return 1;
+        if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape", status); return 1; }
+        if (journal.Status == BC250_ESCAPE_STATUS_NOT_ADMIN) { printf("refused: caller is not an administrator\n"); return 3; }
+        if (journal.Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) {
+            printf("refused: this driver build has no paging journal (0.7.179 or older)\n");
+            return 3;
+        }
+        if (journal.Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("refused: driver status %lu, NTSTATUS 0x%08lX %s\n", journal.Status, journal.NtStatus,
+                   StatusName((NTSTATUS)journal.NtStatus));
+            return 3;
+        }
+        if (first)
+            printf("journal      %llu records since this driver load, ring of %lu, %llu requested but overwritten; table %s\n",
+                   journal.Total, journal.Capacity, journal.Lost,
+                   (journal.Flags & BC250_ESCAPE_FLAG_FULL_WDDM) ? "FULL WDDM" : "display-only");
+        first = 0;
+        for (unsigned long i = 0; i < journal.Returned && i < BC250_PAGING_JOURNAL_MAX; i++) {
+            const BC250_PAGING_JOURNAL_RECORD *r = &journal.Records[i];
+            const char *kind = r->Kind < sizeof(g_JournalKind) / sizeof(g_JournalKind[0]) ? g_JournalKind[r->Kind] : "?";
+            printf("%8llu %14.6f %-10s L%lu i%-3lu n%-3lu v%-3lu va 0x%012llX alloc 0x%016llX off 0x%llX dma 0x%llX "
+                   "fence %lu seq %lu flags 0x%lX%s\n",
+                   journal.Next - journal.Returned + i, (double)r->Time / 1e7, kind, r->Level, r->Index, r->Count,
+                   r->Valid, r->Va, r->Allocation, r->Offset, r->Dma, r->Fence, r->Seq, r->Flags,
+                   (r->Flags & BC250_PJ_FLAG_EVICTION) ? " eviction" : "");
+            printed++;
+        }
+        if (journal.Returned == 0 || journal.Next <= from) break;   // the end, or a driver that is not moving on
+        from = journal.Next;
+        if (printed > 4ull * journal.Capacity) {
+            printf("             stopped at %llu records; ask again from %llu\n", printed, from);
+            break;
+        }
+    }
+    printf("             %llu records printed\n", printed);
+    return 0;
+}
+
 // ---- dpm: the clock governor's telemetry (BC250_ESCAPE_RUN_DPM, docs/design/dpm.md) ------------------------------
 //
 // "dpm [count [interval ms]]" prints one line per sample: the level the governor committed, the SMU's readback,
@@ -1241,6 +1309,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
+                        "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -1268,6 +1337,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 4) return Dpm(argc, argv);
+    if (!_wcsicmp(argv[1], L"journal") && argc <= 3) return Journal(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
         if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);

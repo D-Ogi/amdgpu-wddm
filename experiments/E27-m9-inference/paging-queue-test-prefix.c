@@ -57,6 +57,8 @@ static int KeSetTimer(int*t,LARGE_INTEGER d,int*p)
 {check(lockHeld,"timers armed under Lock");(*t)++;*p=(int)d.QuadPart;return 0;}
 static LONG InterlockedIncrement(LONG*p){return ++*p;}
 static void GuardLog(const char*f,...){(void)f;}
+/* KMD180 paging journal: the drain stamps each hardware submit's sequence; memory only, nothing to check here. */
+static void PagingJournalStampSeq(ULONG fence,ULONG seq){(void)fence;(void)seq;}
 /* KMD172 progress recorders: sites must balance; the drain's own summary is kept for the quota checks. */
 static int progressOpen,quotaExits;
 static ULONG drainExit,drainRetired;

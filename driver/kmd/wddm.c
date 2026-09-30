@@ -19,6 +19,7 @@
 #include "gfx_copy.h"
 #include "paging_private.h"
 #include "paging_drain.h"
+#include "bc250kmd_escape.h"     // BC250_PJ_* record kinds of the paging journal
 #include <ntstrsafe.h>
 
 #define BC250_WDDM_TAG 'wW2B'
@@ -1055,6 +1056,7 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
                     wddm->PagingHwPending=TRUE;
                     wddm->PagingHwSeq=seq;
                     wddm->PagingHwFence=job->Fence;
+                    PagingJournalStampSeq(job->Fence,seq);
                     wddm->PagingDeadline=KeQueryInterruptTime()+10000ull*BC250_WDDM_SUBMIT_TIMEOUT_MS;
                     due.QuadPart=-10000ll*BC250_WDDM_SUBMIT_TIMEOUT_MS;
                     KeSetTimer(&wddm->PagingSubmitTimer,due,&wddm->PagingSubmitDpc);
@@ -3130,8 +3132,14 @@ static NTSTATUS Bc250WddmDestroyAllocation(_In_ const HANDLE hAdapter,
 
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiDestroyAllocation))
         GuardLog("wddm: DestroyAllocation %u allocations", pDestroyAllocation->NumAllocations);
-    for (i = 0; i < pDestroyAllocation->NumAllocations; i++)
-        WddmFreeObject(WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION));
+    for (i = 0; i < pDestroyAllocation->NumAllocations; i++) {
+        BC250_WDDM_OBJECT* object = WddmObject(pDestroyAllocation->pAllocationList[i], BC250_WDDM_MAGIC_ALLOCATION);
+        if (object != NULL)
+            PagingJournalNote(BC250_PJ_DESTROY_ALLOCATION, object->UmdRequestedVa, pDestroyAllocation->pAllocationList[i],
+                              object->UmdAlloc ? object->UmdBytes : object->Allocation.Size, 0,
+                              object->UmdAlloc ? BC250_PJ_FLAG_UMD_ALLOCATION : 0u);
+        WddmFreeObject(object);
+    }
     if (pDestroyAllocation->Flags.DestroyResource && pDestroyAllocation->hResource != NULL)
         WddmFreeObject(WddmObject(pDestroyAllocation->hResource, BC250_WDDM_MAGIC_RESOURCE));
     return STATUS_SUCCESS;
@@ -3999,6 +4007,13 @@ static NTSTATUS WddmBuildPhysicalTransfer(BC250_DEVICE* Device, DXGKARG_BUILDPAG
     return status;
 }
 
+// Where a build lands in the paging buffer, for the paging journal: the same position the private record header
+// binds (WddmPublishPagingRecordCore), which SubmitCommand's DmaBufferVirtualAddress/DmaBufferSize range covers.
+static ULONGLONG WddmPagingBuildPosition(_In_ const DXGKARG_BUILDPAGINGBUFFER* Build)
+{
+    return Build->DmaBufferGpuVirtualAddress + Build->DmaBufferWriteOffset;
+}
+
 static DXGKDDI_BUILDPAGINGBUFFER Bc250WddmBuildPagingBuffer;
 static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKARG_BUILDPAGINGBUFFER* pBuildPagingBuffer)
 {
@@ -4044,6 +4059,8 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            PagingJournalNote(BC250_PJ_FILL,0,pBuildPagingBuffer->Fill.hAllocation,moved,
+                WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4061,6 +4078,8 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingFillsBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            PagingJournalNote(BC250_PJ_VIRTUAL_FILL,pBuildPagingBuffer->FillVirtual.DestinationVirtualAddress,
+                pBuildPagingBuffer->FillVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4078,6 +4097,10 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingTransfersBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            PagingJournalNote(BC250_PJ_VIRTUAL_TRANSFER,pBuildPagingBuffer->TransferVirtual.SourceVirtualAddress,
+                pBuildPagingBuffer->TransferVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),
+                pBuildPagingBuffer->TransferVirtual.TransferDirection==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ?
+                    BC250_PJ_FLAG_TO_SYSTEM : 0u);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4089,6 +4112,8 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         if (moved) {
             InterlockedIncrement(&wddm->PagingTransfersBuilt);
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
+            PagingJournalNote(BC250_PJ_TRANSFER,0,pBuildPagingBuffer->Transfer.hAllocation,moved,
+                WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -4097,8 +4122,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
     // Paging-process CPU_VIRTUAL initialization must be immediate, including when
     // pDmaBuffer is NULL. GPU_PHYSICAL updates use the ordered path below.
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE &&
-        pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL)
+        pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL) {
         VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);
+        PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,0,pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries,
+                            0,TRUE);
+    }
 
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_COPY_PAGE_TABLE_ENTRIES) {
         BC250_WDDM_OBJECT* context=WddmObject(pBuildPagingBuffer->hSystemContext,BC250_WDDM_MAGIC_CONTEXT);
@@ -4145,6 +4173,11 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             if (update) InterlockedIncrement(&wddm->PagingUpdatesBuilt);
             else InterlockedIncrement(&wddm->PagingFlushesBuilt);
             if (!update) InterlockedAdd64(&wddm->PagingBytesMoved, (LONG64)(nextByte - startByte));
+            // The journal's record of this slice, at the position the record header above bound it to.
+            if (update)
+                PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,startByte,nextByte-startByte,
+                                    WddmPagingBuildPosition(pBuildPagingBuffer),FALSE);
+            else PagingJournalNote(BC250_PJ_FLUSH_TLB,0,NULL,0,WddmPagingBuildPosition(pBuildPagingBuffer),0);
         }
         else if (unsupported > BC250PagingSupported && unsupported < RTL_NUMBER_OF(wddm->PagingUnsupported))
         {
@@ -4463,6 +4496,9 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
         context != NULL && !context->UmdContext && pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
         pSubmitCommand->DmaBufferSize != 0 && KeGetCurrentIrql() <= APC_LEVEL)
     {
+        // Before the submit: a submit that goes to the hardware at once stamps the sequence by this fence.
+        PagingJournalStampFence(pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
+                                pSubmitCommand->SubmissionFenceId);
         if (WddmSubmitPagingHardwareRoot(device,wddm,pSubmitCommand->pDmaBufferPrivateData,
                 pSubmitCommand->DmaBufferPrivateDataSize,pSubmitCommand->DmaBufferVirtualAddress,
                 pSubmitCommand->DmaBufferSize,TRUE,pSubmitCommand->SubmissionFenceId,context->RootPhysical)) return STATUS_SUCCESS;

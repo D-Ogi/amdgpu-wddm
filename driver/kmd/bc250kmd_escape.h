@@ -31,7 +31,9 @@
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
 #define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
 #define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
-#define BC250_KMD_VERSION 0x000700B3u       // revision 179: CU mode checks power gating after the RLC stage (docs/design/cu-mode.md)
+#define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
+                                                // record on (page table updates, fills, transfers, flushes, destroys)
+#define BC250_KMD_VERSION 0x000700B4u       // revision 180: the paging journal (docs/design/paging-journal.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -708,3 +710,58 @@ typedef char BC250_ESCAPE_DCN_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCN) == 4288) ? 1 
 typedef char BC250_ESCAPE_DCNFLIP_SIZE_CHECK[(sizeof(BC250_ESCAPE_DCNFLIP) == 168) ? 1 : -1];
 typedef char BC250_ESCAPE_SDMACOPY_SIZE_CHECK[(sizeof(BC250_ESCAPE_SDMACOPY) == 88) ? 1 : -1];
 typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 524416) ? 1 : -1];
+
+// ---- the paging journal (paging_journal.c, docs/design/paging-journal.md) ---------------------------------------
+// One record per BuildPagingBuffer slice, TLB flush and DestroyAllocation. The kernel dump reader decodes the same
+// layout from g_PagingJournal, so the record is plain fixed-width data with no pointers.
+#define BC250_PJ_UPDATE_CPU 1u                  // UPDATE_PAGE_TABLE, CPU_VIRTUAL: written at once, no paging buffer
+#define BC250_PJ_UPDATE_GPU 2u                  // UPDATE_PAGE_TABLE, GPU_PHYSICAL: built into the paging buffer at Dma
+#define BC250_PJ_VIRTUAL_FILL 3u                // VIRTUAL_FILL: Va the destination, Offset the bytes moved
+#define BC250_PJ_VIRTUAL_TRANSFER 4u            // VIRTUAL_TRANSFER: Va the source, Offset the bytes, Flags the direction
+#define BC250_PJ_FLUSH_TLB 5u                   // FLUSH_TLB: only its position in the paging buffer
+#define BC250_PJ_DESTROY_ALLOCATION 6u          // DestroyAllocation: Va the UMD's requested address, Offset the size
+#define BC250_PJ_TRANSFER 7u                    // TRANSFER (physical): Offset the bytes moved
+#define BC250_PJ_FILL 8u                        // FILL (physical): Offset the bytes moved
+#define BC250_PJ_FLAG_REPEAT 1u                 // UPDATE: DXGK_UPDATEPAGETABLEFLAGS.Repeat (one entry for the whole range)
+#define BC250_PJ_FLAG_INITIAL 2u                // UPDATE: .InitialUpdate
+#define BC250_PJ_FLAG_EVICTION 4u               // UPDATE: .NotifyEviction, VidMm evicts the allocation
+#define BC250_PJ_FLAG_64KB 8u                   // UPDATE: .Use64KBPages (this driver refuses it)
+#define BC250_PJ_FLAG_TO_SYSTEM 16u             // VIRTUAL_TRANSFER: local to system (paging out); else system to local
+#define BC250_PJ_FLAG_UMD_ALLOCATION 32u        // DESTROY: a UMD allocation (Offset is its UmdBytes)
+
+typedef struct _BC250_PAGING_JOURNAL_RECORD {
+    unsigned long long Time;                // KeQueryInterruptTime() when recorded (100 ns since boot; the log's
+                                            // Milliseconds are (Time - the log's start) / 10000)
+    unsigned long long Va;                  // UPDATE: the GPU VA the slice's first entry maps; fills/transfers: see the kind
+    unsigned long long Allocation;          // the driver's allocation handle (its BC250_WDDM_OBJECT), 0 when none
+    unsigned long long Offset;              // UPDATE: AllocationOffsetInBytes; others: bytes (see the kind)
+    unsigned long long Dma;                 // GPU path: DmaBufferGpuVirtualAddress + DmaBufferWriteOffset at the build; 0 = none
+    unsigned long Kind;                     // BC250_PJ_*
+    unsigned long Level;                    // UPDATE: page table level
+    unsigned long Index;                    // UPDATE: StartIndex + slice start, entries into the table
+    unsigned long Count;                    // UPDATE: entries in the slice
+    unsigned long Valid;                    // UPDATE: entries of the slice with the Windows Valid bit; the rest zero theirs
+    unsigned long Flags;                    // BC250_PJ_FLAG_*
+    unsigned long Fence;                    // OS SubmissionFenceId of the paging buffer that carried it (0: CPU path, or
+                                            // not submitted yet)
+    unsigned long Seq;                      // the SDMA sequence GfxSubmitPaging gave that buffer (0: not yet)
+} BC250_PAGING_JOURNAL_RECORD;
+#define BC250_PAGING_JOURNAL_MAX 64u        // records one escape returns
+
+typedef struct _BC250_ESCAPE_PAGING_JOURNAL {
+    unsigned long Magic;                    // in: BC250_ESCAPE_MAGIC
+    unsigned long Command;                  // in: BC250_ESCAPE_GET_PAGING_JOURNAL
+    unsigned long Status;                   // out: BC250_ESCAPE_STATUS_*
+    unsigned long Version;                  // out: BC250_KMD_VERSION
+    unsigned long NtStatus;                 // out: the driver's reason when Status is REFUSED
+    unsigned long Flags;                    // out: BC250_ESCAPE_FLAG_*
+    unsigned long Returned;                 // out: records in Records[]
+    unsigned long Capacity;                 // out: records the ring holds
+    unsigned long long From;                // in: the first record index wanted
+    unsigned long long Total;               // out: records written since this driver load; indices run 0..Total-1
+    unsigned long long Next;                // out: the index to ask for next; Returned 0 means the end
+    unsigned long long Lost;                // out: requested records the ring had already overwritten
+    BC250_PAGING_JOURNAL_RECORD Records[BC250_PAGING_JOURNAL_MAX];
+} BC250_ESCAPE_PAGING_JOURNAL;
+typedef char BC250_PAGING_JOURNAL_RECORD_SIZE_CHECK[(sizeof(BC250_PAGING_JOURNAL_RECORD) == 72) ? 1 : -1];
+typedef char BC250_ESCAPE_PAGING_JOURNAL_SIZE_CHECK[(sizeof(BC250_ESCAPE_PAGING_JOURNAL) == 4672) ? 1 : -1];

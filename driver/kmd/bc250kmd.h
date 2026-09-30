@@ -750,6 +750,17 @@ DXGKDDI_SET_POWER_STATE Bc250SetPowerState;
 DXGKDDI_UNLOAD Bc250Unload;
 DXGKDDI_STOP_DEVICE_AND_RELEASE_POST_DISPLAY_OWNERSHIP Bc250StopDeviceAndReleasePostDisplayOwnership;
 
+// paging_journal.c: the ring of VidMm's paging operations (paging_journal.h, record kinds in bc250kmd_escape.h)
+struct _BC250_PAGING_JOURNAL_RECORD;
+void PagingJournalInit(void);
+void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG SliceStart, ULONG SliceCount,
+                         ULONGLONG Dma, BOOLEAN Cpu);
+void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags);
+void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence);
+void PagingJournalStampSeq(ULONG Fence, ULONG Seq);
+ULONG PagingJournalRead(ULONGLONG From, _Out_writes_to_(Max, return) struct _BC250_PAGING_JOURNAL_RECORD* Page, ULONG Max,
+                        _Out_ ULONGLONG* Next, _Out_ ULONGLONG* Total, _Out_ ULONGLONG* Lost);
+
 // display.c
 DXGKDDI_QUERYADAPTERINFO Bc250QueryAdapterInfo;
 DXGKDDI_SETPOINTERPOSITION Bc250SetPointerPosition;

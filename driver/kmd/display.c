@@ -2,6 +2,7 @@
 // CPU copy into the firmware's framebuffer. No MMIO. Written against the documented display-only DDI.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "paging_journal.h"
 #include "display_timing.h"
 
 static ULONG g_Presents;
@@ -158,6 +159,7 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     case BC250_ESCAPE_VRAM_READ:
     case BC250_ESCAPE_GET_LOG:
     case BC250_ESCAPE_LOG_SUMMARY:
+    case BC250_ESCAPE_GET_PAGING_JOURNAL:
     case BC250_ESCAPE_RUN_DCN:
     case BC250_ESCAPE_RUN_FBDUMP:
         return TRUE;
@@ -320,6 +322,36 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
                           (device->VramWriteEnabled ? BC250_ESCAPE_FLAG_VRAM_WRITE : 0) | (device->MmioGartEnabled ? BC250_ESCAPE_FLAG_GART : 0) |
                           (device->MmioPspEnabled ? BC250_ESCAPE_FLAG_PSP : 0) | (device->MmioGfxEnabled ? BC250_ESCAPE_FLAG_GFX : 0);
         if (!CallerIsAdmin()) sdmacopy->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; else SdmaCopyEscape(device, sdmacopy);
+        return STATUS_SUCCESS;
+    }
+    if (data->Command == BC250_ESCAPE_GET_PAGING_JOURNAL)
+    {
+        BC250_ESCAPE_PAGING_JOURNAL* journal = (BC250_ESCAPE_PAGING_JOURNAL*)Escape->pPrivateDriverData;
+        BC250_PAGING_JOURNAL_RECORD* page;
+        ULONGLONG next = 0, total = 0, lost = 0;
+        ULONG returned;
+
+        // The paging journal (paging_journal.c), a page of records at a time, like the log: no gate, no register,
+        // administrators only (the records name allocation handles and GPU addresses), and a nonpaged bounce
+        // buffer because the copy happens under a spin lock.
+        if (Escape->PrivateDriverDataSize < sizeof(BC250_ESCAPE_PAGING_JOURNAL)) return STATUS_INVALID_PARAMETER;
+        journal->Version = BC250_KMD_VERSION;
+        if (!CallerIsAdmin()) { journal->Status = BC250_ESCAPE_STATUS_NOT_ADMIN; return STATUS_SUCCESS; }
+        page = (BC250_PAGING_JOURNAL_RECORD*)ExAllocatePool2(POOL_FLAG_NON_PAGED,
+                                                             BC250_PAGING_JOURNAL_MAX * sizeof(BC250_PAGING_JOURNAL_RECORD),
+                                                             BC250_TAG);
+        if (page == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+        returned = PagingJournalRead(journal->From, page, BC250_PAGING_JOURNAL_MAX, &next, &total, &lost);
+        RtlCopyMemory(journal->Records, page, (SIZE_T)returned * sizeof(BC250_PAGING_JOURNAL_RECORD));
+        ExFreePoolWithTag(page, BC250_TAG);
+        journal->NtStatus = 0;
+        journal->Flags = device->FullWddm ? BC250_ESCAPE_FLAG_FULL_WDDM : 0;
+        journal->Capacity = BC250_PAGING_JOURNAL_ENTRIES;
+        journal->Returned = returned;
+        journal->Next = next;
+        journal->Total = total;
+        journal->Lost = lost;
+        journal->Status = BC250_ESCAPE_STATUS_DONE;
         return STATUS_SUCCESS;
     }
     if (data->Command == BC250_ESCAPE_GET_LOG || data->Command == BC250_ESCAPE_LOG_SUMMARY)
