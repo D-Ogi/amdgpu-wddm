@@ -117,6 +117,8 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmGCMC_VM_FB_OFFSET"), ("GC", "mmGCMC_VM_FB_LOCATION_BASE"), ("GC", "mmGCMC_VM_FB_LOCATION_TOP"),
          # gfx.c: read-only RLC retirement observation, no new write permission
          ("GC", "mmGRBM_STATUS2"), ("GC", "mmRLC_CNTL"),
+         # dpm.c: the busy sampler's second engine, the paging node's SDMA0 (read only)
+         ("GC", "mmSDMA0_STATUS_REG"),
          # gfx.c: are the engines halted?
          ("GC", "mmCP_ME_CNTL"), ("GC", "mmCP_MEC_CNTL"), ("GC", "mmSDMA0_F32_CNTL"), ("GC", "mmSDMA1_F32_CNTL"),
          # gfx.c: a stage that stopped half way must not leave a me/pipe/queue selected

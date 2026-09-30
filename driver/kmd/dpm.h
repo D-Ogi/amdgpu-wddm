@@ -14,7 +14,8 @@ typedef struct _BC250_DPM_SNAP {
     ULONG Mode, Requested, Reason, Throttle;
     ULONG MaxMHz, CapMHz, TargetMHz, WantMHz, CurrentMHz, CurrentMv, ObservedMHz, ObservedVid;
     LONG TemperatureMc;
-    ULONG BusyPermille, BusyAvgPermille;
+    ULONG BusyPermille, BusyAvgPermille;    // the governor's input (GRBM when BusySource says so), its average
+    ULONG SubmitBusyPermille, SdmaBusyPermille, BusySource, HwSamples;
     ULONG Raises, Lowers, ThermalEvents, Errors, Resyncs;
     ULONGLONG Ticks, BusyTime100ns, UptimeMs, Generation;
 } BC250_DPM_SNAP;
@@ -34,6 +35,10 @@ typedef struct _BC250_DPM_STATE {
     // KeQueryInterruptTime units. BusySince is 0 while the ring is idle.
     volatile LONG64 BusySince;
     volatile LONG64 BusyAccum;
+    // The hardware sampler (dpm.c DpmHwSample): a high-resolution timer every BC250_DPM_HW_SAMPLE_US reads
+    // GRBM_STATUS and SDMA0_STATUS_REG and counts; each tick takes the counts (InterlockedExchange).
+    PEX_TIMER HwTimer;
+    volatile LONG HwSamples, HwGfxActive, HwSdmaActive;
     ULONGLONG Generation;                   // start-health generation of this start
     struct bc250_dpm_decision Decision;
     // The thread's alone while it runs.

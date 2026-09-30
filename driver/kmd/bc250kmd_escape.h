@@ -31,7 +31,7 @@
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
 #define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
 #define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
-#define BC250_KMD_VERSION 0x000700B0u       // revision 176: CU mode power-gating guard tests the PG enables only (docs/design/cu-mode.md)
+#define BC250_KMD_VERSION 0x000700B1u       // revision 177: DPM busy from GRBM_STATUS.GUI_ACTIVE samples (docs/design/dpm.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -146,7 +146,10 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 // clears the pending mark of a DPM start, which a later start would otherwise treat as a crash.
 // Mode is BC250_DPM_MODE_*, Reason enum bc250_dpm_reason, Throttle enum bc250_dpm_throttle
 // (driver/shim/include/bc250_dpm.h). CurrentMHz/CurrentMv are the level the governor committed;
-// ObservedMHz/ObservedVid the SMU's readback, at most a second old (FLAG_CLOCK).
+// ObservedMHz/ObservedVid the SMU's readback, at most a second old (FLAG_CLOCK). Since 0.7.177 BusyPermille is
+// the share of GRBM_STATUS.GUI_ACTIVE samples when FLAG_HW_BUSY is set, else the GFX ring's submit-to-fence share;
+// SubmitBusyPermille is the latter always, SdmaBusyPermille the share of SDMA0 not-idle samples (the paging node).
+// Both were Reserved (zero) in 0.7.175-176: a caller still sends them as zero, so the ABI stays 1.
 #define BC250_DPM_ABI 1u
 #define BC250_DPM_OP_READ 0u
 #define BC250_DPM_OP_CONFIRM 1u
@@ -159,6 +162,7 @@ typedef struct _BC250_ESCAPE_CU_MODE {
 #define BC250_DPM_FLAG_SESSION 64u           // DpmSession is on disk: this start is above the floor now or was lately
 #define BC250_DPM_FLAG_TEMPERATURE 128u      // TemperatureMc is this tick's reading
 #define BC250_DPM_FLAG_CLOCK 256u            // ObservedMHz/ObservedVid read back within the last second
+#define BC250_DPM_FLAG_HW_BUSY 512u          // BusyPermille and SdmaBusyPermille come from this tick's hardware samples
 typedef struct _BC250_ESCAPE_DPM {
     unsigned long Magic, Command, Status, Version;
     unsigned long NtStatus, AbiVersion, Op, Flags;
@@ -173,7 +177,8 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long long UptimeMs;                         // since the governor started
     unsigned long long Generation;          // start-health generation of the start this describes
     unsigned long long ExpectedGeneration;  // in, CONFIRM
-    unsigned long Reserved[2];
+    unsigned long SubmitBusyPermille;       // out; in: zero
+    unsigned long SdmaBusyPermille;         // out; in: zero
 } BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
 
 // Read-only diagnostics, not an atomic hardware snapshot. Require administrator,

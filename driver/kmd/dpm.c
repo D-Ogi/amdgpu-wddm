@@ -23,11 +23,15 @@
 // before a raise, down after a lowering, read back). Every change is logged; so is a telemetry line every
 // five seconds, which the game trials' kernel-log stream records.
 //
-// Busy is the GFX ring's: from the submission of an IB until its fence arrives (gfx.c feeds
-// DpmBusyBegin/DpmBusyEnd). It is what dxgkrnl counts as the node's running time, the ETW figure that
-// motivated this. A command processor waiting on a semaphore counts as busy, as it does for ETW.
+// Busy (0.7.177): the share of GRBM_STATUS.GUI_ACTIVE samples, read by a high-resolution timer every
+// BC250_DPM_HW_SAMPLE_US (DpmHwSample) - the graphics engine's own activity, as amdgpu's gfx_v10_0_is_idle reads
+// it. 0.7.175 used the GFX ring's submit-to-fence time (gfx.c DpmBusyBegin/DpmBusyEnd); on the lab it read 0-7 %
+// in a game ETW called 91.5 % busy (docs/design/dpm.md, "Busy"), so it is now telemetry and the fallback for a
+// tick without samples. SDMA0 (the paging node) is sampled beside it, for the telemetry only.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
+#include "regs.generated.h"
+#include "gc_10_1_0_sh_mask.h"      // GRBM_STATUS and SDMA0_STATUS_REG field masks; the offsets come from regcalc
 
 #define DPM_SETTING_MODE L"DpmMode"
 #define DPM_SETTING_MAX L"DpmMaxMHz"
@@ -125,6 +129,8 @@ static ULONGLONG DpmBusyTotal(BC250_DEVICE* Device, BC250_DPM_STATE* S, ULONGLON
 typedef struct _DPM_TICK {
     ULONGLONG Begin, Last, LastBusy, NextVerify, NextLog, Ticks, ClockAt;
     ULONG Permille, ObservedMHz, ObservedVid, Target;
+    ULONG SubmitPermille, SdmaPermille, HwSamples;
+    enum bc250_dpm_busy_source Source;
     LONG TemperatureMc;
     BOOLEAN TemperatureValid, SessionRefused;
     ULONG Errors, Resyncs;
@@ -163,6 +169,11 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     if (T != NULL) {
         snap.TargetMHz = bc250_dpm_level_mhz(T->Target);
         snap.BusyPermille = T->Permille;
+        snap.SubmitBusyPermille = T->SubmitPermille;
+        snap.SdmaBusyPermille = T->SdmaPermille;
+        snap.BusySource = T->Source;
+        snap.HwSamples = T->HwSamples;
+        if (T->Source == BC250_DPM_BUSY_GRBM) snap.Flags |= BC250_DPM_FLAG_HW_BUSY;
         snap.TemperatureMc = T->TemperatureMc;
         if (T->TemperatureValid) snap.Flags |= BC250_DPM_FLAG_TEMPERATURE;
         snap.ObservedMHz = T->ObservedMHz;
@@ -185,6 +196,12 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
         snap.Ticks = S->Snap.Ticks;
         snap.UptimeMs = S->Snap.UptimeMs;
         snap.BusyTime100ns = S->Snap.BusyTime100ns;
+        snap.BusyPermille = S->Snap.BusyPermille;
+        snap.SubmitBusyPermille = S->Snap.SubmitBusyPermille;
+        snap.SdmaBusyPermille = S->Snap.SdmaBusyPermille;
+        snap.BusySource = S->Snap.BusySource;
+        snap.HwSamples = S->Snap.HwSamples;
+        snap.Flags |= S->Snap.Flags & BC250_DPM_FLAG_HW_BUSY;
         KeReleaseSpinLock(&S->SnapLock, irql);
     }
     UNREFERENCED_PARAMETER(Device);
@@ -197,13 +214,16 @@ static void DpmLogLine(const char* What, const BC250_DPM_SNAP* P)
 {
     LONG t = P->TemperatureMc;
     GuardLog("dpm: %s %s %lu MHz/%lu mV (SMU %lu MHz VID %lu) %ld.%01ld C busy %lu.%lu%% avg %lu.%lu%% "
-             "want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu errors %lu resyncs %lu",
+             "want %lu cap %lu max %lu throttle %s, raises %lu lowers %lu thermal %lu errors %lu resyncs %lu, busy from %s "
+             "(%lu samples), submit %lu.%lu%%, sdma %lu.%lu%%",
              What, P->Mode == BC250_DPM_MODE_DPM ? "dpm" : "fixed", P->CurrentMHz, P->CurrentMv,
              P->ObservedMHz, P->ObservedVid, t / 1000, (t < 0 ? -t : t) % 1000 / 100,
              P->BusyPermille / 10, P->BusyPermille % 10, P->BusyAvgPermille / 10, P->BusyAvgPermille % 10,
              P->WantMHz, P->CapMHz, P->MaxMHz,
              P->Throttle < BC250_DPM_THROTTLE_COUNT ? g_Throttle[P->Throttle] : "?",
-             P->Raises, P->Lowers, P->ThermalEvents, P->Errors, P->Resyncs);
+             P->Raises, P->Lowers, P->ThermalEvents, P->Errors, P->Resyncs,
+             P->BusySource == BC250_DPM_BUSY_GRBM ? "grbm" : "submit", P->HwSamples,
+             P->SubmitBusyPermille / 10, P->SubmitBusyPermille % 10, P->SdmaBusyPermille / 10, P->SdmaBusyPermille % 10);
 }
 
 // The one place a level reaches the hardware. TRUE when the hardware is at Level now.
@@ -278,6 +298,28 @@ static void DpmResyncLevel(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T
         DpmGiveUp(Device, S, T);
 }
 
+// The hardware sampler: one high-resolution timer callback every BC250_DPM_HW_SAMPLE_US at DISPATCH_LEVEL, two
+// register reads from the general read table (MmioRead, no lock, no write), three counters. GRBM_STATUS is global
+// (no GRBM_GFX_INDEX bank) and full WDDM runs without GFXOFF (gfx.c pp_gfxoff), so the read is always answered.
+// Paused (a power transition) reads nothing; DpmPause flushes a callback in flight before it returns.
+static EXT_CALLBACK DpmHwSample;
+static void DpmHwSample(_In_ PEX_TIMER Timer, _In_opt_ PVOID Context)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)Context;
+    BC250_DPM_STATE* s;
+    ULONG grbm = 0, sdma = 0;
+
+    UNREFERENCED_PARAMETER(Timer);
+    if (device == NULL) return;
+    s = &device->Dpm;
+    if (InterlockedCompareExchange(&s->Paused, 0, 0)) return;
+    if (!NT_SUCCESS(MmioRead(device, BC250_REG_GC_GRBM_STATUS, &grbm))) return;
+    InterlockedIncrement(&s->HwSamples);
+    if ((grbm & GRBM_STATUS__GUI_ACTIVE_MASK) != 0) InterlockedIncrement(&s->HwGfxActive);
+    if (NT_SUCCESS(MmioRead(device, BC250_REG_GC_SDMA0_STATUS_REG, &sdma)) && (sdma & SDMA0_STATUS_REG__IDLE_MASK) == 0)
+        InterlockedIncrement(&s->HwSdmaActive);
+}
+
 static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
 {
     ULONGLONG now = KeQueryInterruptTime();
@@ -287,8 +329,18 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
     NTSTATUS status;
     BOOLEAN governing;
 
-    T->Permille = dt ? (ULONG)min(1000ull, (busy > T->LastBusy ? busy - T->LastBusy : 0) * 1000ull / dt) : 0;
-    T->Last = now;
+    T->SubmitPermille = dt ? (ULONG)min(1000ull, (busy > T->LastBusy ? busy - T->LastBusy : 0) * 1000ull / dt) : 0;
+    {
+        // The sampler's counts since the last tick. A sample that lands between these reads is counted in the
+        // next tick, or its active bit without its sample: the helper clamps that.
+        ULONG samples = (ULONG)InterlockedExchange(&S->HwSamples, 0);
+        ULONG gfx = (ULONG)InterlockedExchange(&S->HwGfxActive, 0);
+        ULONG sdma = (ULONG)InterlockedExchange(&S->HwSdmaActive, 0);
+        enum bc250_dpm_busy_source unused;
+        T->HwSamples = samples;
+        T->Permille = bc250_dpm_busy_permille(samples, gfx, T->SubmitPermille, &T->Source);
+        T->SdmaPermille = T->Source == BC250_DPM_BUSY_GRBM ? bc250_dpm_busy_permille(samples, sdma, 0, &unused) : 0;
+    }    T->Last = now;
     T->LastBusy = busy;
     T->Ticks++;
     if (InterlockedCompareExchange(&S->Paused, 0, 0)) {
@@ -411,6 +463,9 @@ void DpmStart(BC250_DEVICE* Device)
     InterlockedExchange(&s->Stable, 0);
     InterlockedExchange64(&s->BusySince, 0);
     InterlockedExchange64(&s->BusyAccum, 0);
+    InterlockedExchange(&s->HwSamples, 0);
+    InterlockedExchange(&s->HwGfxActive, 0);
+    InterlockedExchange(&s->HwSdmaActive, 0);
     KeClearEvent(&s->StopEvent);
     s->Generation = Device->StartHealth.Generation;
 
@@ -482,7 +537,15 @@ void DpmStart(BC250_DEVICE* Device)
     if (!NT_SUCCESS(status)) {
         InterlockedExchange(&Device->Smu.GovernorActive, 0);
         GuardLog("dpm: governor thread NOT started 0x%08X, the clock stays at the floor", status);
-    } else s->Created = TRUE;
+    } else {
+        s->Created = TRUE;
+        // Without the sampler every tick falls back to the submit accounting; the governor still runs.
+        s->HwTimer = ExAllocateTimer(DpmHwSample, Device, EX_TIMER_HIGH_RESOLUTION);
+        if (s->HwTimer != NULL)
+            (void)ExSetTimer(s->HwTimer, -10ll * BC250_DPM_HW_SAMPLE_US, 10ll * BC250_DPM_HW_SAMPLE_US, NULL);
+        GuardLog("dpm: hardware busy sampler %s, every %lu us", s->HwTimer != NULL ? "running" : "NOT allocated (submit accounting only)",
+                 (ULONG)BC250_DPM_HW_SAMPLE_US);
+    }
     DpmUnlock(s);
 }
 
@@ -495,6 +558,11 @@ void DpmStop(BC250_DEVICE* Device)
 
     DpmLock(s);
     if (!s->Created) { DpmUnlock(s); return; }
+    // The sampler first: after this no callback runs or will run (Wait), before the mapping can go.
+    if (s->HwTimer != NULL) {
+        (void)ExDeleteTimer(s->HwTimer, TRUE, TRUE, NULL);
+        s->HwTimer = NULL;
+    }
     KeSetEvent(&s->StopEvent, IO_NO_INCREMENT, FALSE);
     (void)KeWaitForSingleObject(s->Thread, Executive, KernelMode, FALSE, NULL);
     ObDereferenceObject(s->Thread);
@@ -530,6 +598,7 @@ void DpmPause(BC250_DEVICE* Device)
     DPM_TICK tick;
     if (!s->Created) return;
     InterlockedExchange(&s->Paused, 1);
+    KeFlushQueuedDpcs();                // a sampler callback that read Paused as 0 has finished its reads
     KeWaitForSingleObject(&s->TickLock, Executive, KernelMode, FALSE, NULL);
     RtlZeroMemory(&tick, sizeof(tick));
     if (Governing(s) && s->Gov.level != BC250_DPM_FLOOR_LEVEL)
@@ -607,9 +676,10 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULO
     Data->CurrentMHz = Data->CurrentMv = Data->ObservedMHz = Data->ObservedVid = 0;
     Data->TemperatureMc = 0;
     Data->BusyPermille = Data->BusyAvgPermille = 0;
+    // SubmitBusyPermille and SdmaBusyPermille were Reserved: zero inputs (checked below), written on success.
     Data->Raises = Data->Lowers = Data->ThermalEvents = Data->Errors = Data->Resyncs = 0;
     Data->Ticks = Data->BusyTime100ns = Data->UptimeMs = Data->Generation = 0;
-    if (Data->AbiVersion != BC250_DPM_ABI || Data->Reserved[0] || Data->Reserved[1] ||
+    if (Data->AbiVersion != BC250_DPM_ABI || Data->SubmitBusyPermille || Data->SdmaBusyPermille ||
         (Data->Op != BC250_DPM_OP_READ && !confirm) || EscapeFlags != expectedFlags.Value) return;
     if (confirm && !Admin) {
         Data->Status = BC250_ESCAPE_STATUS_NOT_ADMIN;
@@ -652,6 +722,8 @@ void DpmRequest(BC250_DEVICE* Device, BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULO
     Data->TemperatureMc = snap.TemperatureMc;
     Data->BusyPermille = snap.BusyPermille;
     Data->BusyAvgPermille = snap.BusyAvgPermille;
+    Data->SubmitBusyPermille = snap.SubmitBusyPermille;
+    Data->SdmaBusyPermille = snap.SdmaBusyPermille;
     Data->Raises = snap.Raises;
     Data->Lowers = snap.Lowers;
     Data->ThermalEvents = snap.ThermalEvents;
