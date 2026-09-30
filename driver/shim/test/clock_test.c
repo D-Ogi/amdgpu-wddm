@@ -56,41 +56,63 @@ static void positive(unsigned old_mhz,unsigned old_vid,unsigned mhz,unsigned mv)
 }
 int main(void){
  unsigned path,step;
- positive(1000,116,1500,900); // voltage up, then clock up
+ positive(1000,116,1500,919); // voltage up, then clock up
  positive(1500,104,1000,820); // clock down, then voltage down
  positive(1000,116,1000,820); // repeated startup
- positive(1000,104,1500,900); // already sufficient voltage
+ positive(1000,100,1500,919); // already sufficient voltage
  positive(1000,136,1000,820); // voltage-only increase
  positive(1500,116,1000,900); // mixed directions still stages voltage up
  for(path=0;path<2;path++)for(step=1;step<=(path?8u:6u);step++){
-  struct backend b=setup(path?1000:1500,path?116:104,path?1500:1000,path?900:820);
+  struct backend b=setup(path?1000:1500,path?116:104,path?1500:1000,path?919:820);
   struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.fail_message=(int)step;
-  CHECK(bc250_clock_prepare(&c,b.target_mhz,path?900:820,&r)==-74);CHECK(!r.ready);
+  CHECK(bc250_clock_prepare(&c,b.target_mhz,path?919:820,&r)==-74);CHECK(!r.ready);
   CHECK(r.messages_attempted==step && r.messages_completed==step-1);
   CHECK(b.count==step && b.end_count==1 && !b.held);
   if(path && step<=4)CHECK(b.mhz==1000); // no early frequency request
   if(!path && step==4)CHECK(b.mhz==1000 && b.vid==104); // keep completed downclock
  }
  for(step=4;step<=8;step+=2){
-  struct backend b=setup(1000,116,1500,900);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
+  struct backend b=setup(1000,116,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
   b.bad_read=step==6?7:step;
-  CHECK(bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_MISMATCH);CHECK(!r.ready && b.end_count==1 && !b.held);
+  CHECK(bc250_clock_prepare(&c,1500,919,&r)==BC250_CLOCK_MISMATCH);CHECK(!r.ready && b.end_count==1 && !b.held);
   if(step==4)CHECK(b.mhz==1000 && b.count==4);
  }
  for(step=0;step<2;step++){
   struct backend b=setup(step?1000:0,step?256:116,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_STATE_INVALID);CHECK(b.count==2 && !r.ready && b.end_count==1);
  }
- {struct backend b=setup(1000,116,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=85000;
-  CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && !b.count && b.end_count==1);
-  b.temp=67000;b.fail_temp=1;CHECK(bc250_clock_prepare(&c,1000,820,&r)==-72);CHECK(!r.ready && !b.count && b.end_count==2);
+ {struct backend b=setup(1000,116,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=85000;
+  // Hot: a raise is refused after the two readbacks and before any request.
+  CHECK(bc250_clock_prepare(&c,1500,919,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.count==2 && b.end_count==1);
+  CHECK(b.mhz==1000 && b.vid==116 && r.initial_mhz==1000 && r.initial_vid==116);
+  b.temp=67000;b.fail_temp=1;CHECK(bc250_clock_prepare(&c,1000,820,&r)==-72);CHECK(!r.ready && b.count==2 && b.end_count==2);
  }
+ {struct backend b=setup(1000,136,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=90000;
+  // A voltage-only raise is a raise as well.
+  CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_TOO_HOT);CHECK(!r.ready && b.count==2 && b.vid==136);
+ }
+ {struct backend b=setup(2000,88,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=95000;
+  // A hot part can always be clocked down: frequency first, then voltage.
+  CHECK(bc250_clock_prepare(&c,1000,820,&r)==0);CHECK(r.ready && b.mhz==1000 && b.vid==116 && r.temperature_mc==95000);
+  CHECK(b.msg[2]==PPSMC_MSG_RequestGfxclk && b.msg[3]==PPSMC_MSG_ForceGfxVid);
+ }
+ {struct backend b=setup(2000,88,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=88000;
+  CHECK(bc250_clock_prepare(&c,1500,919,&r)==0);CHECK(r.ready && b.mhz==1500 && b.vid==100);
+ }
+ positive(1000,116,2000,1000); // the ceiling from the floor: VID 88 staged before the clock
+ positive(2000,88,1000,820);   // and back
  {struct backend b={0};struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.fail_begin=1;
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==-71);CHECK(!r.ready && !b.end_count && !b.count && !b.temp_count);
  }
  {struct backend b={0};struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
-  CHECK(bc250_clock_prepare(&c,1501,820,&r)==BC250_CLOCK_INVALID);
-  CHECK(bc250_clock_prepare(&c,1000,901,&r)==BC250_CLOCK_INVALID);CHECK(!b.begin_count && !b.count && !r.ready);
+  CHECK(bc250_clock_prepare(&c,1501,820,&r)==BC250_CLOCK_INVALID);    // off the 100 MHz grid
+  CHECK(bc250_clock_prepare(&c,2100,1000,&r)==BC250_CLOCK_INVALID);   // above the ceiling clock
+  CHECK(bc250_clock_prepare(&c,900,820,&r)==BC250_CLOCK_INVALID);     // below the floor clock
+  CHECK(bc250_clock_prepare(&c,1000,1001,&r)==BC250_CLOCK_INVALID);   // above the ceiling voltage
+  CHECK(bc250_clock_prepare(&c,1000,819,&r)==BC250_CLOCK_INVALID);    // below the table
+  CHECK(bc250_clock_prepare(&c,1500,900,&r)==BC250_CLOCK_INVALID);    // the old lab ceiling is below the table
+  CHECK(bc250_clock_prepare(&c,2000,999,&r)==BC250_CLOCK_INVALID);
+  CHECK(!b.begin_count && !b.count && !r.ready);
   c.end=NULL;CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_INVALID);CHECK(!b.begin_count);
  }
  printf("clock policy: %d checks, %d failures\n",checks,failures);return failures?1:0;

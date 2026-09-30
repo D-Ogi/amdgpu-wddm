@@ -72,6 +72,7 @@ int main(void) {
     ULONG f,v,version;LONG t;unsigned i;
     SmuOwnerInitialize(&owner);reply=1;mhz=1500;vid=104;
     CHECK(SmuReadClock(&owner,&f,&v,&t)==STATUS_DEVICE_NOT_READY);
+    CHECK(SmuReadTemperature(&owner,&t)==STATUS_DEVICE_NOT_READY && !t);
     CHECK(SmuReadFirmwareVersion(&owner,&version)==STATUS_DEVICE_NOT_READY && !version);
     CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS);
     CHECK(SmuOwnerStart(&owner,registers)==STATUS_INVALID_DEVICE_STATE);
@@ -115,9 +116,37 @@ int main(void) {
         CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && !r.Ready && calls==before);
         CHECK(SmuOwnerStart(&owner,registers)==STATUS_SUCCESS);
         r.Op=BC250_CLOCK_OP_SET;r.RequestedMHz=1500;r.RequestedMv=900;
+        before=calls;
+        SmuClockRequest(&owner,&r,TRUE,TRUE,FALSE); // below the table (bc250_clock.h): refused, nothing sent
+        CHECK(r.NtStatus==(ULONG)STATUS_INVALID_PARAMETER && !r.Ready && calls==before);
+        r.RequestedMv=919;
         SmuClockRequest(&owner,&r,TRUE,TRUE,FALSE);
         CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.VoltageStaged);
-        CHECK(r.InitialMHz==1000 && r.InitialVid==116 && r.ObservedMHz==1500 && r.ObservedVid==104 && r.ExpectedVid==104);
+        CHECK(r.InitialMHz==1000 && r.InitialVid==116 && r.ObservedMHz==1500 && r.ObservedVid==100 && r.ExpectedVid==100);
+        r.RequestedMHz=2000;r.RequestedMv=1000;
+        SmuClockRequest(&owner,&r,TRUE,TRUE,FALSE); // the DPM ceiling
+        CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && r.ObservedMHz==2000 && r.ObservedVid==88);
+        // While the governor runs, the escape does not write.
+        before=calls;owner.GovernorActive=1;r.RequestedMHz=1000;r.RequestedMv=820;
+        SmuClockRequest(&owner,&r,TRUE,TRUE,FALSE);
+        CHECK(r.Status==BC250_ESCAPE_STATUS_REFUSED && r.NtStatus==(ULONG)STATUS_DEVICE_BUSY && !r.Ready && calls==before);
+        r.Op=BC250_CLOCK_OP_READ;r.RequestedMHz=r.RequestedMv=0; // reading is still fine
+        SmuClockRequest(&owner,&r,TRUE,FALSE,TRUE);
+        CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.ObservedMHz==2000 && r.ObservedVid==88);
+        owner.GovernorActive=0;r.Op=BC250_CLOCK_OP_SET;
+        // The governor's own path, and its temperature read without a message.
+        { struct bc250_clock_report p;LONG mc=0;unsigned ignored=0;
+          CHECK(SmuSetPoint(&owner,1700,952,&p)==STATUS_SUCCESS && p.ready && p.observed_mhz==1700 && p.observed_vid==95);
+          CHECK(SmuSetPoint(&owner,1700,951,&p)==STATUS_INVALID_PARAMETER && !p.ready);
+          before=calls;
+          CHECK(SmuReadTemperature(&owner,&mc)==STATUS_SUCCESS && mc==67000 && calls==before);
+          // The allowlist is enforced in the owner, before the transport: nothing reaches the mailbox.
+          owner.Caller=PsGetCurrentThread();
+          CHECK(Message(&owner,PPSMC_MSG_UnforceGfxVid,0,&ignored)==-22);
+          CHECK(Message(&owner,PPSMC_MSG_TransferTableSmu2Dram,6,&ignored)==-22);
+          CHECK(Message(&owner,PPSMC_MSG_ForceGfxFreq,2000,&ignored)==-22);
+          owner.Caller=NULL;
+          CHECK(calls==before); }
         r.RequestedMHz=1000;r.RequestedMv=820;
         SmuClockRequest(&owner,&r,TRUE,TRUE,FALSE);
         CHECK(r.Status==BC250_ESCAPE_STATUS_DONE && r.Ready && !r.VoltageStaged && r.ObservedVid==116);

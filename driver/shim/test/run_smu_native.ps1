@@ -1,6 +1,6 @@
 param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\m9\smu-native',[string]$Source='')
 $ErrorActionPreference='Stop'
-$repo="$Root\bc250-win"
+$repo=(Resolve-Path "$PSScriptRoot\..\..\..").Path # the tree this script lives in; -Root only locates the toolchain
 if(-not $Source){$Source="$repo\driver\kmd\smu.c"}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
