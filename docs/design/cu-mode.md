@@ -55,7 +55,13 @@ The sequence, per shader array under `GRBM_GFX_INDEX`:
    - Pre-driver sweeps under Linux read 0 (E21 `sweep-pre.log`, E03 `sweep-before`), so the firmware before
      the PSP load is not the source.
    - A warm device restart reloads nothing and meets our own `0x00800000`. 0.7.176 therefore took 40 on a warm
-     restart (to40-1) and refused it with reason 6 at the next cold boot (06:14Z, 2026-09-30).
+     restart (to40-1) and refused it with reason 6 at the next cold boot (06:14Z, 2026-09-30); 0.7.178 refused
+     it the same way at the 07:26Z cold boot.
+   - **Measured on 0.7.179.1 (2026-09-30, unit A):** warm restart to40-3 applied 40 (counted 40, `num_cu = 40`,
+     confirmed); the planned cold boot at 08:22Z then logged "applied 40 CUs (40 counted), reason 0, consistent 1,
+     wrote 1, RLC_PG_CNTL 0x00000008 (PG enables 0x8), after the RLC stage 0x00800000 (PG enables 0x0)", CC
+     `0xFFE00000` and SPI `0x1F` on SA0-3, `CuModeLastApplied` 40, with DPM active from the same start. The
+     stage value 0x8 and the post-RLC 0 are the E11 values; the after-RLC hook undid nothing.
    - Any other enable at this stage is a state nobody has measured there, and 40 is still refused before
      anything is written.
    - **After the RLC stage** (`bc250_cu_mode_after_rlc()`, called at the end of `bc250_gfx_rlc_resume()`):
