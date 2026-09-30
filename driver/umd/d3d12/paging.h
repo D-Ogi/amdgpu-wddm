@@ -8,15 +8,21 @@ class PagingDomain;
 class GpuMapping final {
     friend class PagingDomain;
     const PagingDomain* owner_{};
-    UINT64 address_{},bytes_{},fence_{};
+    UINT64 address_{},bytes_{},fence_{};       // fence_: the largest pending value of map and residency
+    D3DKMT_HANDLE allocation_{};
     bool valid_{};
+    bool resident_{};                           // this domain holds one residency reference
 public:
     GpuMapping()=default;
     GpuMapping(const GpuMapping&)=delete;
     GpuMapping& operator=(const GpuMapping&)=delete;
 };
 // Calls must be serialized inside live device DDI scope. No worker/destructor
-// callbacks, and no assumption that mapping also establishes residency.
+// callbacks. Mapping alone does not establish residency: a mapping of an allocation
+// that is not resident yet has no valid page table entries until VidMm commits it
+// (trial 153: a GPU job wrote such a range 2 ms after its map fence, bugcheck 0x116).
+// make_resident() takes this domain's own residency reference on the same paging
+// queue, so the mapping's one fence covers the commit, the fill and the entries.
 class PagingDomain final {
     HANDLE device_{};
     PFND3DDDI_CREATEPAGINGQUEUECB create_{};
@@ -24,6 +30,9 @@ class PagingDomain final {
     PFND3DDDI_MAPGPUVIRTUALADDRESSCB map_{};
     PFND3DDDI_FREEGPUVIRTUALADDRESSCB free_{};
     PFND3DDDI_WAITFORSYNCHRONIZATIONOBJECTFROMGPUCB wait_gpu_{};
+    PFND3DDDI_MAKERESIDENTCB make_resident_{};
+    PFND3DDDI_EVICTCB evict_{};
+    PFND3DDDI_WAITFORSYNCHRONIZATIONOBJECTFROMCPUCB wait_cpu_{};
     D3DKMT_HANDLE queue_{},sync_{};
     const volatile UINT64* completed_{};
     unsigned mappings_{};
@@ -31,7 +40,8 @@ public:
     PagingDomain(D3D12DDI_HRTDEVICE device,const D3DDDI_DEVICECALLBACKS& cb) noexcept
         : device_(device.handle),create_(cb.pfnCreatePagingQueueCb),destroy_(cb.pfnDestroyPagingQueueCb),
           map_(cb.pfnMapGpuVirtualAddressCb),free_(cb.pfnFreeGpuVirtualAddressCb),
-          wait_gpu_(cb.pfnWaitForSynchronizationObjectFromGpuCb) {}
+          wait_gpu_(cb.pfnWaitForSynchronizationObjectFromGpuCb),make_resident_(cb.pfnMakeResidentCb),
+          evict_(cb.pfnEvictCb),wait_cpu_(cb.pfnWaitForSynchronizationObjectFromCpuCb) {}
     PagingDomain(const PagingDomain&)=delete;
     PagingDomain& operator=(const PagingDomain&)=delete;
     HRESULT open() noexcept {
@@ -52,7 +62,7 @@ public:
         args.SizeInPages=bytes/4096;args.Protection.Write=1;
         HRESULT hr=map_(device_,&args);
         if(FAILED(hr) && hr!=E_PENDING) return hr;
-        out.owner_=this;out.address_=args.VirtualAddress;out.bytes_=bytes;
+        out.owner_=this;out.address_=args.VirtualAddress;out.bytes_=bytes;out.allocation_=allocation;
         // The output fence is only meaningful for the asynchronous result.
         out.fence_=hr==E_PENDING?args.PagingFenceValue:0;
         out.valid_=out.address_ && !(out.address_&4095) && out.address_<=UINT64_MAX-bytes &&
@@ -68,6 +78,42 @@ public:
         if(value==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
         if(value<mapping.fence_) return E_PENDING;
         *address=mapping.address_;return S_OK;
+    }
+    // One residency reference of this domain, queued behind the mapping on the same paging
+    // queue; released by unmap_after_gpu_retirement. Its pending value joins the mapping's
+    // fence (a monitored fence value only grows, so the largest covers both operations).
+    // Flags are zero: over budget this refuses (E_OUTOFMEMORY) like the runtime's own
+    // MakeResident of a new heap would, and nothing was taken.
+    HRESULT make_resident(GpuMapping& mapping) noexcept {
+        if(mapping.owner_!=this || !mapping.valid_ || !mapping.allocation_) return E_INVALIDARG;
+        if(mapping.resident_) return E_UNEXPECTED;
+        if(!queue_ || !completed_ || !make_resident_ || !evict_) return E_UNEXPECTED;
+        if(*completed_==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
+        D3DDDI_MAKERESIDENT args{};args.hPagingQueue=queue_;args.NumAllocations=1;
+        args.AllocationList=&mapping.allocation_;
+        HRESULT hr=make_resident_(device_,&args);
+        if(hr!=S_OK && hr!=E_PENDING) return FAILED(hr)?hr:E_UNEXPECTED;
+        // Accepted: the reference exists whatever the rest of the answer says.
+        mapping.resident_=true;
+        if(args.NumAllocations!=1) return E_UNEXPECTED;
+        if(hr==E_PENDING){
+            if(!args.PagingFenceValue || args.PagingFenceValue==UINT64_MAX) return E_UNEXPECTED;
+            if(args.PagingFenceValue>mapping.fence_) mapping.fence_=args.PagingFenceValue;
+        }
+        return S_OK;
+    }
+    // Blocks this thread until the mapping and any residency it took have completed, then
+    // answers like ready(). A lost device signals the fence to UINT64_MAX, which ends the wait.
+    HRESULT wait_ready(const GpuMapping& mapping,UINT64* address) const noexcept {
+        HRESULT hr=ready(mapping,address);
+        if(hr!=E_PENDING) return hr;
+        if(!wait_cpu_ || !sync_) return E_UNEXPECTED;
+        D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU args{};
+        args.ObjectCount=1;args.ObjectHandleArray=&sync_;args.FenceValueArray=&mapping.fence_;
+        hr=wait_cpu_(device_,&args);
+        if(hr!=S_OK) return FAILED(hr)?hr:E_UNEXPECTED;
+        hr=ready(mapping,address);
+        return hr==E_PENDING?E_UNEXPECTED:hr;
     }
     // Returns an address usable by subsequent submissions on this context only.
     // A pending mapping inserts a GPU wait; it does not become CPU-ready, resident,
@@ -92,15 +138,25 @@ public:
         return S_OK;
     }
     // Caller proves all GPU uses have retired before invoking this method.
-    // The paging fence checked here proves mapping completion only.
+    // The paging fence checked here proves completion of the mapping and of any residency
+    // this domain took; that reference is released first, and a failed eviction keeps the
+    // mapping for a retry.
     HRESULT unmap_after_gpu_retirement(GpuMapping& mapping) noexcept {
         if(!mapping.owner_) return S_OK;
         UINT64 address=0;HRESULT hr=ready(mapping,&address);if(FAILED(hr)) return hr;
         if(!free_) return E_UNEXPECTED;
+        if(mapping.resident_){
+            if(!evict_) return E_UNEXPECTED;
+            D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
+            hr=evict_(device_,&evict);
+            if(FAILED(hr)) return hr;
+            mapping.resident_=false;
+        }
         D3DDDICB_FREEGPUVIRTUALADDRESS args{};args.BaseAddress=address;args.Size=mapping.bytes_;
         hr=free_(device_,&args);
         if(SUCCEEDED(hr)){
             mapping.owner_=nullptr;mapping.address_=0;mapping.bytes_=0;mapping.fence_=0;mapping.valid_=false;
+            mapping.allocation_=0;
             --mappings_;
         }
         return hr;
@@ -114,6 +170,7 @@ public:
         if(SUCCEEDED(hr)){queue_=0;sync_=0;completed_=nullptr;}
         return hr;
     }
-    void invalidate_runtime() noexcept {device_=nullptr;create_=nullptr;destroy_=nullptr;map_=nullptr;free_=nullptr;wait_gpu_=nullptr;completed_=nullptr;}
+    void invalidate_runtime() noexcept {device_=nullptr;create_=nullptr;destroy_=nullptr;map_=nullptr;free_=nullptr;wait_gpu_=nullptr;
+        make_resident_=nullptr;evict_=nullptr;wait_cpu_=nullptr;completed_=nullptr;}
 };
 }

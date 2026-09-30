@@ -9,7 +9,8 @@ struct Device;
 // RuntimeDomain scopes. No callback or Vulkan destruction runs in the destructor.
 // Where the latest allocate() ended, for the diagnostic trace: the stage that returned, not a cause.
 enum class ImportStage : uint32_t {
-    Done,Request,Surface,Probe,MemoryType,PagingQueue,AllocateCallback,Map,MapReady,AddressAlignment,Import
+    Done,Request,Surface,Probe,MemoryType,PagingQueue,AllocateCallback,Map,MapReady,AddressAlignment,Import,
+    Resident                                    // appended: trace values of the others stay as they were
 };
 // Where the latest free() ended, by the same rule.
 enum class FreeStage : uint32_t { Done,Request,Record,VulkanFree,Unmap,Deallocate };

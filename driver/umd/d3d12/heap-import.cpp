@@ -210,11 +210,16 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);record->busy=false;
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
+    // The runtime makes a new heap resident only after this DDI returns, on its own paging queue,
+    // and makes only its queues' contexts wait for that. The engine also submits on contexts the
+    // runtime never sees, so its VA must not leave here before the allocation is resident and its
+    // page table entries are written: trial 153 faulted on exactly that window (REPORT-153).
+    if(hr==S_OK){report_.stage=ImportStage::Resident;hr=paging_.make_resident(record->mapping);}
     UINT64 address=0;
-    if(hr==S_OK){
-        report_.stage=ImportStage::MapReady;
-        const ULONGLONG start=GetTickCount64();
-        do {hr=paging_.ready(record->mapping,&address);if(hr!=E_PENDING || GetTickCount64()-start>=2000)break;Sleep(1);}while(true);
+    if(hr==S_OK){report_.stage=ImportStage::MapReady;hr=paging_.wait_ready(record->mapping,&address);}
+    else if(report_.stage==ImportStage::Resident){
+        // The mapping itself was accepted: let it complete so that the release below can free it.
+        UINT64 ignored=0;(void)paging_.wait_ready(record->mapping,&ignored);
     }
     if(hr==S_OK){report_.stage=ImportStage::AddressAlignment;report_.address=address;if(address&(alignment-1))hr=E_INVALIDARG;}
     if(hr==S_OK){
