@@ -11,7 +11,8 @@ public:
     explicit HostedInstance(RuntimeDomain &domain) : domain_(domain) {}
     HostedInstance(const HostedInstance &) = delete;
     HostedInstance &operator=(const HostedInstance &) = delete;
-    HRESULT open(PFN_vkGetInstanceProcAddr get, const bc250_host &host,
+    // policy_flags (BC250_HOST_POLICY_*) is the adapter's resolved instance policy, chained behind host.
+    HRESULT open(PFN_vkGetInstanceProcAddr get, const bc250_host &host, UINT32 policy_flags=0,
         UINT32 api_version=VK_API_VERSION_1_3, UINT32 extension_count=0,
         const char *const *extensions=nullptr);
     HRESULT close();
@@ -19,6 +20,7 @@ public:
 private:
     RuntimeDomain &domain_;
     bc250_host host_{};
+    bc250_host_policy policy_{};
     BC250_DXVK_VULKAN_INSTANCE info_{};
     PFN_vkDestroyInstance destroy_=nullptr;
 };

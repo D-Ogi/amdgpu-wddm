@@ -21,9 +21,11 @@ public:
     ID3D11Device5 *device() const { return device_; } // borrowed
     ID3D11DeviceContext4 *context() const { return context_; } // borrowed
     IBc250DxvkDevice *engine() const { return session_.engine(); } // borrowed
+    IBc250DxvkDevice4 *engine4() const { return engine4_; } // borrowed
+    // policy_flags: the adapter's resolved BC250_HOST_POLICY_* for the hosted instance.
     HRESULT initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 luid,
         PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
-        D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services);
+        D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services, UINT32 policy_flags=0);
     HRESULT close();
     HRESULT take_deferred_error(EngineErrorPolicy policy=EngineErrorPolicy::device_removed_only);
     // On any result, a non-null out belongs to this owner and needs close_surface.

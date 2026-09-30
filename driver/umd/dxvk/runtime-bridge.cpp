@@ -213,6 +213,22 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
       b.MonitoredFenceValueArray=a->MonitoredFenceValueArray;
       return HOST_CALL(SignalSynchronizationObjectFromGpu2, &b);
    }
+   case BC250_HOST_UpdateGpuVirtualAddress: {
+      // Sparse binding: the runtime queues wait(FenceValue), the page-table updates and
+      // signal(FenceValue+1) on the context. The kernel validates ranges and backing.
+      HRESULT health=Bc250HostStatus(s);
+      if (FAILED(health)) return health;
+
+      auto *a=(D3DKMT_UPDATEGPUVIRTUALADDRESS *)argument;
+      if (!a->NumOperations || !a->Operations || a->Reserved0 || a->Reserved1 || !a->hFenceObject ||
+          !a->FenceValue || a->FenceValue>=UINT64_MAX-1) return E_INVALIDARG;
+      if (a->Flags.Value) return E_NOTIMPL;
+      D3DDDICB_UPDATEGPUVIRTUALADDRESS b = {};
+      b.hContext=Bc250HostContext(s,a->hContext); if (!b.hContext) return E_INVALIDARG;
+      b.hFenceObject=a->hFenceObject; b.NumOperations=a->NumOperations; b.Operations=a->Operations;
+      b.FenceValue=a->FenceValue;
+      return HOST_CALL(UpdateGpuVirtualAddress, &b);
+   }
    case BC250_HOST_SubmitCommand: {
       HRESULT health=Bc250HostStatus(s);
       if (FAILED(health)) return health;
@@ -255,7 +271,7 @@ int32_t host_dispatch(void *userdata, uint32_t operation, void *argument)
       Bc250HostLost(s);
       return (int32_t)0xc00002b6;
    }
-   if (FAILED(hr) && (operation==BC250_HOST_SubmitCommand || operation==BC250_HOST_SignalSynchronizationObjectFromGpu2 || operation==BC250_HOST_PUBLISH_PROGRESS))
+   if (FAILED(hr) && (operation==BC250_HOST_SubmitCommand || operation==BC250_HOST_SignalSynchronizationObjectFromGpu2 || operation==BC250_HOST_UpdateGpuVirtualAddress || operation==BC250_HOST_PUBLISH_PROGRESS))
       s->submission_failed=true;
    if (operation<64) ++s->calls[operation];
    if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;

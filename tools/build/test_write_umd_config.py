@@ -40,7 +40,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(record[76:108], bytes.fromhex(self.caps["icd_sha256"]))
 
     def test_capability_rejections(self):
-        for key, value in (("maximum_feature_level", 0xC000), ("doubles", 2),
+        for key, value in (("maximum_feature_level", 0xC200), ("doubles", 2),
                            ("doubles", True), ("logic_op", 1.0), ("tile_based", -1),
                            ("pixel_min_precision", 4), ("other_min_precision", -1),
                            ("compute_raw_structured", 0), ("logic_op", 0)):
@@ -57,6 +57,27 @@ class ConfigurationTests(unittest.TestCase):
         self.icd.write_bytes(b"different ICD")
         with self.assertRaises(ValueError):
             writer.encode(self.caps, self.engine, self.icd)
+
+    def test_fl12_record(self):
+        caps = dict(self.caps, maximum_feature_level=0xC100, tiled_resources_tier=2, typed_uav_loads=1,
+                    rovs=1, stencil_ref=0, conservative_tier=1, vp_rt_index_any_shader=1)
+        record = writer.encode(caps, self.engine, self.icd)
+        self.assertEqual(len(record), 132)
+        self.assertEqual(struct.unpack("<17I", record[:68]),
+                         (0x4334314D, 2, 132, 0, 0xC100, 1, 1, 1, 0, 2, 3, 2, 1, 1, 0, 1, 1))
+        self.assertEqual(record[68:100], bytes.fromhex(self.caps["engine_sha256"]))
+        self.assertEqual(record[100:132], bytes.fromhex(self.caps["icd_sha256"]))
+        self.assertEqual(len(writer.encode(dict(caps, maximum_feature_level=0xC000, rovs=0, conservative_tier=0),
+                                           self.engine, self.icd)), 132)
+        # FL11 keeps the version 1 record, whatever FL12 fields the probe recorded.
+        self.assertEqual(len(writer.encode(dict(caps, maximum_feature_level=0xB100), self.engine, self.icd)), 108)
+        for key, value in (("tiled_resources_tier", 1), ("typed_uav_loads", 0), ("rovs", 0),
+                           ("conservative_tier", 0), ("conservative_tier", 4), ("stencil_ref", True),
+                           ("maximum_feature_level", 0xC200)):
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                writer.encode(dict(caps, **{key: value}), self.engine, self.icd)
+        with self.assertRaises(KeyError):
+            writer.encode(dict(self.caps, maximum_feature_level=0xC000), self.engine, self.icd)
 
     def test_cli_preserves_existing_and_refuses_missing_input(self):
         caps = self.root / "caps.json"

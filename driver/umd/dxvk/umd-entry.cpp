@@ -17,26 +17,28 @@ HRESULT configuration_directory(std::wstring &directory) {
     if(slash==std::wstring::npos)return E_FAIL;
     directory.resize(slash+1);return S_OK;
 }
-HRESULT read_record(const std::wstring &path,bc250::umd::AdapterConfigRecord &record) {
+// Either record version, by file size; decode_adapter_config checks it against the record's own size.
+HRESULT read_record(const std::wstring &path,bc250::umd::AdapterConfigRecord2 &record,DWORD &bytes) {
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(file==INVALID_HANDLE_VALUE)return HRESULT_FROM_WIN32(GetLastError());
     struct Close {HANDLE h;~Close(){CloseHandle(h);}} close{file};
     LARGE_INTEGER size{};
     if(!GetFileSizeEx(file,&size))return HRESULT_FROM_WIN32(GetLastError());
-    if(size.QuadPart!=sizeof(record))return E_INVALIDARG;
+    if(size.QuadPart!=sizeof(bc250::umd::AdapterConfigRecord) && size.QuadPart!=sizeof(record))return E_INVALIDARG;
     DWORD count=0;
-    if(!ReadFile(file,&record,sizeof(record),&count,nullptr))return HRESULT_FROM_WIN32(GetLastError());
-    return count==sizeof(record) ? S_OK : E_FAIL;
+    if(!ReadFile(file,&record,DWORD(size.QuadPart),&count,nullptr))return HRESULT_FROM_WIN32(GetLastError());
+    bytes=count;
+    return count==size.QuadPart ? S_OK : E_FAIL;
 }
 }
 extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args) {
     if(!args)return E_INVALIDARG;
     try {
         std::wstring directory;HRESULT hr=configuration_directory(directory);if(FAILED(hr))return hr;
-        bc250::umd::AdapterConfigRecord record{};
-        hr=read_record(directory+L"amdgpu_wddm_d3d11.config",record);if(FAILED(hr))return hr;
+        bc250::umd::AdapterConfigRecord2 record{};DWORD bytes=0;
+        hr=read_record(directory+L"amdgpu_wddm_d3d11.config",record,bytes);if(FAILED(hr))return hr;
         bc250::umd::AdapterConfiguration config{};
-        hr=bc250::umd::decode_adapter_config(record,config);if(FAILED(hr))return hr;
+        hr=bc250::umd::decode_adapter_config(&record,bytes,config);if(FAILED(hr))return hr;
         const std::wstring engine=directory+L"amdgpu_wddm_dxvk.dll",icd=directory+L"amdgpu_wddm_radv.dll";
         config.engine_path=engine.c_str();config.icd_path=icd.c_str();
         return bc250::umd::open_render_adapter(*args,config);

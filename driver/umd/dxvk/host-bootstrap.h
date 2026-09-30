@@ -42,6 +42,19 @@ _Static_assert(sizeof(struct bc250_host_import) == 48, "bc250_host_import layout
  * borrowed allocation is never mapped by the ICD. */
 #define BC250_HOST_IMPORT_CPU_MAP 1u
 #define BC250_HOST_IMPORT_KNOWN_FLAGS BC250_HOST_IMPORT_CPU_MAP
+/* Policy of the host for this instance (hosted ICD patch 0006), chained next to struct bc250_host. With
+ * the structure present the host alone decides on sparse binding: BC250_HOST_POLICY_SPARSE turns it on,
+ * its absence turns it off. An ICD without the patch ignores it and follows its environment. */
+#define BC250_HOST_POLICY_STYPE 0x42434836u
+#define BC250_HOST_POLICY_VERSION 1u
+#define BC250_HOST_POLICY_SPARSE 1u
+#define BC250_HOST_POLICY_KNOWN_FLAGS BC250_HOST_POLICY_SPARSE
+struct bc250_host_policy {
+   uint32_t sType;
+   const void *pNext;
+   uint32_t version, size;
+   uint32_t flags, reserved;
+};
 #define BC250_HOST_CREATE_PAGING 1u
 #define BC250_HOST_DESTROY_PAGING 2u
 #define BC250_HOST_PUBLISH_PROGRESS 3u

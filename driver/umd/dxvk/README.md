@@ -305,12 +305,22 @@ loads an isolated copy and exercises the real export with synthetic adapter call
 this proves loader/negotiation behavior, not system-runtime device creation or GPU work.
 
 The export reads `amdgpu_wddm_d3d11.config` only beside its own module. The configuration is
-exactly 108 bytes, little-endian, matching `AdapterConfigRecord` in `adapter-config.h`:
+little-endian, either version 1 (108 bytes, `AdapterConfigRecord` in `adapter-config.h`, maximum
+FL11_1) or version 2 (132 bytes, `AdapterConfigRecord2`, maximum FL12_0 or FL12_1):
 
-- Eleven 32-bit words: magic `0x4334314d`, version `1`, size `108`, reserved `0`,
+- Eleven 32-bit words: magic `0x4334314d`, version, size, reserved `0`,
   D3D_FEATURE_LEVEL maximum, doubles Boolean, compute/raw/structured Boolean,
   logic-op Boolean, tile-based Boolean, pixel minimum-precision flags, other-stage flags.
+- Version 2 only: six more words - tiled resources tier (2 or 3), typed UAV loads (1), ROVs,
+  PS stencil reference, conservative rasterization tier, VP/RT array index from any shader.
+  FL12_1 requires ROVs and a conservative tier.
 - Engine SHA-256 (32 raw bytes), then ICD SHA-256 (32 raw bytes).
+
+An FL12 record is advertised only when the adapter's sparse policy (`AmdgpuWddmSparseBinding`,
+read as in the D3D12 shell, default on) is enabled; otherwise the caps are clamped to FL11_1 and
+only the D3D11.1 DDI is offered. With the policy on, the shell offers the WDDM 2.0 DDI
+(`ddi-wddm2.cpp`, tiled entries through the engine's ID3D11DeviceContext2) and chains
+`bc250_host_policy` with `BC250_HOST_POLICY_SPARSE` to the hosted ICD.
 
 The sibling modules are named `amdgpu_wddm_dxvk.dll` and `amdgpu_wddm_radv.dll`. Zero hashes,
 unknown record versions, invalid Boolean/precision values and inconsistent capability

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-fixed-state.h"
+#include <cstddef>
+#include <cstring>
 namespace bc250::umd {
 #define CHECK_ENUM(name) static_assert(unsigned(D3D10_DDI_##name)==unsigned(D3D11_##name))
 CHECK_ENUM(DEPTH_WRITE_MASK_ZERO); CHECK_ENUM(DEPTH_WRITE_MASK_ALL);
@@ -45,6 +47,15 @@ D3D11_RASTERIZER_DESC1 convert_rasterizer(const D3D11_1_DDI_RASTERIZER_DESC &s) 
     d.ForcedSampleCount=s.ForcedSampleCount;
     return d;
 }
+D3D11_RASTERIZER_DESC2 convert_rasterizer2(const D3DWDDM2_0DDI_RASTERIZER_DESC &s) {
+    static_assert(offsetof(D3DWDDM2_0DDI_RASTERIZER_DESC,ForcedSampleCount)==offsetof(D3D11_1_DDI_RASTERIZER_DESC,ForcedSampleCount));
+    D3D11_1_DDI_RASTERIZER_DESC prefix{};std::memcpy(&prefix,&s,sizeof(prefix));
+    const auto first=convert_rasterizer(prefix);
+    D3D11_RASTERIZER_DESC2 d{};std::memcpy(&d,&first,sizeof(first));
+    static_assert(UINT(D3D11_CONSERVATIVE_RASTERIZATION_MODE_ON)==UINT(D3DWDDM2_0DDI_CONSERVATIVE_RASTERIZATION_ON));
+    d.ConservativeRaster=static_cast<D3D11_CONSERVATIVE_RASTERIZATION_MODE>(s.ConservativeRasterizationMode);
+    return d;
+}
 namespace {
 SIZE_T APIENTRY depth_size(D3D10DDI_HDEVICE,const D3D10_DDI_DEPTH_STENCIL_DESC *) { return sizeof(DdiDepthStencil); }
 SIZE_T APIENTRY raster_size(D3D10DDI_HDEVICE,const D3D11_1_DDI_RASTERIZER_DESC *) { return sizeof(DdiRasterizer); }
@@ -70,6 +81,27 @@ void APIENTRY depth_create(D3D10DDI_HDEVICE h,const D3D10_DDI_DEPTH_STENCIL_DESC
 void APIENTRY raster_create(D3D10DDI_HDEVICE h,const D3D11_1_DDI_RASTERIZER_DESC *d,
     D3D10DDI_HRASTERIZERSTATE s,D3D10DDI_HRTRASTERIZERSTATE) {
     create_state<DdiRasterizer>(h,d,s,convert_rasterizer,&ID3D11Device5::CreateRasterizerState1);
+}
+SIZE_T APIENTRY raster2_size(D3D10DDI_HDEVICE,const D3DWDDM2_0DDI_RASTERIZER_DESC *) { return sizeof(DdiRasterizer); }
+void APIENTRY raster2_create(D3D10DDI_HDEVICE h,const D3DWDDM2_0DDI_RASTERIZER_DESC *desc,
+    D3D10DDI_HRASTERIZERSTATE handle,D3D10DDI_HRTRASTERIZERSTATE) {
+    auto *s=static_cast<DdiRasterizer *>(handle.pDrvPrivate);
+    if (s) s->object=nullptr;
+    enter_context(h,[&](ID3D11DeviceContext4 &) {
+        auto &owner=*static_cast<DdiDeviceHandle *>(h.pDrvPrivate)->owner;
+        if (!s || !desc || !owner.device() ||
+            UINT(desc->ConservativeRasterizationMode)>UINT(D3DWDDM2_0DDI_CONSERVATIVE_RASTERIZATION_ON)) {
+            report_ddi_error(owner,E_INVALIDARG); return;
+        }
+        const auto d=convert_rasterizer2(*desc);
+        ID3D11RasterizerState2 *state=nullptr;
+        const HRESULT hr=owner.device()->CreateRasterizerState2(&d,&state);
+        if (FAILED(hr)) {
+            if (state) state->Release();
+            report_ddi_error(owner,hr);
+        } else if (!state) report_ddi_error(owner,E_FAIL);
+        else s->object=state; // RasterizerState2 is a RasterizerState1: binding and release are unchanged.
+    });
 }
 template<typename Storage,typename Handle> void APIENTRY destroy(D3D10DDI_HDEVICE h,Handle handle) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
@@ -97,5 +129,8 @@ void install_fixed_state_ddi(D3D11_1DDI_DEVICEFUNCS &t) {
     t.pfnCalcPrivateRasterizerStateSize=raster_size; t.pfnCreateRasterizerState=raster_create;
     t.pfnDestroyRasterizerState=destroy<DdiRasterizer,D3D10DDI_HRASTERIZERSTATE>;
     t.pfnSetRasterizerState=raster_bind;
+}
+void install_fixed_state_wddm2_0_ddi(D3DWDDM2_0DDI_DEVICEFUNCS &t) {
+    t.pfnCalcPrivateRasterizerStateSize=raster2_size; t.pfnCreateRasterizerState=raster2_create;
 }
 }

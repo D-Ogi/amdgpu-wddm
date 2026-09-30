@@ -124,7 +124,9 @@ HRESULT APIENTRY runtime_residency(HANDLE h,const D3DDDICB_QUERYRESIDENCY *p) {
     return residencyMode==1 ? E_FAIL : S_OK;
 }
 }
+void test_wddm2_0_ddi();
 int main() {
+    test_wddm2_0_ddi();
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
     if (ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true)!=DXGI_DDI_ERR_WASSTILLDRAWING ||
@@ -1099,13 +1101,13 @@ int main() {
     if(query_adapter_identity(&createIdentity,adapter_query,adapterLuid)!=S_OK ||
         adapterLuid!=0xffffff8512345678ull) std::abort();
     UINT32 versionCount=0; UINT64 versions[2]={123,456};
-    if (supported_ddi_versions(nullptr,versions)!=E_INVALIDARG ||
-        supported_ddi_versions(&versionCount,nullptr)!=S_OK || versionCount!=1) std::abort();
+    if (supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,nullptr,versions)!=E_INVALIDARG ||
+        supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,&versionCount,nullptr)!=S_OK || versionCount!=1) std::abort();
     versionCount=0;
-    if (supported_ddi_versions(&versionCount,versions)!=HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) ||
+    if (supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,&versionCount,versions)!=HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) ||
         versionCount!=0 || versions[0]!=123 || versions[1]!=456) std::abort();
     versionCount=2;
-    if (supported_ddi_versions(&versionCount,versions)!=S_OK || versionCount!=1 ||
+    if (supported_ddi_versions(D3D_FEATURE_LEVEL_11_1,&versionCount,versions)!=S_OK || versionCount!=1 ||
         versions[0]!=D3D11_1_DDI_SUPPORTED || versions[1]!=456) std::abort();
     const D3D_FEATURE_LEVEL featureLevels[]={D3D_FEATURE_LEVEL_10_0,D3D_FEATURE_LEVEL_10_1,D3D_FEATURE_LEVEL_11_0,D3D_FEATURE_LEVEL_11_1};
     for (UINT pipeline=0;pipeline<32;++pipeline) {

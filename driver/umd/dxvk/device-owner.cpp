@@ -18,7 +18,7 @@ HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icd
 }
 HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 luid,
     PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
-    D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services) {
+    D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services, UINT32 policy_flags) {
     if (!runtime_.domain.entered() || initialized_ || closing_ || has_live_objects())
         return E_UNEXPECTED;
     if (!args.pKTCallbacks || !args.pUMCallbacks || !args.DXGIBaseDDI.pDXGIBaseCallbacks || !args.hRTDevice.handle)
@@ -38,7 +38,7 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     if (!runtime_.present_context) return E_FAIL;
     auto host=host_descriptor(bridge_,luid);
     hr=retain_code_modules(reinterpret_cast<const void *>(funcs.CreateDevice),reinterpret_cast<const void *>(get));
-    if (SUCCEEDED(hr)) hr=instance_.open(get,host);
+    if (SUCCEEDED(hr)) hr=instance_.open(get,host,policy_flags);
     if (SUCCEEDED(hr)) hr=session_.open(funcs,instance_.info(),level,services);
     if (SUCCEEDED(hr)) {
         hr=session_.engine()->QueryInterface(__uuidof(IBc250DxvkDevice4),reinterpret_cast<void **>(&engine4_));

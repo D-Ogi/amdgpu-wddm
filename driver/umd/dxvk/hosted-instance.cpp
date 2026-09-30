@@ -4,15 +4,19 @@
 #include <new>
 #include <vector>
 namespace bc250::umd {
-HRESULT HostedInstance::open(PFN_vkGetInstanceProcAddr get, const bc250_host &host,
+HRESULT HostedInstance::open(PFN_vkGetInstanceProcAddr get, const bc250_host &host, UINT32 policy_flags,
     UINT32 api_version, UINT32 extension_count, const char *const *extensions) {
     if (!domain_.entered() || info_.Instance) return E_UNEXPECTED;
     if (!get || host.sType!=BC250_HOST_STYPE || host.version!=BC250_HOST_VERSION ||
         host.size!=sizeof(host) || !host.identity || !host.dispatch ||
+        (policy_flags & ~BC250_HOST_POLICY_KNOWN_FLAGS) ||
         api_version<VK_API_VERSION_1_1 || (extension_count && !extensions)) return E_INVALIDARG;
     auto create=reinterpret_cast<PFN_vkCreateInstance>(get(VK_NULL_HANDLE,"vkCreateInstance"));
     if (!create) return E_NOINTERFACE;
-    host_=host;
+    // The D3D12 shell's chain: an ICD with the policy patch takes sparse binding from the host
+    // alone, an older one skips the unknown structure and follows its environment.
+    policy_={BC250_HOST_POLICY_STYPE,host.pNext,BC250_HOST_POLICY_VERSION,sizeof(policy_),policy_flags,0};
+    host_=host; host_.pNext=&policy_;
     info_={}; info_.Size=sizeof(info_); info_.GetInstanceProcAddr=get;
     info_.ApiVersion=api_version; info_.ExtensionCount=extension_count; info_.ExtensionNames=extensions;
     VkApplicationInfo app{}; app.sType=VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -62,6 +66,6 @@ HRESULT HostedInstance::close() {
         if (!destroy_) return E_NOINTERFACE;
         destroy_(info_.Instance,nullptr);
     }
-    info_={}; host_={}; destroy_=nullptr; return S_OK;
+    info_={}; host_={}; policy_={}; destroy_=nullptr; return S_OK;
 }
 }

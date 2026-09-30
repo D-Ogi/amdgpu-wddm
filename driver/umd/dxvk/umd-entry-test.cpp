@@ -46,6 +46,25 @@ int wmain(int argc,wchar_t **argv) {
     capArgs.Type=D3D11DDICAPS_3DPIPELINESUPPORT;capArgs.pData=&pipelines;capArgs.DataSize=sizeof(pipelines);
     CHECK(table.pfnGetCaps(args.hAdapter,&capArgs)==S_OK && pipelines.Caps==7);
     CHECK(table.pfnCloseAdapter(args.hAdapter)==S_OK);
+    // Version 2 (FL12). This LUID names no adapter, so the sparse policy cannot be read: FL11_1 only.
+    AdapterConfigRecord2 record2{};record2.magic=adapter_config_magic;record2.version=2;record2.size=sizeof(record2);
+    record2.maximum=D3D_FEATURE_LEVEL_12_1;record2.compute=1;record2.logic_op=1;
+    record2.tiled_tier=2;record2.typed_uav_loads=1;record2.rovs=1;record2.conservative_tier=1;
+    std::memset(record2.engine_sha256,1,32);std::memset(record2.icd_sha256,2,32);
+    auto write2=[&](const AdapterConfigRecord2 &r,DWORD length) {
+        HANDLE file=CreateFileW(config.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+        CHECK(file!=INVALID_HANDLE_VALUE);DWORD count=0;
+        CHECK(WriteFile(file,&r,length,&count,nullptr) && count==length);CloseHandle(file);
+    };
+    args.hAdapter.pDrvPrivate=&identity;
+    write2(record2,sizeof(AdapterConfigRecord));CHECK(open(&args)==E_INVALIDARG);
+    record2.rovs=0;write2(record2,sizeof(record2));CHECK(open(&args)==E_INVALIDARG);record2.rovs=1;
+    record2.version=1;write2(record2,sizeof(record2));CHECK(open(&args)==E_INVALIDARG);record2.version=2;
+    CHECK(args.hAdapter.pDrvPrivate==&identity);
+    write2(record2,sizeof(record2));CHECK(open(&args)==S_OK && args.hAdapter.pDrvPrivate!=&identity);
+    entries=0;CHECK(table.pfnGetSupportedVersions(args.hAdapter,&entries,nullptr)==S_OK && entries==1);
+    CHECK(table.pfnGetCaps(args.hAdapter,&capArgs)==S_OK && pipelines.Caps==15);
+    CHECK(table.pfnCloseAdapter(args.hAdapter)==S_OK);
     CHECK(FreeLibrary(module));CHECK(DeleteFileW(config.c_str()));
-    std::puts("PASS exported OpenAdapter10_2: missing/malformed configuration, negotiation and close (no GPU)");
+    std::puts("PASS exported OpenAdapter10_2: missing/malformed configuration, v1/v2 records, negotiation and close (no GPU)");
 }

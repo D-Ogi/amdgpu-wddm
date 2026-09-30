@@ -21,7 +21,7 @@ def encode(caps, engine: Path, icd: Path) -> bytes:
             raise ValueError(f"invalid {name}: {value!r}")
         return value
 
-    maximum = integer("maximum_feature_level", (0xA000, 0xA100, 0xB000, 0xB100))
+    maximum = integer("maximum_feature_level", (0xA000, 0xA100, 0xB000, 0xB100, 0xC000, 0xC100))
     doubles = integer("doubles", (0, 1))
     compute = integer("compute_raw_structured", (0, 1))
     logic = integer("logic_op", (0, 1))
@@ -30,8 +30,16 @@ def encode(caps, engine: Path, icd: Path) -> bytes:
     other = integer("other_min_precision", range(4))
     if maximum >= 0xB000 and not compute:
         raise ValueError("FL11 requires compute/raw/structured support")
-    if maximum == 0xB100 and not logic:
+    if maximum >= 0xB100 and not logic:
         raise ValueError("FL11_1 requires logic operations")
+    # Version 2 records the FL12 capabilities; an FL11 or lower maximum keeps the version 1 record.
+    fl12 = None
+    if maximum >= 0xC000:
+        fl12 = (integer("tiled_resources_tier", (2, 3)), integer("typed_uav_loads", (1,)),
+                integer("rovs", (0, 1)), integer("stencil_ref", (0, 1)),
+                integer("conservative_tier", range(4)), integer("vp_rt_index_any_shader", (0, 1)))
+        if maximum == 0xC100 and (not fl12[2] or not fl12[4]):
+            raise ValueError("FL12_1 requires ROVs and conservative rasterization")
 
     hashes = []
     for name, path in (("engine_sha256", engine), ("icd_sha256", icd)):
@@ -46,6 +54,9 @@ def encode(caps, engine: Path, icd: Path) -> bytes:
         if actual != expected:
             raise ValueError(f"{name} does not match {path}")
         hashes.append(actual)
+    if fl12:
+        return struct.pack("<17I32s32s", 0x4334314D, 2, 132, 0, maximum,
+                           doubles, compute, logic, tile, pixel, other, *fl12, *hashes)
     return struct.pack("<11I32s32s", 0x4334314D, 1, 108, 0, maximum,
                        doubles, compute, logic, tile, pixel, other, *hashes)
 
