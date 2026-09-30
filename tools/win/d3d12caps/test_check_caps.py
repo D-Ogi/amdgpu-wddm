@@ -60,7 +60,7 @@ class CheckCapsTest(unittest.TestCase):
         self.assertEqual(failures, ['buffer_64k: 131072 / 65536, expected exactly 65536 / 65536'])
 
     def test_buffer_smaller_than_its_width_fails(self):
-        # Codex 817: an aligned positive answer below the buffer's width passed before.
+        # Regression: an aligned positive answer below the buffer's width passed before.
         failures = check_caps.check(with_answer('buffer_16m_uav', 65536, 65536))
         self.assertEqual(failures, ['buffer_16m_uav: SizeInBytes 65536 is smaller than the buffer width 16777216'])
 
