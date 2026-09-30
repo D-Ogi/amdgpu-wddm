@@ -145,3 +145,25 @@ the winsys wait bound when older work waits on a later CPU signal; that case has
 no test yet. Other winsys paths that destroy objects the GPU may still use are
 not audited by this patch. Kto się śpieszy, ten się diabłu cieszy (the devil
 rejoices at the one in a hurry): freeing early is how the 0x116 got in.
+
+## A pipeline cache identifier that survives a copy
+
+0009-module-content-identifier.patch follows 0008 (fork commit 08c0441b on
+0c49a2ca). On Windows `disk_cache_get_function_identifier` hashed the module
+file's last-write time, and RADV builds its `pipelineCacheUUID` from it. Every
+lab trial stages a fresh copy of the ICD, so the same bytes got a new UUID each
+time, and the engine's persisted VkPipelineCache was rejected at every start.
+The patch hashes the module's file content (BLAKE3 over a read-only mapping)
+once per module and process. It falls back to the last-write time when the file
+cannot be mapped. Only the Windows branch changes.
+
+Candidate 6E43EF21CCD773FD600B7F845FFF2B3B0F3E9C51A2FA1BB893B2F5D64583EEBD
+builds from the series. The host tests pass thirteen cases with 241 checks and
+no failure. A host test links each build's util library and identifies two
+copies of the candidate with different last-write times. The build before the
+patch gives two identifiers; the patched build gives one. The first call costs
+13.8 ms for the 24 MB DLL on the development PC; a repeated call costs 2 us.
+That host test does not enumerate hardware. The UUID on the BC-250 itself and a
+warm pipeline cache across two lab trials remain to be shown there.
+Po owocach ich poznacie (by their fruits you shall know them): judge a build by
+its bytes, not its birthday.
