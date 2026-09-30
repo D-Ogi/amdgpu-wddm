@@ -2,7 +2,7 @@
  * Shim deviations: per-call/per-device settings instead of Linux's global;
  * owner callbacks instead of smu_cmn, the operating-point table of bc250_clock.h
  * (1000-2000 MHz, 820-1000 mV, docs/design/dpm.md), a temperature gate on raises,
- * explicit MHz/VID readback and voltage-up staging before AMD commit. */
+ * explicit MHz/VID readback (re-read while a raise ramps) and voltage-up staging before AMD commit. */
 #include <stddef.h>
 #include <string.h>
 #include "bc250_clock.h"
@@ -80,6 +80,12 @@ int bc250_clock_message_allowed(unsigned int message)
     }
 }
 
+// A readback between the clock the transaction found and the one it requested, the request itself excluded.
+static int on_the_way(unsigned int observed,unsigned int from,unsigned int to)
+{
+    return from<to ? observed>=from && observed<to : observed<=from && observed>to;
+}
+
 int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
                         unsigned int mv,struct bc250_clock_report *report)
 {
@@ -131,6 +137,15 @@ int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
     if(status)goto done;
     status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxFrequency,&report->observed_mhz);
     if(status)goto done;
+    // A raise ramps (BC250_CLOCK_SETTLE_READS); the voltage for the request is already in place, so every
+    // clock on the way is covered. Wait for the exact request, bounded; what does not arrive is MISMATCH below.
+    while(report->observed_mhz!=mhz && report->settle_reads<BC250_CLOCK_SETTLE_READS &&
+          on_the_way(report->observed_mhz,report->initial_mhz,mhz)) {
+        if(io->delay)io->delay(io->context,BC250_CLOCK_SETTLE_US);
+        report->settle_reads++;
+        status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxFrequency,&report->observed_mhz);
+        if(status)goto done;
+    }
     status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxVid,&report->observed_vid);
     if(status)goto done;
     if(report->observed_mhz!=mhz || report->observed_vid!=report->expected_vid) {

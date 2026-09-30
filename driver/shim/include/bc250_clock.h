@@ -12,6 +12,8 @@ struct bc250_clock_io {
     /* Return zero only after transport and firmware both report success. */
     int (*message)(void *context, unsigned int message, unsigned int parameter,
                    unsigned int *value);
+    /* Optional (NULL: re-read at once). Waits at least usec between the settle reads below. */
+    void (*delay)(void *context, unsigned int usec);
 };
 struct bc250_clock_report {
     unsigned int requested_mhz, requested_mv, expected_vid;
@@ -20,6 +22,7 @@ struct bc250_clock_report {
     unsigned int messages_attempted, messages_completed;
     int temperature_mc, status;
     unsigned int ready;
+    unsigned int settle_reads;  /* GetGfxFrequency re-reads while the clock was on its way */
 };
 #define BC250_CLOCK_INVALID (-22)
 #define BC250_CLOCK_TOO_HOT (-1001)
@@ -40,6 +43,11 @@ struct bc250_clock_report {
 #define BC250_CLOCK_FLOOR_MV 820u
 #define BC250_CLOCK_CEILING_MV 1000u
 #define BC250_CLOCK_HOT_MC 85000     /* no raise of clock or voltage at or above this */
+/* After the commit the SMU reports the clock on its way to a raised request (unit A, KMD 0.7.176.1: 1028-1029 MHz
+ * right after 1000 -> 1200, 1200 one 25 ms governor tick later; lowerings read back exact). While the readback lies
+ * between the initial clock and the request, it is read again, at most this often, with this pause before each. */
+#define BC250_CLOCK_SETTLE_READS 50u
+#define BC250_CLOCK_SETTLE_US 1000u
 struct bc250_clock_point { unsigned int mhz, mv, vid; };
 extern const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS];
 /* AMD's SVI2 encoding, as the imported commit computes it. Truncation: the VID's voltage is never
@@ -55,7 +63,8 @@ int bc250_clock_point_allowed(unsigned int mhz, unsigned int mv);
 int bc250_clock_message_allowed(unsigned int message);
 
 /* PASSIVE/sleepable owner only. No allocation, MMIO mapping or async work.
- * Readback matches encoded VID, not an exact analogue voltage claim.
+ * Readback matches encoded VID, not an exact analogue voltage claim. The clock readback must end exactly at
+ * the request; readings on the way there are re-read (BC250_CLOCK_SETTLE_READS), anything else is MISMATCH.
  * On partial failure do not undo a successful downclock by raising frequency.
  * At or above BC250_CLOCK_HOT_MC a transition that raises clock or voltage is refused (TOO_HOT)
  * after the two readbacks; one that raises neither is carried out, so a hot part can always be

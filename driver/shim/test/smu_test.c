@@ -93,7 +93,7 @@ static void setup(struct model *m,int active) {
     CHECK(bc250_smu_init(&m->smu,&io,10,active)==0);
 }
 static int prepare(struct model *m,struct bc250_clock_report *report) {
-    struct bc250_clock_io io={m,begin,end,temperature,message};
+    struct bc250_clock_io io={m,begin,end,temperature,message,NULL};
     return bc250_clock_prepare(&io,1000,820,report);
 }
 static void positive(int active,int raise) {

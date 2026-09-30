@@ -68,6 +68,15 @@ static void MailboxDelay(void* context,unsigned usec)
     UNREFERENCED_PARAMETER(context);
     KeStallExecutionProcessor(usec); // AMD poll interval, bounded by transport.
 }
+static void ClockDelay(void* context,unsigned usec)
+{
+    LARGE_INTEGER interval;
+    UNREFERENCED_PARAMETER(context);
+    // The clock transaction's settle pause (bc250_clock.c): a sleep, not a stall. The owner is PASSIVE only
+    // (OwnerBegin) and its lock a push lock, so the thread may wait; the wait may run to the timer resolution.
+    interval.QuadPart=-10ll*(LONGLONG)usec;
+    KeDelayExecutionThread(KernelMode,FALSE,&interval);
+}
 static int Temperature(void* context,int* value)
 {
     BC250_SMU_OWNER* owner=context;
@@ -158,12 +167,12 @@ NTSTATUS SmuReadFirmwareVersion(BC250_SMU_OWNER* owner,ULONG* version)
 }
 NTSTATUS SmuPrepareClock(BC250_SMU_OWNER* owner,struct bc250_clock_report* report)
 {
-    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message};
+    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
     return ResultStatus(bc250_clock_prepare(&io,BC250_CLOCK_FLOOR_MHZ,BC250_CLOCK_FLOOR_MV,report));
 }
 NTSTATUS SmuSetPoint(BC250_SMU_OWNER* owner,ULONG mhz,ULONG mv,struct bc250_clock_report* report)
 {
-    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message};
+    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
     return ResultStatus(bc250_clock_prepare(&io,mhz,mv,report));
 }
 NTSTATUS SmuReadTemperature(BC250_SMU_OWNER* owner,LONG* temperature)
@@ -197,7 +206,7 @@ void SmuClockRequest(BC250_SMU_OWNER* owner, BC250_ESCAPE_CLOCK* data,
 {
     NTSTATUS status=STATUS_INVALID_PARAMETER;
     struct bc250_clock_report report;
-    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message};
+    struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
     data->Version=BC250_KMD_VERSION;
     data->Status=BC250_ESCAPE_STATUS_REFUSED;
     data->ObservedMHz=data->ObservedVid=0;

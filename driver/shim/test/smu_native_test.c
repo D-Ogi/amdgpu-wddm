@@ -5,7 +5,7 @@
 #include "smu-native.inc"
 static volatile ULONG registers[0x80000/sizeof(ULONG)];
 static BC250_SMU_OWNER owner;
-static unsigned phase,pending,mhz,vid,command,argument,reply;
+static unsigned phase,pending,mhz,vid,command,argument,reply,ramp,ramp_left,ramp_from;
 static LONG calls;
 static unsigned smu_version=0x00580600u,version_refuse;
 static HANDLE entered,release_write,stop_started,stop_done;
@@ -17,9 +17,9 @@ ULONG NativeRead(PULONG address) {
     if(offset==BC250_SMU_mmMP1_SMN_C2PMSG_90) {
         if(pending && !--pending) {
             switch(command) {
-            case PPSMC_MSG_RequestGfxclk:mhz=argument;break;
+            case PPSMC_MSG_RequestGfxclk:ramp_left=ramp;ramp=0;ramp_from=mhz;mhz=argument;break;
             case PPSMC_MSG_ForceGfxVid:vid=argument;break;
-            case PPSMC_MSG_GetGfxFrequency:argument=mhz;break;
+            case PPSMC_MSG_GetGfxFrequency:argument=ramp_left?(ramp_left--,ramp_from+1):mhz;break; // "ramp" reads on the way
             case PPSMC_MSG_GetGfxVid:argument=vid;break;
             case PPSMC_MSG_GetSmuVersion:argument=smu_version;break;
             default:CHECK(0);
@@ -137,6 +137,12 @@ int main(void) {
         // The governor's own path, and its temperature read without a message.
         { struct bc250_clock_report p;LONG mc=0;unsigned ignored=0;
           CHECK(SmuSetPoint(&owner,1700,952,&p)==STATUS_SUCCESS && p.ready && p.observed_mhz==1700 && p.observed_vid==95);
+          CHECK(!p.settle_reads && !native_settle_sleeps);
+          // A raise that ramps: the owner's transaction sleeps before each re-read and ends at the request.
+          ramp=3;
+          CHECK(SmuSetPoint(&owner,1900,984,&p)==STATUS_SUCCESS && p.ready && p.observed_mhz==1900 && p.observed_vid==90);
+          CHECK(p.settle_reads==3 && native_settle_sleeps==3 && p.voltage_staged && !ramp_left);
+          CHECK(SmuSetPoint(&owner,1700,952,&p)==STATUS_SUCCESS && p.ready && !p.settle_reads);
           CHECK(SmuSetPoint(&owner,1700,951,&p)==STATUS_INVALID_PARAMETER && !p.ready);
           before=calls;
           CHECK(SmuReadTemperature(&owner,&mc)==STATUS_SUCCESS && mc==67000 && calls==before);
