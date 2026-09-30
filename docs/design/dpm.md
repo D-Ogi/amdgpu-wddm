@@ -43,10 +43,7 @@ power readout (it needs the metrics table and a DMA buffer); the plug telemetry 
 ## Governor (`driver/shim/bc250_dpm.c`, pure; `driver/kmd/dpm.c`, the thread)
 
 - Tick 25 ms on a system thread (`KeWaitForSingleObject` on the stop event with a timeout, no polling loop).
-- Load: GFX ring busy time. The submit path starts a busy interval, the fence path that clears the last
-  outstanding submission ends it (`DpmBusyBegin/End`, interlocked). The sampler closes an open interval at each
-  tick, so a long IB counts while it runs. Busy per tick in permille, plus an average with 3/4 weight on the old.
-- Up: a tick at 900 permille or more raises at once to the lowest level at which the same work would fill 80 %
+- Load: see "Busy" below. Busy per tick in permille, plus an average with 3/4 weight on the old.- Up: a tick at 900 permille or more raises at once to the lowest level at which the same work would fill 80 %
   (`clock * busy / 800`), at least one level.
 - Down: one level after the average stayed under 650 permille for 200 ms. A step down never lands above the up
   threshold (650 x 1100/1000 < 900), so the two cannot chase each other; the host test sweeps every constant
@@ -57,7 +54,29 @@ power readout (it needs the metrics table and a DMA buffer); the plug telemetry 
 - SetStablePowerState(TRUE) pins the floor (it said "clocks fixed at 1000 MHz" before; profiling now gets that
   floor explicitly).
 
-## Thermal
+## Busy
+
+0.7.177 samples the hardware. A high-resolution timer (`ExAllocateTimer`, `EX_TIMER_HIGH_RESOLUTION`) fires every
+1 ms at DISPATCH_LEVEL and reads `GRBM_STATUS` (`GUI_ACTIVE`, the bit amdgpu's `gfx_v10_0_is_idle` tests) and
+`SDMA0_STATUS_REG` (`IDLE`), both from the general read table, no write, no bank select. Full WDDM starts the RLC
+without GFXOFF (gfx.c `pp_gfxoff`), so GC registers always answer. The tick takes the counts: the governor's busy is
+the share of active GRBM samples (25 per tick, so 40 permille steps; UP needs 23 of 25). A tick with fewer than 8
+samples falls back to the submit accounting. Pause flushes the callback before a power transition; stop deletes the
+timer with wait before the thread joins, so no read can outlive the BAR mapping. Cost: two uncached reads per
+millisecond, and the platform timer runs at 1 ms while the adapter is started.
+
+Why: on the lab, 0.7.175 with DpmMode=1 never raised. The submit accounting (the ring busy from `SubmitIbLocked`,
+gfx.c, until `GfxFenceArrivedAccess` saw the last outstanding fence) read 0 % for vkcompute and at most 7.4 %
+(mean 0.5 %) in The Witcher 3 with RT (trial 139, 1200 samples), where ETW (trial 135) had reported the GPU
+91.5 % busy. The accounting is not bypassed: every node-0 packet goes through `WddmSubmitHardware` (wddm.c) to
+`GfxSubmitIb`, 5389 submitted and 5387 completed in trial 139, and the window closes only when the fence is observed,
+so it can only overstate the ring's own busy time. What it does not see: time a packet spends in the KMD before the
+ring write (`SubmitIbLocked` flushes VMID 1 by MMIO with a poll before `DpmBusyBegin`; a job for another root waits
+for the ring to drain), and every other engine, above all the paging node: 24185 SDMA submissions and 4.3 GB of DMA
+in the same trial. Which of these the ETW figure measured is not established; GRBM and SDMA samples on the lab will
+say whether the graphics engine itself is busy. If GRBM reads low in the game as well, the clock is not the limit
+and the governor rightly stays at 1000 MHz. SMU metrics are not an alternative: amdgpu reads only the metrics table
+on this part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
 
 Same sensor as temp.py (M23). At 85 C or more the cap drops at once to one level under the current clock, then one
 more level every 500 ms while it stays hot. At 90 C, or with an invalid sensor read, the cap is the floor. Below
@@ -85,7 +104,8 @@ at device start: change them, then restart the device or reboot.
 
 - `bc250kmd_cli dpm [count [interval ms]]`: mode, requested mode, reason, then per sample the committed clock and
   voltage, the SMU readback (MHz, VID), temperature, busy and average busy, demand, thermal cap, ceiling, throttle
-  reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed) and counters.
+  reason (none, thermal-soft, thermal-hard, sensor, max-setting, stable, smu, fixed) and counters, then the busy
+  source (grbm or submit), the submit share and the SDMA0 share (0.7.177).
   It uses `BC250_ESCAPE_RUN_DPM` with NoAdapterSynchronization only: a software snapshot, no adapter idle.
 - The driver log (`bc250kmd_cli log`) gets every transition, a telemetry line every 5 s and a line in the summary.
 
