@@ -121,6 +121,20 @@ enum bc250_dpm_throttle {
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */
 #define BC250_DPM_MAX_DT_MS		1000u	/* a longer tick (a stall, a resume) counts as this */
 
+/* The busy signal (docs/design/dpm.md, "Busy"). The miniport samples GRBM_STATUS.GUI_ACTIVE every
+ * HW_SAMPLE_US and counts the samples and the active ones per tick: the graphics engine's own
+ * activity, whichever path fed it. KMD 0.7.175 used the GFX ring's submit-to-fence time instead;
+ * that stays as the fallback for a tick with too few samples (a sampler that could not start, a
+ * power transition). */
+#define BC250_DPM_HW_SAMPLE_US		1000u
+#define BC250_DPM_HW_MIN_SAMPLES	8u
+enum bc250_dpm_busy_source { BC250_DPM_BUSY_SUBMIT = 0, BC250_DPM_BUSY_GRBM = 1 };
+/* The tick's busy share in permille: active/samples rounded, or submit_permille (clamped to 1000)
+ * when samples < HW_MIN_SAMPLES. An active count above samples (a sample that landed between the
+ * caller's two reads) counts as samples. */
+unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
+				     enum bc250_dpm_busy_source *source);
+
 struct bc250_dpm_input {
 	unsigned int	busy_permille;		/* 0..1000 over this tick */
 	int		temperature_mc;

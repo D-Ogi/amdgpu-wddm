@@ -30,6 +30,18 @@ static unsigned int ceil_level(unsigned int mhz)
 	return level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : level;
 }
 
+unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, unsigned int submit_permille,
+				     enum bc250_dpm_busy_source *source)
+{
+	if (samples < BC250_DPM_HW_MIN_SAMPLES) {
+		*source = BC250_DPM_BUSY_SUBMIT;
+		return submit_permille > 1000u ? 1000u : submit_permille;
+	}
+	*source = BC250_DPM_BUSY_GRBM;
+	if (active > samples) active = samples;
+	return (unsigned int)(((unsigned long long)active * 1000u + samples / 2u) / samples);
+}
+
 void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decision *d)
 {
 	unsigned int max;

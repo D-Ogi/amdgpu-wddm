@@ -388,6 +388,33 @@ static void test_session(void)
 	CHECK(bc250_dpm_session_step(&s, 0, 60000u) == BC250_DPM_SESSION_NONE);
 }
 
+/* The busy source: GRBM samples when there are enough, the submit accounting otherwise. */
+static void test_busy_source(void)
+{
+	enum bc250_dpm_busy_source src = BC250_DPM_BUSY_GRBM;
+	unsigned int s, a;
+
+	CHECK(bc250_dpm_busy_permille(0, 0, 420, &src) == 420 && src == BC250_DPM_BUSY_SUBMIT);
+	CHECK(bc250_dpm_busy_permille(BC250_DPM_HW_MIN_SAMPLES - 1u, 7, 1500, &src) == 1000 && src == BC250_DPM_BUSY_SUBMIT);
+	CHECK(bc250_dpm_busy_permille(25, 0, 900, &src) == 0 && src == BC250_DPM_BUSY_GRBM);
+	CHECK(bc250_dpm_busy_permille(25, 25, 0, &src) == 1000 && src == BC250_DPM_BUSY_GRBM);
+	CHECK(bc250_dpm_busy_permille(25, 23, 0, &src) == 920);		/* 23 of 25 reaches UP */
+	CHECK(bc250_dpm_busy_permille(25, 22, 0, &src) == 880);
+	CHECK(bc250_dpm_busy_permille(3, 2, 0, &src) == 0 && src == BC250_DPM_BUSY_SUBMIT);	/* too few: no 667 */
+	CHECK(bc250_dpm_busy_permille(24, 30, 0, &src) == 1000);	/* a late active sample: clamped */
+	/* Every count from the minimum up: in range, monotonic in active, exact at the ends. */
+	for (s = BC250_DPM_HW_MIN_SAMPLES; s <= 64u; s++) {
+		unsigned int prev = 0;
+		for (a = 0; a <= s; a++) {
+			unsigned int p = bc250_dpm_busy_permille(s, a, 0, &src);
+			CHECK(src == BC250_DPM_BUSY_GRBM && p <= 1000u && p >= prev);
+			CHECK(a != 0 || p == 0);
+			CHECK(a != s || p == 1000);
+			prev = p;
+		}
+	}
+}
+
 int main(void)
 {
 	test_table();
@@ -398,6 +425,7 @@ int main(void)
 	test_thermal();
 	test_stable_and_failure();
 	test_session();
+	test_busy_source();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }
