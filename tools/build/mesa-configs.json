@@ -8,6 +8,7 @@
       "glslang": "required",
       "options": [
         "-Dbuildtype=debugoptimized",
+        "-Db_ndebug=true",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
         "-Damd-use-llvm=false",

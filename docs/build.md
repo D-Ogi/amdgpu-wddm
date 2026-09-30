@@ -134,16 +134,18 @@ subprojects into its `subprojects\` directory: zlib 1.3.1 for every configuratio
 SHA-256, forced by `force_fallback_for=zlib`) and DirectX-Headers v1.619.1 for RADV (wrap-git from GitHub).
 Meson also leaves a `.wraplock` file there. An offline machine needs those subprojects populated in advance.
 
-All four configurations are `debugoptimized` with meson's default `b_ndebug=if-release`, so `NDEBUG` is not
-defined and Mesa's assertions and NIR validation are active. A performance comparison with a Linux build must
-use the same setting or change it on both sides.
+All four configurations are `debugoptimized`. RADV adds `b_ndebug=true`: `NDEBUG` is defined, so Mesa's
+assertions and the NIR and ACO validation after every pass are off, while the PDB stays. With meson's default
+`b_ndebug=if-release` they took at least 40 % of the ICD's pipeline compile time in a warm game run
+(Witcher 3, trial 135). The three UMD configurations keep that default, so `NDEBUG` is not defined there. A
+performance comparison with a Linux build must use the same setting or change it on both sides.
 
 ### RADV Vulkan ICD (`-Config radv`)
 
 ```
--Dbuildtype=debugoptimized -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false -Dvulkan-drivers=amd
--Dgallium-drivers=[] -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[] -Degl=disabled -Dglx=disabled
--Dzstd=disabled
+-Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
+-Dvulkan-drivers=amd -Dgallium-drivers=[] -Ddefault_library=static -Dplatforms=windows -Dvideo-codecs=[]
+-Degl=disabled -Dglx=disabled -Dzstd=disabled
 ```
 
 Target `src/amd/vulkan/vulkan_radeon.dll`: ACO only, no LLVM, and glslangValidator is required. It links the

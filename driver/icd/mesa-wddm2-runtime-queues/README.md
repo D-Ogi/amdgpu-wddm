@@ -167,3 +167,21 @@ That host test does not enumerate hardware. The UUID on the BC-250 itself and a
 warm pipeline cache across two lab trials remain to be shown there.
 Po owocach ich poznacie (by their fruits you shall know them): judge a build by
 its bytes, not its birthday.
+
+## Release builds with MSVC
+
+0010-msvc-ndebug-unused-variables.patch follows 0009 (fork commit a7f44c96 on
+08c0441b). The radv configuration now sets `b_ndebug=true` (docs/build.md):
+assertions and the NIR and ACO validation after every pass took at least 40 %
+of pipeline compile time in a warm game run. MSVC builds make C4189, a local
+variable initialized but never read, an error. Without assertions a variable
+that only an assert reads is such a variable, and the build stopped in
+vtn_cmat.c and in the generated amd_cp_print_packet_gfx11.c. The GCC branch of
+meson.build already relaxes its unused-variable warnings when NDEBUG is set; the
+patch does the same for C4189 in the MSVC branch.
+
+No assert in the WDDM2 winsys, the monitored fence, the Win32 WSI or this series
+wraps a call whose effect the code needs, so NDEBUG removes checks only. Release
+candidate 222E2BA5ADB897A3674AF3B79C56B2BE8976F9D91C67FADD28091D5FE188F4FC
+(PDB kept) passes the host tests: thirteen cases, 241 checks, no failure. Its
+compile time on the BC-250 remains to be measured in a lab trial.
