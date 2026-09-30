@@ -10,9 +10,10 @@ The addresses and key paths are not in this repository. They come from a JSON fi
 `<BC250_ROOT>/secrets/client/target.json` (`BC250_TARGET_CONFIG` overrides the path); `tools/win/README.md`
 documents its shape and the lab's values. Importing this module never touches that file - only connecting does.
 
-    python target.py addr                      the address that answers right now
+    python target.py addr                      the address that answers right now (or answered recently)
     python target.py info                      address, configuration in use, remote hostname
     python target.py wait [seconds]            block until it answers again after a reboot
+    python target.py forget                    drop the cached address (the next call probes again)
     python target.py run '<powershell>'         one inline command (watch the quoting, prefer a script file)
     python target.py ps <file.ps1> [args...]   copy a script over and run it with -File
     python target.py push <local...> [--to C:\\BC250\\dir]
@@ -43,6 +44,7 @@ DEFAULTS = {
     "user": "bc250",
     "port": 22,
     "probe_timeout": 3.0,
+    "address_cache_seconds": 300,
     "connect_timeout": 15,
     "connection_attempts": 3,
     "work_dir": "C:\\BC250",
@@ -75,7 +77,13 @@ def load(path=None):
 
 
 def answers(address, port, timeout):
-    """True if something accepts TCP there. Cheaper and more honest than waiting for an ssh timeout."""
+    """True if something accepts TCP there. Cheaper and more honest than waiting for an ssh timeout.
+
+    Not free, though: OpenSSH 9.8+ (PerSourcePenalties, on by default) counts a connection closed before
+    authentication against the source address, 1 s each, and refuses every connection from that address once
+    the sum passes 15 s. Twenty tool invocations a minute, each probing first, locked the operator PC out of
+    the lab for five minutes twice on 2026-09-30 (OpenSSH/Operational: "drop connection ... penalty:
+    connections without attempting authentication"). Hence the address cache below: probe rarely."""
     try:
         with socket.create_connection((address, int(port)), timeout=float(timeout)):
             return True
@@ -83,28 +91,75 @@ def answers(address, port, timeout):
         return False
 
 
+def cache_path():
+    """The last answering address, next to the configuration (outside the repository, like the addresses)."""
+    return os.path.splitext(CONFIG)[0] + "-last-address.json"
+
+
 class Target:
     def __init__(self, config=None):
         self.cfg = config if isinstance(config, dict) else load(config)
         self._address = None
         self.answered = None  # set by `address`: True probed, False nothing answered, None not probed
+        self.cached_age = None  # seconds, when `address` came from the cache instead of a probe
+
+    def _cached(self):
+        """The address a recent probe found, if the cache file is younger than address_cache_seconds."""
+        try:
+            with open(cache_path(), "r", encoding="utf-8") as f:
+                entry = json.load(f)
+            age = time.time() - float(entry["time"])
+            if entry["address"] in self.cfg["addresses"] and 0 <= age < float(self.cfg["address_cache_seconds"]):
+                return entry["address"], age
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        return None, None
+
+    def _remember(self, address):
+        try:
+            tmp = cache_path() + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"address": address, "time": time.time()}, f)
+            os.replace(tmp, cache_path())
+        except OSError:
+            pass
+
+    def forget(self):
+        """Drop the cached address: the next `address` probes again."""
+        try:
+            os.remove(cache_path())
+        except OSError:
+            pass
+
+    def _probe(self):
+        """The first configured address that answers on port 22, wired one first; None if nothing does."""
+        for address in self.cfg["addresses"]:
+            if answers(address, self.cfg["port"], self.cfg["probe_timeout"]):
+                self._remember(address)
+                return address
+        return None
 
     @property
     def address(self):
-        """The first configured address that answers, wired one first; remembered for this process.
+        """The address to use: forced, cached from a recent probe, or probed now; remembered for this process.
 
         `BC250_TARGET_ADDR` forces an address and skips the probe, for the case where the probe would be wrong
-        (a port forward, a target that is up but slow to answer during boot)."""
+        (a port forward, a target that is up but slow to answer during boot). A probe result is reused for
+        address_cache_seconds (see `answers`); an ssh connection failure on a cached address forgets it."""
         if self._address:
             return self._address
         forced = os.environ.get("BC250_TARGET_ADDR")
         if forced:
             self._address, self.answered = forced, None
             return forced
-        for address in self.cfg["addresses"]:
-            if answers(address, self.cfg["port"], self.cfg["probe_timeout"]):
-                self._address, self.answered = address, True
-                return address
+        cached, age = self._cached()
+        if cached:
+            self._address, self.answered, self.cached_age = cached, None, age
+            return cached
+        found = self._probe()
+        if found:
+            self._address, self.answered = found, True
+            return found
         # Nothing answered. The target reboots often; let ssh itself report the failure against the first
         # address rather than deciding here that the machine is gone.
         self._address, self.answered = self.cfg["addresses"][0], False
@@ -112,11 +167,13 @@ class Target:
 
     def wait(self, seconds=300, every=10):
         """Block until an address answers on port 22, for use around the reboots this target does. True if it
-        came back, False on timeout. Forgets a previously chosen address, so the wired one is preferred again."""
+        came back, False on timeout. Ignores the cache and forgets a previously chosen address, so the wired
+        one is preferred again."""
         deadline = time.monotonic() + seconds
         while True:
-            self._address = None
-            if self.address and self.answered:
+            found = self._probe()
+            if found:
+                self._address, self.answered, self.cached_age = found, True, None
                 return True
             if time.monotonic() >= deadline:
                 return False
@@ -143,8 +200,13 @@ class Target:
         return argv
 
     def ssh(self, remote_command, timeout=120, binary=False, stdin=None, options=()):
-        return subprocess.run(self.ssh_argv(remote_command, options),
+        done = subprocess.run(self.ssh_argv(remote_command, options),
                               input=stdin, capture_output=True, text=not binary, timeout=timeout)
+        if done.returncode == 255 and self.cached_age is not None:
+            # ssh's own failure (not the remote command's) on an address the cache vouched for: the next
+            # invocation probes again. No automatic retry here: the command may not be repeatable.
+            self.forget()
+        return done
 
     def run(self, powershell, timeout=120):
         """One PowerShell command, encoded so that no shell on the way can reinterpret it. Returns stdout."""
@@ -205,7 +267,8 @@ def main(argv):
             print(f"config     {CONFIG}")
             print("addresses  " + ", ".join(target.cfg["addresses"]) + f"  (host key pinned as {target.cfg['host_key_alias']})")
             print(f"using      {target.cfg['user']}@{address}" +
-                  ("" if target.answered else "  [not answering on port 22]" if target.answered is False else "  [forced]"))
+                  ("" if target.answered else "  [not answering on port 22]" if target.answered is False else
+                   f"  [cached {target.cached_age:.0f} s ago]" if target.cached_age is not None else "  [forced]"))
             print("remote     " + (target.run("hostname; (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString('s')")
                                    .strip().replace("\n", "  boot ").replace("\r", "") or "no answer"))
         elif cmd == "wait":
@@ -213,6 +276,8 @@ def main(argv):
             back = target.wait(seconds)
             print(f"{target.address} answers" if back else f"still nothing after {seconds}s")
             sys.exit(0 if back else 1)
+        elif cmd == "forget":
+            target.forget()
         elif cmd == "run":
             done = target.ssh(args[0] if args else sys.exit("run needs a command"))
             sys.stdout.write(done.stdout)

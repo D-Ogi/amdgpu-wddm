@@ -51,7 +51,7 @@ reads it; only connecting does, so the tests and anything that just imports the 
 
 `addresses` is tried in order and is the only required field; the rest fall back to the defaults above.
 `identity` and `known_hosts` may be relative, in which case they resolve against the configuration file's own
-directory. Optional: `port` (22), `probe_timeout` (3 s for the port-22 probe), `connect_timeout` (15 s),
+directory. Optional: `port` (22), `probe_timeout` (3 s for the port-22 probe), `address_cache_seconds` (300: a probe result is reused that long from `target-last-address.json` next to the configuration, because OpenSSH 9.8+ penalises connections closed before authentication and locked the operator PC out after ~20 probes a minute; `target.py forget` drops it), `connect_timeout` (15 s),
 `connection_attempts` (3, because the Wi-Fi dongle drops out).
 
 `BC250_TARGET_ADDR` forces one address and skips the probe, for a port forward or a target that is up but
