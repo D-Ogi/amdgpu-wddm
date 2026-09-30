@@ -208,8 +208,9 @@ published at <https://github.com/D-Ogi/dxvk/tree/amdgpu-wddm/ddi-engine>; each `
 Branch commits before engine header r7 name the DLL `bc250dxvk.dll` and the test `bc250dxvk_engine_test.exe`.
 
 The branch's `dxbc-spirv` submodule points at <https://github.com/D-Ogi/dxbc-spirv> (branch
-`amdgpu-wddm/ddi-engine`), which carries the pinned commit 253c08ce: geometry shader output stream decoration and
-the pass-through GS fix, not upstream yet.
+`amdgpu-wddm/ddi-engine`), which carries the geometry shader output stream decoration and the pass-through GS fix
+(253c08ce, not upstream yet). On 2026-09-30 both branches merged their upstream (DXVK 3d01f88b pins dxbc-spirv
+f241996e); recipes built before that name the earlier pins.
 
 Before publication the branch was rewritten on 2026-09-28 to replace a private author identity. The trees are
 unchanged, but every commit on top of upstream 52fe923c has a new hash. Recipes and evidence written before that

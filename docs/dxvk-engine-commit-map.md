@@ -4,7 +4,8 @@ The DXVK branch `amdgpu-wddm/ddi-engine` was rewritten before publication to rep
 (see [build.md](build.md#dxvk)). Trees are identical, so a hash named by an older recipe, evidence file or message
 maps to the published commit with the same tree. Upstream base: 52fe923ca1496c8e44789b613fab8611dfcb5c4a. The
 published branch adds one more commit on top, ae6b8d9b, which only points the `dxbc-spirv` submodule URL at the
-fork that carries its pinned commit.
+fork that carries its pinned commit. Later commits (from the upstream merge 3d01f88b of 2026-09-30 on) were made
+after the rewrite and need no mapping.
 
 | Old commit | Published commit | Tree | Subject |
 |---|---|---|---|
