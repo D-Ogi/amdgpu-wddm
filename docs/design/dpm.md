@@ -1,8 +1,8 @@
 # DPM: load-driven GPU clock and voltage (KMD 0.7.175)
 
 Until 0.7.174 the native KMD clock owner pinned the GPU at the lab point, 1000 MHz / 820 mV, from start to stop.
-The Witcher 3 with RT then runs at 24-28 fps with the GFX engine 91.5 % busy (ETW): the clock, not the CPU or the
-driver, is the limit. The owner decided on 2026-09-30 to let the driver scale clock and voltage with load up to
+The Witcher 3 with RT then runs at 24-28 fps with DMA packets in flight 91.5-94 % of the time (ETW, trial 135): the
+clock looked like the limit ("Busy" below says what that figure is and is not). The owner decided on 2026-09-30 to let the driver scale clock and voltage with load up to
 2000 MHz, starting at 1500 MHz: the default ceiling is 1500, and `DpmMaxMHz` may raise it later to the hard ceiling of 2000. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
 
 ## Sources
@@ -43,13 +43,24 @@ power readout (it needs the metrics table and a DMA buffer); the plug telemetry 
 ## Governor (`driver/shim/bc250_dpm.c`, pure; `driver/kmd/dpm.c`, the thread)
 
 - Tick 25 ms on a system thread (`KeWaitForSingleObject` on the stop event with a timeout, no polling loop).
-- Load: see "Busy" below. Busy per tick in permille, plus an average with 3/4 weight on the old.- Up: a tick at 900 permille or more raises at once to the lowest level at which the same work would fill 80 %
+- Load: see "Busy" below. Busy per tick in permille, plus an average with 3/4 weight on the old.
+- Up: a tick at 900 permille or more raises at once to the lowest level at which the same work would fill 80 %
   (`clock * busy / 800`), at least one level.
 - Down: one level after the average stayed under 650 permille for 200 ms. A step down never lands above the up
   threshold (650 x 1100/1000 < 900), so the two cannot chase each other; the host test sweeps every constant
   demand from 100 to 2400 MHz and asserts no oscillation.
 - Each transition is RequestGfxclk + ForceGfxVid in the safe order (voltage first when raising, clock first when
   lowering), with readbacks; every 1000 ms the SMU's clock and VID are read back and a mismatch resyncs.
+- A raise ramps. In trial 140 (0.7.176.1) the clock read back 1028-1029 MHz right after 1000 -> 1200 and 1200 at
+  the next tick, so all five raises were logged FAILED (MISMATCH) and resynced to 1200; lowerings read back exact.
+  Since 0.7.178 the transaction reads the clock again while it lies between the old clock and the request, 1 ms
+  apart (a sleep), at most 50 times, and still requires the exact request; the log line gives the number of settle
+  reads, the lab's first measure of the ramp. The voltage for the request is in place before the clock request, so
+  every clock on the way is covered.
+- Bursty load flaps. A game held at its frame rate fills some 25 ms ticks and leaves others empty: in trial 140's
+  world the average was 35-50 % at 1000 MHz with single ticks at 90 % or more. Each such tick raises and the average
+  lowers again 200 ms later (five raises in 35 s). Harmless (three transactions, all within the table); raising on the
+  average instead is the obvious change once the lab has shown a sustained load that needs it.
   Three failed transitions in a row: floor, `DpmMode = 0` written, governor gone (reason SMU_ERROR).
 - SetStablePowerState(TRUE) pins the floor (it said "clocks fixed at 1000 MHz" before; profiling now gets that
   floor explicitly).
@@ -65,18 +76,24 @@ samples falls back to the submit accounting. Pause flushes the callback before a
 timer with wait before the thread joins, so no read can outlive the BAR mapping. Cost: two uncached reads per
 millisecond, and the platform timer runs at 1 ms while the adapter is started.
 
-Why: on the lab, 0.7.175 with DpmMode=1 never raised. The submit accounting (the ring busy from `SubmitIbLocked`,
-gfx.c, until `GfxFenceArrivedAccess` saw the last outstanding fence) read 0 % for vkcompute and at most 7.4 %
-(mean 0.5 %) in The Witcher 3 with RT (trial 139, 1200 samples), where ETW (trial 135) had reported the GPU
-91.5 % busy. The accounting is not bypassed: every node-0 packet goes through `WddmSubmitHardware` (wddm.c) to
-`GfxSubmitIb`, 5389 submitted and 5387 completed in trial 139, and the window closes only when the fence is observed,
-so it can only overstate the ring's own busy time. What it does not see: time a packet spends in the KMD before the
-ring write (`SubmitIbLocked` flushes VMID 1 by MMIO with a poll before `DpmBusyBegin`; a job for another root waits
-for the ring to drain), and every other engine, above all the paging node: 24185 SDMA submissions and 4.3 GB of DMA
-in the same trial. Which of these the ETW figure measured is not established; GRBM and SDMA samples on the lab will
-say whether the graphics engine itself is busy. If GRBM reads low in the game as well, the clock is not the limit
-and the governor rightly stays at 1000 MHz. SMU metrics are not an alternative: amdgpu reads only the metrics table
-on this part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
+Why, with a correction. On the lab, 0.7.175 with DpmMode=1 stayed at 1000 MHz, and 0.7.177 was first built on the
+reading that the submit accounting (the ring busy from `SubmitIbLocked`, gfx.c, until `GfxFenceArrivedAccess` saw
+the last outstanding fence) missed the game's GPU time: it read 0 % for vkcompute and at most 7.4 % (mean 0.5 %) in
+trial 139, where ETW (trial 135) had reported 91.5 %. Trial 140 (0.7.176.1, 40 CU) refuted that reading. The
+accounting read 0-12 % in the menu and on the loading screen, where ETW over the same 45 s (window B) found the
+union of all DMA packets 3.0 % of the time, and 30-87 % per 250 ms sample, 35-50 % on average, from the moment the
+world appeared (07:34:49, screenshot 5 at 07:34:50) until the sampler ended. Trial 139 never left the loading
+screen (screenshot 5 at 07:18:11 still loading), and vkcompute is a correctness suite (64 KiB fills, 1M-element sums,
+256x256 matrices), so four runs of it are seconds of process and device setup around milliseconds of GPU work: both
+near-zero readings were right. Trial 135's ETW figure is the union of dxgkrnl's DMA packets over 44 s of an outdoor
+scene at 23.7 fps; trial 140's world was its first 25 s, indoors. No trial yet has ETW and the governor in the same
+world.
+
+What stands: the accounting is the KMD's view, open from the ring write until a fence is observed, and blind to
+SDMA; the GRBM samples are the engine's own. Every telemetry sample carries both (busy from GRBM, submit share),
+so the next game trial compares them in the world. If both read well under 90 % there, the clock is not the limit
+and the governor rightly stays low. SMU metrics are not an alternative: amdgpu reads only the metrics table on this
+part and reports no GPU busy percentage (M90), and the table transfer is outside the allowlist.
 
 Same sensor as temp.py (M23). At 85 C or more the cap drops at once to one level under the current clock, then one
 more level every 500 ms while it stays hot. At 90 C, or with an invalid sensor read, the cap is the floor. Below
