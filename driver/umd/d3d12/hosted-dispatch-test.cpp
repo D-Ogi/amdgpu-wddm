@@ -2,7 +2,9 @@
 #include "hosted-dispatch.h"
 #include <d3dkmthk.h>
 #include <cassert>
+#include <functional>
 #include <thread>
+#include <utility>
 #include <cstdio>
 using native12::HostedDispatch;
 static HANDLE const device_handle=reinterpret_cast<HANDLE>(UINT64_C(0x1234567887654321));
@@ -43,6 +45,30 @@ static HRESULT APIENTRY wrong_native_queue(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CRE
 static HRESULT APIENTRY wait_gpu(HANDLE device,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a){assert(device==device_handle && a->hContext==context_handle && a->ObjectCount==1 && a->MonitoredFenceValueArray[0]==6);return S_OK;}
 static HRESULT APIENTRY submit(HANDLE device,const D3DDDICB_SUBMITCOMMAND* a){assert(device==device_handle && a->BroadcastContextCount==1 && a->BroadcastContext[0]==context_handle);++submitted;return S_OK;}
 static VOID APIENTRY removed(D3D12DDI_HRTDEVICE device,HRESULT result){assert(device.handle==device_handle && result==D3DDDIERR_DEVICEREMOVED);++errors;}
+// Address reuse across threads (trial 172). The runtime releases an address inside its free callback and
+// may hand it out again at once to another thread, before the freeing thread takes the bridge's lock again.
+// during_free runs on a thread of its own inside that window, as a second recording thread of the game does.
+static constexpr UINT64 reused_va=UINT64_C(0x500000000);
+static D3DKMT_HANDLE next_reused_handle=200;
+static unsigned reuse_errors=0,reuse_frees=0;
+static std::function<void()> during_free;
+static HRESULT APIENTRY reuse_allocate(D3D12DDI_HRTDEVICE device,D3D12DDICB_ALLOCATE_0022* a){
+ assert(device.handle==device_handle && a->NumAllocations==1);a->pAllocationInfo->hAllocation=next_reused_handle++;return S_OK;
+}
+static HRESULT APIENTRY reuse_deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DEALLOCATE_0022*){assert(device.handle==device_handle);return S_OK;}
+static HRESULT APIENTRY reuse_map(HANDLE device,D3DDDI_MAPGPUVIRTUALADDRESS* a){
+ assert(device==device_handle);a->VirtualAddress=a->BaseAddress?a->BaseAddress:reused_va;a->PagingFenceValue=4;return E_PENDING;
+}
+static HRESULT APIENTRY reuse_reserve(HANDLE device,D3DDDI_RESERVEGPUVIRTUALADDRESS* a){
+ assert(device==device_handle);a->VirtualAddress=a->BaseAddress?a->BaseAddress:reused_va;a->PagingFenceValue=0;return S_OK;
+}
+static HRESULT APIENTRY reuse_free(HANDLE device,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){
+ assert(device==device_handle && a->BaseAddress==reused_va);++reuse_frees;
+ // From here on the address is free: the other thread's call receives it before this callback returns.
+ if(auto other=std::exchange(during_free,nullptr)){std::thread worker(other);worker.join();}
+ return S_OK;
+}
+static VOID APIENTRY reuse_removed(D3D12DDI_HRTDEVICE device,HRESULT result){assert(device.handle==device_handle && result==D3DDDIERR_DEVICEREMOVED);++reuse_errors;}
 int main(){
  static_assert(BC250_HOST_VERSION==5 && sizeof(bc250_host)==56);
  D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 um{};um.pfnAllocateCb=allocate;um.pfnDeallocateCb=deallocate;um.pfnCreateContextVirtualCb=wrong_native_queue;um.pfnSetErrorCb=removed;
@@ -126,5 +152,47 @@ int main(){
  sync.hSyncObject=0;assert(HostedDispatch::dispatch(&sentinel,BC250_HOST_CreateSynchronizationObject2,&sync)==0);
  sync_fence=UINT64_MAX;assert(HostedDispatch::dispatch(&sentinel,BC250_HOST_CHECK_STATUS,nullptr)<0 && sentinel.lost());
  assert(sentinel.discard_metadata()==1);sync_fence=0;
- std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss");
+ {
+  auto rum=um;rum.pfnAllocateCb=reuse_allocate;rum.pfnDeallocateCb=reuse_deallocate;rum.pfnSetErrorCb=reuse_removed;
+  auto rkt=kt;rkt.pfnMapGpuVirtualAddressCb=reuse_map;rkt.pfnReserveGpuVirtualAddressCb=reuse_reserve;rkt.pfnFreeGpuVirtualAddressCb=reuse_free;
+  HostedDispatch reuse(domain,{device_handle},rum,rkt);
+  auto on=[&](uint32_t op,void* a){return HostedDispatch::dispatch(&reuse,op,a);};
+  bc250_host_paging reuse_paging{};assert(on(BC250_HOST_CREATE_PAGING,&reuse_paging)==0);
+  constexpr UINT64 bytes=65536;
+  auto allocate_one=[&](D3DDDI_ALLOCATIONINFO2& out){
+   D3DKMT_CREATEALLOCATION request{};request.NumAllocations=1;request.pAllocationInfo2=&out;
+   return on(BC250_HOST_CreateAllocation2,&request);};
+  auto map_one=[&](D3DKMT_HANDLE handle,D3DDDI_MAPGPUVIRTUALADDRESS& out){
+   out={};out.hPagingQueue=reuse_paging.queue;out.hAllocation=handle;out.SizeInPages=bytes/4096;
+   return on(BC250_HOST_MapGpuVirtualAddress,&out);};
+  D3DKMT_FREEGPUVIRTUALADDRESS release_va{};release_va.BaseAddress=reused_va;release_va.Size=bytes;
+  D3DDDI_ALLOCATIONINFO2 x{},y{};assert(allocate_one(x)==0 && allocate_one(y)==0 && x.hAllocation!=y.hAllocation);
+  D3DDDI_MAPGPUVIRTUALADDRESS x_map{},y_map{};
+  assert(map_one(x.hAllocation,x_map)==0x103 && x_map.VirtualAddress==reused_va);
+  // 1. The trial 172 removal (MapGpuVirtualAddress, malformed answer): Y is mapped at X's address while
+  //    the free of X's address is inside the runtime.
+  int32_t y_status=-1;
+  during_free=[&]{bc250::umd::RuntimeDomain::Scope entered(domain);y_status=map_one(y.hAllocation,y_map);};
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&release_va)==0 && reuse_frees==1);
+  assert(y_status==0x103 && y_map.VirtualAddress==reused_va && !reuse.lost() && !reuse_errors);
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&release_va)==0 && reuse_frees==2);
+  // 2. A reservation receives the address of a reservation whose free is inside the runtime.
+  D3DDDI_RESERVEGPUVIRTUALADDRESS first{},second{};first.Size=second.Size=bytes;
+  assert(on(BC250_HOST_ReserveGpuVirtualAddress,&first)==0 && first.VirtualAddress==reused_va);
+  int32_t second_status=-1;
+  during_free=[&]{bc250::umd::RuntimeDomain::Scope entered(domain);second_status=on(BC250_HOST_ReserveGpuVirtualAddress,&second);};
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&release_va)==0 && reuse_frees==3);
+  assert(second_status==0 && second.VirtualAddress==reused_va && !reuse.lost() && !reuse_errors);
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&release_va)==0 && reuse_frees==4);
+  // 3. A fixed reservation over an address whose free is in flight is the runtime's to judge.
+  assert(map_one(x.hAllocation,x_map)==0x103 && x_map.VirtualAddress==reused_va);
+  D3DDDI_RESERVEGPUVIRTUALADDRESS fixed{};fixed.BaseAddress=reused_va;fixed.Size=bytes;int32_t fixed_status=-1;
+  during_free=[&]{bc250::umd::RuntimeDomain::Scope entered(domain);fixed_status=on(BC250_HOST_ReserveGpuVirtualAddress,&fixed);};
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&release_va)==0 && reuse_frees==5);
+  assert(fixed_status==0 && fixed.VirtualAddress==reused_va && !reuse.lost() && !reuse_errors);
+  // The check itself stays: an answer inside a live extent (the fixed reservation) still removes the device.
+  assert(map_one(y.hAllocation,y_map)<0 && reuse.lost() && reuse_errors==1);
+  assert(reuse.discard_metadata()==4);
+ }
+ std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss, address reuse inside a free");
 }

@@ -61,6 +61,7 @@ struct HostedDispatch::Reservation {
     UINT64 base{},bytes{};                      // base 0: the reserve callback has not answered
     unsigned borrowed{};                        // runtime callbacks in flight inside this range
     bool busy{};                                // its own reserve or free callback is in flight
+    bool freeing{};                             // its free callback is in flight: no longer owned (owned())
 };
 struct HostedDispatch::Allocation {
     RuntimeAllocation owner;
@@ -69,6 +70,7 @@ struct HostedDispatch::Allocation {
     UINT64 va{},bytes{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it
     bool busy{},locked{};
+    bool freeing{};                             // the free callback of va is in flight: no longer owned (owned())
     Allocation(D3D12DDI_HRTDEVICE runtime,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb)
         :owner(runtime,cb) {}
 };
@@ -110,11 +112,15 @@ HostedDispatch::Reservation* HostedDispatch::containing(UINT64 base,UINT64 bytes
         if(range->base && base>=range->base && bytes<=range->bytes && base-range->base<=range->bytes-bytes)return range;
     return nullptr;
 }
+// An extent whose free callback is in flight is not owned any more. The runtime releases it somewhere
+// inside that callback and may hand it out again at once, to a map or reservation on another thread,
+// before the freeing thread takes lock_ again (trial 172 removed the device at the map check below).
+// The runtime cannot hand out an extent it has not released, so a free that fails loses nothing.
 bool HostedDispatch::owned(UINT64 base,UINT64 bytes,const void* except) const noexcept {
     for(auto range=reservations_;range;range=range->next)
-        if(range!=except && range->base && overlap(base,bytes,range->base,range->bytes))return true;
+        if(range!=except && range->base && !range->freeing && overlap(base,bytes,range->base,range->bytes))return true;
     for(auto record=allocations_;record;record=record->next)
-        if(record!=except && record->va && overlap(base,bytes,record->va,record->bytes))return true;
+        if(record!=except && record->va && !record->freeing && overlap(base,bytes,record->va,record->bytes))return true;
     return false;
 }
 bool HostedDispatch::borrow(D3DKMT_HANDLE handle) noexcept {
@@ -535,21 +541,22 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         auto& a=*static_cast<D3DKMT_FREEGPUVIRTUALADDRESS*>(argument);Allocation* record=nullptr;
         D3DDDICB_FREEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.Size=a.Size;
         Held held(lock_);
+        // An extent being freed is skipped: its address may already belong to a newer record (owned()).
         for(auto range=reservations_;range;range=range->next){
-            if(!range->base || range->base!=a.BaseAddress || range->bytes!=a.Size)continue;
+            if(!range->base || range->freeing || range->base!=a.BaseAddress || range->bytes!=a.Size)continue;
             if(range->busy || range->borrowed)return E_INVALIDARG;
             // Frees the range and every view inside it; updates still queued for it are ignored.
-            range->busy=true;held.release();
+            range->busy=range->freeing=true;held.release();
             HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
-            held.acquire();range->busy=false;
+            held.acquire();range->busy=range->freeing=false;
             if(hr==S_OK){unlink(range);held.release();delete range;}
             return hr;
         }
-        for(auto r=allocations_;r;r=r->next)if(r->va && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
+        for(auto r=allocations_;r;r=r->next)if(r->va && !r->freeing && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
         if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
-        record->busy=true;held.release();
+        record->busy=record->freeing=true;held.release();
         HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
-        held.acquire();record->busy=false;
+        held.acquire();record->busy=record->freeing=false;
         if(hr==S_OK){record->va=record->bytes=0;}return hr;
     }
     case BC250_HOST_Lock2:{

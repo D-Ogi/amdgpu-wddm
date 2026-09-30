@@ -39,8 +39,9 @@ struct HostedDispatchHooks {
 // response for an unsupported operation. Internal KT callbacks take hRTDevice;
 // application queue hooks must use their real runtime queue ownership.
 // Address ranges have two owners: an allocation's ordinary mapping and a reservation. No extent
-// belongs to both. What is mapped inside a reservation is not recorded: the bridge checks extents
-// and handles when a call is admitted and holds them only for the length of the runtime callback.
+// belongs to both. An extent stops being owned when its free callback starts, because the runtime
+// may hand it out again before that callback returns. What is mapped inside a reservation is not
+// recorded: the bridge checks extents and handles when a call is admitted and holds them only for the length of the runtime callback.
 // Update admits MAP, MAP_PROTECT and UNMAP of one reservation per call; COPY and DoNotWait refuse.
 class HostedDispatch final {
     struct Allocation;
