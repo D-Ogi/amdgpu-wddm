@@ -1144,7 +1144,9 @@ static int Log(const WCHAR *fromText, int summary)
 // ---- dpm: the clock governor's telemetry (BC250_ESCAPE_RUN_DPM, docs/design/dpm.md) ------------------------------
 //
 // "dpm [count [interval ms]]" prints one line per sample: the level the governor committed, the SMU's readback,
-// temperature, GFX busy share, what the load wants, the thermal cap, the ceiling and what holds the clock.
+// temperature, GFX busy share, what the load wants, the thermal cap, the ceiling and what holds the clock, then where
+// the busy share came from (grbm: GUI_ACTIVE samples; submit: the ring's submit-to-fence time), the submit share
+// and the SDMA0 (paging) not-idle share.
 // "dpm confirm" clears the pending mark of a DPM start once the start is healthy (administrator).
 
 static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
@@ -1171,7 +1173,7 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
     SYSTEMTIME now;
     GetLocalTime(&now);
     printf("%02u:%02u:%02u.%03u %s%s %4lu MHz %4lu mV (SMU %4lu MHz VID %3lu%s) %5.1f C%s busy %5.1f%% avg %5.1f%% "
-           "want %4lu cap %4lu max %4lu throttle %s%s%s%s%s  up %lu down %lu thermal %lu err %lu\n",
+           "want %4lu cap %4lu max %4lu throttle %s%s%s%s%s  up %lu down %lu thermal %lu err %lu  src %s submit %5.1f%% sdma %5.1f%%\n",
            now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
            d->Mode == 1 ? "dpm" : "fixed", (d->Flags & BC250_DPM_FLAG_RUNNING) ? "" : "(stopped)",
            d->CurrentMHz, d->CurrentMv, d->ObservedMHz, d->ObservedVid,
@@ -1183,7 +1185,8 @@ static void DpmPrint(const BC250_ESCAPE_DPM *d)
            (d->Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "",
            (d->Flags & BC250_DPM_FLAG_PAUSED) ? " paused" : "",
            (d->Flags & BC250_DPM_FLAG_SESSION) ? " session" : "",
-           d->Raises, d->Lowers, d->ThermalEvents, d->Errors);
+           d->Raises, d->Lowers, d->ThermalEvents, d->Errors,
+           (d->Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d->SubmitBusyPermille / 10.0, d->SdmaBusyPermille / 10.0);
 }
 
 static int Dpm(int argc, WCHAR **argv)
