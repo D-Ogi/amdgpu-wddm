@@ -52,6 +52,7 @@
 #include "progress.h"
 #include "cumode.h"
 #include "dpm.h"
+#include "interop.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
 
@@ -105,6 +106,7 @@ typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_STATE StartHealth;
     BC250_CU_MODE_STATE CuMode;        // cumode.c: 24 or 40 CUs, the boot guard, what the caps report
     BC250_DPM_STATE Dpm;               // dpm.c: the load-driven clock governor, its guard and telemetry
+    BC250_INTEROP_STATE Interop;       // interop.c: the GPU DWM interop switches, their session marker
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -292,6 +294,16 @@ void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
 NTSTATUS DpmConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
 void DpmLogSummary(BC250_DEVICE* Device);
 void DpmRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_DPM* Data, BOOLEAN Admin, ULONG EscapeFlags);
+
+// interop.c
+struct _BC250_ESCAPE_INTEROP;
+void InteropInitialize(BC250_DEVICE* Device);
+void InteropStart(BC250_DEVICE* Device, _Out_ BOOLEAN* GpuPresent, _Out_ BOOLEAN* CddInterop);
+BOOLEAN InteropUserBegin(BC250_DEVICE* Device);
+void InteropUserEnd(BC250_DEVICE* Device);
+void InteropStop(BC250_DEVICE* Device);
+void InteropLogSummary(BC250_DEVICE* Device);
+void InteropRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_INTEROP* Data, ULONG EscapeFlags);
 NTSTATUS GuardConfirmStartDurable(void);
 
 

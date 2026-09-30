@@ -173,6 +173,7 @@ typedef struct _BC250_WDDM_OBJECT {
     unsigned long UmdHeap;
     ULONGLONG UmdBytes;
     ULONGLONG UmdRequestedVa;
+    volatile LONG InteropUser;          // devices: 1 once an interop Blt present of it was counted (interop.c)
 } BC250_WDDM_OBJECT;
 
 #define BC250_PRESENT_OBSERVATIONS 16
@@ -367,8 +368,8 @@ typedef struct _BC250_WDDM {
     BOOLEAN BlitGate;
     BOOLEAN HandleIdentityProbe;
     volatile LONG HandleIdentityProbeCalls[2]; // at most16 non-BC2A and16 BC2A opens per start
-    BOOLEAN GpuPresentGate; // diagnostic producer/consumer gate; no interop cap implied
-    BOOLEAN CddDwmInterop; // explicit diagnostic capability, default off and start-latched
+    BOOLEAN GpuPresentGate; // EnableGpuPresentBlit: producer/consumer gate, no interop cap implied (interop.c)
+    BOOLEAN CddDwmInterop; // EnableCddDwmInterop: DRIVERCAPS interop cap; both default on since 0.7.181, start-latched
     volatile LONG64 GpuPresentCalls, GpuPresentRecords, GpuPresentRotates, GpuPresentRefused;
     volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
     volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
@@ -1778,6 +1779,7 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
     }
     DcnLogVsyncSnapshot(Device);
     DpmLogSummary(Device);
+    InteropLogSummary(Device);
     WddmSummaryOf(wddm);
     VidMmSummary();
 }
@@ -1827,9 +1829,9 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     KeInitializeDpc(&wddm->ReportDpc, WddmReportDpcRoutine, Device);
     KeInitializeDpc(&wddm->VSyncDpc, WddmVSyncDpcRoutine, Device);
     wddm->HandleIdentityProbe = (GuardReadSetting(L"EnableHandleIdentityProbe", 0) == 1);
-    // Start-latched: changing registry values does not enable existing unbound opens.
-    wddm->GpuPresentGate = (GuardReadSetting(L"EnableGpuPresentBlit", 0) == 1);
-    wddm->CddDwmInterop = (GuardReadSetting(L"EnableCddDwmInterop", 0) == 1);
+    // Start-latched: changing registry values does not enable existing unbound opens. Absent = on since
+    // 0.7.181; closed for this start after an unclean boot, an invalid value or a registry failure (interop.c).
+    InteropStart(Device, &wddm->GpuPresentGate, &wddm->CddDwmInterop);
     wddm->BlitGate = (GuardReadSetting(L"EnablePresentBlit", 0) == 1);   // E20: the diagnostic CPU blit (ADR 0011)
     KeInitializeDpc(&wddm->SubmitDpc, WddmSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->SubmitTimer);
@@ -2627,6 +2629,8 @@ static NTSTATUS Bc250WddmDestroyDevice(_In_ const HANDLE hDevice)
 
     if (object == NULL) return STATUS_INVALID_PARAMETER;
     if (WddmFirstCalls((BC250_WDDM*)object->Device->Wddm, WddmDdiDestroyDevice)) GuardLog("wddm: DestroyDevice");
+    // The last device that used the interop path ends the session (DWM exits before a clean shutdown ends).
+    if (InterlockedExchange(&object->InteropUser, 0) == 1) InteropUserEnd(object->Device);
     WddmFreeObject(object);
     return STATUS_SUCCESS;
 }
@@ -5318,6 +5322,18 @@ static void WddmObservePresent(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT
     InterlockedExchange(&o->Published,1);
 }
 
+// The first Blt present of a DDI device while either interop switch is open marks the session (interop.c), so a
+// death from here on closes both switches at the next start. Once per device; DestroyDevice ends it.
+static void WddmInteropUse(BC250_WDDM_OBJECT* Context, const DXGKARG_PRESENT* Present)
+{
+    BC250_WDDM* wddm=(BC250_WDDM*)Context->Device->Wddm;
+    BC250_WDDM_OBJECT* owner;
+    if (!wddm || !Present->Flags.Blt || (!wddm->GpuPresentGate && !wddm->CddDwmInterop)) return;
+    owner=WddmObject(Context->OwnerDevice,BC250_WDDM_MAGIC_DEVICE);
+    if (!owner || InterlockedCompareExchange(&owner->InteropUser,1,0)!=0) return;
+    if (!InteropUserBegin(Context->Device)) InterlockedExchange(&owner->InteropUser,0);
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -5328,6 +5344,7 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     // submission: a legal scheduler resubmission must retain the same record.
     Bc250GfxPresentInvalidate(pPresent->pDmaBufferPrivateData,pPresent->DmaBufferPrivateDataSize);
     if (context) WddmObservePresent(context,pPresent);
+    if (context) WddmInteropUse(context,pPresent);
 
     // A flip is handled by SetVidPnSourceAddress. A gated Blt constructs one
     // software packet below; its pixels are copied only at SubmitCommandVirtual.

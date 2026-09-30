@@ -13,6 +13,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     StartHealthInitialize(device);
     CuModeInitialize(device);
     DpmInitialize(device);
+    InteropInitialize(device);
     SmuOwnerInitialize(&device->Smu);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
@@ -164,6 +165,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     device->CommitSeen = FALSE;
     device->PresentSeen = FALSE;
     WddmStop(device);       // first: it logs what dxgkrnl called, and nothing below it is allowed to have run
+    InteropStop(device);    // an orderly stop ends the GPU DWM session: its marker goes (registry only)
     // Display-only starts have no WDDM object and therefore no WddmStop restore.
     if (!device->PostDisplayStopAttempted) {
         device->PostDisplayStopStatus=DcnStop(device);

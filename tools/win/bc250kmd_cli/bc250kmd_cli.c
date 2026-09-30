@@ -9,6 +9,7 @@
 //   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
 //   bc250kmd_cli dpm [n [ms]]         the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
+//   bc250kmd_cli interop              the GPU DWM interop switches this start runs with, and why
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
 // private escape. That failure is a measurement too, so every step prints its own NTSTATUS instead of one
@@ -1287,6 +1288,65 @@ static int Dpm(int argc, WCHAR **argv)
     return 0;
 }
 
+// ---- interop: the GPU DWM interop switches (BC250_ESCAPE_RUN_INTEROP, docs/design/gpu-dwm-interop-switches.md) --
+//
+// One line of what the start decided: which switches were requested (EnableGpuPresentBlit "blit",
+// EnableCddDwmInterop "cdd"), which are effective, the reason, and whether the driver closed them itself after an
+// unclean boot; a second line with the session marker. Exit 0 when the escape answered, whatever the state.
+
+static const char *const g_InteropReason[] = { "none", "not-requested", "invalid-setting", "unused", "unclean",
+                                               "registry", "unused", "not-run" };
+static const char *const g_InteropEnd[] = { "none", "device-stop", "last-user-gone" };
+
+static const char *InteropBits(unsigned long bits)
+{
+    static const char *const names[] = { "none", "blit", "cdd", "blit+cdd" };
+    return names[bits & 3u];
+}
+
+static void InteropSetting(const char *name, unsigned long value, unsigned long flags, unsigned long absent,
+                           unsigned long unreadable)
+{
+    if (flags & absent) printf(" %s=absent(1)", name);
+    else if (flags & unreadable) printf(" %s=unreadable", name);
+    else printf(" %s=%lu", name, value);
+}
+
+static int Interop(void)
+{
+    BC250_ESCAPE_INTEROP d;
+    NTSTATUS status;
+    memset(&d, 0, sizeof(d));
+    d.Magic = BC250_ESCAPE_MAGIC;
+    d.Command = BC250_ESCAPE_RUN_INTEROP;
+    d.AbiVersion = BC250_INTEROP_ABI;
+    d.Op = BC250_INTEROP_OP_READ;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, &d, sizeof(d), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_INTEROP)", status); return 1; }
+    if (d.Status != BC250_ESCAPE_STATUS_DONE) {
+        printf("interop: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d.Status, d.NtStatus, d.Version);
+        return 1;
+    }
+    printf("driver 0x%08lX, requested %s, effective %s, reason %s%s, generation %llu\n", d.Version,
+           InteropBits(d.Requested), InteropBits(d.Effective), d.Reason < 8 ? g_InteropReason[d.Reason] : "?",
+           (d.Flags & BC250_INTEROP_FLAG_VALID) ? "" : " (no full WDDM start)", d.Generation);
+    printf("settings");
+    InteropSetting("EnableGpuPresentBlit", d.BlitSetting, d.Flags, BC250_INTEROP_FLAG_BLIT_ABSENT, BC250_INTEROP_FLAG_BLIT_UNREADABLE);
+    InteropSetting("EnableCddDwmInterop", d.CddSetting, d.Flags, BC250_INTEROP_FLAG_CDD_ABSENT, BC250_INTEROP_FLAG_CDD_UNREADABLE);
+    if (d.Flags & BC250_INTEROP_FLAG_CLOSED_BY_DRIVER)
+        printf("  closed by the driver: %s", d.ClosedReason < 8 ? g_InteropReason[d.ClosedReason] : "?");
+    printf("%s%s%s%s\n", (d.Flags & BC250_INTEROP_FLAG_UNCLEAN) ? "  last boot died in a session" : "",
+           (d.Flags & BC250_INTEROP_FLAG_STALE) ? "  stale marker of this boot cleared" : "",
+           (d.Flags & BC250_INTEROP_FLAG_PERSISTED) ? "  close written" : "",
+           (d.Flags & BC250_INTEROP_FLAG_PERSIST_FAILED) ? "  close NOT written (retried next start)" : "");
+    printf("session %s, users %lu, marks %lu, unmarks %lu, mark failures %lu, last end %s, previous end %s, "
+           "boot %lu, marker found %lu\n",
+           (d.Flags & BC250_INTEROP_FLAG_SESSION) ? "marked" : "not marked", d.Users, d.Marks, d.Unmarks, d.MarkFailures,
+           d.LastEnd < 3 ? g_InteropEnd[d.LastEnd] : "?", d.PreviousEnd < 3 ? g_InteropEnd[d.PreviousEnd] : "?",
+           d.BootId, d.SessionBootId);
+    return 0;
+}
+
 // ---- ---------------------------------------------------------------------------------------------------------
 
 int wmain(int argc, wchar_t **argv)
@@ -1309,6 +1369,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
                         "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
+                        "       bc250kmd_cli interop                      (GPU DWM interop switches, docs/design/gpu-dwm-interop-switches.md)\n"
                         "       bc250kmd_cli journal [from]               (the paging journal, docs/design/paging-journal.md)\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
@@ -1337,6 +1398,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
     if (!_wcsicmp(argv[1], L"dpm") && argc <= 4) return Dpm(argc, argv);
+    if (!_wcsicmp(argv[1], L"interop") && argc == 2) return Interop();
     if (!_wcsicmp(argv[1], L"journal") && argc <= 3) return Journal(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);

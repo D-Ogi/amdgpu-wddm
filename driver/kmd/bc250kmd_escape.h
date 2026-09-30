@@ -33,7 +33,8 @@
 #define BC250_ESCAPE_RUN_DPM 23u                // DPM governor telemetry and boot-guard confirmation
 #define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
-#define BC250_KMD_VERSION 0x000700B4u       // revision 180: the paging journal (docs/design/paging-journal.md)
+#define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
+#define BC250_KMD_VERSION 0x000700B5u       // revision 181: the interop switches default on (docs/design/gpu-dwm-interop-switches.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -182,6 +183,45 @@ typedef struct _BC250_ESCAPE_DPM {
     unsigned long SubmitBusyPermille;       // out; in: zero
     unsigned long SdmaBusyPermille;         // out; in: zero
 } BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+
+// GPU DWM interop switches (driver/kmd/interop.c, docs/design/gpu-dwm-interop-switches.md). Adapter-owned
+// software snapshot decided once per start (both switches are start-latched): no BAR access, so READ takes
+// NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit zero, and is open to every caller. There is no
+// write operation: the operator changes EnableGpuPresentBlit/EnableCddDwmInterop in the registry and restarts.
+// Requested/Effective are BC250_INTEROP_SWITCH_* bits, Reason and ClosedReason enum bc250_interop_reason
+// (driver/kmd/interop_policy.h). BlitSetting/CddSetting are the raw values read at start, 0 when the matching
+// *_ABSENT or *_UNREADABLE flag is set. SessionBootId is the InteropSession value the start found (0 when none),
+// BootId this boot's KUSER_SHARED_DATA.BootId. PreviousEnd is InteropLastEnd as the start found it, LastEnd this
+// start's last unmark: BC250_INTEROP_END_*. Reserved: zero in, zero out.
+#define BC250_INTEROP_ABI 1u
+#define BC250_INTEROP_OP_READ 0u
+#define BC250_INTEROP_SWITCH_BLIT 1u             // EnableGpuPresentBlit: a Blt present is one GPU copy
+#define BC250_INTEROP_SWITCH_CDD 2u              // EnableCddDwmInterop: DRIVERCAPS DriverSupportsCddDwmInterop
+#define BC250_INTEROP_FLAG_VALID 1u              // a full WDDM start decided; else Reason is not-run
+#define BC250_INTEROP_FLAG_SESSION 2u            // InteropSession is on disk now: a device of this start uses the path
+#define BC250_INTEROP_FLAG_UNCLEAN 4u            // the start found a marker of an earlier boot
+#define BC250_INTEROP_FLAG_STALE 8u              // the start found a marker of this boot (a restart without unmark)
+#define BC250_INTEROP_FLAG_CLOSED_BY_DRIVER 16u  // the switches are 0 because the driver wrote them so (ClosedReason)
+#define BC250_INTEROP_FLAG_PERSISTED 32u         // this start wrote the durable close and it reached the disk
+#define BC250_INTEROP_FLAG_PERSIST_FAILED 64u    // this start's durable close failed: the marker stays for the next one
+#define BC250_INTEROP_FLAG_BLIT_ABSENT 128u      // EnableGpuPresentBlit absent: default 1
+#define BC250_INTEROP_FLAG_CDD_ABSENT 256u       // EnableCddDwmInterop absent: default 1
+#define BC250_INTEROP_FLAG_BLIT_UNREADABLE 512u  // not a REG_DWORD, or the read failed
+#define BC250_INTEROP_FLAG_CDD_UNREADABLE 1024u
+#define BC250_INTEROP_END_NONE 0u
+#define BC250_INTEROP_END_STOP 1u                // the device stopped with the session marked
+#define BC250_INTEROP_END_USERS 2u               // the last device that used the path was destroyed (DWM exit)
+typedef struct _BC250_ESCAPE_INTEROP {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Requested, Effective, Reason, ClosedReason;
+    unsigned long BlitSetting, CddSetting;
+    unsigned long BootId, SessionBootId;
+    unsigned long Users, Marks, Unmarks, MarkFailures;   // devices using the path now; marker writes/deletes/failures
+    unsigned long PreviousEnd, LastEnd;
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long Reserved[2];
+} BC250_ESCAPE_INTEROP; // 104 bytes on Windows, ABI 1
 
 // Read-only diagnostics, not an atomic hardware snapshot. Require administrator,
 // HardwareAccess=1 and every other D3DDDI_ESCAPEFLAGS bit zero: Level Two keeps

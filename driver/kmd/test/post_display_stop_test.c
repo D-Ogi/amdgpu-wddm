@@ -77,6 +77,9 @@ static unsigned dpmStops;
 /* KMD175: the DPM governor puts the floor back while the SMU owner is still online, before any teardown. */
 static void DpmStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.restores==0);dpmStops++;}
 static void SmuOwnerStop(int*s){(void)s;model.smu++;}
+static unsigned interopStops;
+/* KMD181: the interop session marker goes after WddmStop (DDI devices are gone), registry only. */
+static void InteropStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==1);interopStops++;}
 #define STOP_STUB(n) static void n(BC250_DEVICE*d){(void)d;CHECK(model.smu && model.restores==1);}
 STOP_STUB(IhStop)
 STOP_STUB(GfxPrepareStop)
@@ -101,7 +104,7 @@ int main(void)
     BC250_DEVICE d;BC250_WDDM w;BC250_WDDM_OBJECT o;DXGK_DISPLAY_INFORMATION info;
     init(&d,&w,&o);
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
-    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==2 && model.unmaps==1 && dpmStops==1);
+    CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==2 && model.unmaps==1 && dpmStops==1 && interopStops==1);
     CHECK(info.Width==1920 && info.Height==1200 && info.Pitch==7680 && info.PhysicAddress==d.Post.PhysicAddress && info.TargetId==BC250_CHILD_UID);
     CHECK(d.PostDisplayStopAttempted && d.PostDisplayStopStatus==STATUS_SUCCESS);
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;memset(&info,0xcc,sizeof(info));
