@@ -13,6 +13,7 @@
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -26,15 +27,29 @@ namespace {
 
 constexpr UINT kWidth = 256, kHeight = 128, kTile = 128, kTileBytes = 65536;
 unsigned g_failures = 0;
+FILE *g_out = nullptr;  // --out: a copy of every line, for runners whose debugger wrapper drops stdout
+
+void Print(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  std::vprintf(format, args);
+  va_end(args);
+  if (g_out) {
+    va_start(args, format);
+    std::vfprintf(g_out, format, args);
+    va_end(args);
+    std::fflush(g_out);
+  }
+}
 
 void Check(bool ok, const char *what) {
-  std::printf("%s %s\n", ok ? "ok  " : "FAIL", what);
+  Print("%s %s\n", ok ? "ok  " : "FAIL", what);
   if (!ok) ++g_failures;
 }
 
 bool Hr(HRESULT hr, const char *what) {
   if (FAILED(hr)) {
-    std::printf("FAIL %s: 0x%08lX\n", what, static_cast<unsigned long>(hr));
+    Print("FAIL %s: 0x%08lX\n", what, static_cast<unsigned long>(hr));
     ++g_failures;
     return false;
   }
@@ -45,14 +60,16 @@ struct Options {
   UINT vendor = 0, device = 0;  // 0: first hardware adapter
   D3D_FEATURE_LEVEL minimum = D3D_FEATURE_LEVEL_12_1;
   UINT deadline = 60;
+  std::wstring out;
 };
 
 void Usage() {
-  std::printf(
+  Print(
       "d3d11fl12.exe [--adapter V[:D]] [--min 12_0|12_1] [--deadline S]\n"
       "  --adapter V[:D]  hexadecimal vendor and optional device id (default: first hardware adapter)\n"
       "  --min LEVEL      lowest accepted device feature level (default 12_1)\n"
-      "  --deadline S     whole-run limit in seconds, at most 170 (default 60)\n");
+      "  --deadline S     whole-run limit in seconds, at most 170 (default 60)\n"
+      "  --out FILE       also write every output line to FILE (created, never overwritten)\n");
 }
 
 bool ParseArgs(int argc, wchar_t **argv, Options &o) {
@@ -73,6 +90,8 @@ bool ParseArgs(int argc, wchar_t **argv, Options &o) {
       if (v == L"12_0") o.minimum = D3D_FEATURE_LEVEL_12_0;
       else if (v == L"12_1") o.minimum = D3D_FEATURE_LEVEL_12_1;
       else return false;
+    } else if (a == L"--out") {
+      o.out = v;
     } else if (a == L"--deadline") {
       o.deadline = static_cast<UINT>(std::wcstoul(v.c_str(), nullptr, 10));
       if (!o.deadline || o.deadline > 170) return false;
@@ -102,7 +121,7 @@ bool Compile(const char *entry, const char *target, ComPtr<ID3DBlob> &blob) {
   ComPtr<ID3DBlob> errors;
   const HRESULT hr = D3DCompile(kShader, sizeof(kShader) - 1, "d3d11fl12", nullptr, nullptr, entry, target,
                                 D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &blob, &errors);
-  if (FAILED(hr) && errors) std::printf("%s\n", static_cast<const char *>(errors->GetBufferPointer()));
+  if (FAILED(hr) && errors) Print("%s\n", static_cast<const char *>(errors->GetBufferPointer()));
   return Hr(hr, entry);
 }
 
@@ -139,7 +158,7 @@ bool Matches(const std::vector<uint32_t> &image, int left, int right, const char
       }
     }
   if (bad)
-    std::printf("     %u texels differ, first (%u,%u) got %08X want %08X\n", bad, firstX, firstY, got, want);
+    Print("     %u texels differ, first (%u,%u) got %08X want %08X\n", bad, firstX, firstY, got, want);
   Check(!bad, what);
   return !bad;
 }
@@ -155,7 +174,7 @@ int Run(const Options &o) {
     a->GetDesc1(&d);
     if (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
     if (o.vendor && (d.VendorId != o.vendor || (o.device && d.DeviceId != o.device))) continue;
-    std::printf("adapter %04X:%04X %ls\n", d.VendorId, d.DeviceId, d.Description);
+    Print("adapter %04X:%04X %ls\n", d.VendorId, d.DeviceId, d.Description);
     adapter = a;
     break;
   }
@@ -173,24 +192,24 @@ int Run(const Options &o) {
                             D3D11_SDK_VERSION, &dev, &level, &ctx),
           "D3D11CreateDevice"))
     return 1;
-  std::printf("FEATURE_LEVEL 0x%X\n", static_cast<unsigned>(level));
+  Print("FEATURE_LEVEL 0x%X\n", static_cast<unsigned>(level));
   Check(level >= o.minimum, "device feature level at or above --min");
 
   D3D11_FEATURE_DATA_D3D11_OPTIONS1 o1{};
   D3D11_FEATURE_DATA_D3D11_OPTIONS2 o2{};
   D3D11_FEATURE_DATA_D3D11_OPTIONS3 o3{};
   if (Hr(dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS1, &o1, sizeof(o1)), "OPTIONS1"))
-    std::printf("OPTIONS1 TiledResourcesTier=%d MinMaxFiltering=%d ClearViewDepthOnly=%d MapOnDefaultBuffers=%d\n",
+    Print("OPTIONS1 TiledResourcesTier=%d MinMaxFiltering=%d ClearViewDepthOnly=%d MapOnDefaultBuffers=%d\n",
                 o1.TiledResourcesTier, o1.MinMaxFiltering, o1.ClearViewAlsoSupportsDepthOnlyFormats,
                 o1.MapOnDefaultBuffers);
   if (Hr(dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS2, &o2, sizeof(o2)), "OPTIONS2"))
-    std::printf("OPTIONS2 PSStencilRef=%d TypedUAVLoadAdditionalFormats=%d ROVs=%d ConservativeTier=%d "
+    Print("OPTIONS2 PSStencilRef=%d TypedUAVLoadAdditionalFormats=%d ROVs=%d ConservativeTier=%d "
                 "TiledResourcesTier=%d MapOnDefaultTextures=%d StandardSwizzle=%d UMA=%d\n",
                 o2.PSSpecifiedStencilRefSupported, o2.TypedUAVLoadAdditionalFormats, o2.ROVsSupported,
                 o2.ConservativeRasterizationTier, o2.TiledResourcesTier, o2.MapOnDefaultTextures,
                 o2.StandardSwizzle, o2.UnifiedMemoryArchitecture);
   if (Hr(dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &o3, sizeof(o3)), "OPTIONS3"))
-    std::printf("OPTIONS3 VPAndRTArrayIndexFromAnyShader=%d\n", o3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer);
+    Print("OPTIONS3 VPAndRTArrayIndexFromAnyShader=%d\n", o3.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer);
   // OPTIONS1 predates tier 3: the runtime reports tier 3 there as tier 2 (measured on a reference GPU).
   Check(o2.TiledResourcesTier >= D3D11_TILED_RESOURCES_TIER_2 &&
             o1.TiledResourcesTier == (o2.TiledResourcesTier < D3D11_TILED_RESOURCES_TIER_2 ? o2.TiledResourcesTier
@@ -236,7 +255,7 @@ int Run(const Options &o) {
   UINT subresources = 1;
   D3D11_SUBRESOURCE_TILING tiling{};
   dev2->GetResourceTiling(tiled.Get(), &tiles, &packed, &shape, &subresources, 0, &tiling);
-  std::printf("tiling tiles=%u shape=%ux%ux%u packed=%u subresource0=%ux%ux%u\n", tiles, shape.WidthInTexels,
+  Print("tiling tiles=%u shape=%ux%ux%u packed=%u subresource0=%ux%ux%u\n", tiles, shape.WidthInTexels,
               shape.HeightInTexels, shape.DepthInTexels, packed.NumPackedMips, tiling.WidthInTiles,
               tiling.HeightInTiles, tiling.DepthInTiles);
   Check(tiles == 2 && shape.WidthInTexels == kTile && shape.HeightInTexels == kTile && packed.NumPackedMips == 0 &&
@@ -306,7 +325,7 @@ int Run(const Options &o) {
       for (UINT y = 0; y < kTile; ++y)
         for (UINT x = 0; x < kTile; ++x) bad += texels[y * kTile + x] != Gradient(x, y);
       ctx->Unmap(linearStaging.Get(), 0);
-      if (bad) std::printf("     %u texels differ\n", bad);
+      if (bad) Print("     %u texels differ\n", bad);
       Check(!bad, "CopyTiles tile 0 to a linear buffer");
     }
   }
@@ -334,15 +353,19 @@ int wmain(int argc, wchar_t **argv) {
     Usage();
     return 2;
   }
+  if (!o.out.empty() && (_wfopen_s(&g_out, o.out.c_str(), L"wx") || !g_out)) {
+    std::printf("FAIL cannot create %ls\n", o.out.c_str());
+    return 2;
+  }
   // The deadline ends a hung run; the lab runner has its own outer bound as well.
   static UINT deadline = o.deadline;
   CreateThread(nullptr, 0, [](void *) -> DWORD {
     Sleep(deadline * 1000);
-    std::printf("FAIL deadline of %u s reached\n", deadline);
+    Print("FAIL deadline of %u s reached\n", deadline);
     TerminateProcess(GetCurrentProcess(), 3);
     return 0;
   }, nullptr, 0, nullptr);
   const int code = Run(o);
-  std::printf("%s: %u failure(s)\n", code ? "FAILED" : "PASSED", g_failures);
+  Print("%s: %u failure(s)\n", code ? "FAILED" : "PASSED", g_failures);
   return code;
 }
