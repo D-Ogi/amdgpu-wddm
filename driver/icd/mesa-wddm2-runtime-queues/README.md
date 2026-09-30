@@ -185,3 +185,29 @@ wraps a call whose effect the code needs, so NDEBUG removes checks only. Release
 candidate 222E2BA5ADB897A3674AF3B79C56B2BE8976F9D91C67FADD28091D5FE188F4FC
 (PDB kept) passes the host tests: thirteen cases, 241 checks, no failure. Its
 compile time on the BC-250 remains to be measured in a lab trial.
+
+## Ray tracing libraries in a persisted pipeline cache
+
+0011-rt-library-cache-key.patch follows 0010 (fork commit 48546c73 on
+a7f44c96). vkd3d-proton builds each AddToStateObject() as a new pipeline
+library that imports the previous state object, and RADV keyed a library by
+the full hashes of the libraries it imports, so a library's key named the whole
+chain below it. Witcher 3 adds shaders as it streams them, in a different order
+and with different additions on each run. In two warm runs the persisted cache
+held ten libraries whose cached data (stages, stage hashes, shader hashes) were
+byte-identical but whose keys differed; each missed and cost 50 to 590 ms on a
+game thread.
+
+A library's compile uses nothing of the imported libraries except whether one
+holds a callable shader: a library is never monolithic, builds no traversal
+shader and compiles only its own stages and groups. The patch keys a library
+that imports others, in the application's cache, by its own stages, groups,
+layout and flags plus that bit. The pipeline keeps its full hash, which
+importing pipelines use. A pipeline linked from the chain (vkd3d's self-link)
+still depends on the whole chain and still compiles its traversal shader when
+the chain differs. Candidate
+66FE8F3178EA2D70D8804858E23434C7662E46AE119529C4DA6FAF7E53F57200 passes the
+host tests (thirteen cases, 241 checks); none of them creates a ray tracing
+pipeline, so the effect remains to be shown by a warm pair on the lab. Co
+nagle, to po diable (what is hasty is the devil's): the cache was right to be
+careful, only too careful about its ancestry.
