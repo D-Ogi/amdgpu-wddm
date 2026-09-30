@@ -21,6 +21,40 @@ bool unbacked_protection(const D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE& p) noexc
     D3DDDIGPUVIRTUALADDRESS_PROTECTION_TYPE zero{},none{};zero.Zero=1;none.NoAccess=1;
     return p.Value==zero.Value || p.Value==none.Value;
 }
+// Exclusive hold of a component lock that the owner can drop around a callback and take again.
+class Held final {
+    SRWLOCK& lock_;
+    bool held_{};
+public:
+    explicit Held(SRWLOCK& lock) noexcept:lock_(lock) {AcquireSRWLockExclusive(&lock_);held_=true;}
+    ~Held() {if(held_)ReleaseSRWLockExclusive(&lock_);}
+    Held(const Held&)=delete;
+    Held& operator=(const Held&)=delete;
+    void release() noexcept {if(held_){held_=false;ReleaseSRWLockExclusive(&lock_);}}
+    void acquire() noexcept {if(!held_){AcquireSRWLockExclusive(&lock_);held_=true;}}
+};
+template<class Record> void unlink_from(Record*& head,Record* record) noexcept {
+    auto link=&head;while(*link && *link!=record)link=&(*link)->next;
+    if(*link)*link=record->next;
+}
+// Only one thread at a time may work against an HCONTEXT (WDK, display/changes-from-direct3d-10.md).
+// Each internal context belongs to one RADV queue, whose submissions and bindings RADV makes under that
+// queue's lock, so the borrows of one context never overlap across threads. Such an overlap is noted
+// (trace mode 2, name hcontext-shared) and not refused: the lab checks the claim, the game does not
+// lose its device over it. Under lock_; true when another thread's borrow is in flight.
+template<class Context> bool lend(Context& ctx) noexcept {
+    const DWORD self=GetCurrentThreadId();
+    const bool shared=ctx.borrowed && ctx.user!=self;
+    if(!ctx.borrowed)ctx.user=self;
+    ++ctx.borrowed;return shared;
+}
+template<class Context> void give(Context& ctx) noexcept {if(!--ctx.borrowed)ctx.user=0;}
+// Once per process: a false per-queue-lock claim would otherwise spend the failure-note budget within a
+// few frames and hide the later device-remove note.
+void note_shared(bool shared) noexcept {
+    static std::atomic<bool> noted{};
+    if(shared && !noted.exchange(true))ddi_failure_note("hcontext-shared",S_OK);
+}
 }
 struct HostedDispatch::Reservation {
     Reservation* next{};
@@ -31,8 +65,9 @@ struct HostedDispatch::Reservation {
 struct HostedDispatch::Allocation {
     RuntimeAllocation owner;
     Allocation* next{};
+    D3DKMT_HANDLE handle{};                     // owner's handle, published under the lock once created
     UINT64 va{},bytes{};
-    unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
+    unsigned borrowed{};                        // runtime callbacks in flight that name it
     bool busy{},locked{};
     Allocation(D3D12DDI_HRTDEVICE runtime,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb)
         :owner(runtime,cb) {}
@@ -42,6 +77,7 @@ struct HostedDispatch::Sync {
     D3DKMT_HANDLE handle{};
     D3DDDI_SYNCHRONIZATIONOBJECT_TYPE type{};
     const volatile UINT64* cpu{};
+    unsigned borrowed{};                        // progress publications in flight that name it
     bool busy{};
 };
 HostedDispatch::HostedDispatch(bc250::umd::RuntimeDomain& domain,D3D12DDI_HRTDEVICE runtime,
@@ -49,20 +85,24 @@ HostedDispatch::HostedDispatch(bc250::umd::RuntimeDomain& domain,D3D12DDI_HRTDEV
     HostedDispatchHooks hooks) noexcept:domain_(domain),runtime_(runtime),user_(user),kernel_(kernel),hooks_(hooks) {}
 HostedDispatch::~HostedDispatch(){discard_metadata();}
 unsigned HostedDispatch::discard_metadata() noexcept {
-    active_=false;unsigned unresolved=0;
+    active_.store(false);unsigned unresolved=0;
+    Held held(lock_);
     while(allocations_){auto record=allocations_;allocations_=record->next;
         if(record->owner.handle())++unresolved;
         record->owner.invalidate_runtime();delete record;}
     while(reservations_){auto range=reservations_;reservations_=range->next;++unresolved;delete range;}
     for(auto& ctx:contexts_){if(ctx.handle)++unresolved;ctx={};}
     while(syncs_){auto sync=syncs_;syncs_=sync->next;if(sync->handle)++unresolved;delete sync;}
-    if(paging_.queue)++unresolved;paging_={};
+    if(paging_.queue)++unresolved;paging_={};paging_busy_=false;
     user_={};kernel_={};hooks_={};runtime_={};return unresolved;
 }
+void HostedDispatch::unlink(Allocation* record) noexcept {unlink_from(allocations_,record);}
+void HostedDispatch::unlink(Reservation* range) noexcept {unlink_from(reservations_,range);}
+void HostedDispatch::unlink(Sync* sync) noexcept {unlink_from(syncs_,sync);}
 HostedDispatch::Allocation* HostedDispatch::find(D3DKMT_HANDLE handle) noexcept {
     if(!handle)return nullptr;
     for(auto record=allocations_;record;record=record->next)
-        if(record->owner.handle()==handle)return record;
+        if(record->handle==handle)return record;
     return nullptr;
 }
 HostedDispatch::Reservation* HostedDispatch::containing(UINT64 base,UINT64 bytes) noexcept {
@@ -92,6 +132,7 @@ HRESULT HostedDispatch::update(void* argument) noexcept {
     if(!a.NumOperations || !a.Operations || a.Reserved0 || a.Reserved1 || !a.FenceValue ||
        a.FenceValue>=UINT64_MAX-1)return E_INVALIDARG;
     if(a.Flags.Value)return E_NOTIMPL;
+    Held held(lock_);
     auto sync=find_sync(a.hFenceObject);
     if(!sync || sync->busy || sync->type!=D3DDDI_MONITORED_FENCE)return E_INVALIDARG;
     auto ctx=context(a.hContext);
@@ -127,27 +168,31 @@ HRESULT HostedDispatch::update(void* argument) noexcept {
         if(backed && (!backing(op) || (offset&(kPage-1)) || (part&(kPage-1)) || part>bytes ||
            (part && bytes%part) || offset>UINT64_MAX-(part?part:bytes)))return E_INVALIDARG;
     }
-    // Everything the callback names is held until it returns: a call that re-enters the bridge
-    // cannot release the backing, the range, the fence or the context under it.
+    // Everything the callback names is held until it returns: a call that re-enters the bridge, or
+    // one on another thread, cannot release the backing, the range, the fence or the context under it.
     for(UINT i=0;i<a.NumOperations;++i){
         const auto handle=backing(a.Operations[i]);
         if(handle && !borrow(handle)){
-            for(UINT j=0;j<i;++j)if(const auto held=backing(a.Operations[j]))give_back(held);
+            for(UINT j=0;j<i;++j)if(const auto taken=backing(a.Operations[j]))give_back(taken);
             return E_INVALIDARG;
         }
     }
     ++range->borrowed;sync->busy=true;
+    HANDLE context_handle=nullptr;
+    if(ctx){ctx->busy=true;context_handle=ctx->handle;}
+    held.release();
     HRESULT hr;
     if(ctx){
         // The callback's request is not the kernel's: full context handle, other field widths.
-        D3DDDICB_UPDATEGPUVIRTUALADDRESS b{};b.hContext=ctx->handle;b.hFenceObject=a.hFenceObject;
+        D3DDDICB_UPDATEGPUVIRTUALADDRESS b{};b.hContext=context_handle;b.hFenceObject=a.hFenceObject;
         b.NumOperations=a.NumOperations;b.Operations=a.Operations;b.FenceValue=a.FenceValue;
-        ctx->busy=true;
         hr=kernel_.pfnUpdateGpuVirtualAddressCb?kernel_.pfnUpdateGpuVirtualAddressCb(runtime_.handle,&b):E_NOTIMPL;
-        ctx->busy=false;
     }else hr=hooks_.queue(hooks_.userdata,BC250_HOST_UpdateGpuVirtualAddress,argument);
+    held.acquire();
+    if(ctx)ctx->busy=false;
     sync->busy=false;--range->borrowed;
-    for(UINT i=0;i<a.NumOperations;++i)if(const auto held=backing(a.Operations[i]))give_back(held);
+    for(UINT i=0;i<a.NumOperations;++i)if(const auto taken=backing(a.Operations[i]))give_back(taken);
+    held.release();
     // S_OK is admission to the queue, not completion. Any other success is not a defined answer.
     if(SUCCEEDED(hr) && hr!=S_OK)return remove_device();
     return hr;
@@ -157,6 +202,7 @@ HostedDispatch::Sync* HostedDispatch::find_sync(D3DKMT_HANDLE handle) noexcept {
     for(auto sync=syncs_;sync;sync=sync->next)if(sync->handle==handle)return sync;
     return nullptr;
 }
+// Never under lock_: the runtime's error callback is a callback like any other.
 HRESULT HostedDispatch::remove_device(int site) noexcept {
     char name[48];std::snprintf(name,sizeof(name),"hosted-remove-device:%d",site);
     ddi_failure_note(name,D3DDDIERR_DEVICEREMOVED);
@@ -181,47 +227,72 @@ HRESULT HostedDispatch::internal_queue(uint32_t op,void* argument) noexcept {
         if(!wrapper.arguments)return E_INVALIDARG;
         if(op==BC250_HOST_CREATE_QUEUE_CONTEXT){
             auto& a=*static_cast<D3DKMT_CREATECONTEXTVIRTUAL*>(wrapper.arguments);
+            Held held(lock_);
             if(a.hContext || next_context_==0x7fffffffu)return E_INVALIDARG;
-            Context* ctx=nullptr;for(auto& entry:contexts_)if(!entry.handle && !entry.busy){ctx=&entry;break;}
+            Context* ctx=nullptr;for(auto& entry:contexts_)if(!entry.handle && !entry.busy && !entry.borrowed){ctx=&entry;break;}
             if(!ctx)return E_OUTOFMEMORY;
+            ctx->busy=true;held.release();
             D3DDDICB_CREATECONTEXTVIRTUAL b{};b.NodeOrdinal=a.NodeOrdinal;b.EngineAffinity=a.EngineAffinity;b.Flags=a.Flags;
             b.pPrivateDriverData=a.pPrivateDriverData;b.PrivateDriverDataSize=a.PrivateDriverDataSize;
-            ctx->busy=true;HRESULT hr=KT_QUEUE(CreateContextVirtual,&b);ctx->busy=false;
+            HRESULT hr=KT_QUEUE(CreateContextVirtual,&b);
+            held.acquire();ctx->busy=false;
             if(SUCCEEDED(hr)){
                 ctx->handle=b.hContext;ctx->token=0x80000000u|++next_context_;
-                if(!ctx->handle)return remove_device();a.hContext=ctx->token;
+                const bool created=ctx->handle!=nullptr;const uint32_t token=ctx->token;
+                held.release();
+                if(!created)return remove_device();a.hContext=token;
             }
             return hr;
         }
-        auto& a=*static_cast<D3DKMT_DESTROYCONTEXT*>(wrapper.arguments);auto ctx=context(a.hContext);
-        if(!ctx || ctx->busy)return E_INVALIDARG;
+        auto& a=*static_cast<D3DKMT_DESTROYCONTEXT*>(wrapper.arguments);
+        Held held(lock_);
+        auto ctx=context(a.hContext);
+        if(!ctx || ctx->busy || ctx->borrowed)return E_INVALIDARG;
         D3DDDICB_DESTROYCONTEXT b{};b.hContext=ctx->handle;
-        ctx->busy=true;HRESULT hr=KT_QUEUE(DestroyContext,&b);ctx->busy=false;
+        ctx->busy=true;held.release();
+        HRESULT hr=KT_QUEUE(DestroyContext,&b);
+        held.acquire();ctx->busy=false;
         if(hr==S_OK)*ctx={};return hr;
     }
     if(op==BC250_HOST_PUBLISH_PROGRESS){
-        auto& a=*static_cast<bc250_host_progress*>(argument);auto ctx=context(a.context);
-        if(!ctx)return delegate();
+        auto& a=*static_cast<bc250_host_progress*>(argument);
+        Held held(lock_);
+        auto ctx=context(a.context);
+        if(!ctx){held.release();return delegate();}
         if(!a.sync || !a.cpu_address || !a.value || a.value==UINT64_MAX ||
            (ctx->progress.sync && (ctx->progress.sync!=a.sync || ctx->progress.value>=a.value)))return E_INVALIDARG;
         ctx->progress=a;return S_OK;
     }
     if(op==BC250_HOST_WaitForSynchronizationObjectFromGpu){
-        auto& a=*static_cast<D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU*>(argument);auto ctx=context(a.hContext);
-        if(!ctx)return delegate();if(ctx->busy || !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)return E_INVALIDARG;
+        auto& a=*static_cast<D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU*>(argument);
+        Held held(lock_);
+        auto ctx=context(a.hContext);
+        if(!ctx){held.release();return delegate();}
+        if(ctx->busy || !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)return E_INVALIDARG;
         D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU b{};b.hContext=ctx->handle;
         b.ObjectCount=a.ObjectCount;b.ObjectHandleArray=a.ObjectHandleArray;b.MonitoredFenceValueArray=a.MonitoredFenceValueArray;
-        return KT_QUEUE(WaitForSynchronizationObjectFromGpu,&b);
+        const bool shared=lend(*ctx);held.release();note_shared(shared);
+        HRESULT hr=KT_QUEUE(WaitForSynchronizationObjectFromGpu,&b);
+        held.acquire();give(*ctx);return hr;
     }
     if(op==BC250_HOST_SignalSynchronizationObjectFromGpu2){
         auto& a=*static_cast<D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2*>(argument);
         if(!a.BroadcastContextCount || a.BroadcastContextCount>D3DDDI_MAX_BROADCAST_CONTEXT || a.Flags.Value ||
            !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)return E_INVALIDARG;
-        HANDLE handles[D3DDDI_MAX_BROADCAST_CONTEXT]{};
-        for(UINT i=0;i<a.BroadcastContextCount;++i){auto ctx=context(a.BroadcastContextArray[i]);if(!ctx)return delegate();if(ctx->busy)return E_INVALIDARG;handles[i]=ctx->handle;}
+        HANDLE handles[D3DDDI_MAX_BROADCAST_CONTEXT]{};Context* named[D3DDDI_MAX_BROADCAST_CONTEXT]{};
+        Held held(lock_);
+        for(UINT i=0;i<a.BroadcastContextCount;++i){
+            auto ctx=context(a.BroadcastContextArray[i]);if(!ctx){held.release();return delegate();}
+            if(ctx->busy)return E_INVALIDARG;
+            named[i]=ctx;handles[i]=ctx->handle;
+        }
+        bool shared=false;for(UINT i=0;i<a.BroadcastContextCount;++i)shared|=lend(*named[i]);
+        held.release();note_shared(shared);
         D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 b{};b.ObjectCount=a.ObjectCount;b.ObjectHandleArray=a.ObjectHandleArray;
         b.BroadcastContextCount=a.BroadcastContextCount;b.BroadcastContextArray=handles;b.MonitoredFenceValueArray=a.MonitoredFenceValueArray;
-        return KT_QUEUE(SignalSynchronizationObjectFromGpu2,&b);
+        HRESULT hr=KT_QUEUE(SignalSynchronizationObjectFromGpu2,&b);
+        held.acquire();for(UINT i=0;i<a.BroadcastContextCount;++i)give(*named[i]);
+        return hr;
     }
     if(op==BC250_HOST_SubmitCommand){
         auto& a=*static_cast<D3DKMT_SUBMITCOMMAND*>(argument);
@@ -229,56 +300,92 @@ HRESULT HostedDispatch::internal_queue(uint32_t op,void* argument) noexcept {
            a.Flags.NullRendering || a.Flags.PresentRedirected || a.Flags.NoKmdAccess || a.Flags.Reserved || a.PresentHistoryToken || a.NumHistoryBuffers)return E_NOTIMPL;
         D3DDDICB_SUBMITCOMMAND b{};b.Commands=a.Commands;b.CommandLength=a.CommandLength;
         b.pPrivateDriverData=a.pPrivateDriverData;b.PrivateDriverDataSize=a.PrivateDriverDataSize;b.BroadcastContextCount=a.BroadcastContextCount;
-        for(UINT i=0;i<a.BroadcastContextCount;++i){auto ctx=context(a.BroadcastContext[i]);if(!ctx)return delegate();if(ctx->busy)return E_INVALIDARG;b.BroadcastContext[i]=ctx->handle;}
+        Context* named[D3DDDI_MAX_BROADCAST_CONTEXT]{};
+        Held held(lock_);
+        for(UINT i=0;i<a.BroadcastContextCount;++i){
+            auto ctx=context(a.BroadcastContext[i]);if(!ctx){held.release();return delegate();}
+            if(ctx->busy)return E_INVALIDARG;
+            named[i]=ctx;b.BroadcastContext[i]=ctx->handle;
+        }
+        bool shared=false;for(UINT i=0;i<a.BroadcastContextCount;++i)shared|=lend(*named[i]);
+        held.release();note_shared(shared);
         b.NumPrimaries=a.NumPrimaries;for(UINT i=0;i<a.NumPrimaries;++i)b.WrittenPrimaries[i]=a.WrittenPrimaries[i];
-        return KT_QUEUE(SubmitCommand,&b);
+        HRESULT hr=KT_QUEUE(SubmitCommand,&b);
+        held.acquire();for(UINT i=0;i<a.BroadcastContextCount;++i)give(*named[i]);
+        return hr;
     }
     return delegate();
 #undef KT_QUEUE
 }
 HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     if(op==BC250_HOST_CHECK_STATUS){
-        if(paging_.cpu_address && *static_cast<const volatile UINT64*>(paging_.cpu_address)==UINT64_MAX)return remove_device();
-        for(auto sync=syncs_;sync;sync=sync->next)if(!sync->busy && sync->cpu && *sync->cpu==UINT64_MAX)return remove_device();
+        // The most frequent callback (every fence poll): a shared hold, no record changes.
+        bool removed=false;
+        AcquireSRWLockShared(&lock_);
+        // Not while the paging queue's destroy is in flight: the kernel may have unmapped its fence page.
+        if(!paging_busy_ && paging_.cpu_address && *static_cast<const volatile UINT64*>(paging_.cpu_address)==UINT64_MAX)removed=true;
+        for(auto sync=syncs_;sync && !removed;sync=sync->next)if(!sync->busy && sync->cpu && *sync->cpu==UINT64_MAX)removed=true;
+        ReleaseSRWLockShared(&lock_);
+        if(removed)return remove_device();
         return lost()?D3DDDIERR_DEVICEREMOVED:S_OK;
     }
     if(op==BC250_HOST_REPORT_LOST)return remove_device();
     if(!argument)return E_INVALIDARG;
     if(lost())return D3DDDIERR_DEVICEREMOVED;
-    // Validate both internal and application queue progress before delegation.
+    // Validate both internal and application queue progress before delegation. The fence stays
+    // named (borrowed) until the publication returns, so that its CPU mapping outlives the call.
     // Queue hooks must not retain the borrowed CPU mapping after this call.
     if(op==BC250_HOST_PUBLISH_PROGRESS){
         const auto& a=*static_cast<const bc250_host_progress*>(argument);
-        auto sync=find_sync(a.sync);
-        if(!sync || sync->busy || sync->type!=D3DDDI_MONITORED_FENCE || !sync->cpu ||
-           sync->cpu!=a.cpu_address || !a.value || a.value==UINT64_MAX)return E_INVALIDARG;
+        Sync* sync=nullptr;
+        {
+            Held held(lock_);
+            sync=find_sync(a.sync);
+            if(!sync || sync->busy || sync->type!=D3DDDI_MONITORED_FENCE || !sync->cpu ||
+               sync->cpu!=a.cpu_address || !a.value || a.value==UINT64_MAX)return E_INVALIDARG;
+            ++sync->borrowed;
+        }
+        const HRESULT hr=internal_queue(op,argument);
+        Held held(lock_);--sync->borrowed;return hr;
     }
 #define KT_CALL(name,args) (kernel_.pfn##name##Cb?kernel_.pfn##name##Cb(runtime_.handle,args):E_NOTIMPL)
     switch(op){
     case BC250_HOST_CREATE_PAGING:{
         if(hooks_.paging)return hooks_.paging(hooks_.userdata,op,argument);
-        if(paging_.queue)return E_UNEXPECTED;
+        {Held held(lock_);if(paging_.queue || paging_busy_)return E_UNEXPECTED;paging_busy_=true;}
         D3DDDICB_CREATEPAGINGQUEUE b{};b.Priority=D3DDDI_PAGINGQUEUE_PRIORITY_NORMAL;
         HRESULT hr=KT_CALL(CreatePagingQueue,&b);
-        if(hr==S_OK){paging_={b.hPagingQueue,b.hSyncObject,b.FenceValueCPUVirtualAddress};
-            *static_cast<bc250_host_paging*>(argument)=paging_;
-            if(!paging_.queue || !paging_.sync || !paging_.cpu_address)return remove_device();}
+        bc250_host_paging created{};
+        {Held held(lock_);paging_busy_=false;
+         if(hr==S_OK){paging_={b.hPagingQueue,b.hSyncObject,b.FenceValueCPUVirtualAddress};created=paging_;}}
+        if(hr==S_OK){*static_cast<bc250_host_paging*>(argument)=created;
+            if(!created.queue || !created.sync || !created.cpu_address)return remove_device();}
         return hr;
     }
     case BC250_HOST_DESTROY_PAGING:{
         if(hooks_.paging)return hooks_.paging(hooks_.userdata,op,argument);
-        if(!paging_.queue || static_cast<bc250_host_paging*>(argument)->queue!=paging_.queue || allocations_ ||
-           reservations_)return E_INVALIDARG;
-        D3DDDI_DESTROYPAGINGQUEUE b{};b.hPagingQueue=paging_.queue;
-        HRESULT hr=KT_CALL(DestroyPagingQueue,&b);if(hr==S_OK)paging_={};return hr;
+        const auto queue=static_cast<bc250_host_paging*>(argument)->queue;
+        {Held held(lock_);
+         if(!paging_.queue || paging_busy_ || queue!=paging_.queue || allocations_ || reservations_)return E_INVALIDARG;
+         paging_busy_=true;}
+        D3DDDI_DESTROYPAGINGQUEUE b{};b.hPagingQueue=queue;
+        HRESULT hr=KT_CALL(DestroyPagingQueue,&b);
+        Held held(lock_);paging_busy_=false;if(hr==S_OK)paging_={};return hr;
     }
     case BC250_HOST_MakeResident:{
         if(hooks_.paging)return hooks_.paging(hooks_.userdata,op,argument);
         auto& a=*static_cast<D3DDDI_MAKERESIDENT*>(argument);
-        if(!paging_.queue || a.hPagingQueue!=paging_.queue || !a.NumAllocations || !a.AllocationList || a.Flags.Reserved)return E_INVALIDARG;
-        for(UINT i=0;i<a.NumAllocations;++i)if(!find(a.AllocationList[i]))return E_INVALIDARG;
+        if(!a.NumAllocations || !a.AllocationList || a.Flags.Reserved)return E_INVALIDARG;
         const UINT count=a.NumAllocations;
+        // The allocations named stay (borrowed) until the call returns.
+        {Held held(lock_);
+         if(!paging_.queue || paging_busy_ || a.hPagingQueue!=paging_.queue)return E_INVALIDARG;
+         // A record whose own create or destroy is in flight is refused, as borrow() refuses it: a destroy
+         // that already passed its borrowed check must not find a new borrower when it retakes the lock.
+         for(UINT i=0;i<count;++i){const auto r=find(a.AllocationList[i]);if(!r || r->busy)return E_INVALIDARG;}
+         for(UINT i=0;i<count;++i)++find(a.AllocationList[i])->borrowed;}
         HRESULT hr=KT_CALL(MakeResident,&a);
+        {Held held(lock_);for(UINT i=0;i<count;++i)if(const auto r=find(a.AllocationList[i]))--r->borrowed;}
         if((hr==S_OK || hr==E_PENDING) && (a.NumAllocations!=count ||
            (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX))))return remove_device();
         // S_OK is immediately resident; only E_PENDING defines this output.
@@ -290,9 +397,14 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(hooks_.paging)return hooks_.paging(hooks_.userdata,op,argument);
         auto& a=*static_cast<D3DKMT_EVICT*>(argument);
         if(!a.NumAllocations || !a.AllocationList || a.Flags.Reserved)return E_INVALIDARG;
-        for(UINT i=0;i<a.NumAllocations;++i)if(!find(a.AllocationList[i]))return E_INVALIDARG;
-        D3DDDICB_EVICT b{};b.NumAllocations=a.NumAllocations;b.AllocationList=a.AllocationList;b.Flags=a.Flags;
-        HRESULT hr=KT_CALL(Evict,&b);a.NumBytesToTrim=b.NumBytesToTrim;return hr;
+        const UINT count=a.NumAllocations;
+        {Held held(lock_);
+         for(UINT i=0;i<count;++i){const auto r=find(a.AllocationList[i]);if(!r || r->busy)return E_INVALIDARG;}
+         for(UINT i=0;i<count;++i)++find(a.AllocationList[i])->borrowed;}
+        D3DDDICB_EVICT b{};b.NumAllocations=count;b.AllocationList=a.AllocationList;b.Flags=a.Flags;
+        HRESULT hr=KT_CALL(Evict,&b);
+        {Held held(lock_);for(UINT i=0;i<count;++i)if(const auto r=find(a.AllocationList[i]))--r->borrowed;}
+        a.NumBytesToTrim=b.NumBytesToTrim;return hr;
     }
     case BC250_HOST_PUBLISH_PROGRESS:case BC250_HOST_CREATE_QUEUE_CONTEXT:case BC250_HOST_DESTROY_QUEUE_CONTEXT:
     case BC250_HOST_CreateContextVirtual:case BC250_HOST_DestroyContext:
@@ -310,25 +422,27 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(!a.Size || (a.Size&(kGranule-1)) || (a.BaseAddress&(kGranule-1)) || a.Reserved0 || a.Reserved1 ||
            a.Reserved2)return E_INVALIDARG;
         if(fixed){
-            if(a.BaseAddress>UINT64_MAX-a.Size || owned(a.BaseAddress,a.Size,nullptr))return E_INVALIDARG;
+            if(a.BaseAddress>UINT64_MAX-a.Size)return E_INVALIDARG;
         }else if((a.MinimumAddress&(kGranule-1)) || (a.MaximumAddress&(kGranule-1)) ||
                  (a.MaximumAddress && (a.MaximumAddress<=a.MinimumAddress ||
                   a.MaximumAddress-a.MinimumAddress<a.Size)))return E_INVALIDARG;
         auto range=new(std::nothrow) Reservation;if(!range)return E_OUTOFMEMORY;
-        // Tracking storage exists before the runtime may reserve anything.
-        range->busy=true;range->next=reservations_;reservations_=range;
+        {Held held(lock_);
+         if(fixed && owned(a.BaseAddress,a.Size,nullptr)){held.release();delete range;return E_INVALIDARG;}
+         // Tracking storage exists before the runtime may reserve anything.
+         range->busy=true;range->next=reservations_;reservations_=range;}
         D3DDDI_RESERVEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.MinimumAddress=a.MinimumAddress;
         b.MaximumAddress=a.MaximumAddress;b.Size=a.Size;
-        HRESULT hr=KT_CALL(ReserveGpuVirtualAddress,&b);range->busy=false;
-        if(FAILED(hr)){
-            auto link=&reservations_;while(*link!=range)link=&(*link)->next;*link=range->next;delete range;return hr;
-        }
+        HRESULT hr=KT_CALL(ReserveGpuVirtualAddress,&b);
+        Held held(lock_);range->busy=false;
+        if(FAILED(hr)){unlink(range);held.release();delete range;return hr;}
         // The runtime holds a reservation now, whatever it answered: the record stays.
         const UINT64 va=b.VirtualAddress;
         const bool placed=va && !(va&(kGranule-1)) && va<=UINT64_MAX-a.Size &&
             (fixed?va==a.BaseAddress:(va>=a.MinimumAddress && (!a.MaximumAddress || va+a.Size<=a.MaximumAddress)));
         const bool free_extent=placed && !owned(va,a.Size,range);
         range->base=va;range->bytes=a.Size;
+        held.release();
         if(hr!=S_OK || !free_extent)return remove_device();
         a.VirtualAddress=va;a.PagingFenceValue=b.PagingFenceValue;return S_OK;
     }
@@ -342,34 +456,40 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(input.hAllocation || input.Flags.Value || (input.PrivateDriverDataSize&&!input.pPrivateDriverData))return E_INVALIDARG;
         auto record=new(std::nothrow) Allocation(runtime_,user_);if(!record)return E_OUTOFMEMORY;
         // Tracking storage exists before the runtime may allocate anything.
-        record->busy=true;record->next=allocations_;allocations_=record;
+        {Held held(lock_);record->busy=true;record->next=allocations_;allocations_=record;}
         D3D12DDI_ALLOCATION_INFO_0022 info{};
         info.pSystemMem=input.pSystemMem;info.pPrivateDriverData=input.pPrivateDriverData;
         info.PrivateDriverDataSize=input.PrivateDriverDataSize;info.VidPnSourceId=input.VidPnSourceId;info.Priority=input.Priority;
         D3D12DDICB_ALLOCATE_0022 request{};request.pPrivateDriverData=a.pPrivateDriverData;
         request.PrivateDriverDataSize=a.PrivateDriverDataSize;request.NumAllocations=1;request.pAllocationInfo=&info;
-        HRESULT hr=record->owner.open(request);record->busy=false;
-        if(FAILED(hr)){
-            auto link=&allocations_;while(*link!=record)link=&(*link)->next;*link=record->next;delete record;return hr;
-        }
-        a.pAllocationInfo2->hAllocation=record->owner.handle();a.pAllocationInfo2->GpuVirtualAddress=record->owner.address();
+        HRESULT hr=record->owner.open(request);
+        Held held(lock_);record->busy=false;
+        if(FAILED(hr)){unlink(record);held.release();delete record;return hr;}
+        record->handle=record->owner.handle();
+        const D3DKMT_HANDLE handle=record->handle;const auto address=record->owner.address();
+        held.release();
+        a.pAllocationInfo2->hAllocation=handle;a.pAllocationInfo2->GpuVirtualAddress=address;
         // Native hKMResource is reserved. Internal allocations are released by handle list.
         a.hResource=0;return S_OK;
     }
     case BC250_HOST_DestroyAllocation2:{
         auto& a=*static_cast<D3DKMT_DESTROYALLOCATION2*>(argument);
         if(a.hResource || a.Flags.Value || a.AllocationCount!=1 || !a.phAllocationList)return E_INVALIDARG;
+        Held held(lock_);
         auto record=find(a.phAllocationList[0]);
         if(!record || record->busy || record->borrowed || record->locked || record->va)return E_INVALIDARG;
-        record->busy=true;HRESULT hr=record->owner.close();record->busy=false;
-        if(SUCCEEDED(hr)){auto link=&allocations_;while(*link!=record)link=&(*link)->next;*link=record->next;delete record;}
+        record->busy=true;held.release();
+        HRESULT hr=record->owner.close();
+        held.acquire();record->busy=false;
+        if(SUCCEEDED(hr)){unlink(record);held.release();delete record;}
         return hr;
     }
     case BC250_HOST_MapGpuVirtualAddress:{
         auto& a=*static_cast<D3DDDI_MAPGPUVIRTUALADDRESS*>(argument);
         if(!a.SizeInPages || a.SizeInPages>UINT64_MAX/kPage)return E_INVALIDARG;
-        if(!hooks_.paging && (!paging_.queue || a.hPagingQueue!=paging_.queue))return E_INVALIDARG;
         const UINT64 bytes=a.SizeInPages*kPage;
+        Held held(lock_);
+        if(!hooks_.paging && (!paging_.queue || paging_busy_ || a.hPagingQueue!=paging_.queue))return E_INVALIDARG;
         Reservation* range=nullptr;
         if(a.BaseAddress){
             if(!extent(a.BaseAddress,bytes))return E_INVALIDARG;
@@ -387,54 +507,72 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
                 if(a.Protection.Value!=only.Value || a.OffsetInPages || a.DriverProtection)return E_INVALIDARG;
             }else if(!backed_protection(a.Protection) || a.OffsetInPages>UINT64_MAX/kPage-a.SizeInPages ||
                      !borrow(a.hAllocation))return E_INVALIDARG;
-            ++range->borrowed;
+            ++range->borrowed;held.release();
             HRESULT hr=KT_CALL(MapGpuVirtualAddress,&a);
-            --range->borrowed;if(!zero)give_back(a.hAllocation);
+            held.acquire();--range->borrowed;if(!zero)give_back(a.hAllocation);held.release();
             if((hr==S_OK || hr==E_PENDING) && (a.VirtualAddress!=a.BaseAddress ||
                (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX))))return remove_device();
             return hr;
         }
         auto record=find(a.hAllocation);
         if(!record || record->busy || record->va)return E_INVALIDARG;
-        record->busy=true;HRESULT hr=KT_CALL(MapGpuVirtualAddress,&a);record->busy=false;
+        record->busy=true;held.release();
+        HRESULT hr=KT_CALL(MapGpuVirtualAddress,&a);
+        held.acquire();record->busy=false;
+        bool malformed=false;
         if(hr==S_OK || hr==E_PENDING){record->va=a.VirtualAddress;record->bytes=bytes;
             // Without a fixed base the answer lies inside the limits that were asked for.
             const bool outside=!a.BaseAddress && extent(record->va,bytes) && (record->va<a.MinimumAddress ||
                 (a.MaximumAddress && (a.MaximumAddress<bytes || record->va>a.MaximumAddress-bytes)));
-            if(!extent(record->va,bytes) || (a.BaseAddress && record->va!=a.BaseAddress) || outside ||
+            malformed=!extent(record->va,bytes) || (a.BaseAddress && record->va!=a.BaseAddress) || outside ||
                owned(record->va,bytes,record) ||
-               (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX)))return remove_device();}
+               (hr==E_PENDING && (!a.PagingFenceValue || a.PagingFenceValue==UINT64_MAX));}
+        held.release();
+        if(malformed)return remove_device();
         return hr;
     }
     case BC250_HOST_FreeGpuVirtualAddress:{
         auto& a=*static_cast<D3DKMT_FREEGPUVIRTUALADDRESS*>(argument);Allocation* record=nullptr;
+        D3DDDICB_FREEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.Size=a.Size;
+        Held held(lock_);
         for(auto range=reservations_;range;range=range->next){
             if(!range->base || range->base!=a.BaseAddress || range->bytes!=a.Size)continue;
             if(range->busy || range->borrowed)return E_INVALIDARG;
             // Frees the range and every view inside it; updates still queued for it are ignored.
-            D3DDDICB_FREEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.Size=a.Size;
-            range->busy=true;HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);range->busy=false;
-            if(hr==S_OK){auto link=&reservations_;while(*link!=range)link=&(*link)->next;*link=range->next;delete range;}
+            range->busy=true;held.release();
+            HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
+            held.acquire();range->busy=false;
+            if(hr==S_OK){unlink(range);held.release();delete range;}
             return hr;
         }
         for(auto r=allocations_;r;r=r->next)if(r->va && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
         if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
-        D3DDDICB_FREEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.Size=a.Size;
-        record->busy=true;HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);record->busy=false;
+        record->busy=true;held.release();
+        HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
+        held.acquire();record->busy=false;
         if(hr==S_OK){record->va=record->bytes=0;}return hr;
     }
     case BC250_HOST_Lock2:{
-        auto& a=*static_cast<D3DKMT_LOCK2*>(argument);auto record=find(a.hAllocation);
+        auto& a=*static_cast<D3DKMT_LOCK2*>(argument);
+        Held held(lock_);
+        auto record=find(a.hAllocation);
         if(!record || record->busy || record->locked)return E_INVALIDARG;
         D3DDDICB_LOCK2 b{};b.hAllocation=a.hAllocation;b.Flags.Value=a.Flags.Value;
-        record->busy=true;HRESULT hr=KT_CALL(Lock2,&b);record->busy=false;
-        if(hr==S_OK){record->locked=true;a.pData=b.pData;if(!b.pData)return remove_device();}return hr;
+        record->busy=true;held.release();
+        HRESULT hr=KT_CALL(Lock2,&b);
+        held.acquire();record->busy=false;
+        if(hr==S_OK){record->locked=true;held.release();a.pData=b.pData;if(!b.pData)return remove_device();}
+        return hr;
     }
     case BC250_HOST_Unlock2:{
-        auto& a=*static_cast<D3DKMT_UNLOCK2*>(argument);auto record=find(a.hAllocation);
+        auto& a=*static_cast<D3DKMT_UNLOCK2*>(argument);
+        Held held(lock_);
+        auto record=find(a.hAllocation);
         if(!record || record->busy || !record->locked)return E_INVALIDARG;
         D3DDDICB_UNLOCK2 b{};b.hAllocation=a.hAllocation;
-        record->busy=true;HRESULT hr=KT_CALL(Unlock2,&b);record->busy=false;
+        record->busy=true;held.release();
+        HRESULT hr=KT_CALL(Unlock2,&b);
+        held.acquire();record->busy=false;
         if(hr==S_OK)record->locked=false;return hr;
     }
     case BC250_HOST_CreateSynchronizationObject2:{
@@ -442,24 +580,30 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(a.Info.Flags.Shared || a.Info.Flags.NtSecuritySharing)return E_NOTIMPL;
         if(a.hSyncObject)return E_INVALIDARG;
         auto sync=new(std::nothrow) Sync;if(!sync)return E_OUTOFMEMORY;
-        sync->busy=true;sync->next=syncs_;syncs_=sync;
+        {Held held(lock_);sync->busy=true;sync->next=syncs_;syncs_=sync;}
         D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 b{};b.Info=a.Info;
-        HRESULT hr=KT_CALL(CreateSynchronizationObject2,&b);sync->busy=false;
-        if(hr!=S_OK){auto link=&syncs_;while(*link!=sync)link=&(*link)->next;*link=sync->next;delete sync;return hr;}
+        HRESULT hr=KT_CALL(CreateSynchronizationObject2,&b);
+        Held held(lock_);sync->busy=false;
+        if(hr!=S_OK){unlink(sync);held.release();delete sync;return hr;}
         const bool duplicate=find_sync(b.hSyncObject)!=nullptr;
         sync->handle=b.hSyncObject;sync->type=b.Info.Type;
         if(sync->type==D3DDDI_MONITORED_FENCE)sync->cpu=static_cast<const volatile UINT64*>(b.Info.MonitoredFence.FenceValueCPUVirtualAddress);
-        if(!sync->handle || duplicate || (sync->type==D3DDDI_MONITORED_FENCE && !sync->cpu))return remove_device();
+        const bool malformed=!sync->handle || duplicate || (sync->type==D3DDDI_MONITORED_FENCE && !sync->cpu);
+        held.release();
+        if(malformed)return remove_device();
         a.Info=b.Info;a.hSyncObject=b.hSyncObject;return S_OK;
     }
     case BC250_HOST_DestroySynchronizationObject:{
         D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT b{};
         b.hSyncObject=static_cast<D3DKMT_DESTROYSYNCHRONIZATIONOBJECT*>(argument)->hSyncObject;
-        auto sync=find_sync(b.hSyncObject);if(!sync || sync->busy)return E_INVALIDARG;
-        sync->busy=true;HRESULT hr=KT_CALL(DestroySynchronizationObject,&b);sync->busy=false;
+        Held held(lock_);
+        auto sync=find_sync(b.hSyncObject);if(!sync || sync->busy || sync->borrowed)return E_INVALIDARG;
+        sync->busy=true;held.release();
+        HRESULT hr=KT_CALL(DestroySynchronizationObject,&b);
+        held.acquire();sync->busy=false;
         if(hr==S_OK){
             for(auto& ctx:contexts_)if(ctx.progress.sync==b.hSyncObject)ctx.progress={};
-            auto link=&syncs_;while(*link!=sync)link=&(*link)->next;*link=sync->next;delete sync;
+            unlink(sync);held.release();delete sync;
         }
         return hr;
     }
@@ -481,7 +625,8 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
 }
 int32_t HostedDispatch::dispatch(void* userdata,uint32_t op,void* argument) noexcept {
     auto self=static_cast<HostedDispatch*>(userdata);
-    if(!self || !self->active_ || !self->runtime_.handle || !self->domain_.entered())return static_cast<int32_t>(0xc000000du);
+    if(!self || !self->active_.load(std::memory_order_acquire) || !self->runtime_.handle || !self->domain_.entered())
+        return static_cast<int32_t>(0xc000000du);
     HRESULT hr=self->operation(op,argument);
     if(hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG){
         self->remove_device();return static_cast<int32_t>(0xc00002b6u);}

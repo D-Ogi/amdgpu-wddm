@@ -9,6 +9,7 @@
 #include "heap-import.h"
 #include "engine-ddi/engine-ddi.h"
 #include <d3dkmthk.h>
+#include <atomic>
 #include <memory>
 #include <d3d12.h>
 #include <cstdio>
@@ -45,19 +46,22 @@ class DeviceEngine final {
     std::unique_ptr<RuntimeHeapImports> imports_;
     std::unique_ptr<QueueEngineRegistry> queues_;
     std::unique_ptr<HostedQueue> queue_bridge_;
-    CRITICAL_SECTION entry_lock_{};
-    bool lock_ready_{},active_{true};
-    bool binding_failed_{};
-    UINT64 callback_sequence_{};
+    // No entry lock: DDI entries of this device run at once on several threads (DeviceEngineScope).
+    // active_ turns false once, at close or retain, after the runtime has ended every entry.
+    std::atomic<bool> active_{true};
+    std::atomic<bool> binding_failed_{};
+    std::atomic<UINT64> callback_sequence_{};
     static int32_t dispatch(void* owner,uint32_t operation,void* argument) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
-        if(!self.active_)return static_cast<int32_t>(0xc000000du);
-        const auto sequence=++self.callback_sequence_;
+        if(!self.active_.load(std::memory_order_acquire))return static_cast<int32_t>(0xc000000du);
         // Start/end pairs reveal an unfinished callback without stopping the
         // kernel. IDs are local to this device; no handles/private payload.
         // Full trace mode only: a game makes thousands of these callbacks per frame, and the
         // unconditional formatting cost 15 % of this module's main-thread samples (native 164).
+        // The sequence is counted in that mode only, so that callbacks on several threads do not
+        // share a cache line for a number nobody reads.
         const bool traced=ddi_trace_enabled();
+        const UINT64 sequence=traced?self.callback_sequence_.fetch_add(1,std::memory_order_relaxed)+1:0;
         LARGE_INTEGER start{},end{};
         if(traced){
             QueryPerformanceCounter(&start);
@@ -89,12 +93,12 @@ class DeviceEngine final {
     static void APIENTRY unbind(void* owner,void*,VkQueue queue) {
         auto& self=*static_cast<DeviceEngine*>(owner);
         HRESULT result=vk_result(self.bootstrap_.unbind(queue));
-        if(FAILED(result))self.binding_failed_=true;
+        if(FAILED(result))self.binding_failed_.store(true);
         stage("UnbindQueue",result);
     }
     static bool borrow_backing(void* owner,D3DKMT_HANDLE handle) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
-        return self.active_ && self.imports_ && self.imports_->borrow_backing(handle);
+        return self.active_.load(std::memory_order_acquire) && self.imports_ && self.imports_->borrow_backing(handle);
     }
     static void return_backing(void* owner,D3DKMT_HANDLE handle) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
@@ -102,7 +106,8 @@ class DeviceEngine final {
     }
     static HRESULT queue_dispatch(void* owner,uint32_t op,void* arg) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
-        return self.active_ && self.queue_bridge_?HostedQueue::dispatch(self.queue_bridge_.get(),op,arg):E_NOTIMPL;
+        return self.active_.load(std::memory_order_acquire) && self.queue_bridge_?
+            HostedQueue::dispatch(self.queue_bridge_.get(),op,arg):E_NOTIMPL;
     }
     static HRESULT checked_close(engine_ddi::EngineQueue** queue) noexcept {
         if(!queue || !*queue)return E_INVALIDARG;
@@ -111,7 +116,8 @@ class DeviceEngine final {
     }
     static HRESULT health(void* owner) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
-        return self.active_ && self.engine_?self.engine_->GetDeviceRemovedReason():DXGI_ERROR_DEVICE_REMOVED;
+        return self.active_.load(std::memory_order_acquire) && self.engine_?
+            self.engine_->GetDeviceRemovedReason():DXGI_ERROR_DEVICE_REMOVED;
     }
     static void APIENTRY report_error(void* shell,HRESULT hr) {
         report_device_error(*static_cast<Device*>(shell),hr);
@@ -177,15 +183,14 @@ public:
        bootstrap_(access.driver_entry,device.adapter->contract.luid,this,this,dispatch,
                   device.adapter->instance_policy) {
         services_={sizeof(services_),this,bind,unbind};
-        lock_ready_=InitializeCriticalSectionEx(&entry_lock_,0,0)!=FALSE;
     }
-    ~DeviceEngine(){if(lock_ready_)DeleteCriticalSection(&entry_lock_);}
     engine_ddi::DeviceContext* context() const noexcept {return context_;}
     QueueEngineRegistry* queues() const noexcept {return queues_.get();}
     RuntimeHeapImports* imports() const noexcept {return imports_.get();}
-    bool entered() const noexcept {return active_ && domain_.entered() && bootstrap_.entry()!=nullptr;}
+    bool entered() const noexcept {
+        return active_.load(std::memory_order_acquire) && domain_.entered() && bootstrap_.entry()!=nullptr;
+    }
     HRESULT open() noexcept {
-        if(!lock_ready_)return E_OUTOFMEMORY;
         bc250::umd::RuntimeDomain::Scope runtime(domain_);
         HostedInstanceBootstrap::Scope hosted(bootstrap_);
         if(!hosted.entered())return E_UNEXPECTED;
@@ -248,16 +253,17 @@ public:
         const bool closed=bootstrap_.closed();
         unsigned unresolved=dispatch_.discard_metadata();
         if(queue_bridge_)unresolved+=queue_bridge_->discard_metadata();
-        active_=false;
+        active_.store(false,std::memory_order_release);
+        const bool binding_failed=binding_failed_.load();
         std::fprintf(stderr,"d3d12-engine teardown instance_closed=%u binding_failed=%u unresolved=%u\n",
-            unsigned(closed),unsigned(binding_failed_),unresolved);std::fflush(stderr);
+            unsigned(closed),unsigned(binding_failed),unresolved);std::fflush(stderr);
         // Retain owner/code on uncertain unbind even if the engine discarded its instance.
-        return closed && !binding_failed_ && unresolved==0;
+        return closed && !binding_failed && unresolved==0;
     }
     void retain() noexcept {
         // Callback authority expires with the runtime Device. Keep storage/code
         // alive, but make any late callback fail before invoking that runtime.
-        active_=false;dispatch_.discard_metadata();
+        active_.store(false,std::memory_order_release);dispatch_.discard_metadata();
         if(imports_)imports_->discard_metadata();
         if(queue_bridge_)queue_bridge_->discard_metadata();
         ++adapter_.retained_engines;
@@ -266,6 +272,29 @@ public:
             reinterpret_cast<LPCWSTR>(&stage),&pinned);
         stage("Owner-retained",E_UNEXPECTED);
     }
+#ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+    HRESULT host_test_open(VkPhysicalDevice physical,VkDevice device) noexcept {
+        bc250::umd::RuntimeDomain::Scope runtime(domain_);
+        HostedInstanceBootstrap::Scope hosted(bootstrap_);
+        if(!hosted.entered())return E_UNEXPECTED;
+        auto create=reinterpret_cast<PFN_vkCreateInstance>(hosted.entry()(VK_NULL_HANDLE,"vkCreateInstance"));
+        VkInstanceCreateInfo info{};info.sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        VkInstance instance{};
+        if(!create || create(&info,nullptr,&instance)!=VK_SUCCESS || !instance || instance!=bootstrap_.instance())
+            return E_FAIL;
+        imports_.reset(new(std::nothrow) RuntimeHeapImports(device_,domain_,physical,device,instance,hosted.entry(),this));
+        if(!imports_)return E_OUTOFMEMORY;
+        return imports_->initialize();
+    }
+    void host_test_destroy_instance() noexcept {
+        bc250::umd::RuntimeDomain::Scope runtime(domain_);
+        HostedInstanceBootstrap::Scope hosted(bootstrap_);
+        const VkInstance instance=bootstrap_.instance();
+        if(!hosted.entered() || !instance)return;
+        auto destroy=reinterpret_cast<PFN_vkDestroyInstance>(hosted.entry()(instance,"vkDestroyInstance"));
+        if(destroy)destroy(instance,nullptr);
+    }
+#endif
 };
 HRESULT create_device_engine(Device& device) noexcept {
     if(device.engine)return E_UNEXPECTED;
@@ -292,18 +321,40 @@ void report_device_error(Device& device,HRESULT hr) noexcept {
     stage("DDI-error",hr);
     if(hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_HUNG || hr==DXGI_ERROR_DEVICE_RESET || hr==D3DDDIERR_DEVICEREMOVED)
         device.lost.store(true);
+    // Reported on every failing call, also after the loss (see Device::remove).
     if(device_engine_entered(device) && device.callbacks.pfnSetErrorCb)device.callbacks.pfnSetErrorCb(device.runtime,hr);
 }
+// Every field this reads is either immutable while the device lives (device.engine, the domain and the
+// bootstrap) or per thread (the three scopes), so entries of one device on several threads do not wait
+// for each other here.
 DeviceEngineScope::DeviceEngineScope(Device& device) noexcept {
     auto owner=device.engine;
-    if(!owner || !owner->active_ || !owner->lock_ready_ || (current_ && current_!=owner))return;
-    EnterCriticalSection(&owner->entry_lock_);
+    if(!owner || !owner->active_.load(std::memory_order_acquire) || (current_ && current_!=owner))return;
     runtime_.emplace(owner->domain_);hosted_.emplace(owner->bootstrap_);
-    if(!hosted_->entered()){hosted_.reset();runtime_.reset();LeaveCriticalSection(&owner->entry_lock_);return;}
+    if(!hosted_->entered()){hosted_.reset();runtime_.reset();return;}
     owner_=owner;previous_=current_;current_=owner;
 }
 DeviceEngineScope::~DeviceEngineScope() noexcept {
     if(!owner_)return;
-    hosted_.reset();runtime_.reset();current_=previous_;LeaveCriticalSection(&owner_->entry_lock_);
+    hosted_.reset();runtime_.reset();current_=previous_;
 }
+#ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+HRESULT host_test_open_device_engine(Device& device,PFN_vkGetInstanceProcAddr icd,VkPhysicalDevice physical,
+                                     VkDevice vk_device) noexcept {
+    if(device.engine || !device.adapter || !icd)return E_UNEXPECTED;
+    AdapterEngineAccess access{};access.driver_entry=icd;
+    auto owner=new(std::nothrow) DeviceEngine(device,access);if(!owner)return E_OUTOFMEMORY;
+    device.engine=owner;
+    const HRESULT result=owner->host_test_open(physical,vk_device);
+    if(result!=S_OK)(void)host_test_close_device_engine(device);
+    return result;
+}
+bool host_test_close_device_engine(Device& device) noexcept {
+    auto owner=device.engine;if(!owner)return false;
+    owner->host_test_destroy_instance();
+    const bool closed=owner->close();
+    if(closed)delete owner;else owner->retain();
+    device.engine=nullptr;return closed;
+}
+#endif
 }

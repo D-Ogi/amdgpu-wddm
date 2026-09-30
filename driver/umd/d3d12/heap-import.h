@@ -3,11 +3,18 @@
 #include "engine-ddi/engine-ddi.h"
 #include "../dxvk/runtime-domain.h"
 #include "paging.h"
+#include <atomic>
 namespace native12 {
 struct Device;
-// Calls require the owner's serialized DeviceScope, including hosted GIPA and
-// RuntimeDomain scopes. No callback or Vulkan destruction runs in the destructor.
-// Where the latest allocate() ended, for the diagnostic trace: the stage that returned, not a cause.
+// Calls run inside the owner's DeviceScope, including hosted GIPA and RuntimeDomain scopes, on any
+// number of the device's DDI threads at once. lock_ guards the record list and every record's flags
+// and is a leaf: no runtime callback, Vulkan call or paging operation runs under it. A record in a
+// callback is busy; a record being released belongs to the releasing thread, whose own re-entrant
+// Unlock2 (RADV's vkFreeMemory) is still admitted. The paging queue is created once, on first use,
+// under its own lock (the one lock held across a runtime callback: CreatePagingQueueCb, a kernel
+// call that does not enter this module). No callback or Vulkan destruction runs in the destructor.
+// Where the latest allocate() of the calling thread ended, for the diagnostic trace: the stage that
+// returned, not a cause.
 enum class ImportStage : uint32_t {
     Done,Request,Surface,Probe,MemoryType,PagingQueue,AllocateCallback,Map,MapReady,AddressAlignment,Import,
     Resident                                    // appended: trace values of the others stay as they were
@@ -29,8 +36,11 @@ struct ImportReport {
 };
 class RuntimeHeapImports final {
     struct Record;
-    ImportReport report_{};
-    FreeReport free_report_{};
+    // Per thread: its caller reads a report right after the call that wrote it, on the same thread.
+    inline static thread_local ImportReport report_{};
+    inline static thread_local FreeReport free_report_{};
+    // The owner scope of the calling thread: the imports whose resource DDI runs on it, if any.
+    inline static thread_local const RuntimeHeapImports* scope_owner_{};
     D3D12DDI_HRTDEVICE runtime_{};
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 callbacks_{};
     D3DDDI_DEVICECALLBACKS kernel_{};
@@ -47,10 +57,14 @@ class RuntimeHeapImports final {
     PFN_vkCreateBuffer create_buffer_{};
     PFN_vkDestroyBuffer destroy_buffer_{};
     PFN_vkGetBufferMemoryRequirements requirements_{};
+    mutable SRWLOCK lock_=SRWLOCK_INIT;         // records_ and the records' flags
+    SRWLOCK paging_open_lock_=SRWLOCK_INIT;     // the first allocate() opens the paging queue
     Record* records_{};
-    bool active_{true},initialized_{},paging_open_{},owner_scope_{};
-    Record* find(D3DKMT_HANDLE) const noexcept;
+    std::atomic<bool> active_{true},paging_open_{};
+    bool initialized_{};
+    Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
     HRESULT release(Record&) noexcept;
+    HRESULT release_owned(Record&,VkDeviceMemory) noexcept;
     void erase(Record*) noexcept;
 public:
     RuntimeHeapImports(Device&,bc250::umd::RuntimeDomain&,VkPhysicalDevice,VkDevice,
@@ -63,12 +77,13 @@ public:
     const ImportReport& last_report() const noexcept {return report_;}
     const FreeReport& last_free_report() const noexcept {return free_report_;}
     HRESULT free(const engine_ddi::ImportedMemory*) noexcept;
-    // The owner scope: the span of one pfnCreateHeapAndResource or pfnDestroyHeapAndResource. Only
-    // inside it may a linear primary be released, by its runtime resource: one created in this span,
-    // or the one the span destroys (its allocation handle, 0 for any other resource). Leaving the
-    // span takes the authority from every record, whatever happened inside. Spans do not nest: a
-    // second begin while one is open is refused (false) and changes nothing, and only the caller
-    // whose begin was admitted may end.
+    // The owner scope: the span of one pfnCreateHeapAndResource or pfnDestroyHeapAndResource, on the
+    // thread that runs it. Only inside it, and on that thread, may a linear primary be released, by its
+    // runtime resource: one created in this span, or the one the span destroys (its allocation handle,
+    // 0 for any other resource). Leaving the span takes the authority from every record it gave one,
+    // whatever happened inside. Spans of different threads run at once, as their DDIs do (resource
+    // creation is free-threaded). Spans do not nest on one thread: a second begin while one is open
+    // there is refused (false) and changes nothing, and only the caller whose begin was admitted may end.
     bool begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept;
     void end_owner_scope() noexcept;
     // Only these two operations are provided for RADV's borrowed allocation map.

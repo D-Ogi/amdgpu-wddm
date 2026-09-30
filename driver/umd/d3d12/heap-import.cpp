@@ -16,25 +16,40 @@ HRESULT from_vk(VkResult r) noexcept {
     return E_FAIL;
 }
 }
+// The creating thread owns allocation, mapping and imported until the record is handed to the engine
+// (retired false); after that only the releasing thread touches them. The flags below next are read and
+// written under lock_, and so is the handle other threads look the record up by.
 struct RuntimeHeapImports::Record {
     RuntimeAllocation allocation;
     GpuMapping mapping;
     engine_ddi::ImportedMemory imported{};
     Record* next{};
+    D3DKMT_HANDLE handle{};                     // allocation.handle(), published once it exists
     bool retired{true},locked{},busy{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it as backing
     bool surface{};                             // the allocation of a linear primary
-    bool authority{};                           // its runtime resource's DDI is running
+    DWORD authority{};                          // the thread whose runtime resource DDI runs (0: none)
     bool destroyed{};                           // that DDI destroys the resource
+    DWORD releasing{};                          // the thread inside release() (0: none)
     Record(D3D12DDI_HRTDEVICE d,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb):allocation(d,cb) {}
 };
+namespace {
+class Exclusive final {
+    SRWLOCK& lock_;
+public:
+    explicit Exclusive(SRWLOCK& lock) noexcept:lock_(lock) {AcquireSRWLockExclusive(&lock_);}
+    ~Exclusive() {ReleaseSRWLockExclusive(&lock_);}
+    Exclusive(const Exclusive&)=delete;
+    Exclusive& operator=(const Exclusive&)=delete;
+};
+}
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
     VkPhysicalDevice physical,VkDevice device,VkInstance instance,PFN_vkGetInstanceProcAddr gipa,void* identity) noexcept
     :runtime_(d.runtime),callbacks_(d.callbacks),kernel_(d.kernel_callbacks),domain_(domain),
      paging_(d.runtime,d.kernel_callbacks),physical_(physical),device_(device),instance_(instance),gipa_(gipa),identity_(identity) {}
 RuntimeHeapImports::~RuntimeHeapImports(){discard_metadata();}
 HRESULT RuntimeHeapImports::initialize() noexcept {
-    if(!active_ || !domain_.entered())return E_UNEXPECTED;
+    if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
     if(initialized_)return S_OK;
     if(!runtime_.handle || !physical_ || !device_ || !instance_ || !gipa_ || !identity_)return E_INVALIDARG;
     auto props=reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties>(gipa_(instance_,"vkGetPhysicalDeviceMemoryProperties"));
@@ -52,61 +67,96 @@ HRESULT RuntimeHeapImports::initialize() noexcept {
 }
 RuntimeHeapImports::Record* RuntimeHeapImports::find(D3DKMT_HANDLE handle) const noexcept {
     if(!handle)return nullptr;
-    for(auto r=records_;r;r=r->next)if(r->allocation.handle()==handle)return r;
+    for(auto r=records_;r;r=r->next)if(r->handle==handle)return r;
     return nullptr;
 }
 bool RuntimeHeapImports::owns_allocation(D3DKMT_HANDLE handle) const noexcept {
-    return active_ && domain_.entered() && find(handle)!=nullptr;
+    if(!active_.load() || !domain_.entered())return false;
+    AcquireSRWLockShared(&lock_);
+    const bool owned=find(handle)!=nullptr;
+    ReleaseSRWLockShared(&lock_);
+    return owned;
 }
 bool RuntimeHeapImports::borrow_backing(D3DKMT_HANDLE handle) noexcept {
-    if(!active_ || !domain_.entered())return false;
+    if(!active_.load() || !domain_.entered())return false;
+    Exclusive held(lock_);
     auto record=find(handle);
     if(!record || record->retired || record->busy || record->surface || !record->imported.memory)return false;
     ++record->borrowed;return true;
 }
 void RuntimeHeapImports::return_backing(D3DKMT_HANDLE handle) noexcept {
+    Exclusive held(lock_);
     if(auto record=find(handle);record && record->borrowed)--record->borrowed;
 }
 void RuntimeHeapImports::erase(Record* record) noexcept {
-    auto link=&records_;while(*link && *link!=record)link=&(*link)->next;
-    if(*link){*link=record->next;delete record;}
+    bool found=false;
+    {
+        Exclusive held(lock_);
+        auto link=&records_;while(*link && *link!=record)link=&(*link)->next;
+        if(*link){*link=record->next;found=true;}
+    }
+    if(found)delete record;
 }
+// The record is retired and not in a callback. The calling thread takes it for the release (free()
+// may have done so already, under the same hold that retired it); on failure it gives it back, on
+// success the caller erases it.
 HRESULT RuntimeHeapImports::release(Record& record) noexcept {
-    free_report_.surface=record.surface;
-    if(!record.retired || record.busy)return E_UNEXPECTED;
+    const DWORD self=GetCurrentThreadId();
+    VkDeviceMemory memory=VK_NULL_HANDLE;
+    {
+        Exclusive held(lock_);
+        free_report_.surface=record.surface;
+        if(!record.retired || record.busy || (record.releasing && record.releasing!=self))return E_UNEXPECTED;
+        record.releasing=self;memory=record.imported.memory;record.imported.memory=VK_NULL_HANDLE;
+    }
+    const HRESULT hr=release_owned(record,memory);
+    if(hr!=S_OK){Exclusive held(lock_);record.releasing=0;}
+    return hr;
+}
+HRESULT RuntimeHeapImports::release_owned(Record& record,VkDeviceMemory memory) noexcept {
     // Engine objects and uses have retired before free() reaches this point; a record of a failed
     // construction was never used. Every release below therefore carries the proof of retirement.
-    // RADV may call Unlock2 from vkFreeMemory; keep the allocation record live.
+    // RADV may call Unlock2 from vkFreeMemory, on this thread; keep the allocation record live.
     free_report_.stage=FreeStage::VulkanFree;
-    if(record.imported.memory){free_(device_,record.imported.memory,nullptr);record.imported.memory=VK_NULL_HANDLE;}
-    if(record.locked)return E_UNEXPECTED;
+    if(memory)free_(device_,memory,nullptr);
+    bool locked=false;
+    {Exclusive held(lock_);locked=record.locked;}
+    if(locked)return E_UNEXPECTED;
     free_report_.stage=FreeStage::Unmap;
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;
     if(record.surface){
-        // By the runtime resource, inside that resource's own DDI, or not at all: neither a saved
-        // owner in a later DDI nor the other form.
-        if(!record.authority || !record.allocation.owner_known()){free_report_.owner_expired=true;return kOwnerExpired;}
+        // By the runtime resource, inside that resource's own DDI and on its thread, or not at all:
+        // neither a saved owner in a later DDI nor the other form.
+        bool authorized=false;
+        {Exclusive held(lock_);authorized=record.authority==GetCurrentThreadId() && record.allocation.owner_known();}
+        if(!authorized){free_report_.owner_expired=true;return kOwnerExpired;}
         hr=record.allocation.close(ReleaseForm::Owner,Retirement::Retired);
     } else hr=record.allocation.close(ReleaseForm::Handle,Retirement::Retired);
     if(hr==S_OK)free_report_.stage=FreeStage::Done;
     return hr;
 }
 bool RuntimeHeapImports::begin_owner_scope(D3DKMT_HANDLE destroyed) noexcept {
-    if(!active_ || owner_scope_)return false;
-    owner_scope_=true;
-    if(auto record=find(destroyed);record && record->surface && record->allocation.owner_known()){
-        record->authority=true;record->destroyed=true;
+    if(!active_.load() || scope_owner_)return false;
+    scope_owner_=this;
+    const DWORD self=GetCurrentThreadId();
+    Exclusive held(lock_);
+    // Another thread's authority over the same record is never taken over.
+    if(auto record=find(destroyed);record && record->surface && record->allocation.owner_known() &&
+       (!record->authority || record->authority==self)){
+        record->authority=self;record->destroyed=true;
     }
     return true;
 }
 void RuntimeHeapImports::end_owner_scope() noexcept {
-    if(!owner_scope_)return;
-    owner_scope_=false;
+    if(scope_owner_!=this)return;
+    scope_owner_=nullptr;
+    const DWORD self=GetCurrentThreadId();
+    Exclusive held(lock_);
     for(auto record=records_;record;record=record->next){
-        if(!record->authority)continue;
-        record->authority=false;
+        if(record->authority!=self)continue;
+        record->authority=0;
         // A record still here after its resource's destruction, or after a creation that handed
         // nothing to the engine, has no runtime resource any more.
         if(record->destroyed || record->retired)record->allocation.revoke_owner();
@@ -115,7 +165,7 @@ void RuntimeHeapImports::end_owner_scope() noexcept {
 HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
     report_={};report_.stage=ImportStage::Request;
-    if(!active_ || !domain_.entered() || !initialized_)return E_UNEXPECTED;
+    if(!active_.load() || !domain_.entered() || !initialized_)return E_UNEXPECTED;
     if(!request || !out || request->size!=sizeof(*request) || !request->heap || request->reserved || request->reserved2 ||
        !request->byte_size || !request->alignment || (request->alignment&(request->alignment-1)))return E_INVALIDARG;
     const auto& heap=*request->heap;
@@ -203,12 +253,22 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         (properties_.memoryTypes[i].propertyFlags&want)==want){type=i;break;}
     if(type==UINT32_MAX)return E_INVALIDARG;
     report_.memory_type=type;report_.stage=ImportStage::PagingQueue;
-    if(!paging_open_){paging_open_=true;hr=paging_.open();if(hr!=S_OK)return hr;}
+    if(!paging_open_.load(std::memory_order_acquire)){
+        // Once, as before: a failed creation is not retried, and the calls after it fail at the map.
+        // A thread that finds the creation under way waits for it here.
+        HRESULT opened=S_OK;
+        AcquireSRWLockExclusive(&paging_open_lock_);
+        if(!paging_open_.load(std::memory_order_relaxed)){opened=paging_.open();paging_open_.store(true,std::memory_order_release);}
+        ReleaseSRWLockExclusive(&paging_open_lock_);
+        if(opened!=S_OK)return opened;
+    }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
-    record->next=records_;records_=record;record->busy=true;
-    record->surface=surface;record->authority=surface && owner_scope_;
+    record->busy=true;record->surface=surface;
+    record->authority=surface && scope_owner_==this?GetCurrentThreadId():0;
+    {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;
-    hr=record->allocation.open(allocation.args);record->busy=false;
+    hr=record->allocation.open(allocation.args);
+    {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
     if(hr==S_OK){report_.stage=ImportStage::Map;hr=paging_.map(record->allocation.handle(),allocation.held,record->mapping);}
     // The runtime makes a new heap resident only after this DDI returns, on its own paging queue,
     // and makes only its queues' contexts wait for that. The engine also submits on contexts the
@@ -232,11 +292,15 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         flags.flags=VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;flags.pNext=&host;
         VkMemoryAllocateInfo info{};info.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;info.pNext=&flags;
         info.allocationSize=host.size;info.memoryTypeIndex=type;
-        hr=from_vk(allocate_(device_,&info,nullptr,&record->imported.memory));
-        if(hr==S_OK && !record->imported.memory)hr=E_UNEXPECTED;
-        if(hr==S_OK){record->imported={sizeof(engine_ddi::ImportedMemory),type,record->imported.memory,
-            host.size,host.allocation,0,address,record};record->retired=false;*out=record->imported;
-            report_.stage=ImportStage::Done;return S_OK;}
+        VkDeviceMemory imported=VK_NULL_HANDLE;
+        hr=from_vk(allocate_(device_,&info,nullptr,&imported));
+        if(hr==S_OK && !imported)hr=E_UNEXPECTED;
+        if(hr==S_OK){
+            Exclusive held(lock_);
+            record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
+            record->retired=false;*out=record->imported;
+            report_.stage=ImportStage::Done;return S_OK;
+        }
     }
     // Failed construction transfers nothing to engine-ddi. Pending mapping and
     // cleanup failures remain owned for an explicit later close, never forgotten.
@@ -245,50 +309,84 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
 }
 HRESULT RuntimeHeapImports::free(const engine_ddi::ImportedMemory* memory) noexcept {
     free_report_={};free_report_.stage=FreeStage::Request;
-    if(!active_ || !domain_.entered())return E_UNEXPECTED;
+    if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
     if(!memory || memory->size!=sizeof(*memory))return E_INVALIDARG;
     free_report_.stage=FreeStage::Record;
-    auto record=find(memory->allocation);
-    if(!record || record!=memory->cookie || record->retired || record->imported.memory!=memory->memory ||
-       record->imported.byte_size!=memory->byte_size || record->imported.gpu_va!=memory->gpu_va)return E_INVALIDARG;
-    // A runtime callback that names this import as backing is in flight below this call.
-    if(record->borrowed)return E_PENDING;
-    record->retired=true;HRESULT hr=release(*record);if(hr==S_OK)erase(record);return hr;
+    Record* record=nullptr;
+    {
+        Exclusive held(lock_);
+        record=find(memory->allocation);
+        if(!record || record!=memory->cookie || record->retired || record->imported.memory!=memory->memory ||
+           record->imported.byte_size!=memory->byte_size || record->imported.gpu_va!=memory->gpu_va)return E_INVALIDARG;
+        // A runtime callback that names this import as backing, or its own Lock2/Unlock2 on another
+        // thread, is in flight: retiring it now would leave it taken for a release that release() refuses.
+        if(record->borrowed || record->busy)return E_PENDING;
+        // Retired and taken for the release in one hold: no other thread's call starts on it in between.
+        record->retired=true;record->releasing=GetCurrentThreadId();
+    }
+    HRESULT hr=release(*record);if(hr==S_OK)erase(record);return hr;
 }
 HRESULT RuntimeHeapImports::dispatch(uint32_t op,void* argument) noexcept {
-    if(!active_ || !domain_.entered())return E_UNEXPECTED;
+    if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
     if(!argument)return E_INVALIDARG;
+    const DWORD self=GetCurrentThreadId();
     if(op==BC250_HOST_Lock2){
-        auto& a=*static_cast<D3DKMT_LOCK2*>(argument);auto record=find(a.hAllocation);
-        if(!record || record->busy || record->locked || !kernel_.pfnLock2Cb)return E_INVALIDARG;
+        auto& a=*static_cast<D3DKMT_LOCK2*>(argument);
+        Record* record=nullptr;
+        {
+            Exclusive held(lock_);
+            record=find(a.hAllocation);
+            if(!record || record->busy || record->locked || (record->releasing && record->releasing!=self) ||
+               !kernel_.pfnLock2Cb)return E_INVALIDARG;
+            record->busy=true;
+        }
         D3DDDICB_LOCK2 b{};b.hAllocation=a.hAllocation;b.Flags.Value=a.Flags.Value;
-        record->busy=true;HRESULT hr=kernel_.pfnLock2Cb(runtime_.handle,&b);record->busy=false;
-        if(hr==S_OK){record->locked=true;a.pData=b.pData;if(!b.pData)return E_UNEXPECTED;}return hr;
+        HRESULT hr=kernel_.pfnLock2Cb(runtime_.handle,&b);
+        {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->locked=true;}
+        if(hr==S_OK){a.pData=b.pData;if(!b.pData)return E_UNEXPECTED;}return hr;
     }
     if(op==BC250_HOST_Unlock2){
-        auto& a=*static_cast<D3DKMT_UNLOCK2*>(argument);auto record=find(a.hAllocation);
-        if(!record || record->busy || !record->locked || !kernel_.pfnUnlock2Cb)return E_INVALIDARG;
+        auto& a=*static_cast<D3DKMT_UNLOCK2*>(argument);
+        Record* record=nullptr;
+        {
+            Exclusive held(lock_);
+            record=find(a.hAllocation);
+            if(!record || record->busy || !record->locked || (record->releasing && record->releasing!=self) ||
+               !kernel_.pfnUnlock2Cb)return E_INVALIDARG;
+            record->busy=true;
+        }
         D3DDDICB_UNLOCK2 b{};b.hAllocation=a.hAllocation;
-        record->busy=true;HRESULT hr=kernel_.pfnUnlock2Cb(runtime_.handle,&b);record->busy=false;
+        HRESULT hr=kernel_.pfnUnlock2Cb(runtime_.handle,&b);
+        Exclusive held(lock_);record->busy=false;
         if(hr==S_OK)record->locked=false;return hr;
     }
     return E_NOTIMPL;
 }
+// Device teardown: the runtime has ended every other entry of this device, so the walk below and the
+// paging queue's destruction meet no other thread. The record hold is still taken where flags are read.
 HRESULT RuntimeHeapImports::close_after_engine_retirement() noexcept {
-    if(!active_ || !domain_.entered())return E_UNEXPECTED;
+    if(!active_.load() || !domain_.entered())return E_UNEXPECTED;
     HRESULT result=S_OK;
-    for(auto record=records_;record;){auto next=record->next;
-        if(!record->retired)result=E_PENDING;
+    Record* record=nullptr;
+    {Exclusive held(lock_);record=records_;}
+    while(record){
+        Record* next=nullptr;bool retired=false;
+        {Exclusive held(lock_);next=record->next;retired=record->retired;}
+        if(!retired)result=E_PENDING;
         else {HRESULT hr=release(*record);if(hr==S_OK)erase(record);else result=hr;}
         record=next;
     }
-    if(records_)return result==S_OK?E_PENDING:result;
-    HRESULT hr=paging_.close();if(hr==S_OK)paging_open_=false;return hr;
+    bool remaining=false;
+    {Exclusive held(lock_);remaining=records_!=nullptr;}
+    if(remaining)return result==S_OK?E_PENDING:result;
+    HRESULT hr=paging_.close();if(hr==S_OK)paging_open_.store(false);return hr;
 }
 unsigned RuntimeHeapImports::discard_metadata() noexcept {
-    active_=false;unsigned count=paging_open_?1u:0u;paging_open_=false;
+    active_.store(false);unsigned count=paging_open_.exchange(false)?1u:0u;
     paging_.invalidate_runtime();runtime_={};callbacks_={};kernel_={};
-    while(records_){auto record=records_;records_=record->next;
+    Record* records=nullptr;
+    {Exclusive held(lock_);records=records_;records_=nullptr;}
+    while(records){auto record=records;records=record->next;
         if(record->allocation.handle() || record->imported.memory)++count;
         record->allocation.invalidate_runtime();delete record;}
     return count;

@@ -202,6 +202,8 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     const D3D12DDIARG_PRESENT_0001* args,D3D12DDI_PRESENT_0051* result,
     D3D12DDI_PRESENT_CONTEXTS_0051* contexts,D3D12DDI_PRESENT_HWQUEUES_0051* queues) {
     const auto device=EntryPolicy::resolve(list);
+    // A queue operation: its context must not be executing on another thread (QueueDomainScope).
+    QueueDomainScope serial(device);
     unsigned stage=1;
     // Every output given is zero before anything is validated, and again after a refusal.
     if(result)*result={};if(contexts)*contexts={};if(queues)*queues={};

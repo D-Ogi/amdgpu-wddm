@@ -25,9 +25,16 @@ struct HostedDispatchHooks {
     HostedReturn give_back{};
 };
 
-// Device-lifetime owner for internal ICD allocations. The caller serializes
-// calls, stops engine workers before destruction, and enters domain on the DDI
-// thread around every engine operation. Domain is permission, not a lock.
+// Device-lifetime owner for internal ICD allocations. Callbacks arrive on every DDI thread of the
+// device at once; each one runs in its own thread's entered domain (permission, not a lock). lock_
+// guards the lists, their records and the contexts, and is a leaf: it is never held across a runtime
+// callback, a hook or the error report. A record that a callback names is marked (busy, borrowed)
+// under the lock before the callback and released under it afterwards. A busy record (its own create
+// or destroy in flight) refuses every other call, as a re-entrant one always was; a borrowed record
+// admits further borrows and refuses its destruction, and the release of an allocation's address,
+// until they return. The one lock taken under lock_ is the heap
+// imports' own leaf lock, through hooks_.borrow and hooks_.give_back. The owner stops engine workers
+// before destruction and calls discard_metadata only after every call has returned.
 // No destructor callback, KMT fallback, fabricated runtime queue, or successful
 // response for an unsupported operation. Internal KT callbacks take hRTDevice;
 // application queue hooks must use their real runtime queue ownership.
@@ -44,23 +51,33 @@ class HostedDispatch final {
     D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 user_{};
     D3DDDI_DEVICECALLBACKS kernel_{};
     HostedDispatchHooks hooks_{};
+    SRWLOCK lock_=SRWLOCK_INIT;
+    // Under lock_ from here to paging_busy_.
     Allocation* allocations_{};
     Reservation* reservations_{};
     Sync* syncs_{};
     Sync* find_sync(D3DKMT_HANDLE handle) noexcept;
-    struct Context {HANDLE handle{};uint32_t token{};bool busy{};bc250_host_progress progress{};};
+    // busy: its own create or destroy callback is in flight. borrowed: callbacks that name it, made by
+    // user, the thread of the first one still in flight (for the HCONTEXT note in hosted-dispatch.cpp).
+    struct Context {HANDLE handle{};uint32_t token{};bool busy{};unsigned borrowed{};DWORD user{};
+                    bc250_host_progress progress{};};
     Context contexts_[16]{};
     uint32_t next_context_{};
     bc250_host_paging paging_{};
+    bool paging_busy_{};                        // the paging queue's create or destroy is in flight
     Context* context(uint32_t token) noexcept;
     HRESULT internal_queue(uint32_t op,void* argument) noexcept;
     std::atomic<bool> lost_{false};
-    bool active_{true};
+    std::atomic<bool> active_{true};
     Allocation* find(D3DKMT_HANDLE handle) noexcept;
     Reservation* containing(UINT64 base,UINT64 bytes) noexcept;
     bool owned(UINT64 base,UINT64 bytes,const void* except) const noexcept;
+    // Under lock_. An internal allocation is held by its record; another owner's by hooks_.
     bool borrow(D3DKMT_HANDLE handle) noexcept;
     void give_back(D3DKMT_HANDLE handle) noexcept;
+    void unlink(Allocation*) noexcept;
+    void unlink(Reservation*) noexcept;
+    void unlink(Sync*) noexcept;
     HRESULT update(void* argument) noexcept;
     HRESULT operation(uint32_t op,void* argument) noexcept;
     HRESULT remove_device(int site=__builtin_LINE()) noexcept;

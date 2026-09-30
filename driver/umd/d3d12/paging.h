@@ -2,6 +2,7 @@
 #pragma once
 #include <windows.h>
 #include <d3d12umddi.h>
+#include <atomic>
 #include <cstdint>
 namespace native12 {
 class PagingDomain;
@@ -17,8 +18,12 @@ public:
     GpuMapping(const GpuMapping&)=delete;
     GpuMapping& operator=(const GpuMapping&)=delete;
 };
-// Calls must be serialized inside live device DDI scope. No worker/destructor
-// callbacks. Mapping alone does not establish residency: a mapping of an allocation
+// Calls run inside a live device DDI scope, on any number of threads at once for different
+// mappings: map, make_resident, ready, wait_ready, address_for_context and unmap touch the given
+// mapping and only the domain's two counters, which are atomic. One mapping belongs to one caller at a
+// time. open, close and invalidate_runtime are the owner's to serialize against everything else (the
+// heap imports open the queue once under their own lock and close it at device teardown). No
+// worker/destructor callbacks. Mapping alone does not establish residency: a mapping of an allocation
 // that is not resident yet has no valid page table entries until VidMm commits it
 // (trial 153: a GPU job wrote such a range 2 ms after its map fence, bugcheck 0x116).
 // make_resident() takes this domain's own residency reference on the same paging
@@ -35,10 +40,10 @@ class PagingDomain final {
     PFND3DDDI_WAITFORSYNCHRONIZATIONOBJECTFROMCPUCB wait_cpu_{};
     D3DKMT_HANDLE queue_{},sync_{};
     const volatile UINT64* completed_{};
-    unsigned mappings_{};
-    unsigned evict_failures_{};
+    std::atomic<unsigned> mappings_{};
+    std::atomic<unsigned> evict_failures_{};
 public:
-    unsigned evict_failures() const noexcept {return evict_failures_;}
+    unsigned evict_failures() const noexcept {return evict_failures_.load();}
     PagingDomain(D3D12DDI_HRTDEVICE device,const D3DDDI_DEVICECALLBACKS& cb) noexcept
         : device_(device.handle),create_(cb.pfnCreatePagingQueueCb),destroy_(cb.pfnDestroyPagingQueueCb),
           map_(cb.pfnMapGpuVirtualAddressCb),free_(cb.pfnFreeGpuVirtualAddressCb),
@@ -172,7 +177,7 @@ public:
         return hr;
     }
     HRESULT close() noexcept {
-        if(mappings_) return E_PENDING;
+        if(mappings_.load()) return E_PENDING;
         if(!queue_) return S_OK;
         if(!destroy_) return E_UNEXPECTED;
         D3DDDI_DESTROYPAGINGQUEUE args{};args.hPagingQueue=queue_;

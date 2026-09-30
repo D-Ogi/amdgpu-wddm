@@ -114,6 +114,11 @@ try {
   if($LASTEXITCODE){throw 'Hosted queue test build failed'}
   & .\hosted-queue-test.exe
   if($LASTEXITCODE){throw 'Hosted queue tests failed'}
+  # One device, several DDI threads at once: scopes, hosted callbacks and heap imports (no GPU).
+  & cl.exe @flags /DAMDGPU_WDDM_D3D12_HOST_TEST /Fe:entry-concurrency-test.exe "$repo\driver\umd\d3d12\entry-concurrency-test.cpp" "$repo\driver\umd\d3d12\device-engine.cpp" "$repo\driver\umd\d3d12\adapter-caps.cpp" "$repo\driver\umd\d3d12\hosted-dispatch.cpp" "$repo\driver\umd\d3d12\hosted-queue.cpp" "$repo\driver\umd\d3d12\queue-engine.cpp" "$repo\driver\umd\d3d12\heap-import.cpp" $engineLib
+  if($LASTEXITCODE){throw 'Entry concurrency test build failed'}
+  & .\entry-concurrency-test.exe
+  if($LASTEXITCODE){throw 'Entry concurrency tests failed'}
   & cl.exe @flags /Fe:heap-import-test.exe "$repo\driver\umd\d3d12\heap-import.cpp" "$repo\driver\umd\d3d12\heap-import-test.cpp"
   if($LASTEXITCODE){throw 'heap-import test build failed'}
   & .\heap-import-test.exe

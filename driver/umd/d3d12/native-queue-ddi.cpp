@@ -32,6 +32,7 @@ HRESULT APIENTRY native_queue_create(D3D12DDI_HDEVICE h, const D3D12DDIARG_CREAT
     if (!args || !slot_of(queue)) return E_INVALIDARG;
     HRESULT hr = device_status(h); if (hr != S_OK) return hr;
     auto& device = *static_cast<Device*>(h.pDrvPrivate);
+    QueueDomainScope serial(&device);
     auto registry = engine_queues(device);
     if (!engine_context(device) || !registry) return E_UNEXPECTED;
     { ContextRequest probe; hr = probe.prepare(*args); if (hr != S_OK) return hr; }
@@ -44,6 +45,7 @@ void APIENTRY native_queue_destroy(D3D12DDI_HDEVICE h, D3D12DDI_HCOMMANDQUEUE qu
     auto slot = slot_of(queue);
     if (!h.pDrvPrivate || !slot) return;
     auto& device = *static_cast<Device*>(h.pDrvPrivate);
+    QueueDomainScope serial(&device);
     auto registry = engine_queues(device);
     if (slot->owner != &device || !registry || !registry->owns(*slot)) { device.remove(); return; }
     const HRESULT hr = registry->destroy(*slot);
@@ -55,6 +57,7 @@ void APIENTRY native_queue_destroy(D3D12DDI_HDEVICE h, D3D12DDI_HCOMMANDQUEUE qu
 void APIENTRY native_execute(D3D12DDI_HCOMMANDQUEUE h, UINT count, const D3D12DDI_HCOMMANDLIST* lists) {
     auto device = resolve_queue_device(h);
     if (!device) { queue_failure(h); return; }
+    QueueDomainScope serial(device);
     const HRESULT hr = engine_queues(*device)->execute(*slot_of(h), count, lists);
     if (hr != S_OK) device->remove();
 }
@@ -88,6 +91,7 @@ void APIENTRY native_update_tiles(D3D12DDI_HCOMMANDQUEUE h, D3D12DDI_HRESOURCE r
     const UINT* heap_range_starts, const UINT* range_tile_counts, D3D12DDI_TILE_MAPPING_FLAGS flags) {
     auto device = resolve_queue_device(h);
     if (!device) { queue_failure(h); return; }
+    QueueDomainScope serial(device);
     const HRESULT hr = engine_queues(*device)->update_tiles(*slot_of(h), resource, region_count, region_starts,
         region_sizes, heap, range_count, range_flags, heap_range_starts, range_tile_counts, flags);
     if (hr != S_OK) device->remove();
@@ -98,6 +102,7 @@ void APIENTRY native_copy_tiles(D3D12DDI_HCOMMANDQUEUE h, D3D12DDI_HRESOURCE dst
     D3D12DDI_TILE_MAPPING_FLAGS flags) {
     auto device = resolve_queue_device(h);
     if (!device) { queue_failure(h); return; }
+    QueueDomainScope serial(device);
     const HRESULT hr = engine_queues(*device)->copy_tiles(*slot_of(h), dst, dst_start, src, src_start, size, flags);
     if (hr != S_OK) device->remove();
 }
