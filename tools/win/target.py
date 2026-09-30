@@ -204,8 +204,11 @@ class Target:
         return argv
 
     def ssh(self, remote_command, timeout=120, binary=False, stdin=None, options=()):
+        # Text output is decoded leniently: a game title with a curly apostrophe (byte 0x83 in the console
+        # code page) once killed the reader thread and left stdout None (2026-09-30).
+        text_options = {} if binary else {"encoding": "utf-8", "errors": "replace"}
         done = subprocess.run(self.ssh_argv(remote_command, options),
-                              input=stdin, capture_output=True, text=not binary, timeout=timeout)
+                              input=stdin, capture_output=True, text=not binary, timeout=timeout, **text_options)
         if done.returncode == 255 and self.cached_age is not None:
             # ssh's own failure (not the remote command's) on an address the cache vouched for: the next
             # invocation probes again. No automatic retry here: the command may not be repeatable.
@@ -257,6 +260,10 @@ class Target:
 
 
 def main(argv):
+    # Remote text may carry characters the console code page cannot show; never die on them.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     if not argv:
         sys.exit(__doc__)
     cmd, args = argv[0], argv[1:]
