@@ -29,8 +29,12 @@ try {
  # /O2: the DLL and its host gates are optimised builds (until 2026-09-30 the line had no /O flag, so cl.exe
  # compiled at /Od; trial 164 attributed 4.3 ms/frame to scope bookkeeping alone).
  # /GL (whole-program optimisation, the linker runs LTCG on /GL objects) and /arch:AVX2 (the BC-250's Zen 2
- # and the development PC both have it) are the strongest level MSVC offers; there is no /O3 in cl.exe.
- $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2','/external:W0','/MT','/DNOMINMAX',"/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ # and the development PC both have it) are the strongest level MSVC offers; there is no /O3 in cl.exe. Both
+ # are withdrawn since 2026-09-30 until the game route renders clean twice on the /O2-only build: the only
+ # /O2 /GL /arch:AVX2 game run (trial 171, adapter100) corrupted the player character with no error, and
+ # the review (scratch/m15/entry-lock/CORRUPTION-ANALYSIS.md, local) found no cause; /O2 carries the measured
+ # gain, the other two have none measured in a forwarding layer. They return one at a time with a measurement.
+ $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/external:W0','/MT','/DNOMINMAX',"/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){
