@@ -26,7 +26,9 @@ try {
  $env:TEMP=$OutputDir;$env:TMP=$OutputDir
  $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
- $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/external:W0','/MT','/DNOMINMAX',"/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
+ # /O2: the DLL and its host gates are optimised builds (until 2026-09-30 the line had no /O flag, so cl.exe
+ # compiled at /Od; trial 164 attributed 4.3 ms/frame to scope bookkeeping alone).
+ $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/external:W0','/MT','/DNOMINMAX',"/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  Push-Location $OutputDir
  try {
   if(Test-Path amdgpu_wddm_d3d12.dll){

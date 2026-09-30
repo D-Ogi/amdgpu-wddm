@@ -17,7 +17,10 @@
 
 namespace {
 engine_ddi::DeviceContext* APIENTRY resolve(D3D12DDI_HDEVICE) { return nullptr; }
-engine_ddi::DeviceContext* APIENTRY other_resolve(D3D12DDI_HDEVICE) { return nullptr; }
+// A distinct body: with /O2 the linker folds identical functions (/OPT:ICF), and two resolvers with one
+// address would pass the engine's "one process-wide resolver" refusal this test relies on.
+unsigned other_resolve_calls;
+engine_ddi::DeviceContext* APIENTRY other_resolve(D3D12DDI_HDEVICE) { ++other_resolve_calls; return nullptr; }
 void APIENTRY present(D3D12DDI_HCOMMANDLIST, D3D12DDI_HCOMMANDQUEUE,
     const D3D12DDIARG_PRESENT_0001*, D3D12DDI_PRESENT_0051*, D3D12DDI_PRESENT_CONTEXTS_0051*, D3D12DDI_PRESENT_HWQUEUES_0051*) {}
 
