@@ -299,9 +299,9 @@ static int SetUp(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     // amdgpu's kernel log on unit A (E03 dmesg): "SE 2, SH per SE 2, CU per SH 10". Backends per SE is not in the log
     // and in no register amdgpu touched; it only scales a software mask (bc250_gfx.h). 2 is the value of every other
     // GC 10.1 part with this SE/SH layout; docs/linux-session-wishlist.md asks for the discovery table.
-    inputs.max_shader_engines = 2;
-    inputs.max_sh_per_se = 2;
-    inputs.max_cu_per_sh = 10;
+    inputs.max_shader_engines = BC250_SHADER_ENGINES;
+    inputs.max_sh_per_se = BC250_SH_PER_SE;
+    inputs.max_cu_per_sh = BC250_MAX_CU_PER_SH;    // cumode.h: the CU mode needs the same number
     inputs.max_backends_per_se = 2;
     inputs.async_gfx_ring = true;       // the trace: no CP_RB0 programming, a KIQ MAP_QUEUES for the gfx queue
     // Full WDDM uses AMD's no-GFXOFF startup policy until its power lifecycle

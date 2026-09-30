@@ -85,7 +85,13 @@ SEQUENCES = [
       ("GC", "mmSDMA0_FREEZE", "not traced: AMD queue quiescence, M370"),
       ("GC", "mmSDMA1_FREEZE", "not traced: AMD queue quiescence, M370"),
       ("GC", "mmSDMA0_STATUS1_REG", "not traced: AMD idle fallback, M370"),
-      ("GC", "mmSDMA1_STATUS1_REG", "not traced: AMD idle fallback, M370")]
+      ("GC", "mmSDMA1_STATUS1_REG", "not traced: AMD idle fallback, M370"),
+      # The CU mode (docs/design/cu-mode.md, driver/shim/bc250_cu_mode.c): amdgpu never touches the SPI's
+      # dispatch gate, the bc250-40cu-unlock reference writes it next to CC_GC_SHADER_ARRAY_CONFIG (already
+      # here from the trace). Written only when CuMode is 40, or to put back this boot's stock value. The RLC's
+      # always-on WGP mask is read, never written; RLC_PG_CNTL (traced) is read as the precondition of 40.
+      ("GC", "mmSPI_PG_ENABLE_STATIC_WGP_MASK", "not traced: CU mode dispatch gate, docs/design/cu-mode.md"),
+      ("GC", "mmRLC_PG_ALWAYS_ON_WGP_MASK", "not traced: CU mode observation, read only")]
      + VMID_PAGE_TABLE_BASE),
     # M6: navi10_ih_irq_init() on unit A, 0.252832 to 0.252845 s: the IH ring's registers, the dummy read address and
     # the bus master bit of the interrupt controller, the IH doorbell range. 19 accesses, nothing else in the window.

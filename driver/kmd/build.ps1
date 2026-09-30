@@ -92,7 +92,7 @@ $shimSources = @("$repo\driver\shim\shim.c", "$repo\driver\shim\bc250_gmc.c", "$
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
 # imported nvd.h is a signed int with bit 31 set (driver\shim\README.md).
 # M6: bc250_ih.c, the interrupt ring (navi10_ih.c), is in this group for its include path.
-$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_copy.c', 'bc250_sdma_paging.c', 'bc250_sdma_virtual_ptes.c', 'bc250_nbio.c', 'bc250_irq.c', 'bc250_ih.c', 'bc250_dispatch.c', 'bc250_clock.c', 'bc250_smu.c') | ForEach-Object { "$repo\driver\shim\$_" }
+$shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_sdma.c', 'bc250_sdma_copy.c', 'bc250_sdma_paging.c', 'bc250_sdma_virtual_ptes.c', 'bc250_nbio.c', 'bc250_irq.c', 'bc250_ih.c', 'bc250_dispatch.c', 'bc250_clock.c', 'bc250_smu.c', 'bc250_cu_mode.c') | ForEach-Object { "$repo\driver\shim\$_" }
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'

@@ -373,6 +373,12 @@ static void bc250_get_cu_tcc_info(struct amdgpu_device *adev)
 {
 	u32 i, j;
 
+	/* Not amdgpu: the BC-250 CU mode (bc250_cu_mode.h) writes the harvest and dispatch masks here,
+	 * inside get_cu_info and before its reads, which is where the unlock reference's patch writes
+	 * them. Only the miniport's startup sets the hook; a replay has none and sees upstream's stream. */
+	if (adev->gfx.cu_mode_hook)
+		adev->gfx.cu_mode_hook(adev, adev->gfx.cu_mode_ctx, bc250_select_se_sh);
+
 	/* gfx_v10_0.c:10115 gfx_v10_0_get_cu_info(): per SE/SA, read the shader-array config and the
 	 * RB config. The shim does not model the CU mask; what matters for the register stream is
 	 * that the same reads happen under the same GRBM_GFX_INDEX selections. */

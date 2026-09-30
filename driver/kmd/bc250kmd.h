@@ -50,6 +50,7 @@
 #include "smu.h"
 #include "start_health.h"
 #include "progress.h"
+#include "cumode.h"
 
 C_ASSERT(DXGKDDI_INTERFACE_VERSION == DXGKDDI_INTERFACE_VERSION_WDDM2_0);
 
@@ -101,6 +102,7 @@ typedef struct _BC250_VISIBILITY_EVENT {
 
 typedef struct _BC250_DEVICE {
     BC250_START_HEALTH_STATE StartHealth;
+    BC250_CU_MODE_STATE CuMode;        // cumode.c: 24 or 40 CUs, the boot guard, what the caps report
     volatile LONG RetainedPowerPhase; // 0 active, 1 suspending, 2 suspended, 3 restoring, 4 failed
     DEVICE_POWER_STATE RetainedDownState;
     POWER_ACTION RetainedDownAction;
@@ -265,6 +267,17 @@ void StartHealthDisplayLocked(BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Mod
 void StartHealthVisibilityLocked(BC250_DEVICE* Device, BOOLEAN Visible);
 void StartHealthCompleted(BC250_DEVICE* Device, ULONG Sequence);
 void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, BOOLEAN Admin, ULONG EscapeFlags);
+BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation);
+
+// cumode.c
+struct _BC250_ESCAPE_CU_MODE;
+void CuModeInitialize(BC250_DEVICE* Device);
+void CuModeBegin(BC250_DEVICE* Device);
+void CuModePrepare(BC250_DEVICE* Device);
+void CuModeFinish(BC250_DEVICE* Device);
+NTSTATUS CuModeConfirm(BC250_DEVICE* Device, _In_z_ const char* Why);
+void CuModeRequest(BC250_DEVICE* Device, struct _BC250_ESCAPE_CU_MODE* Data, BOOLEAN Admin, ULONG EscapeFlags);
+void CuModePatchCaps(BC250_DEVICE* Device, _Inout_updates_bytes_(Bytes) PVOID Caps, ULONG Bytes);
 NTSTATUS GuardConfirmStartDurable(void);
 
 
@@ -301,6 +314,11 @@ NTSTATUS GuardCheckAndCountStart(BOOLEAN RequireDurable); // full table needs a 
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value); // absent is STATUS_OBJECT_NAME_NOT_FOUND
+NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value);        // written and flushed
+NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name);                    // deleted and flushed; absent is success
+NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value); // gone at reboot
+NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value);
 
 // The log ring, read back through BC250_ESCAPE_GET_LOG. BC250_LOG_LINE comes from bc250kmd_escape.h, which only
 // the two files that touch the ring include; a forward declaration keeps it out of everybody else's way.

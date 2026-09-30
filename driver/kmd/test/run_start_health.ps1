@@ -9,6 +9,8 @@ $state=Get-Content (Join-Path $repo 'driver\kmd\start_health.h') -Raw
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_state.inc'),$state.Replace('#include "bc250kmd_escape.h"',''))
 $guard=Get-Content (Join-Path $repo 'driver\kmd\guard.c') -Raw
 $code=$guard.Substring($guard.IndexOf('NTSTATUS GuardConfirmStartDurable('))
+# Up to the CU mode's own settings helpers (cumode.c), which this test does not model.
+$end=$code.IndexOf('// ---- settings the driver itself owns');if($end -gt 0){$code=$code.Substring(0,$end)}
 if($IgnoreFlush){$code=$code.Replace('status=ZwFlushKey(key);','(void)ZwFlushKey(key);')}
 [IO.File]::WriteAllText((Join-Path $Out 'confirm_actual.inc'),$code)
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start_health_test.c') -Destination (Join-Path $Out 'test.c') -Force

@@ -166,6 +166,23 @@ static void HealthSnapshot(const BC250_START_HEALTH_STATE* H, BC250_ESCAPE_START
     Data->LastCompletionAgeMs=H->LastCompletion ? (now-H->LastCompletion)/10000ull : ~0ull;
     Data->ReadyAgeMs=H->ReadySince ? (now-H->ReadySince)/10000ull : 0;
 }
+// The healthy milestone of a CONFIRM, for the CU mode's own confirmation (cumode.c): the same flags,
+// completions, age and freshness, without the durable start-counter write.
+BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation)
+{
+    BC250_START_HEALTH_STATE* h=&Device->StartHealth;
+    BC250_ESCAPE_START_HEALTH data;
+    BOOLEAN ready;
+    KIRQL irql;
+    RtlZeroMemory(&data,sizeof(data));
+    KeAcquireSpinLock(&h->Lock,&irql);
+    HealthSnapshot(h,&data);
+    ready=(data.Flags&BC250_START_HEALTH_REQUIRED)==BC250_START_HEALTH_REQUIRED && h->Completed &&
+        data.ReadyAgeMs>=BC250_START_HEALTH_MIN_MS && data.LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS;
+    *Generation=h->Generation;
+    KeReleaseSpinLock(&h->Lock,irql);
+    return ready;
+}
 void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, BOOLEAN Admin, ULONG EscapeFlags)
 {
     BC250_START_HEALTH_STATE* h=&Device->StartHealth;
@@ -223,6 +240,9 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
         }
         HealthSnapshot(h,Data);
         KeReleaseSpinLock(&h->Lock,irql);
+        // A durably confirmed start also confirms its 40 CU request (cumode.c). Its own failure is
+        // logged there and costs only a fallback at the next start, never this confirmation.
+        if (NT_SUCCESS(status)) (void)CuModeConfirm(Device,"start-health");
     }
     if (confirm) StartHealthLeave(Device);
     ExReleaseRundownProtection(&h->Readers);

@@ -11,6 +11,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     device->PhysicalDeviceObject = PhysicalDeviceObject;
     device->Rotation = D3DKMDT_VPPR_IDENTITY;
     StartHealthInitialize(device);
+    CuModeInitialize(device);
     SmuOwnerInitialize(&device->Smu);
     ExInitializeFastMutex(&device->GartLock);
     ExInitializePushLock(&device->GfxPagingLock);
@@ -60,6 +61,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     GuardStage(StageStartGuardPassed);
 
     StartHealthBegin(device,WddmFullTableSelected());
+    CuModeBegin(device);
     device->StartInfo = *DxgkStartInfo;
     // dxgkrnl hands out the interface at the size of the version we asked for (WIN8), while this structure is
     // compiled at the newest layout: copy what was given, not what we could hold.

@@ -116,7 +116,10 @@ NTSTATUS GpuStartupInitialize(BC250_DEVICE* Device, BC250_START_REPORT* Report)
     Report->Attempted |= BC250_START_GFX;
     GuardLog("startup: entering GFX initialization");
     GuardLogKeep(); // KeepLog-gated, PASSIVE_LEVEL, before subsystem locks.
+    // The CU mode's registry work brackets the stages: inside them GartLock holds APC_LEVEL.
+    CuModePrepare(Device);
     status=GfxInitializeHardware(Device,&Report->Gfx);
+    CuModeFinish(Device);
     if (!NT_SUCCESS(status)) goto Unwind;
     Report->Completed |= BC250_START_GFX;
 

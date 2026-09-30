@@ -2527,6 +2527,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         firmware.smc_version=smuVersion;
         RtlCopyMemory(QueryAdapterInfo->pOutputData, umd_caps_blob, UMD_CAPS_BYTES);
         RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+UMD_CAPS_FIRMWARE_OFFSET,&firmware,sizeof(firmware));
+        // num_cu, and with it RADV's scratch sizing, follows the registers of this start (cumode.c).
+        CuModePatchCaps(device,QueryAdapterInfo->pOutputData,UMD_CAPS_BYTES);
         // DXGK_START_INFO.AdapterLuid is supplied by dxgkrnl at StartDevice.
         // Keep old-sized queries byte-compatible; never emit a partial trailer.
         if (QueryAdapterInfo->OutputDataSize >= BC250_ADAPTER_CAPS_BYTES) {

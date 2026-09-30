@@ -441,3 +441,102 @@ NTSTATUS GuardConfirmStartDurable(void)
     GuardLog("guard: healthy start confirmation persistence 0x%08X",status);
     return status;
 }
+
+// ---- settings the driver itself owns (cumode.c) -------------------------------------------------------------------
+//
+// GuardReadSetting folds "absent" into a default; the CU mode's boot guard must tell absent from zero and must know
+// that a write reached the disk before the registers it protects are touched. PASSIVE_LEVEL only.
+
+NTSTATUS GuardQuerySetting(_In_z_ PCWSTR Name, _Out_ ULONG* Value)
+{
+    HANDLE key;
+    NTSTATUS status;
+
+    *Value = 0;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    status = OpenParameters(&key);
+    if (!NT_SUCCESS(status)) return status;
+    status = ReadDword(key, Name, Value);
+    ZwClose(key);
+    return status;          // STATUS_OBJECT_NAME_NOT_FOUND when absent
+}
+
+// Written and flushed: success means it is on the disk.
+NTSTATUS GuardStoreSetting(_In_z_ PCWSTR Name, ULONG Value)
+{
+    HANDLE key;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    status = OpenParameters(&key);
+    if (!NT_SUCCESS(status)) return status;
+    status = WriteDword(key, Name, Value);
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+    ZwClose(key);
+    return status;
+}
+
+// Deleted and flushed; a value that was not there is success.
+NTSTATUS GuardDeleteSetting(_In_z_ PCWSTR Name)
+{
+    HANDLE key;
+    UNICODE_STRING name;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    status = OpenParameters(&key);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name, Name);
+    status = ZwDeleteValueKey(key, &name);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) status = STATUS_SUCCESS;
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+    ZwClose(key);
+    return status;
+}
+
+// A volatile subkey of Parameters: the configuration manager drops it at every reboot, which is exactly the life
+// of what it holds (this boot's firmware values, cumode.c). Never flushed; there is no disk copy to flush.
+static NTSTATUS OpenVolatile(_In_z_ PCWSTR Subkey, BOOLEAN Create, _Out_ HANDLE* Key)
+{
+    HANDLE parent;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    NTSTATUS status;
+
+    *Key = NULL;
+    status = OpenParameters(&parent);
+    if (!NT_SUCCESS(status)) return status;
+    RtlInitUnicodeString(&name, Subkey);
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parent, NULL);
+    status = Create ? ZwCreateKey(Key, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_VOLATILE, NULL)
+                    : ZwOpenKey(Key, KEY_READ, &attributes);
+    ZwClose(parent);
+    return status;
+}
+
+NTSTATUS GuardVolatileQuery(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, _Out_ ULONG* Value)
+{
+    HANDLE key;
+    NTSTATUS status;
+
+    *Value = 0;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    status = OpenVolatile(Subkey, FALSE, &key);
+    if (!NT_SUCCESS(status)) return status;
+    status = ReadDword(key, Name, Value);
+    ZwClose(key);
+    return status;
+}
+
+NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Value)
+{
+    HANDLE key;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || g_ParametersPath.Buffer == NULL) return STATUS_INVALID_DEVICE_STATE;
+    status = OpenVolatile(Subkey, TRUE, &key);
+    if (!NT_SUCCESS(status)) return status;
+    status = WriteDword(key, Name, Value);
+    ZwClose(key);
+    return status;
+}

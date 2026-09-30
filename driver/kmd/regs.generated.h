@@ -912,7 +912,7 @@ static const unsigned long g_MmioPspAllow[BC250_MMIO_PSP_ALLOW_COUNT] = {
 
 // E11: what amdgpu wrote on unit A in this step (E03 trace, 0.0375 to 0.0385 s, 0.2495 to 0.2528 s, 0.5496 to 0.551 s, 1.56 to 1.562 s, names matching
 // ^(GC\.(?!GCVM_|GCMC_)|GC\.GCVM_INVALIDATE_ENG17_(REQ|ACK)$|GC\.GCMC_VM_CACHEABLE_DRAM_ADDRESS_END$|MMHUB\.MMVM_INVALIDATE_ENG17_(REQ|ACK|SEM)$|NBIO\.(RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN|BIF_SDMA[01]_DOORBELL_RANGE|BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_(BASE_LOW|BASE_HIGH|CNTL))$)), plus the registers it only polled. For the kernel command alone.
-#define BC250_MMIO_GFX_ALLOW_COUNT 288
+#define BC250_MMIO_GFX_ALLOW_COUNT 290
 static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x03780ul,   // NBIO.RCC_DEV0_EPF0_RCC_DOORBELL_APER_EN
     0x0384Cul,   // NBIO.BIF_BX_DEV0_EPF0_VF0_DOORBELL_SELFRING_GPA_APER_BASE_HIGH
@@ -1012,6 +1012,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x08C28ul,   // GC.SH_MEM_BASES
     0x08C30ul,   // GC.SQ_ARB_CONFIG
     0x08C34ul,   // GC.SH_MEM_CONFIG
+    0x0935Cul,   // GC.SPI_PG_ENABLE_STATIC_WGP_MASK (not traced: CU mode dispatch gate, docs/design/cu-mode.md)
     0x09508ul,   // GC.TA_CNTL_AUX
     0x09830ul,   // GC.DB_DEBUG
     0x09838ul,   // GC.DB_DEBUG3
@@ -1188,6 +1189,7 @@ static const unsigned long g_MmioGfxAllow[BC250_MMIO_GFX_ALLOW_COUNT] = {
     0x3B014ul,   // GC.RLC_SAFE_MODE (not traced: AMD paired safe-mode scope, M370)
     0x3B10Cul,   // GC.RLC_PG_CNTL
     0x3B124ul,   // GC.RLC_CGCG_CGLS_CTRL
+    0x3B14Cul,   // GC.RLC_PG_ALWAYS_ON_WGP_MASK (not traced: CU mode observation, read only)
     0x3B1C4ul,   // GC.RLC_SPM_MC_CNTL
     0x3B288ul,   // GC.RLC_CSIB_ADDR_LO
     0x3B28Cul,   // GC.RLC_CSIB_ADDR_HI

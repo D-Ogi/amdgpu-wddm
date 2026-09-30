@@ -29,7 +29,8 @@
 #define BC250_ESCAPE_RUN_CLOCK 19u             // typed SMU telemetry or complete operating-point transaction
 #define BC250_ESCAPE_OBSERVE_DCN 20u       // named, read-only scanout and timing observations
 #define BC250_ESCAPE_RUN_START_HEALTH 21u      // cached start/presentation witness and checked confirmation
-#define BC250_KMD_VERSION 0x000700ADu       // revision 173: composed A2B10G10R10 surfaces through one format table
+#define BC250_ESCAPE_RUN_CU_MODE 22u            // CU mode snapshot (24 or 40 CUs) and boot-guard confirmation
+#define BC250_KMD_VERSION 0x000700AEu       // revision 174: CU mode 24/40 with a boot guard (docs/design/cu-mode.md)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u
@@ -104,6 +105,38 @@ typedef struct _BC250_ESCAPE_START_HEALTH {
     unsigned long long ExpectedGeneration, ExpectedEpoch;
     unsigned long Reserved[2];
 } BC250_ESCAPE_START_HEALTH; // 96 bytes on Windows, ABI 1
+
+// CU mode (driver/kmd/cumode.c, docs/design/cu-mode.md). Adapter-owned software snapshot taken at the
+// end of the start's GFX bring-up: no BAR access, so both operations take NoAdapterSynchronization=1
+// and every other D3DDDI_ESCAPEFLAGS bit zero. READ is open to every caller. CONFIRM needs an
+// administrator, the Generation a READ of this start returned, and a start-health READY adapter; it
+// clears the pending mark of a 40 CU start, which a later start would otherwise treat as a crash.
+// Registers are the values read back after the stage, per shader array (index se * 2 + sh).
+// Reason is enum bc250_cu_reason (driver/shim/include/bc250_cu_mode.h).
+#define BC250_CU_MODE_ABI 1u
+#define BC250_CU_MODE_OP_READ 0u
+#define BC250_CU_MODE_OP_CONFIRM 1u
+#define BC250_CU_MODE_FLAG_VALID 1u          // the stage ran this start; the caps follow ActiveWgps
+#define BC250_CU_MODE_FLAG_PENDING 2u        // 40 applied, not confirmed: a restart now falls back to 24
+#define BC250_CU_MODE_FLAG_CONFIRMED 4u      // 40 applied and confirmed (this start or an earlier one)
+#define BC250_CU_MODE_FLAG_STOCK_RECORD 8u   // stock came from this boot's record: an earlier start wrote
+#define BC250_CU_MODE_FLAG_CONSISTENT 16u    // CC and SPI name the same WGPs on every shader array
+#define BC250_CU_MODE_FLAG_WROTE 32u         // this start wrote CC/SPI (the stock of a cold boot needs none)
+#define BC250_CU_MODE_SA_COUNT 4u
+typedef struct _BC250_ESCAPE_CU_MODE {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Requested;                // CuMode as read at start, 0 when absent
+    unsigned long Applied;                  // 24 or 40, 0 when unknown (not run, restore failed)
+    unsigned long Reason, ActiveCus, DisableMask, PciId;
+    unsigned long RlcPgCntl, RlcAonWgpMask;
+    unsigned long StockCc[BC250_CU_MODE_SA_COUNT], StockSpi[BC250_CU_MODE_SA_COUNT];
+    unsigned long Cc[BC250_CU_MODE_SA_COUNT], User[BC250_CU_MODE_SA_COUNT], Spi[BC250_CU_MODE_SA_COUNT];
+    unsigned long ActiveWgps[BC250_CU_MODE_SA_COUNT];
+    unsigned long long Generation;          // start-health generation of the start this describes
+    unsigned long long ExpectedGeneration;  // in, CONFIRM
+    unsigned long Reserved[2];
+} BC250_ESCAPE_CU_MODE; // 184 bytes on Windows, ABI 1
 
 // Read-only diagnostics, not an atomic hardware snapshot. Require administrator,
 // HardwareAccess=1 and every other D3DDDI_ESCAPEFLAGS bit zero: Level Two keeps

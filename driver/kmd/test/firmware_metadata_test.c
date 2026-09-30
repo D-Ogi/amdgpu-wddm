@@ -35,6 +35,11 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
 typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
 static NTSTATUS SmuReadFirmwareVersion(int* smu,ULONG* version)
 {(void)smu;smuReads++;*version=smuReady?testSmuVersion:0;return smuReady?STATUS_SUCCESS:STATUS_DEVICE_NOT_READY;}
+// cumode.c: the CU fields follow this start's registers. The branch must hand it the whole template,
+// after the template and the firmware section are in place.
+static unsigned cuPatches,cuActive;
+static void CuModePatchCaps(BC250_DEVICE* d,void* caps,ULONG bytes)
+{(void)d;CHECK(bytes==UMD_CAPS_BYTES);cuPatches++;if(cuActive)memcpy((PUCHAR)caps+UMD_CAPS_CU_ACTIVE_OFFSET,&cuActive,4);}
 #include "firmware_metadata_actual.inc"
 // Linking the real parser also links other shim functions. None may reach hardware.
 unsigned int bc250_shim_rreg(struct amdgpu_device* adev,unsigned int index)
@@ -92,6 +97,11 @@ int main(int argc,char**argv)
     CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS);
     fw.smc_version=testSmuVersion;memcpy(expected+UMD_CAPS_FIRMWARE_OFFSET,&fw,sizeof(fw));
     CHECK(!memcmp(out,expected,sizeof(out)) && smuReads==2);
+    before=cuPatches;cuActive=40;
+    CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && cuPatches==before+1);
+    CHECK(!memcmp(out+UMD_CAPS_CU_ACTIVE_OFFSET,&cuActive,4));
+    CHECK(!memcmp(out+UMD_CAPS_FIRMWARE_OFFSET,expected+UMD_CAPS_FIRMWARE_OFFSET,sizeof(fw)));
+    cuActive=0;CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && !memcmp(out,expected,sizeof(out)));
     // The actual QueryAdapterInfo branch preserves the old prefix, writes no
     // partial identity, and does not overwrite caller-owned bytes after it.
     {

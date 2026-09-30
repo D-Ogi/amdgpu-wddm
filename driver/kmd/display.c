@@ -185,6 +185,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         StartHealthRequest(device,(BC250_ESCAPE_START_HEALTH*)data,CallerIsAdmin(),Escape->Flags.Value);
         return STATUS_SUCCESS;
     }
+    // CU mode: adapter-owned software snapshot as well (cumode.c), no BAR access.
+    if (data->Command == BC250_ESCAPE_RUN_CU_MODE) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_CU_MODE)) return STATUS_INVALID_PARAMETER;
+        CuModeRequest(device,(BC250_ESCAPE_CU_MODE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
     // Only adapter-owned health and the separately joined SMU owner support
     // NoAdapterSynchronization. Other diagnostics rely on OS Level Two/Three
     // exclusion and must not enter a powered-down/partially restored subsystem.
