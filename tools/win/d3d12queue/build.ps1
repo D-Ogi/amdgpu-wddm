@@ -42,6 +42,9 @@ param(
     # Test build of -GameLoad only: the render thread keeps tracing this long after its last frame, past the
     # 10 s join bound, so that the session's end with a detached thread can be exercised (0 = off).
     [ValidateRange(0, 30000)][int]$GameLoadRenderHoldMs = 0,
+    # -GameLoad only: how many single-thread steps (256 MB, 512 MB, 1 GB, 2 GB) run before the four-thread phase;
+    # 1 leaves the threads their time on a fast driver (169 finished three steps and never reached them).
+    [ValidateRange(0, 4)][int]$GameLoadSingleSteps = 4,
     # Test build with -GameLoadRenderHoldMs only: throw right after the render thread is detached.
     [switch]$GameLoadThrowAfterDetach,
     # Back buffer format of -Present: B8G8R8A8_UNORM, or R10G10B10A2_UNORM as a 10-bit swap chain composed on
@@ -97,6 +100,8 @@ if ($RayState) { $variant += '/DINTERACTIVE_RAYSTATE' }
 if ($RayGrow) { $variant += '/DINTERACTIVE_RAYGROW' }
 if ($RayCollection) { $variant += '/DINTERACTIVE_RAYCOLLECTION' }
 if ($GameLoad) { $variant += '/DINTERACTIVE_GAMELOAD', "/DINTERACTIVE_GAMELOAD_ARMS=$(@{Small = 1; Large = 2; Both = 3}[$GameLoadArm])" }
+if ($GameLoadSingleSteps -ne 4 -and -not $GameLoad) { throw 'GameLoadSingleSteps needs GameLoad' }
+if ($GameLoad) { $variant += "/DINTERACTIVE_GAMELOAD_SINGLE_STEPS=$GameLoadSingleSteps" }
 & $cl @($variant + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\amdgpu_wddm_d3d12_queue.obj",

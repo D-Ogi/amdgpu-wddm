@@ -30,6 +30,13 @@ namespace gameload {
 constexpr UINT64 MiB=1ull<<20;
 constexpr UINT64 steps[]={256*MiB,512*MiB,1024*MiB,2048*MiB};
 constexpr unsigned step_count=sizeof(steps)/sizeof(steps[0]);
+// How many single-thread steps run before the thread phase (build.ps1 -GameLoadSingleSteps, default all).
+// 169: a driver fast enough to finish three steps inside the 40 s single-thread budget left the threads no time
+// at all (the thread phase may start until 50 s), so a multithreading trial takes the 256 MB step only.
+#ifndef INTERACTIVE_GAMELOAD_SINGLE_STEPS
+#define INTERACTIVE_GAMELOAD_SINGLE_STEPS 4
+#endif
+constexpr unsigned single_steps=INTERACTIVE_GAMELOAD_SINGLE_STEPS<=step_count?INTERACTIVE_GAMELOAD_SINGLE_STEPS:step_count;
 constexpr UINT64 large_size=64*MiB,small_size=64*1024;
 // One LARGE texture footprint (64 MB with row and placement padding) or 1024 SMALL buffers per batch.
 constexpr UINT64 staging_size=65*MiB;constexpr UINT batch_limit=1024;
@@ -639,13 +646,13 @@ inline HRESULT gameload_run(Session& s){
 
     // A step, an arm or the thread phase counts as exercised only once it created a resource; coverage is
     // complete only when every planned arm and all four threads were, with no step skipped or cut.
-    constexpr unsigned arms_per_step=(arms&arm_small?1u:0u)+(arms&arm_large?1u:0u),planned=step_count*arms_per_step+1;
+    constexpr unsigned arms_per_step=(arms&arm_small?1u:0u)+(arms&arm_large?1u:0u),planned=single_steps*arms_per_step+1;
     Counts total;HRESULT result=S_OK;unsigned started=0,ran=0,exercised=0,skipped=0;bool budget_hit=false;
     try{
         {
             Context c(s,log,board,layout,-1,seed,"single",staging_size,batch_limit,s.pending);
             result=c.setup();
-            for(unsigned step=1;step<=step_count && SUCCEEDED(result) && !budget_hit;++step){
+            for(unsigned step=1;step<=single_steps && SUCCEEDED(result) && !budget_hit;++step){
                 if(GetTickCount64()>=single_end){budget_hit=true;sprintf_s(label,"Game load time budget reached at step %u",step);s.event("after",label);
                     log.line("single",step,"-",-1,"time_budget",total,c.value);break;}
                 if(!fits(s,log,adapter.Get(),step,"single",steps[step-1])){++skipped;continue;}
