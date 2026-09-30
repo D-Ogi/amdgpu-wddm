@@ -34,7 +34,7 @@
 #define BC250_ESCAPE_GET_PAGING_JOURNAL 24u     // BC250_ESCAPE_PAGING_JOURNAL in: From; out: the paging journal from that
                                                 // record on (page table updates, fills, transfers, flushes, destroys)
 #define BC250_ESCAPE_RUN_INTEROP 25u            // GPU DWM interop switches: requested, effective, reason, session marker
-#define BC250_KMD_VERSION 0x000700B5u       // revision 181: the interop switches default on (docs/design/gpu-dwm-interop-switches.md)
+#define BC250_KMD_VERSION 0x000700B6u       // revision 182: a full paging DMA buffer is refused quietly (bc250_sdma_paging.c)
 
 #define BC250_ESCAPE_STATUS_DONE 0u
 #define BC250_ESCAPE_STATUS_UNKNOWN_COMMAND 1u

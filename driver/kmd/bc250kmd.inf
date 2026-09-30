@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/01/2026,0.7.181.1
+DriverVer   = 10/01/2026,0.7.182.1
 PnpLockdown = 1
 
 [DestinationDirs]
