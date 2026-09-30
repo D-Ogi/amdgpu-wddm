@@ -69,7 +69,8 @@ static HRESULT APIENTRY unmap_cb(HANDLE,const D3DDDICB_FREEGPUVIRTUALADDRESS* a)
 // E: that reference released before the VA. W: the CPU wait for the largest pending value.
 static HRESULT APIENTRY make_cb(HANDLE d,D3DDDI_MAKERESIDENT* a){
  assert(d==handle<void*>(1) && a->hPagingQueue==9 && a->NumAllocations==1 && a->AllocationList);
- assert(a->AllocationList[0]==next_allocation && !a->Flags.Value && !a->PriorityList);
+ // CantTrimFurther only: D3D12's default residency succeeds over the current budget.
+ assert(a->AllocationList[0]==next_allocation && a->Flags.Value==1 && a->Flags.CantTrimFurther && !a->PriorityList);
  ++makes_resident;events+='Z';
  if(resident_result!=S_OK)return resident_result;
  if(resident_pending){a->PagingFenceValue=30;return E_PENDING;}
@@ -315,13 +316,14 @@ int main(){
  completed=10;resident_result=E_OUTOFMEMORY;events.clear();
  assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMZWUD");
  resident_result=S_OK;pending=false;completed=20;
- // An eviction that fails keeps the mapping for the retry, which evicts once and then frees.
+ // An eviction that fails does not hold the VA: the mapping and the allocation are released anyway
+ // (deallocation drops residency), so an error that never clears cannot leak the record.
  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI");fail_evict=true;
- assert(owner.free(&memory)==E_FAIL && events=="AMZIVE");fail_evict=false;
- events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="EUDP");
+ assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");fail_evict=false;
+ events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- // Every reference taken was released.
- assert(makes_resident==evictions+1);assert(surfaces==4);
+ // Every reference taken was released: all calls but the refused one and the failed eviction.
+ assert(makes_resident==evictions+2);assert(surfaces==4);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.

@@ -36,7 +36,9 @@ class PagingDomain final {
     D3DKMT_HANDLE queue_{},sync_{};
     const volatile UINT64* completed_{};
     unsigned mappings_{};
+    unsigned evict_failures_{};
 public:
+    unsigned evict_failures() const noexcept {return evict_failures_;}
     PagingDomain(D3D12DDI_HRTDEVICE device,const D3DDDI_DEVICECALLBACKS& cb) noexcept
         : device_(device.handle),create_(cb.pfnCreatePagingQueueCb),destroy_(cb.pfnDestroyPagingQueueCb),
           map_(cb.pfnMapGpuVirtualAddressCb),free_(cb.pfnFreeGpuVirtualAddressCb),
@@ -82,15 +84,17 @@ public:
     // One residency reference of this domain, queued behind the mapping on the same paging
     // queue; released by unmap_after_gpu_retirement. Its pending value joins the mapping's
     // fence (a monitored fence value only grows, so the largest covers both operations).
-    // Flags are zero: over budget this refuses (E_OUTOFMEMORY) like the runtime's own
-    // MakeResident of a new heap would, and nothing was taken.
+    // CantTrimFurther: D3D12's default residency policy succeeds regardless of the current budget
+    // (D3D12_RESIDENCY_FLAG_NONE), and this flag is the WDDM form of that: over the current budget
+    // the call still succeeds, over the maximum budget it refuses (E_OUTOFMEMORY) and takes nothing.
+    // Without it a heap the runtime would create could fail here under memory pressure.
     HRESULT make_resident(GpuMapping& mapping) noexcept {
         if(mapping.owner_!=this || !mapping.valid_ || !mapping.allocation_) return E_INVALIDARG;
         if(mapping.resident_) return E_UNEXPECTED;
         if(!queue_ || !completed_ || !make_resident_ || !evict_) return E_UNEXPECTED;
         if(*completed_==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
         D3DDDI_MAKERESIDENT args{};args.hPagingQueue=queue_;args.NumAllocations=1;
-        args.AllocationList=&mapping.allocation_;
+        args.AllocationList=&mapping.allocation_;args.Flags.CantTrimFurther=1;
         HRESULT hr=make_resident_(device_,&args);
         if(hr!=S_OK && hr!=E_PENDING) return FAILED(hr)?hr:E_UNEXPECTED;
         // Accepted: the reference exists whatever the rest of the answer says.
@@ -102,8 +106,10 @@ public:
         }
         return S_OK;
     }
-    // Blocks this thread until the mapping and any residency it took have completed, then
-    // answers like ready(). A lost device signals the fence to UINT64_MAX, which ends the wait.
+    // Blocks this thread, with no time limit, until the mapping and any residency it took have
+    // completed, then answers like ready() (UINT64_MAX there is the removed-device value D3D12
+    // fences report). A paging engine that never completes stalls the caller; on this GPU such
+    // a stall ends in a TDR anyway, and the old 2 s poll only turned it into a refused heap.
     HRESULT wait_ready(const GpuMapping& mapping,UINT64* address) const noexcept {
         HRESULT hr=ready(mapping,address);
         if(hr!=E_PENDING) return hr;
@@ -139,17 +145,21 @@ public:
     }
     // Caller proves all GPU uses have retired before invoking this method.
     // The paging fence checked here proves completion of the mapping and of any residency
-    // this domain took; that reference is released first, and a failed eviction keeps the
-    // mapping for a retry.
+    // this domain took; that reference is released first. A failed eviction is counted and
+    // does not hold the VA: residency and mapping are independent, and deallocating the
+    // allocation drops its residency anyway, while a retry could never succeed on an error
+    // that does not clear (the record, its VA and the paging queue would leak).
     HRESULT unmap_after_gpu_retirement(GpuMapping& mapping) noexcept {
         if(!mapping.owner_) return S_OK;
         UINT64 address=0;HRESULT hr=ready(mapping,&address);if(FAILED(hr)) return hr;
         if(!free_) return E_UNEXPECTED;
         if(mapping.resident_){
-            if(!evict_) return E_UNEXPECTED;
-            D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
-            hr=evict_(device_,&evict);
-            if(FAILED(hr)) return hr;
+            HRESULT evicted=E_UNEXPECTED;
+            if(evict_){
+                D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
+                evicted=evict_(device_,&evict);
+            }
+            if(FAILED(evicted)) ++evict_failures_;
             mapping.resident_=false;
         }
         D3DDDICB_FREEGPUVIRTUALADDRESS args{};args.BaseAddress=address;args.Size=mapping.bytes_;

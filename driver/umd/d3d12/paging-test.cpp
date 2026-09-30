@@ -28,7 +28,7 @@ static HRESULT make_result=E_PENDING,evict_result=S_OK,cpu_wait_result=S_OK;
 static UINT64 make_fence=11,cpu_waited;
 static bool cpu_wait_completes=true;
 static HRESULT APIENTRY make_resident(HANDLE d,D3DDDI_MAKERESIDENT* a){
-    assert(d==owner && a->hPagingQueue==5 && a->NumAllocations==1 && a->AllocationList[0]==9 && !a->Flags.Value);
+    assert(d==owner && a->hPagingQueue==5 && a->NumAllocations==1 && a->AllocationList[0]==9 && a->Flags.Value==1 && a->Flags.CantTrimFurther);
     ++makes;a->PagingFenceValue=make_result==E_PENDING?make_fence:0;return make_result;
 }
 static HRESULT APIENTRY evict(HANDLE d,D3DDDICB_EVICT* a){
@@ -129,11 +129,12 @@ int main(){
     completed=UINT64_MAX;assert(r.wait_ready(held,&address)==D3DDDIERR_DEVICEREMOVED && !address);
     // Ready: no wait at all.
     completed=11;auto w0=cpu_waits;assert(r.wait_ready(held,&address)==S_OK && cpu_waits==w0);
-    // A failed eviction keeps the reference and the VA; the retry evicts once, then frees.
-    evict_result=E_FAIL;e0=evicts;f0=frees;
-    assert(r.unmap_after_gpu_retirement(held)==E_FAIL && evicts==e0+1 && frees==f0);evict_result=S_OK;
-    failFree=true;assert(r.unmap_after_gpu_retirement(held)==E_FAIL && evicts==e0+2 && frees==f0+1);failFree=false;
-    assert(r.unmap_after_gpu_retirement(held)==S_OK && evicts==e0+2 && frees==f0+2);
+    // A failed eviction is counted and does not hold the VA. A failed free keeps the mapping, and
+    // its retry does not evict again.
+    evict_result=E_FAIL;e0=evicts;f0=frees;failFree=true;
+    assert(r.unmap_after_gpu_retirement(held)==E_FAIL && evicts==e0+1 && frees==f0+1 && r.evict_failures()==1);
+    evict_result=S_OK;failFree=false;
+    assert(r.unmap_after_gpu_retirement(held)==S_OK && evicts==e0+1 && frees==f0+2 && r.evict_failures()==1);
     // Immediately resident: no fence to add; the mapping's own value still counts.
     make_result=S_OK;completed=0;
     assert(r.map(9,65536,held)==S_OK && r.make_resident(held)==S_OK && r.ready(held,&address)==E_PENDING);
@@ -157,5 +158,6 @@ int main(){
     assert(nr.make_resident(held)==E_UNEXPECTED);completed=7;
     assert(nr.unmap_after_gpu_retirement(held)==S_OK && nr.close()==S_OK);
     puts("paging ownership, context GPU waits, pending VA, loss and callback lifetime gates passed; "
-         "own residency reference joins the fence, CPU wait for the largest value, evicted before the VA is freed");
+         "own residency reference (CantTrimFurther) joins the fence, CPU wait for the largest value, evicted before "
+         "the VA is freed, a failed eviction does not hold the VA");
 }
