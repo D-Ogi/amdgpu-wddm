@@ -25,9 +25,9 @@
 //
 // Busy (0.7.177): the share of GRBM_STATUS.GUI_ACTIVE samples, read by a high-resolution timer every
 // BC250_DPM_HW_SAMPLE_US (DpmHwSample) - the graphics engine's own activity, as amdgpu's gfx_v10_0_is_idle reads
-// it. 0.7.175 used the GFX ring's submit-to-fence time (gfx.c DpmBusyBegin/DpmBusyEnd); on the lab it read 0-7 %
-// in a game ETW called 91.5 % busy (docs/design/dpm.md, "Busy"), so it is now telemetry and the fallback for a
-// tick without samples. SDMA0 (the paging node) is sampled beside it, for the telemetry only.
+// it. 0.7.175 used the GFX ring's submit-to-fence time (gfx.c DpmBusyBegin/DpmBusyEnd): the KMD's view, closed only
+// when a fence is observed (docs/design/dpm.md, "Busy"). It stays beside the samples as telemetry and as the
+// fallback for a tick without samples. SDMA0 (the paging node) is sampled as well, for the telemetry only.
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
@@ -238,9 +238,9 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
         T->ObservedMHz = report.observed_mhz;
         T->ObservedVid = report.observed_vid;
         T->ClockAt = KeQueryInterruptTime();
-        GuardLog("dpm: %lu -> %lu MHz/%lu mV VID %u%s (%s, busy %lu permille, %d.%01d C, throttle %s)", from,
-                 report.observed_mhz, report.requested_mv, report.observed_vid,
-                 report.voltage_staged ? " staged" : "", Why, T->Permille, report.temperature_mc / 1000,
+        GuardLog("dpm: %lu -> %lu MHz/%lu mV VID %u%s, %u settle reads (%s, busy %lu permille, %d.%01d C, throttle %s)",
+                 from, report.observed_mhz, report.requested_mv, report.observed_vid,
+                 report.voltage_staged ? " staged" : "", report.settle_reads, Why, T->Permille, report.temperature_mc / 1000,
                  (report.temperature_mc < 0 ? -report.temperature_mc : report.temperature_mc) % 1000 / 100,
                  S->Gov.throttle < BC250_DPM_THROTTLE_COUNT ? g_Throttle[S->Gov.throttle] : "?");
         return TRUE;
@@ -255,9 +255,9 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
     S->ErrorsInRow++;
     InterlockedExchange(&S->Resync, 1);
     GuardLog("dpm: %lu -> %lu MHz FAILED 0x%08X (clock status %d, %u of %u messages, initial %u MHz VID %u, "
-             "observed %u MHz VID %u), %lu in a row (%s)", from, bc250_dpm_level_mhz(Level), status, report.status,
-             report.messages_completed, report.messages_attempted, report.initial_mhz, report.initial_vid,
-             report.observed_mhz, report.observed_vid, S->ErrorsInRow, Why);
+             "observed %u MHz VID %u, %u settle reads), %lu in a row (%s)", from, bc250_dpm_level_mhz(Level), status,
+             report.status, report.messages_completed, report.messages_attempted, report.initial_mhz,
+             report.initial_vid, report.observed_mhz, report.observed_vid, report.settle_reads, S->ErrorsInRow, Why);
     return FALSE;
 }
 
@@ -340,7 +340,8 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->HwSamples = samples;
         T->Permille = bc250_dpm_busy_permille(samples, gfx, T->SubmitPermille, &T->Source);
         T->SdmaPermille = T->Source == BC250_DPM_BUSY_GRBM ? bc250_dpm_busy_permille(samples, sdma, 0, &unused) : 0;
-    }    T->Last = now;
+    }
+    T->Last = now;
     T->LastBusy = busy;
     T->Ticks++;
     if (InterlockedCompareExchange(&S->Paused, 0, 0)) {
