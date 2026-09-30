@@ -123,6 +123,7 @@ struct EngineQueue {
     // Submission state in one word, so that a snapshot reads it coherently: bits 63..1 hold the last value
     // signalled on fence, bit 0 is set while work has been submitted that no successful signal covers yet.
     std::atomic<uint64_t> state;
+    std::atomic<uint64_t> last_done;            // the largest retirement fence value read so far (observed_value)
     SRWLOCK submit_lock;                        // keeps ExecuteCommandLists and its Signal together
     uint64_t init_waited;                       // the init_fence value this queue last waited for; submit_lock
     bool closing;                               // destroy has begun: never borrowed again; DeviceContext::lock
@@ -133,6 +134,8 @@ struct EngineQueue {
 };
 // The retirement fence value of a queue (a retirement point of the engine, V8).
 uint64_t completed_value(EngineQueue* queue) noexcept;
+// completed_value() plus a logged check that the value neither goes back nor passes the queue's last signal.
+uint64_t observed_value(EngineQueue* queue) noexcept;
 // Submits lists on the queue followed by the signal of its retirement fence (queue.cpp). With no list it signals
 // the fence after whatever the queue did last, such as a tile mapping (tiles.cpp). The caller holds submit_lock.
 HRESULT submit_locked(EngineQueue* queue, UINT count, ID3D12CommandList* const* lists) noexcept;

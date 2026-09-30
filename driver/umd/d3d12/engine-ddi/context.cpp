@@ -8,6 +8,21 @@
 
 namespace engine_ddi {
 
+namespace {
+// AMDGPU_WDDM_DDI_TRACE=2 is the shell's failures-only debugger mode (ddi-trace.h, same parse). The lab's game runs
+// capture the debugger's log and not stderr (game-runtime.ps1), so without this copy the lines below (a release
+// that cannot prove retirement, a release past its bound, a queue destroyed unretired, a fence anomaly) never reach
+// any record of a game run. Bounded like the shell's failure notes; the stderr line is unchanged.
+bool debugger_lines() noexcept {
+    static const bool on = []() noexcept {
+        char value[2]{};
+        return GetEnvironmentVariableA("AMDGPU_WDDM_DDI_TRACE", value, sizeof(value)) == 1 && value[0] == '2';
+    }();
+    return on;
+}
+std::atomic<int> debugger_budget{1024};
+} // namespace
+
 void log_line(const char* format, ...) noexcept {
     char text[512];
     va_list args;
@@ -15,6 +30,13 @@ void log_line(const char* format, ...) noexcept {
     vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     std::fprintf(stderr, "engine-ddi: %s\n", text);
+    if (!debugger_lines() || debugger_budget.fetch_sub(1, std::memory_order_relaxed) <= 0) return;
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    char line[600];
+    std::snprintf(line, sizeof(line), "amdgpu_wddm_d3d12 engine-ddi: %s qpc=%lld thread=%lu\n", text,
+                  static_cast<long long>(now.QuadPart), static_cast<unsigned long>(GetCurrentThreadId()));
+    OutputDebugStringA(line);
 }
 
 void log_refusal(const char* format, ...) noexcept {
@@ -59,6 +81,30 @@ uint64_t completed_value(EngineQueue* q) noexcept {
     return q->fence->GetCompletedValue();
 }
 
+// completed_value() with the two invariants every release decision rests on checked on the way (fence-lifetime
+// review): a retirement fence never goes back, and it never passes what its queue signalled. submit_locked sets bit 0
+// of state before the Signal of value v+1 is issued, so a state word read after the fence covers any value the fence
+// can hold: (state >> 1) + (state & 1). A violation is logged (and reaches the debugger in trace mode 2), never acted
+// on: the release logic stays as it is, so the check changes no decision and no timing apart from its loads.
+uint64_t observed_value(EngineQueue* q) noexcept {
+    const uint64_t done = completed_value(q);
+    if (done == kFenceRemoved) return done;
+    const uint64_t state = q->state.load();
+    const uint64_t signalled = (state >> 1) + (state & 1);
+    uint64_t seen = q->last_done.load(std::memory_order_relaxed);
+    if (done < seen)
+        log_line("invariant: retirement fence of queue %llu went back from %llu to %llu",
+                 static_cast<unsigned long long>(q->id), static_cast<unsigned long long>(seen),
+                 static_cast<unsigned long long>(done));
+    while (done > seen && !q->last_done.compare_exchange_weak(seen, done, std::memory_order_relaxed)) {
+    }
+    if (done > signalled)
+        log_line("invariant: retirement fence of queue %llu reads %llu beyond its last signal %llu (state %llx)",
+                 static_cast<unsigned long long>(q->id), static_cast<unsigned long long>(done),
+                 static_cast<unsigned long long>(signalled), static_cast<unsigned long long>(state));
+    return done;
+}
+
 HRESULT run_release(const ShellHooks& hooks, const ReleasePayload& payload) noexcept {
     for (IUnknown* object : payload.objects)
         if (object) object->Release();
@@ -98,7 +144,7 @@ again:
         const uint64_t state = q->state.load();
         const uint64_t mark = (state >> 1) + (state & 1);   // unsignalled work: the next signal must retire it
         if (!mark) continue;                                // nothing was ever submitted
-        const uint64_t done = completed_value(q);
+        const uint64_t done = observed_value(q);
         if (done == kFenceRemoved) {
             node->stuck = true;                             // a removed device proves nothing
             continue;
@@ -144,7 +190,7 @@ void DeviceContext::process_retired() noexcept {
     if (!pending.load()) return;
     AcquireSRWLockExclusive(&lock);
     PendingRelease* ready = releases.take_retired([this](uint32_t slot) {
-        return ((queue_mask >> slot) & 1) ? completed_value(queues[slot]) : kFenceRemoved;
+        return ((queue_mask >> slot) & 1) ? observed_value(queues[slot]) : kFenceRemoved;
     });
     ReleaseSRWLockExclusive(&lock);
     while (PendingRelease* n = ready) {

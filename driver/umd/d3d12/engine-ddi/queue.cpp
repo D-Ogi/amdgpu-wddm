@@ -246,6 +246,7 @@ HRESULT create_engine_queue(DeviceContext* c, const BC250_VKD3D_COMMAND_QUEUE_DE
     q->slot = slot;
     q->type = static_cast<D3D12_COMMAND_LIST_TYPE>(desc->Type);
     q->state.store(0);
+    q->last_done.store(0);
     InitializeSRWLock(&q->submit_lock);
     q->init_waited = 0;
     q->closing = false;
@@ -271,7 +272,7 @@ QueueClose destroy_engine_queue(EngineQueue* q) noexcept {
     q->queue = nullptr;
     AcquireSRWLockExclusive(&c->lock);
     const uint64_t state = q->state.load();
-    const uint64_t done = completed_value(q);
+    const uint64_t done = observed_value(q);
     // Clean: the device is not removed, no submission lacks its signal, and the fence reached the last signal.
     const bool clean = done != kFenceRemoved && !(state & 1) && done >= (state >> 1);
     c->releases.queue_destroyed(q->slot, done);
