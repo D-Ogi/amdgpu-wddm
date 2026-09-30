@@ -70,7 +70,10 @@ try {
     $env:TEMP = $OutputDir; $env:TMP = $OutputDir
     $null = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir
     $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
-    $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/external:W0', '/MT', '/DNOMINMAX', '/Zi',
+    # /O2: the library holds the hot per-draw DDIs (draw, submit, descriptor copy, barriers) and compiled at the
+    # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol
+    # gate below reads the library with dumpbin, which cannot read /GL objects.
+    $flags = @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', '/external:W0', '/MT', '/DNOMINMAX', '/Zi',
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
