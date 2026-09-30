@@ -43,6 +43,10 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
 
 - Live: `bc250kmd_cli journal [from]` (`BC250_ESCAPE_GET_PAGING_JOURNAL`, administrators, 64 records per escape,
   admitted under full WDDM as an observational command). The CLI prints one line per record and follows `Next`.
+  `bc250kmd_cli journal follow SECONDS [MS]` is the sampler for a trial: one process, one adapter handle, one
+  escape per interval, printing the records added since the previous read. It replaced a loop that spawned the
+  CLI once a second: next to the desktop's present heartbeat that loop left the lab's sshd accepting no new
+  connection for as long as it ran (2026-09-30), while a single long process never did.
 - From a dump: `scratch\m15\game-recon\bsod-analysis\pagingjournal.py` (local) reads `g_PagingJournal` through the
   build's map, checks `Magic`/`Version`/`EntryBytes`, and lists the records around a fault VA.
 
