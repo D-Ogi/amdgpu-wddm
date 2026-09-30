@@ -28,6 +28,12 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
     Write-Warning 'python not found, skipping test_stages.py (stage table against driver/kmd/bc250kmd.h)'
 }
 
+# Host tests of the exports bc250control.dll gives the monitor, with the D3DKMT calls replaced: no adapter is
+# opened and no escape is sent. Each throws on a failure, so no DLL is built past one.
+foreach ($test in 'test-start-health.ps1', 'test-confirm.ps1', 'test-telemetry.ps1') {
+    & (Join-Path $here $test) -Out (Join-Path $Out ('tests\' + [IO.Path]::GetFileNameWithoutExtension($test)))
+}
+
 $env:INCLUDE = ''; $env:LIB = ''
 & $cl @('/nologo', '/W4', '/WX', '/O2', '/MT', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",

@@ -10,7 +10,8 @@ because `bc250rd.sys` is admin-only.
 ```
  providers (threads)                  remote agent over SSH      owner at the machine
  GpuProvider, SystemProvider,         mon.py -> HTTP            hotkeys, buttons
- KmdProvider, KmdInfoProvider         127.0.0.1:2250
+ KmdProvider, KmdInfoProvider,        127.0.0.1:2250
+ TelemetryProvider
         |                               |                               |
         v                               v                               v
    +---------------------------- State (State.cs) ----------------------------+
@@ -173,6 +174,30 @@ default `png` format, a minimal hand-rolled PNG encoder. `--format bmp` skips th
 mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]
 ```
 
+## GPU telemetry line
+
+One line under the title, `GPU  Tctl 67.5 C  load 12 %  GFX 1000 MHz  VRAM 1234/2048 MB`, from
+`TelemetryProvider.cs`. Every source is read-only. The DPM snapshot and the segment statistics are answered from
+memory the KMD or dxgkrnl already holds; the clock fallback is the same typed read the SoC panel makes anyway:
+
+| Value | Source |
+|---|---|
+| Tctl, GFX clock | the DPM governor's published snapshot (`BC250_ESCAPE_RUN_DPM`, op READ, KMD 0.7.175 and later) through `Bc250Dpm` in `bc250control.dll`. When the snapshot does not carry them (governor stopped, no flag), the clock escape the SoC panel already uses stands in; the JSON says which in `temperatureSource` / `clockSource` |
+| load | the mean of the governor's `BusyAvgPermille` over the 2 s window, only when the snapshot carries `BC250_DPM_FLAG_HW_BUSY` (GRBM_STATUS busy share, KMD 0.7.177). Older KMDs publish a submit-to-fence share that read 7 % while ETW saw 91 %, so it is not shown: the line says `n/a` and the note names the KMD version |
+| VRAM | `D3DKMTQueryStatistics` per segment through `Bc250VideoMemory`: used = resident bytes of the non-aperture segments (what Task Manager calls dedicated usage), total = their commit limits, or the adapter's dedicated video memory when dxgkrnl reports no limit. The aperture (system memory the GPU maps) is kept apart in the JSON |
+
+Samples are taken every 250 ms and published every 2 s. A missing value is `n/a`, never a guess, and the
+reason goes to `note` (logged once when it changes).
+
+**Cost.** DWM composes this desktop on the CPU: a 250 ms full-window repaint of a small window cost DWM 28 %
+of the machine during a game (trials 139/140). So the telemetry never causes a frame of its own: the header
+clock repaints only its own rectangle once a second, and the telemetry line is invalidated in that same tick,
+only when its text changed. A full repaint happens only when a panel, the log or the status changes. The
+monitor's own work per second is about 15 us managed (8 samples, one publish, one line paint; the telemetry
+host test measures it) plus four DPM escapes and, every 2 s, one statistics digest, each an adapter open, the
+call and a close of a few microseconds (the adapter path is cached; looking it up walks SetupAPI for ~0.8 ms and is
+retried at most every 2 s while the adapter is absent).
+
 ## The brake
 
 `Ctrl+Alt+F12` or the red button sets the STOP flag: a banner on the overlay, `GET /flags` returns
@@ -185,7 +210,8 @@ few seconds has to poll one of the two and end. `mon.py stop?` does it from the 
 
 | Endpoint | What it does |
 |---|---|
-| `GET /state` | everything the overlay shows: status, panels, log, stop flag |
+| `GET /state` | everything the overlay shows: status, panels, log, stop flag, telemetry |
+| `GET /telemetry` | the telemetry line as JSON: `available`, `temperatureC`, `loadPercent`, `gfxMHz`, `vramUsedMB`, `vramTotalMB`, their sources, `ageSeconds`, `note` (`null` values are n/a) |
 | `GET /flags` | `{"stop": bool}` - what long-running test scripts poll |
 | `POST /status` | `{"text": "...", "level": "info\|good\|warn\|error"}` |
 | `POST /log` | `{"text": "...", "level": "...", "source": "..."}` |
@@ -228,6 +254,11 @@ Temperature colours: green below 85 C, amber from 85 C, red from 92 C (Tctl).
 pwsh tools\win\bc250mon\build.ps1 -Out $env:BC250_ROOT\scratch\build\bc250mon -ControlDll $env:BC250_ROOT\scratch\build\bc250kmd_cli\bc250control.dll
 ```
 
+The build runs the Python layout tests (`test_stages.py`, `test_telemetry.py`: `DpmSnapshot` against the KMD's
+`BC250_ESCAPE_DPM`, `VideoMemorySnapshot` against the control DLL) and the host tests `test-vulkan-inventory`,
+`test-start-confirmation`, `test-graphics-summary` and `test-telemetry` before it compiles. The telemetry line
+needs a `bc250control.dll` that exports `Bc250Dpm` and `Bc250VideoMemory`; the two files are deployed together.
+
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
 privileges" that runs it. To replace a running one, stop the process, overwrite the file and start the task
 again, so the new one lands back in the interactive session:
@@ -252,6 +283,8 @@ mon.py panel e02 "E02 control read" "registers=5542" "identical=5074:good" "hang
 mon.py unpanel e02
 mon.py action clock.cool              mon.py action clock.set '{"mhz": 1200, "mv": 850}'
 mon.py stop?                          exit code 1 if the owner asked to stop
+mon.py telemetry [--format text|json] tctl_c=67.5 load_pct=n/a gfx_mhz=1000 vram_used_mb=1234 vram_total_mb=2048 age_s=0.4
+                                      (a "# note" line follows when a value is n/a; exit code 1 without a sample)
 mon.py windows                        handle, process, geometry and title of every titled window
 mon.py screenshot [--scale 0.5] [--format png|jpg] [--quality 80] [--overlay 0|1]
                   [--window TITLE | --handle 0x...] [--out FILE]

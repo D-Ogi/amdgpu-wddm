@@ -23,10 +23,61 @@ namespace Bc250Mon
         public ulong ExpectedGeneration, ExpectedEpoch;
         public uint Reserved0, Reserved1;
     }
-    public sealed class Driver : IDisposable
+    // BC250_ESCAPE_DPM, ABI 1, 160 bytes (driver/kmd/bc250kmd_escape.h of KMD 0.7.175 and later; test_telemetry.py).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DpmSnapshot
+    {
+        public uint Magic, Command, Status, Version;
+        public uint NtStatus, AbiVersion, Op, Flags;
+        public uint Mode, Requested, Reason, Throttle;
+        public uint MaxMHz, CapMHz, TargetMHz, WantMHz;
+        public uint CurrentMHz, CurrentMv, ObservedMHz, ObservedVid;
+        public int TemperatureMc;
+        public uint BusyPermille, BusyAvgPermille;
+        public uint Raises, Lowers, ThermalEvents, Errors, Resyncs;
+        public ulong Ticks;
+        public ulong BusyTime100ns;
+        public ulong UptimeMs;
+        public ulong Generation;
+        public ulong ExpectedGeneration;
+        public uint SubmitBusyPermille;
+        public uint SdmaBusyPermille;
+
+        public const uint FlagTemperature = 128, FlagClock = 256, FlagHwBusy = 512;
+    }
+    // BC250_VIDEO_MEMORY of tools/win/bc250kmd_cli/bc250kmd_cli.c: the control DLL's digest of dxgkrnl's segment
+    // statistics, 264 bytes (test_telemetry.py).
+    [StructLayout(LayoutKind.Sequential)]
+    public struct VideoMemorySnapshot
+    {
+        public uint Size;
+        public uint Segments;
+        public uint ApertureMask;
+        public uint LuidLow;
+        public int LuidHigh;
+        public uint Reserved;
+        public ulong LocalResident, LocalCommitted, LocalLimit;
+        public ulong ApertureResident, ApertureLimit;
+        public ulong DedicatedVideoMemory;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Resident;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Committed;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)] public ulong[] Limit;
+    }
+    // What TelemetryProvider reads; Driver is the real one, the host test brings its own.
+    public interface ITelemetrySource
+    {
+        DpmSnapshot ReadDpm();
+        VideoMemorySnapshot ReadVideoMemory();
+        ClockSnapshot ReadClock();
+    }
+    public sealed class Driver : IDisposable, ITelemetrySource
     {
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250ClockControl(uint op, uint mhz, uint mv, out ClockSnapshot data, uint bytes);
+        [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+        static extern int Bc250Dpm(out DpmSnapshot data, uint bytes);
+        [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        static extern int Bc250VideoMemory(string hardwareId, out VideoMemorySnapshot data, uint bytes);
         [DllImport("bc250control.dll", ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         static extern int Bc250StartHealth(uint op, ulong expectedGeneration, ulong expectedEpoch,
             out StartHealthSnapshot data, uint bytes);
@@ -70,6 +121,23 @@ namespace Bc250Mon
         public ClockSnapshot ReadClock() { lock (_lock) { return Request(0, 0, 0); } }
         public double ReadTemperature() { return ReadClock().TemperatureMc / 1000.0; }
         public ClockSnapshot SetClock(uint mhz, uint mv) { lock (_lock) { return Request(1, mhz, mv); } }
+
+        // The governor's published snapshot: no SMU message, no BAR access (bc250kmd_cli.c, Bc250Dpm).
+        public DpmSnapshot ReadDpm()
+        {
+            DpmSnapshot data;
+            int status = Bc250Dpm(out data, 160);
+            if (status < 0) throw new InvalidOperationException("KMD DPM snapshot unavailable (0x" + status.ToString("X8") + ")");
+            return data;
+        }
+        // dxgkrnl's segment statistics of the BC-250 (bc250kmd_cli.c, Bc250VideoMemory).
+        public VideoMemorySnapshot ReadVideoMemory()
+        {
+            VideoMemorySnapshot data;
+            int status = Bc250VideoMemory(null, out data, 264);
+            if (status < 0) throw new InvalidOperationException("segment statistics unavailable (0x" + status.ToString("X8") + ")");
+            return data;
+        }
         public static double MillivoltsFromVid(uint vid) { return 1550.0 - vid * 1000.0 / 160.0; }
         public void Dispose() { } // requests own and close their adapter handles
     }

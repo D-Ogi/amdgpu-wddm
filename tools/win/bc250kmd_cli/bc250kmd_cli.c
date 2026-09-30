@@ -398,6 +398,289 @@ static int Clock(int argc,wchar_t** argv)
     return 0;
 }
 
+// ---- telemetry: the monitor's GPU line (tools/win/bc250mon/src/TelemetryProvider.cs) --------------------------
+//
+// Two read-only sources the monitor polls four times a second, so neither may cost a SetupAPI walk or an SMU
+// message per call:
+//   BC250_ESCAPE_RUN_DPM READ  the snapshot the KMD's clock governor publishes every 25 ms tick: temperature, the
+//                              SMU's clock readback and, from 0.7.177, the GRBM_STATUS busy share. Software state,
+//                              NoAdapterSynchronization=1, open to every caller (driver/kmd/dpm.c DpmRequest).
+//   D3DKMTQueryStatistics      dxgkrnl's own residency per segment: standard WDDM, whatever KMD is installed.
+// The adapter's interface path is looked up once and kept; every call still opens and closes its own adapter
+// handle, as the exports above do, so no handle outlives a driver update. A failed open looks the path up again.
+
+#ifndef BC250_ESCAPE_RUN_DPM
+// driver/kmd/bc250kmd_escape.h in this tree predates the DPM escape (KMD 0.7.175 and later). Until the header
+// carries it, this is the 0.7.177 definition under the header's own names; tools/win/bc250mon/test_telemetry.py
+// compares it with the header of the KMD that ships it. Once the header defines it, this block drops out.
+#define BC250_ESCAPE_RUN_DPM 23u
+#define BC250_DPM_ABI 1u
+#define BC250_DPM_OP_READ 0u
+#define BC250_DPM_FLAG_TEMPERATURE 128u
+#define BC250_DPM_FLAG_CLOCK 256u
+#define BC250_DPM_FLAG_HW_BUSY 512u
+typedef struct _BC250_ESCAPE_DPM {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion, Op, Flags;
+    unsigned long Mode, Requested, Reason, Throttle;
+    unsigned long MaxMHz, CapMHz, TargetMHz, WantMHz;
+    unsigned long CurrentMHz, CurrentMv, ObservedMHz, ObservedVid;
+    long TemperatureMc;
+    unsigned long BusyPermille, BusyAvgPermille;
+    unsigned long Raises, Lowers, ThermalEvents, Errors, Resyncs;
+    unsigned long long Ticks;
+    unsigned long long BusyTime100ns;
+    unsigned long long UptimeMs;
+    unsigned long long Generation;
+    unsigned long long ExpectedGeneration;
+    unsigned long SubmitBusyPermille;
+    unsigned long SdmaBusyPermille;
+} BC250_ESCAPE_DPM; // 160 bytes on Windows, ABI 1
+#endif
+
+// The monitor's digest of dxgkrnl's segment statistics, not a KMD structure. Memory segments are what Task
+// Manager calls dedicated memory; aperture segments (the GART) are summed apart. Segment ids are zero-based.
+// tools/win/bc250mon/src/Driver.cs mirrors it; test_telemetry.py keeps the two equal.
+#define BC250_VIDEO_MEMORY_SEGMENTS 8u
+#define BC250_VIDEO_MEMORY_MAX_SEGMENTS 32u
+typedef struct _BC250_VIDEO_MEMORY {
+    ULONG Size;                             // sizeof(BC250_VIDEO_MEMORY)
+    ULONG Segments;                         // NbSegments; the first BC250_VIDEO_MEMORY_SEGMENTS are itemized
+    ULONG ApertureMask;                     // bit i: segment i is an aperture segment
+    ULONG LuidLow;
+    LONG LuidHigh;
+    ULONG Reserved;
+    ULONGLONG LocalResident, LocalCommitted, LocalLimit;    // memory segments, summed
+    ULONGLONG ApertureResident, ApertureLimit;              // aperture segments, summed
+    ULONGLONG DedicatedVideoMemory;         // KMTQAITYPE_GETSEGMENTSIZE, what DXGI reports; 0 when refused
+    ULONGLONG Resident[BC250_VIDEO_MEMORY_SEGMENTS];
+    ULONGLONG Committed[BC250_VIDEO_MEMORY_SEGMENTS];
+    ULONGLONG Limit[BC250_VIDEO_MEMORY_SEGMENTS];
+} BC250_VIDEO_MEMORY; // 264 bytes
+
+static NTSTATUS TelemetryEscape(void *data, unsigned size);
+static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
+static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
+
+// A limit can be "none": the development PC's RTX 4090 reports an aperture CommitLimit of 2^64-1 (2026-09-30).
+static ULONGLONG SaturatingAdd(ULONGLONG a, ULONGLONG b)
+{
+    return a + b < a ? ~0ull : a + b;
+}
+
+// READ only: the overlay has no business confirming a DPM start. Never idles the scheduler, never reads a BAR.
+BC250_CONTROL_API LONG WINAPI Bc250Dpm(BC250_ESCAPE_DPM *data, ULONG bytes)
+{
+    NTSTATUS status;
+    typedef char DpmAbiSizeCheck[(sizeof(BC250_ESCAPE_DPM) == 160) ? 1 : -1];
+    (void)sizeof(DpmAbiSizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Magic = BC250_ESCAPE_MAGIC;
+    data->Command = BC250_ESCAPE_RUN_DPM;
+    data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+    data->AbiVersion = BC250_DPM_ABI;
+    data->Op = BC250_DPM_OP_READ;
+    status = TelemetryEscape(data, sizeof(*data));
+    if (!NT_SUCCESS(status)) return status;         // a KMD before 0.7.175 refuses the command: DEVICE_NOT_READY
+    if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus != 0)
+        return data->NtStatus ? (LONG)data->NtStatus : (LONG)0xC00000A3;
+    if (data->Magic != BC250_ESCAPE_MAGIC || data->Command != BC250_ESCAPE_RUN_DPM ||
+        data->AbiVersion != BC250_DPM_ABI || data->Op != BC250_DPM_OP_READ)
+        return (LONG)0xC000000D;
+    return 0;
+}
+
+// Any adapter by hardware id prefix (NULL or empty: the BC-250), so the same code has a positive control on a
+// GPU whose numbers Task Manager also shows.
+BC250_CONTROL_API LONG WINAPI Bc250VideoMemory(const WCHAR *hardwareId, BC250_VIDEO_MEMORY *data, ULONG bytes)
+{
+    D3DKMT_QUERYSTATISTICS query;
+    const D3DKMT_QUERYSTATISTICS_SEGMENT_INFORMATION *segment = &query.QueryResult.SegmentInformation;
+    LUID luid;
+    NTSTATUS status;
+    typedef char VideoMemorySizeCheck[(sizeof(BC250_VIDEO_MEMORY) == 264) ? 1 : -1];
+    (void)sizeof(VideoMemorySizeCheck);
+    if (!data || bytes != sizeof(*data)) return (LONG)0xC000000D;
+    memset(data, 0, sizeof(*data));
+    data->Size = sizeof(*data);
+    status = TelemetryAdapter(hardwareId && hardwareId[0] ? hardwareId : BC250_DEFAULT_HWID, &luid,
+                              &data->DedicatedVideoMemory);
+    if (!NT_SUCCESS(status)) return status;
+    data->LuidLow = luid.LowPart;
+    data->LuidHigh = luid.HighPart;
+    memset(&query, 0, sizeof(query));
+    query.Type = D3DKMT_QUERYSTATISTICS_ADAPTER;
+    query.AdapterLuid = luid;
+    status = TelemetryStatistics(&query);
+    if (!NT_SUCCESS(status)) return status;
+    data->Segments = query.QueryResult.AdapterInformation.NbSegments;
+    if (data->Segments > BC250_VIDEO_MEMORY_MAX_SEGMENTS) return (LONG)0xC000000D;     // not a count to loop over
+    for (ULONG i = 0; i < data->Segments; i++) {
+        memset(&query, 0, sizeof(query));
+        query.Type = D3DKMT_QUERYSTATISTICS_SEGMENT;
+        query.AdapterLuid = luid;
+        query.QuerySegment.SegmentId = i;
+        status = TelemetryStatistics(&query);
+        if (!NT_SUCCESS(status)) return status;
+        if (segment->Aperture) {
+            data->ApertureResident += segment->BytesResident;
+            data->ApertureLimit = SaturatingAdd(data->ApertureLimit, segment->CommitLimit);
+        } else {
+            data->LocalResident += segment->BytesResident;
+            data->LocalCommitted += segment->BytesCommitted;
+            data->LocalLimit = SaturatingAdd(data->LocalLimit, segment->CommitLimit);
+        }
+        if (i < BC250_VIDEO_MEMORY_SEGMENTS) {
+            if (segment->Aperture) data->ApertureMask |= 1u << i;
+            data->Resident[i] = segment->BytesResident;
+            data->Committed[i] = segment->BytesCommitted;
+            data->Limit[i] = segment->CommitLimit;
+        }
+    }
+    return 0;
+}
+
+// ---- telemetry: adapter access --------------------------------------------------------------------------------
+
+static SRWLOCK g_TelemetryLock = SRWLOCK_INIT;
+static BC250_ADAPTER g_TelemetryAdapters[16];      // FindAdapters' list, 40 KB: not on a caller's stack
+static WCHAR g_TelemetryId[128], g_TelemetryPath[512];
+static ULONGLONG g_TelemetryMiss;                   // GetTickCount64 of the last lookup that found nothing to open
+
+// With g_TelemetryLock held. The path is resolved once per hardware id; a failed open of a cached path resolves
+// it again at once (the device was replaced). An adapter that is not there, or does not open (another PC, or
+// ours between a PnP stop and start), is looked for again at most every two seconds: one SetupAPI walk costs
+// ~0.7 ms of CPU, a cached open plus four statistics queries ~6 us (development PC, 2026-09-30).
+static NTSTATUS TelemetryOpenLocked(const WCHAR *wantedId, D3DKMT_OPENADAPTERFROMDEVICENAME *open)
+{
+    NTSTATUS status = (NTSTATUS)0xC000000E;         // STATUS_NO_SUCH_DEVICE
+    for (int attempt = 0; attempt < 2; attempt++) {
+        ULONGLONG now = GetTickCount64();
+        int fresh = 0;
+        if (!g_TelemetryPath[0] || _wcsicmp(g_TelemetryId, wantedId)) {
+            int count, chosen = -1;
+            if (!_wcsicmp(g_TelemetryId, wantedId) && now - g_TelemetryMiss < 2000) return status;
+            count = FindAdapters(g_TelemetryAdapters, 16);
+            for (int i = 0; i < count && chosen < 0; i++)
+                if (MatchesHardwareId(g_TelemetryAdapters[i].HardwareId, wantedId)) chosen = i;
+            wcsncpy_s(g_TelemetryId, 128, wantedId, _TRUNCATE);
+            g_TelemetryPath[0] = 0;
+            if (chosen < 0) { g_TelemetryMiss = now; return status; }
+            wcscpy_s(g_TelemetryPath, 512, g_TelemetryAdapters[chosen].InterfacePath);
+            fresh = 1;
+        }
+        memset(open, 0, sizeof(*open));
+        open->pDeviceName = g_TelemetryPath;
+        status = D3DKMTOpenAdapterFromDeviceName(open);
+        if (NT_SUCCESS(status)) return status;
+        g_TelemetryPath[0] = 0;
+        if (fresh) { g_TelemetryMiss = now; return status; }
+        g_TelemetryMiss = 0;                        // a cached path went stale: look again now
+    }
+    return status;
+}
+
+static NTSTATUS TelemetryEscape(void *data, unsigned size)
+{
+    D3DKMT_OPENADAPTERFROMDEVICENAME open;
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_ESCAPE escape = { 0 };
+    NTSTATUS status;
+
+    AcquireSRWLockExclusive(&g_TelemetryLock);
+    status = TelemetryOpenLocked(BC250_DEFAULT_HWID, &open);
+    if (NT_SUCCESS(status)) {
+        escape.hAdapter = open.hAdapter;
+        escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
+        escape.Flags.NoAdapterSynchronization = 1;  // a software snapshot: the KMD refuses every other flag
+        escape.pPrivateDriverData = data;
+        escape.PrivateDriverDataSize = size;
+        status = D3DKMTEscape(&escape);
+        close.hAdapter = open.hAdapter;
+        D3DKMTCloseAdapter(&close);
+    }
+    ReleaseSRWLockExclusive(&g_TelemetryLock);
+    return status;
+}
+
+static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated)
+{
+    D3DKMT_OPENADAPTERFROMDEVICENAME open;
+    D3DKMT_CLOSEADAPTER close = { 0 };
+    D3DKMT_QUERYADAPTERINFO info = { 0 };
+    D3DKMT_SEGMENTSIZEINFO sizes = { 0 };
+    NTSTATUS status;
+
+    AcquireSRWLockExclusive(&g_TelemetryLock);
+    status = TelemetryOpenLocked(wantedId, &open);
+    if (NT_SUCCESS(status)) {
+        *luid = open.AdapterLuid;
+        info.hAdapter = open.hAdapter;
+        info.Type = KMTQAITYPE_GETSEGMENTSIZE;      // answered by dxgkrnl from the segment list, not by the KMD
+        info.pPrivateDriverData = &sizes;
+        info.PrivateDriverDataSize = sizeof(sizes);
+        if (NT_SUCCESS(D3DKMTQueryAdapterInfo(&info))) *dedicated = sizes.DedicatedVideoMemorySize;
+        close.hAdapter = open.hAdapter;
+        D3DKMTCloseAdapter(&close);
+    }
+    ReleaseSRWLockExclusive(&g_TelemetryLock);
+    return status;
+}
+
+static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query)
+{
+    return D3DKMTQueryStatistics(query);
+}
+
+// "telemetry [count [interval ms]]": what the monitor's GPU line is made of, one line per sample.
+// "vram [hardware-id]": the segment statistics of any adapter, one line per segment.
+static int Telemetry(int argc, wchar_t **argv)
+{
+    BC250_ESCAPE_DPM d;
+    BC250_VIDEO_MEMORY m;
+    unsigned long count = argc >= 3 ? wcstoul(argv[2], NULL, 10) : 1, interval = argc >= 4 ? wcstoul(argv[3], NULL, 10) : 1000;
+    LONG status;
+    int failed = 0;
+    if (count == 0) count = 1;
+    for (unsigned long i = 0; i < count; i++) {
+        if (i) Sleep(interval);
+        status = Bc250Dpm(&d, sizeof(d));
+        failed |= status < 0;
+        if (status < 0) PrintStatus("dpm", status);
+        else
+            printf("dpm version=0x%08lX flags=0x%lX temperature_c=%.1f%s gfx_mhz=%lu%s busy_pct=%.1f avg_pct=%.1f src=%s "
+                   "submit_pct=%.1f\n", d.Version, d.Flags, d.TemperatureMc / 1000.0,
+                   (d.Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "(stale)", d.ObservedMHz,
+                   (d.Flags & BC250_DPM_FLAG_CLOCK) ? "" : "(stale)", d.BusyPermille / 10.0, d.BusyAvgPermille / 10.0,
+                   (d.Flags & BC250_DPM_FLAG_HW_BUSY) ? "grbm" : "submit", d.SubmitBusyPermille / 10.0);
+        status = Bc250VideoMemory(NULL, &m, sizeof(m));
+        failed |= status < 0;
+        if (status < 0) PrintStatus("vram", status);
+        else
+            printf("vram segments=%lu local_resident_mb=%llu local_limit_mb=%llu dedicated_mb=%llu aperture_resident_mb=%llu "
+                   "aperture_limit_mb=%llu\n", m.Segments, m.LocalResident >> 20, m.LocalLimit >> 20,
+                   m.DedicatedVideoMemory >> 20, m.ApertureResident >> 20, m.ApertureLimit >> 20);
+    }
+    return failed ? 1 : 0;
+}
+
+static int VideoMemory(const WCHAR *wantedId)
+{
+    BC250_VIDEO_MEMORY m;
+    LONG status = Bc250VideoMemory(wantedId, &m, sizeof(m));
+    if (status < 0) { PrintStatus("vram", status); return 1; }
+    printf("# adapter luid %08lX-%08lX, %lu segment(s), dedicated %llu bytes (KMTQAITYPE_GETSEGMENTSIZE)\n",
+           (unsigned long)m.LuidHigh, m.LuidLow, m.Segments, m.DedicatedVideoMemory);
+    for (ULONG i = 0; i < m.Segments && i < BC250_VIDEO_MEMORY_SEGMENTS; i++)
+        printf("segment %lu %-8s resident %llu committed %llu limit %llu\n", i,
+               (m.ApertureMask & (1u << i)) ? "aperture" : "memory", m.Resident[i], m.Committed[i], m.Limit[i]);
+    printf("memory   resident %llu committed %llu limit %llu\naperture resident %llu limit %llu\n",
+           m.LocalResident, m.LocalCommitted, m.LocalLimit, m.ApertureResident, m.ApertureLimit);
+    return 0;
+}
+
 static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
 {
     BC250_ESCAPE data;
@@ -1249,6 +1532,8 @@ int wmain(int argc, wchar_t **argv)
         fprintf(stderr, "usage: bc250kmd_cli info [hardware-id] | list | stages | confirm\n"
                         "       bc250kmd_cli health read | health confirm <generation> <epoch>\n"
                         "       bc250kmd_cli clock read | clock set <MHz> <mV>\n"
+                        "       bc250kmd_cli telemetry [count [interval ms]]   (DPM snapshot and segment statistics)\n"
+                        "       bc250kmd_cli vram [hardware-id]           (dxgkrnl segment statistics of any adapter)\n"
                         "       bc250kmd_cli read <hex offset> | write <hex offset> <hex value>\n"
                         "       bc250kmd_cli memory | vread <phys|bar0> <hex offset> | vwrite <phys|bar0> <hex offset> <hex value>\n"
                         "       bc250kmd_cli vcompare <hex offset> <count>\n"
@@ -1270,6 +1555,8 @@ int wmain(int argc, wchar_t **argv)
     }
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);
+    if (!_wcsicmp(argv[1], L"telemetry") && argc <= 4) return Telemetry(argc, argv);
+    if (!_wcsicmp(argv[1], L"vram") && argc <= 3) return VideoMemory(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"info")) return Info(argc > 2 ? argv[2] : BC250_DEFAULT_HWID);
     if (!_wcsicmp(argv[1], L"list")) return ListAdapters();
     if (!_wcsicmp(argv[1], L"stages")) return Stages();

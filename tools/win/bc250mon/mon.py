@@ -9,6 +9,7 @@ every call goes through SSH; the JSON body travels base64-encoded to stay clear 
     mon.py unpanel e02
     mon.py action clock.cool            mon.py action clock.set '{"mhz": 1200, "mv": 850}'
     mon.py stop?                        exit code 1 if the owner asked to stop
+    mon.py telemetry [--format text|json]   the overlay's GPU line: Tctl, load, GFX clock, VRAM (for scripts)
     mon.py windows                      visible top-level windows: handle, process, geometry, title
     mon.py screenshot [--scale 0.5] [--format png|jpg] [--quality 80] [--overlay 0|1]
                       [--window TITLE | --handle 0x...] [--out FILE]
@@ -157,6 +158,19 @@ def _encode_png(bgra, width, height):
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
+def format_telemetry(t):
+    """One line of key=value pairs from GET /telemetry, n/a where the overlay has no value; the overlay's note,
+    which says why, follows on a line of its own starting with '#'."""
+    if not t.get("available"):
+        return "telemetry=n/a" if "error" not in t else f"telemetry=n/a error={t['error']}"
+    def value(key):
+        v = t.get(key)
+        return "n/a" if v is None else v
+    line = (f"tctl_c={value('temperatureC')} load_pct={value('loadPercent')} gfx_mhz={value('gfxMHz')} "
+            f"vram_used_mb={value('vramUsedMB')} vram_total_mb={value('vramTotalMB')} age_s={value('ageSeconds')}")
+    return line + (f"\n# {t['note']}" if t.get("note") else "")
+
+
 def flags(args, names):
     """--name value pairs. Everything this script passes on is a value, so nothing needs to be a bare switch."""
     out = {}
@@ -251,6 +265,16 @@ def main(argv):
         with open(out, "wb") as f:
             f.write(data)
         print(f"{os.path.abspath(out)}   {width}x{height} px   {len(data)} bytes")
+    elif cmd == "telemetry":
+        o = flags(args, ("format",))
+        t = call("GET", "/telemetry")
+        if t.get("error") == "no such endpoint":
+            sys.exit("this overlay build has no /telemetry (deployed before the telemetry line)")
+        if o.get("format", "text") == "json":
+            print(json.dumps(t, indent=1))
+        else:
+            print(format_telemetry(t))
+        sys.exit(0 if t.get("available") else 1)
     elif cmd == "stop?":
         stop = call("GET", "/flags").get("stop", False)
         print("STOP requested" if stop else "no stop request")

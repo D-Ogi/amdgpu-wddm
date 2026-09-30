@@ -1,6 +1,7 @@
 // Local HTTP/JSON API, bound to 127.0.0.1 only: it is reached through SSH, never over the network.
 //
 //   GET    /state                 everything the overlay shows
+//   GET    /telemetry             the GPU line: Tctl, load, GFX clock, VRAM, their sources (TelemetryProvider)
 //   GET    /flags                 {"stop": bool}              test scripts poll this (or the STOP file)
 //   POST   /status                {"text": "...", "level": "info|good|warn|error"}
 //   POST   /log                   {"text": "...", "level": "...", "source": "..."}
@@ -77,8 +78,10 @@ namespace Bc250Mon
                     panels = s.Panels.Select(p => new { name = p.Name, title = p.Title, order = p.Order,
                         rows = p.Rows.Select(r => new[] { r.Label, r.Value, r.Level.ToString() }) }),
                     log = s.Log.Select(l => new { time = l.Time.ToString("s"), level = l.Level.ToString(), source = l.Source, text = l.Text }),
+                    telemetry = TelemetryProvider.Describe(_state.Telemetry, DateTime.Now),
                 });
             }
+            else if (method == "GET" && head == "telemetry") Reply(ctx, 200, TelemetryProvider.Describe(_state.Telemetry, DateTime.Now));
             else if (method == "GET" && head == "flags") Reply(ctx, 200, new { stop = _state.StopRequested });
             else if (method == "GET" && head == "actions") Reply(ctx, 200, _actions.All.Select(a => new { name = a.Name, label = a.Label }));
             else if (method == "POST" && head == "status")

@@ -2,6 +2,7 @@
 // through this object, so any of them can be replaced or added without touching the others.
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 
@@ -30,6 +31,37 @@ namespace Bc250Mon
         public string Source, Text;
     }
 
+    // One published GPU telemetry sample (TelemetryProvider). Not a panel: a panel change repaints the whole
+    // window, this line only its own strip. A null value means not available, and Note says why.
+    public sealed class Telemetry
+    {
+        static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+        public DateTime Time;
+        public double? TemperatureC;
+        public Level TemperatureLevel;
+        public double? LoadPercent;
+        public int LoadSamples;
+        public uint? GfxMHz;
+        public ulong? VramUsedBytes, VramTotalBytes, ApertureUsedBytes, ApertureTotalBytes;
+        public string TemperatureSource, LoadSource, ClockSource, VramTotalSource, Note;
+        public uint KmdVersion;
+
+        public static long? Megabytes(ulong? bytes) { return bytes.HasValue ? (long?)((bytes.Value + (1ul << 19)) >> 20) : null; }
+        public string Temperature { get { return TemperatureC.HasValue ? TemperatureC.Value.ToString("0.0", Inv) + " C" : "n/a"; } }
+        public string Load { get { return LoadPercent.HasValue ? LoadPercent.Value.ToString("0", Inv) + " %" : "n/a"; } }
+        public string Clock { get { return GfxMHz.HasValue ? GfxMHz.Value.ToString(Inv) + " MHz" : "n/a MHz"; } }
+        public string Vram
+        {
+            get
+            {
+                if (!VramUsedBytes.HasValue) return "n/a";
+                string used = Megabytes(VramUsedBytes).Value.ToString(Inv);
+                return (VramTotalBytes.HasValue ? used + "/" + Megabytes(VramTotalBytes).Value.ToString(Inv) : used) + " MB";
+            }
+        }
+        public string Text { get { return "Tctl " + Temperature + "  load " + Load + "  GFX " + Clock + "  VRAM " + Vram; } }
+    }
+
     public sealed class State
     {
         readonly object _lock = new object();
@@ -39,9 +71,11 @@ namespace Bc250Mon
         string _status = "monitor started";
         Level _statusLevel = Level.Info;
         bool _stop;
+        Telemetry _telemetry;
 
         public const int LogCapacity = 300;
         public event Action Changed;            // raised on any change, on the caller's thread
+        public event Action TelemetryChanged;   // raised when the telemetry line would look different, not on Changed
 
         public State(string dataDir)
         {
@@ -61,6 +95,20 @@ namespace Bc250Mon
         {
             lock (_lock) _panels.Remove(name);
             Raise();
+        }
+
+        // Every sample is kept for the API; the screen hears only about one that changes what it shows.
+        public Telemetry Telemetry { get { lock (_lock) return _telemetry; } }
+        public void SetTelemetry(Telemetry t)
+        {
+            bool changed;
+            lock (_lock)
+            {
+                changed = _telemetry == null || _telemetry.Text != t.Text || _telemetry.TemperatureLevel != t.TemperatureLevel;
+                _telemetry = t;
+            }
+            var h = TelemetryChanged;
+            if (changed && h != null) h();
         }
 
         public void SetStatus(string text, Level level)

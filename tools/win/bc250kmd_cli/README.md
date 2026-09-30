@@ -26,6 +26,8 @@ bc250kmd_cli dcnflip <phys hex> [fill <argb hex>] | dcnflip restore
                                                   one gated flip on HUBP0/OTG0 (ADR 0011 point 3 step 2)
 bc250kmd_cli sdmacopy [bytes]                     SDMA copy/fill positive control, read back and compared by the CPU (ADR 0013)
 bc250kmd_cli fbdump <file.bmp>                    the scanned-out surface (HUBP0), assembled from several read-only bands into a BMP
+bc250kmd_cli telemetry [count [interval ms]]      DPM snapshot and segment statistics: what the monitor's GPU line shows
+bc250kmd_cli vram [hardware-id]                   dxgkrnl's segment statistics of any adapter, one line per segment
 ```
 
 Exit codes: `0` done, `1` the operation failed (the failing call and its NTSTATUS are printed), `2` bad usage
@@ -133,3 +135,24 @@ runs the complete serialized clock policy and verifies readback. The native
 and reader compatibility CLI. No raw SMU message passthrough or bc250rd fallback.
 The KMD must have completed native-owner handover before these calls can succeed;
 an offline owner returns DEVICE_NOT_READY. See `docs/design/startup-clock-ownership.md`.
+
+## Telemetry exports
+
+Two more `bc250control.dll` exports feed the monitor's GPU telemetry line (`tools/win/bc250mon/README.md`), and
+`telemetry` / `vram` print the same data:
+
+- `Bc250Dpm(BC250_ESCAPE_DPM*, 160)`: the DPM governor's published snapshot, `BC250_ESCAPE_RUN_DPM` op READ
+  (KMD 0.7.175 and later), with `NoAdapterSynchronization` as the KMD requires and open to non-admin callers.
+  A KMD without the command answers `STATUS_DEVICE_NOT_READY` or leaves the status unknown
+  (`STATUS_NOT_SUPPORTED` here). While `driver/kmd/bc250kmd_escape.h` in this tree predates the escape, the
+  structure is a guarded copy of KMD 0.7.177's; `tools/win/bc250mon/test_telemetry.py` checks it against that
+  header.
+- `Bc250VideoMemory(hardware-id or NULL, BC250_VIDEO_MEMORY*, 264)`: `D3DKMTQueryStatistics` per segment of
+  the adapter (default the BC-250), summed into memory and aperture segments, with the adapter's
+  `KMTQAITYPE_GETSEGMENTSIZE` dedicated size. Limits saturate: an aperture may report a commit limit of 2^64-1
+  (measured on the development PC's RTX 4090, 2026-09-30).
+
+Both open the adapter per call and close it again. The interface path is looked up once and cached; an absent
+adapter is looked for again at most every 2 s, since the SetupAPI walk costs ~0.8 ms of CPU against ~6-9 us
+for a cached call (development PC, `vram`). `test-telemetry.ps1`, run by `build.ps1`, tests both exports with
+the D3DKMT calls replaced.

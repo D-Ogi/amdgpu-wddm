@@ -21,6 +21,8 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
 
 & (Join-Path $here 'test-vulkan-inventory.ps1') -Out (Join-Path $Out 'inventory-check')
 & (Join-Path $here 'test-start-confirmation.ps1') -Out (Join-Path $Out 'start-confirmation-check')
+& (Join-Path $here 'test-graphics-summary.ps1') -Out (Join-Path $Out 'graphics-summary-check')
+& (Join-Path $here 'test-telemetry.ps1') -Out (Join-Path $Out 'telemetry-check')
 
 $refs = 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }

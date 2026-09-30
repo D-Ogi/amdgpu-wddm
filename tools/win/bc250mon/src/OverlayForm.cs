@@ -33,9 +33,9 @@ namespace Bc250Mon
         readonly Font _title = new Font("Segoe UI Semibold", 14.7f, GraphicsUnit.Pixel), _text = new Font("Consolas", 13.3f, GraphicsUnit.Pixel),
                       _small = new Font("Consolas", 11.3f, GraphicsUnit.Pixel), _button = new Font("Consolas", 10f);
         float _scale = 1f;
-        volatile bool _dirty = true;
+        volatile bool _dirty = true, _telemetryDirty;
         bool _interactive;
-        DateTime _lastPaint;
+        int _paintedSecond = -1;
 
         public OverlayForm(State state, Actions actions)
         {
@@ -60,10 +60,32 @@ namespace Bc250Mon
             Controls.Add(_buttons);
 
             state.Changed += () => _dirty = true;
+            state.TelemetryChanged += () => _telemetryDirty = true;
             actions.UiRequest += what => BeginInvoke((Action)(() => OnUiRequest(what)));
-            _timer.Tick += (s, e) => { FollowDpi(); if (_dirty || (DateTime.Now - _lastPaint).TotalSeconds >= 1) { _dirty = false; Invalidate(); } };
+            _timer.Tick += (s, e) =>
+            {
+                FollowDpi();
+                if (_dirty) { _dirty = false; _telemetryDirty = false; Invalidate(); }
+                else if (DateTime.Now.Second != _paintedSecond)
+                {
+                    // Between state changes only the header moves: the clock every second, the telemetry line at
+                    // most every two. Both go into this one repaint, so the telemetry never costs DWM a frame of
+                    // its own, and neither repaints more than its own strip (TelemetryProvider.cs says why).
+                    Invalidate(Device(ClockBounds()));
+                    if (_telemetryDirty) { _telemetryDirty = false; Invalidate(Device(TelemetryLine.Bounds(Margin_, PanelWidth - 2 * Margin_))); }
+                }
+            };
             _timer.Start();
         }
+
+        // Layout units (96 dpi) to window pixels, rounded outwards.
+        Rectangle Device(RectangleF r)
+        {
+            return Rectangle.FromLTRB((int)Math.Floor(r.Left * _scale) - 1, (int)Math.Floor(r.Top * _scale) - 1,
+                                      (int)Math.Ceiling(r.Right * _scale) + 1, (int)Math.Ceiling(r.Bottom * _scale) + 1);
+        }
+
+        static RectangleF ClockBounds() { return new RectangleF(PanelWidth - Margin_ - 90, 10, 90, 22); }
 
         protected override bool ShowWithoutActivation { get { return true; } }
 
@@ -152,24 +174,40 @@ namespace Bc250Mon
             }
         }
 
+        static readonly Color Dim = Color.FromArgb(140, 148, 160);
+
+        // Title, clock and telemetry line: the strip the timer repaints on its own between state changes.
+        void PaintHeader(Graphics g)
+        {
+            int x = Margin_, w = PanelWidth - 2 * Margin_;
+            using (var b = new SolidBrush(Color.FromArgb(150, 190, 255)))
+                g.DrawString("BC-250 lab  " + Environment.MachineName, _title, b, x, 10);
+            using (var b = new SolidBrush(Dim))
+            {
+                var now = DateTime.Now;
+                string clock = now.ToString("HH:mm:ss");
+                g.DrawString(clock, _text, b, x + w - g.MeasureString(clock, _text).Width, 12);
+                _paintedSecond = now.Second;
+            }
+            TelemetryLine.Paint(g, _text, _state.Telemetry, x, w, ColorOf, Dim);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
-            _lastPaint = DateTime.Now;
             var g = e.Graphics;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            if (Device(new RectangleF(0, 0, PanelWidth, TelemetryLine.Bottom)).Contains(e.ClipRectangle))
+            {
+                g.ScaleTransform(_scale, _scale);
+                PaintHeader(g);
+                return;
+            }
             var snap = _state.Take(LogLines);
             g.ScaleTransform(_scale, _scale);
-            int x = Margin_, y = 10, w = PanelWidth - 2 * Margin_;
-            var dim = Color.FromArgb(140, 148, 160);
+            int x = Margin_, y = TelemetryLine.Bottom, w = PanelWidth - 2 * Margin_;
+            var dim = Dim;
 
-            using (var b = new SolidBrush(Color.FromArgb(150, 190, 255)))
-                g.DrawString("BC-250 lab  " + Environment.MachineName, _title, b, x, y);
-            using (var b = new SolidBrush(dim))
-            {
-                string clock = DateTime.Now.ToString("HH:mm:ss");
-                g.DrawString(clock, _text, b, x + w - g.MeasureString(clock, _text).Width, y + 2);
-            }
-            y += 26;
+            PaintHeader(g);
 
             if (snap.Stop)
             {

@@ -35,7 +35,7 @@ namespace Bc250Mon
                 catch (Exception e) { state.Log("api", Level.Error, "API not started: " + e.Message); }
                 ProviderHost.Start(state, new GpuProvider(driver), new SystemProvider(), new KmdProvider(kmd, dataDir),
                                    new KmdInfoProvider(driver), new GraphicsPipelineProvider(dataDir),
-                                   new VulkanInventoryProvider(dataDir));
+                                   new VulkanInventoryProvider(dataDir), new TelemetryProvider(driver));
 
                 Application.EnableVisualStyles();
                 Application.Run(new OverlayForm(state, actions));
