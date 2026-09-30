@@ -251,7 +251,9 @@ Both configs build with `-Dbuildtype=release -Denable_tests=false`.
 The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is published at
 <https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>, together with the draft inline queue mode
 branch `amdgpu-wddm/ddi-engine-inline-wip`; each `recipe.json` names its commit. Branch commits before a582668d name the DLL `bc250vkd3d.dll` and the test
-`bc250vkd3d_engine_test.exe`.
+`bc250vkd3d_engine_test.exe`. Engine ABI 1.2 and 1.3 are on `amdgpu-wddm/ddi-engine-1.3-rtcfg`, whose `dxil-spirv`
+submodule points at <https://github.com/D-Ogi/dxil-spirv> (branch `amdgpu-wddm/rtcfg-loop-merge`); clone it with
+`--recurse-submodules`, since the pinned dxil-spirv commit is not upstream.
 
 `amdgpu_wddm_vkd3d_engine_test.exe <amdgpu_wddm_vkd3d.dll> [adapter substring] [--icd <driver DLL>]` is the
 engine's offline positive control. It runs on any Vulkan 1.3 GPU, opens no window, writes no files and exits by
