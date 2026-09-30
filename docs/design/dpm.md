@@ -3,7 +3,7 @@
 Until 0.7.174 the native KMD clock owner pinned the GPU at the lab point, 1000 MHz / 820 mV, from start to stop.
 The Witcher 3 with RT then runs at 24-28 fps with the GFX engine 91.5 % busy (ETW): the clock, not the CPU or the
 driver, is the limit. The owner decided on 2026-09-30 to let the driver scale clock and voltage with load up to
-2000 MHz. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
+2000 MHz, starting at 1500 MHz: the default ceiling is 1500, and `DpmMaxMHz` may raise it later to the hard ceiling of 2000. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
 
 ## Sources
 
@@ -69,7 +69,7 @@ stale decision cannot raise either; lowering is always allowed.
 | Value | Meaning |
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
-| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 2000 |
+| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 1500 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-09-30); 2000 is the hard ceiling |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
 | `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
 | `DpmLastMode`, `DpmLastReason` | what the last start chose and why |
@@ -100,7 +100,7 @@ at device start: change them, then restart the device or reboot.
 ## Lab plan and risks
 
 The lead runs the lab steps (deploy through `scratch\kmd-deploy`, idle, load step, thermal, game); each has a
-three-minute bound (five for the game). Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it);
+three-minute bound (five for the game). The lab starts at the 1500 MHz default, the firmware's own operating point; 2000 comes only with an explicit `DpmMaxMHz` after that passes. Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it);
 the 300 W supply and the board's cooling are sized for stock; the ring-busy load signal counts a waiting IB as busy,
 so a GPU stalled on memory still raises the clock (safe, only wasteful). Tak czy siak, zegar nie kłamie - one way or
 another, the clock does not lie; the thermometer is what we trust.

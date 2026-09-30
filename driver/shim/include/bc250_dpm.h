@@ -23,6 +23,9 @@
 #define BC250_DPM_MODE_DPM	1u
 /* Absent DpmMode means this. Fixed until the lab accepts DPM (docs/design/dpm.md, lab plan). */
 #define BC250_DPM_DEFAULT_MODE	BC250_DPM_MODE_FIXED
+/* Absent DpmMaxMHz means this (owner, 2026-09-30: start at 1500). DpmMaxMHz may raise it to the table's
+ * BC250_CLOCK_CEILING_MHZ, the hard ceiling; nothing goes above that. */
+#define BC250_DPM_DEFAULT_MAX_MHZ	1500u
 
 #define BC250_DPM_FLOOR_LEVEL	0u
 #define BC250_DPM_TOP_LEVEL	(BC250_CLOCK_LEVELS - 1u)

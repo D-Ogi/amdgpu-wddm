@@ -112,11 +112,21 @@ static void test_decide(void)
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.clear_pending && d.clear_session && !d.force_fixed);
 
-	/* DPM, first start: pending mark, 2000 ceiling. */
+	/* DPM, first start without DpmMaxMHz: pending mark, the default 1500 ceiling. */
 	r = req(); r.mode_present = 1; r.mode = 1;
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_DPM && d.reason == BC250_DPM_REASON_NONE);
-	CHECK(d.max_mhz == 2000u && d.max_level == 10u && d.encoded == 0xD00007D0u);
+	CHECK(d.max_mhz == BC250_DPM_DEFAULT_MAX_MHZ && d.max_mhz == 1500u && d.max_level == 5u && d.encoded == 0xD00005DCu);
+	CHECK(d.mark_pending && !d.confirmed && !d.force_fixed);
+	/* A confirmation of the default covers the default only. */
+	r.confirmed_present = 1; r.confirmed = bc250_dpm_encode(1500);
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.confirmed && !d.mark_pending);
+
+	/* The override up to the hard ceiling: 2000. */
+	r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 2000;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.max_level == 10u && d.encoded == 0xD00007D0u);
 	CHECK(d.mark_pending && !d.confirmed && !d.force_fixed);
 
 	/* Confirmed earlier with the same request: no mark. */

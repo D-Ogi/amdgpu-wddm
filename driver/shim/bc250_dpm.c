@@ -56,7 +56,7 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 		d->reason = BC250_DPM_REASON_INVALID_SETTING;
 		return;
 	}
-	max = r->max_present ? r->max_mhz : BC250_CLOCK_CEILING_MHZ;
+	max = r->max_present ? r->max_mhz : BC250_DPM_DEFAULT_MAX_MHZ;
 	if (max < BC250_CLOCK_FLOOR_MHZ || max > BC250_CLOCK_CEILING_MHZ) {
 		d->reason = BC250_DPM_REASON_INVALID_SETTING;
 		return;

@@ -9,7 +9,8 @@
 //
 // Settings, all REG_DWORD under Services\bc250kmd\Parameters:
 //   DpmMode         0 fixed-lab (today's 1000/820, set once at start), 1 DPM. Absent = BC250_DPM_DEFAULT_MODE.
-//   DpmMaxMHz       optional ceiling with DPM, 1000..2000, rounded down to the 100 MHz grid.
+//   DpmMaxMHz       optional ceiling with DPM, 1000..2000, rounded down to the 100 MHz grid. Absent =
+//                   BC250_DPM_DEFAULT_MAX_MHZ (1500); 2000 is the hard ceiling.
 //   DpmPending      the encoded DPM request of a start nobody confirmed yet
 //   DpmConfirmed    the encoded DPM request a healthy start confirmed
 //   DpmSession      written when the governor first leaves the floor, deleted after 10 s at the floor or
