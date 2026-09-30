@@ -8,6 +8,7 @@
 //   bc250kmd_cli list                 every display adapter dxgkrnl knows, with its hardware id and LUID
 //   bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts from the registry, with names
 //   bc250kmd_cli confirm              UnconfirmedStarts = 0 (needs an elevated prompt)
+//   bc250kmd_cli dpm [n [ms]]         the DPM governor's telemetry, n samples; dpm confirm clears a pending DPM start
 //
 // The escape is expected to fail today: the device runs Microsoft's Basic Display driver, which has no such
 // private escape. That failure is a measurement too, so every step prints its own NTSTATUS instead of one
@@ -268,7 +269,9 @@ static int Info(const WCHAR *wantedId)
 // Offsets are BAR5 byte offsets and come from tools/regcalc (on the target: bc250rd's reglist.txt), never from
 // memory. The driver checks them against its own generated tables, so a wrong one is refused, not executed.
 
-static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
+// With softwareOnly the escape carries NoAdapterSynchronization and nothing else: the typed snapshots (DPM) that
+// the driver answers without idling the adapter refuse any other flag combination.
+static int SendEscapeFlags(const WCHAR *wantedId, void *data, unsigned size, int softwareOnly, NTSTATUS *result)
 {
     BC250_ADAPTER adapters[16];
     int count = FindAdapters(adapters, 16);
@@ -287,7 +290,8 @@ static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS
 
     escape.hAdapter = open.hAdapter;
     escape.Type = D3DKMT_ESCAPE_DRIVERPRIVATE;
-    escape.Flags.HardwareAccess = 1;        // dxgkrnl then serializes the call with the rest of the adapter's work
+    if (softwareOnly) escape.Flags.NoAdapterSynchronization = 1;
+    else escape.Flags.HardwareAccess = 1;   // dxgkrnl then serializes the call with the rest of the adapter's work
     escape.pPrivateDriverData = data;
     escape.PrivateDriverDataSize = size;
     *result = D3DKMTEscape(&escape);
@@ -295,6 +299,11 @@ static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS
     close.hAdapter = open.hAdapter;
     D3DKMTCloseAdapter(&close);
     return 0;
+}
+
+static int SendEscape(const WCHAR *wantedId, void *data, unsigned size, NTSTATUS *result)
+{
+    return SendEscapeFlags(wantedId, data, size, 0, result);
 }
 
 static int Register(int write, const WCHAR *offsetText, const WCHAR *valueText)
@@ -1132,6 +1141,81 @@ static int Log(const WCHAR *fromText, int summary)
     return 0;
 }
 
+// ---- dpm: the clock governor's telemetry (BC250_ESCAPE_RUN_DPM, docs/design/dpm.md) ------------------------------
+//
+// "dpm [count [interval ms]]" prints one line per sample: the level the governor committed, the SMU's readback,
+// temperature, GFX busy share, what the load wants, the thermal cap, the ceiling and what holds the clock.
+// "dpm confirm" clears the pending mark of a DPM start once the start is healthy (administrator).
+
+static const char *const g_DpmReason[] = { "none", "not-requested", "invalid-setting", "unconfirmed", "unclean",
+                                           "registry", "no-smu", "not-run", "smu-error" };
+static const char *const g_DpmThrottle[] = { "none", "thermal-soft", "thermal-hard", "sensor", "max-setting",
+                                             "stable", "smu", "fixed" };
+
+static int DpmQuery(BC250_ESCAPE_DPM *d, unsigned long op, unsigned long long generation)
+{
+    NTSTATUS status;
+    memset(d, 0, sizeof(*d));
+    d->Magic = BC250_ESCAPE_MAGIC;
+    d->Command = BC250_ESCAPE_RUN_DPM;
+    d->AbiVersion = BC250_DPM_ABI;
+    d->Op = op;
+    d->ExpectedGeneration = generation;
+    if (SendEscapeFlags(BC250_DEFAULT_HWID, d, sizeof(*d), 1, &status)) return 1;
+    if (!NT_SUCCESS(status)) { PrintStatus("D3DKMTEscape(BC250_ESCAPE_RUN_DPM)", status); return 1; }
+    return 0;
+}
+
+static void DpmPrint(const BC250_ESCAPE_DPM *d)
+{
+    SYSTEMTIME now;
+    GetLocalTime(&now);
+    printf("%02u:%02u:%02u.%03u %s%s %4lu MHz %4lu mV (SMU %4lu MHz VID %3lu%s) %5.1f C%s busy %5.1f%% avg %5.1f%% "
+           "want %4lu cap %4lu max %4lu throttle %s%s%s%s%s  up %lu down %lu thermal %lu err %lu\n",
+           now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
+           d->Mode == 1 ? "dpm" : "fixed", (d->Flags & BC250_DPM_FLAG_RUNNING) ? "" : "(stopped)",
+           d->CurrentMHz, d->CurrentMv, d->ObservedMHz, d->ObservedVid,
+           (d->Flags & BC250_DPM_FLAG_CLOCK) ? "" : " old",
+           d->TemperatureMc / 1000.0, (d->Flags & BC250_DPM_FLAG_TEMPERATURE) ? "" : "?",
+           d->BusyPermille / 10.0, d->BusyAvgPermille / 10.0, d->WantMHz, d->CapMHz, d->MaxMHz,
+           d->Throttle < 8 ? g_DpmThrottle[d->Throttle] : "?",
+           (d->Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "",
+           (d->Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "",
+           (d->Flags & BC250_DPM_FLAG_PAUSED) ? " paused" : "",
+           (d->Flags & BC250_DPM_FLAG_SESSION) ? " session" : "",
+           d->Raises, d->Lowers, d->ThermalEvents, d->Errors);
+}
+
+static int Dpm(int argc, WCHAR **argv)
+{
+    BC250_ESCAPE_DPM d;
+    unsigned long count = 1, interval = 1000, i;
+    if (argc >= 3 && !_wcsicmp(argv[2], L"confirm")) {
+        if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
+        if (DpmQuery(&d, BC250_DPM_OP_CONFIRM, d.Generation)) return 1;
+        printf("dpm confirm: status %lu NTSTATUS 0x%08lX, flags 0x%lX%s%s\n", d.Status, d.NtStatus, d.Flags,
+               (d.Flags & BC250_DPM_FLAG_PENDING) ? " pending" : "", (d.Flags & BC250_DPM_FLAG_CONFIRMED) ? " confirmed" : "");
+        return d.Status == BC250_ESCAPE_STATUS_DONE ? 0 : 1;
+    }
+    if (argc >= 3) count = wcstoul(argv[2], NULL, 0);
+    if (argc >= 4) interval = wcstoul(argv[3], NULL, 0);
+    if (count == 0) count = 1;
+    for (i = 0; i < count; i++) {
+        if (i) Sleep(interval);
+        if (DpmQuery(&d, BC250_DPM_OP_READ, 0)) return 1;
+        if (d.Status != BC250_ESCAPE_STATUS_DONE) {
+            printf("dpm: refused, status %lu NTSTATUS 0x%08lX (driver version 0x%08lX)\n", d.Status, d.NtStatus, d.Version);
+            return 1;
+        }
+        if (i == 0)
+            printf("driver 0x%08lX, requested %s, reason %s, generation %llu, ticks %llu, uptime %llu ms\n", d.Version,
+                   d.Requested == 1 ? "dpm" : (d.Requested == 0 ? "fixed" : "invalid"),
+                   d.Reason < 9 ? g_DpmReason[d.Reason] : "?", d.Generation, d.Ticks, d.UptimeMs);
+        DpmPrint(&d);
+    }
+    return 0;
+}
+
 // ---- ---------------------------------------------------------------------------------------------------------
 
 int wmain(int argc, wchar_t **argv)
@@ -1153,6 +1237,7 @@ int wmain(int argc, wchar_t **argv)
                         "       bc250kmd_cli sdmacopy [bytes]             (SDMA copy/fill positive control, ADR 0013)\n"
                         "       bc250kmd_cli fbdump <file.bmp>            (the scanned-out surface, HUBP0, as a BMP)\n"
                         "       bc250kmd_cli log [from] | log summary [from]\n"
+                        "       bc250kmd_cli dpm [count [interval ms]] | dpm confirm   (clock governor, docs/design/dpm.md)\n"
                         "       default hardware id: %ls\n", BC250_DEFAULT_HWID);
         return 2;
     }
@@ -1179,6 +1264,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"ib") && argc == 6) return Ib(argv);
     if (!_wcsicmp(argv[1], L"sdmacopy") && argc <= 3) return SdmaCopy(argc == 3 ? argv[2] : NULL);
     if (!_wcsicmp(argv[1], L"fbdump") && argc == 3) return Fbdump(argv[2]);
+    if (!_wcsicmp(argv[1], L"dpm") && argc <= 4) return Dpm(argc, argv);
     if (!_wcsicmp(argv[1], L"log") && argc <= 4) {
         if (argc >= 3 && !_wcsicmp(argv[2], L"summary")) return Log(argc == 4 ? argv[3] : NULL, 1);
         if (argc <= 3) return Log(argc == 3 ? argv[2] : NULL, 0);
